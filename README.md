@@ -168,8 +168,8 @@ npm run -w treasury build
 
 ## **Community Demo**
 
-- `docs/demo/community-demo-checklist.md`
-- `docs/demo/community-demo-script.md`
+- `docs/runbooks/demo/community-demo-checklist.md`
+- `docs/runbooks/demo/community-demo-script.md`
 
 
 ## **Contributing**
