@@ -166,6 +166,12 @@ npm run -w treasury build
 - `docs/runbooks/pilot-environment-onboarding.md`
 - `docs/runbooks/github-roadmap-governance.md`
 
+## **Community Demo**
+
+- `docs/demo/community-demo-checklist.md`
+- `docs/demo/community-demo-script.md`
+
+
 ## **Contributing**
 
 We welcome contributions from the Web3 and Trade Finance communities. Please read `CONTRIBUTING.md` for details on our code of conduct and the process for submitting pull requests.
