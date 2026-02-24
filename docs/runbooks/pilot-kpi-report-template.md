@@ -132,12 +132,20 @@ redrive_rate = (triggers that were ever EXHAUSTED_NEEDS_REDRIVE / total settled)
 ```sql
 SELECT
     trigger_type,
-    COUNT(*) FILTER (WHERE status = 'CONFIRMED')                            AS confirmed,
-    COUNT(*) FILTER (WHERE status = 'CONFIRMED' AND attempt_count > 1)     AS confirmed_with_retry,
+    COUNT(*) FILTER (WHERE status = 'CONFIRMED')                                   AS confirmed,
+    COUNT(*) FILTER (WHERE status = 'CONFIRMED' AND attempt_count > 1)             AS confirmed_with_retry,
     ROUND(
         100.0 * COUNT(*) FILTER (WHERE status = 'CONFIRMED' AND attempt_count > 1)
-        / NULLIF(COUNT(*) FILTER (WHERE status = 'CONFIRMED'), 0), 2)       AS retry_rate_pct,
-    ROUND(AVG(attempt_count) FILTER (WHERE status = 'CONFIRMED')::numeric, 2) AS avg_attempts_confirmed
+        / NULLIF(COUNT(*) FILTER (WHERE status = 'CONFIRMED'), 0), 2)               AS retry_rate_pct,
+    ROUND(AVG(attempt_count) FILTER (WHERE status = 'CONFIRMED')::numeric, 2)      AS avg_attempts_confirmed,
+    COUNT(*) FILTER (WHERE status = 'EXHAUSTED_NEEDS_REDRIVE')                     AS currently_exhausted,
+    COUNT(*) FILTER (WHERE status IN ('CONFIRMED','TERMINAL_FAILURE','REJECTED'))  AS total_settled,
+    ROUND(
+        100.0 * COUNT(*) FILTER (WHERE status = 'EXHAUSTED_NEEDS_REDRIVE')
+        / NULLIF(
+            COUNT(*) FILTER (WHERE status IN (
+                'CONFIRMED','TERMINAL_FAILURE','REJECTED','EXHAUSTED_NEEDS_REDRIVE'
+            )), 0), 2)                                                              AS redrive_rate_pct
 FROM oracle_triggers
 WHERE created_at BETWEEN :from AND :to
 GROUP BY trigger_type
@@ -195,23 +203,61 @@ and the fraction of pilot trades that completed with zero CRITICAL drift.
 
 **Data source**: `reconcile_runs` + `reconcile_drifts` — `reconciliation/src/database/schema.sql`.
 
-**Query — run health summary**:
+**Query A — run health summary** (includes `clean_trade_rate`):
+```sql
+WITH run_window AS (
+    SELECT *
+    FROM reconcile_runs
+    WHERE started_at BETWEEN :from AND :to
+),
+dirty_trades AS (
+    SELECT DISTINCT d.trade_id
+    FROM reconcile_drifts d
+    JOIN run_window r ON r.id = d.run_id
+    WHERE d.severity IN ('CRITICAL', 'HIGH')
+)
+SELECT
+    rw.status,
+    COUNT(*)                                              AS run_count,
+    SUM(rw.total_trades)                                  AS total_trades_checked,
+    SUM(rw.drift_count)                                   AS total_drifts,
+    SUM(rw.critical_count)                                AS total_critical,
+    SUM(rw.high_count)                                    AS total_high,
+    SUM(rw.medium_count)                                  AS total_medium,
+    SUM(rw.low_count)                                     AS total_low,
+    MIN(rw.started_at)                                    AS window_start,
+    MAX(rw.completed_at)                                  AS window_end,
+    COUNT(DISTINCT t.trade_id) FILTER (
+        WHERE t.trade_id NOT IN (SELECT trade_id FROM dirty_trades)
+    )                                                     AS clean_trades,
+    ROUND(
+        100.0 * COUNT(DISTINCT t.trade_id) FILTER (
+            WHERE t.trade_id NOT IN (SELECT trade_id FROM dirty_trades)
+        ) / NULLIF(COUNT(DISTINCT t.trade_id), 0), 2
+    )                                                     AS clean_trade_rate_pct
+FROM run_window rw
+LEFT JOIN reconcile_drifts t ON t.run_id = rw.id
+GROUP BY rw.status
+ORDER BY rw.status;
+```
+
+**Query B — recurring CRITICAL drifts**:
 ```sql
 SELECT
-    status,
-    COUNT(*)                      AS run_count,
-    SUM(total_trades)             AS total_trades_checked,
-    SUM(drift_count)              AS total_drifts,
-    SUM(critical_count)           AS total_critical,
-    SUM(high_count)               AS total_high,
-    SUM(medium_count)             AS total_medium,
-    SUM(low_count)                AS total_low,
-    MIN(started_at)               AS window_start,
-    MAX(completed_at)             AS window_end
-FROM reconcile_runs
-WHERE started_at BETWEEN :from AND :to
-GROUP BY status
-ORDER BY status;
+    d.trade_id,
+    d.mismatch_code,
+    d.compared_field,
+    COUNT(DISTINCT r.id)   AS run_count,
+    SUM(d.occurrences)     AS total_occurrences,
+    MIN(r.started_at)      AS first_seen,
+    MAX(r.started_at)      AS last_seen
+FROM reconcile_drifts d
+JOIN reconcile_runs r ON r.id = d.run_id
+WHERE d.severity = 'CRITICAL'
+  AND r.started_at BETWEEN :from AND :to
+GROUP BY d.trade_id, d.mismatch_code, d.compared_field
+HAVING COUNT(DISTINCT r.id) >= 2
+ORDER BY run_count DESC, total_occurrences DESC;
 ```
 
 
