@@ -167,6 +167,10 @@ npm run -w treasury build
 - `docs/runbooks/pilot-kpi-report-template.md`
 - `docs/runbooks/github-roadmap-governance.md`
 
+## **Legal & Compliance**
+
+- `docs/runbooks/legal-evidence-package-template.md`
+
 ## **Community Demo**
 
 - `docs/runbooks/demo/community-demo-checklist.md`
