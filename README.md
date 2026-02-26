@@ -164,6 +164,7 @@ npm run -w treasury build
 - `docs/runbooks/hybrid-split-walkthrough.md`
 - `docs/runbooks/treasury-to-fiat-sop.md`
 - `docs/runbooks/pilot-environment-onboarding.md`
+- `docs/runbooks/non-custodial-pilot-user-guide.md`
 - `docs/runbooks/pilot-kpi-report-template.md`
 - `docs/runbooks/github-roadmap-governance.md`
 
