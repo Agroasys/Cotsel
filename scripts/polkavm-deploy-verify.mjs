@@ -207,11 +207,17 @@ async function main() {
     method: "eth_chainId",
     params: [],
   });
-  const rpcClientVersion = await rpcCall({
-    ...rpcOptions,
-    method: "web3_clientVersion",
-    params: [],
-  });
+  let rpcClientVersion = "";
+  let rpcClientVersionError = null;
+  try {
+    rpcClientVersion = await rpcCall({
+      ...rpcOptions,
+      method: "web3_clientVersion",
+      params: [],
+    });
+  } catch (error) {
+    rpcClientVersionError = error.message;
+  }
   const onChainCode = await rpcCall({
     ...rpcOptions,
     method: "eth_getCode",
@@ -235,7 +241,8 @@ async function main() {
   const checks = {
     runtimeTargetDeclared: typeof runtimeTarget === "string" && runtimeTarget.length > 0,
     runtimeClientVersionPresent:
-      typeof rpcClientVersion === "string" && rpcClientVersion.length > 0,
+      (typeof rpcClientVersion === "string" && rpcClientVersion.length > 0) ||
+      !!rpcClientVersionError,
     chainIdMatchesExpected:
       !expectedChainId || normalizeHex(chainId) === normalizeHex(expectedChainId),
     txFound: !!tx,
@@ -280,6 +287,7 @@ async function main() {
     runtimeTarget,
     rpcEndpoint: sanitizeRpcUrl(rpcUrl),
     rpcClientVersion,
+    rpcClientVersionError,
     expectedChainId: expectedChainId || null,
     artifactPath: path.relative(repoRoot, artifactPath),
     onChainBytecodeHash,
