@@ -59,7 +59,7 @@ The protocol is built on a modular stack designed for high throughput and cross-
 
 **Core Protocol & Languages**
 
-- **Smart Contracts**: Solidity (via Solang/Revive compilers targeting RISC-V PolkaVM).
+- **Smart Contracts**: Solidity with Hardhat (`2.28.6`) compile flow today; PolkaVM parity migration to Parity resolc plugin stack is tracked by ADR gate `#138` and blocker issue `#139`.
 
 - **Scripting & Logic**: TypeScript (Node.js v20.x runtime, matching CI).
 
