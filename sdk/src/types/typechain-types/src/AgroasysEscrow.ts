@@ -46,6 +46,8 @@ export interface AgroasysEscrowInterface extends Interface {
       | "cancelExpiredOracleUpdateProposal"
       | "cancelLockedTradeAfterTimeout"
       | "cancelUnpauseProposal"
+      | "claim"
+      | "claimableUsdc"
       | "confirmArrival"
       | "createTrade"
       | "disableOracleEmergency"
@@ -82,6 +84,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "refundInTransitAfterTimeout"
       | "releaseFundsStage1"
       | "requiredApprovals"
+      | "totalClaimableUsdc"
       | "tradeActiveDisputeProposalId"
       | "tradeCounter"
       | "tradeHasActiveDisputeProposal"
@@ -99,6 +102,8 @@ export interface AgroasysEscrowInterface extends Interface {
       | "AdminAddProposed"
       | "AdminAdded"
       | "ArrivalConfirmed"
+      | "ClaimableAccrued"
+      | "Claimed"
       | "DisputeApproved"
       | "DisputeFinalized"
       | "DisputeOpenedByBuyer"
@@ -203,6 +208,11 @@ export interface AgroasysEscrowInterface extends Interface {
   encodeFunctionData(
     functionFragment: "cancelUnpauseProposal",
     values?: undefined
+  ): string;
+  encodeFunctionData(functionFragment: "claim", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "claimableUsdc",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "confirmArrival",
@@ -351,6 +361,10 @@ export interface AgroasysEscrowInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "totalClaimableUsdc",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "tradeActiveDisputeProposalId",
     values: [BigNumberish]
   ): string;
@@ -455,6 +469,11 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "cancelUnpauseProposal",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "claim", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "claimableUsdc",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -590,6 +609,10 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "totalClaimableUsdc",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "tradeActiveDisputeProposalId",
     data: BytesLike
   ): Result;
@@ -701,6 +724,44 @@ export namespace ArrivalConfirmedEvent {
   export interface OutputObject {
     tradeId: bigint;
     arrivalTimestamp: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace ClaimableAccruedEvent {
+  export type InputTuple = [
+    tradeId: BigNumberish,
+    recipient: AddressLike,
+    amount: BigNumberish,
+    claimType: BigNumberish
+  ];
+  export type OutputTuple = [
+    tradeId: bigint,
+    recipient: string,
+    amount: bigint,
+    claimType: bigint
+  ];
+  export interface OutputObject {
+    tradeId: bigint;
+    recipient: string;
+    amount: bigint;
+    claimType: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace ClaimedEvent {
+  export type InputTuple = [claimant: AddressLike, amount: BigNumberish];
+  export type OutputTuple = [claimant: string, amount: bigint];
+  export interface OutputObject {
+    claimant: string;
+    amount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -1324,6 +1385,10 @@ export interface AgroasysEscrow extends BaseContract {
 
   cancelUnpauseProposal: TypedContractMethod<[], [void], "nonpayable">;
 
+  claim: TypedContractMethod<[], [void], "nonpayable">;
+
+  claimableUsdc: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
+
   confirmArrival: TypedContractMethod<
     [_tradeId: BigNumberish],
     [void],
@@ -1502,6 +1567,8 @@ export interface AgroasysEscrow extends BaseContract {
 
   requiredApprovals: TypedContractMethod<[], [bigint], "view">;
 
+  totalClaimableUsdc: TypedContractMethod<[], [bigint], "view">;
+
   tradeActiveDisputeProposalId: TypedContractMethod<
     [arg0: BigNumberish],
     [bigint],
@@ -1654,6 +1721,12 @@ export interface AgroasysEscrow extends BaseContract {
   getFunction(
     nameOrSignature: "cancelUnpauseProposal"
   ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "claim"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "claimableUsdc"
+  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "confirmArrival"
   ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
@@ -1817,6 +1890,9 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "requiredApprovals"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "totalClaimableUsdc"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "tradeActiveDisputeProposalId"
   ): TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
   getFunction(
@@ -1918,6 +1994,20 @@ export interface AgroasysEscrow extends BaseContract {
     ArrivalConfirmedEvent.InputTuple,
     ArrivalConfirmedEvent.OutputTuple,
     ArrivalConfirmedEvent.OutputObject
+  >;
+  getEvent(
+    key: "ClaimableAccrued"
+  ): TypedContractEvent<
+    ClaimableAccruedEvent.InputTuple,
+    ClaimableAccruedEvent.OutputTuple,
+    ClaimableAccruedEvent.OutputObject
+  >;
+  getEvent(
+    key: "Claimed"
+  ): TypedContractEvent<
+    ClaimedEvent.InputTuple,
+    ClaimedEvent.OutputTuple,
+    ClaimedEvent.OutputObject
   >;
   getEvent(
     key: "DisputeApproved"
@@ -2135,6 +2225,28 @@ export interface AgroasysEscrow extends BaseContract {
       ArrivalConfirmedEvent.InputTuple,
       ArrivalConfirmedEvent.OutputTuple,
       ArrivalConfirmedEvent.OutputObject
+    >;
+
+    "ClaimableAccrued(uint256,address,uint256,uint8)": TypedContractEvent<
+      ClaimableAccruedEvent.InputTuple,
+      ClaimableAccruedEvent.OutputTuple,
+      ClaimableAccruedEvent.OutputObject
+    >;
+    ClaimableAccrued: TypedContractEvent<
+      ClaimableAccruedEvent.InputTuple,
+      ClaimableAccruedEvent.OutputTuple,
+      ClaimableAccruedEvent.OutputObject
+    >;
+
+    "Claimed(address,uint256)": TypedContractEvent<
+      ClaimedEvent.InputTuple,
+      ClaimedEvent.OutputTuple,
+      ClaimedEvent.OutputObject
+    >;
+    Claimed: TypedContractEvent<
+      ClaimedEvent.InputTuple,
+      ClaimedEvent.OutputTuple,
+      ClaimedEvent.OutputObject
     >;
 
     "DisputeApproved(uint256,address,uint256,uint256)": TypedContractEvent<
