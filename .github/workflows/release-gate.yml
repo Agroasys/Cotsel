@@ -453,7 +453,7 @@ jobs:
     env:
       DEPLOY_VERIFY_RPC_URL: "https://services.polkadothub-rpc.com/testnet"
       DEPLOY_VERIFY_NETWORK_NAME: "polkadotTestnet"
-      DEPLOY_VERIFY_ARTIFACT_PATH: "contracts/artifacts/src/MockUSDC.sol/MockUSDC.json"
+      DEPLOY_VERIFY_ARTIFACT_PATH: "contracts/verification-fixtures/mockusdc-polkadotTestnet-0xAE519FC2Ba8e6fFE6473195c092bF1BAe986ff90.json"
       DEPLOY_VERIFY_CONTRACT_ADDRESS: "0xAE519FC2Ba8e6fFE6473195c092bF1BAe986ff90"
       DEPLOY_VERIFY_TX_HASH: "0xbf0bda74c2af42f48524ec79582c246d63115e4c7f7655007160679e0f862e08"
       DEPLOY_VERIFY_COMPILER_NAME: "solc"
@@ -533,6 +533,17 @@ jobs:
 
       - name: Generate contract artifacts for verification
         run: npm run -w contracts compile:polkavm
+
+      - name: Resolve build info path for verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_info_path="$(find contracts/artifacts/build-info -maxdepth 1 -name '*.json' | LC_ALL=C sort | head -n 1)"
+          if [[ -z "${build_info_path}" ]]; then
+            echo "No build-info JSON files found for deploy verification."
+            exit 1
+          fi
+          echo "DEPLOY_VERIFY_BUILD_INFO_PATH=${build_info_path}" >> "${GITHUB_ENV}"
 
       - name: Verify deployed contract bytecode and deployment evidence
         run: node scripts/polkavm-deploy-verify.mjs
