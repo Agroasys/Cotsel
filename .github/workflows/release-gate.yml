@@ -453,6 +453,8 @@ jobs:
     env:
       DEPLOY_VERIFY_RPC_URL: "https://services.polkadothub-rpc.com/testnet"
       DEPLOY_VERIFY_NETWORK_NAME: "polkadotTestnet"
+      DEPLOY_VERIFY_RUNTIME_TARGET: "paseo-asset-hub-revive"
+      DEPLOY_VERIFY_EXPECTED_CHAIN_ID: "0x190f1b41"
       DEPLOY_VERIFY_ARTIFACT_PATH: "contracts/artifacts/src/MockUSDC.sol/MockUSDC.json"
       DEPLOY_VERIFY_CONTRACT_ADDRESS: "0xd58fA437C8Ad344a85D6CA99E91700a1E160d87b"
       DEPLOY_VERIFY_TX_HASH: "0x6ea53035e3f594a40913a56c4257045a9101dbb7309b6721ab81d17d1cef574f"
