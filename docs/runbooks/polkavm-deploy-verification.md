@@ -158,6 +158,7 @@ node scripts/polkavm-deploy-verify.mjs
 Expected output location:
 
 - `reports/deploy-verification/latest.json`
+- CI verifies the canonical reference deployment produced by the resolc pipeline.
 
 ## Current Runtime Note
 
