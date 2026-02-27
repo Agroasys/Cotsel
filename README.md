@@ -168,6 +168,7 @@ npm run -w treasury build
 - `docs/runbooks/polkavm-deploy-verification.md`
 - `docs/runbooks/hybrid-split-walkthrough.md`
 - `docs/runbooks/treasury-to-fiat-sop.md`
+- `docs/runbooks/pull-over-push-claim-flow.md`
 - `docs/runbooks/pilot-environment-onboarding.md`
 - `docs/runbooks/non-custodial-pilot-user-guide.md`
 - `docs/runbooks/pilot-kpi-report-template.md`

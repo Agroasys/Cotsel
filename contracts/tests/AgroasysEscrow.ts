@@ -109,6 +109,7 @@ describe("AgroasysEscrow", function () {
       totalAmount,
       logisticsAmount,
       platformFeesAmount,
+      supplierFirstTranche,
       supplierSecondTranche
     };
   }
@@ -116,6 +117,20 @@ describe("AgroasysEscrow", function () {
   async function unpauseWithQuorum() {
     await escrow.connect(admin1).proposeUnpause();
     await escrow.connect(admin2).approveUnpause();
+  }
+
+  async function claimAndAssert(claimant: SignerWithAddress) {
+    const claimable = await escrow.claimableUsdc(claimant.address);
+    const before = await usdc.balanceOf(claimant.address);
+
+    await expect(escrow.connect(claimant).claim())
+      .to.emit(escrow, "Claimed")
+      .withArgs(claimant.address, claimable);
+
+    expect(await usdc.balanceOf(claimant.address)).to.equal(before + claimable);
+    expect(await escrow.claimableUsdc(claimant.address)).to.equal(0);
+
+    return claimable;
   }
 
   beforeEach(async function () {
@@ -196,6 +211,18 @@ describe("AgroasysEscrow", function () {
 
       await expect(escrow.connect(oracle).releaseFundsStage1(tradeId))
         .to.emit(escrow, "FundsReleasedStage1");
+    });
+
+    it("Should block claims while paused and allow claims again after quorum unpause", async function () {
+      const { tradeId, supplierFirstTranche } = await createDefaultTrade(ethers.id("pause-claim-flow"));
+      await escrow.connect(oracle).releaseFundsStage1(tradeId);
+      expect(await escrow.claimableUsdc(supplier.address)).to.equal(supplierFirstTranche);
+
+      await escrow.connect(admin1).pause();
+      await expect(escrow.connect(supplier).claim()).to.be.revertedWith("paused");
+
+      await unpauseWithQuorum();
+      await claimAndAssert(supplier);
     });
 
     it("Should disable oracle in emergency and require governance recovery before unpause", async function () {
@@ -399,7 +426,9 @@ describe("AgroasysEscrow", function () {
         .to.emit(escrow, "TradeCancelledAfterLockTimeout")
         .withArgs(tradeId, buyer.address, totalAmount);
 
-      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + totalAmount);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(totalAmount);
+      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore);
+      await claimAndAssert(buyer);
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(4); // CLOSED
     });
@@ -417,7 +446,9 @@ describe("AgroasysEscrow", function () {
         .to.emit(escrow, "InTransitTimeoutRefunded")
         .withArgs(tradeId, buyer.address, supplierSecondTranche);
 
-      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + supplierSecondTranche);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(supplierSecondTranche);
+      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore);
+      await claimAndAssert(buyer);
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(4); // CLOSED
     });
@@ -492,17 +523,20 @@ describe("AgroasysEscrow", function () {
       const { tradeId, logisticsAmount, platformFeesAmount } = await createDefaultTrade(
         ethers.id("treasury-in-transit-timeout")
       );
-      const treasuryBefore = await usdc.balanceOf(treasury.address);
+      const treasuryBeforeBalance = await usdc.balanceOf(treasury.address);
+      const treasuryBeforeClaimable = await escrow.claimableUsdc(treasury.address);
 
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
-      const expectedTreasury = treasuryBefore + logisticsAmount + platformFeesAmount;
-      expect(await usdc.balanceOf(treasury.address)).to.equal(expectedTreasury);
+      const expectedTreasuryClaimable = treasuryBeforeClaimable + logisticsAmount + platformFeesAmount;
+      expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBeforeBalance);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(expectedTreasuryClaimable);
 
       const inTransitTimeout = await escrow.IN_TRANSIT_TIMEOUT();
       await time.increase(inTransitTimeout + 1n);
       await escrow.connect(buyer).refundInTransitAfterTimeout(tradeId);
 
-      expect(await usdc.balanceOf(treasury.address)).to.equal(expectedTreasury);
+      expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBeforeBalance);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(expectedTreasuryClaimable);
     });
 
     it("Should keep treasury at fees-only after dispute REFUND", async function () {
@@ -511,12 +545,12 @@ describe("AgroasysEscrow", function () {
       await escrow.connect(oracle).confirmArrival(tradeId);
       await escrow.connect(buyer).openDispute(tradeId);
 
-      const treasuryAfterStage1 = await usdc.balanceOf(treasury.address);
+      const treasuryAfterStage1 = await escrow.claimableUsdc(treasury.address);
 
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
       await escrow.connect(admin2).approveDisputeSolution(0);
 
-      expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryAfterStage1);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryAfterStage1);
     });
 
     it("Should keep treasury at fees-only after dispute RESOLVE", async function () {
@@ -525,12 +559,45 @@ describe("AgroasysEscrow", function () {
       await escrow.connect(oracle).confirmArrival(tradeId);
       await escrow.connect(buyer).openDispute(tradeId);
 
-      const treasuryAfterStage1 = await usdc.balanceOf(treasury.address);
+      const treasuryAfterStage1 = await escrow.claimableUsdc(treasury.address);
 
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 1);
       await escrow.connect(admin2).approveDisputeSolution(0);
 
-      expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryAfterStage1);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryAfterStage1);
+    });
+  });
+
+  describe("Claim Flow", function () {
+    it("Should reject claim when caller has no claimable balance", async function () {
+      await expect(escrow.connect(supplier).claim()).to.be.revertedWith("nothing claimable");
+    });
+
+    it("Should accrue by recipient and keep claims isolated", async function () {
+      const { tradeId, supplierFirstTranche, logisticsAmount, platformFeesAmount } = await createDefaultTrade(
+        ethers.id("claim-isolation")
+      );
+
+      await escrow.connect(oracle).releaseFundsStage1(tradeId);
+
+      expect(await escrow.claimableUsdc(supplier.address)).to.equal(supplierFirstTranche);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(logisticsAmount + platformFeesAmount);
+      expect(await escrow.totalClaimableUsdc()).to.equal(
+        supplierFirstTranche + logisticsAmount + platformFeesAmount
+      );
+
+      await claimAndAssert(supplier);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(logisticsAmount + platformFeesAmount);
+      await claimAndAssert(treasury);
+      expect(await escrow.totalClaimableUsdc()).to.equal(0);
+    });
+
+    it("Should prevent double claim", async function () {
+      const { tradeId } = await createDefaultTrade(ethers.id("double-claim"));
+      await escrow.connect(oracle).releaseFundsStage1(tradeId);
+
+      await claimAndAssert(supplier);
+      await expect(escrow.connect(supplier).claim()).to.be.revertedWith("nothing claimable");
     });
   });
 
@@ -847,16 +914,23 @@ describe("AgroasysEscrow", function () {
       const supplierBalBefore = await usdc.balanceOf(supplier.address);
       const treasuryBalBefore = await usdc.balanceOf(treasury.address);
 
-      await expect(escrow.connect(oracle).releaseFundsStage1(tradeId))
-        .to.emit(escrow, "FundsReleasedStage1")
-        .and.to.emit(escrow, "PlatformFeesPaidStage1");
+      const stage1Tx = await escrow.connect(oracle).releaseFundsStage1(tradeId);
+      await expect(stage1Tx).to.emit(escrow, "FundsReleasedStage1");
+      await expect(stage1Tx).to.emit(escrow, "PlatformFeesPaidStage1");
+      await expect(stage1Tx)
+        .to.emit(escrow, "ClaimableAccrued")
+        .withArgs(tradeId, supplier.address, supplierFirstTranche, 0);
+      await expect(stage1Tx)
+        .to.emit(escrow, "ClaimableAccrued")
+        .withArgs(tradeId, treasury.address, logisticsAmount, 1);
+      await expect(stage1Tx)
+        .to.emit(escrow, "ClaimableAccrued")
+        .withArgs(tradeId, treasury.address, platformFeesAmount, 2);
 
-      expect(await usdc.balanceOf(supplier.address)).to.equal(
-        supplierBalBefore + supplierFirstTranche
-      );
-      expect(await usdc.balanceOf(treasury.address)).to.equal(
-        treasuryBalBefore + logisticsAmount + platformFeesAmount
-      );
+      expect(await usdc.balanceOf(supplier.address)).to.equal(supplierBalBefore);
+      expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBalBefore);
+      expect(await escrow.claimableUsdc(supplier.address)).to.equal(supplierFirstTranche);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(logisticsAmount + platformFeesAmount);
 
       let trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(1); // IN_TRANSIT
@@ -874,8 +948,14 @@ describe("AgroasysEscrow", function () {
       await expect(escrow.connect(buyer).finalizeAfterDisputeWindow(tradeId))
         .to.emit(escrow, "FinalTrancheReleased");
 
+      expect(await escrow.claimableUsdc(supplier.address)).to.equal(
+        supplierFirstTranche + supplierSecondTranche
+      );
+
+      await claimAndAssert(supplier);
+
       expect(await usdc.balanceOf(supplier.address)).to.equal(
-        supplierBalBeforeStage2 + supplierSecondTranche
+        supplierBalBeforeStage2 + supplierFirstTranche + supplierSecondTranche
       );
 
       trade = await escrow.trades(tradeId);
@@ -1047,9 +1127,9 @@ describe("AgroasysEscrow", function () {
         .to.emit(escrow, "DisputePayout")
         .withArgs(tradeId, 0, buyer.address, supplierSecondTranche, 0);
 
-      expect(await usdc.balanceOf(buyer.address)).to.equal(
-        buyerBalBefore + supplierSecondTranche
-      );
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(supplierSecondTranche);
+      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore);
+      await claimAndAssert(buyer);
 
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(4); // CLOSED
@@ -1067,8 +1147,12 @@ describe("AgroasysEscrow", function () {
         .to.emit(escrow, "DisputePayout")
         .withArgs(tradeId, 0, supplier.address, supplierSecondTranche, 1);
 
+      expect(await escrow.claimableUsdc(supplier.address)).to.equal(
+        supplierFirstTranche + supplierSecondTranche
+      );
+      await claimAndAssert(supplier);
       expect(await usdc.balanceOf(supplier.address)).to.equal(
-        supplierBalBefore + supplierSecondTranche
+        supplierBalBefore + supplierFirstTranche + supplierSecondTranche
       );
 
       const trade = await escrow.trades(tradeId);

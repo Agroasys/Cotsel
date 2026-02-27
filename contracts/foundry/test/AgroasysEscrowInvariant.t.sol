@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.28;
 
+// NOTE(issue-150):
+// Pull-over-push claim migration is currently release-gated in Hardhat tests.
+// Foundry parity requires `forge` availability in CI/local env before this suite
+// can be promoted as a blocking gate for claim-flow semantics.
+
 import "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {AgroasysEscrow} from "../src/AgroasysEscrow.sol";
