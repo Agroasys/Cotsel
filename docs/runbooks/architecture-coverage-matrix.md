@@ -1,6 +1,6 @@
 # Architecture Coverage Matrix
 
-Snapshot date: 2026-02-26
+Snapshot date: 2026-02-27
 
 Scope:
 - Source of truth is repository code, merged/open PRs, and roadmap issues.
@@ -35,7 +35,7 @@ Production readiness checklist:
 | Treasury payout queue + audit traceability | B/C | Blocked | 40 | #52, #67, #126, #127 | `treasury/src/database/schema.sql`, `treasury/src/database/queries.ts`, `treasury/src/core/payout.ts`, PR #22 | Processing/audit workflow requires missing operator UI/workflow integration and bank/fiat boundary finalization |
 | Reconciliation reports (on-chain ↔ fiat evidence) | B | Backlog | 10 | #53 | Reconciliation run/drift persistence exists in `reconciliation/src/database/queries.ts` | No deterministic report generator + review cadence artifacts |
 | AssetHub assets + USDC fee conversion validation | A | Backlog | 0 | #63 | Conceptual references in `README.md` only | No automated validation flow across local-dev/staging for fee-in-USDC path |
-| PolkaVM deployment verification + smoke checks | A | Backlog | 0 | #64 | CI exists but no deployment-verification artifact workflow | No deterministic deploy verification bundle and smoke automation |
+| PolkaVM deployment verification + smoke checks | A | Done | 100 | #64 | `scripts/polkavm-deploy-verify.mjs`, `.github/workflows/release-gate.yml` (`ci/contracts-deploy-verification`), `docs/runbooks/polkavm-deploy-verification.md`, PR #141 (merged), CI run 22491206400 (`ci/contracts-deploy-verification` success + artifact), CI run 22492497423 (`bytecodeHashMatch=true` with real artifact path in `ci-report-contracts-deploy-verification`) | None for issue-#64 scope |
 | Mainnet pilot execution evidence | B | Backlog | 0 | #66 | None in repo yet | No transaction evidence package or pilot proof artifacts |
 | Hybrid split walkthrough + treasury-to-fiat SOP | B | Done | 100 | #67 | `docs/runbooks/hybrid-split-walkthrough.md`, `docs/runbooks/treasury-to-fiat-sop.md`, `README.md` runbook links | None for issue-#67 scope |
 | Pilot documentation package (env + legal/KPI/demo templates + user guide) | C | Done | 100 | #57, #58, #59, #60, #68 | `docs/runbooks/pilot-environment-onboarding.md`, `docs/runbooks/staging-e2e-real-release-gate.md`, `docs/runbooks/pilot-kpi-report-template.md`, `docs/runbooks/demo/community-demo-checklist.md`, `docs/runbooks/demo/community-demo-script.md`, `docs/runbooks/non-custodial-pilot-user-guide.md`, `docs/runbooks/legal-evidence-package-template.md` | No repo-side gap for documentation scope |
