@@ -47,7 +47,7 @@ const config: HardhatUserConfig = {
       chainId: 420420417,
       accounts: polkadotAccounts,
       polkadot: { target: "pvm" },
-    },
+    } as any,
   },
 };
 
