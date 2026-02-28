@@ -9,6 +9,9 @@ import { bytesToHex, hexToBytes } from "ethereum-cryptography/utils";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
+const DEFAULT_TIMEOUT_MS = 12000;
+const DEFAULT_RETRIES = 3;
+const DEFAULT_BACKOFF_MS = 1000;
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -78,6 +81,12 @@ async function sleep(ms) {
 async function rpcCall({ rpcUrl, timeoutMs, retries, backoffMs, method, params }) {
   if (!Number.isInteger(retries) || retries <= 0) {
     throw new Error(`invalid retries value: ${retries}`);
+  }
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error(`invalid timeoutMs value: ${timeoutMs}`);
+  }
+  if (!Number.isFinite(backoffMs) || backoffMs < 0) {
+    throw new Error(`invalid backoffMs value: ${backoffMs}`);
   }
 
   for (let attempt = 1; attempt <= retries; attempt += 1) {
@@ -192,9 +201,9 @@ async function main() {
   const txHash = requiredEnv("DEPLOY_VERIFY_TX_HASH");
   const expectedChainId = (process.env.DEPLOY_VERIFY_EXPECTED_CHAIN_ID || "").trim();
   const compilerName = (process.env.DEPLOY_VERIFY_COMPILER_NAME || "solc").trim();
-  const timeoutMs = Number(process.env.DEPLOY_VERIFY_TIMEOUT_MS || "12000");
-  const retries = Number(process.env.DEPLOY_VERIFY_RETRIES || "3");
-  const backoffMs = Number(process.env.DEPLOY_VERIFY_BACKOFF_MS || "1000");
+  const timeoutMs = Number(process.env.DEPLOY_VERIFY_TIMEOUT_MS || String(DEFAULT_TIMEOUT_MS));
+  const retries = Number(process.env.DEPLOY_VERIFY_RETRIES || String(DEFAULT_RETRIES));
+  const backoffMs = Number(process.env.DEPLOY_VERIFY_BACKOFF_MS || String(DEFAULT_BACKOFF_MS));
   const outDir = resolveFromRepo(process.env.DEPLOY_VERIFY_OUT_DIR || "reports/deploy-verification");
   const commitSha =
     (process.env.DEPLOY_VERIFY_COMMIT_SHA || process.env.GITHUB_SHA || "").trim() ||
@@ -206,7 +215,7 @@ async function main() {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     fail(`invalid DEPLOY_VERIFY_TIMEOUT_MS: ${process.env.DEPLOY_VERIFY_TIMEOUT_MS}`);
   }
-  if (!Number.isFinite(retries) || retries <= 0) {
+  if (!Number.isInteger(retries) || retries <= 0) {
     fail(`invalid DEPLOY_VERIFY_RETRIES: ${process.env.DEPLOY_VERIFY_RETRIES}`);
   }
   if (!Number.isFinite(backoffMs) || backoffMs <= 0) {
@@ -265,7 +274,7 @@ async function main() {
   const artifactBytecodeHash = toKeccakHex(hexToBytes(artifact.deployedBytecode));
   // canonicalJson returns a deterministic JSON string; we hash its UTF-8 bytes.
   const abiHash = toKeccakHex(Buffer.from(canonicalJson(artifact.abi), "utf8"));
-  const deployer = tx?.from ?? "";
+  const deployer = tx?.from;
   const expectedDeployer = (process.env.DEPLOY_VERIFY_DEPLOYER || "").trim();
 
   const checks = {
@@ -287,7 +296,9 @@ async function main() {
     // Only enforce deployer match when an expected deployer is configured.
     deployerMatchesExpected: !expectedDeployer
       ? true
-      : normalizeHex(deployer) === normalizeHex(expectedDeployer),
+      : deployer
+        ? normalizeHex(deployer) === normalizeHex(expectedDeployer)
+        : false,
   };
 
   const failedChecks = Object.entries(checks)
@@ -327,9 +338,15 @@ async function main() {
   };
 
   fs.mkdirSync(outDir, { recursive: true });
+  const chainIdForFilename =
+    typeof chainId === "string"
+      ? chainId.replace(/^0x/u, "")
+      : chainId != null
+        ? String(chainId)
+        : "unknown-chainid";
   const outputFile = path.join(
     outDir,
-    `deploy-verification-${network}-${chainId.replace(/^0x/u, "")}-${timestampForFilename()}.json`,
+    `deploy-verification-${network}-${chainIdForFilename}-${timestampForFilename()}.json`,
   );
   fs.writeFileSync(outputFile, `${JSON.stringify(evidence, null, 2)}\n`);
   fs.writeFileSync(path.join(outDir, "latest.json"), `${JSON.stringify(evidence, null, 2)}\n`);
