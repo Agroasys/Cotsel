@@ -110,6 +110,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         address proposer;
     }
 
+    struct TreasuryPayoutAddressUpdateProposal {
+        address newPayoutReceiver;
+        uint256 approvalCount;
+        bool executed;
+        uint256 createdAt;
+        uint256 eta; // execute-after timestamp (timelock)
+        address proposer;
+    }
+
     struct UnpauseProposal {
         uint256 approvalCount;
         bool executed;
@@ -143,7 +152,10 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
     // roles
     address public oracleAddress;
+    /// @notice Immutable treasury identity used in trade signature preimage and fee accrual accounting.
     address public treasuryAddress;
+    /// @notice Rotatable payout receiver for treasury sweeps; initialized to treasuryAddress.
+    address public treasuryPayoutAddress;
     /// @notice Dedicated emergency switch for claim withdrawals.
     bool public claimsPaused;
     /// @notice Emergency switch to disable oracle-triggered transitions.
@@ -180,6 +192,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     /// @notice True when an admin-add proposal has been cancelled after expiry.
     mapping(uint256 => bool) public adminAddProposalCancelled;
     uint256 public adminAddCounter;
+
+    mapping(uint256 => TreasuryPayoutAddressUpdateProposal) public treasuryPayoutAddressUpdateProposals;
+    mapping(uint256 => mapping(address => bool)) public treasuryPayoutAddressUpdateHasApproved;
+    /// @notice Expiration timestamp for each treasury-payout-address proposal id.
+    mapping(uint256 => uint256) public treasuryPayoutAddressUpdateProposalExpiresAt;
+    /// @notice True when a treasury-payout-address proposal has been cancelled after expiry.
+    mapping(uint256 => bool) public treasuryPayoutAddressUpdateProposalCancelled;
+    uint256 public treasuryPayoutAddressUpdateCounter;
 
     // -----------------------------
     // Events
@@ -293,6 +313,29 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     );
 
     event AdminAdded(address indexed newAdmin);
+    event TreasuryPayoutAddressUpdateProposed(
+        uint256 indexed proposalId,
+        address indexed proposer,
+        address indexed newPayoutReceiver,
+        uint256 eta
+    );
+    event TreasuryPayoutAddressUpdateApproved(
+        uint256 indexed proposalId,
+        address indexed approver,
+        uint256 approvalCount,
+        uint256 requiredApprovals
+    );
+    event TreasuryPayoutAddressUpdated(
+        address indexed oldPayoutReceiver,
+        address indexed newPayoutReceiver
+    );
+    event TreasuryPayoutAddressUpdateProposalExpiredCancelled(uint256 indexed proposalId, address indexed cancelledBy);
+    event TreasuryClaimed(
+        address indexed treasuryIdentity,
+        address indexed payoutReceiver,
+        uint256 amount,
+        address triggeredBy
+    );
 
     event OracleDisabledEmergency(address indexed by, address indexed previousOracle);
     event TradeCancelledAfterLockTimeout(
@@ -348,6 +391,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         usdcToken = IERC20(_usdcToken);
         oracleAddress = _oracleAddress;
         treasuryAddress = _treasuryAddress;
+        treasuryPayoutAddress = _treasuryAddress;
         requiredApprovals = _requiredApprovals;
 
         for (uint256 i = 0; i < _admins.length; i++) {
@@ -663,6 +707,24 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         usdcToken.safeTransfer(msg.sender, amount);
 
         emit Claimed(msg.sender, amount);
+    }
+
+    /**
+     * @notice Permissionless treasury sweep that is destination-locked to treasuryPayoutAddress.
+     * @dev Uses treasuryAddress as immutable accounting identity; caller cannot redirect funds.
+     */
+    function claimTreasury() external whenClaimsNotPaused nonReentrant {
+        uint256 amount = claimableUsdc[treasuryAddress];
+        require(amount > 0, "nothing treasury claimable");
+
+        address payoutReceiver = treasuryPayoutAddress;
+        require(payoutReceiver != address(0), "invalid treasury payout receiver");
+
+        claimableUsdc[treasuryAddress] = 0;
+        totalClaimableUsdc -= amount;
+        usdcToken.safeTransfer(payoutReceiver, amount);
+
+        emit TreasuryClaimed(treasuryAddress, payoutReceiver, amount, msg.sender);
     }
 
     // -----------------------------
@@ -1115,6 +1177,85 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         adminAddProposalCancelled[_proposalId] = true;
 
         emit AdminAddProposalExpiredCancelled(_proposalId, msg.sender);
+    }
+
+    function proposeTreasuryPayoutAddressUpdate(address _newPayoutReceiver) external onlyAdmin returns (uint256) {
+        require(_newPayoutReceiver != address(0), "invalid treasury payout receiver");
+        require(_newPayoutReceiver != treasuryPayoutAddress, "same treasury payout receiver");
+        require(admins.length >= governanceApprovals(), "insufficient admins");
+
+        uint256 proposalId = treasuryPayoutAddressUpdateCounter;
+        treasuryPayoutAddressUpdateCounter++;
+
+        treasuryPayoutAddressUpdateProposals[proposalId] = TreasuryPayoutAddressUpdateProposal({
+            newPayoutReceiver: _newPayoutReceiver,
+            approvalCount: 1,
+            executed: false,
+            createdAt: block.timestamp,
+            eta: block.timestamp + governanceTimelock,
+            proposer: msg.sender
+        });
+
+        treasuryPayoutAddressUpdateHasApproved[proposalId][msg.sender] = true;
+        treasuryPayoutAddressUpdateProposalExpiresAt[proposalId] = block.timestamp + GOVERNANCE_PROPOSAL_TTL;
+
+        emit TreasuryPayoutAddressUpdateProposed(proposalId, msg.sender, _newPayoutReceiver, block.timestamp + governanceTimelock);
+        emit TreasuryPayoutAddressUpdateApproved(proposalId, msg.sender, 1, governanceApprovals());
+
+        return proposalId;
+    }
+
+    function approveTreasuryPayoutAddressUpdate(uint256 _proposalId) external onlyAdmin {
+        require(_proposalId < treasuryPayoutAddressUpdateCounter, "proposal not found");
+
+        TreasuryPayoutAddressUpdateProposal storage proposal = treasuryPayoutAddressUpdateProposals[_proposalId];
+        require(proposal.createdAt > 0, "proposal not initialized");
+        require(!proposal.executed, "already executed");
+        require(!treasuryPayoutAddressUpdateProposalCancelled[_proposalId], "proposal cancelled");
+        require(block.timestamp <= treasuryPayoutAddressUpdateProposalExpiresAt[_proposalId], "proposal expired");
+        require(!treasuryPayoutAddressUpdateHasApproved[_proposalId][msg.sender], "already approved");
+
+        treasuryPayoutAddressUpdateHasApproved[_proposalId][msg.sender] = true;
+        proposal.approvalCount++;
+
+        emit TreasuryPayoutAddressUpdateApproved(_proposalId, msg.sender, proposal.approvalCount, governanceApprovals());
+    }
+
+    function executeTreasuryPayoutAddressUpdate(uint256 _proposalId) external onlyAdmin {
+        require(_proposalId < treasuryPayoutAddressUpdateCounter, "proposal not found");
+
+        TreasuryPayoutAddressUpdateProposal storage proposal = treasuryPayoutAddressUpdateProposals[_proposalId];
+        require(proposal.createdAt > 0, "proposal not initialized");
+        require(!proposal.executed, "already executed");
+        require(!treasuryPayoutAddressUpdateProposalCancelled[_proposalId], "proposal cancelled");
+        require(block.timestamp <= treasuryPayoutAddressUpdateProposalExpiresAt[_proposalId], "proposal expired");
+        require(proposal.approvalCount >= governanceApprovals(), "not enough approvals");
+        require(block.timestamp >= proposal.eta, "timelock not elapsed");
+        require(proposal.newPayoutReceiver != address(0), "invalid treasury payout receiver");
+
+        proposal.executed = true;
+
+        address oldPayoutReceiver = treasuryPayoutAddress;
+        treasuryPayoutAddress = proposal.newPayoutReceiver;
+
+        emit TreasuryPayoutAddressUpdated(oldPayoutReceiver, proposal.newPayoutReceiver);
+    }
+
+    /**
+     * @notice Cancels an expired treasury-payout-address update proposal.
+     */
+    function cancelExpiredTreasuryPayoutAddressUpdateProposal(uint256 _proposalId) external onlyAdmin {
+        require(_proposalId < treasuryPayoutAddressUpdateCounter, "proposal not found");
+
+        TreasuryPayoutAddressUpdateProposal storage proposal = treasuryPayoutAddressUpdateProposals[_proposalId];
+        require(proposal.createdAt > 0, "proposal not initialized");
+        require(!proposal.executed, "already executed");
+        require(!treasuryPayoutAddressUpdateProposalCancelled[_proposalId], "already cancelled");
+        require(block.timestamp > treasuryPayoutAddressUpdateProposalExpiresAt[_proposalId], "proposal not expired");
+
+        treasuryPayoutAddressUpdateProposalCancelled[_proposalId] = true;
+
+        emit TreasuryPayoutAddressUpdateProposalExpiredCancelled(_proposalId, msg.sender);
     }
 
     // -----------------------------
