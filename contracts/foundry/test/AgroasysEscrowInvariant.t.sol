@@ -24,6 +24,7 @@ contract Handler is Test {
 
     uint256 public totalDeposited;
     uint256 public totalWithdrawn;
+    uint256 public totalClaimableUsdc;
     uint256 public tradesCreated;
     uint256 public releaseStage1Triggered;
     uint256 public releaseStage2Triggered;
@@ -117,7 +118,7 @@ contract Handler is Test {
         vm.prank(oracle);
         escrow.releaseFundsStage1(tradeId);
         (,,,,,, uint256 logistics,uint256 fees, uint256 tranche1,,,) = escrow.trades(tradeId);
-        totalWithdrawn += logistics + tranche1 + fees;
+        totalClaimableUsdc += logistics + tranche1 + fees;
         releaseStage1Triggered++;
     }
 
@@ -149,7 +150,7 @@ contract Handler is Test {
         vm.prank(oracle);
         escrow.finalizeAfterDisputeWindow(tradeId);
         (,,,,,,,,,uint256 tranche2,,) = escrow.trades(tradeId);
-        totalWithdrawn += tranche2;
+        totalClaimableUsdc += tranche2;
         releaseStage2Triggered++;
     }
 
@@ -199,7 +200,7 @@ contract Handler is Test {
         
         if (executedNow && !executed) {
             disputeSolved++;
-            totalWithdrawn += tranche2;
+            totalClaimableUsdc += tranche2;
         }
     }
 }
@@ -257,6 +258,7 @@ contract InvariantTest is Test {
         console2.log("Total locked in the escrow (USDC):", uint256(usdc.balanceOf(address(escrow))/1e6));
         console2.log("Total deposited (USDC):", uint256(handler.totalDeposited()/1e6));
         console2.log("Total withdrawn (USDC):", uint256(handler.totalWithdrawn()/1e6));
+        console2.log("Total claimable accrued (USDC):", uint256(handler.totalClaimableUsdc()/1e6));
         console2.log("Total triger stage 1:", uint256(handler.releaseStage1Triggered()));
         console2.log("Total triger stage 2:", uint256(handler.releaseStage2Triggered()));
         console2.log("Total dispute raised:", uint256(handler.disputedRaised()));
@@ -265,29 +267,32 @@ contract InvariantTest is Test {
 
 
     function invariant_EscrowBalanceMatchesLockedFunds() public view {
-        uint256 totalLocked = 0;
+        uint256 totalReserved = 0;
         
         for (uint256 i = 0; i < escrow.tradeCounter(); i++) {
             (,,AgroasysEscrow.TradeStatus status,,,uint256 total,,,,uint256 tranche2,,) = escrow.trades(i);
             
             if (status == AgroasysEscrow.TradeStatus.LOCKED) {
-                totalLocked += total;
+                totalReserved += total;
             } else if (
                 status == AgroasysEscrow.TradeStatus.IN_TRANSIT || 
                 status == AgroasysEscrow.TradeStatus.ARRIVAL_CONFIRMED || 
                 status == AgroasysEscrow.TradeStatus.FROZEN
             ) {
-                totalLocked += tranche2;
+                totalReserved += tranche2;
             }
         }
-        assertEq(usdc.balanceOf(address(escrow)), totalLocked, "escrow balance doesn't match logical locked funds");
+        uint256 expectedEscrowBalance = totalReserved + escrow.totalClaimableUsdc();
+        assertEq(usdc.balanceOf(address(escrow)), expectedEscrowBalance, "escrow balance doesn't match reserved+claimable");
         _Summary();
     }
 
     function invariant_EscrowFundsConservation() public view {
-        uint256 amountRemaining = handler.totalDeposited() - handler.totalWithdrawn();
+        uint256 totalDeposited = handler.totalDeposited();
+        uint256 totalWithdrawn = handler.totalWithdrawn();
         uint256 escrowBalance = usdc.balanceOf(address(escrow));
-        assertEq(escrowBalance, amountRemaining, "escrow balance doesn't match 'deposited - withdrawn'");
+        assertEq(totalDeposited, escrowBalance + totalWithdrawn, "escrow funds conservation violated");
+        assertEq(escrow.totalClaimableUsdc(), handler.totalClaimableUsdc(), "claimable tracking mismatch");
         _Summary();
     }
 
