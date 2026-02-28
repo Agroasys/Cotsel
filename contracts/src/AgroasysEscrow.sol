@@ -5,6 +5,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
  * AgroasysEscrow
@@ -18,7 +19,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
  * - Stage 1 accrual (40% milestone) includes: supplierFirstTranche (principal) + logisticsAmount (fee) + platformFeesAmount (fee)
  * - Stage 2 accrual (finalization) includes: supplierSecondTranche (principal) ONLY
  */
-contract AgroasysEscrow is ReentrancyGuard {
+contract AgroasysEscrow is ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
     // -----------------------------
@@ -143,8 +144,6 @@ contract AgroasysEscrow is ReentrancyGuard {
     // roles
     address public oracleAddress;
     address public treasuryAddress;
-    /// @notice Global pause flag for normal protocol operations.
-    bool public paused;
     /// @notice Dedicated emergency switch for claim withdrawals.
     bool public claimsPaused;
     /// @notice Emergency switch to disable oracle-triggered transitions.
@@ -295,8 +294,6 @@ contract AgroasysEscrow is ReentrancyGuard {
 
     event AdminAdded(address indexed newAdmin);
 
-    event Paused(address indexed by);
-    event Unpaused(address indexed by);
     event OracleDisabledEmergency(address indexed by, address indexed previousOracle);
     event TradeCancelledAfterLockTimeout(
         uint256 indexed tradeId,
@@ -377,28 +374,31 @@ contract AgroasysEscrow is ReentrancyGuard {
         _;
     }
 
-    modifier whenNotPaused() {
-        require(!paused, "paused");
-        _;
-    }
-
     modifier whenClaimsNotPaused() {
         require(!claimsPaused, "claims paused");
         _;
     }
-
     modifier onlyOracleActive() {
         require(oracleActive, "oracle disabled");
         _;
+    }
+
+    /// @dev Keep backwards-compatible revert messages for existing consumers/tests.
+    function _requireNotPaused() internal view override {
+        require(!paused(), "paused");
+    }
+
+    /// @dev Keep backwards-compatible revert messages for existing consumers/tests.
+    function _requirePaused() internal view override {
+        require(paused(), "not paused");
     }
 
     /**
      * @notice Pauses normal protocol operations for emergency containment.
      */
     function pause() external onlyAdmin {
-        require(!paused, "already paused");
-        paused = true;
-        emit Paused(msg.sender);
+        require(!paused(), "already paused");
+        _pause();
     }
 
     /**
@@ -423,7 +423,7 @@ contract AgroasysEscrow is ReentrancyGuard {
      * @notice Propose unpausing the protocol (requires multi-sig approval).
      */
     function proposeUnpause() external onlyAdmin returns (bool) {
-        require(paused, "not paused");
+        require(paused(), "not paused");
         require(oracleActive, "oracle disabled");
 
         // Cancel any existing unpause proposal
@@ -451,7 +451,7 @@ contract AgroasysEscrow is ReentrancyGuard {
      * @notice Approve the unpause proposal.
      */
     function approveUnpause() external onlyAdmin {
-        require(paused, "not paused");
+        require(paused(), "not paused");
         require(hasActiveUnpauseProposal, "no active proposal");
         require(!unpauseProposal.executed, "already executed");
         require(!unpauseHasApproved[msg.sender], "already approved");
@@ -495,16 +495,14 @@ contract AgroasysEscrow is ReentrancyGuard {
 
 
         unpauseProposal.executed = true;
-        paused = false;
         hasActiveUnpauseProposal = false;
+        _unpause();
 
         // Clear approvals
         address[] memory adminList = admins;
         for (uint256 i = 0; i < adminList.length; i++) {
             unpauseHasApproved[adminList[i]] = false;
         }
-
-        emit Unpaused(msg.sender);
     }
 
     /**
@@ -513,9 +511,8 @@ contract AgroasysEscrow is ReentrancyGuard {
     function disableOracleEmergency() external onlyAdmin {
         require(oracleActive, "oracle disabled");
         oracleActive = false;
-        if (!paused) {
-            paused = true;
-            emit Paused(msg.sender);
+        if (!paused()) {
+            _pause();
         }
         emit OracleDisabledEmergency(msg.sender, oracleAddress);
     }
@@ -765,7 +762,7 @@ contract AgroasysEscrow is ReentrancyGuard {
     /**
      * @notice Buyer escape hatch: cancel a LOCKED trade after timeout and recover full locked amount.
      */
-    function cancelLockedTradeAfterTimeout(uint256 _tradeId) external nonReentrant {
+    function cancelLockedTradeAfterTimeout(uint256 _tradeId) external whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -783,7 +780,7 @@ contract AgroasysEscrow is ReentrancyGuard {
     /**
      * @notice Buyer escape hatch: refund only remaining escrowed principal when IN_TRANSIT timeout elapses.
      */
-    function refundInTransitAfterTimeout(uint256 _tradeId) external nonReentrant {
+    function refundInTransitAfterTimeout(uint256 _tradeId) external whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 

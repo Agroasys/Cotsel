@@ -192,6 +192,57 @@ jobs:
           name: ci-report-staging-e2e-real-gate
           path: ci-reports/staging-e2e-real-gate.txt
 
+  asset-fee-path:
+    name: ci/asset-fee-path
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Prepare profile env files
+        run: |
+          cp .env.example .env
+          cp .env.local.example .env.local
+          cp .env.staging-e2e-real.example .env.staging-e2e-real
+
+      - name: Run asset fee-path checks (config-only)
+        shell: bash
+        run: |
+          set +e
+          mkdir -p ci-reports
+          report="ci-reports/asset-fee-path.txt"
+          fail=0
+
+          run_check() {
+            local label="$1"
+            local cmd="$2"
+            echo "[$label] command: $cmd" | tee -a "$report"
+            if bash -lc "$cmd"; then
+              echo "[$label] PASS" | tee -a "$report"
+            else
+              echo "[$label] FAIL" | tee -a "$report"
+              fail=1
+            fi
+            echo "" >> "$report"
+          }
+
+          run_check local-dev "ASSET_FEE_PATH_ASSERT_CONFIG_ONLY=true bash scripts/asset-fee-path-gate.sh local-dev"
+          run_check staging-e2e-real "ASSET_FEE_PATH_ASSERT_CONFIG_ONLY=true bash scripts/asset-fee-path-gate.sh staging-e2e-real"
+          run_check regression-test "bash scripts/tests/asset-fee-path-gate.test.sh"
+
+          if [[ "$fail" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Upload asset fee-path report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ci-report-asset-fee-path
+          path: |
+            ci-reports/asset-fee-path.txt
+            reports/asset-fee-path
+
   contracts:
     name: ci/contracts
     runs-on: ubuntu-latest
@@ -453,6 +504,8 @@ jobs:
     env:
       DEPLOY_VERIFY_RPC_URL: "https://services.polkadothub-rpc.com/testnet"
       DEPLOY_VERIFY_NETWORK_NAME: "polkadotTestnet"
+      DEPLOY_VERIFY_RUNTIME_TARGET: "paseo-asset-hub-revive"
+      DEPLOY_VERIFY_EXPECTED_CHAIN_ID: "0x190f1b41"
       DEPLOY_VERIFY_ARTIFACT_PATH: "contracts/artifacts/src/MockUSDC.sol/MockUSDC.json"
       DEPLOY_VERIFY_CONTRACT_ADDRESS: "0xd58fA437C8Ad344a85D6CA99E91700a1E160d87b"
       DEPLOY_VERIFY_TX_HASH: "0x6ea53035e3f594a40913a56c4257045a9101dbb7309b6721ab81d17d1cef574f"
@@ -962,6 +1015,7 @@ jobs:
       - docs-profile-guard
       - env-profile-regression
       - staging-e2e-real-gate
+      - asset-fee-path
       - contracts
       - contracts_deploy_verification
       - sdk
@@ -983,6 +1037,7 @@ jobs:
           results["ci/docs-profile-guard"]="${{ needs.docs-profile-guard.result }}"
           results["ci/env-profile-regression"]="${{ needs.env-profile-regression.result }}"
           results["ci/staging-e2e-real-gate"]="${{ needs.staging-e2e-real-gate.result }}"
+          results["ci/asset-fee-path"]="${{ needs.asset-fee-path.result }}"
           results["ci/contracts"]="${{ needs.contracts.result }}"
           results["ci/contracts-deploy-verification"]="${{ needs.contracts_deploy_verification.result }}"
           results["ci/sdk"]="${{ needs.sdk.result }}"
