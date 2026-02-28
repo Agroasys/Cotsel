@@ -332,6 +332,10 @@ case "$ACTION" in
       echo "reconciliation healthcheck: ok"
     fi
 
+    if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e-real" ]]; then
+      scripts/notifications-wiring-health.sh "$PROFILE"
+    fi
+
     if [[ "$PROFILE" != "infra" ]]; then
       check_indexer_graphql
     else

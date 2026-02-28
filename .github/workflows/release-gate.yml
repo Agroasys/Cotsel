@@ -120,6 +120,7 @@ jobs:
           run_check docker-services-env-precedence scripts/tests/docker-services-env-precedence.test.sh
           run_check docker-services-env-layering scripts/tests/docker-services-env-layering.test.sh
           run_check staging-e2e-real-gate-start-block scripts/tests/staging-e2e-real-gate-start-block.test.sh
+          run_check notifications-wiring-health scripts/tests/notifications-wiring-health.test.sh
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -138,6 +139,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build notifications workspace
+        run: npm run -w notifications build
 
       - name: Prepare CI gate env files
         run: |
@@ -172,6 +185,7 @@ jobs:
 
           run_check validate-env scripts/validate-env.sh staging-e2e-real
           run_check staging-gate bash -lc "STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true scripts/staging-e2e-real-gate.sh"
+          run_check notifications-gate scripts/notifications-gate.sh staging-e2e-real
 
           sed -E \
             -e 's/((API_KEY|HMAC_SECRET|PRIVATE_KEY|PASSWORD|SECRET|TOKEN|MNEMONIC)([[:space:]]*[:=][[:space:]]*))[^[:space:]"]+/\1***REDACTED***/gI' \
@@ -191,6 +205,13 @@ jobs:
         with:
           name: ci-report-staging-e2e-real-gate
           path: ci-reports/staging-e2e-real-gate.txt
+
+      - name: Upload notifications gate report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ci-report-notifications-gate
+          path: reports/notifications/staging-e2e-real.json
 
   asset-fee-path:
     name: ci/asset-fee-path

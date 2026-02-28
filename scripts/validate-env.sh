@@ -97,6 +97,14 @@ if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e" || "$PROFILE" == 
 
     # treasury config aliases (treasury/src/config.ts)
     TREASURY_INDEXER_GRAPHQL_URL\|INDEXER_GRAPHQL_URL
+
+    # notifications aliases (oracle/reconciliation config.ts)
+    ORACLE_NOTIFICATIONS_ENABLED
+    ORACLE_NOTIFICATIONS_COOLDOWN_MS
+    ORACLE_NOTIFICATIONS_REQUEST_TIMEOUT_MS
+    RECONCILIATION_NOTIFICATIONS_ENABLED
+    RECONCILIATION_NOTIFICATIONS_COOLDOWN_MS
+    RECONCILIATION_NOTIFICATIONS_REQUEST_TIMEOUT_MS
   )
 fi
 
@@ -142,6 +150,28 @@ if [[ "${#missing_groups[@]}" -gt 0 ]]; then
     echo "  - ${group//|/ or }" >&2
   done
   exit 1
+fi
+
+if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e" || "$PROFILE" == "staging-e2e-real" ]]; then
+  if [[ "${ORACLE_NOTIFICATIONS_ENABLED:-}" != "true" && "${ORACLE_NOTIFICATIONS_ENABLED:-}" != "false" ]]; then
+    echo "ORACLE_NOTIFICATIONS_ENABLED must be true or false" >&2
+    exit 1
+  fi
+
+  if [[ "${RECONCILIATION_NOTIFICATIONS_ENABLED:-}" != "true" && "${RECONCILIATION_NOTIFICATIONS_ENABLED:-}" != "false" ]]; then
+    echo "RECONCILIATION_NOTIFICATIONS_ENABLED must be true or false" >&2
+    exit 1
+  fi
+
+  if [[ "${ORACLE_NOTIFICATIONS_ENABLED:-false}" == "true" && -z "${ORACLE_NOTIFICATIONS_WEBHOOK_URL:-}" ]]; then
+    echo "ORACLE_NOTIFICATIONS_WEBHOOK_URL is required when ORACLE_NOTIFICATIONS_ENABLED=true" >&2
+    exit 1
+  fi
+
+  if [[ "${RECONCILIATION_NOTIFICATIONS_ENABLED:-false}" == "true" && -z "${RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL:-}" ]]; then
+    echo "RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL is required when RECONCILIATION_NOTIFICATIONS_ENABLED=true" >&2
+    exit 1
+  fi
 fi
 
 echo "env validation passed for profile: $PROFILE"

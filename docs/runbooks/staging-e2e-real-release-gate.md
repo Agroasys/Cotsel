@@ -35,6 +35,8 @@ scripts/docker-services.sh down staging-e2e-real || true
 scripts/docker-services.sh up staging-e2e-real
 scripts/docker-services.sh health staging-e2e-real
 scripts/staging-e2e-real-gate.sh
+npm -w notifications run build
+scripts/notifications-gate.sh staging-e2e-real
 scripts/docker-services.sh logs staging-e2e-real reconciliation
 scripts/docker-services.sh logs staging-e2e-real indexer-graphql
 scripts/docker-services.sh down staging-e2e-real
@@ -45,6 +47,7 @@ The manual `staging-e2e-real` flow above is a staging validation runbook.
 GitHub Actions release-gate enforces workspace lint/typecheck/test/build checks and a CI-safe staging gate path (`scripts/validate-env.sh staging-e2e-real` plus `STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true scripts/staging-e2e-real-gate.sh`).
 CI does not execute the full Docker `up/health/logs/down` staging profile sequence from this runbook.
 Source of truth for CI behavior: `.github/workflows/release-gate.yml`.
+CI also runs deterministic notification-path verification and uploads `ci-report-notifications-gate`.
 
 ## Expected output
 - `health staging-e2e-real` reports required services running and healthy.
@@ -55,6 +58,9 @@ Source of truth for CI behavior: `.github/workflows/release-gate.yml`.
   - reconciliation run summary
   - drift classification snapshot
   - warmup-aware lag enforcement (lag threshold enforced after head readiness)
+- `scripts/notifications-gate.sh staging-e2e-real` writes `reports/notifications/staging-e2e-real.json` with:
+  - delivery + dedup checks for critical oracle/reconciliation event types
+  - severity-route/template metadata validation
 
 ## Common failure modes
 - `STAGING_E2E_REAL_REQUIRE_INDEXED_DATA=true` with empty contract scope: gate fails until a seeded contract/event stream is available.
@@ -63,6 +69,7 @@ Source of truth for CI behavior: `.github/workflows/release-gate.yml`.
 - `indexer head metric unavailable after warmup`: startup is too slow for configured warmup window; tune `STAGING_E2E_REAL_LAG_WARMUP_SECONDS` only after confirming pipeline is healthy.
 - `reconciliation once run failed`: invalid RPC/contract addresses or DB connectivity issue.
 - `indexed data requirement enabled but no indexed trades found`: contract/start block scope has no indexed events yet.
+- `notifications gate failed`: notifications package was not built (`notifications/dist/index.js` missing) or deterministic critical-path probe checks failed.
 
 ## Rollback / backout
 1. Stop profile:

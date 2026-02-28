@@ -8,6 +8,9 @@ This runbook covers containerized orchestration for these services:
 - indexer services used by each profile
 
 `notifications` remains a library workspace (`@agroasys/notifications`), not a standalone runtime container.
+Notification runtime wiring is validated via:
+- `scripts/notifications-wiring-health.sh`
+- `scripts/notifications-gate.sh`
 
 ## Profiles
 
@@ -43,6 +46,7 @@ cp .env.staging-e2e-real.example .env.staging-e2e-real
 scripts/docker-services.sh build local-dev
 scripts/docker-services.sh up local-dev
 scripts/docker-services.sh health local-dev
+scripts/notifications-gate.sh local-dev
 scripts/docker-services.sh logs local-dev reconciliation
 scripts/docker-services.sh down local-dev
 ```
@@ -54,6 +58,7 @@ scripts/docker-services.sh build staging-e2e-real
 scripts/docker-services.sh up staging-e2e-real
 scripts/docker-services.sh health staging-e2e-real
 scripts/staging-e2e-real-gate.sh
+scripts/notifications-gate.sh staging-e2e-real
 scripts/docker-services.sh logs staging-e2e-real reconciliation
 scripts/docker-services.sh logs staging-e2e-real indexer-pipeline
 scripts/docker-services.sh down staging-e2e-real
@@ -70,6 +75,7 @@ scripts/docker-services.sh down staging-e2e-real
 - `DOCKER_SERVICES_WAIT_TIMEOUT_SECONDS` (default `120`)
 - `DOCKER_SERVICES_WAIT_POLL_SECONDS` (default `2`)
 - `DOCKER_SERVICES_HEALTH_LOG_TAIL_LINES` (default `80`)
+- For `local-dev` and `staging-e2e-real`, health also includes notification wiring validation.
 
 ## Notes
 

@@ -9,6 +9,10 @@ Operate deterministic alert delivery with bounded retries, cooldown deduplicatio
   - `oracle/src/core/trigger-manager.ts`
   - `oracle/src/worker/confirmation-worker.ts`
   - `reconciliation/src/core/reconciler.ts`
+- Runtime/profile gates:
+  - `scripts/notifications-wiring-health.sh`
+  - `scripts/notifications-gate.sh`
+  - `scripts/notifications-gate-validate.mjs`
 
 ## Template And Severity Versioning
 - Routing version constant: `NOTIFICATION_ROUTING_VERSION`
@@ -59,8 +63,23 @@ Capture evidence when escalating:
 ## Rollback Procedure
 1. Revert to previous known-good notifications package commit.
 2. Restore prior template version mapping in `NOTIFICATION_TEMPLATE_VERSIONS`.
-3. Re-run notifications tests and one controlled live notification check.
+3. Re-run notifications tests and the deterministic gate probe:
+   - `npm -w notifications run build`
+   - `scripts/notifications-gate.sh staging-e2e-real`
 4. Confirm no secrets are logged and retry bounds are still enforced.
+
+## Runtime Health + Release Evidence
+- Profile-level wiring health checks:
+  - `scripts/docker-services.sh health local-dev`
+  - `scripts/docker-services.sh health staging-e2e-real`
+- Deterministic critical-path probe:
+  - `scripts/notifications-gate.sh staging-e2e-real`
+  - Report output: `reports/notifications/staging-e2e-real.json`
+- CI evidence artifact:
+  - `ci-report-notifications-gate` from `.github/workflows/release-gate.yml`
+  - Contains deterministic probe output for:
+    - `ORACLE_TRIGGER_EXHAUSTED_NEEDS_REDRIVE`
+    - `RECONCILIATION_CRITICAL_DRIFT`
 
 ## Safety Requirements
 - Do not log webhook secrets, tokens, or full credentialed URLs.
@@ -71,4 +90,6 @@ Capture evidence when escalating:
 ```bash
 npm -w notifications test --if-present
 npm -w notifications lint
+npm -w notifications run build
+scripts/notifications-gate.sh staging-e2e-real
 ```
