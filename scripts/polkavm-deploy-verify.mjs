@@ -71,6 +71,16 @@ function timestampForFilename() {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
+function formatChainIdForFilename(chainId) {
+  if (typeof chainId === "string") {
+    return chainId.replace(/^0x/u, "");
+  }
+  if (chainId != null) {
+    return String(chainId);
+  }
+  return "unknown-chainid";
+}
+
 function resolveFromRepo(relativeOrAbsolutePath) {
   if (path.isAbsolute(relativeOrAbsolutePath)) {
     return relativeOrAbsolutePath;
@@ -286,8 +296,8 @@ async function main() {
   const onChainBytecodeHash = toKeccakHex(hexToBytes(onChainCode));
   const artifactBytecodeHash = toKeccakHex(hexToBytes(artifact.deployedBytecode));
   // canonicalJson returns a deterministic JSON string; we hash its UTF-8 bytes.
-  const abiHash = toKeccakHex(Buffer.from(canonicalJson(artifact.abi), "utf8"));
-  const deployer = tx?.from;
+  const abiHash = toKeccakHex(new TextEncoder().encode(canonicalJson(artifact.abi)));
+  const deployer = tx?.from ?? null;
   const expectedDeployer = optionalEnv("DEPLOY_VERIFY_DEPLOYER") || "";
 
   const checks = {
@@ -309,9 +319,9 @@ async function main() {
     // Only enforce deployer match when an expected deployer is configured.
     deployerMatchesExpected: !expectedDeployer
       ? true
-      : deployer
-        ? normalizeHex(deployer) === normalizeHex(expectedDeployer)
-        : false,
+      : typeof deployer === "string" &&
+        deployer.length > 0 &&
+        normalizeHex(deployer) === normalizeHex(expectedDeployer),
   };
 
   const failedChecks = Object.entries(checks)
@@ -351,12 +361,7 @@ async function main() {
   };
 
   fs.mkdirSync(outDir, { recursive: true });
-  const chainIdForFilename =
-    typeof chainId === "string"
-      ? chainId.replace(/^0x/u, "")
-      : chainId != null
-        ? String(chainId)
-        : "unknown-chainid";
+  const chainIdForFilename = formatChainIdForFilename(chainId);
   const outputFile = path.join(
     outDir,
     `deploy-verification-${network}-${chainIdForFilename}-${timestampForFilename()}.json`,
