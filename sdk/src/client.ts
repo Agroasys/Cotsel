@@ -40,6 +40,17 @@ export class Client {
             );
         }
     }
+
+    async getTreasuryPayoutAddress(): Promise<string> {
+        try {
+            return await this.contract.treasuryPayoutAddress();
+        } catch (error: any) {
+            throw new ContractError(
+                `Failed to get treasury payout address: ${error.message}`,
+                { error: error.message }
+            );
+        }
+    }
     
     async getOracleAddress(): Promise<string> {
         try {

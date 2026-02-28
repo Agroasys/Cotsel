@@ -37,4 +37,30 @@ export class SystemEvent {
 
     @BigIntColumn_({nullable: true})
     claimAmount!: bigint | undefined | null
+
+    @Index_()
+    @StringColumn_({nullable: true})
+    proposalId!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    treasuryIdentity!: string | undefined | null
+
+    @Index_()
+    @StringColumn_({nullable: true})
+    payoutReceiver!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    oldPayoutReceiver!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    newPayoutReceiver!: string | undefined | null
+
+    @IntColumn_({nullable: true})
+    approvalCount!: number | undefined | null
+
+    @IntColumn_({nullable: true})
+    requiredApprovals!: number | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    eta!: bigint | undefined | null
 }

@@ -257,4 +257,14 @@ type SystemEvent @entity {
 
   # Claimed specific
   claimAmount: BigInt
+
+  # Treasury claim and payout-receiver governance specific
+  proposalId: String @index
+  treasuryIdentity: String
+  payoutReceiver: String @index
+  oldPayoutReceiver: String
+  newPayoutReceiver: String
+  approvalCount: Int
+  requiredApprovals: Int
+  eta: BigInt
 }

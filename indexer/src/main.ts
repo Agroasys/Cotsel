@@ -159,6 +159,21 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                     case 'Claimed':
                         await handleClaimed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
+                    case 'TreasuryClaimed':
+                        await handleTreasuryClaimed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        break;
+                    case 'TreasuryPayoutAddressUpdateProposed':
+                        await handleTreasuryPayoutAddressUpdateProposed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        break;
+                    case 'TreasuryPayoutAddressUpdateApproved':
+                        await handleTreasuryPayoutAddressUpdateApproved(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        break;
+                    case 'TreasuryPayoutAddressUpdated':
+                        await handleTreasuryPayoutAddressUpdated(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        break;
+                    case 'TreasuryPayoutAddressUpdateProposalExpiredCancelled':
+                        await handleTreasuryPayoutAddressUpdateProposalExpiredCancelled(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        break;
                     case 'ClaimableAccrued':
                         await handleClaimableAccrued(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
@@ -1342,6 +1357,154 @@ async function handleClaimed(
     }));
 
     ctx.log.info(`Claimed ${amount} by ${claimant}`);
+}
+
+async function handleTreasuryClaimed(
+    log: any,
+    events: SystemEvent[],
+    eventId: string,
+    block: any,
+    timestamp: Date,
+    txHash: string | null,
+    extrinsicHash: string | null,
+    extrinsicIndex: number,
+    ctx: any
+) {
+    const [treasuryIdentity, payoutReceiver, amount, triggeredBy] = log.args;
+
+    events.push(new SystemEvent({
+        id: eventId,
+        eventName: 'TreasuryClaimed',
+        blockNumber: block.header.height,
+        timestamp,
+        txHash,
+        extrinsicHash,
+        extrinsicIndex,
+        triggeredBy: triggeredBy.toLowerCase(),
+        claimAmount: amount,
+        treasuryIdentity: treasuryIdentity.toLowerCase(),
+        payoutReceiver: payoutReceiver.toLowerCase()
+    }));
+
+    ctx.log.info(`Treasury claimed ${amount} to ${payoutReceiver} by ${triggeredBy}`);
+}
+
+async function handleTreasuryPayoutAddressUpdateProposed(
+    log: any,
+    events: SystemEvent[],
+    eventId: string,
+    block: any,
+    timestamp: Date,
+    txHash: string | null,
+    extrinsicHash: string | null,
+    extrinsicIndex: number,
+    ctx: any
+) {
+    const [proposalId, proposer, newPayoutReceiver, eta] = log.args;
+
+    events.push(new SystemEvent({
+        id: eventId,
+        eventName: 'TreasuryPayoutAddressUpdateProposed',
+        blockNumber: block.header.height,
+        timestamp,
+        txHash,
+        extrinsicHash,
+        extrinsicIndex,
+        proposalId: proposalId.toString(),
+        triggeredBy: proposer.toLowerCase(),
+        newPayoutReceiver: newPayoutReceiver.toLowerCase(),
+        payoutReceiver: newPayoutReceiver.toLowerCase(),
+        eta
+    }));
+
+    ctx.log.info(`Treasury payout receiver update proposed: proposal=${proposalId} newReceiver=${newPayoutReceiver}`);
+}
+
+async function handleTreasuryPayoutAddressUpdateApproved(
+    log: any,
+    events: SystemEvent[],
+    eventId: string,
+    block: any,
+    timestamp: Date,
+    txHash: string | null,
+    extrinsicHash: string | null,
+    extrinsicIndex: number,
+    ctx: any
+) {
+    const [proposalId, approver, approvalCount, requiredApprovals] = log.args;
+
+    events.push(new SystemEvent({
+        id: eventId,
+        eventName: 'TreasuryPayoutAddressUpdateApproved',
+        blockNumber: block.header.height,
+        timestamp,
+        txHash,
+        extrinsicHash,
+        extrinsicIndex,
+        proposalId: proposalId.toString(),
+        triggeredBy: approver.toLowerCase(),
+        approvalCount: Number(approvalCount),
+        requiredApprovals: Number(requiredApprovals)
+    }));
+
+    ctx.log.info(`Treasury payout receiver update approved: proposal=${proposalId} approver=${approver} approvals=${approvalCount}/${requiredApprovals}`);
+}
+
+async function handleTreasuryPayoutAddressUpdated(
+    log: any,
+    events: SystemEvent[],
+    eventId: string,
+    block: any,
+    timestamp: Date,
+    txHash: string | null,
+    extrinsicHash: string | null,
+    extrinsicIndex: number,
+    ctx: any
+) {
+    const [oldPayoutReceiver, newPayoutReceiver] = log.args;
+
+    events.push(new SystemEvent({
+        id: eventId,
+        eventName: 'TreasuryPayoutAddressUpdated',
+        blockNumber: block.header.height,
+        timestamp,
+        txHash,
+        extrinsicHash,
+        extrinsicIndex,
+        oldPayoutReceiver: oldPayoutReceiver.toLowerCase(),
+        newPayoutReceiver: newPayoutReceiver.toLowerCase(),
+        payoutReceiver: newPayoutReceiver.toLowerCase()
+    }));
+
+    ctx.log.info(`Treasury payout receiver updated: old=${oldPayoutReceiver} new=${newPayoutReceiver}`);
+}
+
+async function handleTreasuryPayoutAddressUpdateProposalExpiredCancelled(
+    log: any,
+    events: SystemEvent[],
+    eventId: string,
+    block: any,
+    timestamp: Date,
+    txHash: string | null,
+    extrinsicHash: string | null,
+    extrinsicIndex: number,
+    ctx: any
+) {
+    const [proposalId, cancelledBy] = log.args;
+
+    events.push(new SystemEvent({
+        id: eventId,
+        eventName: 'TreasuryPayoutAddressUpdateProposalExpiredCancelled',
+        blockNumber: block.header.height,
+        timestamp,
+        txHash,
+        extrinsicHash,
+        extrinsicIndex,
+        proposalId: proposalId.toString(),
+        triggeredBy: cancelledBy.toLowerCase()
+    }));
+
+    ctx.log.info(`Treasury payout receiver update proposal expired and cancelled: proposal=${proposalId} by=${cancelledBy}`);
 }
 
 async function handleClaimsPaused(

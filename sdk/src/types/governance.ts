@@ -25,3 +25,7 @@ export interface GovernanceResult {
     txHash: string;
     blockNumber: number;
 }
+
+export interface GovernanceProposalResult extends GovernanceResult {
+    proposalId?: bigint;
+}

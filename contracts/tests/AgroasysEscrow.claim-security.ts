@@ -169,4 +169,33 @@ describe("AgroasysEscrow - Claim Security", function () {
 
     expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
   });
+
+  it("isolates failed treasury sweep so other claim paths remain usable", async function () {
+    await createTradeToReceiver(ethers.id("treasury-sweep-failure-isolation"));
+    await escrow.connect(oracle).releaseFundsStage1(0);
+
+    const treasuryClaimable = logisticsAmount + platformFeesAmount;
+    expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
+
+    const escrowAny = escrow as any;
+    await escrowAny.connect(admin1).proposeTreasuryPayoutAddressUpdate(await receiver.getAddress());
+    await escrowAny.connect(admin2).approveTreasuryPayoutAddressUpdate(0);
+
+    const timelock = await escrow.governanceTimelock();
+    await ethers.provider.send("evm_increaseTime", [Number(timelock) + 1]);
+    await ethers.provider.send("evm_mine", []);
+    await escrowAny.connect(admin1).executeTreasuryPayoutAddressUpdate(0);
+
+    await usdc.setHookEnabled(await receiver.getAddress(), true);
+    await receiver.configure(false, true);
+
+    await expect(escrowAny.connect(buyer).claimTreasury()).to.be.revertedWith("hook revert");
+    expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
+
+    const treasuryBefore = await usdc.balanceOf(treasury.address);
+    await expect(escrow.connect(treasury).claim())
+      .to.emit(escrow, "Claimed")
+      .withArgs(treasury.address, treasuryClaimable);
+    expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore + treasuryClaimable);
+  });
 });

@@ -43,6 +43,11 @@ type MockContractWithSigner = {
   approveAddAdmin: jest.Mock;
   executeAddAdmin: jest.Mock;
   cancelExpiredAddAdminProposal: jest.Mock;
+  claimTreasury: jest.Mock;
+  proposeTreasuryPayoutAddressUpdate: jest.Mock;
+  approveTreasuryPayoutAddressUpdate: jest.Mock;
+  executeTreasuryPayoutAddressUpdate: jest.Mock;
+  cancelExpiredTreasuryPayoutAddressUpdateProposal: jest.Mock;
 };
 
 function makeSigner(address = '0x1111111111111111111111111111111111111111'): any {
@@ -73,6 +78,11 @@ function makeSdkUnit(isAdmin = true) {
     approveAddAdmin: jest.fn(),
     executeAddAdmin: jest.fn(),
     cancelExpiredAddAdminProposal: jest.fn(),
+    claimTreasury: jest.fn(),
+    proposeTreasuryPayoutAddressUpdate: jest.fn(),
+    approveTreasuryPayoutAddressUpdate: jest.fn(),
+    executeTreasuryPayoutAddressUpdate: jest.fn(),
+    cancelExpiredTreasuryPayoutAddressUpdateProposal: jest.fn(),
   };
 
   const connect = jest.fn().mockReturnValue(contractWithSigner);
@@ -200,6 +210,57 @@ describe('AdminSDK unit', () => {
     expect(contractWithSigner.cancelExpiredAddAdminProposal).toHaveBeenCalledWith(3n);
   });
 
+  test('treasury sweep should be callable without admin verification', async () => {
+    const { sdk, contractWithSigner } = makeSdkUnit(false);
+    const signer = makeSigner();
+    mockSuccessCall(contractWithSigner.claimTreasury);
+
+    await expect(sdk.claimTreasury(signer)).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+    });
+    expect(contractWithSigner.claimTreasury).toHaveBeenCalledTimes(1);
+    expect(sdk.isAdmin).not.toHaveBeenCalled();
+  });
+
+  test('treasury payout receiver governance methods should call matching contract methods', async () => {
+    const { sdk, contractWithSigner } = makeSdkUnit(true);
+    const signer = makeSigner();
+    mockSuccessCall(contractWithSigner.proposeTreasuryPayoutAddressUpdate);
+    mockSuccessCall(contractWithSigner.approveTreasuryPayoutAddressUpdate);
+    mockSuccessCall(contractWithSigner.executeTreasuryPayoutAddressUpdate);
+    mockSuccessCall(contractWithSigner.cancelExpiredTreasuryPayoutAddressUpdateProposal);
+
+    await expect(
+      sdk.proposeTreasuryPayoutAddressUpdate('0x2222222222222222222222222222222222222222', signer)
+    ).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+      proposalId: undefined,
+    });
+    await expect(sdk.approveTreasuryPayoutAddressUpdate(11n, signer)).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+    });
+    await expect(sdk.executeTreasuryPayoutAddressUpdate(11n, signer)).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+    });
+    await expect(
+      sdk.cancelExpiredTreasuryPayoutAddressUpdateProposal(11n, signer)
+    ).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+    });
+
+    expect(contractWithSigner.proposeTreasuryPayoutAddressUpdate).toHaveBeenCalledWith(
+      '0x2222222222222222222222222222222222222222'
+    );
+    expect(contractWithSigner.approveTreasuryPayoutAddressUpdate).toHaveBeenCalledWith(11n);
+    expect(contractWithSigner.executeTreasuryPayoutAddressUpdate).toHaveBeenCalledWith(11n);
+    expect(contractWithSigner.cancelExpiredTreasuryPayoutAddressUpdateProposal).toHaveBeenCalledWith(11n);
+  });
+
   test('proposeDisputeSolution should reject unsupported dispute status', async () => {
     const { sdk } = makeSdkUnit(true);
     const signer = makeSigner();
@@ -216,6 +277,14 @@ describe('AdminSDK unit', () => {
     await expect(sdk.pause(signer)).rejects.toBeInstanceOf(AuthorizationError);
     await expect(sdk.disableOracleEmergency(signer)).rejects.toBeInstanceOf(AuthorizationError);
     await expect(sdk.cancelExpiredOracleUpdateProposal(1n, signer)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(
+      sdk.proposeTreasuryPayoutAddressUpdate('0x2222222222222222222222222222222222222222', signer)
+    ).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(sdk.approveTreasuryPayoutAddressUpdate(1n, signer)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(sdk.executeTreasuryPayoutAddressUpdate(1n, signer)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(
+      sdk.cancelExpiredTreasuryPayoutAddressUpdateProposal(1n, signer)
+    ).rejects.toBeInstanceOf(AuthorizationError);
   });
 });
 
