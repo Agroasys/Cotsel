@@ -40,7 +40,12 @@ curl -fsS "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/ready"
   - `treasuryPayoutAddress` is rotatable payout destination.
   - Treasury entitlement accrues to `claimableUsdc[treasuryAddress]` and is paid by `claimTreasury()`.
 
-If `TREASURY_AUTH_ENABLED=true`, include required HMAC headers on every treasury API call (`x-agroasys-timestamp`, `x-agroasys-signature`, optional `x-agroasys-nonce`, and `X-Api-Key` when key-based auth is used).
+If `TREASURY_AUTH_ENABLED=true`, include required HMAC headers on every treasury API call.
+Required headers:
+- `x-agroasys-timestamp`
+- `x-agroasys-signature`
+- `x-agroasys-nonce` (optional)
+- `X-Api-Key` (when key-based auth is used)
 
 ## Safety Guardrails
 - Never execute payout without an approved ledger entry and evidence package.
@@ -122,7 +127,7 @@ Expected result:
 - Response is `success: true`; transition is accepted by state machine rules.
 
 If not:
-- Validate current state and transition legality (`docs` source of truth: `treasury/src/core/payout.ts`).
+- Validate current state and transition legality against state machine rules in `treasury/src/core/payout.ts` (source of truth for validation behavior).
 - Do not continue until transition path is valid.
 
 ### 4. Start fiat transfer execution (`PROCESSING`)
@@ -228,7 +233,7 @@ cast send <ESCROW_ADDRESS> "unpauseClaims()" --private-key "$ADMIN_KEY"
 - Treasury operations must drain old escrow balances before sunsetting legacy monitoring.
 - Maintain dual-tracking until all are true:
   - all legacy escrows have `claimableUsdc(treasuryAddress) == 0`
-  - all expected `TreasuryClaimed` events are reconciled to payout ledger entries
+  - all expected `TreasuryClaimed` events are reconciled to payout ledger entries (verify via `scripts/staging-e2e-real-gate.sh` and `docs/runbooks/reconciliation.md#treasury-sweep-reconciliation-invariants`)
   - no pending treasury payout rotation incidents remain open
 
 ## Related References

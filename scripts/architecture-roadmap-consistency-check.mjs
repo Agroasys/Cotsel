@@ -5,6 +5,7 @@ import process from "node:process";
 
 const STATUS_VALUES = new Set(["Done", "In Progress", "Blocked", "Backlog", "Out of Scope"]);
 const CADENCE_VALUES = new Set(["daily", "weekly", "biweekly", "monthly", "quarterly", "on-change"]);
+const GATE_ISSUE_NUMBERS = [70, 71, 72];
 const REQUIRED_COLUMNS = [
   "Component",
   "Milestone Target",
@@ -135,8 +136,7 @@ function parseComponentTable(markdown) {
 function parseIssueNumbers(text) {
   const numbers = [];
   const regex = /#(\d+)/gu;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
+  for (const match of text.matchAll(regex)) {
     numbers.push(Number(match[1]));
   }
   return Array.from(new Set(numbers)).sort((a, b) => a - b);
@@ -292,7 +292,7 @@ async function main() {
     if (!token) {
       errors.push("online mode requires GITHUB_TOKEN or GH_TOKEN (use --offline to skip issue-state checks)");
     } else {
-      const issueNumbers = new Set([70, 71, 72]);
+      const issueNumbers = new Set(GATE_ISSUE_NUMBERS);
       for (const row of rows) {
         for (const issueNumber of parseIssueNumbers(row["Roadmap Issue(s)"])) {
           issueNumbers.add(issueNumber);
@@ -325,7 +325,7 @@ async function main() {
         }
       }
 
-      for (const gateIssueNumber of [70, 71, 72]) {
+      for (const gateIssueNumber of GATE_ISSUE_NUMBERS) {
         const gateIssue = issueState.get(gateIssueNumber);
         const gateResult = {
           issue: `#${gateIssueNumber}`,

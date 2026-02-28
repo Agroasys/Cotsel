@@ -27,7 +27,7 @@ Row metadata semantics:
 | Component | Milestone Target | Status | % Complete | Roadmap Issue(s) | Evidence | Remaining Gap | Owner | Last Refreshed | Refresh Cadence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Escrow lifecycle + split-settlement safety | A | Done | 100 | #42, #54 | `contracts/tests/AgroasysEscrow.ts`, `contracts/foundry/test/AgroasysEscrowFuzz.t.sol`, PR #8, PR #13, CI run 22197616358 (`ci/contracts` success) | None for milestone-A baseline | roadmap-maintainers | 2026-02-28 | weekly |
-| Pull-over-push claim settlement model (design + implementation) | B | Done | 100 | #142, #150, #153 | `docs/adr/adr-0142-pull-over-push-claim-settlement.md`, `docs/runbooks/pull-over-push-claim-flow.md`, `contracts/src/AgroasysEscrow.sol` (`claimableUsdc`, `claim`, `pauseClaims`, `unpauseClaims`), `contracts/tests/AgroasysEscrow.ts`, PR #151, PR #154, PR #165, PR #166, PR #167, PR #168, CI run 22518631770 (`ci/contracts` success), CI run 22518757426 (`ci/contracts` success) | None for issue-#142 design + implementation scope. Last refreshed: 2026-02-28 UTC (owner: @Astonstevn). | roadmap-maintainers | 2026-02-28 | weekly |
+| Pull-over-push claim settlement model (design + implementation) | B | Done | 100 | #142, #150, #153 | `docs/adr/adr-0142-pull-over-push-claim-settlement.md`, `docs/runbooks/pull-over-push-claim-flow.md`, `contracts/src/AgroasysEscrow.sol` (`claimableUsdc`, `claim`, `pauseClaims`, `unpauseClaims`), `contracts/tests/AgroasysEscrow.ts`, PR #151, PR #154, PR #165, PR #166, PR #167, PR #168, CI run 22518631770 (`ci/contracts` success), CI run 22518757426 (`ci/contracts` success) | None for issue-#142 design + implementation scope | roadmap-maintainers | 2026-02-28 | weekly |
 | Ricardian PDF/hash service | A | In Progress | 75 | #43, #132 | `ricardian/src/utils/hash.ts`, `ricardian/src/utils/canonicalize.ts`, `ricardian/tests/canonicalize.test.ts`, `sdk/src/modules/ricardianClient.ts`, PR #21 | DocumentStore retrieval resiliency and legal-evidence availability hardening still pending | roadmap-maintainers | 2026-02-28 | weekly |
 | Indexer pipeline + GraphQL schema correctness | A/B | Done | 100 | #44, #174 | `indexer/src/main.ts` (tx/extrinsic separation), `indexer/schema.graphql` (`txHash`, `extrinsicHash` indexed fields), `indexer/src/model/generated/tradeEvent.model.ts`, `indexer/db/migrations/1771180205323-Data.js`, PR #23, PR #177 | None for issue-#44 and issue-#174 scope | roadmap-maintainers | 2026-02-28 | weekly |
 | Reconciliation drift remediation | A/B | In Progress | 60 | #45, #53 | `reconciliation/src/core/classifier.ts`, `reconciliation/src/core/reconciler.ts`, `reconciliation/src/tests/classifier-address-validation.test.ts`, `scripts/staging-e2e-gate.sh` | Deterministic retry/redrive state machine documentation + tests still incomplete | roadmap-maintainers | 2026-02-28 | weekly |
@@ -54,23 +54,48 @@ Row metadata semantics:
 
 ## Milestone Rollup (evidence-based)
 
-- Milestone A: 52% (issue rollup from A deliverables excluding gate)
-- Milestone B: 23% (issue rollup from B deliverables excluding gate)
-- Milestone C: 0% (issue rollup from C deliverables excluding gate)
+- Milestone A: 52% (snapshot as of 2026-02-28; derived via formula below)
+- Milestone B: 23% (snapshot as of 2026-02-28; derived via formula below)
+- Milestone C: 0% (snapshot as of 2026-02-28; derived via formula below)
 
 Computation method:
-- Use roadmap issue `% Complete` values as authoritative per-deliverable status.
-- Recompute after each issue status change or closure.
-- Milestone gate issues (#70/#71/#72) track the rollup value and never lead it.
+- Scope: for each milestone, take all non-gate roadmap issues linked from the corresponding Component Mapping rows.
+- Authoritative signal: use roadmap issue `% Complete` values as per-deliverable completion.
+- Formula: milestone completion = arithmetic mean of in-scope issue `% Complete` values, rounded to nearest whole percent.
+- Deduplication rule: if an issue appears in multiple rows for the same milestone, count it once.
+- Recompute after each in-scope issue status or `% Complete` change.
+- Milestone gate issues (#70/#71/#72) track the rollup value and are excluded from the average.
 
 ## Gate-to-Row Mapping
 
 - Gate `#70` (Milestone A) maps to:
-  Escrow lifecycle + split-settlement safety; Ricardian PDF/hash service; Indexer pipeline + GraphQL schema correctness; Reconciliation drift remediation; SDK typed modules + ABI parity; Release gates + profile health determinism; Core docs + runbooks + developer guidance; AssetHub assets + USDC fee conversion validation; PolkaVM deployment verification + smoke checks.
+  - Escrow lifecycle + split-settlement safety
+  - Ricardian PDF/hash service
+  - Indexer pipeline + GraphQL schema correctness
+  - Reconciliation drift remediation
+  - SDK typed modules + ABI parity
+  - Release gates + profile health determinism
+  - Core docs + runbooks + developer guidance
+  - AssetHub assets + USDC fee conversion validation
+  - PolkaVM deployment verification + smoke checks
 - Gate `#71` (Milestone B) maps to:
-  Dashboard + unified checkout + settlement tracker; Identity service + user profile persistence; Web3Auth signing/session architecture; Oracle trigger + approval + retry controls; Treasury payout queue + audit traceability; Reconciliation reports; Mainnet pilot execution evidence; Hybrid split walkthrough + treasury-to-fiat SOP; API gateway orchestration + error handoff boundary; Notifications service behavior + operational controls.
+  - Dashboard + unified checkout + settlement tracker
+  - Identity service + user profile persistence
+  - Web3Auth signing/session architecture
+  - Oracle trigger + approval + retry controls
+  - Treasury payout queue + audit traceability
+  - Reconciliation reports (on-chain ↔ fiat evidence)
+  - Mainnet pilot execution evidence
+  - Hybrid split walkthrough + treasury-to-fiat SOP
+  - API gateway orchestration + error handoff boundary
+  - Notifications service behavior + operational controls
 - Gate `#72` (Milestone C) maps to:
-  Pilot documentation package (env + legal/KPI/demo templates + user guide); Oracle trigger + approval + retry controls (pilot-safe mode); Treasury payout queue + audit traceability (pilot operations); Infrastructure controls (CI/CD, roadmap governance, release controls); Primary DB operations + recovery evidence; Compliance boundary (KYB/KYT/Sanctions integration).
+  - Pilot documentation package (env + legal/KPI/demo templates + user guide)
+  - Oracle trigger + approval + retry controls (pilot-safe mode)
+  - Treasury payout queue + audit traceability (pilot operations)
+  - Infrastructure controls (CI/CD, roadmap governance, release controls)
+  - Primary DB operations + recovery evidence
+  - Compliance boundary (KYB/KYT/Sanctions integration)
 
 ## Maintenance Rule
 
