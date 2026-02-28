@@ -698,7 +698,7 @@ contract AgroasysEscrow is ReentrancyGuard {
     /**
      * @notice Buyer escape hatch: cancel a LOCKED trade after timeout and recover full locked amount.
      */
-    function cancelLockedTradeAfterTimeout(uint256 _tradeId) external nonReentrant {
+    function cancelLockedTradeAfterTimeout(uint256 _tradeId) external whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -716,7 +716,7 @@ contract AgroasysEscrow is ReentrancyGuard {
     /**
      * @notice Buyer escape hatch: refund only remaining escrowed principal when IN_TRANSIT timeout elapses.
      */
-    function refundInTransitAfterTimeout(uint256 _tradeId) external nonReentrant {
+    function refundInTransitAfterTimeout(uint256 _tradeId) external whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 

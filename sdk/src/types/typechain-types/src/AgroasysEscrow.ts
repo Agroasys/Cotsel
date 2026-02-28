@@ -1035,10 +1035,10 @@ export namespace OracleUpdatedEvent {
 }
 
 export namespace PausedEvent {
-  export type InputTuple = [by: AddressLike];
-  export type OutputTuple = [by: string];
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
   export interface OutputObject {
-    by: string;
+    account: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -1177,10 +1177,10 @@ export namespace UnpauseProposedEvent {
 }
 
 export namespace UnpausedEvent {
-  export type InputTuple = [by: AddressLike];
-  export type OutputTuple = [by: string];
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
   export interface OutputObject {
-    by: string;
+    account: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
