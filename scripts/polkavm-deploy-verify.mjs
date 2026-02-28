@@ -9,6 +9,9 @@ import { bytesToHex, hexToBytes } from "ethereum-cryptography/utils";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
+const DEFAULT_TIMEOUT_MS = 12000;
+const DEFAULT_RETRIES = 3;
+const DEFAULT_BACKOFF_MS = 1000;
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -23,6 +26,19 @@ function requiredEnv(name) {
   return value.trim();
 }
 
+/**
+ * Reads an optional environment variable, trimming whitespace.
+ * Returns undefined if the variable is not set or is empty after trimming.
+ */
+function optionalEnv(name) {
+  const value = process.env[name];
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function normalizeHex(value) {
   if (typeof value !== "string" || value.length === 0) {
     return "";
@@ -35,11 +51,34 @@ function toKeccakHex(inputBytes) {
 }
 
 function canonicalJson(value) {
-  return JSON.stringify(value);
+  function canonicalize(v) {
+    if (v === null || typeof v !== "object") {
+      return v;
+    }
+    if (Array.isArray(v)) {
+      return v.map(canonicalize);
+    }
+    const result = {};
+    for (const key of Object.keys(v).sort()) {
+      result[key] = canonicalize(v[key]);
+    }
+    return result;
+  }
+  return JSON.stringify(canonicalize(value));
 }
 
 function timestampForFilename() {
   return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function formatChainIdForFilename(chainId) {
+  if (typeof chainId === "string") {
+    return chainId.replace(/^0x/u, "");
+  }
+  if (chainId != null) {
+    return String(chainId);
+  }
+  return "unknown-chainid";
 }
 
 function resolveFromRepo(relativeOrAbsolutePath) {
@@ -62,7 +101,21 @@ async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function validateRpcOptions({ retries, timeoutMs, backoffMs }) {
+  if (!Number.isInteger(retries) || retries <= 0) {
+    throw new Error(`invalid retries value: ${retries}`);
+  }
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error(`invalid timeoutMs value: ${timeoutMs}`);
+  }
+  if (!Number.isFinite(backoffMs) || backoffMs < 0) {
+    throw new Error(`invalid backoffMs value: ${backoffMs}`);
+  }
+}
+
 async function rpcCall({ rpcUrl, timeoutMs, retries, backoffMs, method, params }) {
+  validateRpcOptions({ retries, timeoutMs, backoffMs });
+
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -70,7 +123,7 @@ async function rpcCall({ rpcUrl, timeoutMs, retries, backoffMs, method, params }
     try {
       const response = await fetch(rpcUrl, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: 1,
@@ -99,8 +152,6 @@ async function rpcCall({ rpcUrl, timeoutMs, retries, backoffMs, method, params }
       clearTimeout(timeout);
     }
   }
-
-  throw new Error(`rpc call unexpectedly exhausted without result (${method})`);
 }
 
 function loadJson(filePath) {
@@ -119,6 +170,10 @@ function resolveCompilerInfo(artifactPath) {
       compilerVersion: buildInfo.solcVersion ?? null,
       solcLongVersion: buildInfo.solcLongVersion ?? null,
     };
+  }
+
+  if (!artifactPath.endsWith(".json")) {
+    fail(`artifact path does not end with ".json": ${artifactPath}`);
   }
 
   const dbgPath = artifactPath.replace(/\.json$/u, ".dbg.json");
@@ -152,7 +207,7 @@ function resolveHardhatVersion() {
       encoding: "utf8",
     }).trim();
   } catch (error) {
-    const stderr = error && error.stderr ? String(error.stderr).trim() : "";
+    const stderr = error?.stderr ? String(error.stderr).trim() : "";
     const details = stderr ? `\nstderr:\n${stderr}` : "";
     fail(
       `unable to resolve hardhat version using "npx hardhat --version" in ${path.join(
@@ -173,9 +228,9 @@ async function main() {
   const txHash = requiredEnv("DEPLOY_VERIFY_TX_HASH");
   const expectedChainId = (process.env.DEPLOY_VERIFY_EXPECTED_CHAIN_ID || "").trim();
   const compilerName = (process.env.DEPLOY_VERIFY_COMPILER_NAME || "solc").trim();
-  const timeoutMs = Number(process.env.DEPLOY_VERIFY_TIMEOUT_MS || "12000");
-  const retries = Number(process.env.DEPLOY_VERIFY_RETRIES || "3");
-  const backoffMs = Number(process.env.DEPLOY_VERIFY_BACKOFF_MS || "1000");
+  const timeoutMs = Number(process.env.DEPLOY_VERIFY_TIMEOUT_MS || String(DEFAULT_TIMEOUT_MS));
+  const retries = Number(process.env.DEPLOY_VERIFY_RETRIES || String(DEFAULT_RETRIES));
+  const backoffMs = Number(process.env.DEPLOY_VERIFY_BACKOFF_MS || String(DEFAULT_BACKOFF_MS));
   const outDir = resolveFromRepo(process.env.DEPLOY_VERIFY_OUT_DIR || "reports/deploy-verification");
   const commitSha =
     (process.env.DEPLOY_VERIFY_COMMIT_SHA || process.env.GITHUB_SHA || "").trim() ||
@@ -184,14 +239,10 @@ async function main() {
   if (!fs.existsSync(artifactPath)) {
     fail(`artifact not found: ${artifactPath}`);
   }
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    fail(`invalid DEPLOY_VERIFY_TIMEOUT_MS: ${process.env.DEPLOY_VERIFY_TIMEOUT_MS}`);
-  }
-  if (!Number.isFinite(retries) || retries <= 0) {
-    fail(`invalid DEPLOY_VERIFY_RETRIES: ${process.env.DEPLOY_VERIFY_RETRIES}`);
-  }
-  if (!Number.isFinite(backoffMs) || backoffMs <= 0) {
-    fail(`invalid DEPLOY_VERIFY_BACKOFF_MS: ${process.env.DEPLOY_VERIFY_BACKOFF_MS}`);
+  try {
+    validateRpcOptions({ retries, timeoutMs, backoffMs });
+  } catch (error) {
+    fail(error.message);
   }
 
   const artifact = loadJson(artifactPath);
@@ -244,7 +295,10 @@ async function main() {
 
   const onChainBytecodeHash = toKeccakHex(hexToBytes(onChainCode));
   const artifactBytecodeHash = toKeccakHex(hexToBytes(artifact.deployedBytecode));
-  const abiHash = toKeccakHex(Buffer.from(canonicalJson(artifact.abi), "utf8"));
+  // canonicalJson returns a deterministic JSON string; we hash its UTF-8 bytes.
+  const abiHash = toKeccakHex(new TextEncoder().encode(canonicalJson(artifact.abi)));
+  const deployer = tx?.from ?? null;
+  const expectedDeployer = optionalEnv("DEPLOY_VERIFY_DEPLOYER") ?? null;
 
   const checks = {
     runtimeTargetDeclared: typeof runtimeTarget === "string" && runtimeTarget.length > 0,
@@ -262,20 +316,15 @@ async function main() {
     txCreatesContract: tx?.to === null,
     onChainCodeNonEmpty: typeof onChainCode === "string" && onChainCode !== "0x",
     bytecodeHashMatch: normalizeHex(onChainBytecodeHash) === normalizeHex(artifactBytecodeHash),
+    // Only enforce deployer match when an expected deployer is configured.
+    deployerMatchesExpected:
+      expectedDeployer === null ||
+      (!!deployer && normalizeHex(deployer) === normalizeHex(expectedDeployer)),
   };
 
   const failedChecks = Object.entries(checks)
     .filter(([, ok]) => !ok)
     .map(([key]) => key);
-
-  const deployer = tx?.from ?? "";
-  const expectedDeployer = (process.env.DEPLOY_VERIFY_DEPLOYER || "").trim();
-  if (expectedDeployer) {
-    checks.deployerMatchesExpected = normalizeHex(deployer) === normalizeHex(expectedDeployer);
-    if (!checks.deployerMatchesExpected) {
-      failedChecks.push("deployerMatchesExpected");
-    }
-  }
 
   const smokePass = failedChecks.length === 0;
 
@@ -310,9 +359,10 @@ async function main() {
   };
 
   fs.mkdirSync(outDir, { recursive: true });
+  const chainIdForFilename = formatChainIdForFilename(chainId);
   const outputFile = path.join(
     outDir,
-    `deploy-verification-${network}-${chainId.replace(/^0x/u, "")}-${timestampForFilename()}.json`,
+    `deploy-verification-${network}-${chainIdForFilename}-${timestampForFilename()}.json`,
   );
   fs.writeFileSync(outputFile, `${JSON.stringify(evidence, null, 2)}\n`);
   fs.writeFileSync(path.join(outDir, "latest.json"), `${JSON.stringify(evidence, null, 2)}\n`);
