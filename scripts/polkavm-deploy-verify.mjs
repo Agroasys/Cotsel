@@ -218,7 +218,7 @@ async function main() {
   if (!Number.isInteger(retries) || retries <= 0) {
     fail(`invalid DEPLOY_VERIFY_RETRIES: ${process.env.DEPLOY_VERIFY_RETRIES}`);
   }
-  if (!Number.isFinite(backoffMs) || backoffMs <= 0) {
+  if (!Number.isFinite(backoffMs) || backoffMs < 0) {
     fail(`invalid DEPLOY_VERIFY_BACKOFF_MS: ${process.env.DEPLOY_VERIFY_BACKOFF_MS}`);
   }
 
