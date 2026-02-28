@@ -1,6 +1,7 @@
 import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, StringColumn as StringColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_, BigIntColumn as BigIntColumn_} from "@subsquid/typeorm-store"
 import {Trade} from "./trade.model"
 import {DisputeStatus} from "./_disputeStatus"
+import {ClaimType} from "./_claimType"
 
 @Entity_()
 export class TradeEvent {
@@ -94,4 +95,13 @@ export class TradeEvent {
 
     @StringColumn_({nullable: true})
     relatedProposalId!: string | undefined | null
+
+    @Column_("varchar", {length: 31, nullable: true})
+    claimType!: ClaimType | undefined | null
+
+    @StringColumn_({nullable: true})
+    claimRecipient!: string | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    claimAmount!: bigint | undefined | null
 }

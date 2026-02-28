@@ -12,7 +12,8 @@ import {
     AdminEvent,
     SystemEvent,
     TradeStatus,
-    DisputeStatus
+    DisputeStatus,
+    ClaimType
 } from './model'
 import { assertNoExtrinsicFallbackAsTxHash, resolveEventHashes } from './utils/eventHashes';
 
@@ -148,6 +149,18 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                         break;
                     case 'Unpaused':
                         await handleUnpaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        break;
+                    case 'ClaimsPaused':
+                        await handleClaimsPaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        break;
+                    case 'ClaimsUnpaused':
+                        await handleClaimsUnpaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        break;
+                    case 'Claimed':
+                        await handleClaimed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        break;
+                    case 'ClaimableAccrued':
+                        await handleClaimableAccrued(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
 
                     default:
@@ -1256,4 +1269,130 @@ async function handleUnpaused(
     }));
 
     ctx.log.info(`System unpaused by ${triggeredBy}`);
+}
+
+// ########################### claim events ##########################
+
+const CLAIM_TYPE_VALUES = Object.values(ClaimType);
+
+async function handleClaimableAccrued(
+    log: any,
+    trades: Map<string, Trade>,
+    events: TradeEvent[],
+    eventId: string,
+    block: any,
+    timestamp: Date,
+    txHash: string | null,
+    extrinsicHash: string | null,
+    extrinsicIndex: number,
+    ctx: any
+) {
+    const [tradeId, recipient, amount, claimType] = log.args;
+
+    const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
+
+    if (!trade) {
+        ctx.log.error(`Trade ${tradeId} not found for ClaimableAccrued event`);
+        return;
+    }
+
+    const claimTypeEnum = CLAIM_TYPE_VALUES[Number(claimType)] ?? null;
+
+    events.push(new TradeEvent({
+        id: eventId,
+        trade,
+        eventName: 'ClaimableAccrued',
+        blockNumber: block.header.height,
+        timestamp,
+        txHash,
+        extrinsicHash,
+        extrinsicIndex,
+        claimType: claimTypeEnum,
+        claimRecipient: recipient.toLowerCase(),
+        claimAmount: amount
+    }));
+
+    ctx.log.info(`Trade ${tradeId} claimable accrued: ${amount} to ${recipient} (type: ${claimTypeEnum})`);
+}
+
+async function handleClaimed(
+    log: any,
+    events: SystemEvent[],
+    eventId: string,
+    block: any,
+    timestamp: Date,
+    txHash: string | null,
+    extrinsicHash: string | null,
+    extrinsicIndex: number,
+    ctx: any
+) {
+    const [claimant, amount] = log.args;
+
+    events.push(new SystemEvent({
+        id: eventId,
+        eventName: 'Claimed',
+        blockNumber: block.header.height,
+        timestamp,
+        txHash,
+        extrinsicHash,
+        extrinsicIndex,
+        triggeredBy: claimant.toLowerCase(),
+        claimAmount: amount
+    }));
+
+    ctx.log.info(`Claimed ${amount} by ${claimant}`);
+}
+
+async function handleClaimsPaused(
+    log: any,
+    events: SystemEvent[],
+    eventId: string,
+    block: any,
+    timestamp: Date,
+    txHash: string | null,
+    extrinsicHash: string | null,
+    extrinsicIndex: number,
+    ctx: any
+) {
+    const [triggeredBy] = log.args;
+
+    events.push(new SystemEvent({
+        id: eventId,
+        eventName: 'ClaimsPaused',
+        blockNumber: block.header.height,
+        timestamp,
+        txHash,
+        extrinsicHash,
+        extrinsicIndex,
+        triggeredBy: triggeredBy.toLowerCase()
+    }));
+
+    ctx.log.info(`Claims paused by ${triggeredBy}`);
+}
+
+async function handleClaimsUnpaused(
+    log: any,
+    events: SystemEvent[],
+    eventId: string,
+    block: any,
+    timestamp: Date,
+    txHash: string | null,
+    extrinsicHash: string | null,
+    extrinsicIndex: number,
+    ctx: any
+) {
+    const [triggeredBy] = log.args;
+
+    events.push(new SystemEvent({
+        id: eventId,
+        eventName: 'ClaimsUnpaused',
+        blockNumber: block.header.height,
+        timestamp,
+        txHash,
+        extrinsicHash,
+        extrinsicIndex,
+        triggeredBy: triggeredBy.toLowerCase()
+    }));
+
+    ctx.log.info(`Claims unpaused by ${triggeredBy}`);
 }

@@ -66,6 +66,22 @@ type TradeEvent @entity {
   payoutAmount: BigInt
   payoutType: DisputeStatus
   relatedProposalId: String
+
+  # ClaimableAccrued specific
+  claimType: ClaimType
+  claimRecipient: String
+  claimAmount: BigInt
+}
+
+enum ClaimType {
+  STAGE1_SUPPLIER
+  STAGE1_LOGISTICS_FEE
+  STAGE1_PLATFORM_FEE
+  STAGE2_SUPPLIER
+  LOCK_TIMEOUT_BUYER_REFUND
+  IN_TRANSIT_TIMEOUT_BUYER_REFUND
+  DISPUTE_REFUND_BUYER
+  DISPUTE_RESOLVE_SUPPLIER
 }
 
 enum TradeStatus {
@@ -236,6 +252,9 @@ type SystemEvent @entity {
   extrinsicHash: String @index
   extrinsicIndex: Int!
 
-  # Paused/Unpaused specific
+  # Paused/Unpaused/ClaimsPaused/ClaimsUnpaused specific
   triggeredBy: String
+
+  # Claimed specific
+  claimAmount: BigInt
 }

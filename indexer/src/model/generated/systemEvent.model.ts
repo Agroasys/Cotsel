@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_, BigIntColumn as BigIntColumn_} from "@subsquid/typeorm-store"
 
 @Entity_()
 export class SystemEvent {
@@ -34,4 +34,7 @@ export class SystemEvent {
 
     @StringColumn_({nullable: true})
     triggeredBy!: string | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    claimAmount!: bigint | undefined | null
 }
