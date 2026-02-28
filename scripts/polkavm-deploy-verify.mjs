@@ -317,7 +317,7 @@ async function main() {
     onChainCodeNonEmpty: typeof onChainCode === "string" && onChainCode !== "0x",
     bytecodeHashMatch: normalizeHex(onChainBytecodeHash) === normalizeHex(artifactBytecodeHash),
     // Only enforce deployer match when an expected deployer is configured.
-    deployerMatchesExpected: expectedDeployer == null
+    deployerMatchesExpected: expectedDeployer === null
       ? true
       : !!deployer && normalizeHex(deployer) === normalizeHex(expectedDeployer),
   };
