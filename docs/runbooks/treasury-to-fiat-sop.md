@@ -58,6 +58,13 @@ Before preparing fiat payout records, move treasury claimable value from escrow 
 cast send <ESCROW_ADDRESS> "claimTreasury()" --private-key "$OPS_TRIGGER_KEY"
 ```
 
+AdminSDK equivalent (same destination-locked behavior):
+
+```ts
+const adminSDK = new AdminSDK({ rpc, chainId, escrowAddress, usdcAddress });
+await adminSDK.claimTreasury(triggerSigner);
+```
+
 Verification:
 
 ```bash
@@ -178,6 +185,15 @@ cast send <ESCROW_ADDRESS> "proposeTreasuryPayoutAddressUpdate(address)" <NEW_RE
 cast send <ESCROW_ADDRESS> "approveTreasuryPayoutAddressUpdate(uint256)" <PROPOSAL_ID> --private-key "$ADMIN2_KEY"
 # wait governance timelock
 cast send <ESCROW_ADDRESS> "executeTreasuryPayoutAddressUpdate(uint256)" <PROPOSAL_ID> --private-key "$ADMIN1_KEY"
+```
+
+AdminSDK equivalent:
+
+```ts
+const proposal = await adminSDK.proposeTreasuryPayoutAddressUpdate(newReceiver, admin1Signer);
+await adminSDK.approveTreasuryPayoutAddressUpdate(proposal.proposalId!, admin2Signer);
+// wait governance timelock
+await adminSDK.executeTreasuryPayoutAddressUpdate(proposal.proposalId!, admin1Signer);
 ```
 
 3. Verify receiver and unfreeze:

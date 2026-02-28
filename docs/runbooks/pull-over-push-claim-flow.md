@@ -83,6 +83,19 @@ cast send <ESCROW_ADDRESS> "approveTreasuryPayoutAddressUpdate(uint256)" <PROPOS
 cast send <ESCROW_ADDRESS> "executeTreasuryPayoutAddressUpdate(uint256)" <PROPOSAL_ID> --private-key "$ADMIN1_KEY"
 ```
 
+AdminSDK equivalent for automation:
+
+```ts
+const adminSDK = new AdminSDK({ rpc, chainId, escrowAddress, usdcAddress });
+
+await adminSDK.pauseClaims(admin1Signer);
+const proposal = await adminSDK.proposeTreasuryPayoutAddressUpdate(newReceiver, admin1Signer);
+await adminSDK.approveTreasuryPayoutAddressUpdate(proposal.proposalId!, admin2Signer);
+// wait governance timelock
+await adminSDK.executeTreasuryPayoutAddressUpdate(proposal.proposalId!, admin1Signer);
+await adminSDK.unpauseClaims(admin1Signer);
+```
+
 3. Verify rotation on-chain:
 
 ```bash
