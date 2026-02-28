@@ -40,13 +40,16 @@ export interface AgroasysEscrowInterface extends Interface {
       | "approveAddAdmin"
       | "approveDisputeSolution"
       | "approveOracleUpdate"
+      | "approveTreasuryPayoutAddressUpdate"
       | "approveUnpause"
       | "cancelExpiredAddAdminProposal"
       | "cancelExpiredDisputeProposal"
       | "cancelExpiredOracleUpdateProposal"
+      | "cancelExpiredTreasuryPayoutAddressUpdateProposal"
       | "cancelLockedTradeAfterTimeout"
       | "cancelUnpauseProposal"
       | "claim"
+      | "claimTreasury"
       | "claimableUsdc"
       | "claimsPaused"
       | "confirmArrival"
@@ -59,6 +62,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "disputeProposals"
       | "executeAddAdmin"
       | "executeOracleUpdate"
+      | "executeTreasuryPayoutAddressUpdate"
       | "finalizeAfterDisputeWindow"
       | "getBuyerNonce"
       | "getNextTradeId"
@@ -82,6 +86,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "proposeAddAdmin"
       | "proposeDisputeSolution"
       | "proposeOracleUpdate"
+      | "proposeTreasuryPayoutAddressUpdate"
       | "proposeUnpause"
       | "refundInTransitAfterTimeout"
       | "releaseFundsStage1"
@@ -92,6 +97,12 @@ export interface AgroasysEscrowInterface extends Interface {
       | "tradeHasActiveDisputeProposal"
       | "trades"
       | "treasuryAddress"
+      | "treasuryPayoutAddress"
+      | "treasuryPayoutAddressUpdateCounter"
+      | "treasuryPayoutAddressUpdateHasApproved"
+      | "treasuryPayoutAddressUpdateProposalCancelled"
+      | "treasuryPayoutAddressUpdateProposalExpiresAt"
+      | "treasuryPayoutAddressUpdateProposals"
       | "unpauseClaims"
       | "unpauseHasApproved"
       | "unpauseProposal"
@@ -128,6 +139,11 @@ export interface AgroasysEscrowInterface extends Interface {
       | "PlatformFeesPaidStage1"
       | "TradeCancelledAfterLockTimeout"
       | "TradeLocked"
+      | "TreasuryClaimed"
+      | "TreasuryPayoutAddressUpdateApproved"
+      | "TreasuryPayoutAddressUpdateProposalExpiredCancelled"
+      | "TreasuryPayoutAddressUpdateProposed"
+      | "TreasuryPayoutAddressUpdated"
       | "UnpauseApproved"
       | "UnpauseProposalCancelled"
       | "UnpauseProposed"
@@ -191,6 +207,10 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "approveTreasuryPayoutAddressUpdate",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "approveUnpause",
     values?: undefined
   ): string;
@@ -207,6 +227,10 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "cancelExpiredTreasuryPayoutAddressUpdateProposal",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "cancelLockedTradeAfterTimeout",
     values: [BigNumberish]
   ): string;
@@ -215,6 +239,10 @@ export interface AgroasysEscrowInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "claim", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "claimTreasury",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "claimableUsdc",
     values: [AddressLike]
@@ -272,6 +300,10 @@ export interface AgroasysEscrowInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "executeOracleUpdate",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "executeTreasuryPayoutAddressUpdate",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -358,6 +390,10 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "proposeTreasuryPayoutAddressUpdate",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "proposeUnpause",
     values?: undefined
   ): string;
@@ -396,6 +432,30 @@ export interface AgroasysEscrowInterface extends Interface {
   encodeFunctionData(
     functionFragment: "treasuryAddress",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "treasuryPayoutAddress",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "treasuryPayoutAddressUpdateCounter",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "treasuryPayoutAddressUpdateHasApproved",
+    values: [BigNumberish, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "treasuryPayoutAddressUpdateProposalCancelled",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "treasuryPayoutAddressUpdateProposalExpiresAt",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "treasuryPayoutAddressUpdateProposals",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "unpauseClaims",
@@ -465,6 +525,10 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "approveTreasuryPayoutAddressUpdate",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "approveUnpause",
     data: BytesLike
   ): Result;
@@ -481,6 +545,10 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "cancelExpiredTreasuryPayoutAddressUpdateProposal",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "cancelLockedTradeAfterTimeout",
     data: BytesLike
   ): Result;
@@ -489,6 +557,10 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "claim", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "claimTreasury",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "claimableUsdc",
     data: BytesLike
@@ -535,6 +607,10 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "executeOracleUpdate",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "executeTreasuryPayoutAddressUpdate",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -618,6 +694,10 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "proposeTreasuryPayoutAddressUpdate",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "proposeUnpause",
     data: BytesLike
   ): Result;
@@ -652,6 +732,30 @@ export interface AgroasysEscrowInterface extends Interface {
   decodeFunctionResult(functionFragment: "trades", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "treasuryAddress",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "treasuryPayoutAddress",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "treasuryPayoutAddressUpdateCounter",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "treasuryPayoutAddressUpdateHasApproved",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "treasuryPayoutAddressUpdateProposalCancelled",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "treasuryPayoutAddressUpdateProposalExpiresAt",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "treasuryPayoutAddressUpdateProposals",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -1244,6 +1348,113 @@ export namespace TradeLockedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace TreasuryClaimedEvent {
+  export type InputTuple = [
+    treasuryIdentity: AddressLike,
+    payoutReceiver: AddressLike,
+    amount: BigNumberish,
+    triggeredBy: AddressLike
+  ];
+  export type OutputTuple = [
+    treasuryIdentity: string,
+    payoutReceiver: string,
+    amount: bigint,
+    triggeredBy: string
+  ];
+  export interface OutputObject {
+    treasuryIdentity: string;
+    payoutReceiver: string;
+    amount: bigint;
+    triggeredBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TreasuryPayoutAddressUpdateApprovedEvent {
+  export type InputTuple = [
+    proposalId: BigNumberish,
+    approver: AddressLike,
+    approvalCount: BigNumberish,
+    requiredApprovals: BigNumberish
+  ];
+  export type OutputTuple = [
+    proposalId: bigint,
+    approver: string,
+    approvalCount: bigint,
+    requiredApprovals: bigint
+  ];
+  export interface OutputObject {
+    proposalId: bigint;
+    approver: string;
+    approvalCount: bigint;
+    requiredApprovals: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TreasuryPayoutAddressUpdateProposalExpiredCancelledEvent {
+  export type InputTuple = [proposalId: BigNumberish, cancelledBy: AddressLike];
+  export type OutputTuple = [proposalId: bigint, cancelledBy: string];
+  export interface OutputObject {
+    proposalId: bigint;
+    cancelledBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TreasuryPayoutAddressUpdateProposedEvent {
+  export type InputTuple = [
+    proposalId: BigNumberish,
+    proposer: AddressLike,
+    newPayoutReceiver: AddressLike,
+    eta: BigNumberish
+  ];
+  export type OutputTuple = [
+    proposalId: bigint,
+    proposer: string,
+    newPayoutReceiver: string,
+    eta: bigint
+  ];
+  export interface OutputObject {
+    proposalId: bigint;
+    proposer: string;
+    newPayoutReceiver: string;
+    eta: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TreasuryPayoutAddressUpdatedEvent {
+  export type InputTuple = [
+    oldPayoutReceiver: AddressLike,
+    newPayoutReceiver: AddressLike
+  ];
+  export type OutputTuple = [
+    oldPayoutReceiver: string,
+    newPayoutReceiver: string
+  ];
+  export interface OutputObject {
+    oldPayoutReceiver: string;
+    newPayoutReceiver: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace UnpauseApprovedEvent {
   export type InputTuple = [
     approver: AddressLike,
@@ -1410,6 +1621,12 @@ export interface AgroasysEscrow extends BaseContract {
     "nonpayable"
   >;
 
+  approveTreasuryPayoutAddressUpdate: TypedContractMethod<
+    [_proposalId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   approveUnpause: TypedContractMethod<[], [void], "nonpayable">;
 
   cancelExpiredAddAdminProposal: TypedContractMethod<
@@ -1430,6 +1647,12 @@ export interface AgroasysEscrow extends BaseContract {
     "nonpayable"
   >;
 
+  cancelExpiredTreasuryPayoutAddressUpdateProposal: TypedContractMethod<
+    [_proposalId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   cancelLockedTradeAfterTimeout: TypedContractMethod<
     [_tradeId: BigNumberish],
     [void],
@@ -1439,6 +1662,8 @@ export interface AgroasysEscrow extends BaseContract {
   cancelUnpauseProposal: TypedContractMethod<[], [void], "nonpayable">;
 
   claim: TypedContractMethod<[], [void], "nonpayable">;
+
+  claimTreasury: TypedContractMethod<[], [void], "nonpayable">;
 
   claimableUsdc: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
@@ -1511,6 +1736,12 @@ export interface AgroasysEscrow extends BaseContract {
   >;
 
   executeOracleUpdate: TypedContractMethod<
+    [_proposalId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  executeTreasuryPayoutAddressUpdate: TypedContractMethod<
     [_proposalId: BigNumberish],
     [void],
     "nonpayable"
@@ -1608,6 +1839,12 @@ export interface AgroasysEscrow extends BaseContract {
     "nonpayable"
   >;
 
+  proposeTreasuryPayoutAddressUpdate: TypedContractMethod<
+    [_newPayoutReceiver: AddressLike],
+    [bigint],
+    "nonpayable"
+  >;
+
   proposeUnpause: TypedContractMethod<[], [boolean], "nonpayable">;
 
   refundInTransitAfterTimeout: TypedContractMethod<
@@ -1675,6 +1912,43 @@ export interface AgroasysEscrow extends BaseContract {
   >;
 
   treasuryAddress: TypedContractMethod<[], [string], "view">;
+
+  treasuryPayoutAddress: TypedContractMethod<[], [string], "view">;
+
+  treasuryPayoutAddressUpdateCounter: TypedContractMethod<[], [bigint], "view">;
+
+  treasuryPayoutAddressUpdateHasApproved: TypedContractMethod<
+    [arg0: BigNumberish, arg1: AddressLike],
+    [boolean],
+    "view"
+  >;
+
+  treasuryPayoutAddressUpdateProposalCancelled: TypedContractMethod<
+    [arg0: BigNumberish],
+    [boolean],
+    "view"
+  >;
+
+  treasuryPayoutAddressUpdateProposalExpiresAt: TypedContractMethod<
+    [arg0: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
+  treasuryPayoutAddressUpdateProposals: TypedContractMethod<
+    [arg0: BigNumberish],
+    [
+      [string, bigint, boolean, bigint, bigint, string] & {
+        newPayoutReceiver: string;
+        approvalCount: bigint;
+        executed: boolean;
+        createdAt: bigint;
+        eta: bigint;
+        proposer: string;
+      }
+    ],
+    "view"
+  >;
 
   unpauseClaims: TypedContractMethod<[], [void], "nonpayable">;
 
@@ -1763,6 +2037,9 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "approveOracleUpdate"
   ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "approveTreasuryPayoutAddressUpdate"
+  ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "approveUnpause"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
@@ -1775,6 +2052,9 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "cancelExpiredOracleUpdateProposal"
   ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "cancelExpiredTreasuryPayoutAddressUpdateProposal"
+  ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "cancelLockedTradeAfterTimeout"
   ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
   getFunction(
@@ -1782,6 +2062,9 @@ export interface AgroasysEscrow extends BaseContract {
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "claim"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "claimTreasury"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "claimableUsdc"
@@ -1850,6 +2133,9 @@ export interface AgroasysEscrow extends BaseContract {
   ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "executeOracleUpdate"
+  ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "executeTreasuryPayoutAddressUpdate"
   ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "finalizeAfterDisputeWindow"
@@ -1943,6 +2229,13 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "proposeOracleUpdate"
   ): TypedContractMethod<[_newOracle: AddressLike], [bigint], "nonpayable">;
   getFunction(
+    nameOrSignature: "proposeTreasuryPayoutAddressUpdate"
+  ): TypedContractMethod<
+    [_newPayoutReceiver: AddressLike],
+    [bigint],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "proposeUnpause"
   ): TypedContractMethod<[], [boolean], "nonpayable">;
   getFunction(
@@ -2004,6 +2297,41 @@ export interface AgroasysEscrow extends BaseContract {
   getFunction(
     nameOrSignature: "treasuryAddress"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "treasuryPayoutAddress"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "treasuryPayoutAddressUpdateCounter"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "treasuryPayoutAddressUpdateHasApproved"
+  ): TypedContractMethod<
+    [arg0: BigNumberish, arg1: AddressLike],
+    [boolean],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "treasuryPayoutAddressUpdateProposalCancelled"
+  ): TypedContractMethod<[arg0: BigNumberish], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "treasuryPayoutAddressUpdateProposalExpiresAt"
+  ): TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "treasuryPayoutAddressUpdateProposals"
+  ): TypedContractMethod<
+    [arg0: BigNumberish],
+    [
+      [string, bigint, boolean, bigint, bigint, string] & {
+        newPayoutReceiver: string;
+        approvalCount: bigint;
+        executed: boolean;
+        createdAt: bigint;
+        eta: bigint;
+        proposer: string;
+      }
+    ],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "unpauseClaims"
   ): TypedContractMethod<[], [void], "nonpayable">;
@@ -2223,6 +2551,41 @@ export interface AgroasysEscrow extends BaseContract {
     TradeLockedEvent.InputTuple,
     TradeLockedEvent.OutputTuple,
     TradeLockedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TreasuryClaimed"
+  ): TypedContractEvent<
+    TreasuryClaimedEvent.InputTuple,
+    TreasuryClaimedEvent.OutputTuple,
+    TreasuryClaimedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TreasuryPayoutAddressUpdateApproved"
+  ): TypedContractEvent<
+    TreasuryPayoutAddressUpdateApprovedEvent.InputTuple,
+    TreasuryPayoutAddressUpdateApprovedEvent.OutputTuple,
+    TreasuryPayoutAddressUpdateApprovedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TreasuryPayoutAddressUpdateProposalExpiredCancelled"
+  ): TypedContractEvent<
+    TreasuryPayoutAddressUpdateProposalExpiredCancelledEvent.InputTuple,
+    TreasuryPayoutAddressUpdateProposalExpiredCancelledEvent.OutputTuple,
+    TreasuryPayoutAddressUpdateProposalExpiredCancelledEvent.OutputObject
+  >;
+  getEvent(
+    key: "TreasuryPayoutAddressUpdateProposed"
+  ): TypedContractEvent<
+    TreasuryPayoutAddressUpdateProposedEvent.InputTuple,
+    TreasuryPayoutAddressUpdateProposedEvent.OutputTuple,
+    TreasuryPayoutAddressUpdateProposedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TreasuryPayoutAddressUpdated"
+  ): TypedContractEvent<
+    TreasuryPayoutAddressUpdatedEvent.InputTuple,
+    TreasuryPayoutAddressUpdatedEvent.OutputTuple,
+    TreasuryPayoutAddressUpdatedEvent.OutputObject
   >;
   getEvent(
     key: "UnpauseApproved"
@@ -2560,6 +2923,61 @@ export interface AgroasysEscrow extends BaseContract {
       TradeLockedEvent.InputTuple,
       TradeLockedEvent.OutputTuple,
       TradeLockedEvent.OutputObject
+    >;
+
+    "TreasuryClaimed(address,address,uint256,address)": TypedContractEvent<
+      TreasuryClaimedEvent.InputTuple,
+      TreasuryClaimedEvent.OutputTuple,
+      TreasuryClaimedEvent.OutputObject
+    >;
+    TreasuryClaimed: TypedContractEvent<
+      TreasuryClaimedEvent.InputTuple,
+      TreasuryClaimedEvent.OutputTuple,
+      TreasuryClaimedEvent.OutputObject
+    >;
+
+    "TreasuryPayoutAddressUpdateApproved(uint256,address,uint256,uint256)": TypedContractEvent<
+      TreasuryPayoutAddressUpdateApprovedEvent.InputTuple,
+      TreasuryPayoutAddressUpdateApprovedEvent.OutputTuple,
+      TreasuryPayoutAddressUpdateApprovedEvent.OutputObject
+    >;
+    TreasuryPayoutAddressUpdateApproved: TypedContractEvent<
+      TreasuryPayoutAddressUpdateApprovedEvent.InputTuple,
+      TreasuryPayoutAddressUpdateApprovedEvent.OutputTuple,
+      TreasuryPayoutAddressUpdateApprovedEvent.OutputObject
+    >;
+
+    "TreasuryPayoutAddressUpdateProposalExpiredCancelled(uint256,address)": TypedContractEvent<
+      TreasuryPayoutAddressUpdateProposalExpiredCancelledEvent.InputTuple,
+      TreasuryPayoutAddressUpdateProposalExpiredCancelledEvent.OutputTuple,
+      TreasuryPayoutAddressUpdateProposalExpiredCancelledEvent.OutputObject
+    >;
+    TreasuryPayoutAddressUpdateProposalExpiredCancelled: TypedContractEvent<
+      TreasuryPayoutAddressUpdateProposalExpiredCancelledEvent.InputTuple,
+      TreasuryPayoutAddressUpdateProposalExpiredCancelledEvent.OutputTuple,
+      TreasuryPayoutAddressUpdateProposalExpiredCancelledEvent.OutputObject
+    >;
+
+    "TreasuryPayoutAddressUpdateProposed(uint256,address,address,uint256)": TypedContractEvent<
+      TreasuryPayoutAddressUpdateProposedEvent.InputTuple,
+      TreasuryPayoutAddressUpdateProposedEvent.OutputTuple,
+      TreasuryPayoutAddressUpdateProposedEvent.OutputObject
+    >;
+    TreasuryPayoutAddressUpdateProposed: TypedContractEvent<
+      TreasuryPayoutAddressUpdateProposedEvent.InputTuple,
+      TreasuryPayoutAddressUpdateProposedEvent.OutputTuple,
+      TreasuryPayoutAddressUpdateProposedEvent.OutputObject
+    >;
+
+    "TreasuryPayoutAddressUpdated(address,address)": TypedContractEvent<
+      TreasuryPayoutAddressUpdatedEvent.InputTuple,
+      TreasuryPayoutAddressUpdatedEvent.OutputTuple,
+      TreasuryPayoutAddressUpdatedEvent.OutputObject
+    >;
+    TreasuryPayoutAddressUpdated: TypedContractEvent<
+      TreasuryPayoutAddressUpdatedEvent.InputTuple,
+      TreasuryPayoutAddressUpdatedEvent.OutputTuple,
+      TreasuryPayoutAddressUpdatedEvent.OutputObject
     >;
 
     "UnpauseApproved(address,uint256,uint256)": TypedContractEvent<

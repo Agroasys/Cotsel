@@ -29,4 +29,29 @@ describe('Escrow ABI alignment', () => {
             'bool',
         ]);
     });
+
+    test('contains treasury sweep and payout receiver governance methods', () => {
+        const fnNames = abi.filter((item) => item.type === 'function').map((item) => item.name);
+
+        expect(fnNames).toContain('claimTreasury');
+        expect(fnNames).toContain('treasuryPayoutAddress');
+        expect(fnNames).toContain('proposeTreasuryPayoutAddressUpdate');
+        expect(fnNames).toContain('approveTreasuryPayoutAddressUpdate');
+        expect(fnNames).toContain('executeTreasuryPayoutAddressUpdate');
+        expect(fnNames).toContain('cancelExpiredTreasuryPayoutAddressUpdateProposal');
+    });
+
+    test('TreasuryClaimed event has deterministic reconciliation fields', () => {
+        const event = abi.find(
+            (item) => item.type === 'event' && item.name === 'TreasuryClaimed'
+        );
+
+        expect(event).toBeDefined();
+        expect(event.inputs.map((input: any) => input.type)).toEqual([
+            'address',
+            'address',
+            'uint256',
+            'address',
+        ]);
+    });
 });
