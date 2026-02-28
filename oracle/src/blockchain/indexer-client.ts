@@ -1,4 +1,4 @@
-import { Trade, TradeStatus } from '@agroasys/sdk';
+import { TradeStatus } from '@agroasys/sdk';
 import { config } from '../config';
 import { FetchTimeoutError, IndexerNetworkError, fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { Logger } from '../utils/logger';

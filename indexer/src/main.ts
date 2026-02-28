@@ -276,7 +276,7 @@ async function handleFundsReleasedStage1(
     extrinsicIndex: number,
     ctx: any
 ) {
-    const [tradeId, supplier, supplierFirstTranche, treasury, logisticsAmount] = log.args;
+    const [tradeId, , supplierFirstTranche, treasury, logisticsAmount] = log.args;
 
     const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
     

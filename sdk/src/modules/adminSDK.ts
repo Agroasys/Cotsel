@@ -3,8 +3,8 @@
  */
 import { Client } from '../client';
 import { ethers } from 'ethers';
-import { DisputeStatus, DisputeResult, DisputeProposal } from '../types/dispute';
-import { GovernanceResult, OracleUpdateProposal, AdminAddProposal } from '../types/governance';
+import { DisputeStatus, DisputeResult } from '../types/dispute';
+import { GovernanceResult } from '../types/governance';
 import { ContractError, AuthorizationError, ValidationError } from '../types/errors';
 import { validateAddress } from '../utils/validation';
 

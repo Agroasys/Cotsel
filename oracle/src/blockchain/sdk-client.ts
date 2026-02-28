@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { OracleSDK, Trade, TradeStatus } from '@agroasys/sdk';
+import { OracleSDK, Trade } from '@agroasys/sdk';
 import { Logger } from '../utils/logger';
 import { IndexerClient, IndexerTrade } from './indexer-client';
 

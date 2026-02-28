@@ -2,11 +2,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Client } from '../client';
-import { TradeParameters, TradeResult, Trade, TradeStatus } from '../types/trade';
+import { TradeParameters, TradeResult } from '../types/trade';
 import { ethers } from 'ethers';
 import { validateTradeParameters, validateAddress } from '../utils/validation';
 import { signTradeMessage } from '../utils/signature';
-import { ContractError, ValidationError } from '../types/errors';
+import { ContractError } from '../types/errors';
 import { IERC20__factory } from '../types/typechain-types/factories/@openzeppelin/contracts/token/ERC20/IERC20__factory';
 
 export class BuyerSDK extends Client {

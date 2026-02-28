@@ -535,7 +535,7 @@ describe("AgroasysEscrow", function () {
 
 
     it("Should prevent buyer to cancel a LOCKED trade before LOCK_TIMEOUT", async function () {
-      const { tradeId, totalAmount } = await createDefaultTrade(ethers.id("lock-timeout"));
+      const { tradeId } = await createDefaultTrade(ethers.id("lock-timeout"));
 
       const lockTimeout = await escrow.LOCK_TIMEOUT();
       await time.increase(lockTimeout - 1n);
@@ -546,7 +546,7 @@ describe("AgroasysEscrow", function () {
     });
 
     it("Should prevent buyer to refund only remaining principal before IN_TRANSIT timeout", async function () {
-      const { tradeId, supplierSecondTranche } = await createDefaultTrade(ethers.id("in-transit-timeout"));
+      const { tradeId } = await createDefaultTrade(ethers.id("in-transit-timeout"));
 
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
