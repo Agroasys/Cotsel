@@ -35,7 +35,7 @@ This runbook describes the escrow payout model after issue `#142` migration from
   - Use `pause()` for protocol mutation incidents.
   - Use `pauseClaims()` only for claim/accounting/token-transfer incidents.
   - Use both if both risk surfaces are impacted.
-- This behavior is test-backed in `contracts/tests/AgroasysEscrow.ts`:
+- This behavior is test-backed in the repository-root path `./contracts/tests/AgroasysEscrow.ts`:
   - `Should allow claims while globally paused when claim freeze is not active`
   - `Should enforce dedicated claim freeze and restore claim after unpauseClaims`
 
@@ -71,5 +71,8 @@ npm -w contracts test
 - Hardhat test suites are the release gate for this migration:
   - `contracts/tests/AgroasysEscrow.ts`
   - `contracts/tests/AgroasysEscrow.claim-security.ts`
-- Foundry parity could not be executed in this environment because `forge` is unavailable (`npm run -w contracts test:foundry` fails with `forge: command not found`).
-- Treat Foundry migration/verification as a follow-up environment gate before promoting Foundry as a required check.
+- Foundry coverage for pull-over-push behavior exists in:
+  - `contracts/foundry/test/AgroasysEscrowFuzz.t.sol`
+  - `contracts/foundry/test/AgroasysEscrowInvariant.t.sol`
+- Run Foundry with `npm run -w contracts test:foundry` (requires `forge` on `PATH`).
+- Keep Foundry migration/verification as a follow-up gate before promoting Foundry as a required merge check.

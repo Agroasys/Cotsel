@@ -152,7 +152,15 @@ function resolveHardhatVersion() {
       encoding: "utf8",
     }).trim();
   } catch (error) {
-    fail(`unable to resolve hardhat version: ${error.message}`);
+    const stderr = error && error.stderr ? String(error.stderr).trim() : "";
+    const details = stderr ? `\nstderr:\n${stderr}` : "";
+    fail(
+      `unable to resolve hardhat version using "npx hardhat --version" in ${path.join(
+        repoRoot,
+        "contracts",
+      )}: ${error.message || "unknown error"}${details}\n` +
+        "Ensure that Hardhat is installed and that the contracts project has been bootstrapped (e.g., npm/yarn/pnpm install) in the contracts directory.",
+    );
   }
 }
 
