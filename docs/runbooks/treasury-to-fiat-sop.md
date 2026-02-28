@@ -35,6 +35,10 @@ curl -fsS "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/ready"
 - Service auth headers available when `TREASURY_AUTH_ENABLED=true`.
 - Approval separation is active:
   - Treasury Operator cannot self-approve their own payout request.
+- Escrow treasury model is understood:
+  - `treasuryAddress` is immutable signed identity.
+  - `treasuryPayoutAddress` is rotatable payout destination.
+  - Treasury entitlement accrues to `claimableUsdc[treasuryAddress]` and is paid by `claimTreasury()`.
 
 If `TREASURY_AUTH_ENABLED=true`, include required HMAC headers on every treasury API call (`x-agroasys-timestamp`, `x-agroasys-signature`, optional `x-agroasys-nonce`, and `X-Api-Key` when key-based auth is used).
 
@@ -43,8 +47,37 @@ If `TREASURY_AUTH_ENABLED=true`, include required HMAC headers on every treasury
 - Never skip payout state transitions or force `PAID` directly.
 - Never log secrets, private keys, or full credentialed webhook URLs.
 - Never continue processing when destination details are ambiguous.
+- Never use an arbitrary payout destination for treasury claim execution; destination is contract-controlled.
 
 ## Procedure
+
+### 0. Sweep treasury entitlement on-chain (destination-locked)
+Before preparing fiat payout records, move treasury claimable value from escrow to the active payout receiver:
+
+```bash
+cast send <ESCROW_ADDRESS> "claimTreasury()" --private-key "$OPS_TRIGGER_KEY"
+```
+
+AdminSDK equivalent (same destination-locked behavior):
+
+```ts
+const adminSDK = new AdminSDK({ rpc, chainId, escrowAddress, usdcAddress });
+await adminSDK.claimTreasury(triggerSigner);
+```
+
+Verification:
+
+```bash
+cast call <ESCROW_ADDRESS> "claimableUsdc(address)(uint256)" <TREASURY_IDENTITY_ADDRESS>
+cast call <ESCROW_ADDRESS> "treasuryPayoutAddress()(address)"
+```
+
+Expected:
+- `claimableUsdc(treasuryAddress)` decreases to `0` for swept amount.
+- `TreasuryClaimed` event exists with:
+  - immutable `treasuryIdentity`
+  - destination equal to current `treasuryPayoutAddress`
+  - `triggeredBy` matching caller address.
 
 ### 1. Build payout candidate list
 Fetch entries for review:
@@ -138,6 +171,38 @@ If not:
 
 ## Exception Handling
 
+### Treasury payout receiver incident (compromise/lost key/freeze)
+1. Freeze claim path:
+
+```bash
+cast send <ESCROW_ADDRESS> "pauseClaims()" --private-key "$ADMIN_KEY"
+```
+
+2. Rotate payout receiver through governance:
+
+```bash
+cast send <ESCROW_ADDRESS> "proposeTreasuryPayoutAddressUpdate(address)" <NEW_RECEIVER> --private-key "$ADMIN1_KEY"
+cast send <ESCROW_ADDRESS> "approveTreasuryPayoutAddressUpdate(uint256)" <PROPOSAL_ID> --private-key "$ADMIN2_KEY"
+# wait governance timelock
+cast send <ESCROW_ADDRESS> "executeTreasuryPayoutAddressUpdate(uint256)" <PROPOSAL_ID> --private-key "$ADMIN1_KEY"
+```
+
+AdminSDK equivalent:
+
+```ts
+const proposal = await adminSDK.proposeTreasuryPayoutAddressUpdate(newReceiver, admin1Signer);
+await adminSDK.approveTreasuryPayoutAddressUpdate(proposal.proposalId!, admin2Signer);
+// wait governance timelock
+await adminSDK.executeTreasuryPayoutAddressUpdate(proposal.proposalId!, admin1Signer);
+```
+
+3. Verify receiver and unfreeze:
+
+```bash
+cast call <ESCROW_ADDRESS> "treasuryPayoutAddress()(address)"
+cast send <ESCROW_ADDRESS> "unpauseClaims()" --private-key "$ADMIN_KEY"
+```
+
 ### Wrong destination submitted
 - Stop immediately; do not execute transfer.
 - Mark entry `CANCELLED` with explicit reason.
@@ -157,6 +222,14 @@ If not:
 2. Capture treasury API responses, logs, and transfer references.
 3. Run `docs/incidents/first-15-minutes-checklist.md` for high-risk incidents.
 4. Escalate with full evidence to Treasury Approver, Compliance Reviewer, and On-call Engineer.
+
+## Migration Notes (Non-Upgradeable Escrow)
+- Legacy escrow instances may still hold treasury claimables during transition.
+- Treasury operations must drain old escrow balances before sunsetting legacy monitoring.
+- Maintain dual-tracking until all are true:
+  - all legacy escrows have `claimableUsdc(treasuryAddress) == 0`
+  - all expected `TreasuryClaimed` events are reconciled to payout ledger entries
+  - no pending treasury payout rotation incidents remain open
 
 ## Related References
 - `treasury/README.md`

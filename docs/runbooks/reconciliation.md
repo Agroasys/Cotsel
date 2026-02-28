@@ -55,6 +55,44 @@ Severity mapping is deterministic by code path:
 - `HIGH`: status mismatch
 - `MEDIUM`: arrival timestamp mismatch
 
+## Treasury Sweep Reconciliation Invariants
+
+When pull-over-push treasury sweep is enabled, use these deterministic checks:
+
+- Treasury accrual source:
+  - sum `ClaimableAccrued` where `claimRecipient == treasuryAddress`
+- Treasury payout execution sources:
+  - sum `Claimed.claimAmount` where `triggeredBy == treasuryAddress` (direct treasury key path)
+  - sum `TreasuryClaimed.claimAmount` (destination-locked sweep path)
+- Outstanding treasury entitlement:
+  - on-chain `claimableUsdc(treasuryAddress)`
+
+Conservation formula (per escrow address):
+
+```text
+TreasuryAccruedTotal
+  = TreasuryClaimedDirectTotal
+  + TreasuryClaimedSweepTotal
+  + TreasuryOutstandingClaimable
+```
+
+Failure interpretation:
+- If left side > right side: missing payout or stale claimable snapshot.
+- If right side > left side: duplicate accounting or event ingestion bug.
+- Any mismatch across runs for same escrow is `CRITICAL` until explained.
+
+## Migration: Dual-Escrow Reconciliation
+
+Escrow contracts are not upgraded in place. During migration:
+- run reconciliation per escrow address (legacy + new)
+- preserve separate conservation checks for each escrow
+- compute global view only as sum of per-escrow invariant outputs
+
+Migration is complete only when:
+- legacy escrows have zero outstanding treasury claimables
+- expected treasury payout events from legacy escrows are fully matched to treasury ledger entries
+- no unresolved payout receiver rotation incidents remain
+
 ## Retry/Redrive State Machine
 Source of truth:
 - `reconciliation/src/core/reconciler.ts`
@@ -88,6 +126,8 @@ Oracle retry/redrive semantics (for settlement action remediation):
   - output prefix: `reconciliation run summary:`
 - drift snapshot:
   - output prefix: `drift classification snapshot:`
+- treasury payout path evidence:
+  - `TreasuryClaimed` and payout receiver governance events in indexer output/artifacts when present
 
 Run and verify:
 
