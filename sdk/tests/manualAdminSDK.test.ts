@@ -10,7 +10,8 @@ const isManualE2ERequested = process.env.RUN_E2E === 'true';
 const shouldRunManualE2E = isManualE2ERequested && hasRequiredEnv;
 const describeIntegration = shouldRunManualE2E ? describe : describe.skip;
 const isAdminMutationE2ERequested = process.env.RUN_ADMIN_MUTATION_E2E === 'true';
-const testAdminMutation = shouldRunManualE2E && isAdminMutationE2ERequested ? test : test.skip;
+const shouldRunAdminMutationTests = shouldRunManualE2E && isAdminMutationE2ERequested;
+const testAdminMutation = shouldRunAdminMutationTests ? test : test.skip;
 
 function getOptionalEnv(name: string): string | undefined {
     const value = process.env[name];
@@ -38,12 +39,23 @@ function requireManualE2EBigIntEnv(name: string): bigint {
     }
 }
 
-let TEST_TRADE_ID: bigint = 0n;
-let TEST_DISPUTE_PROPOSAL_ID: bigint = 0n;
-let TEST_ORACLE_PROPOSAL_ID: bigint = 0n;
-let TEST_ADMIN_ADD_PROPOSAL_ID: bigint = 0n;
-let TEST_NEW_ORACLE_ADDRESS = '0x0000000000000000000000000000000000000000';
-let TEST_NEW_ADMIN_ADDRESS = '0x0000000000000000000000000000000000000000';
+type AdminMutationFixture = {
+    TEST_TRADE_ID: bigint;
+    TEST_DISPUTE_PROPOSAL_ID: bigint;
+    TEST_ORACLE_PROPOSAL_ID: bigint;
+    TEST_ADMIN_ADD_PROPOSAL_ID: bigint;
+    TEST_NEW_ORACLE_ADDRESS: string;
+    TEST_NEW_ADMIN_ADDRESS: string;
+};
+
+let adminMutationFixture: AdminMutationFixture | undefined;
+
+function requireAdminMutationFixture(): AdminMutationFixture {
+    if (!adminMutationFixture) {
+        throw new Error('Admin mutation fixture not initialized. Ensure RUN_E2E=true and RUN_ADMIN_MUTATION_E2E=true.');
+    }
+    return adminMutationFixture;
+}
 
 describeIntegration('AdminSDK', () => {
     let adminSDK: AdminSDK;
@@ -56,13 +68,15 @@ describeIntegration('AdminSDK', () => {
         adminSigner1 = getAdminSigner(1);
         adminSigner2 = getAdminSigner(2);
 
-        if (shouldRunManualE2E && isAdminMutationE2ERequested) {
-            TEST_TRADE_ID = requireManualE2EBigIntEnv('TEST_TRADE_ID');
-            TEST_DISPUTE_PROPOSAL_ID = requireManualE2EBigIntEnv('TEST_DISPUTE_PROPOSAL_ID');
-            TEST_ORACLE_PROPOSAL_ID = requireManualE2EBigIntEnv('TEST_ORACLE_PROPOSAL_ID');
-            TEST_ADMIN_ADD_PROPOSAL_ID = requireManualE2EBigIntEnv('TEST_ADMIN_ADD_PROPOSAL_ID');
-            TEST_NEW_ORACLE_ADDRESS = requireManualE2EEnv('TEST_NEW_ORACLE_ADDRESS');
-            TEST_NEW_ADMIN_ADDRESS = requireManualE2EEnv('TEST_NEW_ADMIN_ADDRESS');
+        if (shouldRunAdminMutationTests) {
+            adminMutationFixture = {
+                TEST_TRADE_ID: requireManualE2EBigIntEnv('TEST_TRADE_ID'),
+                TEST_DISPUTE_PROPOSAL_ID: requireManualE2EBigIntEnv('TEST_DISPUTE_PROPOSAL_ID'),
+                TEST_ORACLE_PROPOSAL_ID: requireManualE2EBigIntEnv('TEST_ORACLE_PROPOSAL_ID'),
+                TEST_ADMIN_ADD_PROPOSAL_ID: requireManualE2EBigIntEnv('TEST_ADMIN_ADD_PROPOSAL_ID'),
+                TEST_NEW_ORACLE_ADDRESS: requireManualE2EEnv('TEST_NEW_ORACLE_ADDRESS'),
+                TEST_NEW_ADMIN_ADDRESS: requireManualE2EEnv('TEST_NEW_ADMIN_ADDRESS'),
+            };
         }
     });
 
@@ -108,67 +122,78 @@ describeIntegration('AdminSDK', () => {
     });
 
     testAdminMutation('should propose dispute solution', async () => {
-        const result = await adminSDK.proposeDisputeSolution(TEST_TRADE_ID, DisputeStatus.REFUND, adminSigner1);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.proposeDisputeSolution(fixture.TEST_TRADE_ID, DisputeStatus.REFUND, adminSigner1);
         
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
     testAdminMutation('should approve dispute solution', async () => {
-        const result = await adminSDK.approveDisputeSolution(TEST_DISPUTE_PROPOSAL_ID, adminSigner2);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.approveDisputeSolution(fixture.TEST_DISPUTE_PROPOSAL_ID, adminSigner2);
         
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
     testAdminMutation('should cancel expired dispute proposal', async () => {
-        const result = await adminSDK.cancelExpiredDisputeProposal(TEST_DISPUTE_PROPOSAL_ID, adminSigner1);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.cancelExpiredDisputeProposal(fixture.TEST_DISPUTE_PROPOSAL_ID, adminSigner1);
         
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
     testAdminMutation('should propose oracle update', async () => {
-        const result = await adminSDK.proposeOracleUpdate(TEST_NEW_ORACLE_ADDRESS, adminSigner1);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.proposeOracleUpdate(fixture.TEST_NEW_ORACLE_ADDRESS, adminSigner1);
         
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
     testAdminMutation('should approve oracle update', async () => {
-        const result = await adminSDK.approveOracleUpdate(TEST_ORACLE_PROPOSAL_ID, adminSigner2);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.approveOracleUpdate(fixture.TEST_ORACLE_PROPOSAL_ID, adminSigner2);
         
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
     testAdminMutation('should execute oracle update', async () => {
-        const result = await adminSDK.executeOracleUpdate(TEST_ORACLE_PROPOSAL_ID, adminSigner1);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.executeOracleUpdate(fixture.TEST_ORACLE_PROPOSAL_ID, adminSigner1);
         
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
     testAdminMutation('should cancel expired oracle update proposal', async () => {
-        const result = await adminSDK.cancelExpiredOracleUpdateProposal(TEST_ORACLE_PROPOSAL_ID, adminSigner1);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.cancelExpiredOracleUpdateProposal(fixture.TEST_ORACLE_PROPOSAL_ID, adminSigner1);
         
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
     testAdminMutation('should propose add admin', async () => {
-        const result = await adminSDK.proposeAddAdmin(TEST_NEW_ADMIN_ADDRESS, adminSigner1);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.proposeAddAdmin(fixture.TEST_NEW_ADMIN_ADDRESS, adminSigner1);
 
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
     testAdminMutation('should approve add admin', async () => {
-        const result = await adminSDK.approveAddAdmin(TEST_ADMIN_ADD_PROPOSAL_ID, adminSigner2);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.approveAddAdmin(fixture.TEST_ADMIN_ADD_PROPOSAL_ID, adminSigner2);
         
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
     testAdminMutation('should execute add admin', async () => {
-        const result = await adminSDK.executeAddAdmin(TEST_ADMIN_ADD_PROPOSAL_ID, adminSigner1);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.executeAddAdmin(fixture.TEST_ADMIN_ADD_PROPOSAL_ID, adminSigner1);
         
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
     testAdminMutation('should cancel expired add admin proposal', async () => {
-        const result = await adminSDK.cancelExpiredAddAdminProposal(TEST_ADMIN_ADD_PROPOSAL_ID, adminSigner1);
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.cancelExpiredAddAdminProposal(fixture.TEST_ADMIN_ADD_PROPOSAL_ID, adminSigner1);
         
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
