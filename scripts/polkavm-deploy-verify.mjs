@@ -35,7 +35,20 @@ function toKeccakHex(inputBytes) {
 }
 
 function canonicalJson(value) {
-  return JSON.stringify(value);
+  function canonicalize(v) {
+    if (v === null || typeof v !== "object") {
+      return v;
+    }
+    if (Array.isArray(v)) {
+      return v.map(canonicalize);
+    }
+    const result = {};
+    for (const key of Object.keys(v).sort()) {
+      result[key] = canonicalize(v[key]);
+    }
+    return result;
+  }
+  return JSON.stringify(canonicalize(value));
 }
 
 function timestampForFilename() {
@@ -245,6 +258,8 @@ async function main() {
   const onChainBytecodeHash = toKeccakHex(hexToBytes(onChainCode));
   const artifactBytecodeHash = toKeccakHex(hexToBytes(artifact.deployedBytecode));
   const abiHash = toKeccakHex(Buffer.from(canonicalJson(artifact.abi), "utf8"));
+  const deployer = tx?.from ?? "";
+  const expectedDeployer = (process.env.DEPLOY_VERIFY_DEPLOYER || "").trim();
 
   const checks = {
     runtimeTargetDeclared: typeof runtimeTarget === "string" && runtimeTarget.length > 0,
@@ -262,20 +277,15 @@ async function main() {
     txCreatesContract: tx?.to === null,
     onChainCodeNonEmpty: typeof onChainCode === "string" && onChainCode !== "0x",
     bytecodeHashMatch: normalizeHex(onChainBytecodeHash) === normalizeHex(artifactBytecodeHash),
+    // Only enforce deployer match when an expected deployer is configured.
+    deployerMatchesExpected: !expectedDeployer
+      ? true
+      : normalizeHex(deployer) === normalizeHex(expectedDeployer),
   };
 
   const failedChecks = Object.entries(checks)
     .filter(([, ok]) => !ok)
     .map(([key]) => key);
-
-  const deployer = tx?.from ?? "";
-  const expectedDeployer = (process.env.DEPLOY_VERIFY_DEPLOYER || "").trim();
-  if (expectedDeployer) {
-    checks.deployerMatchesExpected = normalizeHex(deployer) === normalizeHex(expectedDeployer);
-    if (!checks.deployerMatchesExpected) {
-      failedChecks.push("deployerMatchesExpected");
-    }
-  }
 
   const smokePass = failedChecks.length === 0;
 
