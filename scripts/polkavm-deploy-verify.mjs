@@ -49,6 +49,15 @@ function resolveFromRepo(relativeOrAbsolutePath) {
   return path.join(repoRoot, relativeOrAbsolutePath);
 }
 
+function sanitizeRpcUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+  } catch {
+    return "invalid-url";
+  }
+}
+
 async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -150,9 +159,11 @@ function resolveHardhatVersion() {
 async function main() {
   const rpcUrl = requiredEnv("DEPLOY_VERIFY_RPC_URL");
   const network = requiredEnv("DEPLOY_VERIFY_NETWORK_NAME");
+  const runtimeTarget = requiredEnv("DEPLOY_VERIFY_RUNTIME_TARGET");
   const artifactPath = resolveFromRepo(requiredEnv("DEPLOY_VERIFY_ARTIFACT_PATH"));
   const contractAddress = requiredEnv("DEPLOY_VERIFY_CONTRACT_ADDRESS");
   const txHash = requiredEnv("DEPLOY_VERIFY_TX_HASH");
+  const expectedChainId = (process.env.DEPLOY_VERIFY_EXPECTED_CHAIN_ID || "").trim();
   const compilerName = (process.env.DEPLOY_VERIFY_COMPILER_NAME || "solc").trim();
   const timeoutMs = Number(process.env.DEPLOY_VERIFY_TIMEOUT_MS || "12000");
   const retries = Number(process.env.DEPLOY_VERIFY_RETRIES || "3");
@@ -196,6 +207,17 @@ async function main() {
     method: "eth_chainId",
     params: [],
   });
+  let rpcClientVersion = "";
+  let rpcClientVersionError = null;
+  try {
+    rpcClientVersion = await rpcCall({
+      ...rpcOptions,
+      method: "web3_clientVersion",
+      params: [],
+    });
+  } catch (error) {
+    rpcClientVersionError = error.message;
+  }
   const onChainCode = await rpcCall({
     ...rpcOptions,
     method: "eth_getCode",
@@ -217,6 +239,12 @@ async function main() {
   const abiHash = toKeccakHex(Buffer.from(canonicalJson(artifact.abi), "utf8"));
 
   const checks = {
+    runtimeTargetDeclared: typeof runtimeTarget === "string" && runtimeTarget.length > 0,
+    runtimeClientVersionPresent:
+      (typeof rpcClientVersion === "string" && rpcClientVersion.length > 0) ||
+      !!rpcClientVersionError,
+    chainIdMatchesExpected:
+      !expectedChainId || normalizeHex(chainId) === normalizeHex(expectedChainId),
     txFound: !!tx,
     receiptFound: !!receipt,
     txHashMatch: normalizeHex(tx?.hash) === normalizeHex(txHash),
@@ -256,9 +284,15 @@ async function main() {
     txHash,
     contractAddress,
     commitSha,
+    runtimeTarget,
+    rpcEndpoint: sanitizeRpcUrl(rpcUrl),
+    rpcClientVersion,
+    rpcClientVersionError,
+    expectedChainId: expectedChainId || null,
     artifactPath: path.relative(repoRoot, artifactPath),
     onChainBytecodeHash,
     artifactBytecodeHash,
+    bytecodeHashMatch: checks.bytecodeHashMatch,
     abiHash,
     smokeCheck: {
       pass: smokePass,
