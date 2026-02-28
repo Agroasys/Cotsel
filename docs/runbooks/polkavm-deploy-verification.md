@@ -152,6 +152,8 @@ Bundle fields include:
 Deployment verification remains a separate check:
 
 ```bash
+DEPLOY_VERIFY_RUNTIME_TARGET=paseo-asset-hub-revive \
+DEPLOY_VERIFY_EXPECTED_CHAIN_ID=0x190f1b41 \
 node scripts/polkavm-deploy-verify.mjs
 ```
 
@@ -160,6 +162,25 @@ Expected output location:
 - `reports/deploy-verification/latest.json`
 - CI verifies the canonical reference deployment produced by the resolc pipeline.
 
-## Current Runtime Note
+Required environment contract:
 
-Compile path is now PolkaVM-targeted through resolc plugin tooling. Deployment runtime endpoint behavior must still be validated separately per environment. If runtime acceptance for resolc artifacts is not available on a target endpoint, track it in a dedicated runtime-migration issue (do not mix with compile-toolchain PR scope).
+- `DEPLOY_VERIFY_RPC_URL`: revive-capable RPC endpoint
+- `DEPLOY_VERIFY_NETWORK_NAME`: network label used in evidence bundle
+- `DEPLOY_VERIFY_RUNTIME_TARGET`: runtime target identifier (current CI value: `paseo-asset-hub-revive`)
+- `DEPLOY_VERIFY_EXPECTED_CHAIN_ID`: expected `eth_chainId` for the endpoint (`0x190f1b41` for Paseo Hub testnet)
+- `DEPLOY_VERIFY_ARTIFACT_PATH`: resolc artifact path (`contracts/artifacts/src/MockUSDC.sol/MockUSDC.json`)
+
+`latest.json` now includes explicit runtime evidence:
+
+- `runtimeTarget`
+- `rpcEndpoint`
+- `rpcClientVersion`
+- `expectedChainId`
+- `bytecodeHashMatch`
+
+## Failure Triage
+
+- `chainIdMatchesExpected=false`: wrong endpoint selected or endpoint routing changed.
+- `runtimeClientVersionPresent=false`: endpoint does not expose `web3_clientVersion`; treat as unsupported for this gate.
+- `txCreatesContract=false` or `receiptContractAddressMatch=false`: tx hash/address mismatch; update canonical reference deployment values.
+- `bytecodeHashMatch=false`: artifact/deployment mismatch; rebuild with `compile:polkavm` and verify the reference deployment inputs.

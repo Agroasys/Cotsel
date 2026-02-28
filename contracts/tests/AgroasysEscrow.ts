@@ -279,6 +279,32 @@ describe("AgroasysEscrow", function () {
       await expect(escrow.connect(admin3).releaseFundsStage1(tradeId))
         .to.emit(escrow, "FundsReleasedStage1");
     });
+
+    it("Should reject pause and emergency controls from non-admin callers", async function () {
+      await expect(
+        escrow.connect(buyer).pause()
+      ).to.be.revertedWith("only admin");
+
+      await expect(
+        escrow.connect(buyer).disableOracleEmergency()
+      ).to.be.revertedWith("only admin");
+
+      await escrow.connect(admin1).pause();
+
+      await expect(
+        escrow.connect(buyer).proposeUnpause()
+      ).to.be.revertedWith("only admin");
+
+      await escrow.connect(admin1).proposeUnpause();
+
+      await expect(
+        escrow.connect(buyer).approveUnpause()
+      ).to.be.revertedWith("only admin");
+
+      await expect(
+        escrow.connect(buyer).cancelUnpauseProposal()
+      ).to.be.revertedWith("only admin");
+    });
   });
 
   describe("Paused Matrix Hardening", function () {
@@ -411,6 +437,32 @@ describe("AgroasysEscrow", function () {
         .withArgs(1, admin2.address);
 
       expect(await escrow.paused()).to.be.true;
+    });
+
+    it("Should block LOCK timeout cancel while paused", async function () {
+      const { tradeId } = await createDefaultTrade(ethers.id("paused-lock-timeout"));
+      const lockTimeout = await escrow.LOCK_TIMEOUT();
+      await time.increase(lockTimeout + 1n);
+
+      await escrow.connect(admin1).pause();
+
+      await expect(
+        escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId)
+      ).to.be.revertedWith("paused");
+    });
+
+    it("Should block IN_TRANSIT timeout refund while paused", async function () {
+      const { tradeId } = await createDefaultTrade(ethers.id("paused-in-transit-timeout"));
+      await escrow.connect(oracle).releaseFundsStage1(tradeId);
+
+      const inTransitTimeout = await escrow.IN_TRANSIT_TIMEOUT();
+      await time.increase(inTransitTimeout + 1n);
+
+      await escrow.connect(admin1).pause();
+
+      await expect(
+        escrow.connect(buyer).refundInTransitAfterTimeout(tradeId)
+      ).to.be.revertedWith("paused");
     });
   });
 
