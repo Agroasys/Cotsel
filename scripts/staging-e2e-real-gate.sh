@@ -150,7 +150,11 @@ run_graphql_query_from_reconciliation() {
   run_compose exec -T reconciliation node -e "
     const target = process.env.INDEXER_GRAPHQL_URL;
     if (!target) {
-      console.error('INDEXER_GRAPHQL_URL is not set. Configure INDEXER_GRAPHQL_URL for the reconciliation service (for example in docker-compose.services.yml or a .env file) as the full HTTP(S) URL of the indexer GraphQL endpoint, such as https://your-indexer-host/graphql.');
+      console.error(
+        'INDEXER_GRAPHQL_URL is not set. ' +
+          'Configure INDEXER_GRAPHQL_URL for the reconciliation service (for example in docker-compose.services.yml or a .env file) ' +
+          'as the full HTTP(S) URL of the indexer GraphQL endpoint, such as https://your-indexer-host/graphql.'
+      );
       process.exit(1);
     }
     fetch(target, {
@@ -172,7 +176,7 @@ extract_indexer_head_height() {
 try:
     data = json.load(sys.stdin)
 except Exception as e:
-    print(f"Warning: Failed to parse JSON: {e}", file=sys.stderr)
+    print(f"Note: JSON parsing failed, treating indexer head height as unavailable and continuing. Details: {e}", file=sys.stderr)
     sys.exit(0)
 root = data.get("data") if isinstance(data, dict) else None
 squid_status = root.get("squidStatus") if isinstance(root, dict) else None
@@ -381,7 +385,7 @@ if [[ -z "$RPC_HEAD_HEX" || -z "$INDEXER_HEAD" ]]; then
 elif [[ ! "$RPC_HEAD_HEX" =~ ^0x[0-9a-fA-F]+$ ]]; then
   fail "RPC head metric is not a valid hex value: ${RPC_HEAD_HEX}"
 else
-  # Strip the 0x prefix, then parse the remaining value as base-16 decimal.
+  # Strip the 0x prefix, then convert the remaining hexadecimal value to decimal.
   RPC_HEAD_NUM="${RPC_HEAD_HEX#0x}"
   RPC_HEAD_NUM="$(printf '%s' "$RPC_HEAD_NUM" | tr '[:upper:]' '[:lower:]')"
   if [[ -z "$RPC_HEAD_NUM" || ! "$RPC_HEAD_NUM" =~ ^[0-9a-f]+$ ]]; then
