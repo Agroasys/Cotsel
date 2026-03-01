@@ -15,6 +15,8 @@ load_env_file() {
   fi
 }
 
+# Normalize URLs that use Docker's internal hostname so they work from the host,
+# by converting host.docker.internal to 127.0.0.1 for host-side access.
 normalize_host_url() {
   local url="$1"
   echo "${url//host.docker.internal/127.0.0.1}"
@@ -84,18 +86,11 @@ resolve_reconciliation_report_version() {
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   local version_source="${script_dir}/../reconciliation/src/core/reconciliationReport.ts"
+  local version_resolver="${script_dir}/get-reconciliation-report-version.mjs"
 
-  if [[ -f "$version_source" ]] && command -v node >/dev/null 2>&1; then
+  if [[ -f "$version_source" && -f "$version_resolver" ]] && command -v node >/dev/null 2>&1; then
     local version
-    version="$(
-      node - "$version_source" 2>/dev/null <<'NODE' || true
-const fs = require("node:fs");
-const filePath = process.argv[2];
-const source = fs.readFileSync(filePath, "utf8");
-const match = source.match(/RECONCILIATION_REPORT_VERSION\s*=\s*["']([^"']+)["']/);
-process.stdout.write(match ? match[1] : "");
-NODE
-    )"
+    version="$(node "$version_resolver" "$version_source" 2>/dev/null || true)"
 
     if [[ -n "$version" ]]; then
       printf '%s\n' "$version"
@@ -113,6 +108,10 @@ require_integer_digits() {
   if [[ ! "$value" =~ ^[0-9]+$ ]]; then
     fail "$name must be an integer consisting only of digits 0-9 (received: $value)"
   fi
+
+  # Validation errors are accumulated via the global failures counter.
+  # Always return success so the gate can report all validation failures at once.
+  return 0
 }
 
 json_encode_string() {
@@ -143,22 +142,24 @@ run_graphql_query_from_reconciliation() {
   run_compose exec -T reconciliation node -e "
     const target = process.env.INDEXER_GRAPHQL_URL;
     if (!target) {
+      console.error('INDEXER_GRAPHQL_URL is not set');
       process.exit(1);
     }
     fetch(target, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: process.argv[1],
-    }).then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1));
+    })
+      .then((response) => process.exit(response.ok ? 0 : 1))
+      .catch((err) => {
+        console.error('Error while executing GraphQL request:', err);
+        process.exit(1);
+      });
   " "$payload"
 }
 
-read_indexer_head() {
-  local status_response
-  status_response="$(run_graphql_query '{ squidStatus { height } }' || true)"
-  local head
-  head="$(
-    printf '%s' "$status_response" | python3 -c 'import json, sys
+extract_indexer_head_height() {
+  python3 -c 'import json, sys
 try:
     data = json.load(sys.stdin)
 except Exception:
@@ -168,7 +169,13 @@ squid_status = root.get("squidStatus") if isinstance(root, dict) else None
 height = squid_status.get("height") if isinstance(squid_status, dict) else None
 if height is not None:
     sys.stdout.write(str(height))'
-  )"
+}
+
+read_indexer_head() {
+  local status_response
+  status_response="$(run_graphql_query '{ squidStatus { height } }' || true)"
+  local head
+  head="$(printf '%s' "$status_response" | extract_indexer_head_height)"
 
   if [[ "$head" =~ ^[0-9]+$ ]]; then
     printf '%s\n' "$head"
@@ -337,6 +344,7 @@ if [[ -z "$RPC_HEAD_HEX" || -z "$INDEXER_HEAD" ]]; then
 elif [[ ! "$RPC_HEAD_HEX" =~ ^0x[0-9a-fA-F]+$ ]]; then
   fail "RPC head metric is not a valid hex value: ${RPC_HEAD_HEX}"
 else
+  # Strip the 0x prefix, then parse the remaining value as base-16 decimal.
   RPC_HEAD_NUM="${RPC_HEAD_HEX#0x}"
   RPC_HEAD_DEC=$((16#$RPC_HEAD_NUM))
   LAG=$((RPC_HEAD_DEC - INDEXER_HEAD))
