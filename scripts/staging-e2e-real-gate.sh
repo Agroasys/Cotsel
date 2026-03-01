@@ -5,6 +5,7 @@ COMPOSE_FILE="docker-compose.services.yml"
 PROFILE="staging-e2e-real"
 failure_count=0
 INDEXER_PIPELINE_SERVICE="${INDEXER_PIPELINE_SERVICE:-indexer-pipeline}"
+PIPELINE_RESTART_SLEEP="${STAGING_E2E_REAL_PIPELINE_RESTART_SLEEP:-5}"
 # Use ASCII Unit Separator (0x1F) as delimiter to minimize collisions with normal text data
 # in reconciliation run and drift summary queries below.
 SUMMARY_FIELD_DELIM=$'\x1f'
@@ -259,22 +260,36 @@ fetch(target, {
   body: process.argv[2],
 })
   .then(async (response) => {
-    if (response.ok) {
-      process.exit(0);
-    }
-    let bodyText = '';
+    let result;
     try {
-      bodyText = await response.text();
+      result = await response.json();
     } catch (e) {
-      bodyText = `<failed to read response body: ${e}>`;
+      console.error('Failed to parse GraphQL response as JSON:', e);
+      process.exit(1);
     }
-    console.error(
-      `GraphQL request failed: status=${response.status} ${response.statusText || ''}`.trim()
-    );
-    if (bodyText) {
-      console.error('Response body:', bodyText);
+
+    if (!response.ok) {
+      console.error(
+        `GraphQL HTTP request failed: status=${response.status} ${response.statusText || ''}`.trim()
+      );
+      console.error('Response body:', JSON.stringify(result));
+      process.exit(1);
     }
-    process.exit(1);
+
+    const hasErrors = Array.isArray(result && result.errors) && result.errors.length > 0;
+    const hasData = !!(result && Object.prototype.hasOwnProperty.call(result, 'data'));
+    if (hasErrors || !hasData) {
+      console.error('GraphQL request returned errors or missing data.');
+      if (hasErrors) {
+        console.error('Errors:', JSON.stringify(result.errors, null, 2));
+      }
+      if (!hasData) {
+        console.error('Response did not contain a "data" field.');
+      }
+      process.exit(1);
+    }
+
+    process.exit(0);
   })
   .catch((err) => {
     console.error('Error while executing GraphQL request:', err);
@@ -348,10 +363,20 @@ calculate_dynamic_start_block() {
   local rpc_start_head_dec=""
   local dynamic_indexer_start_block=0
   local backoff_value="${START_BLOCK_BACKOFF:-250}"
+  local min_start_block=1
+  local configured_min_start_block="${MIN_INDEXER_START_BLOCK:-}"
 
   if [[ -n "${START_BLOCK_BACKOFF:-}" && ! "${START_BLOCK_BACKOFF}" =~ ^[0-9]+$ ]]; then
     echo "warning: invalid START_BLOCK_BACKOFF='${START_BLOCK_BACKOFF}' for dynamic start block; defaulting to 250" >&2
     backoff_value=250
+  fi
+  if [[ -n "$configured_min_start_block" ]]; then
+    if [[ "$configured_min_start_block" =~ ^[0-9]+$ ]]; then
+      min_start_block="$configured_min_start_block"
+    else
+      echo "warning: invalid MIN_INDEXER_START_BLOCK='${configured_min_start_block}' for dynamic start block; defaulting to 1" >&2
+      min_start_block=1
+    fi
   fi
 
   rpc_start_head_hex="$(get_rpc_head_hex)"
@@ -359,11 +384,11 @@ calculate_dynamic_start_block() {
     rpc_start_head_dec="$(hex_to_decimal "$rpc_start_head_hex" 2>/dev/null || true)"
     if [[ -n "$rpc_start_head_dec" && "$rpc_start_head_dec" =~ ^[0-9]+$ ]]; then
       dynamic_indexer_start_block=$((rpc_start_head_dec - backoff_value))
-      if (( dynamic_indexer_start_block < 1 )); then
-        dynamic_indexer_start_block=1
+      if (( dynamic_indexer_start_block < min_start_block )); then
+        dynamic_indexer_start_block=min_start_block
       fi
       export INDEXER_START_BLOCK="$dynamic_indexer_start_block"
-      echo "dynamic start block: INDEXER_START_BLOCK=${INDEXER_START_BLOCK} (rpcHead=${rpc_start_head_dec}, backoff=${backoff_value})"
+      echo "dynamic start block: INDEXER_START_BLOCK=${INDEXER_START_BLOCK} (rpcHead=${rpc_start_head_dec}, backoff=${backoff_value}, minStartBlock=${min_start_block})"
     else
       echo "warning: invalid normalized RPC head value '${rpc_start_head_dec}' for dynamic start block (from hex '${rpc_start_head_hex}'); using existing INDEXER_START_BLOCK=${INDEXER_START_BLOCK:-unset}" >&2
     fi
@@ -407,6 +432,7 @@ LAG_POLL_SECONDS="${STAGING_E2E_REAL_LAG_POLL_SECONDS:-5}"
 MAX_INDEXER_LAG_BLOCKS="${STAGING_E2E_MAX_INDEXER_LAG_BLOCKS:-500}"
 READINESS_RETRY_ATTEMPTS="${STAGING_E2E_REAL_READINESS_RETRY_ATTEMPTS:-30}"
 READINESS_RETRY_DELAY="${STAGING_E2E_REAL_READINESS_RETRY_DELAY:-2}"
+MIN_INDEXER_START_BLOCK="${STAGING_E2E_REAL_MIN_INDEXER_START_BLOCK:-1}"
 
 RUN_KEY="staging-e2e-real-gate-$(date +%s)"
 validate_run_key
@@ -423,12 +449,15 @@ require_integer_digits "STAGING_E2E_REAL_LAG_POLL_SECONDS" "$LAG_POLL_SECONDS"
 require_integer_digits "STAGING_E2E_MAX_INDEXER_LAG_BLOCKS" "$MAX_INDEXER_LAG_BLOCKS"
 require_integer_digits "STAGING_E2E_REAL_READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_ATTEMPTS"
 require_integer_digits "STAGING_E2E_REAL_READINESS_RETRY_DELAY" "$READINESS_RETRY_DELAY"
+require_integer_digits "STAGING_E2E_REAL_PIPELINE_RESTART_SLEEP" "$PIPELINE_RESTART_SLEEP"
+require_integer_digits "STAGING_E2E_REAL_MIN_INDEXER_START_BLOCK" "$MIN_INDEXER_START_BLOCK"
 
 require_positive_value "STAGING_E2E_REAL_LAG_WARMUP_SECONDS" "$LAG_WARMUP_SECONDS"
 require_positive_value "STAGING_E2E_REAL_LAG_POLL_SECONDS" "$LAG_POLL_SECONDS"
 require_positive_value "STAGING_E2E_MAX_INDEXER_LAG_BLOCKS" "$MAX_INDEXER_LAG_BLOCKS"
 require_positive_value "STAGING_E2E_REAL_READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_ATTEMPTS"
 require_positive_value "STAGING_E2E_REAL_READINESS_RETRY_DELAY" "$READINESS_RETRY_DELAY"
+require_positive_value "STAGING_E2E_REAL_PIPELINE_RESTART_SLEEP" "$PIPELINE_RESTART_SLEEP"
 
 if [[ "$failure_count" -gt 0 ]]; then
   echo "staging-e2e-real gate failed with ${failure_count} check(s)" >&2
@@ -472,7 +501,7 @@ else
   fail "profile health check failed"
 fi
 
-if retry_cmd "indexer graphql readiness" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query '{ __typename }' >/dev/null; then
+if retry_cmd "indexer graphql readiness" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query 'query { trades(limit: 1) { tradeId } }' >/dev/null; then
   pass "indexer GraphQL readiness check passed"
 else
   fail "indexer GraphQL readiness check failed"
@@ -556,8 +585,8 @@ fi
 HEAD_BEFORE_RESTART="${INDEXER_HEAD:-}"
 if run_compose ps --services --filter status=running | tr '[:space:]' '\n' | grep -Fxq "${INDEXER_PIPELINE_SERVICE}"; then
   run_compose restart "${INDEXER_PIPELINE_SERVICE}" >/dev/null
-  sleep 5
-  if retry_cmd "indexer graphql readiness after pipeline restart" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query '{ __typename }' >/dev/null; then
+  sleep "$PIPELINE_RESTART_SLEEP"
+  if retry_cmd "indexer graphql readiness after pipeline restart" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query 'query { trades(limit: 1) { tradeId } }' >/dev/null; then
     STATUS_AFTER_RESTART="$(run_graphql_query '{ squidStatus { height } }' || true)"
     HEAD_AFTER_RESTART="$(printf '%s' "$STATUS_AFTER_RESTART" | extract_indexer_head_height)"
     if [[ -z "$HEAD_AFTER_RESTART" ]]; then
@@ -585,7 +614,14 @@ else
   fail "reconciliation once run failed"
 fi
 
-RUN_SUMMARY_SQL=$'SELECT status, total_trades, drift_count FROM reconcile_runs WHERE run_key = :\'run_key_var\' ORDER BY id DESC LIMIT 1;'
+RUN_SUMMARY_SQL="$(cat <<'SQL'
+SELECT status, total_trades, drift_count
+FROM reconcile_runs
+WHERE run_key = :'run_key_var'
+ORDER BY id DESC
+LIMIT 1;
+SQL
+)"
 RUN_SUMMARY="$(run_with_prefixed_stderr "reconcile_run_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${RUN_SUMMARY_SQL}" || true)"
 if [[ -n "$RUN_SUMMARY" ]]; then
   IFS="${SUMMARY_FIELD_DELIM}" read -r RUN_STATUS RUN_TOTAL RUN_DRIFT <<<"$RUN_SUMMARY"
@@ -595,7 +631,14 @@ else
   fail "reconciliation run summary unavailable"
 fi
 
-DRIFT_SUMMARY_SQL=$'SELECT mismatch_code, COUNT(*) FROM reconcile_drifts WHERE run_key = :\'run_key_var\' GROUP BY mismatch_code ORDER BY COUNT(*) DESC;'
+DRIFT_SUMMARY_SQL="$(cat <<'SQL'
+SELECT mismatch_code, COUNT(*)
+FROM reconcile_drifts
+WHERE run_key = :'run_key_var'
+GROUP BY mismatch_code
+ORDER BY COUNT(*) DESC;
+SQL
+)"
 DRIFT_SUMMARY_ROWS="$(run_with_prefixed_stderr "reconcile_drift_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${DRIFT_SUMMARY_SQL}" || true)"
 echo "drift classification snapshot:"
 if [[ -n "$DRIFT_SUMMARY_ROWS" ]]; then
