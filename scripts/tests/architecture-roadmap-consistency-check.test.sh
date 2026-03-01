@@ -82,6 +82,12 @@ node -e '
   if (!errorsText.includes("owner")) {
     throw new Error("expected fail report errors to mention the Owner field");
   }
+  if (!report.remediation || typeof report.remediation.writeMatrix !== "string") {
+    throw new Error("expected remediation.writeMatrix in fail report");
+  }
+  if (!report.remediation || typeof report.remediation.writeGateIssues !== "string") {
+    throw new Error("expected remediation.writeGateIssues in fail report");
+  }
 ' "$tmp_dir/fail.json"
 
 cat > "$fail_matrix_last_refreshed" <<'MATRIX'

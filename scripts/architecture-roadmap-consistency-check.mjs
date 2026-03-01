@@ -285,6 +285,10 @@ async function main() {
     errors,
     warnings,
     gateChecks: [],
+    remediation: {
+      writeMatrix: `GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo "${args.repo}" --write`,
+      writeGateIssues: `GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo "${args.repo}" --write-gate-issues`,
+    },
   };
 
   if (!args.offline) {
@@ -320,7 +324,7 @@ async function main() {
         const allClosed = linkedIssues.every((issueNumber) => issueState.get(issueNumber)?.state === "closed");
         if (allClosed && row.Status !== "Done" && row.Status !== "Out of Scope") {
           errors.push(
-            `line ${row._line}: stale drift - all linked issues are closed (${linkedIssues.map((n) => `#${n}`).join(", ")}) but row status is ${row.Status}`,
+            `line ${row._line}: stale drift - all linked issues are closed (${linkedIssues.map((n) => `#${n}`).join(", ")}); expected Status=Done or Out of Scope, actual=${row.Status}`,
           );
         }
       }
@@ -380,6 +384,8 @@ async function main() {
     for (const error of errors) {
       console.error(`ERROR: ${error}`);
     }
+    console.error(`ERROR: remediation (matrix): ${report.remediation.writeMatrix}`);
+    console.error(`ERROR: remediation (gate issues): ${report.remediation.writeGateIssues}`);
     process.exit(1);
   }
 

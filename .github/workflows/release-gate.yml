@@ -144,6 +144,19 @@ jobs:
             --out "ci-reports/arch-roadmap-consistency.json" \
             > ci-reports/arch-roadmap-consistency.log 2>&1
           status=$?
+          if [[ "$status" -ne 0 ]]; then
+            node scripts/arch-roadmap-sync.mjs \
+              --repo "${{ github.repository }}" \
+              --out "ci-reports/arch-roadmap-sync.json" \
+              --patch "ci-reports/arch-roadmap-sync.patch" \
+              >> ci-reports/arch-roadmap-consistency.log 2>&1 || true
+            {
+              echo ""
+              echo "Remediation:"
+              echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write"
+              echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write-gate-issues"
+            } >> ci-reports/arch-roadmap-consistency.log
+          fi
           cat ci-reports/arch-roadmap-consistency.log
           exit "$status"
 
@@ -155,6 +168,8 @@ jobs:
           path: |
             ci-reports/arch-roadmap-consistency.json
             ci-reports/arch-roadmap-consistency.log
+            ci-reports/arch-roadmap-sync.json
+            ci-reports/arch-roadmap-sync.patch
 
   env-profile-regression:
     name: ci/env-profile-regression
@@ -191,6 +206,7 @@ jobs:
           run_check staging-e2e-real-gate-start-block scripts/tests/staging-e2e-real-gate-start-block.test.sh
           run_check notifications-wiring-health scripts/tests/notifications-wiring-health.test.sh
           run_check arch-roadmap-consistency scripts/tests/architecture-roadmap-consistency-check.test.sh
+          run_check arch-roadmap-sync scripts/tests/architecture-roadmap-sync.test.sh
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1

@@ -69,7 +69,9 @@ Auth for project field writes:
 
 ## Architecture-Matrix Consistency Guard
 - Checker script: `scripts/architecture-roadmap-consistency-check.mjs`
+- Sync helper: `scripts/arch-roadmap-sync.mjs`
 - CI artifact: `ci-report-arch-roadmap-consistency`
+- CI drift artifacts (on failure): `arch-roadmap-sync.json`, `arch-roadmap-sync.patch`
 
 What the checker enforces:
 1. Required matrix row metadata columns exist and are populated:
@@ -83,11 +85,34 @@ What the checker enforces:
    - Issues `#70/#71/#72` must contain `Last synchronized: <date>` matching matrix snapshot date.
    - Gate issue bodies must reference `docs/runbooks/architecture-coverage-matrix.md`.
 
-Manual commands:
+Operator flow (deterministic):
+1. Check drift locally:
+```bash
+GITHUB_TOKEN="$(gh auth token)" node scripts/architecture-roadmap-consistency-check.mjs --repo Agroasys/Agroasys.Web3layer
+```
+2. Generate deterministic sync plan + patch:
+```bash
+GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer
+```
+3. Apply matrix sync updates:
+```bash
+GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer --write
+```
+4. If gate issue metadata is out of sync, update gate issues:
+```bash
+GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer --write-gate-issues
+```
+5. Commit matrix changes and rerun CI checks:
+```bash
+git add docs/runbooks/architecture-coverage-matrix.md
+git commit -m "docs(roadmap): sync architecture coverage matrix"
+```
+
+Manual/offline commands:
 ```bash
 # offline schema/format checks
 node scripts/architecture-roadmap-consistency-check.mjs --offline
 
-# online checks (issue-state + gate sync checks)
-GITHUB_TOKEN=\"$(gh auth token)\" node scripts/architecture-roadmap-consistency-check.mjs
+# offline sync plan from cached issue snapshot
+node scripts/arch-roadmap-sync.mjs --offline
 ```
