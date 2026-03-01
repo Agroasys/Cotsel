@@ -4,6 +4,8 @@ set -euo pipefail
 COMPOSE_FILE="docker-compose.services.yml"
 PROFILE="staging-e2e-real"
 failures=0
+READINESS_RETRY_ATTEMPTS=30
+READINESS_RETRY_DELAY=2
 
 load_env_file() {
   local file="$1"
@@ -51,6 +53,13 @@ pass() {
 fail() {
   echo "[FAIL] $1" >&2
   failures=$((failures + 1))
+}
+
+require_python3() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    fail "python3 is required for JSON helpers but was not found in PATH. Install python3 or adjust PATH."
+    exit 1
+  fi
 }
 
 retry_cmd() {
@@ -115,6 +124,7 @@ require_integer_digits() {
 }
 
 json_encode_string() {
+  require_python3
   python3 -c 'import json,sys; data=sys.stdin.read().rstrip("\n"); print(json.dumps(data))'
 }
 
@@ -159,6 +169,7 @@ run_graphql_query_from_reconciliation() {
 }
 
 extract_indexer_head_height() {
+  require_python3
   python3 -c 'import json, sys
 try:
     data = json.load(sys.stdin)
@@ -209,9 +220,17 @@ wait_for_indexer_head_ready() {
   return 1
 }
 
-extract_json_value() {
-  local expression="$1"
-  python3 -c "import json,sys; data=json.load(sys.stdin); value=${expression}; print(value if value is not None else '')"
+extract_indexed_trades_count() {
+  require_python3
+  python3 -c 'import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+root = data.get("data") if isinstance(data, dict) else None
+trades = root.get("trades") if isinstance(root, dict) else None
+if isinstance(trades, list):
+    sys.stdout.write(str(len(trades)))'
 }
 
 load_env_file ".env"
@@ -263,13 +282,17 @@ if [[ "$DYNAMIC_START_BLOCK" == "true" && -n "$RPC_GATEWAY_URL_HOST" ]]; then
   if [[ -n "$RPC_START_HEAD_HEX" && "$RPC_START_HEAD_HEX" =~ ^0x[0-9a-fA-F]+$ ]]; then
     RPC_START_HEAD_NUM="${RPC_START_HEAD_HEX#0x}"
     RPC_START_HEAD_NUM="$(printf '%s' "$RPC_START_HEAD_NUM" | tr '[:upper:]' '[:lower:]')"
-    RPC_START_HEAD_DEC=$((16#$RPC_START_HEAD_NUM))
-    DYNAMIC_INDEXER_START_BLOCK=$((RPC_START_HEAD_DEC - START_BLOCK_BACKOFF))
-    if (( DYNAMIC_INDEXER_START_BLOCK < 1 )); then
-      DYNAMIC_INDEXER_START_BLOCK=1
+    if [[ "$RPC_START_HEAD_NUM" =~ ^[0-9a-f]+$ ]]; then
+      RPC_START_HEAD_DEC=$((16#$RPC_START_HEAD_NUM))
+      DYNAMIC_INDEXER_START_BLOCK=$((RPC_START_HEAD_DEC - START_BLOCK_BACKOFF))
+      if (( DYNAMIC_INDEXER_START_BLOCK < 1 )); then
+        DYNAMIC_INDEXER_START_BLOCK=1
+      fi
+      export INDEXER_START_BLOCK="$DYNAMIC_INDEXER_START_BLOCK"
+      echo "dynamic start block: INDEXER_START_BLOCK=${INDEXER_START_BLOCK} (rpcHead=${RPC_START_HEAD_DEC}, backoff=${START_BLOCK_BACKOFF})"
+    else
+      echo "warning: invalid normalized RPC head value '${RPC_START_HEAD_NUM}' for dynamic start block; using existing INDEXER_START_BLOCK=${INDEXER_START_BLOCK:-unset}" >&2
     fi
-    export INDEXER_START_BLOCK="$DYNAMIC_INDEXER_START_BLOCK"
-    echo "dynamic start block: INDEXER_START_BLOCK=${INDEXER_START_BLOCK} (rpcHead=${RPC_START_HEAD_DEC}, backoff=${START_BLOCK_BACKOFF})"
   elif [[ -z "$RPC_START_HEAD_HEX" ]]; then
     echo "warning: unable to determine RPC head for dynamic start block; using existing INDEXER_START_BLOCK=${INDEXER_START_BLOCK:-unset}" >&2
   else
@@ -305,13 +328,13 @@ else
   fail "profile health check failed"
 fi
 
-if retry_cmd "indexer graphql readiness" 30 2 run_graphql_query '{ __typename }' >/dev/null; then
+if retry_cmd "indexer graphql readiness" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query '{ __typename }' >/dev/null; then
   pass "indexer GraphQL readiness check passed"
 else
   fail "indexer GraphQL readiness check failed"
 fi
 
-if retry_cmd "indexer graphql in-network readiness" 30 2 run_graphql_query_from_reconciliation '{ __typename }' >/dev/null; then
+if retry_cmd "indexer graphql in-network readiness" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query_from_reconciliation '{ __typename }' >/dev/null; then
   pass "indexer GraphQL in-network readiness check passed"
 else
   fail "indexer GraphQL in-network readiness check failed"
@@ -363,7 +386,7 @@ else
 fi
 
 TRADES_RESPONSE="$(run_graphql_query '{ trades(limit: 1) { tradeId } }' || true)"
-INDEXED_TRADES_COUNT="$(printf '%s' "$TRADES_RESPONSE" | extract_json_value 'len(data.get("data",{}).get("trades",[]))')"
+INDEXED_TRADES_COUNT="$(printf '%s' "$TRADES_RESPONSE" | extract_indexed_trades_count)"
 if [[ -z "$INDEXED_TRADES_COUNT" ]]; then
   INDEXED_TRADES_COUNT=0
 fi
@@ -383,9 +406,9 @@ HEAD_BEFORE_RESTART="${INDEXER_HEAD:-}"
 if run_compose ps --services --filter status=running | grep -qx 'indexer-pipeline'; then
   run_compose restart indexer-pipeline >/dev/null
   sleep 5
-  if retry_cmd "indexer graphql readiness after pipeline restart" 30 2 run_graphql_query '{ __typename }' >/dev/null; then
+  if retry_cmd "indexer graphql readiness after pipeline restart" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query '{ __typename }' >/dev/null; then
     STATUS_AFTER_RESTART="$(run_graphql_query '{ squidStatus { height } }' || true)"
-    HEAD_AFTER_RESTART="$(printf '%s' "$STATUS_AFTER_RESTART" | extract_json_value 'data.get("data",{}).get("squidStatus",{}).get("height")')"
+    HEAD_AFTER_RESTART="$(printf '%s' "$STATUS_AFTER_RESTART" | extract_indexer_head_height)"
     if [[ -z "$HEAD_AFTER_RESTART" ]]; then
       HEAD_AFTER_RESTART="$(get_indexer_head_from_db 2>/dev/null || true)"
     fi
