@@ -100,9 +100,15 @@ require_non_negative_integer() {
   return 0
 }
 
+json_encode_string() {
+  python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
+}
+
 build_graphql_payload() {
   local query="$1"
-  printf '{"query":%s}' "$(printf '%s' "$query" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')"
+  local encoded_query
+  encoded_query="$(printf '%s' "$query" | json_encode_string)"
+  printf '{"query":%s}' "$encoded_query"
 }
 
 run_graphql_query() {
@@ -136,7 +142,18 @@ read_indexer_head() {
   local status_response
   status_response="$(run_graphql_query '{ squidStatus { height } }' || true)"
   local head
-  head="$(printf '%s' "$status_response" | extract_json_value 'data.get("data",{}).get("squidStatus",{}).get("height")')"
+  head="$(
+    printf '%s' "$status_response" | python3 -c 'import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+root = data.get("data") if isinstance(data, dict) else None
+squid_status = root.get("squidStatus") if isinstance(root, dict) else None
+height = squid_status.get("height") if isinstance(squid_status, dict) else None
+if height is not None:
+    sys.stdout.write(str(height))'
+  )"
 
   if [[ "$head" =~ ^-?[0-9]+$ ]]; then
     printf '%s\n' "$head"

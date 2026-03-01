@@ -132,7 +132,14 @@ run_psql_with_stdin() {
 
 # Escape a string for use as a single-quoted SQL literal.
 sql_escape_literal() {
-  printf '%s' "$1" | sed "s/'/''/g"
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
+}
+
+# Escape a string for use as a PostgreSQL identifier.
+sql_escape_identifier() {
+  local ident="$1"
+  ident="${ident//\"/\"\"}"
+  printf '"%s"' "$ident"
 }
 
 wait_for_database() {
@@ -235,11 +242,13 @@ wait_for_database "$SRC_CONTAINER" "$SOURCE_DB"
 
 validate_sentinel_sql_inputs
 SENTINEL_MARKER_SQL="$(sql_escape_literal "$SENTINEL_MARKER")"
+SENTINEL_TABLE_SQL="$(sql_escape_identifier "$SENTINEL_TABLE")"
+SENTINEL_ID_SQL="$(sql_escape_literal "$SENTINEL_ID")"
 
 log "source postgres ready; creating sentinel row"
 run_psql_retry "$SRC_CONTAINER" "$SOURCE_DB" 10 \
-  -c "CREATE TABLE IF NOT EXISTS ${SENTINEL_TABLE} (id INTEGER PRIMARY KEY, marker TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());" \
-  -c "INSERT INTO ${SENTINEL_TABLE} (id, marker) VALUES (${SENTINEL_ID}, '${SENTINEL_MARKER_SQL}') ON CONFLICT (id) DO UPDATE SET marker = EXCLUDED.marker;"
+  -c "CREATE TABLE IF NOT EXISTS ${SENTINEL_TABLE_SQL} (id INTEGER PRIMARY KEY, marker TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());" \
+  -c "INSERT INTO ${SENTINEL_TABLE_SQL} (id, marker) VALUES (${SENTINEL_ID_SQL}::INTEGER, ${SENTINEL_MARKER_SQL}) ON CONFLICT (id) DO UPDATE SET marker = EXCLUDED.marker;"
 
 log "creating logical backup dump"
 if docker exec "$SRC_CONTAINER" pg_dump --clean --if-exists --no-owner --no-privileges -U "$POSTGRES_USER" "$SOURCE_DB" > "$DUMP_FILE" 2>>"$LOG_FILE"; then
@@ -267,7 +276,7 @@ wait_for_database "$DST_CONTAINER" "$TARGET_DB"
 log "restoring backup into target postgres"
 restore_dump_retry "$DST_CONTAINER" "$TARGET_DB" "$DUMP_FILE" 10
 
-RESTORED_MARKER="$(run_psql "$DST_CONTAINER" "$TARGET_DB" -Atc "SELECT marker FROM ${SENTINEL_TABLE} WHERE id=${SENTINEL_ID};")"
+RESTORED_MARKER="$(run_psql "$DST_CONTAINER" "$TARGET_DB" -Atc "SELECT marker FROM ${SENTINEL_TABLE_SQL} WHERE id=${SENTINEL_ID_SQL}::INTEGER;")"
 if [[ "$RESTORED_MARKER" != "$SENTINEL_MARKER" ]]; then
   FAIL_REASON="restored sentinel marker mismatch (expected=${SENTINEL_MARKER}, actual=${RESTORED_MARKER:-<empty>})"
   false
