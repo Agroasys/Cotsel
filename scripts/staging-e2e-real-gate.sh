@@ -559,8 +559,10 @@ validate_identifier "POSTGRES_USER" "${POSTGRES_USER:-}"
 validate_identifier "RECONCILIATION_DB_NAME" "${RECONCILIATION_DB_NAME:-}"
 validate_run_key
 
+# Use ASCII Unit Separator (0x1F) as delimiter to minimize collisions with normal text data.
 SUMMARY_FIELD_DELIM=$'\x1f'
-RUN_SUMMARY="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "SELECT status, total_trades, drift_count FROM reconcile_runs WHERE run_key = :'run_key_var' ORDER BY id DESC LIMIT 1;" 2>/dev/null || true)"
+RUN_SUMMARY_SQL=$'SELECT status, total_trades, drift_count FROM reconcile_runs WHERE run_key = :\'run_key_var\' ORDER BY id DESC LIMIT 1;'
+RUN_SUMMARY="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${RUN_SUMMARY_SQL}" 2>/dev/null || true)"
 if [[ -n "$RUN_SUMMARY" ]]; then
   IFS="${SUMMARY_FIELD_DELIM}" read -r RUN_STATUS RUN_TOTAL RUN_DRIFT <<<"$RUN_SUMMARY"
   echo "reconciliation run summary: runKey=${RUN_KEY}, status=${RUN_STATUS}, totalTrades=${RUN_TOTAL}, driftCount=${RUN_DRIFT}"
@@ -569,7 +571,8 @@ else
   fail "reconciliation run summary unavailable"
 fi
 
-DRIFT_SUMMARY_ROWS="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "SELECT mismatch_code, COUNT(*) FROM reconcile_drifts WHERE run_key = :'run_key_var' GROUP BY mismatch_code ORDER BY COUNT(*) DESC;" 2>/dev/null || true)"
+DRIFT_SUMMARY_SQL=$'SELECT mismatch_code, COUNT(*) FROM reconcile_drifts WHERE run_key = :\'run_key_var\' GROUP BY mismatch_code ORDER BY COUNT(*) DESC;'
+DRIFT_SUMMARY_ROWS="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${DRIFT_SUMMARY_SQL}" 2>/dev/null || true)"
 echo "drift classification snapshot:"
 if [[ -n "$DRIFT_SUMMARY_ROWS" ]]; then
   while IFS="${SUMMARY_FIELD_DELIM}" read -r MISMATCH_CODE MISMATCH_COUNT; do
@@ -588,7 +591,16 @@ else
 fi
 
 validate_identifier "INDEXER_DB_NAME" "${INDEXER_DB_NAME:-}"
-CORRELATION_ROWS="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -A -F $'\t' -tc "SELECT replace(COALESCE(trade_id,''), E'\t', ' '), replace(COALESCE(tx_hash,''), E'\t', ' ') FROM trade_event ORDER BY block_number DESC LIMIT 5;" 2>/dev/null || true)"
+CORRELATION_SQL="$(cat <<'SQL'
+SELECT
+  replace(COALESCE(trade_id, ''), E'\t', ' '),
+  replace(COALESCE(tx_hash, ''), E'\t', ' ')
+FROM trade_event
+ORDER BY block_number DESC
+LIMIT 5;
+SQL
+)"
+CORRELATION_ROWS="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -A -F $'\t' -tc "${CORRELATION_SQL}" 2>/dev/null || true)"
 echo "correlation snapshot (indexer + reconciliation context):"
 if [[ -n "$CORRELATION_ROWS" ]]; then
   while IFS=$'\t' read -r TRADE_ID TX_HASH; do
