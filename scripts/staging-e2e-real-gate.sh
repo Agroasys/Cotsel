@@ -4,6 +4,10 @@ set -euo pipefail
 COMPOSE_FILE="docker-compose.services.yml"
 PROFILE="staging-e2e-real"
 failure_count=0
+INDEXER_PIPELINE_SERVICE="${INDEXER_PIPELINE_SERVICE:-indexer-pipeline}"
+# Use ASCII Unit Separator (0x1F) as delimiter to minimize collisions with normal text data
+# in reconciliation run and drift summary queries below.
+SUMMARY_FIELD_DELIM=$'\x1f'
 
 load_env_file() {
   local file="$1"
@@ -405,6 +409,7 @@ READINESS_RETRY_ATTEMPTS="${STAGING_E2E_REAL_READINESS_RETRY_ATTEMPTS:-30}"
 READINESS_RETRY_DELAY="${STAGING_E2E_REAL_READINESS_RETRY_DELAY:-2}"
 
 RUN_KEY="staging-e2e-real-gate-$(date +%s)"
+validate_run_key
 RECONCILIATION_REPORT_PATH="reports/reconciliation/staging-e2e-real-report.json"
 
 mkdir -p "$(dirname "$RECONCILIATION_REPORT_PATH")"
@@ -459,7 +464,6 @@ fi
 validate_identifier "POSTGRES_USER" "${POSTGRES_USER:-}"
 validate_identifier "RECONCILIATION_DB_NAME" "${RECONCILIATION_DB_NAME:-}"
 validate_identifier "INDEXER_DB_NAME" "${INDEXER_DB_NAME:-}"
-validate_run_key
 
 INDEXER_START_BLOCK="${INDEXER_START_BLOCK:-}" scripts/docker-services.sh up "$PROFILE"
 if scripts/docker-services.sh health "$PROFILE"; then
@@ -550,8 +554,8 @@ else
 fi
 
 HEAD_BEFORE_RESTART="${INDEXER_HEAD:-}"
-if run_compose ps --services --filter status=running | tr '[:space:]' '\n' | grep -Fxq 'indexer-pipeline'; then
-  run_compose restart indexer-pipeline >/dev/null
+if run_compose ps --services --filter status=running | tr '[:space:]' '\n' | grep -Fxq "${INDEXER_PIPELINE_SERVICE}"; then
+  run_compose restart "${INDEXER_PIPELINE_SERVICE}" >/dev/null
   sleep 5
   if retry_cmd "indexer graphql readiness after pipeline restart" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query '{ __typename }' >/dev/null; then
     STATUS_AFTER_RESTART="$(run_graphql_query '{ squidStatus { height } }' || true)"
@@ -572,7 +576,7 @@ if run_compose ps --services --filter status=running | tr '[:space:]' '\n' | gre
     fail "reorg/resync probe failed after pipeline restart"
   fi
 else
-  fail "indexer-pipeline is not running for reorg/resync probe"
+  fail "${INDEXER_PIPELINE_SERVICE} is not running for reorg/resync probe"
 fi
 
 if run_compose exec -T reconciliation node reconciliation/dist/cli.js once --run-key="$RUN_KEY" >/dev/null; then
@@ -581,9 +585,6 @@ else
   fail "reconciliation once run failed"
 fi
 
-# Use ASCII Unit Separator (0x1F) as delimiter to minimize collisions with normal text data
-# in reconciliation run and drift summary queries below.
-SUMMARY_FIELD_DELIM=$'\x1f'
 RUN_SUMMARY_SQL=$'SELECT status, total_trades, drift_count FROM reconcile_runs WHERE run_key = :\'run_key_var\' ORDER BY id DESC LIMIT 1;'
 RUN_SUMMARY="$(run_with_prefixed_stderr "reconcile_run_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${RUN_SUMMARY_SQL}" || true)"
 if [[ -n "$RUN_SUMMARY" ]]; then
