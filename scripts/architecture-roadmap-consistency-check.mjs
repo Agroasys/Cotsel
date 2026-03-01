@@ -287,7 +287,8 @@ async function main() {
     gateChecks: [],
     remediation: {
       writeMatrix: `GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo "${args.repo}" --write`,
-      writeGateIssues: `GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo "${args.repo}" --write-gate-issues`,
+      writeMatrixNormalized: `GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo "${args.repo}" --write --normalize-progress`,
+      writeGateIssues: `GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo "${args.repo}" --write-gate-issues --apply`,
     },
   };
 
@@ -385,6 +386,7 @@ async function main() {
       console.error(`ERROR: ${error}`);
     }
     console.error(`ERROR: remediation (matrix): ${report.remediation.writeMatrix}`);
+    console.error(`ERROR: remediation (matrix+progress): ${report.remediation.writeMatrixNormalized}`);
     console.error(`ERROR: remediation (gate issues): ${report.remediation.writeGateIssues}`);
     process.exit(1);
   }

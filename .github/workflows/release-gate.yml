@@ -154,7 +154,8 @@ jobs:
               echo ""
               echo "Remediation:"
               echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write"
-              echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write-gate-issues"
+              echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write --normalize-progress"
+              echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write-gate-issues --apply"
             } >> ci-reports/arch-roadmap-consistency.log
           fi
           cat ci-reports/arch-roadmap-consistency.log

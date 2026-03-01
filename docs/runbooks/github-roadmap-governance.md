@@ -85,7 +85,7 @@ What the checker enforces:
    - Issues `#70/#71/#72` must contain `Last synchronized: <date>` matching matrix snapshot date.
    - Gate issue bodies must reference `docs/runbooks/architecture-coverage-matrix.md`.
 
-Operator flow (deterministic):
+Operator flow (deterministic + safe defaults):
 1. Check drift locally:
 ```bash
 GITHUB_TOKEN="$(gh auth token)" node scripts/architecture-roadmap-consistency-check.mjs --repo Agroasys/Agroasys.Web3layer
@@ -94,15 +94,19 @@ GITHUB_TOKEN="$(gh auth token)" node scripts/architecture-roadmap-consistency-ch
 ```bash
 GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer
 ```
-3. Apply matrix sync updates:
+3. Apply minimum-safe matrix sync updates (default):
 ```bash
 GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer --write
 ```
-4. If gate issue metadata is out of sync, update gate issues:
+4. Optional: normalize `% Complete` + `Remaining Gap` when you intentionally want policy normalization:
 ```bash
-GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer --write-gate-issues
+GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer --write --normalize-progress
 ```
-5. Commit matrix changes and rerun CI checks:
+5. If gate issue metadata is out of sync, update gate issues (requires explicit apply flag):
+```bash
+GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer --write-gate-issues --apply
+```
+6. Commit matrix changes and rerun CI checks:
 ```bash
 git add docs/runbooks/architecture-coverage-matrix.md
 git commit -m "docs(roadmap): sync architecture coverage matrix"

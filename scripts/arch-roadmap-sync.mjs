@@ -8,6 +8,9 @@ import { spawnSync } from "node:child_process";
 const GATE_ISSUE_NUMBERS = [70, 71, 72];
 const MATRIX_PATH_REFERENCE = "docs/runbooks/architecture-coverage-matrix.md";
 
+// ---------------------------------------------------------------------------
+// Arg parsing
+// ---------------------------------------------------------------------------
 function parseArgs(argv) {
   const args = {
     matrix: MATRIX_PATH_REFERENCE,
@@ -17,7 +20,9 @@ function parseArgs(argv) {
     cache: "reports/governance/arch-roadmap-sync-cache.json",
     offline: false,
     write: false,
+    normalizeProgress: false,
     writeGateIssues: false,
+    apply: false,
     snapshotDate: null,
   };
 
@@ -31,8 +36,16 @@ function parseArgs(argv) {
       args.write = true;
       continue;
     }
+    if (arg === "--normalize-progress") {
+      args.normalizeProgress = true;
+      continue;
+    }
     if (arg === "--write-gate-issues") {
       args.writeGateIssues = true;
+      continue;
+    }
+    if (arg === "--apply") {
+      args.apply = true;
       continue;
     }
     if (arg.startsWith("--matrix=")) {
@@ -95,10 +108,16 @@ function parseArgs(argv) {
   if (args.snapshotDate && !isIsoDate(args.snapshotDate)) {
     throw new Error(`invalid --snapshot-date value: ${args.snapshotDate}`);
   }
+  if (args.apply && !args.writeGateIssues) {
+    throw new Error("--apply requires --write-gate-issues");
+  }
 
   return args;
 }
 
+// ---------------------------------------------------------------------------
+// Matrix parsing helpers
+// ---------------------------------------------------------------------------
 function isIsoDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
@@ -217,6 +236,9 @@ function parseComponentTable(markdown) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Issue fetch/cache helpers
+// ---------------------------------------------------------------------------
 function getToken() {
   return process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
 }
@@ -350,6 +372,85 @@ function buildUnifiedDiff(originalPath, updatedContent) {
   throw new Error(`failed to generate patch: ${diff.stderr || "diff exited unexpectedly"}`);
 }
 
+// ---------------------------------------------------------------------------
+// Matrix and gate sync proposal builders
+// ---------------------------------------------------------------------------
+function applyRowSync({
+  row,
+  statusIndex,
+  lastRefreshedIndex,
+  percentIndex,
+  remainingGapIndex,
+  effectiveSnapshotDate,
+  normalizeProgress,
+}) {
+  row.cells[statusIndex] = "Done";
+  row.cells[lastRefreshedIndex] = effectiveSnapshotDate;
+  if (normalizeProgress) {
+    row.cells[percentIndex] = "100";
+    if (!String(row.cells[remainingGapIndex] || "").toLowerCase().startsWith("none")) {
+      row.cells[remainingGapIndex] = "None (auto-synced from closed issues)";
+    }
+  }
+}
+
+function buildStaleRowProposal({
+  row,
+  effectiveSnapshotDate,
+  percentIndex,
+  remainingGapIndex,
+  normalizeProgress,
+}) {
+  const proposal = {
+    line: row.line,
+    component: row.Component,
+    linkedIssues: row.issueNumbers.map((issueNumber) => `#${issueNumber}`),
+    currentStatus: row.Status,
+    suggestedStatus: "Done",
+    currentLastRefreshed: row.LastRefreshed,
+    suggestedLastRefreshed: effectiveSnapshotDate,
+    reason: "all linked issues are closed",
+    normalizeProgress,
+  };
+
+  if (normalizeProgress) {
+    proposal.currentPercentComplete = row.cells[percentIndex];
+    proposal.suggestedPercentComplete = "100";
+    proposal.currentRemainingGap = row.cells[remainingGapIndex];
+    proposal.suggestedRemainingGap = String(row.cells[remainingGapIndex] || "").toLowerCase().startsWith("none")
+      ? row.cells[remainingGapIndex]
+      : "None (auto-synced from closed issues)";
+  }
+
+  return proposal;
+}
+
+function buildGateIssueDrift(issueMap, effectiveSnapshotDate) {
+  const gateIssueDrift = [];
+  for (const issueNumber of GATE_ISSUE_NUMBERS) {
+    const issue = issueMap.get(issueNumber);
+    if (!issue) {
+      gateIssueDrift.push({
+        issue: `#${issueNumber}`,
+        error: "issue could not be loaded",
+        needsSync: true,
+      });
+      continue;
+    }
+    const lastSynchronized = parseLastSynchronizedDate(issue.body);
+    const referencesMatrix = issue.body.includes(MATRIX_PATH_REFERENCE);
+    gateIssueDrift.push({
+      issue: `#${issueNumber}`,
+      url: issue.url,
+      currentLastSynchronized: lastSynchronized,
+      expectedLastSynchronized: effectiveSnapshotDate,
+      referencesMatrix,
+      needsSync: lastSynchronized !== effectiveSnapshotDate || !referencesMatrix,
+    });
+  }
+  return gateIssueDrift;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
 
@@ -412,23 +513,25 @@ async function main() {
       continue;
     }
 
-    staleRows.push({
-      line: row.line,
-      component: row.Component,
-      linkedIssues: row.issueNumbers.map((issueNumber) => `#${issueNumber}`),
-      currentStatus: row.Status,
-      suggestedStatus: "Done",
-      currentPercentComplete: row.cells[percentIndex],
-      suggestedPercentComplete: "100",
-      reason: "all linked issues are closed",
-    });
+    staleRows.push(
+      buildStaleRowProposal({
+        row,
+        effectiveSnapshotDate,
+        percentIndex,
+        remainingGapIndex,
+        normalizeProgress: args.normalizeProgress,
+      }),
+    );
 
-    row.cells[statusIndex] = "Done";
-    row.cells[percentIndex] = "100";
-    if (!String(row.cells[remainingGapIndex] || "").toLowerCase().startsWith("none")) {
-      row.cells[remainingGapIndex] = "None (auto-synced from closed issues)";
-    }
-    row.cells[lastRefreshedIndex] = effectiveSnapshotDate;
+    applyRowSync({
+      row,
+      statusIndex,
+      lastRefreshedIndex,
+      percentIndex,
+      remainingGapIndex,
+      effectiveSnapshotDate,
+      normalizeProgress: args.normalizeProgress,
+    });
     nextLines[row.index] = formatRow(row.cells);
   }
 
@@ -453,32 +556,15 @@ async function main() {
 
   const remainingStaleRows = args.write ? [] : staleRows;
 
-  const gateIssueDrift = [];
-  for (const issueNumber of GATE_ISSUE_NUMBERS) {
-    const issue = issueMap.get(issueNumber);
-    if (!issue) {
-      gateIssueDrift.push({
-        issue: `#${issueNumber}`,
-        error: "issue could not be loaded",
-        needsSync: true,
-      });
-      continue;
-    }
-    const lastSynchronized = parseLastSynchronizedDate(issue.body);
-    const referencesMatrix = issue.body.includes(MATRIX_PATH_REFERENCE);
-    const needsSync = lastSynchronized !== effectiveSnapshotDate || !referencesMatrix;
-    gateIssueDrift.push({
-      issue: `#${issueNumber}`,
-      url: issue.url,
-      currentLastSynchronized: lastSynchronized,
-      expectedLastSynchronized: effectiveSnapshotDate,
-      referencesMatrix,
-      needsSync,
-    });
-  }
+  const gateIssueDrift = buildGateIssueDrift(issueMap, effectiveSnapshotDate);
 
   const gateUpdatesApplied = [];
   if (args.writeGateIssues) {
+    if (!args.apply) {
+      throw new Error(
+        `--write-gate-issues requires --apply. Re-run with: GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo "${args.repo}" --write-gate-issues --apply`,
+      );
+    }
     if (args.offline) {
       throw new Error("--write-gate-issues requires online mode");
     }
@@ -536,6 +622,10 @@ async function main() {
       rowsUpdated: staleRows.length,
       snapshotDateChanged: Boolean(snapshotChanged),
       wroteChanges: Boolean(args.write && matrixChanged),
+      syncMode: args.normalizeProgress
+        ? "status,last-refreshed,percent-complete,remaining-gap"
+        : "status,last-refreshed",
+      normalizeProgress: args.normalizeProgress,
     },
     staleRows,
     remainingStaleRows,
@@ -544,7 +634,8 @@ async function main() {
     remainingGateIssueDrift,
     remediation: {
       writeMatrix: `GITHUB_TOKEN=\"$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${args.repo}\" --write`,
-      writeGateIssues: `GITHUB_TOKEN=\"$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${args.repo}\" --write-gate-issues`,
+      writeMatrixNormalized: `GITHUB_TOKEN=\"$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${args.repo}\" --write --normalize-progress`,
+      writeGateIssues: `GITHUB_TOKEN=\"$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${args.repo}\" --write-gate-issues --apply`,
     },
   };
 
@@ -563,6 +654,7 @@ async function main() {
     console.error("ERROR: architecture-roadmap drift remains.");
     if (remainingStaleRows.length > 0) {
       console.error(`ERROR: run ${report.remediation.writeMatrix}`);
+      console.error(`ERROR: optional progress normalization: ${report.remediation.writeMatrixNormalized}`);
     }
     if (remainingGateIssueDrift.length > 0) {
       console.error(`ERROR: run ${report.remediation.writeGateIssues}`);
