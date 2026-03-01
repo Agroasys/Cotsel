@@ -115,7 +115,7 @@ require_integer_digits() {
 }
 
 json_encode_string() {
-  python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
+  python3 -c 'import json,sys; data=sys.stdin.read().rstrip("\n"); print(json.dumps(data))'
 }
 
 build_graphql_payload() {
@@ -162,7 +162,8 @@ extract_indexer_head_height() {
   python3 -c 'import json, sys
 try:
     data = json.load(sys.stdin)
-except Exception:
+except Exception as e:
+    print(f"Warning: Failed to parse JSON: {e}", file=sys.stderr)
     sys.exit(0)
 root = data.get("data") if isinstance(data, dict) else None
 squid_status = root.get("squidStatus") if isinstance(root, dict) else None
@@ -260,7 +261,9 @@ fi
 if [[ "$DYNAMIC_START_BLOCK" == "true" && -n "$RPC_GATEWAY_URL_HOST" ]]; then
   RPC_START_HEAD_HEX="$(get_rpc_head_hex)"
   if [[ -n "$RPC_START_HEAD_HEX" && "$RPC_START_HEAD_HEX" =~ ^0x[0-9a-fA-F]+$ ]]; then
-    RPC_START_HEAD_DEC=$((RPC_START_HEAD_HEX))
+    RPC_START_HEAD_NUM="${RPC_START_HEAD_HEX#0x}"
+    RPC_START_HEAD_NUM="$(printf '%s' "$RPC_START_HEAD_NUM" | tr '[:upper:]' '[:lower:]')"
+    RPC_START_HEAD_DEC=$((16#$RPC_START_HEAD_NUM))
     DYNAMIC_INDEXER_START_BLOCK=$((RPC_START_HEAD_DEC - START_BLOCK_BACKOFF))
     if (( DYNAMIC_INDEXER_START_BLOCK < 1 )); then
       DYNAMIC_INDEXER_START_BLOCK=1
@@ -346,6 +349,7 @@ elif [[ ! "$RPC_HEAD_HEX" =~ ^0x[0-9a-fA-F]+$ ]]; then
 else
   # Strip the 0x prefix, then parse the remaining value as base-16 decimal.
   RPC_HEAD_NUM="${RPC_HEAD_HEX#0x}"
+  RPC_HEAD_NUM="$(printf '%s' "$RPC_HEAD_NUM" | tr '[:upper:]' '[:lower:]')"
   RPC_HEAD_DEC=$((16#$RPC_HEAD_NUM))
   LAG=$((RPC_HEAD_DEC - INDEXER_HEAD))
   echo "lag/head metrics: rpcHead=${RPC_HEAD_DEC}, indexerHead=${INDEXER_HEAD}, lag=${LAG}"
