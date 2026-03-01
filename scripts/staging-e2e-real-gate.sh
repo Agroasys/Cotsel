@@ -435,6 +435,11 @@ EOF
   exit 0
 fi
 
+# Validate identifiers before the first non-config-only DB access path.
+validate_identifier "POSTGRES_USER" "${POSTGRES_USER:-}"
+validate_identifier "RECONCILIATION_DB_NAME" "${RECONCILIATION_DB_NAME:-}"
+validate_run_key
+
 INDEXER_START_BLOCK="${INDEXER_START_BLOCK:-}" scripts/docker-services.sh up "$PROFILE"
 if scripts/docker-services.sh health "$PROFILE"; then
   pass "profile health check passed"
@@ -554,10 +559,6 @@ if run_compose exec -T reconciliation node reconciliation/dist/cli.js once --run
 else
   fail "reconciliation once run failed"
 fi
-
-validate_identifier "POSTGRES_USER" "${POSTGRES_USER:-}"
-validate_identifier "RECONCILIATION_DB_NAME" "${RECONCILIATION_DB_NAME:-}"
-validate_run_key
 
 # Use ASCII Unit Separator (0x1F) as delimiter to minimize collisions with normal text data
 # in reconciliation run and drift summary queries below.
