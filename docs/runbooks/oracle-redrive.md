@@ -3,6 +3,8 @@
 ## Purpose
 Handle `EXHAUSTED_NEEDS_REDRIVE` oracle triggers with explicit ownership, bounded retries, and on-chain verification safeguards.
 
+Gateway-boundary handoff: when failures indicate routing/auth propagation/correlation drift across services (not oracle business-state logic), follow `docs/runbooks/api-gateway-boundary.md` first, then return here for redrive actions with the same `tradeId`/`actionKey`/`requestId` evidence.
+
 ## Ownership And Intervention Rules
 - `Operator`:
   - Runs health/diagnostic checks.
@@ -160,4 +162,3 @@ All approve and reject actions are also emitted as `audit`-level log entries
 | Trigger approved but blockchain action fails and exhausts retries | Use standard redrive flow  |
 | Same `actionKey` appears in `PENDING_APPROVAL` a second time | Do **not** approve. Escalate to Service Owner, indicates a duplicate submission at the API layer |
 | On-chain state does not match expected pre-condition | Reject with reason, escalate to Service Owner for hotfix decision |
-
