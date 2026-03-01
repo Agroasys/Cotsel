@@ -1,6 +1,6 @@
 # Architecture Coverage Matrix
 
-Snapshot date: 2026-02-28
+Snapshot date: 2026-03-01
 
 Scope:
 - Source of truth is repository code, merged/open PRs, and roadmap issues.
@@ -54,12 +54,13 @@ Row metadata semantics:
 
 ## Milestone Rollup (evidence-based)
 
-- Milestone A: 52% (snapshot as of 2026-02-28; derived via formula below)
-- Milestone B: 23% (snapshot as of 2026-02-28; derived via formula below)
-- Milestone C: 0% (snapshot as of 2026-02-28; derived via formula below)
+- Milestone A: 52% (snapshot as of 2026-03-01; derived via formula below)
+- Milestone B: 23% (snapshot as of 2026-03-01; derived via formula below)
+- Milestone C: 0% (snapshot as of 2026-03-01; derived via formula below)
 
 Computation method:
-- Scope: for each milestone, take all non-gate roadmap issues linked from the corresponding Component Mapping rows.
+- Scope: for each milestone, take all non-gate roadmap issues linked from the corresponding Component Mapping rows that are not marked `Out of Scope`.
+- Out-of-scope handling: rows with status `Out of Scope` and any issues referenced only from those rows are excluded from repo completion scoring and from the milestone rollup arithmetic mean.
 - Authoritative signal: use roadmap issue `% Complete` values as per-deliverable completion.
 - Formula: milestone completion = arithmetic mean of in-scope issue `% Complete` values, rounded to nearest whole percent.
 - Deduplication rule: if an issue appears in multiple rows for the same milestone, count it once.
@@ -103,3 +104,4 @@ Before marking any milestone gate `Done`:
 1. Ensure each related row above is either `Done` or explicitly out-of-scope with approval.
 2. Ensure each `Done` row references concrete repo evidence (files, tests, merged PRs, CI run).
 3. Update gate issue body `% Complete` and project field `% Complete` in the same change.
+4. Recompute and update the "Milestone Rollup" percentages above whenever any in-scope issue `% Complete` value changes (or verify that roadmap rollup automation has done so).
