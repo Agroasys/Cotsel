@@ -222,6 +222,8 @@ require_positive_value() {
   local value="$2"
   # Reuse digit validation so non-numeric values are flagged consistently.
   require_integer_digits "$name" "$value"
+  # Force base-10 interpretation so values with leading zeros (for example "08")
+  # are handled as decimal instead of being treated as invalid octal by Bash math.
   if (( 10#$value == 0 )); then
     fail "$name must be > 0"
   fi
@@ -279,7 +281,7 @@ run_graphql_query_from_reconciliation() {
   local payload
   payload="$(build_graphql_payload "$query")"
 
-  run_compose exec -T -e COMPOSE_FILE_NAME="${COMPOSE_FILE}" reconciliation node - "$payload" <<'NODE'
+  run_compose exec -T -e COMPOSE_FILE_NAME="${COMPOSE_FILE}" reconciliation node - "$payload" <<'NODE_GRAPHQL_QUERY'
 const target = process.env.INDEXER_GRAPHQL_URL;
 if (!target) {
   const composeFileName = process.env.COMPOSE_FILE_NAME || 'compose.yaml';
@@ -331,7 +333,7 @@ fetch(target, {
     console.error('Error while executing GraphQL request:', err);
     process.exit(1);
   });
-NODE
+NODE_GRAPHQL_QUERY
 }
 
 extract_indexer_head_height() {
@@ -530,6 +532,12 @@ validate_identifier "POSTGRES_USER" "${POSTGRES_USER:-}"
 validate_identifier "RECONCILIATION_DB_NAME" "${RECONCILIATION_DB_NAME:-}"
 validate_identifier "INDEXER_DB_NAME" "${INDEXER_DB_NAME:-}"
 
+# GraphQL queries used by readiness and schema-parity checks.
+READINESS_QUERY='query { trades(limit: 1) { tradeId } }'
+# Kept as a separate constant for clarity in case in-network query diverges later.
+READINESS_IN_NETWORK_QUERY='query { trades(limit: 1) { tradeId } }'
+SCHEMA_PARITY_QUERY='query { trades(limit: 1) { tradeId buyer supplier status totalAmountLocked logisticsAmount platformFeesAmount supplierFirstTranche supplierSecondTranche ricardianHash createdAt arrivalTimestamp } }'
+
 INDEXER_START_BLOCK="${INDEXER_START_BLOCK:-}" scripts/docker-services.sh up "$PROFILE"
 if scripts/docker-services.sh health "$PROFILE"; then
   pass "profile health check passed"
@@ -537,19 +545,19 @@ else
   fail "profile health check failed"
 fi
 
-if retry_cmd "indexer graphql readiness" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query 'query { trades(limit: 1) { tradeId } }' >/dev/null; then
+if retry_cmd "indexer graphql readiness" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query "$READINESS_QUERY" >/dev/null; then
   pass "indexer GraphQL readiness check passed"
 else
   fail "indexer GraphQL readiness check failed"
 fi
 
-if retry_cmd "indexer graphql in-network readiness" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query_from_reconciliation 'query { trades(limit: 1) { tradeId } }' >/dev/null; then
+if retry_cmd "indexer graphql in-network readiness" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query_from_reconciliation "$READINESS_IN_NETWORK_QUERY" >/dev/null; then
   pass "indexer GraphQL in-network readiness check passed"
 else
   fail "indexer GraphQL in-network readiness check failed"
 fi
 
-SCHEMA_RESPONSE="$(run_graphql_query 'query { trades(limit: 1) { tradeId buyer supplier status totalAmountLocked logisticsAmount platformFeesAmount supplierFirstTranche supplierSecondTranche ricardianHash createdAt arrivalTimestamp } }' || true)"
+SCHEMA_RESPONSE="$(run_graphql_query "$SCHEMA_PARITY_QUERY" || true)"
 if printf '%s' "$SCHEMA_RESPONSE" | grep -q '"errors"'; then
   echo "schema parity query response: $SCHEMA_RESPONSE" >&2
   fail "schema parity check failed"
@@ -641,7 +649,7 @@ HEAD_BEFORE_RESTART="${INDEXER_HEAD:-}"
 if is_service_running "${INDEXER_PIPELINE_SERVICE}"; then
   run_compose restart "${INDEXER_PIPELINE_SERVICE}" >/dev/null
   sleep "$PIPELINE_RESTART_SLEEP"
-  if retry_cmd "indexer graphql readiness after pipeline restart" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query 'query { trades(limit: 1) { tradeId } }' >/dev/null; then
+  if retry_cmd "indexer graphql readiness after pipeline restart" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query "$READINESS_QUERY" >/dev/null; then
     STATUS_AFTER_RESTART="$(run_graphql_query '{ squidStatus { height } }' || true)"
     HEAD_AFTER_RESTART="$(printf '%s' "$STATUS_AFTER_RESTART" | extract_indexer_head_height)"
     if [[ -z "$HEAD_AFTER_RESTART" ]]; then
