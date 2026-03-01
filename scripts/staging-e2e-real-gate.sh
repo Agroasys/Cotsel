@@ -36,6 +36,23 @@ get_rpc_head_hex() {
   printf '%s\n' "$rpc_head_hex"
 }
 
+hex_to_decimal() {
+  local hex_value="$1"
+  require_python3
+  python3 - "$hex_value" <<'PY'
+import sys
+
+value = sys.argv[1].strip().lower()
+if value.startswith("0x"):
+    value = value[2:]
+
+if not value or any(ch not in "0123456789abcdef" for ch in value):
+    sys.exit(1)
+
+print(int(value, 16))
+PY
+}
+
 get_indexer_head_from_db() {
   validate_identifier "POSTGRES_USER" "${POSTGRES_USER:-}"
   validate_identifier "INDEXER_DB_NAME" "${INDEXER_DB_NAME:-}"
@@ -77,10 +94,6 @@ validate_run_key() {
     fail "RUN_KEY contains invalid characters"
     exit 1
   fi
-}
-
-sql_escape_literal() {
-  printf '%s' "$1" | sed "s/'/''/g"
 }
 
 require_python3() {
@@ -339,10 +352,8 @@ fi
 if [[ "$DYNAMIC_START_BLOCK" == "true" && -n "$RPC_GATEWAY_URL_HOST" ]]; then
   RPC_START_HEAD_HEX="$(get_rpc_head_hex)"
   if [[ -n "$RPC_START_HEAD_HEX" && "$RPC_START_HEAD_HEX" =~ ^0x[0-9a-fA-F]+$ ]]; then
-    RPC_START_HEAD_NUM="${RPC_START_HEAD_HEX#0x}"
-    RPC_START_HEAD_NUM="$(printf '%s' "$RPC_START_HEAD_NUM" | tr '[:upper:]' '[:lower:]')"
-    if [[ "$RPC_START_HEAD_NUM" =~ ^[0-9a-f]+$ ]]; then
-      RPC_START_HEAD_DEC=$((16#${RPC_START_HEAD_NUM}))
+    RPC_START_HEAD_DEC="$(hex_to_decimal "$RPC_START_HEAD_HEX" 2>/dev/null || true)"
+    if [[ -n "$RPC_START_HEAD_DEC" && "$RPC_START_HEAD_DEC" =~ ^[0-9]+$ ]]; then
       DYNAMIC_INDEXER_START_BLOCK=$((RPC_START_HEAD_DEC - START_BLOCK_BACKOFF))
       if (( DYNAMIC_INDEXER_START_BLOCK < 1 )); then
         DYNAMIC_INDEXER_START_BLOCK=1
@@ -350,7 +361,7 @@ if [[ "$DYNAMIC_START_BLOCK" == "true" && -n "$RPC_GATEWAY_URL_HOST" ]]; then
       export INDEXER_START_BLOCK="$DYNAMIC_INDEXER_START_BLOCK"
       echo "dynamic start block: INDEXER_START_BLOCK=${INDEXER_START_BLOCK} (rpcHead=${RPC_START_HEAD_DEC}, backoff=${START_BLOCK_BACKOFF})"
     else
-      echo "warning: invalid normalized RPC head value '${RPC_START_HEAD_NUM}' for dynamic start block; using existing INDEXER_START_BLOCK=${INDEXER_START_BLOCK:-unset}" >&2
+      echo "warning: invalid normalized RPC head value '${RPC_START_HEAD_HEX}' for dynamic start block; using existing INDEXER_START_BLOCK=${INDEXER_START_BLOCK:-unset}" >&2
     fi
   elif [[ -z "$RPC_START_HEAD_HEX" ]]; then
     echo "warning: unable to determine RPC head for dynamic start block; using existing INDEXER_START_BLOCK=${INDEXER_START_BLOCK:-unset}" >&2
@@ -432,12 +443,10 @@ elif [[ ! "$RPC_HEAD_HEX" =~ ^0x[0-9a-fA-F]+$ ]]; then
   fail "RPC head metric is not a valid hex value: ${RPC_HEAD_HEX}"
 else
   # Strip the 0x prefix, then convert the remaining hexadecimal value to decimal.
-  RPC_HEAD_NUM="${RPC_HEAD_HEX#0x}"
-  RPC_HEAD_NUM="$(printf '%s' "$RPC_HEAD_NUM" | tr '[:upper:]' '[:lower:]')"
-  if [[ -z "$RPC_HEAD_NUM" || ! "$RPC_HEAD_NUM" =~ ^[0-9a-f]+$ ]]; then
-    fail "normalized RPC head value is not a valid hex number: ${RPC_HEAD_NUM}"
+  RPC_HEAD_DEC="$(hex_to_decimal "$RPC_HEAD_HEX" 2>/dev/null || true)"
+  if [[ -z "$RPC_HEAD_DEC" || ! "$RPC_HEAD_DEC" =~ ^[0-9]+$ ]]; then
+    fail "normalized RPC head value is not a valid hex number: ${RPC_HEAD_HEX}"
   else
-    RPC_HEAD_DEC=$((16#${RPC_HEAD_NUM}))
     LAG=$((RPC_HEAD_DEC - INDEXER_HEAD))
     echo "lag/head metrics: rpcHead=${RPC_HEAD_DEC}, indexerHead=${INDEXER_HEAD}, lag=${LAG}"
     if [[ "$LAG" -lt 0 ]]; then
@@ -502,9 +511,8 @@ fi
 validate_identifier "POSTGRES_USER" "${POSTGRES_USER:-}"
 validate_identifier "RECONCILIATION_DB_NAME" "${RECONCILIATION_DB_NAME:-}"
 validate_run_key
-RUN_KEY_SQL="$(sql_escape_literal "$RUN_KEY")"
 
-RUN_SUMMARY="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -Atc "SELECT status || ',' || total_trades || ',' || drift_count FROM reconcile_runs WHERE run_key='${RUN_KEY_SQL}' ORDER BY id DESC LIMIT 1;" 2>/dev/null || true)"
+RUN_SUMMARY="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -Atc "SELECT status || ',' || total_trades || ',' || drift_count FROM reconcile_runs WHERE run_key = :'run_key_var' ORDER BY id DESC LIMIT 1;" 2>/dev/null || true)"
 if [[ -n "$RUN_SUMMARY" ]]; then
   IFS=',' read -r RUN_STATUS RUN_TOTAL RUN_DRIFT <<<"$RUN_SUMMARY"
   echo "reconciliation run summary: runKey=${RUN_KEY}, status=${RUN_STATUS}, totalTrades=${RUN_TOTAL}, driftCount=${RUN_DRIFT}"
@@ -513,7 +521,7 @@ else
   fail "reconciliation run summary unavailable"
 fi
 
-DRIFT_SUMMARY="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -Atc "SELECT mismatch_code || ':' || COUNT(*) FROM reconcile_drifts WHERE run_key='${RUN_KEY_SQL}' GROUP BY mismatch_code ORDER BY COUNT(*) DESC;" 2>/dev/null || true)"
+DRIFT_SUMMARY="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -Atc "SELECT mismatch_code || ':' || COUNT(*) FROM reconcile_drifts WHERE run_key = :'run_key_var' GROUP BY mismatch_code ORDER BY COUNT(*) DESC;" 2>/dev/null || true)"
 echo "drift classification snapshot:"
 if [[ -n "$DRIFT_SUMMARY" ]]; then
   echo "$DRIFT_SUMMARY"
