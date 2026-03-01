@@ -25,6 +25,11 @@ interface TreasuryLedgerStateRow {
   latest_state: string;
 }
 
+interface IndexerHashRow {
+  tx_hash: string;
+  extrinsic_hash: string | null;
+}
+
 function parseArgs(argv: string[]): CliArgs {
   let runKey: string | undefined;
   let outPath: string | undefined;
@@ -168,6 +173,26 @@ async function fetchTreasuryLedgerStates(pool: Pool): Promise<TreasuryLedgerStat
   return result.rows;
 }
 
+async function fetchIndexerExtrinsicHashes(pool: Pool, txHashes: string[]): Promise<Map<string, string | null>> {
+  if (txHashes.length === 0) {
+    return new Map();
+  }
+
+  const result = await pool.query<IndexerHashRow>(
+    `SELECT tx_hash, MAX(extrinsic_hash) AS extrinsic_hash
+     FROM trade_event
+     WHERE tx_hash = ANY($1::text[])
+     GROUP BY tx_hash`,
+    [txHashes]
+  );
+
+  const map = new Map<string, string | null>();
+  for (const row of result.rows) {
+    map.set(row.tx_hash, row.extrinsic_hash ?? null);
+  }
+  return map;
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv);
 
@@ -177,6 +202,7 @@ async function main(): Promise<void> {
   const dbPassword = requiredEnv('DB_PASSWORD');
   const reconciliationDbName = requiredEnv('DB_NAME');
   const treasuryDbName = optionalEnv('TREASURY_DB_NAME');
+  const indexerDbName = optionalEnv('INDEXER_DB_NAME');
 
   const reconciliationPool = new Pool({
     host: dbHost,
@@ -188,6 +214,7 @@ async function main(): Promise<void> {
   });
 
   let treasuryPool: Pool | null = null;
+  let indexerPool: Pool | null = null;
 
   try {
     const resolvedRunKey = await resolveRunKey(reconciliationPool, args.runKey);
@@ -212,10 +239,24 @@ async function main(): Promise<void> {
       treasuryRows = await fetchTreasuryLedgerStates(treasuryPool);
     }
 
+    let extrinsicHashByTxHash = new Map<string, string | null>();
+    if (indexerDbName) {
+      const txHashes = Array.from(new Set(treasuryRows.map((row) => row.tx_hash)));
+      indexerPool = new Pool({
+        host: optionalEnv('INDEXER_DB_HOST') || dbHost,
+        port: numberEnv('INDEXER_DB_PORT', dbPort),
+        user: optionalEnv('INDEXER_DB_USER') || dbUser,
+        password: optionalEnv('INDEXER_DB_PASSWORD') || dbPassword,
+        database: indexerDbName,
+        max: 2,
+      });
+      extrinsicHashByTxHash = await fetchIndexerExtrinsicHashes(indexerPool, txHashes);
+    }
+
     const rows: ReconciliationReportInputRow[] = treasuryRows.map((row) => ({
       tradeId: row.trade_id,
       txHash: row.tx_hash,
-      extrinsicHash: null,
+      extrinsicHash: extrinsicHashByTxHash.get(row.tx_hash) ?? null,
       payoutState: row.latest_state,
       mismatchCodes: driftByTradeId.get(row.trade_id) || [],
       ledgerEntryId: row.id,
@@ -243,6 +284,9 @@ async function main(): Promise<void> {
     await reconciliationPool.end();
     if (treasuryPool) {
       await treasuryPool.end();
+    }
+    if (indexerPool) {
+      await indexerPool.end();
     }
   }
 }

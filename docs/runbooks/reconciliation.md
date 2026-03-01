@@ -30,7 +30,7 @@ npm run -w reconciliation reconcile:report -- --run-key=<runKey> --out reports/r
 ```
 
 Notes:
-- Report command reads reconciliation DB (`DB_NAME`) and treasury DB (`TREASURY_DB_NAME`) using the same Postgres host/user/password env set.
+- Report command reads reconciliation DB (`DB_NAME`), treasury DB (`TREASURY_DB_NAME`), and indexer DB (`INDEXER_DB_NAME`) using the same Postgres host/user/password env set.
 - Output schema is stable and ordered by `tradeId`, then `txHash`; missing fields are emitted as explicit `null`.
 
 Docker local-dev profile:
