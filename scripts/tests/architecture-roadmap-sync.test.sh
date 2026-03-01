@@ -17,6 +17,8 @@ report="$tmp_dir/sync-report.json"
 patch="$tmp_dir/sync.patch"
 report_write_min="$tmp_dir/sync-report-write-min.json"
 report_write_norm="$tmp_dir/sync-report-write-norm.json"
+report_gate="$tmp_dir/write-gate-report.json"
+patch_gate="$tmp_dir/write-gate.patch"
 apply_guard_err="$tmp_dir/write-gate-issues-without-apply.err"
 log="$tmp_dir/sync.log"
 
@@ -74,6 +76,7 @@ cat > "$cache" <<CACHE
 }
 CACHE
 
+: > "$log"
 if run_sync_script --out "$report" --patch "$patch" >>"$log" 2>&1; then
   echo "expected sync helper to fail in check mode when stale rows exist" >&2
   echo "sync helper output was:" >&2
@@ -87,12 +90,17 @@ if ! grep -Fq "$EXPECTED_DEFAULT_ROW" "$patch"; then
   echo "expected default patch to update only Status and Last Refreshed" >&2
   exit 1
 fi
+if grep -Fq "$EXPECTED_NORMALIZED_ROW" "$patch"; then
+  echo "did not expect normalized row (% Complete and Remaining Gap) in default mode patch" >&2
+  exit 1
+fi
 if grep -q "None (auto-synced from closed issues)" "$patch"; then
   echo "did not expect Remaining Gap normalization in default mode patch" >&2
   exit 1
 fi
 
 write_matrix_fixture
+: > "$log"
 if ! run_sync_script --write --out "$report_write_min" --patch "$patch" >>"$log" 2>&1; then
   echo "expected default write mode to apply minimum-safe row updates" >&2
   echo "sync helper output was:" >&2
@@ -108,6 +116,7 @@ if ! grep -Fq "$EXPECTED_DEFAULT_ROW" "$matrix"; then
 fi
 
 write_matrix_fixture
+: > "$log"
 if ! run_sync_script --write --normalize-progress --out "$report_write_norm" --patch "$patch" >>"$log" 2>&1; then
   echo "expected write + normalize-progress mode to apply extended sync updates" >&2
   echo "sync helper output was:" >&2
@@ -122,7 +131,8 @@ if ! grep -Fq "$EXPECTED_NORMALIZED_ROW" "$matrix"; then
   exit 1
 fi
 
-if run_sync_script --write-gate-issues --out "$report" --patch "$patch" >>"$log" 2> "$apply_guard_err"; then
+: > "$log"
+if run_sync_script --write-gate-issues --out "$report_gate" --patch "$patch_gate" >>"$log" 2> "$apply_guard_err"; then
   echo "expected write-gate-issues without --apply to fail" >&2
   exit 1
 fi
