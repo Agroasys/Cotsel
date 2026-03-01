@@ -60,7 +60,11 @@ get_rpc_head_hex() {
           | head -n1
       )"
       if [[ -z "$rpc_head_hex" ]]; then
-        echo "[get_rpc_head_hex] RPC response from '${RPC_GATEWAY_URL_HOST}' did not contain a valid hex block number result" >&2
+        echo "[get_rpc_head_hex] RPC response from '${RPC_GATEWAY_URL_HOST}' did not contain a valid hex block number result." \
+          "Expected JSON-RPC 'eth_blockNumber' with a 'result' field containing a hex string like '0x1234'." \
+          "This can be caused by malformed/non-JSON output, a missing/different 'result' field, a non-hex result value," \
+          "or an unexpected response structure (for example an HTML error page)." \
+          "Check the RPC response below and verify endpoint URL/auth and 'eth_blockNumber' support." >&2
         if [[ -n "$curl_output" ]]; then
           printf '%s\n' "$curl_output" >&2
         fi
@@ -90,7 +94,7 @@ PY
 get_indexer_head_from_db() {
   validate_identifier "POSTGRES_USER" "${POSTGRES_USER:-}" || return 1
   validate_identifier "INDEXER_DB_NAME" "${INDEXER_DB_NAME:-}" || return 1
-  run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -Atc "SELECT COALESCE(MAX(block_number), 0) FROM trade_event;"
+  run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -Atc 'SELECT COALESCE(MAX(block_number), 0) FROM trade_event;'
 }
 
 run_compose() {
@@ -214,10 +218,23 @@ json_encode_string() {
   require_python3
   python3 -c 'import json, sys, traceback
 data = sys.stdin.read().rstrip("\n")
+data_len = len(data)
 try:
     print(json.dumps(data))
 except Exception as e:
-    sys.stderr.write(f"Error: failed to JSON-encode input: {e}\n")
+    sys.stderr.write(
+        "Error: failed to JSON-encode stdin for GraphQL payload: {err}\n"
+        "  Python version: {pyver}\n"
+        "  stdin encoding: {enc}\n"
+        "  input length (characters): {length}\n"
+        "This is unexpected for text input and may indicate invalid/binary data\n"
+        "or an environment/encoding misconfiguration.\n".format(
+            err=e,
+            pyver=sys.version.replace("\n", " "),
+            enc=getattr(sys.stdin, "encoding", None),
+            length=data_len,
+        )
+    )
     traceback.print_exc(file=sys.stderr)
     sys.exit(1)'
 }
@@ -306,7 +323,7 @@ try:
 except Exception as e:
     print(
         f"Warning: JSON parsing failed, treating indexer head height as unavailable and continuing. "
-        f"Check if the indexer GraphQL endpoint is returning valid JSON (for example by inspecting the raw response or relevant service logs). "
+        f"Check whether INDEXER_GRAPHQL_URL is returning valid JSON (for example by inspecting the raw HTTP response or the reconciliation/indexer-pipeline service logs in the current COMPOSE_FILE stack). "
         f"Details: {e}",
         file=sys.stderr,
     )
@@ -576,8 +593,9 @@ if [[ "$REQUIRE_INDEXED_DATA" == "true" && "$INDEXED_TRADES_COUNT" -eq 0 ]]; the
   fail "indexed data requirement enabled but no indexed trades found"
 elif [[ "$INDEXED_TRADES_COUNT" -eq 0 ]]; then
   echo "WARNING: no indexed trades found and REQUIRE_INDEXED_DATA is not enabled."
+  echo "         This is expected when STAGING_E2E_REAL_REQUIRE_INDEXED_DATA=false; zero indexed trades do not fail this check in that mode."
   echo "         Enable STAGING_E2E_REAL_REQUIRE_INDEXED_DATA=true only when deterministic on-chain seeding or pre-seeded test data is configured for this profile."
-  pass "indexed data check completed (require=${REQUIRE_INDEXED_DATA}, count=${INDEXED_TRADES_COUNT})"
+  pass "indexed data check completed without requiring indexed data (require=${REQUIRE_INDEXED_DATA}, count=${INDEXED_TRADES_COUNT})"
 else
   pass "indexed data check completed (require=${REQUIRE_INDEXED_DATA}, count=${INDEXED_TRADES_COUNT})"
 fi
