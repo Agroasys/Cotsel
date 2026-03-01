@@ -123,7 +123,14 @@ require_integer_digits() {
 
 json_encode_string() {
   require_python3
-  python3 -c 'import json,sys; data=sys.stdin.read().rstrip("\n"); print(json.dumps(data))'
+  python3 -c 'import json, sys, traceback
+data = sys.stdin.read().rstrip("\n")
+try:
+    print(json.dumps(data))
+except Exception as e:
+    sys.stderr.write(f"Error: failed to JSON-encode input: {e}\n")
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)'
 }
 
 build_graphql_payload() {
@@ -181,8 +188,11 @@ except Exception as e:
 root = data.get("data") if isinstance(data, dict) else None
 squid_status = root.get("squidStatus") if isinstance(root, dict) else None
 height = squid_status.get("height") if isinstance(squid_status, dict) else None
-if height is not None:
-    sys.stdout.write(str(height))'
+if isinstance(height, int):
+    sys.stdout.write(str(height))
+else:
+    # Explicitly return an empty value when height is absent/non-integer.
+    sys.stdout.write("")'
 }
 
 read_indexer_head() {
@@ -228,11 +238,15 @@ extract_indexed_trades_count() {
 try:
     data = json.load(sys.stdin)
 except Exception:
+    sys.stderr.write("Failed to parse JSON for trades count\n")
+    sys.stdout.write("0")
     sys.exit(0)
 root = data.get("data") if isinstance(data, dict) else None
 trades = root.get("trades") if isinstance(root, dict) else None
 if isinstance(trades, list):
-    sys.stdout.write(str(len(trades)))'
+    sys.stdout.write(str(len(trades)))
+else:
+    sys.stdout.write("0")'
 }
 
 load_env_file ".env"
@@ -367,7 +381,9 @@ INDEXER_HEAD="$(wait_for_indexer_head_ready "$LAG_WARMUP_SECONDS" "$LAG_POLL_SEC
 if [[ -n "$INDEXER_HEAD" ]]; then
   pass "indexer head metric available after warmup (height=${INDEXER_HEAD})"
 else
-  INDEXER_HEAD="$(get_indexer_head_from_db 2>/dev/null || true)"
+  INDEXER_HEAD="$(
+    get_indexer_head_from_db 2> >(sed 's/^/[get_indexer_head_from_db] /' >&2) || true
+  )"
   if [[ -n "$INDEXER_HEAD" ]]; then
     pass "indexer head fallback metric available from DB after warmup (height=${INDEXER_HEAD})"
   else
@@ -414,8 +430,8 @@ echo "indexed trade sample count=${INDEXED_TRADES_COUNT}"
 if [[ "$REQUIRE_INDEXED_DATA" == "true" && "$INDEXED_TRADES_COUNT" -eq 0 ]]; then
   fail "indexed data requirement enabled but no indexed trades found"
 elif [[ "$INDEXED_TRADES_COUNT" -eq 0 ]]; then
-  echo "WARNING: no indexed trades found and deterministic on-chain seeding is not enabled for this profile."
-  echo "         Set STAGING_E2E_REAL_REQUIRE_INDEXED_DATA=true only when the contracts are pre-seeded with test data."
+  echo "WARNING: no indexed trades found and REQUIRE_INDEXED_DATA is not enabled."
+  echo "         Enable STAGING_E2E_REAL_REQUIRE_INDEXED_DATA=true only when deterministic on-chain seeding or pre-seeded test data is configured for this profile."
   pass "indexed data check completed (require=${REQUIRE_INDEXED_DATA}, count=${INDEXED_TRADES_COUNT})"
 else
   pass "indexed data check completed (require=${REQUIRE_INDEXED_DATA}, count=${INDEXED_TRADES_COUNT})"
@@ -429,7 +445,9 @@ if run_compose ps --services --filter status=running | grep -qx 'indexer-pipelin
     STATUS_AFTER_RESTART="$(run_graphql_query '{ squidStatus { height } }' || true)"
     HEAD_AFTER_RESTART="$(printf '%s' "$STATUS_AFTER_RESTART" | extract_indexer_head_height)"
     if [[ -z "$HEAD_AFTER_RESTART" ]]; then
-      HEAD_AFTER_RESTART="$(get_indexer_head_from_db 2>/dev/null || true)"
+      HEAD_AFTER_RESTART="$(
+        get_indexer_head_from_db 2> >(sed 's/^/[get_indexer_head_from_db] /' >&2) || true
+      )"
     fi
 
     if [[ -n "$HEAD_BEFORE_RESTART" && -n "$HEAD_AFTER_RESTART" ]]; then
