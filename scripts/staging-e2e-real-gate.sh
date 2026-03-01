@@ -6,9 +6,16 @@ PROFILE="staging-e2e-real"
 failure_count=0
 INDEXER_PIPELINE_SERVICE="${INDEXER_PIPELINE_SERVICE:-indexer-pipeline}"
 PIPELINE_RESTART_SLEEP="${STAGING_E2E_REAL_PIPELINE_RESTART_SLEEP:-5}"
+DEFAULT_MIN_INDEXER_START_BLOCK=1
+# Default number of blocks to step back from current RPC head when deriving
+# dynamic INDEXER_START_BLOCK. This keeps startup away from the volatile tip.
+DEFAULT_START_BLOCK_BACKOFF=250
+# Maximum allowed indexer lag (in blocks) before this gate considers the indexer unhealthy.
+# Default 500 is conservative for mixed environments; tune per network block time/SLO.
+DEFAULT_MAX_INDEXER_LAG_BLOCKS=500
 # Use ASCII Unit Separator (0x1F) as delimiter to minimize collisions with normal text data
 # in reconciliation run and drift summary queries below.
-SUMMARY_FIELD_DELIM=$'\x1f'
+RECONCILIATION_SUMMARY_FIELD_DELIM=$'\x1f'
 
 load_env_file() {
   local file="$1"
@@ -391,20 +398,20 @@ calculate_dynamic_start_block() {
   local rpc_start_head_hex=""
   local rpc_start_head_dec=""
   local dynamic_indexer_start_block=0
-  local backoff_value="${START_BLOCK_BACKOFF:-250}"
-  local min_start_block=1
+  local backoff_value="${START_BLOCK_BACKOFF:-$DEFAULT_START_BLOCK_BACKOFF}"
+  local min_start_block="$DEFAULT_MIN_INDEXER_START_BLOCK"
   local configured_min_start_block="${MIN_INDEXER_START_BLOCK:-}"
 
   if [[ -n "${START_BLOCK_BACKOFF:-}" && ! "${START_BLOCK_BACKOFF}" =~ ^[0-9]+$ ]]; then
-    echo "warning: invalid START_BLOCK_BACKOFF='${START_BLOCK_BACKOFF}' for dynamic start block; defaulting to 250" >&2
-    backoff_value=250
+    echo "warning: invalid START_BLOCK_BACKOFF='${START_BLOCK_BACKOFF}' for dynamic start block; defaulting to ${DEFAULT_START_BLOCK_BACKOFF}" >&2
+    backoff_value="$DEFAULT_START_BLOCK_BACKOFF"
   fi
   if [[ -n "$configured_min_start_block" ]]; then
     if [[ "$configured_min_start_block" =~ ^[0-9]+$ ]]; then
       min_start_block="$configured_min_start_block"
     else
-      echo "warning: invalid MIN_INDEXER_START_BLOCK='${configured_min_start_block}' for dynamic start block; defaulting to 1" >&2
-      min_start_block=1
+      echo "warning: invalid MIN_INDEXER_START_BLOCK='${configured_min_start_block}' for dynamic start block; defaulting to ${DEFAULT_MIN_INDEXER_START_BLOCK}" >&2
+      min_start_block="$DEFAULT_MIN_INDEXER_START_BLOCK"
     fi
   fi
 
@@ -455,13 +462,13 @@ NETWORK_NAME="${STAGING_E2E_REAL_NETWORK_NAME:-unknown}"
 CHAIN_ID_VALUE="${STAGING_E2E_REAL_CHAIN_ID:-${RECONCILIATION_CHAIN_ID:-unknown}}"
 REQUIRE_INDEXED_DATA="${STAGING_E2E_REAL_REQUIRE_INDEXED_DATA:-false}"
 DYNAMIC_START_BLOCK="${STAGING_E2E_REAL_DYNAMIC_START_BLOCK:-true}"
-START_BLOCK_BACKOFF="${STAGING_E2E_REAL_START_BLOCK_BACKOFF:-250}"
+START_BLOCK_BACKOFF="${STAGING_E2E_REAL_START_BLOCK_BACKOFF:-$DEFAULT_START_BLOCK_BACKOFF}"
 LAG_WARMUP_SECONDS="${STAGING_E2E_REAL_LAG_WARMUP_SECONDS:-180}"
 LAG_POLL_SECONDS="${STAGING_E2E_REAL_LAG_POLL_SECONDS:-5}"
-MAX_INDEXER_LAG_BLOCKS="${STAGING_E2E_MAX_INDEXER_LAG_BLOCKS:-500}"
+MAX_INDEXER_LAG_BLOCKS="${STAGING_E2E_MAX_INDEXER_LAG_BLOCKS:-$DEFAULT_MAX_INDEXER_LAG_BLOCKS}"
 READINESS_RETRY_ATTEMPTS="${STAGING_E2E_REAL_READINESS_RETRY_ATTEMPTS:-30}"
 READINESS_RETRY_DELAY="${STAGING_E2E_REAL_READINESS_RETRY_DELAY:-2}"
-MIN_INDEXER_START_BLOCK="${STAGING_E2E_REAL_MIN_INDEXER_START_BLOCK:-1}"
+MIN_INDEXER_START_BLOCK="${STAGING_E2E_REAL_MIN_INDEXER_START_BLOCK:-$DEFAULT_MIN_INDEXER_START_BLOCK}"
 
 RUN_KEY="staging-e2e-real-gate-$(date +%s)"
 validate_run_key
@@ -585,7 +592,25 @@ else
     LAG=$((RPC_HEAD_DEC - INDEXER_HEAD_DEC))
     echo "lag/head metrics: rpcHead=${RPC_HEAD_DEC}, indexerHead=${INDEXER_HEAD_DEC}, lag=${LAG}"
     if [[ "$LAG" -lt 0 ]]; then
-      fail "negative lag (${LAG} blocks): rpcHead=${RPC_HEAD_DEC} < indexerHead=${INDEXER_HEAD_DEC} indicates possible chain mismatch; verify RPC_GATEWAY_URL_HOST and indexer settings point to the same network/chain"
+      # Re-read RPC head once to avoid false negatives from read timing races.
+      if [[ -n "$RPC_GATEWAY_URL_HOST" ]]; then
+        NEW_RPC_HEAD_HEX="$(get_rpc_head_hex)"
+        if is_valid_hex "$NEW_RPC_HEAD_HEX"; then
+          NEW_RPC_HEAD_DEC="$(hex_to_decimal "$NEW_RPC_HEAD_HEX" 2>/dev/null || true)"
+          if [[ -n "$NEW_RPC_HEAD_DEC" && "$NEW_RPC_HEAD_DEC" =~ ^[0-9]+$ ]]; then
+            RPC_HEAD_DEC="$NEW_RPC_HEAD_DEC"
+            LAG=$((RPC_HEAD_DEC - INDEXER_HEAD_DEC))
+            echo "rechecked lag/head metrics: rpcHead=${RPC_HEAD_DEC}, indexerHead=${INDEXER_HEAD_DEC}, lag=${LAG}"
+          fi
+        fi
+      fi
+      if [[ "$LAG" -lt 0 ]]; then
+        fail "negative lag (${LAG} blocks): rpcHead=${RPC_HEAD_DEC} < indexerHead=${INDEXER_HEAD_DEC} indicates possible chain mismatch; verify RPC_GATEWAY_URL_HOST and indexer settings point to the same network/chain"
+      elif [[ "$LAG" -le "$MAX_INDEXER_LAG_BLOCKS" ]]; then
+        pass "indexer lag within threshold (${LAG} <= ${MAX_INDEXER_LAG_BLOCKS})"
+      else
+        fail "indexer lag exceeds threshold (${LAG} > ${MAX_INDEXER_LAG_BLOCKS})"
+      fi
     elif [[ "$LAG" -le "$MAX_INDEXER_LAG_BLOCKS" ]]; then
       pass "indexer lag within threshold (${LAG} <= ${MAX_INDEXER_LAG_BLOCKS})"
     else
@@ -652,9 +677,9 @@ ORDER BY id DESC
 LIMIT 1;
 SQL
 )"
-RUN_SUMMARY="$(run_with_prefixed_stderr "reconcile_run_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${RUN_SUMMARY_SQL}" || true)"
+RUN_SUMMARY="$(run_with_prefixed_stderr "reconcile_run_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${RECONCILIATION_SUMMARY_FIELD_DELIM}" -tc "${RUN_SUMMARY_SQL}" || true)"
 if [[ -n "$RUN_SUMMARY" ]]; then
-  IFS="${SUMMARY_FIELD_DELIM}" read -r RUN_STATUS RUN_TOTAL RUN_DRIFT <<<"$RUN_SUMMARY"
+  IFS="${RECONCILIATION_SUMMARY_FIELD_DELIM}" read -r RUN_STATUS RUN_TOTAL RUN_DRIFT <<<"$RUN_SUMMARY"
   echo "reconciliation run summary: runKey=${RUN_KEY}, status=${RUN_STATUS}, totalTrades=${RUN_TOTAL}, driftCount=${RUN_DRIFT}"
   pass "reconciliation run summary captured"
 else
@@ -669,10 +694,10 @@ GROUP BY mismatch_code
 ORDER BY COUNT(*) DESC;
 SQL
 )"
-DRIFT_SUMMARY_ROWS="$(run_with_prefixed_stderr "reconcile_drift_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${DRIFT_SUMMARY_SQL}" || true)"
+DRIFT_SUMMARY_ROWS="$(run_with_prefixed_stderr "reconcile_drift_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${RECONCILIATION_SUMMARY_FIELD_DELIM}" -tc "${DRIFT_SUMMARY_SQL}" || true)"
 echo "drift classification snapshot:"
 if [[ -n "$DRIFT_SUMMARY_ROWS" ]]; then
-  while IFS="${SUMMARY_FIELD_DELIM}" read -r MISMATCH_CODE MISMATCH_COUNT; do
+  while IFS="${RECONCILIATION_SUMMARY_FIELD_DELIM}" read -r MISMATCH_CODE MISMATCH_COUNT; do
     echo "${MISMATCH_CODE}:${MISMATCH_COUNT}"
   done <<< "$DRIFT_SUMMARY_ROWS"
 else
@@ -689,17 +714,17 @@ fi
 
 CORRELATION_SQL="$(cat <<'SQL'
 SELECT
-  replace(COALESCE(trade_id, ''), E'\t', ' '),
-  replace(COALESCE(tx_hash, ''), E'\t', ' ')
+  replace(replace(COALESCE(trade_id, ''), chr(31), ' '), E'\t', ' '),
+  replace(replace(COALESCE(tx_hash, ''), chr(31), ' '), E'\t', ' ')
 FROM trade_event
 ORDER BY block_number DESC
 LIMIT 5;
 SQL
 )"
-CORRELATION_ROWS="$(run_with_prefixed_stderr "indexer_correlation_query" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -A -F $'\t' -tc "${CORRELATION_SQL}" || true)"
+CORRELATION_ROWS="$(run_with_prefixed_stderr "indexer_correlation_query" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -A -F "${RECONCILIATION_SUMMARY_FIELD_DELIM}" -tc "${CORRELATION_SQL}" || true)"
 echo "correlation snapshot (indexer + reconciliation context):"
 if [[ -n "$CORRELATION_ROWS" ]]; then
-  while IFS=$'\t' read -r TRADE_ID TX_HASH; do
+  while IFS="${RECONCILIATION_SUMMARY_FIELD_DELIM}" read -r TRADE_ID TX_HASH; do
     printf '{"tradeId":%s,"actionKey":null,"requestId":null,"txHash":%s,"chainId":%s,"networkName":%s}\n' \
       "$(printf '%s' "${TRADE_ID}" | json_encode_string)" \
       "$(printf '%s' "${TX_HASH}" | json_encode_string)" \
