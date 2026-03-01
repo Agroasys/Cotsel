@@ -49,8 +49,16 @@ test('staging-e2e-real gate captures drift classification snapshot output', () =
 test('staging-e2e-real gate SQL fingerprint stays stable unless SQL changes intentionally', () => {
   const sql = loadStagingGateSqlContract();
 
+  // Keep a short hash signal in CI output so SQL changes are obvious in diffs.
   assert.equal(sqlFingerprint(sql.runSummarySql), EXPECTED_SQL_FINGERPRINTS.runSummarySql);
   assert.equal(sqlFingerprint(sql.driftSummarySql), EXPECTED_SQL_FINGERPRINTS.driftSummarySql);
+});
+
+test('staging-e2e-real SQL extractor reports actionable marker errors when script format changes', () => {
+  assert.throws(
+    () => loadStagingGateSqlContract('#!/usr/bin/env bash\necho "no sql markers"\n'),
+    /staging-e2e-real gate script format changed, update markers in stagingGateSqlContract\.ts/,
+  );
 });
 
 test('staging-e2e-real gate writes deterministic reconciliation report output', () => {
