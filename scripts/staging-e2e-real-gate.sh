@@ -197,9 +197,12 @@ require_integer_digits() {
 require_positive_value() {
   local name="$1"
   local value="$2"
+  # Reuse digit validation so non-numeric values are flagged consistently.
+  require_integer_digits "$name" "$value"
   if [[ "$value" == "0" ]]; then
     fail "$name must be > 0"
   fi
+  return 0
 }
 
 json_encode_string() {
@@ -529,7 +532,7 @@ else
 fi
 
 HEAD_BEFORE_RESTART="${INDEXER_HEAD:-}"
-if run_compose ps --services --filter status=running | grep -qx 'indexer-pipeline'; then
+if run_compose ps --services --filter status=running | tr '[:space:]' '\n' | grep -Fxq 'indexer-pipeline'; then
   run_compose restart indexer-pipeline >/dev/null
   sleep 5
   if retry_cmd "indexer graphql readiness after pipeline restart" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query '{ __typename }' >/dev/null; then
@@ -564,7 +567,7 @@ fi
 # in reconciliation run and drift summary queries below.
 SUMMARY_FIELD_DELIM=$'\x1f'
 RUN_SUMMARY_SQL=$'SELECT status, total_trades, drift_count FROM reconcile_runs WHERE run_key = :\'run_key_var\' ORDER BY id DESC LIMIT 1;'
-RUN_SUMMARY="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${RUN_SUMMARY_SQL}" 2>/dev/null || true)"
+RUN_SUMMARY="$(run_with_prefixed_stderr "reconcile_run_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${RUN_SUMMARY_SQL}" || true)"
 if [[ -n "$RUN_SUMMARY" ]]; then
   IFS="${SUMMARY_FIELD_DELIM}" read -r RUN_STATUS RUN_TOTAL RUN_DRIFT <<<"$RUN_SUMMARY"
   echo "reconciliation run summary: runKey=${RUN_KEY}, status=${RUN_STATUS}, totalTrades=${RUN_TOTAL}, driftCount=${RUN_DRIFT}"
@@ -574,7 +577,7 @@ else
 fi
 
 DRIFT_SUMMARY_SQL=$'SELECT mismatch_code, COUNT(*) FROM reconcile_drifts WHERE run_key = :\'run_key_var\' GROUP BY mismatch_code ORDER BY COUNT(*) DESC;'
-DRIFT_SUMMARY_ROWS="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${DRIFT_SUMMARY_SQL}" 2>/dev/null || true)"
+DRIFT_SUMMARY_ROWS="$(run_with_prefixed_stderr "reconcile_drift_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${SUMMARY_FIELD_DELIM}" -tc "${DRIFT_SUMMARY_SQL}" || true)"
 echo "drift classification snapshot:"
 if [[ -n "$DRIFT_SUMMARY_ROWS" ]]; then
   while IFS="${SUMMARY_FIELD_DELIM}" read -r MISMATCH_CODE MISMATCH_COUNT; do
@@ -602,7 +605,7 @@ ORDER BY block_number DESC
 LIMIT 5;
 SQL
 )"
-CORRELATION_ROWS="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -A -F $'\t' -tc "${CORRELATION_SQL}" 2>/dev/null || true)"
+CORRELATION_ROWS="$(run_with_prefixed_stderr "indexer_correlation_query" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -A -F $'\t' -tc "${CORRELATION_SQL}" || true)"
 echo "correlation snapshot (indexer + reconciliation context):"
 if [[ -n "$CORRELATION_ROWS" ]]; then
   while IFS=$'\t' read -r TRADE_ID TX_HASH; do
