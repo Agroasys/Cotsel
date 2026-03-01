@@ -507,7 +507,7 @@ else
   fail "indexer GraphQL readiness check failed"
 fi
 
-if retry_cmd "indexer graphql in-network readiness" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query_from_reconciliation '{ __typename }' >/dev/null; then
+if retry_cmd "indexer graphql in-network readiness" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query_from_reconciliation 'query { trades(limit: 1) { tradeId } }' >/dev/null; then
   pass "indexer GraphQL in-network readiness check passed"
 else
   fail "indexer GraphQL in-network readiness check failed"
