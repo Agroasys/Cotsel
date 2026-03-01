@@ -88,12 +88,12 @@ NODE
   printf '%s\n' "1.0"
 }
 
-require_non_negative_integer() {
+require_integer_digits() {
   local name="$1"
   local value="$2"
 
   if [[ ! "$value" =~ ^[0-9]+$ ]]; then
-    fail "$name must be a non-negative integer (received: $value)"
+    fail "$name must be an integer consisting only of digits 0-9 (received: $value)"
     return 1
   fi
 
@@ -213,10 +213,10 @@ mkdir -p "$(dirname "$RECONCILIATION_REPORT_PATH")"
 echo "Starting staging-e2e-real validation gate"
 echo "profile=${PROFILE} indexerHostUrl=${INDEXER_GATEWAY_URL_HOST} rpcHostUrl=${RPC_GATEWAY_URL_HOST}"
 
-require_non_negative_integer "STAGING_E2E_REAL_START_BLOCK_BACKOFF" "$START_BLOCK_BACKOFF" || true
-require_non_negative_integer "STAGING_E2E_REAL_LAG_WARMUP_SECONDS" "$LAG_WARMUP_SECONDS" || true
-require_non_negative_integer "STAGING_E2E_REAL_LAG_POLL_SECONDS" "$LAG_POLL_SECONDS" || true
-require_non_negative_integer "STAGING_E2E_MAX_INDEXER_LAG_BLOCKS" "$MAX_LAG" || true
+if ! require_integer_digits "STAGING_E2E_REAL_START_BLOCK_BACKOFF" "$START_BLOCK_BACKOFF"; then :; fi
+if ! require_integer_digits "STAGING_E2E_REAL_LAG_WARMUP_SECONDS" "$LAG_WARMUP_SECONDS"; then :; fi
+if ! require_integer_digits "STAGING_E2E_REAL_LAG_POLL_SECONDS" "$LAG_POLL_SECONDS"; then :; fi
+if ! require_integer_digits "STAGING_E2E_MAX_INDEXER_LAG_BLOCKS" "$MAX_LAG"; then :; fi
 
 if [[ "$LAG_WARMUP_SECONDS" == "0" ]]; then
   fail "STAGING_E2E_REAL_LAG_WARMUP_SECONDS must be > 0"
@@ -243,7 +243,7 @@ if [[ "$DYNAMIC_START_BLOCK" == "true" && -n "$RPC_GATEWAY_URL_HOST" ]]; then
       | sed -n 's/.*"result":"\(0x[0-9a-fA-F]*\)".*/\1/p' \
       | head -n1 || true
   )"
-  if [[ -n "$RPC_START_HEAD_HEX" ]]; then
+  if [[ -n "$RPC_START_HEAD_HEX" && "$RPC_START_HEAD_HEX" =~ ^0x[0-9a-fA-F]+$ ]]; then
     RPC_START_HEAD_DEC=$((RPC_START_HEAD_HEX))
     DYNAMIC_INDEXER_START_BLOCK=$((RPC_START_HEAD_DEC - START_BLOCK_BACKOFF))
     if (( DYNAMIC_INDEXER_START_BLOCK < 1 )); then
@@ -251,8 +251,10 @@ if [[ "$DYNAMIC_START_BLOCK" == "true" && -n "$RPC_GATEWAY_URL_HOST" ]]; then
     fi
     export INDEXER_START_BLOCK="$DYNAMIC_INDEXER_START_BLOCK"
     echo "dynamic start block: INDEXER_START_BLOCK=${INDEXER_START_BLOCK} (rpcHead=${RPC_START_HEAD_DEC}, backoff=${START_BLOCK_BACKOFF})"
-  else
+  elif [[ -z "$RPC_START_HEAD_HEX" ]]; then
     echo "warning: unable to determine RPC head for dynamic start block; using existing INDEXER_START_BLOCK=${INDEXER_START_BLOCK:-unset}" >&2
+  else
+    echo "warning: invalid RPC head value '${RPC_START_HEAD_HEX}' for dynamic start block; using existing INDEXER_START_BLOCK=${INDEXER_START_BLOCK:-unset}" >&2
   fi
 fi
 
@@ -323,13 +325,11 @@ fi
 
 if [[ -z "$RPC_HEAD_HEX" || -z "$INDEXER_HEAD" ]]; then
   fail "lag/head metrics unavailable"
-# INDEXER_HEAD is expected to be numeric because read_indexer_head validates it
-# and the fallback SQL query returns an integer; keep this as a defensive guard
-# before shell arithmetic.
-elif [[ ! "$INDEXER_HEAD" =~ ^[0-9]+$ ]]; then
-  fail "indexer head metric is not numeric: ${INDEXER_HEAD}"
+elif [[ ! "$RPC_HEAD_HEX" =~ ^0x[0-9a-fA-F]+$ ]]; then
+  fail "RPC head metric is not a valid hex value: ${RPC_HEAD_HEX}"
 else
-  RPC_HEAD_DEC=$((RPC_HEAD_HEX))
+  RPC_HEAD_NUM="${RPC_HEAD_HEX#0x}"
+  RPC_HEAD_DEC=$((16#$RPC_HEAD_NUM))
   LAG=$((RPC_HEAD_DEC - INDEXER_HEAD))
   echo "lag/head metrics: rpcHead=${RPC_HEAD_DEC}, indexerHead=${INDEXER_HEAD}, lag=${LAG}"
   if [[ "$LAG" -lt 0 ]]; then
