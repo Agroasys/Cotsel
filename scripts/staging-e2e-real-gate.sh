@@ -3,7 +3,7 @@ set -euo pipefail
 
 COMPOSE_FILE="docker-compose.services.yml"
 PROFILE="staging-e2e-real"
-failures=0
+failure_count=0
 
 load_env_file() {
   local file="$1"
@@ -20,6 +20,12 @@ load_env_file() {
 normalize_host_url() {
   local url="$1"
   echo "${url//host.docker.internal/127.0.0.1}"
+}
+
+run_with_prefixed_stderr() {
+  local prefix="$1"
+  shift
+  "$@" 2> >(sed "s/^/[${prefix}] /" >&2)
 }
 
 get_rpc_head_hex() {
@@ -69,7 +75,7 @@ pass() {
 
 fail() {
   echo "[FAIL] $1" >&2
-  failures=$((failures + 1))
+  failure_count=$((failure_count + 1))
 }
 
 validate_identifier() {
@@ -159,7 +165,7 @@ require_integer_digits() {
     fail "$name must be an integer consisting only of digits 0-9 (received: $value)"
   fi
 
-  # Validation errors are accumulated via the global failures counter.
+  # Validation errors are accumulated via the global failure counter.
   # Always return success so the gate can report all validation failures at once.
   return 0
 }
@@ -226,7 +232,7 @@ extract_indexer_head_height() {
 try:
     data = json.load(sys.stdin)
 except Exception as e:
-    print(f"Note: JSON parsing failed, treating indexer head height as unavailable and continuing. Details: {e}", file=sys.stderr)
+    print(f"Warning: JSON parsing failed, treating indexer head height as unavailable and continuing. Details: {e}", file=sys.stderr)
     sys.exit(0)
 root = data.get("data") if isinstance(data, dict) else None
 squid_status = root.get("squidStatus") if isinstance(root, dict) else None
@@ -305,7 +311,7 @@ DYNAMIC_START_BLOCK="${STAGING_E2E_REAL_DYNAMIC_START_BLOCK:-true}"
 START_BLOCK_BACKOFF="${STAGING_E2E_REAL_START_BLOCK_BACKOFF:-250}"
 LAG_WARMUP_SECONDS="${STAGING_E2E_REAL_LAG_WARMUP_SECONDS:-180}"
 LAG_POLL_SECONDS="${STAGING_E2E_REAL_LAG_POLL_SECONDS:-5}"
-MAX_LAG="${STAGING_E2E_MAX_INDEXER_LAG_BLOCKS:-500}"
+MAX_INDEXER_LAG_BLOCKS="${STAGING_E2E_MAX_INDEXER_LAG_BLOCKS:-500}"
 READINESS_RETRY_ATTEMPTS="${STAGING_E2E_READINESS_RETRY_ATTEMPTS:-30}"
 READINESS_RETRY_DELAY="${STAGING_E2E_READINESS_RETRY_DELAY:-2}"
 
@@ -320,7 +326,7 @@ echo "profile=${PROFILE} indexerHostUrl=${INDEXER_GATEWAY_URL_HOST} rpcHostUrl=$
 require_integer_digits "STAGING_E2E_REAL_START_BLOCK_BACKOFF" "$START_BLOCK_BACKOFF"
 require_integer_digits "STAGING_E2E_REAL_LAG_WARMUP_SECONDS" "$LAG_WARMUP_SECONDS"
 require_integer_digits "STAGING_E2E_REAL_LAG_POLL_SECONDS" "$LAG_POLL_SECONDS"
-require_integer_digits "STAGING_E2E_MAX_INDEXER_LAG_BLOCKS" "$MAX_LAG"
+require_integer_digits "STAGING_E2E_MAX_INDEXER_LAG_BLOCKS" "$MAX_INDEXER_LAG_BLOCKS"
 require_integer_digits "STAGING_E2E_READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_ATTEMPTS"
 require_integer_digits "STAGING_E2E_READINESS_RETRY_DELAY" "$READINESS_RETRY_DELAY"
 
@@ -332,7 +338,7 @@ if [[ "$LAG_POLL_SECONDS" == "0" ]]; then
   fail "STAGING_E2E_REAL_LAG_POLL_SECONDS must be > 0"
 fi
 
-if [[ "$MAX_LAG" == "0" ]]; then
+if [[ "$MAX_INDEXER_LAG_BLOCKS" == "0" ]]; then
   fail "STAGING_E2E_MAX_INDEXER_LAG_BLOCKS must be > 0"
 fi
 
@@ -344,8 +350,8 @@ if [[ "$READINESS_RETRY_DELAY" == "0" ]]; then
   fail "STAGING_E2E_READINESS_RETRY_DELAY must be > 0"
 fi
 
-if [[ "$failures" -gt 0 ]]; then
-  echo "staging-e2e-real gate failed with ${failures} check(s)" >&2
+if [[ "$failure_count" -gt 0 ]]; then
+  echo "staging-e2e-real gate failed with ${failure_count} check(s)" >&2
   exit 1
 fi
 
@@ -423,7 +429,7 @@ if [[ -n "$INDEXER_HEAD" ]]; then
   pass "indexer head metric available after warmup (height=${INDEXER_HEAD})"
 else
   INDEXER_HEAD="$(
-    get_indexer_head_from_db 2> >(sed 's/^/[get_indexer_head_from_db] /' >&2) || true
+    run_with_prefixed_stderr "get_indexer_head_from_db" get_indexer_head_from_db || true
   )"
   if [[ -n "$INDEXER_HEAD" ]]; then
     pass "indexer head fallback metric available from DB after warmup (height=${INDEXER_HEAD})"
@@ -450,11 +456,11 @@ else
     LAG=$((RPC_HEAD_DEC - INDEXER_HEAD))
     echo "lag/head metrics: rpcHead=${RPC_HEAD_DEC}, indexerHead=${INDEXER_HEAD}, lag=${LAG}"
     if [[ "$LAG" -lt 0 ]]; then
-      fail "negative lag indicates possible chain mismatch"
-    elif [[ "$LAG" -le "$MAX_LAG" ]]; then
-      pass "indexer lag within threshold (${LAG} <= ${MAX_LAG})"
+      fail "negative lag indicates possible chain mismatch; verify RPC_GATEWAY_URL_HOST and indexer settings point to the same network/chain"
+    elif [[ "$LAG" -le "$MAX_INDEXER_LAG_BLOCKS" ]]; then
+      pass "indexer lag within threshold (${LAG} <= ${MAX_INDEXER_LAG_BLOCKS})"
     else
-      fail "indexer lag exceeds threshold (${LAG} > ${MAX_LAG})"
+      fail "indexer lag exceeds threshold (${LAG} > ${MAX_INDEXER_LAG_BLOCKS})"
     fi
   fi
 fi
@@ -485,7 +491,7 @@ if run_compose ps --services --filter status=running | grep -qx 'indexer-pipelin
     HEAD_AFTER_RESTART="$(printf '%s' "$STATUS_AFTER_RESTART" | extract_indexer_head_height)"
     if [[ -z "$HEAD_AFTER_RESTART" ]]; then
       HEAD_AFTER_RESTART="$(
-        get_indexer_head_from_db 2> >(sed 's/^/[get_indexer_head_from_db] /' >&2) || true
+        run_with_prefixed_stderr "get_indexer_head_from_db" get_indexer_head_from_db || true
       )"
     fi
 
@@ -554,8 +560,8 @@ else
     "$(printf '%s' "${NETWORK_NAME}" | json_encode_string)"
 fi
 
-if [[ "$failures" -gt 0 ]]; then
-  echo "staging-e2e-real gate failed with ${failures} check(s)" >&2
+if [[ "$failure_count" -gt 0 ]]; then
+  echo "staging-e2e-real gate failed with ${failure_count} check(s)" >&2
   exit 1
 fi
 
