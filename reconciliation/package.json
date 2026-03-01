@@ -9,6 +9,7 @@
     "test": "node -r ts-node/register --test src/tests/*.test.ts",
     "reconcile:once": "ts-node src/cli.ts once",
     "reconcile:daemon": "ts-node src/cli.ts daemon",
+    "reconcile:report": "ts-node src/report-cli.ts",
     "healthcheck": "node dist/healthcheck.js"
   },
   "dependencies": {

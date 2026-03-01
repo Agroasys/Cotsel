@@ -251,6 +251,14 @@ jobs:
           name: ci-report-notifications-gate
           path: reports/notifications/staging-e2e-real.json
 
+      - name: Upload reconciliation report artifact
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ci-report-reconciliation-report
+          path: reports/reconciliation/staging-e2e-real-report.json
+          if-no-files-found: error
+
   asset-fee-path:
     name: ci/asset-fee-path
     runs-on: ubuntu-latest

@@ -153,6 +153,9 @@ LAG_POLL_SECONDS="${STAGING_E2E_REAL_LAG_POLL_SECONDS:-5}"
 MAX_LAG="${STAGING_E2E_MAX_INDEXER_LAG_BLOCKS:-500}"
 
 RUN_KEY="phase3-gate-$(date +%s)"
+RECONCILIATION_REPORT_PATH="reports/reconciliation/staging-e2e-real-report.json"
+
+mkdir -p "$(dirname "$RECONCILIATION_REPORT_PATH")"
 
 echo "Starting staging-e2e-real validation gate"
 echo "profile=${PROFILE} indexerHostUrl=${INDEXER_GATEWAY_URL_HOST} rpcHostUrl=${RPC_GATEWAY_URL_HOST}"
@@ -201,6 +204,20 @@ if [[ "$DYNAMIC_START_BLOCK" == "true" && -n "$RPC_GATEWAY_URL_HOST" ]]; then
 fi
 
 if [[ "${STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY:-false}" == "true" ]]; then
+  cat > "$RECONCILIATION_REPORT_PATH" <<EOF
+{
+  "reportVersion": "1.0",
+  "runKey": null,
+  "mode": "config-only",
+  "rows": [],
+  "summary": {
+    "rowCount": 0,
+    "matchCount": 0,
+    "mismatchCount": 0
+  }
+}
+EOF
+  echo "reconciliation report generated (config-only): path=${RECONCILIATION_REPORT_PATH}"
   INDEXER_START_BLOCK="${INDEXER_START_BLOCK:-}" scripts/docker-services.sh config "$PROFILE"
   exit 0
 fi
@@ -327,6 +344,14 @@ if [[ -n "$DRIFT_SUMMARY" ]]; then
   echo "$DRIFT_SUMMARY"
 else
   echo "(no drift rows)"
+fi
+
+if run_compose exec -T reconciliation node reconciliation/dist/report-cli.js --run-key="$RUN_KEY" > "$RECONCILIATION_REPORT_PATH"; then
+  echo "reconciliation report generated: path=${RECONCILIATION_REPORT_PATH}"
+  pass "reconciliation report generated"
+else
+  rm -f "$RECONCILIATION_REPORT_PATH"
+  fail "reconciliation report generation failed"
 fi
 
 CORRELATION_ROWS="$(run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -Atc "SELECT COALESCE(trade_id,''), COALESCE(tx_hash,'') FROM trade_event ORDER BY block_number DESC LIMIT 5;" 2>/dev/null || true)"
