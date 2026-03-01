@@ -84,8 +84,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Check deprecated profile names in docs
-        run: scripts/tests/docs-profile-name-guard.sh
+      - name: Run docs/profile boundary guards
+        shell: bash
+        run: |
+          set +e
+          mkdir -p ci-reports
+          report="ci-reports/docs-profile-guard.txt"
+          fail=0
+
+          run_check() {
+            local label="$1"
+            shift
+            echo "[$label] command: $*" | tee -a "$report"
+            if "$@" 2>&1 | tee -a "$report"; then
+              echo "[$label] PASS" | tee -a "$report"
+            else
+              echo "[$label] FAIL" | tee -a "$report"
+              fail=1
+            fi
+            echo "" >> "$report"
+          }
+
+          run_check docs-profile-name scripts/tests/docs-profile-name-guard.sh
+          run_check api-gateway-boundary scripts/tests/api-gateway-boundary-guard.sh
+
+          if [[ "$fail" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Upload docs/profile guard report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ci-report-docs-profile-guard
+          path: ci-reports/docs-profile-guard.txt
 
   arch-roadmap-consistency:
     name: ci/arch-roadmap-consistency

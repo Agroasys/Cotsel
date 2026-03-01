@@ -3,6 +3,7 @@
 ## Purpose
 Operate reconciliation safely in local/staging and diagnose drift failures.
 For lifecycle checkpoints across lock, stage-1, and final settlement, see `docs/runbooks/hybrid-split-walkthrough.md`.
+If a mismatch may be caused by routing/auth propagation/correlation breakdown between services, use `docs/runbooks/api-gateway-boundary.md` first to classify the handoff boundary before remediating reconciliation state.
 
 ## Preconditions
 - Postgres is reachable.

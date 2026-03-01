@@ -166,6 +166,7 @@ npm run -w treasury build
 - `docs/runbooks/docker-profiles.md`
 - `docs/runbooks/asset-conversion-fee-validation.md`
 - `docs/runbooks/production-readiness-checklist.md`
+- `docs/runbooks/api-gateway-boundary.md`
 - `docs/runbooks/polkavm-deploy-verification.md`
 - `docs/runbooks/hybrid-split-walkthrough.md`
 - `docs/runbooks/treasury-to-fiat-sop.md`
