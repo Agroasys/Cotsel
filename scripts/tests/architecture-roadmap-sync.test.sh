@@ -9,7 +9,20 @@ EXPECTED_DEFAULT_ROW='| Example component | A | Done | 40 | #101 | `docs/example
 EXPECTED_NORMALIZED_ROW='| Example component | A | Done | 100 | #101 | `docs/example.md` | None (auto-synced from closed issues) | roadmap-maintainers | 2026-03-01 | weekly |'
 
 tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir"' EXIT
+
+cleanup_tmp_dir() {
+  if [[ -n "${tmp_dir:-}" && -d "$tmp_dir" ]]; then
+    case "$tmp_dir" in
+      /tmp/*|/var/tmp/*|/var/folders/*|/private/var/folders/*)
+        rm -rf "$tmp_dir"
+        ;;
+      *)
+        printf '%s\n' "Skipping cleanup of unexpected tmp_dir path: $tmp_dir" >&2
+        ;;
+    esac
+  fi
+}
+trap cleanup_tmp_dir EXIT
 
 matrix="$tmp_dir/matrix.md"
 cache="$tmp_dir/cache.json"
@@ -19,7 +32,6 @@ report_write_min="$tmp_dir/sync-report-write-min.json"
 report_write_norm="$tmp_dir/sync-report-write-norm.json"
 report_gate="$tmp_dir/write-gate-report.json"
 patch_gate="$tmp_dir/write-gate.patch"
-apply_guard_err="$tmp_dir/write-gate-issues-without-apply.err"
 log="$tmp_dir/sync.log"
 
 clear_log() {
@@ -146,6 +158,7 @@ fi
 
 # Clear log file before write-gate-issues guard scenario.
 clear_log
+apply_guard_err="$tmp_dir/apply-guard.err"
 if run_sync_script --write-gate-issues --out "$report_gate" --patch "$patch_gate" >>"$log" 2> "$apply_guard_err"; then
   echo "expected write-gate-issues without --apply to fail" >&2
   exit 1
