@@ -12,14 +12,18 @@ test('staging-e2e-real gate captures reconciliation run summary output', () => {
   const script = loadGateScript();
 
   assert.match(script, /reconciliation run summary:/);
-  assert.match(script, /SELECT status \|\| ',' \|\| total_trades \|\| ',' \|\| drift_count FROM reconcile_runs/);
+  assert.match(script, /RUN_SUMMARY_SQL=/);
+  assert.match(script, /SELECT replace\(COALESCE\(status::text, ''\), chr\(31\), ' '\), total_trades, drift_count/);
+  assert.match(script, /WHERE run_key = :'run_key_var'/);
 });
 
 test('staging-e2e-real gate captures drift classification snapshot output', () => {
   const script = loadGateScript();
 
   assert.match(script, /drift classification snapshot:/);
-  assert.match(script, /SELECT mismatch_code \|\| ':' \|\| COUNT\(\*\) FROM reconcile_drifts/);
+  assert.match(script, /DRIFT_SUMMARY_SQL=/);
+  assert.match(script, /SELECT replace\(COALESCE\(mismatch_code::text, ''\), chr\(31\), ' '\), COUNT\(\*\)/);
+  assert.match(script, /FROM reconcile_drifts/);
 });
 
 test('staging-e2e-real gate writes deterministic reconciliation report output', () => {
