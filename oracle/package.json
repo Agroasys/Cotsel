@@ -27,11 +27,11 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/cors": "^2.8.17",
-    "@types/node": "^25.3.0",
+    "@types/node": "^25.3.3",
     "@types/pg": "^8.10.9",
     "typescript": ">=4.5.0",
     "ts-node": "^10.9.2",
-    "nodemon": "^3.0.2",
+    "nodemon": "^3.1.14",
     "@types/jest": "^30.0.0",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.6"
