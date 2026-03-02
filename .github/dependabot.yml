@@ -8,6 +8,31 @@ updates:
       time: "06:00"
       timezone: "UTC"
     open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "hardhat"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@nomicfoundation/hardhat-toolbox"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@nomicfoundation/hardhat-ethers"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@nomicfoundation/hardhat-chai-matchers"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@nomicfoundation/hardhat-ignition"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@nomicfoundation/hardhat-ignition-ethers"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@nomicfoundation/hardhat-network-helpers"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@nomicfoundation/hardhat-verify"
+        update-types:
+          - "version-update:semver-major"
     groups:
       npm-runtime:
         patterns:
