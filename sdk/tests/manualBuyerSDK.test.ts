@@ -86,4 +86,10 @@ describeIntegration('BuyerSDK', () => {
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
         console.log(`In-transit trade refunded: ${result.txHash}`);
     });
+
+    test.skip('should claim funds in the escrow', async () => {
+        const result = await buyerSDK.claim(buyerSigner);
+        expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        console.log(`Funds claimed: ${result.txHash}`);
+    });
 });
