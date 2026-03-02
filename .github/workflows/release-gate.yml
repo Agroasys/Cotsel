@@ -114,7 +114,7 @@ jobs:
 
       - name: Upload docs/profile guard report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-docs-profile-guard
           path: ci-reports/docs-profile-guard.txt
@@ -163,7 +163,7 @@ jobs:
 
       - name: Upload architecture-roadmap consistency report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-arch-roadmap-consistency
           path: |
@@ -215,7 +215,7 @@ jobs:
 
       - name: Upload env/profile regression report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-env-profile-regression
           path: ci-reports/env-profile-regression.txt
@@ -239,7 +239,7 @@ jobs:
 
       - name: Upload Postgres recovery smoke artifacts
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-postgres-recovery-smoke
           path: |
@@ -315,21 +315,21 @@ jobs:
 
       - name: Upload staging gate report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-staging-e2e-real-gate
           path: ci-reports/staging-e2e-real-gate.txt
 
       - name: Upload notifications gate report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-notifications-gate
           path: reports/notifications/staging-e2e-real.json
 
       - name: Upload reconciliation report artifact
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-reconciliation-report
           path: reports/reconciliation/staging-e2e-real-report.json
@@ -379,7 +379,7 @@ jobs:
 
       - name: Upload asset fee-path report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-asset-fee-path
           path: |
@@ -625,14 +625,14 @@ jobs:
 
       - name: Upload PolkaVM compile evidence bundle
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-contracts-compile-polkavm
           path: reports/polkavm-compile
 
       - name: Upload workspace report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
@@ -735,7 +735,7 @@ jobs:
 
       - name: Upload deploy verification artifact
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-contracts-deploy-verification
           path: reports/deploy-verification
@@ -792,7 +792,7 @@ jobs:
 
       - name: Upload workspace report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
@@ -854,7 +854,7 @@ jobs:
 
       - name: Upload workspace report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
@@ -911,7 +911,7 @@ jobs:
 
       - name: Upload workspace report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
@@ -968,7 +968,7 @@ jobs:
 
       - name: Upload workspace report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
@@ -1030,7 +1030,7 @@ jobs:
 
       - name: Upload workspace report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
@@ -1087,7 +1087,7 @@ jobs:
 
       - name: Upload workspace report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
@@ -1144,7 +1144,7 @@ jobs:
 
       - name: Upload workspace report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
@@ -1221,7 +1221,7 @@ jobs:
 
       - name: Upload release gate report
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-release-gate
           path: ci-reports/release-gate.txt
