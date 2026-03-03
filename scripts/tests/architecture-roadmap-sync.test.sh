@@ -6,6 +6,7 @@ SCRIPT="$ROOT_DIR/scripts/arch-roadmap-sync.mjs"
 REPO_NAME='test-org/test-repo'
 REPO_ISSUES_BASE_URL="https://github.com/$REPO_NAME/issues"
 EXPECTED_NORMALIZED_REMAINING_GAP='None (auto-synced from closed issues)'
+# Fixture starts "In Progress"; expected rows are "Done" to confirm status sync.
 EXPECTED_DEFAULT_ROW='| Example component | A | Done | 40 | #101 | `docs/example.md` | Pending final closeout validation | roadmap-maintainers | 2026-03-01 | weekly |'
 EXPECTED_NORMALIZED_ROW="| Example component | A | Done | 100 | #101 | \`docs/example.md\` | ${EXPECTED_NORMALIZED_REMAINING_GAP} | roadmap-maintainers | 2026-03-01 | weekly |"
 
