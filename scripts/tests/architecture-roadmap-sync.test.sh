@@ -21,7 +21,7 @@ diagnose_gate_report_file() {
     echo "gate report file exists but is not readable: $report_path" >&2
   else
     if report_size_bytes="$(wc -c <"$report_path" 2>/dev/null)"; then
-      echo "gate report file exists but is empty or unreadable: $report_path (size: ${report_size_bytes} bytes)" >&2
+      echo "gate report file exists and was successfully read: $report_path (size: ${report_size_bytes} bytes)" >&2
     else
       echo "gate report file exists but size could not be determined due to an error: $report_path" >&2
     fi
@@ -53,6 +53,15 @@ MATRIX_INITIAL_ROW="| ${ROW_COMPONENT} | ${ROW_MILESTONE} | In Progress | 40 | $
 
 # Create a temporary directory, and surface any mktemp error output to aid debugging.
 tmp_root="${TMPDIR:-/tmp}"
+if command -v realpath >/dev/null 2>&1; then
+  if realpath -m "$tmp_root" >/dev/null 2>&1; then
+    tmp_root_real="$(realpath -m "$tmp_root")"
+  else
+    tmp_root_real="$(realpath "$tmp_root" 2>/dev/null || printf '%s' "$tmp_root")"
+  fi
+else
+  tmp_root_real="$tmp_root"
+fi
 mktemp_err_file="$(mktemp)" || {
   printf '%s\n' 'Failed to create temporary file for capturing mktemp errors' >&2
   exit 1
@@ -70,13 +79,22 @@ if [[ ! -d "$tmp_dir" ]]; then
   printf '%s\n' 'Failed to create temporary directory with mktemp -d' >&2
   exit 1
 fi
+if command -v realpath >/dev/null 2>&1; then
+  if realpath -m "$tmp_dir" >/dev/null 2>&1; then
+    tmp_dir_real="$(realpath -m "$tmp_dir")"
+  else
+    tmp_dir_real="$(realpath "$tmp_dir" 2>/dev/null || printf '%s' "$tmp_dir")"
+  fi
+else
+  tmp_dir_real="$tmp_dir"
+fi
 
 cleanup_tmp_dir() {
-  if [[ -n "${tmp_dir:-}" && -d "$tmp_dir" ]]; then
-    if [[ "$tmp_dir" == "$tmp_root"* || "$tmp_dir" == /private"${tmp_root}"* ]]; then
-      rm -rf "$tmp_dir"
+  if [[ -n "${tmp_dir_real:-}" && -d "$tmp_dir_real" ]]; then
+    if [[ "$tmp_dir_real" == "$tmp_root_real"/* ]]; then
+      rm -rf "$tmp_dir_real"
     else
-      printf '%s\n' "Skipping cleanup of unexpected tmp_dir path: $tmp_dir" >&2
+      printf '%s\n' "Skipping cleanup of unexpected tmp_dir path: $tmp_dir_real (tmp_root_real: $tmp_root_real)" >&2
     fi
   fi
 }
@@ -94,12 +112,8 @@ log="$tmp_dir/sync.log"
 validator_log="$tmp_dir/validator.log"
 
 clear_log() {
-  # Truncate the log file before each scenario, but only if the path is set.
-  if [[ -n "${log:-}" ]]; then
-    > "$log"
-  else
-    printf '%s\n' "Skipping log truncation: log path is unset or empty" >&2
-  fi
+  # Truncate the log file before each scenario.
+  > "$log"
 }
 
 run_sync_script() {
@@ -266,7 +280,10 @@ patch_gate_apply="$tmp_dir/patch-gate-apply.patch"
 # can successfully synchronize gate issues against GitHub. Leave it unset for the default
 # offline-only mode, which verifies that an online-only operation is correctly guarded.
 # Note: this check is strict; the variable must be set to the exact string "true" (not "1", "yes",
-# or other truthy values) to enable the online end-to-end validation path.
+# or other truthy values) to enable the online end-to-end validation path. This avoids
+# accidentally enabling online, GitHub-backed runs in environments (e.g., CI, offline
+# development, or air-gapped testing) where network access, credentials, or non-deterministic
+# behavior are undesired; requiring "true" makes opting in an explicit, conscious action.
 if [[ "${RUN_GATE_ISSUES_E2E:-}" == "true" ]]; then
   # Note: run_sync_script_online intentionally does not pass --offline and may reuse the same
   # cache file as offline runs; this branch is meant to exercise real GitHub API calls and
