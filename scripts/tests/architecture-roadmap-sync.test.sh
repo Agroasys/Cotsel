@@ -11,6 +11,8 @@ OFFLINE_MODE_REQUIRED_ERROR_KEY='ERR_OFFLINE_MODE_REQUIRED'
 WRITE_GATE_ISSUES_APPLY_GUARD_PREFIX='ERROR: --write-gate-issues requires --apply. Re-run with:'
 WRITE_GATE_ISSUES_APPLY_GUARD_COMMAND='GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo "'"${REPO_NAME}"'" --write-gate-issues --apply'
 EXPECTED_WRITE_GATE_ISSUES_APPLY_GUARD_MESSAGE="${WRITE_GATE_ISSUES_APPLY_GUARD_PREFIX} ${WRITE_GATE_ISSUES_APPLY_GUARD_COMMAND}"
+# Optional: set RUN_GATE_ISSUES_E2E=true to enable online end-to-end validation of
+#           --write-gate-issues --apply against GitHub; leave unset for offline-only checks.
 
 # Shared row fields to keep fixture and expectations in sync.
 ROW_COMPONENT='Example component'
@@ -156,6 +158,7 @@ CACHE
 
 # Clear log file before check-mode scenario.
 clear_log
+# In check mode, the sync helper should exit non-zero when stale rows are detected.
 if run_sync_script --out "$report" --patch "$patch" >>"$log" 2>&1; then
   echo "expected sync helper to fail in check mode when stale rows exist" >&2
   show_log_on_error
