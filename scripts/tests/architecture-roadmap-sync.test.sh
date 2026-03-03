@@ -7,6 +7,7 @@ REPO_NAME='test-org/test-repo'
 REPO_ISSUES_BASE_URL="https://github.com/$REPO_NAME/issues"
 EXPECTED_NORMALIZED_REMAINING_GAP='None (auto-synchronized from closed issues)'
 # Fixture starts "In Progress"; expected rows are "Done" to confirm status sync.
+OFFLINE_MODE_REQUIRED_ERROR_KEY='ERR_OFFLINE_MODE_REQUIRED'
 EXPECTED_DEFAULT_ROW='| Example component | A | Done | 40 | #101 | `docs/example.md` | Pending final closeout validation | roadmap-maintainers | 2026-03-01 | weekly |'
 EXPECTED_NORMALIZED_ROW="| Example component | A | Done | 100 | #101 | \`docs/example.md\` | ${EXPECTED_NORMALIZED_REMAINING_GAP} | roadmap-maintainers | 2026-03-01 | weekly |"
 
@@ -14,9 +15,6 @@ tmp_dir="$(mktemp -d)"
 
 cleanup_tmp_dir() {
   if [[ -n "${tmp_dir:-}" && -d "$tmp_dir" ]]; then
-    if [[ -n "${apply_guard_err:-}" && -f "$apply_guard_err" ]]; then
-      rm -f "$apply_guard_err"
-    fi
     case "$tmp_dir" in
       /tmp/*|/var/tmp/*|/var/folders/*|/private/var/folders/*)
         rm -rf "$tmp_dir"
@@ -192,7 +190,7 @@ fi
 
 # Now validate successful write-gate-issues behavior when --apply is provided.
 clear_log
-report_gate_apply="$tmp_dir/report-gate-apply.yaml"
+report_gate_apply="$tmp_dir/report-gate-apply.json"
 if [[ "${RUN_GATE_ISSUES_E2E:-}" == "true" ]]; then
   if ! run_sync_script_online --write-gate-issues --apply --out "$report_gate_apply" --patch "$patch_gate" >>"$log" 2>&1; then
     echo "expected write-gate-issues with --apply to succeed and synchronize gate issues" >&2
@@ -208,7 +206,7 @@ else
     echo "expected write-gate-issues with --apply to fail in offline mode" >&2
     exit 1
   fi
-  if ! grep -Eq -- '--write-gate-issues.*requires online mode' "$log"; then
+  if ! grep -Fq -- "$OFFLINE_MODE_REQUIRED_ERROR_KEY" "$log"; then
     echo "expected offline guard message for write-gate-issues --apply" >&2
     show_log_on_error
     exit 1

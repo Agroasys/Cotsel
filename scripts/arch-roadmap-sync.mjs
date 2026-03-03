@@ -566,7 +566,7 @@ async function main() {
       );
     }
     if (args.offline) {
-      throw new Error("--write-gate-issues requires online mode");
+      throw new Error("ERR_OFFLINE_MODE_REQUIRED: --write-gate-issues requires online mode");
     }
     if (!token) {
       throw new Error("--write-gate-issues requires GITHUB_TOKEN or GH_TOKEN");
