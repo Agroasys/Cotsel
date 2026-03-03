@@ -243,28 +243,49 @@ function getToken() {
   return process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
 }
 
-async function fetchIssue(repo, issueNumber, token) {
-  const response = await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": "agroasys-arch-roadmap-sync",
-    },
-  });
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  if (!response.ok) {
+async function fetchIssue(repo, issueNumber, token) {
+  const maxAttempts = 5;
+  const url = `https://api.github.com/repos/${repo}/issues/${issueNumber}`;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "agroasys-arch-roadmap-sync",
+      },
+    });
+
+    if (response.ok) {
+      const issue = await response.json();
+      return {
+        number: issue.number,
+        state: issue.state,
+        body: issue.body || "",
+        url: issue.html_url,
+      };
+    }
+
     const body = await response.text();
-    throw new Error(`github issue fetch failed (#${issueNumber}): http ${response.status} ${body}`);
+    const retryable = response.status >= 500 || response.status === 429;
+    if (!retryable || attempt === maxAttempts) {
+      throw new Error(`github issue fetch failed (#${issueNumber}): http ${response.status} ${body}`);
+    }
+
+    const delayMs = Math.min(1000 * 2 ** (attempt - 1), 8000);
+    console.warn(
+      `github issue fetch retry ${attempt}/${maxAttempts} for #${issueNumber} after http ${response.status}. ` +
+        `Waiting ${delayMs}ms.`,
+    );
+    await sleep(delayMs);
   }
 
-  const issue = await response.json();
-  return {
-    number: issue.number,
-    state: issue.state,
-    body: issue.body || "",
-    url: issue.html_url,
-  };
+  throw new Error(`github issue fetch failed (#${issueNumber}): retry limit exceeded`);
 }
 
 function saveIssueCache(cachePath, repo, issueMap) {
