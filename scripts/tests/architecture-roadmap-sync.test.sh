@@ -5,8 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$ROOT_DIR/scripts/arch-roadmap-sync.mjs"
 REPO_NAME='test-org/test-repo'
 REPO_ISSUES_BASE_URL="https://github.com/$REPO_NAME/issues"
-EXPECTED_DEFAULT_ROW='| Example component | A | Done | 40 | #101 | `docs/example.md` | Pending final closeout validation | roadmap-maintainers | 2026-03-01 | weekly |'
-EXPECTED_NORMALIZED_ROW='| Example component | A | Done | 100 | #101 | `docs/example.md` | None (auto-synced from closed issues) | roadmap-maintainers | 2026-03-01 | weekly |'
+EXPECTED_NORMALIZED_REMAINING_GAP='None (auto-synced from closed issues)'
+EXPECTED_DEFAULT_ROW='| Example component | A | Done | 40 | #101 | `docs/example.md` |'\
+' Pending final closeout validation | roadmap-maintainers | 2026-03-01 | weekly |'
+EXPECTED_NORMALIZED_ROW='| Example component | A | Done | 100 | #101 | `docs/example.md` | '"$EXPECTED_NORMALIZED_REMAINING_GAP"' |'\
+' roadmap-maintainers | 2026-03-01 | weekly |'
 
 tmp_dir="$(mktemp -d)"
 
@@ -40,6 +43,20 @@ clear_log() {
 
 run_sync_script() {
   node "$SCRIPT" --offline --matrix "$matrix" --cache "$cache" "$@"
+}
+
+run_validator() {
+  local mode="$1"
+  local report_path="$2"
+
+  if ! node "$ROOT_DIR/scripts/tests/architecture-roadmap-sync-validator.mjs" "$mode" "$report_path"; then
+    echo "validator failed for mode '$mode' using report '$report_path'" >&2
+    if [[ -f "$log" ]]; then
+      echo "sync helper output was:" >&2
+      cat "$log" >&2
+    fi
+    exit 1
+  fi
 }
 
 write_matrix_fixture() {
@@ -103,7 +120,7 @@ if run_sync_script --out "$report" --patch "$patch" >>"$log" 2>&1; then
   exit 1
 fi
 
-node "$ROOT_DIR/scripts/tests/architecture-roadmap-sync-validator.mjs" check "$report"
+run_validator check "$report"
 
 if ! grep -Fq "$EXPECTED_DEFAULT_ROW" "$patch"; then
   echo "expected default patch to update only Status and Last Refreshed" >&2
@@ -113,7 +130,7 @@ if grep -Fq "$EXPECTED_NORMALIZED_ROW" "$patch"; then
   echo "did not expect normalized row (% Complete and Remaining Gap) in default mode patch" >&2
   exit 1
 fi
-if grep -q "None (auto-synced from closed issues)" "$patch"; then
+if grep -Fq "$EXPECTED_NORMALIZED_REMAINING_GAP" "$patch"; then
   echo "did not expect Remaining Gap normalization in default mode patch" >&2
   exit 1
 fi
@@ -130,7 +147,7 @@ if ! run_sync_script --write --out "$report_write_min" --patch "$patch" >>"$log"
   exit 1
 fi
 
-node "$ROOT_DIR/scripts/tests/architecture-roadmap-sync-validator.mjs" write-min "$report_write_min"
+run_validator write-min "$report_write_min"
 
 if ! grep -Fq "$EXPECTED_DEFAULT_ROW" "$matrix"; then
   echo "expected default write mode to keep % Complete and Remaining Gap unchanged" >&2
@@ -149,7 +166,7 @@ if ! run_sync_script --write --normalize-progress --out "$report_write_norm" --p
   exit 1
 fi
 
-node "$ROOT_DIR/scripts/tests/architecture-roadmap-sync-validator.mjs" write-norm "$report_write_norm"
+run_validator write-norm "$report_write_norm"
 
 if ! grep -Fq "$EXPECTED_NORMALIZED_ROW" "$matrix"; then
   echo "expected normalize-progress write mode to rewrite progress fields" >&2
