@@ -59,8 +59,10 @@ describeIntegration('AdminSDK', () => {
     let adminSigner2: Signer;
     let escrowReadOnly: ReturnType<typeof AgroasysEscrow__factory.connect>;
 
-    async function requireReceipt(txHash: string): Promise<ethers.TransactionReceipt> {
-        const provider = adminSigner1.provider;
+    async function requireReceipt(
+        provider: ethers.Provider | null | undefined,
+        txHash: string,
+    ): Promise<ethers.TransactionReceipt> {
         if (!provider) {
             throw new Error('adminSigner1 provider is unavailable');
         }
@@ -72,7 +74,7 @@ describeIntegration('AdminSDK', () => {
     }
 
     async function findEventInReceipt(txHash: string, eventName: string): Promise<ethers.LogDescription | null> {
-        const receipt = await requireReceipt(txHash);
+        const receipt = await requireReceipt(adminSigner1.provider, txHash);
         for (const log of receipt.logs) {
             try {
                 const parsed = escrowReadOnly.interface.parseLog({
@@ -176,11 +178,8 @@ describeIntegration('AdminSDK', () => {
         expectValidTxHash(result.txHash);
         const disputeProposed = await findEventInReceipt(result.txHash, 'DisputeSolutionProposed');
         expect(disputeProposed).not.toBeNull();
-        if (!disputeProposed) {
-            throw new Error('DisputeSolutionProposed event not found in transaction receipt');
-        }
-        expect(disputeProposed.args.tradeId).toBe(fixture.TEST_TRADE_ID);
-        expect(Number(disputeProposed.args.disputeStatus)).toBe(DisputeStatus.REFUND);
+        expect(disputeProposed!.args.tradeId).toBe(fixture.TEST_TRADE_ID);
+        expect(Number(disputeProposed!.args.disputeStatus)).toBe(DisputeStatus.REFUND);
     });
 
     testAdminMutation('should approve dispute solution', async () => {
@@ -204,10 +203,7 @@ describeIntegration('AdminSDK', () => {
         expectValidTxHash(result.txHash);
         const oracleProposed = await findEventInReceipt(result.txHash, 'OracleUpdateProposed');
         expect(oracleProposed).not.toBeNull();
-        if (!oracleProposed) {
-            throw new Error('OracleUpdateProposed event not found in transaction receipt');
-        }
-        expect((oracleProposed.args.newOracle as string).toLowerCase()).toBe(fixture.TEST_NEW_ORACLE_ADDRESS.toLowerCase());
+        expect((oracleProposed!.args.newOracle as string).toLowerCase()).toBe(fixture.TEST_NEW_ORACLE_ADDRESS.toLowerCase());
     });
 
     testAdminMutation('should approve oracle update', async () => {
