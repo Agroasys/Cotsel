@@ -3,6 +3,8 @@
  */
 import { BuyerSDK } from '../src/modules/buyerSDK';
 import type { Signer } from 'ethers';
+import { AgroasysEscrow__factory } from '../src/types/typechain-types/factories/src/AgroasysEscrow__factory';
+import { TradeStatus } from '../src/types/trade';
 import {
     TEST_CONFIG,
     assertRequiredEnv,
@@ -57,21 +59,33 @@ function expectValidTxHash(txHash: string): void {
 describeIntegration('BuyerSDK', () => {
     let buyerSDK: BuyerSDK;
     let buyerSigner: Signer;
+    let escrowReadOnly: ReturnType<typeof AgroasysEscrow__factory.connect>;
 
     beforeAll(() => {
         assertRequiredEnv();
         buyerSDK = new BuyerSDK(TEST_CONFIG);
         buyerSigner = getBuyerSigner();
+        const provider = buyerSigner.provider;
+        if (!provider) {
+            throw new Error('buyerSigner provider is unavailable');
+        }
+        escrowReadOnly = AgroasysEscrow__factory.connect(TEST_CONFIG.escrowAddress, provider);
     });
 
     test('should get buyer nonce', async () => {
         const buyerAddress = await buyerSigner.getAddress();
-        const nonce = await buyerSDK.getBuyerNonce(buyerAddress);
+        const nonce1 = await buyerSDK.getBuyerNonce(buyerAddress);
+        const nonce2 = await buyerSDK.getBuyerNonce(buyerAddress);
         
-        expect(typeof nonce).toBe('bigint');
-        expect(nonce).toBeGreaterThanOrEqual(0n);
+        expect(typeof nonce1).toBe('bigint');
+        expect(typeof nonce2).toBe('bigint');
+        expect(nonce1).toBeGreaterThanOrEqual(0n);
+        expect(nonce2).toBeGreaterThanOrEqual(0n);
+        // When no transactions are sent between calls, the nonce should remain stable.
+        expect(nonce2).toBe(nonce1);
         
-        console.log(`Buyer nonce: ${nonce}`);
+        console.log(`Buyer nonce (first call): ${nonce1}`);
+        console.log(`Buyer nonce (second call): ${nonce2}`);
     });
     
     test('should check USDC balance and allowance', async () => {
@@ -82,6 +96,8 @@ describeIntegration('BuyerSDK', () => {
         
         expect(typeof balance).toBe('bigint');
         expect(typeof allowance).toBe('bigint');
+        expect(balance).toBeGreaterThanOrEqual(0n);
+        expect(allowance).toBeGreaterThanOrEqual(0n);
         
         console.log(`USDC balance: ${balance}`);
         console.log(`USDC allowance: ${allowance}`);
@@ -98,9 +114,25 @@ describeIntegration('BuyerSDK', () => {
             ricardianHash: generateTestRicardianHash('test1')
         };
 
+        const buyerAddress = await buyerSigner.getAddress();
+        const tradeCounterBefore = await escrowReadOnly.tradeCounter();
         const result = await buyerSDK.createTrade(tradeParams, buyerSigner);
+        const tradeCounterAfter = await escrowReadOnly.tradeCounter();
+
         expectValidTxHash(result.txHash);
+        expect(tradeCounterAfter).toBe(tradeCounterBefore + 1n);
         console.log(`Trade created: ${result.txHash}`);
+
+        const createdTrade = await escrowReadOnly.trades(tradeCounterBefore);
+        expect(createdTrade.buyerAddress.toLowerCase()).toBe(buyerAddress.toLowerCase());
+        expect(createdTrade.supplierAddress.toLowerCase()).toBe(tradeParams.supplier.toLowerCase());
+        expect(createdTrade.totalAmountLocked).toBe(tradeParams.totalAmount);
+        expect(createdTrade.logisticsAmount).toBe(tradeParams.logisticsAmount);
+        expect(createdTrade.platformFeesAmount).toBe(tradeParams.platformFeesAmount);
+        expect(createdTrade.supplierFirstTranche).toBe(tradeParams.supplierFirstTranche);
+        expect(createdTrade.supplierSecondTranche).toBe(tradeParams.supplierSecondTranche);
+        expect(createdTrade.ricardianHash.toLowerCase()).toBe(tradeParams.ricardianHash.toLowerCase());
+        expect(Number(createdTrade.status)).toBe(TradeStatus.LOCKED);
     });
 
     testBuyerDispute('should open dispute', async () => {
@@ -109,22 +141,39 @@ describeIntegration('BuyerSDK', () => {
         const result = await buyerSDK.openDispute(tradeId, buyerSigner);
         expectValidTxHash(result.txHash);
         console.log(`Dispute opened: ${result.txHash}`);
+
+        const tradeAfter = await escrowReadOnly.trades(tradeId);
+        expect(Number(tradeAfter.status)).toBe(TradeStatus.FROZEN);
     });
 
     testBuyerTimeout('should cancel locked trade after timeout', async () => {
         const tradeId = requireManualBuyerE2EBigIntEnv('TEST_LOCKED_TRADE_ID');
+        const buyerAddress = await buyerSigner.getAddress();
+        const claimableBefore = await buyerSDK.getClaimableUsdc(buyerAddress);
 
         const result = await buyerSDK.cancelLockedTradeAfterTimeout(tradeId, buyerSigner);
         expectValidTxHash(result.txHash);
         console.log(`Locked trade cancelled: ${result.txHash}`);
+
+        const tradeAfter = await escrowReadOnly.trades(tradeId);
+        expect(Number(tradeAfter.status)).toBe(TradeStatus.CLOSED);
+        const claimableAfter = await buyerSDK.getClaimableUsdc(buyerAddress);
+        expect(claimableAfter).toBeGreaterThanOrEqual(claimableBefore);
     });
 
     testBuyerTimeout('should refund in-transit trade after timeout', async () => {
         const tradeId = requireManualBuyerE2EBigIntEnv('TEST_IN_TRANSIT_TRADE_ID');
+        const buyerAddress = await buyerSigner.getAddress();
+        const claimableBefore = await buyerSDK.getClaimableUsdc(buyerAddress);
 
         const result = await buyerSDK.refundInTransitAfterTimeout(tradeId, buyerSigner);
         expectValidTxHash(result.txHash);
         console.log(`In-transit trade refunded: ${result.txHash}`);
+
+        const tradeAfter = await escrowReadOnly.trades(tradeId);
+        expect(Number(tradeAfter.status)).toBe(TradeStatus.CLOSED);
+        const claimableAfter = await buyerSDK.getClaimableUsdc(buyerAddress);
+        expect(claimableAfter).toBeGreaterThanOrEqual(claimableBefore);
     });
 
     testBuyerClaim('should claim funds in the escrow', async () => {
