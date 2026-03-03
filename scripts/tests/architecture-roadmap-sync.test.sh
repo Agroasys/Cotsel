@@ -6,7 +6,7 @@ SCRIPT="$ROOT_DIR/scripts/arch-roadmap-sync.mjs"
 VALIDATOR_SCRIPT="$ROOT_DIR/scripts/tests/architecture-roadmap-sync-validator.mjs"
 REPO_NAME='test-org/test-repo'
 REPO_ISSUES_BASE_URL="https://github.com/$REPO_NAME/issues"
-EXPECTED_NORMALIZED_REMAINING_GAP='None (auto-synchronized from closed issues)'
+EXPECTED_NORMALIZED_REMAINING_GAP='None (auto-synced from closed issues)'
 # Fixture starts "In Progress"; expected rows are "Done" to confirm status sync.
 OFFLINE_MODE_REQUIRED_ERROR_KEY='ERR_OFFLINE_MODE_REQUIRED'
 WRITE_GATE_ISSUES_APPLY_GUARD_PREFIX='ERROR: --write-gate-issues requires --apply. Re-run with:'
@@ -77,15 +77,9 @@ log="$tmp_dir/sync.log"
 validator_log="$tmp_dir/validator.log"
 
 clear_log() {
-  # Truncate the log file before each scenario, but only if the path is valid.
+  # Truncate the log file before each scenario, but only if the path is set.
   if [[ -n "${log:-}" ]]; then
-    local log_dir
-    log_dir="$(dirname "$log")"
-    if [[ -d "$log_dir" ]]; then
-      > "$log"
-    else
-      printf '%s\n' "Skipping log truncation: parent directory does not exist for log path: $log" >&2
-    fi
+    > "$log"
   else
     printf '%s\n' "Skipping log truncation: log path is unset or empty" >&2
   fi
@@ -105,7 +99,7 @@ run_validator() {
 
   if ! node "$VALIDATOR_SCRIPT" "$mode" "$report_path" 2>"$validator_log"; then
     echo "validator failed for mode \"$mode\" using report \"$report_path\"" >&2
-    if [ -s "$validator_log" ]; then
+    if [[ -s "$validator_log" ]]; then
       echo "validator stderr output was:" >&2
       cat "$validator_log" >&2
     else
@@ -254,6 +248,8 @@ patch_gate_apply="$tmp_dir/patch-gate-apply.patch"
 # RUN_GATE_ISSUES_E2E=true enables an online end-to-end check that --write-gate-issues --apply
 # can successfully synchronize gate issues against GitHub. Leave it unset for the default
 # offline-only mode, which verifies that an online-only operation is correctly guarded.
+# Note: this check is strict; the variable must be set to the exact string "true" (not "1", "yes",
+# or other truthy values) to enable the online end-to-end validation path.
 if [[ "${RUN_GATE_ISSUES_E2E:-}" == "true" ]]; then
   # Note: run_sync_script_online intentionally does not pass --offline and may reuse the same
   # cache file as offline runs; this branch is meant to exercise real GitHub API calls and
@@ -264,11 +260,16 @@ if [[ "${RUN_GATE_ISSUES_E2E:-}" == "true" ]]; then
     exit 1
   fi
   if [[ ! -s "$report_gate_apply" ]]; then
-    if [[ -e "$report_gate_apply" ]]; then
-      report_size_bytes="$(wc -c <"$report_gate_apply" 2>/dev/null || echo "unknown")"
-      echo "gate report file exists but is empty or unreadable: $report_gate_apply (size: ${report_size_bytes} bytes)" >&2
-    else
+    if [[ ! -e "$report_gate_apply" ]]; then
       echo "gate report file was not created: $report_gate_apply" >&2
+    elif [[ ! -r "$report_gate_apply" ]]; then
+      echo "gate report file exists but is not readable: $report_gate_apply" >&2
+    else
+      if report_size_bytes="$(wc -c <"$report_gate_apply" 2>/dev/null)"; then
+        echo "gate report file exists but is empty or unreadable: $report_gate_apply (size: ${report_size_bytes} bytes)" >&2
+      else
+        echo "gate report file exists but size could not be determined due to an error: $report_gate_apply" >&2
+      fi
     fi
     echo "expected write-gate-issues --apply run to produce a non-empty gate report at $report_gate_apply" >&2
     exit 1
