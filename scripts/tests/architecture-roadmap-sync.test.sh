@@ -20,7 +20,9 @@ diagnose_gate_report_file() {
   elif [[ ! -r "$report_path" ]]; then
     echo "gate report file exists but is not readable: $report_path" >&2
   else
-    if report_size_bytes="$(wc -c <"$report_path" 2>/dev/null)"; then
+    report_size_bytes="$(wc -c <"$report_path" 2>/dev/null)"
+    wc_status=$?
+    if [[ $wc_status -eq 0 ]]; then
       echo "gate report file exists and was successfully read: $report_path (size: ${report_size_bytes} bytes)" >&2
     else
       echo "gate report file exists but size could not be determined due to an error: $report_path" >&2
@@ -91,10 +93,24 @@ fi
 
 cleanup_tmp_dir() {
   if [[ -n "${tmp_dir_real:-}" && -d "$tmp_dir_real" ]]; then
-    if [[ "$tmp_dir_real" == "$tmp_root_real"/* ]]; then
-      rm -rf "$tmp_dir_real"
+    local tmp_root_canon
+    if command -v realpath >/dev/null 2>&1; then
+      if realpath -m "${tmp_root_real:-}" >/dev/null 2>&1; then
+        tmp_root_canon="$(realpath -m "${tmp_root_real:-}" 2>/dev/null || printf '%s' "${tmp_root_real:-}")"
+      else
+        tmp_root_canon="$(realpath "${tmp_root_real:-}" 2>/dev/null || printf '%s' "${tmp_root_real:-}")"
+      fi
     else
-      printf '%s\n' "Skipping cleanup of unexpected tmp_dir path: $tmp_dir_real (tmp_root_real: $tmp_root_real)" >&2
+      tmp_root_canon="${tmp_root_real:-}"
+    fi
+    if [[ -n "$tmp_root_canon" ]]; then
+      if [[ "$tmp_dir_real" == "$tmp_root_canon" || "${tmp_dir_real#$tmp_root_canon/}" != "$tmp_dir_real" ]]; then
+        rm -rf "$tmp_dir_real"
+      else
+        printf '%s\n' "Skipping cleanup of unexpected tmp_dir path: $tmp_dir_real (tmp_root_real: $tmp_root_canon)" >&2
+      fi
+    else
+      printf '%s\n' "Skipping cleanup because tmp_root_real is unset or empty (tmp_dir_real: $tmp_dir_real)" >&2
     fi
   fi
 }
