@@ -14,8 +14,12 @@ WRITE_GATE_ISSUES_APPLY_GUARD_COMMAND='GITHUB_TOKEN="$(gh auth token)" node scri
 EXPECTED_WRITE_GATE_ISSUES_APPLY_GUARD_MESSAGE="${WRITE_GATE_ISSUES_APPLY_GUARD_PREFIX} ${WRITE_GATE_ISSUES_APPLY_GUARD_COMMAND}"
 # Match on a stable substring of the guard message to avoid brittle quoting differences.
 EXPECTED_WRITE_GATE_ISSUES_APPLY_GUARD_SUBSTRING="${WRITE_GATE_ISSUES_APPLY_GUARD_PREFIX} GITHUB_TOKEN="
-# Optional: set RUN_GATE_ISSUES_E2E=true to enable online end-to-end validation of
-#           --write-gate-issues --apply against GitHub; leave unset for offline-only checks.
+#
+# Optional environment configuration:
+# - RUN_GATE_ISSUES_E2E: when set to the exact string "true", enables an online end-to-end
+#   test path for --write-gate-issues --apply that exercises real GitHub API calls.
+#   When unset (the default), the script runs in offline-only mode and verifies that
+#   the online-only operation is correctly guarded.
 
 # Shared row fields to keep fixture and expectations in sync.
 ROW_COMPONENT='Example component'
@@ -34,11 +38,10 @@ EXPECTED_NORMALIZED_ROW="| ${ROW_COMPONENT} | ${ROW_MILESTONE} | Done | 100 | ${
 MATRIX_INITIAL_ROW="| ${ROW_COMPONENT} | ${ROW_MILESTONE} | In Progress | 40 | ${ROW_ISSUE} | ${ROW_EVIDENCE} | ${ROW_REMAINING_GAP_INITIAL} | ${ROW_OWNER} | ${ROW_LAST_REFRESHED_INITIAL} | ${ROW_REFRESH_CADENCE} |"
 
 # Create a temporary directory, and surface any mktemp error output to aid debugging.
-mktemp_err_file="$(mktemp)"
-if [[ -z "${mktemp_err_file:-}" || ! -f "$mktemp_err_file" ]]; then
+mktemp_err_file="$(mktemp)" || {
   printf '%s\n' 'Failed to create temporary file for capturing mktemp errors' >&2
   exit 1
-fi
+}
 if ! tmp_dir="$(mktemp -d 2>"$mktemp_err_file")"; then
   printf '%s\n' 'Failed to create temporary directory with mktemp -d' >&2
   if [[ -s "$mktemp_err_file" ]]; then
