@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$ROOT_DIR/scripts/arch-roadmap-sync.mjs"
 REPO_NAME='test-org/test-repo'
 REPO_ISSUES_BASE_URL="https://github.com/$REPO_NAME/issues"
-EXPECTED_NORMALIZED_REMAINING_GAP='None (auto-synced from closed issues)'
+EXPECTED_NORMALIZED_REMAINING_GAP='None (auto-synchronized from closed issues)'
 # Fixture starts "In Progress"; expected rows are "Done" to confirm status sync.
 EXPECTED_DEFAULT_ROW='| Example component | A | Done | 40 | #101 | `docs/example.md` | Pending final closeout validation | roadmap-maintainers | 2026-03-01 | weekly |'
 EXPECTED_NORMALIZED_ROW="| Example component | A | Done | 100 | #101 | \`docs/example.md\` | ${EXPECTED_NORMALIZED_REMAINING_GAP} | roadmap-maintainers | 2026-03-01 | weekly |"
@@ -14,6 +14,9 @@ tmp_dir="$(mktemp -d)"
 
 cleanup_tmp_dir() {
   if [[ -n "${tmp_dir:-}" && -d "$tmp_dir" ]]; then
+    if [[ -n "${apply_guard_err:-}" && -f "$apply_guard_err" ]]; then
+      rm -f "$apply_guard_err"
+    fi
     case "$tmp_dir" in
       /tmp/*|/var/tmp/*|/var/folders/*|/private/var/folders/*)
         rm -rf "$tmp_dir"
@@ -37,7 +40,7 @@ patch_gate="$tmp_dir/write-gate.patch"
 log="$tmp_dir/sync.log"
 
 clear_log() {
-  > "$log"
+  : > "$log"
 }
 
 run_sync_script() {

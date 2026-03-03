@@ -389,7 +389,7 @@ function applyRowSync({
   if (normalizeProgress) {
     row.cells[percentIndex] = "100";
     if (!String(row.cells[remainingGapIndex] || "").toLowerCase().startsWith("none")) {
-      row.cells[remainingGapIndex] = "None (auto-synced from closed issues)";
+      row.cells[remainingGapIndex] = "None (auto-synchronized from closed issues)";
     }
   }
 }
@@ -419,7 +419,7 @@ function buildStaleRowProposal({
     proposal.currentRemainingGap = row.cells[remainingGapIndex];
     proposal.suggestedRemainingGap = String(row.cells[remainingGapIndex] || "").toLowerCase().startsWith("none")
       ? row.cells[remainingGapIndex]
-      : "None (auto-synced from closed issues)";
+      : "None (auto-synchronized from closed issues)";
   }
 
   return proposal;
