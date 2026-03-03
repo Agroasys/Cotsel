@@ -111,8 +111,7 @@ run_validator() {
     else
       echo "validator produced no stderr output." >&2
     fi
-    echo "sync helper log output was:" >&2
-    cat "$log" >&2
+    show_log_on_error
     exit 1
   fi
 }
