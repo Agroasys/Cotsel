@@ -47,6 +47,10 @@ run_sync_script() {
   node "$SCRIPT" --offline --matrix "$matrix" --cache "$cache" "$@"
 }
 
+run_sync_script_online() {
+  node "$SCRIPT" --matrix "$matrix" --cache "$cache" "$@"
+}
+
 run_validator() {
   local mode="$1"
   local report_path="$2"
@@ -74,7 +78,7 @@ Snapshot date: 2026-03-01
 
 | Component | Milestone Target | Status | % Complete | Roadmap Issue(s) | Evidence | Remaining Gap | Owner | Last Refreshed | Refresh Cadence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Example component | A | In Progress | 40 | #101 | `docs/example.md` | Pending final closeout validation | roadmap-maintainers | 2026-02-25 | weekly |
+| Example component | A | In Progress | 40 | #101 | `docs/example.md` | Pending final closeout validation | roadmap-maintainers | 2026-02-23 | weekly |
 
 ## Gate-to-Row Mapping
 MATRIX
@@ -183,6 +187,31 @@ fi
 if ! grep -q -- "--write-gate-issues requires --apply" "$apply_guard_err"; then
   echo "expected actionable --apply guard error message" >&2
   exit 1
+fi
+
+# Now validate successful write-gate-issues behavior when --apply is provided.
+clear_log
+report_gate_apply="$tmp_dir/report-gate-apply.yaml"
+if [[ "${RUN_GATE_ISSUES_E2E:-}" == "true" ]]; then
+  if ! run_sync_script_online --write-gate-issues --apply --out "$report_gate_apply" --patch "$patch_gate" >>"$log" 2>&1; then
+    echo "expected write-gate-issues with --apply to succeed and synchronize gate issues" >&2
+    show_log_on_error
+    exit 1
+  fi
+  if [[ ! -s "$report_gate_apply" ]]; then
+    echo "expected write-gate-issues --apply run to produce a non-empty gate report at $report_gate_apply" >&2
+    exit 1
+  fi
+else
+  if run_sync_script --write-gate-issues --apply --out "$report_gate_apply" --patch "$patch_gate" >>"$log" 2>&1; then
+    echo "expected write-gate-issues with --apply to fail in offline mode" >&2
+    exit 1
+  fi
+  if ! grep -q -- "--write-gate-issues requires online mode" "$log"; then
+    echo "expected offline guard message for write-gate-issues --apply" >&2
+    show_log_on_error
+    exit 1
+  fi
 fi
 
 echo "architecture-roadmap sync helper offline validation: pass"
