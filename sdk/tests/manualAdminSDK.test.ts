@@ -46,8 +46,10 @@ type AdminMutationFixture = {
     TEST_DISPUTE_PROPOSAL_ID: bigint;
     TEST_ORACLE_PROPOSAL_ID: bigint;
     TEST_ADMIN_ADD_PROPOSAL_ID: bigint;
+    TEST_TREASURY_PAYOUT_PROPOSAL_ID: bigint;
     TEST_NEW_ORACLE_ADDRESS: string;
     TEST_NEW_ADMIN_ADDRESS: string;
+    TEST_NEW_TREASURY_PAYOUT_ADDRESS: string;
 };
 
 let adminMutationFixture: AdminMutationFixture | undefined;
@@ -112,8 +114,10 @@ describeIntegration('AdminSDK', () => {
                 TEST_DISPUTE_PROPOSAL_ID: requireManualE2EBigIntEnv('TEST_DISPUTE_PROPOSAL_ID'),
                 TEST_ORACLE_PROPOSAL_ID: requireManualE2EBigIntEnv('TEST_ORACLE_PROPOSAL_ID'),
                 TEST_ADMIN_ADD_PROPOSAL_ID: requireManualE2EBigIntEnv('TEST_ADMIN_ADD_PROPOSAL_ID'),
+                TEST_TREASURY_PAYOUT_PROPOSAL_ID: requireManualE2EBigIntEnv('TEST_TREASURY_PAYOUT_PROPOSAL_ID'),
                 TEST_NEW_ORACLE_ADDRESS: requireManualE2EEnv('TEST_NEW_ORACLE_ADDRESS'),
                 TEST_NEW_ADMIN_ADDRESS: requireManualE2EEnv('TEST_NEW_ADMIN_ADDRESS'),
+                TEST_NEW_TREASURY_PAYOUT_ADDRESS: requireManualE2EEnv('TEST_NEW_TREASURY_PAYOUT_ADDRESS'),
             };
         }
     });
@@ -259,9 +263,46 @@ describeIntegration('AdminSDK', () => {
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 
-    testAdminMutation('should claim', async () => {
-        const result = await adminSDK.claim(adminSigner1);
-        
+    testAdminMutation('should pause claims', async () => {
+        const result = await adminSDK.pauseClaims(adminSigner1);
+        expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        const isClaimsPaused = await adminSDK.isClaimsPaused();
+        expect(isClaimsPaused).toBe(true);
+    });
+
+    testAdminMutation('should unpause claims', async () => {
+        const result = await adminSDK.unpauseClaims(adminSigner1);
+        expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        const isClaimsPaused = await adminSDK.isClaimsPaused();
+        expect(isClaimsPaused).toBe(false);
+    });
+
+    testAdminMutation('should claim treasury', async () => {
+        const result = await adminSDK.claimTreasury(adminSigner1);
+        expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    });
+
+    testAdminMutation('should propose treasury payout address update', async () => {
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.proposeTreasuryPayoutAddressUpdate(fixture.TEST_NEW_TREASURY_PAYOUT_ADDRESS, adminSigner1);
+        expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    });
+
+    testAdminMutation('should approve treasury payout address update', async () => {
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.approveTreasuryPayoutAddressUpdate(fixture.TEST_TREASURY_PAYOUT_PROPOSAL_ID, adminSigner2);
+        expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    });
+
+    testAdminMutation('should execute treasury payout address update', async () => {
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.executeTreasuryPayoutAddressUpdate(fixture.TEST_TREASURY_PAYOUT_PROPOSAL_ID, adminSigner1);
+        expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    });
+
+    testAdminMutation('should cancel expired treasury payout address update proposal', async () => {
+        const fixture = requireAdminMutationFixture();
+        const result = await adminSDK.cancelExpiredTreasuryPayoutAddressUpdateProposal(fixture.TEST_TREASURY_PAYOUT_PROPOSAL_ID, adminSigner1);
         expect(result.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     });
 });
