@@ -73,8 +73,9 @@ export function createSessionService(
       if (!profile || !profile.active) {
         throw new Error('User profile is inactive or not found');
       }
-      await sessions.revoke(sessionId);
+
       const result = await sessions.issue(profile, ttlSeconds);
+      await sessions.revoke(sessionId);
       incrementSessionRefreshed();
       Logger.info('Session refreshed', { userId: profile.id, walletAddress: profile.walletAddress });
       return result;

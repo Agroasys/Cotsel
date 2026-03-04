@@ -211,6 +211,34 @@ describe('AuthController.login', () => {
 
     expect(res.status).toHaveBeenCalledWith(403);
   });
+
+  test('caps ttlSeconds to maxSessionTtlSeconds', async () => {
+    mockVerifyMessage.mockReturnValue(WALLET);
+    const svc = mockSessionService();
+    const cs = mockChallengeStore('test-nonce');
+    // max configured to 3600; client requests 999999
+    const ctrl = new AuthController(svc, cs, 3600);
+    const req = { body: { walletAddress: WALLET, signature: VALID_SIG, role: 'buyer', ttlSeconds: 999999 } } as Request;
+    const res = mockRes();
+
+    await ctrl.login(req as any, res);
+
+    // sessionService.login must be called with ttl capped at 3600, not 999999
+    expect(svc.login).toHaveBeenCalledWith(WALLET, 'buyer', undefined, 3600);
+  });
+
+  test('enforces minimum ttlSeconds of 1', async () => {
+    mockVerifyMessage.mockReturnValue(WALLET);
+    const svc = mockSessionService();
+    const cs = mockChallengeStore('test-nonce');
+    const ctrl = new AuthController(svc, cs, 3600);
+    const req = { body: { walletAddress: WALLET, signature: VALID_SIG, role: 'buyer', ttlSeconds: 0 } } as Request;
+    const res = mockRes();
+
+    await ctrl.login(req as any, res);
+
+    expect(svc.login).toHaveBeenCalledWith(WALLET, 'buyer', undefined, 1);
+  });
 });
 
 // GET /session

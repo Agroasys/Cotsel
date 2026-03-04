@@ -50,7 +50,7 @@ async function bootstrap(): Promise<void> {
   app.use(cors());
   app.use(express.json());
 
-  const controller = new AuthController(sessionService, challengeStore);
+  const controller = new AuthController(sessionService, challengeStore, config.sessionTtlSeconds);
   const router = createRouter(controller, sessionService);
 
   app.use('/api/auth/v1', router);

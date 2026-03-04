@@ -1,5 +1,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS user_profiles (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     wallet_address TEXT NOT NULL UNIQUE,

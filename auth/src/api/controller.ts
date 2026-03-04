@@ -26,6 +26,8 @@ export class AuthController {
   constructor(
     private readonly sessionService: SessionService,
     private readonly challengeStore: ChallengeStore,
+    /** Maximum allowed session TTL in seconds. Clients cannot exceed this. Default: 86400 (24 h). */
+    private readonly maxSessionTtlSeconds: number = 86400,
   ) {}
 
   /**
@@ -153,9 +155,16 @@ export class AuthController {
     // Consume nonce immediately (replay protection)
     this.challengeStore.delete(wallet);
 
+    // Cap ttlSeconds to the configured maximum so clients cannot mint
+    // arbitrarily long-lived sessions.
+    const safeTtl =
+      ttlSeconds !== undefined
+        ? Math.max(1, Math.min(ttlSeconds, this.maxSessionTtlSeconds))
+        : undefined;
+
     // Issue session
     try {
-      const result = await this.sessionService.login(wallet, role, orgId, ttlSeconds);
+      const result = await this.sessionService.login(wallet, role, orgId, safeTtl);
       Logger.info('Login successful', { walletAddress: wallet, role });
       res.status(201).json({
         success: true,

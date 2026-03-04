@@ -20,10 +20,9 @@ It is **separate** from `shared-auth`, which handles service-to-service HMAC aut
 │   ├── api
 │   │   ├── controller.ts       # Login / session HTTP handlers
 │   │   └── routes.ts           # Express router
-│   ├── auth
-│   │   └── serviceAuth.ts      # Wrapper around @agroasys/shared-auth
 │   ├── config.ts               # Env-driven config
 │   ├── core
+│   │   ├── challengeStore.ts   # In-memory one-time login nonces
 │   │   ├── profileStore.ts     # UserProfile store interface + Postgres impl
 │   │   ├── sessionService.ts   # login / refresh / revoke / resolve
 │   │   └── sessionStore.ts     # UserSession store interface + Postgres impl
@@ -31,7 +30,7 @@ It is **separate** from `shared-auth`, which handles service-to-service HMAC aut
 │   │   ├── connection.ts       # pg Pool
 │   │   ├── migrations.ts       # schema.sql runner
 │   │   ├── queries.ts          # raw SQL helpers
-│   │   └── schema.sql          # user_profiles, user_sessions, auth_hmac_nonces
+│   │   └── schema.sql          # user_profiles, user_sessions
 │   ├── metrics
 │   │   └── counters.ts         # In-process event counters
 │   ├── middleware
