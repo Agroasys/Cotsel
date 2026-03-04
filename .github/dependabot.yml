@@ -9,7 +9,15 @@ updates:
       timezone: "UTC"
     open-pull-requests-limit: 10
     ignore:
+      # Temporary Hardhat v3 migration deferral (issue #192):
+      # keep major updates muted only for the blocked Hardhat plugin chain.
       - dependency-name: "hardhat"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@parity/hardhat-polkadot"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@parity/hardhat-polkadot-resolc"
         update-types:
           - "version-update:semver-major"
       - dependency-name: "@nomicfoundation/hardhat-toolbox"
@@ -31,6 +39,15 @@ updates:
         update-types:
           - "version-update:semver-major"
       - dependency-name: "@nomicfoundation/hardhat-verify"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@typechain/hardhat"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "hardhat-gas-reporter"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "solidity-coverage"
         update-types:
           - "version-update:semver-major"
     groups:
