@@ -50,7 +50,7 @@ Row metadata semantics:
 | Primary DB operations + recovery evidence | C | Done | 100 | #133 | `scripts/postgres-backup-restore-smoke.sh`, `docs/runbooks/postgres-backup-restore-recovery.md`, `docs/runbooks/production-readiness-checklist.md`, `.github/workflows/release-gate.yml` (`ci-report-postgres-recovery-smoke`), PR #183 | None for issue-#133 scope | roadmap-maintainers | 2026-03-01 | weekly |
 | Notifications service behavior + operational controls | A/B | Done | 100 | #77, #130 | `notifications/src/`, `notifications/tests/`, `scripts/notifications-wiring-health.sh`, `scripts/notifications-gate.sh`, `scripts/notifications-gate-validate.mjs`, `.github/workflows/release-gate.yml` (`ci-report-notifications-gate`) | None for issue-#130 scope | roadmap-maintainers | 2026-02-28 | weekly |
 | API gateway orchestration + error handoff boundary | A/B | Backlog | 0 | #78, #123, #124 | Architectural requirement documented in `web3layer.mmd`; no dedicated in-repo service boundary document | Define and implement runtime gateway and error-handler control plane | roadmap-maintainers | 2026-02-28 | weekly |
-| Compliance boundary (KYB/KYT/Sanctions integration) | C | Done | 100 | #128 | `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`, `docs/runbooks/production-readiness-checklist.md` (Compliance boundary governance section), decision record #200 | None for issue-#128 compliance boundary policy formalization scope | roadmap-maintainers | 2026-03-04 | weekly |
+| Compliance boundary policy contract (KYB/KYT/Sanctions) | C | Done | 100 | #128 | `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`, `docs/runbooks/production-readiness-checklist.md` (Compliance boundary governance section), decision record #200 | None for issue-#128 policy documentation and governance-contract scope; provider runtime integration is tracked separately from this row | roadmap-maintainers | 2026-03-04 | weekly |
 
 ## Milestone Rollup (evidence-based)
 
@@ -97,7 +97,7 @@ Computation method:
   - Treasury payout queue + audit traceability (pilot operations)
   - Infrastructure controls (CI/CD, roadmap governance, release controls)
   - Primary DB operations + recovery evidence
-  - Compliance boundary (KYB/KYT/Sanctions integration)
+  - Compliance boundary policy contract (KYB/KYT/Sanctions)
 
 ## Maintenance Rule
 
