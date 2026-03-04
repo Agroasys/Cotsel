@@ -84,10 +84,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: '20'
+          cache: npm
+
       - name: Run docs/profile boundary guards
         shell: bash
         run: |
           set +e
+          set -o pipefail
           mkdir -p ci-reports
           report="ci-reports/docs-profile-guard.txt"
           fail=0
@@ -107,6 +114,7 @@ jobs:
 
           run_check docs-profile-name scripts/tests/docs-profile-name-guard.sh
           run_check api-gateway-boundary scripts/tests/api-gateway-boundary-guard.sh
+          run_check monitoring-baseline-validator node scripts/monitoring-baseline-validate.mjs --runbook docs/runbooks/monitoring-alerting-baseline.md --out ci-reports/monitoring-baseline-validation.json
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -117,7 +125,16 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-docs-profile-guard
-          path: ci-reports/docs-profile-guard.txt
+          path: |
+            ci-reports/docs-profile-guard.txt
+            ci-reports/monitoring-baseline-validation.json
+
+      - name: Upload monitoring baseline validation report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: ci-report-monitoring-baseline
+          path: ci-reports/monitoring-baseline-validation.json
 
   arch-roadmap-consistency:
     name: ci/arch-roadmap-consistency
