@@ -1,7 +1,6 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Logger } from '../utils/logger';
 
 const counters: Record<string, number> = {
   sessions_issued: 0,
