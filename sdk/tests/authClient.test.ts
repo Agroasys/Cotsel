@@ -102,12 +102,12 @@ describe('AuthClient', () => {
         new Error('wallet not available'),
       );
 
-      await expect(client.login({ role: 'buyer' })).rejects.toBeDefined();
+      await expect(client.login({ role: 'buyer' })).rejects.toThrow('wallet not available');
     });
 
     test('rejects when wallet address retrieval fails', async () => {
       mockGetAddress.mockRejectedValueOnce(new Error('user rejected connection'));
-      await expect(client.login({ role: 'buyer' })).rejects.toBeDefined();
+      await expect(client.login({ role: 'buyer' })).rejects.toThrow('user rejected connection');
     });
 
     test('normalises wallet address to lowercase before challenge', async () => {
@@ -212,7 +212,7 @@ describe('AuthClient', () => {
 
     test('throws when session is already revoked', async () => {
       mockFetch.mockResolvedValueOnce(mockErr('Session not found or expired', 401));
-      await expect(client.revoke('dead-token')).rejects.toThrow();
+      await expect(client.revoke('dead-token')).rejects.toThrow('Session not found');
     });
   });
 
