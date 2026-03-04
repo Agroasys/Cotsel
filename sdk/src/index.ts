@@ -28,4 +28,7 @@ export * from './utils/validation';
 export * from './utils/signature';
 
 // web3auth
-export {web3Wallet} from './wallet/wallet-provider'
+export { web3Wallet } from './wallet/wallet-provider';
+
+export { AuthClient } from './modules/authClient';
+export type { AuthClientConfig, AuthRole, SessionResult, LoginOptions } from './modules/authClient';
