@@ -33,3 +33,40 @@ This command is **non-enforcing** and reports:
   - first PR introducing it
   - removal condition (upstream fix version or migration milestone)
 - Review overrides during dependency maintenance and remove when no longer required.
+
+## Hardhat Major Deferral Policy (Issue #192)
+### Deferral Rationale
+- Scope is limited to the Hardhat major-upgrade chain where the current plugin ecosystem is incompatible with Hardhat 3.
+- Deferral avoids unstable migrations that can break CI/runtime behavior and obscure vulnerability triage outcomes.
+- Current evidence basis:
+  - PR #191 merged low-risk updates separately.
+  - PR #193 merged major-version deferral in Dependabot for the blocked chain.
+  - PR #190 was closed after reproducing migration failures under the current dependency constraints.
+
+### What Is Deferred
+- Dependabot `semver-major` updates for the Hardhat chain only:
+  - `hardhat`
+  - `@parity/hardhat-polkadot`
+  - `@parity/hardhat-polkadot-resolc`
+  - `@nomicfoundation/hardhat-*` packages used in this repo
+  - `@typechain/hardhat`
+  - `hardhat-gas-reporter`
+  - `solidity-coverage`
+
+### Revisit Triggers
+- Time-based trigger: reassess monthly during dependency maintenance cadence.
+- Technical trigger: revisit immediately when plugin compatibility for Hardhat 3 is confirmed in upstream releases/changelogs.
+- Event trigger: revisit when CI or Dependabot reports indicate the deferral chain no longer blocks migration.
+
+### Cadence and Ownership
+- Owner: roadmap-maintainers.
+- Cadence: monthly dependency governance review and on-demand review when technical triggers fire.
+- Review record: each review must update the linked issue/PR notes with keep/deprecate decision and evidence.
+
+### Evidence Required to Lift Deferral
+- Compatibility evidence for all required plugins/tooling against Hardhat 3.
+- A dedicated migration PR with:
+  - full workspace checks passing (`lint`, `typecheck`, `test`, `build` where present),
+  - lockfile impact summary and rollback plan,
+  - no use of `npm audit fix --force`.
+- CI parity evidence showing no regression in contract/tooling workflows after migration.
