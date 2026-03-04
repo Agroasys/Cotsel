@@ -66,13 +66,22 @@ if command -v realpath >/dev/null 2>&1; then
 else
   tmp_root_real="$tmp_root"
 fi
-mktemp_stderr=''
-if ! tmp_dir="$(mktemp -d 2> >(mktemp_stderr="$(cat)"))"; then
-  printf '%s\n' 'Failed to create temporary directory with mktemp -d' >&2
-  if [[ -n "$mktemp_stderr" ]]; then
-    printf '%s\n' "mktemp error: $mktemp_stderr" >&2
+mktemp_err_file=''
+if mktemp_err_file="$(mktemp 2>/dev/null)"; then
+  if ! tmp_dir="$(mktemp -d 2>"$mktemp_err_file")"; then
+    printf '%s\n' 'Failed to create temporary directory with mktemp -d' >&2
+    if [[ -s "$mktemp_err_file" ]]; then
+      printf '%s\n' "mktemp error: $(cat "$mktemp_err_file")" >&2
+    fi
+    rm -f "$mktemp_err_file"
+    exit 1
   fi
-  exit 1
+  rm -f "$mktemp_err_file"
+else
+  if ! tmp_dir="$(mktemp -d)"; then
+    printf '%s\n' 'Failed to create temporary directory with mktemp -d' >&2
+    exit 1
+  fi
 fi
 if [[ ! -d "$tmp_dir" ]]; then
   printf '%s\n' 'Failed to create temporary directory with mktemp -d' >&2
@@ -101,7 +110,7 @@ cleanup_tmp_dir() {
       tmp_root_canon="${tmp_root_real:-}"
     fi
     if [[ -n "$tmp_root_canon" ]]; then
-      if [[ "$tmp_dir_real" == "$tmp_root_canon" || "$tmp_dir_real" == "$tmp_root_canon"/* ]]; then
+      if [[ "$tmp_dir_real" == "$tmp_root_canon" ]] || [[ "$tmp_dir_real" == $tmp_root_canon/* ]]; then
         rm -rf "$tmp_dir_real"
       else
         printf '%s\n' "Skipping cleanup of unexpected tmp_dir path: $tmp_dir_real (tmp_root_real: $tmp_root_canon)" >&2
@@ -289,23 +298,6 @@ fi
 clear_log
 report_gate_apply="$tmp_dir/report-gate-apply.json"
 patch_gate_apply="$tmp_dir/patch-gate-apply.patch"
-print_run_gate_issues_e2e_docs() {
-  : <<'RUN_GATE_ISSUES_E2E_DOC'
-RUN_GATE_ISSUES_E2E=true enables an online end-to-end check that
---write-gate-issues --apply can successfully synchronize gate issues
-against GitHub.
-Leave RUN_GATE_ISSUES_E2E unset for the default offline-only mode,
-which verifies that an online-only operation is correctly guarded.
-Note: this check is strict; the variable must be set to the exact
-string "true" (not "1", "yes", or other truthy values) to enable the
-online end-to-end validation path. This avoids accidentally enabling
-online, GitHub-backed runs in environments (e.g., CI, offline
-development, or air-gapped testing) where network access, credentials,
-or non-deterministic behavior are undesired; requiring "true" makes
-opting in an explicit, conscious action.
-RUN_GATE_ISSUES_E2E_DOC
-}
-print_run_gate_issues_e2e_docs
 if [[ "${RUN_GATE_ISSUES_E2E:-}" == "true" ]]; then
   # Note: run_sync_script_online intentionally does not pass --offline and may reuse the same
   # cache file as offline runs; this branch is meant to exercise real GitHub API calls and
