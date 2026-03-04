@@ -94,6 +94,7 @@ jobs:
         shell: bash
         run: |
           set +e
+          set -o pipefail
           mkdir -p ci-reports
           report="ci-reports/docs-profile-guard.txt"
           fail=0
