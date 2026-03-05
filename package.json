@@ -32,6 +32,7 @@
     "@nomicfoundation/hardhat-ignition": "0.15.16",
     "@nomicfoundation/hardhat-ignition-ethers": "0.15.17",
     "glob": "11.1.0",
+    "immutable": "4.3.8",
     "minimatch": "10.2.3",
     "serialize-javascript": "7.0.3",
     "lodash": "4.17.23",
