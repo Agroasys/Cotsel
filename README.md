@@ -173,7 +173,8 @@ npm run -w treasury build
 ```
 
 > Note: `contracts` commands need a Hardhat variable for local runs:
-> `HARDHAT_VAR_PRIVATE_KEY=0x0123456789012345678901234567890123456789012345678901234567890123`
+> `HARDHAT_VAR_PRIVATE_KEY=<local_dev_private_key_hex>`
+> Use a throwaway local-only key and never use a funded or production private key in shell history.
 >
 > For deterministic PolkaVM compile, follow `docs/runbooks/polkavm-deploy-verification.md` ("Deterministic Local Bootstrap") before `compile:polkavm`.
 
