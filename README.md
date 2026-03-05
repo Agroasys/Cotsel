@@ -6,92 +6,59 @@ The Agroasys Web3 Layer is a modular, non-custodial settlement infrastructure bu
 
 While built as the settlement engine for the Agroasys Platform, this protocol is open-source and agnostic, allowing any B2B marketplace to integrate trustless stablecoin settlement with Ricardian legal enforceability.
 
-## Quick Start
+> Founder note: Optimize for deterministic operations and auditability. If a step matters in production, it should be scriptable, tested, and documented in a runbook.
 
-```bash
-nvm use
-# expected: Node.js v20.x
-npm ci
-npm run lint
-npm run security:deps
-scripts/docker-services.sh up local-dev
-scripts/docker-services.sh health local-dev
-```
+## Architecture
 
-For full CI parity and release-gate flows, see the sections below and the runbooks under `docs/runbooks/`.
-
-## **Architecture**
-
-This repository houses the "Settlement Layer" of the architecture. It is designed to operate seamlessly alongside off-chain "Shadow Ledgers" or Web2 marketplaces, serving as the immutable source of truth for funds.
+This repository is the settlement layer in the Agroasys platform. It operates alongside off-chain systems while serving as the on-chain source of truth for settlement state.
 
 ![web3layer](https://github.com/user-attachments/assets/c2677f8f-b430-42f6-a267-285683da74df)
 
-### Core Components
+- `contracts`: escrow state machine and settlement logic.
+- `oracle`: validated real-world event triggers into on-chain actions.
+- `indexer`: indexed chain events for query and operational visibility.
+- `ricardian`: contract-hash evidence workflow linking legal agreement to settlement lifecycle.
 
-- **Escrow Smart Contract** (`/contracts`) : A Solidity-based state machine deployed on PolkaVM. It handles the locking, dispute resolution, and atomic splitting of funds.
+## Core Components
 
-- **Oracle Service** (`/oracle`): A hardened Node.js service that bridges real-world logistics events (API Webhooks) to on-chain triggers, enabling automated release of funds without human intervention.
+- **Escrow Smart Contract** (`/contracts`): A Solidity-based state machine deployed on PolkaVM. It handles locking, dispute resolution, and atomic splitting of funds.
+- **Oracle Service** (`/oracle`): A hardened Node.js service that bridges real-world logistics events (API webhooks) to on-chain triggers for automated release.
+- **Ricardian Proofs**: The protocol does not store PDF data on-chain. It uses a hash-first model where each trade is anchored by a SHA-256 hash of the off-chain legal contract.
+- **Indexer Service** (`/indexer`): A SubQuery/Squid indexer that tracks `TradeLocked` and `FundsReleased` events to sync on-chain state with off-chain systems.
 
-- **Ricardian Proofs**: The protocol does not store PDF data on-chain. Instead, it enforces a "Hash-First" architecture where every trade is anchored by a SHA-256 hash of the off-chain legal contract.
+## How It Works
 
-- **Indexer Service** (`/indexer`): A custom SubQuery/Squid instance that indexes `TradeLocked` and `FundsReleased` events to sync on-chain state with off-chain UIs or databases.
-
-## **How It Works**
-
-The protocol implements a deterministic Two-Stage Settlement Mechanism. This architecture allows for capital efficiency in complex transactions where operational costs, platform fees, or partial milestones must be funded before final delivery, without compromising the security of the principal amount.
+The protocol uses a deterministic two-stage settlement mechanism. This supports capital-efficient flows where operational costs and platform fees are released first, while preserving security of the principal settlement amount.
 
 ### The Lifecycle
 
-**1. Lock (Encumbrance)**
-
-- **Action**: The Payer (Buyer/Client) deposits `USDC` (or any asset ID) into the Escrow Contract.
-This includes:
-  - Goods value
-  - Logistics/shipping fees
-  - Platform fees
-
-- **State**: The protocol records the `ricardianHash` (Immutable Proof of Agreement) and encumbers the funds, splitting the total value into `stageOneAmount` (Operational/Fee) and `stageTwoAmount` (Net Settlement).
-
-**2. Stage 1 Release (Intermediary / Operational)**
-
-- **Trigger**: Oracle verifies validated documentation (e.g., Bill of Lading, Export Permit).
-  
-- **Action**: Actions (executed atomically in a single transaction):
-  - Logistics Payment: Release the shipping fee to the TreasuryWallet to pay the logistics provider.
-  - Platform Fee: Release the platform commission to the TreasuryWallet.
-  - Supplier Tranche 1: Release 40% (configurable) of the goods value to the SupplierAddress (working capital coverage).
-
-**3. Stage 2 Release (Final Settlement)**
-
-- **Trigger**: Oracle verifies the Inspection Report (Quality/Quantity confirmation) at the destination port.
-
-- **Action**: Release the remaining 60% of the goods value to the SupplierAddress, completing the trade.
+1. **Lock (Encumbrance)**
+   **Action:** Buyer deposits `USDC` (or any configured asset) into escrow, covering goods value, logistics fees, and platform fees.  
+   **State:** Protocol records `ricardianHash` and encumbers funds into `stageOneAmount` (operational/fee) and `stageTwoAmount` (net settlement).
+2. **Stage 1 Release (Intermediary / Operational)**
+   **Trigger:** Oracle verifies validated documentation (for example Bill of Lading and export permit).  
+   **Action:** In one atomic transaction, logistics fee is paid to `TreasuryWallet`, platform fee is paid to `TreasuryWallet`, and supplier tranche 1 (default 40%, configurable) is paid to `SupplierAddress`.
+3. **Stage 2 Release (Final Settlement)**
+   **Trigger:** Oracle verifies destination inspection report (quality/quantity confirmation).  
+   **Action:** Remaining supplier tranche (default 60%) is released to `SupplierAddress`, completing settlement.
 
 ## Tech Stack
 
-The protocol is built on a modular stack designed for high throughput and cross-chain interoperability.
+### Core Protocol and Languages
 
-**Core Protocol & Languages**
+- Smart contracts: Solidity with Hardhat and Parity resolc plugin stack (`@parity/hardhat-polkadot*` + `@parity/resolc`) for `compile:polkavm`. Legacy `compile` remains during migration.
+- Scripting and service logic: TypeScript on Node.js v20.x (same baseline as CI).
+- Infrastructure: Docker and Docker Compose.
 
-- **Smart Contracts**: Solidity with Hardhat and Parity resolc plugin stack (`@parity/hardhat-polkadot*` + `@parity/resolc`) for PolkaVM-targeted compilation (`compile:polkavm`). Legacy `compile` remains available during migration.
+### Infrastructure Layers
 
-- **Scripting & Logic**: TypeScript (Node.js v20.x runtime, matching CI).
+- Network: Polkadot AssetHub for low-cost native stablecoin settlement rails.
+- Gas abstraction: Asset Conversion Pallet for fee payment in `USDC` instead of `DOT`.
+- Indexing and querying: SubQuery/Squid + GraphQL over Postgres.
+- Development framework: Hardhat (primary) and Foundry (fuzzing).
+- Oracle runtime: Isolated Node.js 20.x service runtime for key management and webhook ingress.
 
-- **Infrastructure**: Docker & Docker Compose (Containerization).
-
-**Infrastructure Layers**
-
-- **Network**: Polkadot AssetHub (System Parachain) – Utilized for low-cost, native stablecoin settlement.
-
-- **Gas Abstraction**: Asset Conversion Pallet – Enables "Gasless" UX by allowing transaction fees to be paid in `USDC` rather than the native token (`DOT`).
-
-- **Indexing & Querying**: SubQuery / Squid SDK (GraphQL interface over Postgres).
-
-- **Development Framework**: Hardhat (primary testing environment) / Foundry (fuzzing).
-
-- **Oracle Runtime**: Node.js 20.x (Isolated Environment for key management and webhook ingress).
-
-## **Repository Structure**
+## Repository Structure
 
 ```bash
 agroasys-web3/
@@ -111,115 +78,50 @@ agroasys-web3/
 ├── scripts/            # Ops, verification, and CI guard scripts
 └── docs/               # Runbooks, governance, and operational docs
 ```
-## **Security & "Invisible Wallet" Features**
 
-- **Gas Abstraction (The "Gas Station")** - This protocol utilizes the Asset Conversion Pallet. Users do not need to hold DOT to interact with the contract. The protocol automatically swaps a fraction of the deposited USDC to pay for execution gas, enabling a "Gasless" UX for enterprise clients.
+## Security & "Invisible Wallet" Features
 
-- **Oracle Isolation** - The `releaseFunds` function is protected by an `onlyOracle` modifier. The Oracle Service is designed to run in a completely isolated environment (TEE or separate VPC) with restricted key access to prevent unauthorized draining of the escrow.
+- **Gas Abstraction (The "Gas Station")**: Uses Asset Conversion so users do not need to hold `DOT`; protocol can settle fees in `USDC` for a gasless enterprise UX.
+- **Oracle Isolation**: `releaseFunds` is protected by `onlyOracle`. Oracle service is intended to run in an isolated environment (TEE or separate VPC) with restricted key access.
+- **Ricardian Integrity**: `ricardianHash` is immutable after lock, so courts and auditors can verify on-chain settlement against the exact off-chain legal document hash.
 
-- **Ricardian Integrity** - The contract is agnostic to the content of the trade but strict about the Proof of Agreement. The `ricardianHash` is immutable once locked. This allows any court or auditor to mathematically verify that the funds on-chain correspond exactly to the PDF contract signed off-chain.
-
-## **CI Parity Checks**
-
-Run the same checks locally that GitHub Actions runs:
+## Local Setup (Node 20)
 
 ```bash
 nvm use
 # expected: Node.js v20.x
 npm ci
-npm run -w sdk lint
-npm run -w sdk typecheck --if-present
-npm run -w sdk test
-npm run -w sdk build
-
-npm run -w notifications lint
-npm run -w notifications typecheck --if-present
-npm run -w notifications test --if-present
-npm run -w notifications build
-
-npm run -w contracts lint
-npm run -w contracts typecheck --if-present
-npm run -w contracts compile
-# run deterministic resolc bootstrap from docs/runbooks/polkavm-deploy-verification.md first
-npm run -w contracts compile:polkavm
-npm run -w contracts test
-npm run -w contracts build --if-present
-
-npm run -w oracle lint
-npm run -w oracle typecheck --if-present
-npm run -w oracle compile --if-present
-npm run -w oracle test
-npm run -w oracle build
-
-npm run -w indexer lint
-npm run -w indexer typecheck --if-present
-npm run -w indexer test --if-present
-npm run -w indexer build
-
-npm run -w reconciliation lint
-npm run -w reconciliation typecheck --if-present
-npm run -w reconciliation test
-npm run -w reconciliation build
-
-npm run -w ricardian lint
-npm run -w ricardian typecheck --if-present
-npm run -w ricardian test
-npm run -w ricardian build
-
-npm run -w treasury lint
-npm run -w treasury typecheck --if-present
-npm run -w treasury test
-npm run -w treasury build
+npm run lint
+npm run security:deps
 ```
 
-> Note: `contracts` commands need a Hardhat variable for local runs:
-> `HARDHAT_VAR_PRIVATE_KEY=0x0123456789012345678901234567890123456789012345678901234567890123`
->
-> For deterministic PolkaVM compile, follow `docs/runbooks/polkavm-deploy-verification.md` ("Deterministic Local Bootstrap") before `compile:polkavm`.
+Contracts local runs require a local dev key in `HARDHAT_VAR_PRIVATE_KEY`.
+Use a throwaway local-only key and never use a funded or production private key.
 
-## **Operational Runbooks**
+## Common Commands
 
-- `docs/runbooks/reconciliation.md`
-- `docs/runbooks/ricardian-hash-repro.md`
-- `docs/runbooks/oracle-redrive.md`
-- `docs/runbooks/emergency-disable-unpause.md`
-- `docs/runbooks/notifications.md`
-- `docs/runbooks/docker-profiles.md`
-- `docs/runbooks/asset-conversion-fee-validation.md`
-- `docs/runbooks/production-readiness-checklist.md`
-- `docs/runbooks/monitoring-alerting-baseline.md`
-- `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
-- `docs/runbooks/api-gateway-boundary.md`
-- `docs/runbooks/polkavm-deploy-verification.md`
-- `docs/runbooks/hybrid-split-walkthrough.md`
-- `docs/runbooks/treasury-to-fiat-sop.md`
-- `docs/runbooks/pull-over-push-claim-flow.md`
-- `docs/runbooks/pilot-environment-onboarding.md`
-- `docs/runbooks/non-custodial-pilot-user-guide.md`
-- `docs/runbooks/pilot-kpi-report-template.md`
-- `docs/runbooks/github-roadmap-governance.md`
+```bash
+# Contracts
+npm run -w contracts compile
+npm run -w contracts compile:polkavm
+npm run -w contracts test
 
-## **Legal & Compliance**
+# Service quality gates (examples)
+npm run -w sdk lint && npm run -w sdk test && npm run -w sdk build
+npm run -w oracle lint && npm run -w oracle test && npm run -w oracle build
 
-- `docs/runbooks/legal-evidence-package-template.md`
+# Runtime profiles
+scripts/docker-services.sh up local-dev
+scripts/docker-services.sh health local-dev
 
-## **Community Demo**
+scripts/docker-services.sh up staging-e2e-real
+scripts/docker-services.sh health staging-e2e-real
+scripts/staging-e2e-real-gate.sh
+```
 
-- `docs/runbooks/demo/community-demo-checklist.md`
-- `docs/runbooks/demo/community-demo-script.md`
+## CI and Release Gate
 
-
-## **Contributing**
-
-We welcome contributions from the Web3 and Trade Finance communities. Please read `CONTRIBUTING.md` for details on our code of conduct and the process for submitting pull requests.
-
-##### Built with ❤️ for the future of Trade.
-
-## CI Release Gate Checks
-
-Branch protection should require these checks:
-
-- Optional full-matrix override on PRs: add label `release-gate-full` to force all workspace jobs regardless of path filters.
+Branch protection should require:
 
 - `ci/contracts`
 - `ci/sdk`
@@ -231,33 +133,48 @@ Branch protection should require these checks:
 - `ci/treasury`
 - `ci/release-gate`
 
-Use the `CI Parity Checks` command block above for local parity execution.
+To force full matrix jobs on a PR, add label `release-gate-full`.
 
+## Runbooks
 
-## Docker Profiles
+Core operations:
 
-Use these profile commands for deterministic runtime checks:
+- `docs/runbooks/production-readiness-checklist.md`
+- `docs/runbooks/docker-profiles.md`
+- `docs/runbooks/staging-e2e-release-gate.md`
+- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/monitoring-alerting-baseline.md`
+- `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
 
-- `local-dev`: fast iteration profile with lightweight `indexer` responder, plus `postgres`, `redis`, `oracle`, `reconciliation`, `ricardian`, and `treasury`. `health local-dev` waits for all required services.
-- `staging-e2e`: staging profile with real indexer services (`indexer-migrate`, `indexer-pipeline`, `indexer-graphql`) and all application services. `health staging-e2e` must pass before running release checks.
-- `staging-e2e-real`: strict release-gate profile with dynamic start-block support, in-network GraphQL checks, warmup-aware lag verification, and reconciliation once-run validation.
-- `infra`: infrastructure-only profile (`postgres`, `redis`).
+Protocol and service operations:
 
-```bash
-scripts/docker-services.sh up local-dev
-scripts/docker-services.sh health local-dev
+- `docs/runbooks/reconciliation.md`
+- `docs/runbooks/oracle-redrive.md`
+- `docs/runbooks/notifications.md`
+- `docs/runbooks/ricardian-hash-repro.md`
+- `docs/runbooks/polkavm-deploy-verification.md`
+- `docs/runbooks/asset-conversion-fee-validation.md`
+- `docs/runbooks/hybrid-split-walkthrough.md`
+- `docs/runbooks/treasury-to-fiat-sop.md`
+- `docs/runbooks/pull-over-push-claim-flow.md`
 
-scripts/docker-services.sh up staging-e2e
-scripts/docker-services.sh health staging-e2e
+Program and governance:
 
-scripts/docker-services.sh up staging-e2e-real
-scripts/docker-services.sh health staging-e2e-real
-scripts/staging-e2e-real-gate.sh
-```
+- `docs/runbooks/github-roadmap-governance.md`
+- `docs/runbooks/legal-evidence-package-template.md`
+- `docs/runbooks/pilot-environment-onboarding.md`
+- `docs/runbooks/non-custodial-pilot-user-guide.md`
+- `docs/runbooks/pilot-kpi-report-template.md`
 
-See `docs/docker-services.md`, `docs/runbooks/staging-e2e-release-gate.md`, and `docs/runbooks/staging-e2e-real-release-gate.md` for triage and rollback instructions.
-Production readiness criteria are tracked in `docs/runbooks/production-readiness-checklist.md`.
+Community demo:
 
-## Commit Convention
+- `docs/runbooks/demo/community-demo-checklist.md`
+- `docs/runbooks/demo/community-demo-script.md`
 
-This repo follows Conventional Commits. See `CONTRIBUTING.md` for examples and PR checklist.
+## Contributing
+
+See `CONTRIBUTING.md` for contribution flow and PR expectations.
+
+## Security
+
+See `SECURITY.md` for disclosure policy.
