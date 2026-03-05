@@ -6,7 +6,7 @@ The Agroasys Web3 Layer is a modular, non-custodial settlement infrastructure bu
 
 While built as the settlement engine for the Agroasys Platform, this protocol is open-source and agnostic, allowing any B2B marketplace to integrate trustless stablecoin settlement with Ricardian legal enforceability.
 
-> Founder note: Optimize for deterministic operations and auditability. If a step matters in production, it should be scriptable, tested, and documented in a runbook.
+> Note: Optimize for deterministic operations and auditability. If a step matters in production, it should be scriptable, tested, and documented in a runbook.
 
 ## Architecture
 
