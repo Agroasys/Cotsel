@@ -50,6 +50,9 @@ updates:
       - dependency-name: "solidity-coverage"
         update-types:
           - "version-update:semver-major"
+      - dependency-name: "chai"
+        update-types:
+          - "version-update:semver-major"
     groups:
       npm-runtime:
         patterns:
