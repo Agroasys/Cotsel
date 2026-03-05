@@ -8,6 +8,17 @@ While built as the settlement engine for the Agroasys Platform, this protocol is
 
 > Founder note: Optimize for deterministic operations and auditability. If a step matters in production, it should be scriptable, tested, and documented in a runbook.
 
+## Architecture
+
+This repository is the settlement layer in the Agroasys platform. It operates alongside off-chain systems while serving as the on-chain source of truth for settlement state.
+
+![web3layer](https://github.com/user-attachments/assets/c2677f8f-b430-42f6-a267-285683da74df)
+
+- `contracts`: escrow state machine and settlement logic.
+- `oracle`: validated real-world event triggers into on-chain actions.
+- `indexer`: indexed chain events for query and operational visibility.
+- `ricardian`: contract-hash evidence workflow linking legal agreement to settlement lifecycle.
+
 ## What This Repo Contains
 
 - `contracts`: smart contracts, deployment modules, contract tests, and Foundry fuzzing assets.
