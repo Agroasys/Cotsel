@@ -454,7 +454,7 @@ export class AdminSDK extends Client {
     
     // #################### ORACLE GOVERNANCE ####################
 
-    async proposeOracleUpdate(newOracle: string, adminSigner: ethers.Signer): Promise<GovernanceResult> {
+    async proposeOracleUpdate(newOracle: string, adminSigner: ethers.Signer): Promise<GovernanceProposalResult> {
         await this.verifyAdmin(adminSigner);
         validateAddress(newOracle, 'newOracle');
         
@@ -469,7 +469,8 @@ export class AdminSDK extends Client {
             
             return {
                 txHash: receipt.hash,
-                blockNumber: receipt.blockNumber
+                blockNumber: receipt.blockNumber,
+                proposalId: this.extractProposalIdFromReceipt(receipt, 'OracleUpdateProposed')
             };
             
         } catch (error: any) {

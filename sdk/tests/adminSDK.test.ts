@@ -86,10 +86,11 @@ function makeSdkUnit(isAdmin = true) {
   };
 
   const connect = jest.fn().mockReturnValue(contractWithSigner);
-  (sdk as any).contract = { connect };
+  const parseLog = jest.fn().mockReturnValue(undefined);
+  (sdk as any).contract = { connect, interface: { parseLog } };
   jest.spyOn(sdk, 'isAdmin').mockResolvedValue(isAdmin);
 
-  return { sdk, contractWithSigner, connect };
+  return { sdk, contractWithSigner, connect, parseLog };
 }
 
 function mockSuccessCall(mock: jest.Mock): MockTx {
@@ -259,6 +260,35 @@ describe('AdminSDK unit', () => {
     expect(contractWithSigner.approveTreasuryPayoutAddressUpdate).toHaveBeenCalledWith(11n);
     expect(contractWithSigner.executeTreasuryPayoutAddressUpdate).toHaveBeenCalledWith(11n);
     expect(contractWithSigner.cancelExpiredTreasuryPayoutAddressUpdateProposal).toHaveBeenCalledWith(11n);
+  });
+
+  test('proposeOracleUpdate returns proposal id when receipt contains OracleUpdateProposed', async () => {
+    const { sdk, contractWithSigner, parseLog } = makeSdkUnit(true);
+    const signer = makeSigner();
+    const tx = mockSuccessCall(contractWithSigner.proposeOracleUpdate);
+    tx.wait.mockResolvedValue({
+      ...RECEIPT,
+      logs: [
+        {
+          topics: ['0x1'],
+          data: '0x2',
+        },
+      ],
+    });
+    parseLog.mockReturnValue({
+      name: 'OracleUpdateProposed',
+      args: {
+        proposalId: 9n,
+      },
+    });
+
+    await expect(
+      sdk.proposeOracleUpdate('0x2222222222222222222222222222222222222222', signer),
+    ).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+      proposalId: 9n,
+    });
   });
 
   test('proposeDisputeSolution should reject unsupported dispute status', async () => {

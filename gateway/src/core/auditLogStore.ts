@@ -52,3 +52,17 @@ export function createPostgresAuditLogStore(pool: Pool): AuditLogStore {
     },
   };
 }
+
+export function createInMemoryAuditLogStore(entries: AuditLogEntry[] = []): AuditLogStore & {
+  entries: AuditLogEntry[];
+} {
+  return {
+    entries,
+    async append(entry) {
+      entries.push({
+        ...entry,
+        metadata: entry.metadata ? { ...entry.metadata } : undefined,
+      });
+    },
+  };
+}

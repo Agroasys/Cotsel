@@ -9,6 +9,7 @@ import { GatewayError } from '../errors';
 export type GatewayRole = 'operator:read' | 'operator:write';
 
 export interface GatewayPrincipal {
+  sessionId: string;
   session: AuthSession;
   gatewayRoles: GatewayRole[];
   writeEnabled: boolean;
@@ -57,6 +58,7 @@ export function createAuthenticationMiddleware(client: AuthSessionClient, config
     }
 
     req.gatewayPrincipal = {
+      sessionId: token,
       session,
       gatewayRoles: mapGatewayRoles(session),
       writeEnabled: config.enableMutations && matchesAllowlist(session, config.writeAllowlist),

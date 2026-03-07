@@ -21,6 +21,23 @@ export interface GovernanceStatusSnapshot {
   activeTreasuryPayoutReceiverProposalIds: number[];
 }
 
+<<<<<<< HEAD
+export interface UnpauseProposalState {
+  hasActiveProposal: boolean;
+  approvalCount: number;
+  executed: boolean;
+}
+
+export interface GovernanceProposalState {
+  proposalId: number;
+  approvalCount: number;
+  executed: boolean;
+  cancelled: boolean;
+  expired: boolean;
+  etaSeconds: number;
+  targetAddress: string;
+}
+
 export interface GovernanceStatusRequest {
   oracleProposalIds?: number[];
   treasuryPayoutReceiverProposalIds?: number[];
@@ -57,6 +74,16 @@ export interface EscrowGovernanceReader {
   getGovernanceStatus(request?: GovernanceStatusRequest): Promise<GovernanceStatusSnapshot>;
 }
 
+export interface GovernanceMutationPreflightReader extends EscrowGovernanceReader {
+  getUnpauseProposalState(): Promise<UnpauseProposalState>;
+  getOracleProposalState(proposalId: number): Promise<GovernanceProposalState | null>;
+  getTreasuryPayoutReceiverProposalState(proposalId: number): Promise<GovernanceProposalState | null>;
+  getTreasuryClaimableBalance(): Promise<bigint>;
+  hasApprovedUnpause(walletAddress: string): Promise<boolean>;
+  hasApprovedOracleProposal(proposalId: number, walletAddress: string): Promise<boolean>;
+  hasApprovedTreasuryPayoutReceiverProposal(proposalId: number, walletAddress: string): Promise<boolean>;
+}
+
 type GovernanceContractShape = {
   paused(): Promise<boolean>;
   claimsPaused(): Promise<boolean>;
@@ -64,14 +91,20 @@ type GovernanceContractShape = {
   oracleAddress(): Promise<string>;
   treasuryAddress(): Promise<string>;
   treasuryPayoutAddress(): Promise<string>;
+  claimableUsdc(account: string): Promise<bigint>;
   governanceApprovals(): Promise<bigint>;
   governanceTimelock(): Promise<bigint>;
   requiredApprovals(): Promise<bigint>;
   hasActiveUnpauseProposal(): Promise<boolean>;
+  unpauseHasApproved(account: string): Promise<boolean>;
   unpauseProposal(): Promise<UnpauseProposal>;
+  oracleUpdateCounter(): Promise<bigint>;
+  oracleUpdateHasApproved(id: bigint, account: string): Promise<boolean>;
   oracleUpdateProposals(id: bigint): Promise<OracleUpdateProposal>;
   oracleUpdateProposalExpiresAt(id: bigint): Promise<bigint>;
   oracleUpdateProposalCancelled(id: bigint): Promise<boolean>;
+  treasuryPayoutAddressUpdateCounter(): Promise<bigint>;
+  treasuryPayoutAddressUpdateHasApproved(id: bigint, account: string): Promise<boolean>;
   treasuryPayoutAddressUpdateProposals(id: bigint): Promise<TreasuryPayoutReceiverProposal>;
   treasuryPayoutAddressUpdateProposalExpiresAt(id: bigint): Promise<bigint>;
   treasuryPayoutAddressUpdateProposalCancelled(id: bigint): Promise<boolean>;
@@ -84,14 +117,20 @@ const ESCROW_GOVERNANCE_READ_ABI = [
   'function oracleAddress() view returns (address)',
   'function treasuryAddress() view returns (address)',
   'function treasuryPayoutAddress() view returns (address)',
+  'function claimableUsdc(address account) view returns (uint256)',
   'function governanceApprovals() view returns (uint256)',
   'function governanceTimelock() view returns (uint256)',
   'function requiredApprovals() view returns (uint256)',
   'function hasActiveUnpauseProposal() view returns (bool)',
+  'function unpauseHasApproved(address account) view returns (bool)',
   'function unpauseProposal() view returns (uint256 approvalCount, bool executed, uint256 createdAt, address proposer)',
+  'function oracleUpdateCounter() view returns (uint256)',
+  'function oracleUpdateHasApproved(uint256 proposalId, address account) view returns (bool)',
   'function oracleUpdateProposals(uint256 proposalId) view returns (address newOracle, uint256 approvalCount, bool executed, uint256 createdAt, uint256 eta, address proposer, bool emergencyFastTrack)',
   'function oracleUpdateProposalExpiresAt(uint256 proposalId) view returns (uint256)',
   'function oracleUpdateProposalCancelled(uint256 proposalId) view returns (bool)',
+  'function treasuryPayoutAddressUpdateCounter() view returns (uint256)',
+  'function treasuryPayoutAddressUpdateHasApproved(uint256 proposalId, address account) view returns (bool)',
   'function treasuryPayoutAddressUpdateProposals(uint256 proposalId) view returns (address newPayoutReceiver, uint256 approvalCount, bool executed, uint256 createdAt, uint256 eta, address proposer)',
   'function treasuryPayoutAddressUpdateProposalExpiresAt(uint256 proposalId) view returns (uint256)',
   'function treasuryPayoutAddressUpdateProposalCancelled(uint256 proposalId) view returns (bool)',
@@ -129,7 +168,7 @@ async function collectActiveProposalIds(
   return snapshots.filter((value): value is number => value !== null);
 }
 
-export class GovernanceStatusService implements EscrowGovernanceReader {
+export class GovernanceStatusService implements GovernanceMutationPreflightReader {
   constructor(
     private readonly provider: JsonRpcProvider,
     private readonly contract: GovernanceContractShape,
@@ -228,6 +267,141 @@ export class GovernanceStatusService implements EscrowGovernanceReader {
 
       throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read governance status from chain', {
         cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  async getUnpauseProposalState(): Promise<UnpauseProposalState> {
+    try {
+      const [hasActiveProposal, proposal] = await Promise.all([
+        this.contract.hasActiveUnpauseProposal(),
+        this.contract.unpauseProposal(),
+      ]);
+
+      return {
+        hasActiveProposal,
+        approvalCount: hasActiveProposal ? toSafeInteger(proposal.approvalCount, 'unpauseProposal.approvalCount') : 0,
+        executed: proposal.executed,
+      };
+    } catch (error) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read unpause proposal state', {
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  async getOracleProposalState(proposalId: number): Promise<GovernanceProposalState | null> {
+    try {
+      const counter = toSafeInteger(await this.contract.oracleUpdateCounter(), 'oracleUpdateCounter');
+      if (proposalId < 0 || proposalId >= counter) {
+        return null;
+      }
+
+      const [proposal, expiresAt, cancelled] = await Promise.all([
+        this.contract.oracleUpdateProposals(BigInt(proposalId)),
+        this.contract.oracleUpdateProposalExpiresAt(BigInt(proposalId)),
+        this.contract.oracleUpdateProposalCancelled(BigInt(proposalId)),
+      ]);
+
+      if (proposal.createdAt <= 0n) {
+        return null;
+      }
+
+      const expirySeconds = toSafeInteger(expiresAt, 'oracleUpdateProposalExpiresAt');
+      return {
+        proposalId,
+        approvalCount: toSafeInteger(proposal.approvalCount, 'oracleUpdateProposal.approvalCount'),
+        executed: proposal.executed,
+        cancelled,
+        expired: expirySeconds < Math.floor(Date.now() / 1000),
+        etaSeconds: toSafeInteger(proposal.eta, 'oracleUpdateProposal.eta'),
+        targetAddress: proposal.newOracle,
+      };
+    } catch (error) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read oracle proposal state', {
+        cause: error instanceof Error ? error.message : String(error),
+        proposalId,
+      });
+    }
+  }
+
+  async getTreasuryPayoutReceiverProposalState(proposalId: number): Promise<GovernanceProposalState | null> {
+    try {
+      const counter = toSafeInteger(await this.contract.treasuryPayoutAddressUpdateCounter(), 'treasuryPayoutAddressUpdateCounter');
+      if (proposalId < 0 || proposalId >= counter) {
+        return null;
+      }
+
+      const [proposal, expiresAt, cancelled] = await Promise.all([
+        this.contract.treasuryPayoutAddressUpdateProposals(BigInt(proposalId)),
+        this.contract.treasuryPayoutAddressUpdateProposalExpiresAt(BigInt(proposalId)),
+        this.contract.treasuryPayoutAddressUpdateProposalCancelled(BigInt(proposalId)),
+      ]);
+
+      if (proposal.createdAt <= 0n) {
+        return null;
+      }
+
+      const expirySeconds = toSafeInteger(expiresAt, 'treasuryPayoutAddressUpdateProposalExpiresAt');
+      return {
+        proposalId,
+        approvalCount: toSafeInteger(proposal.approvalCount, 'treasuryPayoutAddressUpdateProposal.approvalCount'),
+        executed: proposal.executed,
+        cancelled,
+        expired: expirySeconds < Math.floor(Date.now() / 1000),
+        etaSeconds: toSafeInteger(proposal.eta, 'treasuryPayoutAddressUpdateProposal.eta'),
+        targetAddress: proposal.newPayoutReceiver,
+      };
+    } catch (error) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read treasury payout receiver proposal state', {
+        cause: error instanceof Error ? error.message : String(error),
+        proposalId,
+      });
+    }
+  }
+
+  async getTreasuryClaimableBalance(): Promise<bigint> {
+    try {
+      const treasuryAddress = await this.contract.treasuryAddress();
+      return await this.contract.claimableUsdc(treasuryAddress);
+    } catch (error) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read treasury claimable balance', {
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  async hasApprovedUnpause(walletAddress: string): Promise<boolean> {
+    try {
+      return await this.contract.unpauseHasApproved(walletAddress);
+    } catch (error) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read unpause approval state', {
+        cause: error instanceof Error ? error.message : String(error),
+        walletAddress,
+      });
+    }
+  }
+
+  async hasApprovedOracleProposal(proposalId: number, walletAddress: string): Promise<boolean> {
+    try {
+      return await this.contract.oracleUpdateHasApproved(BigInt(proposalId), walletAddress);
+    } catch (error) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read oracle approval state', {
+        cause: error instanceof Error ? error.message : String(error),
+        proposalId,
+        walletAddress,
+      });
+    }
+  }
+
+  async hasApprovedTreasuryPayoutReceiverProposal(proposalId: number, walletAddress: string): Promise<boolean> {
+    try {
+      return await this.contract.treasuryPayoutAddressUpdateHasApproved(BigInt(proposalId), walletAddress);
+    } catch (error) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read treasury payout receiver approval state', {
+        cause: error instanceof Error ? error.message : String(error),
+        proposalId,
+        walletAddress,
       });
     }
   }

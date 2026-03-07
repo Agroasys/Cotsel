@@ -9,16 +9,25 @@ import { createPool, closeConnection, testConnection } from './database/index';
 import { loadConfig } from './config/env';
 import { createApp } from './app';
 import { createAuthSessionClient } from './core/authSessionClient';
+import { createPostgresAuditLogStore } from './core/auditLogStore';
 import { createPostgresGovernanceActionStore } from './core/governanceStore';
+import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore';
+import { createPostgresIdempotencyStore } from './core/idempotencyStore';
+import { GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
 import { Logger } from './logging/logger';
 import { createGovernanceRouter } from './routes/governance';
+import { createGovernanceMutationRouter } from './routes/governanceMutations';
 
 const config = loadConfig();
 const pool = createPool(config);
 const authSessionClient = createAuthSessionClient(config);
+const auditLogStore = createPostgresAuditLogStore(pool);
 const governanceActionStore = createPostgresGovernanceActionStore(pool);
+const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
 const governanceStatusService = createGovernanceStatusService(config);
+const idempotencyStore = createPostgresIdempotencyStore(pool);
+const governanceMutationService = new GovernanceMutationService(config, governanceWriteStore);
 
 function loadPackageVersion(): string {
   const candidates = [
@@ -91,6 +100,13 @@ async function bootstrap(): Promise<void> {
     config,
     governanceStatusService,
     governanceActionStore,
+  }));
+  extraRouter.use(createGovernanceMutationRouter({
+    authSessionClient,
+    config,
+    governanceReader: governanceStatusService,
+    mutationService: governanceMutationService,
+    idempotencyStore,
   }));
 
   const app = createApp(config, {

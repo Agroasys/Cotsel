@@ -4,14 +4,19 @@
   "private": true,
   "main": "dist/server.js",
   "scripts": {
+    "prelint": "npm --prefix ../sdk run build",
     "build": "tsc && npm run copy-files",
+    "prebuild": "npm --prefix ../sdk run build",
     "copy-files": "mkdir -p dist/database dist/openapi && cp src/database/schema.sql dist/database/ && cp ../docs/api/web3layer-dashboard-gateway.openapi.yml dist/openapi/",
+    "execute:governance-action": "ts-node src/executor/runGovernanceAction.ts",
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
+    "pretest": "npm --prefix ../sdk run build",
     "test": "jest --runInBand",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@agroasys/sdk": "*",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "ethers": "^6.4.0",
