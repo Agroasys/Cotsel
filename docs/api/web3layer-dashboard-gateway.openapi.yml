@@ -7,14 +7,17 @@ info:
     Contract-first API specification for the CTSP admin/operator dashboard to interact with Agroasys Web3layer.
 
     Discovery outcome:
-    - Dedicated in-repo dashboard gateway runtime: not implemented.
+    - Dedicated in-repo dashboard gateway runtime: `gateway/` Express + TypeScript service.
     - Existing repo auth/session surface: `auth` service issues Bearer session tokens.
     - Existing repo governance source of truth: `contracts/src/AgroasysEscrow.sol`, `sdk/src/modules/adminSDK.ts`, and governance runbooks.
     - Existing repo compliance source of truth: policy/runbooks only; no dedicated compliance HTTP service exists yet.
 
     This specification is therefore contract-first for the dashboard gateway, but it is grounded in existing repo truth.
 
-    UNRESOLVED DECISION: the current in-repo auth role model is `buyer | supplier | admin | oracle`. If CTSP requires distinct roles such as `compliance-reviewer`, `treasury-operator`, or `incident-commander`, the gateway must either extend the auth service role model or map session subjects to operator capabilities through a separate authorization layer.
+    Gateway authorization policy:
+    - Auth uses existing auth-service Bearer sessions.
+    - Gateway role mapping is derived from current auth role `admin`, which maps to `operator:read` and `operator:write`.
+    - All mutation endpoints additionally require `GATEWAY_ENABLE_MUTATIONS=true` and membership in `GATEWAY_WRITE_ALLOWLIST`.
 servers:
   - url: http://127.0.0.1:3600/api/dashboard-gateway/v1
     description: Local contract-first gateway base URL.
@@ -681,9 +684,11 @@ paths:
       description: |
         Contract-first endpoint for compliance decisioning that gates oracle progression.
 
-        This endpoint is grounded in `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`, which defines fail-closed enforcement and audit requirements, but there is no in-repo compliance runtime yet.
+        This endpoint is grounded in `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`, which defines fail-closed enforcement and audit requirements.
 
-        UNRESOLVED DECISION: should the gateway own the compliance decision ledger directly, or should it persist an append-only mirror of an external compliance system of record?
+        The gateway owns the append-only compliance decision ledger in its Postgres database. Provider
+        integrations remain out of scope; this endpoint records the authoritative control-plane decision
+        used by the dashboard and gateway orchestration path.
       operationId: createComplianceDecision
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -800,7 +805,7 @@ paths:
 
         This does not change on-chain trade state directly. It is an operator/compliance control that must be consumed by the gateway/oracle orchestration path.
 
-        UNRESOLVED DECISION: should blocked-trade state live in the future gateway database, in the oracle service store, or in a separate control-plane store?
+        The gateway stores oracle progression block state in its Postgres database as the canonical control-plane source of truth.
       operationId: blockOracleProgression
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -837,7 +842,9 @@ paths:
       description: |
         Contract-first off-chain control that clears a prior oracle progression block.
 
-        UNRESOLVED DECISION: should resume require the same approval policy as emergency override, or is a single authorized operator sufficient when the most recent decision is `ALLOW`?
+        Resume requires an authorized gateway write principal together with the latest effective
+        compliance decision evaluating to `ALLOW`. When the effective decision uses
+        `reasonCode=CMP_OVERRIDE_ACTIVE`, the recorded override window must still be active.
       operationId: resumeOracleProgression
       parameters:
         - $ref: '#/components/parameters/XRequestId'

@@ -9,20 +9,25 @@ import { createPool, closeConnection, testConnection } from './database/index';
 import { loadConfig } from './config/env';
 import { createApp } from './app';
 import { createAuthSessionClient } from './core/authSessionClient';
-import { createPostgresAuditLogStore } from './core/auditLogStore';
+import { createPostgresComplianceStore } from './core/complianceStore';
+import { ComplianceService } from './core/complianceService';
+import { createPostgresComplianceWriteStore } from './core/complianceWriteStore';
 import { createPostgresGovernanceActionStore } from './core/governanceStore';
 import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore';
 import { createPostgresIdempotencyStore } from './core/idempotencyStore';
 import { GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
 import { Logger } from './logging/logger';
+import { createComplianceRouter } from './routes/compliance';
 import { createGovernanceRouter } from './routes/governance';
 import { createGovernanceMutationRouter } from './routes/governanceMutations';
 
 const config = loadConfig();
 const pool = createPool(config);
 const authSessionClient = createAuthSessionClient(config);
-const auditLogStore = createPostgresAuditLogStore(pool);
+const complianceStore = createPostgresComplianceStore(pool);
+const complianceWriteStore = createPostgresComplianceWriteStore(pool, complianceStore);
+const complianceService = new ComplianceService(complianceStore, complianceWriteStore);
 const governanceActionStore = createPostgresGovernanceActionStore(pool);
 const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
 const governanceStatusService = createGovernanceStatusService(config);
@@ -95,6 +100,12 @@ async function bootstrap(): Promise<void> {
   await runMigrations(pool);
 
   const extraRouter = Router();
+  extraRouter.use(createComplianceRouter({
+    authSessionClient,
+    config,
+    complianceService,
+    idempotencyStore,
+  }));
   extraRouter.use(createGovernanceRouter({
     authSessionClient,
     config,
