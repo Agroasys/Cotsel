@@ -6,6 +6,7 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { keccak256 } from "ethereum-cryptography/keccak";
 import { bytesToHex, hexToBytes } from "ethereum-cryptography/utils";
+import { evaluateDeployVerificationSmoke } from "./lib/polkavm-deploy-verify-smoke.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
@@ -331,45 +332,23 @@ async function main() {
   const deployer = tx?.from ?? null;
   const expectedDeployer = optionalEnv("DEPLOY_VERIFY_DEPLOYER") ?? null;
 
-  const txHashMatch = normalizeHex(tx?.hash) === normalizeHex(txHash);
-  const txCreatesContract = !!tx && tx.to === null;
   const onChainCodeNonEmpty = typeof onChainCode === "string" && onChainCode !== "0x";
   const bytecodeHashMatch = normalizeHex(onChainBytecodeHash) === normalizeHex(artifactBytecodeHash);
-  const rawReceiptFound = !!receipt;
-  const rawReceiptSuccess = normalizeHex(receipt?.status) === "0x1";
-  const rawReceiptContractAddressMatch =
-    normalizeHex(receipt?.contractAddress) === normalizeHex(contractAddress);
-  // Some RPC providers do not retain old receipts, so we allow a strict fallback only when
-  // transaction lookup and on-chain bytecode verification already prove deploy correctness.
-  const receiptFallbackUsed =
-    !rawReceiptFound && !!tx && txHashMatch && txCreatesContract && onChainCodeNonEmpty && bytecodeHashMatch;
-
-  const checks = {
-    runtimeTargetDeclared: typeof runtimeTarget === "string" && runtimeTarget.length > 0,
-    runtimeClientVersionAttempted:
-      (typeof rpcClientVersion === "string" && rpcClientVersion.length > 0) ||
-      !!rpcClientVersionError,
-    chainIdMatchesExpected:
-      expectedChainId == null || normalizeHex(chainId) === normalizeHex(expectedChainId),
-    txFound: !!tx,
-    receiptFound: rawReceiptFound || receiptFallbackUsed,
-    txHashMatch,
-    receiptSuccess: rawReceiptFound ? rawReceiptSuccess : receiptFallbackUsed,
-    receiptContractAddressMatch: rawReceiptFound ? rawReceiptContractAddressMatch : receiptFallbackUsed,
-    txCreatesContract,
+  const smokeCheck = evaluateDeployVerificationSmoke({
+    runtimeTarget,
+    rpcClientVersion,
+    rpcClientVersionError,
+    chainId,
+    expectedChainId,
+    tx,
+    txHash,
+    receipt,
+    contractAddress,
     onChainCodeNonEmpty,
     bytecodeHashMatch,
-    // Only enforce deployer match when an expected deployer is configured.
-    deployerMatchesExpected:
-      expectedDeployer === null ||
-      (!!deployer && normalizeHex(deployer) === normalizeHex(expectedDeployer)),
-  };
-
-  const failedChecks = Object.entries(checks)
-    .filter(([, ok]) => !ok)
-    .map(([key]) => key);
-
-  const smokePass = failedChecks.length === 0;
+    deployer,
+    expectedDeployer,
+  });
 
   const evidence = {
     generatedAt: new Date().toISOString(),
@@ -392,19 +371,10 @@ async function main() {
     artifactPath: path.relative(repoRoot, artifactPath),
     onChainBytecodeHash,
     artifactBytecodeHash,
-    bytecodeHashMatch: checks.bytecodeHashMatch,
+    bytecodeHashMatch: smokeCheck.checks.bytecodeHashMatch,
     abiHash,
-    receiptDiagnostics: {
-      found: rawReceiptFound,
-      success: rawReceiptSuccess,
-      contractAddressMatch: rawReceiptContractAddressMatch,
-      fallbackUsed: receiptFallbackUsed,
-    },
-    smokeCheck: {
-      pass: smokePass,
-      checks,
-      failedChecks,
-    },
+    receiptDiagnostics: smokeCheck.receiptDiagnostics,
+    smokeCheck,
   };
 
   fs.mkdirSync(outDir, { recursive: true });
@@ -418,8 +388,8 @@ async function main() {
 
   console.log(JSON.stringify({ outputFile: path.relative(repoRoot, outputFile), ...evidence }, null, 2));
 
-  if (!smokePass) {
-    fail(`smoke checks failed: ${failedChecks.join(", ")}`);
+  if (!smokeCheck.pass) {
+    fail(`smoke checks failed: ${smokeCheck.failedChecks.join(", ")}`);
   }
 }
 

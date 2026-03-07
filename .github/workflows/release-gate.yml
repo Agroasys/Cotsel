@@ -751,6 +751,9 @@ jobs:
       - name: Generate contract artifacts for verification
         run: npm run -w contracts compile:polkavm
 
+      - name: Run deploy verification smoke tests
+        run: node --test scripts/tests/polkavm-deploy-verify-smoke.test.mjs
+
       - name: Verify deployed contract bytecode and deployment evidence
         run: node scripts/polkavm-deploy-verify.mjs
 
