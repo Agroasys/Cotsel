@@ -15,6 +15,9 @@ export interface GatewayConfig {
   dbPassword: string;
   authBaseUrl: string;
   authRequestTimeoutMs: number;
+  rpcUrl: string;
+  chainId: number;
+  escrowAddress: string;
   enableMutations: boolean;
   writeAllowlist: string[];
   commitSha: string;
@@ -68,16 +71,26 @@ function parseAllowlist(raw: string | undefined): string[] {
     .filter((value) => value.length > 0);
 }
 
+function assertAddress(name: string, value: string): string {
+  assert(/^0x[a-fA-F0-9]{40}$/.test(value), `${name} must be a 20-byte hex address`);
+  return value;
+}
+
 export function loadConfig(): GatewayConfig {
   const buildTime = process.env.GATEWAY_BUILD_TIME?.trim() || new Date().toISOString();
   const authBaseUrl = env('AUTH_BASE_URL').replace(/\/$/, '');
+  const rpcUrl = env('GATEWAY_RPC_URL').replace(/\/$/, '');
+  const chainId = envNumber('GATEWAY_CHAIN_ID');
+  const escrowAddress = assertAddress('GATEWAY_ESCROW_ADDRESS', env('GATEWAY_ESCROW_ADDRESS'));
   const writeAllowlist = parseAllowlist(process.env.GATEWAY_WRITE_ALLOWLIST);
   const enableMutations = envBool('GATEWAY_ENABLE_MUTATIONS', false);
   const nodeEnv = process.env.NODE_ENV || 'development';
 
   assert(authBaseUrl.startsWith('http://') || authBaseUrl.startsWith('https://'), 'AUTH_BASE_URL must be an absolute http(s) URL');
+  assert(rpcUrl.startsWith('http://') || rpcUrl.startsWith('https://'), 'GATEWAY_RPC_URL must be an absolute http(s) URL');
   assert(envNumber('PORT', 3600) > 0, 'PORT must be > 0');
   assert(envNumber('DB_PORT', 5432) > 0, 'DB_PORT must be > 0');
+  assert(chainId > 0, 'GATEWAY_CHAIN_ID must be > 0');
   assert(envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_AUTH_REQUEST_TIMEOUT_MS must be >= 1000');
 
   return {
@@ -89,6 +102,9 @@ export function loadConfig(): GatewayConfig {
     dbPassword: env('DB_PASSWORD'),
     authBaseUrl,
     authRequestTimeoutMs: envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000),
+    rpcUrl,
+    chainId,
+    escrowAddress,
     enableMutations,
     writeAllowlist,
     commitSha: process.env.GATEWAY_COMMIT_SHA?.trim() || 'local-dev',

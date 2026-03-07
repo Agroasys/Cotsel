@@ -3,16 +3,22 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { Router } from 'express';
 import { runMigrations } from './database/migrations';
 import { createPool, closeConnection, testConnection } from './database/index';
 import { loadConfig } from './config/env';
 import { createApp } from './app';
 import { createAuthSessionClient } from './core/authSessionClient';
+import { createPostgresGovernanceActionStore } from './core/governanceStore';
+import { createGovernanceStatusService } from './core/governanceStatusService';
 import { Logger } from './logging/logger';
+import { createGovernanceRouter } from './routes/governance';
 
 const config = loadConfig();
 const pool = createPool(config);
 const authSessionClient = createAuthSessionClient(config);
+const governanceActionStore = createPostgresGovernanceActionStore(pool);
+const governanceStatusService = createGovernanceStatusService(config);
 
 function loadPackageVersion(): string {
   const candidates = [
@@ -60,6 +66,17 @@ async function readinessCheck() {
     });
   }
 
+  try {
+    await governanceStatusService.checkReadiness();
+    dependencies.push({ name: 'chain-rpc', status: 'ok' });
+  } catch (error) {
+    dependencies.push({
+      name: 'chain-rpc',
+      status: 'unavailable',
+      detail: error instanceof Error ? error.message : 'Chain RPC unavailable',
+    });
+  }
+
   return dependencies;
 }
 
@@ -68,11 +85,20 @@ async function bootstrap(): Promise<void> {
   await testConnection(pool);
   await runMigrations(pool);
 
+  const extraRouter = Router();
+  extraRouter.use(createGovernanceRouter({
+    authSessionClient,
+    config,
+    governanceStatusService,
+    governanceActionStore,
+  }));
+
   const app = createApp(config, {
     version: loadPackageVersion(),
     commitSha: config.commitSha,
     buildTime: config.buildTime,
     readinessCheck,
+    extraRouter,
   });
 
   const server = app.listen(config.port, () => {

@@ -1,0 +1,240 @@
+/**
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { Contract, JsonRpcProvider } from 'ethers';
+import { GatewayConfig } from '../config/env';
+import { GatewayError } from '../errors';
+
+export interface GovernanceStatusSnapshot {
+  paused: boolean;
+  claimsPaused: boolean;
+  oracleActive: boolean;
+  oracleAddress: string;
+  treasuryAddress: string;
+  treasuryPayoutAddress: string;
+  governanceApprovalsRequired: number;
+  governanceTimelockSeconds: number;
+  requiredAdminCount: number;
+  hasActiveUnpauseProposal: boolean;
+  activeUnpauseApprovals: number;
+  activeOracleProposalIds: number[];
+  activeTreasuryPayoutReceiverProposalIds: number[];
+}
+
+interface UnpauseProposal {
+  approvalCount: bigint;
+  executed: boolean;
+  createdAt: bigint;
+  proposer: string;
+}
+
+interface OracleUpdateProposal {
+  newOracle: string;
+  approvalCount: bigint;
+  executed: boolean;
+  createdAt: bigint;
+  eta: bigint;
+  proposer: string;
+  emergencyFastTrack: boolean;
+}
+
+interface TreasuryPayoutReceiverProposal {
+  newPayoutReceiver: string;
+  approvalCount: bigint;
+  executed: boolean;
+  createdAt: bigint;
+  eta: bigint;
+  proposer: string;
+}
+
+export interface EscrowGovernanceReader {
+  checkReadiness(): Promise<void>;
+  getGovernanceStatus(): Promise<GovernanceStatusSnapshot>;
+}
+
+type GovernanceContractShape = {
+  paused(): Promise<boolean>;
+  claimsPaused(): Promise<boolean>;
+  oracleActive(): Promise<boolean>;
+  oracleAddress(): Promise<string>;
+  treasuryAddress(): Promise<string>;
+  treasuryPayoutAddress(): Promise<string>;
+  governanceApprovals(): Promise<bigint>;
+  governanceTimelock(): Promise<bigint>;
+  requiredApprovals(): Promise<bigint>;
+  hasActiveUnpauseProposal(): Promise<boolean>;
+  unpauseProposal(): Promise<UnpauseProposal>;
+  oracleUpdateCounter(): Promise<bigint>;
+  oracleUpdateProposals(id: bigint): Promise<OracleUpdateProposal>;
+  oracleUpdateProposalExpiresAt(id: bigint): Promise<bigint>;
+  oracleUpdateProposalCancelled(id: bigint): Promise<boolean>;
+  treasuryPayoutAddressUpdateCounter(): Promise<bigint>;
+  treasuryPayoutAddressUpdateProposals(id: bigint): Promise<TreasuryPayoutReceiverProposal>;
+  treasuryPayoutAddressUpdateProposalExpiresAt(id: bigint): Promise<bigint>;
+  treasuryPayoutAddressUpdateProposalCancelled(id: bigint): Promise<boolean>;
+};
+
+const ESCROW_GOVERNANCE_READ_ABI = [
+  'function paused() view returns (bool)',
+  'function claimsPaused() view returns (bool)',
+  'function oracleActive() view returns (bool)',
+  'function oracleAddress() view returns (address)',
+  'function treasuryAddress() view returns (address)',
+  'function treasuryPayoutAddress() view returns (address)',
+  'function governanceApprovals() view returns (uint256)',
+  'function governanceTimelock() view returns (uint256)',
+  'function requiredApprovals() view returns (uint256)',
+  'function hasActiveUnpauseProposal() view returns (bool)',
+  'function unpauseProposal() view returns (uint256 approvalCount, bool executed, uint256 createdAt, address proposer)',
+  'function oracleUpdateCounter() view returns (uint256)',
+  'function oracleUpdateProposals(uint256 proposalId) view returns (address newOracle, uint256 approvalCount, bool executed, uint256 createdAt, uint256 eta, address proposer, bool emergencyFastTrack)',
+  'function oracleUpdateProposalExpiresAt(uint256 proposalId) view returns (uint256)',
+  'function oracleUpdateProposalCancelled(uint256 proposalId) view returns (bool)',
+  'function treasuryPayoutAddressUpdateCounter() view returns (uint256)',
+  'function treasuryPayoutAddressUpdateProposals(uint256 proposalId) view returns (address newPayoutReceiver, uint256 approvalCount, bool executed, uint256 createdAt, uint256 eta, address proposer)',
+  'function treasuryPayoutAddressUpdateProposalExpiresAt(uint256 proposalId) view returns (uint256)',
+  'function treasuryPayoutAddressUpdateProposalCancelled(uint256 proposalId) view returns (bool)',
+] as const;
+
+function toSafeInteger(value: bigint, field: string): number {
+  const numeric = Number(value);
+  if (!Number.isSafeInteger(numeric)) {
+    throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', `On-chain field '${field}' exceeds safe integer range`);
+  }
+
+  return numeric;
+}
+
+async function collectActiveProposalIds(
+  counter: bigint,
+  loadProposal: (proposalId: bigint) => Promise<{ createdAt: bigint; executed: boolean }>,
+  loadExpiry: (proposalId: bigint) => Promise<bigint>,
+  loadCancelled: (proposalId: bigint) => Promise<boolean>,
+): Promise<number[]> {
+  const ids = Array.from({ length: toSafeInteger(counter, 'proposalCounter') }, (_, index) => BigInt(index));
+  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+
+  const snapshots = await Promise.all(ids.map(async (proposalId) => {
+    const [proposal, expiresAt, cancelled] = await Promise.all([
+      loadProposal(proposalId),
+      loadExpiry(proposalId),
+      loadCancelled(proposalId),
+    ]);
+
+    const active = proposal.createdAt > 0n && !proposal.executed && !cancelled && expiresAt >= nowSeconds;
+    return active ? toSafeInteger(proposalId, 'proposalId') : null;
+  }));
+
+  return snapshots.filter((value): value is number => value !== null);
+}
+
+export class GovernanceStatusService implements EscrowGovernanceReader {
+  constructor(
+    private readonly provider: JsonRpcProvider,
+    private readonly contract: GovernanceContractShape,
+    private readonly expectedChainId: number,
+  ) {}
+
+  async checkReadiness(): Promise<void> {
+    const [network, paused] = await Promise.all([
+      this.provider.getNetwork(),
+      this.contract.paused(),
+    ]);
+
+    if (Number(network.chainId) !== this.expectedChainId) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'RPC endpoint chain id does not match gateway configuration', {
+        expectedChainId: this.expectedChainId,
+        actualChainId: Number(network.chainId),
+      });
+    }
+
+    if (typeof paused !== 'boolean') {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Escrow contract readiness probe returned invalid data');
+    }
+  }
+
+  async getGovernanceStatus(): Promise<GovernanceStatusSnapshot> {
+    try {
+      const oracleCounterPromise = this.contract.oracleUpdateCounter();
+      const treasuryCounterPromise = this.contract.treasuryPayoutAddressUpdateCounter();
+
+      const [
+        paused,
+        claimsPaused,
+        oracleActive,
+        oracleAddress,
+        treasuryAddress,
+        treasuryPayoutAddress,
+        governanceApprovals,
+        governanceTimelock,
+        requiredApprovals,
+        hasActiveUnpauseProposal,
+        unpauseProposal,
+        oracleUpdateCounter,
+        treasuryPayoutReceiverCounter,
+      ] = await Promise.all([
+        this.contract.paused(),
+        this.contract.claimsPaused(),
+        this.contract.oracleActive(),
+        this.contract.oracleAddress(),
+        this.contract.treasuryAddress(),
+        this.contract.treasuryPayoutAddress(),
+        this.contract.governanceApprovals(),
+        this.contract.governanceTimelock(),
+        this.contract.requiredApprovals(),
+        this.contract.hasActiveUnpauseProposal(),
+        this.contract.unpauseProposal(),
+        oracleCounterPromise,
+        treasuryCounterPromise,
+      ]);
+
+      const [
+        activeOracleProposalIds,
+        activeTreasuryPayoutReceiverProposalIds,
+      ] = await Promise.all([
+        collectActiveProposalIds(
+          oracleUpdateCounter,
+          (proposalId) => this.contract.oracleUpdateProposals(proposalId),
+          (proposalId) => this.contract.oracleUpdateProposalExpiresAt(proposalId),
+          (proposalId) => this.contract.oracleUpdateProposalCancelled(proposalId),
+        ),
+        collectActiveProposalIds(
+          treasuryPayoutReceiverCounter,
+          (proposalId) => this.contract.treasuryPayoutAddressUpdateProposals(proposalId),
+          (proposalId) => this.contract.treasuryPayoutAddressUpdateProposalExpiresAt(proposalId),
+          (proposalId) => this.contract.treasuryPayoutAddressUpdateProposalCancelled(proposalId),
+        ),
+      ]);
+
+      return {
+        paused,
+        claimsPaused,
+        oracleActive,
+        oracleAddress,
+        treasuryAddress,
+        treasuryPayoutAddress,
+        governanceApprovalsRequired: toSafeInteger(governanceApprovals, 'governanceApprovals'),
+        governanceTimelockSeconds: toSafeInteger(governanceTimelock, 'governanceTimelock'),
+        requiredAdminCount: toSafeInteger(requiredApprovals, 'requiredApprovals'),
+        hasActiveUnpauseProposal,
+        activeUnpauseApprovals: hasActiveUnpauseProposal ? toSafeInteger(unpauseProposal.approvalCount, 'unpauseProposal.approvalCount') : 0,
+        activeOracleProposalIds,
+        activeTreasuryPayoutReceiverProposalIds,
+      };
+    } catch (error) {
+      if (error instanceof GatewayError) {
+        throw error;
+      }
+
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read governance status from chain', {
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+}
+
+export function createGovernanceStatusService(config: GatewayConfig): GovernanceStatusService {
+  const provider = new JsonRpcProvider(config.rpcUrl);
+  const contract = new Contract(config.escrowAddress, ESCROW_GOVERNANCE_READ_ABI, provider) as unknown as GovernanceContractShape;
+  return new GovernanceStatusService(provider, contract, config.chainId);
+}
