@@ -4,6 +4,7 @@
 import { Pool } from 'pg';
 import { GatewayError } from '../errors';
 import { AuditLogEntry, AuditLogStore } from '../core/auditLogStore';
+import { withTimeout } from '../core/downstreamTimeout';
 import {
   GovernanceActionRecord,
   GovernanceActionStatus,
@@ -128,6 +129,7 @@ export class GovernanceExecutorService {
     private readonly statusReader: GovernanceMutationPreflightReader,
     private readonly executionLock: GovernanceExecutionLock,
     private readonly chainExecutor: GovernanceChainExecutor,
+    private readonly executionTimeoutMs = 45000,
   ) {}
 
   async executeAction(actionId: string, requestId: string, correlationId?: string | null): Promise<GovernanceActionRecord> {
@@ -141,7 +143,24 @@ export class GovernanceExecutorService {
         return existing;
       }
 
-      const executorWallet = await this.chainExecutor.getSignerAddress();
+      let executorWallet: string | null = null;
+      try {
+        executorWallet = await withTimeout(
+          this.chainExecutor.getSignerAddress(),
+          this.executionTimeoutMs,
+          'Timed out while resolving governance executor signer',
+          {
+            details: {
+              upstream: 'governance-executor',
+              operation: 'getSignerAddress',
+              actionId,
+            },
+          },
+        );
+      } catch (error) {
+        return this.persistFailure(existing, requestId, correlationId, executorWallet, error);
+      }
+
       await this.auditLogStore.append({
         eventType: 'governance.action.execution.started',
         route: '/internal/executor/governance-actions/:actionId',
@@ -160,34 +179,20 @@ export class GovernanceExecutorService {
 
       let execution: GovernanceExecutionResult;
       try {
-        execution = await this.chainExecutor.execute(existing);
-      } catch (error) {
-        const sanitized = sanitizeError(error);
-        const failedRecord: GovernanceActionRecord = {
-          ...existing,
-          status: 'failed',
-          errorCode: sanitized.code,
-          errorMessage: sanitized.message,
-          executedAt: new Date().toISOString(),
-        };
-
-        const auditEntry: AuditLogEntry = {
-          eventType: 'governance.action.execution.failed',
-          route: '/internal/executor/governance-actions/:actionId',
-          method: 'EXECUTE',
-          requestId,
-          correlationId: correlationId ?? null,
-          actorWalletAddress: executorWallet,
-          actorRole: 'executor',
-          status: 'failed',
-          metadata: {
-            actionId,
-            errorCode: sanitized.code,
-            errorMessage: sanitized.message,
+        execution = await withTimeout(
+          this.chainExecutor.execute(existing),
+          this.executionTimeoutMs,
+          'Timed out while executing queued governance action',
+          {
+            details: {
+              upstream: 'governance-executor',
+              operation: 'execute',
+              actionId,
+            },
           },
-        };
-
-        return this.writeStore.saveActionWithAudit(failedRecord, auditEntry);
+        );
+      } catch (error) {
+        return this.persistFailure(existing, requestId, correlationId, executorWallet, error);
       }
 
       const persisted = await this.persistExecution(existing, execution);
@@ -222,6 +227,41 @@ export class GovernanceExecutorService {
         });
       }
     });
+  }
+
+  private async persistFailure(
+    existing: GovernanceActionRecord,
+    requestId: string,
+    correlationId: string | null | undefined,
+    executorWallet: string | null,
+    error: unknown,
+  ): Promise<GovernanceActionRecord> {
+    const sanitized = sanitizeError(error);
+    const failedRecord: GovernanceActionRecord = {
+      ...existing,
+      status: 'failed',
+      errorCode: sanitized.code,
+      errorMessage: sanitized.message,
+      executedAt: new Date().toISOString(),
+    };
+
+    const auditEntry: AuditLogEntry = {
+      eventType: 'governance.action.execution.failed',
+      route: '/internal/executor/governance-actions/:actionId',
+      method: 'EXECUTE',
+      requestId,
+      correlationId: correlationId ?? null,
+      actorWalletAddress: executorWallet,
+      actorRole: 'executor',
+      status: 'failed',
+      metadata: {
+        actionId: existing.actionId,
+        errorCode: sanitized.code,
+        errorMessage: sanitized.message,
+      },
+    };
+
+    return this.writeStore.saveActionWithAudit(failedRecord, auditEntry);
   }
 
   private async persistExecution(

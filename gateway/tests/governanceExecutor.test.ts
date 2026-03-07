@@ -251,6 +251,36 @@ describe('GovernanceExecutorService', () => {
     expect(auditLogStore.entries[1].eventType).toBe('governance.action.execution.failed');
   });
 
+  test('marks queued actions failed when signer resolution times out before execution', async () => {
+    const store = createInMemoryGovernanceActionStore([
+      buildAction({
+        actionId: 'action-signer-timeout',
+        category: 'pause',
+        contractMethod: 'pause',
+      }),
+    ]);
+    const auditLogStore = createInMemoryAuditLogStore();
+    const service = new GovernanceExecutorService(
+      store,
+      createPassthroughGovernanceWriteStore(store, auditLogStore),
+      auditLogStore,
+      createReader(),
+      createInMemoryGovernanceExecutionLock(),
+      createExecutor({
+        getSignerAddress: jest.fn().mockReturnValue(new Promise(() => undefined)),
+      }),
+      10,
+    );
+
+    const result = await service.executeAction('action-signer-timeout', 'executor-req-timeout');
+
+    expect(result.status).toBe('failed');
+    expect(result.errorCode).toBe('EXECUTION_FAILED');
+    expect(result.errorMessage).toContain('Timed out while resolving governance executor signer');
+    expect(auditLogStore.entries).toHaveLength(1);
+    expect(auditLogStore.entries[0].eventType).toBe('governance.action.execution.failed');
+  });
+
   test('does not re-execute actions that are no longer queued', async () => {
     const store = createInMemoryGovernanceActionStore([
       buildAction({

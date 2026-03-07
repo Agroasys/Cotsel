@@ -7,6 +7,7 @@ import { GatewayConfig, loadConfig } from './env';
 export interface GovernanceExecutorConfig extends GatewayConfig {
   usdcAddress: string;
   executorPrivateKey: string;
+  executionTimeoutMs: number;
 }
 
 function env(name: string): string {
@@ -27,10 +28,13 @@ function assertPrivateKey(name: string, value: string): string {
 
 export function loadExecutorConfig(baseConfig?: GatewayConfig): GovernanceExecutorConfig {
   const gatewayConfig = baseConfig ?? loadConfig();
+  const executionTimeoutMs = Number.parseInt(process.env.GATEWAY_EXECUTOR_TIMEOUT_MS || '45000', 10);
+  assert(Number.isInteger(executionTimeoutMs) && executionTimeoutMs >= 1000, 'GATEWAY_EXECUTOR_TIMEOUT_MS must be >= 1000');
 
   return {
     ...gatewayConfig,
     usdcAddress: assertAddress('GATEWAY_USDC_ADDRESS', env('GATEWAY_USDC_ADDRESS')),
     executorPrivateKey: assertPrivateKey('GATEWAY_EXECUTOR_PRIVATE_KEY', env('GATEWAY_EXECUTOR_PRIVATE_KEY')),
+    executionTimeoutMs,
   };
 }

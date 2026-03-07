@@ -26,6 +26,7 @@ jobs:
       reconciliation: ${{ steps.filter.outputs.reconciliation }}
       ricardian: ${{ steps.filter.outputs.ricardian }}
       treasury: ${{ steps.filter.outputs.treasury }}
+      gateway: ${{ steps.filter.outputs.gateway }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -76,6 +77,66 @@ jobs:
               - 'ricardian/**'
             treasury:
               - 'treasury/**'
+            gateway:
+              - 'gateway/**'
+              - 'docs/api/web3layer-dashboard-gateway.openapi.yml'
+              - 'docs/runbooks/dashboard-api-gateway-boundary.md'
+              - 'docs/runbooks/dashboard-gateway-operations.md'
+
+  gateway:
+    name: ci/gateway
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.gateway == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run gateway validation suite
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          mkdir -p ci-reports
+          report="ci-reports/gateway-validation.txt"
+          fail=0
+
+          run_check() {
+            local label="$1"
+            shift
+            echo "[$label] command: $*" | tee -a "$report"
+            if "$@" 2>&1 | tee -a "$report"; then
+              echo "[$label] PASS" | tee -a "$report"
+            else
+              echo "[$label] FAIL" | tee -a "$report"
+              fail=1
+            fi
+            echo "" >> "$report"
+          }
+
+          run_check gateway-lint npm run -w gateway lint
+          run_check gateway-openapi-and-unit-tests npm run -w gateway test
+          run_check gateway-build npm run -w gateway build
+
+          if [[ "$fail" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Upload gateway validation report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: ci-report-gateway-validation
+          path: ci-reports/gateway-validation.txt
 
   docs-profile-guard:
     name: ci/docs-profile-guard

@@ -2,11 +2,11 @@
 
 ## Scope and Non-goals
 - Define a deterministic monitoring and alerting baseline for in-repo pilot operations.
-- In scope services: `oracle`, `indexer`, `reconciliation`, `treasury`, `ricardian`, `notifications`.
+- In scope services: `oracle`, `indexer`, `reconciliation`, `treasury`, `ricardian`, `notifications`, `gateway`.
 - This runbook defines required signals, thresholds, escalation rules, and evidence capture.
 - Non-goal: this repository does not configure or provision an external observability SaaS stack.
 - Non-goal: this runbook does not add runtime instrumentation or change protocol/on-chain behavior.
-- Gateway note: no dedicated gateway runtime exists in this repository; service-directed behavior is documented in `docs/runbooks/api-gateway-boundary.md`.
+- Gateway note: the dedicated dashboard operator gateway now exists in `gateway/`; service-directed ingress/orchestration rules remain documented in `docs/runbooks/api-gateway-boundary.md`.
 
 ## Service Reality Mapping
 Runtime evidence sources:
@@ -23,6 +23,7 @@ Services in scope:
 - `treasury`
 - `ricardian`
 - `notifications`
+- `gateway`
 
 Runtime mapping:
 
@@ -34,6 +35,7 @@ Runtime mapping:
 | treasury | `treasury` container | `treasury` container | `scripts/docker-services.sh health <profile>` (`/api/treasury/v1/health`) |
 | ricardian | `ricardian` container | `ricardian` container | `scripts/docker-services.sh health <profile>` (`/api/ricardian/v1/health`) |
 | notifications | library inside oracle/reconciliation flows (no standalone container) | same | `scripts/notifications-gate.sh <profile>` report (`reports/notifications/<profile>.json`) |
+| gateway | `gateway` container | `gateway` container | `scripts/docker-services.sh health <profile>` (`/api/dashboard-gateway/v1/healthz`) + direct `/readyz` probe when auth/RPC are expected |
 
 ## Service SLO Baseline
 Pilot defaults approved in decision issue `#199`.
@@ -46,6 +48,7 @@ Pilot defaults approved in decision issue `#199`.
 | treasury | 99.9% monthly | Treasury health endpoint remains healthy in active profile | Repeated breach pauses releases until fixed | `scripts/docker-services.sh health <profile>` |
 | ricardian | 99.9% monthly | Ricardian health endpoint remains healthy in active profile | Repeated breach pauses releases until fixed | `scripts/docker-services.sh health <profile>` |
 | notifications | 99.9% monthly | Critical-path gate validation remains passing per profile run | Repeated breach pauses releases until fixed | `scripts/notifications-gate.sh <profile>` |
+| gateway | 99.9% monthly | `/readyz` remains green when auth/RPC/Postgres dependencies are configured for the active profile | Repeated breach pauses releases until fixed | `curl /api/dashboard-gateway/v1/readyz` + `scripts/docker-services.sh health <profile>` |
 
 ## Alert Matrix
 | Alert ID | Service | Signal / Threshold | Severity | Source | First Response | Escalation Owner | Evidence Command |
@@ -57,6 +60,7 @@ Pilot defaults approved in decision issue `#199`.
 | `treasury_health_unhealthy` | treasury | Treasury health endpoint fails | HIGH | `scripts/docker-services.sh health staging-e2e-real` | Capture treasury logs and DB connectivity signal | Ops/Engineering On-Call | `scripts/docker-services.sh logs staging-e2e-real treasury | tail -n 20` |
 | `ricardian_health_unhealthy` | ricardian | Ricardian health endpoint fails | HIGH | `scripts/docker-services.sh health staging-e2e-real` | Capture ricardian logs and DB connectivity signal | Ops/Engineering On-Call | `scripts/docker-services.sh logs staging-e2e-real ricardian | tail -n 20` |
 | `notifications_gate_failed` | notifications | Notification gate output fails deterministic route/template checks | HIGH | `scripts/notifications-gate.sh staging-e2e-real` + report JSON | Rebuild notifications workspace and rerun gate | Ops/Engineering On-Call | `npm run -w notifications build && scripts/notifications-gate.sh staging-e2e-real` |
+| `gateway_readyz_unhealthy` | gateway | Gateway `/readyz` reports Postgres, auth, or chain RPC unavailable | HIGH | direct `/readyz` probe + gateway logs | Capture gateway status and dependent readiness failures | Ops/Engineering On-Call | `curl -fsS http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/readyz && scripts/docker-services.sh logs staging-e2e-real gateway | tail -n 20` |
 
 ## Severity Routing and Escalation Policy
 Approved pilot routing from decision issue `#199`:
@@ -111,6 +115,7 @@ scripts/docker-services.sh logs staging-e2e-real reconciliation | tail -n 20
 scripts/docker-services.sh logs staging-e2e-real treasury | tail -n 20
 scripts/docker-services.sh logs staging-e2e-real ricardian | tail -n 20
 scripts/docker-services.sh logs staging-e2e-real indexer-graphql | tail -n 20
+scripts/docker-services.sh logs staging-e2e-real gateway | tail -n 20
 ```
 
 Settlement progress stale-check query (10-minute threshold):

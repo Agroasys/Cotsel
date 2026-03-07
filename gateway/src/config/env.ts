@@ -16,6 +16,7 @@ export interface GatewayConfig {
   authBaseUrl: string;
   authRequestTimeoutMs: number;
   rpcUrl: string;
+  rpcReadTimeoutMs: number;
   chainId: number;
   escrowAddress: string;
   enableMutations: boolean;
@@ -92,6 +93,7 @@ export function loadConfig(): GatewayConfig {
   assert(envNumber('DB_PORT', 5432) > 0, 'DB_PORT must be > 0');
   assert(chainId > 0, 'GATEWAY_CHAIN_ID must be > 0');
   assert(envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_AUTH_REQUEST_TIMEOUT_MS must be >= 1000');
+  assert(envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000) >= 1000, 'GATEWAY_RPC_READ_TIMEOUT_MS must be >= 1000');
 
   return {
     port: envNumber('PORT', 3600),
@@ -103,6 +105,7 @@ export function loadConfig(): GatewayConfig {
     authBaseUrl,
     authRequestTimeoutMs: envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000),
     rpcUrl,
+    rpcReadTimeoutMs: envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000),
     chainId,
     escrowAddress,
     enableMutations,
