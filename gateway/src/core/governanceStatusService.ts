@@ -21,7 +21,6 @@ export interface GovernanceStatusSnapshot {
   activeTreasuryPayoutReceiverProposalIds: number[];
 }
 
-<<<<<<< HEAD
 export interface UnpauseProposalState {
   hasActiveProposal: boolean;
   approvalCount: number;
