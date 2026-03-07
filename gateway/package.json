@@ -1,0 +1,36 @@
+{
+  "name": "gateway",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc && npm run copy-files",
+    "copy-files": "mkdir -p dist/database dist/openapi && cp src/database/schema.sql dist/database/ && cp ../docs/api/web3layer-dashboard-gateway.openapi.yml dist/openapi/",
+    "start": "node dist/server.js",
+    "dev": "ts-node src/server.ts",
+    "test": "jest --runInBand",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "pg": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.3.3",
+    "@types/pg": "^8.18.0",
+    "ajv": "^8.17.1",
+    "jest": "^30.2.0",
+    "js-yaml": "^4.1.0",
+    "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
+    "typescript": ">=4.5.0"
+  },
+  "license": "Apache-2.0"
+}

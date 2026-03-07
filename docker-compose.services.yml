@@ -186,6 +186,43 @@ services:
     ports:
       - "${RICARDIAN_PORT:-3100}:${RICARDIAN_PORT:-3100}"
 
+  gateway:
+    profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    environment:
+      PORT: "${GATEWAY_PORT}"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: "${GATEWAY_DB_NAME}"
+      DB_USER: "${POSTGRES_USER}"
+      DB_PASSWORD: "${POSTGRES_PASSWORD}"
+      AUTH_BASE_URL: "${GATEWAY_AUTH_BASE_URL}"
+      GATEWAY_AUTH_REQUEST_TIMEOUT_MS: "${GATEWAY_AUTH_REQUEST_TIMEOUT_MS}"
+      GATEWAY_ENABLE_MUTATIONS: "${GATEWAY_ENABLE_MUTATIONS}"
+      GATEWAY_WRITE_ALLOWLIST: "${GATEWAY_WRITE_ALLOWLIST}"
+      GATEWAY_COMMIT_SHA: "${GATEWAY_COMMIT_SHA}"
+      GATEWAY_BUILD_TIME: "${GATEWAY_BUILD_TIME}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${GATEWAY_PORT:-3600}:${GATEWAY_PORT:-3600}"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - |
+          const p = process.env.PORT || '3600';
+          fetch('http://127.0.0.1:' + p + '/api/dashboard-gateway/v1/healthz')
+            .then((response) => process.exit(response.ok ? 0 : 1))
+            .catch(() => process.exit(1));
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
   treasury:
     profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
     build:
