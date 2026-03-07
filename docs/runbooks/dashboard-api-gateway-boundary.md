@@ -1,15 +1,16 @@
 # Dashboard API Gateway Boundary
 
 ## Purpose
-Define the contract boundary for the CTSP admin/operator dashboard when it interacts with Agroasys Web3layer through a future Web2 gateway.
+Define the contract boundary for the CTSP admin/operator dashboard when it interacts with Agroasys Web3layer through the dedicated `gateway/` Web2 service.
 
-This document is the operational companion to `docs/api/web3layer-dashboard-gateway.openapi.yml`.
+This document is the boundary companion to `docs/api/web3layer-dashboard-gateway.openapi.yml`.
+For day-2 operations, deployment checks, logging/tracing, and rollback procedure, use `docs/runbooks/dashboard-gateway-operations.md`.
 
 ## Discovery outcome
-- A dedicated in-repo dashboard gateway runtime is not implemented yet.
-- Existing repo HTTP services are service-scoped (`auth`, `oracle`, `ricardian`, `treasury`).
-- Governance actions are currently grounded in the escrow contract and `sdk/src/modules/adminSDK.ts`.
-- Compliance is currently policy and audit logic documented in runbooks, not a dedicated runtime service.
+- The dedicated in-repo dashboard gateway runtime exists as `gateway/` (Express + TypeScript).
+- Existing repo HTTP services remain service-scoped (`auth`, `oracle`, `ricardian`, `treasury`).
+- Governance actions are grounded in the escrow contract and `sdk/src/modules/adminSDK.ts`.
+- Compliance is implemented in the gateway as an off-chain append-only decision ledger plus oracle progression block/resume control plane.
 
 ## Boundary summary
 
@@ -27,7 +28,7 @@ Dashboard responsibilities:
 Gateway responsibilities:
 - authenticate and authorize operator actions
 - persist audit metadata for every mutation
-- translate governance requests into AdminSDK or direct contract calls
+- translate governance requests into durable queued actions and executor-backed AdminSDK calls
 - assemble read models from chain, indexer, treasury, ricardian, and future compliance storage
 - enforce idempotency, request tracing, and stable error shapes
 
@@ -69,13 +70,13 @@ Primary source of truth:
 - `sdk/src/modules/adminSDK.ts`
 
 ### Off-chain policy and audit controls
-These do not currently exist as a dedicated runtime service in this repo and are contract-first in the gateway spec:
+These exist in the gateway runtime and remain off-chain controls:
 - compliance decision records (`ALLOW`, `DENY`), with emergency override carried by `reasonCode=CMP_OVERRIDE_ACTIVE`
 - compliance decision history for a trade
 - block oracle progression for a trade
 - resume oracle progression for a trade
 
-These controls must be stored in an append-only audit model and consumed by the oracle/gateway orchestration layer.
+These controls are stored in gateway-owned Postgres ledgers and consumed by the oracle/gateway orchestration layer.
 
 Primary source of truth:
 - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
@@ -87,6 +88,8 @@ Primary source of truth:
 The gateway should align with the repo’s existing auth service model:
 - login flow: wallet-signature challenge/response
 - session token: `Authorization: Bearer <sessionId>`
+- gateway role mapping: auth role `admin` -> `operator:read` + `operator:write`
+- gateway write safety gate: mutations additionally require `GATEWAY_ENABLE_MUTATIONS=true` and caller membership in `GATEWAY_WRITE_ALLOWLIST`
 
 Source of truth:
 - `auth/src/api/controller.ts`
@@ -114,6 +117,10 @@ Every gateway action must be verifiable through one or more of:
   - verify gateway action status
   - verify transaction hash
   - verify `Paused`, `ClaimsPaused`, or `ClaimsUnpaused` event
+- Governance mutation execution model:
+  - gateway persists action as `QUEUED`
+  - executor process runs `npm run -w gateway execute:governance-action -- <actionId>`
+  - verify resulting action transition, audit entries, and tx hash
 - Oracle recovery:
   - verify `OracleDisabledEmergency`, `OracleUpdateProposed`, `OracleUpdateApproved`, `OracleUpdated`
   - verify `oracleAddress` and `oracleActive` read model
@@ -150,14 +157,23 @@ The gateway must persist, at minimum:
 - approved by, if applicable
 - resulting tx hash / block number, if applicable
 
-## Known unresolved decisions
-- The auth service currently models `buyer | supplier | admin | oracle`; dedicated operator roles for compliance/treasury/incident workflows are not represented yet.
-- The canonical storage owner for compliance decisions is not implemented yet.
-- The canonical storage owner for blocked-trade / resume-oracle controls is not implemented yet.
-- The gateway read model will likely need direct typechain/contract reads for proposal and status state because the current generic SDK client does not expose all governance reads.
+## Resolved design choices
+- The gateway is the canonical owner of dashboard-facing ledgers:
+  - `governance_actions`
+  - `compliance_decisions`
+  - `oracle_progression_blocks`
+  - `idempotency_keys`
+  - `audit_log`
+- Governance execution uses queued execution; the gateway does not hold private keys.
+- Governance status and proposal reads use direct chain reads because the current generic SDK client does not expose the full read surface.
+- Compliance decisions are append-only and resume is permitted only when policy conditions are satisfied by the latest effective `ALLOW` decision.
+
+## Remaining external deployment dependency
+- Concrete staging deployment coordinates (gateway base URL, auth URL binding, and safe mutation scope values) remain tracked operationally and must be recorded before staging connected-mode validation.
 
 ## References
 - `docs/api/web3layer-dashboard-gateway.openapi.yml`
+- `docs/runbooks/dashboard-gateway-operations.md`
 - `docs/runbooks/api-gateway-boundary.md`
 - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
 - `docs/runbooks/emergency-disable-unpause.md`

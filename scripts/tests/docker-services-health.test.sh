@@ -82,13 +82,13 @@ case "$command" in
     if [[ "${1:-}" == "--services" ]]; then
       case "$profile" in
         local-dev)
-          printf '%s\n' postgres redis indexer oracle reconciliation ricardian treasury
+          printf '%s\n' postgres redis indexer oracle reconciliation ricardian treasury gateway
           ;;
         infra)
           printf '%s\n' postgres redis
           ;;
         staging-e2e|staging-e2e-real)
-          printf '%s\n' postgres redis indexer-pipeline indexer-graphql oracle reconciliation ricardian treasury
+          printf '%s\n' postgres redis indexer-pipeline indexer-graphql oracle reconciliation ricardian treasury gateway
           ;;
       esac
       exit 0
@@ -115,6 +115,7 @@ EOF
 cat > "$tmp_dir/curl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+printf '%s\n' "$*" >> "${DOCKER_MOCK_LOG_FILE:?}"
 exit 0
 EOF
 
@@ -136,6 +137,12 @@ local_log="$tmp_dir/local.log"
 reconciliation_wait_count="$(cat "$state_dir/reconciliation_ps_q_count")"
 if (( reconciliation_wait_count < 3 )); then
   echo "expected health check to poll reconciliation readiness; observed polls=${reconciliation_wait_count}" >&2
+  exit 1
+fi
+
+if ! grep -q "http://127.0.0.1:3600/api/dashboard-gateway/v1/healthz" "$local_log"; then
+  echo "expected local-dev health check to probe gateway health endpoint" >&2
+  cat "$local_log" >&2
   exit 1
 fi
 

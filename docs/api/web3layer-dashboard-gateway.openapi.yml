@@ -18,6 +18,7 @@ info:
     - Auth uses existing auth-service Bearer sessions.
     - Gateway role mapping is derived from current auth role `admin`, which maps to `operator:read` and `operator:write`.
     - All mutation endpoints additionally require `GATEWAY_ENABLE_MUTATIONS=true` and membership in `GATEWAY_WRITE_ALLOWLIST`.
+    - Governance mutations are accepted into a durable queue; a separate executor process performs the AdminSDK-backed chain execution and writes the final outcome back to the action ledger.
 servers:
   - url: http://127.0.0.1:3600/api/dashboard-gateway/v1
     description: Local contract-first gateway base URL.

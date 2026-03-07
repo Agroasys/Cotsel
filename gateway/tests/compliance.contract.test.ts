@@ -25,6 +25,7 @@ const baseConfig: GatewayConfig = {
   authBaseUrl: 'http://127.0.0.1:3005',
   authRequestTimeoutMs: 5000,
   rpcUrl: 'http://127.0.0.1:8545',
+  rpcReadTimeoutMs: 8000,
   chainId: 31337,
   escrowAddress: '0x0000000000000000000000000000000000000000',
   enableMutations: true,

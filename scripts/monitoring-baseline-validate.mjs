@@ -10,6 +10,7 @@ const EXPECTED_SERVICES = [
   "treasury",
   "ricardian",
   "notifications",
+  "gateway",
 ];
 
 const REQUIRED_HEADINGS = [

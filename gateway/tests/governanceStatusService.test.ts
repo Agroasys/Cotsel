@@ -54,6 +54,7 @@ describe('GovernanceStatusService', () => {
           .mockResolvedValueOnce(true),
       } as any,
       31337,
+      50,
     );
 
     const snapshot = await service.getGovernanceStatus({
@@ -89,6 +90,7 @@ describe('GovernanceStatusService', () => {
         paused: jest.fn().mockResolvedValue(false),
       } as any,
       31337,
+      50,
     );
 
     await expect(service.checkReadiness()).rejects.toEqual(expect.objectContaining<Partial<GatewayError>>({
@@ -125,6 +127,7 @@ describe('GovernanceStatusService', () => {
         treasuryPayoutAddressUpdateProposalCancelled: jest.fn().mockResolvedValue(false),
       } as any,
       31337,
+      50,
     );
 
     const snapshot = await service.getGovernanceStatus({
@@ -134,5 +137,31 @@ describe('GovernanceStatusService', () => {
 
     expect(snapshot.activeOracleProposalIds).toEqual([7]);
     expect(provider.getBlock).toHaveBeenCalledWith('latest');
+  });
+
+  test('fails readiness when chain RPC probe exceeds the configured timeout', async () => {
+    const never = new Promise<never>(() => undefined);
+    const provider = {
+      getNetwork: jest.fn().mockReturnValue(never),
+    } as unknown as JsonRpcProvider;
+
+    const service = new GovernanceStatusService(
+      provider,
+      {
+        paused: jest.fn().mockReturnValue(never),
+      } as any,
+      31337,
+      10,
+    );
+
+    await expect(service.checkReadiness()).rejects.toEqual(expect.objectContaining<Partial<GatewayError>>({
+      statusCode: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
+      details: expect.objectContaining({
+        cause: 'timeout',
+        upstream: 'chain-rpc',
+        operation: 'checkReadiness',
+      }),
+    }));
   });
 });

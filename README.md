@@ -40,6 +40,7 @@ This repository is the settlement layer in the Agroasys platform. It operates al
 - `oracle`: validated real-world milestone attestations into on-chain state transitions.
 - `indexer`: indexed chain events for query and operational visibility.
 - `ricardian`: contract-hash evidence workflow linking legal agreement to settlement lifecycle.
+- `gateway`: operator control-plane gateway for governance and compliance workflows.
 
 ## Core Components
 
@@ -92,6 +93,7 @@ agroasys-web3/
 ├── indexer/            # Indexing and GraphQL pipeline
 ├── sdk/                # TypeScript SDK
 ├── auth/               # Authentication service
+├── gateway/            # Dashboard operator gateway service
 ├── shared-auth/        # Shared auth package
 ├── reconciliation/     # Reconciliation service
 ├── notifications/      # Notification service
@@ -129,6 +131,7 @@ npm run -w contracts compile:polkavm
 npm run -w contracts test
 
 # Service quality gates (examples)
+npm run -w gateway lint && npm run -w gateway test && npm run -w gateway build
 npm run -w sdk lint && npm run -w sdk test && npm run -w sdk build
 npm run -w oracle lint && npm run -w oracle test && npm run -w oracle build
 
@@ -146,6 +149,7 @@ scripts/staging-e2e-real-gate.sh
 Branch protection should require:
 
 - `ci/contracts`
+- `ci/gateway`
 - `ci/sdk`
 - `ci/oracle`
 - `ci/indexer`
@@ -192,6 +196,7 @@ Dashboard / Ops API:
 
 - `docs/api/web3layer-dashboard-gateway.openapi.yml`
 - `docs/runbooks/dashboard-api-gateway-boundary.md`
+- `docs/runbooks/dashboard-gateway-operations.md`
 
 Community demo:
 

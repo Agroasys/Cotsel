@@ -3,10 +3,10 @@
 ## Purpose and scope
 Define the operational boundary for API orchestration between the Web2 ingress layer and core services (`oracle`, `treasury`, `reconciliation`, `indexer`, `notifications`).
 
-This runbook is the source of truth for boundary behavior under issue #78. A dedicated gateway runtime control plane is not implemented in-repo yet (tracked by #123), and a centralized dead-letter/error-handler workflow is tracked by #124.
+This runbook is the source of truth for boundary behavior under issue #78. The dedicated dashboard operator gateway now exists in-repo under `gateway/`, but broader cross-service ingress/orchestration remains service-directed and a centralized dead-letter/error-handler workflow is still tracked by #124.
 
 ## Routing ownership and service contract
-Current runtime behavior is service-directed (no single in-repo gateway binary). The boundary contract below defines ownership and expected routing:
+Current runtime behavior for the service boundary below is still service-directed; the dashboard gateway is a separate operator control plane and does not replace these service-specific ownership rules.
 
 | Request class | Current endpoint owner | Contract boundary |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ Current deterministic behavior in-repo:
 - Notifications: bounded retries per notifier configuration (`retryAttempts`, `retryDelayMs`, `maxRetryDelayMs`).
 - Staging gate readiness retries use bounded shell retries (for example, `retry_cmd 30 2` in `scripts/staging-e2e-real-gate.sh`).
 
-Boundary rule for future gateway runtime (#123):
+Boundary rule for the dashboard gateway runtime (#123):
 - Do not add unbounded gateway retries for mutating endpoints.
 - Keep gateway retry budget lower than or equal to downstream idempotent safety model.
 

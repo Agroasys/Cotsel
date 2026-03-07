@@ -4,6 +4,7 @@
 import { Contract, JsonRpcProvider } from 'ethers';
 import { GatewayConfig } from '../config/env';
 import { GatewayError } from '../errors';
+import { withTimeout } from './downstreamTimeout';
 
 export interface GovernanceStatusSnapshot {
   paused: boolean;
@@ -172,13 +173,24 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
     private readonly provider: JsonRpcProvider,
     private readonly contract: GovernanceContractShape,
     private readonly expectedChainId: number,
+    private readonly rpcReadTimeoutMs: number,
   ) {}
 
   async checkReadiness(): Promise<void> {
-    const [network, paused] = await Promise.all([
-      this.provider.getNetwork(),
-      this.contract.paused(),
-    ]);
+    const [network, paused] = await withTimeout(
+      Promise.all([
+        this.provider.getNetwork(),
+        this.contract.paused(),
+      ]),
+      this.rpcReadTimeoutMs,
+      'Timed out while probing governance RPC readiness',
+      {
+        details: {
+          upstream: 'chain-rpc',
+          operation: 'checkReadiness',
+        },
+      },
+    );
 
     if (Number(network.chainId) !== this.expectedChainId) {
       throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'RPC endpoint chain id does not match gateway configuration', {
@@ -194,6 +206,20 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 
   async getGovernanceStatus(request: GovernanceStatusRequest = {}): Promise<GovernanceStatusSnapshot> {
     try {
+      const snapshot = await this.runChainRead('getGovernanceStatus.snapshot', Promise.all([
+        this.contract.paused(),
+        this.contract.claimsPaused(),
+        this.contract.oracleActive(),
+        this.contract.oracleAddress(),
+        this.contract.treasuryAddress(),
+        this.contract.treasuryPayoutAddress(),
+        this.contract.governanceApprovals(),
+        this.contract.governanceTimelock(),
+        this.contract.requiredApprovals(),
+        this.contract.hasActiveUnpauseProposal(),
+        this.contract.unpauseProposal(),
+      ] as const));
+      const latestBlock = await this.runChainRead('getGovernanceStatus.latestBlock', this.provider.getBlock('latest'));
       const [
         paused,
         claimsPaused,
@@ -206,28 +232,14 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         requiredApprovals,
         hasActiveUnpauseProposal,
         unpauseProposal,
-        latestBlock,
-      ] = await Promise.all([
-        this.contract.paused(),
-        this.contract.claimsPaused(),
-        this.contract.oracleActive(),
-        this.contract.oracleAddress(),
-        this.contract.treasuryAddress(),
-        this.contract.treasuryPayoutAddress(),
-        this.contract.governanceApprovals(),
-        this.contract.governanceTimelock(),
-        this.contract.requiredApprovals(),
-        this.contract.hasActiveUnpauseProposal(),
-        this.contract.unpauseProposal(),
-        this.provider.getBlock('latest'),
-      ]);
+      ] = snapshot;
 
       const chainTimeSeconds = BigInt(latestBlock?.timestamp ?? 0);
 
       const [
         activeOracleProposalIds,
         activeTreasuryPayoutReceiverProposalIds,
-      ] = await Promise.all([
+      ] = await this.runChainRead('getGovernanceStatus.activeProposals', Promise.all([
         collectActiveProposalIds(
           request.oracleProposalIds ?? [],
           chainTimeSeconds,
@@ -242,7 +254,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
           (proposalId) => this.contract.treasuryPayoutAddressUpdateProposalExpiresAt(proposalId),
           (proposalId) => this.contract.treasuryPayoutAddressUpdateProposalCancelled(proposalId),
         ),
-      ]);
+      ]));
 
       return {
         paused,
@@ -272,10 +284,10 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 
   async getUnpauseProposalState(): Promise<UnpauseProposalState> {
     try {
-      const [hasActiveProposal, proposal] = await Promise.all([
+      const [hasActiveProposal, proposal] = await this.runChainRead('getUnpauseProposalState', Promise.all([
         this.contract.hasActiveUnpauseProposal(),
         this.contract.unpauseProposal(),
-      ]);
+      ]));
 
       return {
         hasActiveProposal,
@@ -291,16 +303,19 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 
   async getOracleProposalState(proposalId: number): Promise<GovernanceProposalState | null> {
     try {
-      const counter = toSafeInteger(await this.contract.oracleUpdateCounter(), 'oracleUpdateCounter');
+      const counter = toSafeInteger(
+        await this.runChainRead('getOracleProposalState.counter', this.contract.oracleUpdateCounter()),
+        'oracleUpdateCounter',
+      );
       if (proposalId < 0 || proposalId >= counter) {
         return null;
       }
 
-      const [proposal, expiresAt, cancelled] = await Promise.all([
+      const [proposal, expiresAt, cancelled] = await this.runChainRead('getOracleProposalState.proposal', Promise.all([
         this.contract.oracleUpdateProposals(BigInt(proposalId)),
         this.contract.oracleUpdateProposalExpiresAt(BigInt(proposalId)),
         this.contract.oracleUpdateProposalCancelled(BigInt(proposalId)),
-      ]);
+      ]));
 
       if (proposal.createdAt <= 0n) {
         return null;
@@ -326,16 +341,19 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 
   async getTreasuryPayoutReceiverProposalState(proposalId: number): Promise<GovernanceProposalState | null> {
     try {
-      const counter = toSafeInteger(await this.contract.treasuryPayoutAddressUpdateCounter(), 'treasuryPayoutAddressUpdateCounter');
+      const counter = toSafeInteger(
+        await this.runChainRead('getTreasuryPayoutReceiverProposalState.counter', this.contract.treasuryPayoutAddressUpdateCounter()),
+        'treasuryPayoutAddressUpdateCounter',
+      );
       if (proposalId < 0 || proposalId >= counter) {
         return null;
       }
 
-      const [proposal, expiresAt, cancelled] = await Promise.all([
+      const [proposal, expiresAt, cancelled] = await this.runChainRead('getTreasuryPayoutReceiverProposalState.proposal', Promise.all([
         this.contract.treasuryPayoutAddressUpdateProposals(BigInt(proposalId)),
         this.contract.treasuryPayoutAddressUpdateProposalExpiresAt(BigInt(proposalId)),
         this.contract.treasuryPayoutAddressUpdateProposalCancelled(BigInt(proposalId)),
-      ]);
+      ]));
 
       if (proposal.createdAt <= 0n) {
         return null;
@@ -361,8 +379,8 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 
   async getTreasuryClaimableBalance(): Promise<bigint> {
     try {
-      const treasuryAddress = await this.contract.treasuryAddress();
-      return await this.contract.claimableUsdc(treasuryAddress);
+      const treasuryAddress = await this.runChainRead('getTreasuryClaimableBalance.address', this.contract.treasuryAddress());
+      return await this.runChainRead('getTreasuryClaimableBalance.balance', this.contract.claimableUsdc(treasuryAddress));
     } catch (error) {
       throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read treasury claimable balance', {
         cause: error instanceof Error ? error.message : String(error),
@@ -372,7 +390,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 
   async hasApprovedUnpause(walletAddress: string): Promise<boolean> {
     try {
-      return await this.contract.unpauseHasApproved(walletAddress);
+      return await this.runChainRead('hasApprovedUnpause', this.contract.unpauseHasApproved(walletAddress));
     } catch (error) {
       throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read unpause approval state', {
         cause: error instanceof Error ? error.message : String(error),
@@ -383,7 +401,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 
   async hasApprovedOracleProposal(proposalId: number, walletAddress: string): Promise<boolean> {
     try {
-      return await this.contract.oracleUpdateHasApproved(BigInt(proposalId), walletAddress);
+      return await this.runChainRead('hasApprovedOracleProposal', this.contract.oracleUpdateHasApproved(BigInt(proposalId), walletAddress));
     } catch (error) {
       throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read oracle approval state', {
         cause: error instanceof Error ? error.message : String(error),
@@ -395,7 +413,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 
   async hasApprovedTreasuryPayoutReceiverProposal(proposalId: number, walletAddress: string): Promise<boolean> {
     try {
-      return await this.contract.treasuryPayoutAddressUpdateHasApproved(BigInt(proposalId), walletAddress);
+      return await this.runChainRead('hasApprovedTreasuryPayoutReceiverProposal', this.contract.treasuryPayoutAddressUpdateHasApproved(BigInt(proposalId), walletAddress));
     } catch (error) {
       throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed to read treasury payout receiver approval state', {
         cause: error instanceof Error ? error.message : String(error),
@@ -404,10 +422,24 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
       });
     }
   }
+
+  private async runChainRead<T>(operation: string, promise: Promise<T>): Promise<T> {
+    return withTimeout(
+      promise,
+      this.rpcReadTimeoutMs,
+      'Timed out while reading governance state from chain',
+      {
+        details: {
+          upstream: 'chain-rpc',
+          operation,
+        },
+      },
+    );
+  }
 }
 
 export function createGovernanceStatusService(config: GatewayConfig): GovernanceStatusService {
   const provider = new JsonRpcProvider(config.rpcUrl);
   const contract = new Contract(config.escrowAddress, ESCROW_GOVERNANCE_READ_ABI, provider) as unknown as GovernanceContractShape;
-  return new GovernanceStatusService(provider, contract, config.chainId);
+  return new GovernanceStatusService(provider, contract, config.chainId, config.rpcReadTimeoutMs);
 }

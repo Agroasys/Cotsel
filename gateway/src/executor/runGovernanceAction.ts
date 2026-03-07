@@ -37,6 +37,7 @@ async function main(): Promise<void> {
       createGovernanceStatusService(config),
       createPostgresGovernanceExecutionLock(pool),
       createAdminSdkGovernanceChainExecutor(config),
+      config.executionTimeoutMs,
     );
 
     const requestId = `executor-${randomUUID()}`;
