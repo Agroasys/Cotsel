@@ -140,7 +140,7 @@ function buildAuditRecord(
     reason: audit.reason,
     evidenceLinks: audit.evidenceLinks,
     ticketRef: audit.ticketRef,
-    actorSessionId: principal.sessionId,
+    actorSessionId: principal.sessionReference,
     actorWallet: principal.session.walletAddress,
     actorRole: principal.session.role,
     createdAt: acceptedAt,

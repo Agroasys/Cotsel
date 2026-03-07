@@ -41,6 +41,20 @@ function sanitizeError(error: unknown): { code: string; message: string } {
   };
 }
 
+function fallbackPostExecutionStatus(action: GovernanceActionRecord): GovernanceActionStatus | null {
+  switch (action.contractMethod) {
+    case 'proposeUnpause':
+    case 'approveUnpause':
+    case 'proposeTreasuryPayoutAddressUpdate':
+    case 'approveTreasuryPayoutAddressUpdate':
+    case 'proposeOracleUpdate':
+    case 'approveOracleUpdate':
+      return 'pending_approvals';
+    default:
+      return null;
+  }
+}
+
 async function resolveProposalStatus(
   proposal: GovernanceProposalState | null,
   approvalsRequired: number,
@@ -191,6 +205,8 @@ export class GovernanceExecutorService {
           txHash: persisted.txHash,
           blockNumber: persisted.blockNumber,
           proposalId: persisted.proposalId,
+          errorCode: persisted.errorCode,
+          errorMessage: persisted.errorMessage,
         },
       };
 
@@ -212,7 +228,24 @@ export class GovernanceExecutorService {
     action: GovernanceActionRecord,
     execution: GovernanceExecutionResult,
   ): Promise<GovernanceActionRecord> {
-    const finalStatus = await this.resolvePostExecutionStatus(action, execution.proposalId ?? action.proposalId);
+    let finalStatus: GovernanceActionStatus;
+    let statusResolutionFailure: { code: string; message: string } | null = null;
+
+    try {
+      finalStatus = await this.resolvePostExecutionStatus(action, execution.proposalId ?? action.proposalId);
+    } catch (error) {
+      const fallbackStatus = fallbackPostExecutionStatus(action);
+      if (!fallbackStatus) {
+        throw error;
+      }
+
+      const sanitized = sanitizeError(error);
+      finalStatus = fallbackStatus;
+      statusResolutionFailure = {
+        code: 'STATUS_RECONCILIATION_REQUIRED',
+        message: `Executed on-chain but failed to resolve final status: ${sanitized.message}`.slice(0, 1000),
+      };
+    }
 
     return {
       ...action,
@@ -221,8 +254,8 @@ export class GovernanceExecutorService {
       txHash: execution.txHash,
       blockNumber: execution.blockNumber,
       executedAt: new Date().toISOString(),
-      errorCode: null,
-      errorMessage: null,
+      errorCode: statusResolutionFailure?.code ?? null,
+      errorMessage: statusResolutionFailure?.message ?? null,
     };
   }
 

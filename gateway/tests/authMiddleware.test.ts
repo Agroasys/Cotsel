@@ -65,6 +65,8 @@ describe('gateway auth middleware', () => {
     await middleware(req, mockRes(), next);
 
     expect(next).toHaveBeenCalledWith();
+    expect(req.gatewayPrincipal?.sessionReference).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(req.gatewayPrincipal?.sessionReference).not.toBe('sess-1');
     expect(req.gatewayPrincipal?.gatewayRoles).toEqual(['operator:read', 'operator:write']);
     expect(req.gatewayPrincipal?.writeEnabled).toBe(true);
   });

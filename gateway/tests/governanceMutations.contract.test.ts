@@ -449,6 +449,8 @@ describe('gateway governance mutation routes contract', () => {
       expect(storedAction.category).toBe(expectedCategory);
       expect(storedAction.contractMethod).toBe(expectedMethod);
       expect(storedAction.requestId).toBe(`req-${expectedMethod}`);
+      expect(storedAction.audit.actorSessionId).toMatch(/^sha256:[a-f0-9]{64}$/);
+      expect(storedAction.audit.actorSessionId).not.toBe('sess-admin');
     } finally {
       server.close();
     }

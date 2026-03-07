@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { createHash } from 'crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { GatewayConfig } from '../config/env';
 import { AuthSession, AuthSessionClient } from '../core/authSessionClient';
@@ -9,7 +10,7 @@ import { GatewayError } from '../errors';
 export type GatewayRole = 'operator:read' | 'operator:write';
 
 export interface GatewayPrincipal {
-  sessionId: string;
+  sessionReference: string;
   session: AuthSession;
   gatewayRoles: GatewayRole[];
   writeEnabled: boolean;
@@ -43,6 +44,10 @@ function matchesAllowlist(session: AuthSession, allowlist: string[]): boolean {
   return candidates.some((entry) => normalizedAllowlist.has(entry.toLowerCase()));
 }
 
+function buildSessionReference(token: string): string {
+  return `sha256:${createHash('sha256').update(token, 'utf8').digest('hex')}`;
+}
+
 export function createAuthenticationMiddleware(client: AuthSessionClient, config: GatewayConfig) {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     const token = getBearerToken(req);
@@ -58,7 +63,7 @@ export function createAuthenticationMiddleware(client: AuthSessionClient, config
     }
 
     req.gatewayPrincipal = {
-      sessionId: token,
+      sessionReference: buildSessionReference(token),
       session,
       gatewayRoles: mapGatewayRoles(session),
       writeEnabled: config.enableMutations && matchesAllowlist(session, config.writeAllowlist),

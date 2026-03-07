@@ -321,4 +321,53 @@ describe('GovernanceExecutorService', () => {
     expect(auditLogStore.entries).toHaveLength(1);
     expect(auditLogStore.entries[0].eventType).toBe('governance.action.execution.started');
   });
+
+  test('persists tx outcome when post-execution status reads fail', async () => {
+    const store = createInMemoryGovernanceActionStore([
+      buildAction({
+        actionId: 'action-approve-oracle-fallback',
+        proposalId: 7,
+        category: 'oracle_update',
+        contractMethod: 'approveOracleUpdate',
+      }),
+    ]);
+    const auditLogStore = createInMemoryAuditLogStore();
+    const service = new GovernanceExecutorService(
+      store,
+      createPassthroughGovernanceWriteStore(store, auditLogStore),
+      auditLogStore,
+      createReader({
+        getGovernanceStatus: jest.fn().mockRejectedValue(new Error('rpc timeout during post-read')),
+      }),
+      createInMemoryGovernanceExecutionLock(),
+      createExecutor({
+        execute: jest.fn().mockResolvedValue({
+          txHash: '0xpostread123',
+          blockNumber: 201,
+          proposalId: 7,
+        }),
+      }),
+    );
+
+    const result = await service.executeAction('action-approve-oracle-fallback', 'executor-req-7');
+
+    expect(result.status).toBe('pending_approvals');
+    expect(result.txHash).toBe('0xpostread123');
+    expect(result.blockNumber).toBe(201);
+    expect(result.errorCode).toBe('STATUS_RECONCILIATION_REQUIRED');
+    expect(result.errorMessage).toContain('rpc timeout during post-read');
+
+    const persisted = await store.get('action-approve-oracle-fallback');
+    expect(persisted?.status).toBe('pending_approvals');
+    expect(persisted?.txHash).toBe('0xpostread123');
+    expect(persisted?.errorCode).toBe('STATUS_RECONCILIATION_REQUIRED');
+
+    expect(auditLogStore.entries).toHaveLength(2);
+    expect(auditLogStore.entries[1].eventType).toBe('governance.action.execution.succeeded');
+    expect(auditLogStore.entries[1].metadata).toMatchObject({
+      actionId: 'action-approve-oracle-fallback',
+      txHash: '0xpostread123',
+      errorCode: 'STATUS_RECONCILIATION_REQUIRED',
+    });
+  });
 });
