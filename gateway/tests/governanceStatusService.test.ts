@@ -9,6 +9,7 @@ describe('GovernanceStatusService', () => {
   test('maps on-chain governance state into the dashboard status shape', async () => {
     const provider = {
       getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
+      getBlock: jest.fn().mockResolvedValue({ timestamp: 1000 }),
     } as unknown as JsonRpcProvider;
 
     const service = new GovernanceStatusService(
@@ -30,7 +31,6 @@ describe('GovernanceStatusService', () => {
           createdAt: 100n,
           proposer: '0x0000000000000000000000000000000000000099',
         }),
-        oracleUpdateCounter: jest.fn().mockResolvedValue(3n),
         oracleUpdateProposals: jest.fn()
           .mockResolvedValueOnce({ createdAt: 10n, executed: false })
           .mockResolvedValueOnce({ createdAt: 11n, executed: true })
@@ -43,7 +43,6 @@ describe('GovernanceStatusService', () => {
           .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(false),
-        treasuryPayoutAddressUpdateCounter: jest.fn().mockResolvedValue(2n),
         treasuryPayoutAddressUpdateProposals: jest.fn()
           .mockResolvedValueOnce({ createdAt: 20n, executed: false })
           .mockResolvedValueOnce({ createdAt: 21n, executed: false }),
@@ -57,7 +56,10 @@ describe('GovernanceStatusService', () => {
       31337,
     );
 
-    const snapshot = await service.getGovernanceStatus();
+    const snapshot = await service.getGovernanceStatus({
+      oracleProposalIds: [0, 1, 2],
+      treasuryPayoutReceiverProposalIds: [0, 1],
+    });
 
     expect(snapshot).toEqual({
       paused: false,
@@ -93,5 +95,44 @@ describe('GovernanceStatusService', () => {
       statusCode: 503,
       code: 'UPSTREAM_UNAVAILABLE',
     }));
+  });
+
+  test('uses latest chain timestamp instead of host time when filtering active proposals', async () => {
+    const provider = {
+      getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
+      getBlock: jest.fn().mockResolvedValue({ timestamp: 500n }),
+    } as unknown as JsonRpcProvider;
+
+    const service = new GovernanceStatusService(
+      provider,
+      {
+        paused: jest.fn().mockResolvedValue(false),
+        claimsPaused: jest.fn().mockResolvedValue(false),
+        oracleActive: jest.fn().mockResolvedValue(true),
+        oracleAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000011'),
+        treasuryAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000022'),
+        treasuryPayoutAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000033'),
+        governanceApprovals: jest.fn().mockResolvedValue(2n),
+        governanceTimelock: jest.fn().mockResolvedValue(86400n),
+        requiredApprovals: jest.fn().mockResolvedValue(1n),
+        hasActiveUnpauseProposal: jest.fn().mockResolvedValue(false),
+        unpauseProposal: jest.fn().mockResolvedValue({ approvalCount: 0n, executed: false, createdAt: 0n, proposer: '0x0' }),
+        oracleUpdateProposals: jest.fn().mockResolvedValue({ createdAt: 10n, executed: false }),
+        oracleUpdateProposalExpiresAt: jest.fn().mockResolvedValue(600n),
+        oracleUpdateProposalCancelled: jest.fn().mockResolvedValue(false),
+        treasuryPayoutAddressUpdateProposals: jest.fn().mockResolvedValue({ createdAt: 0n, executed: false }),
+        treasuryPayoutAddressUpdateProposalExpiresAt: jest.fn().mockResolvedValue(0n),
+        treasuryPayoutAddressUpdateProposalCancelled: jest.fn().mockResolvedValue(false),
+      } as any,
+      31337,
+    );
+
+    const snapshot = await service.getGovernanceStatus({
+      oracleProposalIds: [7],
+      treasuryPayoutReceiverProposalIds: [],
+    });
+
+    expect(snapshot.activeOracleProposalIds).toEqual([7]);
+    expect(provider.getBlock).toHaveBeenCalledWith('latest');
   });
 });

@@ -101,7 +101,14 @@ export function createGovernanceRouter(options: GovernanceRouterOptions): Router
 
   router.get('/governance/status', async (_req, res, next) => {
     try {
-      const status = await options.governanceStatusService.getGovernanceStatus();
+      const [oracleProposalIds, treasuryPayoutReceiverProposalIds] = await Promise.all([
+        options.governanceActionStore.listActiveProposalIds('oracle_update'),
+        options.governanceActionStore.listActiveProposalIds('treasury_payout_receiver_update'),
+      ]);
+      const status = await options.governanceStatusService.getGovernanceStatus({
+        oracleProposalIds,
+        treasuryPayoutReceiverProposalIds,
+      });
       res.status(200).json(successResponse(status));
     } catch (error) {
       next(error);

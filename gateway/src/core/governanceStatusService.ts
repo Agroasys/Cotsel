@@ -21,6 +21,11 @@ export interface GovernanceStatusSnapshot {
   activeTreasuryPayoutReceiverProposalIds: number[];
 }
 
+export interface GovernanceStatusRequest {
+  oracleProposalIds?: number[];
+  treasuryPayoutReceiverProposalIds?: number[];
+}
+
 interface UnpauseProposal {
   approvalCount: bigint;
   executed: boolean;
@@ -49,7 +54,7 @@ interface TreasuryPayoutReceiverProposal {
 
 export interface EscrowGovernanceReader {
   checkReadiness(): Promise<void>;
-  getGovernanceStatus(): Promise<GovernanceStatusSnapshot>;
+  getGovernanceStatus(request?: GovernanceStatusRequest): Promise<GovernanceStatusSnapshot>;
 }
 
 type GovernanceContractShape = {
@@ -64,11 +69,9 @@ type GovernanceContractShape = {
   requiredApprovals(): Promise<bigint>;
   hasActiveUnpauseProposal(): Promise<boolean>;
   unpauseProposal(): Promise<UnpauseProposal>;
-  oracleUpdateCounter(): Promise<bigint>;
   oracleUpdateProposals(id: bigint): Promise<OracleUpdateProposal>;
   oracleUpdateProposalExpiresAt(id: bigint): Promise<bigint>;
   oracleUpdateProposalCancelled(id: bigint): Promise<boolean>;
-  treasuryPayoutAddressUpdateCounter(): Promise<bigint>;
   treasuryPayoutAddressUpdateProposals(id: bigint): Promise<TreasuryPayoutReceiverProposal>;
   treasuryPayoutAddressUpdateProposalExpiresAt(id: bigint): Promise<bigint>;
   treasuryPayoutAddressUpdateProposalCancelled(id: bigint): Promise<boolean>;
@@ -86,11 +89,9 @@ const ESCROW_GOVERNANCE_READ_ABI = [
   'function requiredApprovals() view returns (uint256)',
   'function hasActiveUnpauseProposal() view returns (bool)',
   'function unpauseProposal() view returns (uint256 approvalCount, bool executed, uint256 createdAt, address proposer)',
-  'function oracleUpdateCounter() view returns (uint256)',
   'function oracleUpdateProposals(uint256 proposalId) view returns (address newOracle, uint256 approvalCount, bool executed, uint256 createdAt, uint256 eta, address proposer, bool emergencyFastTrack)',
   'function oracleUpdateProposalExpiresAt(uint256 proposalId) view returns (uint256)',
   'function oracleUpdateProposalCancelled(uint256 proposalId) view returns (bool)',
-  'function treasuryPayoutAddressUpdateCounter() view returns (uint256)',
   'function treasuryPayoutAddressUpdateProposals(uint256 proposalId) view returns (address newPayoutReceiver, uint256 approvalCount, bool executed, uint256 createdAt, uint256 eta, address proposer)',
   'function treasuryPayoutAddressUpdateProposalExpiresAt(uint256 proposalId) view returns (uint256)',
   'function treasuryPayoutAddressUpdateProposalCancelled(uint256 proposalId) view returns (bool)',
@@ -106,13 +107,13 @@ function toSafeInteger(value: bigint, field: string): number {
 }
 
 async function collectActiveProposalIds(
-  counter: bigint,
+  candidateProposalIds: number[],
+  chainTimeSeconds: bigint,
   loadProposal: (proposalId: bigint) => Promise<{ createdAt: bigint; executed: boolean }>,
   loadExpiry: (proposalId: bigint) => Promise<bigint>,
   loadCancelled: (proposalId: bigint) => Promise<boolean>,
 ): Promise<number[]> {
-  const ids = Array.from({ length: toSafeInteger(counter, 'proposalCounter') }, (_, index) => BigInt(index));
-  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+  const ids = [...new Set(candidateProposalIds)].map((proposalId) => BigInt(proposalId));
 
   const snapshots = await Promise.all(ids.map(async (proposalId) => {
     const [proposal, expiresAt, cancelled] = await Promise.all([
@@ -121,7 +122,7 @@ async function collectActiveProposalIds(
       loadCancelled(proposalId),
     ]);
 
-    const active = proposal.createdAt > 0n && !proposal.executed && !cancelled && expiresAt >= nowSeconds;
+    const active = proposal.createdAt > 0n && !proposal.executed && !cancelled && expiresAt >= chainTimeSeconds;
     return active ? toSafeInteger(proposalId, 'proposalId') : null;
   }));
 
@@ -153,11 +154,8 @@ export class GovernanceStatusService implements EscrowGovernanceReader {
     }
   }
 
-  async getGovernanceStatus(): Promise<GovernanceStatusSnapshot> {
+  async getGovernanceStatus(request: GovernanceStatusRequest = {}): Promise<GovernanceStatusSnapshot> {
     try {
-      const oracleCounterPromise = this.contract.oracleUpdateCounter();
-      const treasuryCounterPromise = this.contract.treasuryPayoutAddressUpdateCounter();
-
       const [
         paused,
         claimsPaused,
@@ -170,8 +168,7 @@ export class GovernanceStatusService implements EscrowGovernanceReader {
         requiredApprovals,
         hasActiveUnpauseProposal,
         unpauseProposal,
-        oracleUpdateCounter,
-        treasuryPayoutReceiverCounter,
+        latestBlock,
       ] = await Promise.all([
         this.contract.paused(),
         this.contract.claimsPaused(),
@@ -184,22 +181,25 @@ export class GovernanceStatusService implements EscrowGovernanceReader {
         this.contract.requiredApprovals(),
         this.contract.hasActiveUnpauseProposal(),
         this.contract.unpauseProposal(),
-        oracleCounterPromise,
-        treasuryCounterPromise,
+        this.provider.getBlock('latest'),
       ]);
+
+      const chainTimeSeconds = BigInt(latestBlock?.timestamp ?? 0);
 
       const [
         activeOracleProposalIds,
         activeTreasuryPayoutReceiverProposalIds,
       ] = await Promise.all([
         collectActiveProposalIds(
-          oracleUpdateCounter,
+          request.oracleProposalIds ?? [],
+          chainTimeSeconds,
           (proposalId) => this.contract.oracleUpdateProposals(proposalId),
           (proposalId) => this.contract.oracleUpdateProposalExpiresAt(proposalId),
           (proposalId) => this.contract.oracleUpdateProposalCancelled(proposalId),
         ),
         collectActiveProposalIds(
-          treasuryPayoutReceiverCounter,
+          request.treasuryPayoutReceiverProposalIds ?? [],
+          chainTimeSeconds,
           (proposalId) => this.contract.treasuryPayoutAddressUpdateProposals(proposalId),
           (proposalId) => this.contract.treasuryPayoutAddressUpdateProposalExpiresAt(proposalId),
           (proposalId) => this.contract.treasuryPayoutAddressUpdateProposalCancelled(proposalId),
