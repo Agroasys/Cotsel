@@ -88,7 +88,14 @@ export interface GovernanceActionStore {
   save(action: GovernanceActionRecord): Promise<GovernanceActionRecord>;
   get(actionId: string): Promise<GovernanceActionRecord | null>;
   list(input: ListGovernanceActionsInput): Promise<ListGovernanceActionsResult>;
+  listActiveProposalIds(category: GovernanceActionCategory): Promise<number[]>;
 }
+
+const ACTIVE_PROPOSAL_STATUSES: readonly GovernanceActionStatus[] = [
+  'requested',
+  'pending_approvals',
+  'approved',
+];
 
 interface GovernanceActionRow {
   actionId: string;
@@ -377,6 +384,22 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
         nextCursor: nextCursorFromItems(mapped, input.limit),
       };
     },
+
+    async listActiveProposalIds(category) {
+      const result = await pool.query<{ proposalId: string | number }>(
+        `SELECT DISTINCT proposal_id AS "proposalId"
+         FROM governance_actions
+         WHERE category = $1
+           AND proposal_id IS NOT NULL
+           AND status = ANY($2::text[])
+         ORDER BY proposal_id ASC`,
+        [category, ACTIVE_PROPOSAL_STATUSES],
+      );
+
+      return result.rows
+        .map((row) => numericOrNull(row.proposalId))
+        .filter((value): value is number => value !== null);
+    },
   };
 }
 
@@ -432,6 +455,22 @@ export function createInMemoryGovernanceActionStore(initial: GovernanceActionRec
         items: page.slice(0, input.limit),
         nextCursor: nextCursorFromItems(page, input.limit),
       };
+    },
+
+    async listActiveProposalIds(category) {
+      const seen = new Set<number>();
+      for (const action of sorted()) {
+        if (
+          action.category !== category ||
+          action.proposalId === null ||
+          !ACTIVE_PROPOSAL_STATUSES.includes(action.status)
+        ) {
+          continue;
+        }
+        seen.add(action.proposalId);
+      }
+
+      return [...seen].sort((left, right) => left - right);
     },
   };
 }
