@@ -16,6 +16,7 @@ export const GOVERNANCE_ACTION_CATEGORIES = [
 
 export const GOVERNANCE_ACTION_STATUSES = [
   'requested',
+  'submitted',
   'pending_approvals',
   'approved',
   'executed',

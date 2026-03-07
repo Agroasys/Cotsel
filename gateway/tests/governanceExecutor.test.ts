@@ -251,7 +251,7 @@ describe('GovernanceExecutorService', () => {
     expect(auditLogStore.entries[1].eventType).toBe('governance.action.execution.failed');
   });
 
-  test('marks queued actions failed when signer resolution times out before execution', async () => {
+  test('marks signer-resolution timeouts as failed before any execution starts', async () => {
     const store = createInMemoryGovernanceActionStore([
       buildAction({
         actionId: 'action-signer-timeout',
@@ -279,6 +279,39 @@ describe('GovernanceExecutorService', () => {
     expect(result.errorMessage).toContain('Timed out while resolving governance executor signer');
     expect(auditLogStore.entries).toHaveLength(1);
     expect(auditLogStore.entries[0].eventType).toBe('governance.action.execution.failed');
+  });
+
+  test('marks execution timeouts as submitted because chain outcome is unknown', async () => {
+    const store = createInMemoryGovernanceActionStore([
+      buildAction({
+        actionId: 'action-execute-timeout',
+        category: 'pause',
+        contractMethod: 'pause',
+      }),
+    ]);
+    const auditLogStore = createInMemoryAuditLogStore();
+    const service = new GovernanceExecutorService(
+      store,
+      createPassthroughGovernanceWriteStore(store, auditLogStore),
+      auditLogStore,
+      createReader(),
+      createInMemoryGovernanceExecutionLock(),
+      createExecutor({
+        execute: jest.fn().mockReturnValue(new Promise(() => undefined)),
+      }),
+      10,
+    );
+
+    const result = await service.executeAction('action-execute-timeout', 'executor-req-execute-timeout');
+
+    expect(result.status).toBe('submitted');
+    expect(result.errorCode).toBe('EXECUTION_TIMEOUT');
+    expect(result.errorMessage).toContain('Timed out while executing queued governance action');
+    expect(result.txHash).toBeNull();
+    expect(auditLogStore.entries).toHaveLength(2);
+    expect(auditLogStore.entries[0].eventType).toBe('governance.action.execution.started');
+    expect(auditLogStore.entries[1].eventType).toBe('governance.action.execution.timeout');
+    expect(auditLogStore.entries[1].status).toBe('submitted');
   });
 
   test('does not re-execute actions that are no longer queued', async () => {

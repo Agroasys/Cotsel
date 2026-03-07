@@ -56,6 +56,10 @@ function fallbackPostExecutionStatus(action: GovernanceActionRecord): Governance
   }
 }
 
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof GatewayError && error.details?.cause === 'timeout';
+}
+
 async function resolveProposalStatus(
   proposal: GovernanceProposalState | null,
   approvalsRequired: number,
@@ -192,6 +196,9 @@ export class GovernanceExecutorService {
           },
         );
       } catch (error) {
+        if (isTimeoutError(error)) {
+          return this.persistExecutionTimeout(existing, requestId, correlationId, executorWallet, error);
+        }
         return this.persistFailure(existing, requestId, correlationId, executorWallet, error);
       }
 
@@ -262,6 +269,42 @@ export class GovernanceExecutorService {
     };
 
     return this.writeStore.saveActionWithAudit(failedRecord, auditEntry);
+  }
+
+  private async persistExecutionTimeout(
+    existing: GovernanceActionRecord,
+    requestId: string,
+    correlationId: string | null | undefined,
+    executorWallet: string | null,
+    error: unknown,
+  ): Promise<GovernanceActionRecord> {
+    const sanitized = sanitizeError(error);
+    const submittedRecord: GovernanceActionRecord = {
+      ...existing,
+      status: 'submitted',
+      errorCode: 'EXECUTION_TIMEOUT',
+      errorMessage: sanitized.message,
+      executedAt: new Date().toISOString(),
+    };
+
+    const auditEntry: AuditLogEntry = {
+      eventType: 'governance.action.execution.timeout',
+      route: '/internal/executor/governance-actions/:actionId',
+      method: 'EXECUTE',
+      requestId,
+      correlationId: correlationId ?? null,
+      actorWalletAddress: executorWallet,
+      actorRole: 'executor',
+      status: 'submitted',
+      metadata: {
+        actionId: existing.actionId,
+        errorCode: 'EXECUTION_TIMEOUT',
+        errorMessage: sanitized.message,
+        outcome: 'unknown',
+      },
+    };
+
+    return this.writeStore.saveActionWithAudit(submittedRecord, auditEntry);
   }
 
   private async persistExecution(
