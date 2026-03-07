@@ -11,6 +11,18 @@ This runbook covers:
 - queued governance execution,
 - rollback and incident evidence capture.
 
+## Current connected-validation target
+Approved current-state contract:
+- gateway target: local/docker only
+- auth-service target: local/docker only
+- mode: read-only first
+- executor mode: manual only
+
+This means:
+- CTSP-Dash connected validation must target the local/docker gateway URL only until real remote staging coordinates are recorded.
+- Mutations stay disabled by default.
+- There is no approved remote staging gateway URL or remote auth-service URL yet.
+
 ## Runtime boundary
 The gateway is a Web2 orchestration boundary. It does not change protocol logic and it does not custody governance private keys.
 
@@ -43,6 +55,8 @@ Safety rules:
 - If `GATEWAY_ENABLE_MUTATIONS=false`, all gateway mutation routes must reject writes.
 - If `GATEWAY_WRITE_ALLOWLIST` is empty, mutations must reject writes even when enabled.
 - The gateway process must never hold the governance signer key; only the separate executor process may do so.
+- Approved write operators for later enablement are Aston and `czypioe`, but `GATEWAY_WRITE_ALLOWLIST`
+  must contain the exact local auth principal IDs used by the auth service. Do not guess identifiers.
 
 ## Startup procedure
 1. Confirm Node 20 baseline.
@@ -81,6 +95,7 @@ Readiness must stay green before enabling connected dashboard mode.
 
 Operational implication:
 - a valid admin session alone is not sufficient to mutate protocol controls.
+- connected validation remains read-only until governance/compliance read verification is complete.
 
 ## Request tracing and log policy
 Every request must carry or receive:

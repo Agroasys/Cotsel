@@ -32,6 +32,10 @@ Gateway responsibilities:
 - assemble read models from chain, indexer, treasury, ricardian, and future compliance storage
 - enforce idempotency, request tracing, and stable error shapes
 
+Current connected-validation constraint:
+- CTSP-Dash may run connected mode only against explicit local/docker gateway and auth-service URLs until real remote staging coordinates are recorded.
+- Connected mode must not silently fall back to preview behavior.
+
 ### Gateway -> on-chain / service backends
 The gateway is an orchestration boundary, not the protocol itself.
 
@@ -169,7 +173,9 @@ The gateway must persist, at minimum:
 - Compliance decisions are append-only and resume is permitted only when policy conditions are satisfied by the latest effective `ALLOW` decision.
 
 ## Remaining external deployment dependency
-- Concrete staging deployment coordinates (gateway base URL, auth URL binding, and safe mutation scope values) remain tracked operationally and must be recorded before staging connected-mode validation.
+- Current approved connected-validation target is local/docker only.
+- Concrete remote staging deployment coordinates (gateway base URL and auth URL binding) are still external operational inputs and must be recorded before remote staging connected-mode validation.
+- Mutations remain disabled by default; later enablement requires both `GATEWAY_ENABLE_MUTATIONS=true` and exact allowlist principal IDs for Aston and `czypioe`.
 
 ## References
 - `docs/api/web3layer-dashboard-gateway.openapi.yml`
