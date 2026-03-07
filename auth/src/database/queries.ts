@@ -4,6 +4,36 @@
 import { Pool, PoolClient } from 'pg';
 import { UserProfile, UserSession, UserRole } from '../types';
 
+type SessionRow = Omit<UserSession, 'issuedAt' | 'expiresAt' | 'revokedAt'> & {
+  issuedAt: number | string;
+  expiresAt: number | string;
+  revokedAt: number | string | null;
+};
+
+function parseSessionEpoch(value: number | string, field: 'issuedAt' | 'expiresAt' | 'revokedAt'): number {
+  if (typeof value === 'number' && Number.isSafeInteger(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isSafeInteger(parsed)) {
+      return parsed;
+    }
+  }
+
+  throw new Error(`Invalid ${field} session timestamp returned from database`);
+}
+
+export function normalizeSessionRow(row: SessionRow): UserSession {
+  return {
+    ...row,
+    issuedAt: parseSessionEpoch(row.issuedAt, 'issuedAt'),
+    expiresAt: parseSessionEpoch(row.expiresAt, 'expiresAt'),
+    revokedAt: row.revokedAt === null ? null : parseSessionEpoch(row.revokedAt, 'revokedAt'),
+  };
+}
+
 //  Profile queries
 
 export async function upsertProfile(
@@ -79,7 +109,7 @@ export async function findSessionById(
   pool: Pool,
   sessionId: string,
 ): Promise<UserSession | null> {
-  const result = await pool.query<UserSession>(
+  const result = await pool.query<SessionRow>(
     `SELECT session_id AS "sessionId", user_id AS "userId",
             wallet_address AS "walletAddress", role,
             issued_at AS "issuedAt", expires_at AS "expiresAt",
@@ -87,7 +117,8 @@ export async function findSessionById(
      FROM user_sessions WHERE session_id = $1`,
     [sessionId],
   );
-  return result.rows[0] ?? null;
+  const row = result.rows[0];
+  return row ? normalizeSessionRow(row) : null;
 }
 
 export async function revokeSession(pool: Pool, sessionId: string): Promise<void> {
@@ -103,4 +134,3 @@ export async function pruneExpiredSessions(pool: Pool): Promise<void> {
     [Math.floor(Date.now() / 1000)],
   );
 }
-
