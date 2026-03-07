@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS governance_actions (
     )),
     status TEXT NOT NULL CHECK (status IN (
         'requested',
+        'submitted',
         'pending_approvals',
         'approved',
         'executed',

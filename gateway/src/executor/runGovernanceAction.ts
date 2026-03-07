@@ -52,7 +52,7 @@ async function main(): Promise<void> {
       blockNumber: result.blockNumber,
     });
 
-    if (result.status === 'failed') {
+    if (result.status === 'failed' || result.status === 'submitted') {
       process.exitCode = 1;
     }
   } finally {
