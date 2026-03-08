@@ -15,6 +15,8 @@ export interface GatewayConfig {
   dbPassword: string;
   authBaseUrl: string;
   authRequestTimeoutMs: number;
+  indexerGraphqlUrl: string;
+  indexerRequestTimeoutMs: number;
   rpcUrl: string;
   rpcReadTimeoutMs: number;
   chainId: number;
@@ -81,6 +83,7 @@ function assertAddress(name: string, value: string): string {
 export function loadConfig(): GatewayConfig {
   const buildTime = process.env.GATEWAY_BUILD_TIME?.trim() || new Date().toISOString();
   const authBaseUrl = env('AUTH_BASE_URL').replace(/\/$/, '');
+  const indexerGraphqlUrl = env('GATEWAY_INDEXER_GRAPHQL_URL').replace(/\/$/, '');
   const rpcUrl = env('GATEWAY_RPC_URL').replace(/\/$/, '');
   const chainId = envNumber('GATEWAY_CHAIN_ID');
   const escrowAddress = assertAddress('GATEWAY_ESCROW_ADDRESS', env('GATEWAY_ESCROW_ADDRESS'));
@@ -89,11 +92,13 @@ export function loadConfig(): GatewayConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
 
   assert(authBaseUrl.startsWith('http://') || authBaseUrl.startsWith('https://'), 'AUTH_BASE_URL must be an absolute http(s) URL');
+  assert(indexerGraphqlUrl.startsWith('http://') || indexerGraphqlUrl.startsWith('https://'), 'GATEWAY_INDEXER_GRAPHQL_URL must be an absolute http(s) URL');
   assert(rpcUrl.startsWith('http://') || rpcUrl.startsWith('https://'), 'GATEWAY_RPC_URL must be an absolute http(s) URL');
   assert(envNumber('PORT', 3600) > 0, 'PORT must be > 0');
   assert(envNumber('DB_PORT', 5432) > 0, 'DB_PORT must be > 0');
   assert(chainId > 0, 'GATEWAY_CHAIN_ID must be > 0');
   assert(envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_AUTH_REQUEST_TIMEOUT_MS must be >= 1000');
+  assert(envNumber('GATEWAY_INDEXER_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_INDEXER_REQUEST_TIMEOUT_MS must be >= 1000');
   assert(envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000) >= 1000, 'GATEWAY_RPC_READ_TIMEOUT_MS must be >= 1000');
   assert(envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400) >= 60, 'GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS must be >= 60');
 
@@ -106,6 +111,8 @@ export function loadConfig(): GatewayConfig {
     dbPassword: env('DB_PASSWORD'),
     authBaseUrl,
     authRequestTimeoutMs: envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000),
+    indexerGraphqlUrl,
+    indexerRequestTimeoutMs: envNumber('GATEWAY_INDEXER_REQUEST_TIMEOUT_MS', 5000),
     rpcUrl,
     rpcReadTimeoutMs: envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000),
     chainId,

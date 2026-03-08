@@ -26,6 +26,7 @@ servers:
     description: Production placeholder for future gateway deployment.
 tags:
   - name: System
+  - name: Trades
   - name: Governance
   - name: Compliance
 security:
@@ -76,6 +77,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VersionResponse'
+  /trades:
+    get:
+      tags: [Trades]
+      summary: List dashboard trade records
+      description: |
+        Indexer-backed dashboard trade registry. This surface is read-only and combines:
+        - indexed trade lifecycle state from `indexer/schema.graphql`
+        - indexed trade-event history for timeline rendering
+        - current gateway compliance ledger status, when available
+
+        Amounts are normalized to display-scale USDC values for dashboard rendering.
+      operationId: listTrades
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Trade registry records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /trades/{tradeId}:
+    get:
+      tags: [Trades]
+      summary: Get trade detail by trade id
+      operationId: getTrade
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/TradeId'
+      responses:
+        '200':
+          description: Trade detail record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
   /governance/status:
     get:
       tags: [Governance]
@@ -1116,6 +1182,107 @@ components:
               type: array
               items:
                 type: string
+    TradeStatus:
+      type: string
+      enum: [locked, stage_1, stage_2, completed, disputed]
+    TradeComplianceStatus:
+      type: string
+      enum: [pass, fail, unavailable]
+    TradeTimelineEvent:
+      type: object
+      required: [stage, timestamp, actor]
+      properties:
+        stage:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        actor:
+          type: string
+        txHash:
+          type: string
+          nullable: true
+          description: EVM transaction hash when available; otherwise the corresponding extrinsic hash.
+        detail:
+          type: string
+    Trade:
+      type: object
+      required:
+        - id
+        - buyer
+        - supplier
+        - amount
+        - currency
+        - status
+        - createdAt
+        - updatedAt
+        - ricardianHash
+        - platformFee
+        - logisticsAmount
+        - timeline
+        - complianceStatus
+      properties:
+        id:
+          type: string
+        buyer:
+          type: string
+        supplier:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+          const: USDC
+        status:
+          $ref: '#/components/schemas/TradeStatus'
+        txHash:
+          type: string
+          nullable: true
+          description: Trade lock hash when available; may be null if the indexer has not retained a chain hash reference.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        ricardianHash:
+          type: string
+        platformFee:
+          type: number
+        logisticsAmount:
+          type: number
+        timeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeTimelineEvent'
+        complianceStatus:
+          $ref: '#/components/schemas/TradeComplianceStatus'
+    TradeResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/Trade'
+        timestamp:
+          type: string
+          format: date-time
+    TradeListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trade'
+        timestamp:
+          type: string
+          format: date-time
     GovernanceActionCategory:
       type: string
       enum:
