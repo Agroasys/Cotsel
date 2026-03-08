@@ -62,6 +62,7 @@ function buildUnpauseProposal(overrides: Partial<UnpauseProposalState> = {}): Un
 }
 
 function buildAction(overrides: Partial<GovernanceActionRecord> = {}): GovernanceActionRecord {
+  const now = Date.now();
   return {
     actionId: 'action-1',
     intentKey: buildGovernanceIntentKey({
@@ -79,8 +80,8 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
     tradeId: null,
     chainId: '31337',
     targetAddress: null,
-    createdAt: '2026-03-07T10:00:00.000Z',
-    expiresAt: '2026-03-08T10:00:00.000Z',
+    createdAt: new Date(now - 60_000).toISOString(),
+    expiresAt: new Date(now + 60 * 60 * 1000).toISOString(),
     executedAt: null,
     requestId: 'req-1',
     correlationId: 'corr-1',
