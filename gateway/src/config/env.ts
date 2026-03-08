@@ -82,7 +82,7 @@ function assertAddress(name: string, value: string): string {
 
 export function loadConfig(): GatewayConfig {
   const buildTime = process.env.GATEWAY_BUILD_TIME?.trim() || new Date().toISOString();
-  const authBaseUrl = env('AUTH_BASE_URL').replace(/\/$/, '');
+  const authBaseUrl = env('GATEWAY_AUTH_BASE_URL').replace(/\/$/, '');
   const indexerGraphqlUrl = env('GATEWAY_INDEXER_GRAPHQL_URL').replace(/\/$/, '');
   const rpcUrl = env('GATEWAY_RPC_URL').replace(/\/$/, '');
   const chainId = envNumber('GATEWAY_CHAIN_ID');
@@ -91,7 +91,7 @@ export function loadConfig(): GatewayConfig {
   const enableMutations = envBool('GATEWAY_ENABLE_MUTATIONS', false);
   const nodeEnv = process.env.NODE_ENV || 'development';
 
-  assert(authBaseUrl.startsWith('http://') || authBaseUrl.startsWith('https://'), 'AUTH_BASE_URL must be an absolute http(s) URL');
+  assert(authBaseUrl.startsWith('http://') || authBaseUrl.startsWith('https://'), 'GATEWAY_AUTH_BASE_URL must be an absolute http(s) URL');
   assert(indexerGraphqlUrl.startsWith('http://') || indexerGraphqlUrl.startsWith('https://'), 'GATEWAY_INDEXER_GRAPHQL_URL must be an absolute http(s) URL');
   assert(rpcUrl.startsWith('http://') || rpcUrl.startsWith('https://'), 'GATEWAY_RPC_URL must be an absolute http(s) URL');
   assert(envNumber('PORT', 3600) > 0, 'PORT must be > 0');
