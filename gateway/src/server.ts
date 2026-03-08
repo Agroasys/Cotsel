@@ -15,12 +15,14 @@ import { createPostgresComplianceWriteStore } from './core/complianceWriteStore'
 import { createPostgresGovernanceActionStore } from './core/governanceStore';
 import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore';
 import { createPostgresIdempotencyStore } from './core/idempotencyStore';
+import { TradeReadService } from './core/tradeReadService';
 import { GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
 import { Logger } from './logging/logger';
 import { createComplianceRouter } from './routes/compliance';
 import { createGovernanceRouter } from './routes/governance';
 import { createGovernanceMutationRouter } from './routes/governanceMutations';
+import { createTradeRouter } from './routes/trades';
 
 const config = loadConfig();
 const pool = createPool(config);
@@ -33,6 +35,11 @@ const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governance
 const governanceStatusService = createGovernanceStatusService(config);
 const idempotencyStore = createPostgresIdempotencyStore(pool);
 const governanceMutationService = new GovernanceMutationService(config, governanceActionStore, governanceWriteStore);
+const tradeReadService = new TradeReadService(
+  config.indexerGraphqlUrl,
+  config.indexerRequestTimeoutMs,
+  complianceStore,
+);
 
 function loadPackageVersion(): string {
   const candidates = [
@@ -91,6 +98,17 @@ async function readinessCheck() {
     });
   }
 
+  try {
+    await tradeReadService.checkReadiness();
+    dependencies.push({ name: 'indexer-graphql', status: 'ok' });
+  } catch (error) {
+    dependencies.push({
+      name: 'indexer-graphql',
+      status: 'unavailable',
+      detail: error instanceof Error ? error.message : 'Indexer GraphQL unavailable',
+    });
+  }
+
   return dependencies;
 }
 
@@ -118,6 +136,11 @@ async function bootstrap(): Promise<void> {
     governanceReader: governanceStatusService,
     mutationService: governanceMutationService,
     idempotencyStore,
+  }));
+  extraRouter.use(createTradeRouter({
+    authSessionClient,
+    config,
+    tradeReadService,
   }));
 
   const app = createApp(config, {
