@@ -36,6 +36,12 @@ export const GOVERNANCE_OPEN_INTENT_STATUSES: readonly GovernanceActionStatus[] 
   'approved',
 ] as const;
 
+export const GOVERNANCE_APPROVAL_CONTRACT_METHODS = [
+  'approveUnpause',
+  'approveTreasuryPayoutAddressUpdate',
+  'approveOracleUpdate',
+] as const;
+
 export interface EvidenceLink {
   kind: 'runbook' | 'incident' | 'ticket' | 'tx' | 'event' | 'document' | 'log' | 'dashboard' | 'other';
   uri: string;
@@ -144,6 +150,10 @@ function normalizeIntentFragment(value: string | number | null | undefined): str
   return String(value).trim().toLowerCase();
 }
 
+export function isApprovalGovernanceContractMethod(contractMethod: string): boolean {
+  return (GOVERNANCE_APPROVAL_CONTRACT_METHODS as readonly string[]).includes(contractMethod);
+}
+
 export function buildGovernanceIntentKey(input: {
   category: GovernanceActionCategory;
   contractMethod: string;
@@ -151,6 +161,7 @@ export function buildGovernanceIntentKey(input: {
   targetAddress?: string | null;
   tradeId?: string | null;
   chainId?: string | number | null;
+  approverWallet?: string | null;
 }): string {
   return [
     'v1',
@@ -160,6 +171,11 @@ export function buildGovernanceIntentKey(input: {
     normalizeIntentFragment(input.targetAddress),
     normalizeIntentFragment(input.tradeId),
     normalizeIntentFragment(input.chainId),
+    normalizeIntentFragment(
+      isApprovalGovernanceContractMethod(input.contractMethod)
+        ? input.approverWallet ?? null
+        : null,
+    ),
   ].join('|');
 }
 
@@ -192,6 +208,7 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
       targetAddress: row.targetAddress,
       tradeId: row.tradeId,
       chainId: row.chainId,
+      approverWallet: row.actorWallet,
     }),
     proposalId: numericOrNull(row.proposalId),
     category: row.category,

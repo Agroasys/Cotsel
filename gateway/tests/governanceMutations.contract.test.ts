@@ -6,6 +6,7 @@ import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
+import type { AuthSession } from '../src/core/authSessionClient';
 import { createInMemoryAuditLogStore } from '../src/core/auditLogStore';
 import {
   createInMemoryGovernanceActionStore,
@@ -101,6 +102,7 @@ interface StartServerOptions {
   sessionRole?: 'admin' | 'buyer' | null;
   enableMutations?: boolean;
   writeAllowlist?: string[];
+  sessionFixtures?: Record<string, AuthSession | null>;
   configureReader?: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => void;
 }
 
@@ -124,20 +126,53 @@ async function startServer(options: StartServerOptions = {}) {
   };
   options.configureReader?.(governanceReader);
 
+  const defaultSessionFixtures: Record<string, AuthSession> = {
+    'sess-admin': {
+      userId: 'uid-admin',
+      walletAddress: '0x00000000000000000000000000000000000000aa',
+      role: 'admin',
+      email: 'admin@agroasys.io',
+      issuedAt: Date.now(),
+      expiresAt: Date.now() + 60_000,
+    },
+    'sess-admin-2': {
+      userId: 'uid-admin-2',
+      walletAddress: '0x00000000000000000000000000000000000000ac',
+      role: 'admin',
+      email: 'admin2@agroasys.io',
+      issuedAt: Date.now(),
+      expiresAt: Date.now() + 60_000,
+    },
+    'sess-buyer': {
+      userId: 'uid-buyer',
+      walletAddress: '0x00000000000000000000000000000000000000bb',
+      role: 'buyer',
+      email: 'buyer@agroasys.io',
+      issuedAt: Date.now(),
+      expiresAt: Date.now() + 60_000,
+    },
+  };
+
   const authSessionClient: AuthSessionClient = {
-    resolveSession: jest.fn().mockImplementation(async () => {
+    resolveSession: jest.fn().mockImplementation(async (token: string) => {
       if (options.sessionRole === null) {
         return null;
       }
 
-      const role = options.sessionRole ?? 'admin';
+      if (options.sessionRole) {
+        const fixture = options.sessionRole === 'admin'
+          ? defaultSessionFixtures['sess-admin']
+          : defaultSessionFixtures['sess-buyer'];
+        return { ...fixture, issuedAt: Date.now(), expiresAt: Date.now() + 60_000 };
+      }
+
+      const fixture = options.sessionFixtures?.[token] ?? defaultSessionFixtures[token];
+      if (!fixture) {
+        return null;
+      }
+
       return {
-        userId: role === 'admin' ? 'uid-admin' : 'uid-buyer',
-        walletAddress: role === 'admin'
-          ? '0x00000000000000000000000000000000000000aa'
-          : '0x00000000000000000000000000000000000000bb',
-        role,
-        email: role === 'admin' ? 'admin@agroasys.io' : 'buyer@agroasys.io',
+        ...fixture,
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
       };
@@ -539,6 +574,66 @@ describe('gateway governance mutation routes contract', () => {
       expect(auditLogStore.entries.map((entry) => entry.eventType)).toEqual([
         'governance.action.queued',
         'governance.action.duplicate_reused',
+      ]);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('approval actions keep separate queued intents for different admin wallets', async () => {
+    const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({
+      writeAllowlist: ['uid-admin', 'uid-admin-2'],
+      configureReader(reader) {
+        reader.getOracleProposalState.mockResolvedValue(buildProposalState({
+          proposalId: 7,
+          approvalCount: 1,
+          expired: false,
+          cancelled: false,
+          executed: false,
+        }));
+        reader.hasApprovedOracleProposal.mockResolvedValue(false);
+      },
+    });
+
+    try {
+      const body = JSON.stringify(buildAuditBody());
+
+      const first = await fetch(`${baseUrl}/governance/oracle/proposals/7/approve`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-approve-oracle-1',
+        },
+        body,
+      });
+      const firstPayload = await first.json();
+
+      const second = await fetch(`${baseUrl}/governance/oracle/proposals/7/approve`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin-2',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-approve-oracle-2',
+        },
+        body,
+      });
+      const secondPayload = await second.json();
+
+      expect(first.status).toBe(202);
+      expect(second.status).toBe(202);
+      expect(firstPayload.data.actionId).not.toBe(secondPayload.data.actionId);
+      expect(firstPayload.data.intentKey).not.toBe(secondPayload.data.intentKey);
+
+      const stored = await governanceActionStore.list({ limit: 10 });
+      expect(stored.items).toHaveLength(2);
+      expect(stored.items.map((action) => action.audit.actorWallet)).toEqual(expect.arrayContaining([
+        '0x00000000000000000000000000000000000000aa',
+        '0x00000000000000000000000000000000000000ac',
+      ]));
+      expect(auditLogStore.entries.map((entry) => entry.eventType)).toEqual([
+        'governance.action.queued',
+        'governance.action.queued',
       ]);
     } finally {
       server.close();

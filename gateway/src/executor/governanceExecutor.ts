@@ -9,6 +9,7 @@ import {
   GovernanceActionRecord,
   GovernanceActionStatus,
   GovernanceActionStore,
+  isApprovalGovernanceContractMethod,
   isExpiredRequestedGovernanceAction,
 } from '../core/governanceStore';
 import {
@@ -58,6 +59,10 @@ function fallbackPostExecutionStatus(action: GovernanceActionRecord): Governance
 
 function isTimeoutError(error: unknown): boolean {
   return error instanceof GatewayError && error.details?.cause === 'timeout';
+}
+
+function normalizeWalletAddress(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase();
 }
 
 async function resolveProposalStatus(
@@ -167,6 +172,42 @@ export class GovernanceExecutorService {
         );
       } catch (error) {
         return this.persistFailure(existing, requestId, correlationId, executorWallet, error);
+      }
+
+      if (isApprovalGovernanceContractMethod(existing.contractMethod)) {
+        const expectedApproverWallet = normalizeWalletAddress(existing.audit.actorWallet);
+        const actualExecutorWallet = normalizeWalletAddress(executorWallet);
+
+        if (!expectedApproverWallet) {
+          throw new GatewayError(500, 'INTERNAL_ERROR', 'Queued approval action is missing the approver wallet');
+        }
+
+        if (expectedApproverWallet !== actualExecutorWallet) {
+          await this.auditLogStore.append({
+            eventType: 'governance.action.execution.rejected',
+            route: '/internal/executor/governance-actions/:actionId',
+            method: 'EXECUTE',
+            requestId,
+            correlationId: correlationId ?? null,
+            actorWalletAddress: executorWallet,
+            actorRole: 'executor',
+            status: existing.status,
+            metadata: {
+              actionId,
+              contractMethod: existing.contractMethod,
+              expectedApproverWallet,
+              executorWallet,
+              reasonCode: 'EXECUTOR_SIGNER_MISMATCH',
+            },
+          });
+
+          throw new GatewayError(409, 'CONFLICT', 'Executor signer does not match the queued approval approver wallet', {
+            actionId,
+            contractMethod: existing.contractMethod,
+            expectedApproverWallet,
+            executorWallet,
+          });
+        }
       }
 
       await this.auditLogStore.append({
