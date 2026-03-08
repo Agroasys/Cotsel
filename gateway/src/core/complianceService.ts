@@ -22,18 +22,7 @@ import { RequestContext } from '../middleware/requestContext';
 import { GatewayError } from '../errors';
 import { EvidenceLink } from './governanceStore';
 import { ComplianceWriteStore } from './complianceWriteStore';
-
-const VALID_EVIDENCE_KINDS = new Set<EvidenceLink['kind']>([
-  'runbook',
-  'incident',
-  'ticket',
-  'tx',
-  'event',
-  'document',
-  'log',
-  'dashboard',
-  'other',
-]);
+import { validateEvidenceLink } from './evidenceValidation';
 
 const DENY_ONLY_REASON_CODES = new Set([
   'CMP_KYB_FAILED',
@@ -85,19 +74,6 @@ function validateStringField(value: unknown, field: string, minLength: number, m
   return normalized;
 }
 
-function validateEvidenceLink(link: EvidenceLink, index: number): void {
-  if (!VALID_EVIDENCE_KINDS.has(link.kind)) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `audit.evidenceLinks[${index}].kind is invalid`);
-  }
-
-  if (typeof link.uri !== 'string' || link.uri.trim().length < 3) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `audit.evidenceLinks[${index}].uri is required`);
-  }
-
-  if (link.note !== undefined && (typeof link.note !== 'string' || link.note.trim().length === 0)) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `audit.evidenceLinks[${index}].note must be a non-empty string when provided`);
-  }
-}
 
 function validateAuditInput(raw: unknown): MutationAuditInput {
   if (!raw || typeof raw !== 'object') {

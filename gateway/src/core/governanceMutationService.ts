@@ -18,18 +18,8 @@ import { GatewayPrincipal } from '../middleware/auth';
 import { RequestContext } from '../middleware/requestContext';
 import { GatewayError } from '../errors';
 import { GovernanceWriteStore } from './governanceWriteStore';
+import { validateEvidenceLink } from './evidenceValidation';
 
-const VALID_EVIDENCE_KINDS = new Set<EvidenceLink['kind']>([
-  'runbook',
-  'incident',
-  'ticket',
-  'tx',
-  'event',
-  'document',
-  'log',
-  'dashboard',
-  'other',
-]);
 
 export interface GovernanceMutationAuditInput {
   reason: string;
@@ -60,19 +50,6 @@ export interface QueueGovernanceActionInput {
   idempotencyKey: string;
 }
 
-function validateEvidenceLink(link: EvidenceLink, index: number): void {
-  if (!VALID_EVIDENCE_KINDS.has(link.kind)) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `audit.evidenceLinks[${index}].kind is invalid`);
-  }
-
-  if (typeof link.uri !== 'string' || link.uri.trim().length < 3) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `audit.evidenceLinks[${index}].uri is required`);
-  }
-
-  if (link.note !== undefined && (typeof link.note !== 'string' || link.note.trim().length === 0)) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `audit.evidenceLinks[${index}].note must be a non-empty string when provided`);
-  }
-}
 
 export function validateGovernanceAuditInput(raw: unknown): GovernanceMutationAuditInput {
   if (!raw || typeof raw !== 'object') {
