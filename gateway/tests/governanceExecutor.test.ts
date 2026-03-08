@@ -3,6 +3,7 @@
  */
 import { createInMemoryAuditLogStore } from '../src/core/auditLogStore';
 import {
+  buildGovernanceIntentKey,
   createInMemoryGovernanceActionStore,
   GovernanceActionRecord,
 } from '../src/core/governanceStore';
@@ -63,6 +64,11 @@ function buildUnpauseProposal(overrides: Partial<UnpauseProposalState> = {}): Un
 function buildAction(overrides: Partial<GovernanceActionRecord> = {}): GovernanceActionRecord {
   return {
     actionId: 'action-1',
+    intentKey: buildGovernanceIntentKey({
+      category: 'pause',
+      contractMethod: 'pause',
+      chainId: '31337',
+    }),
     proposalId: null,
     category: 'pause',
     status: 'requested',
@@ -74,6 +80,7 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
     chainId: '31337',
     targetAddress: null,
     createdAt: '2026-03-07T10:00:00.000Z',
+    expiresAt: '2026-03-08T10:00:00.000Z',
     executedAt: null,
     requestId: 'req-1',
     correlationId: 'corr-1',
@@ -251,6 +258,33 @@ describe('GovernanceExecutorService', () => {
     expect(auditLogStore.entries[1].eventType).toBe('governance.action.execution.failed');
   });
 
+  test('marks expired requested actions as stale without calling the chain executor', async () => {
+    const store = createInMemoryGovernanceActionStore([
+      buildAction({
+        actionId: 'action-expired',
+        expiresAt: '2026-03-07T09:59:59.000Z',
+      }),
+    ]);
+    const auditLogStore = createInMemoryAuditLogStore();
+    const executor = createExecutor();
+    const service = new GovernanceExecutorService(
+      store,
+      createPassthroughGovernanceWriteStore(store, auditLogStore),
+      auditLogStore,
+      createReader(),
+      createInMemoryGovernanceExecutionLock(),
+      executor,
+    );
+
+    const result = await service.executeAction('action-expired', 'executor-req-expired');
+
+    expect(executor.execute).not.toHaveBeenCalled();
+    expect(result.status).toBe('stale');
+    expect(result.errorCode).toBe('QUEUE_EXPIRED');
+    expect(auditLogStore.entries).toHaveLength(1);
+    expect(auditLogStore.entries[0].eventType).toBe('governance.action.execution.stale');
+  });
+
   test('marks signer-resolution timeouts as failed before any execution starts', async () => {
     const store = createInMemoryGovernanceActionStore([
       buildAction({
@@ -361,6 +395,7 @@ describe('GovernanceExecutorService', () => {
       store,
       {
         saveActionWithAudit: jest.fn().mockRejectedValue(new Error('audit storage unavailable')),
+        saveQueuedActionWithIntentDedupe: jest.fn(),
       },
       auditLogStore,
       createReader(),

@@ -1137,6 +1137,7 @@ components:
         - executed
         - cancelled
         - expired
+        - stale
         - failed
     GovernanceStatus:
       type: object
@@ -1204,6 +1205,7 @@ components:
       type: object
       required:
         - actionId
+        - intentKey
         - category
         - status
         - contractMethod
@@ -1211,6 +1213,8 @@ components:
         - createdAt
       properties:
         actionId:
+          type: string
+        intentKey:
           type: string
         proposalId:
           type: integer
@@ -1243,6 +1247,10 @@ components:
         createdAt:
           type: string
           format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
         executedAt:
           type: string
           format: date-time
@@ -1297,9 +1305,11 @@ components:
           const: true
         data:
           type: object
-          required: [actionId, category, status, acceptedAt]
+          required: [actionId, intentKey, category, status, acceptedAt]
           properties:
             actionId:
+              type: string
+            intentKey:
               type: string
             proposalId:
               type: integer
@@ -1312,6 +1322,10 @@ components:
             acceptedAt:
               type: string
               format: date-time
+            expiresAt:
+              type: string
+              format: date-time
+              nullable: true
         timestamp:
           type: string
           format: date-time

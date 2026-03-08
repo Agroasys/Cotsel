@@ -22,6 +22,7 @@ const config: GatewayConfig = {
   escrowAddress: '0x0000000000000000000000000000000000000000',
   enableMutations: false,
   writeAllowlist: [],
+  governanceQueueTtlSeconds: 86400,
   commitSha: 'abc1234',
   buildTime: '2026-03-07T00:00:00.000Z',
   nodeEnv: 'test',

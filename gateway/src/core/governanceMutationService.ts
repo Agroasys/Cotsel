@@ -6,10 +6,12 @@ import { isAddress, ZeroAddress } from 'ethers';
 import { GatewayConfig } from '../config/env';
 import { AuditLogEntry } from './auditLogStore';
 import {
+  buildGovernanceIntentKey,
   EvidenceLink,
   GovernanceActionAuditRecord,
   GovernanceActionCategory,
   GovernanceActionRecord,
+  GovernanceActionStore,
   GovernanceActionStatus,
 } from './governanceStore';
 import { GatewayPrincipal } from '../middleware/auth';
@@ -37,10 +39,12 @@ export interface GovernanceMutationAuditInput {
 
 export interface GovernanceMutationAccepted {
   actionId: string;
+  intentKey: string;
   proposalId: number | null;
   category: GovernanceActionCategory;
   status: GovernanceActionStatus;
   acceptedAt: string;
+  expiresAt: string | null;
 }
 
 export interface QueueGovernanceActionInput {
@@ -151,15 +155,26 @@ function buildAuditRecord(
 export class GovernanceMutationService {
   constructor(
     private readonly config: GatewayConfig,
+    private readonly actionStore: GovernanceActionStore,
     private readonly writeStore: GovernanceWriteStore,
   ) {}
 
   async queueAction(input: QueueGovernanceActionInput): Promise<GovernanceMutationAccepted> {
     const acceptedAt = new Date().toISOString();
+    const expiresAt = new Date(Date.parse(acceptedAt) + (this.config.governanceQueueTtlSeconds * 1000)).toISOString();
+    const intentKey = buildGovernanceIntentKey({
+      category: input.category,
+      contractMethod: input.contractMethod,
+      proposalId: input.proposalId ?? null,
+      targetAddress: input.targetAddress ?? null,
+      tradeId: input.tradeId ?? null,
+      chainId: this.config.chainId,
+    });
     const actionId = randomUUID();
 
     const record: GovernanceActionRecord = {
       actionId,
+      intentKey,
       proposalId: input.proposalId ?? null,
       category: input.category,
       status: 'requested',
@@ -171,6 +186,7 @@ export class GovernanceMutationService {
       chainId: String(this.config.chainId),
       targetAddress: input.targetAddress ?? null,
       createdAt: acceptedAt,
+      expiresAt,
       executedAt: null,
       requestId: input.requestContext.requestId,
       correlationId: input.requestContext.correlationId,
@@ -198,14 +214,43 @@ export class GovernanceMutationService {
       },
     };
 
-    await this.writeStore.saveActionWithAudit(record, auditEntry);
+    const duplicateAuditEntry = (existing: GovernanceActionRecord): AuditLogEntry => ({
+      eventType: 'governance.action.duplicate_reused',
+      route: input.routePath,
+      method: 'POST',
+      requestId: input.requestContext.requestId,
+      correlationId: input.requestContext.correlationId,
+      actorUserId: input.principal.session.userId,
+      actorWalletAddress: input.principal.session.walletAddress,
+      actorRole: input.principal.session.role,
+      status: existing.status,
+      metadata: {
+        actionId: existing.actionId,
+        category: existing.category,
+        proposalId: existing.proposalId,
+        targetAddress: existing.targetAddress,
+        intentKey: existing.intentKey,
+        idempotencyKey: input.idempotencyKey,
+      },
+    });
+
+    const saved = await this.writeStore.saveQueuedActionWithIntentDedupe(
+      record,
+      auditEntry,
+      duplicateAuditEntry,
+      acceptedAt,
+    );
+
+    const stored = saved.created ? record : (await this.actionStore.get(saved.action.actionId)) ?? saved.action;
 
     return {
-      actionId,
-      proposalId: input.proposalId ?? null,
-      category: input.category,
-      status: 'requested',
-      acceptedAt,
+      actionId: stored.actionId,
+      intentKey: stored.intentKey,
+      proposalId: stored.proposalId,
+      category: stored.category,
+      status: stored.status,
+      acceptedAt: stored.createdAt,
+      expiresAt: stored.expiresAt,
     };
   }
 }

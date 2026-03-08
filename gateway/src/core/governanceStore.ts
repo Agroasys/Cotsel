@@ -22,11 +22,19 @@ export const GOVERNANCE_ACTION_STATUSES = [
   'executed',
   'cancelled',
   'expired',
+  'stale',
   'failed',
 ] as const;
 
 export type GovernanceActionCategory = typeof GOVERNANCE_ACTION_CATEGORIES[number];
 export type GovernanceActionStatus = typeof GOVERNANCE_ACTION_STATUSES[number];
+
+export const GOVERNANCE_OPEN_INTENT_STATUSES: readonly GovernanceActionStatus[] = [
+  'requested',
+  'submitted',
+  'pending_approvals',
+  'approved',
+] as const;
 
 export interface EvidenceLink {
   kind: 'runbook' | 'incident' | 'ticket' | 'tx' | 'event' | 'document' | 'log' | 'dashboard' | 'other';
@@ -48,6 +56,7 @@ export interface GovernanceActionAuditRecord {
 
 export interface GovernanceActionRecord {
   actionId: string;
+  intentKey: string;
   proposalId: number | null;
   category: GovernanceActionCategory;
   status: GovernanceActionStatus;
@@ -59,6 +68,7 @@ export interface GovernanceActionRecord {
   chainId: string | null;
   targetAddress: string | null;
   createdAt: string;
+  expiresAt: string | null;
   executedAt: string | null;
   requestId: string;
   correlationId: string | null;
@@ -88,18 +98,17 @@ export interface ListGovernanceActionsResult {
 export interface GovernanceActionStore {
   save(action: GovernanceActionRecord): Promise<GovernanceActionRecord>;
   get(actionId: string): Promise<GovernanceActionRecord | null>;
+  findOpenByIntentKey(intentKey: string, now: string): Promise<GovernanceActionRecord | null>;
   list(input: ListGovernanceActionsInput): Promise<ListGovernanceActionsResult>;
+  listRequestedExpired(now: string, limit: number): Promise<GovernanceActionRecord[]>;
   listActiveProposalIds(category: GovernanceActionCategory): Promise<number[]>;
 }
 
-const ACTIVE_PROPOSAL_STATUSES: readonly GovernanceActionStatus[] = [
-  'requested',
-  'pending_approvals',
-  'approved',
-];
+const ACTIVE_PROPOSAL_STATUSES: readonly GovernanceActionStatus[] = GOVERNANCE_OPEN_INTENT_STATUSES.filter((status) => status !== 'submitted');
 
 interface GovernanceActionRow {
   actionId: string;
+  intentKey: string | null;
   proposalId: string | number | null;
   category: GovernanceActionCategory;
   status: GovernanceActionStatus;
@@ -123,7 +132,41 @@ interface GovernanceActionRow {
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: Date;
+  expiresAt: Date | null;
   executedAt: Date | null;
+}
+
+function normalizeIntentFragment(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  return String(value).trim().toLowerCase();
+}
+
+export function buildGovernanceIntentKey(input: {
+  category: GovernanceActionCategory;
+  contractMethod: string;
+  proposalId?: number | null;
+  targetAddress?: string | null;
+  tradeId?: string | null;
+  chainId?: string | number | null;
+}): string {
+  return [
+    'v1',
+    normalizeIntentFragment(input.category),
+    normalizeIntentFragment(input.contractMethod),
+    normalizeIntentFragment(input.proposalId),
+    normalizeIntentFragment(input.targetAddress),
+    normalizeIntentFragment(input.tradeId),
+    normalizeIntentFragment(input.chainId),
+  ].join('|');
+}
+
+export function isExpiredRequestedGovernanceAction(action: GovernanceActionRecord, now: string): boolean {
+  return action.status === 'requested'
+    && action.expiresAt !== null
+    && action.expiresAt <= now;
 }
 
 function numericOrNull(value: string | number | null): number | null {
@@ -142,6 +185,14 @@ function numericOrNull(value: string | number | null): number | null {
 function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
   return {
     actionId: row.actionId,
+    intentKey: row.intentKey ?? buildGovernanceIntentKey({
+      category: row.category,
+      contractMethod: row.contractMethod,
+      proposalId: numericOrNull(row.proposalId),
+      targetAddress: row.targetAddress,
+      tradeId: row.tradeId,
+      chainId: row.chainId,
+    }),
     proposalId: numericOrNull(row.proposalId),
     category: row.category,
     status: row.status,
@@ -153,6 +204,7 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
     chainId: row.chainId,
     targetAddress: row.targetAddress,
     createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
     executedAt: row.executedAt ? row.executedAt.toISOString() : null,
     requestId: row.requestId,
     correlationId: row.correlationId,
@@ -204,6 +256,7 @@ function nextCursorFromItems(items: GovernanceActionRecord[], limit: number): st
 export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActionStore {
   const selectColumns = `SELECT
     action_id AS "actionId",
+    intent_key AS "intentKey",
     proposal_id AS "proposalId",
     category,
     status,
@@ -227,6 +280,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
     error_code AS "errorCode",
     error_message AS "errorMessage",
     created_at AS "createdAt",
+    expires_at AS "expiresAt",
     executed_at AS "executedAt"`;
 
   return {
@@ -234,6 +288,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
       await pool.query(
         `INSERT INTO governance_actions (
           action_id,
+          intent_key,
           proposal_id,
           category,
           status,
@@ -257,14 +312,16 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           error_code,
           error_message,
           created_at,
+          expires_at,
           executed_at,
           updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          $11, $12, $13, $14, $15::jsonb, $16, $17, $18, $19, $20,
-          $21::jsonb, $22, $23, $24, $25, NOW()
+          $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19, $20, $21,
+          $22::jsonb, $23, $24, $25, $26, $27, NOW()
         )
         ON CONFLICT (action_id) DO UPDATE SET
+          intent_key = EXCLUDED.intent_key,
           proposal_id = EXCLUDED.proposal_id,
           category = EXCLUDED.category,
           status = EXCLUDED.status,
@@ -288,10 +345,12 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           error_code = EXCLUDED.error_code,
           error_message = EXCLUDED.error_message,
           created_at = EXCLUDED.created_at,
+          expires_at = EXCLUDED.expires_at,
           executed_at = EXCLUDED.executed_at,
           updated_at = NOW()`,
         [
           action.actionId,
+          action.intentKey,
           action.proposalId,
           action.category,
           action.status,
@@ -315,6 +374,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           action.errorCode,
           action.errorMessage,
           action.createdAt,
+          action.expiresAt,
           action.executedAt,
         ],
       );
@@ -333,6 +393,25 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
          FROM governance_actions
          WHERE action_id = $1`,
         [actionId],
+      );
+
+      return result.rows[0] ? mapRow(result.rows[0]) : null;
+    },
+
+    async findOpenByIntentKey(intentKey, now) {
+      const result = await pool.query<GovernanceActionRow>(
+        `${selectColumns}
+         FROM governance_actions
+         WHERE intent_key = $1
+           AND status = ANY($2::text[])
+           AND (
+             status <> 'requested'
+             OR expires_at IS NULL
+             OR expires_at > $3::timestamp
+           )
+         ORDER BY created_at DESC, action_id DESC
+         LIMIT 1`,
+        [intentKey, GOVERNANCE_OPEN_INTENT_STATUSES, now],
       );
 
       return result.rows[0] ? mapRow(result.rows[0]) : null;
@@ -386,6 +465,21 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
       };
     },
 
+    async listRequestedExpired(now, limit) {
+      const result = await pool.query<GovernanceActionRow>(
+        `${selectColumns}
+         FROM governance_actions
+         WHERE status = 'requested'
+           AND expires_at IS NOT NULL
+           AND expires_at <= $1::timestamp
+         ORDER BY expires_at ASC, action_id ASC
+         LIMIT $2`,
+        [now, limit],
+      );
+
+      return result.rows.map(mapRow);
+    },
+
     async listActiveProposalIds(category) {
       const result = await pool.query<{ proposalId: string | number }>(
         `SELECT DISTINCT proposal_id AS "proposalId"
@@ -428,6 +522,16 @@ export function createInMemoryGovernanceActionStore(initial: GovernanceActionRec
       return action ? { ...action, audit: { ...action.audit, evidenceLinks: [...action.audit.evidenceLinks], ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}) } } : null;
     },
 
+    async findOpenByIntentKey(intentKey, now) {
+      const action = sorted().find((candidate) => (
+        candidate.intentKey === intentKey
+        && GOVERNANCE_OPEN_INTENT_STATUSES.includes(candidate.status)
+        && !isExpiredRequestedGovernanceAction(candidate, now)
+      ));
+
+      return action ? { ...action, audit: { ...action.audit, evidenceLinks: [...action.audit.evidenceLinks], ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}) } } : null;
+    },
+
     async list(input) {
       let candidates = sorted();
 
@@ -456,6 +560,20 @@ export function createInMemoryGovernanceActionStore(initial: GovernanceActionRec
         items: page.slice(0, input.limit),
         nextCursor: nextCursorFromItems(page, input.limit),
       };
+    },
+
+    async listRequestedExpired(now, limit) {
+      return sorted()
+        .filter((action) => isExpiredRequestedGovernanceAction(action, now))
+        .slice(0, limit)
+        .map((action) => ({
+          ...action,
+          audit: {
+            ...action.audit,
+            evidenceLinks: [...action.audit.evidenceLinks],
+            ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}),
+          },
+        }));
     },
 
     async listActiveProposalIds(category) {

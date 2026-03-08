@@ -32,7 +32,7 @@ const governanceActionStore = createPostgresGovernanceActionStore(pool);
 const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
 const governanceStatusService = createGovernanceStatusService(config);
 const idempotencyStore = createPostgresIdempotencyStore(pool);
-const governanceMutationService = new GovernanceMutationService(config, governanceWriteStore);
+const governanceMutationService = new GovernanceMutationService(config, governanceActionStore, governanceWriteStore);
 
 function loadPackageVersion(): string {
   const candidates = [

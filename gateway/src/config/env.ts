@@ -21,6 +21,7 @@ export interface GatewayConfig {
   escrowAddress: string;
   enableMutations: boolean;
   writeAllowlist: string[];
+  governanceQueueTtlSeconds: number;
   commitSha: string;
   buildTime: string;
   nodeEnv: string;
@@ -94,6 +95,7 @@ export function loadConfig(): GatewayConfig {
   assert(chainId > 0, 'GATEWAY_CHAIN_ID must be > 0');
   assert(envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_AUTH_REQUEST_TIMEOUT_MS must be >= 1000');
   assert(envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000) >= 1000, 'GATEWAY_RPC_READ_TIMEOUT_MS must be >= 1000');
+  assert(envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400) >= 60, 'GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS must be >= 60');
 
   return {
     port: envNumber('PORT', 3600),
@@ -110,6 +112,7 @@ export function loadConfig(): GatewayConfig {
     escrowAddress,
     enableMutations,
     writeAllowlist,
+    governanceQueueTtlSeconds: envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400),
     commitSha: process.env.GATEWAY_COMMIT_SHA?.trim() || 'local-dev',
     buildTime,
     nodeEnv,

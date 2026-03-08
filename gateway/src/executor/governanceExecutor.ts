@@ -9,6 +9,7 @@ import {
   GovernanceActionRecord,
   GovernanceActionStatus,
   GovernanceActionStore,
+  isExpiredRequestedGovernanceAction,
 } from '../core/governanceStore';
 import {
   GovernanceMutationPreflightReader,
@@ -144,6 +145,10 @@ export class GovernanceExecutorService {
 
       if (existing.status !== 'requested') {
         return existing;
+      }
+
+      if (isExpiredRequestedGovernanceAction(existing, new Date().toISOString())) {
+        return this.persistStale(existing, requestId, correlationId);
       }
 
       let executorWallet: string | null = null;
@@ -304,6 +309,38 @@ export class GovernanceExecutorService {
     };
 
     return this.writeStore.saveActionWithAudit(submittedRecord, auditEntry);
+  }
+
+  private async persistStale(
+    existing: GovernanceActionRecord,
+    requestId: string,
+    correlationId: string | null | undefined,
+  ): Promise<GovernanceActionRecord> {
+    const staleRecord: GovernanceActionRecord = {
+      ...existing,
+      status: 'stale',
+      errorCode: 'QUEUE_EXPIRED',
+      errorMessage: 'Governance action expired in the queue before execution started',
+      executedAt: new Date().toISOString(),
+    };
+
+    const auditEntry: AuditLogEntry = {
+      eventType: 'governance.action.execution.stale',
+      route: '/internal/executor/governance-actions/:actionId',
+      method: 'EXECUTE',
+      requestId,
+      correlationId: correlationId ?? null,
+      actorRole: 'executor',
+      status: 'stale',
+      metadata: {
+        actionId: existing.actionId,
+        intentKey: existing.intentKey,
+        expiresAt: existing.expiresAt,
+        errorCode: 'QUEUE_EXPIRED',
+      },
+    };
+
+    return this.writeStore.saveActionWithAudit(staleRecord, auditEntry);
   }
 
   private async persistExecution(

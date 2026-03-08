@@ -3,12 +3,17 @@
  */
 import { Pool, PoolClient } from 'pg';
 import { AuditLogEntry } from '../src/core/auditLogStore';
-import { GovernanceActionRecord, GovernanceActionStore } from '../src/core/governanceStore';
+import { buildGovernanceIntentKey, GovernanceActionRecord, GovernanceActionStore } from '../src/core/governanceStore';
 import { createPostgresGovernanceWriteStore } from '../src/core/governanceWriteStore';
 
 function buildAction(overrides: Partial<GovernanceActionRecord> = {}): GovernanceActionRecord {
   return {
     actionId: 'action-queue-1',
+    intentKey: buildGovernanceIntentKey({
+      category: 'pause',
+      contractMethod: 'pause',
+      chainId: '31337',
+    }),
     proposalId: null,
     category: 'pause',
     status: 'requested',
@@ -20,6 +25,7 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
     chainId: '31337',
     targetAddress: null,
     createdAt: '2026-03-07T10:00:00.000Z',
+    expiresAt: '2026-03-08T10:00:00.000Z',
     executedAt: null,
     requestId: 'req-1',
     correlationId: 'corr-1',
@@ -58,8 +64,10 @@ function buildAuditEntry(overrides: Partial<AuditLogEntry> = {}): AuditLogEntry 
 function createReadStore(): GovernanceActionStore {
   return {
     get: jest.fn(),
+    findOpenByIntentKey: jest.fn(),
     save: jest.fn(),
     list: jest.fn(),
+    listRequestedExpired: jest.fn(),
     listActiveProposalIds: jest.fn(),
   };
 }
@@ -138,6 +146,52 @@ describe('createPostgresGovernanceWriteStore', () => {
     expect(query).toHaveBeenNthCalledWith(4, 'ROLLBACK');
     expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('COMMIT'))).toBe(false);
     expect((readStore.get as jest.Mock)).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  test('returns an existing open intent instead of inserting a duplicate queued action', async () => {
+    const existing = buildAction({
+      actionId: 'action-existing',
+      status: 'requested',
+    });
+    const readStore = createReadStore();
+    (readStore.get as jest.Mock)
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce(existing);
+
+    const { pool, query, release } = createPoolMocks();
+    query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({}) // advisory lock
+      .mockResolvedValueOnce({ rows: [{ actionId: 'action-existing' }] }) // existing action lookup
+      .mockResolvedValueOnce({}) // duplicate audit insert
+      .mockResolvedValueOnce({}); // COMMIT
+
+    const writeStore = createPostgresGovernanceWriteStore(pool, readStore);
+    const result = await writeStore.saveQueuedActionWithIntentDedupe(
+      buildAction({
+        actionId: 'action-duplicate',
+        intentKey: existing.intentKey,
+      }),
+      buildAuditEntry({
+        metadata: {
+          actionId: 'action-duplicate',
+        },
+      }),
+      () => buildAuditEntry({
+        eventType: 'governance.action.duplicate_reused',
+        status: existing.status,
+        metadata: {
+          actionId: existing.actionId,
+        },
+      }),
+      '2026-03-07T10:00:00.000Z',
+    );
+
+    expect(result.created).toBe(false);
+    expect(result.action.actionId).toBe('action-existing');
+    expect(query).toHaveBeenNthCalledWith(1, 'BEGIN');
+    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO governance_actions'))).toBe(false);
     expect(release).toHaveBeenCalledTimes(1);
   });
 });

@@ -39,6 +39,7 @@ const baseConfig: GatewayConfig = {
   escrowAddress: '0x0000000000000000000000000000000000000000',
   enableMutations: true,
   writeAllowlist: ['uid-admin'],
+  governanceQueueTtlSeconds: 86400,
   commitSha: 'abc1234',
   buildTime: '2026-03-07T00:00:00.000Z',
   nodeEnv: 'test',
@@ -149,6 +150,7 @@ async function startServer(options: StartServerOptions = {}) {
   const idempotencyStore = createInMemoryIdempotencyStore();
   const mutationService = new GovernanceMutationService(
     config,
+    governanceActionStore,
     createPassthroughGovernanceWriteStore(governanceActionStore, auditLogStore),
   );
 
@@ -444,10 +446,14 @@ describe('gateway governance mutation routes contract', () => {
       expect(validateAccepted(payload)).toBe(true);
       expect(payload.data.category).toBe(expectedCategory);
       expect(payload.data.status).toBe('requested');
+      expect(typeof payload.data.intentKey).toBe('string');
+      expect(payload.data.expiresAt).toMatch(/Z$/);
 
       const storedAction = await readStoredAction(governanceActionStore, payload.data.actionId);
       expect(storedAction.category).toBe(expectedCategory);
       expect(storedAction.contractMethod).toBe(expectedMethod);
+      expect(storedAction.intentKey).toBe(payload.data.intentKey);
+      expect(storedAction.expiresAt).toBe(payload.data.expiresAt);
       expect(storedAction.requestId).toBe(`req-${expectedMethod}`);
       expect(storedAction.audit.actorSessionId).toMatch(/^sha256:[a-f0-9]{64}$/);
       expect(storedAction.audit.actorSessionId).not.toBe('sess-admin');
@@ -485,6 +491,98 @@ describe('gateway governance mutation routes contract', () => {
       const stored = await governanceActionStore.list({ limit: 10 });
       expect(stored.items).toHaveLength(1);
       expect(auditLogStore.entries).toHaveLength(1);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('semantic dedupe returns the same queued action for duplicate intent with different idempotency keys', async () => {
+    const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({
+      configureReader(reader) {
+        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
+      },
+    });
+
+    try {
+      const body = JSON.stringify(buildAuditBody());
+
+      const first = await fetch(`${baseUrl}/governance/pause`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-pause-1',
+          'x-request-id': 'req-pause-1',
+        },
+        body,
+      });
+      const firstPayload = await first.json();
+
+      const second = await fetch(`${baseUrl}/governance/pause`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-pause-2',
+          'x-request-id': 'req-pause-2',
+        },
+        body,
+      });
+      const secondPayload = await second.json();
+
+      expect(first.status).toBe(202);
+      expect(second.status).toBe(202);
+      expect(firstPayload.data.actionId).toBe(secondPayload.data.actionId);
+      expect(firstPayload.data.intentKey).toBe(secondPayload.data.intentKey);
+      const stored = await governanceActionStore.list({ limit: 10 });
+      expect(stored.items).toHaveLength(1);
+      expect(auditLogStore.entries.map((entry) => entry.eventType)).toEqual([
+        'governance.action.queued',
+        'governance.action.duplicate_reused',
+      ]);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('different governance parameters produce different intent keys', async () => {
+    const { server, baseUrl, governanceActionStore } = await startServer({
+      configureReader(reader) {
+        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({
+          oracleAddress: '0x0000000000000000000000000000000000000011',
+        }));
+      },
+    });
+
+    try {
+      const first = await fetch(`${baseUrl}/governance/oracle/proposals`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-oracle-1',
+        },
+        body: JSON.stringify(buildAuditBody({ newOracleAddress: '0x00000000000000000000000000000000000000f1' })),
+      });
+      const firstPayload = await first.json();
+
+      const second = await fetch(`${baseUrl}/governance/oracle/proposals`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-oracle-2',
+        },
+        body: JSON.stringify(buildAuditBody({ newOracleAddress: '0x00000000000000000000000000000000000000f2' })),
+      });
+      const secondPayload = await second.json();
+
+      expect(first.status).toBe(202);
+      expect(second.status).toBe(202);
+      expect(firstPayload.data.intentKey).not.toBe(secondPayload.data.intentKey);
+
+      const stored = await governanceActionStore.list({ limit: 10 });
+      expect(stored.items).toHaveLength(2);
     } finally {
       server.close();
     }

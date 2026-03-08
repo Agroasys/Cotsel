@@ -30,6 +30,7 @@ Minimum gateway env contract:
 - `GATEWAY_ESCROW_ADDRESS`
 - `GATEWAY_ENABLE_MUTATIONS`
 - `GATEWAY_WRITE_ALLOWLIST`
+- `GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS`
 - `GATEWAY_COMMIT_SHA`
 - `GATEWAY_BUILD_TIME`
 
@@ -130,15 +131,27 @@ Mutation requests do not execute governance transactions inline.
 
 Flow:
 1. Gateway validates authz and payload.
-2. Gateway writes `governance_actions` + `audit_log` atomically with status `requested`.
-3. Operator/executor runs:
+2. Gateway derives a deterministic `intentKey` from governance category, contract method, and relevant parameters.
+3. If an open action already exists for the same `intentKey`, the gateway returns that existing action instead of creating a duplicate row.
+4. Otherwise the gateway writes `governance_actions` + `audit_log` atomically with status `requested`.
+5. Requested actions receive an `expires_at` deadline derived from `GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS`.
+6. Operators may inspect or clean stale requested actions with:
+
+```bash
+node gateway/scripts/governance-cleanup.mjs --dry-run
+node gateway/scripts/governance-cleanup.mjs --apply
+```
+
+7. Cleanup only marks expired `requested` actions as `stale` and appends an audit record with reason code `QUEUE_EXPIRED`.
+8. Operator/executor runs:
 
 ```bash
 npm run -w gateway execute:governance-action -- <actionId>
 ```
 
-4. Executor updates the action record and audit log atomically.
-5. Operator verifies tx hash, status, and chain event.
+9. Executor refuses expired `requested` actions, marks them `stale`, and appends an audit record.
+10. Executor updates the action record and audit log atomically.
+11. Operator verifies tx hash, status, and chain event.
 
 ## Rollback procedure
 If gateway behavior regresses after deploy:

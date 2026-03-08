@@ -10,6 +10,7 @@ import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createGovernanceRouter } from '../src/routes/governance';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
 import {
+  buildGovernanceIntentKey,
   createInMemoryGovernanceActionStore,
   GovernanceActionRecord,
 } from '../src/core/governanceStore';
@@ -30,6 +31,7 @@ const config: GatewayConfig = {
   escrowAddress: '0x0000000000000000000000000000000000000000',
   enableMutations: false,
   writeAllowlist: [],
+  governanceQueueTtlSeconds: 86400,
   commitSha: 'abc1234',
   buildTime: '2026-03-07T00:00:00.000Z',
   nodeEnv: 'test',
@@ -38,6 +40,13 @@ const config: GatewayConfig = {
 const seededActions: GovernanceActionRecord[] = [
   {
     actionId: 'gov-002',
+    intentKey: buildGovernanceIntentKey({
+      category: 'oracle_update',
+      contractMethod: 'proposeOracleUpdate',
+      proposalId: 7,
+      targetAddress: '0x0000000000000000000000000000000000000044',
+      chainId: '31337',
+    }),
     proposalId: 7,
     category: 'oracle_update',
     status: 'pending_approvals',
@@ -49,6 +58,7 @@ const seededActions: GovernanceActionRecord[] = [
     chainId: '31337',
     targetAddress: '0x0000000000000000000000000000000000000044',
     createdAt: '2026-03-07T10:10:00.000Z',
+    expiresAt: '2026-03-08T10:10:00.000Z',
     executedAt: null,
     requestId: 'req-2',
     correlationId: 'corr-2',
@@ -68,6 +78,11 @@ const seededActions: GovernanceActionRecord[] = [
   },
   {
     actionId: 'gov-001',
+    intentKey: buildGovernanceIntentKey({
+      category: 'pause',
+      contractMethod: 'pause',
+      chainId: '31337',
+    }),
     proposalId: null,
     category: 'pause',
     status: 'executed',
@@ -79,6 +94,7 @@ const seededActions: GovernanceActionRecord[] = [
     chainId: '31337',
     targetAddress: null,
     createdAt: '2026-03-07T10:00:00.000Z',
+    expiresAt: '2026-03-08T10:00:00.000Z',
     executedAt: '2026-03-07T10:01:00.000Z',
     requestId: 'req-1',
     correlationId: 'corr-1',

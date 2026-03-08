@@ -15,6 +15,7 @@ import {
   GovernanceExecutorService,
 } from './governanceExecutor';
 import { createAdminSdkGovernanceChainExecutor } from './adminSdkGovernanceChainExecutor';
+import { shouldExitNonZeroForGovernanceAction } from './runGovernanceActionStatus';
 
 async function main(): Promise<void> {
   const actionId = process.argv[2]?.trim();
@@ -52,7 +53,7 @@ async function main(): Promise<void> {
       blockNumber: result.blockNumber,
     });
 
-    if (result.status === 'failed' || result.status === 'submitted') {
+    if (shouldExitNonZeroForGovernanceAction(result.status)) {
       process.exitCode = 1;
     }
   } finally {

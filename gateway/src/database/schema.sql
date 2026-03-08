@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 CREATE TABLE IF NOT EXISTS governance_actions (
     action_id TEXT PRIMARY KEY,
+    intent_key TEXT,
     proposal_id BIGINT,
     category TEXT NOT NULL CHECK (category IN (
         'pause',
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS governance_actions (
         'executed',
         'cancelled',
         'expired',
+        'stale',
         'failed'
     )),
     contract_method TEXT NOT NULL,
@@ -71,6 +73,7 @@ CREATE TABLE IF NOT EXISTS governance_actions (
     error_code TEXT,
     error_message TEXT,
     created_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP,
     executed_at TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -119,6 +122,54 @@ CREATE TABLE IF NOT EXISTS oracle_progression_blocks (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS intent_key TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'governance_actions'::regclass
+          AND conname = 'governance_actions_status_check'
+    ) THEN
+        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_status_check;
+    END IF;
+END $$;
+
+ALTER TABLE governance_actions
+    ADD CONSTRAINT governance_actions_status_check CHECK (status IN (
+        'requested',
+        'submitted',
+        'pending_approvals',
+        'approved',
+        'executed',
+        'cancelled',
+        'expired',
+        'stale',
+        'failed'
+    ));
+
+UPDATE governance_actions
+SET intent_key = CONCAT_WS('|',
+        'v1',
+        LOWER(COALESCE(category, '')),
+        LOWER(COALESCE(contract_method, '')),
+        COALESCE(proposal_id::text, ''),
+        LOWER(COALESCE(target_address, '')),
+        LOWER(COALESCE(trade_id, '')),
+        LOWER(COALESCE(chain_id, ''))
+    )
+WHERE intent_key IS NULL;
+
+UPDATE governance_actions
+SET expires_at = created_at + INTERVAL '86400 seconds'
+WHERE expires_at IS NULL
+  AND status = 'requested';
+
 CREATE INDEX IF NOT EXISTS idx_idempotency_created_at ON idempotency_keys(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_idempotency_completed_at ON idempotency_keys(completed_at DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS idx_audit_log_request_id ON audit_log(request_id);
@@ -127,6 +178,9 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_status_created_at ON audit_log(status, 
 CREATE INDEX IF NOT EXISTS idx_governance_actions_created_at ON governance_actions(created_at DESC, action_id DESC);
 CREATE INDEX IF NOT EXISTS idx_governance_actions_category_status_created_at ON governance_actions(category, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_governance_actions_trade_id_created_at ON governance_actions(trade_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_governance_actions_intent_key_status_created_at ON governance_actions(intent_key, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_governance_actions_requested_expires_at ON governance_actions(expires_at ASC, action_id ASC)
+WHERE status = 'requested' AND expires_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_trade_id_decided_at ON compliance_decisions(trade_id, decided_at DESC, decision_id DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_result_decided_at ON compliance_decisions(result, decided_at DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_reason_code_decided_at ON compliance_decisions(reason_code, decided_at DESC);
