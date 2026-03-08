@@ -202,6 +202,10 @@ describe('GovernanceExecutorService', () => {
         category: 'oracle_update',
         contractMethod: 'approveOracleUpdate',
         targetAddress: '0x0000000000000000000000000000000000000044',
+        audit: {
+          ...buildAction().audit,
+          actorWallet: '0x0000000000000000000000000000000000000e11',
+        },
       }),
     ]);
     const reader = createReader({
@@ -228,6 +232,64 @@ describe('GovernanceExecutorService', () => {
 
     expect(result.status).toBe('approved');
     expect(result.txHash).toBe('0xabc123');
+  });
+
+  test('rejects approval execution when executor signer does not match the queued approver wallet', async () => {
+    const store = createInMemoryGovernanceActionStore([
+      buildAction({
+        actionId: 'action-approve-oracle-mismatch',
+        proposalId: 7,
+        category: 'oracle_update',
+        contractMethod: 'approveOracleUpdate',
+        targetAddress: '0x0000000000000000000000000000000000000044',
+        intentKey: buildGovernanceIntentKey({
+          category: 'oracle_update',
+          contractMethod: 'approveOracleUpdate',
+          proposalId: 7,
+          targetAddress: '0x0000000000000000000000000000000000000044',
+          chainId: '31337',
+          approverWallet: '0x00000000000000000000000000000000000000aa',
+        }),
+      }),
+    ]);
+    const auditLogStore = createInMemoryAuditLogStore();
+    const executor = createExecutor({
+      getSignerAddress: jest.fn(async () => '0x00000000000000000000000000000000000000ff'),
+    });
+    const service = new GovernanceExecutorService(
+      store,
+      createPassthroughGovernanceWriteStore(store, auditLogStore),
+      auditLogStore,
+      createReader(),
+      createInMemoryGovernanceExecutionLock(),
+      executor,
+    );
+
+    await expect(service.executeAction('action-approve-oracle-mismatch', 'executor-req-mismatch'))
+      .rejects
+      .toMatchObject({
+        statusCode: 409,
+        code: 'CONFLICT',
+        details: expect.objectContaining({
+          actionId: 'action-approve-oracle-mismatch',
+          expectedApproverWallet: '0x00000000000000000000000000000000000000aa',
+          executorWallet: '0x00000000000000000000000000000000000000ff',
+        }),
+      });
+
+    expect(executor.execute).not.toHaveBeenCalled();
+    const stored = await store.get('action-approve-oracle-mismatch');
+    expect(stored?.status).toBe('requested');
+    expect(stored?.txHash).toBeNull();
+    expect(auditLogStore.entries).toHaveLength(1);
+    expect(auditLogStore.entries[0]).toMatchObject({
+      eventType: 'governance.action.execution.rejected',
+      status: 'requested',
+      metadata: expect.objectContaining({
+        actionId: 'action-approve-oracle-mismatch',
+        reasonCode: 'EXECUTOR_SIGNER_MISMATCH',
+      }),
+    });
   });
 
   test('marks failed actions and appends a failure audit log when execution fails', async () => {
@@ -428,6 +490,10 @@ describe('GovernanceExecutorService', () => {
         proposalId: 7,
         category: 'oracle_update',
         contractMethod: 'approveOracleUpdate',
+        audit: {
+          ...buildAction().audit,
+          actorWallet: '0x0000000000000000000000000000000000000e11',
+        },
       }),
     ]);
     const auditLogStore = createInMemoryAuditLogStore();

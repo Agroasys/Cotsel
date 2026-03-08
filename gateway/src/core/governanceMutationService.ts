@@ -169,6 +169,7 @@ export class GovernanceMutationService {
       targetAddress: input.targetAddress ?? null,
       tradeId: input.tradeId ?? null,
       chainId: this.config.chainId,
+      approverWallet: input.principal.session.walletAddress,
     });
     const actionId = randomUUID();
 
