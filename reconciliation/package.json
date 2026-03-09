@@ -15,7 +15,7 @@
   "dependencies": {
     "@agroasys/sdk": "^1.0.0",
     "dotenv": "^17.3.1",
-    "pg": "^8.19.0",
+    "pg": "^8.20.0",
     "@agroasys/notifications": "^1.0.0"
   },
   "devDependencies": {
