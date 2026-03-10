@@ -93,6 +93,7 @@ export interface ComplianceStore {
   saveOracleProgressionBlock(block: OracleProgressionBlockRecord): Promise<OracleProgressionBlockRecord>;
   getOracleProgressionBlock(tradeId: string): Promise<OracleProgressionBlockRecord | null>;
   getTradeStatus(tradeId: string): Promise<ComplianceTradeStatusRecord | null>;
+  countBlockedTrades(): Promise<number>;
 }
 
 interface ComplianceDecisionRow {
@@ -538,6 +539,13 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
         updatedAt,
       };
     },
+
+    async countBlockedTrades() {
+      const result = await pool.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM oracle_progression_blocks WHERE block_state IN ('blocked', 'resume_pending')`,
+      );
+      return Number.parseInt(result.rows[0]?.count ?? '0', 10);
+    },
   };
 }
 
@@ -651,6 +659,12 @@ export function createInMemoryComplianceStore(
         latestCorrelationId: latestDecision.correlationId,
         updatedAt,
       };
+    },
+
+    async countBlockedTrades() {
+      return [...blocks.values()].filter(
+        (block) => block.blockState === 'blocked' || block.blockState === 'resume_pending',
+      ).length;
     },
   };
 }
