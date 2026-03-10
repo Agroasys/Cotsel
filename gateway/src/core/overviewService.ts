@@ -17,9 +17,16 @@ export interface OverviewTradeKpis {
 }
 
 export interface OverviewFeedStatus {
-  source: string;
+  source: 'indexer' | 'governance' | 'compliance';
+  freshAt: string | null;
   queriedAt: string | null;
   available: boolean;
+}
+
+export interface OverviewSourceError {
+  source: 'indexer' | 'governance' | 'compliance';
+  code: 'UPSTREAM_UNAVAILABLE';
+  message: string;
 }
 
 export interface OverviewPosture {
@@ -39,49 +46,94 @@ export interface OverviewSnapshot {
     governance: OverviewFeedStatus;
     compliance: OverviewFeedStatus;
   };
+  errors: OverviewSourceError[];
 }
 
 export interface OverviewReader {
   getOverview(): Promise<OverviewSnapshot>;
 }
 
-interface TradeStatusRecord {
-  tradeId: string;
-  status: 'LOCKED' | 'IN_TRANSIT' | 'ARRIVAL_CONFIRMED' | 'FROZEN' | 'CLOSED';
+interface OverviewSnapshotRecord {
+  totalTrades: string | number;
+  lockedTrades: string | number;
+  stage1Trades: string | number;
+  stage2Trades: string | number;
+  completedTrades: string | number;
+  disputedTrades: string | number;
+  cancelledTrades: string | number;
+  lastProcessedBlock: string;
+  lastIndexedAt: string;
+  lastTradeEventAt?: string | null;
 }
 
-interface TradeStatusGraphQlResponse {
-  data?: { trades?: TradeStatusRecord[] };
+interface OverviewGraphQlResponse {
+  data?: { overviewSnapshots?: OverviewSnapshotRecord[] };
   errors?: Array<{ message: string }>;
 }
 
-const OVERVIEW_TRADE_FETCH_LIMIT = 1000;
+const OVERVIEW_SNAPSHOT_QUERY = `
+  query GatewayOverviewSnapshot($snapshotId: String!) {
+    overviewSnapshots(where: { id_eq: $snapshotId }, limit: 1) {
+      totalTrades
+      lockedTrades
+      stage1Trades
+      stage2Trades
+      completedTrades
+      disputedTrades
+      cancelledTrades
+      lastProcessedBlock
+      lastIndexedAt
+      lastTradeEventAt
+    }
+  }
+`;
+
 const EMPTY_TRADE_KPIS: OverviewTradeKpis = {
   total: 0,
   byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 },
 };
 
-const overviewTradesQuery = `
-  query OverviewTradeKpis($limit: Int!, $offset: Int!) {
-    trades(orderBy: createdAt_DESC, limit: $limit, offset: $offset) {
-      tradeId
-      status
-    }
+function asNonNegativeInteger(value: string | number, field: string): number {
+  const numeric = typeof value === 'number' ? value : Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(numeric) || numeric < 0) {
+    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer returned invalid ${field}`, { field, value });
   }
-`;
 
-function aggregateTradeKpis(trades: TradeStatusRecord[]): OverviewTradeKpis {
-  const byStatus = { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 };
-  for (const trade of trades) {
-    switch (trade.status) {
-      case 'LOCKED': byStatus.locked++; break;
-      case 'IN_TRANSIT': byStatus.stage_1++; break;
-      case 'ARRIVAL_CONFIRMED': byStatus.stage_2++; break;
-      case 'CLOSED': byStatus.completed++; break;
-      case 'FROZEN': byStatus.disputed++; break;
-    }
+  return numeric;
+}
+
+function asIsoTimestamp(value: string, field: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer returned invalid ${field}`, { field, value });
   }
-  return { total: trades.length, byStatus };
+
+  return parsed.toISOString();
+}
+
+function safeErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof GatewayError) {
+    return error.message;
+  }
+
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function mapTradeKpis(snapshot: OverviewSnapshotRecord): OverviewTradeKpis {
+  return {
+    total: asNonNegativeInteger(snapshot.totalTrades, 'overviewSnapshot.totalTrades'),
+    byStatus: {
+      locked: asNonNegativeInteger(snapshot.lockedTrades, 'overviewSnapshot.lockedTrades'),
+      stage_1: asNonNegativeInteger(snapshot.stage1Trades, 'overviewSnapshot.stage1Trades'),
+      stage_2: asNonNegativeInteger(snapshot.stage2Trades, 'overviewSnapshot.stage2Trades'),
+      completed: asNonNegativeInteger(snapshot.completedTrades, 'overviewSnapshot.completedTrades'),
+      disputed: asNonNegativeInteger(snapshot.disputedTrades, 'overviewSnapshot.disputedTrades'),
+    },
+  };
 }
 
 export class OverviewService implements OverviewReader {
@@ -93,78 +145,103 @@ export class OverviewService implements OverviewReader {
   ) {}
 
   async getOverview(): Promise<OverviewSnapshot> {
-    const now = new Date().toISOString();
-
     const [tradesResult, governanceResult, complianceResult] = await Promise.allSettled([
-      this.fetchTradeKpis(),
+      this.fetchOverviewSnapshot(),
       this.governanceStatusService.getGovernanceStatus(),
-      this.complianceStore.countBlockedTrades(),
+      this.complianceStore.getOverviewMetrics(),
     ]);
+
+    const errors: OverviewSourceError[] = [];
 
     const tradesAvailable = tradesResult.status === 'fulfilled';
     const governanceAvailable = governanceResult.status === 'fulfilled';
     const complianceAvailable = complianceResult.status === 'fulfilled';
 
-    const tradeKpis = tradesAvailable
-      ? tradesResult.value
-      : EMPTY_TRADE_KPIS;
+    if (!tradesAvailable) {
+      errors.push({
+        source: 'indexer',
+        code: 'UPSTREAM_UNAVAILABLE',
+        message: safeErrorMessage(tradesResult.reason, 'Indexer overview snapshot unavailable'),
+      });
+    }
 
-    const posture: OverviewPosture | null = governanceAvailable
-      ? {
-          paused: governanceResult.value.paused,
-          claimsPaused: governanceResult.value.claimsPaused,
-          oracleActive: governanceResult.value.oracleActive,
-        }
-      : null;
+    if (!governanceAvailable) {
+      errors.push({
+        source: 'governance',
+        code: 'UPSTREAM_UNAVAILABLE',
+        message: safeErrorMessage(governanceResult.reason, 'Governance source unavailable'),
+      });
+    }
 
-    const blockedTrades = complianceAvailable ? complianceResult.value : 0;
+    if (!complianceAvailable) {
+      errors.push({
+        source: 'compliance',
+        code: 'UPSTREAM_UNAVAILABLE',
+        message: safeErrorMessage(complianceResult.reason, 'Compliance source unavailable'),
+      });
+    }
 
     return {
       kpis: {
-        trades: tradeKpis,
-        compliance: { blockedTrades },
+        trades: tradesAvailable ? tradesResult.value.kpis : EMPTY_TRADE_KPIS,
+        compliance: {
+          blockedTrades: complianceAvailable ? complianceResult.value.blockedTrades : 0,
+        },
       },
-      posture,
+      posture: governanceAvailable
+        ? {
+            paused: governanceResult.value.paused,
+            claimsPaused: governanceResult.value.claimsPaused,
+            oracleActive: governanceResult.value.oracleActive,
+          }
+        : null,
       feedFreshness: {
-        trades: { source: 'indexer_graphql', queriedAt: tradesAvailable ? now : null, available: tradesAvailable },
-        governance: { source: 'chain_rpc', queriedAt: governanceAvailable ? now : null, available: governanceAvailable },
-        compliance: { source: 'gateway_ledger', queriedAt: complianceAvailable ? now : null, available: complianceAvailable },
+        trades: tradesAvailable
+          ? {
+              source: 'indexer',
+              freshAt: tradesResult.value.freshAt,
+              queriedAt: tradesResult.value.queriedAt,
+              available: true,
+            }
+          : {
+              source: 'indexer',
+              freshAt: null,
+              queriedAt: null,
+              available: false,
+            },
+        governance: governanceAvailable
+          ? {
+              source: 'governance',
+              freshAt: governanceResult.value.chainBlockTimestamp,
+              queriedAt: governanceResult.value.queriedAt,
+              available: true,
+            }
+          : {
+              source: 'governance',
+              freshAt: null,
+              queriedAt: null,
+              available: false,
+            },
+        compliance: complianceAvailable
+          ? {
+              source: 'compliance',
+              freshAt: complianceResult.value.freshAt,
+              queriedAt: new Date().toISOString(),
+              available: true,
+            }
+          : {
+              source: 'compliance',
+              freshAt: null,
+              queriedAt: null,
+              available: false,
+            },
       },
+      errors,
     };
   }
 
-  private async fetchTradeKpis(): Promise<OverviewTradeKpis> {
-    const aggregate: OverviewTradeKpis = {
-      total: 0,
-      byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 },
-    };
-    let offset = 0;
-
-    while (true) {
-      const trades = await this.fetchTradePage(OVERVIEW_TRADE_FETCH_LIMIT, offset);
-      if (trades.length === 0) {
-        break;
-      }
-
-      const pageKpis = aggregateTradeKpis(trades);
-      aggregate.total += pageKpis.total;
-      aggregate.byStatus.locked += pageKpis.byStatus.locked;
-      aggregate.byStatus.stage_1 += pageKpis.byStatus.stage_1;
-      aggregate.byStatus.stage_2 += pageKpis.byStatus.stage_2;
-      aggregate.byStatus.completed += pageKpis.byStatus.completed;
-      aggregate.byStatus.disputed += pageKpis.byStatus.disputed;
-
-      if (trades.length < OVERVIEW_TRADE_FETCH_LIMIT) {
-        break;
-      }
-
-      offset += trades.length;
-    }
-
-    return aggregate;
-  }
-
-  private async fetchTradePage(limit: number, offset: number): Promise<TradeStatusRecord[]> {
+  private async fetchOverviewSnapshot(): Promise<{ kpis: OverviewTradeKpis; freshAt: string; queriedAt: string }> {
+    const queriedAt = new Date().toISOString();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.indexerRequestTimeoutMs);
 
@@ -173,9 +250,9 @@ export class OverviewService implements OverviewReader {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          operationName: 'OverviewTradeKpis',
-          query: overviewTradesQuery,
-          variables: { limit, offset },
+          operationName: 'GatewayOverviewSnapshot',
+          query: OVERVIEW_SNAPSHOT_QUERY,
+          variables: { snapshotId: 'singleton' },
         }),
         signal: controller.signal,
       });
@@ -186,31 +263,35 @@ export class OverviewService implements OverviewReader {
         });
       }
 
-      const payload = await response.json() as TradeStatusGraphQlResponse;
+      const payload = await response.json() as OverviewGraphQlResponse;
       if (payload.errors?.length) {
         throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned GraphQL errors', {
           errors: payload.errors.map((error) => error.message),
         });
       }
 
-      const trades = payload.data?.trades;
-      if (!Array.isArray(trades)) {
-        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned unexpected payload shape');
+      const snapshot = payload.data?.overviewSnapshots?.[0];
+      if (!snapshot) {
+        throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Indexer overview snapshot is missing');
       }
 
-      return trades;
+      return {
+        kpis: mapTradeKpis(snapshot),
+        freshAt: asIsoTimestamp(snapshot.lastIndexedAt, 'overviewSnapshot.lastIndexedAt'),
+        queriedAt,
+      };
     } catch (error) {
       if (error instanceof GatewayError) {
         throw error;
       }
 
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new GatewayError(504, 'UPSTREAM_UNAVAILABLE', 'Indexer request timed out', {
+        throw new GatewayError(504, 'UPSTREAM_UNAVAILABLE', 'Indexer overview request timed out', {
           timeoutMs: this.indexerRequestTimeoutMs,
         });
       }
 
-      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer request failed', {
+      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer overview request failed', {
         reason: error instanceof Error ? error.message : String(error),
       });
     } finally {

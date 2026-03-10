@@ -16,24 +16,27 @@ describe('overview service', () => {
     jest.restoreAllMocks();
   });
 
-  test('aggregates trade KPIs across all indexer pages', async () => {
-    const firstPage = Array.from({ length: 1000 }, (_, index) => tradeRecord('LOCKED', index + 1));
-    const secondPage = [
-      tradeRecord('IN_TRANSIT', 1001),
-      tradeRecord('ARRIVAL_CONFIRMED', 1002),
-      tradeRecord('CLOSED', 1003),
-      tradeRecord('FROZEN', 1004),
-    ];
-
+  test('returns authoritative trade KPIs from the indexer overview snapshot', async () => {
     global.fetch = jest
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ data: { trades: firstPage } }),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: { trades: secondPage } }),
+        json: async () => ({
+          data: {
+            overviewSnapshots: [{
+              totalTrades: 1004,
+              lockedTrades: 1000,
+              stage1Trades: 1,
+              stage2Trades: 1,
+              completedTrades: 1,
+              disputedTrades: 1,
+              cancelledTrades: 0,
+              lastProcessedBlock: '123456',
+              lastIndexedAt: '2026-03-09T00:00:00.000Z',
+              lastTradeEventAt: '2026-03-09T00:00:00.000Z',
+            }],
+          },
+        }),
       } as Response);
 
     const governanceStatusService = {
@@ -60,10 +63,17 @@ describe('overview service', () => {
     expect(snapshot.kpis.trades.byStatus.stage_2).toBe(1);
     expect(snapshot.kpis.trades.byStatus.completed).toBe(1);
     expect(snapshot.kpis.trades.byStatus.disputed).toBe(1);
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(snapshot.feedFreshness.trades).toEqual({
+      source: 'indexer',
+      freshAt: '2026-03-09T00:00:00.000Z',
+      queriedAt: expect.any(String),
+      available: true,
+    });
+    expect(snapshot.errors).toEqual([]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
-  test('marks queriedAt null for feeds that fail during snapshot generation', async () => {
+  test('returns degraded feed metadata and source errors when snapshot generation fails', async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('indexer down'));
 
     const governanceStatusService = {
@@ -73,7 +83,7 @@ describe('overview service', () => {
 
     const complianceStore = {
       ...createInMemoryComplianceStore([]),
-      countBlockedTrades: jest.fn().mockRejectedValue(new Error('store down')),
+      getOverviewMetrics: jest.fn().mockRejectedValue(new Error('store down')),
     };
 
     const service = new OverviewService(
@@ -86,19 +96,65 @@ describe('overview service', () => {
     const snapshot = await service.getOverview();
 
     expect(snapshot.feedFreshness.trades).toEqual({
-      source: 'indexer_graphql',
+      source: 'indexer',
+      freshAt: null,
       queriedAt: null,
       available: false,
     });
     expect(snapshot.feedFreshness.governance).toEqual({
-      source: 'chain_rpc',
+      source: 'governance',
+      freshAt: null,
       queriedAt: null,
       available: false,
     });
     expect(snapshot.feedFreshness.compliance).toEqual({
-      source: 'gateway_ledger',
+      source: 'compliance',
+      freshAt: null,
       queriedAt: null,
       available: false,
+    });
+    expect(snapshot.errors).toEqual([
+      { source: 'indexer', code: 'UPSTREAM_UNAVAILABLE', message: 'Indexer overview request failed' },
+      { source: 'governance', code: 'UPSTREAM_UNAVAILABLE', message: 'rpc down' },
+      { source: 'compliance', code: 'UPSTREAM_UNAVAILABLE', message: 'store down' },
+    ]);
+  });
+
+  test('treats a missing indexer snapshot as unavailable instead of fabricating freshness', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { overviewSnapshots: [] } }),
+    } as Response);
+
+    const governanceStatusService = {
+      getGovernanceStatus: jest.fn().mockResolvedValue({
+        paused: false,
+        claimsPaused: false,
+        oracleActive: true,
+        chainBlockTimestamp: '2026-03-09T00:00:00.000Z',
+        queriedAt: '2026-03-09T00:00:01.000Z',
+      }),
+      checkReadiness: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new OverviewService(
+      'http://127.0.0.1:4350/graphql',
+      5000,
+      governanceStatusService,
+      createInMemoryComplianceStore([]),
+    );
+
+    const snapshot = await service.getOverview();
+
+    expect(snapshot.kpis.trades).toEqual({
+      total: 0,
+      byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 },
+    });
+    expect(snapshot.feedFreshness.trades.available).toBe(false);
+    expect(snapshot.errors).toContainEqual({
+      source: 'indexer',
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: 'Indexer overview snapshot is missing',
     });
   });
 });

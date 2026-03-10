@@ -20,6 +20,8 @@ export interface GovernanceStatusSnapshot {
   activeUnpauseApprovals: number;
   activeOracleProposalIds: number[];
   activeTreasuryPayoutReceiverProposalIds: number[];
+  chainBlockTimestamp: string | null;
+  queriedAt: string;
 }
 
 export interface UnpauseProposalState {
@@ -145,6 +147,19 @@ function toSafeInteger(value: bigint, field: string): number {
   return numeric;
 }
 
+function toIsoTimestamp(value: bigint | number | null | undefined, field: string): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const seconds = typeof value === 'bigint' ? toSafeInteger(value, field) : value;
+  if (!Number.isSafeInteger(seconds) || seconds < 0) {
+    throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', `On-chain field '${field}' is not a valid timestamp`);
+  }
+
+  return new Date(seconds * 1000).toISOString();
+}
+
 async function collectActiveProposalIds(
   candidateProposalIds: number[],
   chainTimeSeconds: bigint,
@@ -206,6 +221,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 
   async getGovernanceStatus(request: GovernanceStatusRequest = {}): Promise<GovernanceStatusSnapshot> {
     try {
+      const queriedAt = new Date().toISOString();
       const snapshot = await this.runChainRead('getGovernanceStatus.snapshot', Promise.all([
         this.contract.paused(),
         this.contract.claimsPaused(),
@@ -234,7 +250,11 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         unpauseProposal,
       ] = snapshot;
 
-      const chainTimeSeconds = BigInt(latestBlock?.timestamp ?? 0);
+      const latestBlockTimestamp = latestBlock?.timestamp ?? 0;
+      const chainTimeSeconds = typeof latestBlockTimestamp === 'bigint'
+        ? latestBlockTimestamp
+        : BigInt(latestBlockTimestamp);
+      const chainBlockTimestamp = toIsoTimestamp(latestBlock?.timestamp, 'latestBlock.timestamp');
 
       const [
         activeOracleProposalIds,
@@ -270,6 +290,8 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         activeUnpauseApprovals: hasActiveUnpauseProposal ? toSafeInteger(unpauseProposal.approvalCount, 'unpauseProposal.approvalCount') : 0,
         activeOracleProposalIds,
         activeTreasuryPayoutReceiverProposalIds,
+        chainBlockTimestamp,
+        queriedAt,
       };
     } catch (error) {
       if (error instanceof GatewayError) {

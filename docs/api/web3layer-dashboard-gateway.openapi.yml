@@ -85,14 +85,19 @@ paths:
       description: |
         Aggregated overview surface for CTSP-Dash. Returns trade counts by settlement stage,
         governance posture (paused / oracle active), compliance blocked-trade count, and
-        per-feed query metadata so the dashboard can render operator trust indicators.
+        per-feed source freshness metadata so the dashboard can render operator trust indicators.
 
-        All three backend feeds (indexer, chain RPC, and gateway compliance ledger) are queried
-        in parallel. When a feed is unavailable, `feedFreshness.<feed>.available` is `false`,
-        `feedFreshness.<feed>.queriedAt` is `null`, the corresponding KPI values default to zero,
-        and `posture` is `null` when the chain RPC feed is unavailable. The endpoint always returns
-        HTTP 200 so the dashboard can render a partial view with degraded-feed indicators rather
-        than a blank screen.
+        All three backend feeds (indexer, governance, and compliance) are queried in parallel.
+        Each feed reports:
+        - `freshAt`: authoritative freshness timestamp from the source itself
+        - `queriedAt`: when the gateway read that source for this response
+        - `available`: whether the source returned usable data
+
+        When a feed is unavailable, `feedFreshness.<feed>.available` is `false`,
+        `feedFreshness.<feed>.freshAt` and `queriedAt` are `null`, the corresponding KPI values
+        default to zero, `posture` is `null` when the governance feed is unavailable, and a
+        structured `errors[]` entry is added. The endpoint always returns HTTP 200 so the dashboard
+        can render a partial view with degraded-feed indicators rather than a blank screen.
       operationId: getOverview
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1138,21 +1143,40 @@ components:
           format: date-time
     OverviewFeedStatus:
       type: object
-      required: [source, queriedAt, available]
+      required: [source, freshAt, queriedAt, available]
       properties:
         source:
           type: string
-          enum: [indexer_graphql, chain_rpc, gateway_ledger]
-          description: Identifies which backend feed provided (or attempted to provide) this data.
+          enum: [indexer, governance, compliance]
+          description: Identifies which authoritative backend feed provided (or attempted to provide) this data.
+        freshAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+          description: Authoritative freshness timestamp from the source itself; null when the source is unavailable.
         queriedAt:
           anyOf:
             - type: string
               format: date-time
             - type: 'null'
-          description: ISO timestamp of when the gateway successfully queried this feed for the current snapshot; null when the feed is unavailable.
+          description: ISO timestamp of when the gateway queried this source for the current snapshot; null when the feed is unavailable.
         available:
           type: boolean
           description: False when the feed returned an error or timed out for this request.
+    OverviewSourceError:
+      type: object
+      required: [source, code, message]
+      properties:
+        source:
+          type: string
+          enum: [indexer, governance, compliance]
+        code:
+          type: string
+          enum: [UPSTREAM_UNAVAILABLE]
+        message:
+          type: string
+          minLength: 1
     OverviewTradeKpis:
       type: object
       required: [total, byStatus]
@@ -1160,7 +1184,7 @@ components:
         total:
           type: integer
           minimum: 0
-          description: Total number of trades returned by the indexer across all fetched pages.
+          description: Total number of trades from the authoritative indexer overview snapshot.
         byStatus:
           type: object
           required: [locked, stage_1, stage_2, completed, disputed]
@@ -1195,7 +1219,7 @@ components:
           type: boolean
     OverviewSnapshot:
       type: object
-      required: [kpis, feedFreshness]
+      required: [kpis, feedFreshness, errors]
       properties:
         kpis:
           type: object
@@ -1226,6 +1250,11 @@ components:
               $ref: '#/components/schemas/OverviewFeedStatus'
             compliance:
               $ref: '#/components/schemas/OverviewFeedStatus'
+        errors:
+          type: array
+          description: Structured degraded-source errors for feeds that were unavailable during this request.
+          items:
+            $ref: '#/components/schemas/OverviewSourceError'
     OverviewResponse:
       type: object
       required: [success, data, timestamp]

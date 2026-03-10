@@ -48,10 +48,11 @@ const overviewFixture: OverviewSnapshot = {
     oracleActive: true,
   },
   feedFreshness: {
-    trades: { source: 'indexer_graphql', queriedAt: '2026-03-09T00:00:00.000Z', available: true },
-    governance: { source: 'chain_rpc', queriedAt: '2026-03-09T00:00:00.000Z', available: true },
-    compliance: { source: 'gateway_ledger', queriedAt: '2026-03-09T00:00:00.000Z', available: true },
+    trades: { source: 'indexer', freshAt: '2026-03-09T00:00:00.000Z', queriedAt: '2026-03-09T00:00:01.000Z', available: true },
+    governance: { source: 'governance', freshAt: '2026-03-09T00:00:00.000Z', queriedAt: '2026-03-09T00:00:01.000Z', available: true },
+    compliance: { source: 'compliance', freshAt: '2026-03-09T00:00:00.000Z', queriedAt: '2026-03-09T00:00:01.000Z', available: true },
   },
+  errors: [],
 };
 
 const degradedFixture: OverviewSnapshot = {
@@ -64,10 +65,15 @@ const degradedFixture: OverviewSnapshot = {
   },
   posture: null,
   feedFreshness: {
-    trades: { source: 'indexer_graphql', queriedAt: null, available: false },
-    governance: { source: 'chain_rpc', queriedAt: null, available: false },
-    compliance: { source: 'gateway_ledger', queriedAt: null, available: false },
+    trades: { source: 'indexer', freshAt: null, queriedAt: null, available: false },
+    governance: { source: 'governance', freshAt: null, queriedAt: null, available: false },
+    compliance: { source: 'compliance', freshAt: null, queriedAt: null, available: false },
   },
+  errors: [
+    { source: 'indexer', code: 'UPSTREAM_UNAVAILABLE', message: 'Indexer overview snapshot unavailable' },
+    { source: 'governance', code: 'UPSTREAM_UNAVAILABLE', message: 'Governance source unavailable' },
+    { source: 'compliance', code: 'UPSTREAM_UNAVAILABLE', message: 'Compliance source unavailable' },
+  ],
 };
 
 async function startServer(role: 'admin' | 'buyer' | null, fixture: OverviewSnapshot = overviewFixture) {
@@ -144,7 +150,9 @@ describe('gateway overview route contract', () => {
       expect(payload.data.posture.paused).toBe(false);
       expect(payload.data.posture.oracleActive).toBe(true);
       expect(payload.data.feedFreshness.trades.available).toBe(true);
-      expect(payload.data.feedFreshness.governance.source).toBe('chain_rpc');
+      expect(payload.data.feedFreshness.governance.source).toBe('governance');
+      expect(payload.data.feedFreshness.trades.freshAt).toBe('2026-03-09T00:00:00.000Z');
+      expect(payload.data.errors).toEqual([]);
     } finally {
       server.close();
     }
@@ -166,6 +174,7 @@ describe('gateway overview route contract', () => {
       expect(payload.data.feedFreshness.trades.available).toBe(false);
       expect(payload.data.feedFreshness.governance.available).toBe(false);
       expect(payload.data.feedFreshness.compliance.available).toBe(false);
+      expect(payload.data.errors).toHaveLength(3);
     } finally {
       server.close();
     }

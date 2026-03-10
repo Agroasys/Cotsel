@@ -94,6 +94,7 @@ export interface ComplianceStore {
   getOracleProgressionBlock(tradeId: string): Promise<OracleProgressionBlockRecord | null>;
   getTradeStatus(tradeId: string): Promise<ComplianceTradeStatusRecord | null>;
   countBlockedTrades(): Promise<number>;
+  getOverviewMetrics(): Promise<{ blockedTrades: number; freshAt: string | null }>;
 }
 
 interface ComplianceDecisionRow {
@@ -546,6 +547,27 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
       );
       return Number.parseInt(result.rows[0]?.count ?? '0', 10);
     },
+
+    async getOverviewMetrics() {
+      const blockedTradesResult = await pool.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM oracle_progression_blocks WHERE block_state IN ('blocked', 'resume_pending')`,
+      );
+      const freshnessResult = await pool.query<{ freshAt: Date | null }>(
+        `SELECT
+           GREATEST(
+             COALESCE((SELECT MAX(decided_at) FROM compliance_decisions), to_timestamp(0)),
+             COALESCE((SELECT MAX(updated_at) FROM oracle_progression_blocks), to_timestamp(0))
+           ) AS "freshAt"`,
+      );
+
+      const blockedTrades = Number.parseInt(blockedTradesResult.rows[0]?.count ?? '0', 10);
+      const freshAt = freshnessResult.rows[0]?.freshAt ?? null;
+
+      return {
+        blockedTrades,
+        freshAt: freshAt ? freshAt.toISOString() : null,
+      };
+    },
   };
 }
 
@@ -665,6 +687,38 @@ export function createInMemoryComplianceStore(
       return [...blocks.values()].filter(
         (block) => block.blockState === 'blocked' || block.blockState === 'resume_pending',
       ).length;
+    },
+
+    async getOverviewMetrics() {
+      const blockedTrades = [...blocks.values()].filter(
+        (block) => block.blockState === 'blocked' || block.blockState === 'resume_pending',
+      ).length;
+
+      const decisionTimestamps = [...decisions.values()]
+        .map((decision) => decision.decidedAt)
+        .sort();
+      const decisionFreshAt = decisionTimestamps.length > 0
+        ? decisionTimestamps[decisionTimestamps.length - 1]
+        : null;
+
+      const blockTimestamps = [...blocks.values()]
+        .map((block) => block.updatedAt)
+        .sort();
+      const blockFreshAt = blockTimestamps.length > 0
+        ? blockTimestamps[blockTimestamps.length - 1]
+        : null;
+
+      const freshnessCandidates = [decisionFreshAt, blockFreshAt]
+        .filter((value): value is string => Boolean(value))
+        .sort();
+      const freshAt = freshnessCandidates.length > 0
+        ? freshnessCandidates[freshnessCandidates.length - 1]
+        : null;
+
+      return {
+        blockedTrades,
+        freshAt,
+      };
     },
   };
 }

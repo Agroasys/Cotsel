@@ -63,6 +63,8 @@ function buildStatusSnapshot(overrides: Partial<GovernanceStatusSnapshot> = {}):
     activeUnpauseApprovals: 0,
     activeOracleProposalIds: [],
     activeTreasuryPayoutReceiverProposalIds: [],
+    chainBlockTimestamp: '2026-03-10T00:00:00.000Z',
+    queriedAt: '2026-03-10T00:00:01.000Z',
     ...overrides,
   };
 }
