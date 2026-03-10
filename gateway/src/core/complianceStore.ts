@@ -554,10 +554,15 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
       );
       const freshnessResult = await pool.query<{ freshAt: Date | null }>(
         `SELECT
-           GREATEST(
-             COALESCE((SELECT MAX(decided_at) FROM compliance_decisions), to_timestamp(0)),
-             COALESCE((SELECT MAX(updated_at) FROM oracle_progression_blocks), to_timestamp(0))
-           ) AS "freshAt"`,
+           CASE
+             WHEN (SELECT MAX(decided_at) FROM compliance_decisions) IS NULL
+              AND (SELECT MAX(updated_at) FROM oracle_progression_blocks) IS NULL
+             THEN NULL
+             ELSE GREATEST(
+               COALESCE((SELECT MAX(decided_at) FROM compliance_decisions), (SELECT MAX(updated_at) FROM oracle_progression_blocks)),
+               COALESCE((SELECT MAX(updated_at) FROM oracle_progression_blocks), (SELECT MAX(decided_at) FROM compliance_decisions))
+             )
+           END AS "freshAt"`,
       );
 
       const blockedTrades = Number.parseInt(blockedTradesResult.rows[0]?.count ?? '0', 10);

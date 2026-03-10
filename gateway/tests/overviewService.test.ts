@@ -12,6 +12,7 @@ describe('overview service', () => {
   const originalFetch = global.fetch;
 
   afterEach(() => {
+    jest.useRealTimers();
     global.fetch = originalFetch;
     jest.restoreAllMocks();
   });
@@ -156,5 +157,70 @@ describe('overview service', () => {
       code: 'UPSTREAM_UNAVAILABLE',
       message: 'Indexer overview snapshot is missing',
     });
+  });
+
+  test('captures compliance queriedAt at compliance read time instead of response assembly time', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-03-10T12:00:00.000Z'));
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: {
+          overviewSnapshots: [{
+            totalTrades: 1,
+            lockedTrades: 1,
+            stage1Trades: 0,
+            stage2Trades: 0,
+            completedTrades: 0,
+            disputedTrades: 0,
+            cancelledTrades: 0,
+            lastProcessedBlock: '123456',
+            lastIndexedAt: '2026-03-10T12:00:00.000Z',
+            lastTradeEventAt: '2026-03-10T12:00:00.000Z',
+          }],
+        },
+      }),
+    } as Response);
+
+    const governanceStatusService = {
+      getGovernanceStatus: jest.fn().mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(() => {
+              resolve({
+                paused: false,
+                claimsPaused: false,
+                oracleActive: true,
+                chainBlockTimestamp: '2026-03-10T12:00:05.000Z',
+                queriedAt: '2026-03-10T12:00:05.000Z',
+              });
+            }, 5_000);
+          }),
+      ),
+      checkReadiness: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const complianceStore = {
+      ...createInMemoryComplianceStore([]),
+      getOverviewMetrics: jest.fn().mockResolvedValue({
+        blockedTrades: 0,
+        freshAt: null,
+      }),
+    };
+
+    const service = new OverviewService(
+      'http://127.0.0.1:4350/graphql',
+      5000,
+      governanceStatusService,
+      complianceStore,
+    );
+
+    const pending = service.getOverview();
+    await jest.advanceTimersByTimeAsync(5_000);
+    const snapshot = await pending;
+
+    expect(snapshot.feedFreshness.compliance.queriedAt).toBe('2026-03-10T12:00:00.000Z');
+    expect(snapshot.feedFreshness.governance.queriedAt).toBe('2026-03-10T12:00:05.000Z');
   });
 });

@@ -71,6 +71,12 @@ interface OverviewGraphQlResponse {
   errors?: Array<{ message: string }>;
 }
 
+interface OverviewComplianceMetrics {
+  blockedTrades: number;
+  freshAt: string | null;
+  queriedAt: string;
+}
+
 const OVERVIEW_SNAPSHOT_QUERY = `
   query GatewayOverviewSnapshot($snapshotId: String!) {
     overviewSnapshots(where: { id_eq: $snapshotId }, limit: 1) {
@@ -148,7 +154,7 @@ export class OverviewService implements OverviewReader {
     const [tradesResult, governanceResult, complianceResult] = await Promise.allSettled([
       this.fetchOverviewSnapshot(),
       this.governanceStatusService.getGovernanceStatus(),
-      this.complianceStore.getOverviewMetrics(),
+      this.fetchComplianceOverviewMetrics(),
     ]);
 
     const errors: OverviewSourceError[] = [];
@@ -226,7 +232,7 @@ export class OverviewService implements OverviewReader {
           ? {
               source: 'compliance',
               freshAt: complianceResult.value.freshAt,
-              queriedAt: new Date().toISOString(),
+              queriedAt: complianceResult.value.queriedAt,
               available: true,
             }
           : {
@@ -237,6 +243,16 @@ export class OverviewService implements OverviewReader {
             },
       },
       errors,
+    };
+  }
+
+  private async fetchComplianceOverviewMetrics(): Promise<OverviewComplianceMetrics> {
+    const queriedAt = new Date().toISOString();
+    const metrics = await this.complianceStore.getOverviewMetrics();
+    return {
+      blockedTrades: metrics.blockedTrades,
+      freshAt: metrics.freshAt,
+      queriedAt,
     };
   }
 
