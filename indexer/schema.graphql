@@ -19,6 +19,20 @@ type Trade @entity {
   disputes: [DisputeProposal!]! @derivedFrom(field: "trade")
 }
 
+type OverviewSnapshot @entity {
+  id: ID!
+  totalTrades: Int!
+  lockedTrades: Int!
+  stage1Trades: Int!
+  stage2Trades: Int!
+  completedTrades: Int!
+  disputedTrades: Int!
+  cancelledTrades: Int!
+  lastProcessedBlock: BigInt!
+  lastIndexedAt: DateTime!
+  lastTradeEventAt: DateTime
+}
+
 type TradeEvent @entity {
   # fields for all events
   id: ID!
