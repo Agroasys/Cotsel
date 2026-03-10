@@ -18,7 +18,7 @@ export interface OverviewTradeKpis {
 
 export interface OverviewFeedStatus {
   source: string;
-  freshAt: string;
+  queriedAt: string | null;
   available: boolean;
 }
 
@@ -56,10 +56,14 @@ interface TradeStatusGraphQlResponse {
 }
 
 const OVERVIEW_TRADE_FETCH_LIMIT = 1000;
+const EMPTY_TRADE_KPIS: OverviewTradeKpis = {
+  total: 0,
+  byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 },
+};
 
 const overviewTradesQuery = `
-  query OverviewTradeKpis($limit: Int!) {
-    trades(orderBy: createdAt_DESC, limit: $limit) {
+  query OverviewTradeKpis($limit: Int!, $offset: Int!) {
+    trades(orderBy: createdAt_DESC, limit: $limit, offset: $offset) {
       tradeId
       status
     }
@@ -103,7 +107,7 @@ export class OverviewService implements OverviewReader {
 
     const tradeKpis = tradesAvailable
       ? tradesResult.value
-      : { total: 0, byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 } };
+      : EMPTY_TRADE_KPIS;
 
     const posture: OverviewPosture | null = governanceAvailable
       ? {
@@ -122,14 +126,45 @@ export class OverviewService implements OverviewReader {
       },
       posture,
       feedFreshness: {
-        trades: { source: 'indexer_graphql', freshAt: now, available: tradesAvailable },
-        governance: { source: 'chain_rpc', freshAt: now, available: governanceAvailable },
-        compliance: { source: 'gateway_ledger', freshAt: now, available: complianceAvailable },
+        trades: { source: 'indexer_graphql', queriedAt: tradesAvailable ? now : null, available: tradesAvailable },
+        governance: { source: 'chain_rpc', queriedAt: governanceAvailable ? now : null, available: governanceAvailable },
+        compliance: { source: 'gateway_ledger', queriedAt: complianceAvailable ? now : null, available: complianceAvailable },
       },
     };
   }
 
   private async fetchTradeKpis(): Promise<OverviewTradeKpis> {
+    const aggregate: OverviewTradeKpis = {
+      total: 0,
+      byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 },
+    };
+    let offset = 0;
+
+    while (true) {
+      const trades = await this.fetchTradePage(OVERVIEW_TRADE_FETCH_LIMIT, offset);
+      if (trades.length === 0) {
+        break;
+      }
+
+      const pageKpis = aggregateTradeKpis(trades);
+      aggregate.total += pageKpis.total;
+      aggregate.byStatus.locked += pageKpis.byStatus.locked;
+      aggregate.byStatus.stage_1 += pageKpis.byStatus.stage_1;
+      aggregate.byStatus.stage_2 += pageKpis.byStatus.stage_2;
+      aggregate.byStatus.completed += pageKpis.byStatus.completed;
+      aggregate.byStatus.disputed += pageKpis.byStatus.disputed;
+
+      if (trades.length < OVERVIEW_TRADE_FETCH_LIMIT) {
+        break;
+      }
+
+      offset += trades.length;
+    }
+
+    return aggregate;
+  }
+
+  private async fetchTradePage(limit: number, offset: number): Promise<TradeStatusRecord[]> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.indexerRequestTimeoutMs);
 
@@ -140,7 +175,7 @@ export class OverviewService implements OverviewReader {
         body: JSON.stringify({
           operationName: 'OverviewTradeKpis',
           query: overviewTradesQuery,
-          variables: { limit: OVERVIEW_TRADE_FETCH_LIMIT },
+          variables: { limit, offset },
         }),
         signal: controller.signal,
       });
@@ -163,7 +198,7 @@ export class OverviewService implements OverviewReader {
         throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned unexpected payload shape');
       }
 
-      return aggregateTradeKpis(trades);
+      return trades;
     } catch (error) {
       if (error instanceof GatewayError) {
         throw error;

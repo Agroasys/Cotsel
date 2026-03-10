@@ -48,9 +48,9 @@ const overviewFixture: OverviewSnapshot = {
     oracleActive: true,
   },
   feedFreshness: {
-    trades: { source: 'indexer_graphql', freshAt: '2026-03-09T00:00:00.000Z', available: true },
-    governance: { source: 'chain_rpc', freshAt: '2026-03-09T00:00:00.000Z', available: true },
-    compliance: { source: 'gateway_ledger', freshAt: '2026-03-09T00:00:00.000Z', available: true },
+    trades: { source: 'indexer_graphql', queriedAt: '2026-03-09T00:00:00.000Z', available: true },
+    governance: { source: 'chain_rpc', queriedAt: '2026-03-09T00:00:00.000Z', available: true },
+    compliance: { source: 'gateway_ledger', queriedAt: '2026-03-09T00:00:00.000Z', available: true },
   },
 };
 
@@ -64,9 +64,9 @@ const degradedFixture: OverviewSnapshot = {
   },
   posture: null,
   feedFreshness: {
-    trades: { source: 'indexer_graphql', freshAt: '2026-03-09T00:00:00.000Z', available: false },
-    governance: { source: 'chain_rpc', freshAt: '2026-03-09T00:00:00.000Z', available: false },
-    compliance: { source: 'gateway_ledger', freshAt: '2026-03-09T00:00:00.000Z', available: false },
+    trades: { source: 'indexer_graphql', queriedAt: null, available: false },
+    governance: { source: 'chain_rpc', queriedAt: null, available: false },
+    compliance: { source: 'gateway_ledger', queriedAt: null, available: false },
   },
 };
 
