@@ -18,10 +18,12 @@ import { createPostgresIdempotencyStore } from './core/idempotencyStore';
 import { TradeReadService } from './core/tradeReadService';
 import { GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
+import { OverviewService } from './core/overviewService';
 import { Logger } from './logging/logger';
 import { createComplianceRouter } from './routes/compliance';
 import { createGovernanceRouter } from './routes/governance';
 import { createGovernanceMutationRouter } from './routes/governanceMutations';
+import { createOverviewRouter } from './routes/overview';
 import { createTradeRouter } from './routes/trades';
 
 const config = loadConfig();
@@ -38,6 +40,12 @@ const governanceMutationService = new GovernanceMutationService(config, governan
 const tradeReadService = new TradeReadService(
   config.indexerGraphqlUrl,
   config.indexerRequestTimeoutMs,
+  complianceStore,
+);
+const overviewService = new OverviewService(
+  config.indexerGraphqlUrl,
+  config.indexerRequestTimeoutMs,
+  governanceStatusService,
   complianceStore,
 );
 
@@ -141,6 +149,11 @@ async function bootstrap(): Promise<void> {
     authSessionClient,
     config,
     tradeReadService,
+  }));
+  extraRouter.use(createOverviewRouter({
+    authSessionClient,
+    config,
+    overviewService,
   }));
 
   const app = createApp(config, {

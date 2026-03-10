@@ -90,6 +90,7 @@ function createReadStore(): ComplianceStore {
     saveOracleProgressionBlock: jest.fn(),
     getOracleProgressionBlock: jest.fn(),
     getTradeStatus: jest.fn(),
+    countBlockedTrades: jest.fn(),
   };
 }
 

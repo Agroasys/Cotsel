@@ -26,6 +26,7 @@ servers:
     description: Production placeholder for future gateway deployment.
 tags:
   - name: System
+  - name: Overview
   - name: Trades
   - name: Governance
   - name: Compliance
@@ -77,6 +78,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VersionResponse'
+  /overview:
+    get:
+      tags: [Overview]
+      summary: Dashboard overview KPIs and operational posture
+      description: |
+        Aggregated overview surface for CTSP-Dash. Returns trade counts by settlement stage,
+        governance posture (paused / oracle active), compliance blocked-trade count, and
+        per-feed freshness metadata so the dashboard can render operator trust indicators.
+
+        All three backend feeds (indexer, chain RPC, and gateway compliance ledger) are queried
+        in parallel. When a feed is unavailable, `feedFreshness.<feed>.available` is `false`,
+        the corresponding KPI values default to zero, and `posture` is `null` when the chain RPC
+        feed is unavailable. The endpoint always returns HTTP 200 so the dashboard can render a
+        partial view with degraded-feed indicators rather than a blank screen.
+      operationId: getOverview
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Overview KPIs and operational posture snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverviewResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /trades:
     get:
       tags: [Trades]
@@ -1102,6 +1132,106 @@ components:
             sourceRepo:
               type: string
               const: Agroasys.Web3layer
+        timestamp:
+          type: string
+          format: date-time
+    OverviewFeedStatus:
+      type: object
+      required: [source, freshAt, available]
+      properties:
+        source:
+          type: string
+          enum: [indexer_graphql, chain_rpc, gateway_ledger]
+          description: Identifies which backend feed provided (or attempted to provide) this data.
+        freshAt:
+          type: string
+          format: date-time
+          description: ISO timestamp of when the gateway attempted to fetch this feed.
+        available:
+          type: boolean
+          description: False when the feed returned an error or timed out for this request.
+    OverviewTradeKpis:
+      type: object
+      required: [total, byStatus]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          description: Total number of trades returned by the indexer (up to fetch limit).
+        byStatus:
+          type: object
+          required: [locked, stage_1, stage_2, completed, disputed]
+          properties:
+            locked:
+              type: integer
+              minimum: 0
+            stage_1:
+              type: integer
+              minimum: 0
+            stage_2:
+              type: integer
+              minimum: 0
+            completed:
+              type: integer
+              minimum: 0
+            disputed:
+              type: integer
+              minimum: 0
+    OverviewPosture:
+      type: object
+      required: [paused, claimsPaused, oracleActive]
+      description: |
+        Current on-chain protocol posture derived from chain RPC.
+        Null when the governance feed is unavailable (`feedFreshness.governance.available = false`).
+      properties:
+        paused:
+          type: boolean
+        claimsPaused:
+          type: boolean
+        oracleActive:
+          type: boolean
+    OverviewSnapshot:
+      type: object
+      required: [kpis, feedFreshness]
+      properties:
+        kpis:
+          type: object
+          required: [trades, compliance]
+          properties:
+            trades:
+              $ref: '#/components/schemas/OverviewTradeKpis'
+            compliance:
+              type: object
+              required: [blockedTrades]
+              properties:
+                blockedTrades:
+                  type: integer
+                  minimum: 0
+                  description: Number of trades currently blocked by an active compliance hold.
+        posture:
+          anyOf:
+            - $ref: '#/components/schemas/OverviewPosture'
+            - type: 'null'
+          description: Null when the chain RPC feed is unavailable.
+        feedFreshness:
+          type: object
+          required: [trades, governance, compliance]
+          properties:
+            trades:
+              $ref: '#/components/schemas/OverviewFeedStatus'
+            governance:
+              $ref: '#/components/schemas/OverviewFeedStatus'
+            compliance:
+              $ref: '#/components/schemas/OverviewFeedStatus'
+    OverviewResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/OverviewSnapshot'
         timestamp:
           type: string
           format: date-time
