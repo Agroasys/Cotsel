@@ -45,6 +45,16 @@ export function applyTradeTransition(
   return next;
 }
 
+export function applyTradeCancelled(
+  prevStatus: TradeStatus,
+  counters: OverviewCounters,
+): OverviewCounters {
+  const next = { ...counters };
+  decrementStatusBucket(prevStatus, next);
+  next.cancelledTrades += 1;
+  return next;
+}
+
 function incrementStatusBucket(status: TradeStatus, counters: OverviewCounters): void {
   switch (status) {
     case TradeStatus.LOCKED:

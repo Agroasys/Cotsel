@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   createEmptyOverviewCounters,
   applyTradeCreated,
+  applyTradeCancelled,
   applyTradeTransition,
 } from '../lib/overviewAggregate.js';
 import { TradeStatus } from '../lib/model/index.js';
@@ -81,4 +82,38 @@ test('applyTradeTransition rejects counter underflow', () => {
     () => applyTradeTransition(TradeStatus.LOCKED, TradeStatus.IN_TRANSIT, counters),
     /underflow/,
   );
+});
+
+test('applyTradeCancelled preserves total and records terminal cancellation separately from completion', () => {
+  const counters = {
+    totalTrades: 3,
+    lockedTrades: 1,
+    stage1Trades: 1,
+    stage2Trades: 0,
+    completedTrades: 1,
+    disputedTrades: 0,
+    cancelledTrades: 0,
+  };
+
+  const cancelledFromLocked = applyTradeCancelled(TradeStatus.LOCKED, counters);
+  assert.deepEqual(cancelledFromLocked, {
+    totalTrades: 3,
+    lockedTrades: 0,
+    stage1Trades: 1,
+    stage2Trades: 0,
+    completedTrades: 1,
+    disputedTrades: 0,
+    cancelledTrades: 1,
+  });
+
+  const cancelledFromTransit = applyTradeCancelled(TradeStatus.IN_TRANSIT, counters);
+  assert.deepEqual(cancelledFromTransit, {
+    totalTrades: 3,
+    lockedTrades: 1,
+    stage1Trades: 0,
+    stage2Trades: 0,
+    completedTrades: 1,
+    disputedTrades: 0,
+    cancelledTrades: 1,
+  });
 });

@@ -20,6 +20,7 @@ import { assertNoExtrinsicFallbackAsTxHash, resolveEventHashes } from './utils/e
 import {
     OVERVIEW_SNAPSHOT_ID,
     applyTradeCreated,
+    applyTradeCancelled,
     applyTradeTransition,
     createEmptyOverviewCounters,
 } from './overviewAggregate';
@@ -470,7 +471,7 @@ async function handleFinalTrancheReleased(
         return overviewSnapshot;
     }
 
-    const counters = applyTradeTransition(trade.status, TradeStatus.CLOSED, snapshotCounters(overviewSnapshot));
+    const counters = applyTradeCancelled(trade.status, snapshotCounters(overviewSnapshot));
     applySnapshotCounters(overviewSnapshot, counters);
     overviewSnapshot.lastTradeEventAt = timestamp;
 
@@ -560,7 +561,7 @@ async function handleTradeCancelledAfterLockTimeout(
         return overviewSnapshot;
     }
 
-    const counters = applyTradeTransition(trade.status, TradeStatus.CLOSED, snapshotCounters(overviewSnapshot));
+    const counters = applyTradeCancelled(trade.status, snapshotCounters(overviewSnapshot));
     applySnapshotCounters(overviewSnapshot, counters);
     overviewSnapshot.lastTradeEventAt = timestamp;
 
