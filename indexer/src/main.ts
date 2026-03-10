@@ -19,10 +19,10 @@ import {
 import { assertNoExtrinsicFallbackAsTxHash, resolveEventHashes } from './utils/eventHashes';
 import {
     OVERVIEW_SNAPSHOT_ID,
+    buildCountersFromExistingState,
     applyTradeCreated,
     applyTradeCancelled,
     applyTradeTransition,
-    createEmptyOverviewCounters,
 } from './overviewAggregate';
 
 processor.run(new TypeormDatabase(), async (ctx) => {
@@ -237,7 +237,12 @@ async function getOrLoadOverviewSnapshot(ctx: any): Promise<OverviewSnapshot> {
         return snapshot;
     }
 
-    const counters = createEmptyOverviewCounters();
+    const existingTrades = await ctx.store.find(Trade);
+    const terminalEvents = await ctx.store.find(TradeEvent);
+    const counters = buildCountersFromExistingState(
+        existingTrades.map((trade: Trade) => ({ id: trade.id, status: trade.status })),
+        latestTerminalEventsByTradeId(terminalEvents),
+    );
     return new OverviewSnapshot({
         id: OVERVIEW_SNAPSHOT_ID,
         ...counters,
@@ -471,7 +476,7 @@ async function handleFinalTrancheReleased(
         return overviewSnapshot;
     }
 
-    const counters = applyTradeCancelled(trade.status, snapshotCounters(overviewSnapshot));
+    const counters = applyTradeTransition(trade.status, TradeStatus.CLOSED, snapshotCounters(overviewSnapshot));
     applySnapshotCounters(overviewSnapshot, counters);
     overviewSnapshot.lastTradeEventAt = timestamp;
 
@@ -607,7 +612,7 @@ async function handleInTransitTimeoutRefunded(
         return overviewSnapshot;
     }
 
-    const counters = applyTradeTransition(trade.status, TradeStatus.CLOSED, snapshotCounters(overviewSnapshot));
+    const counters = applyTradeCancelled(trade.status, snapshotCounters(overviewSnapshot));
     applySnapshotCounters(overviewSnapshot, counters);
     overviewSnapshot.lastTradeEventAt = timestamp;
 
@@ -641,6 +646,44 @@ function snapshotCounters(snapshot: OverviewSnapshot) {
         disputedTrades: snapshot.disputedTrades,
         cancelledTrades: snapshot.cancelledTrades,
     };
+}
+
+function latestTerminalEventsByTradeId(events: TradeEvent[]): Map<string, string> {
+    const terminalEventByTradeId = new Map<string, TradeEvent>();
+
+    for (const event of events) {
+        if (!event.trade?.id || !isTerminalTradeEvent(event.eventName)) {
+            continue;
+        }
+
+        const existing = terminalEventByTradeId.get(event.trade.id);
+        if (!existing || compareTradeEvents(event, existing) > 0) {
+            terminalEventByTradeId.set(event.trade.id, event);
+        }
+    }
+
+    return new Map(
+        Array.from(terminalEventByTradeId.entries()).map(([tradeId, event]) => [tradeId, event.eventName]),
+    );
+}
+
+function isTerminalTradeEvent(eventName: string): boolean {
+    return eventName === 'FinalTrancheReleased'
+        || eventName === 'TradeCancelledAfterLockTimeout'
+        || eventName === 'InTransitTimeoutRefunded'
+        || eventName === 'DisputePayout';
+}
+
+function compareTradeEvents(left: TradeEvent, right: TradeEvent): number {
+    if (left.blockNumber !== right.blockNumber) {
+        return left.blockNumber - right.blockNumber;
+    }
+
+    if (left.extrinsicIndex !== right.extrinsicIndex) {
+        return left.extrinsicIndex - right.extrinsicIndex;
+    }
+
+    return left.id.localeCompare(right.id);
 }
 
 function applySnapshotCounters(snapshot: OverviewSnapshot, counters: ReturnType<typeof snapshotCounters>) {

@@ -12,6 +12,11 @@ export interface OverviewCounters {
   cancelledTrades: number;
 }
 
+export interface ExistingOverviewTrade {
+  id: string;
+  status: TradeStatus;
+}
+
 export function createEmptyOverviewCounters(): OverviewCounters {
   return {
     totalTrades: 0,
@@ -53,6 +58,35 @@ export function applyTradeCancelled(
   decrementStatusBucket(prevStatus, next);
   next.cancelledTrades += 1;
   return next;
+}
+
+export function buildCountersFromExistingState(
+  trades: Iterable<ExistingOverviewTrade>,
+  terminalEventByTradeId: ReadonlyMap<string, string>,
+): OverviewCounters {
+  const counters = createEmptyOverviewCounters();
+
+  for (const trade of trades) {
+    counters.totalTrades += 1;
+
+    if (trade.status !== TradeStatus.CLOSED) {
+      incrementStatusBucket(trade.status, counters);
+      continue;
+    }
+
+    if (isCancellationEvent(terminalEventByTradeId.get(trade.id))) {
+      counters.cancelledTrades += 1;
+      continue;
+    }
+
+    counters.completedTrades += 1;
+  }
+
+  return counters;
+}
+
+function isCancellationEvent(eventName: string | undefined): boolean {
+  return eventName === 'TradeCancelledAfterLockTimeout' || eventName === 'InTransitTimeoutRefunded';
 }
 
 function incrementStatusBucket(status: TradeStatus, counters: OverviewCounters): void {

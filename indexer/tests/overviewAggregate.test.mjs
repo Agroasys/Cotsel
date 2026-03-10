@@ -6,6 +6,7 @@ import {
   applyTradeCreated,
   applyTradeCancelled,
   applyTradeTransition,
+  buildCountersFromExistingState,
 } from '../lib/overviewAggregate.js';
 import { TradeStatus } from '../lib/model/index.js';
 
@@ -115,5 +116,47 @@ test('applyTradeCancelled preserves total and records terminal cancellation sepa
     completedTrades: 1,
     disputedTrades: 0,
     cancelledTrades: 1,
+  });
+});
+
+test('buildCountersFromExistingState classifies terminal closed trades from their latest terminal event', () => {
+  const counters = buildCountersFromExistingState(
+    [
+      { id: 'trade-1', status: TradeStatus.CLOSED },
+      { id: 'trade-2', status: TradeStatus.CLOSED },
+      { id: 'trade-3', status: TradeStatus.ARRIVAL_CONFIRMED },
+      { id: 'trade-4', status: TradeStatus.FROZEN },
+    ],
+    new Map([
+      ['trade-1', 'FinalTrancheReleased'],
+      ['trade-2', 'InTransitTimeoutRefunded'],
+    ]),
+  );
+
+  assert.deepEqual(counters, {
+    totalTrades: 4,
+    lockedTrades: 0,
+    stage1Trades: 0,
+    stage2Trades: 1,
+    completedTrades: 1,
+    disputedTrades: 1,
+    cancelledTrades: 1,
+  });
+});
+
+test('buildCountersFromExistingState defaults closed trades without cancellation events to completed', () => {
+  const counters = buildCountersFromExistingState(
+    [{ id: 'trade-1', status: TradeStatus.CLOSED }],
+    new Map(),
+  );
+
+  assert.deepEqual(counters, {
+    totalTrades: 1,
+    lockedTrades: 0,
+    stage1Trades: 0,
+    stage2Trades: 0,
+    completedTrades: 1,
+    disputedTrades: 0,
+    cancelledTrades: 0,
   });
 });
