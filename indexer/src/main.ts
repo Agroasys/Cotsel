@@ -663,7 +663,12 @@ function latestTerminalEventsByTradeId(events: TradeEvent[]): Map<string, string
     }
 
     return new Map(
-        Array.from(terminalEventByTradeId.entries()).map(([tradeId, event]) => [tradeId, event.eventName]),
+        Array.from(terminalEventByTradeId.entries()).map(([tradeId, event]) => {
+            const key = event.eventName === 'DisputePayout' && event.payoutType === DisputeStatus.REFUND
+                ? 'DisputePayout:REFUND'
+                : event.eventName;
+            return [tradeId, key];
+        }),
     );
 }
 
@@ -910,7 +915,14 @@ async function handleDisputePayout(
     }
 
     const payoutTypeEnum = payoutType === 0 ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
+    const counters = payoutTypeEnum === DisputeStatus.REFUND
+        ? applyTradeCancelled(trade.status, snapshotCounters(overviewSnapshot))
+        : applyTradeTransition(trade.status, TradeStatus.CLOSED, snapshotCounters(overviewSnapshot));
+    applySnapshotCounters(overviewSnapshot, counters);
     overviewSnapshot.lastTradeEventAt = timestamp;
+
+    trade.status = TradeStatus.CLOSED;
+    trades.set(tradeId.toString(), trade);
 
     events.push(new TradeEvent({
         id: eventId,
