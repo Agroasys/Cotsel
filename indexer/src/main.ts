@@ -11,11 +11,19 @@ import {
     AdminAddProposal,
     AdminEvent,
     SystemEvent,
+    OverviewSnapshot,
     TradeStatus,
     DisputeStatus,
     ClaimType
 } from './model'
 import { assertNoExtrinsicFallbackAsTxHash, resolveEventHashes } from './utils/eventHashes';
+import {
+    OVERVIEW_SNAPSHOT_ID,
+    buildCountersFromExistingState,
+    applyTradeCreated,
+    applyTradeCancelled,
+    applyTradeTransition,
+} from './overviewAggregate';
 
 processor.run(new TypeormDatabase(), async (ctx) => {
     const trades: Map<string, Trade> = new Map();
@@ -27,8 +35,13 @@ processor.run(new TypeormDatabase(), async (ctx) => {
     const adminAddProposals: Map<string, AdminAddProposal> = new Map();
     const adminEvents: AdminEvent[] = [];
     const systemEvents: SystemEvent[] = [];
+    let overviewSnapshot = await getOrLoadOverviewSnapshot(ctx);
 
     for (let block of ctx.blocks) {
+        const indexedAt = new Date(block.header.timestamp || 0);
+        overviewSnapshot.lastProcessedBlock = BigInt(block.header.height);
+        overviewSnapshot.lastIndexedAt = indexedAt;
+
         for (let event of block.events) {
             if (event.name !== 'Revive.ContractEmitted') {
                 continue;
@@ -62,28 +75,28 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 switch (decoded.name) {
                     // Trade events
                     case 'TradeLocked':
-                        await handleTradeLocked(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleTradeLocked(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
                     case 'FundsReleasedStage1':
-                        await handleFundsReleasedStage1(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleFundsReleasedStage1(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
                     case 'PlatformFeesPaidStage1':
-                        await handlePlatformFeesPaidStage1(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handlePlatformFeesPaidStage1(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
                     case 'ArrivalConfirmed':
-                        await handleArrivalConfirmed(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleArrivalConfirmed(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
                     case 'FinalTrancheReleased':
-                        await handleFinalTrancheReleased(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleFinalTrancheReleased(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
                     case 'DisputeOpenedByBuyer':
-                        await handleDisputeOpenedByBuyer(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleDisputeOpenedByBuyer(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
                     case 'TradeCancelledAfterLockTimeout':
-                        await handleTradeCancelledAfterLockTimeout(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleTradeCancelledAfterLockTimeout(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
                     case 'InTransitTimeoutRefunded':
-                        await handleInTransitTimeoutRefunded(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleInTransitTimeoutRefunded(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
 
                     // Dispute events
@@ -100,7 +113,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                         await handleDisputeProposalExpiredCancelled(decoded, disputeProposals, disputeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
                     case 'DisputePayout':
-                        await handleDisputePayout(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleDisputePayout(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
 
                     // Oracle events
@@ -175,7 +188,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                         await handleTreasuryPayoutAddressUpdateProposalExpiredCancelled(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
                     case 'ClaimableAccrued':
-                        await handleClaimableAccrued(decoded, trades, tradeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleClaimableAccrued(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
                         break;
 
                     default:
@@ -197,6 +210,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
     await ctx.store.upsert([...adminAddProposals.values()]);
     await ctx.store.insert(adminEvents);
     await ctx.store.insert(systemEvents);
+    await ctx.store.upsert([overviewSnapshot]);
 
     ctx.log.info(`Processed ${trades.size} trades, ${tradeEvents.length} trade events, ${disputeProposals.size} dispute proposals, ${disputeEvents.length} dispute events, ${oracleUpdateProposals.size} oracle proposals, ${oracleEvents.length} oracle events, ${adminAddProposals.size} admin proposals, ${adminEvents.length} admin events, ${systemEvents.length} system events`);
 });
@@ -217,12 +231,34 @@ async function getOrLoadTrade(tradeId: string, trades: Map<string, Trade>, ctx: 
     return null;
 }
 
+async function getOrLoadOverviewSnapshot(ctx: any): Promise<OverviewSnapshot> {
+    const snapshot = await ctx.store.get(OverviewSnapshot, OVERVIEW_SNAPSHOT_ID);
+    if (snapshot) {
+        return snapshot;
+    }
+
+    const existingTrades = await ctx.store.find(Trade);
+    const terminalEvents = await ctx.store.find(TradeEvent);
+    const counters = buildCountersFromExistingState(
+        existingTrades.map((trade: Trade) => ({ id: trade.id, status: trade.status })),
+        latestTerminalEventsByTradeId(terminalEvents),
+    );
+    return new OverviewSnapshot({
+        id: OVERVIEW_SNAPSHOT_ID,
+        ...counters,
+        lastProcessedBlock: 0n,
+        lastIndexedAt: new Date(0),
+        lastTradeEventAt: null,
+    });
+}
+
 // ########################### trade events ##########################
 
 async function handleTradeLocked(
     log: any,
     trades: Map<string, Trade>,
     events: TradeEvent[],
+    overviewSnapshot: OverviewSnapshot,
     eventId: string,
     block: any,
     timestamp: Date,
@@ -242,6 +278,10 @@ async function handleTradeLocked(
         supplierSecondTranche,
         ricardianHash
     ] = log.args;
+
+    const counters = applyTradeCreated(TradeStatus.LOCKED, snapshotCounters(overviewSnapshot));
+    applySnapshotCounters(overviewSnapshot, counters);
+    overviewSnapshot.lastTradeEventAt = timestamp;
 
     const trade = new Trade({
         id: tradeId.toString(),
@@ -277,12 +317,14 @@ async function handleTradeLocked(
     }));
 
     ctx.log.info(`Trade ${tradeId} locked by ${buyer}`);
+    return overviewSnapshot;
 }
 
 async function handleFundsReleasedStage1(
     log: any,
     trades: Map<string, Trade>,
     events: TradeEvent[],
+    overviewSnapshot: OverviewSnapshot,
     eventId: string,
     block: any,
     timestamp: Date,
@@ -297,8 +339,12 @@ async function handleFundsReleasedStage1(
     
     if (!trade) {
         ctx.log.error(`Trade ${tradeId} not found for FundsReleasedStage1 event`);
-        return;
+        return overviewSnapshot;
     }
+
+    const counters = applyTradeTransition(trade.status, TradeStatus.IN_TRANSIT, snapshotCounters(overviewSnapshot));
+    applySnapshotCounters(overviewSnapshot, counters);
+    overviewSnapshot.lastTradeEventAt = timestamp;
 
     trade.status = TradeStatus.IN_TRANSIT;
     trades.set(tradeId.toString(), trade);
@@ -318,12 +364,14 @@ async function handleFundsReleasedStage1(
     }));
 
     ctx.log.info(`Trade ${tradeId} -> IN_TRANSIT`);
+    return overviewSnapshot;
 }
 
 async function handlePlatformFeesPaidStage1(
     log: any,
     trades: Map<string, Trade>,
     events: TradeEvent[],
+    overviewSnapshot: OverviewSnapshot,
     eventId: string,
     block: any,
     timestamp: Date,
@@ -338,8 +386,10 @@ async function handlePlatformFeesPaidStage1(
     
     if (!trade) {
         ctx.log.error(`Trade ${tradeId} not found for PlatformFeesPaidStage1 event`);
-        return;
+        return overviewSnapshot;
     }
+
+    overviewSnapshot.lastTradeEventAt = timestamp;
 
     events.push(new TradeEvent({
         id: eventId,
@@ -355,12 +405,14 @@ async function handlePlatformFeesPaidStage1(
     }));
 
     ctx.log.info(`Trade ${tradeId} platform fees paid: ${platformFeesAmount}`);
+    return overviewSnapshot;
 }
 
 async function handleArrivalConfirmed(
     log: any,
     trades: Map<string, Trade>,
     events: TradeEvent[],
+    overviewSnapshot: OverviewSnapshot,
     eventId: string,
     block: any,
     timestamp: Date,
@@ -375,8 +427,12 @@ async function handleArrivalConfirmed(
     
     if (!trade) {
         ctx.log.error(`Trade ${tradeId} not found for ArrivalConfirmed event`);
-        return;
+        return overviewSnapshot;
     }
+
+    const counters = applyTradeTransition(trade.status, TradeStatus.ARRIVAL_CONFIRMED, snapshotCounters(overviewSnapshot));
+    applySnapshotCounters(overviewSnapshot, counters);
+    overviewSnapshot.lastTradeEventAt = timestamp;
 
     trade.status = TradeStatus.ARRIVAL_CONFIRMED;
     trade.arrivalTimestamp = new Date(Number(arrivalTimestamp) * 1000);
@@ -395,12 +451,14 @@ async function handleArrivalConfirmed(
     }));
 
     ctx.log.info(`Trade ${tradeId} arrival confirmed at ${arrivalTimestamp}`);
+    return overviewSnapshot;
 }
 
 async function handleFinalTrancheReleased(
     log: any,
     trades: Map<string, Trade>,
     events: TradeEvent[],
+    overviewSnapshot: OverviewSnapshot,
     eventId: string,
     block: any,
     timestamp: Date,
@@ -415,8 +473,12 @@ async function handleFinalTrancheReleased(
     
     if (!trade) {
         ctx.log.error(`Trade ${tradeId} not found for FinalTrancheReleased event`);
-        return;
+        return overviewSnapshot;
     }
+
+    const counters = applyTradeTransition(trade.status, TradeStatus.CLOSED, snapshotCounters(overviewSnapshot));
+    applySnapshotCounters(overviewSnapshot, counters);
+    overviewSnapshot.lastTradeEventAt = timestamp;
 
     trade.status = TradeStatus.CLOSED;
     trades.set(tradeId.toString(), trade);
@@ -435,12 +497,14 @@ async function handleFinalTrancheReleased(
     }));
 
     ctx.log.info(`Trade ${tradeId} finalized - final tranche released to ${supplier}`);
+    return overviewSnapshot;
 }
 
 async function handleDisputeOpenedByBuyer(
     log: any,
     trades: Map<string, Trade>,
     events: TradeEvent[],
+    overviewSnapshot: OverviewSnapshot,
     eventId: string,
     block: any,
     timestamp: Date,
@@ -455,8 +519,12 @@ async function handleDisputeOpenedByBuyer(
     
     if (!trade) {
         ctx.log.error(`Trade ${tradeId} not found for DisputeOpenedByBuyer event`);
-        return;
+        return overviewSnapshot;
     }
+
+    const counters = applyTradeTransition(trade.status, TradeStatus.FROZEN, snapshotCounters(overviewSnapshot));
+    applySnapshotCounters(overviewSnapshot, counters);
+    overviewSnapshot.lastTradeEventAt = timestamp;
 
     trade.status = TradeStatus.FROZEN;
     trades.set(tradeId.toString(), trade);
@@ -473,12 +541,14 @@ async function handleDisputeOpenedByBuyer(
     }));
 
     ctx.log.info(`Trade ${tradeId} frozen - dispute opened by buyer`);
+    return overviewSnapshot;
 }
 
 async function handleTradeCancelledAfterLockTimeout(
     log: any,
     trades: Map<string, Trade>,
     events: TradeEvent[],
+    overviewSnapshot: OverviewSnapshot,
     eventId: string,
     block: any,
     timestamp: Date,
@@ -493,8 +563,12 @@ async function handleTradeCancelledAfterLockTimeout(
     
     if (!trade) {
         ctx.log.error(`Trade ${tradeId} not found for TradeCancelledAfterLockTimeout event`);
-        return;
+        return overviewSnapshot;
     }
+
+    const counters = applyTradeCancelled(trade.status, snapshotCounters(overviewSnapshot));
+    applySnapshotCounters(overviewSnapshot, counters);
+    overviewSnapshot.lastTradeEventAt = timestamp;
 
     trade.status = TradeStatus.CLOSED;
     trades.set(tradeId.toString(), trade);
@@ -513,12 +587,14 @@ async function handleTradeCancelledAfterLockTimeout(
     }));
 
     ctx.log.info(`Trade ${tradeId} cancelled after lock timeout - refunded ${refundedAmount} to ${buyer}`);
+    return overviewSnapshot;
 }
 
 async function handleInTransitTimeoutRefunded(
     log: any,
     trades: Map<string, Trade>,
     events: TradeEvent[],
+    overviewSnapshot: OverviewSnapshot,
     eventId: string,
     block: any,
     timestamp: Date,
@@ -533,8 +609,12 @@ async function handleInTransitTimeoutRefunded(
     
     if (!trade) {
         ctx.log.error(`Trade ${tradeId} not found for InTransitTimeoutRefunded event`);
-        return;
+        return overviewSnapshot;
     }
+
+    const counters = applyTradeCancelled(trade.status, snapshotCounters(overviewSnapshot));
+    applySnapshotCounters(overviewSnapshot, counters);
+    overviewSnapshot.lastTradeEventAt = timestamp;
 
     trade.status = TradeStatus.CLOSED;
     trades.set(tradeId.toString(), trade);
@@ -553,6 +633,67 @@ async function handleInTransitTimeoutRefunded(
     }));
 
     ctx.log.info(`Trade ${tradeId} in-transit timeout - refunded ${refundedAmount} to ${buyer}`);
+    return overviewSnapshot;
+}
+
+function snapshotCounters(snapshot: OverviewSnapshot) {
+    return {
+        totalTrades: snapshot.totalTrades,
+        lockedTrades: snapshot.lockedTrades,
+        stage1Trades: snapshot.stage1Trades,
+        stage2Trades: snapshot.stage2Trades,
+        completedTrades: snapshot.completedTrades,
+        disputedTrades: snapshot.disputedTrades,
+        cancelledTrades: snapshot.cancelledTrades,
+    };
+}
+
+function latestTerminalEventsByTradeId(events: TradeEvent[]): Map<string, string> {
+    const terminalEventByTradeId = new Map<string, TradeEvent>();
+
+    for (const event of events) {
+        if (!event.trade?.id || !isTerminalTradeEvent(event.eventName)) {
+            continue;
+        }
+
+        const existing = terminalEventByTradeId.get(event.trade.id);
+        if (!existing || compareTradeEvents(event, existing) > 0) {
+            terminalEventByTradeId.set(event.trade.id, event);
+        }
+    }
+
+    return new Map(
+        Array.from(terminalEventByTradeId.entries()).map(([tradeId, event]) => [tradeId, event.eventName]),
+    );
+}
+
+function isTerminalTradeEvent(eventName: string): boolean {
+    return eventName === 'FinalTrancheReleased'
+        || eventName === 'TradeCancelledAfterLockTimeout'
+        || eventName === 'InTransitTimeoutRefunded'
+        || eventName === 'DisputePayout';
+}
+
+function compareTradeEvents(left: TradeEvent, right: TradeEvent): number {
+    if (left.blockNumber !== right.blockNumber) {
+        return left.blockNumber - right.blockNumber;
+    }
+
+    if (left.extrinsicIndex !== right.extrinsicIndex) {
+        return left.extrinsicIndex - right.extrinsicIndex;
+    }
+
+    return left.id.localeCompare(right.id);
+}
+
+function applySnapshotCounters(snapshot: OverviewSnapshot, counters: ReturnType<typeof snapshotCounters>) {
+    snapshot.totalTrades = counters.totalTrades;
+    snapshot.lockedTrades = counters.lockedTrades;
+    snapshot.stage1Trades = counters.stage1Trades;
+    snapshot.stage2Trades = counters.stage2Trades;
+    snapshot.completedTrades = counters.completedTrades;
+    snapshot.disputedTrades = counters.disputedTrades;
+    snapshot.cancelledTrades = counters.cancelledTrades;
 }
 
 // ########################### dispute events ##########################
@@ -750,6 +891,7 @@ async function handleDisputePayout(
     log: any,
     trades: Map<string, Trade>,
     events: TradeEvent[],
+    overviewSnapshot: OverviewSnapshot,
     eventId: string,
     block: any,
     timestamp: Date,
@@ -764,10 +906,11 @@ async function handleDisputePayout(
     
     if (!trade) {
         ctx.log.error(`Trade ${tradeId} not found for DisputePayout event`);
-        return;
+        return overviewSnapshot;
     }
 
     const payoutTypeEnum = payoutType === 0 ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
+    overviewSnapshot.lastTradeEventAt = timestamp;
 
     events.push(new TradeEvent({
         id: eventId,
@@ -785,6 +928,7 @@ async function handleDisputePayout(
     }));
 
     ctx.log.info(`Dispute payout for trade ${tradeId}: ${amount} to ${recipient} (type: ${payoutTypeEnum})`);
+    return overviewSnapshot;
 }
 
 // ########################### oracle events ##########################
@@ -1295,6 +1439,7 @@ async function handleClaimableAccrued(
     log: any,
     trades: Map<string, Trade>,
     events: TradeEvent[],
+    overviewSnapshot: OverviewSnapshot,
     eventId: string,
     block: any,
     timestamp: Date,
@@ -1309,10 +1454,11 @@ async function handleClaimableAccrued(
 
     if (!trade) {
         ctx.log.error(`Trade ${tradeId} not found for ClaimableAccrued event`);
-        return;
+        return overviewSnapshot;
     }
 
     const claimTypeEnum = CLAIM_TYPE_VALUES[Number(claimType)] ?? null;
+    overviewSnapshot.lastTradeEventAt = timestamp;
 
     events.push(new TradeEvent({
         id: eventId,
@@ -1329,6 +1475,7 @@ async function handleClaimableAccrued(
     }));
 
     ctx.log.info(`Trade ${tradeId} claimable accrued: ${amount} to ${recipient} (type: ${claimTypeEnum})`);
+    return overviewSnapshot;
 }
 
 async function handleClaimed(

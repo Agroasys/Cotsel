@@ -1,5 +1,6 @@
 export * from "./trade.model"
 export * from "./_tradeStatus"
+export * from "./overviewSnapshot.model"
 export * from "./tradeEvent.model"
 export * from "./_disputeStatus"
 export * from "./_claimType"
