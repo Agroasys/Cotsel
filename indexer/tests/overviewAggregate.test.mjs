@@ -160,3 +160,139 @@ test('buildCountersFromExistingState defaults closed trades without cancellation
     cancelledTrades: 0,
   });
 });
+
+
+test('DisputePayout REFUND: applyTradeCancelled from FROZEN lands in cancelledTrades', () => {
+  const counters = {
+    totalTrades: 3,
+    lockedTrades: 0,
+    stage1Trades: 0,
+    stage2Trades: 0,
+    completedTrades: 1,
+    disputedTrades: 1,
+    cancelledTrades: 0,
+  };
+
+  const result = applyTradeCancelled(TradeStatus.FROZEN, counters);
+
+  assert.deepEqual(result, {
+    totalTrades: 3,
+    lockedTrades: 0,
+    stage1Trades: 0,
+    stage2Trades: 0,
+    completedTrades: 1,
+    disputedTrades: 0,
+    cancelledTrades: 1,
+  });
+  assert.deepEqual(counters.cancelledTrades, 0, 'input counters must remain unchanged');
+});
+
+test('DisputePayout RESOLVE: applyTradeTransition from FROZEN to CLOSED lands in completedTrades', () => {
+  const counters = {
+    totalTrades: 3,
+    lockedTrades: 0,
+    stage1Trades: 0,
+    stage2Trades: 0,
+    completedTrades: 1,
+    disputedTrades: 1,
+    cancelledTrades: 0,
+  };
+
+  const result = applyTradeTransition(TradeStatus.FROZEN, TradeStatus.CLOSED, counters);
+
+  assert.deepEqual(result, {
+    totalTrades: 3,
+    lockedTrades: 0,
+    stage1Trades: 0,
+    stage2Trades: 0,
+    completedTrades: 2,
+    disputedTrades: 0,
+    cancelledTrades: 0,
+  });
+  assert.deepEqual(counters.completedTrades, 1, 'input counters must remain unchanged');
+});
+
+
+test('buildCountersFromExistingState classifies DisputePayout:REFUND terminal event as cancelled', () => {
+  const counters = buildCountersFromExistingState(
+    [
+      { id: 'trade-1', status: TradeStatus.CLOSED },
+      { id: 'trade-2', status: TradeStatus.CLOSED },
+    ],
+    new Map([
+      ['trade-1', 'DisputePayout:REFUND'],
+      ['trade-2', 'FinalTrancheReleased'],
+    ]),
+  );
+
+  assert.deepEqual(counters, {
+    totalTrades: 2,
+    lockedTrades: 0,
+    stage1Trades: 0,
+    stage2Trades: 0,
+    completedTrades: 1,
+    disputedTrades: 0,
+    cancelledTrades: 1,
+  });
+});
+
+test('buildCountersFromExistingState classifies DisputePayout (RESOLVE) terminal event as completed', () => {
+  const counters = buildCountersFromExistingState(
+    [{ id: 'trade-1', status: TradeStatus.CLOSED }],
+    new Map([['trade-1', 'DisputePayout']]),
+  );
+
+  assert.deepEqual(counters, {
+    totalTrades: 1,
+    lockedTrades: 0,
+    stage1Trades: 0,
+    stage2Trades: 0,
+    completedTrades: 1,
+    disputedTrades: 0,
+    cancelledTrades: 0,
+  });
+});
+
+test('live and backfill paths agree: REFUND payout increments cancelledTrades in both', () => {
+  const liveCounters = {
+    totalTrades: 1,
+    lockedTrades: 0,
+    stage1Trades: 0,
+    stage2Trades: 0,
+    completedTrades: 0,
+    disputedTrades: 1,
+    cancelledTrades: 0,
+  };
+  const liveResult = applyTradeCancelled(TradeStatus.FROZEN, liveCounters);
+  assert.equal(liveResult.cancelledTrades, 1);
+  assert.equal(liveResult.completedTrades, 0);
+
+  const backfillResult = buildCountersFromExistingState(
+    [{ id: 'trade-1', status: TradeStatus.CLOSED }],
+    new Map([['trade-1', 'DisputePayout:REFUND']]),
+  );
+  assert.equal(backfillResult.cancelledTrades, 1);
+  assert.equal(backfillResult.completedTrades, 0);
+});
+
+test('live and backfill paths agree: RESOLVE payout increments completedTrades in both', () => {
+  const liveCounters = {
+    totalTrades: 1,
+    lockedTrades: 0,
+    stage1Trades: 0,
+    stage2Trades: 0,
+    completedTrades: 0,
+    disputedTrades: 1,
+    cancelledTrades: 0,
+  };
+  const liveResult = applyTradeTransition(TradeStatus.FROZEN, TradeStatus.CLOSED, liveCounters);
+  assert.equal(liveResult.completedTrades, 1);
+  assert.equal(liveResult.cancelledTrades, 0);
+
+  const backfillResult = buildCountersFromExistingState(
+    [{ id: 'trade-1', status: TradeStatus.CLOSED }],
+    new Map([['trade-1', 'DisputePayout']]),
+  );
+  assert.equal(backfillResult.completedTrades, 1);
+  assert.equal(backfillResult.cancelledTrades, 0);
+});
