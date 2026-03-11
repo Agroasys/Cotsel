@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { ethers } from 'ethers';
-import { BuyerLockPayload } from '../types/trade';
+import { TradeParameters } from '../types/trade';
 import { SignatureError } from '../types/errors';
 
 
@@ -11,7 +11,7 @@ export function createTradeMessageHash(
     escrowAddress: string,
     buyerAddress: string,
     treasuryAddress: string,
-    params: BuyerLockPayload,
+    params: TradeParameters,
     nonce: bigint,
     deadline: number
 ): string {
@@ -49,7 +49,7 @@ export async function signTradeMessage(
     chainId: number,
     escrowAddress: string,
     treasuryAddress: string,
-    params: BuyerLockPayload,
+    params: TradeParameters,
     nonce: bigint,
     deadline: number
 ): Promise<string> {

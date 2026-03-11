@@ -3,7 +3,7 @@
  */
 import { ethers } from 'ethers';
 import { ValidationError } from '../types/errors';
-import { BuyerLockPayload } from '../types/trade';
+import { TradeParameters } from '../types/trade';
 
 
 export function validateAddress(address: string, fieldName: string): void {
@@ -16,7 +16,7 @@ export function validateAddress(address: string, fieldName: string): void {
 }
 
 
-export function validateTradeParameters(params: BuyerLockPayload): void {
+export function validateTradeParameters(params: TradeParameters): void {
     validateAddress(params.supplier, 'supplier');
     
     if (params.totalAmount <= 0n) {
@@ -67,7 +67,7 @@ export function validateTradeParameters(params: BuyerLockPayload): void {
 }
 
 /**
- * Validates a {@link BuyerLockPayload} before it is used to call
+ * Validates a {@link TradeParameters} before it is used to call
  * `BuyerSDK.createTrade(...)`.
  *
  * Enforces:
@@ -81,6 +81,5 @@ export function validateTradeParameters(params: BuyerLockPayload): void {
  *
  * Throws {@link ValidationError} on the first failed constraint.
  *
- * @see {@link BuyerLockPayload}
+ * @see {@link TradeParameters}
  */
-export const validateBuyerLockPayload = validateTradeParameters;

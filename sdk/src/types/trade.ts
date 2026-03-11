@@ -12,7 +12,7 @@
  *
  * ## Amount invariant
  * The following equality MUST hold and is enforced at runtime by
- * `validateBuyerLockPayload`:
+ * `validateTradeParameters`:
  *
  * ```
  * totalAmount === logisticsAmount + platformFeesAmount
@@ -40,7 +40,7 @@
  * document hash. The hash MUST be produced by the Ricardian service before the
  * checkout UI calls `createTrade`.
  */
-export interface BuyerLockPayload {
+export interface TradeParameters {
     /**
      * EVM address of the supplier (goods/service provider).
      *
