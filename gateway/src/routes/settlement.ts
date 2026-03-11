@@ -127,6 +127,17 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
     consumeNonce: options.nonceStore.consume.bind(options.nonceStore),
   });
 
+  router.use((req, _res, next) => {
+    if (!options.config.settlementIngressEnabled) {
+      next(new GatewayError(403, 'FORBIDDEN', 'Settlement ingress is disabled', {
+        reason: 'settlement_ingress_disabled',
+      }));
+      return;
+    }
+
+    next();
+  });
+
   router.use(serviceAuth);
 
   router.post('/settlement/handoffs', idempotency, (req, res, next) => handleRequest(async () => {

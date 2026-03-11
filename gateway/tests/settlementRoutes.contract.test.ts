@@ -50,22 +50,23 @@ const config: GatewayConfig = {
   nodeEnv: 'test',
 };
 
-async function startServer() {
+async function startServer(overrides: Partial<GatewayConfig> = {}) {
+  const runtimeConfig: GatewayConfig = { ...config, ...overrides };
   const settlementStore = createInMemorySettlementStore();
-  const settlementService = new SettlementService(config, settlementStore);
+  const settlementService = new SettlementService(runtimeConfig, settlementStore);
   const nonceStore = createInMemoryNonceStore();
   const idempotencyStore = createInMemoryIdempotencyStore();
   const router = Router();
   router.use(createSettlementRouter({
-    config,
+    config: runtimeConfig,
     settlementService,
     settlementStore,
     nonceStore,
     idempotencyStore,
-    lookupServiceApiKey: createServiceApiKeyLookup(config.settlementServiceAuthApiKeysJson),
+    lookupServiceApiKey: createServiceApiKeyLookup(runtimeConfig.settlementServiceAuthApiKeysJson),
   }));
 
-  const app = createApp(config, {
+  const app = createApp(runtimeConfig, {
     version: '0.1.0',
     commitSha: config.commitSha,
     buildTime: config.buildTime,
@@ -110,6 +111,37 @@ describe('gateway settlement routes contract', () => {
     expect(hasOperation(spec, 'post', '/settlement/handoffs')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/handoffs/{handoffId}/execution-events')).toBe(true);
     expect(hasOperation(spec, 'get', '/settlement/handoffs/{handoffId}/execution-events')).toBe(true);
+  });
+
+
+  test('settlement ingress disabled rejects requests instead of bypassing auth', async () => {
+    const { server, baseUrl } = await startServer({ settlementIngressEnabled: false });
+
+    try {
+      const response = await fetch(`${baseUrl}/settlement/handoffs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'handoff-disabled',
+        },
+        body: JSON.stringify({
+          platformId: 'agroasys-platform',
+          platformHandoffId: 'handoff-disabled',
+          tradeId: 'TRD-disabled',
+          phase: 'lock',
+          settlementChannel: 'web3layer_escrow',
+          displayCurrency: 'USD',
+          displayAmount: 1000,
+        }),
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(payload.error.code).toBe('FORBIDDEN');
+      expect(payload.error.details.reason).toBe('settlement_ingress_disabled');
+    } finally {
+      server.close();
+    }
   });
 
   test('service-authenticated handoff and execution event routes return schema-valid responses', async () => {
