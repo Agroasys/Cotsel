@@ -105,6 +105,7 @@ describe('trade read service', () => {
         providerStatus: 'confirmed',
         txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         extrinsicHash: null,
+        latestEventId: 'evt-1',
         latestEventType: 'reconciled',
         latestEventDetail: 'Settlement confirmed and reconciled.',
         latestEventAt: '2026-03-07T10:05:00.000Z',
