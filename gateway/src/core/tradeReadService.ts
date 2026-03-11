@@ -4,6 +4,13 @@
 import { formatUnits } from 'ethers';
 import { ComplianceStore } from './complianceStore';
 import { GatewayError } from '../errors';
+import type {
+  SettlementCallbackStatus,
+  SettlementEventType,
+  SettlementExecutionStatus,
+  SettlementReconciliationStatus,
+  TradeSettlementProjection,
+} from './settlementStore';
 
 export type DashboardTradeStatus = 'locked' | 'stage_1' | 'stage_2' | 'completed' | 'disputed';
 export type DashboardComplianceStatus = 'pass' | 'fail' | 'unavailable';
@@ -31,6 +38,30 @@ export interface DashboardTradeRecord {
   logisticsAmount: number;
   timeline: DashboardTradeEventRecord[];
   complianceStatus: DashboardComplianceStatus;
+  settlement: DashboardTradeSettlementRecord | null;
+}
+
+export interface DashboardTradeSettlementRecord {
+  handoffId: string;
+  platformId: string;
+  platformHandoffId: string;
+  phase: string;
+  settlementChannel: string;
+  displayCurrency: string;
+  displayAmount: number;
+  executionStatus: SettlementExecutionStatus;
+  reconciliationStatus: SettlementReconciliationStatus;
+  callbackStatus: SettlementCallbackStatus;
+  providerStatus: string | null;
+  txHash: string | null;
+  extrinsicHash: string | null;
+  externalReference: string | null;
+  latestEventType: SettlementEventType | null;
+  latestEventDetail: string | null;
+  latestEventAt: string | null;
+  callbackDeliveredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface TradeGraphQlRecord {
@@ -75,6 +106,10 @@ interface TradesGraphQlResponse {
     trades?: TradeGraphQlRecord[];
   };
   errors?: Array<{ message: string }>;
+}
+
+export interface TradeSettlementReadStore {
+  getTradeSettlementProjectionMap(tradeIds: string[]): Promise<Map<string, TradeSettlementProjection>>;
 }
 
 function assertIsoTimestamp(value: string, field: string): string {
@@ -359,6 +394,7 @@ export class TradeReadService implements TradeReadReader {
     private readonly indexerGraphqlUrl: string,
     private readonly indexerRequestTimeoutMs: number,
     private readonly complianceStore: ComplianceStore,
+    private readonly settlementReadStore?: TradeSettlementReadStore,
   ) {}
 
   async checkReadiness(): Promise<void> {
@@ -372,7 +408,11 @@ export class TradeReadService implements TradeReadReader {
   async listTrades(limit = 100, offset = 0): Promise<DashboardTradeRecord[]> {
     const response = await this.executeQuery('DashboardTrades', listTradesQuery, { limit, offset });
     const trades = readTradesArray(response);
-    return Promise.all(trades.map((trade) => this.mapTradeRecord(trade)));
+    const settlementProjectionMap = this.settlementReadStore
+      ? await this.settlementReadStore.getTradeSettlementProjectionMap(trades.map((trade) => trade.tradeId))
+      : new Map<string, TradeSettlementProjection>();
+
+    return Promise.all(trades.map((trade) => this.mapTradeRecord(trade, settlementProjectionMap.get(trade.tradeId) ?? null)));
   }
 
   async getTrade(tradeId: string): Promise<DashboardTradeRecord | null> {
@@ -382,10 +422,17 @@ export class TradeReadService implements TradeReadReader {
       return null;
     }
 
-    return this.mapTradeRecord(trade);
+    const settlementProjectionMap = this.settlementReadStore
+      ? await this.settlementReadStore.getTradeSettlementProjectionMap([trade.tradeId])
+      : new Map<string, TradeSettlementProjection>();
+
+    return this.mapTradeRecord(trade, settlementProjectionMap.get(trade.tradeId) ?? null);
   }
 
-  private async mapTradeRecord(trade: TradeGraphQlRecord): Promise<DashboardTradeRecord> {
+  private async mapTradeRecord(
+    trade: TradeGraphQlRecord,
+    settlementProjection: TradeSettlementProjection | null,
+  ): Promise<DashboardTradeRecord> {
     const timeline = mapTimeline(trade.events);
     const lockReference = timeline.find((event) => event.stage === 'Lock' && event.txHash)?.txHash
       ?? timeline.find((event) => event.txHash)?.txHash
@@ -409,6 +456,28 @@ export class TradeReadService implements TradeReadReader {
       logisticsAmount: asUsdcNumber(trade.logisticsAmount, 'trade.logisticsAmount'),
       timeline,
       complianceStatus: mapComplianceStatus(compliance?.currentResult ?? null),
+      settlement: settlementProjection ? {
+        handoffId: settlementProjection.handoffId,
+        platformId: settlementProjection.platformId,
+        platformHandoffId: settlementProjection.platformHandoffId,
+        phase: settlementProjection.phase,
+        settlementChannel: settlementProjection.settlementChannel,
+        displayCurrency: settlementProjection.displayCurrency,
+        displayAmount: settlementProjection.displayAmount,
+        executionStatus: settlementProjection.executionStatus,
+        reconciliationStatus: settlementProjection.reconciliationStatus,
+        callbackStatus: settlementProjection.callbackStatus,
+        providerStatus: settlementProjection.providerStatus,
+        txHash: settlementProjection.txHash,
+        extrinsicHash: settlementProjection.extrinsicHash,
+        externalReference: settlementProjection.externalReference,
+        latestEventType: settlementProjection.latestEventType,
+        latestEventDetail: settlementProjection.latestEventDetail,
+        latestEventAt: settlementProjection.latestEventAt,
+        callbackDeliveredAt: settlementProjection.callbackDeliveredAt,
+        createdAt: settlementProjection.createdAt,
+        updatedAt: settlementProjection.updatedAt,
+      } : null,
     };
   }
 

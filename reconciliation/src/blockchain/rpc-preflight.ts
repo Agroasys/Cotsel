@@ -87,3 +87,22 @@ export async function assertRpcEndpointReachable(
     clearTimeout(timeout);
   }
 }
+
+export async function assertRpcEndpointsReachable(
+  rpcUrls: string[],
+  timeoutMs: number = DEFAULT_RPC_TIMEOUT_MS,
+): Promise<void> {
+  const failures: string[] = [];
+
+  for (const rpcUrl of rpcUrls) {
+    try {
+      await assertRpcEndpointReachable(rpcUrl, timeoutMs);
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  if (failures.length === rpcUrls.length) {
+    throw new Error(`All configured RPC endpoints failed startup validation. ${failures[0]}`);
+  }
+}

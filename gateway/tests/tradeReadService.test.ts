@@ -4,6 +4,7 @@
 import { createInMemoryComplianceStore } from '../src/core/complianceStore';
 import { TradeReadService } from '../src/core/tradeReadService';
 import { EvidenceLink } from '../src/core/governanceStore';
+import { createInMemorySettlementStore } from '../src/core/settlementStore';
 
 const evidenceLinks: EvidenceLink[] = [{ kind: 'ticket', uri: 'https://tickets/agro-1' }];
 
@@ -83,7 +84,39 @@ describe('trade read service', () => {
       }),
     } as Response);
 
-    const service = new TradeReadService('http://127.0.0.1:4350/graphql', 5000, complianceStore);
+    const settlementStore = createInMemorySettlementStore([
+      {
+        handoffId: 'sth-1',
+        platformId: 'agroasys-platform',
+        platformHandoffId: 'handoff-1',
+        tradeId: 'TRD-9001',
+        phase: 'stage_2',
+        settlementChannel: 'web3layer_escrow',
+        displayCurrency: 'USD',
+        displayAmount: 125000,
+        assetSymbol: 'USDC',
+        assetAmount: 125000,
+        ricardianHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        externalReference: 'EXT-1',
+        metadata: { source: 'platform' },
+        executionStatus: 'confirmed',
+        reconciliationStatus: 'matched',
+        callbackStatus: 'delivered',
+        providerStatus: 'confirmed',
+        txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        extrinsicHash: null,
+        latestEventType: 'reconciled',
+        latestEventDetail: 'Settlement confirmed and reconciled.',
+        latestEventAt: '2026-03-07T10:05:00.000Z',
+        callbackDeliveredAt: '2026-03-07T10:06:00.000Z',
+        requestId: 'req-1',
+        sourceApiKeyId: 'platform-main',
+        createdAt: '2026-03-07T09:00:00.000Z',
+        updatedAt: '2026-03-07T10:06:00.000Z',
+      },
+    ]);
+
+    const service = new TradeReadService('http://127.0.0.1:4350/graphql', 5000, complianceStore, settlementStore);
     const records = await service.listTrades();
 
     expect(records).toHaveLength(1);
@@ -101,6 +134,28 @@ describe('trade read service', () => {
       platformFee: 1250,
       logisticsAmount: 3000,
       complianceStatus: 'fail',
+      settlement: {
+        handoffId: 'sth-1',
+        platformId: 'agroasys-platform',
+        platformHandoffId: 'handoff-1',
+        phase: 'stage_2',
+        settlementChannel: 'web3layer_escrow',
+        displayCurrency: 'USD',
+        displayAmount: 125000,
+        executionStatus: 'confirmed',
+        reconciliationStatus: 'matched',
+        callbackStatus: 'delivered',
+        providerStatus: 'confirmed',
+        txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        extrinsicHash: null,
+        externalReference: 'EXT-1',
+        latestEventType: 'reconciled',
+        latestEventDetail: 'Settlement confirmed and reconciled.',
+        latestEventAt: '2026-03-07T10:05:00.000Z',
+        callbackDeliveredAt: '2026-03-07T10:06:00.000Z',
+        createdAt: '2026-03-07T09:00:00.000Z',
+        updatedAt: '2026-03-07T10:06:00.000Z',
+      },
       timeline: [
         {
           stage: 'Lock',

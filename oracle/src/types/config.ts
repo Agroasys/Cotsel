@@ -6,6 +6,7 @@ export interface OracleConfig {
     
     // network
     rpcUrl: string;
+    rpcFallbackUrls: string[];
     chainId: number;
     escrowAddress: string;
     usdcAddress: string;

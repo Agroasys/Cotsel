@@ -28,6 +28,7 @@ tags:
   - name: System
   - name: Overview
   - name: Trades
+  - name: Settlement
   - name: Governance
   - name: Compliance
 security:
@@ -173,6 +174,102 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
+  /settlement/handoffs:
+    post:
+      tags: [Settlement]
+      summary: Ingest a platform settlement handoff
+      description: |
+        Service-authenticated ingress contract for platform backends to register a settlement handoff with Web3layer.
+        This route is not intended for operator sessions; it is authenticated using service-auth HMAC headers and
+        requires an `Idempotency-Key` header.
+      operationId: createSettlementHandoff
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementHandoffCreateRequest'
+      responses:
+        '202':
+          description: Settlement handoff accepted into the Web3layer orchestration boundary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementHandoffResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement/handoffs/{handoffId}/execution-events:
+    get:
+      tags: [Settlement]
+      summary: List settlement execution events for a handoff
+      operationId: listSettlementExecutionEvents
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/SettlementHandoffId'
+      responses:
+        '200':
+          description: Settlement execution events for the handoff.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementExecutionEventListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      tags: [Settlement]
+      summary: Ingest execution or reconciliation truth for a settlement handoff
+      description: |
+        Service-authenticated mutation for authoritative execution and reconciliation truth coming back into the
+        Web3layer gateway boundary. Every accepted event produces a durable callback-delivery record for the configured
+        platform backend when callback delivery is enabled.
+      operationId: createSettlementExecutionEvent
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/SettlementHandoffId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementExecutionEventCreateRequest'
+      responses:
+        '202':
+          description: Execution or reconciliation event accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementExecutionEventMutationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
   /governance/status:
     get:
       tags: [Governance]
@@ -1025,6 +1122,12 @@ components:
       required: true
       schema:
         type: string
+    SettlementHandoffId:
+      name: handoffId
+      in: path
+      required: true
+      schema:
+        type: string
       description: Web3layer trade identifier used across chain events, indexer evidence, and operator workflows.
   responses:
     BadRequestError:
@@ -1354,6 +1457,7 @@ components:
         - logisticsAmount
         - timeline
         - complianceStatus
+        - settlement
       properties:
         id:
           type: string
@@ -1390,6 +1494,402 @@ components:
             $ref: '#/components/schemas/TradeTimelineEvent'
         complianceStatus:
           $ref: '#/components/schemas/TradeComplianceStatus'
+        settlement:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TradeSettlementState'
+    TradeSettlementState:
+      type: object
+      required:
+        - handoffId
+        - platformId
+        - platformHandoffId
+        - phase
+        - settlementChannel
+        - displayCurrency
+        - displayAmount
+        - executionStatus
+        - reconciliationStatus
+        - callbackStatus
+        - providerStatus
+        - txHash
+        - extrinsicHash
+        - externalReference
+        - latestEventType
+        - latestEventDetail
+        - latestEventAt
+        - callbackDeliveredAt
+        - createdAt
+        - updatedAt
+      properties:
+        handoffId:
+          type: string
+        platformId:
+          type: string
+        platformHandoffId:
+          type: string
+        phase:
+          type: string
+        settlementChannel:
+          type: string
+        displayCurrency:
+          type: string
+        displayAmount:
+          type: number
+        executionStatus:
+          $ref: '#/components/schemas/SettlementExecutionStatus'
+        reconciliationStatus:
+          $ref: '#/components/schemas/SettlementReconciliationStatus'
+        callbackStatus:
+          $ref: '#/components/schemas/SettlementCallbackStatus'
+        providerStatus:
+          type: [string, 'null']
+        txHash:
+          type: [string, 'null']
+        extrinsicHash:
+          type: [string, 'null']
+        externalReference:
+          type: [string, 'null']
+        latestEventType:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementEventType'
+        latestEventDetail:
+          type: [string, 'null']
+        latestEventAt:
+          type: [string, 'null']
+          format: date-time
+        callbackDeliveredAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SettlementExecutionStatus:
+      type: string
+      enum: [pending, accepted, queued, submitted, confirmed, failed, rejected]
+    SettlementReconciliationStatus:
+      type: string
+      enum: [pending, matched, drift, unavailable]
+    SettlementCallbackStatus:
+      type: string
+      enum: [pending, delivered, failed, dead_letter, disabled]
+    SettlementEventType:
+      type: string
+      enum: [accepted, queued, submitted, confirmed, failed, rejected, reconciled, drift_detected]
+    SettlementHandoff:
+      type: object
+      required:
+        - handoffId
+        - platformId
+        - platformHandoffId
+        - tradeId
+        - phase
+        - settlementChannel
+        - displayCurrency
+        - displayAmount
+        - assetSymbol
+        - assetAmount
+        - ricardianHash
+        - externalReference
+        - metadata
+        - executionStatus
+        - reconciliationStatus
+        - callbackStatus
+        - providerStatus
+        - txHash
+        - extrinsicHash
+        - latestEventType
+        - latestEventDetail
+        - latestEventAt
+        - callbackDeliveredAt
+        - requestId
+        - sourceApiKeyId
+        - createdAt
+        - updatedAt
+      properties:
+        handoffId:
+          type: string
+        platformId:
+          type: string
+        platformHandoffId:
+          type: string
+        tradeId:
+          type: string
+        phase:
+          type: string
+        settlementChannel:
+          type: string
+        displayCurrency:
+          type: string
+        displayAmount:
+          type: number
+        assetSymbol:
+          type: [string, 'null']
+        assetAmount:
+          type: [number, 'null']
+        ricardianHash:
+          type: [string, 'null']
+        externalReference:
+          type: [string, 'null']
+        metadata:
+          type: object
+          additionalProperties: true
+        executionStatus:
+          $ref: '#/components/schemas/SettlementExecutionStatus'
+        reconciliationStatus:
+          $ref: '#/components/schemas/SettlementReconciliationStatus'
+        callbackStatus:
+          $ref: '#/components/schemas/SettlementCallbackStatus'
+        providerStatus:
+          type: [string, 'null']
+        txHash:
+          type: [string, 'null']
+        extrinsicHash:
+          type: [string, 'null']
+        latestEventType:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementEventType'
+        latestEventDetail:
+          type: [string, 'null']
+        latestEventAt:
+          type: [string, 'null']
+          format: date-time
+        callbackDeliveredAt:
+          type: [string, 'null']
+          format: date-time
+        requestId:
+          type: string
+        sourceApiKeyId:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SettlementExecutionEvent:
+      type: object
+      required:
+        - eventId
+        - handoffId
+        - eventType
+        - executionStatus
+        - reconciliationStatus
+        - providerStatus
+        - txHash
+        - extrinsicHash
+        - detail
+        - metadata
+        - observedAt
+        - requestId
+        - sourceApiKeyId
+        - createdAt
+      properties:
+        eventId:
+          type: string
+        handoffId:
+          type: string
+        eventType:
+          $ref: '#/components/schemas/SettlementEventType'
+        executionStatus:
+          $ref: '#/components/schemas/SettlementExecutionStatus'
+        reconciliationStatus:
+          $ref: '#/components/schemas/SettlementReconciliationStatus'
+        providerStatus:
+          type: [string, 'null']
+        txHash:
+          type: [string, 'null']
+        extrinsicHash:
+          type: [string, 'null']
+        detail:
+          type: [string, 'null']
+        metadata:
+          type: object
+          additionalProperties: true
+        observedAt:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        sourceApiKeyId:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+    SettlementCallbackDelivery:
+      type: object
+      required:
+        - deliveryId
+        - handoffId
+        - eventId
+        - targetUrl
+        - requestBody
+        - status
+        - attemptCount
+        - nextAttemptAt
+        - lastAttemptedAt
+        - deliveredAt
+        - responseStatus
+        - lastError
+        - requestId
+        - createdAt
+        - updatedAt
+      properties:
+        deliveryId:
+          type: string
+        handoffId:
+          type: string
+        eventId:
+          type: string
+        targetUrl:
+          type: string
+        requestBody:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [pending, delivering, delivered, failed, dead_letter, disabled]
+        attemptCount:
+          type: integer
+          minimum: 0
+        nextAttemptAt:
+          type: string
+          format: date-time
+        lastAttemptedAt:
+          type: [string, 'null']
+          format: date-time
+        deliveredAt:
+          type: [string, 'null']
+          format: date-time
+        responseStatus:
+          type: [integer, 'null']
+        lastError:
+          type: [string, 'null']
+        requestId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SettlementHandoffCreateRequest:
+      type: object
+      required:
+        - platformId
+        - platformHandoffId
+        - tradeId
+        - phase
+        - settlementChannel
+        - displayCurrency
+        - displayAmount
+      properties:
+        platformId:
+          type: string
+        platformHandoffId:
+          type: string
+        tradeId:
+          type: string
+        phase:
+          type: string
+        settlementChannel:
+          type: string
+        displayCurrency:
+          type: string
+        displayAmount:
+          type: number
+        assetSymbol:
+          type: string
+        assetAmount:
+          type: number
+        ricardianHash:
+          type: string
+        externalReference:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+    SettlementExecutionEventCreateRequest:
+      type: object
+      required:
+        - eventType
+        - executionStatus
+        - reconciliationStatus
+        - observedAt
+      properties:
+        eventType:
+          $ref: '#/components/schemas/SettlementEventType'
+        executionStatus:
+          $ref: '#/components/schemas/SettlementExecutionStatus'
+        reconciliationStatus:
+          $ref: '#/components/schemas/SettlementReconciliationStatus'
+        providerStatus:
+          type: string
+        txHash:
+          type: string
+        extrinsicHash:
+          type: string
+        detail:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        observedAt:
+          type: string
+          format: date-time
+    SettlementHandoffResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SettlementHandoff'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementExecutionEventMutationPayload:
+      type: object
+      required: [handoff, event, callbackDelivery]
+      properties:
+        handoff:
+          $ref: '#/components/schemas/SettlementHandoff'
+        event:
+          $ref: '#/components/schemas/SettlementExecutionEvent'
+        callbackDelivery:
+          $ref: '#/components/schemas/SettlementCallbackDelivery'
+    SettlementExecutionEventMutationResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SettlementExecutionEventMutationPayload'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementExecutionEventListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SettlementExecutionEvent'
+        timestamp:
+          type: string
+          format: date-time
     TradeResponse:
       type: object
       required: [success, data, timestamp]

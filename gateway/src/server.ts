@@ -15,6 +15,10 @@ import { createPostgresComplianceWriteStore } from './core/complianceWriteStore'
 import { createPostgresGovernanceActionStore } from './core/governanceStore';
 import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore';
 import { createPostgresIdempotencyStore } from './core/idempotencyStore';
+import { createGatewayServiceAuthNonceStore, createPostgresSettlementStore } from './core/settlementStore';
+import { createServiceApiKeyLookup } from './core/serviceAuth';
+import { SettlementCallbackDispatcher } from './core/settlementCallbackDispatcher';
+import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
@@ -24,6 +28,7 @@ import { createComplianceRouter } from './routes/compliance';
 import { createGovernanceRouter } from './routes/governance';
 import { createGovernanceMutationRouter } from './routes/governanceMutations';
 import { createOverviewRouter } from './routes/overview';
+import { createSettlementRouter } from './routes/settlement';
 import { createTradeRouter } from './routes/trades';
 
 const config = loadConfig();
@@ -36,11 +41,17 @@ const governanceActionStore = createPostgresGovernanceActionStore(pool);
 const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
 const governanceStatusService = createGovernanceStatusService(config);
 const idempotencyStore = createPostgresIdempotencyStore(pool);
+const settlementStore = createPostgresSettlementStore(pool);
+const settlementNonceStore = createGatewayServiceAuthNonceStore(pool);
+const settlementServiceApiKeyLookup = createServiceApiKeyLookup(config.settlementServiceAuthApiKeysJson);
+const settlementService = new SettlementService(config, settlementStore);
+const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore);
 const governanceMutationService = new GovernanceMutationService(config, governanceActionStore, governanceWriteStore);
 const tradeReadService = new TradeReadService(
   config.indexerGraphqlUrl,
   config.indexerRequestTimeoutMs,
   complianceStore,
+  settlementStore,
 );
 const overviewService = new OverviewService(
   config.indexerGraphqlUrl,
@@ -150,6 +161,14 @@ async function bootstrap(): Promise<void> {
     config,
     tradeReadService,
   }));
+  extraRouter.use(createSettlementRouter({
+    config,
+    settlementService,
+    settlementStore,
+    nonceStore: settlementNonceStore,
+    idempotencyStore,
+    lookupServiceApiKey: settlementServiceApiKeyLookup,
+  }));
   extraRouter.use(createOverviewRouter({
     authSessionClient,
     config,
@@ -173,9 +192,11 @@ async function bootstrap(): Promise<void> {
       allowlistSize: config.writeAllowlist.length,
     });
   });
+  settlementCallbackDispatcher.start();
 
   const shutdown = async (signal: string): Promise<void> => {
     Logger.info('Shutting down dashboard gateway', { signal });
+    settlementCallbackDispatcher.stop();
     await closeConnection(pool);
     server.close(() => process.exit(0));
   };
@@ -190,6 +211,7 @@ async function bootstrap(): Promise<void> {
 
   server.on('error', async (error) => {
     Logger.error('Dashboard gateway server error', error);
+    settlementCallbackDispatcher.stop();
     await closeConnection(pool);
     process.exit(1);
   });

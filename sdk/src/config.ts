@@ -4,6 +4,7 @@
 export interface Config {
     // network
     rpc: string;
+    rpcFallbackUrls?: string[];
     chainId: number;
 
     // contracts

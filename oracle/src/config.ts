@@ -32,6 +32,18 @@ function validateEnvBool(name: string, fallback: boolean): boolean {
     return value.toLowerCase() === 'true';
 }
 
+function parseUrlList(raw: string | undefined): string[] {
+    if (!raw) {
+        return [];
+    }
+
+    return raw
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0)
+        .map((value) => value.replace(/\/$/, ''));
+}
+
 export function loadConfig(): OracleConfig {
     try {
         const notificationsEnabled = validateEnvBool('NOTIFICATIONS_ENABLED', false);
@@ -68,6 +80,7 @@ export function loadConfig(): OracleConfig {
             
             // network
             rpcUrl: validateEnv('RPC_URL'),
+            rpcFallbackUrls: parseUrlList(process.env.RPC_FALLBACK_URLS),
             chainId: validateEnvNumber('CHAIN_ID'),
             escrowAddress: validateEnv('ESCROW_ADDRESS').toLowerCase(),
             usdcAddress: validateEnv('USDC_ADDRESS').toLowerCase(),

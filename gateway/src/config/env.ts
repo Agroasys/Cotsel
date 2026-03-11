@@ -18,12 +18,27 @@ export interface GatewayConfig {
   indexerGraphqlUrl: string;
   indexerRequestTimeoutMs: number;
   rpcUrl: string;
+  rpcFallbackUrls: string[];
   rpcReadTimeoutMs: number;
   chainId: number;
   escrowAddress: string;
   enableMutations: boolean;
   writeAllowlist: string[];
   governanceQueueTtlSeconds: number;
+  settlementIngressEnabled: boolean;
+  settlementServiceAuthApiKeysJson: string;
+  settlementServiceAuthSharedSecret?: string;
+  settlementServiceAuthMaxSkewSeconds: number;
+  settlementServiceAuthNonceTtlSeconds: number;
+  settlementCallbackEnabled: boolean;
+  settlementCallbackUrl?: string;
+  settlementCallbackApiKey?: string;
+  settlementCallbackApiSecret?: string;
+  settlementCallbackRequestTimeoutMs: number;
+  settlementCallbackPollIntervalMs: number;
+  settlementCallbackMaxAttempts: number;
+  settlementCallbackInitialBackoffMs: number;
+  settlementCallbackMaxBackoffMs: number;
   commitSha: string;
   buildTime: string;
   nodeEnv: string;
@@ -75,6 +90,18 @@ function parseAllowlist(raw: string | undefined): string[] {
     .filter((value) => value.length > 0);
 }
 
+function parseUrlList(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => value.replace(/\/$/, ''));
+}
+
 function assertAddress(name: string, value: string): string {
   assert(/^0x[a-fA-F0-9]{40}$/.test(value), `${name} must be a 20-byte hex address`);
   return value;
@@ -85,15 +112,29 @@ export function loadConfig(): GatewayConfig {
   const authBaseUrl = env('GATEWAY_AUTH_BASE_URL').replace(/\/$/, '');
   const indexerGraphqlUrl = env('GATEWAY_INDEXER_GRAPHQL_URL').replace(/\/$/, '');
   const rpcUrl = env('GATEWAY_RPC_URL').replace(/\/$/, '');
+  const rpcFallbackUrls = parseUrlList(process.env.GATEWAY_RPC_FALLBACK_URLS);
   const chainId = envNumber('GATEWAY_CHAIN_ID');
   const escrowAddress = assertAddress('GATEWAY_ESCROW_ADDRESS', env('GATEWAY_ESCROW_ADDRESS'));
   const writeAllowlist = parseAllowlist(process.env.GATEWAY_WRITE_ALLOWLIST);
   const enableMutations = envBool('GATEWAY_ENABLE_MUTATIONS', false);
+  const settlementIngressEnabled = envBool('GATEWAY_SETTLEMENT_INGRESS_ENABLED', false);
+  const settlementServiceAuthApiKeysJson = process.env.GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON?.trim() || '[]';
+  const settlementServiceAuthSharedSecret = process.env.GATEWAY_SETTLEMENT_SERVICE_SHARED_SECRET?.trim() || undefined;
+  const settlementCallbackEnabled = envBool('GATEWAY_SETTLEMENT_CALLBACK_ENABLED', false);
+  const settlementCallbackUrl = process.env.GATEWAY_SETTLEMENT_CALLBACK_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const settlementCallbackApiKey = process.env.GATEWAY_SETTLEMENT_CALLBACK_API_KEY?.trim() || undefined;
+  const settlementCallbackApiSecret = process.env.GATEWAY_SETTLEMENT_CALLBACK_API_SECRET?.trim() || undefined;
   const nodeEnv = process.env.NODE_ENV || 'development';
 
   assert(authBaseUrl.startsWith('http://') || authBaseUrl.startsWith('https://'), 'GATEWAY_AUTH_BASE_URL must be an absolute http(s) URL');
   assert(indexerGraphqlUrl.startsWith('http://') || indexerGraphqlUrl.startsWith('https://'), 'GATEWAY_INDEXER_GRAPHQL_URL must be an absolute http(s) URL');
   assert(rpcUrl.startsWith('http://') || rpcUrl.startsWith('https://'), 'GATEWAY_RPC_URL must be an absolute http(s) URL');
+  for (const [index, fallbackUrl] of rpcFallbackUrls.entries()) {
+    assert(
+      fallbackUrl.startsWith('http://') || fallbackUrl.startsWith('https://'),
+      `GATEWAY_RPC_FALLBACK_URLS[${index}] must be an absolute http(s) URL`,
+    );
+  }
   assert(envNumber('PORT', 3600) > 0, 'PORT must be > 0');
   assert(envNumber('DB_PORT', 5432) > 0, 'DB_PORT must be > 0');
   assert(chainId > 0, 'GATEWAY_CHAIN_ID must be > 0');
@@ -101,6 +142,30 @@ export function loadConfig(): GatewayConfig {
   assert(envNumber('GATEWAY_INDEXER_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_INDEXER_REQUEST_TIMEOUT_MS must be >= 1000');
   assert(envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000) >= 1000, 'GATEWAY_RPC_READ_TIMEOUT_MS must be >= 1000');
   assert(envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400) >= 60, 'GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS must be >= 60');
+  assert(envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS', 300) >= 30, 'GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS must be >= 30');
+  assert(envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_NONCE_TTL_SECONDS', 600) >= 60, 'GATEWAY_SETTLEMENT_SERVICE_AUTH_NONCE_TTL_SECONDS must be >= 60');
+  assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_SETTLEMENT_CALLBACK_REQUEST_TIMEOUT_MS must be >= 1000');
+  assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_POLL_INTERVAL_MS', 5000) >= 1000, 'GATEWAY_SETTLEMENT_CALLBACK_POLL_INTERVAL_MS must be >= 1000');
+  assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS', 8) >= 1, 'GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS must be >= 1');
+  assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000) >= 250, 'GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS must be >= 250');
+  assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000) >= envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000), 'GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS must be >= GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS');
+
+  if (settlementIngressEnabled) {
+    assert(
+      settlementServiceAuthApiKeysJson !== '[]' || settlementServiceAuthSharedSecret,
+      'GATEWAY_SETTLEMENT_INGRESS_ENABLED requires GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON or GATEWAY_SETTLEMENT_SERVICE_SHARED_SECRET',
+    );
+  }
+
+  if (settlementCallbackEnabled) {
+    assert(settlementCallbackUrl, 'GATEWAY_SETTLEMENT_CALLBACK_URL is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true');
+    assert(
+      settlementCallbackUrl.startsWith('http://') || settlementCallbackUrl.startsWith('https://'),
+      'GATEWAY_SETTLEMENT_CALLBACK_URL must be an absolute http(s) URL',
+    );
+    assert(settlementCallbackApiKey, 'GATEWAY_SETTLEMENT_CALLBACK_API_KEY is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true');
+    assert(settlementCallbackApiSecret, 'GATEWAY_SETTLEMENT_CALLBACK_API_SECRET is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true');
+  }
 
   return {
     port: envNumber('PORT', 3600),
@@ -114,12 +179,27 @@ export function loadConfig(): GatewayConfig {
     indexerGraphqlUrl,
     indexerRequestTimeoutMs: envNumber('GATEWAY_INDEXER_REQUEST_TIMEOUT_MS', 5000),
     rpcUrl,
+    rpcFallbackUrls,
     rpcReadTimeoutMs: envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000),
     chainId,
     escrowAddress,
     enableMutations,
     writeAllowlist,
     governanceQueueTtlSeconds: envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400),
+    settlementIngressEnabled,
+    settlementServiceAuthApiKeysJson,
+    settlementServiceAuthSharedSecret,
+    settlementServiceAuthMaxSkewSeconds: envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS', 300),
+    settlementServiceAuthNonceTtlSeconds: envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_NONCE_TTL_SECONDS', 600),
+    settlementCallbackEnabled,
+    settlementCallbackUrl,
+    settlementCallbackApiKey,
+    settlementCallbackApiSecret,
+    settlementCallbackRequestTimeoutMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_REQUEST_TIMEOUT_MS', 5000),
+    settlementCallbackPollIntervalMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_POLL_INTERVAL_MS', 5000),
+    settlementCallbackMaxAttempts: envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS', 8),
+    settlementCallbackInitialBackoffMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000),
+    settlementCallbackMaxBackoffMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000),
     commitSha: process.env.GATEWAY_COMMIT_SHA?.trim() || 'local-dev',
     buildTime,
     nodeEnv,

@@ -12,6 +12,18 @@
       "types": "./dist/index.d.ts",
       "require": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./rpc/failoverProvider": {
+      "types": "./dist/rpc/failoverProvider.d.ts",
+      "require": "./dist/rpc/failoverProvider.js",
+      "default": "./dist/rpc/failoverProvider.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "rpc/failoverProvider": [
+        "dist/rpc/failoverProvider.d.ts"
+      ]
     }
   },
   "license": "Apache-2.0",

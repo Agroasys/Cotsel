@@ -11,6 +11,7 @@ export { RicardianClient } from './modules/ricardianClient';
 
 // service-to-service auth helper
 export { createServiceAuthHeaders, buildServiceAuthCanonicalString, signServiceAuthCanonicalString } from './modules/serviceAuth';
+export { createManagedRpcProvider } from './rpc/failoverProvider';
 
 // types
 export * from './types/trade';
