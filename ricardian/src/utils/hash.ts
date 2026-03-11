@@ -15,6 +15,16 @@ function sha256Hex(input: string): string {
   return createHash('sha256').update(input).digest('hex');
 }
 
+
+export function verifyHashIntegrity(row: {
+  hash: string;
+  rulesVersion: string;
+  canonicalJson: string;
+}): boolean {
+  const preimage = `${row.rulesVersion}:${row.canonicalJson}`;
+  return sha256Hex(preimage) === row.hash;
+}
+
 export function buildRicardianHash(request: RicardianHashRequest): HashBuildResult {
   if (!request.documentRef || request.documentRef.trim().length === 0) {
     throw new Error('documentRef is required');
