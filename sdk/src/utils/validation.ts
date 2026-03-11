@@ -65,3 +65,21 @@ export function validateTradeParameters(params: TradeParameters): void {
         );
     }
 }
+
+/**
+ * Validates a {@link TradeParameters} before it is used to call
+ * `BuyerSDK.createTrade(...)`.
+ *
+ * Enforces:
+ * - `supplier` is a valid non-zero EVM address.
+ * - `totalAmount` is positive.
+ * - `logisticsAmount` and `platformFeesAmount` are >= 0.
+ * - `supplierFirstTranche` and `supplierSecondTranche` are > 0.
+ * - Amount invariant: `totalAmount === logisticsAmount + platformFeesAmount
+ *   + supplierFirstTranche + supplierSecondTranche`.
+ * - `ricardianHash` is a `0x`-prefixed 32-byte hex string.
+ *
+ * Throws {@link ValidationError} on the first failed constraint.
+ *
+ * @see {@link TradeParameters}
+ */

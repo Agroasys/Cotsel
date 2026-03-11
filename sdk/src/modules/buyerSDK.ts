@@ -86,8 +86,29 @@ export class BuyerSDK extends Client {
         }
     }
     
-    async createTrade(params: TradeParameters, buyerSigner: ethers.Signer): Promise<TradeResult> {
-        validateTradeParameters(params);
+    /**
+     * Lock funds and create a new trade in the escrow contract.
+     *
+     * This is the primary entry point for external checkout UIs. The `payload`
+     * parameter MUST conform to the {@link TradeParameters} canonical contract.
+     *
+     * **Flow executed by this method:**
+     * 1. Validates every field in `payload` (amount invariant, address, hash format).
+     * 2. Checks current USDC allowance; issues an `approve` tx if insufficient.
+     * 3. Derives the on-chain nonce via `getBuyerNonce` — callers MUST NOT supply a nonce.
+     * 4. Applies `payload.deadline` or defaults to `now + 3600`.
+     * 5. Signs the canonical EIP-191 trade message.
+     * 6. Submits `createTrade` to the escrow contract and returns the receipt.
+     *
+     * @param payload  Canonical buyer lock payload — see {@link TradeParameters}.
+     * @param buyerSigner  Ethers signer for the buyer wallet (signs and pays gas).
+     * @returns Transaction hash and block number of the confirmed lock transaction.
+     *
+     * @see {@link TradeParameters} for full field semantics and the amount invariant.
+     */
+    async createTrade(payload: TradeParameters, buyerSigner: ethers.Signer): Promise<TradeResult> {
+        validateTradeParameters(payload);
+        const params = payload;
         
         const buyerAddress = await buyerSigner.getAddress();
         
