@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { buildRicardianHash } from '../utils/hash';
-import { createRicardianHash, getRicardianHash } from '../database/queries';
+import { createDocument, getDocument } from '../database/documentStore';
+import { DocumentNotFoundError, DocumentStoreError } from '../errors';
 import { RicardianHashRequest, RicardianHashResponse } from '../types';
 
 function mapRowToResponse(row: any): RicardianHashResponse {
@@ -32,7 +33,7 @@ export class RicardianController {
     }
 
     try {
-      const row = await createRicardianHash({
+      const row = await createDocument({
         requestId: hashed.requestId,
         documentRef: hashed.documentRef,
         hash: hashed.hash,
@@ -46,43 +47,47 @@ export class RicardianController {
         data: mapRowToResponse(row),
       });
     } catch (error: any) {
+      const code = error instanceof DocumentStoreError ? error.code : undefined;
       res.status(500).json({
         success: false,
         error: error?.message || 'Failed to persist Ricardian hash',
+        ...(code ? { code } : {}),
       });
     }
   }
 
   async getHash(req: Request<{ hash: string }>, res: Response): Promise<void> {
+    const hash = req.params.hash;
+
+    if (!/^[a-f0-9]{64}$/i.test(hash)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid hash format',
+      });
+      return;
+    }
+
     try {
-      const hash = req.params.hash;
-
-      if (!/^[a-f0-9]{64}$/i.test(hash)) {
-        res.status(400).json({
-          success: false,
-          error: 'Invalid hash format',
-        });
-        return;
-      }
-
-      const row = await getRicardianHash(hash.toLowerCase());
-
-      if (!row) {
-        res.status(404).json({
-          success: false,
-          error: 'Hash not found',
-        });
-        return;
-      }
-
+      const row = await getDocument(hash.toLowerCase());
       res.status(200).json({
         success: true,
         data: mapRowToResponse(row),
       });
     } catch (error: any) {
+      if (error instanceof DocumentNotFoundError) {
+        res.status(404).json({
+          success: false,
+          error: error.message,
+          code: error.code,
+        });
+        return;
+      }
+
+      const code = error instanceof DocumentStoreError ? error.code : undefined;
       res.status(500).json({
         success: false,
         error: error?.message || 'Failed to fetch Ricardian hash',
+        ...(code ? { code } : {}),
       });
     }
   }
