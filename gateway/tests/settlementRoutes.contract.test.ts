@@ -262,6 +262,58 @@ describe('gateway settlement routes contract', () => {
       });
 
       expect(invalidTransition.status).toBe(409);
+
+      const submitBody = {
+        eventType: 'submitted',
+        executionStatus: 'submitted',
+        reconciliationStatus: 'pending',
+        observedAt: '2026-03-11T12:20:00.000Z',
+      };
+      const submitResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'event-submitted-before-confirm',
+          ...withServiceAuth(eventPath, submitBody),
+        },
+        body: JSON.stringify(submitBody),
+      });
+      expect(submitResponse.status).toBe(202);
+
+      const confirmBody = {
+        eventType: 'confirmed',
+        executionStatus: 'confirmed',
+        reconciliationStatus: 'pending',
+        observedAt: '2026-03-11T12:20:30.000Z',
+      };
+      const confirmResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'event-confirmed',
+          ...withServiceAuth(eventPath, confirmBody),
+        },
+        body: JSON.stringify(confirmBody),
+      });
+      expect(confirmResponse.status).toBe(202);
+
+      const staleReconcileBody = {
+        eventType: 'reconciled',
+        executionStatus: 'failed',
+        reconciliationStatus: 'matched',
+        observedAt: '2026-03-11T12:31:00.000Z',
+      };
+      const staleReconcileResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'event-reconcile-mutates-execution',
+          ...withServiceAuth(eventPath, staleReconcileBody),
+        },
+        body: JSON.stringify(staleReconcileBody),
+      });
+
+      expect(staleReconcileResponse.status).toBe(409);
     } finally {
       server.close();
     }

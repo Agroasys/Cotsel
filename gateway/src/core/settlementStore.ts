@@ -4,6 +4,7 @@
 import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
 import { GatewayError } from '../errors';
+import { validateExecutionTransition } from './settlementStateMachine';
 
 export const SETTLEMENT_EXECUTION_STATUSES = [
   'pending',
@@ -66,6 +67,7 @@ export interface SettlementHandoffRecord {
   providerStatus: string | null;
   txHash: string | null;
   extrinsicHash: string | null;
+  latestEventId: string | null;
   latestEventType: SettlementEventType | null;
   latestEventDetail: string | null;
   latestEventAt: string | null;
@@ -216,6 +218,7 @@ interface SettlementHandoffRow {
   providerStatus: string | null;
   txHash: string | null;
   extrinsicHash: string | null;
+  latestEventId: string | null;
   latestEventType: SettlementEventType | null;
   latestEventDetail: string | null;
   latestEventAt: Date | null;
@@ -295,6 +298,7 @@ function mapHandoffRow(row: SettlementHandoffRow): SettlementHandoffRecord {
     providerStatus: row.providerStatus,
     txHash: row.txHash,
     extrinsicHash: row.extrinsicHash,
+    latestEventId: row.latestEventId,
     latestEventType: row.latestEventType,
     latestEventDetail: row.latestEventDetail,
     latestEventAt: row.latestEventAt ? row.latestEventAt.toISOString() : null,
@@ -415,9 +419,10 @@ async function createEventWithClient(client: PoolClient, input: CreateSettlement
          provider_status = COALESCE($4, provider_status),
          tx_hash = COALESCE($5, tx_hash),
          extrinsic_hash = COALESCE($6, extrinsic_hash),
-         latest_event_type = $7,
-         latest_event_detail = $8,
-         latest_event_at = $9,
+         latest_event_id = $7,
+         latest_event_type = $8,
+         latest_event_detail = $9,
+         latest_event_at = $10,
          updated_at = NOW()
      WHERE handoff_id = $1`,
     [
@@ -427,6 +432,7 @@ async function createEventWithClient(client: PoolClient, input: CreateSettlement
       input.providerStatus ?? null,
       input.txHash ?? null,
       input.extrinsicHash ?? null,
+      event.eventId,
       input.eventType,
       input.detail ?? null,
       input.observedAt,
@@ -459,6 +465,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
          provider_status AS "providerStatus",
          tx_hash AS "txHash",
          extrinsic_hash AS "extrinsicHash",
+         latest_event_id AS "latestEventId",
          latest_event_type AS "latestEventType",
          latest_event_detail AS "latestEventDetail",
          latest_event_at AS "latestEventAt",
@@ -497,6 +504,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
          provider_status AS "providerStatus",
          tx_hash AS "txHash",
          extrinsic_hash AS "extrinsicHash",
+         latest_event_id AS "latestEventId",
          latest_event_type AS "latestEventType",
          latest_event_detail AS "latestEventDetail",
          latest_event_at AS "latestEventAt",
@@ -562,6 +570,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
            provider_status AS "providerStatus",
            tx_hash AS "txHash",
            extrinsic_hash AS "extrinsicHash",
+           latest_event_id AS "latestEventId",
            latest_event_type AS "latestEventType",
            latest_event_detail AS "latestEventDetail",
            latest_event_at AS "latestEventAt",
@@ -604,13 +613,20 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const handoffCheck = await client.query<{ handoffId: string }>(
-          'SELECT handoff_id AS "handoffId" FROM settlement_handoffs WHERE handoff_id = $1 FOR UPDATE',
+        const handoffCheck = await client.query<{ handoffId: string; executionStatus: SettlementExecutionStatus }>(
+          `SELECT
+             handoff_id AS "handoffId",
+             execution_status AS "executionStatus"
+           FROM settlement_handoffs
+           WHERE handoff_id = $1
+           FOR UPDATE`,
           [input.handoffId],
         );
         if (!handoffCheck.rows[0]) {
           throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', { handoffId: input.handoffId });
         }
+
+        validateExecutionTransition(handoffCheck.rows[0].executionStatus, input.executionStatus, input.eventType);
 
         const event = await createEventWithClient(client, input);
         await client.query('COMMIT');
@@ -782,7 +798,8 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
              updated_at = NOW()
          FROM settlement_callback_deliveries deliveries
          WHERE deliveries.delivery_id = $1
-           AND handoffs.handoff_id = deliveries.handoff_id`,
+           AND handoffs.handoff_id = deliveries.handoff_id
+           AND handoffs.latest_event_id = deliveries.event_id`,
         [deliveryId, completedAt],
       );
     },
@@ -812,7 +829,8 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
              updated_at = NOW()
          FROM settlement_callback_deliveries deliveries
          WHERE deliveries.delivery_id = $1
-           AND handoffs.handoff_id = deliveries.handoff_id`,
+           AND handoffs.handoff_id = deliveries.handoff_id
+           AND handoffs.latest_event_id = deliveries.event_id`,
         [deliveryId, update.deadLetter],
       );
     },
@@ -843,6 +861,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
            provider_status AS "providerStatus",
            tx_hash AS "txHash",
            extrinsic_hash AS "extrinsicHash",
+           latest_event_id AS "latestEventId",
            latest_event_type AS "latestEventType",
            latest_event_detail AS "latestEventDetail",
            latest_event_at AS "latestEventAt",
@@ -950,6 +969,7 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
         providerStatus: null,
         txHash: null,
         extrinsicHash: null,
+        latestEventId: null,
         latestEventType: null,
         latestEventDetail: null,
         latestEventAt: null,
@@ -981,6 +1001,8 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
         throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', { handoffId: input.handoffId });
       }
 
+      validateExecutionTransition(handoff.executionStatus, input.executionStatus, input.eventType);
+
       const event: SettlementExecutionEventRecord = {
         eventId: randomUUID(),
         handoffId: input.handoffId,
@@ -1010,6 +1032,7 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
         providerStatus: input.providerStatus ?? handoff.providerStatus,
         txHash: input.txHash ?? handoff.txHash,
         extrinsicHash: input.extrinsicHash ?? handoff.extrinsicHash,
+        latestEventId: event.eventId,
         latestEventType: input.eventType,
         latestEventDetail: input.detail ?? null,
         latestEventAt: input.observedAt,
@@ -1089,7 +1112,7 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
         updatedAt: new Date().toISOString(),
       });
       const handoff = handoffs.get(delivery.handoffId);
-      if (handoff) {
+      if (handoff && handoff.latestEventId === delivery.eventId) {
         handoffs.set(delivery.handoffId, {
           ...handoff,
           callbackStatus: 'delivered',
@@ -1114,7 +1137,7 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
         updatedAt: new Date().toISOString(),
       });
       const handoff = handoffs.get(delivery.handoffId);
-      if (handoff) {
+      if (handoff && handoff.latestEventId === delivery.eventId) {
         handoffs.set(delivery.handoffId, {
           ...handoff,
           callbackStatus: update.deadLetter ? 'dead_letter' : 'failed',

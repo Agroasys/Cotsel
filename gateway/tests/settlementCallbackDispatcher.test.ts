@@ -126,4 +126,54 @@ describe('settlement callback dispatcher', () => {
     updatedHandoff = await settlementStore.getHandoff(handoff.handoffId);
     expect(updatedHandoff?.callbackStatus).toBe('dead_letter');
   });
+
+  test('stale callback deliveries do not overwrite the latest handoff callback status', async () => {
+    const settlementStore = createInMemorySettlementStore();
+    const settlementService = new SettlementService(config, settlementStore);
+    const handoff = await settlementService.createHandoff({
+      platformId: 'agroasys-platform',
+      platformHandoffId: 'handoff-3',
+      tradeId: 'TRD-3',
+      phase: 'stage_2',
+      settlementChannel: 'web3layer_escrow',
+      displayCurrency: 'USD',
+      displayAmount: 700,
+      requestId: 'req-handoff-3',
+    });
+
+    await settlementService.recordExecutionEvent({
+      handoffId: handoff.handoffId,
+      eventType: 'submitted',
+      executionStatus: 'submitted',
+      reconciliationStatus: 'pending',
+      providerStatus: 'dispatch_received',
+      observedAt: '2026-03-11T12:20:00.000Z',
+      requestId: 'req-event-3a',
+    });
+
+    const originalDelivery = (await settlementStore.getDueCallbackDeliveries(10, '2100-03-11T12:20:10.000Z'))[0];
+    expect(originalDelivery).toBeDefined();
+
+    await settlementService.recordExecutionEvent({
+      handoffId: handoff.handoffId,
+      eventType: 'confirmed',
+      executionStatus: 'confirmed',
+      reconciliationStatus: 'pending',
+      providerStatus: 'confirmed',
+      observedAt: '2026-03-11T12:20:05.000Z',
+      requestId: 'req-event-3b',
+    });
+
+    await settlementStore.markCallbackFailed(originalDelivery!.deliveryId, {
+      attemptedAt: '2100-03-11T12:20:11.000Z',
+      responseStatus: 500,
+      errorMessage: 'stale callback failed',
+      nextAttemptAt: '2100-03-11T12:20:30.000Z',
+      deadLetter: false,
+    });
+
+    const updatedHandoff = await settlementStore.getHandoff(handoff.handoffId);
+    expect(updatedHandoff?.callbackStatus).toBe('pending');
+    expect(updatedHandoff?.latestEventType).toBe('confirmed');
+  });
 });

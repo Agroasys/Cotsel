@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS settlement_handoffs (
     provider_status TEXT,
     tx_hash TEXT,
     extrinsic_hash TEXT,
+    latest_event_id TEXT,
     latest_event_type TEXT,
     latest_event_detail TEXT,
     latest_event_at TIMESTAMP,
@@ -246,6 +247,9 @@ CREATE TABLE IF NOT EXISTS settlement_callback_deliveries (
 
 ALTER TABLE governance_actions
     ADD COLUMN IF NOT EXISTS intent_key TEXT;
+
+ALTER TABLE settlement_handoffs
+    ADD COLUMN IF NOT EXISTS latest_event_id TEXT;
 
 ALTER TABLE governance_actions
     ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
