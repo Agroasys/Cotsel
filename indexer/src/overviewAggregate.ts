@@ -86,7 +86,9 @@ export function buildCountersFromExistingState(
 }
 
 function isCancellationEvent(eventName: string | undefined): boolean {
-  return eventName === 'TradeCancelledAfterLockTimeout' || eventName === 'InTransitTimeoutRefunded';
+  return eventName === 'TradeCancelledAfterLockTimeout'
+    || eventName === 'InTransitTimeoutRefunded'
+    || eventName === 'DisputePayout:REFUND';
 }
 
 function incrementStatusBucket(status: TradeStatus, counters: OverviewCounters): void {
