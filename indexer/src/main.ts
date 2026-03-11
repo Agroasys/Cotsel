@@ -725,7 +725,7 @@ async function handleDisputeSolutionProposed(
         return;
     }
 
-    const disputeStatusEnum = disputeStatus === 0 ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
+    const disputeStatusEnum = disputeStatus === 0n ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
 
     // Calculate expiration (7 days TTL)
     const DISPUTE_PROPOSAL_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
@@ -833,7 +833,7 @@ async function handleDisputeFinalized(
     proposal.executed = true;
     disputeProposals.set(proposalId.toString(), proposal);
 
-    const disputeStatusEnum = disputeStatus === 0 ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
+    const disputeStatusEnum = disputeStatus === 0n ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
 
     events.push(new DisputeEvent({
         id: eventId,
@@ -914,7 +914,7 @@ async function handleDisputePayout(
         return overviewSnapshot;
     }
 
-    const payoutTypeEnum = payoutType === 0 ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
+    const payoutTypeEnum = payoutType === 0n ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
     const counters = payoutTypeEnum === DisputeStatus.REFUND
         ? applyTradeCancelled(trade.status, snapshotCounters(overviewSnapshot))
         : applyTradeTransition(trade.status, TradeStatus.CLOSED, snapshotCounters(overviewSnapshot));
