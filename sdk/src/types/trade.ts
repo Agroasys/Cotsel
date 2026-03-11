@@ -106,6 +106,14 @@ export interface TradeParameters {
     deadline?: number;
 }
 
+/**
+ * Preferred payload name for new external checkout integrations.
+ *
+ * Kept as an alias to preserve backward compatibility for consumers that
+ * already import `TradeParameters` from the public SDK surface.
+ */
+export type BuyerLockPayload = TradeParameters;
+
 export interface TradeResult {
     txHash: string;
     blockNumber: number;
