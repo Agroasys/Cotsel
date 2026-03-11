@@ -3,7 +3,7 @@
  */
 import { ethers } from 'ethers';
 import { ValidationError } from '../types/errors';
-import { TradeParameters } from '../types/trade';
+import { BuyerLockPayload } from '../types/trade';
 
 
 export function validateAddress(address: string, fieldName: string): void {
@@ -16,7 +16,7 @@ export function validateAddress(address: string, fieldName: string): void {
 }
 
 
-export function validateTradeParameters(params: TradeParameters): void {
+export function validateTradeParameters(params: BuyerLockPayload): void {
     validateAddress(params.supplier, 'supplier');
     
     if (params.totalAmount <= 0n) {
@@ -65,3 +65,22 @@ export function validateTradeParameters(params: TradeParameters): void {
         );
     }
 }
+
+/**
+ * Validates a {@link BuyerLockPayload} before it is used to call
+ * `BuyerSDK.createTrade(...)`.
+ *
+ * Enforces:
+ * - `supplier` is a valid non-zero EVM address.
+ * - `totalAmount` is positive.
+ * - `logisticsAmount` and `platformFeesAmount` are >= 0.
+ * - `supplierFirstTranche` and `supplierSecondTranche` are > 0.
+ * - Amount invariant: `totalAmount === logisticsAmount + platformFeesAmount
+ *   + supplierFirstTranche + supplierSecondTranche`.
+ * - `ricardianHash` is a `0x`-prefixed 32-byte hex string.
+ *
+ * Throws {@link ValidationError} on the first failed constraint.
+ *
+ * @see {@link BuyerLockPayload}
+ */
+export const validateBuyerLockPayload = validateTradeParameters;
