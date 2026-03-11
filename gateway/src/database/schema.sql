@@ -122,8 +122,134 @@ CREATE TABLE IF NOT EXISTS oracle_progression_blocks (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS service_auth_nonces (
+    api_key TEXT NOT NULL,
+    nonce TEXT NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (api_key, nonce)
+);
+
+CREATE TABLE IF NOT EXISTS settlement_handoffs (
+    handoff_id TEXT PRIMARY KEY,
+    platform_id TEXT NOT NULL,
+    platform_handoff_id TEXT NOT NULL,
+    trade_id TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    settlement_channel TEXT NOT NULL,
+    display_currency TEXT NOT NULL,
+    display_amount NUMERIC(20, 2) NOT NULL,
+    asset_symbol TEXT,
+    asset_amount NUMERIC(36, 6),
+    ricardian_hash TEXT,
+    external_reference TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    execution_status TEXT NOT NULL CHECK (execution_status IN (
+        'pending',
+        'accepted',
+        'queued',
+        'submitted',
+        'confirmed',
+        'failed',
+        'rejected'
+    )),
+    reconciliation_status TEXT NOT NULL CHECK (reconciliation_status IN (
+        'pending',
+        'matched',
+        'drift',
+        'unavailable'
+    )),
+    callback_status TEXT NOT NULL CHECK (callback_status IN (
+        'pending',
+        'delivered',
+        'failed',
+        'dead_letter',
+        'disabled'
+    )),
+    provider_status TEXT,
+    tx_hash TEXT,
+    extrinsic_hash TEXT,
+    latest_event_id TEXT,
+    latest_event_type TEXT,
+    latest_event_detail TEXT,
+    latest_event_at TIMESTAMP,
+    callback_delivered_at TIMESTAMP,
+    request_id TEXT NOT NULL,
+    source_api_key_id TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (platform_id, platform_handoff_id)
+);
+
+CREATE TABLE IF NOT EXISTS settlement_execution_events (
+    event_id TEXT PRIMARY KEY,
+    handoff_id TEXT NOT NULL REFERENCES settlement_handoffs(handoff_id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL CHECK (event_type IN (
+        'accepted',
+        'queued',
+        'submitted',
+        'confirmed',
+        'failed',
+        'rejected',
+        'reconciled',
+        'drift_detected'
+    )),
+    execution_status TEXT NOT NULL CHECK (execution_status IN (
+        'pending',
+        'accepted',
+        'queued',
+        'submitted',
+        'confirmed',
+        'failed',
+        'rejected'
+    )),
+    reconciliation_status TEXT NOT NULL CHECK (reconciliation_status IN (
+        'pending',
+        'matched',
+        'drift',
+        'unavailable'
+    )),
+    provider_status TEXT,
+    tx_hash TEXT,
+    extrinsic_hash TEXT,
+    detail TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    observed_at TIMESTAMP NOT NULL,
+    request_id TEXT NOT NULL,
+    source_api_key_id TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS settlement_callback_deliveries (
+    delivery_id TEXT PRIMARY KEY,
+    handoff_id TEXT NOT NULL REFERENCES settlement_handoffs(handoff_id) ON DELETE CASCADE,
+    event_id TEXT NOT NULL REFERENCES settlement_execution_events(event_id) ON DELETE CASCADE,
+    target_url TEXT NOT NULL,
+    request_body JSONB NOT NULL,
+    status TEXT NOT NULL CHECK (status IN (
+        'pending',
+        'delivering',
+        'delivered',
+        'failed',
+        'dead_letter',
+        'disabled'
+    )),
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMP NOT NULL,
+    last_attempted_at TIMESTAMP,
+    delivered_at TIMESTAMP,
+    response_status INTEGER,
+    last_error TEXT,
+    request_id TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 ALTER TABLE governance_actions
     ADD COLUMN IF NOT EXISTS intent_key TEXT;
+
+ALTER TABLE settlement_handoffs
+    ADD COLUMN IF NOT EXISTS latest_event_id TEXT;
 
 ALTER TABLE governance_actions
     ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
@@ -186,3 +312,10 @@ CREATE INDEX IF NOT EXISTS idx_compliance_decisions_result_decided_at ON complia
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_reason_code_decided_at ON compliance_decisions(reason_code, decided_at DESC);
 CREATE INDEX IF NOT EXISTS idx_oracle_progression_blocks_state_updated_at ON oracle_progression_blocks(block_state, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_oracle_progression_blocks_latest_decision_id ON oracle_progression_blocks(latest_decision_id);
+CREATE INDEX IF NOT EXISTS idx_service_auth_nonces_expires_at ON service_auth_nonces(expires_at ASC);
+CREATE INDEX IF NOT EXISTS idx_settlement_handoffs_trade_id_updated_at ON settlement_handoffs(trade_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_settlement_handoffs_execution_status_updated_at ON settlement_handoffs(execution_status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_settlement_handoffs_reconciliation_status_updated_at ON settlement_handoffs(reconciliation_status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_settlement_events_handoff_observed_at ON settlement_execution_events(handoff_id, observed_at DESC, event_id DESC);
+CREATE INDEX IF NOT EXISTS idx_settlement_events_event_type_created_at ON settlement_execution_events(event_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_settlement_callback_deliveries_status_next_attempt_at ON settlement_callback_deliveries(status, next_attempt_at ASC, created_at ASC);

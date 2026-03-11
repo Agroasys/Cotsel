@@ -1,18 +1,21 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { ethers, JsonRpcProvider } from 'ethers';
+import { AbstractProvider, ethers } from 'ethers';
 import { Config } from './config';
 import { ContractError } from './types/errors';
 import { AgroasysEscrow__factory } from './types/typechain-types/factories/src/AgroasysEscrow__factory';
 import type { AgroasysEscrow } from './types/typechain-types/src/AgroasysEscrow';
+import { createManagedRpcProvider } from './rpc/failoverProvider';
 
 export class Client {
-    protected provider: JsonRpcProvider;
+    protected provider: AbstractProvider;
     protected contract: AgroasysEscrow;
     
     constructor(protected config: Config) {
-        this.provider = new ethers.JsonRpcProvider(config.rpc);
+        this.provider = createManagedRpcProvider(config.rpc, config.rpcFallbackUrls, {
+            chainId: config.chainId,
+        });
         this.contract = AgroasysEscrow__factory.connect(
             config.escrowAddress,
             this.provider

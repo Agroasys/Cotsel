@@ -63,6 +63,7 @@ async function bootstrap() {
 
         const sdkClient = new SDKClient(
             config.rpcUrl,
+            config.rpcFallbackUrls,
             config.oraclePrivateKey,
             config.escrowAddress,
             config.usdcAddress,

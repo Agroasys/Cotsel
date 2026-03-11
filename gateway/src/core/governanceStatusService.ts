@@ -1,7 +1,8 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Contract, JsonRpcProvider } from 'ethers';
+import { AbstractProvider, Contract } from 'ethers';
+import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import { GatewayConfig } from '../config/env';
 import { GatewayError } from '../errors';
 import { withTimeout } from './downstreamTimeout';
@@ -170,7 +171,7 @@ async function collectActiveProposalIds(
 
 export class GovernanceStatusService implements GovernanceMutationPreflightReader {
   constructor(
-    private readonly provider: JsonRpcProvider,
+    private readonly provider: AbstractProvider,
     private readonly contract: GovernanceContractShape,
     private readonly expectedChainId: number,
     private readonly rpcReadTimeoutMs: number,
@@ -439,7 +440,10 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 }
 
 export function createGovernanceStatusService(config: GatewayConfig): GovernanceStatusService {
-  const provider = new JsonRpcProvider(config.rpcUrl);
+  const provider = createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
+    chainId: config.chainId,
+    stallTimeoutMs: Math.max(250, Math.floor(config.rpcReadTimeoutMs / 2)),
+  });
   const contract = new Contract(config.escrowAddress, ESCROW_GOVERNANCE_READ_ABI, provider) as unknown as GovernanceContractShape;
   return new GovernanceStatusService(provider, contract, config.chainId, config.rpcReadTimeoutMs);
 }

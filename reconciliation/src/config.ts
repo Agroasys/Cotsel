@@ -15,6 +15,7 @@ export interface ReconciliationConfig {
   dbUser: string;
   dbPassword: string;
   rpcUrl: string;
+  rpcFallbackUrls: string[];
   chainId: number;
   escrowAddress: string;
   usdcAddress: string;
@@ -75,6 +76,18 @@ function envUrl(name: string): string {
   return value;
 }
 
+function parseUrlList(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => value.replace(/\/$/, ''));
+}
+
 function assertContainerSafeIndexerUrl(url: string, name: string): void {
   let parsed: URL;
   try {
@@ -131,6 +144,7 @@ export function loadConfig(): ReconciliationConfig {
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
     rpcUrl: envUrl('RPC_URL'),
+    rpcFallbackUrls: parseUrlList(process.env.RPC_FALLBACK_URLS),
     chainId: envNumber('CHAIN_ID'),
     escrowAddress: envAddress('ESCROW_ADDRESS'),
     usdcAddress: envAddress('USDC_ADDRESS'),

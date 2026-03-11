@@ -1,8 +1,9 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { JsonRpcProvider, Wallet } from 'ethers';
+import { Wallet } from 'ethers';
 import { AdminSDK, type GovernanceProposalResult } from '@agroasys/sdk';
+import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import { GovernanceExecutorConfig } from '../config/executorEnv';
 import { GatewayError } from '../errors';
 import { GovernanceActionRecord } from '../core/governanceStore';
@@ -56,11 +57,17 @@ function toProposalResult(execution: GovernanceProposalResult, missingProposalMe
 export function createAdminSdkGovernanceChainExecutor(config: GovernanceExecutorConfig): GovernanceChainExecutor {
   const adminSdk = new AdminSDK({
     rpc: config.rpcUrl,
+    rpcFallbackUrls: config.rpcFallbackUrls,
     chainId: config.chainId,
     escrowAddress: config.escrowAddress,
     usdcAddress: config.usdcAddress,
   });
-  const signer = new Wallet(config.executorPrivateKey, new JsonRpcProvider(config.rpcUrl));
+  const signer = new Wallet(
+    config.executorPrivateKey,
+    createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
+      chainId: config.chainId,
+    }),
+  );
 
   return {
     async getSignerAddress() {

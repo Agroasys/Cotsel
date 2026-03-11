@@ -7,6 +7,7 @@ export class OnchainClient {
   constructor() {
     this.sdk = new OracleSDK({
       rpc: config.rpcUrl,
+      rpcFallbackUrls: config.rpcFallbackUrls,
       chainId: config.chainId,
       escrowAddress: config.escrowAddress,
       usdcAddress: config.usdcAddress,

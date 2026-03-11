@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { OracleSDK, Trade } from '@agroasys/sdk';
+import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import { Logger } from '../utils/logger';
 import { IndexerClient, IndexerTrade } from './indexer-client';
 
@@ -15,17 +16,19 @@ export class SDKClient {
 
     constructor(
         rpcUrl: string,
+        rpcFallbackUrls: string[],
         privateKey: string,
         escrowAddress: string,
         usdcAddress: string,
         chainId: number,
         indexer: IndexerClient
     ) {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = createManagedRpcProvider(rpcUrl, rpcFallbackUrls, { chainId });
         this.signer = new ethers.Wallet(privateKey, provider);
 
         this.sdk = new OracleSDK({
             rpc: rpcUrl,
+            rpcFallbackUrls,
             chainId,
             escrowAddress,
             usdcAddress,
