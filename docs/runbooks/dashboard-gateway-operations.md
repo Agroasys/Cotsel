@@ -48,6 +48,16 @@ Minimum gateway env contract:
 - `GATEWAY_INDEXER_REQUEST_TIMEOUT_MS`
 - `GATEWAY_INDEXER_GRAPHQL_URL`
 
+Optional operations-health probe URLs:
+- `GATEWAY_ORACLE_BASE_URL`
+- `GATEWAY_RECONCILIATION_BASE_URL`
+- `GATEWAY_TREASURY_BASE_URL`
+- `GATEWAY_RICARDIAN_BASE_URL`
+- `GATEWAY_NOTIFICATIONS_BASE_URL`
+
+When optional probe URLs are not set, the operations summary endpoint returns deterministic `unavailable`
+for the corresponding service with a stable explanatory detail.
+
 Executor-only env:
 - `GATEWAY_USDC_ADDRESS`
 - `GATEWAY_EXECUTOR_PRIVATE_KEY`
@@ -77,6 +87,8 @@ scripts/docker-services.sh health local-dev
 curl -fsS http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/healthz
 curl -fsS http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/readyz
 curl -fsS http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/version
+curl -fsS -H "Authorization: Bearer <session>" \
+  http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/operations/summary
 ```
 
 ## Health and readiness interpretation
@@ -193,6 +205,7 @@ curl -fsS -H "Authorization: Bearer <session>" \
 - `curl /healthz`
 - `curl /readyz`
 - `curl /version`
+- `curl /operations/summary` (authenticated admin session)
 
 ## References
 - `docs/api/web3layer-dashboard-gateway.openapi.yml`

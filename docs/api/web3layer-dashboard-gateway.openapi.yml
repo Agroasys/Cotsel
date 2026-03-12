@@ -27,6 +27,7 @@ servers:
 tags:
   - name: System
   - name: Overview
+  - name: Operations
   - name: Trades
   - name: Settlement
   - name: Governance
@@ -105,6 +106,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OverviewResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /operations/summary:
+    get:
+      tags: [Operations]
+      summary: Service health and incident summary snapshot
+      description: |
+        Authoritative operations read surface for CTSP-Dash Operations pages.
+
+        The gateway probes service dependencies and returns deterministic service states:
+        - `healthy`: service probe succeeded within latency threshold
+        - `degraded`: probe succeeded above latency threshold, or latest probe failed while recent success is still fresh
+        - `unavailable`: probe failed and no recent successful baseline exists, or the service is not wired in gateway config
+        - `stale`: latest probe failed and last successful baseline is older than `staleAfterMs`
+
+        Incident summary is gateway-derived from non-healthy services and includes source and freshness timestamps for UI trust indicators.
+      operationId: getOperationsSummary
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Operations snapshot with service health and incident summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsSummaryResponse'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -1338,6 +1368,154 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/OverviewSnapshot'
+        timestamp:
+          type: string
+          format: date-time
+    OperationsState:
+      type: string
+      enum: [healthy, degraded, unavailable, stale]
+    OperationsServiceStatus:
+      type: object
+      required:
+        - key
+        - name
+        - state
+        - source
+        - checkedAt
+        - lastSuccessAt
+        - freshnessMs
+        - staleAfterMs
+        - latencyMs
+      properties:
+        key:
+          type: string
+          examples: [oracle, indexer, reconciliation, treasury, ricardian, notifications]
+        name:
+          type: string
+        state:
+          $ref: '#/components/schemas/OperationsState'
+        source:
+          type: string
+          description: Probe source identifier such as `indexer_graphql` or `oracle_http`.
+        checkedAt:
+          type: string
+          format: date-time
+          description: Timestamp when this service status was checked for the snapshot.
+        lastSuccessAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+          description: Last successful probe timestamp, or null when no success baseline exists.
+        freshnessMs:
+          anyOf:
+            - type: integer
+              minimum: 0
+            - type: 'null'
+          description: Milliseconds since `lastSuccessAt`; null when the service has never had a successful probe baseline.
+        staleAfterMs:
+          type: integer
+          minimum: 1
+        latencyMs:
+          anyOf:
+            - type: integer
+              minimum: 0
+            - type: 'null'
+          description: Probe latency in milliseconds when available.
+        detail:
+          type: string
+    OperationsIncidentSeverity:
+      type: string
+      enum: [critical, high, medium, low]
+    OperationsIncidentItem:
+      type: object
+      required:
+        - incidentId
+        - title
+        - severity
+        - state
+        - sourceServiceKey
+        - firstObservedAt
+        - lastObservedAt
+      properties:
+        incidentId:
+          type: string
+        title:
+          type: string
+        severity:
+          $ref: '#/components/schemas/OperationsIncidentSeverity'
+        state:
+          type: string
+          enum: [open]
+        sourceServiceKey:
+          type: string
+        firstObservedAt:
+          type: string
+          format: date-time
+        lastObservedAt:
+          type: string
+          format: date-time
+        detail:
+          type: string
+    OperationsIncidentSummary:
+      type: object
+      required: [state, source, generatedAt, openCount, bySeverity, items]
+      properties:
+        state:
+          $ref: '#/components/schemas/OperationsState'
+        source:
+          type: string
+          const: gateway_derived
+        generatedAt:
+          type: string
+          format: date-time
+        openCount:
+          type: integer
+          minimum: 0
+        bySeverity:
+          type: object
+          required: [critical, high, medium, low]
+          properties:
+            critical:
+              type: integer
+              minimum: 0
+            high:
+              type: integer
+              minimum: 0
+            medium:
+              type: integer
+              minimum: 0
+            low:
+              type: integer
+              minimum: 0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsIncidentItem'
+    OperationsSummarySnapshot:
+      type: object
+      required: [state, generatedAt, services, incidents]
+      properties:
+        state:
+          $ref: '#/components/schemas/OperationsState'
+        generatedAt:
+          type: string
+          format: date-time
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsServiceStatus'
+        incidents:
+          $ref: '#/components/schemas/OperationsIncidentSummary'
+    OperationsSummaryResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/OperationsSummarySnapshot'
         timestamp:
           type: string
           format: date-time
