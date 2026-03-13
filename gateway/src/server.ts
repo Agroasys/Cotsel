@@ -22,11 +22,13 @@ import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
+import { OperationsSummaryService } from './core/operationsSummaryService';
 import { OverviewService } from './core/overviewService';
 import { Logger } from './logging/logger';
 import { createComplianceRouter } from './routes/compliance';
 import { createGovernanceRouter } from './routes/governance';
 import { createGovernanceMutationRouter } from './routes/governanceMutations';
+import { createOperationsRouter } from './routes/operations';
 import { createOverviewRouter } from './routes/overview';
 import { createSettlementRouter } from './routes/settlement';
 import { createTradeRouter } from './routes/trades';
@@ -59,6 +61,105 @@ const overviewService = new OverviewService(
   governanceStatusService,
   complianceStore,
 );
+const oracleBaseUrl = readOptionalBaseUrl('GATEWAY_ORACLE_BASE_URL');
+const reconciliationBaseUrl = readOptionalBaseUrl('GATEWAY_RECONCILIATION_BASE_URL');
+const treasuryBaseUrl = readOptionalBaseUrl('GATEWAY_TREASURY_BASE_URL');
+const ricardianBaseUrl = readOptionalBaseUrl('GATEWAY_RICARDIAN_BASE_URL');
+const notificationsBaseUrl = readOptionalBaseUrl('GATEWAY_NOTIFICATIONS_BASE_URL');
+
+function readOptionalBaseUrl(variableName: string): string | undefined {
+  const value = process.env[variableName]?.trim();
+  if (!value) {
+    return undefined;
+  }
+
+  return value.replace(/\/$/, '');
+}
+
+async function checkHttpHealth(baseUrl: string, timeoutMs: number): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${baseUrl}/health`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Probe timeout after ${timeoutMs}ms`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+const operationsSummaryService = new OperationsSummaryService([
+  {
+    key: 'oracle',
+    name: 'Oracle',
+    source: 'oracle_http',
+    staleAfterMs: 120_000,
+    timeoutMs: 5_000,
+    check: oracleBaseUrl
+      ? async () => checkHttpHealth(oracleBaseUrl, 5_000)
+      : undefined,
+  },
+  {
+    key: 'indexer',
+    name: 'Indexer',
+    source: 'indexer_graphql',
+    staleAfterMs: 120_000,
+    timeoutMs: config.indexerRequestTimeoutMs,
+    check: async () => tradeReadService.checkReadiness(),
+  },
+  {
+    key: 'reconciliation',
+    name: 'Reconciliation',
+    source: 'reconciliation_http',
+    staleAfterMs: 120_000,
+    timeoutMs: 5_000,
+    check: reconciliationBaseUrl
+      ? async () => checkHttpHealth(reconciliationBaseUrl, 5_000)
+      : undefined,
+  },
+  {
+    key: 'treasury',
+    name: 'Treasury',
+    source: 'treasury_http',
+    staleAfterMs: 120_000,
+    timeoutMs: 5_000,
+    check: treasuryBaseUrl
+      ? async () => checkHttpHealth(treasuryBaseUrl, 5_000)
+      : undefined,
+  },
+  {
+    key: 'ricardian',
+    name: 'Ricardian Engine',
+    source: 'ricardian_http',
+    staleAfterMs: 120_000,
+    timeoutMs: 5_000,
+    check: ricardianBaseUrl
+      ? async () => checkHttpHealth(ricardianBaseUrl, 5_000)
+      : undefined,
+  },
+  {
+    key: 'notifications',
+    name: 'Notifications',
+    source: 'notifications_http',
+    staleAfterMs: 120_000,
+    timeoutMs: 5_000,
+    check: notificationsBaseUrl
+      ? async () => checkHttpHealth(notificationsBaseUrl, 5_000)
+      : undefined,
+  },
+]);
 
 function loadPackageVersion(): string {
   const candidates = [
@@ -173,6 +274,11 @@ async function bootstrap(): Promise<void> {
     authSessionClient,
     config,
     overviewService,
+  }));
+  extraRouter.use(createOperationsRouter({
+    authSessionClient,
+    config,
+    operationsSummaryService,
   }));
 
   const app = createApp(config, {

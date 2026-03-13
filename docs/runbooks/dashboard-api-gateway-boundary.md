@@ -32,6 +32,11 @@ Gateway responsibilities:
 - assemble read models from chain, indexer, treasury, ricardian, and future compliance storage
 - enforce idempotency, request tracing, and stable error shapes
 
+Operations read surface:
+- `GET /operations/summary` provides service health and incident summary for operator operations pages.
+- Response states are explicit and deterministic: `healthy`, `degraded`, `unavailable`, `stale`.
+- Every service status and incident summary snapshot includes source and freshness timestamps.
+
 Current connected-validation constraint:
 - CTSP-Dash may run connected mode only against explicit local/docker gateway and auth-service URLs until real remote staging coordinates are recorded.
 - Connected mode must not silently fall back to preview behavior.
