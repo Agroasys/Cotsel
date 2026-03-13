@@ -95,4 +95,92 @@ describe('OperationsSummaryService', () => {
     expect(staleSnapshot.services[0]?.state).toBe('stale');
     expect(staleSnapshot.incidents.bySeverity.medium).toBe(1);
   });
+
+  test('unavailable outranks stale when mixed in aggregate state', async () => {
+    let staleShouldFail = false;
+    const timeline = [
+      new Date('2026-03-12T00:00:00.000Z'),
+      new Date('2026-03-12T01:00:00.000Z'),
+    ];
+
+    const service = new OperationsSummaryService(
+      [
+        {
+          key: 'staleable',
+          name: 'Staleable',
+          source: 'staleable_probe',
+          staleAfterMs: 1_000,
+          check: async () => {
+            if (staleShouldFail) {
+              throw new Error('upstream failed');
+            }
+          },
+        },
+        {
+          key: 'unwired',
+          name: 'Unwired',
+          source: 'unwired_probe',
+          staleAfterMs: 60_000,
+        },
+      ],
+      () => {
+        const value = timeline.shift();
+        if (!value) {
+          throw new Error('Timeline exhausted');
+        }
+
+        return value;
+      },
+    );
+
+    await service.getOperationsSummary();
+    staleShouldFail = true;
+
+    const snapshot = await service.getOperationsSummary();
+    expect(snapshot.services.find((s) => s.key === 'staleable')?.state).toBe('stale');
+    expect(snapshot.services.find((s) => s.key === 'unwired')?.state).toBe('unavailable');
+    expect(snapshot.state).toBe('unavailable');
+  });
+
+  test('incident firstObservedAt reflects time of first failure not last success', async () => {
+    let shouldFail = false;
+    const timeline = [
+      new Date('2026-03-12T00:00:00.000Z'),
+      new Date('2026-03-12T00:01:00.000Z'),
+      new Date('2026-03-12T00:02:00.000Z'),
+    ];
+
+    const service = new OperationsSummaryService(
+      [
+        {
+          key: 'probe',
+          name: 'Probe',
+          source: 'probe_source',
+          staleAfterMs: 60_000,
+          check: async () => {
+            if (shouldFail) {
+              throw new Error('upstream failed');
+            }
+          },
+        },
+      ],
+      () => {
+        const value = timeline.shift();
+        if (!value) {
+          throw new Error('Timeline exhausted');
+        }
+
+        return value;
+      },
+    );
+
+    await service.getOperationsSummary();
+    shouldFail = true;
+
+    const firstFailureSnapshot = await service.getOperationsSummary();
+    expect(firstFailureSnapshot.incidents.items[0]?.firstObservedAt).toBe('2026-03-12T00:01:00.000Z');
+
+    const secondFailureSnapshot = await service.getOperationsSummary();
+    expect(secondFailureSnapshot.incidents.items[0]?.firstObservedAt).toBe('2026-03-12T00:01:00.000Z');
+  });
 });

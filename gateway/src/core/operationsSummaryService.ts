@@ -11,6 +11,7 @@ export interface OperationsServiceStatus {
   state: ServiceHealthState;
   source: string;
   checkedAt: string;
+  firstFailureAt: string | null;
   lastSuccessAt: string | null;
   freshnessMs: number | null;
   staleAfterMs: number;
@@ -104,7 +105,7 @@ function deriveAggregateState(states: ServiceHealthState[]): ServiceHealthState 
     return 'healthy';
   }
 
-  if (states.every((state) => state === 'unavailable')) {
+  if (states.some((state) => state === 'unavailable')) {
     return 'unavailable';
   }
 
@@ -168,6 +169,7 @@ export class OperationsSummaryService implements OperationsSummaryReader {
         state: 'unavailable',
         source: probe.source,
         checkedAt,
+        firstFailureAt: null,
         lastSuccessAt: null,
         freshnessMs: null,
         staleAfterMs,
@@ -197,6 +199,7 @@ export class OperationsSummaryService implements OperationsSummaryReader {
         state,
         source: probe.source,
         checkedAt,
+        firstFailureAt: null,
         lastSuccessAt: checkedAt,
         freshnessMs: 0,
         staleAfterMs,
@@ -227,6 +230,7 @@ export class OperationsSummaryService implements OperationsSummaryReader {
           state: 'unavailable',
           source: probe.source,
           checkedAt,
+          firstFailureAt: checkedAt,
           lastSuccessAt: null,
           freshnessMs: null,
           staleAfterMs,
@@ -250,6 +254,7 @@ export class OperationsSummaryService implements OperationsSummaryReader {
         state,
         source: probe.source,
         checkedAt,
+        firstFailureAt: cacheEntry?.firstFailureAt ?? checkedAt,
         lastSuccessAt,
         freshnessMs,
         staleAfterMs,
@@ -267,7 +272,7 @@ export class OperationsSummaryService implements OperationsSummaryReader {
       severity: severityForState(service.state),
       state: 'open' as const,
       sourceServiceKey: service.key,
-      firstObservedAt: service.lastSuccessAt ?? service.checkedAt,
+      firstObservedAt: service.firstFailureAt ?? service.checkedAt,
       lastObservedAt: service.checkedAt,
       ...(service.detail ? { detail: service.detail } : {}),
     }));
