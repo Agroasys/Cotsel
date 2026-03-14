@@ -30,6 +30,7 @@ tags:
   - name: Overview
   - name: Operations
   - name: Trades
+  - name: Reconciliation
   - name: Settlement
   - name: Governance
   - name: Treasury
@@ -227,6 +228,86 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TradeResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /reconciliation:
+    get:
+      tags: [Reconciliation]
+      summary: List reconciliation handoff records for dashboard consumers
+      description: |
+        Operator read surface for reconciliation summaries and drift review. This contract is derived
+        from the gateway settlement ledger and current trade-linked settlement projection.
+      operationId: listReconciliation
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: tradeId
+          in: query
+          schema:
+            type: string
+        - name: reconciliationStatus
+          in: query
+          schema:
+            $ref: '#/components/schemas/SettlementReconciliationStatus'
+        - name: executionStatus
+          in: query
+          schema:
+            $ref: '#/components/schemas/SettlementExecutionStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Reconciliation handoff summaries with deterministic pagination and freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /reconciliation/handoffs/{handoffId}:
+    get:
+      tags: [Reconciliation]
+      summary: Get reconciliation detail for a settlement handoff
+      description: |
+        Returns the settlement handoff, its trade-linked projection, execution event history, and
+        freshness metadata for operator drift investigation workflows.
+      operationId: getReconciliationHandoff
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: handoffId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reconciliation handoff detail payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationDetailResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -2287,6 +2368,174 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Trade'
+        timestamp:
+          type: string
+          format: date-time
+    GatewayReadFreshness:
+      type: object
+      required: [source, sourceFreshAt, queriedAt, available]
+      properties:
+        source:
+          type: string
+        sourceFreshAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+        degradedReason:
+          type: string
+    ReconciliationRecord:
+      type: object
+      required:
+        - handoffId
+        - tradeId
+        - platformId
+        - platformHandoffId
+        - phase
+        - settlementChannel
+        - displayCurrency
+        - displayAmount
+        - assetSymbol
+        - assetAmount
+        - ricardianHash
+        - externalReference
+        - executionStatus
+        - reconciliationStatus
+        - callbackStatus
+        - providerStatus
+        - txHash
+        - extrinsicHash
+        - latestEventType
+        - latestEventDetail
+        - latestEventAt
+        - callbackDeliveredAt
+        - createdAt
+        - updatedAt
+        - tradeProjection
+      properties:
+        handoffId:
+          type: string
+        tradeId:
+          type: string
+        platformId:
+          type: string
+        platformHandoffId:
+          type: string
+        phase:
+          type: string
+        settlementChannel:
+          type: string
+        displayCurrency:
+          type: string
+        displayAmount:
+          type: number
+        assetSymbol:
+          type: [string, 'null']
+        assetAmount:
+          type: [number, 'null']
+        ricardianHash:
+          type: [string, 'null']
+        externalReference:
+          type: [string, 'null']
+        executionStatus:
+          $ref: '#/components/schemas/SettlementExecutionStatus'
+        reconciliationStatus:
+          $ref: '#/components/schemas/SettlementReconciliationStatus'
+        callbackStatus:
+          $ref: '#/components/schemas/SettlementCallbackStatus'
+        providerStatus:
+          type: [string, 'null']
+        txHash:
+          type: [string, 'null']
+        extrinsicHash:
+          type: [string, 'null']
+        latestEventType:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementEventType'
+        latestEventDetail:
+          type: [string, 'null']
+        latestEventAt:
+          type: [string, 'null']
+          format: date-time
+        callbackDeliveredAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        tradeProjection:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TradeSettlementState'
+    ReconciliationPagination:
+      type: object
+      required: [limit, offset, total]
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+        offset:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+    ReconciliationListPayload:
+      type: object
+      required: [items, pagination, freshness]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconciliationRecord'
+        pagination:
+          $ref: '#/components/schemas/ReconciliationPagination'
+        freshness:
+          $ref: '#/components/schemas/GatewayReadFreshness'
+    ReconciliationListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ReconciliationListPayload'
+        timestamp:
+          type: string
+          format: date-time
+    ReconciliationDetailPayload:
+      type: object
+      required: [handoff, events, freshness]
+      properties:
+        handoff:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ReconciliationRecord'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/SettlementExecutionEvent'
+        freshness:
+          $ref: '#/components/schemas/GatewayReadFreshness'
+    ReconciliationDetailResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ReconciliationDetailPayload'
         timestamp:
           type: string
           format: date-time
