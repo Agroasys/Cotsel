@@ -26,6 +26,7 @@ import { OperationsSummaryService } from './core/operationsSummaryService';
 import { OverviewService } from './core/overviewService';
 import { checkIndexerHealth } from './core/indexerHealthProbe';
 import { Logger } from './logging/logger';
+import { createCapabilitiesRouter } from './routes/capabilities';
 import { createComplianceRouter } from './routes/compliance';
 import { createGovernanceRouter } from './routes/governance';
 import { createGovernanceMutationRouter } from './routes/governanceMutations';
@@ -239,6 +240,10 @@ async function bootstrap(): Promise<void> {
   await runMigrations(pool);
 
   const extraRouter = Router();
+  extraRouter.use(createCapabilitiesRouter({
+    authSessionClient,
+    config,
+  }));
   extraRouter.use(createComplianceRouter({
     authSessionClient,
     config,

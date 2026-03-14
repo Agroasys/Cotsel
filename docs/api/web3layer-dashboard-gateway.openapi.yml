@@ -26,6 +26,7 @@ servers:
     description: Production placeholder for future gateway deployment.
 tags:
   - name: System
+  - name: Auth
   - name: Overview
   - name: Operations
   - name: Trades
@@ -80,6 +81,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VersionResponse'
+  /auth/capabilities:
+    get:
+      tags: [Auth]
+      summary: Authenticated operator capability snapshot
+      description: |
+        Returns the backend-authoritative route and action capabilities for the current authenticated
+        session so CTSL-Dash can gate operator pages and controls from gateway truth.
+
+        This route authenticates any valid session and does not require `operator:read`. Non-admin
+        sessions therefore receive a successful response with empty gateway roles and all operator
+        capabilities set to `false`.
+
+        Write capabilities are derived from the existing gateway policy:
+        - auth role `admin` maps to `operator:read` and `operator:write`
+        - mutations also require `GATEWAY_ENABLE_MUTATIONS=true`
+        - mutations additionally require the authenticated session to match `GATEWAY_WRITE_ALLOWLIST`
+      operationId: getOperatorCapabilities
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Backend capability snapshot for the authenticated session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorCapabilitiesResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
   /overview:
     get:
       tags: [Overview]
@@ -1266,6 +1296,85 @@ components:
             sourceRepo:
               type: string
               const: Agroasys.Web3layer
+        timestamp:
+          type: string
+          format: date-time
+    AuthServiceRole:
+      type: string
+      enum: [buyer, supplier, admin, oracle]
+    GatewayRole:
+      type: string
+      enum: [operator:read, operator:write]
+    OperatorCapabilitySubject:
+      type: object
+      required: [userId, walletAddress, authRole, gatewayRoles]
+      properties:
+        userId:
+          type: string
+        walletAddress:
+          type: string
+        authRole:
+          $ref: '#/components/schemas/AuthServiceRole'
+        gatewayRoles:
+          type: array
+          items:
+            $ref: '#/components/schemas/GatewayRole'
+    OperatorRouteCapabilities:
+      type: object
+      required: [overviewRead, operationsRead, tradesRead, governanceRead, complianceRead]
+      properties:
+        overviewRead:
+          type: boolean
+        operationsRead:
+          type: boolean
+        tradesRead:
+          type: boolean
+        governanceRead:
+          type: boolean
+        complianceRead:
+          type: boolean
+    OperatorActionCapabilities:
+      type: object
+      required: [governanceWrite, complianceWrite]
+      properties:
+        governanceWrite:
+          type: boolean
+        complianceWrite:
+          type: boolean
+    OperatorWriteAccess:
+      type: object
+      required: [mutationsConfigured, allowlisted, effective]
+      properties:
+        mutationsConfigured:
+          type: boolean
+          description: True when gateway mutation routes are enabled in config.
+        allowlisted:
+          type: boolean
+          description: True when the authenticated session matches GATEWAY_WRITE_ALLOWLIST.
+        effective:
+          type: boolean
+          description: True only when the session has operator write role, mutations are enabled, and the session is allowlisted.
+    OperatorCapabilitiesSnapshot:
+      type: object
+      required: [subject, routes, actions, writeAccess]
+      properties:
+        subject:
+          $ref: '#/components/schemas/OperatorCapabilitySubject'
+        routes:
+          $ref: '#/components/schemas/OperatorRouteCapabilities'
+        actions:
+          $ref: '#/components/schemas/OperatorActionCapabilities'
+        writeAccess:
+          $ref: '#/components/schemas/OperatorWriteAccess'
+    OperatorCapabilitiesResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/OperatorCapabilitiesSnapshot'
         timestamp:
           type: string
           format: date-time
