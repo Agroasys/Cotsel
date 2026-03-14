@@ -85,6 +85,7 @@ export interface GovernanceActionRecord {
 
 export interface ListGovernanceActionsInput {
   category?: GovernanceActionCategory;
+  categories?: GovernanceActionCategory[];
   status?: GovernanceActionStatus;
   tradeId?: string;
   limit: number;
@@ -443,6 +444,11 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
         conditions.push(`category = $${values.length}`);
       }
 
+      if (input.categories && input.categories.length > 0) {
+        values.push(input.categories);
+        conditions.push(`category = ANY($${values.length}::text[])`);
+      }
+
       if (input.status) {
         values.push(input.status);
         conditions.push(`status = $${values.length}`);
@@ -554,6 +560,10 @@ export function createInMemoryGovernanceActionStore(initial: GovernanceActionRec
 
       if (input.category) {
         candidates = candidates.filter((action) => action.category === input.category);
+      }
+
+      if (input.categories && input.categories.length > 0) {
+        candidates = candidates.filter((action) => input.categories?.includes(action.category));
       }
 
       if (input.status) {

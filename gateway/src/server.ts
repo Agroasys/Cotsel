@@ -24,6 +24,7 @@ import { GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
 import { OperationsSummaryService } from './core/operationsSummaryService';
 import { OverviewService } from './core/overviewService';
+import { TreasuryReadService } from './core/treasuryReadService';
 import { checkIndexerHealth } from './core/indexerHealthProbe';
 import { Logger } from './logging/logger';
 import { createCapabilitiesRouter } from './routes/capabilities';
@@ -33,6 +34,7 @@ import { createGovernanceMutationRouter } from './routes/governanceMutations';
 import { createOperationsRouter } from './routes/operations';
 import { createOverviewRouter } from './routes/overview';
 import { createSettlementRouter } from './routes/settlement';
+import { createTreasuryRouter } from './routes/treasury';
 import { createTradeRouter } from './routes/trades';
 
 const config = loadConfig();
@@ -51,6 +53,7 @@ const settlementServiceApiKeyLookup = createServiceApiKeyLookup(config.settlemen
 const settlementService = new SettlementService(config, settlementStore);
 const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore);
 const governanceMutationService = new GovernanceMutationService(config, governanceActionStore, governanceWriteStore);
+const treasuryReadService = new TreasuryReadService(governanceStatusService, governanceActionStore);
 const tradeReadService = new TradeReadService(
   config.indexerGraphqlUrl,
   config.indexerRequestTimeoutMs,
@@ -255,6 +258,11 @@ async function bootstrap(): Promise<void> {
     config,
     governanceStatusService,
     governanceActionStore,
+  }));
+  extraRouter.use(createTreasuryRouter({
+    authSessionClient,
+    config,
+    treasuryReadService,
   }));
   extraRouter.use(createGovernanceMutationRouter({
     authSessionClient,
