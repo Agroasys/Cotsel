@@ -27,6 +27,7 @@ servers:
 tags:
   - name: System
   - name: Auth
+  - name: Access Logs
   - name: Overview
   - name: Operations
   - name: Trades
@@ -114,6 +115,122 @@ paths:
                 $ref: '#/components/schemas/OperatorCapabilitiesResponse'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+  /access-logs:
+    post:
+      tags: [Access Logs]
+      summary: Append an operator access log entry
+      description: |
+        Append-only access-log mutation for CTSP-Dash operator surfaces. The gateway derives actor,
+        request, session, and network context from the authenticated request and applies stable
+        masking/redaction to session and IP fields in the returned record.
+
+        This mutation requires an admin session, `GATEWAY_ENABLE_MUTATIONS=true`, membership in
+        `GATEWAY_WRITE_ALLOWLIST`, and an `Idempotency-Key` header.
+      operationId: createAccessLogEntry
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessLogCreateRequest'
+      responses:
+        '201':
+          description: Access log entry recorded successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessLogEntryResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+    get:
+      tags: [Access Logs]
+      summary: List operator access log entries
+      description: |
+        Returns append-only access-log records for operator audit surfaces. Session and IP fields are
+        returned as stable masked/fingerprint pairs so operators can correlate events without
+        exposing raw bearer-session or client network identifiers.
+      operationId: listAccessLogEntries
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: eventType
+          in: query
+          schema:
+            type: string
+        - name: outcome
+          in: query
+          schema:
+            type: string
+        - name: actorUserId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Access log list payload with freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessLogListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /access-logs/{entryId}:
+    get:
+      tags: [Access Logs]
+      summary: Get a single access log entry by id
+      operationId: getAccessLogEntry
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: entryId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Access log detail payload with freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessLogEntryResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
   /overview:
     get:
       tags: [Overview]
@@ -1925,6 +2042,178 @@ components:
               type: array
               items:
                 type: string
+    AccessAuditReference:
+      type: object
+      required: [type, reference]
+      properties:
+        type:
+          type: string
+          enum: [audit_log, governance_action, compliance_decision, settlement_handoff, external]
+        reference:
+          type: string
+    AccessLogCreateRequest:
+      type: object
+      required: [eventType, surface, outcome]
+      properties:
+        eventType:
+          type: string
+          description: Stable dashboard/operator event type, for example `settings.access.granted`.
+        surface:
+          type: string
+          description: Dashboard surface or route associated with the access event.
+        outcome:
+          type: string
+          description: Stable event outcome label such as `allowed` or `denied`.
+        auditReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessAuditReference'
+        metadata:
+          type: object
+          additionalProperties: true
+    AccessLogActor:
+      type: object
+      required: [userId, walletAddress, role, sessionFingerprint, sessionDisplay]
+      properties:
+        userId:
+          type: string
+        walletAddress:
+          type: string
+        role:
+          type: string
+        sessionFingerprint:
+          type: string
+          description: Stable SHA-256 gateway fingerprint for the authenticated session reference.
+        sessionDisplay:
+          type: string
+          description: Masked session display value safe for operator UIs.
+    AccessLogNetwork:
+      type: object
+      required: [ipFingerprint, ipDisplay, userAgent]
+      properties:
+        ipFingerprint:
+          type: string
+          nullable: true
+          description: Stable SHA-256 fingerprint of the normalized client IP when available.
+        ipDisplay:
+          type: string
+          nullable: true
+          description: Masked client IP display value safe for operator UIs.
+        userAgent:
+          type: string
+          nullable: true
+    AccessLogRequestContext:
+      type: object
+      required: [requestId, correlationId, method, route]
+      properties:
+        requestId:
+          type: string
+        correlationId:
+          type: string
+          nullable: true
+        method:
+          type: string
+        route:
+          type: string
+    AccessLogEntry:
+      type: object
+      required:
+        - entryId
+        - eventType
+        - surface
+        - outcome
+        - actor
+        - network
+        - request
+        - auditReferences
+        - metadata
+        - createdAt
+      properties:
+        entryId:
+          type: string
+        eventType:
+          type: string
+        surface:
+          type: string
+        outcome:
+          type: string
+        actor:
+          $ref: '#/components/schemas/AccessLogActor'
+        network:
+          $ref: '#/components/schemas/AccessLogNetwork'
+        request:
+          $ref: '#/components/schemas/AccessLogRequestContext'
+        auditReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessAuditReference'
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    AccessLogFreshness:
+      type: object
+      required: [source, sourceFreshAt, queriedAt, available]
+      properties:
+        source:
+          type: string
+          enum: [gateway_access_log]
+        sourceFreshAt:
+          type: string
+          format: date-time
+          nullable: true
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+    AccessLogEntryEnvelope:
+      type: object
+      required: [item, freshness]
+      properties:
+        item:
+          $ref: '#/components/schemas/AccessLogEntry'
+        freshness:
+          $ref: '#/components/schemas/AccessLogFreshness'
+    AccessLogEntryResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/AccessLogEntryEnvelope'
+        timestamp:
+          type: string
+          format: date-time
+    AccessLogListEnvelope:
+      type: object
+      required: [items, freshness]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessLogEntry'
+        nextCursor:
+          type: string
+          nullable: true
+        freshness:
+          $ref: '#/components/schemas/AccessLogFreshness'
+    AccessLogListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/AccessLogListEnvelope'
+        timestamp:
+          type: string
+          format: date-time
     TradeStatus:
       type: string
       enum: [locked, stage_1, stage_2, completed, disputed]
