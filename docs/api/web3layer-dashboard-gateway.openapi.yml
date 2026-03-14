@@ -688,6 +688,96 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
+  /evidence/bundles:
+    post:
+      tags: [Evidence]
+      summary: Generate an evidence bundle manifest for a trade
+      description: |
+        Generates and persists a read-only evidence bundle manifest for CTSP-Dash Evidence. The
+        manifest exposes explicit artifact references and never claims a signed bundle unless the
+        backend actually provides one.
+      operationId: generateEvidenceBundle
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceBundleGenerateRequest'
+      responses:
+        '201':
+          description: Evidence bundle manifest generated and persisted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceBundleResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /evidence/bundles/{bundleId}:
+    get:
+      tags: [Evidence]
+      summary: Retrieve a generated evidence bundle manifest
+      operationId: getEvidenceBundle
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: bundleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Evidence bundle manifest metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceBundleResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /evidence/bundles/{bundleId}/download:
+    get:
+      tags: [Evidence]
+      summary: Download a generated evidence bundle manifest
+      operationId: downloadEvidenceBundle
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: bundleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: JSON attachment containing the evidence bundle manifest.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceBundleManifest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
   /governance/actions:
     get:
       tags: [Governance]
@@ -3346,6 +3436,181 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/GovernanceStatus'
+        timestamp:
+          type: string
+          format: date-time
+    EvidenceBundleGenerateRequest:
+      type: object
+      required: [tradeId]
+      properties:
+        tradeId:
+          type: string
+    EvidenceBundleGeneratedBy:
+      type: object
+      required: [userId, walletAddress, role]
+      properties:
+        userId:
+          type: string
+        walletAddress:
+          type: string
+        role:
+          type: string
+    EvidenceBundleArtifactReference:
+      type: object
+      required:
+        - artifactId
+        - type
+        - title
+        - format
+        - href
+        - available
+        - digest
+      properties:
+        artifactId:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        format:
+          type: string
+        href:
+          type: string
+          nullable: true
+        available:
+          type: boolean
+        digest:
+          type: string
+          nullable: true
+        unavailableReason:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+    EvidenceBundleEvidenceReference:
+      type: object
+      required:
+        - sourceType
+        - sourceId
+        - kind
+        - uri
+        - capturedAt
+        - actorRole
+        - actorWallet
+      properties:
+        sourceType:
+          type: string
+          enum: [compliance_decision, oracle_progression_block]
+        sourceId:
+          type: string
+        kind:
+          type: string
+          enum: [runbook, incident, ticket, tx, event, document, log, dashboard, other]
+        uri:
+          type: string
+        note:
+          type: string
+        capturedAt:
+          type: string
+          format: date-time
+        actorRole:
+          type: string
+        actorWallet:
+          type: string
+    EvidenceBundleTradeSummary:
+      type: object
+      required:
+        - id
+        - status
+        - createdAt
+        - updatedAt
+        - ricardianHash
+        - complianceStatus
+        - settlementHandoffId
+      properties:
+        id:
+          type: string
+        status:
+          $ref: '#/components/schemas/TradeStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        ricardianHash:
+          type: string
+          nullable: true
+        complianceStatus:
+          type: string
+          enum: [pass, fail, unavailable]
+        settlementHandoffId:
+          type: string
+          nullable: true
+    EvidenceBundleManifest:
+      type: object
+      required:
+        - bundleId
+        - tradeId
+        - manifestDigest
+        - generatedAt
+        - generatedBy
+        - signed
+        - signature
+        - sourceFreshAt
+        - queriedAt
+        - available
+        - trade
+        - artifactReferences
+        - evidenceReferences
+      properties:
+        bundleId:
+          type: string
+        tradeId:
+          type: string
+        manifestDigest:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        generatedBy:
+          $ref: '#/components/schemas/EvidenceBundleGeneratedBy'
+        signed:
+          type: boolean
+          const: false
+        signature:
+          type: string
+          nullable: true
+        sourceFreshAt:
+          type: string
+          format: date-time
+          nullable: true
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+        degradedReason:
+          type: string
+        trade:
+          $ref: '#/components/schemas/EvidenceBundleTradeSummary'
+        artifactReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceBundleArtifactReference'
+        evidenceReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceBundleEvidenceReference'
+    EvidenceBundleResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/EvidenceBundleManifest'
         timestamp:
           type: string
           format: date-time

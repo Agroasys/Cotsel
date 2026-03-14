@@ -15,6 +15,8 @@ import { createAuthSessionClient } from './core/authSessionClient';
 import { createPostgresComplianceStore } from './core/complianceStore';
 import { ComplianceService } from './core/complianceService';
 import { createPostgresComplianceWriteStore } from './core/complianceWriteStore';
+import { GatewayEvidenceBundleService } from './core/evidenceBundleService';
+import { createPostgresEvidenceBundleStore } from './core/evidenceBundleStore';
 import { createPostgresGovernanceActionStore } from './core/governanceStore';
 import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore';
 import { createPostgresIdempotencyStore } from './core/idempotencyStore';
@@ -38,6 +40,7 @@ import { Logger } from './logging/logger';
 import { createAccessLogRouter } from './routes/accessLogs';
 import { createCapabilitiesRouter } from './routes/capabilities';
 import { createComplianceRouter } from './routes/compliance';
+import { createEvidenceBundleRouter } from './routes/evidenceBundles';
 import { createGovernanceRouter } from './routes/governance';
 import { createGovernanceMutationRouter } from './routes/governanceMutations';
 import { createOperationsRouter } from './routes/operations';
@@ -58,6 +61,7 @@ const auditFeedStore = createPostgresAuditFeedStore(pool);
 const complianceStore = createPostgresComplianceStore(pool);
 const complianceWriteStore = createPostgresComplianceWriteStore(pool, complianceStore);
 const complianceService = new ComplianceService(complianceStore, complianceWriteStore);
+const evidenceBundleStore = createPostgresEvidenceBundleStore(pool);
 const governanceActionStore = createPostgresGovernanceActionStore(pool);
 const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
 const governanceStatusService = createGovernanceStatusService(config);
@@ -99,6 +103,12 @@ const evidenceReadService = new EvidenceReadService(
   ricardianClient,
   complianceStore,
   governanceActionStore,
+);
+const evidenceBundleService = new GatewayEvidenceBundleService(
+  evidenceBundleStore,
+  tradeReadService,
+  complianceStore,
+  ricardianBaseUrl,
 );
 
 function readOptionalBaseUrl(variableName: string): string | undefined {
@@ -286,6 +296,12 @@ async function bootstrap(): Promise<void> {
     authSessionClient,
     config,
     complianceService,
+    idempotencyStore,
+  }));
+  extraRouter.use(createEvidenceBundleRouter({
+    authSessionClient,
+    config,
+    evidenceBundleService,
     idempotencyStore,
   }));
   extraRouter.use(createGovernanceRouter({
