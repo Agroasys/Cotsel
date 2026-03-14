@@ -122,4 +122,68 @@ describe('reconciliation read service', () => {
       },
     });
   });
+
+  test('preserves handoff rows when projection lookups degrade', async () => {
+    const store = {
+      listHandoffs: jest.fn().mockResolvedValue({
+        items: [
+          {
+            handoffId: 'sth-2',
+            platformId: 'agroasys-platform',
+            platformHandoffId: 'handoff-2',
+            tradeId: 'TRD-9002',
+            phase: 'stage_2',
+            settlementChannel: 'web3layer_escrow',
+            displayCurrency: 'USD',
+            displayAmount: 9000,
+            assetSymbol: 'USDC',
+            assetAmount: 9000,
+            ricardianHash: null,
+            externalReference: 'EXT-2',
+            metadata: {},
+            executionStatus: 'confirmed',
+            reconciliationStatus: 'matched',
+            callbackStatus: 'delivered',
+            providerStatus: 'confirmed',
+            txHash: '0x2',
+            extrinsicHash: null,
+            latestEventId: 'evt-2',
+            latestEventType: 'reconciled',
+            latestEventDetail: 'Matched',
+            latestEventAt: '2026-03-14T10:05:00.000Z',
+            callbackDeliveredAt: '2026-03-14T10:06:00.000Z',
+            requestId: 'req-2',
+            sourceApiKeyId: 'platform-main',
+            createdAt: '2026-03-14T10:00:00.000Z',
+            updatedAt: '2026-03-14T10:06:00.000Z',
+          },
+        ],
+        total: 1,
+        sourceFreshAt: '2026-03-14T10:06:00.000Z',
+      }),
+      getTradeSettlementProjectionMap: jest.fn().mockRejectedValue(new Error('projection lookup unavailable')),
+      getHandoff: jest.fn(),
+      getHandoffByPlatformRef: jest.fn(),
+      createHandoff: jest.fn(),
+      createExecutionEvent: jest.fn(),
+      listExecutionEvents: jest.fn(),
+      queueCallbackDelivery: jest.fn(),
+      getDueCallbackDeliveries: jest.fn(),
+      markCallbackDelivering: jest.fn(),
+      markCallbackDelivered: jest.fn(),
+      markCallbackFailed: jest.fn(),
+    };
+
+    const service = new ReconciliationReadService(store as never, () => new Date('2026-03-14T11:00:00.000Z'));
+    const snapshot = await service.listReconciliation({
+      limit: 25,
+      offset: 0,
+    });
+
+    expect(snapshot.items).toHaveLength(1);
+    expect(snapshot.items[0]?.handoffId).toBe('sth-2');
+    expect(snapshot.items[0]?.tradeProjection).toBeNull();
+    expect(snapshot.freshness.available).toBe(false);
+    expect(snapshot.freshness.degradedReason).toContain('projection lookup unavailable');
+  });
 });

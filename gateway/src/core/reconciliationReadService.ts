@@ -140,6 +140,15 @@ function degradedReason(error: unknown): string {
   return 'Settlement ledger is unavailable';
 }
 
+function combineDegradedReasons(reasons: Array<string | null | undefined>): string | undefined {
+  const values = [...new Set(reasons.filter((reason): reason is string => Boolean(reason?.trim())).map((reason) => reason.trim()))];
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  return values.join('; ');
+}
+
 export class ReconciliationReadService implements ReconciliationReadReader {
   constructor(
     private readonly settlementStore: SettlementStore,
@@ -151,13 +160,22 @@ export class ReconciliationReadService implements ReconciliationReadReader {
 
     try {
       const handoffs = await this.settlementStore.listHandoffs(query as ListSettlementHandoffsInput);
-      const projections = await this.settlementStore.getTradeSettlementProjectionMap(
+      const projectionResult = await this.settlementStore.getTradeSettlementProjectionMap(
         [...new Set(handoffs.items.map((item) => item.tradeId))],
-      );
+      ).then((value) => ({ ok: true as const, value })).catch((error) => ({
+        ok: false as const,
+        error: degradedReason(error),
+      }));
 
       const items = handoffs.items.map((handoff) =>
-        mapReconciliationRecord(handoff, projections.get(handoff.tradeId) ?? null),
+        mapReconciliationRecord(
+          handoff,
+          projectionResult.ok ? projectionResult.value.get(handoff.tradeId) ?? null : null,
+        ),
       );
+      const responseDegradedReason = combineDegradedReasons([
+        !projectionResult.ok ? projectionResult.error : undefined,
+      ]);
 
       return {
         items,
@@ -173,7 +191,8 @@ export class ReconciliationReadService implements ReconciliationReadReader {
             ...items.map((item) => item.tradeProjection?.updatedAt ?? null),
           ]),
           queriedAt,
-          available: true,
+          available: responseDegradedReason ? false : true,
+          ...(responseDegradedReason ? { degradedReason: responseDegradedReason } : {}),
         },
       };
     } catch (error) {
@@ -213,12 +232,19 @@ export class ReconciliationReadService implements ReconciliationReadReader {
         };
       }
 
-      const [events, projections] = await Promise.all([
+      const [eventsResult, projectionsResult] = await Promise.allSettled([
         this.settlementStore.listExecutionEvents(handoffId),
         this.settlementStore.getTradeSettlementProjectionMap([handoff.tradeId]),
       ]);
 
-      const tradeProjection = projections.get(handoff.tradeId) ?? null;
+      const events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
+      const tradeProjection = projectionsResult.status === 'fulfilled'
+        ? projectionsResult.value.get(handoff.tradeId) ?? null
+        : null;
+      const responseDegradedReason = combineDegradedReasons([
+        eventsResult.status === 'rejected' ? degradedReason(eventsResult.reason) : undefined,
+        projectionsResult.status === 'rejected' ? degradedReason(projectionsResult.reason) : undefined,
+      ]);
 
       return {
         handoff: mapReconciliationRecord(handoff, tradeProjection),
@@ -231,7 +257,8 @@ export class ReconciliationReadService implements ReconciliationReadReader {
             ...events.map((event) => event.observedAt),
           ]),
           queriedAt,
-          available: true,
+          available: responseDegradedReason ? false : true,
+          ...(responseDegradedReason ? { degradedReason: responseDegradedReason } : {}),
         },
       };
     } catch (error) {
