@@ -2,9 +2,9 @@ openapi: 3.1.0
 info:
   title: Web3layer Dashboard Gateway API
   version: 0.1.0
-  summary: Contract-first admin/operator gateway for the CTSP dashboard.
+  summary: Contract-first admin/operator gateway for the CTSL dashboard.
   description: |
-    Contract-first API specification for the CTSP admin/operator dashboard to interact with Agroasys Web3layer.
+    Contract-first API specification for the CTSL admin/operator dashboard to interact with Agroasys Web3layer.
 
     Discovery outcome:
     - Dedicated in-repo dashboard gateway runtime: `gateway/` Express + TypeScript service.
@@ -85,7 +85,7 @@ paths:
       tags: [Overview]
       summary: Dashboard overview KPIs and operational posture
       description: |
-        Aggregated overview surface for CTSP-Dash. Returns trade counts by settlement stage,
+        Aggregated overview surface for CTSL-Dash. Returns trade counts by settlement stage,
         governance posture (paused / oracle active), compliance blocked-trade count, and
         per-feed query metadata so the dashboard can render operator trust indicators.
 
@@ -115,7 +115,7 @@ paths:
       tags: [Operations]
       summary: Service health and incident summary snapshot
       description: |
-        Authoritative operations read surface for CTSP-Dash Operations pages.
+        Authoritative operations read surface for CTSL-Dash Operations pages.
 
         The gateway probes service dependencies and returns deterministic service states:
         - `healthy`: service probe succeeded within latency threshold
@@ -1290,19 +1290,19 @@ components:
       allOf:
         - $ref: '#/components/schemas/OverviewFeedStatus'
         - type: object
-          required: [lastProcessedBlock, freshAt]
+          required: [lastProcessedBlock, lastTradeEventAt]
           properties:
             lastProcessedBlock:
               anyOf:
                 - type: string
                 - type: 'null'
               description: Block number of the last block processed by the indexer; null when the feed is unavailable.
-            freshAt:
+            lastTradeEventAt:
               anyOf:
                 - type: string
                   format: date-time
                 - type: 'null'
-              description: Timestamp of the last block processed by the indexer (advances on every block regardless of trade activity); null when the feed is unavailable. Use this to assess indexer freshness — lastTradeEventAt is event metadata, not a liveness signal.
+              description: Timestamp of the last trade lifecycle event indexed; null when no events have been indexed yet or the feed is unavailable.
     OverviewTradeKpis:
       type: object
       required: [total, byStatus]

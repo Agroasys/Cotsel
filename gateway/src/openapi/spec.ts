@@ -16,9 +16,9 @@ export interface OpenApiSpec {
 export function loadOpenApiSpec(): OpenApiSpec {
   const candidates = [
     path.resolve(__dirname, './web3layer-dashboard-gateway.openapi.yml'),
-    path.resolve(__dirname, '../../dist/openapi/web3layer-dashboard-gateway.openapi.yml'),
     path.resolve(__dirname, '../../../docs/api/web3layer-dashboard-gateway.openapi.yml'),
     path.resolve(process.cwd(), 'docs/api/web3layer-dashboard-gateway.openapi.yml'),
+    path.resolve(__dirname, '../../dist/openapi/web3layer-dashboard-gateway.openapi.yml'),
   ];
 
   const specPath = candidates.find((candidate) => fs.existsSync(candidate));

@@ -19,7 +19,7 @@ Approved current-state contract:
 - executor mode: manual only
 
 This means:
-- CTSP-Dash connected validation must target the local/docker gateway URL only until real remote staging coordinates are recorded.
+- CTSL-Dash connected validation must target the local/docker gateway URL only until real remote staging coordinates are recorded.
 - Mutations stay disabled by default.
 - There is no approved remote staging gateway URL or remote auth-service URL yet.
 
