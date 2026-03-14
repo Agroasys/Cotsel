@@ -3,6 +3,7 @@
  */
 import type { Express } from 'express';
 import { IncomingMessage, ServerResponse } from 'http';
+import type { Socket } from 'net';
 import { Duplex } from 'stream';
 
 class MockSocket extends Duplex {
@@ -17,11 +18,13 @@ class MockSocket extends Duplex {
     encoding: BufferEncoding,
     callback: (error?: Error | null) => void,
   ): void {
-    this.output.push(
-      typeof chunk === 'string'
-        ? Buffer.from(chunk, encoding)
-        : Buffer.from(chunk),
-    );
+    if (Buffer.isBuffer(chunk)) {
+      this.output.push(chunk);
+    } else if (typeof chunk === 'string') {
+      this.output.push(Buffer.from(chunk, encoding));
+    } else {
+      this.output.push(Buffer.from(chunk));
+    }
     callback();
   }
 
@@ -86,7 +89,7 @@ export async function sendInProcessRequest(
   });
 
   const requestSocket = new MockSocket();
-  const request = new IncomingMessage(requestSocket as never);
+  const request = new IncomingMessage(requestSocket as unknown as Socket);
   request.method = options.method;
   request.url = options.path;
   request.headers = requestHeaders;
@@ -96,7 +99,7 @@ export async function sendInProcessRequest(
 
   const responseSocket = new MockSocket();
   const response = new ServerResponse(request);
-  response.assignSocket(responseSocket as never);
+  response.assignSocket(responseSocket as unknown as Socket);
 
   return await new Promise<InProcessResponse>((resolve, reject) => {
     response.once('error', reject);
@@ -115,8 +118,8 @@ export async function sendInProcessRequest(
       });
     });
 
-    (app as Express & {
-      handle: (req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void) => void;
+    (app as unknown as {
+      handle(req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void): void;
     }).handle(request, response, (error: unknown) => {
       if (error) {
         reject(error);

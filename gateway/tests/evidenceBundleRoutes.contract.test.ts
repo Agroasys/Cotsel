@@ -1,7 +1,6 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { Server } from 'http';
 import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
@@ -14,6 +13,7 @@ import type { DashboardTradeRecord, TradeReadReader } from '../src/core/tradeRea
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createEvidenceBundleRouter } from '../src/routes/evidenceBundles';
+import { sendInProcessRequest } from './support/inProcessHttp';
 
 const baseConfig: GatewayConfig = {
   port: 3600,
@@ -194,19 +194,7 @@ async function startServer(options: StartServerOptions = {}) {
     extraRouter: router,
   });
 
-  const server = await new Promise<Server>((resolve) => {
-    const instance = app.listen(0, () => resolve(instance));
-  });
-
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Failed to resolve server address');
-  }
-
-  return {
-    server,
-    baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
-  };
+  return app;
 }
 
 describe('gateway evidence bundle routes contract', () => {
@@ -220,88 +208,84 @@ describe('gateway evidence bundle routes contract', () => {
   });
 
   test('POST /evidence/bundles generates a schema-valid bundle and GET retrieves it', async () => {
-    const { server, baseUrl } = await startServer();
+    const app = await startServer();
+    const createResponse = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/evidence/bundles',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+        'idempotency-key': 'bundle-247',
+        'x-request-id': 'req-evidence-create',
+      },
+      body: JSON.stringify({ tradeId: trade.id }),
+    });
+    const createPayload = createResponse.json<Record<string, unknown>>();
 
-    try {
-      const createResponse = await fetch(`${baseUrl}/evidence/bundles`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'bundle-247',
-          'x-request-id': 'req-evidence-create',
-        },
-        body: JSON.stringify({ tradeId: trade.id }),
-      });
-      const createPayload = await createResponse.json();
+    expect(createResponse.status).toBe(201);
+    expect(validateBundleResponse(createPayload)).toBe(true);
+    expect((createPayload as { data: { bundleId: string; trade: { id: string } } }).data.trade.id).toBe(trade.id);
 
-      expect(createResponse.status).toBe(201);
-      expect(validateBundleResponse(createPayload)).toBe(true);
-      expect(createPayload.data.trade.id).toBe(trade.id);
+    const getResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: `/api/dashboard-gateway/v1/evidence/bundles/${(createPayload as { data: { bundleId: string } }).data.bundleId}`,
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'x-request-id': 'req-evidence-get',
+      },
+    });
+    const getPayload = getResponse.json<Record<string, unknown>>();
 
-      const getResponse = await fetch(`${baseUrl}/evidence/bundles/${createPayload.data.bundleId}`, {
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'x-request-id': 'req-evidence-get',
-        },
-      });
-      const getPayload = await getResponse.json();
-
-      expect(getResponse.status).toBe(200);
-      expect(validateBundleResponse(getPayload)).toBe(true);
-      expect(getPayload.data.bundleId).toBe(createPayload.data.bundleId);
-    } finally {
-      server.close();
-    }
+    expect(getResponse.status).toBe(200);
+    expect(validateBundleResponse(getPayload)).toBe(true);
+    expect((getPayload as { data: { bundleId: string } }).data.bundleId).toBe(
+      (createPayload as { data: { bundleId: string } }).data.bundleId,
+    );
   });
 
   test('GET /evidence/bundles/{bundleId}/download returns a JSON attachment', async () => {
-    const { server, baseUrl } = await startServer();
+    const app = await startServer();
+    const createResponse = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/evidence/bundles',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+        'idempotency-key': 'bundle-247-download',
+      },
+      body: JSON.stringify({ tradeId: trade.id }),
+    });
+    const createPayload = createResponse.json<{ data: { bundleId: string } }>();
 
-    try {
-      const createResponse = await fetch(`${baseUrl}/evidence/bundles`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'bundle-247-download',
-        },
-        body: JSON.stringify({ tradeId: trade.id }),
-      });
-      const createPayload = await createResponse.json();
+    const downloadResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: `/api/dashboard-gateway/v1/evidence/bundles/${createPayload.data.bundleId}/download`,
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const downloadPayload = downloadResponse.json<{ bundleId: string }>();
 
-      const downloadResponse = await fetch(`${baseUrl}/evidence/bundles/${createPayload.data.bundleId}/download`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      const downloadPayload = await downloadResponse.json();
-
-      expect(downloadResponse.status).toBe(200);
-      expect(downloadResponse.headers.get('content-disposition')).toContain(`evidence-bundle-${createPayload.data.bundleId}.json`);
-      expect(downloadPayload.bundleId).toBe(createPayload.data.bundleId);
-    } finally {
-      server.close();
-    }
+    expect(downloadResponse.status).toBe(200);
+    expect(downloadResponse.headers['content-disposition']).toContain(
+      `evidence-bundle-${createPayload.data.bundleId}.json`,
+    );
+    expect(downloadPayload.bundleId).toBe(createPayload.data.bundleId);
   });
 
   test('generation remains behind the mutation safety gate', async () => {
-    const { server, baseUrl } = await startServer({ enableMutations: false });
+    const app = await startServer({ enableMutations: false });
+    const response = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/evidence/bundles',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+        'idempotency-key': 'bundle-247-disabled',
+      },
+      body: JSON.stringify({ tradeId: trade.id }),
+    });
+    const payload = response.json<{ error: { code: string } }>();
 
-    try {
-      const response = await fetch(`${baseUrl}/evidence/bundles`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'bundle-247-disabled',
-        },
-        body: JSON.stringify({ tradeId: trade.id }),
-      });
-      const payload = await response.json();
-
-      expect(response.status).toBe(403);
-      expect(payload.error.code).toBe('FORBIDDEN');
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(403);
+    expect(payload.error.code).toBe('FORBIDDEN');
   });
 });
