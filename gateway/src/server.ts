@@ -24,8 +24,12 @@ import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
+import { EvidenceReadService } from './core/evidenceReadService';
 import { OperationsSummaryService } from './core/operationsSummaryService';
 import { OverviewService } from './core/overviewService';
+import { TreasuryReadService } from './core/treasuryReadService';
+import { ReconciliationReadService } from './core/reconciliationReadService';
+import { RicardianClient } from './core/ricardianClient';
 import { checkIndexerHealth } from './core/indexerHealthProbe';
 import { Logger } from './logging/logger';
 import { createAccessLogRouter } from './routes/accessLogs';
@@ -35,7 +39,10 @@ import { createGovernanceRouter } from './routes/governance';
 import { createGovernanceMutationRouter } from './routes/governanceMutations';
 import { createOperationsRouter } from './routes/operations';
 import { createOverviewRouter } from './routes/overview';
+import { createReconciliationRouter } from './routes/reconciliation';
+import { createRicardianRouter } from './routes/ricardian';
 import { createSettlementRouter } from './routes/settlement';
+import { createTreasuryRouter } from './routes/treasury';
 import { createTradeRouter } from './routes/trades';
 
 const config = loadConfig();
@@ -56,6 +63,8 @@ const settlementServiceApiKeyLookup = createServiceApiKeyLookup(config.settlemen
 const settlementService = new SettlementService(config, settlementStore);
 const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore);
 const governanceMutationService = new GovernanceMutationService(config, governanceActionStore, governanceWriteStore);
+const treasuryReadService = new TreasuryReadService(governanceStatusService, governanceActionStore);
+const reconciliationReadService = new ReconciliationReadService(settlementStore);
 const tradeReadService = new TradeReadService(
   config.indexerGraphqlUrl,
   config.indexerRequestTimeoutMs,
@@ -73,6 +82,14 @@ const reconciliationBaseUrl = readOptionalBaseUrl('GATEWAY_RECONCILIATION_BASE_U
 const treasuryBaseUrl = readOptionalBaseUrl('GATEWAY_TREASURY_BASE_URL');
 const ricardianBaseUrl = readOptionalBaseUrl('GATEWAY_RICARDIAN_BASE_URL');
 const notificationsBaseUrl = readOptionalBaseUrl('GATEWAY_NOTIFICATIONS_BASE_URL');
+const ricardianClient = new RicardianClient(ricardianBaseUrl, 5_000);
+const evidenceReadService = new EvidenceReadService(
+  tradeReadService,
+  settlementStore,
+  ricardianClient,
+  complianceStore,
+  governanceActionStore,
+);
 
 function readOptionalBaseUrl(variableName: string): string | undefined {
   const value = process.env[variableName]?.trim();
@@ -267,6 +284,11 @@ async function bootstrap(): Promise<void> {
     governanceStatusService,
     governanceActionStore,
   }));
+  extraRouter.use(createTreasuryRouter({
+    authSessionClient,
+    config,
+    treasuryReadService,
+  }));
   extraRouter.use(createGovernanceMutationRouter({
     authSessionClient,
     config,
@@ -278,6 +300,16 @@ async function bootstrap(): Promise<void> {
     authSessionClient,
     config,
     tradeReadService,
+  }));
+  extraRouter.use(createReconciliationRouter({
+    authSessionClient,
+    config,
+    reconciliationReadService,
+  }));
+  extraRouter.use(createRicardianRouter({
+    authSessionClient,
+    config,
+    evidenceReadService,
   }));
   extraRouter.use(createSettlementRouter({
     config,
