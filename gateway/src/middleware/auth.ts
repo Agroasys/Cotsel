@@ -34,7 +34,7 @@ function mapGatewayRoles(session: AuthSession): GatewayRole[] {
   return [];
 }
 
-function matchesAllowlist(session: AuthSession, allowlist: string[]): boolean {
+export function matchesAllowlist(session: AuthSession, allowlist: string[]): boolean {
   if (allowlist.length === 0) {
     return false;
   }
