@@ -12,6 +12,7 @@ import { AccessLogService } from './core/accessLogService';
 import { createPostgresAccessLogStore } from './core/accessLogStore';
 import { createPostgresAuditFeedStore } from './core/auditFeedStore';
 import { createAuthSessionClient } from './core/authSessionClient';
+import { GovernanceApprovalWorkflowReadService } from './core/approvalWorkflowReadService';
 import { createPostgresComplianceStore } from './core/complianceStore';
 import { ComplianceService } from './core/complianceService';
 import { createPostgresComplianceWriteStore } from './core/complianceWriteStore';
@@ -36,6 +37,7 @@ import { RicardianClient } from './core/ricardianClient';
 import { checkIndexerHealth } from './core/indexerHealthProbe';
 import { Logger } from './logging/logger';
 import { createAccessLogRouter } from './routes/accessLogs';
+import { createApprovalWorkflowRouter } from './routes/approvals';
 import { createCapabilitiesRouter } from './routes/capabilities';
 import { createComplianceRouter } from './routes/compliance';
 import { createGovernanceRouter } from './routes/governance';
@@ -61,6 +63,7 @@ const complianceService = new ComplianceService(complianceStore, complianceWrite
 const governanceActionStore = createPostgresGovernanceActionStore(pool);
 const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
 const governanceStatusService = createGovernanceStatusService(config);
+const approvalWorkflowReadService = new GovernanceApprovalWorkflowReadService(governanceActionStore, governanceStatusService);
 const idempotencyStore = createPostgresIdempotencyStore(pool);
 const roleAssignmentStore = createPostgresRoleAssignmentStore(pool);
 const settlementStore = createPostgresSettlementStore(pool);
@@ -275,6 +278,11 @@ async function bootstrap(): Promise<void> {
   extraRouter.use(createCapabilitiesRouter({
     authSessionClient,
     config,
+  }));
+  extraRouter.use(createApprovalWorkflowRouter({
+    authSessionClient,
+    config,
+    approvalWorkflowReadService,
   }));
   extraRouter.use(createAccessLogRouter({
     authSessionClient,
