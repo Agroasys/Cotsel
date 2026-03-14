@@ -25,7 +25,7 @@ export interface OverviewFeedStatus {
 
 export interface OverviewTradeFeedStatus extends OverviewFeedStatus {
   lastProcessedBlock: string | null;
-  lastTradeEventAt: string | null;
+  freshAt: string | null;
 }
 
 export interface OverviewPosture {
@@ -150,7 +150,7 @@ export class OverviewService implements OverviewReader {
           queriedAt: snapshotAvailable ? now : null,
           available: snapshotAvailable,
           lastProcessedBlock: indexerSnapshot?.lastProcessedBlock ?? null,
-          lastTradeEventAt: indexerSnapshot?.lastTradeEventAt ?? null,
+          freshAt: indexerSnapshot?.lastIndexedAt ?? null,
         },
         governance: { source: 'chain_rpc', queriedAt: governanceAvailable ? now : null, available: governanceAvailable },
         compliance: { source: 'gateway_ledger', queriedAt: complianceAvailable ? now : null, available: complianceAvailable },

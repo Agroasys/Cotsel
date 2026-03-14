@@ -59,7 +59,7 @@ describe('overview service', () => {
     expect(snapshot.kpis.trades.byStatus.disputed).toBe(1);
     expect(snapshot.kpis.trades.byStatus.cancelled).toBe(1);
     expect(snapshot.feedFreshness.trades.lastProcessedBlock).toBe('42000');
-    expect(snapshot.feedFreshness.trades.lastTradeEventAt).toBe('2026-03-08T12:00:00.000Z');
+    expect(snapshot.feedFreshness.trades.freshAt).toBe('2026-03-09T00:00:00.000Z');
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -90,7 +90,7 @@ describe('overview service', () => {
       queriedAt: null,
       available: false,
       lastProcessedBlock: null,
-      lastTradeEventAt: null,
+      freshAt: null,
     });
     expect(snapshot.feedFreshness.governance).toEqual({
       source: 'chain_rpc',

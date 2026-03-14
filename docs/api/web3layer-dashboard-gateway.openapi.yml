@@ -1290,19 +1290,19 @@ components:
       allOf:
         - $ref: '#/components/schemas/OverviewFeedStatus'
         - type: object
-          required: [lastProcessedBlock, lastTradeEventAt]
+          required: [lastProcessedBlock, freshAt]
           properties:
             lastProcessedBlock:
               anyOf:
                 - type: string
                 - type: 'null'
               description: Block number of the last block processed by the indexer; null when the feed is unavailable.
-            lastTradeEventAt:
+            freshAt:
               anyOf:
                 - type: string
                   format: date-time
                 - type: 'null'
-              description: Timestamp of the last trade lifecycle event indexed; null when no events have been indexed yet or the feed is unavailable.
+              description: Timestamp of the last block processed by the indexer (advances on every block regardless of trade activity); null when the feed is unavailable. Use this to assess indexer freshness — lastTradeEventAt is event metadata, not a liveness signal.
     OverviewTradeKpis:
       type: object
       required: [total, byStatus]
