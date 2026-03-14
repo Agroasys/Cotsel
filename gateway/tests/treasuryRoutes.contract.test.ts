@@ -1,7 +1,6 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { Server } from 'http';
 import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
@@ -10,6 +9,7 @@ import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createTreasuryRouter } from '../src/routes/treasury';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
 import type { TreasuryReadReader } from '../src/core/treasuryReadService';
+import { sendInProcessRequest } from './support/inProcessHttp';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -159,19 +159,7 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<T
     extraRouter: router,
   });
 
-  const server = await new Promise<Server>((resolve) => {
-    const instance = app.listen(0, () => resolve(instance));
-  });
-
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Failed to resolve server address');
-  }
-
-  return {
-    server,
-    baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
-  };
+  return app;
 }
 
 describe('gateway treasury routes contract', () => {
@@ -185,42 +173,39 @@ describe('gateway treasury routes contract', () => {
   });
 
   test('GET /treasury returns a schema-valid treasury snapshot', async () => {
-    const { server, baseUrl } = await startServer('admin');
+    const app = await startServer('admin');
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'x-request-id': 'req-treasury',
+      },
+    });
+    const payload = response.json<{ data: { state: { sweepVisibility: { canSweep: boolean } } } }>();
 
-    try {
-      const response = await fetch(`${baseUrl}/treasury`, {
-        headers: { Authorization: 'Bearer sess-admin', 'x-request-id': 'req-treasury' },
-      });
-      const payload = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get('x-request-id')).toBe('req-treasury');
-      expect(validateSnapshot(payload)).toBe(true);
-      expect(payload.data.state.sweepVisibility.canSweep).toBe(true);
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(200);
+    expect(response.headers['x-request-id']).toBe('req-treasury');
+    expect(validateSnapshot(payload)).toBe(true);
+    expect(payload.data.state.sweepVisibility.canSweep).toBe(true);
   });
 
   test('GET /treasury/actions returns treasury governance history', async () => {
-    const { server, baseUrl } = await startServer('admin');
+    const app = await startServer('admin');
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury/actions?category=treasury_sweep&status=executed&limit=20',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const payload = response.json<{ data: { items: Array<{ category: string }> } }>();
 
-    try {
-      const response = await fetch(`${baseUrl}/treasury/actions?category=treasury_sweep&status=executed&limit=20`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      const payload = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(validateActions(payload)).toBe(true);
-      expect(payload.data.items[0].category).toBe('treasury_sweep');
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(200);
+    expect(validateActions(payload)).toBe(true);
+    expect(payload.data.items[0].category).toBe('treasury_sweep');
   });
 
   test('GET /treasury returns degraded payloads when the chain source is unavailable', async () => {
-    const { server, baseUrl } = await startServer('admin', {
+    const app = await startServer('admin', {
       getTreasurySnapshot: jest.fn().mockResolvedValue({
         state: null,
         freshness: {
@@ -233,50 +218,47 @@ describe('gateway treasury routes contract', () => {
       }),
     });
 
-    try {
-      const response = await fetch(`${baseUrl}/treasury`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      const payload = await response.json();
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const payload = response.json<{ data: { freshness: { available: boolean } } }>();
 
-      expect(response.status).toBe(200);
-      expect(validateSnapshot(payload)).toBe(true);
-      expect(payload.data.freshness.available).toBe(false);
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(200);
+    expect(validateSnapshot(payload)).toBe(true);
+    expect(payload.data.freshness.available).toBe(false);
   });
 
   test('treasury routes require an authenticated admin session and validate query parameters', async () => {
-    const unauthenticated = await startServer(null);
-    const nonAdmin = await startServer('buyer');
+    const unauthenticatedApp = await startServer(null);
+    const unauthenticatedResponse = await sendInProcessRequest(unauthenticatedApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury',
+    });
+    expect(unauthenticatedResponse.status).toBe(401);
 
-    try {
-      const unauthenticatedResponse = await fetch(`${unauthenticated.baseUrl}/treasury`);
-      expect(unauthenticatedResponse.status).toBe(401);
+    const nonAdminApp = await startServer('buyer');
+    const forbiddenResponse = await sendInProcessRequest(nonAdminApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury',
+      headers: { authorization: 'Bearer sess-buyer' },
+    });
+    expect(forbiddenResponse.status).toBe(403);
 
-      const forbiddenResponse = await fetch(`${nonAdmin.baseUrl}/treasury`, {
-        headers: { Authorization: 'Bearer sess-buyer' },
-      });
-      expect(forbiddenResponse.status).toBe(403);
-    } finally {
-      unauthenticated.server.close();
-      nonAdmin.server.close();
-    }
+    const app = await startServer('admin');
+    const invalidCategory = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury/actions?category=broken',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    expect(invalidCategory.status).toBe(400);
 
-    const { server, baseUrl } = await startServer('admin');
-    try {
-      const invalidCategory = await fetch(`${baseUrl}/treasury/actions?category=broken`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      expect(invalidCategory.status).toBe(400);
-
-      const invalidCursor = await fetch(`${baseUrl}/treasury/actions?cursor=not-a-cursor`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      expect(invalidCursor.status).toBe(400);
-    } finally {
-      server.close();
-    }
+    const invalidCursor = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury/actions?cursor=not-a-cursor',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    expect(invalidCursor.status).toBe(400);
   });
 });
