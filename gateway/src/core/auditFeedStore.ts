@@ -116,6 +116,17 @@ function nextCursorFromItems(items: AuditFeedEvent[], limit: number): string | n
   });
 }
 
+function compareEventIds(left: string, right: string): number {
+  const leftId = BigInt(left);
+  const rightId = BigInt(right);
+
+  if (leftId === rightId) {
+    return 0;
+  }
+
+  return leftId < rightId ? -1 : 1;
+}
+
 export function createPostgresAuditFeedStore(pool: Pool): AuditFeedStore {
   const selectColumns = `SELECT
     id AS "eventId",
@@ -150,9 +161,9 @@ export function createPostgresAuditFeedStore(pool: Pool): AuditFeedStore {
         const cursor = decodeAuditFeedCursor(input.cursor);
         values.push(cursor.createdAt);
         const createdAtIndex = values.length;
-        values.push(Number(cursor.eventId));
+        values.push(cursor.eventId);
         const eventIdIndex = values.length;
-        conditions.push(`(created_at < $${createdAtIndex}::timestamp OR (created_at = $${createdAtIndex}::timestamp AND id < $${eventIdIndex}))`);
+        conditions.push(`(created_at < $${createdAtIndex}::timestamp OR (created_at = $${createdAtIndex}::timestamp AND id < $${eventIdIndex}::bigint))`);
       }
 
       values.push(input.limit + 1);
@@ -183,7 +194,7 @@ export function createInMemoryAuditFeedStore(initial: AuditFeedEvent[] = []): Au
   function sorted(): AuditFeedEvent[] {
     return [...items].sort((left, right) => {
       if (left.createdAt === right.createdAt) {
-        return Number(right.eventId) - Number(left.eventId);
+        return compareEventIds(right.eventId, left.eventId);
       }
 
       return right.createdAt.localeCompare(left.createdAt);
@@ -206,7 +217,7 @@ export function createInMemoryAuditFeedStore(initial: AuditFeedEvent[] = []): Au
         const cursor = decodeAuditFeedCursor(input.cursor);
         candidates = candidates.filter((event) => (
           event.createdAt < cursor.createdAt
-          || (event.createdAt === cursor.createdAt && Number(event.eventId) < Number(cursor.eventId))
+          || (event.createdAt === cursor.createdAt && compareEventIds(event.eventId, cursor.eventId) < 0)
         ));
       }
 
