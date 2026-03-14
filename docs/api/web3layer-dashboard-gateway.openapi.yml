@@ -29,6 +29,7 @@ tags:
   - name: Auth
   - name: Access Logs
   - name: Settings
+  - name: Approvals
   - name: Overview
   - name: Operations
   - name: Trades
@@ -319,6 +320,75 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
+  /approvals:
+    get:
+      tags: [Approvals]
+      summary: List maker-checker approval workflows for dashboard consumers
+      description: |
+        Returns read-only approval workflow summaries derived from the governance action ledger and
+        live governance status reads. The route is additive and does not mutate governance state.
+      operationId: listApprovalWorkflows
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/ApprovalWorkflowCategory'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Approval workflow summaries with freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalWorkflowListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /approvals/{approvalId}:
+    get:
+      tags: [Approvals]
+      summary: Get approval workflow detail by workflow id
+      description: |
+        Returns request, review, status, and execution metadata for a single maker-checker
+        governance workflow. When live governance state cannot be read, the response remains
+        additive and degrades explicitly with `available=false`.
+      operationId: getApprovalWorkflow
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Approval workflow detail with freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalWorkflowDetailResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
   /overview:
     get:
       tags: [Overview]
@@ -2457,6 +2527,256 @@ components:
               nullable: true
             freshness:
               $ref: '#/components/schemas/SettingsFreshness'
+        timestamp:
+          type: string
+          format: date-time
+    ApprovalWorkflowCategory:
+      type: string
+      enum:
+        - unpause
+        - treasury_payout_receiver_update
+        - oracle_update
+    ApprovalWorkflowFreshness:
+      type: object
+      required: [sourceFreshAt, queriedAt, available]
+      properties:
+        sourceFreshAt:
+          type: string
+          format: date-time
+          nullable: true
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+        degradedReason:
+          type: string
+    ApprovalWorkflowRequest:
+      type: object
+      required:
+        - actionId
+        - requestId
+        - requestedAt
+        - requestedBy
+        - actorWallet
+        - actorRole
+        - reason
+        - ticketRef
+        - evidenceLinks
+      properties:
+        actionId:
+          type: string
+        requestId:
+          type: string
+        correlationId:
+          type: string
+          nullable: true
+        requestedAt:
+          type: string
+          format: date-time
+        requestedBy:
+          type: string
+        actorWallet:
+          type: string
+        actorRole:
+          type: string
+        reason:
+          type: string
+        ticketRef:
+          type: string
+        evidenceLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceLink'
+    ApprovalWorkflowReviewEvent:
+      type: object
+      required:
+        - actionId
+        - reviewType
+        - contractMethod
+        - status
+        - reviewedAt
+        - reviewedBy
+        - actorWallet
+        - actorRole
+        - requestId
+      properties:
+        actionId:
+          type: string
+        reviewType:
+          type: string
+          enum: [approve, execute, cancel, other]
+        contractMethod:
+          type: string
+        status:
+          $ref: '#/components/schemas/GovernanceActionStatus'
+        reviewedAt:
+          type: string
+          format: date-time
+        reviewedBy:
+          type: string
+        actorWallet:
+          type: string
+        actorRole:
+          type: string
+        requestId:
+          type: string
+        correlationId:
+          type: string
+          nullable: true
+        executedAt:
+          type: string
+          format: date-time
+          nullable: true
+        txHash:
+          type: string
+          nullable: true
+        blockNumber:
+          type: integer
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+    ApprovalWorkflowReviewSummary:
+      type: object
+      required: [approvalsRequired, approvalCount, approvedBy, latestReviewedAt]
+      properties:
+        approvalsRequired:
+          type: integer
+          minimum: 0
+          nullable: true
+        approvalCount:
+          type: integer
+          minimum: 0
+          nullable: true
+        approvedBy:
+          type: array
+          items:
+            type: string
+        latestReviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+    ApprovalWorkflowReviewDetail:
+      allOf:
+        - $ref: '#/components/schemas/ApprovalWorkflowReviewSummary'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ApprovalWorkflowReviewEvent'
+    ApprovalWorkflowStatus:
+      type: object
+      required: [current, proposalId, expiresAt, executedAt, pendingExecution]
+      properties:
+        current:
+          $ref: '#/components/schemas/GovernanceActionStatus'
+        proposalId:
+          type: integer
+          minimum: 0
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        executedAt:
+          type: string
+          format: date-time
+          nullable: true
+        pendingExecution:
+          type: boolean
+    ApprovalWorkflowExecution:
+      type: object
+      required:
+        - actionId
+        - contractMethod
+        - targetAddress
+        - txHash
+        - blockNumber
+        - errorCode
+        - errorMessage
+      properties:
+        actionId:
+          type: string
+        contractMethod:
+          type: string
+        targetAddress:
+          type: string
+          nullable: true
+        txHash:
+          type: string
+          nullable: true
+        blockNumber:
+          type: integer
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+    ApprovalWorkflowSummary:
+      type: object
+      required: [approvalId, category, request, review, status, execution]
+      properties:
+        approvalId:
+          type: string
+        category:
+          $ref: '#/components/schemas/ApprovalWorkflowCategory'
+        request:
+          $ref: '#/components/schemas/ApprovalWorkflowRequest'
+        review:
+          $ref: '#/components/schemas/ApprovalWorkflowReviewSummary'
+        status:
+          $ref: '#/components/schemas/ApprovalWorkflowStatus'
+        execution:
+          $ref: '#/components/schemas/ApprovalWorkflowExecution'
+    ApprovalWorkflowDetail:
+      allOf:
+        - $ref: '#/components/schemas/ApprovalWorkflowSummary'
+        - type: object
+          properties:
+            review:
+              $ref: '#/components/schemas/ApprovalWorkflowReviewDetail'
+    ApprovalWorkflowListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          allOf:
+            - $ref: '#/components/schemas/ApprovalWorkflowFreshness'
+            - type: object
+              required: [items, nextCursor]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ApprovalWorkflowSummary'
+                nextCursor:
+                  type: string
+                  nullable: true
+        timestamp:
+          type: string
+          format: date-time
+    ApprovalWorkflowDetailResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          allOf:
+            - $ref: '#/components/schemas/ApprovalWorkflowFreshness'
+            - $ref: '#/components/schemas/ApprovalWorkflowDetail'
         timestamp:
           type: string
           format: date-time
