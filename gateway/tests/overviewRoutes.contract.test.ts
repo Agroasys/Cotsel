@@ -49,7 +49,7 @@ const overviewFixture: OverviewSnapshot = {
   kpis: {
     trades: {
       total: 5,
-      byStatus: { locked: 1, stage_1: 2, stage_2: 1, completed: 1, disputed: 0 },
+      byStatus: { locked: 1, stage_1: 2, stage_2: 1, completed: 1, disputed: 0, cancelled: 0 },
     },
     compliance: { blockedTrades: 1 },
   },
@@ -59,7 +59,7 @@ const overviewFixture: OverviewSnapshot = {
     oracleActive: true,
   },
   feedFreshness: {
-    trades: { source: 'indexer_graphql', queriedAt: '2026-03-09T00:00:00.000Z', available: true },
+    trades: { source: 'indexer_graphql', queriedAt: '2026-03-09T00:00:00.000Z', available: true, lastProcessedBlock: '42000', freshAt: '2026-03-09T00:00:00.000Z' },
     governance: { source: 'chain_rpc', queriedAt: '2026-03-09T00:00:00.000Z', available: true },
     compliance: { source: 'gateway_ledger', queriedAt: '2026-03-09T00:00:00.000Z', available: true },
   },
@@ -69,13 +69,13 @@ const degradedFixture: OverviewSnapshot = {
   kpis: {
     trades: {
       total: 0,
-      byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 },
+      byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0, cancelled: 0 },
     },
     compliance: { blockedTrades: 0 },
   },
   posture: null,
   feedFreshness: {
-    trades: { source: 'indexer_graphql', queriedAt: null, available: false },
+    trades: { source: 'indexer_graphql', queriedAt: null, available: false, lastProcessedBlock: null, freshAt: null },
     governance: { source: 'chain_rpc', queriedAt: null, available: false },
     compliance: { source: 'gateway_ledger', queriedAt: null, available: false },
   },

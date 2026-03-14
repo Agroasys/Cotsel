@@ -4,10 +4,6 @@
 import { createInMemoryComplianceStore } from '../src/core/complianceStore';
 import { OverviewService } from '../src/core/overviewService';
 
-function tradeRecord(status: 'LOCKED' | 'IN_TRANSIT' | 'ARRIVAL_CONFIRMED' | 'FROZEN' | 'CLOSED', id: number) {
-  return { tradeId: `TRD-${id}`, status };
-}
-
 describe('overview service', () => {
   const originalFetch = global.fetch;
 
@@ -16,25 +12,26 @@ describe('overview service', () => {
     jest.restoreAllMocks();
   });
 
-  test('aggregates trade KPIs across all indexer pages', async () => {
-    const firstPage = Array.from({ length: 1000 }, (_, index) => tradeRecord('LOCKED', index + 1));
-    const secondPage = [
-      tradeRecord('IN_TRANSIT', 1001),
-      tradeRecord('ARRIVAL_CONFIRMED', 1002),
-      tradeRecord('CLOSED', 1003),
-      tradeRecord('FROZEN', 1004),
-    ];
-
-    global.fetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: { trades: firstPage } }),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: { trades: secondPage } }),
-      } as Response);
+  test('maps overview snapshot from indexer to trade KPIs', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          overviewSnapshotById: {
+            totalTrades: 10,
+            lockedTrades: 3,
+            stage1Trades: 2,
+            stage2Trades: 1,
+            completedTrades: 2,
+            disputedTrades: 1,
+            cancelledTrades: 1,
+            lastProcessedBlock: '42000',
+            lastIndexedAt: '2026-03-09T00:00:00.000Z',
+            lastTradeEventAt: '2026-03-08T12:00:00.000Z',
+          },
+        },
+      }),
+    } as Response);
 
     const governanceStatusService = {
       getGovernanceStatus: jest.fn().mockResolvedValue({
@@ -54,13 +51,16 @@ describe('overview service', () => {
 
     const snapshot = await service.getOverview();
 
-    expect(snapshot.kpis.trades.total).toBe(1004);
-    expect(snapshot.kpis.trades.byStatus.locked).toBe(1000);
-    expect(snapshot.kpis.trades.byStatus.stage_1).toBe(1);
+    expect(snapshot.kpis.trades.total).toBe(10);
+    expect(snapshot.kpis.trades.byStatus.locked).toBe(3);
+    expect(snapshot.kpis.trades.byStatus.stage_1).toBe(2);
     expect(snapshot.kpis.trades.byStatus.stage_2).toBe(1);
-    expect(snapshot.kpis.trades.byStatus.completed).toBe(1);
+    expect(snapshot.kpis.trades.byStatus.completed).toBe(2);
     expect(snapshot.kpis.trades.byStatus.disputed).toBe(1);
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(snapshot.kpis.trades.byStatus.cancelled).toBe(1);
+    expect(snapshot.feedFreshness.trades.lastProcessedBlock).toBe('42000');
+    expect(snapshot.feedFreshness.trades.freshAt).toBe('2026-03-09T00:00:00.000Z');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   test('marks queriedAt null for feeds that fail during snapshot generation', async () => {
@@ -89,6 +89,8 @@ describe('overview service', () => {
       source: 'indexer_graphql',
       queriedAt: null,
       available: false,
+      lastProcessedBlock: null,
+      freshAt: null,
     });
     expect(snapshot.feedFreshness.governance).toEqual({
       source: 'chain_rpc',

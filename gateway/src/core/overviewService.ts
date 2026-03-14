@@ -13,6 +13,7 @@ export interface OverviewTradeKpis {
     stage_2: number;
     completed: number;
     disputed: number;
+    cancelled: number;
   };
 }
 
@@ -20,6 +21,11 @@ export interface OverviewFeedStatus {
   source: string;
   queriedAt: string | null;
   available: boolean;
+}
+
+export interface OverviewTradeFeedStatus extends OverviewFeedStatus {
+  lastProcessedBlock: string | null;
+  freshAt: string | null;
 }
 
 export interface OverviewPosture {
@@ -35,7 +41,7 @@ export interface OverviewSnapshot {
   };
   posture: OverviewPosture | null;
   feedFreshness: {
-    trades: OverviewFeedStatus;
+    trades: OverviewTradeFeedStatus;
     governance: OverviewFeedStatus;
     compliance: OverviewFeedStatus;
   };
@@ -45,44 +51,45 @@ export interface OverviewReader {
   getOverview(): Promise<OverviewSnapshot>;
 }
 
-interface TradeStatusRecord {
-  tradeId: string;
-  status: 'LOCKED' | 'IN_TRANSIT' | 'ARRIVAL_CONFIRMED' | 'FROZEN' | 'CLOSED';
+interface IndexerOverviewSnapshot {
+  totalTrades: number;
+  lockedTrades: number;
+  stage1Trades: number;
+  stage2Trades: number;
+  completedTrades: number;
+  disputedTrades: number;
+  cancelledTrades: number;
+  lastProcessedBlock: string;
+  lastIndexedAt: string;
+  lastTradeEventAt: string | null;
 }
 
-interface TradeStatusGraphQlResponse {
-  data?: { trades?: TradeStatusRecord[] };
+interface OverviewSnapshotGraphQlResponse {
+  data?: { overviewSnapshotById?: IndexerOverviewSnapshot | null };
   errors?: Array<{ message: string }>;
 }
 
-const OVERVIEW_TRADE_FETCH_LIMIT = 1000;
 const EMPTY_TRADE_KPIS: OverviewTradeKpis = {
   total: 0,
-  byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 },
+  byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0, cancelled: 0 },
 };
 
-const overviewTradesQuery = `
-  query OverviewTradeKpis($limit: Int!, $offset: Int!) {
-    trades(orderBy: createdAt_DESC, limit: $limit, offset: $offset) {
-      tradeId
-      status
+const overviewSnapshotQuery = `
+  query OverviewSnapshot {
+    overviewSnapshotById(id: "singleton") {
+      totalTrades
+      lockedTrades
+      stage1Trades
+      stage2Trades
+      completedTrades
+      disputedTrades
+      cancelledTrades
+      lastProcessedBlock
+      lastIndexedAt
+      lastTradeEventAt
     }
   }
 `;
-
-function aggregateTradeKpis(trades: TradeStatusRecord[]): OverviewTradeKpis {
-  const byStatus = { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 };
-  for (const trade of trades) {
-    switch (trade.status) {
-      case 'LOCKED': byStatus.locked++; break;
-      case 'IN_TRANSIT': byStatus.stage_1++; break;
-      case 'ARRIVAL_CONFIRMED': byStatus.stage_2++; break;
-      case 'CLOSED': byStatus.completed++; break;
-      case 'FROZEN': byStatus.disputed++; break;
-    }
-  }
-  return { total: trades.length, byStatus };
-}
 
 export class OverviewService implements OverviewReader {
   constructor(
@@ -95,18 +102,30 @@ export class OverviewService implements OverviewReader {
   async getOverview(): Promise<OverviewSnapshot> {
     const now = new Date().toISOString();
 
-    const [tradesResult, governanceResult, complianceResult] = await Promise.allSettled([
-      this.fetchTradeKpis(),
+    const [snapshotResult, governanceResult, complianceResult] = await Promise.allSettled([
+      this.fetchIndexerSnapshot(),
       this.governanceStatusService.getGovernanceStatus(),
       this.complianceStore.countBlockedTrades(),
     ]);
 
-    const tradesAvailable = tradesResult.status === 'fulfilled';
+    const snapshotAvailable = snapshotResult.status === 'fulfilled';
     const governanceAvailable = governanceResult.status === 'fulfilled';
     const complianceAvailable = complianceResult.status === 'fulfilled';
 
-    const tradeKpis = tradesAvailable
-      ? tradesResult.value
+    const indexerSnapshot = snapshotAvailable ? snapshotResult.value : null;
+
+    const tradeKpis: OverviewTradeKpis = indexerSnapshot
+      ? {
+          total: indexerSnapshot.totalTrades,
+          byStatus: {
+            locked: indexerSnapshot.lockedTrades,
+            stage_1: indexerSnapshot.stage1Trades,
+            stage_2: indexerSnapshot.stage2Trades,
+            completed: indexerSnapshot.completedTrades,
+            disputed: indexerSnapshot.disputedTrades,
+            cancelled: indexerSnapshot.cancelledTrades,
+          },
+        }
       : EMPTY_TRADE_KPIS;
 
     const posture: OverviewPosture | null = governanceAvailable
@@ -126,45 +145,20 @@ export class OverviewService implements OverviewReader {
       },
       posture,
       feedFreshness: {
-        trades: { source: 'indexer_graphql', queriedAt: tradesAvailable ? now : null, available: tradesAvailable },
+        trades: {
+          source: 'indexer_graphql',
+          queriedAt: snapshotAvailable ? now : null,
+          available: snapshotAvailable,
+          lastProcessedBlock: indexerSnapshot?.lastProcessedBlock ?? null,
+          freshAt: indexerSnapshot?.lastIndexedAt ?? null,
+        },
         governance: { source: 'chain_rpc', queriedAt: governanceAvailable ? now : null, available: governanceAvailable },
         compliance: { source: 'gateway_ledger', queriedAt: complianceAvailable ? now : null, available: complianceAvailable },
       },
     };
   }
 
-  private async fetchTradeKpis(): Promise<OverviewTradeKpis> {
-    const aggregate: OverviewTradeKpis = {
-      total: 0,
-      byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0 },
-    };
-    let offset = 0;
-
-    while (true) {
-      const trades = await this.fetchTradePage(OVERVIEW_TRADE_FETCH_LIMIT, offset);
-      if (trades.length === 0) {
-        break;
-      }
-
-      const pageKpis = aggregateTradeKpis(trades);
-      aggregate.total += pageKpis.total;
-      aggregate.byStatus.locked += pageKpis.byStatus.locked;
-      aggregate.byStatus.stage_1 += pageKpis.byStatus.stage_1;
-      aggregate.byStatus.stage_2 += pageKpis.byStatus.stage_2;
-      aggregate.byStatus.completed += pageKpis.byStatus.completed;
-      aggregate.byStatus.disputed += pageKpis.byStatus.disputed;
-
-      if (trades.length < OVERVIEW_TRADE_FETCH_LIMIT) {
-        break;
-      }
-
-      offset += trades.length;
-    }
-
-    return aggregate;
-  }
-
-  private async fetchTradePage(limit: number, offset: number): Promise<TradeStatusRecord[]> {
+  private async fetchIndexerSnapshot(): Promise<IndexerOverviewSnapshot> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.indexerRequestTimeoutMs);
 
@@ -173,9 +167,8 @@ export class OverviewService implements OverviewReader {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          operationName: 'OverviewTradeKpis',
-          query: overviewTradesQuery,
-          variables: { limit, offset },
+          operationName: 'OverviewSnapshot',
+          query: overviewSnapshotQuery,
         }),
         signal: controller.signal,
       });
@@ -186,19 +179,19 @@ export class OverviewService implements OverviewReader {
         });
       }
 
-      const payload = await response.json() as TradeStatusGraphQlResponse;
+      const payload = await response.json() as OverviewSnapshotGraphQlResponse;
       if (payload.errors?.length) {
         throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned GraphQL errors', {
           errors: payload.errors.map((error) => error.message),
         });
       }
 
-      const trades = payload.data?.trades;
-      if (!Array.isArray(trades)) {
-        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned unexpected payload shape');
+      const snapshot = payload.data?.overviewSnapshotById;
+      if (!snapshot) {
+        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned no overview snapshot');
       }
 
-      return trades;
+      return snapshot;
     } catch (error) {
       if (error instanceof GatewayError) {
         throw error;

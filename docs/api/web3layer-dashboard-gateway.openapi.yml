@@ -1286,6 +1286,23 @@ components:
         available:
           type: boolean
           description: False when the feed returned an error or timed out for this request.
+    OverviewTradeFeedStatus:
+      allOf:
+        - $ref: '#/components/schemas/OverviewFeedStatus'
+        - type: object
+          required: [lastProcessedBlock, freshAt]
+          properties:
+            lastProcessedBlock:
+              anyOf:
+                - type: string
+                - type: 'null'
+              description: Block number of the last block processed by the indexer; null when the feed is unavailable.
+            freshAt:
+              anyOf:
+                - type: string
+                  format: date-time
+                - type: 'null'
+              description: Timestamp of the last block processed by the indexer (advances on every block regardless of trade activity); null when the feed is unavailable. Use this to assess indexer freshness — lastTradeEventAt is event metadata, not a liveness signal.
     OverviewTradeKpis:
       type: object
       required: [total, byStatus]
@@ -1293,10 +1310,10 @@ components:
         total:
           type: integer
           minimum: 0
-          description: Total number of trades returned by the indexer across all fetched pages.
+          description: Total number of trades ever locked, as tracked by the indexer overview snapshot.
         byStatus:
           type: object
-          required: [locked, stage_1, stage_2, completed, disputed]
+          required: [locked, stage_1, stage_2, completed, disputed, cancelled]
           properties:
             locked:
               type: integer
@@ -1311,6 +1328,9 @@ components:
               type: integer
               minimum: 0
             disputed:
+              type: integer
+              minimum: 0
+            cancelled:
               type: integer
               minimum: 0
     OverviewPosture:
@@ -1354,7 +1374,7 @@ components:
           required: [trades, governance, compliance]
           properties:
             trades:
-              $ref: '#/components/schemas/OverviewFeedStatus'
+              $ref: '#/components/schemas/OverviewTradeFeedStatus'
             governance:
               $ref: '#/components/schemas/OverviewFeedStatus'
             compliance:
