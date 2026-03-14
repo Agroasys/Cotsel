@@ -28,6 +28,7 @@ tags:
   - name: System
   - name: Auth
   - name: Access Logs
+  - name: Settings
   - name: Overview
   - name: Operations
   - name: Trades
@@ -231,6 +232,93 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
+  /settings/role-assignments:
+    get:
+      tags: [Settings]
+      summary: List operator role assignments for dashboard settings
+      description: |
+        Returns role-assignment records from the gateway role-assignment ledger. This route is
+        additive and read-only; it does not infer or fabricate assignments that are not present in
+        the authoritative backend ledger.
+      operationId: listRoleAssignments
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: gatewayRole
+          in: query
+          schema:
+            type: string
+        - name: authRole
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role assignment list with source freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleAssignmentListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /settings/audit-feed:
+    get:
+      tags: [Settings]
+      summary: List operator audit-feed events for dashboard settings
+      description: |
+        Returns audit-feed events from the gateway audit ledger with explicit actor, event type,
+        route, request identifiers, and freshness metadata for CTSP-Dash Settings.
+      operationId: listSettingsAuditFeed
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: eventType
+          in: query
+          schema:
+            type: string
+        - name: actorUserId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit feed list with source freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditFeedListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /overview:
     get:
       tags: [Overview]
@@ -2211,6 +2299,164 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/AccessLogListEnvelope'
+        timestamp:
+          type: string
+          format: date-time
+    SettingsFreshness:
+      type: object
+      required: [source, sourceFreshAt, queriedAt, available]
+      properties:
+        source:
+          type: string
+          enum: [gateway_role_assignments, gateway_audit_log]
+        sourceFreshAt:
+          type: string
+          format: date-time
+          nullable: true
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+    RoleAssignment:
+      type: object
+      required:
+        - assignmentId
+        - subjectUserId
+        - subjectWalletAddress
+        - authRole
+        - gatewayRoles
+        - source
+        - assignedByUserId
+        - assignedByWalletAddress
+        - assignedAt
+        - lastVerifiedAt
+      properties:
+        assignmentId:
+          type: string
+        subjectUserId:
+          type: string
+        subjectWalletAddress:
+          type: string
+        authRole:
+          type: string
+        gatewayRoles:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+          enum: [gateway_seed, manual_sync]
+        assignedByUserId:
+          type: string
+          nullable: true
+        assignedByWalletAddress:
+          type: string
+          nullable: true
+        assignedAt:
+          type: string
+          format: date-time
+        lastVerifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+    RoleAssignmentListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required: [items, freshness]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/RoleAssignment'
+            nextCursor:
+              type: string
+              nullable: true
+            freshness:
+              $ref: '#/components/schemas/SettingsFreshness'
+        timestamp:
+          type: string
+          format: date-time
+    AuditFeedActor:
+      type: object
+      required: [userId, walletAddress, role]
+      properties:
+        userId:
+          type: string
+          nullable: true
+        walletAddress:
+          type: string
+          nullable: true
+        role:
+          type: string
+          nullable: true
+    AuditFeedEvent:
+      type: object
+      required:
+        - eventId
+        - eventType
+        - route
+        - method
+        - requestId
+        - correlationId
+        - actor
+        - status
+        - metadata
+        - source
+        - createdAt
+      properties:
+        eventId:
+          type: string
+        eventType:
+          type: string
+        route:
+          type: string
+        method:
+          type: string
+        requestId:
+          type: string
+        correlationId:
+          type: string
+          nullable: true
+        actor:
+          $ref: '#/components/schemas/AuditFeedActor'
+        status:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        source:
+          type: string
+          enum: [audit_log]
+        createdAt:
+          type: string
+          format: date-time
+    AuditFeedListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required: [items, freshness]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditFeedEvent'
+            nextCursor:
+              type: string
+              nullable: true
+            freshness:
+              $ref: '#/components/schemas/SettingsFreshness'
         timestamp:
           type: string
           format: date-time

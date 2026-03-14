@@ -10,6 +10,7 @@ import { loadConfig } from './config/env';
 import { createApp } from './app';
 import { AccessLogService } from './core/accessLogService';
 import { createPostgresAccessLogStore } from './core/accessLogStore';
+import { createPostgresAuditFeedStore } from './core/auditFeedStore';
 import { createAuthSessionClient } from './core/authSessionClient';
 import { createPostgresComplianceStore } from './core/complianceStore';
 import { ComplianceService } from './core/complianceService';
@@ -17,6 +18,8 @@ import { createPostgresComplianceWriteStore } from './core/complianceWriteStore'
 import { createPostgresGovernanceActionStore } from './core/governanceStore';
 import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore';
 import { createPostgresIdempotencyStore } from './core/idempotencyStore';
+import { OperatorSettingsReadService } from './core/operatorSettingsReadService';
+import { createPostgresRoleAssignmentStore } from './core/roleAssignmentStore';
 import { createGatewayServiceAuthNonceStore, createPostgresSettlementStore } from './core/settlementStore';
 import { createServiceApiKeyLookup } from './core/serviceAuth';
 import { SettlementCallbackDispatcher } from './core/settlementCallbackDispatcher';
@@ -41,6 +44,7 @@ import { createOperationsRouter } from './routes/operations';
 import { createOverviewRouter } from './routes/overview';
 import { createReconciliationRouter } from './routes/reconciliation';
 import { createRicardianRouter } from './routes/ricardian';
+import { createSettingsRouter } from './routes/settings';
 import { createSettlementRouter } from './routes/settlement';
 import { createTreasuryRouter } from './routes/treasury';
 import { createTradeRouter } from './routes/trades';
@@ -50,6 +54,7 @@ const pool = createPool(config);
 const authSessionClient = createAuthSessionClient(config);
 const accessLogStore = createPostgresAccessLogStore(pool);
 const accessLogService = new AccessLogService(accessLogStore);
+const auditFeedStore = createPostgresAuditFeedStore(pool);
 const complianceStore = createPostgresComplianceStore(pool);
 const complianceWriteStore = createPostgresComplianceWriteStore(pool, complianceStore);
 const complianceService = new ComplianceService(complianceStore, complianceWriteStore);
@@ -57,6 +62,7 @@ const governanceActionStore = createPostgresGovernanceActionStore(pool);
 const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
 const governanceStatusService = createGovernanceStatusService(config);
 const idempotencyStore = createPostgresIdempotencyStore(pool);
+const roleAssignmentStore = createPostgresRoleAssignmentStore(pool);
 const settlementStore = createPostgresSettlementStore(pool);
 const settlementNonceStore = createGatewayServiceAuthNonceStore(pool);
 const settlementServiceApiKeyLookup = createServiceApiKeyLookup(config.settlementServiceAuthApiKeysJson);
@@ -76,6 +82,10 @@ const overviewService = new OverviewService(
   config.indexerRequestTimeoutMs,
   governanceStatusService,
   complianceStore,
+);
+const settingsReadService = new OperatorSettingsReadService(
+  roleAssignmentStore,
+  auditFeedStore,
 );
 const oracleBaseUrl = readOptionalBaseUrl('GATEWAY_ORACLE_BASE_URL');
 const reconciliationBaseUrl = readOptionalBaseUrl('GATEWAY_RECONCILIATION_BASE_URL');
@@ -310,6 +320,11 @@ async function bootstrap(): Promise<void> {
     authSessionClient,
     config,
     evidenceReadService,
+  }));
+  extraRouter.use(createSettingsRouter({
+    authSessionClient,
+    config,
+    settingsReadService,
   }));
   extraRouter.use(createSettlementRouter({
     config,

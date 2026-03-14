@@ -50,6 +50,20 @@ CREATE TABLE IF NOT EXISTS access_log_entries (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS role_assignments (
+    assignment_id TEXT PRIMARY KEY,
+    subject_user_id TEXT NOT NULL,
+    subject_wallet_address TEXT NOT NULL,
+    auth_role TEXT NOT NULL,
+    gateway_roles JSONB NOT NULL DEFAULT '[]'::jsonb,
+    source TEXT NOT NULL,
+    assigned_by_user_id TEXT,
+    assigned_by_wallet_address TEXT,
+    assigned_at TIMESTAMP NOT NULL,
+    last_verified_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS governance_actions (
     action_id TEXT PRIMARY KEY,
     intent_key TEXT,
