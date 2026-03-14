@@ -1,7 +1,6 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { Server } from 'http';
 import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
@@ -12,6 +11,7 @@ import { createInMemoryIdempotencyStore } from '../src/core/idempotencyStore';
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createAccessLogRouter } from '../src/routes/accessLogs';
+import { sendInProcessRequest } from './support/inProcessHttp';
 
 const baseConfig: GatewayConfig = {
   port: 3600,
@@ -100,19 +100,7 @@ async function startServer(options: StartServerOptions = {}) {
     extraRouter: router,
   });
 
-  const server = await new Promise<Server>((resolve) => {
-    const instance = app.listen(0, () => resolve(instance));
-  });
-
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Failed to resolve server address');
-  }
-
-  return {
-    server,
-    baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
-  };
+  return app;
 }
 
 describe('gateway access log routes contract', () => {
@@ -128,105 +116,114 @@ describe('gateway access log routes contract', () => {
   });
 
   test('POST and GET access log routes satisfy the OpenAPI schema and preserve audit references', async () => {
-    const { server, baseUrl } = await startServer();
+    const app = await startServer();
+    const createResponse = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/access-logs',
+      headers: {
+        authorization: 'Bearer session-admin',
+        'content-type': 'application/json',
+        'idempotency-key': 'idem-access-1',
+      },
+      body: JSON.stringify({
+        eventType: 'settings.access.granted',
+        surface: '/settings/security',
+        outcome: 'allowed',
+        auditReferences: [{ type: 'governance_action', reference: 'act-100' }],
+        metadata: { section: 'security' },
+      }),
+    });
+    const createPayload = createResponse.json<{
+      data: {
+        item: {
+          entryId: string;
+          actor: { sessionDisplay: string };
+          network: { ipDisplay: string | null };
+          auditReferences: Array<{ type: string; reference: string }>;
+        };
+      };
+    }>();
 
-    try {
-      const createResponse = await fetch(`${baseUrl}/access-logs`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer session-admin',
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'idem-access-1',
-        },
-        body: JSON.stringify({
-          eventType: 'settings.access.granted',
-          surface: '/settings/security',
-          outcome: 'allowed',
-          auditReferences: [{ type: 'governance_action', reference: 'act-100' }],
-          metadata: { section: 'security' },
-        }),
-      });
-      const createPayload = await createResponse.json();
+    expect(createResponse.status).toBe(201);
+    expect(validateEntry(createPayload)).toBe(true);
+    expect(createPayload.data.item.actor.sessionDisplay).toContain('...');
+    expect(createPayload.data.item.network.ipDisplay).toBe('127.0.0.x');
+    expect(createPayload.data.item.auditReferences[0]).toEqual({ type: 'governance_action', reference: 'act-100' });
 
-      expect(createResponse.status).toBe(201);
-      expect(validateEntry(createPayload)).toBe(true);
-      expect(createPayload.data.item.actor.sessionDisplay).toContain('...');
-      expect(createPayload.data.item.network.ipDisplay).toBe('127.0.0.x');
-      expect(createPayload.data.item.auditReferences[0]).toEqual({ type: 'governance_action', reference: 'act-100' });
+    const detailResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: `/api/dashboard-gateway/v1/access-logs/${createPayload.data.item.entryId}`,
+      headers: { authorization: 'Bearer session-admin' },
+    });
+    const detailPayload = detailResponse.json<Record<string, unknown>>();
 
-      const detailResponse = await fetch(`${baseUrl}/access-logs/${createPayload.data.item.entryId}`, {
-        headers: { Authorization: 'Bearer session-admin' },
-      });
-      const detailPayload = await detailResponse.json();
+    const listResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/access-logs?eventType=settings.access.granted',
+      headers: { authorization: 'Bearer session-admin' },
+    });
+    const listPayload = listResponse.json<{ data: { items: unknown[]; freshness: { available: boolean } } }>();
 
-      const listResponse = await fetch(`${baseUrl}/access-logs?eventType=settings.access.granted`, {
-        headers: { Authorization: 'Bearer session-admin' },
-      });
-      const listPayload = await listResponse.json();
-
-      expect(detailResponse.status).toBe(200);
-      expect(validateEntry(detailPayload)).toBe(true);
-      expect(listResponse.status).toBe(200);
-      expect(validateList(listPayload)).toBe(true);
-      expect(listPayload.data.items).toHaveLength(1);
-      expect(listPayload.data.freshness.available).toBe(true);
-    } finally {
-      server.close();
-    }
+    expect(detailResponse.status).toBe(200);
+    expect(validateEntry(detailPayload)).toBe(true);
+    expect(listResponse.status).toBe(200);
+    expect(validateList(listPayload)).toBe(true);
+    expect(listPayload.data.items).toHaveLength(1);
+    expect(listPayload.data.freshness.available).toBe(true);
   });
 
   test('access log writes require admin auth, allowlisting, and idempotency', async () => {
-    const unauthenticated = await startServer({ sessionRole: null });
-    const nonAdmin = await startServer({ sessionRole: 'buyer' });
-    const disabled = await startServer({ enableMutations: false });
+    const unauthenticatedApp = await startServer({ sessionRole: null });
+    const unauthenticatedResponse = await sendInProcessRequest(unauthenticatedApp, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/access-logs',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'idem-access-2',
+      },
+      body: JSON.stringify({
+        eventType: 'settings.access.granted',
+        surface: '/settings/security',
+        outcome: 'allowed',
+      }),
+    });
+    expect(unauthenticatedResponse.status).toBe(401);
 
-    try {
-      const unauthenticatedResponse = await fetch(`${unauthenticated.baseUrl}/access-logs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'idem-access-2' },
-        body: JSON.stringify({
-          eventType: 'settings.access.granted',
-          surface: '/settings/security',
-          outcome: 'allowed',
-        }),
-      });
-      expect(unauthenticatedResponse.status).toBe(401);
+    const nonAdminApp = await startServer({ sessionRole: 'buyer' });
+    const forbiddenResponse = await sendInProcessRequest(nonAdminApp, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/access-logs',
+      headers: {
+        authorization: 'Bearer session-buyer',
+        'content-type': 'application/json',
+        'idempotency-key': 'idem-access-3',
+      },
+      body: JSON.stringify({
+        eventType: 'settings.access.granted',
+        surface: '/settings/security',
+        outcome: 'allowed',
+      }),
+    });
+    expect(forbiddenResponse.status).toBe(403);
 
-      const forbiddenResponse = await fetch(`${nonAdmin.baseUrl}/access-logs`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer session-buyer',
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'idem-access-3',
-        },
-        body: JSON.stringify({
-          eventType: 'settings.access.granted',
-          surface: '/settings/security',
-          outcome: 'allowed',
-        }),
-      });
-      expect(forbiddenResponse.status).toBe(403);
+    const disabledApp = await startServer({ enableMutations: false });
+    const disabledResponse = await sendInProcessRequest(disabledApp, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/access-logs',
+      headers: {
+        authorization: 'Bearer session-admin',
+        'content-type': 'application/json',
+        'idempotency-key': 'idem-access-4',
+      },
+      body: JSON.stringify({
+        eventType: 'settings.access.granted',
+        surface: '/settings/security',
+        outcome: 'allowed',
+      }),
+    });
+    const disabledPayload = disabledResponse.json<Record<string, unknown>>();
 
-      const disabledResponse = await fetch(`${disabled.baseUrl}/access-logs`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer session-admin',
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'idem-access-4',
-        },
-        body: JSON.stringify({
-          eventType: 'settings.access.granted',
-          surface: '/settings/security',
-          outcome: 'allowed',
-        }),
-      });
-      const disabledPayload = await disabledResponse.json();
-      expect(disabledResponse.status).toBe(403);
-      expect(validateError(disabledPayload)).toBe(true);
-    } finally {
-      unauthenticated.server.close();
-      nonAdmin.server.close();
-      disabled.server.close();
-    }
+    expect(disabledResponse.status).toBe(403);
+    expect(validateError(disabledPayload)).toBe(true);
   });
 });
