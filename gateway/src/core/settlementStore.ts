@@ -178,10 +178,25 @@ export interface TradeSettlementProjection {
   updatedAt: string;
 }
 
+export interface ListSettlementHandoffsInput {
+  tradeId?: string;
+  reconciliationStatus?: SettlementReconciliationStatus;
+  executionStatus?: SettlementExecutionStatus;
+  limit: number;
+  offset: number;
+}
+
+export interface ListSettlementHandoffsResult {
+  items: SettlementHandoffRecord[];
+  total: number;
+  sourceFreshAt: string | null;
+}
+
 export interface SettlementStore {
   createHandoff(input: CreateSettlementHandoffInput): Promise<SettlementHandoffRecord>;
   getHandoff(handoffId: string): Promise<SettlementHandoffRecord | null>;
   getHandoffByPlatformRef(platformId: string, platformHandoffId: string): Promise<SettlementHandoffRecord | null>;
+  listHandoffs(input: ListSettlementHandoffsInput): Promise<ListSettlementHandoffsResult>;
   createExecutionEvent(input: CreateSettlementExecutionEventInput): Promise<SettlementExecutionEventRecord>;
   listExecutionEvents(handoffId: string): Promise<SettlementExecutionEventRecord[]>;
   queueCallbackDelivery(input: QueueSettlementCallbackInput): Promise<SettlementCallbackDeliveryRecord>;
@@ -346,6 +361,33 @@ function mapDeliveryRow(row: SettlementCallbackDeliveryRow): SettlementCallbackD
     requestId: row.requestId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function buildHandoffFilterClause(
+  input: Pick<ListSettlementHandoffsInput, 'tradeId' | 'reconciliationStatus' | 'executionStatus'>,
+): { clause: string; params: string[] } {
+  const filters: string[] = [];
+  const params: string[] = [];
+
+  if (input.tradeId) {
+    params.push(input.tradeId);
+    filters.push(`trade_id = $${params.length}`);
+  }
+
+  if (input.reconciliationStatus) {
+    params.push(input.reconciliationStatus);
+    filters.push(`reconciliation_status = $${params.length}`);
+  }
+
+  if (input.executionStatus) {
+    params.push(input.executionStatus);
+    filters.push(`execution_status = $${params.length}`);
+  }
+
+  return {
+    clause: filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '',
+    params,
   };
 }
 
@@ -608,6 +650,72 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
 
     getHandoff,
     getHandoffByPlatformRef,
+
+    async listHandoffs(input) {
+      const { clause, params } = buildHandoffFilterClause(input);
+
+      const [rowsResult, summaryResult] = await Promise.all([
+        pool.query<SettlementHandoffRow>(
+          `SELECT
+             handoff_id AS "handoffId",
+             platform_id AS "platformId",
+             platform_handoff_id AS "platformHandoffId",
+             trade_id AS "tradeId",
+             phase,
+             settlement_channel AS "settlementChannel",
+             display_currency AS "displayCurrency",
+             display_amount AS "displayAmount",
+             asset_symbol AS "assetSymbol",
+             asset_amount AS "assetAmount",
+             ricardian_hash AS "ricardianHash",
+             external_reference AS "externalReference",
+             metadata,
+             execution_status AS "executionStatus",
+             reconciliation_status AS "reconciliationStatus",
+             callback_status AS "callbackStatus",
+             provider_status AS "providerStatus",
+             tx_hash AS "txHash",
+             extrinsic_hash AS "extrinsicHash",
+             latest_event_id AS "latestEventId",
+             latest_event_type AS "latestEventType",
+             latest_event_detail AS "latestEventDetail",
+             latest_event_at AS "latestEventAt",
+             callback_delivered_at AS "callbackDeliveredAt",
+             request_id AS "requestId",
+             source_api_key_id AS "sourceApiKeyId",
+             created_at AS "createdAt",
+             updated_at AS "updatedAt"
+           FROM settlement_handoffs
+           ${clause}
+           ORDER BY updated_at DESC, handoff_id DESC
+           LIMIT $${params.length + 1}
+           OFFSET $${params.length + 2}`,
+          [...params, String(input.limit), String(input.offset)],
+        ),
+        pool.query<{ total: string; sourceFreshAt: Date | null }>(
+          `SELECT
+             COUNT(*)::text AS total,
+             MAX(updated_at) AS "sourceFreshAt"
+           FROM settlement_handoffs
+           ${clause}`,
+          params,
+        ),
+      ]);
+
+      const summary = summaryResult.rows[0];
+      const total = Number(summary?.total ?? '0');
+      if (!Number.isFinite(total)) {
+        throw new GatewayError(500, 'INTERNAL_ERROR', 'Stored settlement total is invalid', {
+          total: summary?.total,
+        });
+      }
+
+      return {
+        items: rowsResult.rows.map(mapHandoffRow),
+        total,
+        sourceFreshAt: summary?.sourceFreshAt ? summary.sourceFreshAt.toISOString() : null,
+      };
+    },
 
     async createExecutionEvent(input) {
       const client = await pool.connect();
@@ -993,6 +1101,29 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
     async getHandoffByPlatformRef(platformId, platformHandoffId) {
       const record = handoffs.get(platformIndex.get(`${platformId}:${platformHandoffId}`) ?? '');
       return record ? structuredClone(record) : null;
+    },
+
+    async listHandoffs(input) {
+      const filtered = [...handoffs.values()]
+        .filter((record) => (input.tradeId ? record.tradeId === input.tradeId : true))
+        .filter((record) => (input.reconciliationStatus ? record.reconciliationStatus === input.reconciliationStatus : true))
+        .filter((record) => (input.executionStatus ? record.executionStatus === input.executionStatus : true))
+        .sort((left, right) => {
+          const updatedOrder = right.updatedAt.localeCompare(left.updatedAt);
+          if (updatedOrder !== 0) {
+            return updatedOrder;
+          }
+
+          return right.handoffId.localeCompare(left.handoffId);
+        });
+
+      return {
+        items: filtered
+          .slice(input.offset, input.offset + input.limit)
+          .map((record) => structuredClone(record)),
+        total: filtered.length,
+        sourceFreshAt: filtered[0]?.updatedAt ?? null,
+      };
     },
 
     async createExecutionEvent(input) {
