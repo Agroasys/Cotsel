@@ -32,6 +32,7 @@ tags:
   - name: Trades
   - name: Settlement
   - name: Governance
+  - name: Treasury
   - name: Compliance
 security:
   - sessionBearer: []
@@ -417,6 +418,72 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
+  /treasury:
+    get:
+      tags: [Treasury]
+      summary: Get treasury state and sweep visibility snapshot
+      description: |
+        Operator read surface for current treasury state. This snapshot is derived from chain RPC
+        governance reads and makes claim/sweep visibility explicit for dashboard consumers.
+      operationId: getTreasury
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Treasury snapshot with explicit sweep visibility and freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySnapshotResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/actions:
+    get:
+      tags: [Treasury]
+      summary: List treasury governance actions for dashboard history views
+      description: |
+        Treasury history read surface derived from the gateway governance ledger. This route is
+        restricted to treasury-related categories and uses deterministic cursor pagination to remain
+        consistent with the underlying governance action ledger.
+      operationId: listTreasuryActions
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/TreasuryActionCategory'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/GovernanceActionStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Treasury governance history with cursor pagination and freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryActionListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /governance/pause:
     post:
       tags: [Governance]
@@ -2394,6 +2461,148 @@ components:
             nextCursor:
               type: string
               nullable: true
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryFreshness:
+      type: object
+      required: [source, sourceFreshAt, queriedAt, available]
+      properties:
+        source:
+          type: string
+          enum: [chain_rpc, gateway_governance_ledger]
+        sourceFreshAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+        degradedReason:
+          type: string
+    TreasuryBalanceSnapshot:
+      type: object
+      required: [assetSymbol, raw, display]
+      properties:
+        assetSymbol:
+          type: string
+          const: USDC
+        raw:
+          type: string
+        display:
+          type: string
+    TreasurySweepVisibility:
+      type: object
+      required: [canSweep, blockedReason]
+      properties:
+        canSweep:
+          type: boolean
+        blockedReason:
+          oneOf:
+            - type: 'null'
+            - type: string
+              enum: [claims_paused, no_claimable_balance]
+    TreasuryPayoutReceiverVisibility:
+      type: object
+      required: [currentAddress, hasPendingUpdate, activeProposalIds]
+      properties:
+        currentAddress:
+          type: string
+        hasPendingUpdate:
+          type: boolean
+        activeProposalIds:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+    TreasuryState:
+      type: object
+      required:
+        - paused
+        - claimsPaused
+        - treasuryAddress
+        - treasuryPayoutAddress
+        - governanceApprovalsRequired
+        - governanceTimelockSeconds
+        - requiredAdminCount
+        - claimableBalance
+        - sweepVisibility
+        - payoutReceiverVisibility
+      properties:
+        paused:
+          type: boolean
+        claimsPaused:
+          type: boolean
+        treasuryAddress:
+          type: string
+        treasuryPayoutAddress:
+          type: string
+        governanceApprovalsRequired:
+          type: integer
+          minimum: 1
+        governanceTimelockSeconds:
+          type: integer
+          minimum: 0
+        requiredAdminCount:
+          type: integer
+          minimum: 1
+        claimableBalance:
+          $ref: '#/components/schemas/TreasuryBalanceSnapshot'
+        sweepVisibility:
+          $ref: '#/components/schemas/TreasurySweepVisibility'
+        payoutReceiverVisibility:
+          $ref: '#/components/schemas/TreasuryPayoutReceiverVisibility'
+    TreasurySnapshotPayload:
+      type: object
+      required: [state, freshness]
+      properties:
+        state:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TreasuryState'
+        freshness:
+          $ref: '#/components/schemas/TreasuryFreshness'
+    TreasurySnapshotResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasurySnapshotPayload'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryActionCategory:
+      type: string
+      enum: [treasury_sweep, treasury_payout_receiver_update]
+    TreasuryActionListPayload:
+      type: object
+      required: [items, nextCursor, freshness]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceAction'
+        nextCursor:
+          anyOf:
+            - type: string
+            - type: 'null'
+        freshness:
+          $ref: '#/components/schemas/TreasuryFreshness'
+    TreasuryActionListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasuryActionListPayload'
         timestamp:
           type: string
           format: date-time
