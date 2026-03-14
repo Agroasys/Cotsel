@@ -1,7 +1,6 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { Server } from 'http';
 import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
@@ -10,6 +9,7 @@ import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createReconciliationRouter } from '../src/routes/reconciliation';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
 import type { ReconciliationReadReader } from '../src/core/reconciliationReadService';
+import { sendInProcessRequest } from './support/inProcessHttp';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -189,19 +189,7 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<R
     extraRouter: router,
   });
 
-  const server = await new Promise<Server>((resolve) => {
-    const instance = app.listen(0, () => resolve(instance));
-  });
-
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Failed to resolve server address');
-  }
-
-  return {
-    server,
-    baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
-  };
+  return app;
 }
 
 describe('gateway reconciliation routes contract', () => {
@@ -215,53 +203,52 @@ describe('gateway reconciliation routes contract', () => {
   });
 
   test('GET /reconciliation returns schema-valid records', async () => {
-    const { server, baseUrl } = await startServer('admin');
-
-    try {
-      const response = await fetch(
-        `${baseUrl}/reconciliation?tradeId=TRD-9001&reconciliationStatus=pending&executionStatus=submitted&limit=20&offset=0`,
-        {
-          headers: { Authorization: 'Bearer sess-admin', 'x-request-id': 'req-reconciliation-list' },
+    const app = await startServer('admin');
+    const response = await sendInProcessRequest(
+      app,
+      {
+        method: 'GET',
+        path: '/api/dashboard-gateway/v1/reconciliation?tradeId=TRD-9001&reconciliationStatus=pending&executionStatus=submitted&limit=20&offset=0',
+        headers: {
+          authorization: 'Bearer sess-admin',
+          'x-request-id': 'req-reconciliation-list',
         },
-      );
-      const payload = await response.json();
+      },
+    );
+    const payload = response.json<{ data: { items: Array<{ handoffId: string }> } }>();
 
-      expect(response.status).toBe(200);
-      expect(response.headers.get('x-request-id')).toBe('req-reconciliation-list');
-      expect(validateList(payload)).toBe(true);
-      expect(payload.data.items[0].handoffId).toBe('sth-1');
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(200);
+    expect(response.headers['x-request-id']).toBe('req-reconciliation-list');
+    expect(validateList(payload)).toBe(true);
+    expect(payload.data.items[0].handoffId).toBe('sth-1');
   });
 
   test('GET /reconciliation/handoffs/{handoffId} returns detail and 404s for missing handoffs', async () => {
-    const { server, baseUrl } = await startServer('admin');
+    const app = await startServer('admin');
+    const detailResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/reconciliation/handoffs/sth-1',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const detailPayload = detailResponse.json<{ data: { events: unknown[] } }>();
 
-    try {
-      const detailResponse = await fetch(`${baseUrl}/reconciliation/handoffs/sth-1`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      const detailPayload = await detailResponse.json();
+    expect(detailResponse.status).toBe(200);
+    expect(validateDetail(detailPayload)).toBe(true);
+    expect(detailPayload.data.events).toHaveLength(1);
 
-      expect(detailResponse.status).toBe(200);
-      expect(validateDetail(detailPayload)).toBe(true);
-      expect(detailPayload.data.events).toHaveLength(1);
+    const missingResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/reconciliation/handoffs/missing',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const missingPayload = missingResponse.json<{ error: { code: string } }>();
 
-      const missingResponse = await fetch(`${baseUrl}/reconciliation/handoffs/missing`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      const missingPayload = await missingResponse.json();
-
-      expect(missingResponse.status).toBe(404);
-      expect(missingPayload.error.code).toBe('NOT_FOUND');
-    } finally {
-      server.close();
-    }
+    expect(missingResponse.status).toBe(404);
+    expect(missingPayload.error.code).toBe('NOT_FOUND');
   });
 
   test('GET /reconciliation returns degraded payloads when the reconciliation source is unavailable', async () => {
-    const { server, baseUrl } = await startServer('admin', {
+    const app = await startServer('admin', {
       listReconciliation: jest.fn().mockResolvedValue({
         items: [],
         pagination: { limit: 50, offset: 0, total: 0 },
@@ -275,53 +262,48 @@ describe('gateway reconciliation routes contract', () => {
       }),
     });
 
-    try {
-      const response = await fetch(`${baseUrl}/reconciliation`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      const payload = await response.json();
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/reconciliation',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const payload = response.json<{ data: { freshness: { available: boolean; degradedReason?: string } } }>();
 
-      expect(response.status).toBe(200);
-      expect(validateList(payload)).toBe(true);
-      expect(payload.data.freshness.available).toBe(false);
-      expect(payload.data.freshness.degradedReason).toBe('connection refused');
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(200);
+    expect(validateList(payload)).toBe(true);
+    expect(payload.data.freshness.available).toBe(false);
+    expect(payload.data.freshness.degradedReason).toBe('connection refused');
   });
 
   test('GET /reconciliation enforces authz and validates query parameters', async () => {
-    const { server: unauthenticatedServer, baseUrl: unauthenticatedBaseUrl } = await startServer(null);
-    try {
-      const unauthenticated = await fetch(`${unauthenticatedBaseUrl}/reconciliation`);
-      expect(unauthenticated.status).toBe(401);
-    } finally {
-      unauthenticatedServer.close();
-    }
+    const unauthenticatedApp = await startServer(null);
+    const unauthenticated = await sendInProcessRequest(unauthenticatedApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/reconciliation',
+    });
+    expect(unauthenticated.status).toBe(401);
 
-    const { server: forbiddenServer, baseUrl: forbiddenBaseUrl } = await startServer('buyer');
-    try {
-      const forbidden = await fetch(`${forbiddenBaseUrl}/reconciliation`, {
-        headers: { Authorization: 'Bearer sess-buyer' },
-      });
-      expect(forbidden.status).toBe(403);
-    } finally {
-      forbiddenServer.close();
-    }
+    const forbiddenApp = await startServer('buyer');
+    const forbidden = await sendInProcessRequest(forbiddenApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/reconciliation',
+      headers: { authorization: 'Bearer sess-buyer' },
+    });
+    expect(forbidden.status).toBe(403);
 
-    const { server, baseUrl } = await startServer('admin');
-    try {
-      const invalidStatus = await fetch(`${baseUrl}/reconciliation?reconciliationStatus=broken`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      expect(invalidStatus.status).toBe(400);
+    const app = await startServer('admin');
+    const invalidStatus = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/reconciliation?reconciliationStatus=broken',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    expect(invalidStatus.status).toBe(400);
 
-      const invalidOffset = await fetch(`${baseUrl}/reconciliation?offset=-1`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      expect(invalidOffset.status).toBe(400);
-    } finally {
-      server.close();
-    }
+    const invalidOffset = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/reconciliation?offset=-1',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    expect(invalidOffset.status).toBe(400);
   });
 });
