@@ -8,6 +8,8 @@ import { runMigrations } from './database/migrations';
 import { createPool, closeConnection, testConnection } from './database/index';
 import { loadConfig } from './config/env';
 import { createApp } from './app';
+import { AccessLogService } from './core/accessLogService';
+import { createPostgresAccessLogStore } from './core/accessLogStore';
 import { createAuthSessionClient } from './core/authSessionClient';
 import { createPostgresComplianceStore } from './core/complianceStore';
 import { ComplianceService } from './core/complianceService';
@@ -26,6 +28,7 @@ import { OperationsSummaryService } from './core/operationsSummaryService';
 import { OverviewService } from './core/overviewService';
 import { checkIndexerHealth } from './core/indexerHealthProbe';
 import { Logger } from './logging/logger';
+import { createAccessLogRouter } from './routes/accessLogs';
 import { createCapabilitiesRouter } from './routes/capabilities';
 import { createComplianceRouter } from './routes/compliance';
 import { createGovernanceRouter } from './routes/governance';
@@ -38,6 +41,8 @@ import { createTradeRouter } from './routes/trades';
 const config = loadConfig();
 const pool = createPool(config);
 const authSessionClient = createAuthSessionClient(config);
+const accessLogStore = createPostgresAccessLogStore(pool);
+const accessLogService = new AccessLogService(accessLogStore);
 const complianceStore = createPostgresComplianceStore(pool);
 const complianceWriteStore = createPostgresComplianceWriteStore(pool, complianceStore);
 const complianceService = new ComplianceService(complianceStore, complianceWriteStore);
@@ -243,6 +248,12 @@ async function bootstrap(): Promise<void> {
   extraRouter.use(createCapabilitiesRouter({
     authSessionClient,
     config,
+  }));
+  extraRouter.use(createAccessLogRouter({
+    authSessionClient,
+    config,
+    accessLogService,
+    idempotencyStore,
   }));
   extraRouter.use(createComplianceRouter({
     authSessionClient,

@@ -28,6 +28,28 @@ CREATE TABLE IF NOT EXISTS audit_log (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS access_log_entries (
+    entry_id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    surface TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    actor_user_id TEXT NOT NULL,
+    actor_wallet_address TEXT NOT NULL,
+    actor_role TEXT NOT NULL,
+    session_fingerprint TEXT NOT NULL,
+    session_display TEXT NOT NULL,
+    ip_fingerprint TEXT,
+    ip_display TEXT,
+    user_agent TEXT,
+    request_id TEXT NOT NULL,
+    correlation_id TEXT,
+    request_method TEXT NOT NULL,
+    request_route TEXT NOT NULL,
+    audit_references JSONB NOT NULL DEFAULT '[]'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS governance_actions (
     action_id TEXT PRIMARY KEY,
     intent_key TEXT,
@@ -301,6 +323,10 @@ CREATE INDEX IF NOT EXISTS idx_idempotency_completed_at ON idempotency_keys(comp
 CREATE INDEX IF NOT EXISTS idx_audit_log_request_id ON audit_log(request_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_route_created_at ON audit_log(route, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_status_created_at ON audit_log(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_access_log_created_at ON access_log_entries(created_at DESC, entry_id DESC);
+CREATE INDEX IF NOT EXISTS idx_access_log_event_type_created_at ON access_log_entries(event_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_access_log_actor_created_at ON access_log_entries(actor_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_access_log_request_id ON access_log_entries(request_id);
 CREATE INDEX IF NOT EXISTS idx_governance_actions_created_at ON governance_actions(created_at DESC, action_id DESC);
 CREATE INDEX IF NOT EXISTS idx_governance_actions_category_status_created_at ON governance_actions(category, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_governance_actions_trade_id_created_at ON governance_actions(trade_id, created_at DESC);
