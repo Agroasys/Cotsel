@@ -7,7 +7,7 @@
     "prelint": "npm --prefix ../sdk run build",
     "build": "tsc && npm run copy-files",
     "prebuild": "npm --prefix ../sdk run build",
-    "copy-files": "mkdir -p dist/database dist/openapi && cp src/database/schema.sql dist/database/ && cp ../docs/api/web3layer-dashboard-gateway.openapi.yml dist/openapi/",
+    "copy-files": "mkdir -p dist/database dist/openapi && cp src/database/schema.sql dist/database/ && cp ../docs/api/cotsel-dashboard-gateway.openapi.yml dist/openapi/",
     "execute:governance-action": "ts-node src/executor/runGovernanceAction.ts",
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",

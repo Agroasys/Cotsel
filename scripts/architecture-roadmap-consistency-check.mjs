@@ -24,7 +24,7 @@ function parseArgs(argv) {
     matrix: "docs/runbooks/architecture-coverage-matrix.md",
     out: "reports/governance/architecture-roadmap-consistency.json",
     offline: false,
-    repo: process.env.GITHUB_REPOSITORY || "Agroasys/Agroasys.Web3layer",
+    repo: process.env.GITHUB_REPOSITORY || "Agroasys/Cotsel",
   };
 
   for (let index = 2; index < argv.length; index += 1) {

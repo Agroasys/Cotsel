@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
-  title: Web3layer Dashboard Gateway API
+  title: Cotsel Dashboard Gateway API
   version: 0.1.0
-  summary: Contract-first admin/operator gateway for the CTSL dashboard.
+  summary: Contract-first admin/operator gateway for Cotsel-Dash.
   description: |
-    Contract-first API specification for the CTSL admin/operator dashboard to interact with Agroasys Web3layer.
+    Contract-first API specification for the Cotsel-Dash admin/operator dashboard to interact with Cotsel.
 
     Discovery outcome:
     - Dedicated in-repo dashboard gateway runtime: `gateway/` Express + TypeScript service.
@@ -94,7 +94,7 @@ paths:
       summary: Authenticated operator capability snapshot
       description: |
         Returns the backend-authoritative route and action capabilities for the current authenticated
-        session so CTSL-Dash can gate operator pages and controls from gateway truth.
+        session so Cotsel-Dash can gate operator pages and controls from gateway truth.
 
         This route authenticates any valid session and does not require `operator:read`. Non-admin
         sessions therefore receive a successful response with empty gateway roles and all operator
@@ -122,7 +122,7 @@ paths:
       tags: [Access Logs]
       summary: Append an operator access log entry
       description: |
-        Append-only access-log mutation for CTSP-Dash operator surfaces. The gateway derives actor,
+        Append-only access-log mutation for Cotsel-Dash operator surfaces. The gateway derives actor,
         request, session, and network context from the authenticated request and applies stable
         masking/redaction to session and IP fields in the returned record.
 
@@ -283,7 +283,7 @@ paths:
       summary: List operator audit-feed events for dashboard settings
       description: |
         Returns audit-feed events from the gateway audit ledger with explicit actor, event type,
-        route, request identifiers, and freshness metadata for CTSP-Dash Settings.
+        route, request identifiers, and freshness metadata for Cotsel-Dash Settings.
       operationId: listSettingsAuditFeed
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -394,7 +394,7 @@ paths:
       tags: [Overview]
       summary: Dashboard overview KPIs and operational posture
       description: |
-        Aggregated overview surface for CTSL-Dash. Returns trade counts by settlement stage,
+        Aggregated overview surface for Cotsel-Dash. Returns trade counts by settlement stage,
         governance posture (paused / oracle active), compliance blocked-trade count, and
         per-feed query metadata so the dashboard can render operator trust indicators.
 
@@ -424,7 +424,7 @@ paths:
       tags: [Operations]
       summary: Service health and incident summary snapshot
       description: |
-        Authoritative operations read surface for CTSL-Dash Operations pages.
+        Authoritative operations read surface for Cotsel-Dash Operations pages.
 
         The gateway probes service dependencies and returns deterministic service states:
         - `healthy`: service probe succeeded within latency threshold
@@ -620,7 +620,7 @@ paths:
       tags: [Evidence]
       summary: Get grouped evidence records for a trade
       description: |
-        Returns the evidence sources needed by CTSP-Dash Evidence and Trade Detail views. The
+        Returns the evidence sources needed by Cotsel-Dash Evidence and Trade Detail views. The
         payload groups trade settlement context, compliance decisions, and governance actions for a
         single trade.
       operationId: getTradeEvidence
@@ -648,7 +648,7 @@ paths:
       tags: [Settlement]
       summary: Ingest a platform settlement handoff
       description: |
-        Service-authenticated ingress contract for platform backends to register a settlement handoff with Web3layer.
+        Service-authenticated ingress contract for platform backends to register a settlement handoff with Cotsel.
         This route is not intended for operator sessions; it is authenticated using service-auth HMAC headers and
         requires an `Idempotency-Key` header.
       operationId: createSettlementHandoff
@@ -668,7 +668,7 @@ paths:
               $ref: '#/components/schemas/SettlementHandoffCreateRequest'
       responses:
         '202':
-          description: Settlement handoff accepted into the Web3layer orchestration boundary.
+          description: Settlement handoff accepted into the Cotsel orchestration boundary.
           content:
             application/json:
               schema:
@@ -706,7 +706,7 @@ paths:
       summary: Ingest execution or reconciliation truth for a settlement handoff
       description: |
         Service-authenticated mutation for authoritative execution and reconciliation truth coming back into the
-        Web3layer gateway boundary. Every accepted event produces a durable callback-delivery record for the configured
+        Cotsel gateway boundary. Every accepted event produces a durable callback-delivery record for the configured
         platform backend when callback delivery is enabled.
       operationId: createSettlementExecutionEvent
       security: []
@@ -763,7 +763,7 @@ paths:
       tags: [Evidence]
       summary: Generate an evidence bundle manifest for a trade
       description: |
-        Generates and persists a read-only evidence bundle manifest for CTSP-Dash Evidence. The
+        Generates and persists a read-only evidence bundle manifest for Cotsel-Dash Evidence. The
         manifest exposes explicit artifact references and never claims a signed bundle unless the
         backend actually provides one.
       operationId: generateEvidenceBundle
@@ -1753,7 +1753,7 @@ components:
       required: true
       schema:
         type: string
-      description: Web3layer trade identifier used across chain events, indexer evidence, and operator workflows.
+      description: Cotsel trade identifier used across chain events, indexer evidence, and operator workflows.
   responses:
     BadRequestError:
       description: Request validation failed.
@@ -1860,7 +1860,7 @@ components:
               format: date-time
             sourceRepo:
               type: string
-              const: Agroasys.Web3layer
+              const: Cotsel
         timestamp:
           type: string
           format: date-time

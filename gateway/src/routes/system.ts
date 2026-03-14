@@ -47,7 +47,7 @@ export function createSystemRouter(options: SystemRouterOptions): Router {
       version: options.version,
       commitSha: options.commitSha,
       buildTime: options.buildTime,
-      sourceRepo: 'Agroasys.Web3layer',
+      sourceRepo: 'Cotsel',
     }));
   });
 

@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "Agroasys.Web3layer",
+  "name": "Cotsel",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=20 <23",

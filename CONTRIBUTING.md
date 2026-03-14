@@ -1,4 +1,4 @@
-# Contributing to Agroasys.Web3layer
+# Contributing to Cotsel
 
 Thanks for contributing. This repository is production-bound Web3 settlement infrastructure.
 Changes can impact financial safety, on-chain correctness, and operational reliability.
@@ -45,8 +45,8 @@ If your change touches any guarded area, document impact and rollback plan in th
 
 ## Setup
 ```bash
-git clone https://github.com/Agroasys/Agroasys.Web3layer.git
-cd Agroasys.Web3layer
+git clone https://github.com/Agroasys/Cotsel.git
+cd Cotsel
 npm ci
 ```
 
@@ -166,7 +166,7 @@ Reviewers will prioritize:
 
 ## Issue Reporting
 Use GitHub Issues:
-- https://github.com/Agroasys/Agroasys.Web3layer/issues
+- https://github.com/Agroasys/Cotsel/issues
 
 Include:
 - affected module

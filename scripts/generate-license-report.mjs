@@ -10,7 +10,7 @@ const summaryOut = path.join(outputDir, 'third-party-licenses-summary.txt');
 
 const INTERNAL_PREFIX = '@agroasys/';
 const workspaceNames = new Set([
-  'Agroasys.Web3layer',
+  'Cotsel',
   'contracts',
   'indexer',
   'oracle',

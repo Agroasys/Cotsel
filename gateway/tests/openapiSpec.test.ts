@@ -19,8 +19,8 @@ describe('loadOpenApiSpec', () => {
   });
 
   test('prefers the checked-in source spec over stale dist output', () => {
-    const repoSpecPath = path.resolve(process.cwd(), 'docs/api/web3layer-dashboard-gateway.openapi.yml');
-    const distSpecPath = path.resolve(process.cwd(), 'gateway/dist/openapi/web3layer-dashboard-gateway.openapi.yml');
+    const repoSpecPath = path.resolve(process.cwd(), 'docs/api/cotsel-dashboard-gateway.openapi.yml');
+    const distSpecPath = path.resolve(process.cwd(), 'gateway/dist/openapi/cotsel-dashboard-gateway.openapi.yml');
 
     existsSyncMock.mockImplementation((candidate) => candidate === repoSpecPath || candidate === distSpecPath);
     readFileSyncMock.mockImplementation((candidate) => {

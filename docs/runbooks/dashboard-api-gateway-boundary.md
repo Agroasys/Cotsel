@@ -1,9 +1,9 @@
 # Dashboard API Gateway Boundary
 
 ## Purpose
-Define the contract boundary for the CTSL admin/operator dashboard when it interacts with Agroasys Web3layer through the dedicated `gateway/` Web2 service.
+Define the contract boundary for the Cotsel-Dash admin/operator dashboard when it interacts with Cotsel through the dedicated `gateway/` Web2 service.
 
-This document is the boundary companion to `docs/api/web3layer-dashboard-gateway.openapi.yml`.
+This document is the boundary companion to `docs/api/cotsel-dashboard-gateway.openapi.yml`.
 For day-2 operations, deployment checks, logging/tracing, and rollback procedure, use `docs/runbooks/dashboard-gateway-operations.md`.
 
 ## Discovery outcome
@@ -15,7 +15,7 @@ For day-2 operations, deployment checks, logging/tracing, and rollback procedure
 ## Boundary summary
 
 ### Dashboard -> gateway
-The CTSL dashboard is the operator/admin client.
+The Cotsel-Dash dashboard is the operator/admin client.
 
 The dashboard must call only the documented gateway contract and must not call contract methods or internal services directly.
 
@@ -38,7 +38,7 @@ Operations read surface:
 - Every service status and incident summary snapshot includes source and freshness timestamps.
 
 Current connected-validation constraint:
-- CTSL-Dash may run connected mode only against explicit local/docker gateway and auth-service URLs until real remote staging coordinates are recorded.
+- Cotsel-Dash may run connected mode only against explicit local/docker gateway and auth-service URLs until real remote staging coordinates are recorded.
 - Connected mode must not silently fall back to preview behavior.
 
 ### Gateway -> on-chain / service backends
@@ -183,7 +183,7 @@ The gateway must persist, at minimum:
 - Mutations remain disabled by default; later enablement requires both `GATEWAY_ENABLE_MUTATIONS=true` and exact allowlist principal IDs for Aston and `czypioe`.
 
 ## References
-- `docs/api/web3layer-dashboard-gateway.openapi.yml`
+- `docs/api/cotsel-dashboard-gateway.openapi.yml`
 - `docs/runbooks/dashboard-gateway-operations.md`
 - `docs/runbooks/api-gateway-boundary.md`
 - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`

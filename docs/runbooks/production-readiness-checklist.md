@@ -1,7 +1,7 @@
 # Production Readiness Checklist
 
 Purpose:
-- Define deterministic go-live criteria for Agroasys.Web3layer production deployments.
+- Define deterministic go-live criteria for Cotsel production deployments.
 - Provide a single source of truth for security, fee behavior, operations, and rollback readiness.
 
 ## 1) Security Prerequisites
