@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-02-28
-- Related issue: [#142](https://github.com/Agroasys/Agroasys.Web3layer/issues/142)
+- Related issue: [#142](https://github.com/Agroasys/Cotsel/issues/142)
 
 ## Context
 Escrow payout transitions previously transferred USDC directly during stage/dispute/timeout functions. This coupled core trade-state mutation with external token-transfer side effects and made payout-path failures harder to isolate.
@@ -48,19 +48,19 @@ Adopt a pull-over-push settlement model:
 
 ## Evidence
 ### Canonical implementation PRs
-- [#151](https://github.com/Agroasys/Agroasys.Web3layer/pull/151)
-- [#154](https://github.com/Agroasys/Agroasys.Web3layer/pull/154)
-- [#165](https://github.com/Agroasys/Agroasys.Web3layer/pull/165)
-- [#166](https://github.com/Agroasys/Agroasys.Web3layer/pull/166)
-- [#167](https://github.com/Agroasys/Agroasys.Web3layer/pull/167)
-- [#168](https://github.com/Agroasys/Agroasys.Web3layer/pull/168)
+- [#151](https://github.com/Agroasys/Cotsel/pull/151)
+- [#154](https://github.com/Agroasys/Cotsel/pull/154)
+- [#165](https://github.com/Agroasys/Cotsel/pull/165)
+- [#166](https://github.com/Agroasys/Cotsel/pull/166)
+- [#167](https://github.com/Agroasys/Cotsel/pull/167)
+- [#168](https://github.com/Agroasys/Cotsel/pull/168)
 
 ### Runbooks
 - [pull-over-push-claim-flow.md](../runbooks/pull-over-push-claim-flow.md)
 
 ### CI evidence
-- PR #151 release-gate run: https://github.com/Agroasys/Agroasys.Web3layer/actions/runs/22518631770
-- PR #154 contracts/release-gate run: https://github.com/Agroasys/Agroasys.Web3layer/actions/runs/22518757426
+- PR #151 release-gate run: https://github.com/Agroasys/Cotsel/actions/runs/22518631770
+- PR #154 contracts/release-gate run: https://github.com/Agroasys/Cotsel/actions/runs/22518757426
 
 ## Rollback
 If rollback is required, revert implementation commits from the migration PR chain starting at #151 (and dependent policy/indexer/sdk follow-ups), then validate:

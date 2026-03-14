@@ -73,7 +73,7 @@ Approved pilot routing from decision issue `#199`:
 | LOW | Backlog issue | <= 1 business day triage |
 
 Role ownership:
-- `Platform On-Call`: active Agroasys Web3layer operations owner.
+- `Platform On-Call`: active Cotsel operations owner.
 - `Incident Commander`: Aston (pilot default).
 
 ## Suppression Policy

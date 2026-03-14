@@ -1,10 +1,10 @@
 # GitHub Roadmap Governance
 
 ## Purpose
-Maintain a single execution board for `Agroasys.Web3layer` where every roadmap item and PR is mapped to milestone scope and delivery status.
+Maintain a single execution board for `Cotsel` where every roadmap item and PR is mapped to milestone scope and delivery status.
 
 ## Project v2 Definition
-- Project name: `Agroasys.Web3layer Roadmap`
+- Project name: `Cotsel Roadmap`
 - Project URL: `https://github.com/orgs/Agroasys/projects/5`
 - Project node ID: `PVT_kwDODMhsg84BPnYZ`
 - Status values: `Backlog`, `In Progress`, `In Review`, `Blocked`, `Done`
@@ -20,7 +20,7 @@ Maintain a single execution board for `Agroasys.Web3layer` where every roadmap i
 ## PR Policy (Required)
 Every PR must:
 1. Have a repo milestone assigned.
-2. Be added to Project v2 (`Agroasys.Web3layer Roadmap`).
+2. Be added to Project v2 (`Cotsel Roadmap`).
 3. Keep CI green and avoid ABI/economics/token-flow changes unless explicitly approved.
 
 The workflow `.github/workflows/pr-roadmap-policy.yml` enforces (1) and (2).
@@ -39,11 +39,11 @@ During temporary rollout without GitHub App auth, project-link enforcement is ad
 ## Maintainer Steps For Each PR
 1. Assign milestone:
 ```bash
-gh pr edit <PR_NUMBER> --repo Agroasys/Agroasys.Web3layer --milestone "<Milestone Name>"
+gh pr edit <PR_NUMBER> --repo Agroasys/Cotsel --milestone "<Milestone Name>"
 ```
 2. Add PR to Project v2:
 ```bash
-pr_id="$(gh pr view <PR_NUMBER> --repo Agroasys/Agroasys.Web3layer --json id -q .id)"
+pr_id="$(gh pr view <PR_NUMBER> --repo Agroasys/Cotsel --json id -q .id)"
 gh api graphql \
   -f query='mutation($project:ID!,$content:ID!){ addProjectV2ItemById(input:{projectId:$project,contentId:$content}) { item { id } } }' \
   -F project="$ROADMAP_PROJECT_ID" \
@@ -88,23 +88,23 @@ What the checker enforces:
 Operator flow (deterministic + safe defaults):
 1. Check drift locally:
 ```bash
-GITHUB_TOKEN="$(gh auth token)" node scripts/architecture-roadmap-consistency-check.mjs --repo Agroasys/Agroasys.Web3layer
+GITHUB_TOKEN="$(gh auth token)" node scripts/architecture-roadmap-consistency-check.mjs --repo Agroasys/Cotsel
 ```
 2. Generate deterministic sync plan + patch:
 ```bash
-GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer
+GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Cotsel
 ```
 3. Apply minimum-safe matrix sync updates (default):
 ```bash
-GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer --write
+GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Cotsel --write
 ```
 4. Optional: normalize `% Complete` + `Remaining Gap` when you intentionally want policy normalization:
 ```bash
-GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer --write --normalize-progress
+GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Cotsel --write --normalize-progress
 ```
 5. If gate issue metadata is out of sync, update gate issues (requires explicit apply flag):
 ```bash
-GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Agroasys.Web3layer --write-gate-issues --apply
+GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Cotsel --write-gate-issues --apply
 ```
 6. Commit matrix changes and rerun CI checks:
 ```bash

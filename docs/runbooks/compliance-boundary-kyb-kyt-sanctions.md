@@ -1,7 +1,7 @@
 # Compliance Boundary: KYB/KYT/Sanctions
 
 ## Purpose and scope
-Define the deterministic policy boundary for compliance checks that gate trade execution in Agroasys Web3layer pilot operations.
+Define the deterministic policy boundary for compliance checks that gate trade execution in Cotsel pilot operations.
 
 This runbook formalizes issue #128 using the approved decision record in issue #200.
 

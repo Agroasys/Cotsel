@@ -15,7 +15,7 @@ const MATRIX_PATH_REFERENCE = "docs/runbooks/architecture-coverage-matrix.md";
 function parseArgs(argv) {
   const args = {
     matrix: MATRIX_PATH_REFERENCE,
-    repo: process.env.GITHUB_REPOSITORY || "Agroasys/Agroasys.Web3layer",
+    repo: process.env.GITHUB_REPOSITORY || "Agroasys/Cotsel",
     out: "reports/governance/arch-roadmap-sync.json",
     patch: "reports/governance/arch-roadmap-sync.patch",
     cache: "reports/governance/arch-roadmap-sync-cache.json",

@@ -4,7 +4,7 @@
 
 ## Roadmap Governance
 - [ ] Linked to a repo Milestone
-- [ ] Added to `Agroasys.Web3layer Roadmap` Project v2
+- [ ] Added to `Cotsel Roadmap` Project v2
 - [ ] Mapped to correct roadmap area/status/priority in Project fields
 
 ## Validation

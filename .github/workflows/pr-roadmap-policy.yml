@@ -114,7 +114,7 @@ jobs:
           fi
 
           if [[ -z "$project_title" ]]; then
-            project_title='Agroasys.Web3layer Roadmap'
+            project_title='Cotsel Roadmap'
           fi
 
           if [[ -z "$token" ]]; then

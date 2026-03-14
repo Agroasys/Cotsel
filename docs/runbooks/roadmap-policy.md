@@ -3,7 +3,7 @@
 ## What this policy enforces
 The workflow `.github/workflows/pr-roadmap-policy.yml` enforces both requirements on every `pull_request` event:
 - PR has a GitHub Milestone.
-- PR is added to ProjectV2 `Agroasys.Web3layer Roadmap`.
+- PR is added to ProjectV2 `Cotsel Roadmap`.
 
 Validation order is strict:
 1. Direct PR -> `projectItems` match by `ROADMAP_PROJECT_ID`.
@@ -52,10 +52,10 @@ The workflow automatically prefers the App token when these secrets are present.
 
 ## Required repository variable
 Set:
-- `ROADMAP_PROJECT_ID` = ProjectV2 node ID for `Agroasys.Web3layer Roadmap`
+- `ROADMAP_PROJECT_ID` = ProjectV2 node ID for `Cotsel Roadmap`
 
 Optional:
-- `ROADMAP_PROJECT_TITLE` (defaults to `Agroasys.Web3layer Roadmap`)
+- `ROADMAP_PROJECT_TITLE` (defaults to `Cotsel Roadmap`)
 
 ## Troubleshooting
 If the check fails:

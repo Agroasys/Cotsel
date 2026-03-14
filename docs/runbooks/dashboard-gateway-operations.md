@@ -1,7 +1,7 @@
 # Dashboard Gateway Operations
 
 ## Purpose
-Operate the `gateway/` service safely as the dashboard-facing control plane for Web3layer governance and compliance workflows.
+Operate the `gateway/` service safely as the dashboard-facing control plane for Cotsel governance and compliance workflows.
 
 This runbook covers:
 - startup prerequisites,
@@ -19,7 +19,7 @@ Approved current-state contract:
 - executor mode: manual only
 
 This means:
-- CTSL-Dash connected validation must target the local/docker gateway URL only until real remote staging coordinates are recorded.
+- Cotsel-Dash connected validation must target the local/docker gateway URL only until real remote staging coordinates are recorded.
 - Mutations stay disabled by default.
 - There is no approved remote staging gateway URL or remote auth-service URL yet.
 
