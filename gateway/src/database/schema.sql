@@ -158,6 +158,21 @@ CREATE TABLE IF NOT EXISTS oracle_progression_blocks (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS evidence_bundles (
+    bundle_id TEXT PRIMARY KEY,
+    trade_id TEXT NOT NULL,
+    manifest_digest TEXT NOT NULL,
+    ricardian_hash TEXT,
+    generated_at TIMESTAMP NOT NULL,
+    generated_by_user_id TEXT NOT NULL,
+    generated_by_wallet TEXT NOT NULL,
+    generated_by_role TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    correlation_id TEXT,
+    manifest JSONB NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS service_auth_nonces (
     api_key TEXT NOT NULL,
     nonce TEXT NOT NULL,
@@ -352,6 +367,7 @@ CREATE INDEX IF NOT EXISTS idx_compliance_decisions_result_decided_at ON complia
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_reason_code_decided_at ON compliance_decisions(reason_code, decided_at DESC);
 CREATE INDEX IF NOT EXISTS idx_oracle_progression_blocks_state_updated_at ON oracle_progression_blocks(block_state, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_oracle_progression_blocks_latest_decision_id ON oracle_progression_blocks(latest_decision_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_bundles_trade_id_created_at ON evidence_bundles(trade_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_service_auth_nonces_expires_at ON service_auth_nonces(expires_at ASC);
 CREATE INDEX IF NOT EXISTS idx_settlement_handoffs_trade_id_updated_at ON settlement_handoffs(trade_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_settlement_handoffs_execution_status_updated_at ON settlement_handoffs(execution_status, updated_at DESC);
