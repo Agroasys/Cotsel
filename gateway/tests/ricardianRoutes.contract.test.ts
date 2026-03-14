@@ -1,7 +1,6 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { Server } from 'http';
 import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
@@ -11,6 +10,7 @@ import { createRicardianRouter } from '../src/routes/ricardian';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
 import type { EvidenceReadReader } from '../src/core/evidenceReadService';
 import { GatewayError } from '../src/errors';
+import { sendInProcessRequest } from './support/inProcessHttp';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -170,19 +170,7 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<E
     extraRouter: router,
   });
 
-  const server = await new Promise<Server>((resolve) => {
-    const instance = app.listen(0, () => resolve(instance));
-  });
-
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Failed to resolve server address');
-  }
-
-  return {
-    server,
-    baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
-  };
+  return app;
 }
 
 describe('gateway ricardian and evidence routes contract', () => {
@@ -196,85 +184,76 @@ describe('gateway ricardian and evidence routes contract', () => {
   });
 
   test('GET /ricardian/{tradeId} returns a schema-valid ricardian document payload', async () => {
-    const { server, baseUrl } = await startServer('admin');
+    const app = await startServer('admin');
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/ricardian/TRD-9001',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'x-request-id': 'req-ricardian',
+      },
+    });
+    const payload = response.json<{ data: { verification: { status: string } } }>();
 
-    try {
-      const response = await fetch(`${baseUrl}/ricardian/TRD-9001`, {
-        headers: { Authorization: 'Bearer sess-admin', 'x-request-id': 'req-ricardian' },
-      });
-      const payload = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get('x-request-id')).toBe('req-ricardian');
-      expect(validateRicardian(payload)).toBe(true);
-      expect(payload.data.verification.status).toBe('verified');
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(200);
+    expect(response.headers['x-request-id']).toBe('req-ricardian');
+    expect(validateRicardian(payload)).toBe(true);
+    expect(payload.data.verification.status).toBe('verified');
   });
 
   test('GET /ricardian/{tradeId} returns degraded payloads when the ricardian source is unavailable', async () => {
-    const { server, baseUrl } = await startServer('admin');
+    const app = await startServer('admin');
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/ricardian/TRD-degraded',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const payload = response.json<{ data: { freshness: { available: boolean } } }>();
 
-    try {
-      const response = await fetch(`${baseUrl}/ricardian/TRD-degraded`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      const payload = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(validateRicardian(payload)).toBe(true);
-      expect(payload.data.freshness.available).toBe(false);
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(200);
+    expect(validateRicardian(payload)).toBe(true);
+    expect(payload.data.freshness.available).toBe(false);
   });
 
   test('GET /evidence/{tradeId} returns grouped evidence records', async () => {
-    const { server, baseUrl } = await startServer('admin');
+    const app = await startServer('admin');
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/evidence/TRD-9001',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const payload = response.json<{ data: { tradeId: string } }>();
 
-    try {
-      const response = await fetch(`${baseUrl}/evidence/TRD-9001`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      const payload = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(validateEvidence(payload)).toBe(true);
-      expect(payload.data.tradeId).toBe('TRD-9001');
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(200);
+    expect(validateEvidence(payload)).toBe(true);
+    expect(payload.data.tradeId).toBe('TRD-9001');
   });
 
   test('ricardian and evidence routes require an authenticated admin session and fail closed on missing hashes', async () => {
-    const unauthenticated = await startServer(null);
-    const nonAdmin = await startServer('buyer');
+    const unauthenticatedApp = await startServer(null);
+    const unauthenticatedResponse = await sendInProcessRequest(unauthenticatedApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/ricardian/TRD-9001',
+    });
+    expect(unauthenticatedResponse.status).toBe(401);
 
-    try {
-      const unauthenticatedResponse = await fetch(`${unauthenticated.baseUrl}/ricardian/TRD-9001`);
-      expect(unauthenticatedResponse.status).toBe(401);
+    const nonAdminApp = await startServer('buyer');
+    const forbiddenResponse = await sendInProcessRequest(nonAdminApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/ricardian/TRD-9001',
+      headers: { authorization: 'Bearer sess-buyer' },
+    });
+    expect(forbiddenResponse.status).toBe(403);
 
-      const forbiddenResponse = await fetch(`${nonAdmin.baseUrl}/ricardian/TRD-9001`, {
-        headers: { Authorization: 'Bearer sess-buyer' },
-      });
-      expect(forbiddenResponse.status).toBe(403);
-    } finally {
-      unauthenticated.server.close();
-      nonAdmin.server.close();
-    }
+    const app = await startServer('admin');
+    const missingHashResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/ricardian/missing-hash',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const missingHashPayload = missingHashResponse.json<{ error: { code: string } }>();
 
-    const { server, baseUrl } = await startServer('admin');
-    try {
-      const missingHashResponse = await fetch(`${baseUrl}/ricardian/missing-hash`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      const missingHashPayload = await missingHashResponse.json();
-
-      expect(missingHashResponse.status).toBe(409);
-      expect(missingHashPayload.error.code).toBe('CONFLICT');
-    } finally {
-      server.close();
-    }
+    expect(missingHashResponse.status).toBe(409);
+    expect(missingHashPayload.error.code).toBe('CONFLICT');
   });
 });

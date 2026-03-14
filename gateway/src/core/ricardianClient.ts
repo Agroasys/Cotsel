@@ -21,6 +21,19 @@ interface RicardianHashResponse {
   code?: string;
 }
 
+async function parseOptionalJson(response: Response): Promise<RicardianHashResponse | null> {
+  const text = await response.text();
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as RicardianHashResponse;
+  } catch {
+    return null;
+  }
+}
+
 function isDocumentRecord(value: unknown): value is RicardianDocumentRecord {
   return Boolean(
     value
@@ -53,7 +66,7 @@ export class RicardianClient {
         method: 'GET',
         signal: controller.signal,
       });
-      const payload = await response.json() as RicardianHashResponse;
+      const payload = await parseOptionalJson(response);
 
       if (response.status === 404) {
         throw new GatewayError(404, 'NOT_FOUND', 'Ricardian document not found', {
@@ -66,12 +79,12 @@ export class RicardianClient {
         throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Ricardian service request failed', {
           upstream: 'ricardian',
           status: response.status,
-          reason: payload.error ?? null,
-          code: payload.code ?? null,
+          reason: payload?.error ?? null,
+          code: payload?.code ?? null,
         });
       }
 
-      if (!payload.success || !isDocumentRecord(payload.data)) {
+      if (!payload?.success || !isDocumentRecord(payload.data)) {
         throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Ricardian service returned an invalid payload', {
           upstream: 'ricardian',
         });
