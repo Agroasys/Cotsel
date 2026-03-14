@@ -1,7 +1,6 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { Server } from 'http';
 import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
@@ -12,6 +11,7 @@ import { createInMemoryRoleAssignmentStore } from '../src/core/roleAssignmentSto
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createSettingsRouter } from '../src/routes/settings';
+import { sendInProcessRequest } from './support/inProcessHttp';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -120,19 +120,7 @@ async function startServer(role: 'admin' | 'buyer' | null = 'admin') {
     extraRouter: router,
   });
 
-  const server = await new Promise<Server>((resolve) => {
-    const instance = app.listen(0, () => resolve(instance));
-  });
-
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Failed to resolve server address');
-  }
-
-  return {
-    server,
-    baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
-  };
+  return app;
 }
 
 describe('gateway settings routes contract', () => {
@@ -146,47 +134,47 @@ describe('gateway settings routes contract', () => {
   });
 
   test('settings routes return schema-valid role assignments and audit feed payloads', async () => {
-    const { server, baseUrl } = await startServer('admin');
+    const app = await startServer('admin');
+    const rolesResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/settings/role-assignments',
+      headers: { authorization: 'Bearer session-admin' },
+    });
+    const rolesPayload = rolesResponse.json<{ data: { items: Array<{ subjectUserId?: string }> } }>();
 
-    try {
-      const rolesResponse = await fetch(`${baseUrl}/settings/role-assignments`, {
-        headers: { Authorization: 'Bearer session-admin' },
-      });
-      const rolesPayload = await rolesResponse.json();
+    const auditFeedResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/settings/audit-feed',
+      headers: { authorization: 'Bearer session-admin' },
+    });
+    const auditFeedPayload = auditFeedResponse.json<{
+      data: { items: Array<{ eventType?: string }>; freshness: { available: boolean } };
+    }>();
 
-      const auditFeedResponse = await fetch(`${baseUrl}/settings/audit-feed`, {
-        headers: { Authorization: 'Bearer session-admin' },
-      });
-      const auditFeedPayload = await auditFeedResponse.json();
+    expect(rolesResponse.status).toBe(200);
+    expect(validateRoleAssignments(rolesPayload)).toBe(true);
+    expect(rolesPayload.data.items[0]?.subjectUserId).toBe('uid-admin');
 
-      expect(rolesResponse.status).toBe(200);
-      expect(validateRoleAssignments(rolesPayload)).toBe(true);
-      expect(rolesPayload.data.items[0]?.subjectUserId).toBe('uid-admin');
-
-      expect(auditFeedResponse.status).toBe(200);
-      expect(validateAuditFeed(auditFeedPayload)).toBe(true);
-      expect(auditFeedPayload.data.items[0]?.eventType).toBe('governance.action.recorded');
-      expect(auditFeedPayload.data.freshness.available).toBe(true);
-    } finally {
-      server.close();
-    }
+    expect(auditFeedResponse.status).toBe(200);
+    expect(validateAuditFeed(auditFeedPayload)).toBe(true);
+    expect(auditFeedPayload.data.items[0]?.eventType).toBe('governance.action.recorded');
+    expect(auditFeedPayload.data.freshness.available).toBe(true);
   });
 
   test('settings routes require an authenticated admin session', async () => {
-    const unauthenticated = await startServer(null);
-    const nonAdmin = await startServer('buyer');
+    const unauthenticatedApp = await startServer(null);
+    const unauthenticatedResponse = await sendInProcessRequest(unauthenticatedApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/settings/role-assignments',
+    });
+    expect(unauthenticatedResponse.status).toBe(401);
 
-    try {
-      const unauthenticatedResponse = await fetch(`${unauthenticated.baseUrl}/settings/role-assignments`);
-      expect(unauthenticatedResponse.status).toBe(401);
-
-      const forbiddenResponse = await fetch(`${nonAdmin.baseUrl}/settings/audit-feed`, {
-        headers: { Authorization: 'Bearer session-buyer' },
-      });
-      expect(forbiddenResponse.status).toBe(403);
-    } finally {
-      unauthenticated.server.close();
-      nonAdmin.server.close();
-    }
+    const nonAdminApp = await startServer('buyer');
+    const forbiddenResponse = await sendInProcessRequest(nonAdminApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/settings/audit-feed',
+      headers: { authorization: 'Bearer session-buyer' },
+    });
+    expect(forbiddenResponse.status).toBe(403);
   });
 });
