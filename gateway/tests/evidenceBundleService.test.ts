@@ -4,6 +4,7 @@
 import { createInMemoryComplianceStore } from '../src/core/complianceStore';
 import { GatewayEvidenceBundleService } from '../src/core/evidenceBundleService';
 import { createInMemoryEvidenceBundleStore } from '../src/core/evidenceBundleStore';
+import type { ComplianceStore } from '../src/core/complianceStore';
 import type { DashboardTradeRecord, TradeReadReader } from '../src/core/tradeReadService';
 import type { GatewayPrincipal } from '../src/middleware/auth';
 import type { RequestContext } from '../src/middleware/requestContext';
@@ -130,7 +131,7 @@ describe('GatewayEvidenceBundleService', () => {
       expect.objectContaining({
         artifactId: 'ricardian-document',
         available: true,
-        href: 'http://127.0.0.1:3100/api/ricardian/v1/hash/0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        href: '/api/dashboard-gateway/v1/ricardian/TRD-247',
       }),
     ]));
     expect(manifest.evidenceReferences).toEqual([
@@ -166,6 +167,39 @@ describe('GatewayEvidenceBundleService', () => {
       expect.objectContaining({
         artifactId: 'ricardian-document',
         available: false,
+      }),
+    ]));
+  });
+
+  test('generates a degraded manifest when compliance evidence sources are unavailable', async () => {
+    const complianceStore = {
+      getTradeStatus: jest.fn().mockRejectedValue(new Error('compliance status unavailable')),
+      getOracleProgressionBlock: jest.fn().mockRejectedValue(new Error('oracle progression unavailable')),
+      listTradeDecisions: jest.fn().mockRejectedValue(new Error('trade decisions unavailable')),
+    } as unknown as ComplianceStore;
+
+    const service = new GatewayEvidenceBundleService(
+      createInMemoryEvidenceBundleStore(),
+      buildTradeReader(trade),
+      complianceStore,
+      'http://127.0.0.1:3100/api/ricardian/v1',
+      () => new Date('2026-03-14T10:00:00.000Z'),
+    );
+
+    const manifest = await service.generate({
+      tradeId: trade.id,
+      principal,
+      requestContext,
+    });
+
+    expect(manifest.available).toBe(false);
+    expect(manifest.degradedReason).toContain('compliance status unavailable');
+    expect(manifest.degradedReason).toContain('trade decisions unavailable');
+    expect(manifest.evidenceReferences).toEqual([]);
+    expect(manifest.artifactReferences).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        artifactId: 'bundle-manifest',
+        href: expect.stringContaining(`/evidence/bundles/${manifest.bundleId}/download`),
       }),
     ]));
   });

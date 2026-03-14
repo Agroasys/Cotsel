@@ -8,10 +8,7 @@ import type { DashboardTradeRecord, TradeReadReader } from './tradeReadService';
 import type { GatewayPrincipal } from '../middleware/auth';
 import type { RequestContext } from '../middleware/requestContext';
 import { GatewayError } from '../errors';
-import {
-  EvidenceBundleManifestRecord,
-  EvidenceBundleStore,
-} from './evidenceBundleStore';
+import { EvidenceBundleStore } from './evidenceBundleStore';
 
 const GATEWAY_BASE_PATH = '/api/dashboard-gateway/v1';
 
@@ -56,6 +53,15 @@ function latestTimestamp(values: Array<string | null | undefined>): string | nul
   });
 
   return latest;
+}
+
+function combineDegradedReasons(reasons: Array<string | null | undefined>): string | undefined {
+  const values = [...new Set(reasons.filter((reason): reason is string => Boolean(reason?.trim())).map((reason) => reason.trim()))];
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  return values.join('; ');
 }
 
 export interface EvidenceBundleArtifactReference {
@@ -139,11 +145,16 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
     }
 
     const queriedAt = this.now().toISOString();
-    const [tradeStatus, decisions, oracleProgressionBlock] = await Promise.all([
+    const [tradeStatusResult, decisionsResult, oracleProgressionBlockResult] = await Promise.allSettled([
       this.complianceStore.getTradeStatus(trade.id),
       this.collectTradeDecisions(trade.id),
       this.complianceStore.getOracleProgressionBlock(trade.id),
     ]);
+    const tradeStatus = tradeStatusResult.status === 'fulfilled' ? tradeStatusResult.value : null;
+    const decisions = decisionsResult.status === 'fulfilled' ? decisionsResult.value : [];
+    const oracleProgressionBlock = oracleProgressionBlockResult.status === 'fulfilled'
+      ? oracleProgressionBlockResult.value
+      : null;
 
     const bundleId = randomUUID();
     const generatedAt = queriedAt;
@@ -153,7 +164,14 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
       trade,
       tradeHasCompliance: tradeStatus !== null || decisions.length > 0,
     });
-    const degradedReason = this.resolveDegradedReason(trade);
+    const degradedReason = combineDegradedReasons([
+      this.resolveDegradedReason(trade),
+      tradeStatusResult.status === 'rejected' ? this.describeDegradedReason(tradeStatusResult.reason) : undefined,
+      decisionsResult.status === 'rejected' ? this.describeDegradedReason(decisionsResult.reason) : undefined,
+      oracleProgressionBlockResult.status === 'rejected'
+        ? this.describeDegradedReason(oracleProgressionBlockResult.reason)
+        : undefined,
+    ]);
     const manifestWithoutDigest = {
       bundleId,
       tradeId: trade.id,
@@ -216,6 +234,14 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
     }
 
     return stored.manifest as unknown as EvidenceBundleManifest;
+  }
+
+  private describeDegradedReason(error: unknown): string {
+    if (error instanceof Error && error.message.trim().length > 0) {
+      return error.message;
+    }
+
+    return 'Evidence source is unavailable';
   }
 
   private async collectTradeDecisions(tradeId: string): Promise<ComplianceDecisionRecord[]> {
@@ -306,9 +332,7 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
         type: 'ricardian_document',
         title: 'Ricardian document lookup by hash',
         format: 'application/json',
-        href: this.ricardianBaseUrl
-          ? `${this.ricardianBaseUrl}/hash/${encodeURIComponent(input.trade.ricardianHash)}`
-          : null,
+        href: buildGatewayHref(`/ricardian/${encodeURIComponent(input.trade.id)}`),
         available: Boolean(this.ricardianBaseUrl),
         digest: input.trade.ricardianHash,
         ...(this.ricardianBaseUrl ? {} : { unavailableReason: 'GATEWAY_RICARDIAN_BASE_URL is not configured' }),
