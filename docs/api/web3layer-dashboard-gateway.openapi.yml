@@ -31,6 +31,8 @@ tags:
   - name: Operations
   - name: Trades
   - name: Reconciliation
+  - name: Ricardian
+  - name: Evidence
   - name: Settlement
   - name: Governance
   - name: Treasury
@@ -308,6 +310,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReconciliationDetailResponse'
+  /ricardian/{tradeId}:
+    get:
+      tags: [Ricardian]
+      summary: Get Ricardian document retrieval payload for a trade
+      description: |
+        Read-through dashboard contract for Ricardian retrieval. The gateway resolves the trade,
+        uses the authoritative Ricardian hash, retrieves the document from the Ricardian service,
+        and returns verification-oriented metadata.
+      operationId: getRicardianDocument
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/TradeId'
+      responses:
+        '200':
+          description: Ricardian retrieval payload with freshness and verification metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RicardianDocumentResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /evidence/{tradeId}:
+    get:
+      tags: [Evidence]
+      summary: Get grouped evidence records for a trade
+      description: |
+        Returns the evidence sources needed by CTSP-Dash Evidence and Trade Detail views. The
+        payload groups trade settlement context, compliance decisions, and governance actions for a
+        single trade.
+      operationId: getTradeEvidence
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/TradeId'
+      responses:
+        '200':
+          description: Grouped evidence payload for a trade.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeEvidenceResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -2536,6 +2588,144 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/ReconciliationDetailPayload'
+        timestamp:
+          type: string
+          format: date-time
+    RicardianFreshness:
+      type: object
+      required: [source, sourceFreshAt, queriedAt, available]
+      properties:
+        source:
+          type: string
+          enum: [ricardian_http]
+        sourceFreshAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+        degradedReason:
+          type: string
+    TradeEvidenceFreshness:
+      type: object
+      required: [source, sourceFreshAt, queriedAt, available]
+      properties:
+        source:
+          type: string
+          enum: [gateway_ledgers]
+        sourceFreshAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+        degradedReason:
+          type: string
+    RicardianDocument:
+      type: object
+      required: [id, requestId, documentRef, hash, rulesVersion, canonicalJson, metadata, createdAt]
+      properties:
+        id:
+          type: string
+        requestId:
+          type: string
+        documentRef:
+          type: string
+        hash:
+          type: string
+        rulesVersion:
+          type: string
+        canonicalJson:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    RicardianVerification:
+      type: object
+      required: [status, tradeHashMatchesDocument, settlementHashMatchesTrade]
+      properties:
+        status:
+          type: string
+          enum: [verified, mismatch, unavailable]
+        tradeHashMatchesDocument:
+          anyOf:
+            - type: boolean
+            - type: 'null'
+        settlementHashMatchesTrade:
+          anyOf:
+            - type: boolean
+            - type: 'null'
+    RicardianDocumentPayload:
+      type: object
+      required: [tradeId, ricardianHash, document, verification, freshness]
+      properties:
+        tradeId:
+          type: string
+        ricardianHash:
+          type: string
+        document:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/RicardianDocument'
+        verification:
+          $ref: '#/components/schemas/RicardianVerification'
+        freshness:
+          $ref: '#/components/schemas/RicardianFreshness'
+    RicardianDocumentResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/RicardianDocumentPayload'
+        timestamp:
+          type: string
+          format: date-time
+    TradeEvidencePayload:
+      type: object
+      required: [tradeId, ricardianHash, settlement, complianceDecisions, governanceActions, freshness]
+      properties:
+        tradeId:
+          type: string
+        ricardianHash:
+          type: string
+        settlement:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TradeSettlementState'
+        complianceDecisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComplianceDecision'
+        governanceActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceAction'
+        freshness:
+          $ref: '#/components/schemas/TradeEvidenceFreshness'
+    TradeEvidenceResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TradeEvidencePayload'
         timestamp:
           type: string
           format: date-time
