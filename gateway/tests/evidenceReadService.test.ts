@@ -251,4 +251,145 @@ describe('evidence read service', () => {
       available: true,
     });
   });
+
+  test('degrades ricardian verification when the settlement handoff lookup fails', async () => {
+    const tradeReadService: TradeReadReader = {
+      checkReadiness: jest.fn(),
+      listTrades: jest.fn(),
+      getTrade: jest.fn().mockResolvedValue(tradeFixture),
+    };
+
+    const settlementStore = {
+      getHandoff: jest.fn().mockRejectedValue(new Error('settlement ledger unavailable')),
+    } as unknown as ReturnType<typeof createInMemorySettlementStore>;
+
+    const ricardianClient = {
+      getDocument: jest.fn().mockResolvedValue({
+        id: 'doc-1',
+        requestId: 'req-doc-1',
+        documentRef: 'CTSL-TRD-9001',
+        hash: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        rulesVersion: 'v1',
+        canonicalJson: { tradeId: 'TRD-9001' },
+        metadata: { issuer: 'ctsp' },
+        createdAt: '2026-03-14T09:30:00.000Z',
+      }),
+    } as unknown as RicardianClient;
+
+    const complianceStore = {
+      listTradeDecisions: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+    } as unknown as ComplianceStore;
+
+    const service = new EvidenceReadService(
+      tradeReadService,
+      settlementStore,
+      ricardianClient,
+      complianceStore,
+      createInMemoryGovernanceActionStore(governanceFixture),
+      () => new Date('2026-03-14T11:00:00.000Z'),
+    );
+
+    const result = await service.getRicardianDocument('TRD-9001');
+
+    expect(result.verification.status).toBe('unavailable');
+    expect(result.verification.tradeHashMatchesDocument).toBe(true);
+    expect(result.verification.settlementHashMatchesTrade).toBeNull();
+    expect(result.freshness.available).toBe(false);
+    expect(result.freshness.degradedReason).toContain('settlement ledger unavailable');
+  });
+
+  test('does not report a synthetic ricardian mismatch when the upstream document service is unavailable', async () => {
+    const tradeReadService: TradeReadReader = {
+      checkReadiness: jest.fn(),
+      listTrades: jest.fn(),
+      getTrade: jest.fn().mockResolvedValue(tradeFixture),
+    };
+
+    const settlementStore = createInMemorySettlementStore([
+      {
+        handoffId: 'sth-1',
+        platformId: 'agroasys-platform',
+        platformHandoffId: 'handoff-1',
+        tradeId: 'TRD-9001',
+        phase: 'stage_2',
+        settlementChannel: 'web3layer_escrow',
+        displayCurrency: 'USD',
+        displayAmount: 125000,
+        assetSymbol: 'USDC',
+        assetAmount: 125000,
+        ricardianHash: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        externalReference: 'EXT-1',
+        metadata: {},
+        executionStatus: 'confirmed',
+        reconciliationStatus: 'matched',
+        callbackStatus: 'delivered',
+        providerStatus: 'confirmed',
+        txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        extrinsicHash: null,
+        latestEventId: 'evt-1',
+        latestEventType: 'reconciled',
+        latestEventDetail: 'Settlement confirmed and reconciled.',
+        latestEventAt: '2026-03-14T10:05:00.000Z',
+        callbackDeliveredAt: '2026-03-14T10:06:00.000Z',
+        requestId: 'req-1',
+        sourceApiKeyId: 'platform-main',
+        createdAt: '2026-03-14T09:00:00.000Z',
+        updatedAt: '2026-03-14T10:06:00.000Z',
+      },
+    ]);
+    const ricardianClient = {
+      getDocument: jest.fn().mockRejectedValue(new Error('ricardian service unavailable')),
+    } as unknown as RicardianClient;
+    const complianceStore = {
+      listTradeDecisions: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+    } as unknown as ComplianceStore;
+
+    const service = new EvidenceReadService(
+      tradeReadService,
+      settlementStore,
+      ricardianClient,
+      complianceStore,
+      createInMemoryGovernanceActionStore(governanceFixture),
+      () => new Date('2026-03-14T11:00:00.000Z'),
+    );
+
+    const result = await service.getRicardianDocument('TRD-9001');
+
+    expect(result.verification.status).toBe('unavailable');
+    expect(result.verification.tradeHashMatchesDocument).toBeNull();
+    expect(result.verification.settlementHashMatchesTrade).toBe(true);
+    expect(result.freshness.available).toBe(false);
+    expect(result.freshness.degradedReason).toContain('ricardian service unavailable');
+  });
+
+  test('preserves successful evidence reads when one source degrades', async () => {
+    const tradeReadService: TradeReadReader = {
+      checkReadiness: jest.fn(),
+      listTrades: jest.fn(),
+      getTrade: jest.fn().mockResolvedValue(tradeFixture),
+    };
+
+    const settlementStore = createInMemorySettlementStore();
+    const ricardianClient = { getDocument: jest.fn() } as unknown as RicardianClient;
+    const complianceStore = {
+      listTradeDecisions: jest.fn().mockRejectedValue(new Error('compliance store unavailable')),
+    } as unknown as ComplianceStore;
+
+    const service = new EvidenceReadService(
+      tradeReadService,
+      settlementStore,
+      ricardianClient,
+      complianceStore,
+      createInMemoryGovernanceActionStore(governanceFixture),
+      () => new Date('2026-03-14T11:00:00.000Z'),
+    );
+
+    const result = await service.getTradeEvidence('TRD-9001');
+
+    expect(result.governanceActions).toHaveLength(1);
+    expect(result.complianceDecisions).toHaveLength(0);
+    expect(result.freshness.available).toBe(false);
+    expect(result.freshness.degradedReason).toContain('compliance store unavailable');
+    expect(result.freshness.sourceFreshAt).toBe('2026-03-14T10:06:00.000Z');
+  });
 });

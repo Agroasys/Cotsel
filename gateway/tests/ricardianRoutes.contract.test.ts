@@ -139,7 +139,7 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<E
             document: null,
             verification: {
               status: 'unavailable',
-              tradeHashMatchesDocument: false,
+              tradeHashMatchesDocument: null,
               settlementHashMatchesTrade: null,
             },
             freshness: {

@@ -32,7 +32,7 @@ export interface EvidenceFreshness {
 
 export interface RicardianVerificationStatus {
   status: 'verified' | 'mismatch' | 'unavailable';
-  tradeHashMatchesDocument: boolean;
+  tradeHashMatchesDocument: boolean | null;
   settlementHashMatchesTrade: boolean | null;
 }
 
@@ -87,6 +87,15 @@ function degradedReason(error: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+function combineDegradedReasons(reasons: Array<string | null | undefined>): string | undefined {
+  const values = [...new Set(reasons.filter((reason): reason is string => Boolean(reason?.trim())).map((reason) => reason.trim()))];
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  return values.join('; ');
 }
 
 async function readAllComplianceDecisions(
@@ -145,23 +154,36 @@ export class EvidenceReadService implements EvidenceReadReader {
     }
 
     const queriedAt = this.now().toISOString();
-    const settlementHandoff = trade.settlement
-      ? await this.settlementStore.getHandoff(trade.settlement.handoffId)
-      : null;
-    const settlementHashMatchesTrade = settlementHandoff?.ricardianHash
-      ? settlementHandoff.ricardianHash.toLowerCase() === trade.ricardianHash.toLowerCase()
-      : null;
+    let settlementHashMatchesTrade: boolean | null = null;
+    let settlementLookupDegradedReason: string | undefined;
+
+    if (trade.settlement) {
+      try {
+        const settlementHandoff = await this.settlementStore.getHandoff(trade.settlement.handoffId);
+        settlementHashMatchesTrade = settlementHandoff?.ricardianHash
+          ? settlementHandoff.ricardianHash.toLowerCase() === trade.ricardianHash.toLowerCase()
+          : null;
+      } catch (error) {
+        settlementLookupDegradedReason = degradedReason(error, 'Settlement handoff lookup is unavailable');
+      }
+    }
 
     try {
       const document = await this.ricardianClient.getDocument(trade.ricardianHash);
       const tradeHashMatchesDocument = document.hash.toLowerCase() === trade.ricardianHash.toLowerCase();
+      const responseDegradedReason = combineDegradedReasons([settlementLookupDegradedReason]);
+      const verificationStatus = responseDegradedReason
+        ? 'unavailable'
+        : tradeHashMatchesDocument && settlementHashMatchesTrade !== false
+          ? 'verified'
+          : 'mismatch';
 
       return {
         tradeId,
         ricardianHash: trade.ricardianHash,
         document,
         verification: {
-          status: tradeHashMatchesDocument && settlementHashMatchesTrade !== false ? 'verified' : 'mismatch',
+          status: verificationStatus,
           tradeHashMatchesDocument,
           settlementHashMatchesTrade,
         },
@@ -169,7 +191,8 @@ export class EvidenceReadService implements EvidenceReadReader {
           source: 'ricardian_http',
           sourceFreshAt: document.createdAt,
           queriedAt,
-          available: true,
+          available: responseDegradedReason ? false : true,
+          ...(responseDegradedReason ? { degradedReason: responseDegradedReason } : {}),
         },
       };
     } catch (error) {
@@ -183,7 +206,7 @@ export class EvidenceReadService implements EvidenceReadReader {
         document: null,
         verification: {
           status: 'unavailable',
-          tradeHashMatchesDocument: false,
+          tradeHashMatchesDocument: null,
           settlementHashMatchesTrade,
         },
         freshness: {
@@ -205,44 +228,39 @@ export class EvidenceReadService implements EvidenceReadReader {
 
     const queriedAt = this.now().toISOString();
 
-    try {
-      const [complianceDecisions, governanceActions] = await Promise.all([
-        readAllComplianceDecisions(this.complianceStore, tradeId),
-        readAllGovernanceActions(this.governanceActionStore, tradeId),
-      ]);
+    const [complianceResult, governanceResult] = await Promise.allSettled([
+      readAllComplianceDecisions(this.complianceStore, tradeId),
+      readAllGovernanceActions(this.governanceActionStore, tradeId),
+    ]);
 
-      return {
-        tradeId,
-        ricardianHash: trade.ricardianHash,
-        settlement: trade.settlement,
-        complianceDecisions,
-        governanceActions,
-        freshness: {
-          source: 'gateway_ledgers',
-          sourceFreshAt: maxTimestamp([
-            trade.settlement?.updatedAt ?? null,
-            ...complianceDecisions.map((decision) => decision.decidedAt),
-            ...governanceActions.flatMap((action) => [action.executedAt, action.createdAt]),
-          ]),
-          queriedAt,
-          available: true,
-        },
-      };
-    } catch (error) {
-      return {
-        tradeId,
-        ricardianHash: trade.ricardianHash,
-        settlement: trade.settlement,
-        complianceDecisions: [],
-        governanceActions: [],
-        freshness: {
-          source: 'gateway_ledgers',
-          sourceFreshAt: trade.settlement?.updatedAt ?? null,
-          queriedAt,
-          available: false,
-          degradedReason: degradedReason(error, 'Evidence sources are unavailable'),
-        },
-      };
-    }
+    const complianceDecisions = complianceResult.status === 'fulfilled' ? complianceResult.value : [];
+    const governanceActions = governanceResult.status === 'fulfilled' ? governanceResult.value : [];
+    const responseDegradedReason = combineDegradedReasons([
+      complianceResult.status === 'rejected'
+        ? degradedReason(complianceResult.reason, 'Compliance evidence source is unavailable')
+        : undefined,
+      governanceResult.status === 'rejected'
+        ? degradedReason(governanceResult.reason, 'Governance evidence source is unavailable')
+        : undefined,
+    ]);
+
+    return {
+      tradeId,
+      ricardianHash: trade.ricardianHash,
+      settlement: trade.settlement,
+      complianceDecisions,
+      governanceActions,
+      freshness: {
+        source: 'gateway_ledgers',
+        sourceFreshAt: maxTimestamp([
+          trade.settlement?.updatedAt ?? null,
+          ...complianceDecisions.map((decision) => decision.decidedAt),
+          ...governanceActions.flatMap((action) => [action.executedAt, action.createdAt]),
+        ]),
+        queriedAt,
+        available: responseDegradedReason ? false : true,
+        ...(responseDegradedReason ? { degradedReason: responseDegradedReason } : {}),
+      },
+    };
   }
 }
