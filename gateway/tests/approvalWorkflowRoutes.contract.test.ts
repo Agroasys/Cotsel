@@ -1,7 +1,6 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { Server } from 'http';
 import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
@@ -23,6 +22,7 @@ import {
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createApprovalWorkflowRouter } from '../src/routes/approvals';
+import { sendInProcessRequest } from './support/inProcessHttp';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -265,19 +265,7 @@ async function startServer(sessionRole: 'admin' | 'buyer' | null) {
     extraRouter: router,
   });
 
-  const server = await new Promise<Server>((resolve) => {
-    const instance = app.listen(0, () => resolve(instance));
-  });
-
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Failed to resolve server address');
-  }
-
-  return {
-    server,
-    baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
-  };
+  return app;
 }
 
 describe('gateway approval workflow routes contract', () => {
@@ -291,63 +279,59 @@ describe('gateway approval workflow routes contract', () => {
   });
 
   test('GET /approvals returns schema-valid approval workflow summaries', async () => {
-    const { server, baseUrl } = await startServer('admin');
+    const app = await startServer('admin');
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/approvals?limit=1',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'x-request-id': 'req-approvals',
+      },
+    });
+    const payload = response.json<{
+      data: {
+        items: Array<{ approvalId: string; review: { approvedBy: string[] } }>;
+        nextCursor: string | null;
+      };
+    }>();
 
-    try {
-      const response = await fetch(`${baseUrl}/approvals?limit=1`, {
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'x-request-id': 'req-approvals',
-        },
-      });
-      const payload = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get('x-request-id')).toBe('req-approvals');
-      expect(validateList(payload)).toBe(true);
-      expect(payload.data.items).toHaveLength(1);
-      expect(payload.data.items[0].approvalId).toBe('approval-2');
-      expect(payload.data.items[0].review.approvedBy).toEqual(['uid-admin-3']);
-      expect(payload.data.nextCursor).toBeTruthy();
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(200);
+    expect(response.headers['x-request-id']).toBe('req-approvals');
+    expect(validateList(payload)).toBe(true);
+    expect(payload.data.items).toHaveLength(1);
+    expect(payload.data.items[0].approvalId).toBe('approval-2');
+    expect(payload.data.items[0].review.approvedBy).toEqual(['uid-admin-3']);
+    expect(payload.data.nextCursor).toBeTruthy();
   });
 
   test('GET /approvals/{approvalId} returns schema-valid detail', async () => {
-    const { server, baseUrl } = await startServer('admin');
+    const app = await startServer('admin');
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/approvals/approval-2',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'x-request-id': 'req-approval-detail',
+      },
+    });
+    const payload = response.json<{ data: { approvalId: string; review: { items: Array<{ actionId: string }> } } }>();
 
-    try {
-      const response = await fetch(`${baseUrl}/approvals/approval-2`, {
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'x-request-id': 'req-approval-detail',
-        },
-      });
-      const payload = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(validateDetail(payload)).toBe(true);
-      expect(payload.data.approvalId).toBe('approval-2');
-      expect(payload.data.review.items[0].actionId).toBe('approval-2-review');
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(200);
+    expect(validateDetail(payload)).toBe(true);
+    expect(payload.data.approvalId).toBe('approval-2');
+    expect(payload.data.review.items[0].actionId).toBe('approval-2-review');
   });
 
   test('approval workflow routes require operator access', async () => {
-    const { server, baseUrl } = await startServer('buyer');
+    const app = await startServer('buyer');
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/approvals',
+      headers: { authorization: 'Bearer sess-buyer' },
+    });
+    const payload = response.json<{ error: { code: string } }>();
 
-    try {
-      const response = await fetch(`${baseUrl}/approvals`, {
-        headers: { Authorization: 'Bearer sess-buyer' },
-      });
-      const payload = await response.json();
-
-      expect(response.status).toBe(403);
-      expect(payload.error.code).toBe('FORBIDDEN');
-    } finally {
-      server.close();
-    }
+    expect(response.status).toBe(403);
+    expect(payload.error.code).toBe('FORBIDDEN');
   });
 });
