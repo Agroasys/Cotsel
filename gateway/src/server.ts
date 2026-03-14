@@ -24,6 +24,7 @@ import { GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
 import { OperationsSummaryService } from './core/operationsSummaryService';
 import { OverviewService } from './core/overviewService';
+import { checkIndexerHealth } from './core/indexerHealthProbe';
 import { Logger } from './logging/logger';
 import { createComplianceRouter } from './routes/compliance';
 import { createGovernanceRouter } from './routes/governance';
@@ -117,7 +118,7 @@ const operationsSummaryService = new OperationsSummaryService([
     source: 'indexer_graphql',
     staleAfterMs: 120_000,
     timeoutMs: config.indexerRequestTimeoutMs,
-    check: async () => tradeReadService.checkReadiness(),
+    check: async () => checkIndexerHealth(config.indexerGraphqlUrl, config.indexerRequestTimeoutMs),
   },
   {
     key: 'reconciliation',

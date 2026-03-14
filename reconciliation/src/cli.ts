@@ -4,6 +4,7 @@ import { closeConnection, testConnection } from './database/connection';
 import { runMigrations } from './database/migrations';
 import { ReconciliationService } from './core/reconciler';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from './blockchain/rpc-preflight';
+import { startHealthServer } from './health-server';
 
 type Mode = 'once' | 'daemon';
 
@@ -47,8 +48,11 @@ async function bootstrap(): Promise<void> {
     return;
   }
 
+  const healthServer = startHealthServer();
+
   const shutdown = async (signal: string): Promise<void> => {
     Logger.warn('Received shutdown signal', { signal });
+    healthServer.close();
     await closeConnection();
     process.exit(0);
   };
