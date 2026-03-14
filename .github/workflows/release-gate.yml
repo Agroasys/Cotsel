@@ -79,7 +79,7 @@ jobs:
               - 'treasury/**'
             gateway:
               - 'gateway/**'
-              - 'docs/api/web3layer-dashboard-gateway.openapi.yml'
+              - 'docs/api/cotsel-dashboard-gateway.openapi.yml'
               - 'docs/runbooks/dashboard-api-gateway-boundary.md'
               - 'docs/runbooks/dashboard-gateway-operations.md'
 

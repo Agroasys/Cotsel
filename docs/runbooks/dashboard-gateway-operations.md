@@ -208,7 +208,7 @@ curl -fsS -H "Authorization: Bearer <session>" \
 - `curl /operations/summary` (authenticated admin session)
 
 ## References
-- `docs/api/web3layer-dashboard-gateway.openapi.yml`
+- `docs/api/cotsel-dashboard-gateway.openapi.yml`
 - `docs/runbooks/dashboard-api-gateway-boundary.md`
 - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
 - `docs/runbooks/api-gateway-boundary.md`

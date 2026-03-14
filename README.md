@@ -2,7 +2,7 @@
 
 _**A non-custodial, evidence-driven settlement engine for cross-border trade workflows.**_
 
-The Agroasys Web3 Layer is a modular, non-custodial settlement infrastructure built on Polkadot Asset Hub. It provides milestone-based smart contract escrow designed to reduce counterparty risk and shorten settlement cycles through verifiable, evidence-driven state transitions.
+Cotsel is a modular, non-custodial settlement infrastructure built on Polkadot Asset Hub. It provides milestone-based smart contract escrow designed to reduce counterparty risk and shorten settlement cycles through verifiable, evidence-driven state transitions.
 
 While initially developed as the settlement engine for the Agroasys Platform, this protocol is open-source and integration-friendly, allowing any B2B marketplace or trade workflow to adopt stablecoin escrow settlement with Ricardian contract anchoring and audit-grade evidence traceability.
 
@@ -34,7 +34,7 @@ While initially developed as the settlement engine for the Agroasys Platform, th
 
 This repository is the settlement layer in the Agroasys platform. It operates alongside off-chain systems while serving as the on-chain source of truth for settlement state.
 
-![web3layer](https://github.com/user-attachments/assets/c2677f8f-b430-42f6-a267-285683da74df)
+![cotsel](https://github.com/user-attachments/assets/c2677f8f-b430-42f6-a267-285683da74df)
 
 - `contracts`: escrow state machine and settlement logic.
 - `oracle`: validated real-world milestone attestations into on-chain state transitions.
@@ -84,7 +84,7 @@ The protocol implements a deterministic two-stage settlement mechanism. This sup
 ## Repository Structure
 
 ```bash
-agroasys-web3/
+cotsel/
 ├── contracts/          # Solidity Smart Contracts + tests (Hardhat + Foundry)
 │   ├── src/
 │   ├── tests/
@@ -194,7 +194,7 @@ Program and governance:
 
 Dashboard / Ops API:
 
-- `docs/api/web3layer-dashboard-gateway.openapi.yml`
+- `docs/api/cotsel-dashboard-gateway.openapi.yml`
 - `docs/runbooks/dashboard-api-gateway-boundary.md`
 - `docs/runbooks/dashboard-gateway-operations.md`
 

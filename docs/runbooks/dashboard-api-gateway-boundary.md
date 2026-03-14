@@ -3,7 +3,7 @@
 ## Purpose
 Define the contract boundary for the Cotsel-Dash admin/operator dashboard when it interacts with Cotsel through the dedicated `gateway/` Web2 service.
 
-This document is the boundary companion to `docs/api/web3layer-dashboard-gateway.openapi.yml`.
+This document is the boundary companion to `docs/api/cotsel-dashboard-gateway.openapi.yml`.
 For day-2 operations, deployment checks, logging/tracing, and rollback procedure, use `docs/runbooks/dashboard-gateway-operations.md`.
 
 ## Discovery outcome
@@ -183,7 +183,7 @@ The gateway must persist, at minimum:
 - Mutations remain disabled by default; later enablement requires both `GATEWAY_ENABLE_MUTATIONS=true` and exact allowlist principal IDs for Aston and `czypioe`.
 
 ## References
-- `docs/api/web3layer-dashboard-gateway.openapi.yml`
+- `docs/api/cotsel-dashboard-gateway.openapi.yml`
 - `docs/runbooks/dashboard-gateway-operations.md`
 - `docs/runbooks/api-gateway-boundary.md`
 - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
