@@ -118,7 +118,7 @@ const operationsSummaryService = new OperationsSummaryService([
     source: 'indexer_graphql',
     staleAfterMs: 120_000,
     timeoutMs: config.indexerRequestTimeoutMs,
-    check: async () => checkIndexerHealth(config.indexerGraphqlUrl, config.indexerRequestTimeoutMs),
+    check: async () => checkIndexerHealth(config.indexerGraphqlUrl, config.indexerRequestTimeoutMs, 120_000),
   },
   {
     key: 'reconciliation',

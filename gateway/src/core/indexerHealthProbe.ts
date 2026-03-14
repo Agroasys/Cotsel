@@ -54,7 +54,12 @@ export async function checkIndexerHealth(
       throw new Error('Indexer has not yet produced an overview snapshot');
     }
 
-    const stalenessMs = Date.now() - Date.parse(snapshot.lastIndexedAt);
+    const parsedAt = Date.parse(snapshot.lastIndexedAt);
+    if (!snapshot.lastIndexedAt || Number.isNaN(parsedAt)) {
+      throw new Error('Indexer snapshot has an invalid or missing lastIndexedAt timestamp');
+    }
+
+    const stalenessMs = Date.now() - parsedAt;
     if (stalenessMs > staleThresholdMs) {
       const minutes = Math.round(stalenessMs / 60_000);
       throw new Error(
