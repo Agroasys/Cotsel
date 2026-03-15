@@ -43,42 +43,52 @@ This repository is the settlement layer in the Agroasys platform. It operates al
 
 ## Core Components
 
-- **Escrow Smart Contract** (`/contracts`): A Solidity-based state machine compiled for PolkaVM using the Parity toolchain. It handles locking, dispute holds, timeouts, and deterministic splitting and routing of funds.
-- **Oracle Service** (`/oracle`): A hardened Node.js service that submits signed, schema-validated milestone attestations (for example shipment and inspection evidence references) to drive state transitions.
-- **Ricardian Anchoring**: The protocol does not store PDFs on-chain. Each trade is anchored by a SHA-256 hash of the off-chain legal contract (TradeID), tying evidence and settlement to a single immutable reference.
-- **Indexer Service** (`/indexer`): An indexer that tracks core settlement events to support reconciliation, operational monitoring, and audit-style reporting.
+**Escrow Contract (`/contracts`)**  
+A settlement state machine implemented in Solidity and compiled for PolkaVM using the Parity toolchain. It manages escrow locking, timeouts, dispute holds, and deterministic allocation and routing of funds based on trade state.
+
+**Oracle Service (`/oracle`)**  
+A Node.js service that submits signed milestone attestations to the contract. Attestations are schema-validated and designed to be replay-safe and idempotent. Each attestation references external evidence identifiers (for example Bill of Lading, inspection certificate references) that support operational and audit review.
+
+**Ricardian Anchoring (`/ricardian`)**  
+The protocol does not store contracts on-chain. Each trade is anchored by a SHA-256 hash of the signed off-chain agreement (TradeID). Evidence references and settlement actions are linked to this immutable identifier across the lifecycle.
+
+**Indexer (`/indexer`)**  
+An indexing service that tracks settlement events to support reconciliation, operational monitoring, and audit-style reporting. It provides a normalized trade timeline, state transitions, and payout references.
 
 ## How It Works
 
-The protocol implements a deterministic two-stage settlement mechanism. This supports flows where operational costs and fees can be released earlier, while preserving safety of the principal settlement amount.
+Cotsel implements a deterministic two-stage settlement flow. This supports commercial trade patterns where certain operational costs and fees can be released earlier while preserving safety for the principal settlement amount.
 
-### The Lifecycle
+## Lifecycle
 
-1. **Lock (Encumbrance)**
-   **Action:** Buyer deposits `USDC` (or any configured asset) into escrow, covering goods value, logistics fees, and platform fees.  
-   **State:** Protocol records `ricardianHash` and encumbers funds into `stageOneAmount` (operational and fee) and `stageTwoAmount` (net settlement).
-2. **Stage 1 Release (Operational)**
-   **Trigger:** Oracle submits a signed attestation referencing validated documentation (for example Bill of Lading and export permit).  
-   **Action:** In one atomic transaction, logistics fee is paid to `TreasuryWallet`, platform fee is paid to `TreasuryWallet`, and supplier tranche 1 (default 40%, configurable) is paid to `SupplierAddress`.
-3. **Stage 2 Release (Final Settlement)**
-   **Trigger:** Oracle submits a signed attestation referencing destination inspection evidence (quality and quantity confirmation).  
-   **Action:** Remaining supplier tranche (default 60%) is released to `SupplierAddress`, completing settlement.
+**Lock (Encumbrance)**  
+The buyer locks stablecoin funds into escrow to cover goods value plus configured fees. The contract records the Ricardian TradeID and encumbers funds into two logical buckets: `stageOneAmount` (operational and fee tranche) and `stageTwoAmount` (net settlement tranche).
+
+**Stage 1 Release (Operational)**  
+Trigger: the oracle submits a signed attestation referencing validated documentation (for example shipment evidence such as Bill of Lading reference).  
+Action: in a single state transition, configured fees are allocated to their recipients and the supplier receives tranche one of the principal (default 40%, configurable).
+
+**Stage 2 Release (Final Settlement)**  
+Trigger: the oracle submits a signed attestation referencing destination inspection evidence (quality and quantity confirmation, where applicable).  
+Action: the remaining supplier tranche (default 60%) is released, completing settlement.
 
 ## Tech Stack
 
-### Core Protocol and Languages
+**Contracts and toolchain**  
+- Smart contracts: Solidity, compiled for PolkaVM using the Parity toolchain (`@parity/resolc` and Hardhat integration) with `compile:polkavm` as the intended release artifact.  
+- Testing and fuzzing: Hardhat for integration tests; Foundry for fuzz and invariant testing where applicable.
 
-- Smart contracts: Solidity with Hardhat and Parity resolc plugin stack (`@parity/hardhat-polkadot*` + `@parity/resolc`) for `compile:polkavm`. Legacy `compile` remains during migration.
-- Scripting and service logic: TypeScript on Node.js v20.x (same baseline as CI).
-- Infrastructure: Docker and Docker Compose.
+**Services and runtime**  
+- Service logic: TypeScript on Node.js 20.x  
+- Infrastructure: Docker and Docker Compose  
+- Storage: Postgres for indexed and operational views
 
-### Infrastructure Layers
+**Network and assets**  
+- Settlement rails: Polkadot Asset Hub (pilot on Paseo) for stablecoin settlement flows.  
+- Fee payment: where supported, fee payment in USDC can be used to reduce DOT dependency.
 
-- Network: Polkadot Asset Hub for low-cost native stablecoin settlement rails.
-- Fee payment: Asset Conversion Pallet for fee payment in `USDC` instead of `DOT` where supported.
-- Indexing and querying: SubQuery or Squid + GraphQL over Postgres.
-- Development framework: Hardhat (primary) and Foundry (fuzzing).
-- Oracle runtime: Isolated Node.js 20.x service runtime for key management and webhook ingress.
+**Indexing and APIs**  
+- Indexing: SubQuery or Subsquid with a GraphQL API backed by Postgres.
 
 ## Repository Structure
 
