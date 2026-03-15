@@ -3,6 +3,9 @@
 ## Purpose
 Operational playbook for emergency stop and controlled recovery path.
 
+Automation-governance source of truth:
+- `docs/runbooks/programmability-governance.md`
+
 ## Preconditions
 - Incident severity confirmed (security or correctness risk).
 - Admin quorum availability confirmed.
@@ -34,3 +37,4 @@ Operational playbook for emergency stop and controlled recovery path.
 - Suspected key compromise.
 - Unexpected privileged-path behavior.
 - Any mismatch between governance events and expected admin quorum.
+- Any automation path that cannot be correlated to an approved change record or incident ticket.

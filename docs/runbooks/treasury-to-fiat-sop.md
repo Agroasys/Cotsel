@@ -3,6 +3,9 @@
 ## Purpose
 Define a controlled, auditable procedure to move treasury-observed settlement value into fiat rails without bypassing payout controls.
 
+Automation-governance source of truth:
+- `docs/runbooks/programmability-governance.md`
+
 ## Who This Is For
 - `Treasury Operator`: prepares payout package and executes approved transfer.
 - `Treasury Approver`: validates controls and authorizes payout progression.
@@ -53,6 +56,7 @@ Required headers:
 - Never log secrets, private keys, or full credentialed webhook URLs.
 - Never continue processing when destination details are ambiguous.
 - Never use an arbitrary payout destination for treasury claim execution; destination is contract-controlled.
+- Never enable or improvise new treasury automation outside the approved automation classes and change-control path.
 
 ## Procedure
 
