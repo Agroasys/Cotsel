@@ -77,7 +77,7 @@ Rollback expectations:
 - rollback steps must reference the owning runbook and required evidence bundle
 
 Incident rule:
-- if an operator cannot explain the current automation state with request IDs, actor identity, and service logs, the system is not safe to continue in automatic mode
+- if an operator cannot explain the current automation state with the current correlation baseline (`tradeId`, `actionKey`, `requestId`, `txHash`, `traceId` where applicable) and service logs, the system is not safe to continue in automatic mode
 
 ## Evidence and audit minimums
 Every automation-affecting change or incident must preserve enough evidence to answer:
@@ -88,11 +88,10 @@ Every automation-affecting change or incident must preserve enough evidence to a
 - how can the action be correlated to on-chain or service truth?
 
 Minimum evidence set:
-- request ID and correlation ID
-- actor identity and role
+- trade ID, action key, request ID, transaction hash, and trace ID where the service boundary exposes them
 - affected service/runtime
-- trade ID or action key where applicable
-- transaction hash or extrinsic reference where applicable
+- correlation ID and actor identity/role when the service boundary exposes them
+- intent and outcome fields when the workflow already records them
 - linked incident or ticket reference
 - rollback decision and timestamp when containment is used
 
