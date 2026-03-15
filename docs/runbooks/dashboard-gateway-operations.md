@@ -146,6 +146,10 @@ Evidence capture for incidents:
 - tx hash / block number, if applicable
 - related ticket/incident URL
 
+Use:
+- `docs/incidents/incident-evidence-template.md` for incident closeout
+- `docs/runbooks/operator-audit-evidence-template.md` for operator-reviewed control-plane actions
+
 ## Downstream timeout and retry boundaries
 The gateway is intentionally conservative:
 - Auth session validation timeout: `GATEWAY_AUTH_REQUEST_TIMEOUT_MS` (default `5000ms`)

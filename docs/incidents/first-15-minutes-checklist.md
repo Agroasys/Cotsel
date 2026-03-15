@@ -22,6 +22,7 @@ scripts/docker-services.sh logs local-dev ricardian
    - `docs/runbooks/staging-e2e-release-gate.md`
    - `docs/runbooks/staging-e2e-real-release-gate.md`
 6. Confirm whether issue is chain connectivity, indexer drift, auth failures, or data-layer fault.
-7. Record affected trade IDs, action keys, request IDs, tx hashes.
-8. Decide containment path (pause/disable/or continue with monitoring).
-9. Notify stakeholders with current blast radius and next update time.
+7. Start `docs/incidents/incident-evidence-template.md` and record affected trade IDs, action keys, request IDs, trace IDs, and tx hashes.
+8. Decide containment path (pause/disable/or continue with monitoring) and record the owner and timestamp in the template.
+9. Link operator-reviewed evidence packets from `docs/runbooks/operator-audit-evidence-template.md` when recovery actions require approval or audit follow-up.
+10. Notify stakeholders with current blast radius and next update time.

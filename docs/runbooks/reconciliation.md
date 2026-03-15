@@ -177,6 +177,8 @@ CI artifact name:
 - Execute `docs/incidents/first-15-minutes-checklist.md`.
 - Capture reconciliation logs and identify affected `tradeId`/`requestId` pairs.
 - Confirm whether failure source is RPC, indexer GraphQL, or DB.
+- Start `docs/incidents/incident-evidence-template.md` for any mismatch that requires containment or operator escalation.
+- Use `docs/runbooks/operator-audit-evidence-template.md` when reconciliation output drives an operator approval or treasury follow-up.
 
 ## Rollback / backout
 1. Stop daemon:

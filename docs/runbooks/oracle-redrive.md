@@ -97,6 +97,8 @@ curl -X POST http://127.0.0.1:3001/api/oracle/redrive \
 - Oracle/reconciliation/indexer logs around affected `tradeId`.
 - Trigger record status history with `attempt_count`, `last_error`, and timestamps.
 - Transaction hashes and on-chain state evidence used for decisioning.
+- Incident packet: `docs/incidents/incident-evidence-template.md`
+- Operator audit packet for approved/manual actions: `docs/runbooks/operator-audit-evidence-template.md`
 
 ## Escalation Matrix
 - `SEV-1` (page immediately, response target: `<= 15 min`):
@@ -116,6 +118,8 @@ When escalating, include: `tradeId`, `actionKey`, `requestId`, `txHash`, current
 
 ## Cross-Links
 - Incident checklist: `docs/incidents/first-15-minutes-checklist.md`
+- Incident evidence template: `docs/incidents/incident-evidence-template.md`
+- Operator audit evidence template: `docs/runbooks/operator-audit-evidence-template.md`
 - Staging gate runbook: `docs/runbooks/staging-e2e-real-release-gate.md`
 - Staging gate diagnostics (non-real profile): `docs/runbooks/staging-e2e-release-gate.md`
 - Hybrid lifecycle walkthrough: `docs/runbooks/hybrid-split-walkthrough.md`
