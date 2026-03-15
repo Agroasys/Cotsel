@@ -1,27 +1,26 @@
-# **Agroasys: A commercial trade settlement protocol**
+# Cotsel: Commercial Trade Settlement Layer
+A non-custodial, evidence-driven settlement layer for cross-border trade workflows.
 
-_**A non-custodial, evidence-driven settlement engine for cross-border trade workflows.**_
+Cotsel is a modular settlement infrastructure built on Polkadot Asset Hub. It implements milestone-gated escrow and conditional release, designed to reduce counterparty risk and improve settlement determinism through verifiable, evidence-linked state transitions.
 
-Cotsel is a modular, non-custodial settlement infrastructure built on Polkadot Asset Hub. It provides milestone-based smart contract escrow designed to reduce counterparty risk and shorten settlement cycles through verifiable, evidence-driven state transitions.
-
-While initially developed as the settlement engine for the Agroasys Platform, this protocol is open-source and integration-friendly, allowing any B2B marketplace or trade workflow to adopt stablecoin escrow settlement with Ricardian contract anchoring and audit-grade evidence traceability.
+Cotsel was initially developed to support the Agroasys platform, but it is open-source and integration-friendly. It is designed for reuse by B2B marketplaces and trade workflows that require stablecoin escrow settlement, Ricardian agreement anchoring, and audit-grade traceability without introducing a custodial operator.
 
 ## At a Glance
 
-- What this is: a secure settlement layer for commercial trade (DvP-style escrow, milestones, dispute and timeout flows).
-- What this is not: a custody wallet, a bank, or a full marketplace interface.
-- What this gives partners: transparent settlement logic, deterministic operational controls, and evidence traceability for reconciliation and dispute review.
+- **What this is:** a secure settlement layer for commercial trade (DvP-style escrow, milestone gating, disputes, timeouts, and holds).
+- **What this is not:** a custody wallet, a bank, or a full marketplace application.
+- **What this enables:** transparent settlement logic, deterministic operational controls, and evidence traceability for reconciliation and dispute review.
 
 ## Status and Maturity
 
-- Current phase: Pilot.
-- Operational readiness criteria: `docs/runbooks/production-readiness-checklist.md`.
+- **Current phase:** Pilot readiness (active development).
+- **Operational readiness criteria:** `docs/runbooks/production-readiness-checklist.md`.
 
 ## Who Should Read Next
 
-- Partners and integrators: `docs/runbooks/hybrid-split-walkthrough.md`.
-- Operators: `docs/runbooks/monitoring-alerting-baseline.md`.
-- Audit and compliance teams: `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`.
+- **Partners and integrators:** `docs/runbooks/hybrid-split-walkthrough.md`.
+- **Operators:** `docs/runbooks/monitoring-alerting-baseline.md`.
+- **Audit and compliance teams:** `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`.
 
 ## Scope Boundaries
 
@@ -44,168 +43,83 @@ This repository is the settlement layer in the Agroasys platform. It operates al
 
 ## Core Components
 
-- **Escrow Smart Contract** (`/contracts`): A Solidity-based state machine compiled for PolkaVM using the Parity toolchain. It handles locking, dispute holds, timeouts, and deterministic splitting and routing of funds.
-- **Oracle Service** (`/oracle`): A hardened Node.js service that submits signed, schema-validated milestone attestations (for example shipment and inspection evidence references) to drive state transitions.
-- **Ricardian Anchoring**: The protocol does not store PDFs on-chain. Each trade is anchored by a SHA-256 hash of the off-chain legal contract (TradeID), tying evidence and settlement to a single immutable reference.
-- **Indexer Service** (`/indexer`): An indexer that tracks core settlement events to support reconciliation, operational monitoring, and audit-style reporting.
+- **Escrow Contract (`/contracts`)**  
+A settlement state machine implemented in Solidity and compiled for PolkaVM using the Parity toolchain. It manages escrow locking, timeouts, dispute holds, and deterministic allocation and routing of funds based on trade state.
+
+- **Oracle Service (`/oracle`)**  
+A Node.js service that submits signed milestone attestations to the contract. Attestations are schema-validated and designed to be replay-safe and idempotent. Each attestation references external evidence identifiers (for example Bill of Lading, inspection certificate references) that support operational and audit review.
+
+- **Ricardian Anchoring (`/ricardian`)**  
+The protocol does not store contracts on-chain. Each trade is anchored by a SHA-256 hash of the signed off-chain agreement (TradeID). Evidence references and settlement actions are linked to this immutable identifier across the lifecycle.
+
+- **Indexer (`/indexer`)**  
+An indexing service that tracks settlement events to support reconciliation, operational monitoring, and audit-style reporting. It provides a normalized trade timeline, state transitions, and payout references.
 
 ## How It Works
 
-The protocol implements a deterministic two-stage settlement mechanism. This supports flows where operational costs and fees can be released earlier, while preserving safety of the principal settlement amount.
+Cotsel implements a deterministic two-stage settlement flow. This supports commercial trade patterns where certain operational costs and fees can be released earlier while preserving safety for the principal settlement amount.
 
-### The Lifecycle
+## Lifecycle
 
-1. **Lock (Encumbrance)**
-   **Action:** Buyer deposits `USDC` (or any configured asset) into escrow, covering goods value, logistics fees, and platform fees.  
-   **State:** Protocol records `ricardianHash` and encumbers funds into `stageOneAmount` (operational and fee) and `stageTwoAmount` (net settlement).
-2. **Stage 1 Release (Operational)**
-   **Trigger:** Oracle submits a signed attestation referencing validated documentation (for example Bill of Lading and export permit).  
-   **Action:** In one atomic transaction, logistics fee is paid to `TreasuryWallet`, platform fee is paid to `TreasuryWallet`, and supplier tranche 1 (default 40%, configurable) is paid to `SupplierAddress`.
-3. **Stage 2 Release (Final Settlement)**
-   **Trigger:** Oracle submits a signed attestation referencing destination inspection evidence (quality and quantity confirmation).  
-   **Action:** Remaining supplier tranche (default 60%) is released to `SupplierAddress`, completing settlement.
+- **Lock (Encumbrance)**
+The buyer locks stablecoin funds into escrow to cover goods value plus configured fees. The contract records the Ricardian TradeID and encumbers funds into two logical buckets: `stageOneAmount` (operational and fee tranche) and `stageTwoAmount` (net settlement tranche).
+
+- **Stage 1 Release (Operational)**  
+Trigger: the oracle submits a signed attestation referencing validated documentation (for example shipment evidence such as Bill of Lading reference).  
+Action: in a single state transition, configured fees are allocated to their recipients and the supplier receives tranche one of the principal (default 40%, configurable).
+
+- **Stage 2 Release (Final Settlement)**  
+Trigger: the oracle submits a signed attestation referencing destination inspection evidence (quality and quantity confirmation, where applicable).  
+Action: the remaining supplier tranche (default 60%) is released, completing settlement.
 
 ## Tech Stack
 
-### Core Protocol and Languages
+**Contracts and toolchain**  
+- Smart contracts: Solidity, compiled for PolkaVM using the Parity toolchain (`@parity/resolc` and Hardhat integration) with `compile:polkavm` as the intended release artifact.  
+- Testing and fuzzing: Hardhat for integration tests; Foundry for fuzz and invariant testing where applicable.
 
-- Smart contracts: Solidity with Hardhat and Parity resolc plugin stack (`@parity/hardhat-polkadot*` + `@parity/resolc`) for `compile:polkavm`. Legacy `compile` remains during migration.
-- Scripting and service logic: TypeScript on Node.js v20.x (same baseline as CI).
-- Infrastructure: Docker and Docker Compose.
+**Services and runtime**  
+- Service logic: TypeScript on Node.js 20.x  
+- Infrastructure: Docker and Docker Compose  
+- Storage: Postgres for indexed and operational views
 
-### Infrastructure Layers
+**Network and assets**  
+- Settlement rails: Polkadot Asset Hub (pilot on Paseo) for stablecoin settlement flows.  
+- Fee payment: where supported, fee payment in USDC can be used to reduce DOT dependency.
 
-- Network: Polkadot Asset Hub for low-cost native stablecoin settlement rails.
-- Fee payment: Asset Conversion Pallet for fee payment in `USDC` instead of `DOT` where supported.
-- Indexing and querying: SubQuery or Squid + GraphQL over Postgres.
-- Development framework: Hardhat (primary) and Foundry (fuzzing).
-- Oracle runtime: Isolated Node.js 20.x service runtime for key management and webhook ingress.
+**Indexing and APIs**  
+- Indexing: SubQuery or Subsquid with a GraphQL API backed by Postgres.
 
 ## Repository Structure
 
 ```bash
 cotsel/
-├── contracts/          # Solidity Smart Contracts + tests (Hardhat + Foundry)
-│   ├── src/
-│   ├── tests/
-│   └── foundry/test/
-├── oracle/             # Oracle signing and event trigger service
-├── indexer/            # Indexing and GraphQL pipeline
-├── sdk/                # TypeScript SDK
-├── auth/               # Authentication service
-├── gateway/            # Dashboard operator gateway service
-├── shared-auth/        # Shared auth package
-├── reconciliation/     # Reconciliation service
-├── notifications/      # Notification service
-├── ricardian/          # Ricardian evidence service
-├── treasury/           # Treasury operations service
-├── scripts/            # Ops, verification, and CI guard scripts
-└── docs/               # Runbooks, governance, and operational docs
+├── contracts/          # Escrow contract source, tests, and PolkaVM build path
+├── oracle/             # Milestone attestation service
+├── indexer/            # Chain event indexing and query layer
+├── gateway/            # Operator control-plane gateway
+├── reconciliation/     # Drift detection and settlement verification
+├── ricardian/          # Ricardian hash and evidence-linking service
+├── treasury/           # Treasury ledger and payout operations
+├── notifications/      # Operational notification service
+├── auth/               # Session and user-profile service
+├── sdk/                # External integration SDK
+├── shared/             # Shared utilities used across services
+├── shared-auth/        # Shared authentication primitives and helpers
+├── docs/               # ADRs, runbooks, API contracts, and governance docs
+├── scripts/            # CI guards, ops scripts, and verification helpers
+├── env/                # Environment templates and profile inputs
+├── postgres/           # Database bootstrap and local operational assets
+└── reports/            # Generated validation and evidence artifacts
 ```
 
-## Security & "Invisible Wallet" Features
+## Security and Wallet Abstraction
 
-- **Gas Abstraction (The "Gas Station")**: Uses Asset Conversion so users do not need to hold `DOT`; protocol can settle fees in `USDC` for a gasless enterprise UX.
-- **Oracle Isolation**: `releaseFunds` is protected by `onlyOracle`. Oracle service is intended to run in an isolated environment (TEE or separate VPC) with restricted key access.
-- **Ricardian Integrity**: `ricardianHash` is immutable after lock, so courts and auditors can verify on-chain settlement against the exact off-chain legal document hash.
+- **Fee Abstraction (Sponsored Fees)**: Where supported, the system can abstract network fee management from end users. This reduces the requirement for users to hold DOT directly and supports an enterprise-friendly checkout flow. Fee payment via Asset Conversion may be used depending on network support and operational configuration.
 
-## Local Setup (Node 20)
+- **Oracle Key Isolation**: Oracle-gated functions are restricted to an authorized attester key (for example `onlyOracle`). The oracle service should be deployed with strict key management controls (isolated runtime, restricted access, least privilege), and may be backed by hardened key storage such as an HSM or equivalent secure key management service.
 
-```bash
-nvm use
-# expected: Node.js v20.x
-npm ci
-npm run lint
-npm run security:deps
-```
-
-Contracts local runs require a local dev key in `HARDHAT_VAR_PRIVATE_KEY`.
-Use a throwaway local-only key and never use a funded or production private key.
-
-## Common Commands
-
-```bash
-# Contracts
-npm run -w contracts compile
-npm run -w contracts compile:polkavm
-npm run -w contracts test
-
-# Service quality gates (examples)
-npm run -w gateway lint && npm run -w gateway test && npm run -w gateway build
-npm run -w sdk lint && npm run -w sdk test && npm run -w sdk build
-npm run -w oracle lint && npm run -w oracle test && npm run -w oracle build
-
-# Runtime profiles
-scripts/docker-services.sh up local-dev
-scripts/docker-services.sh health local-dev
-
-scripts/docker-services.sh up staging-e2e-real
-scripts/docker-services.sh health staging-e2e-real
-scripts/staging-e2e-real-gate.sh
-```
-
-## CI and Release Gate
-
-Branch protection should require:
-
-- `ci/contracts`
-- `ci/gateway`
-- `ci/sdk`
-- `ci/oracle`
-- `ci/indexer`
-- `ci/notifications`
-- `ci/reconciliation`
-- `ci/ricardian`
-- `ci/treasury`
-- `ci/release-gate`
-
-To force full matrix jobs on a PR, add label `release-gate-full`.
-
-## Runbooks
-
-Core operations:
-
-- `docs/runbooks/production-readiness-checklist.md`
-- `docs/runbooks/docker-profiles.md`
-- `docs/runbooks/staging-e2e-release-gate.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
-- `docs/runbooks/monitoring-alerting-baseline.md`
-- `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
-
-Protocol and service operations:
-
-- `docs/runbooks/reconciliation.md`
-- `docs/runbooks/oracle-redrive.md`
-- `docs/runbooks/notifications.md`
-- `docs/runbooks/ricardian-hash-repro.md`
-- `docs/runbooks/polkavm-deploy-verification.md`
-- `docs/runbooks/asset-conversion-fee-validation.md`
-- `docs/runbooks/hybrid-split-walkthrough.md`
-- `docs/runbooks/treasury-to-fiat-sop.md`
-- `docs/runbooks/pull-over-push-claim-flow.md`
-
-Program and governance:
-
-- `docs/runbooks/github-roadmap-governance.md`
-- `docs/runbooks/legal-evidence-package-template.md`
-- `docs/runbooks/pilot-environment-onboarding.md`
-- `docs/runbooks/non-custodial-pilot-user-guide.md`
-- `docs/runbooks/pilot-kpi-report-template.md`
-
-Dashboard / Ops API:
-
-- `docs/api/cotsel-dashboard-gateway.openapi.yml`
-- `docs/runbooks/dashboard-api-gateway-boundary.md`
-- `docs/runbooks/dashboard-gateway-operations.md`
-
-Community demo:
-
-- `docs/runbooks/demo/community-demo-checklist.md`
-- `docs/runbooks/demo/community-demo-script.md`
-
-## Contributing
-
-See `CONTRIBUTING.md` for contribution flow and PR expectations.
+- **Ricardian Anchoring Integrity**: The `ricardianHash` (TradeID) is committed at trade creation and treated as immutable for that trade lifecycle. This provides a stable reference linking off-chain agreement text to on-chain settlement state and supports audit and dispute review through verifiable evidence traceability.
 
 ## Security
 

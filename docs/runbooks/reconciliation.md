@@ -5,6 +5,9 @@ Operate reconciliation safely in local/staging and diagnose drift failures.
 For lifecycle checkpoints across lock, stage-1, and final settlement, see `docs/runbooks/hybrid-split-walkthrough.md`.
 If a mismatch may be caused by routing/auth propagation/correlation breakdown between services, use `docs/runbooks/api-gateway-boundary.md` first to classify the handoff boundary before remediating reconciliation state.
 
+Automation-governance source of truth:
+- `docs/runbooks/programmability-governance.md`
+
 ## Preconditions
 - Postgres is reachable.
 - Reconciliation env vars are set (`RPC_URL`, `INDEXER_GRAPHQL_URL`, addresses).
@@ -125,6 +128,7 @@ Reconciliation retry semantics:
 - No unbounded per-trade retry loop inside one run.
 - Daemon retries happen only by scheduling the next run interval.
 - Drift rows use upsert semantics (`run_key`, `trade_id`, `mismatch_code`, `compared_field`) and increment `occurrences` on duplicates.
+- Reconciliation automation must remain within the approved automation classes and rollback expectations defined in `docs/runbooks/programmability-governance.md`.
 
 Oracle retry/redrive semantics (for settlement action remediation):
 - Retry loop with bounded attempts and backoff in `TriggerManager`.
