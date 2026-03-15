@@ -1,7 +1,7 @@
 import { chmodSync, writeFileSync } from "node:fs";
 
 export const DEFAULT_TIMEOUT_MS = 8000;
-export const DEFAULT_SESSION_OUTPUT_FILE = "/tmp/ctsl-dashboard-session.json";
+export const DEFAULT_SESSION_OUTPUT_FILE = "/tmp/cotsel-dashboard-session.json";
 
 export function normalizeTimeoutMs(rawValue, fallback = DEFAULT_TIMEOUT_MS) {
   const numericValue = Number(rawValue);

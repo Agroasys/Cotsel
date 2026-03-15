@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { AuditLogEntry } from './auditLogStore';
 import {
   COMPLIANCE_DECISION_RESULTS,
@@ -108,6 +108,47 @@ function validateAuditInput(raw: unknown): MutationAuditInput {
   };
 }
 
+function resolveComplianceActorId(principal: GatewayPrincipal): string {
+  const userId = principal.session.userId?.trim();
+  if (userId) {
+    return `user:${userId}`;
+  }
+
+  return `wallet:${principal.session.walletAddress.trim().toLowerCase()}`;
+}
+
+function buildComplianceIntentHash(input: {
+  tradeId: string;
+  decisionType: ComplianceDecisionType;
+  result: ComplianceDecisionResult;
+  reasonCode: string;
+  provider: string;
+  providerRef: string;
+  subjectId: string;
+  subjectType: string;
+  riskLevel: ComplianceRiskLevel | null;
+  overrideWindowEndsAt: string | null;
+  correlationId: string;
+  actorId: string;
+}): string {
+  const normalizedIntent = JSON.stringify({
+    actorId: input.actorId,
+    tradeId: input.tradeId.trim(),
+    decisionType: input.decisionType,
+    result: input.result,
+    reasonCode: input.reasonCode.trim(),
+    provider: input.provider.trim().toLowerCase(),
+    providerRef: input.providerRef.trim(),
+    subjectId: input.subjectId.trim(),
+    subjectType: input.subjectType.trim().toLowerCase(),
+    riskLevel: input.riskLevel,
+    overrideWindowEndsAt: input.overrideWindowEndsAt,
+    correlationId: input.correlationId.trim(),
+  });
+
+  return createHash('sha256').update(normalizedIntent).digest('hex');
+}
+
 function buildAuditRecord(
   audit: MutationAuditInput,
   principal: GatewayPrincipal,
@@ -171,6 +212,14 @@ export function validateComplianceDecisionCreateRequest(raw: unknown): Omit<Comp
   }
 
   const body = raw as Record<string, unknown>;
+  if (body.actionId !== undefined) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'actionId is server-generated and must not be provided by the client');
+  }
+
+  if (body.decisionId !== undefined) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'decisionId is server-generated and must not be provided by the client');
+  }
+
   const result = validateEnum(body.result, COMPLIANCE_DECISION_RESULTS, 'result');
   const reasonCode = validateStringField(body.reasonCode, 'reasonCode', 3, 128);
   const overrideWindowEndsAt = validateOptionalTimestamp(body.overrideWindowEndsAt, 'overrideWindowEndsAt');
@@ -217,6 +266,10 @@ export function validateComplianceOperationalControlRequest(raw: unknown): Omit<
   }
 
   const body = raw as Record<string, unknown>;
+  if (body.actionId !== undefined) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'actionId is server-generated and must not be provided by the client');
+  }
+
   return {
     reasonCode: validateStringField(body.reasonCode, 'reasonCode', 3, 128),
     decisionId: validateOptionalDecisionId(body.decisionId),
@@ -288,6 +341,7 @@ export class ComplianceService {
       this.nextDecisionTimestamp(input.tradeId),
       this.store.getOracleProgressionBlock(input.tradeId),
     ]);
+    const actorId = resolveComplianceActorId(input.principal);
 
     const decision: ComplianceDecisionRecord = {
       decisionId: randomUUID(),
@@ -304,6 +358,23 @@ export class ComplianceService {
       decidedAt,
       overrideWindowEndsAt: input.overrideWindowEndsAt,
       blockState: existingBlock?.blockState ?? 'not_blocked',
+      idempotencyKey: input.idempotencyKey,
+      actorId,
+      endpoint: input.routePath,
+      intentHash: buildComplianceIntentHash({
+        tradeId: input.tradeId,
+        decisionType: input.decisionType,
+        result: input.result,
+        reasonCode: input.reasonCode,
+        provider: input.provider,
+        providerRef: input.providerRef,
+        subjectId: input.subjectId,
+        subjectType: input.subjectType,
+        riskLevel: input.riskLevel,
+        overrideWindowEndsAt: input.overrideWindowEndsAt,
+        correlationId: input.correlationId,
+        actorId,
+      }),
       audit: buildAuditRecord(input.audit, input.principal, decidedAt),
     };
 
@@ -313,11 +384,18 @@ export class ComplianceService {
       method: 'POST',
       requestId: input.requestContext.requestId,
       correlationId: input.requestContext.correlationId,
+      actionId: decision.decisionId,
+      idempotencyKey: input.idempotencyKey,
+      actorId,
       actorUserId: input.principal.session.userId,
       actorWalletAddress: input.principal.session.walletAddress,
       actorRole: input.principal.session.role,
       status: 'recorded',
-      metadata: decisionAuditMetadata(decision, input.idempotencyKey),
+      metadata: {
+        ...decisionAuditMetadata(decision, input.idempotencyKey),
+        actorId,
+        intentHash: decision.intentHash,
+      },
     };
 
     return this.writeStore.saveDecisionWithAudit(decision, auditEntry);
@@ -358,6 +436,9 @@ export class ComplianceService {
       method: 'POST',
       requestId: input.requestContext.requestId,
       correlationId: input.requestContext.correlationId,
+      actionId: decision.decisionId,
+      idempotencyKey: input.idempotencyKey,
+      actorId: resolveComplianceActorId(input.principal),
       actorUserId: input.principal.session.userId,
       actorWalletAddress: input.principal.session.walletAddress,
       actorRole: input.principal.session.role,
@@ -431,6 +512,9 @@ export class ComplianceService {
       method: 'POST',
       requestId: input.requestContext.requestId,
       correlationId: input.requestContext.correlationId,
+      actionId: latestDecision.decisionId,
+      idempotencyKey: input.idempotencyKey,
+      actorId: resolveComplianceActorId(input.principal),
       actorUserId: input.principal.session.userId,
       actorWalletAddress: input.principal.session.walletAddress,
       actorRole: input.principal.session.role,

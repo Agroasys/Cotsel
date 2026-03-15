@@ -64,7 +64,7 @@ const tradeFixture: DashboardTradeRecord = {
     platformId: 'agroasys-platform',
     platformHandoffId: 'handoff-1',
     phase: 'stage_1',
-    settlementChannel: 'web3layer_escrow',
+    settlementChannel: 'cotsel_escrow',
     displayCurrency: 'USD',
     displayAmount: 125000,
     executionStatus: 'submitted',

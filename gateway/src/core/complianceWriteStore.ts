@@ -22,18 +22,24 @@ async function insertAuditLog(client: PoolClient, entry: AuditLogEntry): Promise
       method,
       request_id,
       correlation_id,
+      action_id,
+      idempotency_key,
+      actor_id,
       actor_user_id,
       actor_wallet_address,
       actor_role,
       status,
       metadata
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)`,
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)`,
     [
       entry.eventType,
       entry.route,
       entry.method,
       entry.requestId,
       entry.correlationId || null,
+      entry.actionId || null,
+      entry.idempotencyKey || null,
+      entry.actorId || null,
       entry.actorUserId || null,
       entry.actorWalletAddress || null,
       entry.actorRole || null,
@@ -58,6 +64,10 @@ async function insertComplianceDecision(client: PoolClient, decision: Compliance
       risk_level,
       correlation_id,
       override_window_ends_at,
+      idempotency_key,
+      actor_id,
+      endpoint,
+      intent_hash,
       reason,
       evidence_links,
       ticket_ref,
@@ -69,7 +79,7 @@ async function insertComplianceDecision(client: PoolClient, decision: Compliance
       decided_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-      $11, $12, $13, $14::jsonb, $15, $16, $17, $18, $19, $20::jsonb, $21
+      $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19, $20, $21, $22, $23, $24::jsonb, $25
     )`,
     [
       decision.decisionId,
@@ -84,6 +94,10 @@ async function insertComplianceDecision(client: PoolClient, decision: Compliance
       decision.riskLevel,
       decision.correlationId,
       decision.overrideWindowEndsAt,
+      decision.idempotencyKey ?? null,
+      decision.actorId ?? null,
+      decision.endpoint ?? null,
+      decision.intentHash ?? null,
       decision.audit.reason,
       JSON.stringify(decision.audit.evidenceLinks),
       decision.audit.ticketRef,

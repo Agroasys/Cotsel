@@ -4,8 +4,13 @@
 import crypto from 'crypto';
 import { Pool } from 'pg';
 
-export interface IdempotencyRecord {
+export interface IdempotencyScope {
+  actorId: string;
+  endpoint: string;
   idempotencyKey: string;
+}
+
+export interface IdempotencyRecord extends IdempotencyScope {
   requestMethod: string;
   requestPath: string;
   requestFingerprint: string;
@@ -18,25 +23,26 @@ export interface IdempotencyRecord {
 }
 
 export interface IdempotencyStore {
-  get(key: string): Promise<IdempotencyRecord | null>;
-  createPending(entry: {
-    idempotencyKey: string;
+  get(scope: IdempotencyScope): Promise<IdempotencyRecord | null>;
+  createPending(entry: IdempotencyScope & {
     requestMethod: string;
     requestPath: string;
     requestFingerprint: string;
     requestId: string;
   }): Promise<{ record: IdempotencyRecord; created: boolean }>;
-  complete(key: string, response: {
+  complete(scope: IdempotencyScope, response: {
     responseStatus: number;
     responseHeaders: Record<string, string>;
     responseBody: unknown;
   }): Promise<void>;
-  releasePending(key: string): Promise<void>;
-  markReplay(key: string): Promise<void>;
+  releasePending(scope: IdempotencyScope): Promise<void>;
+  markReplay(scope: IdempotencyScope): Promise<void>;
 }
 
 interface IdempotencyRow {
   idempotencyKey: string;
+  actorId: string;
+  endpoint: string;
   requestMethod: string;
   requestPath: string;
   requestFingerprint: string;
@@ -51,6 +57,8 @@ interface IdempotencyRow {
 function mapRow(row: IdempotencyRow): IdempotencyRecord {
   return {
     idempotencyKey: row.idempotencyKey,
+    actorId: row.actorId,
+    endpoint: row.endpoint,
     requestMethod: row.requestMethod,
     requestPath: row.requestPath,
     requestFingerprint: row.requestFingerprint,
@@ -63,7 +71,15 @@ function mapRow(row: IdempotencyRow): IdempotencyRecord {
   };
 }
 
-export function buildRequestFingerprint(method: string, path: string, rawBody?: Buffer): string {
+function toScopedKey(scope: IdempotencyScope): string {
+  return `${scope.actorId}\u0000${scope.endpoint}\u0000${scope.idempotencyKey}`;
+}
+
+export function buildRequestFingerprint(
+  method: string,
+  path: string,
+  rawBody?: Buffer,
+): string {
   return crypto
     .createHash('sha256')
     .update(method.toUpperCase())
@@ -75,10 +91,12 @@ export function buildRequestFingerprint(method: string, path: string, rawBody?: 
 }
 
 export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
-  const get = async (key: string): Promise<IdempotencyRecord | null> => {
+  const get = async (scope: IdempotencyScope): Promise<IdempotencyRecord | null> => {
     const result = await pool.query<IdempotencyRow>(
       `SELECT
          idempotency_key AS "idempotencyKey",
+         actor_id AS "actorId",
+         endpoint AS "endpoint",
          request_method AS "requestMethod",
          request_path AS "requestPath",
          request_fingerprint AS "requestFingerprint",
@@ -89,8 +107,10 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
          completed_at AS "completedAt",
          created_at AS "createdAt"
        FROM idempotency_keys
-       WHERE idempotency_key = $1`,
-      [key],
+       WHERE actor_id = $1
+         AND endpoint = $2
+         AND idempotency_key = $3`,
+      [scope.actorId, scope.endpoint, scope.idempotencyKey],
     );
 
     return result.rows[0] ? mapRow(result.rows[0]) : null;
@@ -103,14 +123,18 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
       const insertResult = await pool.query<IdempotencyRow>(
         `INSERT INTO idempotency_keys (
            idempotency_key,
+           actor_id,
+           endpoint,
            request_method,
            request_path,
            request_fingerprint,
            request_id
-         ) VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (idempotency_key) DO NOTHING
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (actor_id, endpoint, idempotency_key) DO NOTHING
          RETURNING
            idempotency_key AS "idempotencyKey",
+           actor_id AS "actorId",
+           endpoint AS "endpoint",
            request_method AS "requestMethod",
            request_path AS "requestPath",
            request_fingerprint AS "requestFingerprint",
@@ -122,6 +146,8 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
            created_at AS "createdAt"`,
         [
           entry.idempotencyKey,
+          entry.actorId,
+          entry.endpoint,
           entry.requestMethod,
           entry.requestPath,
           entry.requestFingerprint,
@@ -137,9 +163,11 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
         };
       }
 
-      const stored = await get(entry.idempotencyKey);
+      const stored = await get(entry);
       if (!stored) {
-        throw new Error(`Failed to persist idempotency key ${entry.idempotencyKey}`);
+        throw new Error(
+          `Failed to persist idempotency key ${entry.idempotencyKey} for ${entry.actorId} on ${entry.endpoint}`,
+        );
       }
 
       return {
@@ -148,34 +176,47 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
       };
     },
 
-    async complete(key, response) {
+    async complete(scope, response) {
       await pool.query(
         `UPDATE idempotency_keys
-         SET response_status = $2,
-             response_headers = $3::jsonb,
-             response_body = $4::jsonb,
+         SET response_status = $4,
+             response_headers = $5::jsonb,
+             response_body = $6::jsonb,
              completed_at = NOW(),
              updated_at = NOW()
-         WHERE idempotency_key = $1`,
-        [key, response.responseStatus, JSON.stringify(response.responseHeaders), JSON.stringify(response.responseBody)],
+         WHERE actor_id = $1
+           AND endpoint = $2
+           AND idempotency_key = $3`,
+        [
+          scope.actorId,
+          scope.endpoint,
+          scope.idempotencyKey,
+          response.responseStatus,
+          JSON.stringify(response.responseHeaders),
+          JSON.stringify(response.responseBody),
+        ],
       );
     },
 
-    async releasePending(key) {
+    async releasePending(scope) {
       await pool.query(
         `DELETE FROM idempotency_keys
-         WHERE idempotency_key = $1
+         WHERE actor_id = $1
+           AND endpoint = $2
+           AND idempotency_key = $3
            AND completed_at IS NULL`,
-        [key],
+        [scope.actorId, scope.endpoint, scope.idempotencyKey],
       );
     },
 
-    async markReplay(key) {
+    async markReplay(scope) {
       await pool.query(
         `UPDATE idempotency_keys
          SET last_replayed_at = NOW(), updated_at = NOW()
-         WHERE idempotency_key = $1`,
-        [key],
+         WHERE actor_id = $1
+           AND endpoint = $2
+           AND idempotency_key = $3`,
+        [scope.actorId, scope.endpoint, scope.idempotencyKey],
       );
     },
   };
@@ -185,12 +226,13 @@ export function createInMemoryIdempotencyStore(): IdempotencyStore {
   const store = new Map<string, IdempotencyRecord>();
 
   return {
-    async get(key) {
-      return store.get(key) ?? null;
+    async get(scope) {
+      return store.get(toScopedKey(scope)) ?? null;
     },
 
     async createPending(entry) {
-      const existing = store.get(entry.idempotencyKey);
+      const scopedKey = toScopedKey(entry);
+      const existing = store.get(scopedKey);
       if (existing) {
         return {
           record: existing,
@@ -200,6 +242,8 @@ export function createInMemoryIdempotencyStore(): IdempotencyStore {
 
       const record: IdempotencyRecord = {
         idempotencyKey: entry.idempotencyKey,
+        actorId: entry.actorId,
+        endpoint: entry.endpoint,
         requestMethod: entry.requestMethod,
         requestPath: entry.requestPath,
         requestFingerprint: entry.requestFingerprint,
@@ -211,20 +255,23 @@ export function createInMemoryIdempotencyStore(): IdempotencyStore {
         createdAt: new Date().toISOString(),
       };
 
-      store.set(entry.idempotencyKey, record);
+      store.set(scopedKey, record);
       return {
         record,
         created: true,
       };
     },
 
-    async complete(key, response) {
-      const existing = store.get(key);
+    async complete(scope, response) {
+      const scopedKey = toScopedKey(scope);
+      const existing = store.get(scopedKey);
       if (!existing) {
-        throw new Error(`Missing in-memory idempotency record for ${key}`);
+        throw new Error(
+          `Missing in-memory idempotency record for ${scope.idempotencyKey}`,
+        );
       }
 
-      store.set(key, {
+      store.set(scopedKey, {
         ...existing,
         responseStatus: response.responseStatus,
         responseHeaders: response.responseHeaders,
@@ -233,22 +280,24 @@ export function createInMemoryIdempotencyStore(): IdempotencyStore {
       });
     },
 
-    async releasePending(key) {
-      const existing = store.get(key);
+    async releasePending(scope) {
+      const scopedKey = toScopedKey(scope);
+      const existing = store.get(scopedKey);
       if (!existing || existing.completedAt) {
         return;
       }
 
-      store.delete(key);
+      store.delete(scopedKey);
     },
 
-    async markReplay(key) {
-      const existing = store.get(key);
+    async markReplay(scope) {
+      const scopedKey = toScopedKey(scope);
+      const existing = store.get(scopedKey);
       if (!existing) {
         return;
       }
 
-      store.set(key, existing);
+      store.set(scopedKey, existing);
     },
   };
 }

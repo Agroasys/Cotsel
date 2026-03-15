@@ -41,6 +41,10 @@ export interface ComplianceDecisionRecord {
   decidedAt: string;
   overrideWindowEndsAt: string | null;
   blockState: ComplianceBlockState;
+  idempotencyKey?: string;
+  actorId?: string;
+  endpoint?: string;
+  intentHash?: string;
   audit: ComplianceAuditRecord;
 }
 
@@ -110,6 +114,10 @@ interface ComplianceDecisionRow {
   correlationId: string;
   decidedAt: Date;
   overrideWindowEndsAt: Date | null;
+  idempotencyKey: string | null;
+  actorId: string | null;
+  endpoint: string | null;
+  intentHash: string | null;
   reason: string;
   evidenceLinks: EvidenceLink[];
   ticketRef: string;
@@ -186,6 +194,10 @@ function mapDecisionRow(row: ComplianceDecisionRow, blockState: ComplianceBlockS
     decidedAt: row.decidedAt.toISOString(),
     overrideWindowEndsAt: row.overrideWindowEndsAt ? row.overrideWindowEndsAt.toISOString() : null,
     blockState,
+    idempotencyKey: row.idempotencyKey ?? undefined,
+    actorId: row.actorId ?? undefined,
+    endpoint: row.endpoint ?? undefined,
+    intentHash: row.intentHash ?? undefined,
     audit: {
       reason: row.reason,
       evidenceLinks: row.evidenceLinks || [],
@@ -301,6 +313,10 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
     correlation_id AS "correlationId",
     decided_at AS "decidedAt",
     override_window_ends_at AS "overrideWindowEndsAt",
+    idempotency_key AS "idempotencyKey",
+    actor_id AS "actorId",
+    endpoint,
+    intent_hash AS "intentHash",
     reason,
     evidence_links AS "evidenceLinks",
     ticket_ref AS "ticketRef",
@@ -326,6 +342,10 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
           risk_level,
           correlation_id,
           override_window_ends_at,
+          idempotency_key,
+          actor_id,
+          endpoint,
+          intent_hash,
           reason,
           evidence_links,
           ticket_ref,
@@ -337,7 +357,7 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
           decided_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          $11, $12, $13, $14::jsonb, $15, $16, $17, $18, $19, $20::jsonb, $21
+          $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19, $20, $21, $22, $23, $24::jsonb, $25
         )`,
         [
           decision.decisionId,
@@ -352,6 +372,10 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
           decision.riskLevel,
           decision.correlationId,
           decision.overrideWindowEndsAt,
+          decision.idempotencyKey ?? null,
+          decision.actorId ?? null,
+          decision.endpoint ?? null,
+          decision.intentHash ?? null,
           decision.audit.reason,
           JSON.stringify(decision.audit.evidenceLinks),
           decision.audit.ticketRef,

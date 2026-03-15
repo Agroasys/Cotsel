@@ -19,6 +19,7 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
   return [
     action.actionId,
     action.intentKey,
+    action.intentHash ?? null,
     action.proposalId,
     action.category,
     action.status,
@@ -31,6 +32,9 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
     action.targetAddress,
     action.requestId,
     action.correlationId,
+    action.idempotencyKey ?? null,
+    action.actorId ?? null,
+    action.endpoint ?? null,
     action.audit.reason,
     JSON.stringify(action.audit.evidenceLinks),
     action.audit.ticketRef,
@@ -52,6 +56,7 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
     `INSERT INTO governance_actions (
       action_id,
       intent_key,
+      intent_hash,
       proposal_id,
       category,
       status,
@@ -64,6 +69,9 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       target_address,
       request_id,
       correlation_id,
+      idempotency_key,
+      actor_id,
+      endpoint,
       reason,
       evidence_links,
       ticket_ref,
@@ -80,11 +88,12 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       updated_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-      $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19, $20,
-      $21, $22::jsonb, $23, $24, $25, $26, $27, NOW()
+      $11, $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, $21, $22, $23, $24,
+      $25, $26::jsonb, $27, $28, $29, $30, $31, NOW()
     )
     ON CONFLICT (action_id) DO UPDATE SET
       intent_key = EXCLUDED.intent_key,
+      intent_hash = EXCLUDED.intent_hash,
       proposal_id = EXCLUDED.proposal_id,
       category = EXCLUDED.category,
       status = EXCLUDED.status,
@@ -97,6 +106,9 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       target_address = EXCLUDED.target_address,
       request_id = EXCLUDED.request_id,
       correlation_id = EXCLUDED.correlation_id,
+      idempotency_key = EXCLUDED.idempotency_key,
+      actor_id = EXCLUDED.actor_id,
+      endpoint = EXCLUDED.endpoint,
       reason = EXCLUDED.reason,
       evidence_links = EXCLUDED.evidence_links,
       ticket_ref = EXCLUDED.ticket_ref,
@@ -123,18 +135,24 @@ async function insertAuditLog(client: PoolClient, entry: AuditLogEntry): Promise
       method,
       request_id,
       correlation_id,
+      action_id,
+      idempotency_key,
+      actor_id,
       actor_user_id,
       actor_wallet_address,
       actor_role,
       status,
       metadata
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)`,
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)`,
     [
       entry.eventType,
       entry.route,
       entry.method,
       entry.requestId,
       entry.correlationId || null,
+      entry.actionId || null,
+      entry.idempotencyKey || null,
+      entry.actorId || null,
       entry.actorUserId || null,
       entry.actorWalletAddress || null,
       entry.actorRole || null,
