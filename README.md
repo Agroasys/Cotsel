@@ -43,16 +43,16 @@ This repository is the settlement layer in the Agroasys platform. It operates al
 
 ## Core Components
 
-**Escrow Contract (`/contracts`)**  
+- **Escrow Contract (`/contracts`)**  
 A settlement state machine implemented in Solidity and compiled for PolkaVM using the Parity toolchain. It manages escrow locking, timeouts, dispute holds, and deterministic allocation and routing of funds based on trade state.
 
-**Oracle Service (`/oracle`)**  
+- **Oracle Service (`/oracle`)**  
 A Node.js service that submits signed milestone attestations to the contract. Attestations are schema-validated and designed to be replay-safe and idempotent. Each attestation references external evidence identifiers (for example Bill of Lading, inspection certificate references) that support operational and audit review.
 
-**Ricardian Anchoring (`/ricardian`)**  
+- **Ricardian Anchoring (`/ricardian`)**  
 The protocol does not store contracts on-chain. Each trade is anchored by a SHA-256 hash of the signed off-chain agreement (TradeID). Evidence references and settlement actions are linked to this immutable identifier across the lifecycle.
 
-**Indexer (`/indexer`)**  
+- **Indexer (`/indexer`)**  
 An indexing service that tracks settlement events to support reconciliation, operational monitoring, and audit-style reporting. It provides a normalized trade timeline, state transitions, and payout references.
 
 ## How It Works
@@ -61,14 +61,14 @@ Cotsel implements a deterministic two-stage settlement flow. This supports comme
 
 ## Lifecycle
 
-**Lock (Encumbrance)**  
+- **Lock (Encumbrance)**
 The buyer locks stablecoin funds into escrow to cover goods value plus configured fees. The contract records the Ricardian TradeID and encumbers funds into two logical buckets: `stageOneAmount` (operational and fee tranche) and `stageTwoAmount` (net settlement tranche).
 
-**Stage 1 Release (Operational)**  
+- **Stage 1 Release (Operational)**  
 Trigger: the oracle submits a signed attestation referencing validated documentation (for example shipment evidence such as Bill of Lading reference).  
 Action: in a single state transition, configured fees are allocated to their recipients and the supplier receives tranche one of the principal (default 40%, configurable).
 
-**Stage 2 Release (Final Settlement)**  
+- **Stage 2 Release (Final Settlement)**  
 Trigger: the oracle submits a signed attestation referencing destination inspection evidence (quality and quantity confirmation, where applicable).  
 Action: the remaining supplier tranche (default 60%) is released, completing settlement.
 
@@ -112,11 +112,13 @@ cotsel/
 └── docs/               # Runbooks, governance, and operational docs
 ```
 
-## Security & "Invisible Wallet" Features
+## Security and Wallet Abstraction
 
-- **Gas Abstraction (The "Gas Station")**: Uses Asset Conversion so users do not need to hold `DOT`; protocol can settle fees in `USDC` for a gasless enterprise UX.
-- **Oracle Isolation**: `releaseFunds` is protected by `onlyOracle`. Oracle service is intended to run in an isolated environment (TEE or separate VPC) with restricted key access.
-- **Ricardian Integrity**: `ricardianHash` is immutable after lock, so courts and auditors can verify on-chain settlement against the exact off-chain legal document hash.
+- **Fee Abstraction (Sponsored Fees)**: Where supported, the system can abstract network fee management from end users. This reduces the requirement for users to hold DOT directly and supports an enterprise-friendly checkout flow. Fee payment via Asset Conversion may be used depending on network support and operational configuration.
+
+- **Oracle Key Isolation**: Oracle-gated functions are restricted to an authorized attester key (for example `onlyOracle`). The oracle service should be deployed with strict key management controls (isolated runtime, restricted access, least privilege), and may be backed by hardened key storage such as an HSM or equivalent secure key management service.
+
+- **Ricardian Anchoring Integrity**: The `ricardianHash` (TradeID) is committed at trade creation and treated as immutable for that trade lifecycle. This provides a stable reference linking off-chain agreement text to on-chain settlement state and supports audit and dispute review through verifiable evidence traceability.
 
 ## Security
 
