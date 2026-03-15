@@ -1,27 +1,26 @@
-# **Cotsel: Commercial Trade Settlement Layer**
+# Cotsel: Commercial Trade Settlement Layer
+A non-custodial, evidence-driven settlement layer for cross-border trade workflows.
 
-_**A non-custodial, evidence-driven settlement engine for cross-border trade workflows.**_
+Cotsel is a modular settlement infrastructure built on Polkadot Asset Hub. It implements milestone-gated escrow and conditional release, designed to reduce counterparty risk and improve settlement determinism through verifiable, evidence-linked state transitions.
 
-Cotsel is a modular, non-custodial settlement infrastructure built on Polkadot Asset Hub. It provides milestone-based smart contract escrow designed to reduce counterparty risk and shorten settlement cycles through verifiable, evidence-driven state transitions.
-
-While initially developed as the settlement engine for the Agroasys Platform, this protocol is open-source and integration-friendly, allowing any B2B marketplace or trade workflow to adopt stablecoin escrow settlement with Ricardian contract anchoring and audit-grade evidence traceability.
+Cotsel was initially developed to support the Agroasys platform, but it is open-source and integration-friendly. It is designed for reuse by B2B marketplaces and trade workflows that require stablecoin escrow settlement, Ricardian agreement anchoring, and audit-grade traceability without introducing a custodial operator.
 
 ## At a Glance
 
-- What this is: a secure settlement layer for commercial trade (DvP-style escrow, milestones, dispute and timeout flows).
-- What this is not: a custody wallet, a bank, or a full marketplace interface.
-- What this gives partners: transparent settlement logic, deterministic operational controls, and evidence traceability for reconciliation and dispute review.
+- **What this is:** a secure settlement layer for commercial trade (DvP-style escrow, milestone gating, disputes, timeouts, and holds).
+- **What this is not:** a custody wallet, a bank, or a full marketplace application.
+- **What this enables:** transparent settlement logic, deterministic operational controls, and evidence traceability for reconciliation and dispute review.
 
 ## Status and Maturity
 
-- Current phase: Pilot.
-- Operational readiness criteria: `docs/runbooks/production-readiness-checklist.md`.
+- **Current phase:** Pilot readiness (active development).
+- **Operational readiness criteria:** `docs/runbooks/production-readiness-checklist.md`.
 
 ## Who Should Read Next
 
-- Partners and integrators: `docs/runbooks/hybrid-split-walkthrough.md`.
-- Operators: `docs/runbooks/monitoring-alerting-baseline.md`.
-- Audit and compliance teams: `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`.
+- **Partners and integrators:** `docs/runbooks/hybrid-split-walkthrough.md`.
+- **Operators:** `docs/runbooks/monitoring-alerting-baseline.md`.
+- **Audit and compliance teams:** `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`.
 
 ## Scope Boundaries
 
