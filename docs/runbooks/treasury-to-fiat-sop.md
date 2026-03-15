@@ -173,6 +173,8 @@ If not:
 - Amount/currency checks and approval artifacts.
 - Off-ramp transfer reference, FX rate, and settlement timestamp.
 - Associated `trade_id`, `entry_id`, `tx_hash`, incident/ticket IDs (if any).
+- Template reference: `docs/runbooks/operator-audit-evidence-template.md`
+- Incident escalation template: `docs/incidents/incident-evidence-template.md`
 
 ## Exception Handling
 

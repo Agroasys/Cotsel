@@ -18,11 +18,18 @@ Use this template for enforceability consultations, pilot sign-off, and legal re
 - Ricardian PDF/hash reproducibility evidence.
 - Trade-level chain/indexer/reconciliation linkage.
 - Versioned handoff packet structure and reproducibility checklist.
+- Legal or enforceability-facing packet composition only.
 
 ## Non-Scope
 - Legal interpretation of contract terms.
 - Court filing process by jurisdiction.
 - Storage of raw private keys or secret material.
+- Incident commander notes or operator audit packets that belong in the incident and operator templates below.
+
+## Related Operational Templates
+Use these templates for operational evidence that is not part of the legal handoff packet:
+- `docs/incidents/incident-evidence-template.md`
+- `docs/runbooks/operator-audit-evidence-template.md`
 
 ## Required Inputs
 
@@ -160,6 +167,8 @@ Required packet metadata (include in `01-cover-sheet.md`):
 - Preserve original file hashes for any redacted document derivatives.
 
 ## Related Runbooks
+- `docs/incidents/incident-evidence-template.md`
+- `docs/runbooks/operator-audit-evidence-template.md`
 - `docs/runbooks/ricardian-hash-repro.md`
 - `docs/runbooks/reconciliation.md`
 - `docs/runbooks/pilot-kpi-report-template.md`
