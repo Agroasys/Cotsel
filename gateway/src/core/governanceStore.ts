@@ -63,6 +63,7 @@ export interface GovernanceActionAuditRecord {
 export interface GovernanceActionRecord {
   actionId: string;
   intentKey: string;
+  intentHash?: string;
   proposalId: number | null;
   category: GovernanceActionCategory;
   status: GovernanceActionStatus;
@@ -78,6 +79,9 @@ export interface GovernanceActionRecord {
   executedAt: string | null;
   requestId: string;
   correlationId: string | null;
+  idempotencyKey?: string;
+  actorId?: string;
+  endpoint?: string;
   errorCode: string | null;
   errorMessage: string | null;
   audit: GovernanceActionAuditRecord;
@@ -116,6 +120,7 @@ const ACTIVE_PROPOSAL_STATUSES: readonly GovernanceActionStatus[] = GOVERNANCE_O
 interface GovernanceActionRow {
   actionId: string;
   intentKey: string | null;
+  intentHash: string | null;
   proposalId: string | number | null;
   category: GovernanceActionCategory;
   status: GovernanceActionStatus;
@@ -128,6 +133,9 @@ interface GovernanceActionRow {
   targetAddress: string | null;
   requestId: string;
   correlationId: string | null;
+  idempotencyKey: string | null;
+  actorId: string | null;
+  endpoint: string | null;
   reason: string;
   evidenceLinks: EvidenceLink[];
   ticketRef: string;
@@ -211,6 +219,7 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
       chainId: row.chainId,
       approverWallet: row.actorWallet,
     }),
+    intentHash: row.intentHash ?? undefined,
     proposalId: numericOrNull(row.proposalId),
     category: row.category,
     status: row.status,
@@ -226,6 +235,9 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
     executedAt: row.executedAt ? row.executedAt.toISOString() : null,
     requestId: row.requestId,
     correlationId: row.correlationId,
+    idempotencyKey: row.idempotencyKey ?? undefined,
+    actorId: row.actorId ?? undefined,
+    endpoint: row.endpoint ?? undefined,
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
     audit: {
@@ -275,6 +287,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
   const selectColumns = `SELECT
     action_id AS "actionId",
     intent_key AS "intentKey",
+    intent_hash AS "intentHash",
     proposal_id AS "proposalId",
     category,
     status,
@@ -287,6 +300,9 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
     target_address AS "targetAddress",
     request_id AS "requestId",
     correlation_id AS "correlationId",
+    idempotency_key AS "idempotencyKey",
+    actor_id AS "actorId",
+    endpoint AS "endpoint",
     reason,
     evidence_links AS "evidenceLinks",
     ticket_ref AS "ticketRef",
@@ -307,6 +323,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
         `INSERT INTO governance_actions (
           action_id,
           intent_key,
+          intent_hash,
           proposal_id,
           category,
           status,
@@ -319,6 +336,9 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           target_address,
           request_id,
           correlation_id,
+          idempotency_key,
+          actor_id,
+          endpoint,
           reason,
           evidence_links,
           ticket_ref,
@@ -335,11 +355,12 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19, $20, $21,
-          $22::jsonb, $23, $24, $25, $26, $27, NOW()
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, $21, $22, $23, $24,
+          $25, $26::jsonb, $27, $28, $29, $30, $31, NOW()
         )
         ON CONFLICT (action_id) DO UPDATE SET
           intent_key = EXCLUDED.intent_key,
+          intent_hash = EXCLUDED.intent_hash,
           proposal_id = EXCLUDED.proposal_id,
           category = EXCLUDED.category,
           status = EXCLUDED.status,
@@ -352,6 +373,9 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           target_address = EXCLUDED.target_address,
           request_id = EXCLUDED.request_id,
           correlation_id = EXCLUDED.correlation_id,
+          idempotency_key = EXCLUDED.idempotency_key,
+          actor_id = EXCLUDED.actor_id,
+          endpoint = EXCLUDED.endpoint,
           reason = EXCLUDED.reason,
           evidence_links = EXCLUDED.evidence_links,
           ticket_ref = EXCLUDED.ticket_ref,
@@ -369,6 +393,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
         [
           action.actionId,
           action.intentKey,
+          action.intentHash ?? null,
           action.proposalId,
           action.category,
           action.status,
@@ -381,6 +406,9 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           action.targetAddress,
           action.requestId,
           action.correlationId,
+          action.idempotencyKey ?? null,
+          action.actorId ?? null,
+          action.endpoint ?? null,
           action.audit.reason,
           JSON.stringify(action.audit.evidenceLinks),
           action.audit.ticketRef,

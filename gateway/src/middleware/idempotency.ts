@@ -7,7 +7,31 @@ import { buildRequestFingerprint, IdempotencyStore } from '../core/idempotencySt
 
 export interface IdempotencyRequestState {
   idempotencyKey: string;
+  actorId: string;
+  endpoint: string;
   requestFingerprint: string;
+}
+
+function resolveActorId(req: Request): string {
+  const principal = req.gatewayPrincipal;
+  if (principal?.session.userId) {
+    return `user:${principal.session.userId}`;
+  }
+
+  if (principal?.session.walletAddress) {
+    return `wallet:${principal.session.walletAddress.toLowerCase()}`;
+  }
+
+  if (req.serviceAuth?.apiKeyId) {
+    return `service:${req.serviceAuth.apiKeyId}`;
+  }
+
+  throw new GatewayError(500, 'INTERNAL_ERROR', 'Idempotency scope could not resolve actor context');
+}
+
+function resolveEndpoint(req: Request): string {
+  const routePath = typeof req.route?.path === 'string' ? req.route.path : req.path;
+  return `${req.baseUrl || ''}${routePath || ''}` || req.path;
 }
 
 function normalizeBody(body: unknown): unknown {
@@ -57,10 +81,14 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
       return;
     }
 
-    const requestPath = req.originalUrl || req.path;
+    const actorId = resolveActorId(req);
+    const endpoint = resolveEndpoint(req);
+    const requestPath = `${req.baseUrl || ''}${req.path || ''}` || req.originalUrl || req.path;
     const requestFingerprint = buildRequestFingerprint(req.method, requestPath, req.rawBody);
     const reservation = await store.createPending({
       idempotencyKey,
+      actorId,
+      endpoint,
       requestMethod: req.method,
       requestPath,
       requestFingerprint,
@@ -81,7 +109,7 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
       }
 
       if (existing.completedAt && existing.responseStatus !== null) {
-        await store.markReplay(idempotencyKey);
+        await store.markReplay({ actorId, endpoint, idempotencyKey });
         res.setHeader('x-idempotent-replay', 'true');
         if (existing.responseHeaders['content-type']) {
           res.setHeader('content-type', existing.responseHeaders['content-type']);
@@ -98,6 +126,8 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
 
     req.idempotencyState = {
       idempotencyKey,
+      actorId,
+      endpoint,
       requestFingerprint,
     };
 
@@ -119,11 +149,11 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
 
     res.on('finish', () => {
       if (res.statusCode >= 500) {
-        void store.releasePending(idempotencyKey);
+        void store.releasePending({ actorId, endpoint, idempotencyKey });
         return;
       }
 
-      void store.complete(idempotencyKey, {
+      void store.complete({ actorId, endpoint, idempotencyKey }, {
         responseStatus: res.statusCode,
         responseHeaders: replayHeaders(res),
         responseBody,

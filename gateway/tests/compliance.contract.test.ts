@@ -96,19 +96,30 @@ async function startServer(options: StartServerOptions = {}) {
   };
 
   const authSessionClient: AuthSessionClient = {
-    resolveSession: jest.fn().mockImplementation(async () => {
+    resolveSession: jest.fn().mockImplementation(async (token: string) => {
       if (options.sessionRole === null) {
         return null;
       }
 
-      const role = options.sessionRole ?? 'admin';
+      const role = options.sessionRole ?? (
+        token === 'session-admin-2' ? 'admin' : 'admin'
+      );
+      const sessionToken = token || 'session-admin';
       return {
-        userId: role === 'admin' ? 'uid-admin' : 'uid-buyer',
+        userId: role === 'admin'
+          ? (sessionToken === 'session-admin-2' ? 'uid-admin-2' : 'uid-admin')
+          : 'uid-buyer',
         walletAddress: role === 'admin'
-          ? '0x00000000000000000000000000000000000000aa'
+          ? (
+            sessionToken === 'session-admin-2'
+              ? '0x00000000000000000000000000000000000000ac'
+              : '0x00000000000000000000000000000000000000aa'
+          )
           : '0x00000000000000000000000000000000000000bb',
         role,
-        email: role === 'admin' ? 'admin@agroasys.io' : 'buyer@agroasys.io',
+        email: role === 'admin'
+          ? (sessionToken === 'session-admin-2' ? 'admin2@agroasys.io' : 'admin@agroasys.io')
+          : 'buyer@agroasys.io',
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
       };
@@ -192,7 +203,9 @@ describe('gateway compliance routes contract', () => {
   });
 
   test('POST /compliance/decisions records a decision matching the OpenAPI schema', async () => {
-    const { server, baseUrl, auditLogStore } = await startServer();
+    const { server, baseUrl, auditLogStore } = await startServer({
+      writeAllowlist: ['uid-admin', 'uid-admin-2'],
+    });
 
     try {
       const response = await createDecision(baseUrl, buildDecisionBody(), 'idem-create-1');
@@ -204,6 +217,11 @@ describe('gateway compliance routes contract', () => {
       expect(response.headers.get('x-request-id')).toBeTruthy();
       expect(auditLogStore.entries).toHaveLength(1);
       expect(auditLogStore.entries[0]?.eventType).toBe('compliance.decision.recorded');
+      expect(auditLogStore.entries[0]).toMatchObject({
+        actionId: payload.data.decisionId,
+        idempotencyKey: 'idem-create-1',
+        actorId: 'user:uid-admin',
+      });
     } finally {
       server.close();
     }
@@ -375,6 +393,71 @@ describe('gateway compliance routes contract', () => {
       expect(firstResponse.status).toBe(201);
       expect(replayResponse.status).toBe(201);
       expect(replayPayload).toEqual(firstPayload);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('mutation routes scope idempotency by actor and reject client-supplied decision ids', async () => {
+    const { server, baseUrl, auditLogStore } = await startServer({
+      writeAllowlist: ['uid-admin', 'uid-admin-2'],
+    });
+
+    try {
+      const sharedBody = buildDecisionBody({
+        result: 'ALLOW',
+        reasonCode: 'CMP_OVERRIDE_ACTIVE',
+        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      });
+
+      const first = await fetch(`${baseUrl}/compliance/decisions`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer session-admin',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'idem-shared-decision',
+        },
+        body: JSON.stringify(sharedBody),
+      });
+      const firstPayload = await first.json();
+
+      const second = await fetch(`${baseUrl}/compliance/decisions`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer session-admin-2',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'idem-shared-decision',
+        },
+        body: JSON.stringify({
+          ...sharedBody,
+          correlationId: 'corr-2',
+        }),
+      });
+      const secondPayload = await second.json();
+
+      const invalid = await fetch(`${baseUrl}/compliance/decisions`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer session-admin',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'idem-invalid-decision-id',
+        },
+        body: JSON.stringify({
+          ...buildDecisionBody(),
+          decisionId: 'client-controlled-decision',
+        }),
+      });
+      const invalidPayload = await invalid.json();
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(firstPayload.data.decisionId).not.toBe(secondPayload.data.decisionId);
+      expect(invalid.status).toBe(400);
+      expect(validateError(invalidPayload)).toBe(true);
+      expect(invalidPayload.error.message).toContain('decisionId is server-generated');
+      expect(auditLogStore.entries.map((entry) => entry.actorId)).toEqual(
+        expect.arrayContaining(['user:uid-admin', 'user:uid-admin-2']),
+      );
     } finally {
       server.close();
     }

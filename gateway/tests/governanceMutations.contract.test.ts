@@ -474,7 +474,7 @@ describe('gateway governance mutation routes contract', () => {
       },
     },
   ])('POST $path accepts and persists $name', async ({ path, body, expectedCategory, expectedMethod, configureReader }) => {
-    const { server, baseUrl, governanceActionStore } = await startServer({ configureReader });
+    const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({ configureReader });
 
     try {
       const response = await fetch(`${baseUrl}${path}`, {
@@ -501,10 +501,19 @@ describe('gateway governance mutation routes contract', () => {
       expect(storedAction.category).toBe(expectedCategory);
       expect(storedAction.contractMethod).toBe(expectedMethod);
       expect(storedAction.intentKey).toBe(payload.data.intentKey);
+      expect(storedAction.idempotencyKey).toBe(`idem-${expectedMethod}`);
+      expect(storedAction.actorId).toBe('user:uid-admin');
+      expect(storedAction.endpoint).toBe(`/api/dashboard-gateway/v1${path}`);
+      expect(storedAction.intentHash).toMatch(/^[a-f0-9]{64}$/);
       expect(storedAction.expiresAt).toBe(payload.data.expiresAt);
       expect(storedAction.requestId).toBe(`req-${expectedMethod}`);
       expect(storedAction.audit.actorSessionId).toMatch(/^sha256:[a-f0-9]{64}$/);
       expect(storedAction.audit.actorSessionId).not.toBe('sess-admin');
+      expect(auditLogStore.entries[0]).toMatchObject({
+        actionId: payload.data.actionId,
+        idempotencyKey: `idem-${expectedMethod}`,
+        actorId: 'user:uid-admin',
+      });
     } finally {
       server.close();
     }
@@ -539,6 +548,71 @@ describe('gateway governance mutation routes contract', () => {
       const stored = await governanceActionStore.list({ limit: 10 });
       expect(stored.items).toHaveLength(1);
       expect(auditLogStore.entries).toHaveLength(1);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('mutation routes scope idempotency by actor and reject client-supplied action ids', async () => {
+    const { server, baseUrl, governanceActionStore } = await startServer({
+      writeAllowlist: ['uid-admin', 'uid-admin-2'],
+      configureReader(reader) {
+        reader.getOracleProposalState.mockResolvedValue(buildProposalState({
+          proposalId: 7,
+          approvalCount: 1,
+          expired: false,
+          cancelled: false,
+          executed: false,
+        }));
+        reader.hasApprovedOracleProposal.mockResolvedValue(false);
+      },
+    });
+
+    try {
+      const body = JSON.stringify(buildAuditBody());
+
+      const first = await fetch(`${baseUrl}/governance/oracle/proposals/7/approve`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-shared-approval',
+        },
+        body,
+      });
+      const firstPayload = await first.json();
+
+      const second = await fetch(`${baseUrl}/governance/oracle/proposals/7/approve`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin-2',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-shared-approval',
+        },
+        body,
+      });
+      const secondPayload = await second.json();
+
+      const invalid = await fetch(`${baseUrl}/governance/pause`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-invalid-action-id',
+        },
+        body: JSON.stringify(buildAuditBody({ actionId: 'client-controlled-action' })),
+      });
+      const invalidPayload = await invalid.json();
+
+      expect(first.status).toBe(202);
+      expect(second.status).toBe(202);
+      expect(firstPayload.data.actionId).not.toBe(secondPayload.data.actionId);
+      expect(invalid.status).toBe(400);
+      expect(validateError(invalidPayload)).toBe(true);
+      expect(invalidPayload.error.message).toContain('actionId is server-generated');
+
+      const stored = await governanceActionStore.list({ limit: 10 });
+      expect(stored.items).toHaveLength(2);
     } finally {
       server.close();
     }

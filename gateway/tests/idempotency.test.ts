@@ -50,7 +50,20 @@ async function startServer() {
   let failOnce = false;
   let slowMutationMs = 0;
 
-  router.post('/test-mutation', mutationMiddleware, (_req, res) => {
+  router.post('/test-mutation', (req, _res, next) => {
+    const actor = req.header('x-test-actor') ?? 'admin';
+    (req as any).gatewayPrincipal = {
+      sessionReference: `sess-${actor}`,
+      session: {
+        userId: actor === 'buyer' ? 'uid-buyer' : 'uid-admin',
+        walletAddress: actor === 'buyer'
+          ? '0x00000000000000000000000000000000000000bb'
+          : '0x00000000000000000000000000000000000000aa',
+        role: actor === 'buyer' ? 'buyer' : 'admin',
+      },
+    };
+    next();
+  }, mutationMiddleware, (_req, res) => {
     if (slowMutationMs > 0) {
       return setTimeout(() => {
         executionCount += 1;
@@ -105,6 +118,7 @@ describe('gateway idempotency middleware', () => {
       const headers = {
         'content-type': 'application/json',
         'Idempotency-Key': 'idem-1',
+        'x-test-actor': 'admin',
       };
       const body = JSON.stringify({ hello: 'world' });
 
@@ -131,6 +145,7 @@ describe('gateway idempotency middleware', () => {
       const headers = {
         'content-type': 'application/json',
         'Idempotency-Key': 'idem-2',
+        'x-test-actor': 'admin',
       };
 
       await fetch(`${baseUrl}/test-mutation`, {
@@ -159,7 +174,10 @@ describe('gateway idempotency middleware', () => {
     try {
       const response = await fetch(`${baseUrl}/test-mutation`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          'x-test-actor': 'admin',
+        },
         body: JSON.stringify({ missing: true }),
       });
       const payload = await response.json();
@@ -178,6 +196,7 @@ describe('gateway idempotency middleware', () => {
       const headers = {
         'content-type': 'application/json',
         'Idempotency-Key': 'idem-retry-after-500',
+        'x-test-actor': 'admin',
       };
       setFailOnce();
 
@@ -210,6 +229,7 @@ describe('gateway idempotency middleware', () => {
       const headers = {
         'content-type': 'application/json',
         'Idempotency-Key': 'idem-concurrent',
+        'x-test-actor': 'admin',
       };
       setSlowMutationMs(50);
       const body = JSON.stringify({ parallel: true });
@@ -222,6 +242,44 @@ describe('gateway idempotency middleware', () => {
       const statuses = [first.status, second.status].sort((a, b) => a - b);
       expect(statuses).toEqual([202, 409]);
       expect(getExecutionCount()).toBe(1);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('scopes identical idempotency keys by actor identity', async () => {
+    const { server, baseUrl, getExecutionCount } = await startServer();
+
+    try {
+      const body = JSON.stringify({ scoped: true });
+      const adminResponse = await fetch(`${baseUrl}/test-mutation`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-shared',
+          'x-test-actor': 'admin',
+        },
+        body,
+      });
+      const adminPayload = await adminResponse.json();
+
+      const buyerResponse = await fetch(`${baseUrl}/test-mutation`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-shared',
+          'x-test-actor': 'buyer',
+        },
+        body,
+      });
+      const buyerPayload = await buyerResponse.json();
+
+      expect(adminResponse.status).toBe(202);
+      expect(buyerResponse.status).toBe(202);
+      expect(adminPayload.executionCount).toBe(1);
+      expect(buyerPayload.executionCount).toBe(2);
+      expect(buyerResponse.headers.get('x-idempotent-replay')).toBeNull();
+      expect(getExecutionCount()).toBe(2);
     } finally {
       server.close();
     }

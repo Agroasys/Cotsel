@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     profiles: ["local-dev", "staging-e2e", "staging-e2e-real", "infra"]
+    restart: unless-stopped
     environment:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
@@ -20,6 +21,7 @@ services:
   redis:
     image: redis:7-alpine
     profiles: ["local-dev", "staging-e2e", "staging-e2e-real", "infra"]
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
@@ -34,6 +36,7 @@ services:
   indexer:
     image: node:20-alpine
     profiles: ["local-dev"]
+    restart: unless-stopped
     command:
       - node
       - -e
@@ -158,6 +161,7 @@ services:
 
   ricardian:
     profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: ricardian/Dockerfile
@@ -185,9 +189,23 @@ services:
         condition: service_healthy
     ports:
       - "${RICARDIAN_PORT:-3100}:${RICARDIAN_PORT:-3100}"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - |
+          const p = process.env.PORT || '3100';
+          fetch('http://127.0.0.1:' + p + '/api/ricardian/v1/health')
+            .then((response) => process.exit(response.ok ? 0 : 1))
+            .catch(() => process.exit(1));
+      interval: 10s
+      timeout: 5s
+      retries: 8
 
   gateway:
     profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: gateway/Dockerfile
@@ -231,6 +249,7 @@ services:
 
   treasury:
     profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: treasury/Dockerfile
@@ -263,9 +282,23 @@ services:
         required: false
     ports:
       - "${TREASURY_PORT:-3200}:${TREASURY_PORT:-3200}"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - |
+          const p = process.env.PORT || '3200';
+          fetch('http://127.0.0.1:' + p + '/api/treasury/v1/health')
+            .then((response) => process.exit(response.ok ? 0 : 1))
+            .catch(() => process.exit(1));
+      interval: 10s
+      timeout: 5s
+      retries: 8
 
   oracle:
     profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: oracle/Dockerfile
@@ -318,6 +351,7 @@ services:
 
   reconciliation:
     profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: reconciliation/Dockerfile
@@ -353,8 +387,22 @@ services:
       indexer-graphql:
         condition: service_healthy
         required: false
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - |
+          const p = process.env.RECONCILIATION_HEALTH_PORT || '9090';
+          fetch('http://127.0.0.1:' + p + '/health')
+            .then((response) => process.exit(response.ok ? 0 : 1))
+            .catch(() => process.exit(1));
+      interval: 15s
+      timeout: 5s
+      retries: 8
   hardhat:
     profiles: ["local-dev"]
+    restart: unless-stopped
     build:
       context: ./contracts
       dockerfile: Dockerfile

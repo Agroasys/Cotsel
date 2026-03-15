@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { isAddress, ZeroAddress } from 'ethers';
 import { GatewayConfig } from '../config/env';
 import { AuditLogEntry } from './auditLogStore';
@@ -50,6 +50,15 @@ export interface QueueGovernanceActionInput {
   idempotencyKey: string;
 }
 
+function resolveGovernanceActorId(principal: GatewayPrincipal): string {
+  return principal.session.userId
+    ? `user:${principal.session.userId}`
+    : `wallet:${principal.session.walletAddress.toLowerCase()}`;
+}
+
+function buildGovernanceIntentHash(intentKey: string): string {
+  return createHash('sha256').update(intentKey).digest('hex');
+}
 
 export function validateGovernanceAuditInput(raw: unknown): GovernanceMutationAuditInput {
   if (!raw || typeof raw !== 'object') {
@@ -57,6 +66,9 @@ export function validateGovernanceAuditInput(raw: unknown): GovernanceMutationAu
   }
 
   const body = raw as Record<string, unknown>;
+  if (body.actionId !== undefined) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'actionId is server-generated and must not be provided by the client');
+  }
   const audit = body.audit;
   if (!audit || typeof audit !== 'object') {
     throw new GatewayError(400, 'VALIDATION_ERROR', 'Request body must include audit metadata');
@@ -148,11 +160,14 @@ export class GovernanceMutationService {
       chainId: this.config.chainId,
       approverWallet: input.principal.session.walletAddress,
     });
+    const intentHash = buildGovernanceIntentHash(intentKey);
     const actionId = randomUUID();
+    const actorId = resolveGovernanceActorId(input.principal);
 
     const record: GovernanceActionRecord = {
       actionId,
       intentKey,
+      intentHash,
       proposalId: input.proposalId ?? null,
       category: input.category,
       status: 'requested',
@@ -168,6 +183,9 @@ export class GovernanceMutationService {
       executedAt: null,
       requestId: input.requestContext.requestId,
       correlationId: input.requestContext.correlationId,
+      idempotencyKey: input.idempotencyKey,
+      actorId,
+      endpoint: input.routePath,
       errorCode: null,
       errorMessage: null,
       audit: buildAuditRecord(input.audit, input.principal, acceptedAt),
@@ -179,6 +197,9 @@ export class GovernanceMutationService {
       method: 'POST',
       requestId: input.requestContext.requestId,
       correlationId: input.requestContext.correlationId,
+      actionId,
+      idempotencyKey: input.idempotencyKey,
+      actorId,
       actorUserId: input.principal.session.userId,
       actorWalletAddress: input.principal.session.walletAddress,
       actorRole: input.principal.session.role,
@@ -188,6 +209,8 @@ export class GovernanceMutationService {
         category: input.category,
         proposalId: input.proposalId ?? null,
         targetAddress: input.targetAddress ?? null,
+        actorId,
+        intentHash,
         idempotencyKey: input.idempotencyKey,
       },
     };
@@ -198,6 +221,9 @@ export class GovernanceMutationService {
       method: 'POST',
       requestId: input.requestContext.requestId,
       correlationId: input.requestContext.correlationId,
+      actionId: existing.actionId,
+      idempotencyKey: input.idempotencyKey,
+      actorId,
       actorUserId: input.principal.session.userId,
       actorWalletAddress: input.principal.session.walletAddress,
       actorRole: input.principal.session.role,
@@ -208,6 +234,8 @@ export class GovernanceMutationService {
         proposalId: existing.proposalId,
         targetAddress: existing.targetAddress,
         intentKey: existing.intentKey,
+        intentHash: existing.intentHash ?? intentHash,
+        actorId: existing.actorId ?? actorId,
         idempotencyKey: input.idempotencyKey,
       },
     });
