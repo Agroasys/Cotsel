@@ -5,6 +5,9 @@ Handle `EXHAUSTED_NEEDS_REDRIVE` oracle triggers with explicit ownership, bounde
 
 Gateway-boundary handoff: when failures indicate routing/auth propagation/correlation drift across services (not oracle business-state logic), follow `docs/runbooks/api-gateway-boundary.md` first, then return here for redrive actions with the same `tradeId`/`actionKey`/`requestId` evidence.
 
+Automation-governance source of truth:
+- `docs/runbooks/programmability-governance.md`
+
 ## Ownership And Intervention Rules
 - `Operator`:
   - Runs health/diagnostic checks.
@@ -87,6 +90,7 @@ curl -X POST http://127.0.0.1:3001/api/oracle/redrive \
 - Idempotency is preserved by `actionKey`/`idempotencyKey`.
 - If action was already executed on-chain: trigger is marked confirmed without duplicate execution.
 - If still pending: one new re-drive attempt is created and processed under bounded retry policy.
+- If re-drive behavior or approval state deviates from the allowed automation classes, stop and route the decision through `docs/runbooks/programmability-governance.md`.
 
 ## Evidence To Collect For Incidents
 - Service health and readiness output.

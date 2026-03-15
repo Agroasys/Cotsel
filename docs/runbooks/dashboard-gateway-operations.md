@@ -11,6 +11,9 @@ This runbook covers:
 - queued governance execution,
 - rollback and incident evidence capture.
 
+Automation-governance source of truth:
+- `docs/runbooks/programmability-governance.md`
+
 ## Current connected-validation target
 Approved current-state contract:
 - gateway target: local/docker only
