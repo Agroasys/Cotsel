@@ -94,22 +94,23 @@ Action: the remaining supplier tranche (default 60%) is released, completing set
 
 ```bash
 cotsel/
-├── contracts/          # Solidity Smart Contracts + tests (Hardhat + Foundry)
-│   ├── src/
-│   ├── tests/
-│   └── foundry/test/
-├── oracle/             # Oracle signing and event trigger service
-├── indexer/            # Indexing and GraphQL pipeline
-├── sdk/                # TypeScript SDK
-├── auth/               # Authentication service
-├── gateway/            # Dashboard operator gateway service
-├── shared-auth/        # Shared auth package
-├── reconciliation/     # Reconciliation service
-├── notifications/      # Notification service
-├── ricardian/          # Ricardian evidence service
-├── treasury/           # Treasury operations service
-├── scripts/            # Ops, verification, and CI guard scripts
-└── docs/               # Runbooks, governance, and operational docs
+├── contracts/          # Escrow contract source, tests, and PolkaVM build path
+├── oracle/             # Milestone attestation service
+├── indexer/            # Chain event indexing and query layer
+├── gateway/            # Operator control-plane gateway
+├── reconciliation/     # Drift detection and settlement verification
+├── ricardian/          # Ricardian hash and evidence-linking service
+├── treasury/           # Treasury ledger and payout operations
+├── notifications/      # Operational notification service
+├── auth/               # Session and user-profile service
+├── sdk/                # External integration SDK
+├── shared/             # Shared utilities used across services
+├── shared-auth/        # Shared authentication primitives and helpers
+├── docs/               # ADRs, runbooks, API contracts, and governance docs
+├── scripts/            # CI guards, ops scripts, and verification helpers
+├── env/                # Environment templates and profile inputs
+├── postgres/           # Database bootstrap and local operational assets
+└── reports/            # Generated validation and evidence artifacts
 ```
 
 ## Security and Wallet Abstraction
