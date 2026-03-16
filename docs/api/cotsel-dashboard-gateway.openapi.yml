@@ -400,7 +400,7 @@ paths:
 
         All three backend feeds (indexer, chain RPC, and gateway compliance ledger) are queried
         in parallel. When a feed is unavailable, `feedFreshness.<feed>.available` is `false`,
-        `feedFreshness.<feed>.queriedAt` is `null`, the corresponding KPI values default to zero,
+        `feedFreshness.<feed>.freshAt` is `null`, the corresponding KPI values default to zero,
         and `posture` is `null` when the chain RPC feed is unavailable. The endpoint always returns
         HTTP 200 so the dashboard can render a partial view with degraded-feed indicators rather
         than a blank screen.
@@ -1945,13 +1945,13 @@ components:
           format: date-time
     OverviewFeedStatus:
       type: object
-      required: [source, queriedAt, available]
+      required: [source, freshAt, available]
       properties:
         source:
           type: string
           enum: [indexer_graphql, chain_rpc, gateway_ledger]
           description: Identifies which backend feed provided (or attempted to provide) this data.
-        queriedAt:
+        freshAt:
           anyOf:
             - type: string
               format: date-time
