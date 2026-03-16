@@ -90,6 +90,24 @@ Action: the remaining supplier tranche (default 60%) is released, completing set
 **Indexing and APIs**  
 - Indexing: SubQuery or Subsquid with a GraphQL API backed by Postgres.
 
+## Job and Eventing Strategy
+
+Cotsel uses a two-tier async strategy to separate payments-grade durability from
+non-critical background processing.
+
+- Durable jobs and event routing: SQS with DLQs for durable processing
+  (webhooks, payouts, chain events, reconciliation, notifications) and
+  EventBridge for internal event routing (`trade.updated`, `escrow.locked`,
+  `docs.approved`).
+- Non-critical async jobs: BullMQ (Redis) is permitted only for best-effort
+  background tasks such as email sending and PDF generation.
+- Redis usage boundary: Redis may be used for caching, short-lived locks, and
+  rate limiting tokens only. Redis is never a source of truth for settlement,
+  reconciliation, or payments-grade workflows.
+
+See also:
+[`docs/architecture/job-and-eventing-strategy.md`](docs/architecture/job-and-eventing-strategy.md)
+
 ## Repository Structure
 
 ```bash
