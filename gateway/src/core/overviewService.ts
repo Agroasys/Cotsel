@@ -20,6 +20,7 @@ export interface OverviewTradeKpis {
 export interface OverviewFeedStatus {
   source: string;
   queriedAt: string | null;
+  freshAt: string | null;
   available: boolean;
 }
 
@@ -148,12 +149,13 @@ export class OverviewService implements OverviewReader {
         trades: {
           source: 'indexer_graphql',
           queriedAt: snapshotAvailable ? now : null,
+          freshAt: snapshotAvailable ? now : null,
           available: snapshotAvailable,
           lastProcessedBlock: indexerSnapshot?.lastProcessedBlock ?? null,
           lastTradeEventAt: indexerSnapshot?.lastTradeEventAt ?? null,
         },
-        governance: { source: 'chain_rpc', queriedAt: governanceAvailable ? now : null, available: governanceAvailable },
-        compliance: { source: 'gateway_ledger', queriedAt: complianceAvailable ? now : null, available: complianceAvailable },
+        governance: { source: 'chain_rpc', queriedAt: governanceAvailable ? now : null, freshAt: governanceAvailable ? now : null, available: governanceAvailable },
+        compliance: { source: 'gateway_ledger', queriedAt: complianceAvailable ? now : null, freshAt: complianceAvailable ? now : null, available: complianceAvailable },
       },
     };
   }
