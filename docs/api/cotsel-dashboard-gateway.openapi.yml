@@ -1945,12 +1945,19 @@ components:
           format: date-time
     OverviewFeedStatus:
       type: object
-      required: [source, freshAt, available]
+      required: [source, queriedAt, freshAt, available]
       properties:
         source:
           type: string
           enum: [indexer_graphql, chain_rpc, gateway_ledger]
           description: Identifies which backend feed provided (or attempted to provide) this data.
+        queriedAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+          deprecated: true
+          description: "Deprecated: use freshAt instead. ISO timestamp of when the gateway successfully queried this feed for the current snapshot; null when the feed is unavailable. Kept for backward compatibility with existing consumers."
         freshAt:
           anyOf:
             - type: string

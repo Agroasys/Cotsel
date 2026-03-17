@@ -87,6 +87,7 @@ describe('overview service', () => {
 
     expect(snapshot.feedFreshness.trades).toEqual({
       source: 'indexer_graphql',
+      queriedAt: null,
       freshAt: null,
       available: false,
       lastProcessedBlock: null,
@@ -94,11 +95,13 @@ describe('overview service', () => {
     });
     expect(snapshot.feedFreshness.governance).toEqual({
       source: 'chain_rpc',
+      queriedAt: null,
       freshAt: null,
       available: false,
     });
     expect(snapshot.feedFreshness.compliance).toEqual({
       source: 'gateway_ledger',
+      queriedAt: null,
       freshAt: null,
       available: false,
     });
