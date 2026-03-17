@@ -15,6 +15,12 @@
       "require": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./legacy": {
+      "types": "./dist/legacy.d.ts",
+      "import": "./dist/legacy.js",
+      "require": "./dist/legacy.js",
+      "default": "./dist/legacy.js"
+    },
     "./rpc/failoverProvider": {
       "types": "./dist/rpc/failoverProvider.d.ts",
       "import": "./dist/rpc/failoverProvider.js",
@@ -24,6 +30,9 @@
   },
   "typesVersions": {
     "*": {
+      "legacy": [
+        "dist/legacy.d.ts"
+      ],
       "rpc/failoverProvider": [
         "dist/rpc/failoverProvider.d.ts"
       ]
