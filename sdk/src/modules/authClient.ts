@@ -1,6 +1,11 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+/**
+ * @deprecated Agroasys production flows should authenticate users through
+ * Agroasys auth and pass an Agroasys-managed signer into the SDK. This helper
+ * remains only for standalone wallet-challenge demos.
+ */
 import { web3Wallet } from '../wallet/wallet-provider';
 
 // Types
