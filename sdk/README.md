@@ -93,7 +93,7 @@ const result = await buyerSDK.createTrade(tradeParams, buyerSigner);
 ### Legacy demo helper: Web3Auth wallet provider
 
 ```ts
-import { web3Wallet } from "@agroasys/sdk";
+import { web3Wallet } from "@agroasys/sdk/legacy";
 
 await web3Wallet.connect();
 const address = await web3Wallet.getAddress();
@@ -161,8 +161,9 @@ Production integrations should follow this boundary:
 - this SDK consumes an injected signer
 - Cotsel remains the settlement engine, not the identity root
 
-The exported `web3Wallet` and `AuthClient` helpers remain available for demo
-flows, but they are no longer the recommended production integration path.
+The legacy `web3Wallet` and `AuthClient` helpers remain available from the
+`@agroasys/sdk/legacy` entrypoint for demo flows, but they are no longer the
+recommended production integration path.
 
 
 
