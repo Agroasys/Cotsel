@@ -63,7 +63,7 @@ describe('overview service', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
-  test('marks queriedAt null for feeds that fail during snapshot generation', async () => {
+  test('marks freshAt null for feeds that fail during snapshot generation', async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('indexer down'));
 
     const governanceStatusService = {
@@ -88,6 +88,7 @@ describe('overview service', () => {
     expect(snapshot.feedFreshness.trades).toEqual({
       source: 'indexer_graphql',
       queriedAt: null,
+      freshAt: null,
       available: false,
       lastProcessedBlock: null,
       lastTradeEventAt: null,
@@ -95,11 +96,13 @@ describe('overview service', () => {
     expect(snapshot.feedFreshness.governance).toEqual({
       source: 'chain_rpc',
       queriedAt: null,
+      freshAt: null,
       available: false,
     });
     expect(snapshot.feedFreshness.compliance).toEqual({
       source: 'gateway_ledger',
       queriedAt: null,
+      freshAt: null,
       available: false,
     });
   });
