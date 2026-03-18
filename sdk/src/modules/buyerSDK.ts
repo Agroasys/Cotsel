@@ -10,6 +10,41 @@ import { ContractError } from '../types/errors';
 import { IERC20__factory } from '../types/typechain-types/factories/@openzeppelin/contracts/token/ERC20/IERC20__factory';
 
 export class BuyerSDK extends Client {
+    private async assertSignerCompatibility(buyerSigner: ethers.Signer): Promise<void> {
+        if (!buyerSigner.provider) {
+            throw new ContractError('Buyer signer is missing a connected provider');
+        }
+
+        const signerNetwork = await buyerSigner.provider.getNetwork();
+        if (signerNetwork.chainId !== BigInt(this.config.chainId)) {
+            throw new ContractError(
+                'Buyer signer is connected to the wrong network for this settlement target',
+                {
+                    expectedChainId: this.config.chainId,
+                    actualChainId: signerNetwork.chainId.toString(),
+                }
+            );
+        }
+    }
+
+    private extractTradeIdFromReceipt(receipt: ethers.TransactionReceipt): string | undefined {
+        for (const log of receipt.logs) {
+            if (log.address.toLowerCase() !== this.config.escrowAddress.toLowerCase()) {
+                continue;
+            }
+
+            try {
+                const parsed = this.contract.interface.parseLog(log);
+                if (parsed?.name === 'TradeLocked') {
+                    return BigInt(parsed.args.tradeId).toString();
+                }
+            } catch {
+                continue;
+            }
+        }
+
+        return undefined;
+    }
 
     async getBuyerNonce(buyerAddress: string): Promise<bigint> {
         validateAddress(buyerAddress, 'buyer');
@@ -109,6 +144,7 @@ export class BuyerSDK extends Client {
     async createTrade(payload: TradeParameters, buyerSigner: ethers.Signer): Promise<TradeResult> {
         validateTradeParameters(payload);
         const params = payload;
+        await this.assertSignerCompatibility(buyerSigner);
         
         const buyerAddress = await buyerSigner.getAddress();
         
@@ -155,10 +191,13 @@ export class BuyerSDK extends Client {
             if (!receipt) {
                 throw new ContractError('Transaction receipt not available');
             }
+
+            const tradeId = this.extractTradeIdFromReceipt(receipt);
             
             return {
                 txHash: receipt.hash,
-                blockNumber: receipt.blockNumber
+                blockNumber: receipt.blockNumber,
+                ...(tradeId ? { tradeId } : {})
             };
             
         } catch (error: any) {

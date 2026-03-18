@@ -2,6 +2,7 @@
   "name": "@agroasys/sdk",
   "version": "1.0.0",
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist",
@@ -10,17 +11,28 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
       "require": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./legacy": {
+      "types": "./dist/legacy.d.ts",
+      "import": "./dist/legacy.js",
+      "require": "./dist/legacy.js",
+      "default": "./dist/legacy.js"
+    },
     "./rpc/failoverProvider": {
       "types": "./dist/rpc/failoverProvider.d.ts",
+      "import": "./dist/rpc/failoverProvider.js",
       "require": "./dist/rpc/failoverProvider.js",
       "default": "./dist/rpc/failoverProvider.js"
     }
   },
   "typesVersions": {
     "*": {
+      "legacy": [
+        "dist/legacy.d.ts"
+      ],
       "rpc/failoverProvider": [
         "dist/rpc/failoverProvider.d.ts"
       ]

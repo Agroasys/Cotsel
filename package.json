@@ -1,6 +1,29 @@
 {
   "private": true,
-  "name": "Cotsel",
+  "name": "@agroasys/cotsel",
+  "main": "sdk/dist/index.js",
+  "module": "sdk/dist/index.js",
+  "types": "sdk/dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./sdk/dist/index.d.ts",
+      "import": "./sdk/dist/index.js",
+      "require": "./sdk/dist/index.js",
+      "default": "./sdk/dist/index.js"
+    },
+    "./legacy": {
+      "types": "./sdk/dist/legacy.d.ts",
+      "import": "./sdk/dist/legacy.js",
+      "require": "./sdk/dist/legacy.js",
+      "default": "./sdk/dist/legacy.js"
+    },
+    "./rpc/failoverProvider": {
+      "types": "./sdk/dist/rpc/failoverProvider.d.ts",
+      "import": "./sdk/dist/rpc/failoverProvider.js",
+      "require": "./sdk/dist/rpc/failoverProvider.js",
+      "default": "./sdk/dist/rpc/failoverProvider.js"
+    }
+  },
   "license": "Apache-2.0",
   "engines": {
     "node": ">=20 <23",
@@ -20,7 +43,9 @@
     "treasury"
   ],
   "scripts": {
+    "build": "npm run build -w sdk",
     "lint": "npm run lint --workspaces --if-present",
+    "prepare": "npm run build",
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs"
   },

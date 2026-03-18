@@ -68,16 +68,41 @@ const buyerSDK = new BuyerSDK(config);
 const result = await buyerSDK.createTrade(tradeParams, buyerSigner);
 ```
 
-### Web3Auth Wallet Provider
+### Recommended: external Agroasys-managed signer
+
+The production SDK boundary should accept a signer that Agroasys already owns.
+That keeps:
+
+- Agroasys auth as the identity authority
+- embedded-wallet bootstrap outside the SDK
+- Ricardian signing and settlement initiation on the same signer path
+
+Example:
 
 ```ts
-import { web3Wallet } from "@agroasys/sdk";
+import { BuyerSDK } from "@agroasys/sdk";
+import { ethers } from "ethers";
+
+const buyerSDK = new BuyerSDK(config);
+const provider = new ethers.BrowserProvider(agroasysManagedProvider);
+const buyerSigner = await provider.getSigner();
+
+const result = await buyerSDK.createTrade(tradeParams, buyerSigner);
+```
+
+### Legacy demo helper: Web3Auth wallet provider
+
+```ts
+import { web3Wallet } from "@agroasys/sdk/legacy";
 
 await web3Wallet.connect();
 const address = await web3Wallet.getAddress();
 ```
 
 `CLIENT_ID` is required. `WEB3AUTH_NETWORK` defaults to `SAPPHIRE_DEVNET`.
+
+This helper is now considered legacy/demo-only. Agroasys production integrations
+should not let the SDK become the owner of wallet identity or wallet bootstrap.
 
 ## Functions
 
@@ -126,6 +151,19 @@ const address = await web3Wallet.getAddress();
 | `approveAddAdmin(proposalId, signer)` | Approve admin-add proposal |
 | `executeAddAdmin(proposalId, signer)` | Execute approved admin addition |
 | `cancelExpiredAddAdminProposal(proposalId, signer)` | Cancel expired admin-add proposal |
+
+## Auth ownership boundary
+
+Production integrations should follow this boundary:
+
+- Agroasys auth owns user identity
+- Agroasys-owned embedded wallet bootstrap owns wallet/session state
+- this SDK consumes an injected signer
+- Cotsel remains the settlement engine, not the identity root
+
+The legacy `web3Wallet` and `AuthClient` helpers remain available from the
+`@agroasys/sdk/legacy` entrypoint for demo flows, but they are no longer the
+recommended production integration path.
 
 
 

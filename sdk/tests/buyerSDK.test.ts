@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { BuyerSDK } from '../src/modules/buyerSDK';
+import { Interface } from 'ethers';
 import {
   TEST_CONFIG,
   assertRequiredEnv,
@@ -22,8 +23,12 @@ const RECEIPT = {
   hash: `0x${'2'.repeat(64)}`,
   blockNumber: 456,
 };
+const TRADE_LOCKED_INTERFACE = new Interface([
+  'event TradeLocked(uint256 indexed tradeId,address indexed buyer,address indexed supplier,uint256 totalAmount,uint256 logisticsAmount,uint256 platformFeesAmount,uint256 supplierFirstTranche,uint256 supplierSecondTranche,bytes32 ricardianHash)',
+]);
 
 type MockContractWithSigner = {
+  createTrade?: jest.Mock;
   openDispute: jest.Mock;
   cancelLockedTradeAfterTimeout: jest.Mock;
   refundInTransitAfterTimeout: jest.Mock;
@@ -33,6 +38,10 @@ type MockContractWithSigner = {
 function makeBuyerSigner(address = '0x2222222222222222222222222222222222222222'): any {
   return {
     getAddress: jest.fn().mockResolvedValue(address),
+    signMessage: jest.fn().mockResolvedValue(`0x${'1'.repeat(130)}`),
+    provider: {
+      getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
+    },
   };
 }
 
@@ -40,6 +49,7 @@ function makeSdkUnit() {
   const sdk = new BuyerSDK(UNIT_CONFIG);
 
   const contractWithSigner: MockContractWithSigner = {
+    createTrade: jest.fn(),
     openDispute: jest.fn(),
     cancelLockedTradeAfterTimeout: jest.fn(),
     refundInTransitAfterTimeout: jest.fn(),
@@ -47,7 +57,15 @@ function makeSdkUnit() {
   };
 
   const connect = jest.fn().mockReturnValue(contractWithSigner);
-  (sdk as any).contract = { connect };
+  (sdk as any).contract = {
+    connect,
+    interface: TRADE_LOCKED_INTERFACE,
+  };
+  jest.spyOn(sdk, 'getUSDCAllowance').mockResolvedValue(1_000_000n);
+  jest.spyOn(sdk, 'getBuyerNonce').mockResolvedValue(7n);
+  jest.spyOn(sdk, 'getTreasuryAddress').mockResolvedValue(
+    '0x3000000000000000000000000000000000000003',
+  );
 
   return { sdk, contractWithSigner, connect };
 }
@@ -63,6 +81,78 @@ function mockSuccessCall(mock: jest.Mock) {
 describe('BuyerSDK unit', () => {
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  test('createTrade should reject signer network mismatches', async () => {
+    const { sdk } = makeSdkUnit();
+    const signer = makeBuyerSigner();
+    signer.provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
+
+    await expect(
+      sdk.createTrade(
+        {
+          supplier: '0x1111111111111111111111111111111111111111',
+          totalAmount: 1000000n,
+          logisticsAmount: 0n,
+          platformFeesAmount: 0n,
+          supplierFirstTranche: 400000n,
+          supplierSecondTranche: 600000n,
+          ricardianHash: `0x${'a'.repeat(64)}`,
+        },
+        signer,
+      ),
+    ).rejects.toThrow('wrong network');
+  });
+
+  test('createTrade should surface tradeId from TradeLocked receipt logs', async () => {
+    const { sdk, contractWithSigner } = makeSdkUnit();
+    const signer = makeBuyerSigner();
+    const encodedLog = TRADE_LOCKED_INTERFACE.encodeEventLog(
+      TRADE_LOCKED_INTERFACE.getEvent('TradeLocked')!,
+      [
+        99n,
+        '0x2222222222222222222222222222222222222222',
+        '0x1111111111111111111111111111111111111111',
+        1000000n,
+        0n,
+        0n,
+        400000n,
+        600000n,
+        `0x${'a'.repeat(64)}`,
+      ],
+    );
+    const tx = {
+      wait: jest.fn().mockResolvedValue({
+        ...RECEIPT,
+        logs: [
+          {
+            address: UNIT_CONFIG.escrowAddress,
+            topics: encodedLog.topics,
+            data: encodedLog.data,
+          },
+        ],
+      }),
+    };
+    (contractWithSigner as any).createTrade = jest.fn().mockResolvedValue(tx);
+
+    const result = await sdk.createTrade(
+      {
+        supplier: '0x1111111111111111111111111111111111111111',
+        totalAmount: 1000000n,
+        logisticsAmount: 0n,
+        platformFeesAmount: 0n,
+        supplierFirstTranche: 400000n,
+        supplierSecondTranche: 600000n,
+        ricardianHash: `0x${'a'.repeat(64)}`,
+      },
+      signer,
+    );
+
+    expect(result).toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+      tradeId: '99',
+    });
   });
 
   test('openDispute should call contract and return tx result', async () => {

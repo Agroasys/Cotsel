@@ -1,6 +1,11 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+/**
+ * @deprecated Agroasys should own embedded-wallet bootstrap and signer
+ * injection. This helper remains only for local demos and standalone SDK
+ * experiments.
+ */
 import { Web3Auth, WEB3AUTH_NETWORK } from '@web3auth/modal';
 import { ethers } from 'ethers';
 

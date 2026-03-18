@@ -117,6 +117,7 @@ export type BuyerLockPayload = TradeParameters;
 export interface TradeResult {
     txHash: string;
     blockNumber: number;
+    tradeId?: string;
 }
 
 export enum TradeStatus {
