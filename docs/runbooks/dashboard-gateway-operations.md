@@ -70,7 +70,7 @@ Safety rules:
 - If `GATEWAY_ENABLE_MUTATIONS=false`, all gateway mutation routes must reject writes.
 - If `GATEWAY_WRITE_ALLOWLIST` is empty, mutations must reject writes even when enabled.
 - The gateway process must never hold the governance signer key; only the separate executor process may do so.
-- Approved write operators for later enablement are Aston and `czypioe`, but `GATEWAY_WRITE_ALLOWLIST`
+- Approved write operators for later enablement are Aston and `czpyioe`, but `GATEWAY_WRITE_ALLOWLIST`
   must contain the exact local auth principal IDs used by the auth service. Do not guess identifiers.
 
 ## Startup procedure

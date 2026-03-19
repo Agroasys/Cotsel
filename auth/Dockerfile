@@ -2,14 +2,18 @@ FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
 COPY package*.json ./
-COPY shared-auth shared-auth
-COPY auth auth
+COPY auth/package.json auth/package.json
+COPY sdk/package.json sdk/package.json
+COPY shared-auth/package.json shared-auth/package.json
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm ci
+RUN npm ci --ignore-scripts
+
+COPY auth auth
+COPY shared-auth shared-auth
 
 RUN npm run -w auth build
 

@@ -180,7 +180,7 @@ The gateway must persist, at minimum:
 ## Remaining external deployment dependency
 - Current approved connected-validation target is local/docker only.
 - Concrete remote staging deployment coordinates (gateway base URL and auth URL binding) are still external operational inputs and must be recorded before remote staging connected-mode validation.
-- Mutations remain disabled by default; later enablement requires both `GATEWAY_ENABLE_MUTATIONS=true` and exact allowlist principal IDs for Aston and `czypioe`.
+- Mutations remain disabled by default; later enablement requires both `GATEWAY_ENABLE_MUTATIONS=true` and exact allowlist principal IDs for Aston and `czpyioe`.
 
 ## References
 - `docs/api/cotsel-dashboard-gateway.openapi.yml`
