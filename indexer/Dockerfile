@@ -15,7 +15,7 @@ COPY ricardian/package.json ricardian/package.json
 COPY sdk/package.json sdk/package.json
 COPY treasury/package.json treasury/package.json
 
-RUN npm ci --workspace indexer --include-workspace-root=false
+RUN npm ci --ignore-scripts --workspace indexer --include-workspace-root=false
 
 COPY indexer indexer
 

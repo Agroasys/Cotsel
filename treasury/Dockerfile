@@ -5,7 +5,7 @@ COPY package*.json ./
 COPY treasury/package.json treasury/package.json
 COPY shared-auth/package.json shared-auth/package.json
 
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY treasury treasury
 COPY shared-auth shared-auth
@@ -20,7 +20,7 @@ COPY package*.json ./
 COPY treasury/package.json treasury/package.json
 COPY shared-auth/package.json shared-auth/package.json
 
-RUN npm ci --omit=dev --workspace treasury --workspace @agroasys/shared-auth --include-workspace-root=false \
+RUN npm ci --omit=dev --ignore-scripts --workspace treasury --workspace @agroasys/shared-auth --include-workspace-root=false \
   && npm cache clean --force
 
 COPY --from=builder /app/treasury/dist /app/treasury/dist
