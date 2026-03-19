@@ -1,5 +1,5 @@
-module.exports = class Data1772284878012 {
-    name = 'Data1772284878012'
+module.exports = class Data1773933183979 {
+    name = 'Data1773933183979'
 
     async up(db) {
         await db.query(`CREATE TABLE "trade_event" ("id" character varying NOT NULL, "event_name" text NOT NULL, "block_number" integer NOT NULL, "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL, "tx_hash" text, "extrinsic_hash" text, "extrinsic_index" integer NOT NULL, "total_amount" numeric, "logistics_amount" numeric, "platform_fees_amount" numeric, "supplier_first_tranche" numeric, "supplier_second_tranche" numeric, "released_first_tranche" numeric, "released_logistics_amount" numeric, "treasury_address" text, "paid_platform_fees" numeric, "arrival_timestamp" numeric, "final_tranche" numeric, "final_recipient" text, "refunded_amount" numeric, "refunded_to" text, "refunded_buyer_principal" numeric, "payout_recipient" text, "payout_amount" numeric, "payout_type" character varying(7), "related_proposal_id" text, "claim_type" character varying(31), "claim_recipient" text, "claim_amount" numeric, "trade_id" character varying, CONSTRAINT "PK_728d9646fc0b297fd53619fa5e5" PRIMARY KEY ("id"))`)
@@ -30,6 +30,7 @@ module.exports = class Data1772284878012 {
         await db.query(`CREATE INDEX "IDX_32ee6fe694d94ee5834c17a3b5" ON "trade" ("supplier") `)
         await db.query(`CREATE INDEX "IDX_85f0c92d4a133135aafce952df" ON "trade" ("status") `)
         await db.query(`CREATE INDEX "IDX_1fa8b882815c66af40b4194894" ON "trade" ("created_at") `)
+        await db.query(`CREATE TABLE "overview_snapshot" ("id" character varying NOT NULL, "total_trades" integer NOT NULL, "locked_trades" integer NOT NULL, "stage1_trades" integer NOT NULL, "stage2_trades" integer NOT NULL, "completed_trades" integer NOT NULL, "disputed_trades" integer NOT NULL, "cancelled_trades" integer NOT NULL, "last_processed_block" numeric NOT NULL, "last_indexed_at" TIMESTAMP WITH TIME ZONE NOT NULL, "last_trade_event_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_60f629777d1ce64649ed176f071" PRIMARY KEY ("id"))`)
         await db.query(`CREATE TABLE "oracle_event" ("id" character varying NOT NULL, "event_name" text NOT NULL, "block_number" integer NOT NULL, "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL, "tx_hash" text, "extrinsic_hash" text, "extrinsic_index" integer NOT NULL, "proposed_oracle" text, "eta" numeric, "proposer" text, "approver" text, "approval_count" integer, "required_approvals" integer, "old_oracle" text, "new_oracle" text, "cancelled_by" text, "disabled_by" text, "previous_oracle" text, "oracle_update_id" character varying, CONSTRAINT "PK_25e19d364e5a1bd428bb2382acc" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_6332b67418267dcc642fc8fc1f" ON "oracle_event" ("oracle_update_id") `)
         await db.query(`CREATE INDEX "IDX_377cbe80128aa963a248625a2a" ON "oracle_event" ("event_name") `)
@@ -58,12 +59,14 @@ module.exports = class Data1772284878012 {
         await db.query(`CREATE INDEX "IDX_83b312e4cde8a32aa1aeba67d0" ON "admin_add_proposal" ("created_at") `)
         await db.query(`CREATE INDEX "IDX_6f568395738a583a6d4464317b" ON "admin_add_proposal" ("proposer") `)
         await db.query(`CREATE INDEX "IDX_4312e3977304fa06b6b8f3d422" ON "admin_add_proposal" ("cancelled") `)
-        await db.query(`CREATE TABLE "system_event" ("id" character varying NOT NULL, "event_name" text NOT NULL, "block_number" integer NOT NULL, "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL, "tx_hash" text, "extrinsic_hash" text, "extrinsic_index" integer NOT NULL, "triggered_by" text, "claim_amount" numeric, CONSTRAINT "PK_387d2d01bb48af5099e53bd14cf" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE TABLE "system_event" ("id" character varying NOT NULL, "event_name" text NOT NULL, "block_number" integer NOT NULL, "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL, "tx_hash" text, "extrinsic_hash" text, "extrinsic_index" integer NOT NULL, "triggered_by" text, "claim_amount" numeric, "proposal_id" text, "treasury_identity" text, "payout_receiver" text, "old_payout_receiver" text, "new_payout_receiver" text, "approval_count" integer, "required_approvals" integer, "eta" numeric, CONSTRAINT "PK_387d2d01bb48af5099e53bd14cf" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_7ff7d829541d61c592e9e5c196" ON "system_event" ("event_name") `)
         await db.query(`CREATE INDEX "IDX_82d04998f89102e75dc9c4d074" ON "system_event" ("block_number") `)
         await db.query(`CREATE INDEX "IDX_252506670ac8dc8e24bb154961" ON "system_event" ("timestamp") `)
         await db.query(`CREATE INDEX "IDX_1ba591704beabb03a9731beff0" ON "system_event" ("tx_hash") `)
         await db.query(`CREATE INDEX "IDX_c81998b1dc03c6b884b6b2bed0" ON "system_event" ("extrinsic_hash") `)
+        await db.query(`CREATE INDEX "IDX_fb1d8b8f54aaff0d07d724a727" ON "system_event" ("proposal_id") `)
+        await db.query(`CREATE INDEX "IDX_43f0b7b7f3d8d404241de69b67" ON "system_event" ("payout_receiver") `)
         await db.query(`ALTER TABLE "trade_event" ADD CONSTRAINT "FK_3408756ee41eca556530a91ad2b" FOREIGN KEY ("trade_id") REFERENCES "trade"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "dispute_event" ADD CONSTRAINT "FK_200ec7dc1960be051ff71d76ecd" FOREIGN KEY ("dispute_id") REFERENCES "dispute_proposal"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "dispute_proposal" ADD CONSTRAINT "FK_49a5da33a65902441b67111348f" FOREIGN KEY ("trade_id") REFERENCES "trade"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
@@ -100,6 +103,7 @@ module.exports = class Data1772284878012 {
         await db.query(`DROP INDEX "public"."IDX_32ee6fe694d94ee5834c17a3b5"`)
         await db.query(`DROP INDEX "public"."IDX_85f0c92d4a133135aafce952df"`)
         await db.query(`DROP INDEX "public"."IDX_1fa8b882815c66af40b4194894"`)
+        await db.query(`DROP TABLE "overview_snapshot"`)
         await db.query(`DROP TABLE "oracle_event"`)
         await db.query(`DROP INDEX "public"."IDX_6332b67418267dcc642fc8fc1f"`)
         await db.query(`DROP INDEX "public"."IDX_377cbe80128aa963a248625a2a"`)
@@ -134,6 +138,8 @@ module.exports = class Data1772284878012 {
         await db.query(`DROP INDEX "public"."IDX_252506670ac8dc8e24bb154961"`)
         await db.query(`DROP INDEX "public"."IDX_1ba591704beabb03a9731beff0"`)
         await db.query(`DROP INDEX "public"."IDX_c81998b1dc03c6b884b6b2bed0"`)
+        await db.query(`DROP INDEX "public"."IDX_fb1d8b8f54aaff0d07d724a727"`)
+        await db.query(`DROP INDEX "public"."IDX_43f0b7b7f3d8d404241de69b67"`)
         await db.query(`ALTER TABLE "trade_event" DROP CONSTRAINT "FK_3408756ee41eca556530a91ad2b"`)
         await db.query(`ALTER TABLE "dispute_event" DROP CONSTRAINT "FK_200ec7dc1960be051ff71d76ecd"`)
         await db.query(`ALTER TABLE "dispute_proposal" DROP CONSTRAINT "FK_49a5da33a65902441b67111348f"`)
