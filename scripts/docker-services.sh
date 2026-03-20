@@ -205,10 +205,10 @@ check_required_services() {
 
   case "$PROFILE" in
     local-dev)
-      required_services=(postgres redis indexer oracle reconciliation ricardian treasury gateway)
+      required_services=(postgres redis indexer oracle reconciliation ricardian treasury gateway auth)
       ;;
     staging-e2e|staging-e2e-real)
-      required_services=(postgres redis indexer-pipeline indexer-graphql oracle reconciliation ricardian treasury gateway)
+      required_services=(postgres redis indexer-pipeline indexer-graphql oracle reconciliation ricardian treasury gateway auth)
       ;;
     infra)
       required_services=(postgres redis)
@@ -329,6 +329,10 @@ case "$ACTION" in
 
     if is_running "gateway"; then
       check_http_health "gateway" "http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/healthz"
+    fi
+
+    if is_running "auth"; then
+      check_http_health "auth" "http://127.0.0.1:${AUTH_PORT:-3005}/api/auth/v1/health"
     fi
 
     if is_running "reconciliation"; then
