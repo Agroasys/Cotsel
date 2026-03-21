@@ -61,6 +61,7 @@ required_groups=(
   # shared compose/database inputs
   POSTGRES_USER
   POSTGRES_PASSWORD
+  AUTH_DB_NAME
   RICARDIAN_DB_NAME
   TREASURY_DB_NAME
   ORACLE_DB_NAME
@@ -71,6 +72,8 @@ required_groups=(
 if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e" || "$PROFILE" == "staging-e2e-real" ]]; then
   required_groups+=(
     # service ports used by local/staging compose profiles
+    AUTH_PORT
+    AUTH_SESSION_TTL_SECONDS
     RICARDIAN_PORT
     TREASURY_PORT
     ORACLE_PORT

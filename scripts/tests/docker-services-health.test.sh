@@ -82,7 +82,7 @@ case "$command" in
     if [[ "${1:-}" == "--services" ]]; then
       case "$profile" in
         local-dev)
-          printf '%s\n' postgres redis indexer oracle reconciliation ricardian treasury gateway
+          printf '%s\n' postgres redis indexer oracle reconciliation ricardian treasury auth gateway
           ;;
         infra)
           printf '%s\n' postgres redis

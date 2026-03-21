@@ -1,6 +1,7 @@
 # Docker Service Profiles Runbook
 
 This runbook covers containerized orchestration for these services:
+- `auth`
 - `oracle`
 - `ricardian`
 - `treasury`
@@ -30,6 +31,7 @@ Staging-grade release-gate profile with real indexer pipeline components:
 - Docker Engine with Compose plugin (`docker compose`)
 - Root env files created from examples
 - Reachable `RPC_URL` if reconciliation/oracle on-chain checks are enabled
+- `AUTH_DB_NAME`, `AUTH_PORT`, and `AUTH_SESSION_TTL_SECONDS` must be set for all `local-dev`, `staging-e2e`, and `staging-e2e-real` profiles — enforced by `scripts/validate-env.sh`
 
 ## Environment Setup
 
@@ -66,6 +68,7 @@ scripts/docker-services.sh down staging-e2e-real
 
 ## Health Endpoints
 
+- Auth: `http://127.0.0.1:${AUTH_PORT:-3005}/api/auth/v1/health`
 - Ricardian: `http://127.0.0.1:${RICARDIAN_PORT:-3100}/api/ricardian/v1/health`
 - Treasury: `http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/health`
 - Oracle: `http://127.0.0.1:${ORACLE_PORT:-3001}/api/oracle/health`
