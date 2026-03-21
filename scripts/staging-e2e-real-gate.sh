@@ -355,9 +355,10 @@ extract_indexer_head_height() {
 try:
     data = json.load(sys.stdin)
 except Exception as e:
+    compose_file = os.getenv("COMPOSE_FILE", "docker-compose.services.yml")
     print(
         f"Warning: JSON parsing failed, treating indexer head height as unavailable and continuing. "
-        f"Check whether INDEXER_GRAPHQL_URL is returning valid JSON (for example by inspecting the raw HTTP response or the reconciliation/indexer-pipeline logs in the active Docker Compose config, COMPOSE_FILE={os.getenv(\"COMPOSE_FILE\", \"docker-compose.services.yml\")}). "
+        f"Check whether INDEXER_GRAPHQL_URL is returning valid JSON (for example by inspecting the raw HTTP response or the reconciliation/indexer-pipeline logs in the active Docker Compose config, COMPOSE_FILE={compose_file}). "
         f"Details: {e}",
         file=sys.stderr,
     )
@@ -695,7 +696,7 @@ ORDER BY id DESC
 LIMIT 1;
 SQL
 )"
-RUN_SUMMARY="$(run_with_prefixed_stderr "reconcile_run_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${RECONCILIATION_SUMMARY_FIELD_DELIM}" -tc "${RUN_SUMMARY_SQL}" || true)"
+RUN_SUMMARY="$(printf '%s\n' "${RUN_SUMMARY_SQL}" | run_with_prefixed_stderr "reconcile_run_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${RECONCILIATION_SUMMARY_FIELD_DELIM}" -t || true)"
 if [[ -n "$RUN_SUMMARY" ]]; then
   IFS="${RECONCILIATION_SUMMARY_FIELD_DELIM}" read -r RUN_STATUS RUN_TOTAL RUN_DRIFT <<<"$RUN_SUMMARY"
   echo "reconciliation run summary: runKey=${RUN_KEY}, status=${RUN_STATUS}, totalTrades=${RUN_TOTAL}, driftCount=${RUN_DRIFT}"
@@ -712,7 +713,7 @@ GROUP BY mismatch_code
 ORDER BY COUNT(*) DESC;
 SQL
 )"
-DRIFT_SUMMARY_ROWS="$(run_with_prefixed_stderr "reconcile_drift_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${RECONCILIATION_SUMMARY_FIELD_DELIM}" -tc "${DRIFT_SUMMARY_SQL}" || true)"
+DRIFT_SUMMARY_ROWS="$(printf '%s\n' "${DRIFT_SUMMARY_SQL}" | run_with_prefixed_stderr "reconcile_drift_summary" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -v run_key_var="${RUN_KEY}" -A -F "${RECONCILIATION_SUMMARY_FIELD_DELIM}" -t || true)"
 echo "drift classification snapshot:"
 if [[ -n "$DRIFT_SUMMARY_ROWS" ]]; then
   while IFS="${RECONCILIATION_SUMMARY_FIELD_DELIM}" read -r MISMATCH_CODE MISMATCH_COUNT; do

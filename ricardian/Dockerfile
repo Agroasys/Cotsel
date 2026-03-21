@@ -5,7 +5,7 @@ COPY package*.json ./
 COPY ricardian/package.json ricardian/package.json
 COPY shared-auth/package.json shared-auth/package.json
 
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY ricardian ricardian
 COPY shared-auth shared-auth
@@ -20,7 +20,7 @@ COPY package*.json ./
 COPY ricardian/package.json ricardian/package.json
 COPY shared-auth/package.json shared-auth/package.json
 
-RUN npm ci --omit=dev --workspace ricardian --workspace @agroasys/shared-auth --include-workspace-root=false \
+RUN npm ci --omit=dev --ignore-scripts --workspace ricardian --workspace @agroasys/shared-auth --include-workspace-root=false \
   && npm cache clean --force
 
 COPY --from=builder /app/ricardian/dist /app/ricardian/dist
