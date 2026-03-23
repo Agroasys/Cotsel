@@ -24,7 +24,7 @@
   "devDependencies": {
     "@subsquid/substrate-metadata-explorer": "^3.1.2",
     "@subsquid/substrate-typegen": "^8.1.0",
-    "@subsquid/typeorm-codegen": "^2.0.1",
+    "@subsquid/typeorm-codegen": "^2.1.0",
     "@types/minimatch": "^6.0.0",
     "@types/node": "^25.5.0",
     "typescript": "^5.5.2"
