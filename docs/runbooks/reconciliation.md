@@ -69,6 +69,24 @@ Severity mapping is deterministic by code path:
 - `HIGH`: status mismatch
 - `MEDIUM`: arrival timestamp mismatch
 
+## Audit envelope expectations
+Reconciliation evidence must align with `AuditEnvelopeV1` in
+`docs/observability/logging-schema.md`.
+
+Current runtime truth:
+- `reconciliation/src/utils/logger.ts` already emits `tradeId`, `actionKey`,
+  `requestId`, `txHash`, `chainId`, `networkName`, and `traceId`.
+- Reconciliation does not yet emit first-class `correlationId`, actor fields,
+  `intent`, or `outcome` on every log line.
+
+Operator rule:
+- When reconciliation output is used for incident or treasury follow-up, attach
+  missing `correlationId`, actor context, `intent`, and `outcome` from the
+  nearest authoritative request ledger, gateway action, or operator evidence
+  packet.
+- Do not infer a terminal result from free-form text alone; record an explicit
+  `outcome` in the incident or operator evidence artifact.
+
 ## Treasury Sweep Reconciliation Invariants
 
 When pull-over-push treasury sweep is enabled, use these deterministic checks:
@@ -176,6 +194,8 @@ CI artifact name:
 ## First 15 Minutes Checklist
 - Execute `docs/incidents/first-15-minutes-checklist.md`.
 - Capture reconciliation logs and identify affected `tradeId`/`requestId` pairs.
+- Capture `correlationId`, `intent`, and `outcome` from the upstream gateway or
+  operator evidence source when the reconciliation logger does not emit them directly.
 - Confirm whether failure source is RPC, indexer GraphQL, or DB.
 - Start `docs/incidents/incident-evidence-template.md` for any mismatch that requires containment or operator escalation.
 - Use `docs/runbooks/operator-audit-evidence-template.md` when reconciliation output drives an operator approval or treasury follow-up.

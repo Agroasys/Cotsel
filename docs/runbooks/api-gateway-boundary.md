@@ -30,17 +30,25 @@ Rules that apply to gateway-mediated traffic:
 - For internal retries/replays, regenerate service signatures per request; do not replay stale signed headers.
 
 ## Correlation IDs + request IDs (exact fields, generation, logging expectations)
-Correlation fields must align with `docs/observability/logging-schema.md`:
+Gateway-orchestrated traffic must align with `AuditEnvelopeV1` in
+`docs/observability/logging-schema.md`.
+
+Minimum fields for boundary investigations:
 - `tradeId`
 - `actionKey`
 - `requestId`
-- `txHash`
+- `correlationId`
 - `traceId`
+- `intent`
+- `outcome`
+- `txHash` when a chain action occurs
 
 Operational rules:
 - Mutating oracle calls must include `requestId` in request body (already required by oracle API contract).
 - If ingress receives no request correlation header, generate one at ingress and attach to downstream logs as `traceId`.
+- For dashboard or operator-initiated actions, generate or preserve a stable `correlationId` that survives retries and later incident review.
 - Keep `requestId` stable across retry attempts for the same client intent; use `actionKey`/idempotency logic in downstream services to prevent duplication.
+- Populate `intent` and `outcome` explicitly in gateway-owned ledgers and incident artifacts even when downstream services still emit only the correlation baseline.
 
 ## Timeouts and retries (default ceilings; per-service overrides; retry budget)
 Current deterministic behavior in-repo:
@@ -80,13 +88,21 @@ Use this classification for deterministic handoff:
 
 ## Observability requirements (log fields, metrics, traces)
 Minimum log requirements:
-- Include correlation fields from `docs/observability/logging-schema.md`.
+- Include the `AuditEnvelopeV1` baseline from `docs/observability/logging-schema.md`.
 - Redact auth/signature secrets from logs and artifacts.
 
 Required operational evidence for gateway-boundary incidents:
 - health/readiness outputs for affected services
-- correlated logs using `tradeId`, `actionKey`, `requestId`, `txHash`, `traceId`
+- correlated logs using `tradeId`, `actionKey`, `requestId`, `correlationId`, `traceId`, and `txHash`
 - release-gate reports when incident overlaps staging validation
+
+Current adoption note:
+- `gateway` generic request logs already emit `requestId` and `correlationId`, but
+  several downstream services still expose only the correlation baseline
+  (`tradeId`, `actionKey`, `requestId`, `txHash`, `traceId`).
+- During incidents, source missing `intent`, `outcome`, and actor fields from
+  gateway ledgers or operator evidence packets rather than inferring them from
+  free-form logs.
 
 Metric references (existing schema baseline):
 - `auth_failures_total`

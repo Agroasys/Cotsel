@@ -10,22 +10,24 @@ Use this template when an operator needs an audit-ready package for:
 - treasury payout reviews and exception handling
 
 ## Evidence Field Rules
-Current mandatory correlation fields come from `docs/observability/logging-schema.md`:
+Current mandatory audit-envelope fields come from `docs/observability/logging-schema.md`:
 - `tradeId`
 - `actionKey`
 - `requestId`
+- `correlationId`
 - `txHash`
 - `traceId`
-
-Additional fields should be populated when available from the service boundary:
-- `correlationId`
-- `actor`
 - `intent`
 - `outcome`
+
+Additional fields should be populated when available from the service boundary:
+- `actor`
 - `blockNumber` or `extrinsicHash`
 - approval or ticket reference
 
 If a field is not available for the workflow, record `N/A` instead of leaving it blank.
+If the runtime logger does not emit a field directly, source it from the nearest
+authoritative gateway ledger, request record, or operator evidence source.
 
 ## Audit Packet Header
 
@@ -62,8 +64,8 @@ If a field is not available for the workflow, record `N/A` instead of leaving it
 | `<name>` | `<approved / rejected / requires follow-up>` | `<timestamp>` | `<notes>` |
 
 ## Closeout Checklist
-- [ ] Core correlation fields captured from current logging baseline.
-- [ ] `actor`, `intent`, and `outcome` populated when the service boundary exposes them.
+- [ ] Core `AuditEnvelopeV1` fields captured from current logging or ledger baseline.
+- [ ] `actor`, `intent`, and `outcome` populated from the authoritative service or ledger source.
 - [ ] On-chain or extrinsic reference attached where a state-changing action occurred.
 - [ ] Approval or escalation references attached.
 - [ ] Links to service logs and supporting artifacts included.

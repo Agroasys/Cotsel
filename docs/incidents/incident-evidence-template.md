@@ -15,23 +15,25 @@ Use this template when a responder needs to preserve enough evidence to explain:
 - Gateway mutation incidents or control-plane safety investigations.
 - Treasury payout incidents that require containment, cancellation, or manual recovery.
 
-## Current Correlation Baseline
-Current mandatory log fields come from `docs/observability/logging-schema.md`:
+## Current Audit Envelope Baseline
+Current mandatory audit-envelope fields come from `docs/observability/logging-schema.md`:
 - `tradeId`
 - `actionKey`
 - `requestId`
+- `correlationId`
 - `txHash`
 - `traceId`
-
-Populate the following when the service surface already provides them:
-- `correlationId`
-- `actor`
 - `intent`
 - `outcome`
+
+Populate the following when the service surface already provides them:
+- `actor`
 - `blockNumber` / `extrinsicHash`
 - incident or ticket reference
 
-This template is forward-compatible with later audit-envelope standardization and should not be treated as permission to omit currently available evidence.
+If a service does not emit every field directly, source the missing values from
+the nearest authoritative request ledger, gateway action record, or operator
+evidence packet rather than leaving them implicit.
 
 ## Incident Summary
 
@@ -78,6 +80,7 @@ Populate one row per impacted action or trade.
 ## Closeout Checklist
 - [ ] Severity, owner, and impact recorded.
 - [ ] Affected `tradeId` / `actionKey` / `requestId` values captured where applicable.
+- [ ] `correlationId`, `intent`, and `outcome` captured from the authoritative source where available.
 - [ ] `traceId` and `txHash` or equivalent chain references captured where available.
 - [ ] Containment or rollback decision recorded with timestamp and owner.
 - [ ] Evidence artifacts linked for service logs, chain truth, and indexer or DB truth.
