@@ -55,6 +55,7 @@ All modules extend a shared **Client** base class, which handles provider initia
 
 ```
 import { BuyerSDK } from '@agroasys/sdk';
+import type { BuyerLockPayload } from '@agroasys/sdk';
 
 const config = {
   rpc: '',
@@ -65,7 +66,17 @@ const config = {
 
 const buyerSDK = new BuyerSDK(config);
 
-const result = await buyerSDK.createTrade(tradeParams, buyerSigner);
+const payload: BuyerLockPayload = {
+  supplier: '',
+  totalAmount: 0n,
+  logisticsAmount: 0n,
+  platformFeesAmount: 0n,
+  supplierFirstTranche: 0n,
+  supplierSecondTranche: 0n,
+  ricardianHash: ''
+};
+
+const result = await buyerSDK.createTrade(payload, buyerSigner);
 ```
 
 ### Recommended: external Agroasys-managed signer
@@ -80,12 +91,10 @@ That keeps:
 Example:
 
 ```ts
-import { BuyerLockPayload, BuyerSDK } from "@agroasys/sdk";
-import { ethers } from "ethers";
+import { BuyerLockPayload, BuyerSDK, createSignerFromEip1193Provider } from "@agroasys/sdk";
 
 const buyerSDK = new BuyerSDK(config);
-const provider = new ethers.BrowserProvider(agroasysManagedProvider);
-const buyerSigner = await provider.getSigner();
+const buyerSigner = await createSignerFromEip1193Provider(agroasysManagedProvider);
 const payload: BuyerLockPayload = {
   supplier: "0xSupplierAddress...",
   totalAmount: 141_500_000n,
@@ -104,6 +113,27 @@ Canonical buyer lock payload contract:
 - `TradeParameters` remains available as a backward-compatible alias.
 - Source of truth: `docs/runbooks/buyer-lock-payload.md`
 
+### Embedded-wallet / Web3Auth compatibility contract
+
+The recommended embedded-wallet path is an injected EIP-1193 provider that the
+SDK converts into an ethers signer via `createSignerFromEip1193Provider(...)`.
+
+Minimum provider capabilities required by the buyer flow:
+
+- `request({ method: "eth_chainId" })` for network verification
+- `request({ method: "eth_accounts" })` or `eth_requestAccounts` for signer resolution
+- `request({ method: "personal_sign" })` for the canonical trade signature
+- standard transaction submission support such as `eth_sendTransaction` for real approve/createTrade execution in production runtimes
+
+Deterministic compatibility harness:
+
+```bash
+npm run -w sdk test -- --runTestsByPath tests/web3AuthSignerCompatibility.test.ts
+```
+
+The harness proves that an EIP-1193/embedded-wallet signer can pass through the
+SDK lock flow, trigger allowance handling, produce the canonical signature, and
+submit the lock call through the current `BuyerSDK` assumptions.
 ### Legacy demo helper: Web3Auth wallet provider
 
 ```ts
