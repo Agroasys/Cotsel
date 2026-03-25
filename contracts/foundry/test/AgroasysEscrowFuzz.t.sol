@@ -669,5 +669,38 @@ contract FuzzTest is Test {
         assertEq(escrow.claimableUsdc(buyer), buyerClaimableBefore + tranche2, "buyer claimable should include tranche2 refund");
     }
 
+    // after payout address rotation, treasury cannot bypass claimTreasury() via claim()
+    function test_treasuryCannotBypassPayoutRotationViaClaim() public {
+        uint256 tradeId = _create_trade(1_000e6, 500e6, 10_000e6, 10_000e6, keccak256("doc"));
+
+        vm.prank(oracle);
+        escrow.releaseFundsStage1(tradeId);
+
+        // treasury has accrued fees at this point
+        uint256 accrued = escrow.claimableUsdc(treasury);
+        assertGt(accrued, 0, "treasury should have claimable balance");
+
+        // rotate payout address to a separate receiver
+        address newReceiver = makeAddr("newReceiver");
+        vm.prank(admin1);
+        uint256 proposalId = escrow.proposeTreasuryPayoutAddressUpdate(newReceiver);
+        vm.prank(admin2);
+        escrow.approveTreasuryPayoutAddressUpdate(proposalId);
+        vm.warp(block.timestamp + escrow.governanceTimelock() + 1);
+        vm.prank(admin1);
+        escrow.executeTreasuryPayoutAddressUpdate(proposalId);
+        assertEq(escrow.treasuryPayoutAddress(), newReceiver, "payout address should be rotated");
+
+        // treasury calling claim() directly must revert
+        vm.prank(treasury);
+        vm.expectRevert("treasury must use claimTreasury");
+        escrow.claim();
+
+        // claimTreasury() routes funds to newReceiver, not treasury
+        uint256 receiverBefore = usdc.balanceOf(newReceiver);
+        escrow.claimTreasury();
+        assertEq(usdc.balanceOf(newReceiver), receiverBefore + accrued, "funds should land at rotated receiver");
+        assertEq(usdc.balanceOf(treasury), 0, "treasury wallet should receive nothing");
+    }
 
 }

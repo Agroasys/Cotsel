@@ -677,7 +677,14 @@ describe("AgroasysEscrow", function () {
 
       await claimAndAssert(supplier);
       expect(await escrow.claimableUsdc(treasury.address)).to.equal(logisticsAmount + platformFeesAmount);
-      await claimAndAssert(treasury);
+      const treasuryClaimable = await escrow.claimableUsdc(treasury.address);
+      const treasuryBefore = await usdc.balanceOf(treasury.address);
+      const escrowAny = escrow as any;
+      await expect(escrowAny.connect(buyer).claimTreasury())
+        .to.emit(escrow, "TreasuryClaimed")
+        .withArgs(treasury.address, treasury.address, treasuryClaimable, buyer.address);
+      expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore + treasuryClaimable);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(0);
       expect(await escrow.totalClaimableUsdc()).to.equal(0);
     });
 
