@@ -164,6 +164,20 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
     }
   });
 
+  router.get('/compliance/trades/:tradeId/attestation-status', requireGatewayRole('operator:read'), async (req, res, next) => {
+    try {
+      const tradeId = parseTradeId(req.params.tradeId);
+      const status = await options.complianceService.getAttestationStatus(tradeId);
+      if (!status) {
+        throw new GatewayError(404, 'NOT_FOUND', 'Attestation status not found for trade', { tradeId });
+      }
+
+      res.status(200).json(successResponse(status));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get('/compliance/trades/:tradeId/decisions', requireGatewayRole('operator:read'), async (req, res, next) => {
     try {
       const tradeId = parseTradeId(req.params.tradeId);

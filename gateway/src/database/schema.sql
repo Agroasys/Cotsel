@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS governance_actions (
     actor_id TEXT NOT NULL,
     endpoint TEXT NOT NULL,
     intent_hash TEXT NOT NULL,
+    attestation_ref JSONB,
     reason TEXT NOT NULL,
     evidence_links JSONB NOT NULL DEFAULT '[]'::jsonb,
     ticket_ref TEXT NOT NULL,
@@ -365,6 +366,9 @@ ALTER TABLE compliance_decisions
 
 ALTER TABLE compliance_decisions
     ADD COLUMN IF NOT EXISTS intent_hash TEXT;
+
+ALTER TABLE compliance_decisions
+    ADD COLUMN IF NOT EXISTS attestation_ref JSONB;
 
 UPDATE idempotency_keys
 SET actor_id = COALESCE(NULLIF(actor_id, ''), '__legacy__'),

@@ -59,6 +59,25 @@ function buildDecisionInput(overrides: Record<string, unknown> = {}) {
     subjectType: 'counterparty',
     riskLevel: 'high',
     correlationId: 'corr-1',
+    attestation: {
+      attestationId: 'att-1',
+      attestationType: 'kyt',
+      status: 'active',
+      issuer: {
+        id: 'compliance-provider',
+        kind: 'provider',
+        displayName: 'Compliance Provider',
+      },
+      subjectRef: {
+        type: 'counterparty',
+        reference: 'subject-1',
+      },
+      issuedAt: '2026-03-20T10:00:00.000Z',
+      expiresAt: '2026-03-30T10:00:00.000Z',
+      providerRef: 'provider-ref-1',
+      evidenceRef: 'evidence-bundle-1',
+      referenceHash: `0x${'a'.repeat(64)}`,
+    },
     audit: buildAudit(),
     ...overrides,
   };
@@ -123,6 +142,62 @@ describe('compliance service', () => {
       'compliance.decision.recorded',
       'compliance.decision.recorded',
     ]);
+  });
+
+  test('derives read-only attestation status from the latest attested decision', async () => {
+    const { service } = buildService();
+    const principal = buildPrincipal();
+    const requestContext = buildRequestContext();
+
+    await service.createDecision({
+      ...validateComplianceDecisionCreateRequest(buildDecisionInput({
+        result: 'ALLOW',
+        reasonCode: 'CMP_OVERRIDE_ACTIVE',
+        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      })),
+      principal,
+      requestContext,
+      routePath: '/api/dashboard-gateway/v1/compliance/decisions',
+      idempotencyKey: 'idem-attestation-available',
+    });
+
+    const status = await service.getAttestationStatus('TRD-1');
+
+    expect(status).toMatchObject({
+      tradeId: 'TRD-1',
+      decisionType: 'KYT',
+      complianceResult: 'ALLOW',
+      availability: 'available',
+      freshness: 'current',
+      attestation: {
+        attestationId: 'att-1',
+        issuer: { id: 'compliance-provider' },
+      },
+    });
+  });
+
+  test('marks attestation status unavailable when latest attested decision records provider outage', async () => {
+    const { service } = buildService();
+    const principal = buildPrincipal();
+    const requestContext = buildRequestContext();
+
+    await service.createDecision({
+      ...validateComplianceDecisionCreateRequest(buildDecisionInput()),
+      principal,
+      requestContext,
+      routePath: '/api/dashboard-gateway/v1/compliance/decisions',
+      idempotencyKey: 'idem-attestation-unavailable',
+    });
+
+    const status = await service.getAttestationStatus('TRD-1');
+
+    expect(status).toMatchObject({
+      tradeId: 'TRD-1',
+      complianceResult: 'DENY',
+      availability: 'unavailable',
+      freshness: 'stale',
+      degradedReason: 'cmp_provider_unavailable',
+    });
   });
 
   test('assigns monotonic decision timestamps for same-trade writes', async () => {

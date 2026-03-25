@@ -68,6 +68,7 @@ async function insertComplianceDecision(client: PoolClient, decision: Compliance
       actor_id,
       endpoint,
       intent_hash,
+      attestation_ref,
       reason,
       evidence_links,
       ticket_ref,
@@ -79,7 +80,7 @@ async function insertComplianceDecision(client: PoolClient, decision: Compliance
       decided_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-      $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19, $20, $21, $22, $23, $24::jsonb, $25
+      $11, $12, $13, $14, $15, $16, $17::jsonb, $18, $19::jsonb, $20, $21, $22, $23, $24, $25::jsonb, $26
     )`,
     [
       decision.decisionId,
@@ -98,6 +99,7 @@ async function insertComplianceDecision(client: PoolClient, decision: Compliance
       decision.actorId ?? null,
       decision.endpoint ?? null,
       decision.intentHash ?? null,
+      decision.attestation ? JSON.stringify(decision.attestation) : null,
       decision.audit.reason,
       JSON.stringify(decision.audit.evidenceLinks),
       decision.audit.ticketRef,

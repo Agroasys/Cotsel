@@ -1590,6 +1590,32 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
+  /compliance/trades/{tradeId}/attestation-status:
+    get:
+      tags: [Compliance]
+      summary: Get read-only attestation status for a trade
+      description: |
+        Returns the latest attestation-backed compliance status for the trade.
+        This is a read-only operator surface and does not revalidate the
+        attestation against the issuer at request time.
+      operationId: getTradeComplianceAttestationStatus
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/TradeId'
+      responses:
+        '200':
+          description: Current attestation-backed compliance status for the trade.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceTradeAttestationStatusResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
   /compliance/trades/{tradeId}/decisions:
     get:
       tags: [Compliance]
@@ -4318,6 +4344,12 @@ components:
           type: string
           nullable: true
           description: Optional digest of the external attestation statement or evidence bundle.
+    AttestationAvailability:
+      type: string
+      enum: [available, degraded, unavailable]
+    AttestationFreshnessState:
+      type: string
+      enum: [current, stale, expired, unknown]
     ComplianceDecisionType:
       type: string
       enum: [KYB, KYT, SANCTIONS]
@@ -4375,6 +4407,8 @@ components:
           description: Used when `reasonCode=CMP_OVERRIDE_ACTIVE` to record the approved override window.
         correlationId:
           type: string
+        attestation:
+          $ref: '#/components/schemas/AttestationReference'
         audit:
           $ref: '#/components/schemas/MutationAuditInput'
     ComplianceDecision:
@@ -4425,6 +4459,8 @@ components:
           nullable: true
         blockState:
           $ref: '#/components/schemas/ComplianceBlockState'
+        attestation:
+          $ref: '#/components/schemas/AttestationReference'
         audit:
           $ref: '#/components/schemas/MutationAuditRecord'
     ComplianceDecisionResponse:
@@ -4497,6 +4533,56 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/ComplianceTradeStatus'
+        timestamp:
+          type: string
+          format: date-time
+    ComplianceTradeAttestationStatus:
+      type: object
+      required:
+        - tradeId
+        - decisionId
+        - decisionType
+        - complianceResult
+        - availability
+        - freshness
+        - verifiedAt
+        - updatedAt
+        - attestation
+      properties:
+        tradeId:
+          type: string
+        decisionId:
+          type: string
+        decisionType:
+          $ref: '#/components/schemas/ComplianceDecisionType'
+        complianceResult:
+          $ref: '#/components/schemas/ComplianceDecisionResult'
+        reasonCode:
+          type: string
+        availability:
+          $ref: '#/components/schemas/AttestationAvailability'
+        freshness:
+          $ref: '#/components/schemas/AttestationFreshnessState'
+        degradedReason:
+          type: string
+          nullable: true
+        verifiedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        attestation:
+          $ref: '#/components/schemas/AttestationReference'
+    ComplianceTradeAttestationStatusResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ComplianceTradeAttestationStatus'
         timestamp:
           type: string
           format: date-time
