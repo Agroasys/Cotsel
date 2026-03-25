@@ -200,6 +200,51 @@ describe('compliance service', () => {
     });
   });
 
+  test('preserves last-known attestation metadata when the latest outage decision has no attestation payload', async () => {
+    const { service } = buildService();
+    const principal = buildPrincipal();
+    const requestContext = buildRequestContext();
+
+    const attestedDecision = await service.createDecision({
+      ...validateComplianceDecisionCreateRequest(buildDecisionInput({
+        result: 'ALLOW',
+        reasonCode: 'CMP_OVERRIDE_ACTIVE',
+        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      })),
+      principal,
+      requestContext,
+      routePath: '/api/dashboard-gateway/v1/compliance/decisions',
+      idempotencyKey: 'idem-attestation-last-known',
+    });
+
+    const outageDecision = await service.createDecision({
+      ...validateComplianceDecisionCreateRequest(buildDecisionInput({
+        attestation: null,
+      })),
+      principal,
+      requestContext: { ...requestContext, requestId: 'req-2', correlationId: 'corr-2' },
+      routePath: '/api/dashboard-gateway/v1/compliance/decisions',
+      idempotencyKey: 'idem-attestation-outage-no-ref',
+    });
+
+    const status = await service.getAttestationStatus('TRD-1');
+
+    expect(status).toMatchObject({
+      tradeId: 'TRD-1',
+      decisionId: outageDecision.decisionId,
+      complianceResult: 'DENY',
+      availability: 'unavailable',
+      freshness: 'stale',
+      degradedReason: 'cmp_provider_unavailable',
+      verifiedAt: attestedDecision.decidedAt,
+      updatedAt: outageDecision.decidedAt,
+      attestation: {
+        attestationId: 'att-1',
+        issuer: { id: 'compliance-provider' },
+      },
+    });
+  });
+
   test('assigns monotonic decision timestamps for same-trade writes', async () => {
     const { service } = buildService();
     const principal = buildPrincipal();
