@@ -36,6 +36,8 @@ Purpose:
 - Private key access is role-limited and logged.
 - Emergency rotation procedure is documented and tested in non-production first.
 - Shared test/dev keys are never reused for production environments.
+- Gateway governance signer custody is defined in `docs/runbooks/gateway-governance-signer-custody.md`.
+- Production governance execution must use managed signer custody; raw `GATEWAY_EXECUTOR_PRIVATE_KEY` env injection is staging-only unless a time-boxed exception is approved and rotated immediately after use.
 
 ## 2) Gas and Fee Expectations
 
@@ -113,5 +115,6 @@ Purpose:
   - `docs/runbooks/staging-e2e-release-gate.md`
   - `docs/runbooks/staging-e2e-real-release-gate.md`
   - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
+  - `docs/runbooks/gateway-governance-signer-custody.md`
   - `docs/runbooks/oracle-redrive.md`
   - `docs/incidents/first-15-minutes-checklist.md`

@@ -66,10 +66,14 @@ Executor-only env:
 - `GATEWAY_EXECUTOR_PRIVATE_KEY`
 - `GATEWAY_EXECUTOR_TIMEOUT_MS`
 
+Signer custody source of truth:
+- `docs/runbooks/gateway-governance-signer-custody.md`
+
 Safety rules:
 - If `GATEWAY_ENABLE_MUTATIONS=false`, all gateway mutation routes must reject writes.
 - If `GATEWAY_WRITE_ALLOWLIST` is empty, mutations must reject writes even when enabled.
 - The gateway process must never hold the governance signer key; only the separate executor process may do so.
+- `GATEWAY_EXECUTOR_PRIVATE_KEY` is an approved local/staging bootstrap path only, not a steady-state production custody model.
 - Approved write operators for later enablement are Aston and `czpyioe`, but `GATEWAY_WRITE_ALLOWLIST`
   must contain the exact local auth principal IDs used by the auth service. Do not guess identifiers.
 
@@ -189,6 +193,11 @@ npm run -w gateway execute:governance-action -- <actionId>
 10. Executor updates the action record and audit log atomically.
 11. Operator verifies tx hash, status, and chain event.
 
+Signer-custody requirements before step 8:
+- confirm the executor signer address matches the approved admin address for the queued action
+- confirm the signer source satisfies `docs/runbooks/gateway-governance-signer-custody.md`
+- record the approval or incident reference before starting the executor session
+
 ## Rollback procedure
 If gateway behavior regresses after deploy:
 1. Set `GATEWAY_ENABLE_MUTATIONS=false`.
@@ -219,3 +228,4 @@ curl -fsS -H "Authorization: Bearer <session>" \
 - `docs/runbooks/dashboard-api-gateway-boundary.md`
 - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
 - `docs/runbooks/api-gateway-boundary.md`
+- `docs/runbooks/gateway-governance-signer-custody.md`
