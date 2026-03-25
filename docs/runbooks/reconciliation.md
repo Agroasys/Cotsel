@@ -8,6 +8,9 @@ If a mismatch may be caused by routing/auth propagation/correlation breakdown be
 Automation-governance source of truth:
 - `docs/runbooks/programmability-governance.md`
 
+Legacy chain-event ingest retirement source of truth:
+- `docs/runbooks/chain-event-parity-retirement.md`
+
 ## Preconditions
 - Postgres is reachable.
 - Reconciliation env vars are set (`RPC_URL`, `INDEXER_GRAPHQL_URL`, addresses).
