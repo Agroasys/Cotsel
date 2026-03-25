@@ -8,6 +8,7 @@
  */
 import { Web3Auth, WEB3AUTH_NETWORK } from '@web3auth/modal';
 import { ethers } from 'ethers';
+import { createSignerFromEip1193Provider } from './eip1193';
 
 type Web3AuthNetwork = (typeof WEB3AUTH_NETWORK)[keyof typeof WEB3AUTH_NETWORK];
 
@@ -57,8 +58,7 @@ class Web3AuthWrapper {
       throw new Error('Web3Auth provider not initialized');
     }
 
-    const provider = new ethers.BrowserProvider(this.web3auth.provider);
-    this.signer = await provider.getSigner();
+    this.signer = await createSignerFromEip1193Provider(this.web3auth.provider);
 
     return this.signer;
   }
