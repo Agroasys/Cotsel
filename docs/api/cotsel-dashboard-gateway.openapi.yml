@@ -4266,7 +4266,8 @@ components:
       description: |
         Canonical off-chain attestation reference contract for operator surfaces.
         This schema intentionally carries only reference metadata and not the raw
-        attestation payload.
+        attestation payload. Verification freshness and outage interpretation are
+        defined operationally in `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`.
       required:
         - attestationId
         - attestationType
