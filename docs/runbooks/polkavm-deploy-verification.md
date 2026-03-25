@@ -62,8 +62,26 @@ npm run -w contracts compile
 Bytecode size report script:
 
 ```bash
+# requires a compiled artifact at contracts/artifacts/... or an explicit --artifact override
 node scripts/polkavm-bytecode-size.mjs
 ```
+
+Deterministic JSON output for CI or local verification:
+
+```bash
+node scripts/polkavm-bytecode-size.mjs --json
+```
+
+Fixture or alternate artifact override:
+
+```bash
+node scripts/polkavm-bytecode-size.mjs --json --artifact path/to/AgroasysEscrow.json
+```
+
+Interpretation:
+- `Runtime bytecode` is the deployed contract bytecode size.
+- `Initcode` is the deploy-time creation bytecode from the artifact.
+- `Deploy payload` is `initcode + ABI-encoded constructor args` and is the value compared against the EIP-3860 48 KB limit.
 
 ## resolc Binary Lookup Contract (Plugin Behavior)
 
