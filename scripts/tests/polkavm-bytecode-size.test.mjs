@@ -7,8 +7,15 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const scriptPath = path.join(repoRoot, "scripts", "polkavm-bytecode-size.mjs");
+const fixtureArtifactPath = path.join(
+  repoRoot,
+  "scripts",
+  "tests",
+  "fixtures",
+  "polkavm-bytecode-size-artifact.json",
+);
 
-const stdout = execFileSync(process.execPath, [scriptPath, "--json"], {
+const stdout = execFileSync(process.execPath, [scriptPath, "--json", "--artifact", fixtureArtifactPath], {
   cwd: repoRoot,
   encoding: "utf8",
 });
@@ -16,6 +23,7 @@ const stdout = execFileSync(process.execPath, [scriptPath, "--json"], {
 const report = JSON.parse(stdout);
 
 assert.equal(typeof report.format, "string");
+assert.equal(report.artifactPath, path.relative(repoRoot, fixtureArtifactPath));
 assert.equal(typeof report.runtimeBytecodeBytes, "number");
 assert.equal(typeof report.initcodeBytes, "number");
 assert.equal(typeof report.encodedArgsBytes, "number");

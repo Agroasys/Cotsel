@@ -19,9 +19,36 @@ const DEPLOY_ARGS = {
 };
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const artifactPath = path.join(root, "contracts/artifacts/src/AgroasysEscrow.sol/AgroasysEscrow.json");
+const defaultArtifactPath = path.join(root, "contracts/artifacts/src/AgroasysEscrow.sol/AgroasysEscrow.json");
+const args = process.argv.slice(2);
 
-const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+function parseArtifactPath(argv) {
+  const flagIndex = argv.indexOf("--artifact");
+  if (flagIndex === -1) {
+    return defaultArtifactPath;
+  }
+
+  const rawPath = argv[flagIndex + 1];
+  if (!rawPath || rawPath.startsWith("--")) {
+    throw new Error("Missing value for --artifact");
+  }
+
+  return path.resolve(root, rawPath);
+}
+
+function loadArtifact(artifactPath) {
+  if (!fs.existsSync(artifactPath)) {
+    throw new Error(
+      `Artifact not found at ${artifactPath}. ` +
+      "Run 'npm run -w contracts compile:polkavm' first or pass --artifact <path>."
+    );
+  }
+
+  return JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+}
+
+const artifactPath = parseArtifactPath(args);
+const artifact = loadArtifact(artifactPath);
 const fmt = artifact._format ?? "unknown";
 const EVM_CAP = 49152;
 
@@ -80,7 +107,7 @@ const report = {
   exceedsByBytes,
 };
 
-if (process.argv.includes("--json")) {
+if (args.includes("--json")) {
   console.log(JSON.stringify(report, null, 2));
   process.exit(0);
 }
