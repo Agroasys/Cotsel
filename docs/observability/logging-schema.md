@@ -91,8 +91,9 @@ At minimum, never log:
 - full HMAC secrets or full signed canonical strings
 - raw banking details
 
-Data-classification enforcement is governed separately by the data-classification
-policy and release-gate guardrail work.
+Data-classification enforcement is governed by
+`docs/security/data-classification-policy.md` and the release-gate guard
+`scripts/tests/data-classification-guard.mjs`.
 
 ## Service adoption status
 
