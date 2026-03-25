@@ -76,13 +76,10 @@ Deterministic CI enforcement is performed by:
 
 Current guard coverage:
 
-- `docs/observability/logging-schema.md`
-- `docs/incidents/incident-evidence-template.md`
-- `docs/runbooks/operator-audit-evidence-template.md`
-- `docs/runbooks/api-gateway-boundary.md`
-- `docs/runbooks/dashboard-api-gateway-boundary.md`
-- `docs/runbooks/reconciliation.md`
-- `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
+- all operator-facing docs under `docs/api`
+- all incident templates under `docs/incidents`
+- all observability contracts under `docs/observability`
+- all runbook examples and field lists under `docs/runbooks`
 - `gateway/src/logging/logger.ts`
 - `oracle/src/utils/logger.ts`
 - `treasury/src/utils/logger.ts`
