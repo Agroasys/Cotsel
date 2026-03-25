@@ -3,14 +3,15 @@
 This document is the reference for external checkout UIs that
 integrate with `BuyerSDK.createTrade(...)`.
 
-**Relevant SDK type:** `TradeParameters` (`sdk/src/types/trade.ts`)  
+**Relevant SDK type:** `BuyerLockPayload` (`sdk/src/types/trade.ts`)
+**Backward-compatible alias:** `TradeParameters`
 **Entry point method:** `BuyerSDK.createTrade(payload, buyerSigner)`
 
 
 ## Overview
 
 When a buyer initiates settlement on the Agroasys platform, the checkout UI
-must assemble a `TradeParameters` and pass it to `BuyerSDK.createTrade(...)`.
+must assemble a `BuyerLockPayload` and pass it to `BuyerSDK.createTrade(...)`.
 The SDK validates the payload, handles the USDC approval if needed, derives the
 nonce, constructs the EIP-191 signature, and submits the lock transaction.
 
@@ -26,9 +27,9 @@ The checkout UI is responsible for:
 ## Canonical Payload Shape
 
 ```ts
-import { TradeParameters } from '@agroasys/sdk';
+import { BuyerLockPayload } from '@agroasys/sdk';
 
-const payload: TradeParameters = {
+const payload: BuyerLockPayload = {
   supplier:             '0xSupplierAddress...',
   totalAmount:          141_500_000n,   // 141.50 USDC (6 decimals)
   logisticsAmount:       10_000_000n,   //  10.00 USDC — logistics fee
@@ -74,14 +75,14 @@ totalAmount === logisticsAmount
 
 **Checkout UI responsibility:**
 
-Call the Ricardian service to anchor the legal document and receive the hash **before** assembling the `TradeParameters`.
+Call the Ricardian service to anchor the legal document and receive the hash **before** assembling the `BuyerLockPayload`.
 
 
 ## Nonce and Deadline
 
 ### Nonce
 
-The nonce is **not** part of `TradeParameters`. The SDK derives the current
+The nonce is **not** part of `BuyerLockPayload`. The SDK derives the current
 per-buyer on-chain nonce automatically:
 
 ```ts
@@ -89,6 +90,12 @@ const nonce = await this.getBuyerNonce(buyerAddress);
 ```
 
 Checkout UIs MUST NOT pass a nonce.
+
+## Compatibility note
+
+`TradeParameters` remains exported as a backward-compatible alias for existing
+integrations. New checkout implementations should prefer `BuyerLockPayload` so
+the canonical contract is unambiguous across SDK docs and examples.
 
 ### Deadline
 

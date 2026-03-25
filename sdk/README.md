@@ -80,15 +80,29 @@ That keeps:
 Example:
 
 ```ts
-import { BuyerSDK } from "@agroasys/sdk";
+import { BuyerLockPayload, BuyerSDK } from "@agroasys/sdk";
 import { ethers } from "ethers";
 
 const buyerSDK = new BuyerSDK(config);
 const provider = new ethers.BrowserProvider(agroasysManagedProvider);
 const buyerSigner = await provider.getSigner();
+const payload: BuyerLockPayload = {
+  supplier: "0xSupplierAddress...",
+  totalAmount: 141_500_000n,
+  logisticsAmount: 10_000_000n,
+  platformFeesAmount: 1_500_000n,
+  supplierFirstTranche: 52_000_000n,
+  supplierSecondTranche: 78_000_000n,
+  ricardianHash: "0x3a4b5c6d...f1e2d3",
+};
 
-const result = await buyerSDK.createTrade(tradeParams, buyerSigner);
+const result = await buyerSDK.createTrade(payload, buyerSigner);
 ```
+
+Canonical buyer lock payload contract:
+- `BuyerLockPayload` is the preferred public type for new integrations.
+- `TradeParameters` remains available as a backward-compatible alias.
+- Source of truth: `docs/runbooks/buyer-lock-payload.md`
 
 ### Legacy demo helper: Web3Auth wallet provider
 
