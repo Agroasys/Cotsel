@@ -1,0 +1,225 @@
+import crypto from 'crypto';
+import express, { Request, Response } from 'express';
+import { AddressInfo } from 'net';
+import { Server } from 'http';
+import { createRouter } from '../src/api/routes';
+import {
+  buildServiceAuthCanonicalString,
+  createServiceAuthMiddleware,
+  signServiceAuthCanonicalString,
+} from '../src/auth/serviceAuth';
+
+function createSignedRequestParts(options?: {
+  method?: string;
+  path?: string;
+  query?: string;
+  body?: Buffer;
+  apiKey?: string;
+  timestamp?: string;
+  nonce?: string;
+  secret?: string;
+  signatureOverride?: string;
+}) {
+  const method = options?.method ?? 'POST';
+  const path = options?.path ?? '/api/treasury/v1/ingest';
+  const query = options?.query ?? '';
+  const body = options?.body ?? Buffer.from(JSON.stringify({ entryId: 'entry-1' }));
+  const timestamp = options?.timestamp ?? '1700000000';
+  const nonce = options?.nonce ?? 'nonce-1';
+  const apiKey = options?.apiKey ?? 'svc-a';
+  const secret = options?.secret ?? 'secret-a';
+  const bodySha256 = crypto.createHash('sha256').update(body).digest('hex');
+  const canonical = buildServiceAuthCanonicalString({
+    method,
+    path,
+    query,
+    bodySha256,
+    timestamp,
+    nonce,
+  });
+  const signature = options?.signatureOverride ?? signServiceAuthCanonicalString(secret, canonical);
+
+  return {
+    body,
+    bodyText: body.toString('utf8'),
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'x-agroasys-timestamp': timestamp,
+      'x-agroasys-nonce': nonce,
+      'x-agroasys-signature': signature,
+    },
+  };
+}
+
+describe('treasury service-authenticated routes', () => {
+  let server: Server;
+  let baseUrl: string;
+  let consumeNonce: jest.MockedFunction<(apiKey: string, nonce: string, ttlSeconds: number) => Promise<boolean>>;
+
+  const lookupApiKey = (apiKey: string) => {
+    if (apiKey === 'svc-a') {
+      return { id: 'svc-a', secret: 'secret-a', active: true };
+    }
+
+    return undefined;
+  };
+
+  beforeEach(async () => {
+    consumeNonce = jest.fn().mockResolvedValue(true);
+    const authMiddleware = createServiceAuthMiddleware({
+      enabled: true,
+      maxSkewSeconds: 300,
+      nonceTtlSeconds: 600,
+      lookupApiKey,
+      consumeNonce,
+      nowSeconds: () => 1700000000,
+    });
+
+    const controller = {
+      ingest: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'ingest' });
+      },
+      listEntries: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: [] });
+      },
+      appendState: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { updated: true } });
+      },
+      exportEntries: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: [] });
+      },
+    };
+
+    const app = express();
+    app.use(
+      express.json({
+        verify: (req, _res, buffer) => {
+          (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+        },
+      }),
+    );
+    app.use('/api/treasury/v1', createRouter(controller as never, { authMiddleware }));
+
+    await new Promise<void>((resolve) => {
+      server = app.listen(0, () => resolve());
+    });
+
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  });
+
+  test('valid signed ingest request reaches the route once', async () => {
+    const signed = createSignedRequestParts({ nonce: 'treasury-route-nonce' });
+
+    const response = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.bodyText,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        route: 'ingest',
+      }),
+    );
+    expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-route-nonce', 600);
+  });
+
+  test('replayed ingest request is rejected before controller runs', async () => {
+    consumeNonce.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const signed = createSignedRequestParts({ nonce: 'treasury-replay' });
+
+    const firstResponse = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.bodyText,
+    });
+
+    const secondResponse = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.bodyText,
+    });
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(401);
+    await expect(secondResponse.json()).resolves.toEqual(
+      expect.objectContaining({
+        code: 'AUTH_NONCE_REPLAY',
+        error: 'Replay detected for nonce',
+      }),
+    );
+  });
+
+  test('invalid signature is rejected at the route boundary', async () => {
+    const signed = createSignedRequestParts({
+      nonce: 'treasury-invalid-signature',
+      signatureOverride: 'f'.repeat(64),
+    });
+
+    const response = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.bodyText,
+    });
+
+    expect(response.status).toBe(401);
+    expect(consumeNonce).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        code: 'AUTH_INVALID_SIGNATURE',
+        error: 'Invalid signature',
+      }),
+    );
+  });
+
+  test('stale timestamp is rejected at the route boundary', async () => {
+    const signed = createSignedRequestParts({
+      nonce: 'treasury-stale',
+      timestamp: '1699999600',
+    });
+
+    const response = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.bodyText,
+    });
+
+    expect(response.status).toBe(401);
+    expect(consumeNonce).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        code: 'AUTH_TIMESTAMP_SKEW',
+        error: 'Timestamp outside allowed skew window',
+      }),
+    );
+  });
+
+  test('nonce persistence failure returns auth unavailable', async () => {
+    consumeNonce.mockRejectedValue(new Error('redis unavailable'));
+    const signed = createSignedRequestParts({ nonce: 'treasury-db-error' });
+
+    const response = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.bodyText,
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        code: 'AUTH_UNAVAILABLE',
+        error: 'Authentication service unavailable',
+      }),
+    );
+  });
+});
