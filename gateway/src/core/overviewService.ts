@@ -25,6 +25,7 @@ export interface OverviewFeedStatus {
 }
 
 export interface OverviewTradeFeedStatus extends OverviewFeedStatus {
+  lastIndexedAt: string | null;
   lastProcessedBlock: string | null;
   lastTradeEventAt: string | null;
 }
@@ -92,6 +93,48 @@ const overviewSnapshotQuery = `
   }
 `;
 
+function parseNonNegativeInteger(raw: number, field: string): number {
+  if (!Number.isSafeInteger(raw) || raw < 0) {
+    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer returned invalid ${field}`, {
+      field,
+      value: raw,
+    });
+  }
+
+  return raw;
+}
+
+function parseIsoTimestamp(raw: string, field: string): string {
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer returned invalid ${field}`, {
+      field,
+      value: raw,
+    });
+  }
+
+  return parsed.toISOString();
+}
+
+function parseOptionalIsoTimestamp(raw: string | null, field: string): string | null {
+  if (raw === null) {
+    return null;
+  }
+
+  return parseIsoTimestamp(raw, field);
+}
+
+function parseBlockNumber(raw: string, field: string): string {
+  if (!/^\d+$/.test(raw)) {
+    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer returned invalid ${field}`, {
+      field,
+      value: raw,
+    });
+  }
+
+  return raw;
+}
+
 export class OverviewService implements OverviewReader {
   constructor(
     private readonly indexerGraphqlUrl: string,
@@ -138,6 +181,25 @@ export class OverviewService implements OverviewReader {
       : null;
 
     const blockedTrades = complianceAvailable ? complianceResult.value : 0;
+    const tradesFeedFreshness: OverviewTradeFeedStatus = snapshotAvailable && indexerSnapshot
+      ? {
+          source: 'indexer_graphql',
+          queriedAt: now,
+          freshAt: indexerSnapshot.lastIndexedAt,
+          available: true,
+          lastIndexedAt: indexerSnapshot.lastIndexedAt,
+          lastProcessedBlock: indexerSnapshot.lastProcessedBlock,
+          lastTradeEventAt: indexerSnapshot.lastTradeEventAt,
+        }
+      : {
+          source: 'indexer_graphql',
+          queriedAt: null,
+          freshAt: null,
+          available: false,
+          lastIndexedAt: null,
+          lastProcessedBlock: null,
+          lastTradeEventAt: null,
+        };
 
     return {
       kpis: {
@@ -146,14 +208,7 @@ export class OverviewService implements OverviewReader {
       },
       posture,
       feedFreshness: {
-        trades: {
-          source: 'indexer_graphql',
-          queriedAt: snapshotAvailable ? now : null,
-          freshAt: snapshotAvailable ? now : null,
-          available: snapshotAvailable,
-          lastProcessedBlock: indexerSnapshot?.lastProcessedBlock ?? null,
-          lastTradeEventAt: indexerSnapshot?.lastTradeEventAt ?? null,
-        },
+        trades: tradesFeedFreshness,
         governance: { source: 'chain_rpc', queriedAt: governanceAvailable ? now : null, freshAt: governanceAvailable ? now : null, available: governanceAvailable },
         compliance: { source: 'gateway_ledger', queriedAt: complianceAvailable ? now : null, freshAt: complianceAvailable ? now : null, available: complianceAvailable },
       },
@@ -193,7 +248,18 @@ export class OverviewService implements OverviewReader {
         throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned no overview snapshot');
       }
 
-      return snapshot;
+      return {
+        totalTrades: parseNonNegativeInteger(snapshot.totalTrades, 'overviewSnapshot.totalTrades'),
+        lockedTrades: parseNonNegativeInteger(snapshot.lockedTrades, 'overviewSnapshot.lockedTrades'),
+        stage1Trades: parseNonNegativeInteger(snapshot.stage1Trades, 'overviewSnapshot.stage1Trades'),
+        stage2Trades: parseNonNegativeInteger(snapshot.stage2Trades, 'overviewSnapshot.stage2Trades'),
+        completedTrades: parseNonNegativeInteger(snapshot.completedTrades, 'overviewSnapshot.completedTrades'),
+        disputedTrades: parseNonNegativeInteger(snapshot.disputedTrades, 'overviewSnapshot.disputedTrades'),
+        cancelledTrades: parseNonNegativeInteger(snapshot.cancelledTrades, 'overviewSnapshot.cancelledTrades'),
+        lastProcessedBlock: parseBlockNumber(snapshot.lastProcessedBlock, 'overviewSnapshot.lastProcessedBlock'),
+        lastIndexedAt: parseIsoTimestamp(snapshot.lastIndexedAt, 'overviewSnapshot.lastIndexedAt'),
+        lastTradeEventAt: parseOptionalIsoTimestamp(snapshot.lastTradeEventAt, 'overviewSnapshot.lastTradeEventAt'),
+      };
     } catch (error) {
       if (error instanceof GatewayError) {
         throw error;

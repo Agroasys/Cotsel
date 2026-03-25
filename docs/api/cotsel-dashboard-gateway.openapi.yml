@@ -404,6 +404,12 @@ paths:
         and `posture` is `null` when the chain RPC feed is unavailable. The endpoint always returns
         HTTP 200 so the dashboard can render a partial view with degraded-feed indicators rather
         than a blank screen.
+
+        Authoritative trade freshness comes from the indexer snapshot watermark, not from the
+        gateway request timestamp. For the trades feed:
+        - `feedFreshness.trades.queriedAt` is when the gateway asked the indexer for this snapshot
+        - `feedFreshness.trades.freshAt` mirrors the indexer `lastIndexedAt` watermark
+        - `feedFreshness.trades.lastProcessedBlock` identifies the last indexed block for the snapshot
       operationId: getOverview
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1956,14 +1962,13 @@ components:
             - type: string
               format: date-time
             - type: 'null'
-          deprecated: true
-          description: "Deprecated: use freshAt instead. ISO timestamp of when the gateway successfully queried this feed for the current snapshot; null when the feed is unavailable. Kept for backward compatibility with existing consumers."
+          description: ISO timestamp of when the gateway successfully queried this feed for the current snapshot; null when the feed is unavailable.
         freshAt:
           anyOf:
             - type: string
               format: date-time
             - type: 'null'
-          description: ISO timestamp of when the gateway successfully queried this feed for the current snapshot; null when the feed is unavailable.
+          description: Source-authoritative freshness timestamp for this feed; null when the feed is unavailable.
         available:
           type: boolean
           description: False when the feed returned an error or timed out for this request.
@@ -1971,8 +1976,14 @@ components:
       allOf:
         - $ref: '#/components/schemas/OverviewFeedStatus'
         - type: object
-          required: [lastProcessedBlock, lastTradeEventAt]
+          required: [lastIndexedAt, lastProcessedBlock, lastTradeEventAt]
           properties:
+            lastIndexedAt:
+              anyOf:
+                - type: string
+                  format: date-time
+                - type: 'null'
+              description: Indexer watermark timestamp for the most recently processed block; mirrors `freshAt` when available.
             lastProcessedBlock:
               anyOf:
                 - type: string
