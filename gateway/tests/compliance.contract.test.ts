@@ -324,6 +324,39 @@ describe('gateway compliance routes contract', () => {
     }
   });
 
+  test('GET /compliance/trades/:tradeId/attestation-status preserves last-known attestation metadata during provider outage', async () => {
+    const { server, baseUrl } = await startServer();
+
+    try {
+      await createDecision(baseUrl, buildDecisionBody({
+        result: 'ALLOW',
+        reasonCode: 'CMP_OVERRIDE_ACTIVE',
+        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }), 'idem-attestation-last-known-1');
+
+      await createDecision(baseUrl, buildDecisionBody({
+        correlationId: 'corr-attestation-outage-2',
+        attestation: null,
+      }), 'idem-attestation-last-known-2');
+
+      const response = await fetch(`${baseUrl}/compliance/trades/TRD-1/attestation-status`, {
+        headers: { Authorization: 'Bearer session-admin' },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(validateAttestationStatus(payload)).toBe(true);
+      expect(payload.data.complianceResult).toBe('DENY');
+      expect(payload.data.availability).toBe('unavailable');
+      expect(payload.data.freshness).toBe('stale');
+      expect(payload.data.degradedReason).toBe('cmp_provider_unavailable');
+      expect(payload.data.attestation.attestationId).toBe('att-1');
+      expect(payload.data.attestation.issuer.id).toBe('compliance-provider');
+    } finally {
+      server.close();
+    }
+  });
+
   test('block and resume oracle progression match the OpenAPI schema', async () => {
     const { server, baseUrl } = await startServer();
 

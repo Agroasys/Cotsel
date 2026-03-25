@@ -1591,7 +1591,11 @@ paths:
       description: |
         Returns the latest attestation-backed compliance status for the trade.
         This is a read-only operator surface and does not revalidate the
-        attestation against the issuer at request time.
+        attestation against the issuer at request time. If the latest decision
+        records provider outage or fail-closed denial without a fresh
+        attestation payload, the response preserves the last known attestation
+        metadata and marks the status as degraded or unavailable from the
+        latest decision state.
       operationId: getTradeComplianceAttestationStatus
       parameters:
         - $ref: '#/components/parameters/XRequestId'

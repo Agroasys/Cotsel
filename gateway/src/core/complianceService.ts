@@ -406,12 +406,20 @@ export class ComplianceService {
   }
 
   async getAttestationStatus(tradeId: string): Promise<ComplianceAttestationStatusRecord | null> {
-    const decision = await this.store.getLatestDecisionWithAttestation(tradeId);
-    if (!decision?.attestation) {
+    const latestDecision = await this.store.getLatestDecision(tradeId);
+    if (!latestDecision) {
       return null;
     }
 
-    const attestation = decision.attestation;
+    const attestationDecision = latestDecision.attestation
+      ? latestDecision
+      : await this.store.getLatestDecisionWithAttestation(tradeId);
+
+    if (!attestationDecision?.attestation) {
+      return null;
+    }
+
+    const attestation = attestationDecision.attestation;
     const nowMs = Date.now();
     const expiresAtMs = attestation.expiresAt ? Date.parse(attestation.expiresAt) : Number.NaN;
 
@@ -423,10 +431,10 @@ export class ComplianceService {
       availability = 'degraded';
       freshness = 'expired';
       degradedReason = 'attestation_expired';
-    } else if (ATTESTATION_UNAVAILABLE_REASON_CODES.has(decision.reasonCode)) {
+    } else if (ATTESTATION_UNAVAILABLE_REASON_CODES.has(latestDecision.reasonCode)) {
       availability = 'unavailable';
       freshness = 'stale';
-      degradedReason = decision.reasonCode.toLowerCase();
+      degradedReason = latestDecision.reasonCode.toLowerCase();
     } else if (attestation.status === 'expired') {
       availability = 'degraded';
       freshness = 'expired';
@@ -439,7 +447,7 @@ export class ComplianceService {
       availability = 'degraded';
       freshness = 'unknown';
       degradedReason = 'attestation_unknown';
-    } else if (decision.result === 'DENY') {
+    } else if (latestDecision.result === 'DENY') {
       availability = 'degraded';
       freshness = 'current';
       degradedReason = 'decision_denied';
@@ -447,15 +455,15 @@ export class ComplianceService {
 
     return {
       tradeId,
-      decisionId: decision.decisionId,
-      decisionType: decision.decisionType,
-      complianceResult: decision.result,
-      reasonCode: decision.reasonCode,
+      decisionId: latestDecision.decisionId,
+      decisionType: latestDecision.decisionType,
+      complianceResult: latestDecision.result,
+      reasonCode: latestDecision.reasonCode,
       availability,
       freshness,
       ...(degradedReason ? { degradedReason } : {}),
-      verifiedAt: decision.decidedAt,
-      updatedAt: decision.decidedAt,
+      verifiedAt: attestationDecision.decidedAt,
+      updatedAt: latestDecision.decidedAt,
       attestation,
     };
   }
