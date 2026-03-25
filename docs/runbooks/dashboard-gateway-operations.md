@@ -166,6 +166,31 @@ Reason:
 - downstream services already own their idempotency and retry policies
 - the gateway must fail deterministically rather than amplify mutations
 
+## Attestation verification and outage stance
+For compliance and future attestation read surfaces, the gateway must preserve
+the issuer’s attestation reference metadata without turning query time into fake
+verification truth.
+
+Operational rules:
+- The gateway may expose last-known attestation reference metadata, but it must
+  not imply successful current verification when issuer/provider checks are
+  unavailable.
+- Missing, stale, expired, or untrusted attestation state remains fail-closed
+  for new trade-gating decisions.
+- Read-only operator pages must distinguish:
+  - last-known reference metadata
+  - last successful verification time
+  - current degraded or unavailable state
+- During outage, operators must capture issuer ID, subject reference, provider
+  reference, evidence reference, expiry, and affected `tradeId`/`correlationId`
+  values in the incident or audit evidence packet.
+
+Escalation:
+- Follow the compliance outage thresholds in
+  `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`.
+- Do not re-enable writes or approve overrides on the assumption that a manual
+  dashboard refresh constitutes fresh verification.
+
 ## Governance queue and executor procedure
 Mutation requests do not execute governance transactions inline.
 

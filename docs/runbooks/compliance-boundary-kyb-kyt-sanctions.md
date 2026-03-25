@@ -62,6 +62,59 @@ Contract mirror:
 - OpenAPI component: `#/components/schemas/AttestationReference`
 - ADR boundary: `docs/adr/adr-0143-privacy-attestation-composability.md`
 
+## Attestation verification, freshness, and outage stance
+Attestation references are not trusted just because they exist. They must be
+evaluated against issuer trust, expiry, freshness, and current issuer
+availability.
+
+Verification rules:
+- Trust only attestation issuers that are explicitly approved for the pilot or
+  integration boundary. An unknown `issuer.id` or unsupported `issuer.kind`
+  must be treated as untrusted.
+- `providerRef` or equivalent issuer lookup evidence must exist before an
+  attestation is treated as operator-usable.
+- `evidenceRef` must point to the evidence artifact that justified the current
+  attestation state.
+
+Freshness rules:
+- `expiresAt` is a hard stop. Once past, the attestation is `expired` and not
+  sufficient for new trade-gating decisions.
+- If the current operator surface cannot prove when the issuer state was last
+  revalidated, the attestation must be treated as `stale`.
+- Gateway query time is never an acceptable substitute for issuer verification
+  time. A UI refresh does not make an attestation fresh.
+
+Operator decision rules:
+
+| Condition | Operator interpretation | Execution stance |
+| --- | --- | --- |
+| issuer trusted, not expired, latest verification available | usable | May support normal operator review and settlement gating. |
+| `expiresAt` in the past | expired | Treat as deny/block until re-issued or re-verified. |
+| latest verification missing or older than approved freshness window | stale | Treat as deny/block until issuer revalidation succeeds. |
+| issuer unknown or not approved | untrusted | Treat as deny/block; escalate integration or policy review. |
+| issuer/provider unavailable | unavailable | Treat as deny/block for new trade decisions; preserve last-known metadata only as degraded evidence. |
+
+Outage stance:
+- New trade-gating paths remain fail-closed during attestation-provider outage,
+  stale verification, or unknown issuer state.
+- Read-only operator surfaces may show the last known attestation reference, but
+  they must mark it as degraded or unavailable and must not imply successful
+  current verification.
+- Emergency override follows the same approval and evidence rules as the rest of
+  this compliance boundary; an outage alone does not authorize silent fail-open
+  behavior.
+
+Operator evidence minimum during attestation incidents:
+- `attestationId`
+- `issuer.id`
+- `subjectRef.reference`
+- `providerRef`
+- `evidenceRef`
+- last known verification timestamp, if available
+- expiry timestamp, if available
+- affected `tradeId` / `correlationId`
+- outage start time and current degraded reason
+
 ## Decision contract (allow/deny semantics)
 
 ### Input contract for every compliance decision
@@ -201,6 +254,7 @@ Pilot role mapping:
 - `docs/incidents/first-15-minutes-checklist.md`
 - `docs/runbooks/staging-e2e-real-release-gate.md`
 - `docs/runbooks/api-gateway-boundary.md`
+- `docs/runbooks/dashboard-gateway-operations.md`
 - `docs/observability/logging-schema.md`
 - `docs/runbooks/production-readiness-checklist.md`
 - `docs/adr/adr-0143-privacy-attestation-composability.md`
