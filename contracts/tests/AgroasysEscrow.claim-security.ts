@@ -162,9 +162,10 @@ describe("AgroasysEscrow - Claim Security", function () {
     expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
 
     const treasuryBefore = await usdc.balanceOf(treasury.address);
-    await expect(escrow.connect(treasury).claim())
-      .to.emit(escrow, "Claimed")
-      .withArgs(treasury.address, treasuryClaimable);
+    const escrowAny = escrow as any;
+    await expect(escrowAny.connect(buyer).claimTreasury())
+      .to.emit(escrow, "TreasuryClaimed")
+      .withArgs(treasury.address, treasury.address, treasuryClaimable, buyer.address);
     expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore + treasuryClaimable);
 
     expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
@@ -192,10 +193,17 @@ describe("AgroasysEscrow - Claim Security", function () {
     await expect(escrowAny.connect(buyer).claimTreasury()).to.be.revertedWith("hook revert");
     expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
 
-    const treasuryBefore = await usdc.balanceOf(treasury.address);
-    await expect(escrow.connect(treasury).claim())
-      .to.emit(escrow, "Claimed")
-      .withArgs(treasury.address, treasuryClaimable);
-    expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore + treasuryClaimable);
+    // treasury cannot bypass the rotated payout address via claim()
+    await expect(escrow.connect(treasury).claim()).to.be.revertedWith("treasury must use claimTreasury");
+
+    // once the hook is resolved, claimTreasury routes to the rotated receiver — state was not corrupted
+    await usdc.setHookEnabled(await receiver.getAddress(), false);
+    const receiverBefore = await usdc.balanceOf(await receiver.getAddress());
+    const treasuryWalletBefore = await usdc.balanceOf(treasury.address);
+    await expect(escrowAny.connect(buyer).claimTreasury())
+      .to.emit(escrow, "TreasuryClaimed")
+      .withArgs(treasury.address, await receiver.getAddress(), treasuryClaimable, buyer.address);
+    expect(await usdc.balanceOf(await receiver.getAddress())).to.equal(receiverBefore + treasuryClaimable);
+    expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryWalletBefore);
   });
 });

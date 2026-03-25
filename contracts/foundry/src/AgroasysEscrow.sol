@@ -701,6 +701,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function claim() external whenClaimsNotPaused nonReentrant {
+        require(msg.sender != treasuryAddress, "treasury must use claimTreasury");
         uint256 amount = claimableUsdc[msg.sender];
         require(amount > 0, "nothing claimable");
 
