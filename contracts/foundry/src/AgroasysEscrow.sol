@@ -200,6 +200,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     /// @notice True when a treasury-payout-address proposal has been cancelled after expiry.
     mapping(uint256 => bool) public treasuryPayoutAddressUpdateProposalCancelled;
     uint256 public treasuryPayoutAddressUpdateCounter;
+    /// @notice True when a treasury-payout-address update proposal is currently pending (not yet executed or cancelled).
+    bool public hasPendingTreasuryPayoutAddressUpdateProposal;
 
     // -----------------------------
     // Events
@@ -1183,6 +1185,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(_newPayoutReceiver != address(0), "invalid treasury payout receiver");
         require(_newPayoutReceiver != treasuryPayoutAddress, "same treasury payout receiver");
         require(admins.length >= governanceApprovals(), "insufficient admins");
+        require(!hasPendingTreasuryPayoutAddressUpdateProposal, "proposal already pending");
 
         uint256 proposalId = treasuryPayoutAddressUpdateCounter;
         treasuryPayoutAddressUpdateCounter++;
@@ -1198,6 +1201,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
         treasuryPayoutAddressUpdateHasApproved[proposalId][msg.sender] = true;
         treasuryPayoutAddressUpdateProposalExpiresAt[proposalId] = block.timestamp + GOVERNANCE_PROPOSAL_TTL;
+        hasPendingTreasuryPayoutAddressUpdateProposal = true;
 
         emit TreasuryPayoutAddressUpdateProposed(proposalId, msg.sender, _newPayoutReceiver, block.timestamp + governanceTimelock);
         emit TreasuryPayoutAddressUpdateApproved(proposalId, msg.sender, 1, governanceApprovals());
@@ -1234,6 +1238,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(proposal.newPayoutReceiver != address(0), "invalid treasury payout receiver");
 
         proposal.executed = true;
+        hasPendingTreasuryPayoutAddressUpdateProposal = false;
 
         address oldPayoutReceiver = treasuryPayoutAddress;
         treasuryPayoutAddress = proposal.newPayoutReceiver;
@@ -1254,6 +1259,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(block.timestamp > treasuryPayoutAddressUpdateProposalExpiresAt[_proposalId], "proposal not expired");
 
         treasuryPayoutAddressUpdateProposalCancelled[_proposalId] = true;
+        hasPendingTreasuryPayoutAddressUpdateProposal = false;
 
         emit TreasuryPayoutAddressUpdateProposalExpiredCancelled(_proposalId, msg.sender);
     }
