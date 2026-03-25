@@ -1,0 +1,20 @@
+{
+  "_format": "hh-resolc-artifact-1",
+  "contractName": "AgroasysEscrow",
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        { "name": "usdcAddress", "type": "address" },
+        { "name": "oracleAddress", "type": "address" },
+        { "name": "treasuryAddress", "type": "address" },
+        { "name": "admins", "type": "address[]" },
+        { "name": "requiredApprovals", "type": "uint256" }
+      ]
+    }
+  ],
+  "bytecode": "0x60006000556001600055",
+  "deployedBytecode": {
+    "object": "0x6001600055"
+  }
+}
