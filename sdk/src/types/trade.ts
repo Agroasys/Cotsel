@@ -40,7 +40,7 @@
  * document hash. The hash MUST be produced by the Ricardian service before the
  * checkout UI calls `createTrade`.
  */
-export interface TradeParameters {
+export interface BuyerLockPayload {
     /**
      * EVM address of the supplier (goods/service provider).
      *
@@ -107,12 +107,12 @@ export interface TradeParameters {
 }
 
 /**
- * Preferred payload name for new external checkout integrations.
+ * Backward-compatible alias for existing integrations that already import
+ * `TradeParameters` from the public SDK surface.
  *
- * Kept as an alias to preserve backward compatibility for consumers that
- * already import `TradeParameters` from the public SDK surface.
+ * New integrations should prefer `BuyerLockPayload`.
  */
-export type BuyerLockPayload = TradeParameters;
+export type TradeParameters = BuyerLockPayload;
 
 export interface TradeResult {
     txHash: string;

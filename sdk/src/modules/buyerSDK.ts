@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Client } from '../client';
-import { TradeParameters, TradeResult } from '../types/trade';
+import { BuyerLockPayload, TradeResult } from '../types/trade';
 import { ethers } from 'ethers';
 import { validateTradeParameters, validateAddress } from '../utils/validation';
 import { signTradeMessage } from '../utils/signature';
@@ -125,7 +125,7 @@ export class BuyerSDK extends Client {
      * Lock funds and create a new trade in the escrow contract.
      *
      * This is the primary entry point for external checkout UIs. The `payload`
-     * parameter MUST conform to the {@link TradeParameters} canonical contract.
+     * parameter MUST conform to the {@link BuyerLockPayload} canonical contract.
      *
      * **Flow executed by this method:**
      * 1. Validates every field in `payload` (amount invariant, address, hash format).
@@ -135,13 +135,13 @@ export class BuyerSDK extends Client {
      * 5. Signs the canonical EIP-191 trade message.
      * 6. Submits `createTrade` to the escrow contract and returns the receipt.
      *
-     * @param payload  Canonical buyer lock payload — see {@link TradeParameters}.
+     * @param payload  Canonical buyer lock payload — see {@link BuyerLockPayload}.
      * @param buyerSigner  Ethers signer for the buyer wallet (signs and pays gas).
      * @returns Transaction hash and block number of the confirmed lock transaction.
      *
-     * @see {@link TradeParameters} for full field semantics and the amount invariant.
+     * @see {@link BuyerLockPayload} for full field semantics and the amount invariant.
      */
-    async createTrade(payload: TradeParameters, buyerSigner: ethers.Signer): Promise<TradeResult> {
+    async createTrade(payload: BuyerLockPayload, buyerSigner: ethers.Signer): Promise<TradeResult> {
         validateTradeParameters(payload);
         const params = payload;
         await this.assertSignerCompatibility(buyerSigner);
