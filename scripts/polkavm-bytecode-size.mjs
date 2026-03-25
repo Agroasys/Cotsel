@@ -23,6 +23,27 @@ const artifactPath = path.join(root, "contracts/artifacts/src/AgroasysEscrow.sol
 
 const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
 const fmt = artifact._format ?? "unknown";
+const EVM_CAP = 49152;
+
+function normalizeHex(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.startsWith("0x") ? value.slice(2) : value;
+}
+
+function resolveRuntimeBytecodeHex(inputArtifact) {
+  if (typeof inputArtifact.deployedBytecode === "string") {
+    return normalizeHex(inputArtifact.deployedBytecode);
+  }
+
+  if (typeof inputArtifact.deployedBytecode?.object === "string") {
+    return normalizeHex(inputArtifact.deployedBytecode.object);
+  }
+
+  return "";
+}
 
 const ctorFragment = artifact.abi.find((f) => f.type === "constructor");
 if (!ctorFragment) throw new Error("No constructor found in artifact ABI");
@@ -36,22 +57,42 @@ const values = [
 ];
 const encodedArgs = AbiCoder.defaultAbiCoder().encode(types, values);
 
-const bytecodeHex = artifact.bytecode.startsWith("0x") ? artifact.bytecode.slice(2) : artifact.bytecode;
-const argsHex = encodedArgs.startsWith("0x") ? encodedArgs.slice(2) : encodedArgs;
-const deployPayloadHex = bytecodeHex + argsHex;
+const initcodeHex = normalizeHex(artifact.bytecode);
+const runtimeBytecodeHex = resolveRuntimeBytecodeHex(artifact);
+const argsHex = normalizeHex(encodedArgs);
+const deployPayloadHex = initcodeHex + argsHex;
 
-const bytecodeBytes = bytecodeHex.length / 2;
+const runtimeBytecodeBytes = runtimeBytecodeHex.length / 2;
+const initcodeBytes = initcodeHex.length / 2;
 const argsBytes = argsHex.length / 2;
 const payloadBytes = deployPayloadHex.length / 2;
-const EVM_CAP = 49152;
+const exceedsByBytes = payloadBytes > EVM_CAP ? payloadBytes - EVM_CAP : 0;
 
-console.log(`Format        : ${fmt}`);
-console.log(`Bytecode      : ${bytecodeBytes.toLocaleString()} bytes (${(bytecodeBytes / 1024).toFixed(1)} KB)`);
-console.log(`Encoded args  : ${argsBytes.toLocaleString()} bytes`);
-console.log(`Deploy payload: ${payloadBytes.toLocaleString()} bytes (${(payloadBytes / 1024).toFixed(1)} KB)`);
-console.log(`EVM cap       : ${EVM_CAP.toLocaleString()} bytes (48 KB, EIP-3860)`);
+const report = {
+  format: fmt,
+  artifactPath: path.relative(root, artifactPath),
+  runtimeBytecodeBytes,
+  initcodeBytes,
+  encodedArgsBytes: argsBytes,
+  deployPayloadBytes: payloadBytes,
+  evmDeployPayloadCapBytes: EVM_CAP,
+  evmDeployPayloadStatus: payloadBytes > EVM_CAP ? "exceeds_limit" : "within_limit",
+  exceedsByBytes,
+};
+
+if (process.argv.includes("--json")) {
+  console.log(JSON.stringify(report, null, 2));
+  process.exit(0);
+}
+
+console.log(`Format                  : ${report.format}`);
+console.log(`Runtime bytecode        : ${runtimeBytecodeBytes.toLocaleString()} bytes (${(runtimeBytecodeBytes / 1024).toFixed(1)} KB)`);
+console.log(`Initcode                : ${initcodeBytes.toLocaleString()} bytes (${(initcodeBytes / 1024).toFixed(1)} KB)`);
+console.log(`Encoded constructor args: ${argsBytes.toLocaleString()} bytes`);
+console.log(`Deploy payload          : ${payloadBytes.toLocaleString()} bytes (${(payloadBytes / 1024).toFixed(1)} KB)`);
+console.log(`EVM cap                 : ${EVM_CAP.toLocaleString()} bytes (48 KB, EIP-3860 deploy payload cap)`);
 if (payloadBytes > EVM_CAP) {
-  console.log(`Status        : EXCEEDS EVM limit by ${(payloadBytes - EVM_CAP).toLocaleString()} bytes`);
+  console.log(`Status                  : EXCEEDS EVM deploy payload limit by ${exceedsByBytes.toLocaleString()} bytes`);
 } else {
-  console.log(`Status        : within EVM limit`);
+  console.log("Status                  : within EVM deploy payload limit");
 }

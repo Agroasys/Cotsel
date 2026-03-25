@@ -65,6 +65,17 @@ Bytecode size report script:
 node scripts/polkavm-bytecode-size.mjs
 ```
 
+Deterministic JSON output for CI or local verification:
+
+```bash
+node scripts/polkavm-bytecode-size.mjs --json
+```
+
+Interpretation:
+- `Runtime bytecode` is the deployed contract bytecode size.
+- `Initcode` is the deploy-time creation bytecode from the artifact.
+- `Deploy payload` is `initcode + ABI-encoded constructor args` and is the value compared against the EIP-3860 48 KB limit.
+
 ## resolc Binary Lookup Contract (Plugin Behavior)
 
 `@parity/hardhat-polkadot-resolc` uses Hardhat compiler cache lookup in binary mode:
