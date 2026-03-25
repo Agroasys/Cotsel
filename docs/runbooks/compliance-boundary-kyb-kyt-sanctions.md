@@ -61,6 +61,7 @@ Reference semantics:
 Contract mirror:
 - OpenAPI component: `#/components/schemas/AttestationReference`
 - ADR boundary: `docs/adr/adr-0143-privacy-attestation-composability.md`
+- Read-only operator route: `GET /compliance/trades/{tradeId}/attestation-status`
 
 ## Attestation verification, freshness, and outage stance
 Attestation references are not trusted just because they exist. They must be

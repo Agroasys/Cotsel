@@ -8,11 +8,43 @@ export const COMPLIANCE_DECISION_TYPES = ['KYB', 'KYT', 'SANCTIONS'] as const;
 export const COMPLIANCE_DECISION_RESULTS = ['ALLOW', 'DENY'] as const;
 export const COMPLIANCE_BLOCK_STATES = ['not_blocked', 'blocked', 'resume_pending'] as const;
 export const COMPLIANCE_RISK_LEVELS = ['low', 'medium', 'high', 'critical'] as const;
+export const ATTESTATION_ISSUER_KINDS = ['provider', 'service', 'operator', 'partner'] as const;
+export const ATTESTATION_REFERENCE_STATUSES = ['active', 'revoked', 'expired', 'unknown'] as const;
+export const ATTESTATION_AVAILABILITIES = ['available', 'degraded', 'unavailable'] as const;
+export const ATTESTATION_FRESHNESS_STATES = ['current', 'stale', 'expired', 'unknown'] as const;
 
 export type ComplianceDecisionType = typeof COMPLIANCE_DECISION_TYPES[number];
 export type ComplianceDecisionResult = typeof COMPLIANCE_DECISION_RESULTS[number];
 export type ComplianceBlockState = typeof COMPLIANCE_BLOCK_STATES[number];
 export type ComplianceRiskLevel = typeof COMPLIANCE_RISK_LEVELS[number];
+export type AttestationIssuerKind = typeof ATTESTATION_ISSUER_KINDS[number];
+export type AttestationReferenceStatus = typeof ATTESTATION_REFERENCE_STATUSES[number];
+export type AttestationAvailability = typeof ATTESTATION_AVAILABILITIES[number];
+export type AttestationFreshnessState = typeof ATTESTATION_FRESHNESS_STATES[number];
+
+export interface AttestationIssuerRef {
+  id: string;
+  kind: AttestationIssuerKind;
+  displayName?: string | null;
+}
+
+export interface AttestationSubjectRef {
+  type: string;
+  reference: string;
+}
+
+export interface AttestationReferenceRecord {
+  attestationId: string;
+  attestationType: string;
+  status: AttestationReferenceStatus;
+  issuer: AttestationIssuerRef;
+  subjectRef: AttestationSubjectRef;
+  issuedAt: string;
+  expiresAt: string | null;
+  providerRef: string;
+  evidenceRef: string;
+  referenceHash?: string | null;
+}
 
 export interface ComplianceAuditRecord {
   reason: string;
@@ -45,6 +77,7 @@ export interface ComplianceDecisionRecord {
   actorId?: string;
   endpoint?: string;
   intentHash?: string;
+  attestation?: AttestationReferenceRecord | null;
   audit: ComplianceAuditRecord;
 }
 
@@ -73,6 +106,20 @@ export interface ComplianceTradeStatusRecord {
   updatedAt: string;
 }
 
+export interface ComplianceAttestationStatusRecord {
+  tradeId: string;
+  decisionId: string;
+  decisionType: ComplianceDecisionType;
+  complianceResult: ComplianceDecisionResult;
+  reasonCode: string;
+  availability: AttestationAvailability;
+  freshness: AttestationFreshnessState;
+  degradedReason?: string;
+  verifiedAt: string;
+  updatedAt: string;
+  attestation: AttestationReferenceRecord;
+}
+
 export interface ListComplianceDecisionsInput {
   tradeId: string;
   limit: number;
@@ -93,6 +140,7 @@ export interface ComplianceStore {
   saveDecision(decision: ComplianceDecisionRecord): Promise<ComplianceDecisionRecord>;
   getDecision(decisionId: string): Promise<ComplianceDecisionRecord | null>;
   getLatestDecision(tradeId: string): Promise<ComplianceDecisionRecord | null>;
+  getLatestDecisionWithAttestation(tradeId: string): Promise<ComplianceDecisionRecord | null>;
   listTradeDecisions(input: ListComplianceDecisionsInput): Promise<ListComplianceDecisionsResult>;
   saveOracleProgressionBlock(block: OracleProgressionBlockRecord): Promise<OracleProgressionBlockRecord>;
   getOracleProgressionBlock(tradeId: string): Promise<OracleProgressionBlockRecord | null>;
@@ -118,6 +166,7 @@ interface ComplianceDecisionRow {
   actorId: string | null;
   endpoint: string | null;
   intentHash: string | null;
+  attestationRef: AttestationReferenceRecord | null;
   reason: string;
   evidenceLinks: EvidenceLink[];
   ticketRef: string;
@@ -126,6 +175,22 @@ interface ComplianceDecisionRow {
   actorRole: string;
   requestedBy: string;
   approvedBy: string[] | null;
+}
+
+function cloneAttestationRecord(attestation: AttestationReferenceRecord): AttestationReferenceRecord {
+  return {
+    ...attestation,
+    issuer: {
+      id: attestation.issuer.id,
+      kind: attestation.issuer.kind,
+      ...(attestation.issuer.displayName ? { displayName: attestation.issuer.displayName } : {}),
+    },
+    subjectRef: {
+      type: attestation.subjectRef.type,
+      reference: attestation.subjectRef.reference,
+    },
+    ...(attestation.referenceHash ? { referenceHash: attestation.referenceHash } : {}),
+  };
 }
 
 interface OracleProgressionBlockRow {
@@ -167,6 +232,7 @@ function cloneAuditRecord(audit: ComplianceAuditRecord): ComplianceAuditRecord {
 function cloneDecisionRecord(decision: ComplianceDecisionRecord): ComplianceDecisionRecord {
   return {
     ...decision,
+    ...(decision.attestation ? { attestation: cloneAttestationRecord(decision.attestation) } : {}),
     audit: cloneAuditRecord(decision.audit),
   };
 }
@@ -198,6 +264,7 @@ function mapDecisionRow(row: ComplianceDecisionRow, blockState: ComplianceBlockS
     actorId: row.actorId ?? undefined,
     endpoint: row.endpoint ?? undefined,
     intentHash: row.intentHash ?? undefined,
+    ...(row.attestationRef ? { attestation: cloneAttestationRecord(row.attestationRef) } : {}),
     audit: {
       reason: row.reason,
       evidenceLinks: row.evidenceLinks || [],
@@ -317,6 +384,7 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
     actor_id AS "actorId",
     endpoint,
     intent_hash AS "intentHash",
+    attestation_ref AS "attestationRef",
     reason,
     evidence_links AS "evidenceLinks",
     ticket_ref AS "ticketRef",
@@ -346,6 +414,7 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
           actor_id,
           endpoint,
           intent_hash,
+          attestation_ref,
           reason,
           evidence_links,
           ticket_ref,
@@ -357,7 +426,7 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
           decided_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19, $20, $21, $22, $23, $24::jsonb, $25
+          $11, $12, $13, $14, $15, $16, $17::jsonb, $18, $19::jsonb, $20, $21, $22, $23, $24, $25::jsonb, $26
         )`,
         [
           decision.decisionId,
@@ -376,6 +445,7 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
           decision.actorId ?? null,
           decision.endpoint ?? null,
           decision.intentHash ?? null,
+          decision.attestation ? JSON.stringify(decision.attestation) : null,
           decision.audit.reason,
           JSON.stringify(decision.audit.evidenceLinks),
           decision.audit.ticketRef,
@@ -418,6 +488,26 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
         `${selectDecisionColumns}
          FROM compliance_decisions
          WHERE trade_id = $1
+         ORDER BY decided_at DESC, decision_id DESC
+         LIMIT 1`,
+        [tradeId],
+      );
+
+      const row = result.rows[0];
+      if (!row) {
+        return null;
+      }
+
+      const block = await loadBlockState(pool, tradeId);
+      return mapDecisionRow(row, block?.blockState ?? 'not_blocked');
+    },
+
+    async getLatestDecisionWithAttestation(tradeId) {
+      const result = await pool.query<ComplianceDecisionRow>(
+        `${selectDecisionColumns}
+         FROM compliance_decisions
+         WHERE trade_id = $1
+           AND attestation_ref IS NOT NULL
          ORDER BY decided_at DESC, decision_id DESC
          LIMIT 1`,
         [tradeId],
@@ -617,6 +707,19 @@ export function createInMemoryComplianceStore(
 
     async getLatestDecision(tradeId) {
       const latest = sortedTradeDecisions(tradeId)[0];
+      if (!latest) {
+        return null;
+      }
+
+      const blockState = blocks.get(tradeId)?.blockState ?? 'not_blocked';
+      return {
+        ...cloneDecisionRecord(latest),
+        blockState,
+      };
+    },
+
+    async getLatestDecisionWithAttestation(tradeId) {
+      const latest = sortedTradeDecisions(tradeId).find((decision) => decision.attestation);
       if (!latest) {
         return null;
       }

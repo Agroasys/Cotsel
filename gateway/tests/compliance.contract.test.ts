@@ -61,6 +61,25 @@ function buildDecisionBody(overrides: Record<string, unknown> = {}) {
     subjectType: 'counterparty',
     riskLevel: 'high',
     correlationId: 'corr-1',
+    attestation: {
+      attestationId: 'att-1',
+      attestationType: 'kyt',
+      status: 'active',
+      issuer: {
+        id: 'compliance-provider',
+        kind: 'provider',
+        displayName: 'Compliance Provider',
+      },
+      subjectRef: {
+        type: 'counterparty',
+        reference: 'subject-1',
+      },
+      issuedAt: '2026-03-20T10:00:00.000Z',
+      expiresAt: '2026-03-30T10:00:00.000Z',
+      providerRef: 'provider-ref-1',
+      evidenceRef: 'evidence-bundle-1',
+      referenceHash: `0x${'a'.repeat(64)}`,
+    },
     audit: {
       reason: 'Documented compliance control action for dashboard workflow.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets.agroasys.local/AGRO-1100' }],
@@ -184,6 +203,7 @@ describe('gateway compliance routes contract', () => {
   const validateDecision = createSchemaValidator(spec, '#/components/schemas/ComplianceDecisionResponse');
   const validateDecisionList = createSchemaValidator(spec, '#/components/schemas/ComplianceDecisionListResponse');
   const validateTradeStatus = createSchemaValidator(spec, '#/components/schemas/ComplianceTradeStatusResponse');
+  const validateAttestationStatus = createSchemaValidator(spec, '#/components/schemas/ComplianceTradeAttestationStatusResponse');
   const validateError = createSchemaValidator(spec, '#/components/schemas/ErrorResponse');
 
   test('OpenAPI spec exposes all compliance endpoints', () => {
@@ -191,6 +211,7 @@ describe('gateway compliance routes contract', () => {
       '/compliance/decisions',
       '/compliance/decisions/{decisionId}',
       '/compliance/trades/{tradeId}',
+      '/compliance/trades/{tradeId}/attestation-status',
       '/compliance/trades/{tradeId}/decisions',
       '/compliance/trades/{tradeId}/block-oracle-progression',
       '/compliance/trades/{tradeId}/resume-oracle-progression',
@@ -272,6 +293,32 @@ describe('gateway compliance routes contract', () => {
 
       expect(response.status).toBe(404);
       expect(validateError(payload)).toBe(true);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('GET /compliance/trades/:tradeId/attestation-status returns read-only attestation status matching the OpenAPI schema', async () => {
+    const { server, baseUrl } = await startServer();
+
+    try {
+      await createDecision(baseUrl, buildDecisionBody({
+        result: 'ALLOW',
+        reasonCode: 'CMP_OVERRIDE_ACTIVE',
+        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }), 'idem-attestation-1');
+
+      const response = await fetch(`${baseUrl}/compliance/trades/TRD-1/attestation-status`, {
+        headers: { Authorization: 'Bearer session-admin' },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(validateAttestationStatus(payload)).toBe(true);
+      expect(payload.data.attestation.issuer.id).toBe('compliance-provider');
+      expect(payload.data.attestation.subjectRef.reference).toBe('subject-1');
+      expect(payload.data.availability).toBe('available');
+      expect(payload.data.freshness).toBe('current');
     } finally {
       server.close();
     }

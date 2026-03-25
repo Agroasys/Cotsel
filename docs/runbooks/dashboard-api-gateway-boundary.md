@@ -142,6 +142,10 @@ Every gateway action must be verifiable through one or more of:
   - verify `TreasuryPayoutAddressUpdated`
 
 ### Compliance verification examples
+- Attestation status read:
+  - verify `GET /compliance/trades/{tradeId}/attestation-status`
+  - verify issuer, subject reference, `verifiedAt`, freshness, availability, expiry, and degraded reason
+  - verify the route is treated as read-only evidence and not as a revalidation or mutation path
 - Decision create:
   - verify append-only decision record with provider reference, reason code, evidence links, and actor metadata
 - Block oracle progression:
