@@ -124,12 +124,13 @@ Every gateway action must be verifiable through one or more of:
 ### Governance verification examples
 - Pause / claims pause:
   - verify gateway action status
+  - verify audit `intent` / `outcome`
   - verify transaction hash
   - verify `Paused`, `ClaimsPaused`, or `ClaimsUnpaused` event
 - Governance mutation execution model:
   - gateway persists action as `QUEUED`
   - executor process runs `npm run -w gateway execute:governance-action -- <actionId>`
-  - verify resulting action transition, audit entries, and tx hash
+  - verify resulting action transition, audit entries, explicit `outcome`, and tx hash
 - Oracle recovery:
   - verify `OracleDisabledEmergency`, `OracleUpdateProposed`, `OracleUpdateApproved`, `OracleUpdated`
   - verify `oracleAddress` and `oracleActive` read model
@@ -143,7 +144,7 @@ Every gateway action must be verifiable through one or more of:
 
 ### Compliance verification examples
 - Decision create:
-  - verify append-only decision record with provider reference, reason code, evidence links, and actor metadata
+  - verify append-only decision record with provider reference, reason code, evidence links, actor metadata, and explicit `outcome`
 - Block oracle progression:
   - verify trade block state in gateway read model
   - verify that subsequent oracle progression requests are rejected or held by orchestration policy
@@ -151,20 +152,31 @@ Every gateway action must be verifiable through one or more of:
   - verify cleared block state and linked reason/evidence
 
 ## Required audit fields for every mutation
-The gateway must persist, at minimum:
-- actor session id
-- actor wallet / subject
-- actor role
-- request id
-- correlation id
-- idempotency key
-- reason
-- evidence links
-- ticket reference
-- created at
-- requested by
-- approved by, if applicable
-- resulting tx hash / block number, if applicable
+The gateway must persist every mutation in a form that can populate
+`AuditEnvelopeV1` from `docs/observability/logging-schema.md`.
+
+Minimum persisted fields:
+- `requestId`
+- `correlationId`
+- `actionKey` or equivalent gateway action identifier
+- `actorSessionId`
+- `actorWallet`
+- `actorRole`
+- `intent`
+- `outcome`
+- `reason`
+- `evidenceLinks`
+- `ticketRef`
+- `createdAt`
+- `requestedBy`
+- `approvedBy`, if applicable
+- resulting `txHash` / `blockNumber`, if applicable
+
+Gateway-specific note:
+- The current gateway runtime already persists actor and audit metadata in its
+  ledgers, but generic request logs still use local field names such as
+  `userId`, `walletAddress`, and `gatewayRoles`.
+- Treat the ledger records as the stronger audit truth when field names diverge.
 
 ## Resolved design choices
 - The gateway is the canonical owner of dashboard-facing ledgers:
