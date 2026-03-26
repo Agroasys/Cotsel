@@ -221,6 +221,53 @@ describe('upsertFiatDepositReference', () => {
     expect(result.reference.failure_class).toBe('REVERSED_FUNDING');
   });
 
+  it('keeps reversed funding classification even when the observed amount mismatches', async () => {
+    mockClientQuery
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 12,
+            trade_id: 'trade-1',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 93,
+            ramp_reference: 'ramp-4',
+            trade_id: 'trade-1',
+            deposit_state: 'REVERSED',
+            provider_event_id: 'provider-event-4',
+            failure_class: 'REVERSED_FUNDING',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({});
+
+    const result = await upsertFiatDepositReference({
+      rampReference: 'ramp-4',
+      tradeId: 'trade-1',
+      ledgerEntryId: 12,
+      depositState: 'REVERSED',
+      sourceAmount: '90',
+      currency: 'USD',
+      expectedAmount: '100',
+      expectedCurrency: 'USD',
+      observedAt: new Date('2026-03-26T00:00:00.000Z'),
+      providerEventId: 'provider-event-4',
+      providerAccountRef: 'acct-1',
+      reversalReference: 'reversal-2',
+    });
+
+    expect(mockClientQuery.mock.calls[4][1][11]).toBe('REVERSED_FUNDING');
+    expect(result.reference.failure_class).toBe('REVERSED_FUNDING');
+  });
+
   it('rejects duplicate provider events with conflicting payloads', async () => {
     const payloadHash = createFiatDepositPayloadHash(
       normalizeFiatDepositInput({

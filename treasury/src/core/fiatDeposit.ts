@@ -98,6 +98,10 @@ export function deriveFiatDepositFailureClass(
     return 'CURRENCY_MISMATCH';
   }
 
+  if (input.depositState === 'REVERSED') {
+    return 'REVERSED_FUNDING';
+  }
+
   const sourceAmount = BigInt(input.sourceAmount);
   const expectedAmount = BigInt(input.expectedAmount);
 
@@ -107,10 +111,6 @@ export function deriveFiatDepositFailureClass(
 
   if (sourceAmount !== expectedAmount) {
     return 'AMOUNT_MISMATCH';
-  }
-
-  if (input.depositState === 'REVERSED') {
-    return 'REVERSED_FUNDING';
   }
 
   return null;
