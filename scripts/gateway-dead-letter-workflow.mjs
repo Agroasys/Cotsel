@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { createRequire } from 'module';
 import { runGatewayDeadLetterWorkflow } from './lib/gateway-dead-letter-workflow-lib.mjs';
-
 const require = createRequire(import.meta.url);
 require('ts-node/register/transpile-only');
 
@@ -59,4 +58,3 @@ main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });
-

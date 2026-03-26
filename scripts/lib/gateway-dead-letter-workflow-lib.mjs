@@ -3,7 +3,6 @@ export function parseGatewayDeadLetterArgs(argv) {
   if (!command) {
     throw new Error('usage: node scripts/gateway-dead-letter-workflow.mjs <list|replay> [options]');
   }
-
   let json = false;
   let state = 'open';
   let all = false;
@@ -95,4 +94,3 @@ export async function runGatewayDeadLetterWorkflow(argv, deps, io = console) {
   io.log(`replayed\t${record.failedOperationId}\t${record.failureState}\t${record.lastReplayedAt ?? 'n/a'}`);
   return { success: true, data: record };
 }
-

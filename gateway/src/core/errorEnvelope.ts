@@ -3,7 +3,6 @@
  */
 import type { RequestContext } from '../middleware/requestContext';
 import { GatewayError, type GatewayErrorCode } from '../errors';
-
 export type GatewayFailureClass =
   | 'client_contract'
   | 'upstream_business'
@@ -73,4 +72,3 @@ export function createGatewayErrorEnvelope(
     replayable: true,
   };
 }
-

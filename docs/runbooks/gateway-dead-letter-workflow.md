@@ -1,5 +1,4 @@
 # Gateway Dead-Letter Workflow
-
 ## Purpose
 Define the gateway-owned failed-operation ledger, replay eligibility rules, and operator replay workflow introduced under issue `#124`.
 
@@ -108,4 +107,3 @@ Record these fields in the incident or operator evidence packet:
 - failure class/code/message
 - replay result
 - ticket reference and operator identity
-
