@@ -36,6 +36,7 @@ Operations read surface:
 - `GET /operations/summary` provides service health and incident summary for operator operations pages.
 - Response states are explicit and deterministic: `healthy`, `degraded`, `unavailable`, `stale`.
 - Every service status and incident summary snapshot includes source and freshness timestamps.
+- `GET /overview` trade freshness must come from indexer watermarks (`lastIndexedAt`, `lastProcessedBlock`), not gateway request time.
 
 Current connected-validation constraint:
 - Cotsel-Dash may run connected mode only against explicit local/docker gateway and auth-service URLs until real remote staging coordinates are recorded.

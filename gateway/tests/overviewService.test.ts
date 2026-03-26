@@ -8,11 +8,13 @@ describe('overview service', () => {
   const originalFetch = global.fetch;
 
   afterEach(() => {
+    jest.useRealTimers();
     global.fetch = originalFetch;
     jest.restoreAllMocks();
   });
 
-  test('maps overview snapshot from indexer to trade KPIs', async () => {
+  test('maps overview snapshot from indexer to trade KPIs and preserves indexer watermarks', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-03-09T00:01:00.000Z'));
     global.fetch = jest.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -58,6 +60,9 @@ describe('overview service', () => {
     expect(snapshot.kpis.trades.byStatus.completed).toBe(2);
     expect(snapshot.kpis.trades.byStatus.disputed).toBe(1);
     expect(snapshot.kpis.trades.byStatus.cancelled).toBe(1);
+    expect(snapshot.feedFreshness.trades.queriedAt).toBe('2026-03-09T00:01:00.000Z');
+    expect(snapshot.feedFreshness.trades.freshAt).toBe('2026-03-09T00:00:00.000Z');
+    expect(snapshot.feedFreshness.trades.lastIndexedAt).toBe('2026-03-09T00:00:00.000Z');
     expect(snapshot.feedFreshness.trades.lastProcessedBlock).toBe('42000');
     expect(snapshot.feedFreshness.trades.lastTradeEventAt).toBe('2026-03-08T12:00:00.000Z');
     expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -90,6 +95,7 @@ describe('overview service', () => {
       queriedAt: null,
       freshAt: null,
       available: false,
+      lastIndexedAt: null,
       lastProcessedBlock: null,
       lastTradeEventAt: null,
     });
@@ -104,6 +110,60 @@ describe('overview service', () => {
       queriedAt: null,
       freshAt: null,
       available: false,
+    });
+  });
+
+  test('rejects invalid indexer watermark timestamps instead of fabricating overview freshness', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          overviewSnapshotById: {
+            totalTrades: 1,
+            lockedTrades: 1,
+            stage1Trades: 0,
+            stage2Trades: 0,
+            completedTrades: 0,
+            disputedTrades: 0,
+            cancelledTrades: 0,
+            lastProcessedBlock: '42001',
+            lastIndexedAt: 'not-a-date',
+            lastTradeEventAt: null,
+          },
+        },
+      }),
+    } as Response);
+
+    const governanceStatusService = {
+      getGovernanceStatus: jest.fn().mockResolvedValue({
+        paused: false,
+        claimsPaused: false,
+        oracleActive: true,
+      }),
+      checkReadiness: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new OverviewService(
+      'http://127.0.0.1:4350/graphql',
+      5000,
+      governanceStatusService,
+      createInMemoryComplianceStore([]),
+    );
+
+    const snapshot = await service.getOverview();
+
+    expect(snapshot.kpis.trades).toEqual({
+      total: 0,
+      byStatus: { locked: 0, stage_1: 0, stage_2: 0, completed: 0, disputed: 0, cancelled: 0 },
+    });
+    expect(snapshot.feedFreshness.trades).toEqual({
+      source: 'indexer_graphql',
+      queriedAt: null,
+      freshAt: null,
+      available: false,
+      lastIndexedAt: null,
+      lastProcessedBlock: null,
+      lastTradeEventAt: null,
     });
   });
 });
