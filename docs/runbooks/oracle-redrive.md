@@ -8,6 +8,13 @@ Gateway-boundary handoff: when failures indicate routing/auth propagation/correl
 Automation-governance source of truth:
 - `docs/runbooks/programmability-governance.md`
 
+Webhook authenticity and replay regression fixtures:
+- `oracle/tests/hmac-middleware.test.ts`
+- `oracle/tests/authenticated-routes.test.ts`
+- `treasury/tests/authMiddleware.test.ts`
+- `treasury/tests/replayProtection.test.ts`
+- `treasury/tests/serviceAuthRoutes.test.ts`
+
 ## Ownership And Intervention Rules
 - `Operator`:
   - Runs health/diagnostic checks.
