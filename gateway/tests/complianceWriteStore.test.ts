@@ -86,6 +86,7 @@ function createReadStore(): ComplianceStore {
     saveDecision: jest.fn(),
     getDecision: jest.fn(),
     getLatestDecision: jest.fn(),
+    getLatestDecisionWithAttestation: jest.fn(),
     listTradeDecisions: jest.fn(),
     saveOracleProgressionBlock: jest.fn(),
     getOracleProgressionBlock: jest.fn(),

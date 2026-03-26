@@ -4,10 +4,16 @@
 import { createHash, randomUUID } from 'crypto';
 import { AuditLogEntry } from './auditLogStore';
 import {
+  ATTESTATION_ISSUER_KINDS,
+  ATTESTATION_REFERENCE_STATUSES,
   COMPLIANCE_DECISION_RESULTS,
   COMPLIANCE_DECISION_TYPES,
   COMPLIANCE_RISK_LEVELS,
+  AttestationAvailability,
+  AttestationFreshnessState,
+  AttestationReferenceRecord,
   ComplianceAuditRecord,
+  ComplianceAttestationStatusRecord,
   ComplianceDecisionRecord,
   ComplianceDecisionResult,
   ComplianceDecisionType,
@@ -32,6 +38,10 @@ const DENY_ONLY_REASON_CODES = new Set([
   'CMP_PROVIDER_TIMEOUT',
   'CMP_AUDIT_WRITE_FAILED',
 ]);
+const ATTESTATION_UNAVAILABLE_REASON_CODES = new Set([
+  'CMP_PROVIDER_UNAVAILABLE',
+  'CMP_PROVIDER_TIMEOUT',
+]);
 
 type MutationAuditInput = GovernanceMutationAuditInput;
 
@@ -47,6 +57,7 @@ export interface ComplianceDecisionCreateInput {
   riskLevel: ComplianceRiskLevel | null;
   overrideWindowEndsAt: string | null;
   correlationId: string;
+  attestation: AttestationReferenceRecord | null;
   audit: MutationAuditInput;
   principal: GatewayPrincipal;
   requestContext: RequestContext;
@@ -206,6 +217,67 @@ function validateOptionalTimestamp(value: unknown, field: string): string | null
   return normalized;
 }
 
+function validateRequiredTimestamp(value: unknown, field: string): string {
+  const normalized = validateStringField(value, field, 10, 64);
+  if (Number.isNaN(Date.parse(normalized))) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be a valid ISO timestamp`);
+  }
+
+  return normalized;
+}
+
+function validateOptionalDisplayName(value: unknown, field: string): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  return validateStringField(value, field, 1, 128);
+}
+
+function validateAttestationReference(raw: unknown): AttestationReferenceRecord | null {
+  if (raw === undefined || raw === null) {
+    return null;
+  }
+
+  if (!raw || typeof raw !== 'object') {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'attestation must be an object when provided');
+  }
+
+  const record = raw as Record<string, unknown>;
+  const issuer = record.issuer;
+  if (!issuer || typeof issuer !== 'object') {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'attestation.issuer must be an object');
+  }
+
+  const subjectRef = record.subjectRef;
+  if (!subjectRef || typeof subjectRef !== 'object') {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'attestation.subjectRef must be an object');
+  }
+
+  const issuerRecord = issuer as Record<string, unknown>;
+  const subjectRecord = subjectRef as Record<string, unknown>;
+
+  return {
+    attestationId: validateStringField(record.attestationId, 'attestation.attestationId', 1, 256),
+    attestationType: validateStringField(record.attestationType, 'attestation.attestationType', 2, 128),
+    status: validateEnum(record.status, ATTESTATION_REFERENCE_STATUSES, 'attestation.status'),
+    issuer: {
+      id: validateStringField(issuerRecord.id, 'attestation.issuer.id', 1, 128),
+      kind: validateEnum(issuerRecord.kind, ATTESTATION_ISSUER_KINDS, 'attestation.issuer.kind'),
+      displayName: validateOptionalDisplayName(issuerRecord.displayName, 'attestation.issuer.displayName'),
+    },
+    subjectRef: {
+      type: validateStringField(subjectRecord.type, 'attestation.subjectRef.type', 1, 128),
+      reference: validateStringField(subjectRecord.reference, 'attestation.subjectRef.reference', 1, 256),
+    },
+    issuedAt: validateRequiredTimestamp(record.issuedAt, 'attestation.issuedAt'),
+    expiresAt: validateOptionalTimestamp(record.expiresAt, 'attestation.expiresAt'),
+    providerRef: validateStringField(record.providerRef, 'attestation.providerRef', 1, 256),
+    evidenceRef: validateStringField(record.evidenceRef, 'attestation.evidenceRef', 1, 256),
+    referenceHash: validateOptionalDisplayName(record.referenceHash, 'attestation.referenceHash'),
+  };
+}
+
 export function validateComplianceDecisionCreateRequest(raw: unknown): Omit<ComplianceDecisionCreateInput, 'principal' | 'requestContext' | 'routePath' | 'idempotencyKey'> {
   if (!raw || typeof raw !== 'object') {
     throw new GatewayError(400, 'VALIDATION_ERROR', 'Request body must be a JSON object');
@@ -256,6 +328,7 @@ export function validateComplianceDecisionCreateRequest(raw: unknown): Omit<Comp
     riskLevel: validateOptionalRiskLevel(body.riskLevel),
     overrideWindowEndsAt,
     correlationId: validateStringField(body.correlationId, 'correlationId', 3, 128),
+    attestation: validateAttestationReference(body.attestation),
     audit: validateAuditInput(body),
   };
 }
@@ -332,6 +405,69 @@ export class ComplianceService {
     return this.store.getTradeStatus(tradeId);
   }
 
+  async getAttestationStatus(tradeId: string): Promise<ComplianceAttestationStatusRecord | null> {
+    const latestDecision = await this.store.getLatestDecision(tradeId);
+    if (!latestDecision) {
+      return null;
+    }
+
+    const attestationDecision = latestDecision.attestation
+      ? latestDecision
+      : await this.store.getLatestDecisionWithAttestation(tradeId);
+
+    if (!attestationDecision?.attestation) {
+      return null;
+    }
+
+    const attestation = attestationDecision.attestation;
+    const nowMs = Date.now();
+    const expiresAtMs = attestation.expiresAt ? Date.parse(attestation.expiresAt) : Number.NaN;
+
+    let availability: AttestationAvailability = 'available';
+    let freshness: AttestationFreshnessState = 'current';
+    let degradedReason: string | undefined;
+
+    if (!Number.isNaN(expiresAtMs) && expiresAtMs <= nowMs) {
+      availability = 'degraded';
+      freshness = 'expired';
+      degradedReason = 'attestation_expired';
+    } else if (ATTESTATION_UNAVAILABLE_REASON_CODES.has(latestDecision.reasonCode)) {
+      availability = 'unavailable';
+      freshness = 'stale';
+      degradedReason = latestDecision.reasonCode.toLowerCase();
+    } else if (attestation.status === 'expired') {
+      availability = 'degraded';
+      freshness = 'expired';
+      degradedReason = 'attestation_expired';
+    } else if (attestation.status === 'revoked') {
+      availability = 'degraded';
+      freshness = 'unknown';
+      degradedReason = 'attestation_revoked';
+    } else if (attestation.status === 'unknown') {
+      availability = 'degraded';
+      freshness = 'unknown';
+      degradedReason = 'attestation_unknown';
+    } else if (latestDecision.result === 'DENY') {
+      availability = 'degraded';
+      freshness = 'current';
+      degradedReason = 'decision_denied';
+    }
+
+    return {
+      tradeId,
+      decisionId: latestDecision.decisionId,
+      decisionType: latestDecision.decisionType,
+      complianceResult: latestDecision.result,
+      reasonCode: latestDecision.reasonCode,
+      availability,
+      freshness,
+      ...(degradedReason ? { degradedReason } : {}),
+      verifiedAt: attestationDecision.decidedAt,
+      updatedAt: latestDecision.decidedAt,
+      attestation,
+    };
+  }
+
   async listTradeDecisions(tradeId: string, limit: number, cursor?: string): Promise<{ items: ComplianceDecisionRecord[]; nextCursor: string | null }> {
     return this.store.listTradeDecisions({ tradeId, limit, cursor });
   }
@@ -375,6 +511,7 @@ export class ComplianceService {
         correlationId: input.correlationId,
         actorId,
       }),
+      attestation: input.attestation,
       audit: buildAuditRecord(input.audit, input.principal, decidedAt),
     };
 
