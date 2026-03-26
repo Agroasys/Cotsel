@@ -2,6 +2,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { GatewayConfig } from '../src/config/env';
+import { createInMemoryAuditLogStore } from '../src/core/auditLogStore';
+import { GatewayErrorHandlerWorkflow } from '../src/core/errorHandlerWorkflow';
+import { createInMemoryFailedOperationStore } from '../src/core/failedOperationStore';
 import { SettlementCallbackDispatcher } from '../src/core/settlementCallbackDispatcher';
 import { SettlementService } from '../src/core/settlementService';
 import { createInMemorySettlementStore } from '../src/core/settlementStore';
@@ -83,6 +86,11 @@ describe('settlement callback dispatcher', () => {
 
   test('retries failed callbacks and dead-letters after the max attempts threshold', async () => {
     const settlementStore = createInMemorySettlementStore();
+    const failedOperationStore = createInMemoryFailedOperationStore();
+    const workflow = new GatewayErrorHandlerWorkflow(
+      failedOperationStore,
+      createInMemoryAuditLogStore(),
+    );
     const settlementService = new SettlementService(config, settlementStore);
     const handoff = await settlementService.createHandoff({
       platformId: 'agroasys-platform',
@@ -110,6 +118,7 @@ describe('settlement callback dispatcher', () => {
     const dispatcher = new SettlementCallbackDispatcher(config, settlementStore, {
       fetchImpl: fetchMock as unknown as typeof fetch,
       now: () => now,
+      failedOperationWorkflow: workflow,
     });
 
     await dispatcher.processDueDeliveries();
@@ -125,6 +134,14 @@ describe('settlement callback dispatcher', () => {
     await dispatcher.processDueDeliveries();
     updatedHandoff = await settlementStore.getHandoff(handoff.handoffId);
     expect(updatedHandoff?.callbackStatus).toBe('dead_letter');
+    const failedOperations = await failedOperationStore.list();
+    expect(failedOperations).toHaveLength(1);
+    expect(failedOperations[0]).toMatchObject({
+      operationType: 'settlement.callback_delivery',
+      failureState: 'open',
+      replayEligible: true,
+      targetService: 'settlement_callback',
+    });
   });
 
   test('stale callback deliveries do not overwrite the latest handoff callback status', async () => {

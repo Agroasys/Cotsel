@@ -5,10 +5,12 @@ import { GatewayConfig } from '../config/env';
 import { Logger } from '../logging/logger';
 import { SettlementStore } from './settlementStore';
 import { createServiceAuthHeaders } from './serviceAuth';
+import type { GatewayErrorHandlerWorkflow } from './errorHandlerWorkflow';
 
 interface CallbackDispatcherOptions {
   fetchImpl?: typeof fetch;
   now?: () => Date;
+  failedOperationWorkflow?: GatewayErrorHandlerWorkflow;
 }
 
 function computeBackoffMs(attemptCount: number, initialBackoffMs: number, maxBackoffMs: number): number {
@@ -19,6 +21,7 @@ function computeBackoffMs(attemptCount: number, initialBackoffMs: number, maxBac
 export class SettlementCallbackDispatcher {
   private readonly fetchImpl: typeof fetch;
   private readonly now: () => Date;
+  private readonly failedOperationWorkflow?: GatewayErrorHandlerWorkflow;
   private timer: NodeJS.Timeout | null = null;
   private running = false;
 
@@ -29,6 +32,7 @@ export class SettlementCallbackDispatcher {
   ) {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.now = options.now ?? (() => new Date());
+    this.failedOperationWorkflow = options.failedOperationWorkflow;
   }
 
   start(): void {
@@ -66,6 +70,15 @@ export class SettlementCallbackDispatcher {
     } finally {
       this.running = false;
     }
+  }
+
+  async replayDeadLetterDelivery(deliveryId: string): Promise<void> {
+    const requeued = await this.store.requeueCallbackDelivery(deliveryId, this.now().toISOString());
+    if (!requeued) {
+      throw new Error(`Settlement callback delivery is not eligible for replay: ${deliveryId}`);
+    }
+
+    await this.processDelivery(deliveryId);
   }
 
   private async processDelivery(deliveryId: string): Promise<void> {
@@ -147,5 +160,21 @@ export class SettlementCallbackDispatcher {
       deadLetter,
       error: message,
     });
+
+    if (deadLetter && this.failedOperationWorkflow) {
+      const callbackDelivery = await this.store.getCallbackDelivery(delivery.deliveryId);
+      if (callbackDelivery) {
+        await this.failedOperationWorkflow.captureSettlementCallbackDeadLetter({
+          deliveryId: callbackDelivery.deliveryId,
+          handoffId: callbackDelivery.handoffId,
+          eventId: callbackDelivery.eventId,
+          targetUrl: callbackDelivery.targetUrl,
+          requestId: callbackDelivery.requestId,
+          requestPayload: callbackDelivery.requestBody,
+          responseStatus,
+          errorMessage: message,
+        });
+      }
+    }
   }
 }

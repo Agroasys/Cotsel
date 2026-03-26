@@ -8,6 +8,8 @@ import type { GatewayConfig } from '../src/config/env';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
 import type { AuthSession } from '../src/core/authSessionClient';
 import { createInMemoryAuditLogStore } from '../src/core/auditLogStore';
+import { GatewayErrorHandlerWorkflow } from '../src/core/errorHandlerWorkflow';
+import { createInMemoryFailedOperationStore } from '../src/core/failedOperationStore';
 import {
   createInMemoryGovernanceActionStore,
   GovernanceActionStore,
@@ -117,6 +119,7 @@ interface StartServerOptions {
   writeAllowlist?: string[];
   sessionFixtures?: Record<string, AuthSession | null>;
   configureReader?: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => void;
+  failQueueAction?: boolean;
 }
 
 async function startServer(options: StartServerOptions = {}) {
@@ -194,6 +197,7 @@ async function startServer(options: StartServerOptions = {}) {
   };
 
   const auditLogStore = createInMemoryAuditLogStore();
+  const failedOperationStore = createInMemoryFailedOperationStore();
   const governanceActionStore = createInMemoryGovernanceActionStore();
   const idempotencyStore = createInMemoryIdempotencyStore();
   const mutationService = new GovernanceMutationService(
@@ -201,6 +205,11 @@ async function startServer(options: StartServerOptions = {}) {
     governanceActionStore,
     createPassthroughGovernanceWriteStore(governanceActionStore, auditLogStore),
   );
+  const failedOperationWorkflow = new GatewayErrorHandlerWorkflow(failedOperationStore, auditLogStore);
+
+  if (options.failQueueAction) {
+    jest.spyOn(mutationService, 'queueAction').mockRejectedValue(new Error('governance queue unavailable'));
+  }
 
   const router = Router();
   router.use(createGovernanceMutationRouter({
@@ -209,6 +218,7 @@ async function startServer(options: StartServerOptions = {}) {
     governanceReader,
     mutationService,
     idempotencyStore,
+    failedOperationWorkflow,
   }));
 
   const app = createApp(config, {
@@ -234,6 +244,7 @@ async function startServer(options: StartServerOptions = {}) {
     governanceReader,
     governanceActionStore,
     auditLogStore,
+    failedOperationStore,
   };
 }
 
@@ -274,6 +285,51 @@ describe('gateway governance mutation routes contract', () => {
     mutationPaths.forEach((routePath) => {
       expect(hasOperation(spec, 'post', routePath)).toBe(true);
     });
+  });
+
+  test('infrastructure failures dead-letter governance queue mutations and preserve logical idempotency', async () => {
+    const { server, baseUrl, failedOperationStore } = await startServer({
+      failQueueAction: true,
+    });
+
+    try {
+      const firstResponse = await fetch(`${baseUrl}/governance/pause`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'idem-governance-dead-letter',
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      const firstPayload = await firstResponse.json();
+      expect(firstResponse.status).toBe(503);
+      expect(validateError(firstPayload)).toBe(true);
+      expect(firstPayload.error.details.failedOperationId).toBeTruthy();
+
+      const secondResponse = await fetch(`${baseUrl}/governance/pause`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'idem-governance-dead-letter',
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      expect(secondResponse.status).toBe(503);
+
+      const failedOperations = await failedOperationStore.list();
+      expect(failedOperations).toHaveLength(1);
+      expect(failedOperations[0]).toMatchObject({
+        operationType: 'governance.queue_action',
+        failureState: 'open',
+        replayEligible: true,
+        retryCount: 2,
+        idempotencyKey: 'idem-governance-dead-letter',
+      });
+    } finally {
+      server.close();
+    }
   });
 
   test.each([

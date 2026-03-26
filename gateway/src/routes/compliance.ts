@@ -21,12 +21,18 @@ import {
 import { createIdempotencyMiddleware } from '../middleware/idempotency';
 import { type RequestContext } from '../middleware/requestContext';
 import { successResponse } from '../responses';
+import {
+  GatewayErrorHandlerWorkflow,
+  type ComplianceControlReplaySpec,
+  type ComplianceDecisionReplaySpec,
+} from '../core/errorHandlerWorkflow';
 
 export interface ComplianceRouterOptions {
   authSessionClient: AuthSessionClient;
   config: GatewayConfig;
   complianceService: ComplianceService;
   idempotencyStore: IdempotencyStore;
+  failedOperationWorkflow?: GatewayErrorHandlerWorkflow;
 }
 
 type MutationRequest = Request<
@@ -119,12 +125,40 @@ async function handleMutation(
   res: Response,
   next: NextFunction,
   statusCode: number,
+  options: ComplianceRouterOptions,
+  failureCapture: {
+    principal: GatewayPrincipal;
+    requestContext: RequestContext;
+    idempotencyKey: string;
+    replaySpec: ComplianceDecisionReplaySpec | ComplianceControlReplaySpec;
+  },
   operation: () => Promise<unknown>,
 ): Promise<void> {
   try {
     const result = await operation();
     res.status(statusCode).json(successResponse(result));
   } catch (error) {
+    if (options.failedOperationWorkflow) {
+      const failedOperation = await options.failedOperationWorkflow.captureFailure({
+        operationType: failureCapture.replaySpec.type,
+        operationKey: `${failureCapture.principal.session.walletAddress.toLowerCase()}:${req.originalUrl || req.path}:${failureCapture.idempotencyKey}`,
+        targetService: 'gateway_compliance_write',
+        route: req.originalUrl || req.path,
+        method: req.method,
+        requestContext: failureCapture.requestContext,
+        requestPayload: req.body,
+        idempotencyKey: failureCapture.idempotencyKey,
+        principal: failureCapture.principal,
+        replaySpec: failureCapture.replaySpec,
+        error,
+      });
+
+      if (failedOperation) {
+        next(options.failedOperationWorkflow.buildClientError(failedOperation, failureCapture.requestContext));
+        return;
+      }
+    }
+
     next(error);
   }
 }
@@ -198,10 +232,23 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
     }
   });
 
-  router.post('/compliance/decisions', requireMutationWriteAccess(), idempotency, (req, res, next) => handleMutation(req, res, next, 201, async () => {
+  router.post('/compliance/decisions', requireMutationWriteAccess(), idempotency, (req, res, next) => handleMutation(req, res, next, 201, options, (() => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'compliance.create_decision',
+        routePath: req.originalUrl || req.path,
+        payload: validateComplianceDecisionCreateRequest(req.body),
+      } satisfies ComplianceDecisionReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const payload = validateComplianceDecisionCreateRequest(req.body);
     return options.complianceService.createDecision({
-      ...validateComplianceDecisionCreateRequest(req.body),
+      ...payload,
       principal,
       requestContext,
       routePath: req.originalUrl || req.path,
@@ -209,10 +256,26 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
     });
   }));
 
-  router.post('/compliance/trades/:tradeId/block-oracle-progression', requireMutationWriteAccess(), idempotency, (req, res, next) => handleMutation(req, res, next, 202, async () => {
+  router.post('/compliance/trades/:tradeId/block-oracle-progression', requireMutationWriteAccess(), idempotency, (req, res, next) => handleMutation(req, res, next, 202, options, (() => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'compliance.block_oracle_progression',
+        routePath: req.originalUrl || req.path,
+        payload: {
+          ...validateComplianceOperationalControlRequest(req.body),
+          tradeId: parseTradeId(req.params.tradeId),
+        },
+      } satisfies ComplianceControlReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const payload = validateComplianceOperationalControlRequest(req.body);
     return options.complianceService.blockOracleProgression({
-      ...validateComplianceOperationalControlRequest(req.body),
+      ...payload,
       tradeId: parseTradeId(req.params.tradeId),
       principal,
       requestContext,
@@ -221,10 +284,26 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
     });
   }));
 
-  router.post('/compliance/trades/:tradeId/resume-oracle-progression', requireMutationWriteAccess(), idempotency, (req, res, next) => handleMutation(req, res, next, 202, async () => {
+  router.post('/compliance/trades/:tradeId/resume-oracle-progression', requireMutationWriteAccess(), idempotency, (req, res, next) => handleMutation(req, res, next, 202, options, (() => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'compliance.resume_oracle_progression',
+        routePath: req.originalUrl || req.path,
+        payload: {
+          ...validateComplianceOperationalControlRequest(req.body),
+          tradeId: parseTradeId(req.params.tradeId),
+        },
+      } satisfies ComplianceControlReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const payload = validateComplianceOperationalControlRequest(req.body);
     return options.complianceService.resumeOracleProgression({
-      ...validateComplianceOperationalControlRequest(req.body),
+      ...payload,
       tradeId: parseTradeId(req.params.tradeId),
       principal,
       requestContext,

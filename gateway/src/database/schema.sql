@@ -36,6 +36,48 @@ CREATE TABLE IF NOT EXISTS audit_log (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS failed_operations (
+    failed_operation_id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    operation_type TEXT NOT NULL,
+    operation_key TEXT NOT NULL,
+    target_service TEXT NOT NULL,
+    route TEXT NOT NULL,
+    method TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    request_payload JSONB,
+    request_id TEXT NOT NULL,
+    correlation_id TEXT,
+    idempotency_key TEXT,
+    action_key TEXT,
+    actor_id TEXT,
+    actor_user_id TEXT,
+    actor_wallet_address TEXT,
+    actor_role TEXT,
+    session_reference TEXT,
+    replay_eligible BOOLEAN NOT NULL DEFAULT TRUE,
+    failure_state TEXT NOT NULL CHECK (failure_state IN (
+        'open',
+        'replayed',
+        'replay_failed'
+    )),
+    first_failed_at TIMESTAMP NOT NULL,
+    last_failed_at TIMESTAMP NOT NULL,
+    retry_count INTEGER NOT NULL DEFAULT 1,
+    terminal_error_class TEXT NOT NULL CHECK (terminal_error_class IN (
+        'client_contract',
+        'upstream_business',
+        'infrastructure',
+        'unexpected'
+    )),
+    terminal_error_code TEXT NOT NULL,
+    terminal_error_message TEXT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    last_replayed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (operation_type, operation_key)
+);
+
 CREATE TABLE IF NOT EXISTS access_log_entries (
     entry_id TEXT PRIMARY KEY,
     event_type TEXT NOT NULL,
@@ -504,6 +546,10 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_action_id ON audit_log(action_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_idempotency_key ON audit_log(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_audit_log_route_created_at ON audit_log(route, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_status_created_at ON audit_log(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_failed_operations_state_last_failed_at ON failed_operations(failure_state, last_failed_at DESC, failed_operation_id DESC);
+CREATE INDEX IF NOT EXISTS idx_failed_operations_replay_eligible_last_failed_at ON failed_operations(replay_eligible, last_failed_at DESC, failed_operation_id DESC);
+CREATE INDEX IF NOT EXISTS idx_failed_operations_request_id ON failed_operations(request_id);
+CREATE INDEX IF NOT EXISTS idx_failed_operations_idempotency_key ON failed_operations(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_access_log_created_at ON access_log_entries(created_at DESC, entry_id DESC);
 CREATE INDEX IF NOT EXISTS idx_access_log_event_type_created_at ON access_log_entries(event_type, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_access_log_actor_created_at ON access_log_entries(actor_user_id, created_at DESC);

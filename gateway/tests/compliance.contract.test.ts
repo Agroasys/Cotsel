@@ -10,6 +10,8 @@ import { createInMemoryAuditLogStore } from '../src/core/auditLogStore';
 import { ComplianceService } from '../src/core/complianceService';
 import { createInMemoryComplianceStore } from '../src/core/complianceStore';
 import { createPassthroughComplianceWriteStore } from '../src/core/complianceWriteStore';
+import { GatewayErrorHandlerWorkflow } from '../src/core/errorHandlerWorkflow';
+import { createInMemoryFailedOperationStore } from '../src/core/failedOperationStore';
 import { createInMemoryIdempotencyStore } from '../src/core/idempotencyStore';
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
@@ -105,6 +107,7 @@ interface StartServerOptions {
   sessionRole?: 'admin' | 'buyer' | null;
   enableMutations?: boolean;
   writeAllowlist?: string[];
+  failCreateDecision?: boolean;
 }
 
 async function startServer(options: StartServerOptions = {}) {
@@ -148,11 +151,17 @@ async function startServer(options: StartServerOptions = {}) {
 
   const complianceStore = createInMemoryComplianceStore();
   const auditLogStore = createInMemoryAuditLogStore();
+  const failedOperationStore = createInMemoryFailedOperationStore();
   const idempotencyStore = createInMemoryIdempotencyStore();
   const complianceService = new ComplianceService(
     complianceStore,
     createPassthroughComplianceWriteStore(complianceStore, auditLogStore),
   );
+  const failedOperationWorkflow = new GatewayErrorHandlerWorkflow(failedOperationStore, auditLogStore);
+
+  if (options.failCreateDecision) {
+    jest.spyOn(complianceService, 'createDecision').mockRejectedValue(new Error('compliance store unavailable'));
+  }
 
   const router = Router();
   router.use(createComplianceRouter({
@@ -160,6 +169,7 @@ async function startServer(options: StartServerOptions = {}) {
     config,
     complianceService,
     idempotencyStore,
+    failedOperationWorkflow,
   }));
 
   const app = createApp(config, {
@@ -183,6 +193,7 @@ async function startServer(options: StartServerOptions = {}) {
     server,
     baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
     auditLogStore,
+    failedOperationStore,
   };
 }
 
@@ -242,6 +253,36 @@ describe('gateway compliance routes contract', () => {
         actionId: payload.data.decisionId,
         idempotencyKey: 'idem-create-1',
         actorId: 'user:uid-admin',
+      });
+    } finally {
+      server.close();
+    }
+  });
+
+  test('infrastructure failures dead-letter compliance mutations and accumulate retry count by logical operation', async () => {
+    const { server, baseUrl, failedOperationStore } = await startServer({
+      failCreateDecision: true,
+      writeAllowlist: ['uid-admin'],
+    });
+
+    try {
+      const firstResponse = await createDecision(baseUrl, buildDecisionBody(), 'idem-dead-letter-1');
+      const firstPayload = await firstResponse.json();
+      expect(firstResponse.status).toBe(503);
+      expect(validateError(firstPayload)).toBe(true);
+      expect(firstPayload.error.details.failedOperationId).toBeTruthy();
+
+      const secondResponse = await createDecision(baseUrl, buildDecisionBody(), 'idem-dead-letter-1');
+      expect(secondResponse.status).toBe(503);
+
+      const failedOperations = await failedOperationStore.list();
+      expect(failedOperations).toHaveLength(1);
+      expect(failedOperations[0]).toMatchObject({
+        operationType: 'compliance.create_decision',
+        failureState: 'open',
+        replayEligible: true,
+        retryCount: 2,
+        idempotencyKey: 'idem-dead-letter-1',
       });
     } finally {
       server.close();
