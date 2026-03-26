@@ -145,7 +145,7 @@ cotsel/
 
 See `SECURITY.md` for disclosure policy.
 
-Cotsel is an open settlement layer developed by Agroasys; Agroasys is the first production adopter and contributes the operational reference implementation.
+Cotsel is an open settlement layer developed by [Agroasys](https://github.com/Agroasys); [Agroasys](https://github.com/Agroasys) is the first production adopter and contributes the operational reference implementation.
 
 ## Partners and Contributors
 
