@@ -35,11 +35,11 @@ Logistics event signal
         └─> [6] Confirmation polling -> trigger CONFIRMED
 ```
 
-**[1] HMAC authenticity** — the oracle HMAC middleware validates `x-agroasys-signature` as HMAC-SHA256 of `timestamp + "." + raw-body` using `ORACLE_HMAC_SECRET`. Requests with missing or invalid signatures are rejected `401` before any trigger record is created.
+**[1] HMAC authenticity** — the oracle HMAC middleware validates `x-signature` as HMAC-SHA256 of `timestamp + body` (no separator) using `ORACLE_HMAC_SECRET`. The API key is validated separately via `Authorization: Bearer <API_KEY>`. Requests with missing or invalid headers are rejected `401` before any trigger record is created.
 
-**[2] Replay protection** — `x-agroasys-timestamp` must be within the allowed clock-skew window (service default: 5 minutes). Requests outside that window are rejected `401`. If `x-agroasys-nonce` is present, the nonce is checked against prior use for the same caller within the skew window.
+**[2] Replay protection** — `x-timestamp` must be within the allowed clock-skew window (service default: 5 minutes). Requests outside that window are rejected `401`. A nonce is always consumed: if `x-nonce` is present it is used directly; otherwise a nonce is derived from `(timestamp, body, signature)` and consumed. Replay protection applies to every request, not only those that include an explicit nonce.
 
-**[3] Idempotency** — trigger creation derives `actionKey = hash(triggerType, tradeId)`. A second submission of the same `(triggerType, tradeId)` pair returns the existing trigger record without creating a duplicate execution path. This is the primary guard against double-release on retry or re-queued logistics signals.
+**[3] Idempotency** — `actionKey` is the string `${triggerType}:${tradeId}`. When a trigger for the same `actionKey` already exists in `SUBMITTED` or `CONFIRMED` state, the existing record is returned without creating a new execution path. Other terminal states (`TERMINAL_FAILURE`, `EXHAUSTED_NEEDS_REDRIVE`) are returned as-is. Concurrent duplicate active triggers are prevented by a unique index on active action keys. This guard substantially reduces double-release risk on retry, but operators should treat it as a defence-in-depth control rather than a general retry-safe dedupe contract for every repeat submission.
 
 **[4] On-chain pre-condition** — before submitting any transaction, the oracle reads current escrow state:
 - `RELEASE_STAGE_1` requires trade in `LOCKED` state
@@ -58,10 +58,10 @@ Callers must include on every request:
 
 | Header | Required | Description |
 |---|---|---|
-| `x-agroasys-timestamp` | Yes | Unix timestamp in seconds; must be within clock-skew window |
-| `x-agroasys-signature` | Yes | HMAC-SHA256 of `timestamp + "." + raw-body` using `ORACLE_HMAC_SECRET` |
-| `x-api-key` | Yes (key-based) | API key when key-based auth is active |
-| `x-agroasys-nonce` | Optional | Unique string per request; checked for prior use if present |
+| `Authorization` | Yes | `Bearer <API_KEY>` — validated against `ORACLE_API_KEY` |
+| `x-timestamp` | Yes | Unix timestamp in milliseconds; must be within clock-skew window |
+| `x-signature` | Yes | HMAC-SHA256 of `timestamp + body` (no separator) using `ORACLE_HMAC_SECRET` |
+| `x-nonce` | Optional | Unique string per request; if omitted, one is derived from the signed request and still consumed |
 
 See test coverage for the enforcement boundary:
 - `oracle/tests/hmac-middleware.test.ts`
@@ -71,7 +71,7 @@ See test coverage for the enforcement boundary:
 
 For each logistics-triggered release, operators must be able to provide:
 
-- Incoming signal metadata: caller identity, `x-agroasys-timestamp`, `requestId`
+- Incoming signal metadata: caller identity, `x-timestamp`, `requestId`
 - `tradeId`, `triggerType`, `actionKey`, `idempotencyKey`
 - Oracle trigger status history: `SUBMITTED` → `CONFIRMED` (or failure path)
 - `txHash` of the on-chain release transaction
@@ -155,8 +155,9 @@ Example re-drive request:
 ```bash
 curl -X POST http://127.0.0.1:3001/api/oracle/redrive \
   -H 'Content-Type: application/json' \
-  -H "x-api-key: ${ORACLE_API_KEY}" \
-  -H "x-hmac-signature: <signature>" \
+  -H "Authorization: Bearer ${ORACLE_API_KEY}" \
+  -H "x-timestamp: <unix-ms>" \
+  -H "x-signature: <hmac-sha256>" \
   -d '{"tradeId":"123","triggerType":"RELEASE_STAGE_1","requestId":"manual-redrive-001"}'
 ```
 
