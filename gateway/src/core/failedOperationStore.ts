@@ -81,6 +81,13 @@ export interface ListFailedOperationsInput {
   replayEligible?: boolean;
 }
 
+export class FailedOperationConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FailedOperationConflictError';
+  }
+}
+
 interface FailedOperationRow {
   failedOperationId: string;
   operationType: string;
@@ -215,6 +222,7 @@ export function createPostgresFailedOperationStore(pool: Pool): FailedOperationS
            terminal_error_message = EXCLUDED.terminal_error_message,
            metadata = EXCLUDED.metadata,
            updated_at = NOW()
+         WHERE failed_operations.payload_hash = EXCLUDED.payload_hash
          RETURNING
            failed_operation_id AS "failedOperationId",
            operation_type AS "operationType",
@@ -270,6 +278,12 @@ export function createPostgresFailedOperationStore(pool: Pool): FailedOperationS
           JSON.stringify(input.metadata ?? {}),
         ],
       );
+
+      if (!result.rows[0]) {
+        throw new FailedOperationConflictError(
+          'Failed operation key was reused with a conflicting payload',
+        );
+      }
 
       return mapRow(result.rows[0]!);
     },
@@ -419,10 +433,17 @@ export function createInMemoryFailedOperationStore(
       const now = input.failedAt;
 
       if (existing) {
+        const nextPayloadHash = buildPayloadHash(input.requestPayload);
+        if (existing.payloadHash !== nextPayloadHash) {
+          throw new FailedOperationConflictError(
+            'Failed operation key was reused with a conflicting payload',
+          );
+        }
+
         existing.targetService = input.targetService;
         existing.route = input.route;
         existing.method = input.method;
-        existing.payloadHash = buildPayloadHash(input.requestPayload);
+        existing.payloadHash = nextPayloadHash;
         existing.requestPayload = input.requestPayload ?? null;
         existing.requestId = input.requestId;
         existing.correlationId = input.correlationId ?? null;
@@ -527,4 +548,3 @@ export function createInMemoryFailedOperationStore(
     },
   };
 }
-

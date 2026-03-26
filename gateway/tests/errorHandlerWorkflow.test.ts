@@ -7,7 +7,10 @@ import {
   GatewayFailedOperationReplayer,
 } from '../src/core/errorHandlerWorkflow';
 import { createGatewayErrorEnvelope } from '../src/core/errorEnvelope';
-import { createInMemoryFailedOperationStore } from '../src/core/failedOperationStore';
+import {
+  createInMemoryFailedOperationStore,
+  FailedOperationConflictError,
+} from '../src/core/failedOperationStore';
 import { GatewayError } from '../src/errors';
 
 describe('gateway error handler workflow', () => {
@@ -179,5 +182,88 @@ describe('gateway error handler workflow', () => {
     expect(governanceMutationService.queueAction).toHaveBeenCalledTimes(1);
     expect(replayed.failureState).toBe('replayed');
     expect(replayed.lastReplayedAt).toBeTruthy();
+  });
+
+  test('rejects failed-operation key reuse when the payload changes', async () => {
+    const failedOperationStore = createInMemoryFailedOperationStore();
+    const workflow = new GatewayErrorHandlerWorkflow(failedOperationStore);
+
+    await workflow.captureFailure({
+      operationType: 'compliance.create_decision',
+      operationKey: 'wallet:0xaa:/compliance/decisions:idem-1',
+      targetService: 'gateway_compliance_write',
+      route: '/api/dashboard-gateway/v1/compliance/decisions',
+      method: 'POST',
+      requestContext: {
+        requestId: 'req-1',
+        correlationId: 'corr-1',
+      },
+      requestPayload: { tradeId: 'TRD-1' },
+      idempotencyKey: 'idem-1',
+      replaySpec: {
+        type: 'compliance.create_decision',
+        routePath: '/api/dashboard-gateway/v1/compliance/decisions',
+        payload: {
+          tradeId: 'TRD-1',
+          decisionType: 'KYT',
+          result: 'DENY',
+          reasonCode: 'CMP_PROVIDER_UNAVAILABLE',
+          provider: 'provider',
+          providerRef: 'ref-1',
+          subjectId: 'subject-1',
+          subjectType: 'counterparty',
+          riskLevel: 'high',
+          overrideWindowEndsAt: null,
+          correlationId: 'corr-1',
+          attestation: null,
+          audit: {
+            reason: 'Documented operator action.',
+            evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets.agroasys.local/AGRO-3000' }],
+            ticketRef: 'AGRO-3000',
+          },
+        },
+      },
+      error: new Error('database unavailable'),
+    });
+
+    await expect(
+      workflow.captureFailure({
+        operationType: 'compliance.create_decision',
+        operationKey: 'wallet:0xaa:/compliance/decisions:idem-1',
+        targetService: 'gateway_compliance_write',
+        route: '/api/dashboard-gateway/v1/compliance/decisions',
+        method: 'POST',
+        requestContext: {
+          requestId: 'req-1',
+          correlationId: 'corr-1',
+        },
+        requestPayload: { tradeId: 'TRD-2' },
+        idempotencyKey: 'idem-1',
+        replaySpec: {
+          type: 'compliance.create_decision',
+          routePath: '/api/dashboard-gateway/v1/compliance/decisions',
+          payload: {
+            tradeId: 'TRD-2',
+            decisionType: 'KYT',
+            result: 'DENY',
+            reasonCode: 'CMP_PROVIDER_UNAVAILABLE',
+            provider: 'provider',
+            providerRef: 'ref-1',
+            subjectId: 'subject-2',
+            subjectType: 'counterparty',
+            riskLevel: 'high',
+            overrideWindowEndsAt: null,
+            correlationId: 'corr-1',
+            attestation: null,
+            audit: {
+              reason: 'Documented operator action.',
+              evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets.agroasys.local/AGRO-3000' }],
+              ticketRef: 'AGRO-3000',
+            },
+          },
+        },
+        error: new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Compliance store is unavailable'),
+      }),
+    ).rejects.toBeInstanceOf(FailedOperationConflictError);
   });
 });
