@@ -33,6 +33,9 @@ describe('treasury router auth scope', () => {
       appendState: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { updated: true } });
       },
+      upsertDeposit: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { stored: true } });
+      },
       exportEntries: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
       },
@@ -72,5 +75,17 @@ describe('treasury router auth scope', () => {
         success: true,
       })
     );
+  });
+
+  test('unauthenticated deposit write route is rejected', async () => {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/deposits`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ rampReference: 'ramp-1' }),
+    });
+
+    expect(response.status).toBe(401);
   });
 });

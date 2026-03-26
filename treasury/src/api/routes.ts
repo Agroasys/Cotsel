@@ -30,6 +30,7 @@ export function createRouter(controller: TreasuryController, options: TreasuryRo
   router.post('/ingest', ...protectedMiddlewares, controller.ingest.bind(controller));
   router.get('/entries', ...protectedMiddlewares, controller.listEntries.bind(controller));
   router.post('/entries/:entryId/state', ...protectedMiddlewares, controller.appendState.bind(controller));
+  router.post('/deposits', ...protectedMiddlewares, controller.upsertDeposit.bind(controller));
   router.get('/export', ...protectedMiddlewares, controller.exportEntries.bind(controller));
 
   return router;
