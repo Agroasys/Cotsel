@@ -74,7 +74,11 @@ function buildUrl(baseUrl: string, path: string, query: ExecuteRequestInput['que
 
 function serializeBody(
   body: ExecuteRequestInput['body'],
-): { requestBody: BodyInit | undefined; bodyForSigning: string | Buffer } {
+): {
+  requestBody: BodyInit | undefined;
+  bodyForSigning: string | Buffer;
+  contentType?: string;
+} {
   if (body === undefined || body === null) {
     return { requestBody: undefined, bodyForSigning: '' };
   }
@@ -88,7 +92,7 @@ function serializeBody(
   }
 
   const serialized = JSON.stringify(body);
-  return { requestBody: serialized, bodyForSigning: serialized };
+  return { requestBody: serialized, bodyForSigning: serialized, contentType: 'application/json' };
 }
 
 function toSharedAuthHeaders(headers: ReturnType<typeof createServiceAuthHeaders>, style: DownstreamHeaderStyle): Record<string, string> {
@@ -198,10 +202,10 @@ export async function executeHttpRequestWithPolicy(input: ExecuteRequestInput): 
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const { requestBody, bodyForSigning } = serializeBody(input.body);
+    const { requestBody, bodyForSigning, contentType } = serializeBody(input.body);
     const headers = {
       Accept: 'application/json',
-      ...(requestBody !== undefined ? { 'content-type': 'application/json' } : {}),
+      ...(contentType ? { 'content-type': contentType } : {}),
       ...(input.requestContext?.requestId ? { 'x-request-id': input.requestContext.requestId } : {}),
       ...(input.requestContext?.correlationId ? { 'x-correlation-id': input.requestContext.correlationId } : {}),
       ...(input.headers ?? {}),

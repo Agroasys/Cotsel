@@ -134,6 +134,31 @@ describe('service orchestrator', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  test('does not force JSON content type for raw string or buffer payloads', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValue({ ok: true, status: 202, text: async () => '' } as Response);
+    global.fetch = fetchMock;
+
+    const orchestrator = new ServiceOrchestrator(
+      createDownstreamServiceRegistry([createContract()]),
+    );
+
+    await orchestrator.fetch('treasury', {
+      method: 'POST',
+      path: '/api/treasury/v1/upload',
+      body: Buffer.from('signed-binary-payload', 'utf8'),
+      readOnly: false,
+      authenticated: true,
+      operation: 'treasury:upload',
+      headers: {
+        'content-type': 'application/octet-stream',
+      },
+    });
+
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers['content-type']).toBe('application/octet-stream');
+  });
+
   test('times out reads with an explicit upstream-unavailable error', async () => {
     global.fetch = jest.fn().mockImplementation(
       (_input, init) => new Promise<Response>((resolve, reject) => {
