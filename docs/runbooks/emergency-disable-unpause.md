@@ -6,6 +6,9 @@ Operational playbook for emergency stop and controlled recovery path.
 Automation-governance source of truth:
 - `docs/runbooks/programmability-governance.md`
 
+Signer custody source of truth:
+- `docs/runbooks/gateway-governance-signer-custody.md`
+
 ## Preconditions
 - Incident severity confirmed (security or correctness risk).
 - Admin quorum availability confirmed.
@@ -14,6 +17,7 @@ Automation-governance source of truth:
 ## Commands
 - Contract interactions must be executed through approved admin tooling and governance flow.
 - Do not execute ad-hoc scripts outside approved signer path.
+- Emergency disable may use a break-glass signer session only under the custody and evidence rules in `docs/runbooks/gateway-governance-signer-custody.md`.
 
 ## Expected outputs
 - Emergency disable action emits audit events.
@@ -32,6 +36,7 @@ Automation-governance source of truth:
 1. Keep protocol paused if verification is incomplete.
 2. Re-run reconciliation to verify state consistency before unpause.
 3. Resume only after governance approvals are finalized.
+4. Rotate or revoke any temporary break-glass signer session before reopening normal execution.
 
 ## Escalation criteria
 - Suspected key compromise.
