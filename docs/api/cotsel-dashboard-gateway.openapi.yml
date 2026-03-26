@@ -1508,7 +1508,8 @@ paths:
 
         The gateway owns the append-only compliance decision ledger in its Postgres database. Provider
         integrations remain out of scope; this endpoint records the authoritative control-plane decision
-        used by the dashboard and gateway orchestration path.
+        used by the dashboard and gateway orchestration path. Off-chain attestation reference semantics
+        used by later read surfaces are defined separately in `#/components/schemas/AttestationReference`.
       operationId: createComplianceDecision
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -4228,6 +4229,83 @@ components:
           type: string
         audit:
           $ref: '#/components/schemas/MutationAuditInput'
+    AttestationStatus:
+      type: string
+      enum: [active, revoked, expired, unknown]
+      description: |
+        Canonical reference-state values for externally issued attestations.
+        Verification freshness and outage handling are defined by the compliance
+        runbooks and are intentionally separate from this schema-only status contract.
+    AttestationIssuerRef:
+      type: object
+      required: [id, kind]
+      properties:
+        id:
+          type: string
+          description: Stable identifier for the issuer or integrating system.
+        kind:
+          type: string
+          enum: [provider, service, operator, partner]
+          description: Issuer class for the attestation boundary.
+        displayName:
+          type: string
+          nullable: true
+          description: Optional operator-facing label for the issuer.
+    AttestationSubjectRef:
+      type: object
+      required: [type, reference]
+      properties:
+        type:
+          type: string
+          description: Scoped subject class such as `business`, `wallet`, `trade`, or `shipment`.
+        reference:
+          type: string
+          description: Stable bounded subject reference. Must not contain raw PII or full provider dossiers.
+    AttestationReference:
+      type: object
+      description: |
+        Canonical off-chain attestation reference contract for operator surfaces.
+        This schema intentionally carries only reference metadata and not the raw
+        attestation payload.
+      required:
+        - attestationId
+        - attestationType
+        - status
+        - issuer
+        - subjectRef
+        - issuedAt
+        - providerRef
+        - evidenceRef
+      properties:
+        attestationId:
+          type: string
+          description: Stable identifier for the attestation in the issuing or integrating system.
+        attestationType:
+          type: string
+          description: Bounded attestation category such as `kyb`, `kyt`, `sanctions_clearance`, or `inspection`.
+        status:
+          $ref: '#/components/schemas/AttestationStatus'
+        issuer:
+          $ref: '#/components/schemas/AttestationIssuerRef'
+        subjectRef:
+          $ref: '#/components/schemas/AttestationSubjectRef'
+        issuedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        providerRef:
+          type: string
+          description: Provider or issuer lookup reference used for revalidation.
+        evidenceRef:
+          type: string
+          description: Immutable evidence bundle or document reference linked to the attestation.
+        referenceHash:
+          type: string
+          nullable: true
+          description: Optional digest of the external attestation statement or evidence bundle.
     ComplianceDecisionType:
       type: string
       enum: [KYB, KYT, SANCTIONS]

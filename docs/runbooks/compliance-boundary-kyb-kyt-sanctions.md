@@ -30,6 +30,38 @@ Policy authority:
   - Compliance Lead: Aston
   - Incident Commander: Aston
 
+## Off-chain attestation reference contract
+This runbook is the canonical repository source for the off-chain attestation
+reference contract described by ADR-0143.
+
+Attestation references are permitted only as minimal metadata pointers. They do
+not authorize placing full provider payloads or identity dossiers inside Cotsel
+logs, runbooks, or on-chain state.
+
+Minimum attestation reference fields:
+- `attestationId`: stable identifier for the attestation record in the issuing or integrating system.
+- `attestationType`: category such as `kyb`, `kyt`, `sanctions_clearance`, `inspection`, or another bounded operator-approved type.
+- `status`: last issuer- or integrator-reported state for the attestation reference.
+- `issuer`: who issued the attestation, including stable issuer ID and issuer kind.
+- `subjectRef`: stable reference to the checked subject or settlement object; this must be a pointer, not a raw dossier.
+- `issuedAt`: timestamp when the attestation was issued or captured.
+- `expiresAt`: optional expiry timestamp when the attestation stops being valid for fresh verification.
+- `providerRef`: issuer or provider lookup reference used to re-fetch or re-verify the attestation.
+- `evidenceRef`: immutable evidence bundle or document reference linked to the attestation.
+- `referenceHash`: optional digest of the external attestation statement or evidence bundle when hash linkage is available.
+
+Reference semantics:
+- `issuer.id` is the stable system or operator identifier that owns the attestation decision.
+- `issuer.kind` distinguishes `provider`, `service`, `operator`, or `partner` issuance paths.
+- `subjectRef.reference` must remain bounded and non-sensitive; use provider-scoped IDs, document refs, or trade-linked refs instead of raw PII.
+- `providerRef` is for revalidation lookup, not for displaying raw provider payloads.
+- `evidenceRef` points to the supporting evidence artifact and may resolve to a ticket, document hash bundle, or operator evidence packet.
+- `referenceHash` is additive and should be used when the integrator can bind the attestation to a deterministic external statement.
+
+Contract mirror:
+- OpenAPI component: `#/components/schemas/AttestationReference`
+- ADR boundary: `docs/adr/adr-0143-privacy-attestation-composability.md`
+
 ## Decision contract (allow/deny semantics)
 
 ### Input contract for every compliance decision
@@ -171,3 +203,4 @@ Pilot role mapping:
 - `docs/runbooks/api-gateway-boundary.md`
 - `docs/observability/logging-schema.md`
 - `docs/runbooks/production-readiness-checklist.md`
+- `docs/adr/adr-0143-privacy-attestation-composability.md`
