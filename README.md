@@ -21,11 +21,13 @@ Cotsel was initially developed to support the Agroasys platform, but it is open-
 - **Partners and integrators:** `docs/runbooks/hybrid-split-walkthrough.md`.
 - **Operators:** `docs/runbooks/monitoring-alerting-baseline.md`.
 - **Audit and compliance teams:** `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`.
+- **Enterprise architecture reviewers:** `docs/adr/adr-0143-privacy-attestation-composability.md`.
 
 ## Scope Boundaries
 
 - This repository focuses on settlement protocol, operations, and evidence workflows.
 - It does not replace internal ERP systems, banking rails, or external marketplace frontends.
+- Enterprise data-boundary and attestation expectations are defined in `docs/adr/adr-0143-privacy-attestation-composability.md`.
 
 > Note: Optimize for deterministic operations and auditability. If a step matters in production, it should be scriptable, tested, and documented in a runbook.
 
@@ -142,6 +144,8 @@ cotsel/
 ## Security
 
 See `SECURITY.md` for disclosure policy.
+
+Cotsel is an open settlement layer developed by Agroasys; Agroasys is the first production adopter and contributes the operational reference implementation.
 
 ## Partners and Contributors
 
