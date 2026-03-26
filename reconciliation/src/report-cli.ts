@@ -31,6 +31,10 @@ interface TreasuryLedgerStateRow {
   fiat_deposit_state: string | null;
   fiat_deposit_failure_class: string | null;
   fiat_deposit_observed_at: Date | null;
+  bank_reference: string | null;
+  bank_payout_state: string | null;
+  bank_failure_code: string | null;
+  bank_confirmed_at: Date | null;
 }
 
 interface IndexerHashRow {
@@ -186,7 +190,11 @@ async function fetchTreasuryLedgerStates(pool: Pool, scopedTradeIds: string[]): 
         d.ramp_reference,
         d.deposit_state AS fiat_deposit_state,
         d.failure_class AS fiat_deposit_failure_class,
-        d.observed_at AS fiat_deposit_observed_at
+        d.observed_at AS fiat_deposit_observed_at,
+        b.bank_reference,
+        b.bank_state AS bank_payout_state,
+        b.failure_code AS bank_failure_code,
+        b.confirmed_at AS bank_confirmed_at
       FROM treasury_ledger_entries e
       JOIN LATERAL (
         SELECT p.state
@@ -207,6 +215,17 @@ async function fetchTreasuryLedgerStates(pool: Pool, scopedTradeIds: string[]): 
         ORDER BY CASE WHEN r.ledger_entry_id = e.id THEN 0 ELSE 1 END, r.observed_at DESC, r.id DESC
         LIMIT 1
       ) d ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          c.bank_reference,
+          c.bank_state,
+          c.failure_code,
+          c.confirmed_at
+        FROM bank_payout_confirmations c
+        WHERE c.ledger_entry_id = e.id
+        ORDER BY c.confirmed_at DESC, c.id DESC
+        LIMIT 1
+      ) b ON TRUE
       WHERE e.trade_id = ANY($1::text[])
       ORDER BY e.trade_id ASC, e.tx_hash ASC, e.id ASC`
     ,
@@ -310,6 +329,10 @@ async function main(): Promise<void> {
       fiatDepositState: row.fiat_deposit_state,
       fiatDepositFailureClass: row.fiat_deposit_failure_class,
       fiatDepositObservedAt: row.fiat_deposit_observed_at ? new Date(row.fiat_deposit_observed_at) : null,
+      bankReference: row.bank_reference,
+      bankPayoutState: row.bank_payout_state,
+      bankFailureCode: row.bank_failure_code,
+      bankConfirmedAt: row.bank_confirmed_at ? new Date(row.bank_confirmed_at) : null,
       mismatchCodes: driftByTradeId.get(row.trade_id) || [],
       ledgerEntryId: row.id,
     }));
@@ -329,6 +352,10 @@ async function main(): Promise<void> {
         fiatDepositState: null,
         fiatDepositFailureClass: null,
         fiatDepositObservedAt: null,
+        bankReference: null,
+        bankPayoutState: null,
+        bankFailureCode: null,
+        bankConfirmedAt: null,
         mismatchCodes: driftByTradeId.get(tradeId) || [],
         ledgerEntryId: null,
       });
@@ -349,6 +376,10 @@ async function main(): Promise<void> {
         fiatDepositState: null,
         fiatDepositFailureClass: null,
         fiatDepositObservedAt: null,
+        bankReference: null,
+        bankPayoutState: null,
+        bankFailureCode: null,
+        bankConfirmedAt: null,
         mismatchCodes,
         ledgerEntryId: null,
       });

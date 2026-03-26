@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { assertBankPayoutState, BankPayoutConflictError } from '../core/bankPayout';
 import { TreasuryIngestionService } from '../core/ingestion';
 import { assertFiatDepositState, FiatDepositConflictError } from '../core/fiatDeposit';
 import { assertValidTransition } from '../core/payout';
@@ -7,9 +8,10 @@ import {
   getLatestPayoutState,
   getLedgerEntries,
   getLedgerEntryById,
+  upsertBankPayoutConfirmation,
   upsertFiatDepositReference,
 } from '../database/queries';
-import { FiatDepositState, PayoutState } from '../types';
+import { BankPayoutState, FiatDepositState, PayoutState } from '../types';
 
 const PAYOUT_STATES: PayoutState[] = [
   'PENDING_REVIEW',
@@ -197,6 +199,64 @@ export class TreasuryController {
       }
 
       res.status(400).json({ success: false, error: error?.message || 'Failed to persist fiat deposit reference' });
+    }
+  }
+
+  async upsertBankConfirmation(
+    req: Request<
+      { entryId: string },
+      {},
+      {
+        payoutReference?: string | null;
+        bankReference: string;
+        bankState: BankPayoutState;
+        confirmedAt: string;
+        source: string;
+        actor: string;
+        failureCode?: string | null;
+        evidenceReference?: string | null;
+        metadata?: Record<string, unknown>;
+      }
+    >,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const entryId = Number.parseInt(req.params.entryId, 10);
+      if (Number.isNaN(entryId)) {
+        res.status(400).json({ success: false, error: 'Invalid entryId' });
+        return;
+      }
+
+      assertBankPayoutState(req.body.bankState);
+
+      const result = await upsertBankPayoutConfirmation({
+        ledgerEntryId: entryId,
+        payoutReference: req.body.payoutReference,
+        bankReference: req.body.bankReference,
+        bankState: req.body.bankState,
+        confirmedAt: parseObservedAt(req.body.confirmedAt),
+        source: req.body.source,
+        actor: req.body.actor,
+        failureCode: req.body.failureCode,
+        evidenceReference: req.body.evidenceReference,
+        metadata: req.body.metadata,
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          confirmation: result.confirmation,
+          created: result.created,
+          idempotentReplay: result.idempotentReplay,
+        },
+      });
+    } catch (error: any) {
+      if (error instanceof BankPayoutConflictError) {
+        res.status(409).json({ success: false, error: error.message, code: error.code });
+        return;
+      }
+
+      res.status(400).json({ success: false, error: error?.message || 'Failed to persist bank payout confirmation' });
     }
   }
 

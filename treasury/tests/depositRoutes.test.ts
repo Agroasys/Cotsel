@@ -12,13 +12,15 @@ process.env.INDEXER_GRAPHQL_URL = process.env.INDEXER_GRAPHQL_URL || 'http://127
 
 jest.mock('../src/database/queries', () => ({
   ...jest.requireActual('../src/database/queries'),
+  upsertBankPayoutConfirmation: jest.fn(),
   upsertFiatDepositReference: jest.fn(),
 }));
 
 const { createRouter } = require('../src/api/routes') as typeof import('../src/api/routes');
 const { TreasuryController } = require('../src/api/controller') as typeof import('../src/api/controller');
-const { upsertFiatDepositReference } = require('../src/database/queries') as typeof import('../src/database/queries');
+const { upsertBankPayoutConfirmation, upsertFiatDepositReference } = require('../src/database/queries') as typeof import('../src/database/queries');
 
+const mockedUpsertBankPayoutConfirmation = upsertBankPayoutConfirmation as jest.MockedFunction<typeof upsertBankPayoutConfirmation>;
 const mockedUpsertFiatDepositReference = upsertFiatDepositReference as jest.MockedFunction<typeof upsertFiatDepositReference>;
 
 describe('treasury fiat deposit routes', () => {
@@ -27,6 +29,7 @@ describe('treasury fiat deposit routes', () => {
 
   beforeEach(async () => {
     mockedUpsertFiatDepositReference.mockReset();
+    mockedUpsertBankPayoutConfirmation.mockReset();
 
     const app = express();
     app.use(express.json());
@@ -113,6 +116,66 @@ describe('treasury fiat deposit routes', () => {
       expect.objectContaining({
         success: false,
         error: 'Invalid fiat deposit state',
+      }),
+    );
+  });
+
+  test('bank confirmation endpoint persists normalized contract payload', async () => {
+    mockedUpsertBankPayoutConfirmation.mockResolvedValue({
+      confirmation: {
+        id: 1,
+        bank_reference: 'bank-1',
+      } as never,
+      created: true,
+      idempotentReplay: false,
+    });
+
+    const response = await fetch(`${baseUrl}/api/treasury/v1/entries/11/bank-confirmation`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        payoutReference: 'payout-1',
+        bankReference: 'bank-1',
+        bankState: 'CONFIRMED',
+        confirmedAt: '2026-03-26T00:00:00.000Z',
+        source: 'bank:webhook',
+        actor: 'Treasury Operator',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockedUpsertBankPayoutConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ledgerEntryId: 11,
+        bankReference: 'bank-1',
+        bankState: 'CONFIRMED',
+        confirmedAt: new Date('2026-03-26T00:00:00.000Z'),
+      }),
+    );
+  });
+
+  test('invalid bank state is rejected', async () => {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/entries/11/bank-confirmation`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        bankReference: 'bank-1',
+        bankState: 'SETTLED',
+        confirmedAt: '2026-03-26T00:00:00.000Z',
+        source: 'bank:webhook',
+        actor: 'Treasury Operator',
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: false,
+        error: 'Invalid bank payout state',
       }),
     );
   });

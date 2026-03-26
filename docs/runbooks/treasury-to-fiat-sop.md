@@ -104,6 +104,31 @@ Failure-class interpretation:
 - `CURRENCY_MISMATCH`: observed and expected currency do not match.
 - `STALE_PENDING_DEPOSIT`: reconciliation-only classification for deposits left in `PENDING` longer than the report threshold.
 
+## Bank Payout Confirmation Contract
+Treasury source of truth:
+- `treasury/src/core/bankPayout.ts`
+- `treasury/src/database/schema.sql`
+- `treasury/src/database/queries.ts`
+- `POST /api/treasury/v1/entries/:entryId/bank-confirmation`
+
+Each bank-finality record must include:
+- `bankReference`: stable bank-side settlement identifier.
+- `bankState`: `PENDING`, `CONFIRMED`, or `REJECTED`.
+- `confirmedAt`: bank observation timestamp.
+- `source`: originating integration path such as `bank:webhook` or `operator:manual`.
+- `actor`: operator or system actor recording the evidence.
+- `payoutReference`: optional treasury or provider-side payout reference.
+- `failureCode`: optional bank failure code.
+- `evidenceReference`: optional receipt, statement row, or case identifier.
+- `metadata`: optional structured evidence fields.
+
+Transition guardrails:
+- Bank confirmation is not valid while treasury payout state is `PENDING_REVIEW` or `READY_FOR_PAYOUT`.
+- `PENDING` bank state is only valid while treasury payout state is `PROCESSING`.
+- Bank confirmation is not valid after treasury payout entry is `CANCELLED`.
+- Replaying the same `bankReference` with the same payload is idempotent.
+- Replaying the same `bankReference` with a different payload is rejected as a conflict.
+
 ## Procedure
 
 ### 0. Sweep treasury entitlement on-chain (destination-locked)
@@ -220,6 +245,22 @@ If not:
 ### 5. Finalize entry (`PAID`) and attach evidence
 After transfer confirmation:
 
+Record bank finality first:
+
+```bash
+curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/bank-confirmation" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "payoutReference":"payout-2026-03-26-001",
+    "bankReference":"bank-2026-03-26-001",
+    "bankState":"CONFIRMED",
+    "confirmedAt":"2026-03-26T04:30:00.000Z",
+    "source":"bank:webhook",
+    "actor":"Treasury Operator",
+    "evidenceReference":"receipt-2026-03-26-001"
+  }'
+```
+
 ```bash
 curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/state" \
   -H "Content-Type: application/json" \
@@ -231,6 +272,7 @@ Record post-transfer evidence:
 - FX rate and timestamp used for conversion.
 - Linked `trade_id`, ledger `entry_id`, and source on-chain `tx_hash`.
 - Final fiat deposit event for the same `rampReference` recorded as `FUNDED` or `REVERSED` with the provider confirmation identifier.
+- Bank confirmation receipt stored under `bankReference` before or at the same time as the `PAID` lifecycle transition.
 
 Expected result:
 - Entry appears with `latest_state=PAID`.
@@ -290,6 +332,7 @@ cast send <ESCROW_ADDRESS> "unpauseClaims()" --private-key "$ADMIN_KEY"
 - Keep state at `PROCESSING` only while active retry plan exists.
 - If transfer cannot recover safely, set `CANCELLED` and open incident.
 - Persist the provider failure as a treasury deposit event with `depositState="FAILED"` and `failureCode`.
+- If bank rejects settlement after transfer initiation, persist `bankState="REJECTED"` with `failureCode` before deciding whether treasury state remains `PROCESSING` or moves to `CANCELLED`.
 
 ### Partial settlement confirmed
 - Do not mark `PAID` until full amount is reconciled.

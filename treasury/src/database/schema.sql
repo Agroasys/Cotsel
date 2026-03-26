@@ -79,6 +79,22 @@ CREATE TABLE IF NOT EXISTS fiat_deposit_events (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS bank_payout_confirmations (
+    id SERIAL PRIMARY KEY,
+    ledger_entry_id INT NOT NULL REFERENCES treasury_ledger_entries(id) ON DELETE CASCADE,
+    payout_reference VARCHAR(255),
+    bank_reference VARCHAR(255) NOT NULL UNIQUE,
+    bank_state VARCHAR(32) NOT NULL,
+    confirmed_at TIMESTAMP NOT NULL,
+    source VARCHAR(255) NOT NULL,
+    actor VARCHAR(255) NOT NULL,
+    failure_code VARCHAR(255),
+    evidence_reference VARCHAR(255),
+    payload_hash CHAR(64) NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 INSERT INTO treasury_ingestion_state (cursor_name, next_offset)
 VALUES ('trade_events', 0)
 ON CONFLICT (cursor_name) DO NOTHING;
@@ -93,3 +109,4 @@ CREATE INDEX IF NOT EXISTS idx_fiat_deposit_trade_observed ON fiat_deposit_refer
 CREATE INDEX IF NOT EXISTS idx_fiat_deposit_ledger_observed ON fiat_deposit_references(ledger_entry_id, observed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_fiat_deposit_state_observed ON fiat_deposit_references(deposit_state, observed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_fiat_deposit_event_reference_created ON fiat_deposit_events(fiat_deposit_reference_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bank_payout_confirmation_ledger_confirmed ON bank_payout_confirmations(ledger_entry_id, confirmed_at DESC);
