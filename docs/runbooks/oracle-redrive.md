@@ -15,6 +15,73 @@ Webhook authenticity and replay regression fixtures:
 - `treasury/tests/replayProtection.test.ts`
 - `treasury/tests/serviceAuthRoutes.test.ts`
 
+
+## Reference Flow: Logistics-Triggered Release
+
+### Overview
+
+Cotsel supports logistics-triggered fund release when an external logistics or trade-documentation system signals a trade milestone (e.g., Bill of Lading issued, goods arrived at destination). This section describes the control path from external signal to on-chain release. It is a reference flow for documentation and operator training, not a description of a new webhook provider integration.
+
+### Control Points
+
+```
+Logistics event signal
+  └─> Oracle POST 
+        ├─> [1] HMAC authenticity check
+        ├─> [2] Replay protection check
+        ├─> [3] Duplicate / idempotency check (actionKey)
+        ├─> [4] On-chain pre-condition validation
+        ├─> [5] Transaction submission (bounded retry)
+        └─> [6] Confirmation polling -> trigger CONFIRMED
+```
+
+**[1] HMAC authenticity** — the oracle HMAC middleware validates `x-agroasys-signature` as HMAC-SHA256 of `timestamp + "." + raw-body` using `ORACLE_HMAC_SECRET`. Requests with missing or invalid signatures are rejected `401` before any trigger record is created.
+
+**[2] Replay protection** — `x-agroasys-timestamp` must be within the allowed clock-skew window (service default: 5 minutes). Requests outside that window are rejected `401`. If `x-agroasys-nonce` is present, the nonce is checked against prior use for the same caller within the skew window.
+
+**[3] Idempotency** — trigger creation derives `actionKey = hash(triggerType, tradeId)`. A second submission of the same `(triggerType, tradeId)` pair returns the existing trigger record without creating a duplicate execution path. This is the primary guard against double-release on retry or re-queued logistics signals.
+
+**[4] On-chain pre-condition** — before submitting any transaction, the oracle reads current escrow state:
+- `RELEASE_STAGE_1` requires trade in `LOCKED` state
+- `CONFIRM_ARRIVAL` requires trade in `IN_TRANSIT` state
+- `FINALIZE_TRADE` requires trade in `ARRIVAL_CONFIRMED` state with expired dispute window
+
+If the pre-condition fails, the trigger is moved to `TERMINAL_FAILURE` (non-retryable) and must not be re-driven.
+
+**[5] Transaction submission** — oracle signs and submits the release transaction. Execution is bounded by `ORACLE_RETRY_ATTEMPTS` with exponential backoff capped at `30 s`.
+
+**[6] Confirmation polling** — oracle polls for on-chain confirmation at `10 s` intervals, with soft-timeout warning at `5 m` and hard-timeout at `30 m` (trigger moves to `EXHAUSTED_NEEDS_REDRIVE` if confirmation is not observed).
+
+### Webhook Authenticity Requirements
+
+Callers must include on every request:
+
+| Header | Required | Description |
+|---|---|---|
+| `x-agroasys-timestamp` | Yes | Unix timestamp in seconds; must be within clock-skew window |
+| `x-agroasys-signature` | Yes | HMAC-SHA256 of `timestamp + "." + raw-body` using `ORACLE_HMAC_SECRET` |
+| `x-api-key` | Yes (key-based) | API key when key-based auth is active |
+| `x-agroasys-nonce` | Optional | Unique string per request; checked for prior use if present |
+
+See test coverage for the enforcement boundary:
+- `oracle/tests/hmac-middleware.test.ts`
+- `oracle/tests/authenticated-routes.test.ts`
+
+### Operator Evidence Expectations
+
+For each logistics-triggered release, operators must be able to provide:
+
+- Incoming signal metadata: caller identity, `x-agroasys-timestamp`, `requestId`
+- `tradeId`, `triggerType`, `actionKey`, `idempotencyKey`
+- Oracle trigger status history: `SUBMITTED` → `CONFIRMED` (or failure path)
+- `txHash` of the on-chain release transaction
+- Reconciliation confirmation that the on-chain release matches expected trade state
+- Indexed event evidence (`FundsReleasedStage1` or `FinalTrancheReleased`) from the indexer
+
+Template: `docs/runbooks/operator-audit-evidence-template.md`
+
+
+
 ## Ownership And Intervention Rules
 - `Operator`:
   - Runs health/diagnostic checks.
