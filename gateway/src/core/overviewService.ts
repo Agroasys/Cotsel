@@ -3,6 +3,7 @@
  */
 import { ComplianceStore } from './complianceStore';
 import { EscrowGovernanceReader } from './governanceStatusService';
+import { IndexerGraphqlClient } from './indexerGraphqlClient';
 import { GatewayError } from '../errors';
 
 export interface OverviewTradeKpis {
@@ -136,12 +137,31 @@ function parseBlockNumber(raw: string, field: string): string {
 }
 
 export class OverviewService implements OverviewReader {
+  private readonly indexerClient: IndexerGraphqlClient;
+
   constructor(
-    private readonly indexerGraphqlUrl: string,
-    private readonly indexerRequestTimeoutMs: number,
-    private readonly governanceStatusService: EscrowGovernanceReader,
-    private readonly complianceStore: ComplianceStore,
-  ) {}
+    indexerClientOrUrl: IndexerGraphqlClient | string,
+    indexerRequestTimeoutOrGovernanceStatusService: number | EscrowGovernanceReader,
+    governanceStatusServiceOrComplianceStore: EscrowGovernanceReader | ComplianceStore,
+    maybeComplianceStore?: ComplianceStore,
+  ) {
+    if (typeof indexerClientOrUrl === 'string') {
+      this.indexerClient = new IndexerGraphqlClient(
+        indexerClientOrUrl,
+        indexerRequestTimeoutOrGovernanceStatusService as number,
+      );
+      this.governanceStatusService = governanceStatusServiceOrComplianceStore as EscrowGovernanceReader;
+      this.complianceStore = maybeComplianceStore as ComplianceStore;
+      return;
+    }
+
+    this.indexerClient = indexerClientOrUrl;
+    this.governanceStatusService = indexerRequestTimeoutOrGovernanceStatusService as EscrowGovernanceReader;
+    this.complianceStore = governanceStatusServiceOrComplianceStore as ComplianceStore;
+  }
+
+  private readonly governanceStatusService: EscrowGovernanceReader;
+  private readonly complianceStore: ComplianceStore;
 
   async getOverview(): Promise<OverviewSnapshot> {
     const now = new Date().toISOString();
@@ -216,66 +236,26 @@ export class OverviewService implements OverviewReader {
   }
 
   private async fetchIndexerSnapshot(): Promise<IndexerOverviewSnapshot> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.indexerRequestTimeoutMs);
-
-    try {
-      const response = await fetch(this.indexerGraphqlUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          operationName: 'OverviewSnapshot',
-          query: overviewSnapshotQuery,
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer request failed with HTTP ${response.status}`, {
-          status: response.status,
-        });
-      }
-
-      const payload = await response.json() as OverviewSnapshotGraphQlResponse;
-      if (payload.errors?.length) {
-        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned GraphQL errors', {
-          errors: payload.errors.map((error) => error.message),
-        });
-      }
-
-      const snapshot = payload.data?.overviewSnapshotById;
-      if (!snapshot) {
-        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned no overview snapshot');
-      }
-
-      return {
-        totalTrades: parseNonNegativeInteger(snapshot.totalTrades, 'overviewSnapshot.totalTrades'),
-        lockedTrades: parseNonNegativeInteger(snapshot.lockedTrades, 'overviewSnapshot.lockedTrades'),
-        stage1Trades: parseNonNegativeInteger(snapshot.stage1Trades, 'overviewSnapshot.stage1Trades'),
-        stage2Trades: parseNonNegativeInteger(snapshot.stage2Trades, 'overviewSnapshot.stage2Trades'),
-        completedTrades: parseNonNegativeInteger(snapshot.completedTrades, 'overviewSnapshot.completedTrades'),
-        disputedTrades: parseNonNegativeInteger(snapshot.disputedTrades, 'overviewSnapshot.disputedTrades'),
-        cancelledTrades: parseNonNegativeInteger(snapshot.cancelledTrades, 'overviewSnapshot.cancelledTrades'),
-        lastProcessedBlock: parseBlockNumber(snapshot.lastProcessedBlock, 'overviewSnapshot.lastProcessedBlock'),
-        lastIndexedAt: parseIsoTimestamp(snapshot.lastIndexedAt, 'overviewSnapshot.lastIndexedAt'),
-        lastTradeEventAt: parseOptionalIsoTimestamp(snapshot.lastTradeEventAt, 'overviewSnapshot.lastTradeEventAt'),
-      };
-    } catch (error) {
-      if (error instanceof GatewayError) {
-        throw error;
-      }
-
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new GatewayError(504, 'UPSTREAM_UNAVAILABLE', 'Indexer request timed out', {
-          timeoutMs: this.indexerRequestTimeoutMs,
-        });
-      }
-
-      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer request failed', {
-        reason: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      clearTimeout(timeout);
+    const payload = await this.indexerClient.query<{ overviewSnapshotById?: IndexerOverviewSnapshot | null }>(
+      'OverviewSnapshot',
+      overviewSnapshotQuery,
+    ) as OverviewSnapshotGraphQlResponse;
+    const snapshot = payload.data?.overviewSnapshotById;
+    if (!snapshot) {
+      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned no overview snapshot');
     }
+
+    return {
+      totalTrades: parseNonNegativeInteger(snapshot.totalTrades, 'overviewSnapshot.totalTrades'),
+      lockedTrades: parseNonNegativeInteger(snapshot.lockedTrades, 'overviewSnapshot.lockedTrades'),
+      stage1Trades: parseNonNegativeInteger(snapshot.stage1Trades, 'overviewSnapshot.stage1Trades'),
+      stage2Trades: parseNonNegativeInteger(snapshot.stage2Trades, 'overviewSnapshot.stage2Trades'),
+      completedTrades: parseNonNegativeInteger(snapshot.completedTrades, 'overviewSnapshot.completedTrades'),
+      disputedTrades: parseNonNegativeInteger(snapshot.disputedTrades, 'overviewSnapshot.disputedTrades'),
+      cancelledTrades: parseNonNegativeInteger(snapshot.cancelledTrades, 'overviewSnapshot.cancelledTrades'),
+      lastProcessedBlock: parseBlockNumber(snapshot.lastProcessedBlock, 'overviewSnapshot.lastProcessedBlock'),
+      lastIndexedAt: parseIsoTimestamp(snapshot.lastIndexedAt, 'overviewSnapshot.lastIndexedAt'),
+      lastTradeEventAt: parseOptionalIsoTimestamp(snapshot.lastTradeEventAt, 'overviewSnapshot.lastTradeEventAt'),
+    };
   }
 }

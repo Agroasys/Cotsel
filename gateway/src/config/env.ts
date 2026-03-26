@@ -39,6 +39,21 @@ export interface GatewayConfig {
   settlementCallbackMaxAttempts: number;
   settlementCallbackInitialBackoffMs: number;
   settlementCallbackMaxBackoffMs: number;
+  oracleBaseUrl?: string;
+  oracleServiceApiKey?: string;
+  oracleServiceApiSecret?: string;
+  treasuryBaseUrl?: string;
+  treasuryServiceApiKey?: string;
+  treasuryServiceApiSecret?: string;
+  reconciliationBaseUrl?: string;
+  ricardianBaseUrl?: string;
+  ricardianServiceApiKey?: string;
+  ricardianServiceApiSecret?: string;
+  notificationsBaseUrl?: string;
+  downstreamReadRetryBudget?: number;
+  downstreamMutationRetryBudget?: number;
+  downstreamReadTimeoutMs?: number;
+  downstreamMutationTimeoutMs?: number;
   commitSha: string;
   buildTime: string;
   nodeEnv: string;
@@ -124,6 +139,17 @@ export function loadConfig(): GatewayConfig {
   const settlementCallbackUrl = process.env.GATEWAY_SETTLEMENT_CALLBACK_URL?.trim()?.replace(/\/$/, '') || undefined;
   const settlementCallbackApiKey = process.env.GATEWAY_SETTLEMENT_CALLBACK_API_KEY?.trim() || undefined;
   const settlementCallbackApiSecret = process.env.GATEWAY_SETTLEMENT_CALLBACK_API_SECRET?.trim() || undefined;
+  const oracleBaseUrl = process.env.GATEWAY_ORACLE_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const treasuryBaseUrl = process.env.GATEWAY_TREASURY_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const reconciliationBaseUrl = process.env.GATEWAY_RECONCILIATION_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const ricardianBaseUrl = process.env.GATEWAY_RICARDIAN_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const notificationsBaseUrl = process.env.GATEWAY_NOTIFICATIONS_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const oracleServiceApiKey = process.env.GATEWAY_ORACLE_SERVICE_API_KEY?.trim() || undefined;
+  const oracleServiceApiSecret = process.env.GATEWAY_ORACLE_SERVICE_API_SECRET?.trim() || undefined;
+  const treasuryServiceApiKey = process.env.GATEWAY_TREASURY_SERVICE_API_KEY?.trim() || undefined;
+  const treasuryServiceApiSecret = process.env.GATEWAY_TREASURY_SERVICE_API_SECRET?.trim() || undefined;
+  const ricardianServiceApiKey = process.env.GATEWAY_RICARDIAN_SERVICE_API_KEY?.trim() || undefined;
+  const ricardianServiceApiSecret = process.env.GATEWAY_RICARDIAN_SERVICE_API_SECRET?.trim() || undefined;
   const nodeEnv = process.env.NODE_ENV || 'development';
 
   assert(authBaseUrl.startsWith('http://') || authBaseUrl.startsWith('https://'), 'GATEWAY_AUTH_BASE_URL must be an absolute http(s) URL');
@@ -134,6 +160,19 @@ export function loadConfig(): GatewayConfig {
       fallbackUrl.startsWith('http://') || fallbackUrl.startsWith('https://'),
       `GATEWAY_RPC_FALLBACK_URLS[${index}] must be an absolute http(s) URL`,
     );
+  }
+  for (const [name, value] of [
+    ['GATEWAY_ORACLE_BASE_URL', oracleBaseUrl],
+    ['GATEWAY_TREASURY_BASE_URL', treasuryBaseUrl],
+    ['GATEWAY_RECONCILIATION_BASE_URL', reconciliationBaseUrl],
+    ['GATEWAY_RICARDIAN_BASE_URL', ricardianBaseUrl],
+    ['GATEWAY_NOTIFICATIONS_BASE_URL', notificationsBaseUrl],
+  ] as const) {
+    if (!value) {
+      continue;
+    }
+
+    assert(value.startsWith('http://') || value.startsWith('https://'), `${name} must be an absolute http(s) URL`);
   }
   assert(envNumber('PORT', 3600) > 0, 'PORT must be > 0');
   assert(envNumber('DB_PORT', 5432) > 0, 'DB_PORT must be > 0');
@@ -149,6 +188,22 @@ export function loadConfig(): GatewayConfig {
   assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS', 8) >= 1, 'GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS must be >= 1');
   assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000) >= 250, 'GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS must be >= 250');
   assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000) >= envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000), 'GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS must be >= GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS');
+  assert(envNumber('GATEWAY_DOWNSTREAM_READ_RETRY_BUDGET', 1) >= 0, 'GATEWAY_DOWNSTREAM_READ_RETRY_BUDGET must be >= 0');
+  assert(envNumber('GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET', 0) >= 0, 'GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET must be >= 0');
+  assert(envNumber('GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS must be >= 1000');
+  assert(envNumber('GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS', 8000) >= 1000, 'GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS must be >= 1000');
+
+  if ((oracleServiceApiKey && !oracleServiceApiSecret) || (!oracleServiceApiKey && oracleServiceApiSecret)) {
+    throw new Error('GATEWAY_ORACLE_SERVICE_API_KEY and GATEWAY_ORACLE_SERVICE_API_SECRET must be set together');
+  }
+
+  if ((treasuryServiceApiKey && !treasuryServiceApiSecret) || (!treasuryServiceApiKey && treasuryServiceApiSecret)) {
+    throw new Error('GATEWAY_TREASURY_SERVICE_API_KEY and GATEWAY_TREASURY_SERVICE_API_SECRET must be set together');
+  }
+
+  if ((ricardianServiceApiKey && !ricardianServiceApiSecret) || (!ricardianServiceApiKey && ricardianServiceApiSecret)) {
+    throw new Error('GATEWAY_RICARDIAN_SERVICE_API_KEY and GATEWAY_RICARDIAN_SERVICE_API_SECRET must be set together');
+  }
 
   if (settlementIngressEnabled) {
     assert(
@@ -200,6 +255,21 @@ export function loadConfig(): GatewayConfig {
     settlementCallbackMaxAttempts: envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS', 8),
     settlementCallbackInitialBackoffMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000),
     settlementCallbackMaxBackoffMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000),
+    oracleBaseUrl,
+    oracleServiceApiKey,
+    oracleServiceApiSecret,
+    treasuryBaseUrl,
+    treasuryServiceApiKey,
+    treasuryServiceApiSecret,
+    reconciliationBaseUrl,
+    ricardianBaseUrl,
+    ricardianServiceApiKey,
+    ricardianServiceApiSecret,
+    notificationsBaseUrl,
+    downstreamReadRetryBudget: envNumber('GATEWAY_DOWNSTREAM_READ_RETRY_BUDGET', 1),
+    downstreamMutationRetryBudget: envNumber('GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET', 0),
+    downstreamReadTimeoutMs: envNumber('GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS', 5000),
+    downstreamMutationTimeoutMs: envNumber('GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS', 8000),
     commitSha: process.env.GATEWAY_COMMIT_SHA?.trim() || 'local-dev',
     buildTime,
     nodeEnv,

@@ -58,6 +58,20 @@ Optional operations-health probe URLs:
 - `GATEWAY_RICARDIAN_BASE_URL`
 - `GATEWAY_NOTIFICATIONS_BASE_URL`
 
+Optional downstream service-auth contract:
+- `GATEWAY_ORACLE_SERVICE_API_KEY`
+- `GATEWAY_ORACLE_SERVICE_API_SECRET`
+- `GATEWAY_TREASURY_SERVICE_API_KEY`
+- `GATEWAY_TREASURY_SERVICE_API_SECRET`
+- `GATEWAY_RICARDIAN_SERVICE_API_KEY`
+- `GATEWAY_RICARDIAN_SERVICE_API_SECRET`
+
+Gateway-owned downstream policy knobs:
+- `GATEWAY_DOWNSTREAM_READ_RETRY_BUDGET`
+- `GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET`
+- `GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS`
+- `GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS`
+
 When optional probe URLs are not set, the operations summary endpoint returns deterministic `unavailable`
 for the corresponding service with a stable explanatory detail.
 
@@ -159,8 +173,11 @@ The gateway is intentionally conservative:
 - Auth session validation timeout: `GATEWAY_AUTH_REQUEST_TIMEOUT_MS` (default `5000ms`)
 - Chain read timeout: `GATEWAY_RPC_READ_TIMEOUT_MS` (default `8000ms`)
 - Governance executor timeout: `GATEWAY_EXECUTOR_TIMEOUT_MS` (default `45000ms`)
-- Automatic retries for gateway mutations: none
-- Automatic retries for auth and RPC reads inside the gateway: none
+- Downstream read timeout: `GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS` (default `5000ms`)
+- Downstream mutation timeout: `GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS` (default `8000ms`)
+- Automatic retries for gateway mutations: `GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET` (default `0`)
+- Automatic retries for orchestrated downstream reads: `GATEWAY_DOWNSTREAM_READ_RETRY_BUDGET` (default `1`)
+- Automatic retries for auth and RPC reads inside the gateway: none unless the owning client already defines them
 
 Reason:
 - downstream services already own their idempotency and retry policies

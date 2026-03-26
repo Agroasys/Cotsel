@@ -28,6 +28,7 @@ import { createServiceApiKeyLookup } from './core/serviceAuth';
 import { SettlementCallbackDispatcher } from './core/settlementCallbackDispatcher';
 import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
+import { IndexerGraphqlClient } from './core/indexerGraphqlClient';
 import { GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
 import { EvidenceReadService } from './core/evidenceReadService';
@@ -36,7 +37,8 @@ import { OverviewService } from './core/overviewService';
 import { TreasuryReadService } from './core/treasuryReadService';
 import { ReconciliationReadService } from './core/reconciliationReadService';
 import { RicardianClient } from './core/ricardianClient';
-import { checkIndexerHealth } from './core/indexerHealthProbe';
+import { createDownstreamServiceRegistry } from './core/serviceRegistry';
+import { ServiceOrchestrator } from './core/serviceOrchestrator';
 import { Logger } from './logging/logger';
 import { createAccessLogRouter } from './routes/accessLogs';
 import { createApprovalWorkflowRouter } from './routes/approvals';
@@ -78,15 +80,100 @@ const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, se
 const governanceMutationService = new GovernanceMutationService(config, governanceActionStore, governanceWriteStore);
 const treasuryReadService = new TreasuryReadService(governanceStatusService, governanceActionStore);
 const reconciliationReadService = new ReconciliationReadService(settlementStore);
-const tradeReadService = new TradeReadService(
+const downstreamServiceRegistry = createDownstreamServiceRegistry([
+  {
+    key: 'oracle',
+    name: 'Oracle',
+    source: 'oracle_http',
+    baseUrl: config.oracleBaseUrl,
+    healthPath: '/api/oracle/health',
+    auth: config.oracleServiceApiSecret
+      ? {
+          mode: 'oracle_legacy_hmac',
+          headerStyle: 'legacy',
+          apiKey: config.oracleServiceApiKey,
+          apiSecret: config.oracleServiceApiSecret,
+        }
+      : { mode: 'none' },
+    readTimeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
+    mutationTimeoutMs: config.downstreamMutationTimeoutMs ?? 8_000,
+    readRetryBudget: config.downstreamReadRetryBudget ?? 1,
+    mutationRetryBudget: config.downstreamMutationRetryBudget ?? 0,
+  },
+  {
+    key: 'treasury',
+    name: 'Treasury',
+    source: 'treasury_http',
+    baseUrl: config.treasuryBaseUrl,
+    healthPath: '/api/treasury/v1/health',
+    auth: config.treasuryServiceApiSecret
+      ? {
+          mode: 'shared_hmac',
+          headerStyle: 'agroasys',
+          apiKey: config.treasuryServiceApiKey,
+          apiSecret: config.treasuryServiceApiSecret,
+        }
+      : { mode: 'none' },
+    readTimeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
+    mutationTimeoutMs: config.downstreamMutationTimeoutMs ?? 8_000,
+    readRetryBudget: config.downstreamReadRetryBudget ?? 1,
+    mutationRetryBudget: config.downstreamMutationRetryBudget ?? 0,
+  },
+  {
+    key: 'reconciliation',
+    name: 'Reconciliation',
+    source: 'reconciliation_http',
+    baseUrl: config.reconciliationBaseUrl,
+    healthPath: '/health',
+    auth: { mode: 'none' },
+    readTimeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
+    mutationTimeoutMs: config.downstreamMutationTimeoutMs ?? 8_000,
+    readRetryBudget: config.downstreamReadRetryBudget ?? 1,
+    mutationRetryBudget: config.downstreamMutationRetryBudget ?? 0,
+  },
+  {
+    key: 'ricardian',
+    name: 'Ricardian Engine',
+    source: 'ricardian_http',
+    baseUrl: config.ricardianBaseUrl,
+    healthPath: '/api/ricardian/v1/health',
+    auth: config.ricardianServiceApiSecret
+      ? {
+          mode: 'shared_hmac',
+          headerStyle: 'agroasys',
+          apiKey: config.ricardianServiceApiKey,
+          apiSecret: config.ricardianServiceApiSecret,
+        }
+      : { mode: 'none' },
+    readTimeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
+    mutationTimeoutMs: config.downstreamMutationTimeoutMs ?? 8_000,
+    readRetryBudget: config.downstreamReadRetryBudget ?? 1,
+    mutationRetryBudget: config.downstreamMutationRetryBudget ?? 0,
+  },
+  {
+    key: 'notifications',
+    name: 'Notifications',
+    source: 'notifications_http',
+    baseUrl: config.notificationsBaseUrl,
+    auth: { mode: 'none' },
+    readTimeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
+    mutationTimeoutMs: config.downstreamMutationTimeoutMs ?? 8_000,
+    readRetryBudget: config.downstreamReadRetryBudget ?? 1,
+    mutationRetryBudget: config.downstreamMutationRetryBudget ?? 0,
+  },
+]);
+const orchestrator = new ServiceOrchestrator(downstreamServiceRegistry);
+const indexerClient = new IndexerGraphqlClient(
   config.indexerGraphqlUrl,
   config.indexerRequestTimeoutMs,
+);
+const tradeReadService = new TradeReadService(
+  indexerClient,
   complianceStore,
   settlementStore,
 );
 const overviewService = new OverviewService(
-  config.indexerGraphqlUrl,
-  config.indexerRequestTimeoutMs,
+  indexerClient,
   governanceStatusService,
   complianceStore,
 );
@@ -94,12 +181,7 @@ const settingsReadService = new OperatorSettingsReadService(
   roleAssignmentStore,
   auditFeedStore,
 );
-const oracleBaseUrl = readOptionalBaseUrl('GATEWAY_ORACLE_BASE_URL');
-const reconciliationBaseUrl = readOptionalBaseUrl('GATEWAY_RECONCILIATION_BASE_URL');
-const treasuryBaseUrl = readOptionalBaseUrl('GATEWAY_TREASURY_BASE_URL');
-const ricardianBaseUrl = readOptionalBaseUrl('GATEWAY_RICARDIAN_BASE_URL');
-const notificationsBaseUrl = readOptionalBaseUrl('GATEWAY_NOTIFICATIONS_BASE_URL');
-const ricardianClient = new RicardianClient(ricardianBaseUrl, 5_000);
+const ricardianClient = new RicardianClient(orchestrator);
 const evidenceReadService = new EvidenceReadService(
   tradeReadService,
   settlementStore,
@@ -111,41 +193,8 @@ const evidenceBundleService = new GatewayEvidenceBundleService(
   evidenceBundleStore,
   tradeReadService,
   complianceStore,
-  ricardianBaseUrl,
+  config.ricardianBaseUrl,
 );
-
-function readOptionalBaseUrl(variableName: string): string | undefined {
-  const value = process.env[variableName]?.trim();
-  if (!value) {
-    return undefined;
-  }
-
-  return value.replace(/\/$/, '');
-}
-
-async function checkHttpHealth(baseUrl: string, timeoutMs: number): Promise<void> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(`${baseUrl}/health`, {
-      method: 'GET',
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Probe timeout after ${timeoutMs}ms`);
-    }
-
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
 const operationsSummaryService = new OperationsSummaryService([
   {
@@ -153,9 +202,9 @@ const operationsSummaryService = new OperationsSummaryService([
     name: 'Oracle',
     source: 'oracle_http',
     staleAfterMs: 120_000,
-    timeoutMs: 5_000,
-    check: oracleBaseUrl
-      ? async () => checkHttpHealth(oracleBaseUrl, 5_000)
+    timeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
+    check: config.oracleBaseUrl
+      ? async () => orchestrator.probeHealth('oracle')
       : undefined,
   },
   {
@@ -164,16 +213,16 @@ const operationsSummaryService = new OperationsSummaryService([
     source: 'indexer_graphql',
     staleAfterMs: 120_000,
     timeoutMs: config.indexerRequestTimeoutMs,
-    check: async () => checkIndexerHealth(config.indexerGraphqlUrl, config.indexerRequestTimeoutMs, 120_000),
+    check: async () => indexerClient.checkHealth(120_000),
   },
   {
     key: 'reconciliation',
     name: 'Reconciliation',
     source: 'reconciliation_http',
     staleAfterMs: 120_000,
-    timeoutMs: 5_000,
-    check: reconciliationBaseUrl
-      ? async () => checkHttpHealth(reconciliationBaseUrl, 5_000)
+    timeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
+    check: config.reconciliationBaseUrl
+      ? async () => orchestrator.probeHealth('reconciliation')
       : undefined,
   },
   {
@@ -181,9 +230,9 @@ const operationsSummaryService = new OperationsSummaryService([
     name: 'Treasury',
     source: 'treasury_http',
     staleAfterMs: 120_000,
-    timeoutMs: 5_000,
-    check: treasuryBaseUrl
-      ? async () => checkHttpHealth(treasuryBaseUrl, 5_000)
+    timeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
+    check: config.treasuryBaseUrl
+      ? async () => orchestrator.probeHealth('treasury')
       : undefined,
   },
   {
@@ -191,9 +240,9 @@ const operationsSummaryService = new OperationsSummaryService([
     name: 'Ricardian Engine',
     source: 'ricardian_http',
     staleAfterMs: 120_000,
-    timeoutMs: 5_000,
-    check: ricardianBaseUrl
-      ? async () => checkHttpHealth(ricardianBaseUrl, 5_000)
+    timeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
+    check: config.ricardianBaseUrl
+      ? async () => orchestrator.probeHealth('ricardian')
       : undefined,
   },
   {
@@ -201,9 +250,9 @@ const operationsSummaryService = new OperationsSummaryService([
     name: 'Notifications',
     source: 'notifications_http',
     staleAfterMs: 120_000,
-    timeoutMs: 5_000,
-    check: notificationsBaseUrl
-      ? async () => checkHttpHealth(notificationsBaseUrl, 5_000)
+    timeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
+    check: config.notificationsBaseUrl
+      ? async () => orchestrator.probeHealth('notifications')
       : undefined,
   },
 ]);
