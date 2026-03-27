@@ -15,6 +15,73 @@ Webhook authenticity and replay regression fixtures:
 - `treasury/tests/replayProtection.test.ts`
 - `treasury/tests/serviceAuthRoutes.test.ts`
 
+
+## Reference Flow: Logistics-Triggered Release
+
+### Overview
+
+Cotsel supports logistics-triggered fund release when an external logistics or trade-documentation system signals a trade milestone (e.g., Bill of Lading issued, goods arrived at destination). This section describes the control path from external signal to on-chain release. It is a reference flow for documentation and operator training, not a description of a new webhook provider integration.
+
+### Control Points
+
+```
+Logistics event signal
+  └─> Oracle POST 
+        ├─> [1] HMAC authenticity check
+        ├─> [2] Replay protection check
+        ├─> [3] Duplicate / idempotency check (actionKey)
+        ├─> [4] On-chain pre-condition validation
+        ├─> [5] Transaction submission (bounded retry)
+        └─> [6] Confirmation polling -> trigger CONFIRMED
+```
+
+**[1] HMAC authenticity** — the oracle HMAC middleware validates `x-signature` as HMAC-SHA256 of `timestamp + body` (no separator) using `ORACLE_HMAC_SECRET`. The API key is validated separately via `Authorization: Bearer <API_KEY>`. Requests with missing or invalid headers are rejected `401` before any trigger record is created.
+
+**[2] Replay protection** — `x-timestamp` must be within the allowed clock-skew window (service default: 5 minutes). Requests outside that window are rejected `401`. A nonce is always consumed: if `x-nonce` is present it is used directly; otherwise a nonce is derived from `(timestamp, body, signature)` and consumed. Replay protection applies to every request, not only those that include an explicit nonce.
+
+**[3] Idempotency** — `actionKey` is the string `${triggerType}:${tradeId}`. When a trigger for the same `actionKey` already exists in `SUBMITTED` or `CONFIRMED` state, the existing record is returned without creating a new execution path. Other terminal states (`TERMINAL_FAILURE`, `EXHAUSTED_NEEDS_REDRIVE`) are returned as-is. Concurrent duplicate active triggers are prevented by a unique index on active action keys. This guard substantially reduces double-release risk on retry, but operators should treat it as a defence-in-depth control rather than a general retry-safe dedupe contract for every repeat submission.
+
+**[4] On-chain pre-condition** — before submitting any transaction, the oracle reads current escrow state:
+- `RELEASE_STAGE_1` requires trade in `LOCKED` state
+- `CONFIRM_ARRIVAL` requires trade in `IN_TRANSIT` state
+- `FINALIZE_TRADE` requires trade in `ARRIVAL_CONFIRMED` state with expired dispute window
+
+If the pre-condition fails, the trigger is moved to `TERMINAL_FAILURE` (non-retryable) and must not be re-driven.
+
+**[5] Transaction submission** — oracle signs and submits the release transaction. Execution is bounded by `ORACLE_RETRY_ATTEMPTS` with exponential backoff capped at `30 s`.
+
+**[6] Confirmation polling** — oracle polls for on-chain confirmation at `10 s` intervals, with soft-timeout warning at `5 m` and hard-timeout at `30 m` (trigger moves to `EXHAUSTED_NEEDS_REDRIVE` if confirmation is not observed).
+
+### Webhook Authenticity Requirements
+
+Callers must include on every request:
+
+| Header | Required | Description |
+|---|---|---|
+| `Authorization` | Yes | `Bearer <API_KEY>` — validated against `ORACLE_API_KEY` |
+| `x-timestamp` | Yes | Unix timestamp in milliseconds; must be within clock-skew window |
+| `x-signature` | Yes | HMAC-SHA256 of `timestamp + body` (no separator) using `ORACLE_HMAC_SECRET` |
+| `x-nonce` | Optional | Unique string per request; if omitted, one is derived from the signed request and still consumed |
+
+See test coverage for the enforcement boundary:
+- `oracle/tests/hmac-middleware.test.ts`
+- `oracle/tests/authenticated-routes.test.ts`
+
+### Operator Evidence Expectations
+
+For each logistics-triggered release, operators must be able to provide:
+
+- Incoming signal metadata: caller identity, `x-timestamp`, `requestId`
+- `tradeId`, `triggerType`, `actionKey`, `idempotencyKey`
+- Oracle trigger status history: `SUBMITTED` → `CONFIRMED` (or failure path)
+- `txHash` of the on-chain release transaction
+- Reconciliation confirmation that the on-chain release matches expected trade state
+- Indexed event evidence (`FundsReleasedStage1` or `FinalTrancheReleased`) from the indexer
+
+Template: `docs/runbooks/operator-audit-evidence-template.md`
+
+
+
 ## Ownership And Intervention Rules
 - `Operator`:
   - Runs health/diagnostic checks.
@@ -88,8 +155,9 @@ Example re-drive request:
 ```bash
 curl -X POST http://127.0.0.1:3001/api/oracle/redrive \
   -H 'Content-Type: application/json' \
-  -H "x-api-key: ${ORACLE_API_KEY}" \
-  -H "x-hmac-signature: <signature>" \
+  -H "Authorization: Bearer ${ORACLE_API_KEY}" \
+  -H "x-timestamp: <unix-ms>" \
+  -H "x-signature: <hmac-sha256>" \
   -d '{"tradeId":"123","triggerType":"RELEASE_STAGE_1","requestId":"manual-redrive-001"}'
 ```
 
