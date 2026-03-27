@@ -18,6 +18,7 @@ Automation-governance source of truth:
 
 ## Scope
 - Treasury ledger state progression (`PENDING_REVIEW` -> `READY_FOR_PAYOUT` -> `PROCESSING` -> `PAID` or `CANCELLED`).
+- Fiat ramp deposit evidence contract used to anchor off-chain funding to trade and ledger context.
 - Approval and evidence requirements for treasury-to-fiat execution.
 - Exception handling for failed, incorrect, or partial payouts.
 
@@ -57,6 +58,51 @@ Required headers:
 - Never continue processing when destination details are ambiguous.
 - Never use an arbitrary payout destination for treasury claim execution; destination is contract-controlled.
 - Never enable or improvise new treasury automation outside the approved automation classes and change-control path.
+
+## Fiat Ramp Deposit Contract
+Treasury source of truth:
+- `treasury/src/types.ts`
+- `treasury/src/database/schema.sql`
+- `treasury/src/database/queries.ts`
+- `POST /api/treasury/v1/deposits`
+
+Each off-ramp funding observation must be recorded with this contract:
+- `rampReference`: stable off-ramp or provider-side reference for the logical funding path.
+- `tradeId`: trade-level business anchor.
+- `ledgerEntryId`: optional but preferred treasury ledger anchor when the deposit is funding a specific payout entry.
+- `depositState`: `PENDING`, `FUNDED`, `PARTIAL`, `REVERSED`, or `FAILED`.
+- `sourceAmount`: provider-observed amount as an integer string.
+- `currency`: provider-observed currency code.
+- `expectedAmount`: approved expected amount as an integer string.
+- `expectedCurrency`: approved expected currency code.
+- `observedAt`: provider observation timestamp.
+- `providerEventId`: idempotency key for the provider event.
+- `providerAccountRef`: provider-side account or wallet reference.
+- `failureCode`: optional provider failure code.
+- `reversalReference`: optional reversal or clawback reference.
+- `metadata`: optional structured evidence fields.
+
+Idempotency and conflict rules:
+- Replaying the same `providerEventId` with the exact same payload is accepted as an idempotent replay.
+- Reusing the same `providerEventId` with a different payload is rejected as a conflict.
+- Reusing the same `rampReference` for a different `tradeId` is rejected as a conflict.
+
+Deterministic failure classes:
+- `MISSING_TRADE_MAPPING`
+- `DUPLICATE_PROVIDER_EVENT`
+- `PARTIAL_FUNDING`
+- `REVERSED_FUNDING`
+- `STALE_PENDING_DEPOSIT`
+- `AMOUNT_MISMATCH`
+- `CURRENCY_MISMATCH`
+
+Failure-class interpretation:
+- `MISSING_TRADE_MAPPING`: no treasury ledger evidence was found for the declared trade/entry.
+- `PARTIAL_FUNDING`: provider-observed amount is below approved expected amount or the event was explicitly marked `PARTIAL`.
+- `REVERSED_FUNDING`: provider indicates funding was reversed after observation.
+- `AMOUNT_MISMATCH`: observed and expected amounts differ without matching the controlled partial-funding path.
+- `CURRENCY_MISMATCH`: observed and expected currency do not match.
+- `STALE_PENDING_DEPOSIT`: reconciliation-only classification for deposits left in `PENDING` longer than the report threshold.
 
 ## Procedure
 
@@ -145,6 +191,26 @@ curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entri
 
 Execute transfer in approved off-ramp channel (bank/exchange workflow).
 
+Before external execution, persist the approved funding reference:
+
+```bash
+curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/deposits" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rampReference":"ramp-2026-03-26-001",
+    "tradeId":"<trade-id>",
+    "ledgerEntryId":<entry-id>,
+    "depositState":"PENDING",
+    "sourceAmount":"1000000",
+    "currency":"USD",
+    "expectedAmount":"1000000",
+    "expectedCurrency":"USD",
+    "observedAt":"2026-03-26T00:00:00.000Z",
+    "providerEventId":"provider-event-001",
+    "providerAccountRef":"acct-usd-1"
+  }'
+```
+
 Expected result:
 - External transfer reference is generated.
 
@@ -164,6 +230,7 @@ Record post-transfer evidence:
 - Transfer reference/receipt ID.
 - FX rate and timestamp used for conversion.
 - Linked `trade_id`, ledger `entry_id`, and source on-chain `tx_hash`.
+- Final fiat deposit event for the same `rampReference` recorded as `FUNDED` or `REVERSED` with the provider confirmation identifier.
 
 Expected result:
 - Entry appears with `latest_state=PAID`.
@@ -222,10 +289,12 @@ cast send <ESCROW_ADDRESS> "unpauseClaims()" --private-key "$ADMIN_KEY"
 ### Off-ramp transfer failed
 - Keep state at `PROCESSING` only while active retry plan exists.
 - If transfer cannot recover safely, set `CANCELLED` and open incident.
+- Persist the provider failure as a treasury deposit event with `depositState="FAILED"` and `failureCode`.
 
 ### Partial settlement confirmed
 - Do not mark `PAID` until full amount is reconciled.
 - Record partial receipt and discrepancy details.
+- Persist the provider event with `depositState="PARTIAL"` so reconciliation emits `PARTIAL_FUNDING`.
 - Escalate for controlled remediation and evidence review.
 
 ## Rollback / Escalation

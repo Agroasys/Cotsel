@@ -7,6 +7,17 @@ export type PayoutState =
   | 'PAID'
   | 'CANCELLED';
 
+export type FiatDepositState = 'PENDING' | 'FUNDED' | 'PARTIAL' | 'REVERSED' | 'FAILED';
+
+export type FiatDepositFailureClass =
+  | 'MISSING_TRADE_MAPPING'
+  | 'DUPLICATE_PROVIDER_EVENT'
+  | 'PARTIAL_FUNDING'
+  | 'REVERSED_FUNDING'
+  | 'STALE_PENDING_DEPOSIT'
+  | 'AMOUNT_MISMATCH'
+  | 'CURRENCY_MISMATCH';
+
 export interface LedgerEntry {
   id: number;
   entry_key: string;
@@ -45,4 +56,65 @@ export interface IndexerTradeEvent {
   timestamp: Date;
   releasedLogisticsAmount?: string | null;
   paidPlatformFees?: string | null;
+}
+
+export interface FiatDepositReference {
+  id: number;
+  ramp_reference: string;
+  trade_id: string;
+  ledger_entry_id: number | null;
+  deposit_state: FiatDepositState;
+  source_amount: string;
+  currency: string;
+  expected_amount: string;
+  expected_currency: string;
+  observed_at: Date;
+  provider_event_id: string;
+  provider_account_ref: string;
+  failure_class: FiatDepositFailureClass | null;
+  failure_code: string | null;
+  reversal_reference: string | null;
+  latest_event_payload_hash: string;
+  metadata: Record<string, unknown>;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface FiatDepositEvent {
+  id: number;
+  fiat_deposit_reference_id: number;
+  ramp_reference: string;
+  trade_id: string;
+  ledger_entry_id: number | null;
+  deposit_state: FiatDepositState;
+  source_amount: string;
+  currency: string;
+  expected_amount: string;
+  expected_currency: string;
+  observed_at: Date;
+  provider_event_id: string;
+  provider_account_ref: string;
+  failure_class: FiatDepositFailureClass | null;
+  failure_code: string | null;
+  reversal_reference: string | null;
+  payload_hash: string;
+  metadata: Record<string, unknown>;
+  created_at: Date;
+}
+
+export interface FiatDepositUpsertInput {
+  rampReference: string;
+  tradeId: string;
+  ledgerEntryId?: number | null;
+  depositState: FiatDepositState;
+  sourceAmount: string;
+  currency: string;
+  expectedAmount: string;
+  expectedCurrency: string;
+  observedAt: Date;
+  providerEventId: string;
+  providerAccountRef: string;
+  failureCode?: string | null;
+  reversalReference?: string | null;
+  metadata?: Record<string, unknown>;
 }

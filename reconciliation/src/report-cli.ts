@@ -27,6 +27,10 @@ interface TreasuryLedgerStateRow {
   trade_id: string;
   tx_hash: string;
   latest_state: string;
+  ramp_reference: string | null;
+  fiat_deposit_state: string | null;
+  fiat_deposit_failure_class: string | null;
+  fiat_deposit_observed_at: Date | null;
 }
 
 interface IndexerHashRow {
@@ -178,7 +182,11 @@ async function fetchTreasuryLedgerStates(pool: Pool, scopedTradeIds: string[]): 
         e.id,
         e.trade_id,
         e.tx_hash,
-        s.state AS latest_state
+        s.state AS latest_state,
+        d.ramp_reference,
+        d.deposit_state AS fiat_deposit_state,
+        d.failure_class AS fiat_deposit_failure_class,
+        d.observed_at AS fiat_deposit_observed_at
       FROM treasury_ledger_entries e
       JOIN LATERAL (
         SELECT p.state
@@ -187,6 +195,18 @@ async function fetchTreasuryLedgerStates(pool: Pool, scopedTradeIds: string[]): 
         ORDER BY p.created_at DESC, p.id DESC
         LIMIT 1
       ) s ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          r.ramp_reference,
+          r.deposit_state,
+          r.failure_class,
+          r.observed_at
+        FROM fiat_deposit_references r
+        WHERE r.ledger_entry_id = e.id
+           OR (r.ledger_entry_id IS NULL AND r.trade_id = e.trade_id)
+        ORDER BY CASE WHEN r.ledger_entry_id = e.id THEN 0 ELSE 1 END, r.observed_at DESC, r.id DESC
+        LIMIT 1
+      ) d ON TRUE
       WHERE e.trade_id = ANY($1::text[])
       ORDER BY e.trade_id ASC, e.tx_hash ASC, e.id ASC`
     ,
@@ -286,6 +306,10 @@ async function main(): Promise<void> {
       txHash: row.tx_hash,
       extrinsicHash: extrinsicHashByTxHash.get(row.tx_hash) ?? null,
       payoutState: row.latest_state,
+      rampReference: row.ramp_reference,
+      fiatDepositState: row.fiat_deposit_state,
+      fiatDepositFailureClass: row.fiat_deposit_failure_class,
+      fiatDepositObservedAt: row.fiat_deposit_observed_at ? new Date(row.fiat_deposit_observed_at) : null,
       mismatchCodes: driftByTradeId.get(row.trade_id) || [],
       ledgerEntryId: row.id,
     }));
@@ -301,6 +325,10 @@ async function main(): Promise<void> {
         txHash: null,
         extrinsicHash: null,
         payoutState: null,
+        rampReference: null,
+        fiatDepositState: null,
+        fiatDepositFailureClass: null,
+        fiatDepositObservedAt: null,
         mismatchCodes: driftByTradeId.get(tradeId) || [],
         ledgerEntryId: null,
       });
@@ -317,6 +345,10 @@ async function main(): Promise<void> {
         txHash: null,
         extrinsicHash: null,
         payoutState: null,
+        rampReference: null,
+        fiatDepositState: null,
+        fiatDepositFailureClass: null,
+        fiatDepositObservedAt: null,
         mismatchCodes,
         ledgerEntryId: null,
       });

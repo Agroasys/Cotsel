@@ -39,6 +39,7 @@ npm run -w reconciliation reconcile:report -- --run-key=<runKey> --out reports/r
 Notes:
 - Report command reads reconciliation DB (`DB_NAME`), treasury DB (`TREASURY_DB_NAME`), and indexer DB (`INDEXER_DB_NAME`) using the same Postgres host/user/password env set.
 - Output schema is stable and ordered by `tradeId`, then `txHash`; missing fields are emitted as explicit `null`.
+- Treasury-linked rows now also surface `rampReference`, `fiatDepositState`, `fiatDepositFailureReason`, and `fiatDepositObservedAt` when deposit evidence exists.
 
 Docker local-dev profile:
 
@@ -116,6 +117,27 @@ Failure interpretation:
 - If right side > left side: duplicate accounting or event ingestion bug.
 - Any mismatch across runs for same escrow is `CRITICAL` until explained.
 
+## Fiat Deposit Evidence Invariants
+Treasury deposit evidence source of truth:
+- `treasury/src/database/schema.sql`
+- `treasury/src/database/queries.ts`
+- `docs/runbooks/treasury-to-fiat-sop.md#fiat-ramp-deposit-contract`
+
+Reconciliation report rows attach latest treasury deposit evidence per ledger entry, or the latest trade-level deposit reference when no entry-specific reference exists.
+
+Deterministic deposit mismatch classes visible in reconciliation output:
+- `MISSING_TRADE_MAPPING`
+- `PARTIAL_FUNDING`
+- `REVERSED_FUNDING`
+- `AMOUNT_MISMATCH`
+- `CURRENCY_MISMATCH`
+- `STALE_PENDING_DEPOSIT`
+
+Operator rules:
+- Treat `STALE_PENDING_DEPOSIT` as a treasury operations exception even when chain-side reconciliation is otherwise clean.
+- Do not mark treasury payout completion evidence as complete when `fiatDepositState` is `PENDING`, `PARTIAL`, `REVERSED`, or `FAILED`.
+- When `fiatDepositFailureReason` is non-null, attach provider event identifiers and treasury approval evidence to the incident packet.
+
 ## Migration: Dual-Escrow Reconciliation
 
 Escrow contracts are not upgraded in place. During migration:
@@ -183,6 +205,7 @@ CI artifact name:
 - Escalate immediately when:
   - any row has `reconciliationVerdict = "MISMATCH"` for two consecutive runs
   - mismatch reasons include `AMOUNT_MISMATCH`, `PARTICIPANT_MISMATCH`, or `HASH_MISMATCH`
+  - mismatch reasons include `PARTIAL_FUNDING`, `REVERSED_FUNDING`, `CURRENCY_MISMATCH`, or `STALE_PENDING_DEPOSIT`
   - payout state is `PROCESSING` for longer than the agreed treasury operations window
 - Escalation runbooks:
   - `docs/runbooks/oracle-redrive.md`

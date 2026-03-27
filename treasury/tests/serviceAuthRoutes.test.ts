@@ -86,6 +86,9 @@ describe('treasury service-authenticated routes', () => {
       appendState: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { updated: true } });
       },
+      upsertDeposit: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'deposits' });
+      },
       exportEntries: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
       },
@@ -221,5 +224,42 @@ describe('treasury service-authenticated routes', () => {
         error: 'Authentication service unavailable',
       }),
     );
+  });
+
+  test('valid signed deposit request reaches the route once', async () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        rampReference: 'ramp-1',
+        tradeId: 'trade-1',
+        depositState: 'FUNDED',
+        sourceAmount: '100',
+        currency: 'USD',
+        expectedAmount: '100',
+        expectedCurrency: 'USD',
+        observedAt: '2026-03-26T00:00:00.000Z',
+        providerEventId: 'provider-event-1',
+        providerAccountRef: 'acct-1',
+      }),
+    );
+    const signed = createSignedRequestParts({
+      path: '/api/treasury/v1/deposits',
+      body,
+      nonce: 'treasury-deposit-route-nonce',
+    });
+
+    const response = await fetch(`${baseUrl}/api/treasury/v1/deposits`, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.bodyText,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        route: 'deposits',
+      }),
+    );
+    expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-deposit-route-nonce', 600);
   });
 });

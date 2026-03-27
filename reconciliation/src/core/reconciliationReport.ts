@@ -1,4 +1,4 @@
-export const RECONCILIATION_REPORT_VERSION = '1.0';
+export const RECONCILIATION_REPORT_VERSION = '1.1';
 
 export type ReconciliationVerdict = 'MATCH' | 'MISMATCH';
 
@@ -7,6 +7,10 @@ export interface ReconciliationReportInputRow {
   txHash: string | null;
   extrinsicHash: string | null;
   payoutState: string | null;
+  rampReference: string | null;
+  fiatDepositState: string | null;
+  fiatDepositFailureClass: string | null;
+  fiatDepositObservedAt: Date | null;
   mismatchCodes: string[];
   ledgerEntryId: number | null;
 }
@@ -16,6 +20,10 @@ export interface ReconciliationReportRow {
   txHash: string | null;
   extrinsicHash: string | null;
   payoutState: string | null;
+  rampReference: string | null;
+  fiatDepositState: string | null;
+  fiatDepositFailureReason: string | null;
+  fiatDepositObservedAt: string | null;
   reconciliationVerdict: ReconciliationVerdict;
   mismatchReason: string | null;
 }
@@ -29,6 +37,11 @@ export interface ReconciliationReport {
     matchCount: number;
     mismatchCount: number;
   };
+}
+
+export interface ReconciliationReportBuildOptions {
+  now?: Date;
+  stalePendingAfterHours?: number;
 }
 
 function compareNullableStrings(a: string | null, b: string | null): number {
@@ -60,9 +73,32 @@ function compareTradeIds(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
-export function buildReconciliationReportRows(inputRows: ReconciliationReportInputRow[]): ReconciliationReportRow[] {
+function deriveMismatchCodes(row: ReconciliationReportInputRow, options: ReconciliationReportBuildOptions): string[] {
+  const mismatchCodes = [...row.mismatchCodes];
+
+  if (row.fiatDepositFailureClass) {
+    mismatchCodes.push(row.fiatDepositFailureClass);
+  }
+
+  const now = options.now ?? new Date();
+  const stalePendingAfterHours = options.stalePendingAfterHours ?? 24;
+  if (
+    row.fiatDepositState === 'PENDING' &&
+    row.fiatDepositObservedAt &&
+    now.getTime() - row.fiatDepositObservedAt.getTime() >= stalePendingAfterHours * 60 * 60 * 1000
+  ) {
+    mismatchCodes.push('STALE_PENDING_DEPOSIT');
+  }
+
+  return Array.from(new Set(mismatchCodes)).sort((a, b) => a.localeCompare(b));
+}
+
+export function buildReconciliationReportRows(
+  inputRows: ReconciliationReportInputRow[],
+  options: ReconciliationReportBuildOptions = {},
+): ReconciliationReportRow[] {
   const rows = inputRows.map((row) => {
-    const uniqueMismatchCodes = Array.from(new Set(row.mismatchCodes)).sort((a, b) => a.localeCompare(b));
+    const uniqueMismatchCodes = deriveMismatchCodes(row, options);
     const mismatchReason = uniqueMismatchCodes.length > 0 ? uniqueMismatchCodes.join(',') : null;
     const reconciliationVerdict: ReconciliationVerdict = uniqueMismatchCodes.length > 0 ? 'MISMATCH' : 'MATCH';
 
@@ -71,6 +107,10 @@ export function buildReconciliationReportRows(inputRows: ReconciliationReportInp
       txHash: row.txHash,
       extrinsicHash: row.extrinsicHash,
       payoutState: row.payoutState,
+      rampReference: row.rampReference,
+      fiatDepositState: row.fiatDepositState,
+      fiatDepositFailureReason: row.fiatDepositFailureClass,
+      fiatDepositObservedAt: row.fiatDepositObservedAt ? row.fiatDepositObservedAt.toISOString() : null,
       reconciliationVerdict,
       mismatchReason,
       _ledgerEntryId: row.ledgerEntryId,
@@ -98,6 +138,11 @@ export function buildReconciliationReportRows(inputRows: ReconciliationReportInp
       return byState;
     }
 
+    const byRamp = compareNullableStrings(a.rampReference, b.rampReference);
+    if (byRamp !== 0) {
+      return byRamp;
+    }
+
     const aLedgerEntry = a._ledgerEntryId ?? Number.MAX_SAFE_INTEGER;
     const bLedgerEntry = b._ledgerEntryId ?? Number.MAX_SAFE_INTEGER;
     return aLedgerEntry - bLedgerEntry;
@@ -106,8 +151,12 @@ export function buildReconciliationReportRows(inputRows: ReconciliationReportInp
   return rows.map(({ _ledgerEntryId: _unused, ...row }) => row);
 }
 
-export function buildReconciliationReport(runKey: string | null, inputRows: ReconciliationReportInputRow[]): ReconciliationReport {
-  const rows = buildReconciliationReportRows(inputRows);
+export function buildReconciliationReport(
+  runKey: string | null,
+  inputRows: ReconciliationReportInputRow[],
+  options: ReconciliationReportBuildOptions = {},
+): ReconciliationReport {
+  const rows = buildReconciliationReportRows(inputRows, options);
   const matchCount = rows.filter((row) => row.reconciliationVerdict === 'MATCH').length;
   const mismatchCount = rows.length - matchCount;
 

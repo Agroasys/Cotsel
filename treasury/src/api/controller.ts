@@ -1,8 +1,15 @@
 import { Request, Response } from 'express';
 import { TreasuryIngestionService } from '../core/ingestion';
+import { assertFiatDepositState, FiatDepositConflictError } from '../core/fiatDeposit';
 import { assertValidTransition } from '../core/payout';
-import { appendPayoutState, getLatestPayoutState, getLedgerEntries, getLedgerEntryById } from '../database/queries';
-import { PayoutState } from '../types';
+import {
+  appendPayoutState,
+  getLatestPayoutState,
+  getLedgerEntries,
+  getLedgerEntryById,
+  upsertFiatDepositReference,
+} from '../database/queries';
+import { FiatDepositState, PayoutState } from '../types';
 
 const PAYOUT_STATES: PayoutState[] = [
   'PENDING_REVIEW',
@@ -16,6 +23,14 @@ function assertPayoutState(value: string): asserts value is PayoutState {
   if (!PAYOUT_STATES.includes(value as PayoutState)) {
     throw new Error('Invalid payout state');
   }
+}
+
+function parseObservedAt(value: string): Date {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error('observedAt must be a valid ISO timestamp');
+  }
+  return parsed;
 }
 
 function toCsv(entries: Awaited<ReturnType<typeof getLedgerEntries>>): string {
@@ -118,6 +133,70 @@ export class TreasuryController {
       res.status(200).json({ success: true, data: event });
     } catch (error: any) {
       res.status(400).json({ success: false, error: error?.message || 'Failed to append payout state' });
+    }
+  }
+
+  async upsertDeposit(
+    req: Request<
+      {},
+      {},
+      {
+        rampReference: string;
+        tradeId: string;
+        ledgerEntryId?: number | null;
+        depositState: FiatDepositState;
+        sourceAmount: string;
+        currency: string;
+        expectedAmount: string;
+        expectedCurrency: string;
+        observedAt: string;
+        providerEventId: string;
+        providerAccountRef: string;
+        failureCode?: string | null;
+        reversalReference?: string | null;
+        metadata?: Record<string, unknown>;
+      }
+    >,
+    res: Response,
+  ): Promise<void> {
+    try {
+      assertFiatDepositState(req.body.depositState);
+
+      const result = await upsertFiatDepositReference({
+        rampReference: req.body.rampReference,
+        tradeId: req.body.tradeId,
+        ledgerEntryId:
+          typeof req.body.ledgerEntryId === 'number' && Number.isFinite(req.body.ledgerEntryId)
+            ? req.body.ledgerEntryId
+            : null,
+        depositState: req.body.depositState,
+        sourceAmount: req.body.sourceAmount,
+        currency: req.body.currency,
+        expectedAmount: req.body.expectedAmount,
+        expectedCurrency: req.body.expectedCurrency,
+        observedAt: parseObservedAt(req.body.observedAt),
+        providerEventId: req.body.providerEventId,
+        providerAccountRef: req.body.providerAccountRef,
+        failureCode: req.body.failureCode,
+        reversalReference: req.body.reversalReference,
+        metadata: req.body.metadata,
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          reference: result.reference,
+          eventCreated: result.eventCreated,
+          idempotentReplay: result.idempotentReplay,
+        },
+      });
+    } catch (error: any) {
+      if (error instanceof FiatDepositConflictError) {
+        res.status(409).json({ success: false, error: error.message, code: error.code });
+        return;
+      }
+
+      res.status(400).json({ success: false, error: error?.message || 'Failed to persist fiat deposit reference' });
     }
   }
 
