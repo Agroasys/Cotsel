@@ -3,6 +3,7 @@
  */
 import { formatUnits } from 'ethers';
 import { ComplianceStore } from './complianceStore';
+import { IndexerGraphqlClient } from './indexerGraphqlClient';
 import { GatewayError } from '../errors';
 import type {
   SettlementCallbackStatus,
@@ -390,12 +391,30 @@ export interface TradeReadReader {
 }
 
 export class TradeReadService implements TradeReadReader {
+  private readonly indexerClient: IndexerGraphqlClient;
+  private readonly complianceStore: ComplianceStore;
+  private readonly settlementReadStore?: TradeSettlementReadStore;
+
   constructor(
-    private readonly indexerGraphqlUrl: string,
-    private readonly indexerRequestTimeoutMs: number,
-    private readonly complianceStore: ComplianceStore,
-    private readonly settlementReadStore?: TradeSettlementReadStore,
-  ) {}
+    indexerClientOrUrl: IndexerGraphqlClient | string,
+    indexerRequestTimeoutOrComplianceStore: number | ComplianceStore,
+    complianceStoreOrSettlementStore?: ComplianceStore | TradeSettlementReadStore,
+    maybeSettlementReadStore?: TradeSettlementReadStore,
+  ) {
+    if (typeof indexerClientOrUrl === 'string') {
+      this.indexerClient = new IndexerGraphqlClient(
+        indexerClientOrUrl,
+        indexerRequestTimeoutOrComplianceStore as number,
+      );
+      this.complianceStore = complianceStoreOrSettlementStore as ComplianceStore;
+      this.settlementReadStore = maybeSettlementReadStore;
+      return;
+    }
+
+    this.indexerClient = indexerClientOrUrl;
+    this.complianceStore = indexerRequestTimeoutOrComplianceStore as ComplianceStore;
+    this.settlementReadStore = complianceStoreOrSettlementStore as TradeSettlementReadStore | undefined;
+  }
 
   async checkReadiness(): Promise<void> {
     const response = await this.executeQuery(
@@ -486,51 +505,6 @@ export class TradeReadService implements TradeReadReader {
     query: string,
     variables?: Record<string, unknown>,
   ): Promise<TradesGraphQlResponse> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.indexerRequestTimeoutMs);
-
-    try {
-      const response = await fetch(this.indexerGraphqlUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ operationName, query, variables }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer request failed with HTTP ${response.status}`, {
-          operationName,
-          status: response.status,
-        });
-      }
-
-      const payload = parseGraphQlResponse(await response.json());
-      if (payload.errors?.length) {
-        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned GraphQL errors', {
-          operationName,
-          errors: payload.errors.map((error) => error.message),
-        });
-      }
-
-      return payload;
-    } catch (error) {
-      if (error instanceof GatewayError) {
-        throw error;
-      }
-
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new GatewayError(504, 'UPSTREAM_UNAVAILABLE', 'Indexer request timed out', {
-          operationName,
-          timeoutMs: this.indexerRequestTimeoutMs,
-        });
-      }
-
-      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer request failed', {
-        operationName,
-        reason: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
+    return parseGraphQlResponse(await this.indexerClient.query(operationName, query, variables));
   }
 }
