@@ -1,0 +1,38 @@
+{
+  "tradeId": "TRD-LOCAL-9001",
+  "buyer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "supplier": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+  "status": "LOCKED",
+  "totalAmountLocked": "125000000",
+  "logisticsAmount": "15000000",
+  "platformFeesAmount": "5000000",
+  "supplierFirstTranche": "52500000",
+  "supplierSecondTranche": "52500000",
+  "ricardianHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "createdAt": "2026-03-27T17:00:00.000Z",
+  "arrivalTimestamp": null,
+  "events": [
+    {
+      "eventName": "TradeLocked",
+      "timestamp": "2026-03-27T17:00:00.000Z",
+      "txHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "extrinsicHash": null,
+      "totalAmount": "125000000",
+      "releasedFirstTranche": null,
+      "releasedLogisticsAmount": null,
+      "paidPlatformFees": null,
+      "arrivalTimestamp": null,
+      "finalTranche": null,
+      "finalRecipient": null,
+      "refundedAmount": null,
+      "refundedTo": null,
+      "refundedBuyerPrincipal": null,
+      "claimType": null,
+      "claimRecipient": null,
+      "claimAmount": null,
+      "payoutRecipient": null,
+      "payoutAmount": null,
+      "payoutType": null
+    }
+  ]
+}

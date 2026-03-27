@@ -37,29 +37,17 @@ services:
     image: node:20-alpine
     profiles: ["local-dev"]
     restart: unless-stopped
+    environment:
+      LOCAL_DEV_INDEXER_FIXTURE_MODE: "${LOCAL_DEV_INDEXER_FIXTURE_MODE:-empty}"
+      LOCAL_DEV_INDEXER_FIXTURE_PATH: "/app/scripts/fixtures/local-dev-dashboard-parity-trade.json"
+      LOCAL_DEV_INDEXER_PORT: "4350"
     command:
       - node
-      - -e
-      - |
-        const http = require('http');
-        const payload = JSON.stringify({ data: { trades: [] } });
-
-        http.createServer((req, res) => {
-          if (req.url !== '/graphql' || req.method !== 'POST') {
-            res.statusCode = 404;
-            res.end('not found');
-            return;
-          }
-
-          req.on('data', () => {
-            // request body intentionally ignored in lightweight local responder
-          });
-
-          req.on('end', () => {
-            res.setHeader('Content-Type', 'application/json');
-            res.end(payload);
-          });
-        }).listen(4350, '0.0.0.0');
+      - /app/scripts/local-dev-indexer-responder.mjs
+    volumes:
+      - ./scripts/local-dev-indexer-responder.mjs:/app/scripts/local-dev-indexer-responder.mjs:ro
+      - ./scripts/lib/local-dev-indexer-fixture.mjs:/app/scripts/lib/local-dev-indexer-fixture.mjs:ro
+      - ./scripts/fixtures/local-dev-dashboard-parity-trade.json:/app/scripts/fixtures/local-dev-dashboard-parity-trade.json:ro
     healthcheck:
       test:
         - CMD

@@ -46,6 +46,9 @@
     "build": "npm run build -w sdk",
     "lint": "npm run lint --workspaces --if-present",
     "prepare": "npm run build",
+    "dashboard:parity:session": "node scripts/dashboard-operator-session.mjs",
+    "dashboard:parity:preflight": "node scripts/dashboard-local-parity-preflight.mjs",
+    "dashboard:parity:gate": "npm run dashboard:parity:preflight",
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs"
   },

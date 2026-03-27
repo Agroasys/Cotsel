@@ -56,14 +56,12 @@ load_env_file() {
 
 ORIGINAL_ENV_KEYS=()
 ORIGINAL_ENV_VALUES=()
-while IFS= read -r line; do
-  key="${line%%=*}"
-  value="${line#*=}"
+while IFS='=' read -r key value; do
   ORIGINAL_ENV_KEYS+=("$key")
   ORIGINAL_ENV_VALUES+=("$value")
 done < <(env)
 
-restore_original_environment() {
+restore_external_environment_overrides() {
   local idx=0
   for key in "${ORIGINAL_ENV_KEYS[@]}"; do
     export "$key=${ORIGINAL_ENV_VALUES[$idx]}"
@@ -72,13 +70,13 @@ restore_original_environment() {
 }
 
 load_env_file ".env"
-restore_original_environment
+restore_external_environment_overrides
 if [[ "$PROFILE" == "local-dev" ]]; then
   load_env_file ".env.local"
 else
   load_env_file ".env.${PROFILE}"
 fi
-restore_original_environment
+restore_external_environment_overrides
 
 run_compose() {
   docker compose -f "$COMPOSE_FILE" --profile "$PROFILE" "$@"

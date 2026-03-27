@@ -124,7 +124,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
   const idempotency = createIdempotencyMiddleware(options.idempotencyStore);
 
-  router.use(authenticate, requireMutationWriteAccess());
+  router.use('/governance', authenticate, requireMutationWriteAccess());
 
   router.post('/governance/pause', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
