@@ -41,6 +41,7 @@ Notes:
 - Report command reads reconciliation DB (`DB_NAME`), treasury DB (`TREASURY_DB_NAME`), and indexer DB (`INDEXER_DB_NAME`) using the same Postgres host/user/password env set.
 - Output schema is stable and ordered by `tradeId`, then `txHash`; missing fields are emitted as explicit `null`.
 - Treasury-linked rows now also surface `rampReference`, `fiatDepositState`, `fiatDepositFailureReason`, and `fiatDepositObservedAt` when deposit evidence exists.
+- Treasury-linked rows also surface `bankReference`, `bankPayoutState`, `bankFailureCode`, `bankConfirmedAt`, and `bankPayoutDivergenceReason` when bank-finality evidence exists.
 
 Docker local-dev profile:
 
@@ -139,6 +140,24 @@ Operator rules:
 - Do not mark treasury payout completion evidence as complete when `fiatDepositState` is `PENDING`, `PARTIAL`, `REVERSED`, or `FAILED`.
 - When `fiatDepositFailureReason` is non-null, attach provider event identifiers and treasury approval evidence to the incident packet.
 
+## Bank Payout Confirmation Invariants
+Bank confirmation source of truth:
+- `treasury/src/core/bankPayout.ts`
+- `treasury/src/database/schema.sql`
+- `treasury/src/database/queries.ts`
+- `docs/runbooks/treasury-to-fiat-sop.md#bank-payout-confirmation-contract`
+
+Reconciliation report rows expose latest bank confirmation evidence per treasury ledger entry.
+
+Deterministic bank divergence classes visible in reconciliation output:
+- `BANK_REJECTED`
+- `TREASURY_BANK_STATE_DIVERGENCE`
+
+Operator rules:
+- `bankPayoutState="CONFIRMED"` with treasury `payoutState != "PAID"` is a divergence and must be remediated before closeout.
+- `bankPayoutState="PENDING"` with treasury `payoutState="PAID"` is a divergence and must be treated as missing bank evidence.
+- `bankPayoutState="REJECTED"` is always a payout exception and must be linked to the bank failure code or incident evidence.
+
 ## Migration: Dual-Escrow Reconciliation
 
 Escrow contracts are not upgraded in place. During migration:
@@ -207,6 +226,7 @@ CI artifact name:
   - any row has `reconciliationVerdict = "MISMATCH"` for two consecutive runs
   - mismatch reasons include `AMOUNT_MISMATCH`, `PARTICIPANT_MISMATCH`, or `HASH_MISMATCH`
   - mismatch reasons include `PARTIAL_FUNDING`, `REVERSED_FUNDING`, `CURRENCY_MISMATCH`, or `STALE_PENDING_DEPOSIT`
+  - mismatch reasons include `BANK_REJECTED` or `TREASURY_BANK_STATE_DIVERGENCE`
   - payout state is `PROCESSING` for longer than the agreed treasury operations window
 - Escalation runbooks:
   - `docs/runbooks/gateway-dead-letter-workflow.md`

@@ -1,4 +1,4 @@
-export const RECONCILIATION_REPORT_VERSION = '1.1';
+export const RECONCILIATION_REPORT_VERSION = '1.2';
 
 export type ReconciliationVerdict = 'MATCH' | 'MISMATCH';
 
@@ -11,6 +11,10 @@ export interface ReconciliationReportInputRow {
   fiatDepositState: string | null;
   fiatDepositFailureClass: string | null;
   fiatDepositObservedAt: Date | null;
+  bankReference: string | null;
+  bankPayoutState: string | null;
+  bankFailureCode: string | null;
+  bankConfirmedAt: Date | null;
   mismatchCodes: string[];
   ledgerEntryId: number | null;
 }
@@ -24,6 +28,11 @@ export interface ReconciliationReportRow {
   fiatDepositState: string | null;
   fiatDepositFailureReason: string | null;
   fiatDepositObservedAt: string | null;
+  bankReference: string | null;
+  bankPayoutState: string | null;
+  bankFailureCode: string | null;
+  bankConfirmedAt: string | null;
+  bankPayoutDivergenceReason: string | null;
   reconciliationVerdict: ReconciliationVerdict;
   mismatchReason: string | null;
 }
@@ -90,6 +99,27 @@ function deriveMismatchCodes(row: ReconciliationReportInputRow, options: Reconci
     mismatchCodes.push('STALE_PENDING_DEPOSIT');
   }
 
+  if (row.bankPayoutState === 'REJECTED') {
+    mismatchCodes.push('BANK_REJECTED');
+    if (row.payoutState !== 'CANCELLED') {
+      mismatchCodes.push('TREASURY_BANK_STATE_DIVERGENCE');
+    }
+  }
+
+  if (
+    row.bankPayoutState === 'CONFIRMED' &&
+    row.payoutState !== 'PAID'
+  ) {
+    mismatchCodes.push('TREASURY_BANK_STATE_DIVERGENCE');
+  }
+
+  if (
+    row.bankPayoutState === 'PENDING' &&
+    row.payoutState === 'PAID'
+  ) {
+    mismatchCodes.push('TREASURY_BANK_STATE_DIVERGENCE');
+  }
+
   return Array.from(new Set(mismatchCodes)).sort((a, b) => a.localeCompare(b));
 }
 
@@ -101,6 +131,9 @@ export function buildReconciliationReportRows(
     const uniqueMismatchCodes = deriveMismatchCodes(row, options);
     const mismatchReason = uniqueMismatchCodes.length > 0 ? uniqueMismatchCodes.join(',') : null;
     const reconciliationVerdict: ReconciliationVerdict = uniqueMismatchCodes.length > 0 ? 'MISMATCH' : 'MATCH';
+    const bankMismatchCodes = uniqueMismatchCodes.filter((code) =>
+      code === 'BANK_REJECTED' || code === 'TREASURY_BANK_STATE_DIVERGENCE',
+    );
 
     return {
       tradeId: row.tradeId,
@@ -111,6 +144,11 @@ export function buildReconciliationReportRows(
       fiatDepositState: row.fiatDepositState,
       fiatDepositFailureReason: row.fiatDepositFailureClass,
       fiatDepositObservedAt: row.fiatDepositObservedAt ? row.fiatDepositObservedAt.toISOString() : null,
+      bankReference: row.bankReference,
+      bankPayoutState: row.bankPayoutState,
+      bankFailureCode: row.bankFailureCode,
+      bankConfirmedAt: row.bankConfirmedAt ? row.bankConfirmedAt.toISOString() : null,
+      bankPayoutDivergenceReason: bankMismatchCodes.length > 0 ? bankMismatchCodes.join(',') : null,
       reconciliationVerdict,
       mismatchReason,
       _ledgerEntryId: row.ledgerEntryId,

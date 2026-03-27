@@ -33,6 +33,9 @@ describe('treasury router auth scope', () => {
       appendState: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { updated: true } });
       },
+      upsertBankConfirmation: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { confirmed: true } });
+      },
       upsertDeposit: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { stored: true } });
       },
@@ -84,6 +87,18 @@ describe('treasury router auth scope', () => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({ rampReference: 'ramp-1' }),
+    });
+
+    expect(response.status).toBe(401);
+  });
+
+  test('unauthenticated bank confirmation route is rejected', async () => {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/entries/1/bank-confirmation`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ bankReference: 'bank-1' }),
     });
 
     expect(response.status).toBe(401);

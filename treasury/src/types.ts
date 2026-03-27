@@ -18,6 +18,8 @@ export type FiatDepositFailureClass =
   | 'AMOUNT_MISMATCH'
   | 'CURRENCY_MISMATCH';
 
+export type BankPayoutState = 'PENDING' | 'CONFIRMED' | 'REJECTED';
+
 export interface LedgerEntry {
   id: number;
   entry_key: string;
@@ -116,5 +118,34 @@ export interface FiatDepositUpsertInput {
   providerAccountRef: string;
   failureCode?: string | null;
   reversalReference?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface BankPayoutConfirmation {
+  id: number;
+  ledger_entry_id: number;
+  payout_reference: string | null;
+  bank_reference: string;
+  bank_state: BankPayoutState;
+  confirmed_at: Date;
+  source: string;
+  actor: string;
+  failure_code: string | null;
+  evidence_reference: string | null;
+  payload_hash: string;
+  metadata: Record<string, unknown>;
+  created_at: Date;
+}
+
+export interface BankPayoutConfirmationUpsertInput {
+  ledgerEntryId: number;
+  payoutReference?: string | null;
+  bankReference: string;
+  bankState: BankPayoutState;
+  confirmedAt: Date;
+  source: string;
+  actor: string;
+  failureCode?: string | null;
+  evidenceReference?: string | null;
   metadata?: Record<string, unknown>;
 }

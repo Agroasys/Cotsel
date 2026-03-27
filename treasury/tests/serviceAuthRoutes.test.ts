@@ -86,6 +86,9 @@ describe('treasury service-authenticated routes', () => {
       appendState: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { updated: true } });
       },
+      upsertBankConfirmation: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'bank-confirmation' });
+      },
       upsertDeposit: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, route: 'deposits' });
       },
@@ -261,5 +264,37 @@ describe('treasury service-authenticated routes', () => {
       }),
     );
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-deposit-route-nonce', 600);
+  });
+
+  test('valid signed bank confirmation request reaches the route once', async () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        bankReference: 'bank-1',
+        bankState: 'CONFIRMED',
+        confirmedAt: '2026-03-26T00:00:00.000Z',
+        source: 'bank:webhook',
+        actor: 'Treasury Operator',
+      }),
+    );
+    const signed = createSignedRequestParts({
+      path: '/api/treasury/v1/entries/11/bank-confirmation',
+      body,
+      nonce: 'treasury-bank-confirmation-nonce',
+    });
+
+    const response = await fetch(`${baseUrl}/api/treasury/v1/entries/11/bank-confirmation`, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.bodyText,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        route: 'bank-confirmation',
+      }),
+    );
+    expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-bank-confirmation-nonce', 600);
   });
 });
