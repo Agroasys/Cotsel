@@ -98,10 +98,12 @@ describe('reconciliation read service', () => {
       createExecutionEvent: jest.fn(),
       listExecutionEvents: jest.fn(),
       queueCallbackDelivery: jest.fn(),
+      getCallbackDelivery: jest.fn(),
       getDueCallbackDeliveries: jest.fn(),
       markCallbackDelivering: jest.fn(),
       markCallbackDelivered: jest.fn(),
       markCallbackFailed: jest.fn(),
+      requeueCallbackDelivery: jest.fn(),
     };
 
     const service = new ReconciliationReadService(store, () => new Date('2026-03-14T11:00:00.000Z'));
@@ -168,10 +170,12 @@ describe('reconciliation read service', () => {
       createExecutionEvent: jest.fn(),
       listExecutionEvents: jest.fn(),
       queueCallbackDelivery: jest.fn(),
+      getCallbackDelivery: jest.fn(),
       getDueCallbackDeliveries: jest.fn(),
       markCallbackDelivering: jest.fn(),
       markCallbackDelivered: jest.fn(),
       markCallbackFailed: jest.fn(),
+      requeueCallbackDelivery: jest.fn(),
     };
 
     const service = new ReconciliationReadService(store as never, () => new Date('2026-03-14T11:00:00.000Z'));

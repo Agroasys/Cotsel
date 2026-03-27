@@ -3,7 +3,7 @@
 ## Purpose and scope
 Define the operational boundary for API orchestration between the Web2 ingress layer and core services (`oracle`, `treasury`, `reconciliation`, `indexer`, `notifications`).
 
-This runbook is the source of truth for boundary behavior under issues #78 and #123. The dedicated dashboard operator gateway now exists in-repo under `gateway/`, and its downstream routing/auth/timeout policy is centralized in `gateway/src/core/serviceRegistry.ts` and `gateway/src/core/serviceOrchestrator.ts`. A centralized dead-letter/error-handler workflow is still tracked by #124.
+This runbook is the source of truth for boundary behavior under issues #78, #123, and #124. The dedicated dashboard operator gateway now exists in-repo under `gateway/`, its downstream routing/auth/timeout policy is centralized in `gateway/src/core/serviceRegistry.ts` and `gateway/src/core/serviceOrchestrator.ts`, and its failed-operation replay workflow is documented in `docs/runbooks/gateway-dead-letter-workflow.md`.
 
 ## Routing ownership and service contract
 Current runtime behavior is split between:
@@ -75,13 +75,16 @@ Boundary rule for the dashboard gateway runtime (#123):
 
 ## Failure modes: fallback, dead-letter, and "who owns the incident"
 Current state:
-- Full cross-service dead-letter queue is not implemented yet (tracked by #124).
+- Gateway-owned failed operations are persisted in `failed_operations` and replayed with `scripts/gateway-dead-letter-workflow.mjs`.
+- Governance/compliance mutation failures are dead-lettered only for infrastructure or unexpected failures; client/business conflicts are returned directly and are not replayable.
+- Settlement callback deliveries retain their service-specific retry loop and `dead_letter` status, and terminal failures are mirrored into the gateway failed-operation ledger.
 - Oracle provides deterministic exhaustion state (`EXHAUSTED_NEEDS_REDRIVE`) plus manual redrive controls (`docs/runbooks/oracle-redrive.md`).
 - Reconciliation and staging gate outputs provide drift/error evidence for incident triage.
 - Gateway HTTP orchestration now fails mutating downstream calls immediately on upstream failure unless a service-specific durable queue already exists outside the gateway path.
 
 Fallback policy:
 - If gateway/orchestration behavior is unclear, route incident through runbooks with deterministic evidence:
+  - `docs/runbooks/gateway-dead-letter-workflow.md`
   - `docs/incidents/first-15-minutes-checklist.md`
   - `docs/runbooks/oracle-redrive.md`
   - `docs/runbooks/reconciliation.md`
@@ -99,6 +102,11 @@ Use this classification for deterministic handoff:
 | Upstream business/state error | Trade state precondition fails, idempotency conflict, payout transition invalid | Return deterministic error body; classify as service-owned incident if persistent. |
 | Infrastructure/transient error | RPC timeout, DB connectivity, indexer unavailable | Retry only within bounded policy; escalate to on-call if threshold exceeded. |
 
+Dead-letter rule:
+- Only `infrastructure` and `unexpected` failures are eligible for gateway replay.
+- Replay keeps the original `requestId`, `correlationId`, and `idempotencyKey`.
+- Gateway replay is operator-controlled and must use `scripts/gateway-dead-letter-workflow.mjs`; do not manually resubmit mutated payloads without the original evidence context.
+
 ## Observability requirements (log fields, metrics, traces)
 Minimum log requirements:
 - Include the `AuditEnvelopeV1` baseline from `docs/observability/logging-schema.md`.
@@ -107,6 +115,7 @@ Minimum log requirements:
 Required operational evidence for gateway-boundary incidents:
 - health/readiness outputs for affected services
 - correlated logs using `tradeId`, `actionKey`, `requestId`, `correlationId`, `traceId`, and `txHash`
+- failed-operation ledger records when a gateway mutation or settlement callback reaches dead-letter
 - release-gate reports when incident overlaps staging validation
 
 Current adoption note:
@@ -138,8 +147,9 @@ Legend: `A` accountable, `R` responsible, `C` consulted, `I` informed.
 
 ## Runbook quick actions (first 15 minutes checklist links)
 1. Run incident triage baseline: `docs/incidents/first-15-minutes-checklist.md`.
-2. If oracle path is impacted, execute `docs/runbooks/oracle-redrive.md`.
-3. If drift/indexing mismatch is suspected, execute `docs/runbooks/reconciliation.md`.
-4. Validate profile health and release-gate diagnostics:
-   - `docs/runbooks/staging-e2e-release-gate.md`
-   - `docs/runbooks/staging-e2e-real-release-gate.md`
+2. If a gateway mutation or settlement callback was dead-lettered, execute `docs/runbooks/gateway-dead-letter-workflow.md`.
+3. If oracle path is impacted, execute `docs/runbooks/oracle-redrive.md`.
+4. If drift/indexing mismatch is suspected, execute `docs/runbooks/reconciliation.md`.
+5. Validate profile health and release-gate diagnostics:
+  - `docs/runbooks/staging-e2e-release-gate.md`
+  - `docs/runbooks/staging-e2e-real-release-gate.md`

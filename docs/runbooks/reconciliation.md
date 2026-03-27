@@ -4,6 +4,7 @@
 Operate reconciliation safely in local/staging and diagnose drift failures.
 For lifecycle checkpoints across lock, stage-1, and final settlement, see `docs/runbooks/hybrid-split-walkthrough.md`.
 If a mismatch may be caused by routing/auth propagation/correlation breakdown between services, use `docs/runbooks/api-gateway-boundary.md` first to classify the handoff boundary before remediating reconciliation state.
+If the incident includes gateway dead-lettered mutations or settlement callback deliveries, use `docs/runbooks/gateway-dead-letter-workflow.md` before replaying or reclassifying reconciliation drift.
 
 Automation-governance source of truth:
 - `docs/runbooks/programmability-governance.md`
@@ -208,6 +209,7 @@ CI artifact name:
   - mismatch reasons include `PARTIAL_FUNDING`, `REVERSED_FUNDING`, `CURRENCY_MISMATCH`, or `STALE_PENDING_DEPOSIT`
   - payout state is `PROCESSING` for longer than the agreed treasury operations window
 - Escalation runbooks:
+  - `docs/runbooks/gateway-dead-letter-workflow.md`
   - `docs/runbooks/oracle-redrive.md`
   - `docs/runbooks/treasury-to-fiat-sop.md`
   - `docs/incidents/first-15-minutes-checklist.md`

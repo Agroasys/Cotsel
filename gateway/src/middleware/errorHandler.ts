@@ -5,6 +5,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { GatewayError } from '../errors';
 import { Logger } from '../logging/logger';
 import { errorResponse } from '../responses';
+import { createGatewayErrorEnvelope } from '../core/errorEnvelope';
 
 export function notFoundHandler(req: Request, res: Response): void {
   res.status(404).json(
@@ -16,8 +17,9 @@ export function notFoundHandler(req: Request, res: Response): void {
 }
 
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
-  const requestId = req.requestContext?.requestId;
-  const correlationId = req.requestContext?.correlationId;
+  const envelope = createGatewayErrorEnvelope(err, req.requestContext);
+  const requestId = envelope.requestId;
+  const correlationId = envelope.traceId;
 
   if (err instanceof GatewayError) {
     Logger.warn('Gateway error response', {
@@ -25,12 +27,15 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
       correlationId,
       route: req.originalUrl || req.path,
       method: req.method,
-      statusCode: err.statusCode,
-      errorCode: err.code,
-      details: err.details,
+      statusCode: envelope.statusCode,
+      errorCode: envelope.code,
+      failureClass: envelope.failureClass,
+      retryable: envelope.retryable,
+      replayable: envelope.replayable,
+      details: envelope.details,
     });
 
-    res.status(err.statusCode).json(errorResponse(req.requestContext, err.code, err.message, err.details));
+    res.status(envelope.statusCode).json(errorResponse(req.requestContext, envelope.code, envelope.message, envelope.details));
     return;
   }
 
@@ -39,6 +44,9 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     correlationId,
     route: req.originalUrl || req.path,
     method: req.method,
+    failureClass: envelope.failureClass,
+    retryable: envelope.retryable,
+    replayable: envelope.replayable,
     error: err instanceof Error ? err.message : String(err),
     stack: err instanceof Error ? err.stack : undefined,
   });

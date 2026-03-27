@@ -200,6 +200,7 @@ export interface SettlementStore {
   createExecutionEvent(input: CreateSettlementExecutionEventInput): Promise<SettlementExecutionEventRecord>;
   listExecutionEvents(handoffId: string): Promise<SettlementExecutionEventRecord[]>;
   queueCallbackDelivery(input: QueueSettlementCallbackInput): Promise<SettlementCallbackDeliveryRecord>;
+  getCallbackDelivery(deliveryId: string): Promise<SettlementCallbackDeliveryRecord | null>;
   getDueCallbackDeliveries(limit: number, now: string): Promise<SettlementCallbackDeliveryRecord[]>;
   markCallbackDelivering(deliveryId: string, attemptedAt: string): Promise<SettlementCallbackDeliveryRecord | null>;
   markCallbackDelivered(deliveryId: string, completedAt: string, responseStatus: number): Promise<void>;
@@ -210,6 +211,7 @@ export interface SettlementStore {
     nextAttemptAt: string;
     deadLetter: boolean;
   }): Promise<void>;
+  requeueCallbackDelivery(deliveryId: string, nextAttemptAt: string): Promise<SettlementCallbackDeliveryRecord | null>;
   getTradeSettlementProjectionMap(tradeIds: string[]): Promise<Map<string, TradeSettlementProjection>>;
 }
 
@@ -857,6 +859,32 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       return result.rows.map(mapDeliveryRow);
     },
 
+    async getCallbackDelivery(deliveryId) {
+      const result = await pool.query<SettlementCallbackDeliveryRow>(
+        `SELECT
+           delivery_id AS "deliveryId",
+           handoff_id AS "handoffId",
+           event_id AS "eventId",
+           target_url AS "targetUrl",
+           request_body AS "requestBody",
+           status,
+           attempt_count AS "attemptCount",
+           next_attempt_at AS "nextAttemptAt",
+           last_attempted_at AS "lastAttemptedAt",
+           delivered_at AS "deliveredAt",
+           response_status AS "responseStatus",
+           last_error AS "lastError",
+           request_id AS "requestId",
+           created_at AS "createdAt",
+           updated_at AS "updatedAt"
+         FROM settlement_callback_deliveries
+         WHERE delivery_id = $1`,
+        [deliveryId],
+      );
+
+      return result.rows[0] ? mapDeliveryRow(result.rows[0]) : null;
+    },
+
     async markCallbackDelivering(deliveryId, attemptedAt) {
       const result = await pool.query<SettlementCallbackDeliveryRow>(
         `UPDATE settlement_callback_deliveries
@@ -941,6 +969,36 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
            AND handoffs.latest_event_id = deliveries.event_id`,
         [deliveryId, update.deadLetter],
       );
+    },
+
+    async requeueCallbackDelivery(deliveryId, nextAttemptAt) {
+      const result = await pool.query<SettlementCallbackDeliveryRow>(
+        `UPDATE settlement_callback_deliveries
+         SET status = 'pending',
+             next_attempt_at = $2,
+             updated_at = NOW()
+         WHERE delivery_id = $1
+           AND status = 'dead_letter'
+         RETURNING
+           delivery_id AS "deliveryId",
+           handoff_id AS "handoffId",
+           event_id AS "eventId",
+           target_url AS "targetUrl",
+           request_body AS "requestBody",
+           status,
+           attempt_count AS "attemptCount",
+           next_attempt_at AS "nextAttemptAt",
+           last_attempted_at AS "lastAttemptedAt",
+           delivered_at AS "deliveredAt",
+           response_status AS "responseStatus",
+           last_error AS "lastError",
+           request_id AS "requestId",
+           created_at AS "createdAt",
+           updated_at AS "updatedAt"`,
+        [deliveryId, nextAttemptAt],
+      );
+
+      return result.rows[0] ? mapDeliveryRow(result.rows[0]) : null;
     },
 
     async getTradeSettlementProjectionMap(tradeIds) {
@@ -1212,6 +1270,11 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
         .map((delivery) => structuredClone(delivery));
     },
 
+    async getCallbackDelivery(deliveryId) {
+      const delivery = deliveries.get(deliveryId);
+      return delivery ? structuredClone(delivery) : null;
+    },
+
     async markCallbackDelivering(deliveryId, attemptedAt) {
       const delivery = deliveries.get(deliveryId);
       if (!delivery || (delivery.status !== 'pending' && delivery.status !== 'failed')) {
@@ -1275,6 +1338,30 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
           updatedAt: new Date().toISOString(),
         });
       }
+    },
+
+    async requeueCallbackDelivery(deliveryId, nextAttemptAt) {
+      const delivery = deliveries.get(deliveryId);
+      if (!delivery || delivery.status !== 'dead_letter') {
+        return null;
+      }
+
+      const next = {
+        ...delivery,
+        status: 'pending' as const,
+        nextAttemptAt,
+        updatedAt: new Date().toISOString(),
+      };
+      deliveries.set(deliveryId, next);
+      const handoff = handoffs.get(delivery.handoffId);
+      if (handoff && handoff.latestEventId === delivery.eventId) {
+        handoffs.set(delivery.handoffId, {
+          ...handoff,
+          callbackStatus: 'pending',
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      return structuredClone(next);
     },
 
     async getTradeSettlementProjectionMap(tradeIds) {

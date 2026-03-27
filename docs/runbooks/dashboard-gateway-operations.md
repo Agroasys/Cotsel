@@ -31,6 +31,7 @@ The gateway is a Web2 orchestration boundary. It does not change protocol logic 
 
 Authoritative dependencies:
 - Postgres: gateway ledgers and idempotency/audit persistence
+- Failed-operation replay: `node scripts/gateway-dead-letter-workflow.mjs list|replay`
 - Auth service: bearer-session validation
 - Chain RPC: governance status reads and executor-backed governance mutations
 - Executor process: `npm run -w gateway execute:governance-action -- <actionId>`
@@ -182,6 +183,7 @@ The gateway is intentionally conservative:
 Reason:
 - downstream services already own their idempotency and retry policies
 - the gateway must fail deterministically rather than amplify mutations
+- gateway-owned mutation and callback dead letters are replayed only through `docs/runbooks/gateway-dead-letter-workflow.md`
 
 ## Attestation verification and outage stance
 For compliance and future attestation read surfaces, the gateway must preserve

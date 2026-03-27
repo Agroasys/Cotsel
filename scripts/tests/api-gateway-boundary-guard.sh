@@ -33,6 +33,10 @@ for heading in "${required_headings[@]}"; do
 done
 
 if [[ "$fail" -eq 0 ]]; then
+  if ! grep -Fq "docs/runbooks/gateway-dead-letter-workflow.md" "$DOC_PATH"; then
+    echo "[FAIL] Missing failed-operation runbook reference in ${DOC_PATH}" >&2
+    exit 1
+  fi
   echo "API gateway boundary guard: pass"
   exit 0
 fi

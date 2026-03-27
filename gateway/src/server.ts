@@ -10,6 +10,7 @@ import { loadConfig } from './config/env';
 import { createApp } from './app';
 import { AccessLogService } from './core/accessLogService';
 import { createPostgresAccessLogStore } from './core/accessLogStore';
+import { createPostgresAuditLogStore } from './core/auditLogStore';
 import { createPostgresAuditFeedStore } from './core/auditFeedStore';
 import { createAuthSessionClient } from './core/authSessionClient';
 import { GovernanceApprovalWorkflowReadService } from './core/approvalWorkflowReadService';
@@ -20,6 +21,8 @@ import { GatewayEvidenceBundleService } from './core/evidenceBundleService';
 import { createPostgresEvidenceBundleStore } from './core/evidenceBundleStore';
 import { createPostgresGovernanceActionStore } from './core/governanceStore';
 import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore';
+import { GatewayErrorHandlerWorkflow } from './core/errorHandlerWorkflow';
+import { createPostgresFailedOperationStore } from './core/failedOperationStore';
 import { createPostgresIdempotencyStore } from './core/idempotencyStore';
 import { OperatorSettingsReadService } from './core/operatorSettingsReadService';
 import { createPostgresRoleAssignmentStore } from './core/roleAssignmentStore';
@@ -61,6 +64,7 @@ const pool = createPool(config);
 const authSessionClient = createAuthSessionClient(config);
 const accessLogStore = createPostgresAccessLogStore(pool);
 const accessLogService = new AccessLogService(accessLogStore);
+const auditLogStore = createPostgresAuditLogStore(pool);
 const auditFeedStore = createPostgresAuditFeedStore(pool);
 const complianceStore = createPostgresComplianceStore(pool);
 const complianceWriteStore = createPostgresComplianceWriteStore(pool, complianceStore);
@@ -70,13 +74,17 @@ const governanceActionStore = createPostgresGovernanceActionStore(pool);
 const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
 const governanceStatusService = createGovernanceStatusService(config);
 const approvalWorkflowReadService = new GovernanceApprovalWorkflowReadService(governanceActionStore, governanceStatusService);
+const failedOperationStore = createPostgresFailedOperationStore(pool);
+const errorHandlerWorkflow = new GatewayErrorHandlerWorkflow(failedOperationStore, auditLogStore);
 const idempotencyStore = createPostgresIdempotencyStore(pool);
 const roleAssignmentStore = createPostgresRoleAssignmentStore(pool);
 const settlementStore = createPostgresSettlementStore(pool);
 const settlementNonceStore = createGatewayServiceAuthNonceStore(pool);
 const settlementServiceApiKeyLookup = createServiceApiKeyLookup(config.settlementServiceAuthApiKeysJson);
 const settlementService = new SettlementService(config, settlementStore);
-const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore);
+const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore, {
+  failedOperationWorkflow: errorHandlerWorkflow,
+});
 const governanceMutationService = new GovernanceMutationService(config, governanceActionStore, governanceWriteStore);
 const treasuryReadService = new TreasuryReadService(governanceStatusService, governanceActionStore);
 const reconciliationReadService = new ReconciliationReadService(settlementStore);
@@ -354,6 +362,7 @@ async function bootstrap(): Promise<void> {
     config,
     complianceService,
     idempotencyStore,
+    failedOperationWorkflow: errorHandlerWorkflow,
   }));
   extraRouter.use(createEvidenceBundleRouter({
     authSessionClient,
@@ -378,6 +387,7 @@ async function bootstrap(): Promise<void> {
     governanceReader: governanceStatusService,
     mutationService: governanceMutationService,
     idempotencyStore,
+    failedOperationWorkflow: errorHandlerWorkflow,
   }));
   extraRouter.use(createTradeRouter({
     authSessionClient,

@@ -19,6 +19,10 @@ import { GatewayError } from '../errors';
 import { successResponse } from '../responses';
 import type { GatewayPrincipal } from '../middleware/auth';
 import type { RequestContext } from '../middleware/requestContext';
+import {
+  GatewayErrorHandlerWorkflow,
+  type GovernanceReplaySpec,
+} from '../core/errorHandlerWorkflow';
 
 export interface GovernanceMutationRouterOptions {
   authSessionClient: AuthSessionClient;
@@ -26,6 +30,7 @@ export interface GovernanceMutationRouterOptions {
   governanceReader: GovernanceMutationPreflightReader;
   mutationService: GovernanceMutationService;
   idempotencyStore: IdempotencyStore;
+  failedOperationWorkflow?: GatewayErrorHandlerWorkflow;
 }
 
 interface MutationContext {
@@ -76,12 +81,40 @@ async function queueAndRespond(
   req: MutationRequest,
   res: Response,
   next: NextFunction,
+  options: GovernanceMutationRouterOptions,
+  failureCapture: {
+    principal: GatewayPrincipal;
+    requestContext: RequestContext;
+    idempotencyKey: string;
+    replaySpec: GovernanceReplaySpec;
+  },
   actionFactory: () => Promise<GovernanceMutationAccepted>,
 ): Promise<void> {
   try {
     const accepted = await actionFactory();
     res.status(202).json(successResponse(accepted));
   } catch (error) {
+    if (options.failedOperationWorkflow) {
+      const failedOperation = await options.failedOperationWorkflow.captureFailure({
+        operationType: 'governance.queue_action',
+        operationKey: `${failureCapture.principal.session.walletAddress.toLowerCase()}:${req.originalUrl || req.path}:${failureCapture.idempotencyKey}`,
+        targetService: 'gateway_governance_queue',
+        route: req.originalUrl || req.path,
+        method: req.method,
+        requestContext: failureCapture.requestContext,
+        requestPayload: req.body,
+        idempotencyKey: failureCapture.idempotencyKey,
+        principal: failureCapture.principal,
+        replaySpec: failureCapture.replaySpec,
+        error,
+      });
+
+      if (failedOperation) {
+        next(options.failedOperationWorkflow.buildClientError(failedOperation, failureCapture.requestContext));
+        return;
+      }
+    }
+
     next(error);
   }
 }
@@ -93,25 +126,56 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
 
   router.use(authenticate, requireMutationWriteAccess());
 
-  router.post('/governance/pause', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/pause', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'pause',
+        contractMethod: 'pause',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const status = await options.governanceReader.getGovernanceStatus();
     if (status.paused) {
       throw new GatewayError(409, 'CONFLICT', 'Protocol is already paused');
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'pause',
       contractMethod: 'pause',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
     });
   }));
 
-  router.post('/governance/unpause/proposal', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/unpause/proposal', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'unpause',
+        contractMethod: 'proposeUnpause',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const status = await options.governanceReader.getGovernanceStatus();
     if (!status.paused) {
       throw new GatewayError(409, 'CONFLICT', 'Protocol must be paused before creating an unpause proposal');
@@ -120,25 +184,39 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Oracle must be active before creating an unpause proposal');
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'unpause',
       contractMethod: 'proposeUnpause',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
     });
   }));
 
-  router.post('/governance/unpause/proposal/approve', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/unpause/proposal/approve', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'unpause',
+        contractMethod: 'approveUnpause',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const proposal = await options.governanceReader.getUnpauseProposalState();
     if (!proposal.hasActiveProposal) {
       throw new GatewayError(409, 'CONFLICT', 'No active unpause proposal is available to approve');
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     if (await options.governanceReader.hasApprovedUnpause(principal.session.walletAddress)) {
       throw new GatewayError(409, 'CONFLICT', 'Caller has already approved the active unpause proposal');
     }
@@ -147,68 +225,129 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       category: 'unpause',
       contractMethod: 'approveUnpause',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
     });
   }));
 
-  router.post('/governance/unpause/proposal/cancel', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/unpause/proposal/cancel', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'unpause',
+        contractMethod: 'cancelUnpauseProposal',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const proposal = await options.governanceReader.getUnpauseProposalState();
     if (!proposal.hasActiveProposal) {
       throw new GatewayError(409, 'CONFLICT', 'No active unpause proposal is available to cancel');
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'unpause',
       contractMethod: 'cancelUnpauseProposal',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
     });
   }));
 
-  router.post('/governance/claims/pause', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/claims/pause', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'claims_pause',
+        contractMethod: 'pauseClaims',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const status = await options.governanceReader.getGovernanceStatus();
     if (status.claimsPaused) {
       throw new GatewayError(409, 'CONFLICT', 'Claims are already paused');
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'claims_pause',
       contractMethod: 'pauseClaims',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
     });
   }));
 
-  router.post('/governance/claims/unpause', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/claims/unpause', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'claims_unpause',
+        contractMethod: 'unpauseClaims',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const status = await options.governanceReader.getGovernanceStatus();
     if (!status.claimsPaused) {
       throw new GatewayError(409, 'CONFLICT', 'Claims are not currently paused');
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'claims_unpause',
       contractMethod: 'unpauseClaims',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
     });
   }));
 
-  router.post('/governance/treasury/sweep', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/treasury/sweep', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'treasury_sweep',
+        contractMethod: 'claimTreasury',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const status = await options.governanceReader.getGovernanceStatus();
     if (status.claimsPaused) {
       throw new GatewayError(409, 'CONFLICT', 'Treasury sweep is unavailable while claims are paused');
@@ -219,31 +358,47 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Treasury claimable balance is zero');
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'treasury_sweep',
       contractMethod: 'claimTreasury',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
     });
   }));
 
-  router.post('/governance/treasury/payout-receiver/proposals', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/treasury/payout-receiver/proposals', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const newPayoutReceiver = validateAddressInput((req.body as Record<string, unknown>)?.newPayoutReceiver, 'newPayoutReceiver');
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'treasury_payout_receiver_update',
+        contractMethod: 'proposeTreasuryPayoutAddressUpdate',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+        targetAddress: newPayoutReceiver,
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const status = await options.governanceReader.getGovernanceStatus();
     const newPayoutReceiver = validateAddressInput((req.body as Record<string, unknown>)?.newPayoutReceiver, 'newPayoutReceiver');
     if (newPayoutReceiver.toLowerCase() === status.treasuryPayoutAddress.toLowerCase()) {
       throw new GatewayError(409, 'CONFLICT', 'New payout receiver matches the current treasury payout receiver');
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'treasury_payout_receiver_update',
       contractMethod: 'proposeTreasuryPayoutAddressUpdate',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
@@ -251,7 +406,25 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     });
   }));
 
-  router.post('/governance/treasury/payout-receiver/proposals/:proposalId/approve', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/treasury/payout-receiver/proposals/:proposalId/approve', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'treasury_payout_receiver_update',
+        contractMethod: 'approveTreasuryPayoutAddressUpdate',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+        proposalId,
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getTreasuryPayoutReceiverProposalState(proposalId);
     if (!proposal) {
@@ -261,7 +434,6 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Treasury payout receiver proposal is no longer approvable', { proposalId });
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     if (await options.governanceReader.hasApprovedTreasuryPayoutReceiverProposal(proposalId, principal.session.walletAddress)) {
       throw new GatewayError(409, 'CONFLICT', 'Caller has already approved this treasury payout receiver proposal', { proposalId });
     }
@@ -270,7 +442,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       category: 'treasury_payout_receiver_update',
       contractMethod: 'approveTreasuryPayoutAddressUpdate',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
@@ -279,7 +451,25 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     });
   }));
 
-  router.post('/governance/treasury/payout-receiver/proposals/:proposalId/execute', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/treasury/payout-receiver/proposals/:proposalId/execute', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'treasury_payout_receiver_update',
+        contractMethod: 'executeTreasuryPayoutAddressUpdate',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+        proposalId,
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getTreasuryPayoutReceiverProposalState(proposalId);
     if (!proposal) {
@@ -297,12 +487,11 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Treasury payout receiver proposal timelock has not elapsed', { proposalId });
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'treasury_payout_receiver_update',
       contractMethod: 'executeTreasuryPayoutAddressUpdate',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
@@ -311,7 +500,25 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     });
   }));
 
-  router.post('/governance/treasury/payout-receiver/proposals/:proposalId/cancel-expired', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/treasury/payout-receiver/proposals/:proposalId/cancel-expired', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'treasury_payout_receiver_update',
+        contractMethod: 'cancelExpiredTreasuryPayoutAddressUpdateProposal',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+        proposalId,
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getTreasuryPayoutReceiverProposalState(proposalId);
     if (!proposal) {
@@ -321,12 +528,11 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Treasury payout receiver proposal is not cancellable as expired', { proposalId });
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'treasury_payout_receiver_update',
       contractMethod: 'cancelExpiredTreasuryPayoutAddressUpdateProposal',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
@@ -335,18 +541,33 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     });
   }));
 
-  router.post('/governance/oracle/disable-emergency', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/oracle/disable-emergency', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'oracle_disable_emergency',
+        contractMethod: 'disableOracleEmergency',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const status = await options.governanceReader.getGovernanceStatus();
     if (!status.oracleActive) {
       throw new GatewayError(409, 'CONFLICT', 'Oracle is already disabled');
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'oracle_disable_emergency',
       contractMethod: 'disableOracleEmergency',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
@@ -354,19 +575,36 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     });
   }));
 
-  router.post('/governance/oracle/proposals', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/oracle/proposals', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const newOracleAddress = validateAddressInput((req.body as Record<string, unknown>)?.newOracleAddress, 'newOracleAddress');
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'oracle_update',
+        contractMethod: 'proposeOracleUpdate',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+        targetAddress: newOracleAddress,
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const status = await options.governanceReader.getGovernanceStatus();
     const newOracleAddress = validateAddressInput((req.body as Record<string, unknown>)?.newOracleAddress, 'newOracleAddress');
     if (newOracleAddress.toLowerCase() === status.oracleAddress.toLowerCase()) {
       throw new GatewayError(409, 'CONFLICT', 'New oracle address matches the current oracle address');
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'oracle_update',
       contractMethod: 'proposeOracleUpdate',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
@@ -374,7 +612,25 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     });
   }));
 
-  router.post('/governance/oracle/proposals/:proposalId/approve', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/oracle/proposals/:proposalId/approve', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'oracle_update',
+        contractMethod: 'approveOracleUpdate',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+        proposalId,
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getOracleProposalState(proposalId);
     if (!proposal) {
@@ -384,7 +640,6 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Oracle update proposal is no longer approvable', { proposalId });
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     if (await options.governanceReader.hasApprovedOracleProposal(proposalId, principal.session.walletAddress)) {
       throw new GatewayError(409, 'CONFLICT', 'Caller has already approved this oracle update proposal', { proposalId });
     }
@@ -393,7 +648,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       category: 'oracle_update',
       contractMethod: 'approveOracleUpdate',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
@@ -402,7 +657,25 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     });
   }));
 
-  router.post('/governance/oracle/proposals/:proposalId/execute', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/oracle/proposals/:proposalId/execute', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'oracle_update',
+        contractMethod: 'executeOracleUpdate',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+        proposalId,
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getOracleProposalState(proposalId);
     if (!proposal) {
@@ -420,12 +693,11 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Oracle update proposal timelock has not elapsed', { proposalId });
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'oracle_update',
       contractMethod: 'executeOracleUpdate',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
@@ -434,7 +706,25 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     });
   }));
 
-  router.post('/governance/oracle/proposals/:proposalId/cancel-expired', idempotency, (req, res, next) => queueAndRespond(req, res, next, async () => {
+  router.post('/governance/oracle/proposals/:proposalId/cancel-expired', idempotency, (req, res, next) => queueAndRespond(req, res, next, options, (() => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
+    return {
+      principal,
+      requestContext,
+      idempotencyKey,
+      replaySpec: {
+        type: 'governance.queue_action',
+        category: 'oracle_update',
+        contractMethod: 'cancelExpiredOracleUpdateProposal',
+        routePath: req.originalUrl || req.path,
+        audit: validateGovernanceAuditInput(req.body),
+        proposalId,
+      } satisfies GovernanceReplaySpec,
+    };
+  })(), async () => {
+    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getOracleProposalState(proposalId);
     if (!proposal) {
@@ -444,12 +734,11 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Oracle update proposal is not cancellable as expired', { proposalId });
     }
 
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
     return options.mutationService.queueAction({
       category: 'oracle_update',
       contractMethod: 'cancelExpiredOracleUpdateProposal',
       routePath: req.originalUrl || req.path,
-      audit: validateGovernanceAuditInput(req.body),
+      audit,
       principal,
       requestContext,
       idempotencyKey,
