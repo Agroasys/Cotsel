@@ -313,10 +313,6 @@ case "$ACTION" in
     run_compose ps
     check_required_services
 
-    if is_running "auth"; then
-      check_http_health "auth" "http://127.0.0.1:${AUTH_PORT:-3005}/api/auth/v1/health"
-    fi
-
     if is_running "ricardian"; then
       check_http_health "ricardian" "http://127.0.0.1:${RICARDIAN_PORT:-3100}/api/ricardian/v1/health"
     fi
