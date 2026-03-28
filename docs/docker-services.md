@@ -18,6 +18,14 @@ Notification runtime wiring is validated via:
 ### `local-dev`
 Fast feedback mode with a lightweight in-memory indexer GraphQL responder.
 
+Default `local-dev` behavior:
+- empty trade registry for fast iteration
+
+Parity-enabled `local-dev` behavior:
+- set `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity`
+- exposes canonical seeded trade `TRD-LOCAL-9001`
+- intended for dashboard live local-contract browser verification
+
 ### `staging-e2e`
 Existing staging profile.
 
@@ -52,6 +60,9 @@ scripts/notifications-gate.sh local-dev
 scripts/docker-services.sh logs local-dev reconciliation
 scripts/docker-services.sh down local-dev
 ```
+
+For dashboard live parity, see `docs/runbooks/dashboard-local-parity.md`.
+Use `npm run dashboard:parity:gate` as the authoritative dashboard parity readiness check after the local stack is up; `scripts/docker-services.sh health local-dev` remains the broader whole-profile health command.
 
 ## Staging E2E Real
 

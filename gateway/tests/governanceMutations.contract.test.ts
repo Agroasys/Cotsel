@@ -26,6 +26,8 @@ import {
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createGovernanceMutationRouter } from '../src/routes/governanceMutations';
+import { createTradeRouter } from '../src/routes/trades';
+import type { DashboardTradeRecord, TradeReadReader } from '../src/core/tradeReadService';
 
 const baseConfig: GatewayConfig = {
   port: 3600,
@@ -59,6 +61,53 @@ const baseConfig: GatewayConfig = {
   commitSha: 'abc1234',
   buildTime: '2026-03-07T00:00:00.000Z',
   nodeEnv: 'test',
+};
+
+const tradeFixture: DashboardTradeRecord = {
+  id: 'TRD-LOCAL-9001',
+  buyer: 'buyer@demo',
+  supplier: 'supplier@demo',
+  amount: 125000,
+  currency: 'USDC',
+  status: 'stage_1',
+  txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  createdAt: '2026-03-07T09:00:00.000Z',
+  updatedAt: '2026-03-07T10:00:00.000Z',
+  ricardianHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  platformFee: 1250,
+  logisticsAmount: 3000,
+  complianceStatus: 'pass',
+  settlement: {
+    handoffId: 'sth-1',
+    platformId: 'agroasys-platform',
+    platformHandoffId: 'handoff-1',
+    phase: 'stage_1',
+    settlementChannel: 'cotsel_escrow',
+    displayCurrency: 'USD',
+    displayAmount: 125000,
+    executionStatus: 'submitted',
+    reconciliationStatus: 'pending',
+    callbackStatus: 'pending',
+    providerStatus: 'dispatch_received',
+    txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    extrinsicHash: null,
+    externalReference: 'EXT-1',
+    latestEventType: 'submitted',
+    latestEventDetail: 'Dispatch accepted by settlement engine.',
+    latestEventAt: '2026-03-07T09:15:00.000Z',
+    callbackDeliveredAt: null,
+    createdAt: '2026-03-07T09:00:00.000Z',
+    updatedAt: '2026-03-07T09:15:00.000Z',
+  },
+  timeline: [
+    {
+      stage: 'Lock',
+      timestamp: '2026-03-07T09:00:00.000Z',
+      actor: 'Buyer',
+      txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      detail: 'Escrow locked for 125,000 USDC.',
+    },
+  ],
 };
 
 function buildStatusSnapshot(overrides: Partial<GovernanceStatusSnapshot> = {}): GovernanceStatusSnapshot {
@@ -257,6 +306,14 @@ async function readStoredAction(store: GovernanceActionStore, actionId: string) 
   return action;
 }
 
+function buildTradeReadService(): TradeReadReader {
+  return {
+    checkReadiness: jest.fn(),
+    listTrades: jest.fn().mockResolvedValue([tradeFixture]),
+    getTrade: jest.fn().mockImplementation(async (tradeId: string) => (tradeId === tradeFixture.id ? tradeFixture : null)),
+  };
+}
+
 describe('gateway governance mutation routes contract', () => {
   const spec = loadOpenApiSpec();
   const validateAccepted = createSchemaValidator(spec, '#/components/schemas/GovernanceActionAcceptedResponse');
@@ -327,6 +384,91 @@ describe('gateway governance mutation routes contract', () => {
         retryCount: 2,
         idempotencyKey: 'idem-governance-dead-letter',
       });
+    } finally {
+      server.close();
+    }
+  });
+
+  test('governance mutation middleware does not intercept trade reads when routers share the app boundary', async () => {
+    const config: GatewayConfig = {
+      ...baseConfig,
+      enableMutations: true,
+      writeAllowlist: ['uid-admin'],
+    };
+
+    const governanceReader: jest.Mocked<GovernanceMutationPreflightReader> = {
+      checkReadiness: jest.fn(),
+      getGovernanceStatus: jest.fn().mockResolvedValue(buildStatusSnapshot()),
+      getUnpauseProposalState: jest.fn().mockResolvedValue(buildUnpauseProposal()),
+      getOracleProposalState: jest.fn().mockResolvedValue(buildProposalState()),
+      getTreasuryPayoutReceiverProposalState: jest.fn().mockResolvedValue(buildProposalState()),
+      getTreasuryClaimableBalance: jest.fn().mockResolvedValue(10n),
+      hasApprovedUnpause: jest.fn().mockResolvedValue(false),
+      hasApprovedOracleProposal: jest.fn().mockResolvedValue(false),
+      hasApprovedTreasuryPayoutReceiverProposal: jest.fn().mockResolvedValue(false),
+    };
+
+    const authSessionClient: AuthSessionClient = {
+      resolveSession: jest.fn().mockResolvedValue({
+        userId: 'uid-admin',
+        walletAddress: '0x00000000000000000000000000000000000000aa',
+        role: 'admin',
+        email: 'admin@agroasys.io',
+        issuedAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+      }),
+      checkReadiness: jest.fn(),
+    };
+
+    const governanceActionStore = createInMemoryGovernanceActionStore();
+    const auditLogStore = createInMemoryAuditLogStore();
+    const router = Router();
+    router.use(createGovernanceMutationRouter({
+      authSessionClient,
+      config,
+      governanceReader,
+      mutationService: new GovernanceMutationService(
+        config,
+        governanceActionStore,
+        createPassthroughGovernanceWriteStore(governanceActionStore, auditLogStore),
+      ),
+      idempotencyStore: createInMemoryIdempotencyStore(),
+      failedOperationWorkflow: new GatewayErrorHandlerWorkflow(
+        createInMemoryFailedOperationStore(),
+        auditLogStore,
+      ),
+    }));
+    router.use(createTradeRouter({
+      authSessionClient,
+      config,
+      tradeReadService: buildTradeReadService(),
+    }));
+
+    const app = createApp(config, {
+      version: '0.1.0',
+      commitSha: config.commitSha,
+      buildTime: config.buildTime,
+      readinessCheck: async () => [{ name: 'postgres', status: 'ok' }],
+      extraRouter: router,
+    });
+
+    const server = await new Promise<Server>((resolve) => {
+      const instance = app.listen(0, () => resolve(instance));
+    });
+
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to resolve server address');
+    }
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/dashboard-gateway/v1/trades?limit=1&offset=0`, {
+        headers: { Authorization: 'Bearer sess-admin', 'x-request-id': 'req-trades' },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload.data[0].id).toBe(tradeFixture.id);
     } finally {
       server.close();
     }

@@ -5,7 +5,8 @@ Run deterministic build/start/health/log actions for each supported compose prof
 Production launch criteria are defined in `docs/runbooks/production-readiness-checklist.md`.
 
 ## Profiles
-- `local-dev`: lightweight mock indexer responder (`indexer`) for fast iteration.
+- `local-dev`: lightweight mock indexer responder (`indexer`) for fast iteration with an empty trade registry by default.
+- `local-dev` with `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity`: parity-enabled local profile exposing canonical seeded trade `TRD-LOCAL-9001` for dashboard live-contract verification.
 - `staging-e2e`: existing staging profile.
 - `staging-e2e-real`: release-gate profile using real indexer pipeline (`indexer-migrate`, `indexer-pipeline`, `indexer-graphql`).
 - `infra`: shared infra only (`postgres`, `redis`).
@@ -47,6 +48,7 @@ scripts/docker-services.sh down staging-e2e-real
 - Non-infra profiles verify indexer GraphQL readiness.
 - Reconciliation healthcheck passes when DB is reachable.
 - `local-dev` and `staging-e2e-real` include notification wiring checks in `health`.
+- Dashboard live local-contract verification uses `npm run dashboard:parity:gate` as its narrower upstream readiness gate; that is related to, but distinct from, whole-profile `health local-dev`.
 
 ## Failure modes
 - `required service is not running`: profile mismatch or startup failure.
@@ -64,3 +66,4 @@ scripts/docker-services.sh down <profile>
 
 ## Related
 - Production readiness checklist: `docs/runbooks/production-readiness-checklist.md`
+- Dashboard local parity: `docs/runbooks/dashboard-local-parity.md`

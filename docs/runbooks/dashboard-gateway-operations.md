@@ -21,6 +21,9 @@ Approved current-state contract:
 - mode: read-only first
 - executor mode: manual only
 
+Local parity source of truth:
+- `docs/runbooks/dashboard-local-parity.md`
+
 This means:
 - Cotsel-Dash connected validation must target the local/docker gateway URL only until real remote staging coordinates are recorded.
 - Mutations stay disabled by default.
@@ -112,6 +115,13 @@ curl -fsS http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/versio
 curl -fsS -H "Authorization: Bearer <session>" \
   http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/operations/summary
 ```
+
+Parity-enabled local browser verification:
+- standard `local-dev` keeps the trade registry empty for fast iteration
+- set `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity` to expose the canonical seeded trade `TRD-LOCAL-9001`
+- use `npm run dashboard:parity:session` and `npm run dashboard:parity:gate` before running dashboard live local-contract verification
+- treat `scripts/docker-services.sh health local-dev` as the broader whole-profile health check, not the dashboard parity gate
+- canonical steps and failure interpretation live in `docs/runbooks/dashboard-local-parity.md`
 
 ## Health and readiness interpretation
 - `/healthz`: process is alive
@@ -268,6 +278,7 @@ curl -fsS -H "Authorization: Bearer <session>" \
 - `curl /operations/summary` (authenticated admin session)
 
 ## References
+- `docs/runbooks/dashboard-local-parity.md`
 - `docs/api/cotsel-dashboard-gateway.openapi.yml`
 - `docs/runbooks/dashboard-api-gateway-boundary.md`
 - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
