@@ -120,6 +120,7 @@ Parity-enabled local browser verification:
 - standard `local-dev` keeps the trade registry empty for fast iteration
 - set `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity` to expose the canonical seeded trade `TRD-LOCAL-9001`
 - use `npm run dashboard:parity:session` and `npm run dashboard:parity:gate` before running dashboard live local-contract verification
+- use `npm run dashboard:parity:ci` for the Cotsel-owned CI-adjacent orchestration path that also runs the Dash live suite
 - treat `scripts/docker-services.sh health local-dev` as the broader whole-profile health check, not the dashboard parity gate
 - canonical steps and failure interpretation live in `docs/runbooks/dashboard-local-parity.md`
 

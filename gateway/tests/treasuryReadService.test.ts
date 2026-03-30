@@ -154,6 +154,67 @@ describe('treasury read service', () => {
     });
   });
 
+  test('surfaces blocked sweep visibility when claims are paused or claimable balance is zero', async () => {
+    const baseStatus = {
+      paused: false,
+      claimsPaused: true,
+      oracleActive: true,
+      oracleAddress: '0x0000000000000000000000000000000000000011',
+      treasuryAddress: '0x0000000000000000000000000000000000000022',
+      treasuryPayoutAddress: '0x0000000000000000000000000000000000000033',
+      governanceApprovalsRequired: 2,
+      governanceTimelockSeconds: 86400,
+      requiredAdminCount: 2,
+      hasActiveUnpauseProposal: false,
+      activeUnpauseApprovals: 0,
+      activeOracleProposalIds: [],
+      activeTreasuryPayoutReceiverProposalIds: [],
+    };
+    const claimsPausedReader: GovernanceMutationPreflightReader = {
+      checkReadiness: jest.fn(),
+      getGovernanceStatus: jest.fn().mockResolvedValue(baseStatus),
+      getUnpauseProposalState: jest.fn(),
+      getOracleProposalState: jest.fn(),
+      getTreasuryPayoutReceiverProposalState: jest.fn(),
+      getTreasuryClaimableBalance: jest.fn().mockResolvedValue(125000000n),
+      hasApprovedUnpause: jest.fn(),
+      hasApprovedOracleProposal: jest.fn(),
+      hasApprovedTreasuryPayoutReceiverProposal: jest.fn(),
+    };
+
+    const zeroBalanceReader: GovernanceMutationPreflightReader = {
+      ...claimsPausedReader,
+      getGovernanceStatus: jest.fn().mockResolvedValue({
+        ...baseStatus,
+        claimsPaused: false,
+      }),
+      getTreasuryClaimableBalance: jest.fn().mockResolvedValue(0n),
+    };
+
+    const claimsPausedService = new TreasuryReadService(
+      claimsPausedReader,
+      createInMemoryGovernanceActionStore(seededActions),
+      () => new Date('2026-03-14T11:00:00.000Z'),
+    );
+    const zeroBalanceService = new TreasuryReadService(
+      zeroBalanceReader,
+      createInMemoryGovernanceActionStore(seededActions),
+      () => new Date('2026-03-14T11:00:00.000Z'),
+    );
+
+    const pausedSnapshot = await claimsPausedService.getTreasurySnapshot();
+    const zeroBalanceSnapshot = await zeroBalanceService.getTreasurySnapshot();
+
+    expect(pausedSnapshot.state?.sweepVisibility).toEqual({
+      canSweep: false,
+      blockedReason: 'claims_paused',
+    });
+    expect(zeroBalanceSnapshot.state?.sweepVisibility).toEqual({
+      canSweep: false,
+      blockedReason: 'no_claimable_balance',
+    });
+  });
+
   test('lists treasury governance actions through the treasury contract filter', async () => {
     const governanceReader = {
       checkReadiness: jest.fn(),
@@ -185,6 +246,41 @@ describe('treasury read service', () => {
       sourceFreshAt: '2026-03-14T10:01:00.000Z',
       queriedAt: '2026-03-14T11:00:00.000Z',
       available: true,
+    });
+  });
+
+  test('returns an explicit degraded treasury action feed when governance history is unavailable', async () => {
+    const failingStore = {
+      list: jest.fn().mockRejectedValue(new Error('gateway governance ledger unavailable')),
+    } as any;
+    const governanceReader = {
+      checkReadiness: jest.fn(),
+      getGovernanceStatus: jest.fn(),
+      getUnpauseProposalState: jest.fn(),
+      getOracleProposalState: jest.fn(),
+      getTreasuryPayoutReceiverProposalState: jest.fn(),
+      getTreasuryClaimableBalance: jest.fn(),
+      hasApprovedUnpause: jest.fn(),
+      hasApprovedOracleProposal: jest.fn(),
+      hasApprovedTreasuryPayoutReceiverProposal: jest.fn(),
+    } as unknown as GovernanceMutationPreflightReader;
+
+    const service = new TreasuryReadService(
+      governanceReader,
+      failingStore,
+      () => new Date('2026-03-14T11:00:00.000Z'),
+    );
+
+    const result = await service.listTreasuryActions({ limit: 10 });
+
+    expect(result.items).toEqual([]);
+    expect(result.nextCursor).toBeNull();
+    expect(result.freshness).toEqual({
+      source: 'gateway_governance_ledger',
+      sourceFreshAt: null,
+      queriedAt: '2026-03-14T11:00:00.000Z',
+      available: false,
+      degradedReason: 'gateway governance ledger unavailable',
     });
   });
 });

@@ -37,6 +37,9 @@ This repository is the settlement layer in the Agroasys platform. It operates al
 
 ![cotsel](https://github.com/user-attachments/assets/05f69ccd-80da-410c-be17-c14ee3e6a337)
 
+Canonical target-state architecture:
+[`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md)
+
 - `contracts`: escrow state machine and settlement logic.
 - `oracle`: validated real-world milestone attestations into on-chain state transitions.
 - `indexer`: indexed chain events for query and operational visibility.

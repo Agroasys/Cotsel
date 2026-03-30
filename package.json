@@ -49,6 +49,7 @@
     "dashboard:parity:session": "node scripts/dashboard-operator-session.mjs",
     "dashboard:parity:preflight": "node scripts/dashboard-local-parity-preflight.mjs",
     "dashboard:parity:gate": "npm run dashboard:parity:preflight",
+    "dashboard:parity:ci": "bash scripts/dashboard-live-parity-gate.sh",
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs"
   },

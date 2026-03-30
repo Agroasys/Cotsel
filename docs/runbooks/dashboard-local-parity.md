@@ -47,6 +47,7 @@ scripts/docker-services.sh health local-dev
 Parity gate note:
 - `scripts/docker-services.sh health local-dev` validates the whole local profile and can fail for services outside the dashboard parity boundary.
 - `npm run dashboard:parity:preflight` and `npm run dashboard:parity:gate` are the authoritative upstream parity gate for dashboard live local-contract verification.
+- parity gate failures now emit a stable machine-usable error code and non-zero exit for CI-adjacent automation; do not reinterpret the gate as whole-profile health.
 
 3. Deploy the local escrow contract if gateway readiness reports `chain-rpc unavailable`:
 
@@ -91,6 +92,20 @@ Successful parity preflight proves:
 - auth session fails
   - mint a fresh session artifact with `npm run dashboard:parity:session`
 
+Stable parity gate failure classes:
+- `SESSION_ARTIFACT_INVALID`
+- `AUTH_SESSION_REQUEST_FAILED`
+- `AUTH_SESSION_PAYLOAD_INVALID`
+- `AUTH_SESSION_ROLE_INVALID`
+- `GATEWAY_HEALTH_REQUEST_FAILED`
+- `GATEWAY_READY_REQUEST_FAILED`
+- `GATEWAY_NOT_READY`
+- `GATEWAY_VERSION_REQUEST_FAILED`
+- `GATEWAY_TRADES_REQUEST_FAILED`
+- `GATEWAY_TRADES_PAYLOAD_INVALID`
+- `SEEDED_TRADE_MISSING`
+- `SEEDED_TRADE_MISMATCH`
+
 ## Automation boundary
 Supported now:
 - manual local parity verification
@@ -105,6 +120,40 @@ Promotion criteria for CI-adjacent parity:
 2. mint an admin session artifact in job scope
 3. run `npm run dashboard:parity:gate`
 4. then run `Cotsel-Dash` live local-contract browser verification
+
+## CI-adjacent live parity automation
+Canonical Cotsel-owned entrypoint:
+
+```bash
+npm run dashboard:parity:ci
+```
+
+This orchestration path:
+- validates `local-dev` env requirements
+- requires `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity`
+- builds and starts `local-dev`
+- records broader `scripts/docker-services.sh health local-dev` as advisory whole-profile evidence
+- deploys the local escrow contract
+- mints a fresh dashboard session artifact
+- runs `npm run dashboard:parity:gate`
+- runs `Cotsel-Dash` `npm run test:e2e:live`
+- writes `reports/dashboard-parity/live-parity-gate.json`
+
+Status boundary:
+- `dashboard:parity:gate` remains the authoritative narrow dashboard readiness contract
+- broader `health local-dev` remains a separate whole-profile signal and is reported distinctly in the gate report
+- a whole-profile health failure must remain visible; it does not automatically invalidate the dashboard parity gate if parity and live browser verification both pass
+
+GitHub Actions source of truth:
+- `.github/workflows/dashboard-live-parity.yml`
+
+Expected report fields:
+- `summary.wholeProfileHealth`
+- `summary.dashboardParityGate`
+- `summary.dashLiveSuite`
+- `summary.overallLiveParityGate`
+- `blockingFailure`
+- per-step statuses for env validation, local-dev bring-up, escrow deploy, session mint, parity gate, Dash repo prepare, and live suite execution
 
 ## References
 - `docs/runbooks/dashboard-gateway-operations.md`
