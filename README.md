@@ -35,7 +35,7 @@ Cotsel was initially developed to support the Agroasys platform, but it is open-
 
 This repository is the settlement layer in the Agroasys platform. It operates alongside off-chain systems while serving as the on-chain source of truth for settlement state.
 
-![cotsel](https://github.com/user-attachments/assets/c2677f8f-b430-42f6-a267-285683da74df)
+![cotsel](https://github.com/user-attachments/assets/05f69ccd-80da-410c-be17-c14ee3e6a337)
 
 - `contracts`: escrow state machine and settlement logic.
 - `oracle`: validated real-world milestone attestations into on-chain state transitions.
