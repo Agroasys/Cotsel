@@ -10,6 +10,9 @@ export interface OracleConfig {
     chainId: number;
     escrowAddress: string;
     usdcAddress: string;
+    settlementRuntimeKey?: string;
+    networkName?: string;
+    explorerBaseUrl?: string | null;
     oraclePrivateKey: string;
     
     // oracle db

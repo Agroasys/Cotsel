@@ -25,6 +25,7 @@ export * from './types/errors';
 
 // config
 export * from './config';
+export * from './runtime';
 
 // utils
 export * from './utils/validation';

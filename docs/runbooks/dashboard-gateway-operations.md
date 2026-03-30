@@ -43,9 +43,12 @@ Authoritative dependencies:
 Minimum gateway env contract:
 - `GATEWAY_AUTH_BASE_URL`
 - `GATEWAY_AUTH_REQUEST_TIMEOUT_MS`
+- `GATEWAY_SETTLEMENT_RUNTIME` or (`GATEWAY_RPC_URL` + `GATEWAY_CHAIN_ID`)
 - `GATEWAY_RPC_URL`
+- `GATEWAY_RPC_FALLBACK_URLS`
 - `GATEWAY_RPC_READ_TIMEOUT_MS`
 - `GATEWAY_CHAIN_ID`
+- `GATEWAY_EXPLORER_BASE_URL`
 - `GATEWAY_ESCROW_ADDRESS`
 - `GATEWAY_ENABLE_MUTATIONS`
 - `GATEWAY_WRITE_ALLOWLIST`
@@ -83,6 +86,11 @@ Executor-only env:
 - `GATEWAY_USDC_ADDRESS`
 - `GATEWAY_EXECUTOR_PRIVATE_KEY`
 - `GATEWAY_EXECUTOR_TIMEOUT_MS`
+
+Runtime notes:
+- `GATEWAY_SETTLEMENT_RUNTIME` is the canonical selector for active Base v1 runtimes.
+- `GATEWAY_RPC_URL`, `GATEWAY_RPC_FALLBACK_URLS`, and `GATEWAY_EXPLORER_BASE_URL` are override inputs, not separate runtime truth.
+- Public Base RPC endpoints are acceptable for local/dev or pilot bootstrap only. Production must use the managed provider policy frozen in M0.
 
 Signer custody source of truth:
 - `docs/runbooks/gateway-governance-signer-custody.md`

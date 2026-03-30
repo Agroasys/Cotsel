@@ -229,8 +229,11 @@ Create a `.env` file at the project root:
 
 ```
 # Network configuration
+SETTLEMENT_RUNTIME=
 RPC_URL=
+RPC_FALLBACK_URLS=
 CHAIN_ID=
+EXPLORER_BASE_URL=
 
 # Contract addresses
 ESCROW_ADDRESS=

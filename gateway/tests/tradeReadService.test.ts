@@ -169,7 +169,6 @@ describe('trade read service', () => {
           stage: 'Arrival Confirmed',
           timestamp: '2026-03-07T10:00:00.000Z',
           actor: 'Oracle',
-          txHash: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
           detail: 'Arrival confirmed at 2025-03-07T10:00:00.000Z.',
         },
       ],

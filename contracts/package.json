@@ -4,13 +4,20 @@
   "main": "index.js",
   "license": "Apache-2.0",
   "scripts": {
-    "compile": "hardhat compile",
-    "compile:polkavm": "USE_POLKAVM_RESOLC=true hardhat compile --network polkadotTestnet --force",
-    "deploy:polkavm": "npx hardhat clean && USE_POLKAVM_RESOLC=true npx hardhat compile --network polkadotTestnet --force && USE_POLKAVM_RESOLC=true npx hardhat run scripts/deploy-polkavm.ts --network polkadotTestnet",
+    "compile": "hardhat compile --force",
+    "prelint": "hardhat compile",
+    "deploy:base-sepolia": "npx hardhat run scripts/deploy-base.ts --network base-sepolia",
+    "deploy:base-mainnet": "npx hardhat run scripts/deploy-base.ts --network base-mainnet",
+    "verify:base-sepolia": "npx hardhat verify --network base-sepolia",
+    "verify:base-mainnet": "npx hardhat verify --network base-mainnet",
+    "compile:polkavm:historical": "hardhat --config hardhat.polkavm.historical.config.ts compile --network polkadotTestnet --force",
+    "deploy:polkavm:historical": "npx hardhat --config hardhat.polkavm.historical.config.ts clean && npx hardhat --config hardhat.polkavm.historical.config.ts compile --network polkadotTestnet --force && npx hardhat --config hardhat.polkavm.historical.config.ts run scripts/deploy-polkavm.ts --network polkadotTestnet",
     "test": "hardhat test",
     "test:foundry": "cd foundry && forge test -vvv",
     "coverage": "hardhat coverage",
-    "lint": "tsc --noEmit"
+    "pretypecheck": "hardhat compile",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.2",

@@ -40,7 +40,7 @@ async function main(): Promise<void> {
   if (!fs.existsSync(artifactPath)) {
     throw new Error(
       `Artifact not found at ${artifactPath}. ` +
-      "Run 'npm run compile:polkavm' first."
+      "Run 'npm run compile:polkavm:historical' first."
     );
   }
 
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
   if (artifact._format !== "hh-resolc-artifact-1") {
     throw new Error(
       `Expected resolc artifact (hh-resolc-artifact-1), found '${artifact._format}'. ` +
-      "Run 'npm run compile:polkavm' to produce PVM bytecode."
+      "Run 'npm run compile:polkavm:historical' to produce archived PVM bytecode."
     );
   }
 

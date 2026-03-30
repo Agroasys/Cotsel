@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
+import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
 import { normalizeAddressOrThrow } from './utils/address';
 
 dotenv.config();
@@ -19,6 +20,9 @@ export interface ReconciliationConfig {
   chainId: number;
   escrowAddress: string;
   usdcAddress: string;
+  settlementRuntimeKey?: SettlementRuntimeKey;
+  networkName?: string;
+  explorerBaseUrl?: string | null;
   indexerGraphqlUrl: string;
   indexerGraphqlRequestTimeoutMs: number;
   enforceContainerSafeIndexerUrl: boolean;
@@ -32,6 +36,11 @@ function env(name: string): string {
   const value = process.env[name];
   assert(value, `${name} is missing`);
   return value;
+}
+
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
 }
 
 function envNumber(name: string, fallback?: number): number {
@@ -133,6 +142,16 @@ export function loadConfig(): ReconciliationConfig {
     `INDEXER_GQL_TIMEOUT_MS must be between ${indexerGraphqlTimeoutMinMs} and ${indexerGraphqlTimeoutMaxMs}`,
   );
 
+  const runtime = resolveSettlementRuntime({
+    runtimeKey: optionalEnv('SETTLEMENT_RUNTIME'),
+    rpcUrl: process.env.RPC_URL ? envUrl('RPC_URL') : undefined,
+    rpcFallbackUrls: parseUrlList(process.env.RPC_FALLBACK_URLS),
+    chainId: process.env.CHAIN_ID ? envNumber('CHAIN_ID') : null,
+    explorerBaseUrl: optionalEnv('EXPLORER_BASE_URL'),
+    escrowAddress: envAddress('ESCROW_ADDRESS'),
+    usdcAddress: optionalEnv('USDC_ADDRESS') ? envAddress('USDC_ADDRESS') : null,
+  });
+
   const config: ReconciliationConfig = {
     enabled: envBool('RECONCILIATION_ENABLED', false),
     daemonIntervalMs: envNumber('RECONCILIATION_DAEMON_INTERVAL_MS', 60000),
@@ -143,11 +162,14 @@ export function loadConfig(): ReconciliationConfig {
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
-    rpcUrl: envUrl('RPC_URL'),
-    rpcFallbackUrls: parseUrlList(process.env.RPC_FALLBACK_URLS),
-    chainId: envNumber('CHAIN_ID'),
-    escrowAddress: envAddress('ESCROW_ADDRESS'),
-    usdcAddress: envAddress('USDC_ADDRESS'),
+    rpcUrl: runtime.rpcUrl,
+    rpcFallbackUrls: runtime.rpcFallbackUrls,
+    chainId: runtime.chainId,
+    escrowAddress: normalizeAddressOrThrow(runtime.escrowAddress ?? envAddress('ESCROW_ADDRESS'), 'ESCROW_ADDRESS'),
+    usdcAddress: normalizeAddressOrThrow(runtime.usdcAddress ?? envAddress('USDC_ADDRESS'), 'USDC_ADDRESS'),
+    settlementRuntimeKey: runtime.runtimeKey,
+    networkName: runtime.networkName,
+    explorerBaseUrl: runtime.explorerBaseUrl,
     indexerGraphqlUrl,
     indexerGraphqlRequestTimeoutMs,
     enforceContainerSafeIndexerUrl,

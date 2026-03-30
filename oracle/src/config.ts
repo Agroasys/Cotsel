@@ -1,5 +1,7 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
+import { ethers } from 'ethers';
+import { resolveSettlementRuntime } from '@agroasys/sdk';
 import { OracleConfig } from './types';
 
 dotenv.config();
@@ -8,6 +10,32 @@ function validateEnv(name: string): string {
     const value = process.env[name];
     assert(value, `${name} is missing`);
     return value;
+}
+
+function optionalEnv(name: string): string | undefined {
+    const value = process.env[name]?.trim();
+    return value ? value : undefined;
+}
+
+function validateEnvUrl(name: string): string {
+    const value = validateEnv(name);
+    let parsed: URL;
+    try {
+        parsed = new URL(value);
+    } catch {
+        throw new Error(`${name} must be a valid URL, received "${value}"`);
+    }
+    assert(
+        parsed.protocol === 'http:' || parsed.protocol === 'https:',
+        `${name} must use http or https protocol`,
+    );
+    return value.replace(/\/$/, '');
+}
+
+function validateEnvAddress(name: string): string {
+    const value = validateEnv(name);
+    assert(ethers.isAddress(value), `${name} must be a valid EVM address, received "${value}"`);
+    return ethers.getAddress(value);
 }
 
 function validateEnvNumber(name: string, fallback?: number): number {
@@ -72,6 +100,16 @@ export function loadConfig(): OracleConfig {
             `INDEXER_GQL_TIMEOUT_MS must be between ${indexerGraphqlTimeoutMinMs} and ${indexerGraphqlTimeoutMaxMs}`,
         );
 
+        const runtime = resolveSettlementRuntime({
+            runtimeKey: optionalEnv('SETTLEMENT_RUNTIME'),
+            rpcUrl: process.env.RPC_URL ? validateEnvUrl('RPC_URL') : undefined,
+            rpcFallbackUrls: parseUrlList(process.env.RPC_FALLBACK_URLS),
+            chainId: process.env.CHAIN_ID ? validateEnvNumber('CHAIN_ID') : null,
+            explorerBaseUrl: optionalEnv('EXPLORER_BASE_URL'),
+            escrowAddress: validateEnvAddress('ESCROW_ADDRESS'),
+            usdcAddress: optionalEnv('USDC_ADDRESS') ? validateEnvAddress('USDC_ADDRESS') : null,
+        });
+
         const config: OracleConfig = {
             // server
             port: validateEnvNumber('PORT'),
@@ -79,11 +117,14 @@ export function loadConfig(): OracleConfig {
             hmacSecret: validateEnv('HMAC_SECRET'),
             
             // network
-            rpcUrl: validateEnv('RPC_URL'),
-            rpcFallbackUrls: parseUrlList(process.env.RPC_FALLBACK_URLS),
-            chainId: validateEnvNumber('CHAIN_ID'),
-            escrowAddress: validateEnv('ESCROW_ADDRESS').toLowerCase(),
-            usdcAddress: validateEnv('USDC_ADDRESS').toLowerCase(),
+            rpcUrl: runtime.rpcUrl,
+            rpcFallbackUrls: runtime.rpcFallbackUrls,
+            chainId: runtime.chainId,
+            escrowAddress: runtime.escrowAddress ? ethers.getAddress(runtime.escrowAddress) : validateEnvAddress('ESCROW_ADDRESS'),
+            usdcAddress: runtime.usdcAddress ? ethers.getAddress(runtime.usdcAddress) : validateEnvAddress('USDC_ADDRESS'),
+            settlementRuntimeKey: runtime.runtimeKey,
+            networkName: runtime.networkName,
+            explorerBaseUrl: runtime.explorerBaseUrl,
             oraclePrivateKey: validateEnv('ORACLE_PRIVATE_KEY'),
             
             // oracle db
@@ -94,7 +135,7 @@ export function loadConfig(): OracleConfig {
             dbPassword: validateEnv('DB_PASSWORD'),
             
             // indexer graphql api
-            indexerGraphqlUrl: validateEnv('INDEXER_GRAPHQL_URL'),
+            indexerGraphqlUrl: validateEnvUrl('INDEXER_GRAPHQL_URL'),
             indexerGraphqlRequestTimeoutMs,
             
             // retry

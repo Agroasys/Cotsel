@@ -3,6 +3,8 @@
  */
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
+import { getAddress, isAddress } from 'ethers';
+import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
 
 dotenv.config();
 
@@ -22,6 +24,9 @@ export interface GatewayConfig {
   rpcReadTimeoutMs: number;
   chainId: number;
   escrowAddress: string;
+  settlementRuntimeKey?: SettlementRuntimeKey;
+  networkName?: string;
+  explorerBaseUrl?: string | null;
   enableMutations: boolean;
   writeAllowlist: string[];
   governanceQueueTtlSeconds: number;
@@ -63,6 +68,11 @@ function env(name: string): string {
   const value = process.env[name];
   assert(value, `${name} is missing`);
   return value;
+}
+
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
 }
 
 function envNumber(name: string, fallback?: number): number {
@@ -118,18 +128,27 @@ function parseUrlList(raw: string | undefined): string[] {
 }
 
 function assertAddress(name: string, value: string): string {
-  assert(/^0x[a-fA-F0-9]{40}$/.test(value), `${name} must be a 20-byte hex address`);
-  return value;
+  assert(isAddress(value), `${name} must be a valid EVM address`);
+  return getAddress(value);
 }
 
 export function loadConfig(): GatewayConfig {
   const buildTime = process.env.GATEWAY_BUILD_TIME?.trim() || new Date().toISOString();
   const authBaseUrl = env('GATEWAY_AUTH_BASE_URL').replace(/\/$/, '');
   const indexerGraphqlUrl = env('GATEWAY_INDEXER_GRAPHQL_URL').replace(/\/$/, '');
-  const rpcUrl = env('GATEWAY_RPC_URL').replace(/\/$/, '');
-  const rpcFallbackUrls = parseUrlList(process.env.GATEWAY_RPC_FALLBACK_URLS);
-  const chainId = envNumber('GATEWAY_CHAIN_ID');
   const escrowAddress = assertAddress('GATEWAY_ESCROW_ADDRESS', env('GATEWAY_ESCROW_ADDRESS'));
+  const runtime = resolveSettlementRuntime({
+    runtimeKey: optionalEnv('GATEWAY_SETTLEMENT_RUNTIME'),
+    rpcUrl: optionalEnv('GATEWAY_RPC_URL'),
+    rpcFallbackUrls: parseUrlList(process.env.GATEWAY_RPC_FALLBACK_URLS),
+    chainId: process.env.GATEWAY_CHAIN_ID ? envNumber('GATEWAY_CHAIN_ID') : null,
+    explorerBaseUrl: optionalEnv('GATEWAY_EXPLORER_BASE_URL'),
+    escrowAddress,
+    usdcAddress: optionalEnv('GATEWAY_USDC_ADDRESS'),
+  });
+  const rpcUrl = runtime.rpcUrl;
+  const rpcFallbackUrls = runtime.rpcFallbackUrls;
+  const chainId = runtime.chainId;
   const writeAllowlist = parseAllowlist(process.env.GATEWAY_WRITE_ALLOWLIST);
   const enableMutations = envBool('GATEWAY_ENABLE_MUTATIONS', false);
   const settlementIngressEnabled = envBool('GATEWAY_SETTLEMENT_INGRESS_ENABLED', false);
@@ -237,7 +256,10 @@ export function loadConfig(): GatewayConfig {
     rpcFallbackUrls,
     rpcReadTimeoutMs: envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000),
     chainId,
-    escrowAddress,
+    escrowAddress: assertAddress('GATEWAY_ESCROW_ADDRESS', runtime.escrowAddress ?? escrowAddress),
+    settlementRuntimeKey: runtime.runtimeKey,
+    networkName: runtime.networkName,
+    explorerBaseUrl: runtime.explorerBaseUrl,
     enableMutations,
     writeAllowlist,
     governanceQueueTtlSeconds: envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400),

@@ -223,6 +223,62 @@ describe('gateway settlement routes contract', () => {
     }
   });
 
+  test('submitted execution events reject extrinsic-only compatibility payloads', async () => {
+    const { server, baseUrl } = await startServer();
+
+    try {
+      const handoffBody = {
+        platformId: 'agroasys-platform',
+        platformHandoffId: 'handoff-compat',
+        tradeId: 'TRD-compat',
+        phase: 'stage_1',
+        settlementChannel: 'cotsel_escrow',
+        displayCurrency: 'USD',
+        displayAmount: 125000,
+      };
+
+      const handoffResponse = await fetch(`${baseUrl}/settlement/handoffs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'handoff-compat',
+          'X-Request-Id': 'req-handoff-compat',
+          ...withServiceAuth('/api/dashboard-gateway/v1/settlement/handoffs', handoffBody),
+        },
+        body: JSON.stringify(handoffBody),
+      });
+      const handoffPayload = await handoffResponse.json();
+      const handoffId = handoffPayload.data.handoffId as string;
+
+      const eventBody = {
+        eventType: 'submitted',
+        executionStatus: 'submitted',
+        reconciliationStatus: 'pending',
+        extrinsicHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        observedAt: '2026-03-11T12:00:00.000Z',
+      };
+      const eventPath = `/api/dashboard-gateway/v1/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`;
+
+      const eventResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'event-compat',
+          'X-Request-Id': 'req-event-compat',
+          ...withServiceAuth(eventPath, eventBody),
+        },
+        body: JSON.stringify(eventBody),
+      });
+      const eventPayload = await eventResponse.json();
+
+      expect(eventResponse.status).toBe(400);
+      expect(eventPayload.error.code).toBe('VALIDATION_ERROR');
+      expect(eventPayload.error.message).toContain('txHash is required');
+    } finally {
+      server.close();
+    }
+  });
+
   test('service auth, idempotency, and state machine violations are enforced', async () => {
     const { server, baseUrl } = await startServer();
 

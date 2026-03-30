@@ -2939,7 +2939,11 @@ components:
         txHash:
           type: string
           nullable: true
-          description: EVM transaction hash when available; otherwise the corresponding extrinsic hash.
+          description: Canonical EVM transaction hash when available.
+        explorerUrl:
+          type: string
+          nullable: true
+          description: Canonical chain explorer link derived from `txHash` when available.
         detail:
           type: string
     Trade:
@@ -2976,7 +2980,7 @@ components:
         txHash:
           type: string
           nullable: true
-          description: Trade lock hash when available; may be null if the indexer has not retained a chain hash reference.
+          description: Canonical EVM transaction hash for the trade lock when available.
         createdAt:
           type: string
           format: date-time
@@ -3014,7 +3018,6 @@ components:
         - callbackStatus
         - providerStatus
         - txHash
-        - extrinsicHash
         - externalReference
         - latestEventType
         - latestEventDetail
@@ -3047,8 +3050,14 @@ components:
           type: [string, 'null']
         txHash:
           type: [string, 'null']
+          description: Canonical EVM transaction hash for the latest settlement execution reference.
         extrinsicHash:
           type: [string, 'null']
+          deprecated: true
+          description: Historical-only compatibility field from the Polkadot-era execution model. Not canonical for Base-era settlement logic.
+        explorerUrl:
+          type: [string, 'null']
+          description: Canonical chain explorer link derived from `txHash` when available.
         externalReference:
           type: [string, 'null']
         latestEventType:
@@ -3102,7 +3111,6 @@ components:
         - callbackStatus
         - providerStatus
         - txHash
-        - extrinsicHash
         - latestEventType
         - latestEventDetail
         - latestEventAt
@@ -3149,8 +3157,11 @@ components:
           type: [string, 'null']
         txHash:
           type: [string, 'null']
+          description: Canonical EVM transaction hash when available.
         extrinsicHash:
           type: [string, 'null']
+          deprecated: true
+          description: Historical-only compatibility field from the Polkadot-era execution model.
         latestEventType:
           oneOf:
             - type: 'null'
@@ -3183,7 +3194,6 @@ components:
         - reconciliationStatus
         - providerStatus
         - txHash
-        - extrinsicHash
         - detail
         - metadata
         - observedAt
@@ -3205,8 +3215,11 @@ components:
           type: [string, 'null']
         txHash:
           type: [string, 'null']
+          description: Canonical EVM transaction hash when available.
         extrinsicHash:
           type: [string, 'null']
+          deprecated: true
+          description: Historical-only compatibility field from the Polkadot-era execution model.
         detail:
           type: [string, 'null']
         metadata:
@@ -3333,8 +3346,11 @@ components:
           type: string
         txHash:
           type: string
+          description: Canonical EVM transaction hash when available.
         extrinsicHash:
           type: string
+          deprecated: true
+          description: Historical-only compatibility input. Base-era submitted and confirmed events must use `txHash`.
         detail:
           type: string
         metadata:
@@ -3455,7 +3471,6 @@ components:
         - callbackStatus
         - providerStatus
         - txHash
-        - extrinsicHash
         - latestEventType
         - latestEventDetail
         - latestEventAt
@@ -3498,8 +3513,11 @@ components:
           type: [string, 'null']
         txHash:
           type: [string, 'null']
+          description: Canonical EVM transaction hash when available.
         extrinsicHash:
           type: [string, 'null']
+          deprecated: true
+          description: Historical-only compatibility field from the Polkadot-era execution model.
         latestEventType:
           oneOf:
             - type: 'null'
@@ -4014,6 +4032,8 @@ components:
         extrinsicHash:
           type: string
           nullable: true
+          deprecated: true
+          description: Historical-only compatibility field from the Polkadot-era execution model.
         blockNumber:
           type: integer
           nullable: true

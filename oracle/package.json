@@ -7,6 +7,7 @@
     "copy-files": "mkdir -p dist/database && cp src/database/schema.sql dist/database/",
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
+    "pretest": "npm run build:sdk",
     "test": "jest --runInBand",
     "lint": "tsc --noEmit",
     "build:sdk": "npm --prefix ../sdk run build",

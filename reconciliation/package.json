@@ -9,6 +9,7 @@
     "prebuild": "npm run build:sdk",
     "lint": "tsc --noEmit",
     "prelint": "npm run build:sdk",
+    "pretest": "npm run build:sdk",
     "test": "node -r ts-node/register --test src/tests/*.test.ts",
     "reconcile:once": "ts-node src/cli.ts once",
     "reconcile:daemon": "ts-node src/cli.ts daemon",

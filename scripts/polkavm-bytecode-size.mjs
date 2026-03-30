@@ -40,7 +40,7 @@ function loadArtifact(artifactPath) {
   if (!fs.existsSync(artifactPath)) {
     throw new Error(
       `Artifact not found at ${artifactPath}. ` +
-      "Run 'npm run -w contracts compile:polkavm' first or pass --artifact <path>."
+      "Run 'npm run -w contracts compile:polkavm:historical' first or pass --artifact <path>."
     );
   }
 
