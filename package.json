@@ -69,7 +69,9 @@
     "minimatch": "10.2.3",
     "picomatch@<2.3.2": "2.3.2",
     "picomatch@>=4 <4.0.4": "4.0.4",
-    "serialize-javascript": "7.0.3",
+    "path-to-regexp@<0.1.13": "0.1.13",
+    "path-to-regexp@>=8 <8.4.0": "8.4.0",
+    "serialize-javascript": "7.0.5",
     "lodash": "4.17.23",
     "@nomicfoundation/ignition-core": {
       "lodash": "4.17.23"
