@@ -200,7 +200,8 @@ jobs:
           path: ci-reports/monitoring-baseline-validation.json
 
   arch-roadmap-consistency:
-    name: ci/arch-roadmap-consistency
+    if: ${{ vars.ENABLE_HISTORICAL_ABC_GOVERNANCE == 'true' }}
+    name: ci/arch-roadmap-consistency-historical
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -212,7 +213,7 @@ jobs:
           node-version: '20'
           cache: npm
 
-      - name: Run architecture-roadmap consistency guard
+      - name: Run historical A/B/C architecture-roadmap consistency guard
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
@@ -233,6 +234,8 @@ jobs:
             {
               echo ""
               echo "Remediation:"
+              echo "  Historical-only A/B/C governance drift was detected."
+              echo "  This check is disabled by default for the active Base migration and should only be enabled for archive maintenance."
               echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write"
               echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write --normalize-progress"
               echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write-gate-issues --apply"
@@ -720,12 +723,12 @@ jobs:
           path: ci-reports/${{ env.WORKSPACE }}.txt
 
   contracts_deploy_verification:
-    name: ci/contracts-deploy-verification
+    if: ${{ (needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.contracts == 'true') && vars.ENABLE_HISTORICAL_POLKADOT_DEPLOY_VERIFICATION == 'true' }}
+    name: ci/contracts-deploy-verification-historical
     runs-on: ubuntu-latest
     needs:
       - changes
       - contracts
-    if: needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.contracts == 'true'
     env:
       DEPLOY_VERIFY_RPC_URL: "https://services.polkadothub-rpc.com/testnet"
       DEPLOY_VERIFY_NETWORK_NAME: "polkadotTestnet"
@@ -752,7 +755,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install pinned resolc binary (deterministic)
+      - name: Install pinned historical resolc binary (deterministic)
         shell: bash
         run: |
           set -euo pipefail
@@ -811,20 +814,20 @@ jobs:
 
           "${TARGET_BIN}" --version
 
-      - name: Generate contract artifacts for verification
+      - name: Generate historical PolkaVM contract artifacts for verification
         run: npm run -w contracts compile:polkavm
 
-      - name: Run deploy verification smoke tests
+      - name: Run historical deploy verification smoke tests
         run: node --test scripts/tests/polkavm-deploy-verify-smoke.test.mjs
 
-      - name: Verify deployed contract bytecode and deployment evidence
+      - name: Verify historical deployed contract bytecode and deployment evidence
         run: node scripts/polkavm-deploy-verify.mjs
 
-      - name: Upload deploy verification artifact
+      - name: Upload historical deploy verification artifact
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
-          name: ci-report-contracts-deploy-verification
+          name: ci-report-contracts-deploy-verification-historical
           path: reports/deploy-verification
 
   sdk:
@@ -1271,7 +1274,7 @@ jobs:
           results["ci/staging-e2e-real-gate"]="${{ needs.staging-e2e-real-gate.result }}"
           results["ci/asset-fee-path"]="${{ needs.asset-fee-path.result }}"
           results["ci/contracts"]="${{ needs.contracts.result }}"
-          results["ci/contracts-deploy-verification"]="${{ needs.contracts_deploy_verification.result }}"
+          results["ci/contracts-deploy-verification-historical"]="${{ needs.contracts_deploy_verification.result }}"
           results["ci/sdk"]="${{ needs.sdk.result }}"
           results["ci/oracle"]="${{ needs.oracle.result }}"
           results["ci/indexer"]="${{ needs.indexer.result }}"

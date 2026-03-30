@@ -1,0 +1,104 @@
+name: Dashboard Live Parity
+
+on:
+  workflow_dispatch:
+    inputs:
+      cotsel_ref:
+        description: "Cotsel ref to run"
+        required: false
+        default: ""
+      dash_ref:
+        description: "Cotsel-Dash ref to run"
+        required: false
+        default: "main"
+      retain_logs_on_success:
+        description: "Upload Cotsel parity logs even when the run passes"
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: "0 4 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-live-parity
+  cancel-in-progress: false
+
+jobs:
+  dashboard-live-parity:
+    name: ci/dashboard-live-parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout Cotsel
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.cotsel_ref != '' && inputs.cotsel_ref || github.ref }}
+
+      - name: Checkout Cotsel-Dash
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: Agroasys/Cotsel-Dash
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.dash_ref != '' && inputs.dash_ref || 'main' }}
+          path: cotsel-dash
+          token: ${{ secrets.COTSEL_DASH_CHECKOUT_TOKEN || github.token }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            cotsel-dash/package-lock.json
+
+      - name: Prepare env files
+        shell: bash
+        run: |
+          cp .env.example .env
+          cp .env.local.example .env.local
+          python3 - <<'PY'
+from pathlib import Path
+
+path = Path(".env.local")
+text = path.read_text()
+text = text.replace("LOCAL_DEV_INDEXER_FIXTURE_MODE=empty", "LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity")
+text = text.replace("GATEWAY_AUTH_BASE_URL=http://host.docker.internal:3005", "GATEWAY_AUTH_BASE_URL=http://auth:3005")
+path.write_text(text)
+PY
+
+      - name: Install Cotsel dependencies
+        run: npm ci
+
+      - name: Run dashboard live parity gate
+        env:
+          DASHBOARD_LIVE_SUITE_REPO_DIR: ${{ github.workspace }}/cotsel-dash
+          DASHBOARD_PARITY_REPORT_DIR: ${{ github.workspace }}/reports/dashboard-parity
+          DASHBOARD_PARITY_CI_SESSION_FILE: /tmp/cotsel-dashboard-session.json
+        run: npm run dashboard:parity:ci
+
+      - name: Upload dashboard parity report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: ci-report-dashboard-live-parity
+          path: reports/dashboard-parity
+          if-no-files-found: ignore
+
+      - name: Upload dashboard parity logs
+        if: always() && (failure() || inputs.retain_logs_on_success)
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: ci-report-dashboard-live-parity-logs
+          path: reports/dashboard-parity/logs
+          if-no-files-found: ignore
+
+      - name: Upload Dash Playwright report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: ci-report-dashboard-live-parity-playwright
+          path: cotsel-dash/output/playwright/report
+          if-no-files-found: ignore

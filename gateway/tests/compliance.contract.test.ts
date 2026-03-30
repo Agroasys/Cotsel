@@ -51,6 +51,11 @@ const baseConfig: GatewayConfig = {
   nodeEnv: 'test',
 };
 
+const ACTIVE_ATTESTATION_WINDOW = {
+  issuedAt: '2026-03-20T10:00:00.000Z',
+  expiresAt: '2099-03-30T10:00:00.000Z',
+} as const;
+
 function buildDecisionBody(overrides: Record<string, unknown> = {}) {
   return {
     tradeId: 'TRD-1',
@@ -76,8 +81,7 @@ function buildDecisionBody(overrides: Record<string, unknown> = {}) {
         type: 'counterparty',
         reference: 'subject-1',
       },
-      issuedAt: '2026-03-20T10:00:00.000Z',
-      expiresAt: '2026-03-30T10:00:00.000Z',
+      ...ACTIVE_ATTESTATION_WINDOW,
       providerRef: 'provider-ref-1',
       evidenceRef: 'evidence-bundle-1',
       referenceHash: `0x${'a'.repeat(64)}`,

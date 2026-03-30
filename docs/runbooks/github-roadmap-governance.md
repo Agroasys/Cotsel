@@ -3,12 +3,17 @@
 ## Purpose
 Maintain a single execution board for `Cotsel` where every roadmap item and PR is mapped to milestone scope and delivery status.
 
+## Active migration truth
+- The active v1 migration governance source of truth is the Base migration program rooted at issue `#339`.
+- The active milestone model is `M0 Base Migration Decision and Boundary Freeze`, `M1 Base Contract Runtime and Deployment`, `M2 Base Eventing, Reconciliation, and Treasury Safety`, `M3 Backend, Gateway, and Wallet Continuity`, `M4 Base Sepolia Pilot Readiness`, `M5 Base Mainnet Launch and Polkadot Retirement`, plus `Needs Triage`.
+- Historical Milestones A/B/C and their old weighted rollups are retained only for pre-Base traceability. They are not active v1 planning truth.
+
 ## Project v2 Definition
 - Project name: `Cotsel Roadmap`
 - Project URL: `https://github.com/orgs/Agroasys/projects/5`
 - Project node ID: `PVT_kwDODMhsg84BPnYZ`
 - Status values: `Backlog`, `In Progress`, `In Review`, `Blocked`, `Done`
-- Milestone values: `Milestone A: PolkaVM Smart Contract Escrow & Ricardian Architecture`, `Milestone B: Non-Custodial Integration & Hybrid Split Settlement`, `Milestone C: Pilot with 1 Buyer + 1 Cooperative & Enforceability Memo`, `Needs Triage`
+- Milestone values: `M0 Base Migration Decision and Boundary Freeze`, `M1 Base Contract Runtime and Deployment`, `M2 Base Eventing, Reconciliation, and Treasury Safety`, `M3 Backend, Gateway, and Wallet Continuity`, `M4 Base Sepolia Pilot Readiness`, `M5 Base Mainnet Launch and Polkadot Retirement`, `Needs Triage`
 - Area values: `Contracts`, `Oracle`, `Indexer`, `SDK`, `Reconciliation`, `Ricardian`, `Treasury`, `Notifications`, `Ops/CI`, `Docs/Runbooks`, `Security`
 - Work type values: `Feature`, `Bug`, `Refactor`, `Ops`, `Docs`, `Security` (`Type` is a reserved project field name in GitHub UI/API).
 
@@ -26,15 +31,16 @@ Every PR must:
 The workflow `.github/workflows/pr-roadmap-policy.yml` enforces (1) and (2).
 During temporary rollout without GitHub App auth, project-link enforcement is advisory (warnings only); milestone enforcement remains blocking.
 
-## Weighted Progress (Authoritative)
-- Authoritative milestone delivery status is the weighted rollup, not the native GitHub closed/open ratio.
+## Weighted Progress (Historical)
+- Historical milestone A/B/C weighted rollups are retained for pre-Base traceability only.
+- Authoritative active v1 delivery status is tracked through the Base migration issue tree rooted at `#339`, not through the historical A/B/C rollup.
 - Source of truth for component mapping: `docs/runbooks/architecture-coverage-matrix.md`.
-- Automation workflow: `.github/workflows/roadmap-weighted-progress-sync.yml`.
+- Historical archive workflow: `.github/workflows/roadmap-weighted-progress-sync.yml` (manual `workflow_dispatch` only).
 - Sync behavior:
-  1. Recompute weighted `% Complete` for Milestones A/B/C from deliverable issues.
-  2. Update milestone gate issues `#70/#71/#72` status label + `% Complete`.
-  3. Update milestone descriptions with the weighted status.
-  4. Update Project v2 gate item fields (`Status`, `% Complete`) when project access is available.
+  1. Recompute weighted `% Complete` for historical Milestones A/B/C from deliverable issues.
+  2. Update milestone gate issues `#70/#71/#72` for historical tracking only.
+  3. Update historical milestone descriptions with the weighted status.
+  4. Do not use this rollup as active Base migration planning truth.
 
 ## Maintainer Steps For Each PR
 1. Assign milestone:
@@ -68,10 +74,15 @@ Auth for project field writes:
 - Fallback: `github.token` (may be unable to write org ProjectV2 fields depending on org visibility/policy).
 
 ## Architecture-Matrix Consistency Guard
-- Checker script: `scripts/architecture-roadmap-consistency-check.mjs`
-- Sync helper: `scripts/arch-roadmap-sync.mjs`
+- Historical checker script: `scripts/architecture-roadmap-consistency-check.mjs`
+- Historical sync helper: `scripts/arch-roadmap-sync.mjs`
 - CI artifact: `ci-report-arch-roadmap-consistency`
 - CI drift artifacts (on failure): `arch-roadmap-sync.json`, `arch-roadmap-sync.patch`
+
+Historical-only note:
+- The checker and sync helper apply to the archived A/B/C governance model only.
+- The release-gate job for this historical model is disabled by default during the active Base migration.
+- Only enable or run these tools when maintaining archive traceability for the pre-Base roadmap record.
 
 What the checker enforces:
 1. Required matrix row metadata columns exist and are populated:
@@ -81,7 +92,7 @@ What the checker enforces:
 2. Status/evidence consistency rules:
    - `Done` rows require `100%` and `Remaining Gap` starting with `None`.
    - Non-`Done`/non-`Out of Scope` rows cannot be `100%` or claim no remaining gap.
-3. Gate synchronization:
+3. Historical gate synchronization:
    - Issues `#70/#71/#72` must contain `Last synchronized: <date>` matching matrix snapshot date.
    - Gate issue bodies must reference `docs/runbooks/architecture-coverage-matrix.md`.
 
@@ -106,7 +117,7 @@ GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroas
 ```bash
 GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Cotsel --write-gate-issues --apply
 ```
-6. Commit matrix changes and rerun CI checks:
+6. Commit matrix changes and rerun CI checks only when maintaining the historical matrix:
 ```bash
 git add docs/runbooks/architecture-coverage-matrix.md
 git commit -m "docs(roadmap): sync architecture coverage matrix"

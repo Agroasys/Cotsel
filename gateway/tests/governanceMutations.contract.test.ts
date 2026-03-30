@@ -1000,6 +1000,9 @@ describe('gateway governance mutation routes contract', () => {
       const nonAdminPayload = await nonAdminResponse.json();
       expect(nonAdminResponse.status).toBe(403);
       expect(nonAdminPayload.error.code).toBe('FORBIDDEN');
+      const nonAdminActions = await nonAdmin.governanceActionStore.list({ limit: 10 });
+      expect(nonAdminActions.items).toHaveLength(0);
+      expect(nonAdmin.auditLogStore.entries).toHaveLength(0);
 
       const disabledResponse = await fetch(`${disabled.baseUrl}/governance/pause`, {
         ...requestInit,
@@ -1011,6 +1014,10 @@ describe('gateway governance mutation routes contract', () => {
       const disabledPayload = await disabledResponse.json();
       expect(disabledResponse.status).toBe(403);
       expect(disabledPayload.error.code).toBe('FORBIDDEN');
+      expect(disabledPayload.error.details.reason).toBe('disabled_or_not_allowlisted');
+      const disabledActions = await disabled.governanceActionStore.list({ limit: 10 });
+      expect(disabledActions.items).toHaveLength(0);
+      expect(disabled.auditLogStore.entries).toHaveLength(0);
 
       const notAllowlistedResponse = await fetch(`${notAllowlisted.baseUrl}/governance/pause`, {
         ...requestInit,
@@ -1022,6 +1029,10 @@ describe('gateway governance mutation routes contract', () => {
       const notAllowlistedPayload = await notAllowlistedResponse.json();
       expect(notAllowlistedResponse.status).toBe(403);
       expect(notAllowlistedPayload.error.code).toBe('FORBIDDEN');
+      expect(notAllowlistedPayload.error.details.reason).toBe('disabled_or_not_allowlisted');
+      const notAllowlistedActions = await notAllowlisted.governanceActionStore.list({ limit: 10 });
+      expect(notAllowlistedActions.items).toHaveLength(0);
+      expect(notAllowlisted.auditLogStore.entries).toHaveLength(0);
     } finally {
       unauthenticated.server.close();
       nonAdmin.server.close();

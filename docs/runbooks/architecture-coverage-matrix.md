@@ -2,6 +2,11 @@
 
 Snapshot date: 2026-03-01
 
+Historical-only note:
+- This matrix captures the pre-Base A/B/C roadmap model for traceability.
+- It is not the active v1 migration source of truth.
+- The active Base migration execution source of truth is issue `#339` and milestones `M0` through `M5`.
+
 Scope:
 - Source of truth is repository code, merged/open PRs, and roadmap issues.
 - Third-party KYC/KYB/AML vendor internals are excluded, but integration boundaries are tracked.

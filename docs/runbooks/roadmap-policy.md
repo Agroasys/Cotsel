@@ -5,6 +5,10 @@ The workflow `.github/workflows/pr-roadmap-policy.yml` enforces both requirement
 - PR has a GitHub Milestone.
 - PR is added to ProjectV2 `Cotsel Roadmap`.
 
+## Active migration truth
+- The active Base migration execution source of truth is issue `#339` and milestones `M0` through `M5`.
+- Historical Milestones A/B/C weighted progress tooling is retained for pre-Base traceability only and must not be used as active v1 migration truth.
+
 Validation order is strict:
 1. Direct PR -> `projectItems` match by `ROADMAP_PROJECT_ID`.
 2. ProjectV2 contents scan with GraphQL pagination (`items(first:100, after:cursor)`) until found/exhausted.
@@ -13,7 +17,8 @@ Validation order is strict:
 If all checks fail, the workflow fails.
 
 Related automation:
-- `.github/workflows/roadmap-weighted-progress-sync.yml` keeps weighted milestone progress in sync with roadmap deliverable issues and updates gate issue/project fields.
+- `.github/workflows/roadmap-weighted-progress-sync.yml` is retained for manual historical A/B/C archive maintenance only.
+- Historical A/B/C governance checks in `.github/workflows/release-gate.yml` are disabled by default during the active Base migration and must not be treated as active v1 planning controls.
 
 ## Temporary rollout mode (current)
 - Milestone check is always enforced (blocking).
