@@ -1,7 +1,7 @@
 # Cotsel: Commercial Trade Settlement Layer
 A non-custodial, evidence-driven settlement layer for cross-border trade workflows.
 
-Cotsel is a modular settlement infrastructure built on Polkadot Asset Hub. It implements milestone-gated escrow and conditional release, designed to reduce counterparty risk and improve settlement determinism through verifiable, evidence-linked state transitions.
+Cotsel is a modular settlement infrastructure for milestone-gated escrow and conditional release. The active v1 migration target is Base. Historical Polkadot/PolkaVM deployment, indexing, and evidence artifacts may still exist in the repository during migration, but they are not canonical v1 architecture truth.
 
 Cotsel was initially developed to support the Agroasys platform, but it is open-source and integration-friendly. It is designed for reuse by B2B marketplaces and trade workflows that require stablecoin escrow settlement, Ricardian agreement anchoring, and audit-grade traceability without introducing a custodial operator.
 
@@ -49,7 +49,7 @@ Canonical target-state architecture:
 ## Core Components
 
 - **Escrow Contract (`/contracts`)**  
-A settlement state machine implemented in Solidity and compiled for PolkaVM using the Parity toolchain. It manages escrow locking, timeouts, dispute holds, and deterministic allocation and routing of funds based on trade state.
+A settlement state machine implemented in Solidity. The contract business logic remains portable, while the active v1 runtime target moves to Base and the legacy PolkaVM toolchain is treated as historical migration residue until replaced.
 
 - **Oracle Service (`/oracle`)**  
 A Node.js service that submits signed milestone attestations to the contract. Attestations are schema-validated and designed to be replay-safe and idempotent. Each attestation references external evidence identifiers (for example Bill of Lading, inspection certificate references) that support operational and audit review.
@@ -80,7 +80,7 @@ Action: the remaining supplier tranche (default 60%) is released, completing set
 ## Tech Stack
 
 **Contracts and toolchain**  
-- Smart contracts: Solidity, compiled for PolkaVM using the Parity toolchain (`@parity/resolc` and Hardhat integration) with `compile:polkavm` as the intended release artifact.  
+- Smart contracts: Solidity with a Base-first runtime target for active v1 delivery. Legacy PolkaVM toolchain references remain in the repo only until the Base contract/deploy migration is complete.
 - Testing and fuzzing: Hardhat for integration tests; Foundry for fuzz and invariant testing where applicable.
 
 **Services and runtime**  
@@ -89,8 +89,9 @@ Action: the remaining supplier tranche (default 60%) is released, completing set
 - Storage: Postgres for indexed and operational views
 
 **Network and assets**  
-- Settlement rails: Polkadot Asset Hub (pilot on Paseo) for stablecoin settlement flows.  
-- Fee payment: where supported, fee payment in USDC can be used to reduce DOT dependency.
+- Settlement rails: Base Sepolia for pilot validation and Base mainnet for production target-state settlement flows.
+- Stablecoin rail: USDC on Base for active v1 settlement design.
+- Gas management: any sponsorship or fee abstraction is optional, buyer-bounded, and not a prerequisite for the Base migration.
 
 **Indexing and APIs**  
 - Indexing: SubQuery or Subsquid with a GraphQL API backed by Postgres.
@@ -117,7 +118,7 @@ See also:
 
 ```bash
 cotsel/
-├── contracts/          # Escrow contract source, tests, and PolkaVM build path
+├── contracts/          # Escrow contract source, tests, and active deployment path
 ├── oracle/             # Milestone attestation service
 ├── indexer/            # Chain event indexing and query layer
 ├── gateway/            # Operator control-plane gateway
@@ -138,7 +139,7 @@ cotsel/
 
 ## Security and Wallet Abstraction
 
-- **Fee Abstraction (Sponsored Fees)**: Where supported, the system can abstract network fee management from end users. This reduces the requirement for users to hold DOT directly and supports an enterprise-friendly checkout flow. Fee payment via Asset Conversion may be used depending on network support and operational configuration.
+- **Fee / Gas Abstraction**: Any sponsored-fee or gas-abstraction path is optional, tightly bounded, and never a prerequisite for v1 settlement safety. The default Base migration path preserves explicit non-custodial signing and does not depend on a mandatory account-abstraction rollout.
 
 - **Oracle Key Isolation**: Oracle-gated functions are restricted to an authorized attester key (for example `onlyOracle`). The oracle service should be deployed with strict key management controls (isolated runtime, restricted access, least privilege), and may be backed by hardened key storage such as an HSM or equivalent secure key management service.
 

@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// Historical-only governance helper for the pre-Base A/B/C roadmap model.
+// This script is preserved for archive traceability and should not be treated
+// as active v1 migration planning truth. The active Base migration program is
+// governed by issue #339 and milestones M0-M5.
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";

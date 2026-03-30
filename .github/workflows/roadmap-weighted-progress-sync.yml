@@ -1,24 +1,25 @@
-name: Roadmap Weighted Progress Sync
+name: Historical Roadmap Weighted Progress Sync (A/B/C Archive)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '23 */6 * * *'
-  push:
-    branches:
-      - main
-  issues:
-    types: [opened, edited, reopened, closed, milestoned, demilestoned, labeled, unlabeled]
 
 jobs:
   sync-weighted-progress:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event_name == 'push' || github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
       repository-projects: write
     steps:
+      - name: Historical-only notice
+        shell: bash
+        run: |
+          cat <<'EOF'
+          This workflow is historical-only.
+          It exists to preserve the pre-Base A/B/C weighted-rollup model for archive traceability.
+          It is not active v1 migration planning truth. The active migration program is rooted at issue #339 and milestones M0-M5.
+          EOF
+
       - name: Detect roadmap app credentials
         id: app_config
         shell: bash
@@ -145,7 +146,7 @@ jobs:
 
             status_text="$(status_text_for_pct "$pct")"
             status_label="$(status_label_for_pct "$pct")"
-            progress_line="- Progress basis: average of milestone deliverable issue \`% Complete\` values (excluding this gate), auto-synced by \`.github/workflows/roadmap-weighted-progress-sync.yml\`."
+            progress_line="- Progress basis: average of milestone deliverable issue \`% Complete\` values (excluding this gate), synced manually by \`.github/workflows/roadmap-weighted-progress-sync.yml\` for historical A/B/C archive tracking only."
 
             body="$(gh issue view "$gate" --repo "$repo" --json body --jq '.body')"
             updated="$(STATUS_TEXT="$status_text" PERCENT="$pct" PROGRESS_LINE="$progress_line" printf '%s' "$body" \
@@ -183,7 +184,7 @@ jobs:
                   "Includes Escrow contract hardening, Ricardian PDF/hash service, AssetHub interaction modules, indexer/reconciliation foundations, SDK interfaces, and production readiness tests/deployment runbooks." \
                   "Target outcome: deterministic on-chain lock/release flow with reproducible off-chain state sync." \
                   "" \
-                  "Authoritative delivery status (weighted): ${pct}% complete (deliverable issue rollup; source: docs/runbooks/architecture-coverage-matrix.md)." \
+                  "Historical delivery status (weighted): ${pct}% complete (deliverable issue rollup; source: docs/runbooks/architecture-coverage-matrix.md)." \
                   "" \
                   "Note: GitHub milestone bar remains native closed/open ratio and is not configurable."
                 ;;
@@ -193,7 +194,7 @@ jobs:
                   "Includes Web3Auth-powered signing UX, unified checkout, oracle-driven release flow, treasury bridge/payout records, and mainnet pilot execution workflows." \
                   "Target outcome: one buyer lock action drives supplier + treasury split settlement with operational traceability." \
                   "" \
-                  "Authoritative delivery status (weighted): ${pct}% complete (deliverable issue rollup; source: docs/runbooks/architecture-coverage-matrix.md)." \
+                  "Historical delivery status (weighted): ${pct}% complete (deliverable issue rollup; source: docs/runbooks/architecture-coverage-matrix.md)." \
                   "" \
                   "Note: GitHub milestone bar remains native closed/open ratio and is not configurable."
                 ;;
@@ -203,7 +204,7 @@ jobs:
                   "Includes pilot environment/runbooks, KPI reporting (MPC success, settlement latency, gas profile), legal technical support for enforceability memo, and community-facing demo assets." \
                   "Target outcome: validated real-world lifecycle and publishable pilot evidence." \
                   "" \
-                  "Authoritative delivery status (weighted): ${pct}% complete (deliverable issue rollup; source: docs/runbooks/architecture-coverage-matrix.md)." \
+                  "Historical delivery status (weighted): ${pct}% complete (deliverable issue rollup; source: docs/runbooks/architecture-coverage-matrix.md)." \
                   "" \
                   "Note: GitHub milestone bar remains native closed/open ratio and is not configurable."
                 ;;

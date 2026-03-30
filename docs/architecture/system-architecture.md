@@ -151,10 +151,10 @@ flowchart LR
       direction TB
       subgraph Chain["Settlement Layer"]
         direction TB
-        rpc_providers["Polkadot Asset Hub RPC<br/>primary + fallback"]
+        rpc_providers["Base RPC Providers<br/>primary + fallback"]
         escrow_contract["Escrow Smart Contract<br/>settlement + governance + claims"]
-        assets_pallet["USDC Asset Rail"]
-        asset_conversion["Asset Conversion<br/>fee abstraction"]
+        assets_pallet["USDC on Base"]
+        asset_conversion["Optional buyer gas sponsorship<br/>pilot-bounded only"]
       end
     end
     class rpc_providers,escrow_contract,assets_pallet,asset_conversion blockchain
@@ -277,6 +277,9 @@ flowchart LR
 - Current repo truth already contains the major Cotsel settlement/control
   services represented above: auth, gateway, ricardian, oracle, indexer,
   reconciliation, treasury, notifications, SDK, and shared-auth.
+- Base is the active v1 settlement target-state. Historical Polkadot/PolkaVM
+  references elsewhere in the repo are migration residue or archive material,
+  not active architecture truth.
 - Transitional `platform.v1` Supabase ownership is not canonical target-state
   architecture and is intentionally excluded from this diagram.
 - This diagram is a target-state system architecture view. It is not intended
