@@ -1,3 +1,5 @@
+import type { SettlementConfirmationStage } from '@agroasys/sdk';
+
 export enum TriggerStatus {
     PENDING = 'PENDING',
     EXECUTING = 'EXECUTING',
@@ -40,6 +42,8 @@ export interface Trigger {
     
     tx_hash: string | null;
     block_number: bigint | null;
+    confirmation_stage: SettlementConfirmationStage | null;
+    confirmation_stage_at: Date | null;
     
     indexer_confirmed: boolean;
     indexer_confirmed_at: Date | null;
@@ -77,6 +81,8 @@ export interface UpdateTriggerData {
     attempt_count?: number;
     tx_hash?: string;
     block_number?: bigint;
+    confirmation_stage?: SettlementConfirmationStage;
+    confirmation_stage_at?: Date;
     indexer_confirmed?: boolean;
     indexer_confirmed_at?: Date;
     indexer_event_id?: string;

@@ -27,15 +27,23 @@ export class OracleEvent {
     timestamp!: Date
 
     @Index_()
-    @StringColumn_({nullable: true})
-    txHash!: string | undefined | null
+    @StringColumn_({nullable: false})
+    txHash!: string
+
+    @Index_()
+    @IntColumn_({nullable: false})
+    logIndex!: number
+
+    @Index_()
+    @IntColumn_({nullable: false})
+    transactionIndex!: number
 
     @Index_()
     @StringColumn_({nullable: true})
     extrinsicHash!: string | undefined | null
 
-    @IntColumn_({nullable: false})
-    extrinsicIndex!: number
+    @IntColumn_({nullable: true})
+    extrinsicIndex!: number | undefined | null
 
     @StringColumn_({nullable: true})
     proposedOracle!: string | undefined | null

@@ -7,7 +7,6 @@ test('reconciliation report rows are deterministically ordered and keep stable s
     {
       tradeId: '10',
       txHash: '0xbb',
-      extrinsicHash: null,
       payoutState: 'PENDING_REVIEW',
       rampReference: 'ramp-b',
       fiatDepositState: 'PARTIAL',
@@ -23,7 +22,6 @@ test('reconciliation report rows are deterministically ordered and keep stable s
     {
       tradeId: '2',
       txHash: null,
-      extrinsicHash: null,
       payoutState: null,
       rampReference: 'ramp-a',
       fiatDepositState: 'PENDING',
@@ -39,7 +37,6 @@ test('reconciliation report rows are deterministically ordered and keep stable s
     {
       tradeId: '10',
       txHash: '0xaa',
-      extrinsicHash: null,
       payoutState: 'PAID',
       rampReference: 'ramp-a',
       fiatDepositState: 'FUNDED',
@@ -58,7 +55,6 @@ test('reconciliation report rows are deterministically ordered and keep stable s
     {
       tradeId: '2',
       txHash: null,
-      extrinsicHash: null,
       payoutState: null,
       rampReference: 'ramp-a',
       fiatDepositState: 'PENDING',
@@ -75,7 +71,6 @@ test('reconciliation report rows are deterministically ordered and keep stable s
     {
       tradeId: '10',
       txHash: '0xaa',
-      extrinsicHash: null,
       payoutState: 'PAID',
       rampReference: 'ramp-a',
       fiatDepositState: 'FUNDED',
@@ -92,7 +87,6 @@ test('reconciliation report rows are deterministically ordered and keep stable s
     {
       tradeId: '10',
       txHash: '0xbb',
-      extrinsicHash: null,
       payoutState: 'PENDING_REVIEW',
       rampReference: 'ramp-b',
       fiatDepositState: 'PARTIAL',
@@ -114,7 +108,6 @@ test('reconciliation report summary counts are stable', () => {
     {
       tradeId: '1',
       txHash: '0xabc',
-      extrinsicHash: null,
       payoutState: 'PAID',
       rampReference: 'ramp-1',
       fiatDepositState: 'FUNDED',
@@ -130,7 +123,6 @@ test('reconciliation report summary counts are stable', () => {
     {
       tradeId: '2',
       txHash: null,
-      extrinsicHash: null,
       payoutState: null,
       rampReference: null,
       fiatDepositState: null,

@@ -1,11 +1,10 @@
-export const RECONCILIATION_REPORT_VERSION = '1.2';
+export const RECONCILIATION_REPORT_VERSION = '2.0';
 
 export type ReconciliationVerdict = 'MATCH' | 'MISMATCH';
 
 export interface ReconciliationReportInputRow {
   tradeId: string;
   txHash: string | null;
-  extrinsicHash: string | null;
   payoutState: string | null;
   rampReference: string | null;
   fiatDepositState: string | null;
@@ -22,7 +21,6 @@ export interface ReconciliationReportInputRow {
 export interface ReconciliationReportRow {
   tradeId: string;
   txHash: string | null;
-  extrinsicHash: string | null;
   payoutState: string | null;
   rampReference: string | null;
   fiatDepositState: string | null;
@@ -138,7 +136,6 @@ export function buildReconciliationReportRows(
     return {
       tradeId: row.tradeId,
       txHash: row.txHash,
-      extrinsicHash: row.extrinsicHash,
       payoutState: row.payoutState,
       rampReference: row.rampReference,
       fiatDepositState: row.fiatDepositState,
@@ -164,11 +161,6 @@ export function buildReconciliationReportRows(
     const byTx = compareNullableStrings(a.txHash, b.txHash);
     if (byTx !== 0) {
       return byTx;
-    }
-
-    const byExtrinsic = compareNullableStrings(a.extrinsicHash, b.extrinsicHash);
-    if (byExtrinsic !== 0) {
-      return byExtrinsic;
     }
 
     const byState = compareNullableStrings(a.payoutState, b.payoutState);

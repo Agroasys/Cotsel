@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
+import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
 import { parseServiceApiKeys, ServiceApiKey } from './auth/serviceAuth';
 
 dotenv.config();
@@ -25,6 +26,19 @@ export interface TreasuryConfig {
   nonceStore: NonceStoreMode;
   nonceRedisUrl?: string;
   nonceTtlSeconds: number;
+  settlementRuntimeKey?: SettlementRuntimeKey;
+  networkName?: string;
+  rpcUrl?: string;
+  rpcFallbackUrls: string[];
+  chainId?: number;
+  explorerBaseUrl?: string | null;
+  reconciliationDb: {
+    host: string;
+    port: number;
+    name: string;
+    user: string;
+    password: string;
+  } | null;
 }
 
 function env(name: string): string {
@@ -61,6 +75,44 @@ function envNumber(name: string, fallback?: number): number {
   return parsed;
 }
 
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+}
+
+function envUrl(name: string): string {
+  const value = env(name);
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${name} must be a valid URL, received "${value}"`);
+  }
+
+  assert(
+    parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'ws:' || parsed.protocol === 'wss:',
+    `${name} must use http, https, ws, or wss protocol`,
+  );
+
+  return value.replace(/\/$/, '');
+}
+
+function parseUrlList(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => value.replace(/\/$/, ''));
+}
+
+function hasSettlementRuntimeOverride(): boolean {
+  return Boolean(optionalEnv('SETTLEMENT_RUNTIME') || optionalEnv('RPC_URL') || optionalEnv('CHAIN_ID'));
+}
+
 function resolveNonceStoreMode(nodeEnv: string): NonceStoreMode {
   const rawMode = process.env.NONCE_STORE?.trim().toLowerCase();
 
@@ -93,6 +145,16 @@ export function loadConfig(): TreasuryConfig {
   const indexerGraphqlTimeoutMinMs = envNumber('INDEXER_GQL_TIMEOUT_MIN_MS', 1000);
   const indexerGraphqlTimeoutMaxMs = envNumber('INDEXER_GQL_TIMEOUT_MAX_MS', 60000);
   const indexerGraphqlRequestTimeoutMs = envNumber('INDEXER_GQL_TIMEOUT_MS', 10000);
+  const runtime = hasSettlementRuntimeOverride()
+    ? resolveSettlementRuntime({
+        runtimeKey: optionalEnv('SETTLEMENT_RUNTIME'),
+        rpcUrl: optionalEnv('RPC_URL') ? envUrl('RPC_URL') : undefined,
+        rpcFallbackUrls: parseUrlList(process.env.RPC_FALLBACK_URLS),
+        chainId: optionalEnv('CHAIN_ID') ? envNumber('CHAIN_ID') : null,
+        explorerBaseUrl: optionalEnv('EXPLORER_BASE_URL'),
+      })
+    : null;
+  const reconciliationDbName = optionalEnv('RECONCILIATION_DB_NAME');
 
   if (authEnabled) {
     assert(
@@ -140,6 +202,21 @@ export function loadConfig(): TreasuryConfig {
     nonceStore,
     nonceRedisUrl,
     nonceTtlSeconds,
+    settlementRuntimeKey: runtime?.runtimeKey,
+    networkName: runtime?.networkName,
+    rpcUrl: runtime?.rpcUrl,
+    rpcFallbackUrls: runtime?.rpcFallbackUrls ?? [],
+    chainId: runtime?.chainId,
+    explorerBaseUrl: runtime?.explorerBaseUrl ?? null,
+    reconciliationDb: reconciliationDbName
+      ? {
+          host: optionalEnv('RECONCILIATION_DB_HOST') || env('DB_HOST'),
+          port: envNumber('RECONCILIATION_DB_PORT', envNumber('DB_PORT')),
+          name: reconciliationDbName,
+          user: optionalEnv('RECONCILIATION_DB_USER') || env('DB_USER'),
+          password: optionalEnv('RECONCILIATION_DB_PASSWORD') || env('DB_PASSWORD'),
+        }
+      : null,
   };
 
   assert(config.ingestBatchSize > 0, 'TREASURY_INGEST_BATCH_SIZE must be > 0');

@@ -1,13 +1,13 @@
 # Cotsel: Commercial Trade Settlement Layer
 A non-custodial, evidence-driven settlement layer for cross-border trade workflows.
 
-Cotsel is a modular settlement infrastructure for milestone-gated escrow and conditional release. The active v1 migration target is Base. Historical Polkadot/PolkaVM deployment, indexing, and evidence artifacts may still exist in the repository during migration, but they are not canonical v1 architecture truth.
+Cotsel is a modular settlement infrastructure for milestone-gated escrow and conditional release. It is designed for B2B trade workflows that require stablecoin escrow settlement, Ricardian agreement anchoring, and audit-grade traceability without introducing a custodial operator.
 
-Cotsel was initially developed to support the Agroasys platform, but it is open-source and integration-friendly. It is designed for reuse by B2B marketplaces and trade workflows that require stablecoin escrow settlement, Ricardian agreement anchoring, and audit-grade traceability without introducing a custodial operator.
+Cotsel was initially developed to support the Agroasys platform, but it is open-source and integration-friendly. It is designed for reuse by marketplaces, trade platforms, and enterprise workflows that need deterministic settlement controls, evidence-linked execution, and reconciliation-ready operational visibility.
 
 ## At a Glance
 
-- **What this is:** a secure settlement layer for commercial trade (DvP-style escrow, milestone gating, disputes, timeouts, and holds).
+- **What this is:** a secure settlement layer for commercial trade, including milestone-gated escrow, conditional release, disputes, timeouts, and holds.
 - **What this is not:** a custody wallet, a bank, or a full marketplace application.
 - **What this enables:** transparent settlement logic, deterministic operational controls, and evidence traceability for reconciliation and dispute review.
 
@@ -29,7 +29,7 @@ Cotsel was initially developed to support the Agroasys platform, but it is open-
 - It does not replace internal ERP systems, banking rails, or external marketplace frontends.
 - Enterprise data-boundary and attestation expectations are defined in `docs/adr/adr-0143-privacy-attestation-composability.md`.
 
-> Note: Optimize for deterministic operations and auditability. If a step matters in production, it should be scriptable, tested, and documented in a runbook.
+Optimize for deterministic operations and auditability. If a step matters in production, it should be scriptable, tested, and documented in a runbook.
 
 ## Architecture
 
@@ -49,10 +49,10 @@ Canonical target-state architecture:
 ## Core Components
 
 - **Escrow Contract (`/contracts`)**  
-A settlement state machine implemented in Solidity. The contract business logic remains portable, while the active v1 runtime target moves to Base and the legacy PolkaVM toolchain is treated as historical migration residue until replaced.
+A settlement state machine implemented in Solidity for Base-first delivery. The contract governs milestone-gated releases, dispute holds, pause controls, and deterministic settlement transitions.
 
 - **Oracle Service (`/oracle`)**  
-A Node.js service that submits signed milestone attestations to the contract. Attestations are schema-validated and designed to be replay-safe and idempotent. Each attestation references external evidence identifiers (for example Bill of Lading, inspection certificate references) that support operational and audit review.
+A Node.js service that submits signed milestone attestations to the contract. Attestations are schema-validated and designed to be replay-safe and idempotent. Each attestation references external evidence identifiers, such as Bill of Lading or inspection certificate references, that support operational and audit review.
 
 - **Ricardian Anchoring (`/ricardian`)**  
 The protocol does not store contracts on-chain. Each trade is anchored by a SHA-256 hash of the signed off-chain agreement (TradeID). Evidence references and settlement actions are linked to this immutable identifier across the lifecycle.
@@ -67,20 +67,20 @@ Cotsel implements a deterministic two-stage settlement flow. This supports comme
 ## Lifecycle
 
 - **Lock (Encumbrance)**
-The buyer locks stablecoin funds into escrow to cover goods value plus configured fees. The contract records the Ricardian TradeID and encumbers funds into two logical buckets: `stageOneAmount` (operational and fee tranche) and `stageTwoAmount` (net settlement tranche).
+The buyer locks stablecoin funds into escrow to cover goods value plus configured fees. The contract records the Ricardian TradeID and encumbers funds into two logical buckets: `stageOneAmount` for operational and fee release, and `stageTwoAmount` for final net settlement.
 
-- **Stage 1 Release (Operational)**  
-Trigger: the oracle submits a signed attestation referencing validated documentation (for example shipment evidence such as Bill of Lading reference).  
-Action: in a single state transition, configured fees are allocated to their recipients and the supplier receives tranche one of the principal (default 40%, configurable).
+- **Stage 1 Release (Operational)**
+Trigger: the oracle submits a signed attestation referencing validated shipment or milestone evidence.
+Action: in a single state transition, configured fees are allocated to their recipients and the supplier receives tranche one of the principal.
 
-- **Stage 2 Release (Final Settlement)**  
-Trigger: the oracle submits a signed attestation referencing destination inspection evidence (quality and quantity confirmation, where applicable).  
-Action: the remaining supplier tranche (default 60%) is released, completing settlement.
+- **Stage 2 Release (Final Settlement)**
+Trigger: the oracle submits a signed attestation referencing destination inspection or final acceptance evidence.
+Action: the remaining supplier tranche is released, completing settlement.
 
 ## Tech Stack
 
 **Contracts and toolchain**  
-- Smart contracts: Solidity with a Base-first runtime target for active v1 delivery. Legacy PolkaVM toolchain references remain in the repo only until the Base contract/deploy migration is complete.
+- Smart contracts: Solidity with a Base-first runtime target.
 - Testing and fuzzing: Hardhat for integration tests; Foundry for fuzz and invariant testing where applicable.
 
 **Services and runtime**  
@@ -90,26 +90,19 @@ Action: the remaining supplier tranche (default 60%) is released, completing set
 
 **Network and assets**  
 - Settlement rails: Base Sepolia for pilot validation and Base mainnet for production target-state settlement flows.
-- Stablecoin rail: USDC on Base for active v1 settlement design.
-- Gas management: any sponsorship or fee abstraction is optional, buyer-bounded, and not a prerequisite for the Base migration.
+- Stablecoin rail: USDC on Base for active settlement design.
+- Gas management: any sponsorship or fee abstraction is optional, buyer-bounded, and not a prerequisite for settlement safety.
 
 **Indexing and APIs**  
-- Indexing: SubQuery or Subsquid with a GraphQL API backed by Postgres.
+- Indexing: EVM-native indexing with a GraphQL API backed by Postgres.
 
 ## Job and Eventing Strategy
 
-Cotsel uses a two-tier async strategy to separate payments-grade durability from
-non-critical background processing.
+Cotsel uses a two-tier async strategy to separate payments-grade durability from non-critical background processing.
 
-- Durable jobs and event routing: SQS with DLQs for durable processing
-  (webhooks, payouts, chain events, reconciliation, notifications) and
-  EventBridge for internal event routing (`trade.updated`, `escrow.locked`,
-  `docs.approved`).
-- Non-critical async jobs: BullMQ (Redis) is permitted only for best-effort
-  background tasks such as email sending and PDF generation.
-- Redis usage boundary: Redis may be used for caching, short-lived locks, and
-  rate limiting tokens only. Redis is never a source of truth for settlement,
-  reconciliation, or payments-grade workflows.
+- Durable jobs and event routing: SQS with DLQs for durable processing of webhooks, payouts, chain events, reconciliation, and notifications, plus EventBridge for internal event routing such as `trade.updated`, `escrow.locked`, and `docs.approved`.
+- Non-critical async jobs: BullMQ and Redis are permitted only for best-effort background tasks such as email delivery and PDF generation.
+- Redis usage boundary: Redis may be used for caching, short-lived locks, and rate-limiting tokens only. Redis is never a source of truth for settlement, reconciliation, or payments-grade workflows.
 
 See also:
 [`docs/architecture/job-and-eventing-strategy.md`](docs/architecture/job-and-eventing-strategy.md)
@@ -139,9 +132,9 @@ cotsel/
 
 ## Security and Wallet Abstraction
 
-- **Fee / Gas Abstraction**: Any sponsored-fee or gas-abstraction path is optional, tightly bounded, and never a prerequisite for v1 settlement safety. The default Base migration path preserves explicit non-custodial signing and does not depend on a mandatory account-abstraction rollout.
+- **Fee / Gas Abstraction**: Any sponsored-fee or gas-abstraction path is optional, tightly bounded, and never a prerequisite for settlement safety. The default path preserves explicit non-custodial signing and does not depend on a mandatory account-abstraction rollout.
 
-- **Oracle Key Isolation**: Oracle-gated functions are restricted to an authorized attester key (for example `onlyOracle`). The oracle service should be deployed with strict key management controls (isolated runtime, restricted access, least privilege), and may be backed by hardened key storage such as an HSM or equivalent secure key management service.
+- **Oracle Key Isolation**: Oracle-gated functions are restricted to an authorized attester key. The oracle service should be deployed with strict key-management controls, isolated runtime boundaries, restricted access, and least privilege. Hardened key storage such as an HSM or equivalent secure key-management service is recommended.
 
 - **Ricardian Anchoring Integrity**: The `ricardianHash` (TradeID) is committed at trade creation and treated as immutable for that trade lifecycle. This provides a stable reference linking off-chain agreement text to on-chain settlement state and supports audit and dispute review through verifiable evidence traceability.
 

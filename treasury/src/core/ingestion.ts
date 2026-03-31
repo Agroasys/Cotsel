@@ -36,7 +36,6 @@ export class TreasuryIngestionService {
             Logger.warn('Skipping logistics ledger entry because txHash is unavailable', {
               eventId: event.id,
               tradeId: event.tradeId,
-              extrinsicHash: event.extrinsicHash,
             });
             continue;
           }
@@ -63,7 +62,6 @@ export class TreasuryIngestionService {
             Logger.warn('Skipping platform fee ledger entry because txHash is unavailable', {
               eventId: event.id,
               tradeId: event.tradeId,
-              extrinsicHash: event.extrinsicHash,
             });
             continue;
           }

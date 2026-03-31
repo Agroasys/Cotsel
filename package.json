@@ -54,6 +54,16 @@
     "security:deps": "node scripts/security-deps-report.mjs"
   },
   "overrides": {
+    "axios": "1.14.0",
+    "@parity/hardhat-polkadot-node": {
+      "axios": "1.14.0"
+    },
+    "@parity/hardhat-polkadot-resolc": {
+      "axios": "1.14.0"
+    },
+    "hardhat-gas-reporter": {
+      "axios": "1.14.0"
+    },
     "bn.js": "5.2.3",
     "brace-expansion@<1.1.13": "1.1.13",
     "brace-expansion@>=2 <2.0.3": "2.0.3",

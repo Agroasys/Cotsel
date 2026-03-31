@@ -1,8 +1,8 @@
 # Indexer
 
-This module indexes **AgroasysEscrow** on-chain events into a **queryable datastore** (PostgreSQL via TypeORM) and exposes a **read-only GraphQL** API for the Web2 platform layer.
+This module indexes **AgroasysEscrow** EVM logs from **Base Sepolia** and **Base Mainnet** into a queryable PostgreSQL datastore (TypeORM) and exposes a read-only GraphQL API for the rest of the platform.
 
-It is designed for **auditability**, **idempotency**, and **re-org safety**, and must remain aligned with Agroasys business/security rules (especially around milestone releases, dispute flow, and fee handling).
+The active processor is EVM-native and Base-first. Historical Substrate / extrinsic-shaped assumptions are not part of the live v1 path.
 
 ---
 
@@ -10,7 +10,7 @@ It is designed for **auditability**, **idempotency**, and **re-org safety**, and
 
 ### Core responsibilities
 
-- **Ingest escrow contract events** from the target chain (Asset Hub Paseo / Polkadot Hub testnet environment).
+- **Ingest escrow contract logs** from the configured Base settlement runtime.
 - **Persist** normalized trade state + event history into Postgres (TypeORM models generated from `schema.graphql`).
 - Provide a **read-only GraphQL interface** for the platform backend to query:
   - trades, participants, amounts, statuses
@@ -19,8 +19,8 @@ It is designed for **auditability**, **idempotency**, and **re-org safety**, and
   - event timeline / audit trail
 - Ensure indexing is:
   - **Idempotent** (replays do not duplicate rows or double-count amounts)
-  - **Re-org safe** (handles block reorganizations with deterministic rollbacks)
-  - **Config-driven** (no hardcoded RPC URLs / keys; env-based configuration)
+  - **Re-org safe** (EVM log identity is stable and replay-safe)
+  - **Config-driven** (runtime, start block, and finality confirmation come from env/config)
 
 ### Events indexed (must match the on-chain contract)
 
@@ -64,13 +64,14 @@ The indexer is expected to capture and store the following escrow events:
 - Writes must be **atomic and retry-safe**.
 - Event handlers must:
   - validate the **expected contract address**
-  - verify the **expected emitter/module** (where applicable)
-  - enforce **deterministic primary keys** (e.g., `txHash + logIndex`) to guarantee idempotency
+  - verify the **expected contract address**
+  - decode only the frozen Base-era escrow ABI
+  - enforce **deterministic primary keys** (`txHash + logIndex`) to guarantee idempotency
 
 ### Re-org handling
 
-- Must handle chain **re-orgs** using finality checks and deterministic rollbacks.
-- Avoid assumptions of immediate finality; prefer indexing based on finalized blocks where possible.
+- Must handle chain **re-orgs** using deterministic event identity and configured confirmation depth.
+- Avoid assumptions of immediate finality; active downstream workflow and treasury gates rely on Base `safe` and `finalized` stages.
 
 ---
 
@@ -89,7 +90,6 @@ indexer/
 ├── package.json
 ├── schema.graphql
 ├── tsconfig.json
-└── typegen.json
 ```
 ### Validation checklist
 
@@ -107,7 +107,7 @@ indexer/
 
 - Node.js + npm
 - Docker + Docker Compose
-- A reachable RPC endpoint for the target network
+- A reachable Base RPC endpoint for the target environment
 - A deployed AgroasysEscrow contract address + deployment start block
 - .env configured (see below)
 
@@ -183,13 +183,13 @@ docker compose logs -f
 ---
 ### Operational notes
 
-1. Always confirm the gateway and rpc point to the same network dataset.
+1. Always confirm the GraphQL endpoint and RPC point to the same Base runtime.
 2. If you see missing blocks / “Failed to fetch block …” errors:
-   - confirm your start block exists in the gateway dataset
-   - confirm your gateway URL matches the deployed chain (Asset Hub Paseo vs Polkadot vs other)
+   - confirm your start block exists in the configured Base dataset
+   - confirm your gateway URL matches the deployed Base runtime
    - reduce RPC rate limits if your provider is throttling
 
-3. If events appear on Subscan but not in the indexer:
+3. If events appear in the configured Base explorer but not in the indexer:
    - confirm the processor event filters match the emitted event names
    - confirm the ABI/decoder matches the deployed contract build
    - confirm contract address filtering is correct
