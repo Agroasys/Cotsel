@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-03-30T20:51:45.925Z",
+  "commitSha": "e650a4608d25f0e450ef917bcec3250b62d0c455",
+  "network": {
+    "hardhatName": "base-sepolia",
+    "runtimeKey": "base-sepolia",
+    "displayName": "Base Sepolia",
+    "chainId": 84532
+  },
+  "contract": {
+    "name": "AgroasysEscrow",
+    "address": "0xc34e24F88bbC4d3a04CD1FF89957817BE0ce42d3",
+    "deploymentTxHash": "0xfb6026d4cae6c60a41854e0fb29bf983ebae0f24220c15f338a7866112ea92c7",
+    "explorerAddressUrl": "https://sepolia.basescan.org/address/0xc34e24F88bbC4d3a04CD1FF89957817BE0ce42d3",
+    "constructorArguments": {
+      "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "oracleAddress": "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
+      "treasuryAddress": "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
+      "admins": [
+        "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a"
+      ],
+      "requiredApprovals": 1
+    }
+  },
+  "verification": {
+    "requested": true,
+    "status": "verified",
+    "verificationUrl": "https://sepolia.basescan.org/address/0xc34e24F88bbC4d3a04CD1FF89957817BE0ce42d3#code"
+  },
+  "artifact": {
+    "abiSha256": "a9d62d6adf98963f5d010f8636261fdb826408b188dd00f82f0b59afbcc1ff3b",
+    "bytecodeSha256": "4a024f0b90f87447857a912f9bd95e7de29649b7ba8c765db261f2880e58088b",
+    "deployedBytecodeSha256": "a54942c8e365f3784f38b8d437f9d708290db60738b00cdcfb934c32d1be97f3"
+  }
+}

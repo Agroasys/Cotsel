@@ -5,13 +5,12 @@ import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import { vars } from 'hardhat/config';
 
-const usePolkavmResolc = process.env.USE_POLKAVM_RESOLC === "true";
-if (usePolkavmResolc) {
-  require("@parity/hardhat-polkadot");
-  require("@parity/hardhat-polkadot-resolc");
-}
-
 function optionalVar(name: string): string | undefined {
+  const envValue = process.env[name]?.trim();
+  if (envValue) {
+    return envValue;
+  }
+
   try {
     const v = vars.get(name);
     return v && v.trim() ? v : undefined;
@@ -22,7 +21,11 @@ function optionalVar(name: string): string | undefined {
 
 const pk1 = optionalVar("PRIVATE_KEY");
 const pk2 = optionalVar("PRIVATE_KEY2");
-const polkadotAccounts = [pk1, pk2].filter(Boolean) as string[];
+const deployerAccounts = [pk1, pk2].filter(Boolean) as string[];
+
+const baseSepoliaRpcUrl = optionalVar("BASE_SEPOLIA_RPC_URL") ?? "https://sepolia.base.org";
+const baseMainnetRpcUrl = optionalVar("BASE_MAINNET_RPC_URL") ?? "https://mainnet.base.org";
+const etherscanApiKey = optionalVar("ETHERSCAN_API_KEY") ?? optionalVar("BASESCAN_API_KEY") ?? "PLACEHOLDER";
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -42,26 +45,31 @@ const config: HardhatUserConfig = {
     artifacts: "./artifacts"
   },
   networks: {
-    polkadotTestnet: {
-      url: 'https://services.polkadothub-rpc.com/testnet',
-      chainId: 420420417,
-      accounts: polkadotAccounts,
-      polkadot: { target: "pvm" },
-    } as any,
+    hardhat: {},
+    baseSepolia: {
+      url: baseSepoliaRpcUrl,
+      chainId: 84532,
+      accounts: deployerAccounts,
+    },
+    "base-sepolia": {
+      url: baseSepoliaRpcUrl,
+      chainId: 84532,
+      accounts: deployerAccounts,
+    },
+    base: {
+      url: baseMainnetRpcUrl,
+      chainId: 8453,
+      accounts: deployerAccounts,
+    },
+    "base-mainnet": {
+      url: baseMainnetRpcUrl,
+      chainId: 8453,
+      accounts: deployerAccounts,
+    },
+  },
+  etherscan: {
+    apiKey: etherscanApiKey,
   },
 };
-
-if (usePolkavmResolc) {
-  (config as HardhatUserConfig & { resolc?: unknown }).resolc = {
-    version: "1.0.0",
-    compilerSource: "binary",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200,
-      },
-    },
-  };
-}
 
 export default config;

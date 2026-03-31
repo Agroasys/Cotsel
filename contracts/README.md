@@ -1,8 +1,8 @@
-# Solidity Smart Contract (PolkaVM)
+# Solidity Smart Contract (Base EVM)
 
 ## Overview
 
-A Solidity-based state machine deployed on PolkaVM. It handles the locking, dispute resolution, and atomic splitting of funds.
+A Solidity-based state machine prepared for Base EVM deployment. It handles the locking, dispute resolution, and atomic splitting of funds.
 
 
 ## Architecture
@@ -452,9 +452,23 @@ forge test --match-contract InvariantTest -vvv
 
 ## Deploy Contracts
 ```bash
-npx hardhat ignition deploy ignition/modules/MockUSDC.ts --network polkadotTestnet
-npx hardhat ignition deploy ignition/modules/AgroasysEscrow.ts --network polkadotTestnet
+npm run deploy:base-sepolia
+npm run deploy:base-mainnet
 ```
+
+Required deploy-time inputs:
+- `DEPLOY_ORACLE_ADDRESS`
+- `DEPLOY_TREASURY_ADDRESS`
+- `DEPLOY_ADMINS` (comma-separated)
+- `DEPLOY_REQUIRED_APPROVALS`
+
+Optional deploy-time inputs:
+- `DEPLOY_VERIFY=true|false`
+- `DEPLOY_CONFIRMATIONS`
+- `DEPLOY_EVIDENCE_OUT_DIR`
+- `BASE_SEPOLIA_RPC_URL`
+- `BASE_MAINNET_RPC_URL`
+- `BASESCAN_API_KEY`
 
 ## Addresses
 

@@ -3,6 +3,7 @@
  */
 import { strict as assert } from 'assert';
 import { GatewayConfig, loadConfig } from './env';
+import { resolveSettlementRuntime } from '@agroasys/sdk';
 
 export interface GovernanceExecutorConfig extends GatewayConfig {
   usdcAddress: string;
@@ -33,7 +34,15 @@ export function loadExecutorConfig(baseConfig?: GatewayConfig): GovernanceExecut
 
   return {
     ...gatewayConfig,
-    usdcAddress: assertAddress('GATEWAY_USDC_ADDRESS', env('GATEWAY_USDC_ADDRESS')),
+    usdcAddress: assertAddress('GATEWAY_USDC_ADDRESS', resolveSettlementRuntime({
+      runtimeKey: gatewayConfig.settlementRuntimeKey,
+      rpcUrl: gatewayConfig.rpcUrl,
+      rpcFallbackUrls: gatewayConfig.rpcFallbackUrls,
+      chainId: gatewayConfig.chainId,
+      explorerBaseUrl: gatewayConfig.explorerBaseUrl,
+      escrowAddress: gatewayConfig.escrowAddress,
+      usdcAddress: process.env.GATEWAY_USDC_ADDRESS ? assertAddress('GATEWAY_USDC_ADDRESS', env('GATEWAY_USDC_ADDRESS')) : null,
+    }).usdcAddress ?? assertAddress('GATEWAY_USDC_ADDRESS', env('GATEWAY_USDC_ADDRESS'))),
     executorPrivateKey: assertPrivateKey('GATEWAY_EXECUTOR_PRIVATE_KEY', env('GATEWAY_EXECUTOR_PRIVATE_KEY')),
     executionTimeoutMs,
   };

@@ -15,6 +15,7 @@ import {
   SETTLEMENT_EXECUTION_STATUSES,
   SETTLEMENT_RECONCILIATION_STATUSES,
 } from '../core/settlementStore';
+import { requiresCanonicalTxHash } from '../core/transactionReference';
 
 export interface SettlementRouterOptions {
   config: GatewayConfig;
@@ -165,14 +166,24 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
   router.post('/settlement/handoffs/:handoffId/execution-events', idempotency, (req, res, next) => handleRequest(async () => {
     const handoffId = requireString(req.params.handoffId, 'handoffId');
     const body = requireObject(req.body, 'body');
+    const executionStatus = requireExecutionStatus(body.executionStatus);
+    const txHash = optionalString(body.txHash, 'txHash');
+    const extrinsicHash = optionalString(body.extrinsicHash, 'extrinsicHash');
+    if (requiresCanonicalTxHash(executionStatus) && !txHash && extrinsicHash) {
+      throw new GatewayError(
+        400,
+        'VALIDATION_ERROR',
+        'txHash is required for submitted and confirmed execution events; extrinsicHash is compatibility-only',
+      );
+    }
     const result = await options.settlementService.recordExecutionEvent({
       handoffId,
       eventType: requireEventType(body.eventType),
-      executionStatus: requireExecutionStatus(body.executionStatus),
+      executionStatus,
       reconciliationStatus: requireReconciliationStatus(body.reconciliationStatus),
       providerStatus: optionalString(body.providerStatus, 'providerStatus'),
-      txHash: optionalString(body.txHash, 'txHash'),
-      extrinsicHash: optionalString(body.extrinsicHash, 'extrinsicHash'),
+      txHash,
+      extrinsicHash,
       detail: optionalString(body.detail, 'detail'),
       metadata: optionalMetadata(body.metadata),
       observedAt: requireString(body.observedAt, 'observedAt'),

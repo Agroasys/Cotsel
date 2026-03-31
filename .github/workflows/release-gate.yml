@@ -419,7 +419,8 @@ jobs:
           if-no-files-found: error
 
   asset-fee-path:
-    name: ci/asset-fee-path
+    if: vars.ENABLE_HISTORICAL_ASSET_FEE_PATH == 'true'
+    name: ci/asset-fee-path-historical
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -431,7 +432,7 @@ jobs:
           cp .env.local.example .env.local
           cp .env.staging-e2e-real.example .env.staging-e2e-real
 
-      - name: Run asset fee-path checks (config-only)
+      - name: Run historical asset fee-path checks (config-only)
         shell: bash
         run: |
           set +e
@@ -460,11 +461,11 @@ jobs:
             exit 1
           fi
 
-      - name: Upload asset fee-path report
+      - name: Upload historical asset fee-path report
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
-          name: ci-report-asset-fee-path
+          name: ci-report-asset-fee-path-historical
           path: |
             ci-reports/asset-fee-path.txt
             reports/asset-fee-path
@@ -491,7 +492,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install pinned resolc binary (deterministic)
+      - name: Install pinned historical resolc binary (deterministic)
+        if: vars.ENABLE_HISTORICAL_POLKAVM_COMPILE_EVIDENCE == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -550,11 +552,12 @@ jobs:
 
           "${TARGET_BIN}" --version
 
-      - name: Compile contracts via PolkaVM resolc path
-        run: npm run -w contracts compile:polkavm
+      - name: Compile historical PolkaVM contracts via resolc path
+        if: vars.ENABLE_HISTORICAL_POLKAVM_COMPILE_EVIDENCE == 'true'
+        run: npm run -w contracts compile:polkavm:historical
 
-      - name: Generate PolkaVM compile evidence bundle
-        if: always()
+      - name: Generate historical PolkaVM compile evidence bundle
+        if: always() && vars.ENABLE_HISTORICAL_POLKAVM_COMPILE_EVIDENCE == 'true'
         shell: bash
         run: |
           set +e
@@ -660,8 +663,8 @@ jobs:
           }
           EOF
 
-      - name: Guard PolkaVM artifact evidence integrity
-        if: always()
+      - name: Guard historical PolkaVM artifact evidence integrity
+        if: always() && vars.ENABLE_HISTORICAL_POLKAVM_COMPILE_EVIDENCE == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -708,11 +711,11 @@ jobs:
             exit 1
           fi
 
-      - name: Upload PolkaVM compile evidence bundle
-        if: always()
+      - name: Upload historical PolkaVM compile evidence bundle
+        if: always() && vars.ENABLE_HISTORICAL_POLKAVM_COMPILE_EVIDENCE == 'true'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
-          name: ci-report-contracts-compile-polkavm
+          name: ci-report-contracts-compile-polkavm-historical
           path: reports/polkavm-compile
 
       - name: Upload workspace report
@@ -815,7 +818,7 @@ jobs:
           "${TARGET_BIN}" --version
 
       - name: Generate historical PolkaVM contract artifacts for verification
-        run: npm run -w contracts compile:polkavm
+        run: npm run -w contracts compile:polkavm:historical
 
       - name: Run historical deploy verification smoke tests
         run: node --test scripts/tests/polkavm-deploy-verify-smoke.test.mjs
@@ -1272,7 +1275,7 @@ jobs:
           results["ci/arch-roadmap-consistency"]="${{ needs.arch-roadmap-consistency.result }}"
           results["ci/env-profile-regression"]="${{ needs.env-profile-regression.result }}"
           results["ci/staging-e2e-real-gate"]="${{ needs.staging-e2e-real-gate.result }}"
-          results["ci/asset-fee-path"]="${{ needs.asset-fee-path.result }}"
+          results["ci/asset-fee-path-historical"]="${{ needs.asset-fee-path.result }}"
           results["ci/contracts"]="${{ needs.contracts.result }}"
           results["ci/contracts-deploy-verification-historical"]="${{ needs.contracts_deploy_verification.result }}"
           results["ci/sdk"]="${{ needs.sdk.result }}"

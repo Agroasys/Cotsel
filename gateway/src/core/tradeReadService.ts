@@ -5,6 +5,7 @@ import { formatUnits } from 'ethers';
 import { ComplianceStore } from './complianceStore';
 import { IndexerGraphqlClient } from './indexerGraphqlClient';
 import { GatewayError } from '../errors';
+import { buildSettlementTransactionReference } from './transactionReference';
 import type {
   SettlementCallbackStatus,
   SettlementEventType,
@@ -21,6 +22,7 @@ export interface DashboardTradeEventRecord {
   timestamp: string;
   actor: string;
   txHash?: string;
+  explorerUrl?: string | null;
   detail?: string;
 }
 
@@ -56,6 +58,7 @@ export interface DashboardTradeSettlementRecord {
   providerStatus: string | null;
   txHash: string | null;
   extrinsicHash: string | null;
+  explorerUrl?: string | null;
   externalReference: string | null;
   latestEventType: SettlementEventType | null;
   latestEventDetail: string | null;
@@ -145,7 +148,7 @@ function assertUnixSecondsTimestamp(value: string, field: string): string {
 }
 
 function parseHash(txHash?: string | null, extrinsicHash?: string | null): string | undefined {
-  const candidate = txHash ?? extrinsicHash ?? undefined;
+  const candidate = txHash ?? undefined;
   return candidate && candidate.trim().length > 0 ? candidate : undefined;
 }
 
@@ -272,19 +275,24 @@ function mapEventDetail(event: TradeEventGraphQlRecord): string | undefined {
   }
 }
 
-function mapTimeline(events: TradeEventGraphQlRecord[] | undefined): DashboardTradeEventRecord[] {
+function mapTimeline(
+  events: TradeEventGraphQlRecord[] | undefined,
+  explorerBaseUrl?: string | null,
+): DashboardTradeEventRecord[] {
   const sorted = [...(events ?? [])].sort(
     (left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime(),
   );
 
   return sorted.map((event) => {
-    const eventHash = parseHash(event.txHash, event.extrinsicHash);
+    const reference = buildSettlementTransactionReference(event.txHash, event.extrinsicHash, explorerBaseUrl);
+    const eventHash = parseHash(reference.txHash, reference.extrinsicHash);
     const eventDetail = mapEventDetail(event);
     return {
       stage: mapEventStage(event.eventName),
       timestamp: assertIsoTimestamp(event.timestamp, 'tradeEvent.timestamp'),
       actor: mapEventActor(event.eventName),
       ...(eventHash ? { txHash: eventHash } : {}),
+      ...(reference.explorerUrl ? { explorerUrl: reference.explorerUrl } : {}),
       ...(eventDetail ? { detail: eventDetail } : {}),
     };
   });
@@ -394,12 +402,14 @@ export class TradeReadService implements TradeReadReader {
   private readonly indexerClient: IndexerGraphqlClient;
   private readonly complianceStore: ComplianceStore;
   private readonly settlementReadStore?: TradeSettlementReadStore;
+  private readonly explorerBaseUrl?: string | null;
 
   constructor(
     indexerClientOrUrl: IndexerGraphqlClient | string,
     indexerRequestTimeoutOrComplianceStore: number | ComplianceStore,
     complianceStoreOrSettlementStore?: ComplianceStore | TradeSettlementReadStore,
-    maybeSettlementReadStore?: TradeSettlementReadStore,
+    maybeSettlementReadStoreOrExplorerBaseUrl?: TradeSettlementReadStore | string | null,
+    maybeExplorerBaseUrl?: string | null,
   ) {
     if (typeof indexerClientOrUrl === 'string') {
       this.indexerClient = new IndexerGraphqlClient(
@@ -407,13 +417,21 @@ export class TradeReadService implements TradeReadReader {
         indexerRequestTimeoutOrComplianceStore as number,
       );
       this.complianceStore = complianceStoreOrSettlementStore as ComplianceStore;
-      this.settlementReadStore = maybeSettlementReadStore;
+      this.settlementReadStore = typeof maybeSettlementReadStoreOrExplorerBaseUrl === 'string'
+        ? undefined
+        : maybeSettlementReadStoreOrExplorerBaseUrl ?? undefined;
+      this.explorerBaseUrl = typeof maybeSettlementReadStoreOrExplorerBaseUrl === 'string'
+        ? maybeSettlementReadStoreOrExplorerBaseUrl
+        : maybeExplorerBaseUrl;
       return;
     }
 
     this.indexerClient = indexerClientOrUrl;
     this.complianceStore = indexerRequestTimeoutOrComplianceStore as ComplianceStore;
     this.settlementReadStore = complianceStoreOrSettlementStore as TradeSettlementReadStore | undefined;
+    this.explorerBaseUrl = typeof maybeSettlementReadStoreOrExplorerBaseUrl === 'string'
+      ? maybeSettlementReadStoreOrExplorerBaseUrl
+      : maybeExplorerBaseUrl;
   }
 
   async checkReadiness(): Promise<void> {
@@ -452,13 +470,18 @@ export class TradeReadService implements TradeReadReader {
     trade: TradeGraphQlRecord,
     settlementProjection: TradeSettlementProjection | null,
   ): Promise<DashboardTradeRecord> {
-    const timeline = mapTimeline(trade.events);
+    const timeline = mapTimeline(trade.events, this.explorerBaseUrl);
     const lockReference = timeline.find((event) => event.stage === 'Lock' && event.txHash)?.txHash
       ?? timeline.find((event) => event.txHash)?.txHash
       ?? null;
     const compliance = await this.complianceStore.getTradeStatus(trade.tradeId);
     const latestTimelineEntry = timeline.length > 0 ? timeline[timeline.length - 1] : null;
     const updatedAt = latestTimelineEntry?.timestamp ?? assertIsoTimestamp(trade.createdAt, 'trade.createdAt');
+    const settlementReference = buildSettlementTransactionReference(
+      settlementProjection?.txHash ?? null,
+      settlementProjection?.extrinsicHash ?? null,
+      this.explorerBaseUrl,
+    );
 
     return {
       id: trade.tradeId,
@@ -487,8 +510,9 @@ export class TradeReadService implements TradeReadReader {
         reconciliationStatus: settlementProjection.reconciliationStatus,
         callbackStatus: settlementProjection.callbackStatus,
         providerStatus: settlementProjection.providerStatus,
-        txHash: settlementProjection.txHash,
+        txHash: settlementReference.txHash,
         extrinsicHash: settlementProjection.extrinsicHash,
+        ...(settlementReference.explorerUrl ? { explorerUrl: settlementReference.explorerUrl } : {}),
         externalReference: settlementProjection.externalReference,
         latestEventType: settlementProjection.latestEventType,
         latestEventDetail: settlementProjection.latestEventDetail,

@@ -179,6 +179,7 @@ const tradeReadService = new TradeReadService(
   indexerClient,
   complianceStore,
   settlementStore,
+  config.explorerBaseUrl,
 );
 const overviewService = new OverviewService(
   indexerClient,
