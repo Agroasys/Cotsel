@@ -45,6 +45,8 @@ describe('ConfirmationWorker on-chain fallback', () => {
     } as any;
 
     const sdkClient = {
+      getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(null),
+      getSettlementConfirmationHeads: jest.fn(),
       getTrade: jest.fn().mockResolvedValue({ status: TRADE_STATUS_IN_TRANSIT }),
     } as any;
 
@@ -69,6 +71,8 @@ describe('ConfirmationWorker on-chain fallback', () => {
     } as any;
 
     const sdkClient = {
+      getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(null),
+      getSettlementConfirmationHeads: jest.fn(),
       getTrade: jest.fn().mockResolvedValue({ status: TRADE_STATUS_LOCKED }),
     } as any;
 
@@ -90,6 +94,8 @@ describe('ConfirmationWorker on-chain fallback', () => {
     } as any;
 
     const sdkClient = {
+      getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(null),
+      getSettlementConfirmationHeads: jest.fn(),
       getTrade: jest.fn().mockResolvedValue({ status: TRADE_STATUS_LOCKED }),
     } as any;
 
@@ -103,13 +109,19 @@ describe('ConfirmationWorker on-chain fallback', () => {
     expect(sdkClient.getTrade).toHaveBeenCalledTimes(1);
   });
 
-  it('prefers on-chain confirmation before moving to exhausted on hard timeout', async () => {
+  it('confirms from receipt once the block has reached the safe stage', async () => {
     const indexerClient = {
       findConfirmationEvent: jest.fn().mockResolvedValue(null),
     } as any;
 
     const sdkClient = {
-      getTrade: jest.fn().mockResolvedValue({ status: TRADE_STATUS_IN_TRANSIT }),
+      getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(123),
+      getSettlementConfirmationHeads: jest.fn().mockResolvedValue({
+        latestBlockNumber: 140,
+        safeBlockNumber: 130,
+        finalizedBlockNumber: 100,
+      }),
+      getTrade: jest.fn(),
     } as any;
 
     const worker = new ConfirmationWorker(indexerClient, sdkClient);
@@ -124,11 +136,9 @@ describe('ConfirmationWorker on-chain fallback', () => {
       expect.objectContaining({
         status: TriggerStatus.CONFIRMED,
         on_chain_verified: true,
+        confirmation_stage: 'SAFE',
       }),
     );
-    expect(mockUpdateTrigger).not.toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ status: TriggerStatus.EXHAUSTED_NEEDS_REDRIVE }),
-    );
+    expect(sdkClient.getTrade).not.toHaveBeenCalled();
   });
 });

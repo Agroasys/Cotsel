@@ -12,6 +12,7 @@
     "ingest:once": "ts-node src/server.ts --ingest-once"
   },
   "dependencies": {
+    "@agroasys/sdk": "^1.0.0",
     "@agroasys/shared-auth": "^1.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",

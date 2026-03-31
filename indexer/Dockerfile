@@ -31,7 +31,6 @@ COPY --from=builder /app/indexer/package.json /app/indexer/package.json
 COPY --from=builder /app/indexer/lib /app/indexer/lib
 COPY --from=builder /app/indexer/db /app/indexer/db
 COPY --from=builder /app/indexer/schema.graphql /app/indexer/schema.graphql
-COPY --from=builder /app/indexer/typegen.json /app/indexer/typegen.json
 
 WORKDIR /app/indexer
 

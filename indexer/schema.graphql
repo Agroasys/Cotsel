@@ -40,9 +40,11 @@ type TradeEvent @entity {
   eventName: String! @index
   blockNumber: Int! @index
   timestamp: DateTime! @index
-  txHash: String @index
+  txHash: String! @index
+  logIndex: Int! @index
+  transactionIndex: Int! @index
   extrinsicHash: String @index
-  extrinsicIndex: Int!
+  extrinsicIndex: Int
 
   # TradeLocked specific
   totalAmount: BigInt
@@ -132,9 +134,11 @@ type DisputeEvent @entity {
   eventName: String! @index
   blockNumber: Int! @index
   timestamp: DateTime! @index
-  txHash: String @index
+  txHash: String! @index
+  logIndex: Int! @index
+  transactionIndex: Int! @index
   extrinsicHash: String @index
-  extrinsicIndex: Int!
+  extrinsicIndex: Int
 
   # DisputeSolutionProposed specific
   proposedDisputeStatus: DisputeStatus
@@ -184,9 +188,11 @@ type OracleEvent @entity {
   eventName: String! @index
   blockNumber: Int! @index
   timestamp: DateTime! @index
-  txHash: String @index
+  txHash: String! @index
+  logIndex: Int! @index
+  transactionIndex: Int! @index
   extrinsicHash: String @index
-  extrinsicIndex: Int!
+  extrinsicIndex: Int
 
   # OracleUpdateProposed specific
   proposedOracle: String
@@ -234,9 +240,11 @@ type AdminEvent @entity {
   eventName: String! @index
   blockNumber: Int! @index
   timestamp: DateTime! @index
-  txHash: String @index
+  txHash: String! @index
+  logIndex: Int! @index
+  transactionIndex: Int! @index
   extrinsicHash: String @index
-  extrinsicIndex: Int!
+  extrinsicIndex: Int
 
   # AdminAddProposed specific
   proposedAdmin: String
@@ -262,9 +270,11 @@ type SystemEvent @entity {
   eventName: String! @index
   blockNumber: Int! @index
   timestamp: DateTime! @index
-  txHash: String @index
+  txHash: String! @index
+  logIndex: Int! @index
+  transactionIndex: Int! @index
   extrinsicHash: String @index
-  extrinsicIndex: Int!
+  extrinsicIndex: Int
 
   # Paused/Unpaused/ClaimsPaused/ClaimsUnpaused specific
   triggeredBy: String

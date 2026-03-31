@@ -55,6 +55,8 @@ function buildTrigger(overrides: Partial<Trigger> = {}): Trigger {
         status: TriggerStatus.PENDING_APPROVAL,
         tx_hash: null,
         block_number: null,
+        confirmation_stage: null,
+        confirmation_stage_at: null,
         indexer_confirmed: false,
         indexer_confirmed_at: null,
         indexer_event_id: null,

@@ -1,3 +1,5 @@
+import type { SettlementConfirmationStage } from '@agroasys/sdk';
+
 export type TreasuryComponent = 'LOGISTICS' | 'PLATFORM_FEE';
 
 export type PayoutState =
@@ -19,6 +21,7 @@ export type FiatDepositFailureClass =
   | 'CURRENCY_MISMATCH';
 
 export type BankPayoutState = 'PENDING' | 'CONFIRMED' | 'REJECTED';
+export type ReconciliationGateStatus = 'CLEAR' | 'BLOCKED' | 'UNKNOWN';
 
 export interface LedgerEntry {
   id: number;
@@ -53,7 +56,6 @@ export interface IndexerTradeEvent {
   tradeId: string;
   eventName: string;
   txHash: string | null;
-  extrinsicHash: string | null;
   blockNumber: number;
   timestamp: Date;
   releasedLogisticsAmount?: string | null;
@@ -148,4 +150,19 @@ export interface BankPayoutConfirmationUpsertInput {
   failureCode?: string | null;
   evidenceReference?: string | null;
   metadata?: Record<string, unknown>;
+}
+
+export interface TreasuryEntryEligibility {
+  entryId: number;
+  tradeId: string;
+  payoutState: PayoutState | null;
+  confirmationStage: SettlementConfirmationStage | null;
+  latestBlockNumber: number | null;
+  safeBlockNumber: number | null;
+  finalizedBlockNumber: number | null;
+  reconciliationStatus: ReconciliationGateStatus;
+  reconciliationRunKey: string | null;
+  eligibleForPayout: boolean;
+  eligibleForExport: boolean;
+  blockedReasons: string[];
 }

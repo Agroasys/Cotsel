@@ -16,7 +16,6 @@ import {
     DisputeStatus,
     ClaimType
 } from './model'
-import { assertNoExtrinsicFallbackAsTxHash, resolveEventHashes } from './utils/eventHashes';
 import {
     OVERVIEW_SNAPSHOT_ID,
     buildCountersFromExistingState,
@@ -24,6 +23,8 @@ import {
     applyTradeCancelled,
     applyTradeTransition,
 } from './overviewAggregate';
+import { buildEvmEventId, compareOrderedEvmEvents } from './eventIdentity';
+import { persistIndexerBatch } from './persistence';
 
 processor.run(new TypeormDatabase(), async (ctx) => {
     const trades: Map<string, Trade> = new Map();
@@ -42,153 +43,145 @@ processor.run(new TypeormDatabase(), async (ctx) => {
         overviewSnapshot.lastProcessedBlock = BigInt(block.header.height);
         overviewSnapshot.lastIndexedAt = indexedAt;
 
-        for (let event of block.events) {
-            if (event.name !== 'Revive.ContractEmitted') {
+        for (let log of block.logs) {
+            if (log.address.toLowerCase() !== ESCROW_ADDRESS) {
                 continue;
             }
+
             try {
-                const { contract, data, topics } = event.args;
-
-                if (contract.toLowerCase() !== ESCROW_ADDRESS) {
-                    continue;
-                }
-
-                const decoded = contractInterface.parseLog({ topics, data });
+                const decoded = contractInterface.parseLog({ topics: log.topics, data: log.data });
 
                 if (!decoded) {
-                    ctx.log.warn(`Failed to decode event at block ${block.header.height}`);
+                    ctx.log.warn(`Failed to decode log at block ${block.header.height}`);
                     continue;
                 }
 
-                const eventId = event.id;
+                const transaction = log.getTransaction();
+                const txHash = transaction.hash;
+                const logIndex = log.logIndex;
+                const transactionIndex = log.transactionIndex;
+                const eventId = buildEvmEventId(txHash, logIndex);
                 const timestamp = new Date(block.header.timestamp || 0);
-                const extrinsic = block.extrinsics.find(e => e.index === event.extrinsicIndex);
-                const eventHashes = resolveEventHashes(extrinsic);
-                assertNoExtrinsicFallbackAsTxHash(eventHashes);
-                const { txHash, extrinsicHash } = eventHashes;
-                const extrinsicIndex = event.extrinsicIndex || 0;
-
-                if (!txHash && extrinsicHash) {
-                    ctx.log.warn(`EVM tx hash unavailable at block ${block.header.height} eventId=${eventId} extrinsicIndex=${event.extrinsicIndex ?? 'n/a'} extrinsicHash=${extrinsicHash}`);
-                }
+                const extrinsicHash = null;
+                const extrinsicIndex = null;
 
                 switch (decoded.name) {
                     // Trade events
                     case 'TradeLocked':
-                        overviewSnapshot = await handleTradeLocked(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleTradeLocked(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'FundsReleasedStage1':
-                        overviewSnapshot = await handleFundsReleasedStage1(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleFundsReleasedStage1(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'PlatformFeesPaidStage1':
-                        overviewSnapshot = await handlePlatformFeesPaidStage1(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handlePlatformFeesPaidStage1(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'ArrivalConfirmed':
-                        overviewSnapshot = await handleArrivalConfirmed(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleArrivalConfirmed(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'FinalTrancheReleased':
-                        overviewSnapshot = await handleFinalTrancheReleased(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleFinalTrancheReleased(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'DisputeOpenedByBuyer':
-                        overviewSnapshot = await handleDisputeOpenedByBuyer(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleDisputeOpenedByBuyer(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'TradeCancelledAfterLockTimeout':
-                        overviewSnapshot = await handleTradeCancelledAfterLockTimeout(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleTradeCancelledAfterLockTimeout(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'InTransitTimeoutRefunded':
-                        overviewSnapshot = await handleInTransitTimeoutRefunded(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleInTransitTimeoutRefunded(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
 
                     // Dispute events
                     case 'DisputeSolutionProposed':
-                        await handleDisputeSolutionProposed(decoded, trades, disputeProposals, disputeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleDisputeSolutionProposed(decoded, trades, disputeProposals, disputeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'DisputeApproved':
-                        await handleDisputeApproved(decoded, disputeProposals, disputeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleDisputeApproved(decoded, disputeProposals, disputeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'DisputeFinalized':
-                        await handleDisputeFinalized(decoded, disputeProposals, disputeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleDisputeFinalized(decoded, disputeProposals, disputeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'DisputeProposalExpiredCancelled':
-                        await handleDisputeProposalExpiredCancelled(decoded, disputeProposals, disputeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleDisputeProposalExpiredCancelled(decoded, disputeProposals, disputeEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'DisputePayout':
-                        overviewSnapshot = await handleDisputePayout(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleDisputePayout(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
 
                     // Oracle events
                     case 'OracleUpdateProposed':
-                        await handleOracleUpdateProposed(decoded, oracleUpdateProposals, oracleEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleOracleUpdateProposed(decoded, oracleUpdateProposals, oracleEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'OracleUpdateApproved':
-                        await handleOracleUpdateApproved(decoded, oracleUpdateProposals, oracleEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleOracleUpdateApproved(decoded, oracleUpdateProposals, oracleEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'OracleUpdated':
-                        await handleOracleUpdated(decoded, oracleEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleOracleUpdated(decoded, oracleEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'OracleUpdateProposalExpiredCancelled':
-                        await handleOracleUpdateProposalExpiredCancelled(decoded, oracleUpdateProposals, oracleEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleOracleUpdateProposalExpiredCancelled(decoded, oracleUpdateProposals, oracleEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'OracleDisabledEmergency':
-                        await handleOracleDisabledEmergency(decoded, oracleEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleOracleDisabledEmergency(decoded, oracleEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
 
                     // Admin events
                     case 'AdminAddProposed':
-                        await handleAdminAddProposed(decoded, adminAddProposals, adminEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleAdminAddProposed(decoded, adminAddProposals, adminEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'AdminAddApproved':
-                        await handleAdminAddApproved(decoded, adminAddProposals, adminEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleAdminAddApproved(decoded, adminAddProposals, adminEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'AdminAdded':
-                        await handleAdminAdded(decoded, adminEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleAdminAdded(decoded, adminEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'AdminAddProposalExpiredCancelled':
-                        await handleAdminAddProposalExpiredCancelled(decoded, adminAddProposals, adminEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleAdminAddProposalExpiredCancelled(decoded, adminAddProposals, adminEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
 
                     // System events
                     case 'Paused':
-                        await handlePaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handlePaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'UnpauseProposed':
-                        await handleUnpauseProposed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleUnpauseProposed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'UnpauseApproved':
-                        await handleUnpauseApproved(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleUnpauseApproved(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'UnpauseProposalCancelled':
-                        await handleUnpauseProposalCancelled(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleUnpauseProposalCancelled(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'Unpaused':
-                        await handleUnpaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleUnpaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'ClaimsPaused':
-                        await handleClaimsPaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleClaimsPaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'ClaimsUnpaused':
-                        await handleClaimsUnpaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleClaimsUnpaused(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'Claimed':
-                        await handleClaimed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleClaimed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'TreasuryClaimed':
-                        await handleTreasuryClaimed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleTreasuryClaimed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'TreasuryPayoutAddressUpdateProposed':
-                        await handleTreasuryPayoutAddressUpdateProposed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleTreasuryPayoutAddressUpdateProposed(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'TreasuryPayoutAddressUpdateApproved':
-                        await handleTreasuryPayoutAddressUpdateApproved(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleTreasuryPayoutAddressUpdateApproved(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'TreasuryPayoutAddressUpdated':
-                        await handleTreasuryPayoutAddressUpdated(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleTreasuryPayoutAddressUpdated(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'TreasuryPayoutAddressUpdateProposalExpiredCancelled':
-                        await handleTreasuryPayoutAddressUpdateProposalExpiredCancelled(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        await handleTreasuryPayoutAddressUpdateProposalExpiredCancelled(decoded, systemEvents, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
                     case 'ClaimableAccrued':
-                        overviewSnapshot = await handleClaimableAccrued(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, ctx);
+                        overviewSnapshot = await handleClaimableAccrued(decoded, trades, tradeEvents, overviewSnapshot, eventId, block, timestamp, txHash, extrinsicHash, extrinsicIndex, logIndex, transactionIndex, ctx);
                         break;
 
                     default:
@@ -201,16 +194,18 @@ processor.run(new TypeormDatabase(), async (ctx) => {
     }
 
     // save to db
-    await ctx.store.upsert([...trades.values()]);
-    await ctx.store.insert(tradeEvents);
-    await ctx.store.upsert([...disputeProposals.values()]);
-    await ctx.store.insert(disputeEvents);
-    await ctx.store.upsert([...oracleUpdateProposals.values()]);
-    await ctx.store.insert(oracleEvents);
-    await ctx.store.upsert([...adminAddProposals.values()]);
-    await ctx.store.insert(adminEvents);
-    await ctx.store.insert(systemEvents);
-    await ctx.store.upsert([overviewSnapshot]);
+    await persistIndexerBatch(ctx.store, {
+        trades: trades.values(),
+        tradeEvents,
+        disputeProposals: disputeProposals.values(),
+        disputeEvents,
+        oracleUpdateProposals: oracleUpdateProposals.values(),
+        oracleEvents,
+        adminAddProposals: adminAddProposals.values(),
+        adminEvents,
+        systemEvents,
+        overviewSnapshot,
+    });
 
     ctx.log.info(`Processed ${trades.size} trades, ${tradeEvents.length} trade events, ${disputeProposals.size} dispute proposals, ${disputeEvents.length} dispute events, ${oracleUpdateProposals.size} oracle proposals, ${oracleEvents.length} oracle events, ${adminAddProposals.size} admin proposals, ${adminEvents.length} admin events, ${systemEvents.length} system events`);
 });
@@ -262,9 +257,11 @@ async function handleTradeLocked(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [
@@ -309,6 +306,8 @@ async function handleTradeLocked(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         totalAmount: totalAmount,
         logisticsAmount: logisticsAmount,
         platformFeesAmount: platformFeesAmount,
@@ -328,9 +327,11 @@ async function handleFundsReleasedStage1(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [tradeId, , supplierFirstTranche, treasury, logisticsAmount] = log.args;
@@ -358,6 +359,8 @@ async function handleFundsReleasedStage1(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         releasedFirstTranche: supplierFirstTranche,
         releasedLogisticsAmount: logisticsAmount,
         treasuryAddress: treasury.toLowerCase()
@@ -375,9 +378,11 @@ async function handlePlatformFeesPaidStage1(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [tradeId, treasury, platformFeesAmount] = log.args;
@@ -400,6 +405,8 @@ async function handlePlatformFeesPaidStage1(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         paidPlatformFees: platformFeesAmount,
         treasuryAddress: treasury.toLowerCase()
     }));
@@ -416,9 +423,11 @@ async function handleArrivalConfirmed(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [tradeId, arrivalTimestamp] = log.args;
@@ -447,6 +456,8 @@ async function handleArrivalConfirmed(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         arrivalTimestamp: arrivalTimestamp
     }));
 
@@ -462,9 +473,11 @@ async function handleFinalTrancheReleased(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [tradeId, supplier, supplierSecondTranche] = log.args;
@@ -492,6 +505,8 @@ async function handleFinalTrancheReleased(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         finalTranche: supplierSecondTranche,
         finalRecipient: supplier.toLowerCase()
     }));
@@ -508,9 +523,11 @@ async function handleDisputeOpenedByBuyer(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [tradeId] = log.args;
@@ -552,9 +569,11 @@ async function handleTradeCancelledAfterLockTimeout(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [tradeId, buyer, refundedAmount] = log.args;
@@ -582,6 +601,8 @@ async function handleTradeCancelledAfterLockTimeout(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         refundedAmount: refundedAmount,
         refundedTo: buyer.toLowerCase()
     }));
@@ -598,9 +619,11 @@ async function handleInTransitTimeoutRefunded(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [tradeId, buyer, refundedAmount] = log.args;
@@ -628,6 +651,8 @@ async function handleInTransitTimeoutRefunded(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         refundedBuyerPrincipal: refundedAmount,
         refundedTo: buyer.toLowerCase()
     }));
@@ -680,15 +705,7 @@ function isTerminalTradeEvent(eventName: string): boolean {
 }
 
 function compareTradeEvents(left: TradeEvent, right: TradeEvent): number {
-    if (left.blockNumber !== right.blockNumber) {
-        return left.blockNumber - right.blockNumber;
-    }
-
-    if (left.extrinsicIndex !== right.extrinsicIndex) {
-        return left.extrinsicIndex - right.extrinsicIndex;
-    }
-
-    return left.id.localeCompare(right.id);
+    return compareOrderedEvmEvents(left, right);
 }
 
 function applySnapshotCounters(snapshot: OverviewSnapshot, counters: ReturnType<typeof snapshotCounters>) {
@@ -711,9 +728,11 @@ async function handleDisputeSolutionProposed(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, tradeId, disputeStatus, proposer] = log.args;
@@ -755,6 +774,8 @@ async function handleDisputeSolutionProposed(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         proposedDisputeStatus: disputeStatusEnum,
         proposer: proposer.toLowerCase()
     }));
@@ -769,9 +790,11 @@ async function handleDisputeApproved(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, approver, approvalCount, requiredApprovals] = log.args;
@@ -798,6 +821,8 @@ async function handleDisputeApproved(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         approver: approver.toLowerCase(),
         approvalCount: Number(approvalCount),
         requiredApprovals: Number(requiredApprovals)
@@ -813,9 +838,11 @@ async function handleDisputeFinalized(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, tradeId, disputeStatus] = log.args;
@@ -844,6 +871,8 @@ async function handleDisputeFinalized(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         finalDisputeStatus: disputeStatusEnum
     }));
 
@@ -857,9 +886,11 @@ async function handleDisputeProposalExpiredCancelled(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, tradeId, cancelledBy] = log.args;
@@ -886,6 +917,8 @@ async function handleDisputeProposalExpiredCancelled(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         cancelledBy: cancelledBy.toLowerCase()
     }));
 
@@ -900,9 +933,11 @@ async function handleDisputePayout(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [tradeId, proposalId, recipient, amount, payoutType] = log.args;
@@ -933,6 +968,8 @@ async function handleDisputePayout(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         payoutRecipient: recipient.toLowerCase(),
         payoutAmount: amount,
         payoutType: payoutTypeEnum,
@@ -952,9 +989,11 @@ async function handleOracleUpdateProposed(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, proposer, newOracle, eta, emergencyFastTrack] = log.args;
@@ -988,6 +1027,8 @@ async function handleOracleUpdateProposed(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         proposedOracle: newOracle.toLowerCase(),
         eta: eta,
         proposer: proposer.toLowerCase()
@@ -1003,9 +1044,11 @@ async function handleOracleUpdateApproved(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, approver, approvalCount, requiredApprovals] = log.args;
@@ -1032,6 +1075,8 @@ async function handleOracleUpdateApproved(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         approver: approver.toLowerCase(),
         approvalCount: Number(approvalCount),
         requiredApprovals: Number(requiredApprovals)
@@ -1046,9 +1091,11 @@ async function handleOracleUpdated(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [oldOracle, newOracle] = log.args;
@@ -1062,6 +1109,8 @@ async function handleOracleUpdated(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         oldOracle: oldOracle.toLowerCase(),
         newOracle: newOracle.toLowerCase()
     }));
@@ -1076,9 +1125,11 @@ async function handleOracleUpdateProposalExpiredCancelled(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, cancelledBy] = log.args;
@@ -1105,6 +1156,8 @@ async function handleOracleUpdateProposalExpiredCancelled(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         cancelledBy: cancelledBy.toLowerCase()
     }));
 
@@ -1117,9 +1170,11 @@ async function handleOracleDisabledEmergency(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [disabledBy, previousOracle] = log.args;
@@ -1133,6 +1188,8 @@ async function handleOracleDisabledEmergency(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         disabledBy: disabledBy.toLowerCase(),
         previousOracle: previousOracle.toLowerCase()
     }));
@@ -1149,9 +1206,11 @@ async function handleAdminAddProposed(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, proposer, newAdmin, eta] = log.args;
@@ -1184,6 +1243,8 @@ async function handleAdminAddProposed(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         proposedAdmin: newAdmin.toLowerCase(),
         eta: eta,
         proposer: proposer.toLowerCase()
@@ -1199,9 +1260,11 @@ async function handleAdminAddApproved(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, approver, approvalCount, requiredApprovals] = log.args;
@@ -1228,6 +1291,8 @@ async function handleAdminAddApproved(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         approver: approver.toLowerCase(),
         approvalCount: Number(approvalCount),
         requiredApprovals: Number(requiredApprovals)
@@ -1242,9 +1307,11 @@ async function handleAdminAdded(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [newAdmin] = log.args;
@@ -1258,6 +1325,8 @@ async function handleAdminAdded(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         addedAdmin: newAdmin.toLowerCase()
     }));
 
@@ -1271,9 +1340,11 @@ async function handleAdminAddProposalExpiredCancelled(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, cancelledBy] = log.args;
@@ -1300,6 +1371,8 @@ async function handleAdminAddProposalExpiredCancelled(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         cancelledBy: cancelledBy.toLowerCase()
     }));
 
@@ -1314,9 +1387,11 @@ async function handlePaused(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [triggeredBy] = log.args;
@@ -1329,6 +1404,8 @@ async function handlePaused(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         triggeredBy: triggeredBy.toLowerCase()
     }));
 
@@ -1341,9 +1418,11 @@ async function handleUnpauseProposed(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [triggeredBy] = log.args;
@@ -1356,6 +1435,8 @@ async function handleUnpauseProposed(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         triggeredBy: triggeredBy.toLowerCase()
     }));
 
@@ -1368,9 +1449,11 @@ async function handleUnpauseApproved(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [triggeredBy, approvalCount, requiredApprovals] = log.args;
@@ -1383,6 +1466,8 @@ async function handleUnpauseApproved(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         triggeredBy: triggeredBy.toLowerCase()
     }));
 
@@ -1395,9 +1480,11 @@ async function handleUnpauseProposalCancelled(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [triggeredBy] = log.args;
@@ -1410,6 +1497,8 @@ async function handleUnpauseProposalCancelled(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         triggeredBy: triggeredBy.toLowerCase()
     }));
 
@@ -1422,9 +1511,11 @@ async function handleUnpaused(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [triggeredBy] = log.args;
@@ -1437,6 +1528,8 @@ async function handleUnpaused(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         triggeredBy: triggeredBy.toLowerCase()
     }));
 
@@ -1455,9 +1548,11 @@ async function handleClaimableAccrued(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [tradeId, recipient, amount, claimType] = log.args;
@@ -1481,6 +1576,8 @@ async function handleClaimableAccrued(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         claimType: claimTypeEnum,
         claimRecipient: recipient.toLowerCase(),
         claimAmount: amount
@@ -1496,9 +1593,11 @@ async function handleClaimed(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [claimant, amount] = log.args;
@@ -1511,6 +1610,8 @@ async function handleClaimed(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         triggeredBy: claimant.toLowerCase(),
         claimAmount: amount
     }));
@@ -1524,9 +1625,11 @@ async function handleTreasuryClaimed(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [treasuryIdentity, payoutReceiver, amount, triggeredBy] = log.args;
@@ -1539,6 +1642,8 @@ async function handleTreasuryClaimed(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         triggeredBy: triggeredBy.toLowerCase(),
         claimAmount: amount,
         treasuryIdentity: treasuryIdentity.toLowerCase(),
@@ -1554,9 +1659,11 @@ async function handleTreasuryPayoutAddressUpdateProposed(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, proposer, newPayoutReceiver, eta] = log.args;
@@ -1569,6 +1676,8 @@ async function handleTreasuryPayoutAddressUpdateProposed(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         proposalId: proposalId.toString(),
         triggeredBy: proposer.toLowerCase(),
         newPayoutReceiver: newPayoutReceiver.toLowerCase(),
@@ -1585,9 +1694,11 @@ async function handleTreasuryPayoutAddressUpdateApproved(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, approver, approvalCount, requiredApprovals] = log.args;
@@ -1600,6 +1711,8 @@ async function handleTreasuryPayoutAddressUpdateApproved(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         proposalId: proposalId.toString(),
         triggeredBy: approver.toLowerCase(),
         approvalCount: Number(approvalCount),
@@ -1615,9 +1728,11 @@ async function handleTreasuryPayoutAddressUpdated(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [oldPayoutReceiver, newPayoutReceiver] = log.args;
@@ -1630,6 +1745,8 @@ async function handleTreasuryPayoutAddressUpdated(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         oldPayoutReceiver: oldPayoutReceiver.toLowerCase(),
         newPayoutReceiver: newPayoutReceiver.toLowerCase(),
         payoutReceiver: newPayoutReceiver.toLowerCase()
@@ -1644,9 +1761,11 @@ async function handleTreasuryPayoutAddressUpdateProposalExpiredCancelled(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [proposalId, cancelledBy] = log.args;
@@ -1659,6 +1778,8 @@ async function handleTreasuryPayoutAddressUpdateProposalExpiredCancelled(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         proposalId: proposalId.toString(),
         triggeredBy: cancelledBy.toLowerCase()
     }));
@@ -1672,9 +1793,11 @@ async function handleClaimsPaused(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [triggeredBy] = log.args;
@@ -1687,6 +1810,8 @@ async function handleClaimsPaused(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         triggeredBy: triggeredBy.toLowerCase()
     }));
 
@@ -1699,9 +1824,11 @@ async function handleClaimsUnpaused(
     eventId: string,
     block: any,
     timestamp: Date,
-    txHash: string | null,
+    txHash: string,
     extrinsicHash: string | null,
-    extrinsicIndex: number,
+    extrinsicIndex: number | null,
+    logIndex: number,
+    transactionIndex: number,
     ctx: any
 ) {
     const [triggeredBy] = log.args;
@@ -1714,6 +1841,8 @@ async function handleClaimsUnpaused(
         txHash,
         extrinsicHash,
         extrinsicIndex,
+        logIndex,
+        transactionIndex,
         triggeredBy: triggeredBy.toLowerCase()
     }));
 

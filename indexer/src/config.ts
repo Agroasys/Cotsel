@@ -12,10 +12,12 @@ export interface IndexerConfig {
     dbPassword: string;
     
     // network
-    gatewayUrl: string;
+    gatewayUrl: string | null;
     rpcEndpoint: string;
     startBlock: number;
     rateLimit: number;
+    finalityConfirmationBlocks: number;
+    prometheusPort: number | null;
     
     // contract
     contractAddress: string;
@@ -28,6 +30,22 @@ function validateEnv(name: string): string {
     const value = process.env[name];
     assert(value, `${name} is missing`);
     return value;
+}
+
+function optionalEnv(name: string): string | null {
+    const value = process.env[name]?.trim();
+    return value && value.length > 0 ? value : null;
+}
+
+function optionalEnvNumber(name: string): number | null {
+    const value = optionalEnv(name);
+    if (value === null) {
+        return null;
+    }
+
+    const num = parseInt(value, 10);
+    assert(!isNaN(num), `${name} must be a number`);
+    return num;
 }
 
 function validateEnvNumber(name: string): number {
@@ -45,18 +63,19 @@ export function loadConfig(): IndexerConfig {
             dbName: validateEnv('DB_NAME'),
             dbUser: validateEnv('DB_USER'),
             dbPassword: validateEnv('DB_PASSWORD'),
-            gatewayUrl: validateEnv('GATEWAY_URL'),
+            gatewayUrl: optionalEnv('GATEWAY_URL'),
             rpcEndpoint: validateEnv('RPC_ENDPOINT'),
             startBlock: validateEnvNumber('START_BLOCK'),
             rateLimit: validateEnvNumber('RATE_LIMIT'),
+            finalityConfirmationBlocks: validateEnvNumber('FINALITY_CONFIRMATION_BLOCKS'),
+            prometheusPort: optionalEnvNumber('PROMETHEUS_PORT'),
             contractAddress: validateEnv('CONTRACT_ADDRESS').toLowerCase(),
             graphqlPort: validateEnvNumber('GRAPHQL_PORT'),
         };
-        
-        console.log('config validated');
+
         return config;
     } catch (error) {
-        console.error('config failed:', error);
+        console.error('indexer config failed:', error);
         process.exit(1);
     }
 }

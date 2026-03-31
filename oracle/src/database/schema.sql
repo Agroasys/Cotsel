@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS oracle_triggers (
     
     tx_hash VARCHAR(66),
     block_number BIGINT,
+    confirmation_stage VARCHAR(16),
+    confirmation_stage_at TIMESTAMP,
     
     indexer_confirmed BOOLEAN DEFAULT false,
     indexer_confirmed_at TIMESTAMP,
@@ -69,6 +71,8 @@ ON oracle_hmac_nonces(expires_at);
 
 DO $$
 BEGIN
+    ALTER TABLE oracle_triggers ADD COLUMN IF NOT EXISTS confirmation_stage   VARCHAR(16);
+    ALTER TABLE oracle_triggers ADD COLUMN IF NOT EXISTS confirmation_stage_at TIMESTAMP;
     ALTER TABLE oracle_triggers ADD COLUMN IF NOT EXISTS approved_by      VARCHAR(255);
     ALTER TABLE oracle_triggers ADD COLUMN IF NOT EXISTS approved_at      TIMESTAMP;
     ALTER TABLE oracle_triggers ADD COLUMN IF NOT EXISTS rejected_by      VARCHAR(255);
@@ -99,6 +103,10 @@ BEGIN
         ALTER TABLE oracle_triggers ADD CONSTRAINT check_error_type
             CHECK (error_type IN ('VALIDATION', 'NETWORK', 'CONTRACT', 'TERMINAL', 'INDEXER_LAG'));
     END IF;
+
+    ALTER TABLE oracle_triggers DROP CONSTRAINT IF EXISTS check_confirmation_stage;
+    ALTER TABLE oracle_triggers ADD CONSTRAINT check_confirmation_stage
+        CHECK (confirmation_stage IS NULL OR confirmation_stage IN ('INDEXED', 'SAFE', 'FINALIZED'));
 
 END $$;
 

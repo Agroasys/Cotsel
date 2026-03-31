@@ -121,6 +121,8 @@ const ALLOWED_UPDATE_COLUMNS = new Set([
     'attempt_count',
     'tx_hash',
     'block_number',
+    'confirmation_stage',
+    'confirmation_stage_at',
     'indexer_confirmed',
     'indexer_confirmed_at',
     'indexer_event_id',

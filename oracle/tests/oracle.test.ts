@@ -1,8 +1,48 @@
-import axios from 'axios';
 import { generateRequestHash, verifyRequestSignature, deriveRequestNonce } from '../src/utils/crypto';
 
 const runManualE2E = process.env.RUN_E2E === 'true' || process.env.RUN_MANUAL_E2E === 'true';
 const describeManual = runManualE2E ? describe : describe.skip;
+
+type JsonHttpResponse = {
+    status: number;
+    data: unknown;
+};
+
+type OracleSuccessResponse = {
+    success: boolean;
+    status?: string;
+    idempotencyKey?: string;
+    actionKey?: string;
+    timestamp?: string;
+};
+
+function expectObject<T extends object>(value: unknown): T {
+    expect(value).not.toBeNull();
+    expect(typeof value).toBe('object');
+    return value as T;
+}
+
+async function jsonRequest(
+    input: string,
+    init?: RequestInit,
+): Promise<JsonHttpResponse> {
+    const response = await fetch(input, init);
+    const text = await response.text();
+
+    let data: unknown = null;
+    if (text.length > 0) {
+        try {
+            data = JSON.parse(text);
+        } catch {
+            data = text;
+        }
+    }
+
+    return {
+        status: response.status,
+        data,
+    };
+}
 
 
 describe('Oracle request signing', () => {
@@ -80,26 +120,31 @@ describeManual('Oracle API integration (manual)', () => {
 
 
     test('GET /health returns ok', async () => {
-        const response = await axios.get(`${API_URL}/health`);
+        const response = await jsonRequest(`${API_URL}/health`);
         expect(response.status).toBe(200);
-        expect(response.data.success).toBe(true);
-        expect(response.data.status).toBe('ok');
+        expect(response.data).toMatchObject({
+            success: true,
+            status: 'ok',
+        });
     });
 
     test('GET /ready returns ready', async () => {
-        const response = await axios.get(`${API_URL}/ready`);
+        const response = await jsonRequest(`${API_URL}/ready`);
         expect(response.status).toBe(200);
-        expect(response.data.ready).toBe(true);
+        expect(response.data).toMatchObject({
+            ready: true,
+        });
     });
 
 
     test.skip('rejects request without Authorization header', async () => {
         const payload = { tradeId: '1', requestId: `test-${Date.now()}` };
-        await expect(
-            axios.post(`${API_URL}/release-stage1`, payload, {
-                headers: { 'Content-Type': 'application/json' },
-            })
-        ).rejects.toMatchObject({ response: { status: 401 } });
+        const response = await jsonRequest(`${API_URL}/release-stage1`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        expect(response.status).toBe(401);
     });
 
     test.skip('rejects request with invalid API key', async () => {
@@ -109,44 +154,47 @@ describeManual('Oracle API integration (manual)', () => {
         const signature = generateRequestHash(timestamp, bodyStr, HMAC_SECRET);
         const nonce = deriveRequestNonce(timestamp, bodyStr, signature);
 
-        await expect(
-            axios.post(`${API_URL}/release-stage1`, payload, {
-                headers: {
-                    Authorization: 'Bearer wrong-api-key',
-                    'X-Timestamp': timestamp,
-                    'X-Signature': signature,
-                    'X-Nonce': nonce,
-                    'Content-Type': 'application/json',
-                },
-            })
-        ).rejects.toMatchObject({ response: { status: 401 } });
+        const response = await jsonRequest(`${API_URL}/release-stage1`, {
+            method: 'POST',
+            headers: {
+                Authorization: 'Bearer wrong-api-key',
+                'X-Timestamp': timestamp,
+                'X-Signature': signature,
+                'X-Nonce': nonce,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        expect(response.status).toBe(401);
     });
 
     test.skip('rejects request without HMAC headers', async () => {
         const payload = { tradeId: '1', requestId: `test-${Date.now()}` };
-        await expect(
-            axios.post(`${API_URL}/release-stage1`, payload, {
-                headers: {
-                    Authorization: `Bearer ${API_KEY}`,
-                    'Content-Type': 'application/json',
-                },
-            })
-        ).rejects.toMatchObject({ response: { status: 401 } });
+        const response = await jsonRequest(`${API_URL}/release-stage1`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        expect(response.status).toBe(401);
     });
 
 
     test.skip('POST /release-stage1 accepts signed request', async () => {
         const payload = { tradeId: '8', requestId: `test-${Date.now()}` };
 
-        const response = await axios.post(
-            `${API_URL}/release-stage1`,
-            payload,
-            { headers: signedHeaders(payload) }
-        );
+        const response = await jsonRequest(`${API_URL}/release-stage1`, {
+            method: 'POST',
+            headers: signedHeaders(payload),
+            body: JSON.stringify(payload),
+        });
 
         expect(response.status).toBe(200);
-        expect(response.data.success).toBe(true);
-        expect(response.data).toMatchObject({
+        const data = expectObject<OracleSuccessResponse>(response.data);
+        expect(data.success).toBe(true);
+        expect(data).toMatchObject({
             success: true,
             idempotencyKey: expect.any(String),
             actionKey: expect.stringContaining('RELEASE_STAGE_1'),
@@ -158,15 +206,16 @@ describeManual('Oracle API integration (manual)', () => {
     test.skip('POST /confirm-arrival accepts signed request', async () => {
         const payload = { tradeId: '2', requestId: `test-${Date.now()}` };
 
-        const response = await axios.post(
-            `${API_URL}/confirm-arrival`,
-            payload,
-            { headers: signedHeaders(payload) }
-        );
+        const response = await jsonRequest(`${API_URL}/confirm-arrival`, {
+            method: 'POST',
+            headers: signedHeaders(payload),
+            body: JSON.stringify(payload),
+        });
 
         expect(response.status).toBe(200);
-        expect(response.data.success).toBe(true);
-        expect(response.data).toMatchObject({
+        const data = expectObject<OracleSuccessResponse>(response.data);
+        expect(data.success).toBe(true);
+        expect(data).toMatchObject({
             success: true,
             idempotencyKey: expect.any(String),
             actionKey: expect.stringContaining('CONFIRM_ARRIVAL'),
@@ -178,15 +227,16 @@ describeManual('Oracle API integration (manual)', () => {
     test.skip('POST /finalize-trade accepts signed request', async () => {
         const payload = { tradeId: '0', requestId: `test-${Date.now()}` };
 
-        const response = await axios.post(
-            `${API_URL}/finalize-trade`,
-            payload,
-            { headers: signedHeaders(payload) }
-        );
+        const response = await jsonRequest(`${API_URL}/finalize-trade`, {
+            method: 'POST',
+            headers: signedHeaders(payload),
+            body: JSON.stringify(payload),
+        });
 
         expect(response.status).toBe(200);
-        expect(response.data.success).toBe(true);
-        expect(response.data).toMatchObject({
+        const data = expectObject<OracleSuccessResponse>(response.data);
+        expect(data.success).toBe(true);
+        expect(data).toMatchObject({
             success: true,
             idempotencyKey: expect.any(String),
             actionKey: expect.stringContaining('FINALIZE_TRADE'),
@@ -203,15 +253,16 @@ describeManual('Oracle API integration (manual)', () => {
             requestId: `redrive-${Date.now()}`,
         };
 
-        const response = await axios.post(
-            `${API_URL}/redrive`,
-            payload,
-            { headers: signedHeaders(payload) }
-        );
+        const response = await jsonRequest(`${API_URL}/redrive`, {
+            method: 'POST',
+            headers: signedHeaders(payload),
+            body: JSON.stringify(payload),
+        });
 
         expect(response.status).toBe(200);
-        expect(response.data.success).toBe(true);
-        expect(response.data).toMatchObject({
+        const data = expectObject<OracleSuccessResponse>(response.data);
+        expect(data.success).toBe(true);
+        expect(data).toMatchObject({
             success: true,
             idempotencyKey: expect.any(String),
             actionKey: expect.any(String),
@@ -223,33 +274,40 @@ describeManual('Oracle API integration (manual)', () => {
     test.skip('POST /redrive rejects missing triggerType', async () => {
         const payload = { tradeId: '1', requestId: `test-${Date.now()}` };
 
-        await expect(
-            axios.post(`${API_URL}/redrive`, payload, { headers: signedHeaders(payload) })
-        ).rejects.toMatchObject({ response: { status: 400 } });
+        const response = await jsonRequest(`${API_URL}/redrive`, {
+            method: 'POST',
+            headers: signedHeaders(payload),
+            body: JSON.stringify(payload),
+        });
+        expect(response.status).toBe(400);
     });
 
 
     test.skip('rejects missing tradeId', async () => {
         const payload = { requestId: `test-${Date.now()}` } as any;
 
-        await expect(
-            axios.post(`${API_URL}/release-stage1`, payload, { headers: signedHeaders(payload) })
-        ).rejects.toMatchObject({ response: { status: 400 } });
+        const response = await jsonRequest(`${API_URL}/release-stage1`, {
+            method: 'POST',
+            headers: signedHeaders(payload),
+            body: JSON.stringify(payload),
+        });
+        expect(response.status).toBe(400);
     });
 
     test.skip('POST /approve approves a PENDING_APPROVAL trigger and executes it', async () => {
         const submitPayload = { tradeId: '9', requestId: `test-approve-${Date.now()}` };
 
-        const submitResponse = await axios.post(
-            `${API_URL}/release-stage1`,
-            submitPayload,
-            { headers: signedHeaders(submitPayload) }
-        );
+        const submitResponse = await jsonRequest(`${API_URL}/release-stage1`, {
+            method: 'POST',
+            headers: signedHeaders(submitPayload),
+            body: JSON.stringify(submitPayload),
+        });
 
         expect(submitResponse.status).toBe(200);
-        expect(submitResponse.data.status).toBe('PENDING_APPROVAL');
+        const submitData = expectObject<OracleSuccessResponse>(submitResponse.data);
+        expect(submitData.status).toBe('PENDING_APPROVAL');
 
-        const { idempotencyKey } = submitResponse.data;
+        const { idempotencyKey } = submitData;
         expect(idempotencyKey).toBeTruthy();
 
         const approvePayload = {
@@ -257,29 +315,31 @@ describeManual('Oracle API integration (manual)', () => {
             actor: 'operator@agroasys',
         };
 
-        const approveResponse = await axios.post(
-            `${API_URL}/approve`,
-            approvePayload,
-            { headers: signedHeaders(approvePayload) }
-        );
+        const approveResponse = await jsonRequest(`${API_URL}/approve`, {
+            method: 'POST',
+            headers: signedHeaders(approvePayload),
+            body: JSON.stringify(approvePayload),
+        });
 
         expect(approveResponse.status).toBe(200);
-        expect(approveResponse.data.success).toBe(true);
+        const approveData = expectObject<OracleSuccessResponse>(approveResponse.data);
+        expect(approveData.success).toBe(true);
     });
 
     test.skip('POST /reject rejects a PENDING_APPROVAL trigger with audit trail', async () => {
         const submitPayload = { tradeId: '9', requestId: `test-reject-${Date.now()}` };
 
-        const submitResponse = await axios.post(
-            `${API_URL}/confirm-arrival`,
-            submitPayload,
-            { headers: signedHeaders(submitPayload) }
-        );
+        const submitResponse = await jsonRequest(`${API_URL}/confirm-arrival`, {
+            method: 'POST',
+            headers: signedHeaders(submitPayload),
+            body: JSON.stringify(submitPayload),
+        });
 
         expect(submitResponse.status).toBe(200);
-        expect(submitResponse.data.status).toBe('PENDING_APPROVAL');
+        const submitData = expectObject<OracleSuccessResponse>(submitResponse.data);
+        expect(submitData.status).toBe('PENDING_APPROVAL');
 
-        const { idempotencyKey } = submitResponse.data;
+        const { idempotencyKey } = submitData;
         expect(idempotencyKey).toBeTruthy();
 
         const rejectPayload = {
@@ -288,30 +348,37 @@ describeManual('Oracle API integration (manual)', () => {
             reason: 'issue during pilot review',
         };
 
-        const rejectResponse = await axios.post(
-            `${API_URL}/reject`,
-            rejectPayload,
-            { headers: signedHeaders(rejectPayload) }
-        );
+        const rejectResponse = await jsonRequest(`${API_URL}/reject`, {
+            method: 'POST',
+            headers: signedHeaders(rejectPayload),
+            body: JSON.stringify(rejectPayload),
+        });
 
         expect(rejectResponse.status).toBe(200);
-        expect(rejectResponse.data.success).toBe(true);
+        const rejectData = expectObject<OracleSuccessResponse>(rejectResponse.data);
+        expect(rejectData.success).toBe(true);
     });
 
     test.skip('POST /approve returns 400 when idempotencyKey is missing', async () => {
         const payload = { actor: 'operator@agroasys' } as any;
 
-        await expect(
-            axios.post(`${API_URL}/approve`, payload, { headers: signedHeaders(payload) })
-        ).rejects.toMatchObject({ response: { status: 400 } });
+        const response = await jsonRequest(`${API_URL}/approve`, {
+            method: 'POST',
+            headers: signedHeaders(payload),
+            body: JSON.stringify(payload),
+        });
+        expect(response.status).toBe(400);
     });
 
     test.skip('POST /reject returns 400 when actor is missing', async () => {
         const payload = { idempotencyKey: 'some-key' } as any;
 
-        await expect(
-            axios.post(`${API_URL}/reject`, payload, { headers: signedHeaders(payload) })
-        ).rejects.toMatchObject({ response: { status: 400 } });
+        const response = await jsonRequest(`${API_URL}/reject`, {
+            method: 'POST',
+            headers: signedHeaders(payload),
+            body: JSON.stringify(payload),
+        });
+        expect(response.status).toBe(400);
     });
 
     test.skip('POST /approve returns 400 when trigger does not exist', async () => {
@@ -320,8 +387,11 @@ describeManual('Oracle API integration (manual)', () => {
             actor: 'operator@agroasys',
         };
 
-        await expect(
-            axios.post(`${API_URL}/approve`, payload, { headers: signedHeaders(payload) })
-        ).rejects.toMatchObject({ response: { status: 400 } });
+        const response = await jsonRequest(`${API_URL}/approve`, {
+            method: 'POST',
+            headers: signedHeaders(payload),
+            body: JSON.stringify(payload),
+        });
+        expect(response.status).toBe(400);
     });
 });

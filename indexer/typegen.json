@@ -1,8 +1,0 @@
-{
-  "outDir": "src/types",
-  "specVersions": "https://v2.archive.subsquid.io/metadata/asset-hub-paseo",
-  "events": [
-    "Revive.ContractEmitted"
-  ],
-  "calls": []
-}

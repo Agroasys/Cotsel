@@ -25,7 +25,6 @@ function makeEvent(data: Partial<IndexerTradeEvent> & Pick<IndexerTradeEvent, 'i
     tradeId: data.tradeId,
     eventName: data.eventName,
     txHash: data.txHash === undefined ? '0xtx' : data.txHash,
-    extrinsicHash: data.extrinsicHash ?? null,
     blockNumber: data.blockNumber ?? 1,
     timestamp: data.timestamp || new Date('2026-01-01T00:00:00.000Z'),
     releasedLogisticsAmount: data.releasedLogisticsAmount,
@@ -147,7 +146,6 @@ describe('TreasuryIngestionService', () => {
           tradeId: 'trade-z',
           eventName: 'FundsReleasedStage1',
           txHash: null,
-          extrinsicHash: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
           releasedLogisticsAmount: '90',
         }),
       ])
@@ -162,5 +160,77 @@ describe('TreasuryIngestionService', () => {
     expect(result).toEqual({ fetched: 1, inserted: 0 });
     expect(mockUpsertLedgerEntryWithInitialState).not.toHaveBeenCalled();
     expect(mockSetIngestionOffset).toHaveBeenCalledWith(1);
+  });
+
+  it('ignores non-treasury events so principal never enters treasury ingestion', async () => {
+    const service = new TreasuryIngestionService();
+
+    mockGetIngestionOffset.mockResolvedValue(0);
+    mockSetIngestionOffset.mockResolvedValue(undefined);
+
+    const fetchTreasuryEvents = jest
+      .fn()
+      .mockResolvedValueOnce([
+        makeEvent({
+          id: 'evt-final-tranche',
+          tradeId: 'trade-principal',
+          eventName: 'FinalTrancheReleased',
+        }),
+      ])
+      .mockResolvedValueOnce([]);
+
+    (service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }).indexerClient = {
+      fetchTreasuryEvents,
+    };
+
+    const result = await service.ingestOnce();
+
+    expect(result).toEqual({ fetched: 1, inserted: 0 });
+    expect(mockUpsertLedgerEntryWithInitialState).not.toHaveBeenCalled();
+    expect(mockSetIngestionOffset).toHaveBeenCalledWith(1);
+  });
+
+  it('does not double-count replayed treasury events with the same canonical event id', async () => {
+    const service = new TreasuryIngestionService();
+
+    mockGetIngestionOffset.mockResolvedValue(0);
+    mockSetIngestionOffset.mockResolvedValue(undefined);
+    mockUpsertLedgerEntryWithInitialState
+      .mockResolvedValueOnce({ entry: { id: 1 }, initialStateCreated: true })
+      .mockResolvedValueOnce({ entry: { id: 1 }, initialStateCreated: false });
+
+    const fetchTreasuryEvents = jest
+      .fn()
+      .mockResolvedValueOnce([
+        makeEvent({
+          id: 'evt-replay',
+          tradeId: 'trade-replay',
+          eventName: 'PlatformFeesPaidStage1',
+          paidPlatformFees: '15',
+        }),
+        makeEvent({
+          id: 'evt-replay',
+          tradeId: 'trade-replay',
+          eventName: 'PlatformFeesPaidStage1',
+          paidPlatformFees: '15',
+        }),
+      ])
+      .mockResolvedValueOnce([]);
+
+    (service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }).indexerClient = {
+      fetchTreasuryEvents,
+    };
+
+    const result = await service.ingestOnce();
+
+    expect(result).toEqual({ fetched: 2, inserted: 1 });
+    expect(mockUpsertLedgerEntryWithInitialState).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ entryKey: 'evt-replay:platform_fee' }),
+    );
+    expect(mockUpsertLedgerEntryWithInitialState).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ entryKey: 'evt-replay:platform_fee' }),
+    );
   });
 });

@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { OracleSDK, Trade } from '@agroasys/sdk';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
+import type { SettlementConfirmationHeads } from '@agroasys/sdk';
 import { Logger } from '../utils/logger';
 import { IndexerClient, IndexerTrade } from './indexer-client';
 
@@ -11,6 +12,7 @@ export interface BlockchainResult {
 
 export class SDKClient {
     private sdk: OracleSDK;
+    private provider: ethers.AbstractProvider;
     private signer: ethers.Wallet;
     private indexer: IndexerClient;
 
@@ -24,6 +26,7 @@ export class SDKClient {
         indexer: IndexerClient
     ) {
         const provider = createManagedRpcProvider(rpcUrl, rpcFallbackUrls, { chainId });
+        this.provider = provider;
         this.signer = new ethers.Wallet(privateKey, provider);
 
         this.sdk = new OracleSDK({
@@ -41,6 +44,34 @@ export class SDKClient {
             escrowAddress,
             chainId,
         });
+    }
+
+    private async getBlockNumberForTag(tag: 'latest' | 'safe' | 'finalized'): Promise<number | null> {
+        const block = await this.provider.getBlock(tag);
+        return block ? Number(block.number) : null;
+    }
+
+    async getSettlementConfirmationHeads(): Promise<SettlementConfirmationHeads> {
+        const [latestBlockNumber, safeBlockNumber, finalizedBlockNumber] = await Promise.all([
+            this.getBlockNumberForTag('latest'),
+            this.getBlockNumberForTag('safe'),
+            this.getBlockNumberForTag('finalized'),
+        ]);
+
+        if (latestBlockNumber === null) {
+            throw new Error('Managed RPC provider returned no latest block for settlement confirmation');
+        }
+
+        return {
+            latestBlockNumber,
+            safeBlockNumber,
+            finalizedBlockNumber,
+        };
+    }
+
+    async getTransactionReceiptBlockNumber(txHash: string): Promise<number | null> {
+        const receipt = await this.provider.getTransactionReceipt(txHash);
+        return receipt ? Number(receipt.blockNumber) : null;
     }
 
     async getTrade(tradeId: string): Promise<Trade> {

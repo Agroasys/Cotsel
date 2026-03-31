@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { assertBankPayoutState, BankPayoutConflictError } from '../core/bankPayout';
+import { TreasuryEligibilityService } from '../core/exportEligibility';
 import { TreasuryIngestionService } from '../core/ingestion';
 import { assertFiatDepositState, FiatDepositConflictError } from '../core/fiatDeposit';
 import { assertValidTransition } from '../core/payout';
@@ -35,7 +36,12 @@ function parseObservedAt(value: string): Date {
   return parsed;
 }
 
-function toCsv(entries: Awaited<ReturnType<typeof getLedgerEntries>>): string {
+function toCsv(entries: Array<Awaited<ReturnType<typeof getLedgerEntries>>[number] & {
+  confirmationStage: string | null;
+  reconciliationStatus: string;
+  eligibleForExport: boolean;
+  blockedReasons: string[];
+}>): string {
   const headers = [
     'id',
     'trade_id',
@@ -45,6 +51,10 @@ function toCsv(entries: Awaited<ReturnType<typeof getLedgerEntries>>): string {
     'component_type',
     'amount_raw',
     'latest_state',
+    'confirmation_stage',
+    'reconciliation_status',
+    'eligible_for_export',
+    'blocked_reasons',
     'latest_state_at',
     'created_at',
   ];
@@ -58,6 +68,10 @@ function toCsv(entries: Awaited<ReturnType<typeof getLedgerEntries>>): string {
     entry.component_type,
     entry.amount_raw,
     entry.latest_state,
+    entry.confirmationStage ?? '',
+    entry.reconciliationStatus,
+    entry.eligibleForExport ? 'true' : 'false',
+    entry.blockedReasons.join('|'),
     entry.latest_state_at.toISOString(),
     entry.created_at.toISOString(),
   ]);
@@ -67,6 +81,7 @@ function toCsv(entries: Awaited<ReturnType<typeof getLedgerEntries>>): string {
 
 export class TreasuryController {
   private readonly ingestion = new TreasuryIngestionService();
+  private readonly eligibility = new TreasuryEligibilityService();
 
   async ingest(req: Request, res: Response): Promise<void> {
     try {
@@ -96,8 +111,23 @@ export class TreasuryController {
         limit: Number.isNaN(limit) ? 50 : limit,
         offset: Number.isNaN(offset) ? 0 : offset,
       });
+      const eligibility = await this.eligibility.assessEntries(entries);
+      const data = entries.map((entry) => ({
+        ...entry,
+        ...(eligibility.get(entry.id) ?? {
+          confirmationStage: null,
+          latestBlockNumber: null,
+          safeBlockNumber: null,
+          finalizedBlockNumber: null,
+          reconciliationStatus: 'UNKNOWN',
+          reconciliationRunKey: null,
+          eligibleForPayout: false,
+          eligibleForExport: false,
+          blockedReasons: ['Eligibility state unavailable'],
+        }),
+      }));
 
-      res.status(200).json({ success: true, data: entries });
+      res.status(200).json({ success: true, data });
     } catch (error: any) {
       res.status(400).json({ success: false, error: error?.message || 'Failed to list entries' });
     }
@@ -124,6 +154,26 @@ export class TreasuryController {
       const currentState = latest?.state || 'PENDING_REVIEW';
 
       assertValidTransition(currentState as PayoutState, requestedState);
+
+      if (requestedState === 'READY_FOR_PAYOUT') {
+        const entries = await getLedgerEntries({
+          tradeId: entry.trade_id,
+          limit: 500,
+          offset: 0,
+        });
+        const candidate = entries.find((item) => item.id === entryId);
+        if (!candidate) {
+          throw new Error('Ledger entry not found in payout eligibility scope');
+        }
+
+        const eligibility = await this.eligibility.assessEntries([candidate]);
+        const gate = eligibility.get(entryId);
+        if (!gate?.eligibleForPayout) {
+          throw new Error(
+            `Ledger entry is not eligible for payout: ${gate?.blockedReasons.join('; ') || 'unknown gate failure'}`,
+          );
+        }
+      }
 
       const event = await appendPayoutState({
         ledgerEntryId: entryId,
@@ -264,15 +314,32 @@ export class TreasuryController {
     try {
       const format = typeof req.query.format === 'string' ? req.query.format : 'json';
       const entries = await getLedgerEntries({ limit: 5000, offset: 0 });
+      const eligibility = await this.eligibility.assessEntries(entries);
+      const exportableEntries = entries
+        .map((entry) => ({
+          ...entry,
+          ...(eligibility.get(entry.id) ?? {
+            confirmationStage: null,
+            latestBlockNumber: null,
+            safeBlockNumber: null,
+            finalizedBlockNumber: null,
+            reconciliationStatus: 'UNKNOWN',
+            reconciliationRunKey: null,
+            eligibleForPayout: false,
+            eligibleForExport: false,
+            blockedReasons: ['Eligibility state unavailable'],
+          }),
+        }))
+        .filter((entry) => entry.eligibleForExport);
 
       if (format === 'csv') {
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename="treasury-ledger.csv"');
-        res.status(200).send(toCsv(entries));
+        res.status(200).send(toCsv(exportableEntries));
         return;
       }
 
-      res.status(200).json({ success: true, data: entries });
+      res.status(200).json({ success: true, data: exportableEntries });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || 'Failed to export entries' });
     }

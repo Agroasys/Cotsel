@@ -1,4 +1,5 @@
 import { WebhookNotifier } from '@agroasys/notifications';
+import { isWorkflowConfirmationStage, resolveSettlementConfirmationStage } from '@agroasys/sdk';
 import { IndexerClient } from '../blockchain/indexer-client';
 import { SDKClient } from '../blockchain/sdk-client';
 import { getTriggersByStatus, updateTrigger } from '../database/queries';
@@ -182,6 +183,12 @@ export class ConfirmationWorker {
             );
 
             if (event) {
+                const confirmationState = resolveSettlementConfirmationStage(
+                    event.blockNumber,
+                    await this.sdkClient.getSettlementConfirmationHeads(),
+                );
+                const stageReachedWorkflowGate = isWorkflowConfirmationStage(confirmationState.stage);
+
                 Logger.info('Transaction confirmed in indexer', {
                     idempotencyKey: trigger.idempotency_key.substring(0, 32),
                     actionKey: trigger.action_key,
@@ -189,24 +196,37 @@ export class ConfirmationWorker {
                     eventId: event.id,
                     eventName: event.eventName,
                     blockNumber: event.blockNumber,
+                    confirmationStage: confirmationState.stage,
+                    safeBlockNumber: confirmationState.safeBlockNumber,
+                    finalizedBlockNumber: confirmationState.finalizedBlockNumber,
                     confirmationTimeSeconds: (ageMs / 1000).toFixed(1),
                 });
 
                 await updateTrigger(trigger.idempotency_key, {
-                    status: TriggerStatus.CONFIRMED,
                     indexer_confirmed: true,
                     indexer_confirmed_at: new Date(),
                     indexer_event_id: event.id,
-                    confirmed_at: new Date(),
+                    confirmation_stage: confirmationState.stage,
+                    confirmation_stage_at: new Date(),
+                    ...(stageReachedWorkflowGate
+                        ? {
+                            status: TriggerStatus.CONFIRMED,
+                            confirmed_at: new Date(),
+                        }
+                        : {}),
                 });
 
-                Logger.audit('TRIGGER_CONFIRMED', trigger.trade_id, {
+                Logger.audit(
+                    stageReachedWorkflowGate ? 'TRIGGER_CONFIRMED' : 'TRIGGER_INDEXED_AWAITING_SAFE_HEAD',
+                    trigger.trade_id,
+                    {
                     idempotencyKey: trigger.idempotency_key.substring(0, 32),
                     actionKey: trigger.action_key,
                     triggerType: trigger.trigger_type,
                     txHash: trigger.tx_hash,
                     eventName: event.eventName,
                     blockNumber: event.blockNumber,
+                    confirmationStage: confirmationState.stage,
                     confirmationTimeSeconds: (ageMs / 1000).toFixed(1),
                 });
             } else {
@@ -266,6 +286,51 @@ export class ConfirmationWorker {
         }
 
         try {
+            const receiptBlockNumber = await this.sdkClient.getTransactionReceiptBlockNumber(trigger.tx_hash);
+            if (receiptBlockNumber !== null) {
+                const confirmationState = resolveSettlementConfirmationStage(
+                    receiptBlockNumber,
+                    await this.sdkClient.getSettlementConfirmationHeads(),
+                );
+
+                await updateTrigger(trigger.idempotency_key, {
+                    confirmation_stage: confirmationState.stage,
+                    confirmation_stage_at: new Date(),
+                    ...(isWorkflowConfirmationStage(confirmationState.stage)
+                        ? {
+                            status: TriggerStatus.CONFIRMED,
+                            on_chain_verified: true,
+                            on_chain_verified_at: new Date(),
+                            confirmed_at: new Date(),
+                        }
+                        : {}),
+                });
+
+                if (isWorkflowConfirmationStage(confirmationState.stage)) {
+                    Logger.warn('On-chain receipt confirmed action while indexer lagged behind', {
+                        idempotencyKey: trigger.idempotency_key.substring(0, 32),
+                        actionKey: trigger.action_key,
+                        triggerType: trigger.trigger_type,
+                        txHash: trigger.tx_hash,
+                        receiptBlockNumber,
+                        confirmationStage: confirmationState.stage,
+                        ageMinutes: ageMinutes.toFixed(1),
+                    });
+
+                    Logger.audit('TRIGGER_CONFIRMED_ON_CHAIN_RECEIPT', trigger.trade_id, {
+                        idempotencyKey: trigger.idempotency_key.substring(0, 32),
+                        actionKey: trigger.action_key,
+                        triggerType: trigger.trigger_type,
+                        txHash: trigger.tx_hash,
+                        receiptBlockNumber,
+                        confirmationStage: confirmationState.stage,
+                        ageMinutes: ageMinutes.toFixed(1),
+                    });
+
+                    return true;
+                }
+            }
+
             const trade = await this.sdkClient.getTrade(trigger.trade_id);
             const advanced = this.isTradeStateAdvanced(trigger.trigger_type, trade.status);
 
