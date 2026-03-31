@@ -198,6 +198,29 @@ check_http_health() {
   return 1
 }
 
+check_http_health_in_service_once() {
+  local service_name="$1"
+  local port="$2"
+  local path="$3"
+
+  run_compose exec -T "$service_name" node -e "fetch('http://127.0.0.1:${port}${path}').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+}
+
+check_http_health_in_service() {
+  local name="$1"
+  local service_name="$2"
+  local port="$3"
+  local path="$4"
+
+  if with_retries "$name health endpoint" check_http_health_in_service_once "$service_name" "$port" "$path"; then
+    echo "$name health endpoint: ok"
+    return 0
+  fi
+
+  echo "$name health endpoint failed: service=$service_name path=$path" >&2
+  return 1
+}
+
 check_required_services() {
   local required_services=()
 
@@ -322,7 +345,7 @@ case "$ACTION" in
     fi
 
     if is_running "oracle"; then
-      check_http_health "oracle" "http://127.0.0.1:${ORACLE_PORT:-3001}/api/oracle/health"
+      check_http_health_in_service "oracle" "oracle" "${ORACLE_PORT:-3001}" "/api/oracle/health"
     fi
 
     if is_running "gateway"; then

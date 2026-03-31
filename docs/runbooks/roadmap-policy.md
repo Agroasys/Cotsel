@@ -8,6 +8,7 @@ The workflow `.github/workflows/pr-roadmap-policy.yml` enforces both requirement
 ## Active migration truth
 - The active Base migration execution source of truth is issue `#339` and milestones `M0` through `M5`.
 - Historical Milestones A/B/C weighted progress tooling is retained for pre-Base traceability only and must not be used as active v1 migration truth.
+- M4 closure requires operational proof: active Base-only runbooks, a canonical rehearsal path, and a real Base Sepolia evidence packet. Template existence alone is not sufficient.
 
 Validation order is strict:
 1. Direct PR -> `projectItems` match by `ROADMAP_PROJECT_ID`.

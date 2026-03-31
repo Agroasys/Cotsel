@@ -280,6 +280,9 @@ flowchart LR
 - Base is the active v1 settlement target-state. Historical Polkadot/PolkaVM
   references elsewhere in the repo are migration residue or archive material,
   not active architecture truth.
+- M4 and later operational readiness work must use this Base-only architecture
+  view together with the active Base runbooks. Historical deployment notes are
+  not sufficient for pilot or production decision-making.
 - Transitional `platform.v1` Supabase ownership is not canonical target-state
   architecture and is intentionally excluded from this diagram.
 - This diagram is a target-state system architecture view. It is not intended

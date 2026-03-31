@@ -62,6 +62,7 @@ required_groups=(
   POSTGRES_USER
   POSTGRES_PASSWORD
   AUTH_DB_NAME
+  GATEWAY_DB_NAME
   RICARDIAN_DB_NAME
   TREASURY_DB_NAME
   ORACLE_DB_NAME
@@ -111,6 +112,16 @@ if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e" || "$PROFILE" == 
   )
 fi
 
+if [[ "$PROFILE" == "staging-e2e-real" ]]; then
+  required_groups+=(
+    GATEWAY_AUTH_BASE_URL
+    GATEWAY_INDEXER_GRAPHQL_URL
+    GATEWAY_SETTLEMENT_RUNTIME\|GATEWAY_RPC_URL
+    GATEWAY_SETTLEMENT_RUNTIME\|GATEWAY_CHAIN_ID
+    GATEWAY_ESCROW_ADDRESS
+  )
+fi
+
 if [[ "$PROFILE" == "staging-e2e" || "$PROFILE" == "staging-e2e-real" ]]; then
   required_groups+=(
     # indexer pipeline aliases (indexer/src/config.ts)
@@ -118,6 +129,7 @@ if [[ "$PROFILE" == "staging-e2e" || "$PROFILE" == "staging-e2e-real" ]]; then
     INDEXER_RPC_ENDPOINT\|RPC_ENDPOINT
     INDEXER_START_BLOCK\|START_BLOCK
     INDEXER_RATE_LIMIT\|RATE_LIMIT
+    FINALITY_CONFIRMATION_BLOCKS
     INDEXER_GRAPHQL_PORT\|GRAPHQL_PORT
     INDEXER_CONTRACT_ADDRESS\|CONTRACT_ADDRESS
   )
@@ -175,6 +187,76 @@ if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e" || "$PROFILE" == 
     echo "RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL is required when RECONCILIATION_NOTIFICATIONS_ENABLED=true" >&2
     exit 1
   fi
+fi
+
+optional_numeric_keys=(
+  INDEXER_RPC_CAPACITY
+  INDEXER_RPC_MAX_BATCH_CALL_SIZE
+  INDEXER_RPC_REQUEST_TIMEOUT_MS
+  INDEXER_RPC_RETRY_ATTEMPTS
+  INDEXER_RPC_HEAD_POLL_INTERVAL_MS
+  INDEXER_RPC_BLOCK_SPLIT_SIZE
+)
+
+for key in "${optional_numeric_keys[@]}"; do
+  value="${!key:-}"
+  if [[ -n "$value" && ! "$value" =~ ^[0-9]+$ ]]; then
+    echo "$key must be a whole number when set" >&2
+    exit 1
+  fi
+done
+
+if [[ -n "${INDEXER_RPC_INGEST_DISABLED:-}" && "${INDEXER_RPC_INGEST_DISABLED}" != "true" && "${INDEXER_RPC_INGEST_DISABLED}" != "false" ]]; then
+  echo "INDEXER_RPC_INGEST_DISABLED must be true or false when set" >&2
+  exit 1
+fi
+
+contains_stale_chain_marker() {
+  local value="${1:-}"
+  [[ "$value" == *asset-hub-paseo* || "$value" == *paseo* || "$value" == *polkadot* || "$value" == *polkavm* ]]
+}
+
+if [[ "$PROFILE" == "staging-e2e-real" ]]; then
+  if [[ "${STAGING_E2E_REAL_NETWORK_NAME:-}" != "Base Sepolia" ]]; then
+    echo "STAGING_E2E_REAL_NETWORK_NAME must be 'Base Sepolia' for M4 pilot readiness" >&2
+    exit 1
+  fi
+
+  if [[ "${STAGING_E2E_REAL_CHAIN_ID:-}" != "84532" ]]; then
+    echo "STAGING_E2E_REAL_CHAIN_ID must be 84532 for Base Sepolia pilot readiness" >&2
+    exit 1
+  fi
+
+  for var_name in INDEXER_GATEWAY_URL INDEXER_RPC_ENDPOINT ORACLE_RPC_URL RECONCILIATION_RPC_URL GATEWAY_RPC_URL; do
+    value="${!var_name:-}"
+    if contains_stale_chain_marker "$value"; then
+      echo "$var_name still points at historical chain infrastructure: $value" >&2
+      exit 1
+    fi
+  done
+
+  if [[ -n "${ORACLE_SETTLEMENT_RUNTIME:-}" && "${ORACLE_SETTLEMENT_RUNTIME:-}" != "base-sepolia" ]]; then
+    echo "ORACLE_SETTLEMENT_RUNTIME must be base-sepolia for staging-e2e-real" >&2
+    exit 1
+  fi
+
+  if [[ -n "${RECONCILIATION_SETTLEMENT_RUNTIME:-}" && "${RECONCILIATION_SETTLEMENT_RUNTIME:-}" != "base-sepolia" ]]; then
+    echo "RECONCILIATION_SETTLEMENT_RUNTIME must be base-sepolia for staging-e2e-real" >&2
+    exit 1
+  fi
+
+  if [[ -n "${GATEWAY_SETTLEMENT_RUNTIME:-}" && "${GATEWAY_SETTLEMENT_RUNTIME:-}" != "base-sepolia" ]]; then
+    echo "GATEWAY_SETTLEMENT_RUNTIME must be base-sepolia for staging-e2e-real" >&2
+    exit 1
+  fi
+
+  for var_name in ORACLE_CHAIN_ID RECONCILIATION_CHAIN_ID GATEWAY_CHAIN_ID; do
+    value="${!var_name:-}"
+    if [[ -n "$value" && "$value" != "84532" ]]; then
+      echo "$var_name must be 84532 for staging-e2e-real" >&2
+      exit 1
+    fi
+  done
 fi
 
 echo "env validation passed for profile: $PROFILE"

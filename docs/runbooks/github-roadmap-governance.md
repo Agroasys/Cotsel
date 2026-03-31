@@ -7,6 +7,7 @@ Maintain a single execution board for `Cotsel` where every roadmap item and PR i
 - The active v1 migration governance source of truth is the Base migration program rooted at issue `#339`.
 - The active milestone model is `M0 Base Migration Decision and Boundary Freeze`, `M1 Base Contract Runtime and Deployment`, `M2 Base Eventing, Reconciliation, and Treasury Safety`, `M3 Backend, Gateway, and Wallet Continuity`, `M4 Base Sepolia Pilot Readiness`, `M5 Base Mainnet Launch and Polkadot Retirement`, plus `Needs Triage`.
 - Historical Milestones A/B/C and their old weighted rollups are retained only for pre-Base traceability. They are not active v1 planning truth.
+- M4 is the operational installation-and-proof gate. M5 must not begin until M4 has a real Base Sepolia rehearsal result, a reviewable evidence packet, and an explicit blocker register.
 
 ## Project v2 Definition
 - Project name: `Cotsel Roadmap`

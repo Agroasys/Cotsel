@@ -16,6 +16,12 @@ export interface IndexerConfig {
     rpcEndpoint: string;
     startBlock: number;
     rateLimit: number;
+    rpcCapacity: number | null;
+    rpcMaxBatchCallSize: number | null;
+    rpcRequestTimeoutMs: number | null;
+    rpcRetryAttempts: number | null;
+    rpcHeadPollIntervalMs: number | null;
+    rpcIngestDisabled: boolean;
     finalityConfirmationBlocks: number;
     prometheusPort: number | null;
     
@@ -48,6 +54,16 @@ function optionalEnvNumber(name: string): number | null {
     return num;
 }
 
+function optionalEnvBoolean(name: string): boolean | null {
+    const value = optionalEnv(name);
+    if (value === null) {
+        return null;
+    }
+
+    assert(value === 'true' || value === 'false', `${name} must be true or false`);
+    return value === 'true';
+}
+
 function validateEnvNumber(name: string): number {
     const value = validateEnv(name);
     const num = parseInt(value, 10);
@@ -67,6 +83,12 @@ export function loadConfig(): IndexerConfig {
             rpcEndpoint: validateEnv('RPC_ENDPOINT'),
             startBlock: validateEnvNumber('START_BLOCK'),
             rateLimit: validateEnvNumber('RATE_LIMIT'),
+            rpcCapacity: optionalEnvNumber('RPC_CAPACITY'),
+            rpcMaxBatchCallSize: optionalEnvNumber('RPC_MAX_BATCH_CALL_SIZE'),
+            rpcRequestTimeoutMs: optionalEnvNumber('RPC_REQUEST_TIMEOUT_MS'),
+            rpcRetryAttempts: optionalEnvNumber('RPC_RETRY_ATTEMPTS'),
+            rpcHeadPollIntervalMs: optionalEnvNumber('RPC_HEAD_POLL_INTERVAL_MS'),
+            rpcIngestDisabled: optionalEnvBoolean('RPC_INGEST_DISABLED') ?? false,
             finalityConfirmationBlocks: validateEnvNumber('FINALITY_CONFIRMATION_BLOCKS'),
             prometheusPort: optionalEnvNumber('PROMETHEUS_PORT'),
             contractAddress: validateEnv('CONTRACT_ADDRESS').toLowerCase(),

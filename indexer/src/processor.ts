@@ -13,6 +13,14 @@ const processor = new EvmBatchProcessor()
   .setRpcEndpoint({
     url: config.rpcEndpoint,
     rateLimit: config.rateLimit,
+    capacity: config.rpcCapacity ?? undefined,
+    maxBatchCallSize: config.rpcMaxBatchCallSize ?? undefined,
+    requestTimeout: config.rpcRequestTimeoutMs ?? undefined,
+    retryAttempts: config.rpcRetryAttempts ?? undefined,
+  })
+  .setRpcDataIngestionSettings({
+    disabled: config.rpcIngestDisabled,
+    headPollInterval: config.rpcHeadPollIntervalMs ?? undefined,
   })
   .setFinalityConfirmation(config.finalityConfirmationBlocks)
   .addLog({

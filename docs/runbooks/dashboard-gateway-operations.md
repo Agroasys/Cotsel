@@ -90,7 +90,8 @@ Executor-only env:
 Runtime notes:
 - `GATEWAY_SETTLEMENT_RUNTIME` is the canonical selector for active Base v1 runtimes.
 - `GATEWAY_RPC_URL`, `GATEWAY_RPC_FALLBACK_URLS`, and `GATEWAY_EXPLORER_BASE_URL` are override inputs, not separate runtime truth.
-- Public Base RPC endpoints are acceptable for local/dev or pilot bootstrap only. Production must use the managed provider policy frozen in M0.
+- Public Base RPC endpoints are acceptable for local/dev and emergency diagnostics only.
+- The controlled Base Sepolia pilot runtime must use one managed primary provider and one independent managed fallback provider, per M0.
 
 Signer custody source of truth:
 - `docs/runbooks/gateway-governance-signer-custody.md`
