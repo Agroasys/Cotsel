@@ -92,7 +92,7 @@ For every HIGH/CRITICAL incident record:
 - environment (`staging-e2e-real` or equivalent),
 - affected component,
 - last 20 log lines,
-- relevant tx/extrinsic hash when on-chain correlation exists,
+- relevant `txHash` and `blockNumber`/`logIndex` when on-chain correlation exists,
 - current service health status,
 - rollback decision (`yes` or `no`) with reason.
 

@@ -14,6 +14,7 @@ export type AuthRole = 'buyer' | 'supplier' | 'admin';
 
 export interface AuthClientConfig {
   baseUrl: string;
+  expectedChainId?: number;
 }
 
 export interface SessionResult {
@@ -58,14 +59,37 @@ async function apiRequest<T>(url: string, init: RequestInit): Promise<T> {
 
 export class AuthClient {
   private readonly base: string;
+  private readonly expectedChainId: number | null;
 
   constructor(config: AuthClientConfig) {
     this.base = `${trimBase(config.baseUrl)}/api/auth/v1`;
+    this.expectedChainId = config.expectedChainId ?? null;
   }
 
+  private async assertWalletNetwork(signer: {
+    provider?: { getNetwork(): Promise<{ chainId: bigint | number | string }> } | null;
+  }): Promise<void> {
+    if (!this.expectedChainId) {
+      return;
+    }
+
+    if (!signer.provider || typeof signer.provider.getNetwork !== 'function') {
+      throw new Error('Connected wallet signer is missing provider network context.');
+    }
+
+    const network = await signer.provider.getNetwork();
+    const actualChainId = Number(network.chainId);
+    if (actualChainId !== this.expectedChainId) {
+      throw new Error(
+        `Connected wallet is on the wrong network. Expected chainId=${this.expectedChainId}, received ${actualChainId}.`,
+      );
+    }
+  }
 
   async login(options: LoginOptions): Promise<SessionResult> {
+    await web3Wallet.connect();
     const signer = await web3Wallet.getSigner();
+    await this.assertWalletNetwork(signer);
     const walletAddress = (await signer.getAddress()).toLowerCase();
 
     const challenge = await apiRequest<{ message: string; expiresIn: number }>(

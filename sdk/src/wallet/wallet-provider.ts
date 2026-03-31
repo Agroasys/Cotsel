@@ -75,6 +75,16 @@ class Web3AuthWrapper {
     return signer.getAddress();
   }
 
+  async getChainId(): Promise<number> {
+    const signer = await this.getSigner();
+    if (!signer.provider) {
+      throw new Error('Connected wallet signer is missing provider network context.');
+    }
+
+    const network = await signer.provider.getNetwork();
+    return Number(network.chainId);
+  }
+
   async disconnect(): Promise<void> {
     await this.web3auth?.logout();
     this.signer = null;

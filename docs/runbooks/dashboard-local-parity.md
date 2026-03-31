@@ -78,6 +78,8 @@ Successful parity preflight proves:
 - gateway `/healthz`, `/readyz`, and `/version` are reachable
 - gateway readiness is green against the local stack
 - the trade list surface returns the canonical seeded trade `TRD-LOCAL-9001`
+- the trade detail surface returns a canonical Base-era payload with at least one `txHash`
+- the trade detail payload does not expose `extrinsicHash`
 
 ## Failure interpretation
 - `readyz` reports `chain-rpc unavailable`
@@ -103,6 +105,8 @@ Stable parity gate failure classes:
 - `GATEWAY_VERSION_REQUEST_FAILED`
 - `GATEWAY_TRADES_REQUEST_FAILED`
 - `GATEWAY_TRADES_PAYLOAD_INVALID`
+- `GATEWAY_TRADE_DETAIL_REQUEST_FAILED`
+- `GATEWAY_TRADE_DETAIL_PAYLOAD_INVALID`
 - `SEEDED_TRADE_MISSING`
 - `SEEDED_TRADE_MISMATCH`
 
@@ -146,6 +150,17 @@ Status boundary:
 
 GitHub Actions source of truth:
 - `.github/workflows/dashboard-live-parity.yml`
+
+## M3 continuity gate
+Canonical M3 continuity entrypoint:
+
+```bash
+npm run m3:continuity:ci
+```
+
+This gate adds the upstream Agroasys settlement-handoff contract tests to the
+existing Cotsel + Cotsel-Dash live parity flow so the application boundary is
+checked across all three repos before M3 closure.
 
 Expected report fields:
 - `summary.wholeProfileHealth`

@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY sdk sdk
 COPY notifications notifications
 COPY oracle oracle
@@ -20,7 +20,7 @@ FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY oracle/package.json oracle/package.json
 COPY sdk/package.json sdk/package.json
 COPY notifications/package.json notifications/package.json

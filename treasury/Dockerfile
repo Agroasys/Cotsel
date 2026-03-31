@@ -1,31 +1,36 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY treasury/package.json treasury/package.json
+COPY sdk/package.json sdk/package.json
 COPY shared-auth/package.json shared-auth/package.json
 
 RUN npm ci --ignore-scripts
 
-COPY treasury treasury
+COPY sdk sdk
 COPY shared-auth shared-auth
+COPY treasury treasury
 
-RUN npm run -w treasury build
+RUN npm run -w @agroasys/sdk build \
+  && npm run -w treasury build
 
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY treasury/package.json treasury/package.json
+COPY sdk/package.json sdk/package.json
 COPY shared-auth/package.json shared-auth/package.json
 
-RUN npm ci --omit=dev --ignore-scripts --workspace treasury --workspace @agroasys/shared-auth --include-workspace-root=false \
+RUN npm ci --omit=dev --ignore-scripts --workspace treasury --workspace @agroasys/sdk --workspace @agroasys/shared-auth --include-workspace-root=false \
   && npm cache clean --force
 
+COPY --from=builder /app/sdk/dist /app/sdk/dist
+COPY --from=builder /app/shared-auth /app/shared-auth
 COPY --from=builder /app/treasury/dist /app/treasury/dist
 COPY --from=builder /app/treasury/src/database/schema.sql /app/treasury/src/database/schema.sql
-COPY --from=builder /app/shared-auth /app/shared-auth
 
 RUN addgroup -S agro && adduser -S agro -G agro \
   && chown -R agro:agro /app

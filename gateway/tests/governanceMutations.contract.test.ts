@@ -90,7 +90,6 @@ const tradeFixture: DashboardTradeRecord = {
     callbackStatus: 'pending',
     providerStatus: 'dispatch_received',
     txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    extrinsicHash: null,
     externalReference: 'EXT-1',
     latestEventType: 'submitted',
     latestEventDetail: 'Dispatch accepted by settlement engine.',

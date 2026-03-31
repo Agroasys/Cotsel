@@ -57,7 +57,6 @@ export interface DashboardTradeSettlementRecord {
   callbackStatus: SettlementCallbackStatus;
   providerStatus: string | null;
   txHash: string | null;
-  extrinsicHash: string | null;
   explorerUrl?: string | null;
   externalReference: string | null;
   latestEventType: SettlementEventType | null;
@@ -86,7 +85,6 @@ interface TradeEventGraphQlRecord {
   eventName: string;
   timestamp: string;
   txHash?: string | null;
-  extrinsicHash?: string | null;
   totalAmount?: string | null;
   releasedFirstTranche?: string | null;
   releasedLogisticsAmount?: string | null;
@@ -147,7 +145,7 @@ function assertUnixSecondsTimestamp(value: string, field: string): string {
   return timestamp.toISOString();
 }
 
-function parseHash(txHash?: string | null, extrinsicHash?: string | null): string | undefined {
+function parseHash(txHash?: string | null): string | undefined {
   const candidate = txHash ?? undefined;
   return candidate && candidate.trim().length > 0 ? candidate : undefined;
 }
@@ -284,8 +282,8 @@ function mapTimeline(
   );
 
   return sorted.map((event) => {
-    const reference = buildSettlementTransactionReference(event.txHash, event.extrinsicHash, explorerBaseUrl);
-    const eventHash = parseHash(reference.txHash, reference.extrinsicHash);
+    const reference = buildSettlementTransactionReference(event.txHash, explorerBaseUrl);
+    const eventHash = parseHash(reference.txHash);
     const eventDetail = mapEventDetail(event);
     return {
       stage: mapEventStage(event.eventName),
@@ -331,7 +329,6 @@ const listTradesQuery = `
         eventName
         timestamp
         txHash
-        extrinsicHash
         totalAmount
         releasedFirstTranche
         releasedLogisticsAmount
@@ -370,7 +367,6 @@ const tradeDetailQuery = `
         eventName
         timestamp
         txHash
-        extrinsicHash
         totalAmount
         releasedFirstTranche
         releasedLogisticsAmount
@@ -479,7 +475,6 @@ export class TradeReadService implements TradeReadReader {
     const updatedAt = latestTimelineEntry?.timestamp ?? assertIsoTimestamp(trade.createdAt, 'trade.createdAt');
     const settlementReference = buildSettlementTransactionReference(
       settlementProjection?.txHash ?? null,
-      settlementProjection?.extrinsicHash ?? null,
       this.explorerBaseUrl,
     );
 
@@ -511,7 +506,6 @@ export class TradeReadService implements TradeReadReader {
         callbackStatus: settlementProjection.callbackStatus,
         providerStatus: settlementProjection.providerStatus,
         txHash: settlementReference.txHash,
-        extrinsicHash: settlementProjection.extrinsicHash,
         ...(settlementReference.explorerUrl ? { explorerUrl: settlementReference.explorerUrl } : {}),
         externalReference: settlementProjection.externalReference,
         latestEventType: settlementProjection.latestEventType,

@@ -37,7 +37,6 @@ export interface ReconciliationRecord {
   callbackStatus: SettlementHandoffRecord['callbackStatus'];
   providerStatus: string | null;
   txHash: string | null;
-  extrinsicHash: string | null;
   latestEventType: SettlementHandoffRecord['latestEventType'];
   latestEventDetail: string | null;
   latestEventAt: string | null;
@@ -121,7 +120,6 @@ function mapReconciliationRecord(
     callbackStatus: handoff.callbackStatus,
     providerStatus: handoff.providerStatus,
     txHash: handoff.txHash,
-    extrinsicHash: handoff.extrinsicHash,
     latestEventType: handoff.latestEventType,
     latestEventDetail: handoff.latestEventDetail,
     latestEventAt: handoff.latestEventAt,

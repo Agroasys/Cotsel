@@ -5,14 +5,20 @@ import { AuthClient, AuthRole, SessionResult } from '../src/modules/authClient';
 
 // Mock web3Wallet
 
+const mockConnect = jest.fn<Promise<void>, []>();
 const mockGetAddress = jest.fn<Promise<string>, []>();
 const mockSignMessage = jest.fn<Promise<string>, [string]>();
+const mockGetNetwork = jest.fn<Promise<{ chainId: bigint }>, []>();
 
 jest.mock('../src/wallet/wallet-provider', () => ({
   web3Wallet: {
+    connect: () => mockConnect(),
     getSigner: jest.fn(async () => ({
       getAddress: mockGetAddress,
       signMessage: mockSignMessage,
+      provider: {
+        getNetwork: mockGetNetwork,
+      },
     })),
   },
 }));
@@ -60,8 +66,10 @@ describe('AuthClient', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     client = new AuthClient({ baseUrl: BASE });
+    mockConnect.mockResolvedValue(undefined);
     mockGetAddress.mockResolvedValue(WALLET);
     mockSignMessage.mockResolvedValue(SIG);
+    mockGetNetwork.mockResolvedValue({ chainId: 84532n });
   });
 
   // login()
@@ -73,6 +81,8 @@ describe('AuthClient', () => {
         .mockResolvedValueOnce(mockOk(SESSION));
 
       const result = await client.login({ role: 'buyer' });
+
+      expect(mockConnect).toHaveBeenCalledTimes(1);
 
       // challenge request targets correct URL with wallet param
       expect(mockFetch).toHaveBeenNthCalledWith(
@@ -166,6 +176,16 @@ describe('AuthClient', () => {
         .mockResolvedValueOnce(mockErr('No active challenge for this wallet', 401));
 
       await expect(client.login({ role: 'buyer' })).rejects.toThrow('No active challenge');
+    });
+
+    test('rejects when the connected wallet is on the wrong Base network', async () => {
+      client = new AuthClient({ baseUrl: BASE, expectedChainId: 84532 });
+      mockGetNetwork.mockResolvedValueOnce({ chainId: 8453n });
+
+      await expect(client.login({ role: 'buyer' })).rejects.toThrow(
+        'Expected chainId=84532, received 8453',
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 

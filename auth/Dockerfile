@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY auth/package.json auth/package.json
 COPY sdk/package.json sdk/package.json
 COPY shared-auth/package.json shared-auth/package.json
@@ -21,7 +21,7 @@ FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY auth/package.json auth/package.json
 COPY shared-auth/package.json shared-auth/package.json
 

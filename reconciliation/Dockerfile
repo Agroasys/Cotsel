@@ -1,7 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY notifications notifications
 COPY sdk sdk
 COPY reconciliation reconciliation
@@ -18,7 +18,7 @@ FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY reconciliation/package.json reconciliation/package.json
 COPY sdk/package.json sdk/package.json
 COPY notifications/package.json notifications/package.json

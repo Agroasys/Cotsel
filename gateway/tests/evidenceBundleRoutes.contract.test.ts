@@ -77,7 +77,6 @@ const trade: DashboardTradeRecord = {
     callbackStatus: 'delivered',
     providerStatus: 'ok',
     txHash: '0xsettlement',
-    extrinsicHash: null,
     externalReference: 'ref-247',
     latestEventType: 'confirmed',
     latestEventDetail: 'Settled',

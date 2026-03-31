@@ -22,7 +22,8 @@ Current mandatory audit-envelope fields come from `docs/observability/logging-sc
 
 Additional fields should be populated when available from the service boundary:
 - `actor`
-- `blockNumber` or `extrinsicHash`
+- `blockNumber`
+- `logIndex`
 - approval or ticket reference
 
 If a field is not available for the workflow, record `N/A` instead of leaving it blank.
@@ -43,9 +44,9 @@ authoritative gateway ledger, request record, or operator evidence source.
 
 ## Core Evidence Table
 
-| Trade ID | Action Key | Request ID | Trace ID | Correlation ID | Actor | Intent | Outcome | Tx Hash / Extrinsic | Service | Evidence link |
+| Trade ID | Action Key | Request ID | Trace ID | Correlation ID | Actor | Intent | Outcome | Tx Hash | Service | Evidence link |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `<tradeId or N/A>` | `<actionKey or N/A>` | `<requestId or N/A>` | `<traceId or N/A>` | `<correlationId or N/A>` | `<actor or N/A>` | `<intent or N/A>` | `<outcome or pending>` | `<txHash/extrinsicHash or N/A>` | `<service>` | `<path or URL>` |
+| `<tradeId or N/A>` | `<actionKey or N/A>` | `<requestId or N/A>` | `<traceId or N/A>` | `<correlationId or N/A>` | `<actor or N/A>` | `<intent or N/A>` | `<outcome or pending>` | `<txHash or N/A>` | `<service>` | `<path or URL>` |
 
 ## Supporting Artifacts
 
@@ -66,7 +67,7 @@ authoritative gateway ledger, request record, or operator evidence source.
 ## Closeout Checklist
 - [ ] Core `AuditEnvelopeV1` fields captured from current logging or ledger baseline.
 - [ ] `actor`, `intent`, and `outcome` populated from the authoritative service or ledger source.
-- [ ] On-chain or extrinsic reference attached where a state-changing action occurred.
+- [ ] On-chain transaction reference attached where a state-changing action occurred.
 - [ ] Approval or escalation references attached.
 - [ ] Links to service logs and supporting artifacts included.
 

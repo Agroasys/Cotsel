@@ -58,6 +58,7 @@ Required headers:
 - Never continue processing when destination details are ambiguous.
 - Never use an arbitrary payout destination for treasury claim execution; destination is contract-controlled.
 - Never enable or improvise new treasury automation outside the approved automation classes and change-control path.
+- Never route treasury execution through buyer-facing AA, paymaster, or sponsored-gas shortcuts; treasury operators must use the explicit privileged signer path only.
 
 ## Fiat Ramp Deposit Contract
 Treasury source of truth:
