@@ -20,16 +20,30 @@ function getCommitSha(): string {
   }
 }
 
+function getConfiguredCompilerVersion(): string | null {
+  if (typeof hre.config.solidity === "string") {
+    return hre.config.solidity;
+  }
+
+  if ("version" in hre.config.solidity && typeof hre.config.solidity.version === "string") {
+    return hre.config.solidity.version;
+  }
+
+  if ("compilers" in hre.config.solidity && Array.isArray(hre.config.solidity.compilers)) {
+    const primaryCompiler = hre.config.solidity.compilers[0];
+    if (primaryCompiler && typeof primaryCompiler.version === "string") {
+      return primaryCompiler.version;
+    }
+  }
+
+  return null;
+}
+
 async function main(): Promise<void> {
   const chainId = hre.network.config.chainId ?? null;
   const config = loadBaseDeploymentConfig(hre.network.name, chainId);
   const artifact = await hre.artifacts.readArtifact(config.escrowName);
-  const configuredCompilerVersion =
-    typeof hre.config.solidity === "string"
-      ? hre.config.solidity
-      : "version" in hre.config.solidity
-        ? hre.config.solidity.version
-        : null;
+  const configuredCompilerVersion = getConfiguredCompilerVersion();
   const [deployer] = await ethers.getSigners();
 
   if (!deployer) {
