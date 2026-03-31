@@ -47,7 +47,7 @@ If any check fails, stop and escalate before signing.
 3. Wait for confirmation response in the UI.
 
 Expected result:
-- A transaction reference (`txHash` / `extrinsicHash`) is shown or logged.
+- A transaction reference (`txHash`) is shown or logged.
 - Trade status moves forward (for example, to locked/in-progress).
 
 ### Step 4: Track Settlement Status
@@ -107,7 +107,7 @@ When requesting help, always include:
 - participant role (buyer/cooperative)
 - local timestamp (UTC preferred)
 - observed status
-- tx hash/extrinsic hash (if available)
+- `txHash` (if available)
 - screenshot or exact error text
 
 ## Safety Rules

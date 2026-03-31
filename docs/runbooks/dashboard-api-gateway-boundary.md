@@ -123,7 +123,7 @@ Gateway orchestration rules:
 ## Verification model for operators
 Every gateway action must be verifiable through one or more of:
 - gateway action record / audit entry
-- chain transaction hash or extrinsic hash
+- chain transaction hash
 - emitted contract event
 - treasury ledger record
 - ricardian hash record

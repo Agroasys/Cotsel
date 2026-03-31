@@ -5,7 +5,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY contracts/package.json contracts/package.json
 COPY indexer/package.json indexer/package.json
 COPY notifications/package.json notifications/package.json

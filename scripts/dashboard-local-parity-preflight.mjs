@@ -12,8 +12,10 @@ import {
   formatDashboardParityFailure,
   buildUrl,
   explainReadyzFailure,
+  inspectCanonicalTradeDetailPayload,
   optionalEnv,
   readDashboardParitySessionArtifact,
+  readTradeDetailFromGatewayPayload,
   readTradeListFromGatewayPayload,
 } from "./lib/dashboard-local-parity.mjs";
 
@@ -139,6 +141,13 @@ async function main() {
     { bearer: sessionBearer },
     parityContext,
   );
+  const tradeDetailEnvelope = await fetchJson(
+    "gateway /trades/:tradeId",
+    buildUrl(gatewayBaseUrl, `trades/${encodeURIComponent(expectedTradeId)}`),
+    DASHBOARD_PARITY_FAILURE_CODES.GATEWAY_TRADE_DETAIL_REQUEST_FAILED,
+    { bearer: sessionBearer },
+    parityContext,
+  );
 
   const session = sessionEnvelope?.data ?? null;
   if (!session || typeof session !== "object") {
@@ -201,6 +210,22 @@ async function main() {
     );
   }
 
+  let canonicalTradeDetail;
+  try {
+    readTradeDetailFromGatewayPayload(tradeDetailEnvelope);
+    canonicalTradeDetail = inspectCanonicalTradeDetailPayload(tradeDetailEnvelope, expectedTradeId);
+  } catch (error) {
+    fail(
+      DASHBOARD_PARITY_FAILURE_CODES.GATEWAY_TRADE_DETAIL_PAYLOAD_INVALID,
+      "gateway /trades/:tradeId did not preserve the canonical Base-era trade detail contract",
+      {
+        error: error instanceof Error ? error.message : String(error),
+        payload: tradeDetailEnvelope,
+      },
+      parityContext,
+    );
+  }
+
   process.stdout.write(
     `${JSON.stringify(
       {
@@ -221,6 +246,7 @@ async function main() {
           version: version?.data ?? version,
         },
         seededTradeId: firstTradeId,
+        seededTrade: canonicalTradeDetail,
       },
       null,
       2,

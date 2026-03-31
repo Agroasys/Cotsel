@@ -39,7 +39,7 @@ Use these templates for operational evidence that is not part of the legal hando
 | `documentRef` | Off-chain Ricardian document reference | Ricardian payload |
 | `ricardianHash` | Canonical hash for the legal agreement | Ricardian API + on-chain/indexer |
 | `rulesVersion` | Canonicalization/version marker | Ricardian response |
-| `txHash` / `extrinsicHash` | Settlement transaction identifiers | Oracle/indexer/chain explorer |
+| `txHash` | Settlement transaction identifier | Oracle/indexer/chain explorer |
 | `runKey` | Reconciliation run identifier for evidence window | Reconciliation |
 | `from` / `to` UTC | Evidence window boundaries | Pilot owner/operator |
 | `chainId` + network name | Chain context for verifier | Environment config |
@@ -91,8 +91,8 @@ Confirm:
 - indexed `ricardianHash` equals Step 1/Step 2 hash
 
 ### Step 4: Verify Chain Reference
-- Capture chain explorer URL(s) for each relevant `txHash`/`extrinsicHash`.
-- Confirm explorer details match expected trade lifecycle events for the same trade.
+- Capture the chain explorer URL for each relevant `txHash`.
+- Confirm explorer details match the expected trade lifecycle events for the same trade.
 
 ### Step 5: Verify Reconciliation Linkage
 - Run or retrieve reconciliation evidence for the same time window/run key.
@@ -102,9 +102,9 @@ Confirm:
 
 Populate one row per trade in scope.
 
-| Trade ID | Document Ref | Reproduced Hash | API Hash | Indexed Hash | Chain Tx/Extrinsic | Explorer URL | Reconciliation Run Key | Reconciliation Result | Verifier Initials | Notes |
+| Trade ID | Document Ref | Reproduced Hash | API Hash | Indexed Hash | Chain Tx Hash | Explorer URL | Reconciliation Run Key | Reconciliation Result | Verifier Initials | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `<tradeId>` | `<documentRef>` | `<0x/hex>` | `<0x/hex>` | `<0x/hex>` | `<txHash/extrinsicHash>` | `<url>` | `<runKey>` | `PASS / FAIL` | `<initials>` | `<notes>` |
+| `<tradeId>` | `<documentRef>` | `<0x/hex>` | `<0x/hex>` | `<0x/hex>` | `<txHash>` | `<url>` | `<runKey>` | `PASS / FAIL` | `<initials>` | `<notes>` |
 
 Validation rule:
 - `Reproduced Hash == API Hash == Indexed Hash` for a PASS linkage result.

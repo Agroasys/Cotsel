@@ -3051,10 +3051,6 @@ components:
         txHash:
           type: [string, 'null']
           description: Canonical EVM transaction hash for the latest settlement execution reference.
-        extrinsicHash:
-          type: [string, 'null']
-          deprecated: true
-          description: Historical-only compatibility field from the Polkadot-era execution model. Not canonical for Base-era settlement logic.
         explorerUrl:
           type: [string, 'null']
           description: Canonical chain explorer link derived from `txHash` when available.
@@ -3158,10 +3154,6 @@ components:
         txHash:
           type: [string, 'null']
           description: Canonical EVM transaction hash when available.
-        extrinsicHash:
-          type: [string, 'null']
-          deprecated: true
-          description: Historical-only compatibility field from the Polkadot-era execution model.
         latestEventType:
           oneOf:
             - type: 'null'
@@ -3216,10 +3208,6 @@ components:
         txHash:
           type: [string, 'null']
           description: Canonical EVM transaction hash when available.
-        extrinsicHash:
-          type: [string, 'null']
-          deprecated: true
-          description: Historical-only compatibility field from the Polkadot-era execution model.
         detail:
           type: [string, 'null']
         metadata:
@@ -3514,10 +3502,6 @@ components:
         txHash:
           type: [string, 'null']
           description: Canonical EVM transaction hash when available.
-        extrinsicHash:
-          type: [string, 'null']
-          deprecated: true
-          description: Historical-only compatibility field from the Polkadot-era execution model.
         latestEventType:
           oneOf:
             - type: 'null'
@@ -4029,11 +4013,6 @@ components:
         txHash:
           type: string
           nullable: true
-        extrinsicHash:
-          type: string
-          nullable: true
-          deprecated: true
-          description: Historical-only compatibility field from the Polkadot-era execution model.
         blockNumber:
           type: integer
           nullable: true

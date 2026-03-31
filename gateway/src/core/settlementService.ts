@@ -57,7 +57,6 @@ export interface SettlementCallbackPayload extends Record<string, unknown> {
   callbackStatus: string;
   providerStatus: string | null;
   txHash: string | null;
-  extrinsicHash: string | null;
   latestEventType: SettlementEventType | null;
   latestEventDetail: string | null;
   latestEventAt: string | null;
@@ -165,7 +164,6 @@ export class SettlementService {
       callbackStatus: handoff.callbackStatus,
       providerStatus: handoff.providerStatus,
       txHash: handoff.txHash,
-      extrinsicHash: handoff.extrinsicHash,
       latestEventType: handoff.latestEventType,
       latestEventDetail: handoff.latestEventDetail,
       latestEventAt: handoff.latestEventAt,

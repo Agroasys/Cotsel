@@ -12,6 +12,11 @@ This runbook applies to:
 
 This runbook does not change protocol quorum rules. It defines how the executor signer is sourced, approved, rotated, and used safely.
 
+No-AA boundary for privileged paths:
+- governance executor actions, treasury sweeps, payout-receiver changes, compliance overrides, and operator-admin sessions use direct wallet or managed-signer execution only
+- buyer-facing account abstraction, paymaster support, or sponsored-gas experiments must not be reused for privileged actions
+- privileged flows require explicit signer identity, approval evidence, and audit records for every execution step
+
 Automation-governance source of truth:
 - `docs/runbooks/programmability-governance.md`
 
@@ -22,6 +27,7 @@ Interpretation:
 - local development and deterministic staging validation may use `GATEWAY_EXECUTOR_PRIVATE_KEY`
 - production readiness must not rely on a long-lived raw environment private key managed like a convenience secret
 - the gateway API process must never hold the signer key; only the isolated executor invocation may access signer material
+- no smart-wallet or paymaster shortcut is an approved replacement for this signer boundary
 
 Until a managed signer adapter exists in code, production approval is limited to environments where the raw private key is injected from a managed custody system for a bounded execution window and never persisted in source control, images, CI logs, or long-lived shell history.
 
@@ -58,7 +64,7 @@ Required approvals:
 
 Execution steps:
 1. Verify the queued action details from the gateway API and confirm the signer address expected by the queued action.
-2. Verify the signer source matches the approved custody model for the environment.
+2. Verify the signer source matches the approved custody model for the environment and is not a buyer-facing AA/sponsorship path.
 3. Start a bounded executor session with only the env vars required for that action.
 4. Run `npm run -w gateway execute:governance-action -- <actionId>`.
 5. Capture resulting `txHash`, `blockNumber`, `requestId`, and audit log row.
@@ -92,6 +98,7 @@ Rules:
 - use the narrowest action that safely contains the incident
 - record the incident URL before execution if at all possible
 - do not use a break-glass signer session to perform recovery or unpause actions
+- do not route break-glass or treasury execution through buyer wallet bootstrap, sponsorship, or paymaster helpers
 - after break-glass use, rotate the signer or revoke the exception before reopening normal execution
 
 For emergency actions, also follow:

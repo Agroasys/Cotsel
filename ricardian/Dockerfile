@@ -1,7 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY ricardian/package.json ricardian/package.json
 COPY shared-auth/package.json shared-auth/package.json
 
@@ -16,7 +16,7 @@ FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY ricardian/package.json ricardian/package.json
 COPY shared-auth/package.json shared-auth/package.json
 
