@@ -24,6 +24,12 @@ async function main(): Promise<void> {
   const chainId = hre.network.config.chainId ?? null;
   const config = loadBaseDeploymentConfig(hre.network.name, chainId);
   const artifact = await hre.artifacts.readArtifact(config.escrowName);
+  const configuredCompilerVersion =
+    typeof hre.config.solidity === "string"
+      ? hre.config.solidity
+      : "version" in hre.config.solidity
+        ? hre.config.solidity.version
+        : null;
   const [deployer] = await ethers.getSigners();
 
   if (!deployer) {
@@ -68,6 +74,7 @@ async function main(): Promise<void> {
   const contractAddress = await contract.getAddress();
   const deployedBytecode = await ethers.provider.getCode(contractAddress);
   const explorerAddressUrl = `${config.target.explorerBaseUrl}${contractAddress}`;
+  const verificationUrl = `${explorerAddressUrl}#code`;
 
   let verificationStatus: "skipped" | "verified" | "already-verified" = "skipped";
   if (config.verify) {
@@ -112,8 +119,10 @@ async function main(): Promise<void> {
     verification: {
       requested: config.verify,
       status: verificationStatus,
+      verificationUrl: config.verify ? verificationUrl : null,
     },
     artifact: {
+      compilerVersion: configuredCompilerVersion,
       abiSha256: sha256Hex(JSON.stringify(artifact.abi)),
       bytecodeSha256: sha256Hex(artifact.bytecode),
       deployedBytecodeSha256: sha256Hex(deployedBytecode),

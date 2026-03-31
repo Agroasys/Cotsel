@@ -29,7 +29,7 @@ const etherscanApiKey = optionalVar("ETHERSCAN_API_KEY") ?? optionalVar("BASESCA
 
 const config: HardhatUserConfig = {
   solidity: {
-    version:"0.8.28",
+    version:"0.8.34",
     settings: {
       viaIR:true,
       optimizer: {

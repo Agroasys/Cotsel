@@ -9,7 +9,7 @@ remappings = [
 ]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
-solc_version = "0.8.28"
+solc_version = "0.8.34"
 via_ir = true
 
 [fuzz]
