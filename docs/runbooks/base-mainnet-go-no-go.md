@@ -22,6 +22,11 @@ Hard prerequisite:
   - PR `#400` merged
   - issues `#392`, `#393`, `#394`, and `#344` closed
 
+Control-surface note:
+- This file is the authoritative approval template and review checklist for Base mainnet launch readiness.
+- It is not, by itself, proof that a Base mainnet launch has already occurred.
+- A real launch window must attach a filled approval record, the deployment/change record used for promotion, and any mainnet deployment evidence that exists for that window.
+
 ## Authoritative references
 - Production baseline readiness: `docs/runbooks/production-readiness-checklist.md`
 - Staging release gate: `docs/runbooks/staging-e2e-release-gate.md`

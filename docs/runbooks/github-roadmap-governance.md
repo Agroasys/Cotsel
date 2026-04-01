@@ -18,7 +18,8 @@ Maintain a single execution board for `Cotsel` where every roadmap item and PR i
 - Project URL: `https://github.com/orgs/Agroasys/projects/5`
 - Project node ID: `PVT_kwDODMhsg84BPnYZ`
 - Status values: `Backlog`, `In Progress`, `In Review`, `Blocked`, `Done`
-- Milestone values: `M0 Base Migration Decision and Boundary Freeze`, `M1 Base Contract Runtime and Deployment`, `M2 Base Eventing, Reconciliation, and Treasury Safety`, `M3 Backend, Gateway, and Wallet Continuity`, `M4 Base Sepolia Pilot Readiness`, `M5 Base Mainnet Launch and Polkadot Retirement`, `Needs Triage`
+- Repository milestone model: `M0 Base Migration Decision and Boundary Freeze`, `M1 Base Contract Runtime and Deployment`, `M2 Base Eventing, Reconciliation, and Treasury Safety`, `M3 Backend, Gateway, and Wallet Continuity`, `M4 Base Sepolia Pilot Readiness`, `M5 Base Mainnet Launch and Polkadot Retirement`, `Needs Triage`
+- Active Project v2 fields: `Status`, `Area`, `Priority`, `Work Type`, `Risk`, `% Complete`, `Target Date`
 - Area values: `Contracts`, `Oracle`, `Indexer`, `SDK`, `Reconciliation`, `Ricardian`, `Treasury`, `Notifications`, `Ops/CI`, `Docs/Runbooks`, `Security`
 - Work type values: `Feature`, `Bug`, `Refactor`, `Ops`, `Docs`, `Security` (`Type` is a reserved project field name in GitHub UI/API).
 
@@ -60,7 +61,7 @@ gh api graphql \
   -F project="$ROADMAP_PROJECT_ID" \
   -F content="$pr_id"
 ```
-3. Set project fields (`Status`, `Roadmap Milestone`, `Area`, `Priority`, `Work Type`, `Risk`, `% Complete`, `Target Date`).
+3. Set active project fields (`Status`, `Area`, `Priority`, `Work Type`, `Risk`, `% Complete`, `Target Date`).
 
 ## Required Repository Configuration
 - Repository variable: `ROADMAP_PROJECT_ID` (Project v2 node id).

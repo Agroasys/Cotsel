@@ -13,9 +13,9 @@ Cotsel was initially developed to support the Agroasys platform, but it is open-
 
 ## Status and Maturity
 
-- **Current phase:** Pilot readiness (active development).
+- **Current phase:** Post-migration Base operations and launch-governance maintenance.
 - **Operational readiness criteria:** `docs/runbooks/production-readiness-checklist.md`.
-- **Active chain truth:** Base Sepolia is the controlled pilot environment and Base mainnet is the production target-state. Historical Polkadot/PolkaVM material in this repo is retained for archive traceability only.
+- **Active chain truth:** Base is the only active v1 settlement target in this repo. Base Sepolia has verified pilot evidence, and Base mainnet go/no-go plus rollback control surfaces are installed. This repo does not, by itself, prove a completed Base mainnet launch unless a filled approval record and mainnet deployment evidence are attached.
 
 ## Who Should Read Next
 
@@ -90,7 +90,7 @@ Action: the remaining supplier tranche is released, completing settlement.
 - Storage: Postgres for indexed and operational views
 
 **Network and assets**  
-- Settlement rails: Base Sepolia for pilot validation and Base mainnet for production target-state settlement flows.
+- Settlement rails: Base Sepolia for verified pilot validation; Base mainnet runtime configuration and launch controls are implemented, but live mainnet activation evidence is external unless separately recorded in-repo.
 - Stablecoin rail: USDC on Base for active settlement design.
 - Gas management: any sponsorship or fee abstraction is optional, buyer-bounded, and not a prerequisite for settlement safety.
 
