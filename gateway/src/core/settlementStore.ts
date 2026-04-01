@@ -47,6 +47,11 @@ export type SettlementReconciliationStatus = typeof SETTLEMENT_RECONCILIATION_ST
 export type SettlementCallbackStatus = typeof SETTLEMENT_CALLBACK_STATUSES[number];
 export type SettlementEventType = typeof SETTLEMENT_EVENT_TYPES[number];
 
+// `extrinsicHash` remains in the internal store only to preserve archived
+// Substrate-era records already persisted in the database. Active Base-native
+// handoffs and execution events must rely on `txHash`; new Base writes should
+// leave the legacy field null.
+
 export interface SettlementHandoffRecord {
   handoffId: string;
   platformId: string;

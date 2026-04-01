@@ -1,13 +1,12 @@
 # Architecture Coverage Matrix
 
-Snapshot date: 2026-03-01
+Snapshot date: 2026-04-01
 
-Historical-only note:
-- This matrix captures the pre-Base A/B/C roadmap model for traceability.
-- It is not the active v1 migration source of truth.
-- The active Base migration execution source of truth is issue `#339` and milestones `M0` through `M5`.
-- Do not use this matrix to determine current pilot readiness, M4 closure, or M5 go/no-go. Those decisions must be taken from the Base migration issue tree, active Base runbooks, and the actual pilot evidence packet.
-- During M5, this matrix is archive-only evidence. It must not be used as an active weekly operator checklist.
+Active-usage note:
+- This matrix is the active architecture traceability surface for the Base-era repo.
+- The authoritative migration/governance closeout lives in issue `#339`, milestones `M0` through `M5`, the active Base runbooks, and the merged Base migration PR history.
+- Historical Polkadot/PolkaVM rows remain here only where they still provide audit traceability. They are explicitly marked `archive-only` and are not active v1 truth.
+- Do not use this matrix to override M4 pilot evidence, M5 go/no-go controls, or active Base incident/runbook decisions.
 
 Scope:
 - Source of truth is repository code, merged/open PRs, and roadmap issues.
@@ -31,85 +30,37 @@ Row metadata semantics:
 - `Last Refreshed`: last date the row evidence/status was validated.
 - `Refresh Cadence`: expected review frequency for row maintenance. Use `archive-only` when the row is preserved purely as historical evidence after retirement.
 
-| Component | Milestone Target | Status | % Complete | Roadmap Issue(s) | Evidence | Remaining Gap | Owner | Last Refreshed | Refresh Cadence |
+| Component | Program Scope | Status | % Complete | Roadmap Issue(s) | Evidence | Remaining Gap | Owner | Last Refreshed | Refresh Cadence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Escrow lifecycle + split-settlement safety | A | Done | 100 | #42, #54 | `contracts/tests/AgroasysEscrow.ts`, `contracts/foundry/test/AgroasysEscrowFuzz.t.sol`, PR #8, PR #13, CI run 22197616358 (`ci/contracts` success) | None for milestone-A baseline | roadmap-maintainers | 2026-02-28 | weekly |
-| Pull-over-push claim settlement model (design + implementation) | B | Done | 100 | #142, #150, #153 | `docs/adr/adr-0142-pull-over-push-claim-settlement.md`, `docs/runbooks/pull-over-push-claim-flow.md`, `contracts/src/AgroasysEscrow.sol` (`claimableUsdc`, `claim`, `pauseClaims`, `unpauseClaims`), `contracts/tests/AgroasysEscrow.ts`, PR #151, PR #154, PR #165, PR #166, PR #167, PR #168, CI run 22518631770 (`ci/contracts` success), CI run 22518757426 (`ci/contracts` success) | None for issue-#142 design + implementation scope | roadmap-maintainers | 2026-02-28 | weekly |
-| Ricardian PDF/hash service | A | Done | 100 | #43, #132 | `ricardian/src/utils/hash.ts`, `ricardian/src/utils/canonicalize.ts`, `ricardian/tests/canonicalize.test.ts`, `sdk/src/modules/ricardianClient.ts`, `ricardian/src/database/documentStore.ts`, `ricardian/tests/documentStore.test.ts`, PR #21, PR #256 | None for issue-#43 and issue-#132 scope | roadmap-maintainers | 2026-03-12 | weekly |
-| Indexer pipeline + GraphQL schema correctness | A/B | Done | 100 | #44, #174 | `indexer/src/main.ts` (tx/extrinsic separation), `indexer/schema.graphql` (`txHash`, `extrinsicHash` indexed fields), `indexer/src/model/generated/tradeEvent.model.ts`, `indexer/db/migrations/1771180205323-Data.js`, PR #23, PR #177 | None for issue-#44 and issue-#174 scope | roadmap-maintainers | 2026-02-28 | weekly |
-| Reconciliation drift remediation | A/B | Done | 100 | #45, #53 | `reconciliation/src/core/classifier.ts`, `reconciliation/src/core/reconciler.ts`, `reconciliation/src/core/reconciliationReport.ts`, `reconciliation/src/tests/classifier-address-validation.test.ts`, `reconciliation/src/tests/reconciliation-report.test.ts`, `scripts/staging-e2e-real-gate.sh`, PR #182 | None for issue-#45 and issue-#53 scope | roadmap-maintainers | 2026-03-01 | weekly |
-| SDK typed modules + ABI parity | A | Done | 100 | #46, #50 | `sdk/src/modules/`, `sdk/tests/abiAlignment.test.ts`, `sdk/README.md`, PR #12, PR #15, CI run 22197616358 (`ci/sdk` success) | None for issue-#46 scope (checkout integration tracked in #50) | roadmap-maintainers | 2026-02-28 | weekly |
-| Release gates + profile health determinism | A/B | Done | 100 | #47, #55, #71 | `scripts/docker-services.sh`, `scripts/staging-e2e-gate.sh`, `scripts/tests/docker-services-args.test.sh`, PR #28, PR #39, PR #41 (open) | None for retired A/B release-gate scope | roadmap-maintainers | 2026-04-01 | archive-only |
-| Core docs + runbooks + developer guidance | A | Done | 100 | #49, #65, #172 | `README.md`, `docs/docker-services.md`, `docs/runbooks/staging-e2e-release-gate.md`, `docs/runbooks/production-readiness-checklist.md`, `docs/runbooks/pull-over-push-claim-flow.md`, `docs/runbooks/treasury-to-fiat-sop.md`, `docs/runbooks/reconciliation.md`, PR #31, PR #34, PR #178 | None for issue-#49, issue-#65, and issue-#172 scope | roadmap-maintainers | 2026-02-28 | weekly |
-| Dashboard + unified checkout + settlement tracker | B | Blocked | 25 | #50, #129 | SDK support exists (`sdk/src/modules/`, `sdk/README.md`), Web3Auth dependency present | No in-repo dashboard surface; cross-repo dependency governance still required for closure | roadmap-maintainers | 2026-02-28 | weekly |
-| Identity service + user profile persistence | B | Done | 100 | #122 | `auth/`, `auth/src/core/sessionService.ts`, `auth/src/database/schema.sql`, `sdk/src/modules/authClient.ts`, PR #197 | None for issue-#122 scope | roadmap-maintainers | 2026-03-01 | weekly |
-| Web3Auth signing/session architecture | B | In Progress | 50 | #50, #122, #105 | `sdk/README.md` Web3Auth section, `@web3auth/modal` in `sdk/package.json`, PR #15 | Full frontend/session lifecycle and operational runbook still missing | roadmap-maintainers | 2026-02-28 | weekly |
-| Oracle trigger + approval + retry controls | B/C | In Progress | 70 | #51, #56, #61, #124 | `oracle/src/core/trigger-manager.ts`, `oracle/src/worker/confirmation-worker.ts`, `oracle/src/api/routes.ts`, `docs/runbooks/oracle-redrive.md`, PR #14 | Pilot manual-approval mode and complete SOP hardening still open | roadmap-maintainers | 2026-02-28 | weekly |
-| Treasury payout queue + audit traceability | B/C | Blocked | 40 | #52, #67, #126, #127 | `treasury/src/database/schema.sql`, `treasury/src/database/queries.ts`, `treasury/src/core/payout.ts`, PR #22 | Processing/audit workflow requires missing operator UI/workflow integration and bank/fiat boundary finalization | roadmap-maintainers | 2026-02-28 | weekly |
-| Reconciliation reports (on-chain ↔ fiat evidence) | B | Done | 100 | #53 | `reconciliation/src/report-cli.ts`, `reconciliation/src/core/reconciliationReport.ts`, `reconciliation/src/tests/reconciliation-report.test.ts`, `scripts/staging-e2e-real-gate.sh`, `.github/workflows/release-gate.yml` (`ci-report-reconciliation-report`), `docs/runbooks/reconciliation.md`, PR #182 | None for issue-#53 scope | roadmap-maintainers | 2026-03-01 | weekly |
-| AssetHub assets + USDC fee conversion validation | A | Out of Scope | 0 | #63 | `scripts/asset-fee-path-gate.sh`, `scripts/asset-fee-path-validate.mjs`, `scripts/tests/asset-fee-path-gate.test.sh`, `docs/runbooks/asset-conversion-fee-validation.md`, `.github/workflows/historical-archive-maintenance.yml` (`historical-asset-fee-path`) | Historical AssetHub-only validation retained for audit; not active Base v1 truth | roadmap-maintainers | 2026-04-01 | archive-only |
-| PolkaVM deployment verification + smoke checks | A | Out of Scope | 0 | #64 | `scripts/polkavm-deploy-verify.mjs`, `scripts/tests/polkavm-deploy-verify-smoke.test.mjs`, `docs/runbooks/polkavm-deploy-verification.md`, `.github/workflows/historical-archive-maintenance.yml` (`historical-polkavm-deploy-verification`) | Historical PolkaVM evidence retained for audit; not active Base v1 truth | roadmap-maintainers | 2026-04-01 | archive-only |
-| Mainnet pilot execution evidence | B | Out of Scope | 0 | #66 | `docs/runbooks/base-mainnet-go-no-go.md`, `docs/runbooks/base-mainnet-cutover-and-rollback.md`, `docs/runbooks/polkadot-retirement-checklist.md` | Historical pilot evidence package was retired with M5 launch governance closure; no separate proof bundle is active v1 truth | roadmap-maintainers | 2026-04-01 | archive-only |
-| Hybrid split walkthrough + treasury-to-fiat SOP | B | Done | 100 | #67 | `docs/runbooks/hybrid-split-walkthrough.md`, `docs/runbooks/treasury-to-fiat-sop.md`, `README.md` runbook links | None for issue-#67 scope | roadmap-maintainers | 2026-02-28 | weekly |
-| Pilot documentation package (env + legal/KPI/demo templates + user guide) | C | Done | 100 | #57, #58, #59, #60, #68 | `docs/runbooks/pilot-environment-onboarding.md`, `docs/runbooks/staging-e2e-real-release-gate.md`, `docs/runbooks/pilot-kpi-report-template.md`, `docs/runbooks/demo/community-demo-checklist.md`, `docs/runbooks/demo/community-demo-script.md`, `docs/runbooks/non-custodial-pilot-user-guide.md`, `docs/runbooks/legal-evidence-package-template.md` | None for documentation scope deliverables in repo | roadmap-maintainers | 2026-02-28 | weekly |
-| Pilot lessons-learned case study (post-live execution) | Post-C | Out of Scope | 0 | #69 | None in repo yet | Deferred until real pilot execution evidence exists | roadmap-maintainers | 2026-02-28 | weekly |
-| Infrastructure controls (CI/CD, roadmap governance, release controls) | A/B/C | In Progress | 70 | #70, #71, #72, #73, #100, #104, #125, #131 | `.github/workflows/ci.yml`, `.github/workflows/pr-roadmap-policy.yml`, `docs/runbooks/github-roadmap-governance.md`, PR #62, PR #76 | Coverage matrix + gate linkage exists, but monitoring baseline, dependency major-upgrade backlog, and consistency enforcement are still open | roadmap-maintainers | 2026-02-28 | weekly |
-| Primary DB operations + recovery evidence | C | Done | 100 | #133 | `scripts/postgres-backup-restore-smoke.sh`, `docs/runbooks/postgres-backup-restore-recovery.md`, `docs/runbooks/production-readiness-checklist.md`, `.github/workflows/release-gate.yml` (`ci-report-postgres-recovery-smoke`), PR #183 | None for issue-#133 scope | roadmap-maintainers | 2026-03-01 | weekly |
-| Notifications service behavior + operational controls | A/B | Done | 100 | #77, #130 | `notifications/src/`, `notifications/tests/`, `scripts/notifications-wiring-health.sh`, `scripts/notifications-gate.sh`, `scripts/notifications-gate-validate.mjs`, `.github/workflows/release-gate.yml` (`ci-report-notifications-gate`) | None for issue-#130 scope | roadmap-maintainers | 2026-02-28 | weekly |
-| API gateway orchestration + error handoff boundary | A/B | Backlog | 0 | #78, #123, #124 | Architectural requirement documented in the source-of-truth architecture diagram; no dedicated in-repo service boundary document | Define and implement runtime gateway and error-handler control plane | roadmap-maintainers | 2026-02-28 | weekly |
-| Compliance boundary policy contract (KYB/KYT/Sanctions) | C | Done | 100 | #128 | `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`, `docs/runbooks/production-readiness-checklist.md` (Compliance boundary governance section), decision record #200 | None for issue-#128 policy documentation and governance-contract scope; provider runtime integration is tracked separately from this row | roadmap-maintainers | 2026-03-04 | weekly |
+| Escrow lifecycle + split-settlement safety | Base active | Done | 100 | #42, #54 | `contracts/tests/AgroasysEscrow.ts`, `contracts/foundry/test/AgroasysEscrowFuzz.t.sol`, PR #8, PR #13, CI run 22197616358 (`ci/contracts` success) | None for current Base-era escrow scope | roadmap-maintainers | 2026-04-01 | weekly |
+| Pull-over-push claim settlement model (design + implementation) | Base active | Done | 100 | #142, #150, #153 | `docs/adr/adr-0142-pull-over-push-claim-settlement.md`, `docs/runbooks/pull-over-push-claim-flow.md`, `contracts/src/AgroasysEscrow.sol` (`claimableUsdc`, `claim`, `pauseClaims`, `unpauseClaims`), `contracts/tests/AgroasysEscrow.ts`, PR #151, PR #154, PR #165, PR #166, PR #167, PR #168, CI run 22518631770 (`ci/contracts` success), CI run 22518757426 (`ci/contracts` success) | None for issue-#142 design + implementation scope | roadmap-maintainers | 2026-04-01 | weekly |
+| Ricardian PDF/hash service | Base active | Done | 100 | #43, #132 | `ricardian/src/utils/hash.ts`, `ricardian/src/utils/canonicalize.ts`, `ricardian/tests/canonicalize.test.ts`, `sdk/src/modules/ricardianClient.ts`, `ricardian/src/database/documentStore.ts`, `ricardian/tests/documentStore.test.ts`, PR #21, PR #256 | None for issue-#43 and issue-#132 scope | roadmap-maintainers | 2026-04-01 | weekly |
+| Indexer pipeline + GraphQL schema correctness | Base active | Done | 100 | #44, #174 | `indexer/src/main.ts` (Base tx/log identity), `indexer/schema.graphql` (`txHash` active; legacy extrinsic fields retained only for historical compatibility), `indexer/src/model/generated/tradeEvent.model.ts`, `indexer/db/migrations/1771180205323-Data.js`, PR #23, PR #177 | None for issue-#44 and issue-#174 scope | roadmap-maintainers | 2026-04-01 | weekly |
+| Reconciliation drift remediation | Base active | Done | 100 | #45, #53 | `reconciliation/src/core/classifier.ts`, `reconciliation/src/core/reconciler.ts`, `reconciliation/src/core/reconciliationReport.ts`, `reconciliation/src/tests/classifier-address-validation.test.ts`, `reconciliation/src/tests/reconciliation-report.test.ts`, `scripts/staging-e2e-real-gate.sh`, PR #182 | None for issue-#45 and issue-#53 scope | roadmap-maintainers | 2026-04-01 | weekly |
+| SDK typed modules + ABI parity | Base active | Done | 100 | #46, #50 | `sdk/src/modules/`, `sdk/tests/abiAlignment.test.ts`, `sdk/README.md`, PR #12, PR #15, CI run 22197616358 (`ci/sdk` success) | None for issue-#46 scope (checkout integration tracked in #50) | roadmap-maintainers | 2026-04-01 | weekly |
+| Release gates + profile health determinism | Base active | Done | 100 | #47, #55, #71 | `scripts/docker-services.sh`, `scripts/staging-e2e-gate.sh`, `scripts/tests/docker-services-args.test.sh`, PR #28, PR #39, PR #41 (open) | None for current Base release-gate scope | roadmap-maintainers | 2026-04-01 | weekly |
+| Core docs + runbooks + developer guidance | Base active | Done | 100 | #49, #65, #172 | `README.md`, `docs/docker-services.md`, `docs/runbooks/staging-e2e-release-gate.md`, `docs/runbooks/production-readiness-checklist.md`, `docs/runbooks/pull-over-push-claim-flow.md`, `docs/runbooks/treasury-to-fiat-sop.md`, `docs/runbooks/reconciliation.md`, PR #31, PR #34, PR #178 | None for issue-#49, issue-#65, and issue-#172 scope | roadmap-maintainers | 2026-04-01 | weekly |
+| Dashboard + unified checkout + settlement tracker | External dependency | Blocked | 25 | #50, #129 | SDK support exists (`sdk/src/modules/`, `sdk/README.md`), Web3Auth dependency present | No in-repo dashboard surface; cross-repo dependency governance still required for closure | roadmap-maintainers | 2026-04-01 | weekly |
+| Identity service + user profile persistence | Base active | Done | 100 | #122 | `auth/`, `auth/src/core/sessionService.ts`, `auth/src/database/schema.sql`, `sdk/src/modules/authClient.ts`, PR #197 | None for issue-#122 scope | roadmap-maintainers | 2026-04-01 | weekly |
+| Web3Auth signing/session architecture | Base active | In Progress | 50 | #50, #122, #105 | `sdk/README.md` Web3Auth section, `@web3auth/modal` in `sdk/package.json`, PR #15 | Full frontend/session lifecycle and operational runbook still missing | roadmap-maintainers | 2026-04-01 | weekly |
+| Oracle trigger + approval + retry controls | Base active | In Progress | 70 | #51, #56, #61, #124 | `oracle/src/core/trigger-manager.ts`, `oracle/src/worker/confirmation-worker.ts`, `oracle/src/api/routes.ts`, `docs/runbooks/oracle-redrive.md`, PR #14 | Complete SOP hardening still open for follow-on work | roadmap-maintainers | 2026-04-01 | weekly |
+| Treasury payout queue + audit traceability | Base active | Blocked | 40 | #52, #67, #126, #127 | `treasury/src/database/schema.sql`, `treasury/src/database/queries.ts`, `treasury/src/core/payout.ts`, PR #22 | Processing/audit workflow requires missing operator UI/workflow integration and bank/fiat boundary finalization | roadmap-maintainers | 2026-04-01 | weekly |
+| Reconciliation reports (on-chain ↔ fiat evidence) | Base active | Done | 100 | #53 | `reconciliation/src/report-cli.ts`, `reconciliation/src/core/reconciliationReport.ts`, `reconciliation/src/tests/reconciliation-report.test.ts`, `scripts/staging-e2e-real-gate.sh`, `.github/workflows/release-gate.yml` (`ci-report-reconciliation-report`), `docs/runbooks/reconciliation.md`, PR #182 | None for issue-#53 scope | roadmap-maintainers | 2026-04-01 | weekly |
+| AssetHub assets + USDC fee conversion validation | Historical archive | Out of Scope | 0 | #63 | `scripts/asset-fee-path-gate.sh`, `scripts/asset-fee-path-validate.mjs`, `scripts/tests/asset-fee-path-gate.test.sh`, `docs/runbooks/asset-conversion-fee-validation.md`, `.github/workflows/historical-archive-maintenance.yml` (`historical-asset-fee-path`) | Historical AssetHub-only validation retained for audit; not active Base v1 truth | roadmap-maintainers | 2026-04-01 | archive-only |
+| PolkaVM deployment verification + smoke checks | Historical archive | Out of Scope | 0 | #64 | `scripts/polkavm-deploy-verify.mjs`, `scripts/tests/polkavm-deploy-verify-smoke.test.mjs`, `docs/runbooks/polkavm-deploy-verification.md`, `.github/workflows/historical-archive-maintenance.yml` (`historical-polkavm-deploy-verification`) | Historical PolkaVM evidence retained for audit; not active Base v1 truth | roadmap-maintainers | 2026-04-01 | archive-only |
+| Mainnet pilot execution evidence | Historical archive | Out of Scope | 0 | #66 | `docs/runbooks/base-mainnet-go-no-go.md`, `docs/runbooks/base-mainnet-cutover-and-rollback.md`, `docs/runbooks/polkadot-retirement-checklist.md` | Historical pilot evidence package was retired with M5 launch governance closure; no separate proof bundle is active v1 truth | roadmap-maintainers | 2026-04-01 | archive-only |
+| Hybrid split walkthrough + treasury-to-fiat SOP | Base active | Done | 100 | #67 | `docs/runbooks/hybrid-split-walkthrough.md`, `docs/runbooks/treasury-to-fiat-sop.md`, `README.md` runbook links | None for issue-#67 scope | roadmap-maintainers | 2026-04-01 | weekly |
+| Pilot documentation package (env + legal/KPI/demo templates + user guide) | Base active | Done | 100 | #57, #58, #59, #60, #68 | `docs/runbooks/pilot-environment-onboarding.md`, `docs/runbooks/staging-e2e-real-release-gate.md`, `docs/runbooks/pilot-kpi-report-template.md`, `docs/runbooks/demo/community-demo-checklist.md`, `docs/runbooks/demo/community-demo-script.md`, `docs/runbooks/non-custodial-pilot-user-guide.md`, `docs/runbooks/legal-evidence-package-template.md` | None for documentation scope deliverables in repo | roadmap-maintainers | 2026-04-01 | weekly |
+| Pilot lessons-learned case study (post-live execution) | Post-pilot | Out of Scope | 0 | #69 | None in repo yet | Deferred until real pilot execution evidence exists | roadmap-maintainers | 2026-04-01 | weekly |
+| Infrastructure controls (CI/CD, roadmap governance, release controls) | Base active | In Progress | 70 | #70, #71, #72, #73, #100, #104, #125, #131 | `.github/workflows/ci.yml`, `.github/workflows/pr-roadmap-policy.yml`, `docs/runbooks/github-roadmap-governance.md`, PR #62, PR #76 | Coverage matrix + gate linkage exists, but monitoring baseline, dependency major-upgrade backlog, and consistency enforcement are still open | roadmap-maintainers | 2026-04-01 | weekly |
+| Primary DB operations + recovery evidence | Base active | Done | 100 | #133 | `scripts/postgres-backup-restore-smoke.sh`, `docs/runbooks/postgres-backup-restore-recovery.md`, `docs/runbooks/production-readiness-checklist.md`, `.github/workflows/release-gate.yml` (`ci-report-postgres-recovery-smoke`), PR #183 | None for issue-#133 scope | roadmap-maintainers | 2026-04-01 | weekly |
+| Notifications service behavior + operational controls | Base active | Done | 100 | #77, #130 | `notifications/src/`, `notifications/tests/`, `scripts/notifications-wiring-health.sh`, `scripts/notifications-gate.sh`, `scripts/notifications-gate-validate.mjs`, `.github/workflows/release-gate.yml` (`ci-report-notifications-gate`) | None for issue-#130 scope | roadmap-maintainers | 2026-04-01 | weekly |
+| API gateway orchestration + error handoff boundary | Base active | Backlog | 0 | #78, #123, #124 | Architectural requirement documented in the source-of-truth architecture diagram; no dedicated in-repo service boundary document | Define and implement runtime gateway and error-handler control plane | roadmap-maintainers | 2026-04-01 | weekly |
+| Compliance boundary policy contract (KYB/KYT/Sanctions) | Base active | Done | 100 | #128 | `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`, `docs/runbooks/production-readiness-checklist.md` (Compliance boundary governance section), decision record #200 | None for issue-#128 policy documentation and governance-contract scope; provider runtime integration is tracked separately from this row | roadmap-maintainers | 2026-04-01 | weekly |
 
-## Milestone Rollup (evidence-based)
+## Base-Era Maintenance Rule
 
-_Maintenance note: milestone rollup percentages are manually recomputed using the formula below; update these values whenever roadmap issue `% Complete` values or component statuses change._
-- Milestone A: 52% (snapshot as of 2026-03-01; derived via formula below)
-- Milestone B: 23% (snapshot as of 2026-03-01; derived via formula below)
-- Milestone C: 0% (snapshot as of 2026-03-01; derived via formula below)
-
-Computation method:
-- Scope: for each milestone, take all non-gate roadmap issues linked from the corresponding Component Mapping rows that are not marked `Out of Scope`, explicitly excluding milestone gate issues (#70/#71/#72).
-- Out-of-scope handling: rows with status `Out of Scope` and any issues referenced only from those rows are excluded from repo completion scoring and from the milestone rollup arithmetic mean.
-- Authoritative signal: use roadmap issue `% Complete` values as per-deliverable completion.
-- Formula: milestone completion = arithmetic mean of in-scope issue `% Complete` values (excluding milestone gate issues #70/#71/#72), rounded to nearest whole percent.
-- Deduplication rule: if an issue appears in multiple rows for the same milestone, count it once.
-- Recompute after each in-scope issue status or `% Complete` change.
-- Milestone gate issues (#70/#71/#72) track the rollup value and, as described above, are excluded from the average.
-
-## Gate-to-Row Mapping
-
-- Gate `#70` (Milestone A) maps to:
-  - Escrow lifecycle + split-settlement safety
-  - Ricardian PDF/hash service
-  - Indexer pipeline + GraphQL schema correctness
-  - Reconciliation drift remediation
-  - SDK typed modules + ABI parity
-  - Release gates + profile health determinism
-  - Core docs + runbooks + developer guidance
-  - AssetHub assets + USDC fee conversion validation (historical-only)
-  - PolkaVM deployment verification + smoke checks (historical-only)
-- Gate `#71` (Milestone B) maps to:
-  - Dashboard + unified checkout + settlement tracker
-  - Identity service + user profile persistence
-  - Web3Auth signing/session architecture
-  - Oracle trigger + approval + retry controls
-  - Treasury payout queue + audit traceability
-  - Reconciliation reports (on-chain ↔ fiat evidence)
-  - Mainnet pilot execution evidence
-  - Hybrid split walkthrough + treasury-to-fiat SOP
-  - API gateway orchestration + error handoff boundary
-  - Notifications service behavior + operational controls
-- Gate `#72` (Milestone C) maps to:
-  - Pilot documentation package (env + legal/KPI/demo templates + user guide)
-  - Oracle trigger + approval + retry controls (pilot-safe mode)
-  - Treasury payout queue + audit traceability (pilot operations)
-  - Infrastructure controls (CI/CD, roadmap governance, release controls)
-  - Primary DB operations + recovery evidence
-  - Compliance boundary policy contract (KYB/KYT/Sanctions)
-
-## Maintenance Rule
-
-Before marking any milestone gate `Done`:
-1. Ensure each related row above is either `Done` or explicitly `Out of Scope`, with approval recorded in the corresponding gate issue or roadmap item.
-2. Ensure each `Done` row references concrete repo evidence (files, tests, merged PRs, CI run).
-3. Update gate issue body `% Complete` and project field `% Complete` in the same change.
- 4. Recompute and update the "Milestone Rollup" percentages above whenever any in-scope issue `% Complete` value changes (or verify that roadmap rollup automation has done so).
+Before marking an active Base release gate or production-readiness checkpoint `Done`:
+1. Ensure each related row above is either `Done`, explicitly `Blocked`, or explicitly `Out of Scope` with rationale recorded in the controlling issue or runbook.
+2. Ensure each `Done` row references concrete repo evidence: files, tests, merged PRs, or CI runs.
+3. Keep historical rows marked `archive-only`; they must never be reused as active Base readiness evidence.

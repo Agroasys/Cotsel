@@ -42,6 +42,10 @@ export const GOVERNANCE_APPROVAL_CONTRACT_METHODS = [
   'approveOracleUpdate',
 ] as const;
 
+// Governance records retain `extrinsicHash` only for archived Substrate-era
+// actions. Active Base governance evidence uses `txHash`; new Base-originated
+// actions should continue storing the legacy field as null.
+
 export interface EvidenceLink {
   kind: 'runbook' | 'incident' | 'ticket' | 'tx' | 'event' | 'document' | 'log' | 'dashboard' | 'other';
   uri: string;

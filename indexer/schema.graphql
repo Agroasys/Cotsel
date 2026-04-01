@@ -43,6 +43,9 @@ type TradeEvent @entity {
   txHash: String! @index
   logIndex: Int! @index
   transactionIndex: Int! @index
+  # Historical compatibility fields retained for archived Substrate-era replay
+  # evidence. Base-originated records keep these null and use txHash +
+  # logIndex/transactionIndex as the active identity tuple.
   extrinsicHash: String @index
   extrinsicIndex: Int
 
@@ -137,6 +140,8 @@ type DisputeEvent @entity {
   txHash: String! @index
   logIndex: Int! @index
   transactionIndex: Int! @index
+  # Historical compatibility fields retained for archived Substrate-era replay
+  # evidence. Base-originated records keep these null.
   extrinsicHash: String @index
   extrinsicIndex: Int
 
@@ -191,6 +196,8 @@ type OracleEvent @entity {
   txHash: String! @index
   logIndex: Int! @index
   transactionIndex: Int! @index
+  # Historical compatibility fields retained for archived Substrate-era replay
+  # evidence. Base-originated records keep these null.
   extrinsicHash: String @index
   extrinsicIndex: Int
 

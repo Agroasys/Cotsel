@@ -62,6 +62,8 @@ processor.run(new TypeormDatabase(), async (ctx) => {
                 const transactionIndex = log.transactionIndex;
                 const eventId = buildEvmEventId(txHash, logIndex);
                 const timestamp = new Date(block.header.timestamp || 0);
+                // Base-native events do not have Substrate extrinsic coordinates.
+                // Legacy compatibility columns remain null for new Base records.
                 const extrinsicHash = null;
                 const extrinsicIndex = null;
 

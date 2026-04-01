@@ -22,7 +22,7 @@ The gateway remains an operator control plane and does not replace service-owned
 | Notifications emission | library/runtime hooks | No gateway mutation/read surface yet; operations summary may probe a configured URL but absence remains deterministic `unavailable`. |
 
 Ownership rule:
-- Gateway orchestration policy ownership: platform/ops maintainers (Milestone B governance scope).
+- Gateway orchestration policy ownership: platform/ops maintainers under the active Base governance scope.
 - Service behavior ownership: each service owner remains responsible for validation and idempotency inside their runtime.
 
 ## Authentication propagation rules (headers/claims, what must never be forwarded)
