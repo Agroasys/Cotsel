@@ -9,6 +9,11 @@ The workflow `.github/workflows/pr-roadmap-policy.yml` enforces both requirement
 - The active Base migration execution source of truth is issue `#339` and milestones `M0` through `M5`.
 - Historical Milestones A/B/C weighted progress tooling is retained for pre-Base traceability only and must not be used as active v1 migration truth.
 - M4 closure requires operational proof: active Base-only runbooks, a canonical rehearsal path, and a real Base Sepolia evidence packet. Template existence alone is not sufficient.
+- M5 closure requires:
+  - an explicit Base mainnet go/no-go record
+  - an explicit Base mainnet cutover and rollback path
+  - retirement closure against issue `#356`
+  - no active release-gate or API path that still implies Polkadot is live
 
 Validation order is strict:
 1. Direct PR -> `projectItems` match by `ROADMAP_PROJECT_ID`.
@@ -19,7 +24,7 @@ If all checks fail, the workflow fails.
 
 Related automation:
 - `.github/workflows/roadmap-weighted-progress-sync.yml` is retained for manual historical A/B/C archive maintenance only.
-- Historical A/B/C governance checks in `.github/workflows/release-gate.yml` are disabled by default during the active Base migration and must not be treated as active v1 planning controls.
+- Historical A/B/C governance checks and PolkaVM archive validation belong only in `.github/workflows/historical-archive-maintenance.yml` and must not be treated as active v1 planning controls.
 
 ## Temporary rollout mode (current)
 - Milestone check is always enforced (blocking).

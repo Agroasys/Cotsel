@@ -8,7 +8,7 @@ import path from "node:path";
 import process from "node:process";
 
 const STATUS_VALUES = new Set(["Done", "In Progress", "Blocked", "Backlog", "Out of Scope"]);
-const CADENCE_VALUES = new Set(["daily", "weekly", "biweekly", "monthly", "quarterly", "on-change"]);
+const CADENCE_VALUES = new Set(["daily", "weekly", "biweekly", "monthly", "quarterly", "on-change", "archive-only"]);
 const GATE_ISSUE_NUMBERS = [70, 71, 72];
 const REQUIRED_COLUMNS = [
   "Component",

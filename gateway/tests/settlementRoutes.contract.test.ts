@@ -177,6 +177,7 @@ describe('gateway settlement routes contract', () => {
 
       expect(handoffResponse.status).toBe(202);
       expect(validateHandoffResponse(handoffPayload)).toBe(true);
+      expect(handoffPayload.data.extrinsicHash).toBeUndefined();
 
       const handoffId = handoffPayload.data.handoffId as string;
       const eventBody = {
@@ -206,6 +207,8 @@ describe('gateway settlement routes contract', () => {
       expect(eventResponse.status).toBe(202);
       expect(validateMutationResponse(eventPayload)).toBe(true);
       expect(eventPayload.data.callbackDelivery.status).toBe('disabled');
+      expect(eventPayload.data.handoff.extrinsicHash).toBeUndefined();
+      expect(eventPayload.data.event.extrinsicHash).toBeUndefined();
 
       const listResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
         headers: {
@@ -218,12 +221,13 @@ describe('gateway settlement routes contract', () => {
       expect(listResponse.status).toBe(200);
       expect(validateEventListResponse(listPayload)).toBe(true);
       expect(listPayload.data).toHaveLength(1);
+      expect(listPayload.data[0].extrinsicHash).toBeUndefined();
     } finally {
       server.close();
     }
   });
 
-  test('submitted execution events reject extrinsic-only compatibility payloads', async () => {
+  test('submitted execution events reject retired extrinsicHash payloads', async () => {
     const { server, baseUrl } = await startServer();
 
     try {
@@ -273,7 +277,7 @@ describe('gateway settlement routes contract', () => {
 
       expect(eventResponse.status).toBe(400);
       expect(eventPayload.error.code).toBe('VALIDATION_ERROR');
-      expect(eventPayload.error.message).toContain('txHash is required');
+      expect(eventPayload.error.message).toContain('extrinsicHash is retired');
     } finally {
       server.close();
     }

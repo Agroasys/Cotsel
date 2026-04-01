@@ -96,6 +96,9 @@ Purpose:
 - Stop affected profiles/services.
 - Revert to last known-good deploy artifact and configuration.
 - Re-run health and gate checks before reopening traffic.
+- For Base mainnet launch governance and ordered rollback control, use:
+  - `docs/runbooks/base-mainnet-go-no-go.md`
+  - `docs/runbooks/base-mainnet-cutover-and-rollback.md`
 
 ### Data rollback policy
 - Schema/database changes require reversible migration strategy or forward-fix plan approved before release.
@@ -114,6 +117,8 @@ Purpose:
   - `docs/runbooks/postgres-backup-restore-recovery.md`
   - `docs/runbooks/staging-e2e-release-gate.md`
   - `docs/runbooks/staging-e2e-real-release-gate.md`
+  - `docs/runbooks/base-mainnet-go-no-go.md`
+  - `docs/runbooks/base-mainnet-cutover-and-rollback.md`
   - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
   - `docs/runbooks/gateway-governance-signer-custody.md`
   - `docs/runbooks/oracle-redrive.md`

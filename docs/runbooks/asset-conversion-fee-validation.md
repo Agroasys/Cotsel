@@ -1,4 +1,9 @@
-# Asset Conversion Fee Validation
+# Historical Asset Conversion Fee Validation
+
+Historical-only notice:
+- This runbook is retained for pre-Base traceability.
+- It is not an active Base mainnet launch or rollback requirement.
+- Use `.github/workflows/historical-archive-maintenance.yml` only when maintaining historical archive evidence for this path.
 
 ## Purpose
 

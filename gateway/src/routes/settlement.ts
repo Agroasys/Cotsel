@@ -15,7 +15,6 @@ import {
   SETTLEMENT_EXECUTION_STATUSES,
   SETTLEMENT_RECONCILIATION_STATUSES,
 } from '../core/settlementStore';
-import { requiresCanonicalTxHash } from '../core/transactionReference';
 
 export interface SettlementRouterOptions {
   config: GatewayConfig;
@@ -116,6 +115,18 @@ async function handleRequest(handler: () => Promise<unknown>, res: Response, nex
   }
 }
 
+function sanitizeSettlementHandoff<T extends { extrinsicHash?: string | null }>(handoff: T): Omit<T, 'extrinsicHash'> {
+  const { extrinsicHash: _extrinsicHash, ...publicHandoff } = handoff;
+  return publicHandoff;
+}
+
+function sanitizeSettlementExecutionEvent<T extends { extrinsicHash?: string | null }>(
+  event: T,
+): Omit<T, 'extrinsicHash'> {
+  const { extrinsicHash: _extrinsicHash, ...publicEvent } = event;
+  return publicEvent;
+}
+
 export function createSettlementRouter(options: SettlementRouterOptions): Router {
   const router = Router();
   const idempotency = createIdempotencyMiddleware(options.idempotencyStore);
@@ -160,22 +171,21 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
       sourceApiKeyId: getServiceApiKeyId(req),
     });
 
-    return handoff;
+    return sanitizeSettlementHandoff(handoff);
   }, res, next));
 
   router.post('/settlement/handoffs/:handoffId/execution-events', idempotency, (req, res, next) => handleRequest(async () => {
     const handoffId = requireString(req.params.handoffId, 'handoffId');
     const body = requireObject(req.body, 'body');
-    const executionStatus = requireExecutionStatus(body.executionStatus);
-    const txHash = optionalString(body.txHash, 'txHash');
-    const extrinsicHash = optionalString(body.extrinsicHash, 'extrinsicHash');
-    if (requiresCanonicalTxHash(executionStatus) && !txHash && extrinsicHash) {
+    if (body.extrinsicHash !== undefined && body.extrinsicHash !== null && body.extrinsicHash !== '') {
       throw new GatewayError(
         400,
         'VALIDATION_ERROR',
-        'txHash is required for submitted and confirmed execution events; extrinsicHash is compatibility-only',
+        'extrinsicHash is retired from the active settlement ingress contract; use txHash',
       );
     }
+    const executionStatus = requireExecutionStatus(body.executionStatus);
+    const txHash = optionalString(body.txHash, 'txHash');
     const result = await options.settlementService.recordExecutionEvent({
       handoffId,
       eventType: requireEventType(body.eventType),
@@ -183,7 +193,6 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
       reconciliationStatus: requireReconciliationStatus(body.reconciliationStatus),
       providerStatus: optionalString(body.providerStatus, 'providerStatus'),
       txHash,
-      extrinsicHash,
       detail: optionalString(body.detail, 'detail'),
       metadata: optionalMetadata(body.metadata),
       observedAt: requireString(body.observedAt, 'observedAt'),
@@ -191,14 +200,18 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
       sourceApiKeyId: getServiceApiKeyId(req),
     });
 
-    return result;
+    return {
+      handoff: sanitizeSettlementHandoff(result.handoff),
+      event: sanitizeSettlementExecutionEvent(result.event),
+      callbackDelivery: result.callbackDelivery,
+    };
   }, res, next));
 
   router.get('/settlement/handoffs/:handoffId/execution-events', async (req, res, next) => {
     try {
       const handoffId = requireString(req.params.handoffId, 'handoffId');
       const events = await options.settlementService.listExecutionEvents(handoffId);
-      res.status(200).json(successResponse(events));
+      res.status(200).json(successResponse(events.map((event) => sanitizeSettlementExecutionEvent(event))));
     } catch (error) {
       next(error);
     }
