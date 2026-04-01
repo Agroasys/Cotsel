@@ -57,9 +57,9 @@ full rehearsal record on its own.
   - `RECONCILIATION_INDEXER_GRAPHQL_URL`
   - `RECONCILIATION_CHAIN_ID`
 - Indexer routing configured:
-  - `INDEXER_GATEWAY_URL`
   - `INDEXER_RPC_ENDPOINT`
   - `INDEXER_START_BLOCK`
+  - `INDEXER_GATEWAY_URL` only when an archive gateway is explicitly provisioned for the pilot profile
 
 ## Prerequisites
 - Docker Engine + Compose plugin installed.
