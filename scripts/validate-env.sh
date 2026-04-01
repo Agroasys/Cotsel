@@ -125,7 +125,6 @@ fi
 if [[ "$PROFILE" == "staging-e2e" || "$PROFILE" == "staging-e2e-real" ]]; then
   required_groups+=(
     # indexer pipeline aliases (indexer/src/config.ts)
-    INDEXER_GATEWAY_URL\|GATEWAY_URL
     INDEXER_RPC_ENDPOINT\|RPC_ENDPOINT
     INDEXER_START_BLOCK\|START_BLOCK
     INDEXER_RATE_LIMIT\|RATE_LIMIT

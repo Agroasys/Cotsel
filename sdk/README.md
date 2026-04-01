@@ -59,7 +59,7 @@ import type { BuyerLockPayload } from '@agroasys/sdk';
 
 const config = {
   rpc: '',
-  chainId: 420420417,
+  chainId: 84532,
   escrowAddress: '',
   usdcAddress: ''
 };
