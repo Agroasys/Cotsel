@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Historical-only governance helper for the pre-Base A/B/C roadmap model.
-// This script is preserved for archive traceability and should not be treated
-// as active v1 migration planning truth. The active Base migration program is
-// governed by issue #339 and milestones M0-M5.
+// Governance helper for the active Base-era architecture coverage matrix.
+// The matrix remains the source-of-truth traceability surface for component
+// status, roadmap linkage, and evidence freshness. Historical rows may still
+// appear in the matrix for audit traceability, but the script validates the
+// current Base-era schema.
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -12,7 +13,7 @@ const CADENCE_VALUES = new Set(["daily", "weekly", "biweekly", "monthly", "quart
 const GATE_ISSUE_NUMBERS = [70, 71, 72];
 const REQUIRED_COLUMNS = [
   "Component",
-  "Milestone Target",
+  "Program Scope",
   "Status",
   "% Complete",
   "Roadmap Issue(s)",
@@ -22,6 +23,9 @@ const REQUIRED_COLUMNS = [
   "Last Refreshed",
   "Refresh Cadence",
 ];
+const LEGACY_COLUMN_ALIASES = new Map([
+  ["Milestone Target", "Program Scope"],
+]);
 
 function parseArgs(argv) {
   const args = {
@@ -135,6 +139,28 @@ function parseComponentTable(markdown) {
   }
 
   return { header, rows };
+}
+
+function normalizeHeader(header, rows) {
+  const normalizedHeader = [...header];
+  const normalizedRows = rows.map((row) => ({ ...row }));
+
+  for (const [legacyColumn, canonicalColumn] of LEGACY_COLUMN_ALIASES.entries()) {
+    if (!normalizedHeader.includes(canonicalColumn) && normalizedHeader.includes(legacyColumn)) {
+      const headerIndex = normalizedHeader.indexOf(legacyColumn);
+      normalizedHeader[headerIndex] = canonicalColumn;
+
+      for (const row of normalizedRows) {
+        row[canonicalColumn] = row[legacyColumn];
+        delete row[legacyColumn];
+      }
+    }
+  }
+
+  return {
+    header: normalizedHeader,
+    rows: normalizedRows,
+  };
 }
 
 function parseIssueNumbers(text) {
@@ -265,7 +291,8 @@ async function main() {
     throw new Error(`invalid matrix snapshot date: ${snapshotDate}`);
   }
 
-  const { header, rows } = parseComponentTable(markdown);
+  const parsedTable = parseComponentTable(markdown);
+  const { header, rows } = normalizeHeader(parsedTable.header, parsedTable.rows);
 
   const errors = [];
   const warnings = [];
