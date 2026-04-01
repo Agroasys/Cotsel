@@ -3335,10 +3335,6 @@ components:
         txHash:
           type: string
           description: Canonical EVM transaction hash when available.
-        extrinsicHash:
-          type: string
-          deprecated: true
-          description: Historical-only compatibility input. Base-era submitted and confirmed events must use `txHash`.
         detail:
           type: string
         metadata:

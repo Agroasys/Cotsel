@@ -4,6 +4,7 @@ Historical-only notice:
 - This runbook is retained for pre-Base migration traceability.
 - It is not active operator truth for v1.
 - Do not use this runbook for Base Sepolia pilot execution, M4 readiness, or M5 launch preparation.
+- Use `.github/workflows/historical-archive-maintenance.yml` only when maintaining historical PolkaVM archive evidence.
 - Active runtime and pilot operations must follow the Base-era runbooks, especially:
   - `docs/runbooks/staging-e2e-real-release-gate.md`
   - `docs/runbooks/pilot-environment-onboarding.md`

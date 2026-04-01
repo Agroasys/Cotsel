@@ -7,6 +7,7 @@ Historical-only note:
 - It is not the active v1 migration source of truth.
 - The active Base migration execution source of truth is issue `#339` and milestones `M0` through `M5`.
 - Do not use this matrix to determine current pilot readiness, M4 closure, or M5 go/no-go. Those decisions must be taken from the Base migration issue tree, active Base runbooks, and the actual pilot evidence packet.
+- During M5, this matrix is archive-only evidence. It must not be used as an active weekly operator checklist.
 
 Scope:
 - Source of truth is repository code, merged/open PRs, and roadmap issues.
@@ -28,7 +29,7 @@ Production readiness checklist:
 Row metadata semantics:
 - `Owner`: maintainer group responsible for row freshness/evidence upkeep.
 - `Last Refreshed`: last date the row evidence/status was validated.
-- `Refresh Cadence`: expected review frequency for row maintenance.
+- `Refresh Cadence`: expected review frequency for row maintenance. Use `archive-only` when the row is preserved purely as historical evidence after retirement.
 
 | Component | Milestone Target | Status | % Complete | Roadmap Issue(s) | Evidence | Remaining Gap | Owner | Last Refreshed | Refresh Cadence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -38,7 +39,7 @@ Row metadata semantics:
 | Indexer pipeline + GraphQL schema correctness | A/B | Done | 100 | #44, #174 | `indexer/src/main.ts` (tx/extrinsic separation), `indexer/schema.graphql` (`txHash`, `extrinsicHash` indexed fields), `indexer/src/model/generated/tradeEvent.model.ts`, `indexer/db/migrations/1771180205323-Data.js`, PR #23, PR #177 | None for issue-#44 and issue-#174 scope | roadmap-maintainers | 2026-02-28 | weekly |
 | Reconciliation drift remediation | A/B | Done | 100 | #45, #53 | `reconciliation/src/core/classifier.ts`, `reconciliation/src/core/reconciler.ts`, `reconciliation/src/core/reconciliationReport.ts`, `reconciliation/src/tests/classifier-address-validation.test.ts`, `reconciliation/src/tests/reconciliation-report.test.ts`, `scripts/staging-e2e-real-gate.sh`, PR #182 | None for issue-#45 and issue-#53 scope | roadmap-maintainers | 2026-03-01 | weekly |
 | SDK typed modules + ABI parity | A | Done | 100 | #46, #50 | `sdk/src/modules/`, `sdk/tests/abiAlignment.test.ts`, `sdk/README.md`, PR #12, PR #15, CI run 22197616358 (`ci/sdk` success) | None for issue-#46 scope (checkout integration tracked in #50) | roadmap-maintainers | 2026-02-28 | weekly |
-| Release gates + profile health determinism | A/B | In Progress | 75 | #47, #55, #71 | `scripts/docker-services.sh`, `scripts/staging-e2e-gate.sh`, `scripts/tests/docker-services-args.test.sh`, PR #28, PR #39, PR #41 (open) | Staging-real gate promotion and full CI enforcement are not complete | roadmap-maintainers | 2026-02-28 | weekly |
+| Release gates + profile health determinism | A/B | Done | 100 | #47, #55, #71 | `scripts/docker-services.sh`, `scripts/staging-e2e-gate.sh`, `scripts/tests/docker-services-args.test.sh`, PR #28, PR #39, PR #41 (open) | None for retired A/B release-gate scope | roadmap-maintainers | 2026-04-01 | archive-only |
 | Core docs + runbooks + developer guidance | A | Done | 100 | #49, #65, #172 | `README.md`, `docs/docker-services.md`, `docs/runbooks/staging-e2e-release-gate.md`, `docs/runbooks/production-readiness-checklist.md`, `docs/runbooks/pull-over-push-claim-flow.md`, `docs/runbooks/treasury-to-fiat-sop.md`, `docs/runbooks/reconciliation.md`, PR #31, PR #34, PR #178 | None for issue-#49, issue-#65, and issue-#172 scope | roadmap-maintainers | 2026-02-28 | weekly |
 | Dashboard + unified checkout + settlement tracker | B | Blocked | 25 | #50, #129 | SDK support exists (`sdk/src/modules/`, `sdk/README.md`), Web3Auth dependency present | No in-repo dashboard surface; cross-repo dependency governance still required for closure | roadmap-maintainers | 2026-02-28 | weekly |
 | Identity service + user profile persistence | B | Done | 100 | #122 | `auth/`, `auth/src/core/sessionService.ts`, `auth/src/database/schema.sql`, `sdk/src/modules/authClient.ts`, PR #197 | None for issue-#122 scope | roadmap-maintainers | 2026-03-01 | weekly |
@@ -46,9 +47,9 @@ Row metadata semantics:
 | Oracle trigger + approval + retry controls | B/C | In Progress | 70 | #51, #56, #61, #124 | `oracle/src/core/trigger-manager.ts`, `oracle/src/worker/confirmation-worker.ts`, `oracle/src/api/routes.ts`, `docs/runbooks/oracle-redrive.md`, PR #14 | Pilot manual-approval mode and complete SOP hardening still open | roadmap-maintainers | 2026-02-28 | weekly |
 | Treasury payout queue + audit traceability | B/C | Blocked | 40 | #52, #67, #126, #127 | `treasury/src/database/schema.sql`, `treasury/src/database/queries.ts`, `treasury/src/core/payout.ts`, PR #22 | Processing/audit workflow requires missing operator UI/workflow integration and bank/fiat boundary finalization | roadmap-maintainers | 2026-02-28 | weekly |
 | Reconciliation reports (on-chain ↔ fiat evidence) | B | Done | 100 | #53 | `reconciliation/src/report-cli.ts`, `reconciliation/src/core/reconciliationReport.ts`, `reconciliation/src/tests/reconciliation-report.test.ts`, `scripts/staging-e2e-real-gate.sh`, `.github/workflows/release-gate.yml` (`ci-report-reconciliation-report`), `docs/runbooks/reconciliation.md`, PR #182 | None for issue-#53 scope | roadmap-maintainers | 2026-03-01 | weekly |
-| AssetHub assets + USDC fee conversion validation | A | In Progress | 60 | #63 | `scripts/asset-fee-path-gate.sh`, `scripts/asset-fee-path-validate.mjs`, `scripts/tests/asset-fee-path-gate.test.sh`, `docs/runbooks/asset-conversion-fee-validation.md`, `.github/workflows/release-gate.yml` (`ci/asset-fee-path`) | Live staging tx reference set for `usdc-preferred` mode still needs operator-supplied tx hashes/evidence | roadmap-maintainers | 2026-02-28 | weekly |
-| PolkaVM deployment verification + smoke checks | A | Done | 100 | #64 | `scripts/polkavm-deploy-verify.mjs`, `.github/workflows/release-gate.yml` (`ci/contracts-deploy-verification`), `docs/runbooks/polkavm-deploy-verification.md`, PR #141 (merged), CI run 22491206400 (`ci/contracts-deploy-verification` success + artifact), CI run 22492497423 (`bytecodeHashMatch=true` with real artifact path in `ci-report-contracts-deploy-verification`) | None for issue-#64 scope | roadmap-maintainers | 2026-02-28 | weekly |
-| Mainnet pilot execution evidence | B | Backlog | 0 | #66 | None in repo yet | No transaction evidence package or pilot proof artifacts | roadmap-maintainers | 2026-02-28 | weekly |
+| AssetHub assets + USDC fee conversion validation | A | Out of Scope | 0 | #63 | `scripts/asset-fee-path-gate.sh`, `scripts/asset-fee-path-validate.mjs`, `scripts/tests/asset-fee-path-gate.test.sh`, `docs/runbooks/asset-conversion-fee-validation.md`, `.github/workflows/historical-archive-maintenance.yml` (`historical-asset-fee-path`) | Historical AssetHub-only validation retained for audit; not active Base v1 truth | roadmap-maintainers | 2026-04-01 | archive-only |
+| PolkaVM deployment verification + smoke checks | A | Out of Scope | 0 | #64 | `scripts/polkavm-deploy-verify.mjs`, `scripts/tests/polkavm-deploy-verify-smoke.test.mjs`, `docs/runbooks/polkavm-deploy-verification.md`, `.github/workflows/historical-archive-maintenance.yml` (`historical-polkavm-deploy-verification`) | Historical PolkaVM evidence retained for audit; not active Base v1 truth | roadmap-maintainers | 2026-04-01 | archive-only |
+| Mainnet pilot execution evidence | B | Out of Scope | 0 | #66 | `docs/runbooks/base-mainnet-go-no-go.md`, `docs/runbooks/base-mainnet-cutover-and-rollback.md`, `docs/runbooks/polkadot-retirement-checklist.md` | Historical pilot evidence package was retired with M5 launch governance closure; no separate proof bundle is active v1 truth | roadmap-maintainers | 2026-04-01 | archive-only |
 | Hybrid split walkthrough + treasury-to-fiat SOP | B | Done | 100 | #67 | `docs/runbooks/hybrid-split-walkthrough.md`, `docs/runbooks/treasury-to-fiat-sop.md`, `README.md` runbook links | None for issue-#67 scope | roadmap-maintainers | 2026-02-28 | weekly |
 | Pilot documentation package (env + legal/KPI/demo templates + user guide) | C | Done | 100 | #57, #58, #59, #60, #68 | `docs/runbooks/pilot-environment-onboarding.md`, `docs/runbooks/staging-e2e-real-release-gate.md`, `docs/runbooks/pilot-kpi-report-template.md`, `docs/runbooks/demo/community-demo-checklist.md`, `docs/runbooks/demo/community-demo-script.md`, `docs/runbooks/non-custodial-pilot-user-guide.md`, `docs/runbooks/legal-evidence-package-template.md` | None for documentation scope deliverables in repo | roadmap-maintainers | 2026-02-28 | weekly |
 | Pilot lessons-learned case study (post-live execution) | Post-C | Out of Scope | 0 | #69 | None in repo yet | Deferred until real pilot execution evidence exists | roadmap-maintainers | 2026-02-28 | weekly |
@@ -84,8 +85,8 @@ Computation method:
   - SDK typed modules + ABI parity
   - Release gates + profile health determinism
   - Core docs + runbooks + developer guidance
-  - AssetHub assets + USDC fee conversion validation
-  - PolkaVM deployment verification + smoke checks
+  - AssetHub assets + USDC fee conversion validation (historical-only)
+  - PolkaVM deployment verification + smoke checks (historical-only)
 - Gate `#71` (Milestone B) maps to:
   - Dashboard + unified checkout + settlement tracker
   - Identity service + user profile persistence

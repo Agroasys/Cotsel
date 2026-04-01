@@ -11,6 +11,7 @@ pass_matrix="$tmp_dir/matrix-pass.md"
 fail_matrix="$tmp_dir/matrix-fail.md"
 fail_matrix_last_refreshed="$tmp_dir/matrix-fail-last-refreshed.md"
 fail_matrix_refresh_cadence="$tmp_dir/matrix-fail-refresh-cadence.md"
+archive_only_matrix="$tmp_dir/matrix-archive-only.md"
 
 cat > "$pass_matrix" <<'MATRIX'
 # Architecture Coverage Matrix
@@ -125,6 +126,25 @@ MATRIX
 
 if node "$SCRIPT" --offline --matrix "$fail_matrix_refresh_cadence" --out "$tmp_dir/fail-refresh-cadence.json" >/dev/null 2>&1; then
   echo "expected consistency checker to fail when Refresh Cadence is empty" >&2
+  exit 1
+fi
+
+cat > "$archive_only_matrix" <<'MATRIX'
+# Architecture Coverage Matrix
+
+Snapshot date: 2026-04-01
+
+## Component Mapping
+
+| Component | Milestone Target | Status | % Complete | Roadmap Issue(s) | Evidence | Remaining Gap | Owner | Last Refreshed | Refresh Cadence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Historical component | A | Out of Scope | 0 | #999 | `docs/example.md` | Historical evidence retained for audit | roadmap-maintainers | 2026-04-01 | archive-only |
+
+## Gate-to-Row Mapping
+MATRIX
+
+if ! node "$SCRIPT" --offline --matrix "$archive_only_matrix" --out "$tmp_dir/archive-only.json" >/dev/null 2>&1; then
+  echo "expected consistency checker to accept archive-only refresh cadence" >&2
   exit 1
 fi
 

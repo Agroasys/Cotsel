@@ -4,6 +4,9 @@
 Run deterministic staging checks before merge/release.
 
 For staging-grade validation with the explicit real indexer profile, use `docs/runbooks/staging-e2e-real-release-gate.md`.
+For Base mainnet launch approval and ordered production rollback, use:
+- `docs/runbooks/base-mainnet-go-no-go.md`
+- `docs/runbooks/base-mainnet-cutover-and-rollback.md`
 
 ## Preconditions
 - `.env` and `.env.staging-e2e` populated.
@@ -45,3 +48,7 @@ scripts/staging-e2e-gate.sh
 - Reconciliation cannot stay healthy for 10+ minutes.
 - Drift spikes with repeated CRITICAL mismatches.
 - Indexer pipeline cannot advance head height.
+
+Boundary note:
+- This runbook is a staging validation surface only.
+- It is not sufficient by itself for M5 production approval.

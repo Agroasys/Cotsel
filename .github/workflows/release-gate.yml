@@ -176,6 +176,8 @@ jobs:
           run_check docs-profile-name scripts/tests/docs-profile-name-guard.sh
           run_check api-gateway-boundary scripts/tests/api-gateway-boundary-guard.sh
           run_check programmability-governance scripts/tests/programmability-governance-guard.sh
+          run_check base-mainnet-governance scripts/tests/base-mainnet-governance-guard.sh
+          run_check polkadot-retirement scripts/tests/polkadot-retirement-guard.sh
           run_check data-classification-guard node scripts/tests/data-classification-guard.mjs
           run_check monitoring-baseline-validator node scripts/monitoring-baseline-validate.mjs --runbook docs/runbooks/monitoring-alerting-baseline.md --out ci-reports/monitoring-baseline-validation.json
 
@@ -198,62 +200,6 @@ jobs:
         with:
           name: ci-report-monitoring-baseline
           path: ci-reports/monitoring-baseline-validation.json
-
-  arch-roadmap-consistency:
-    if: ${{ vars.ENABLE_HISTORICAL_ABC_GOVERNANCE == 'true' }}
-    name: ci/arch-roadmap-consistency-historical
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
-        with:
-          node-version: '20'
-          cache: npm
-
-      - name: Run historical A/B/C architecture-roadmap consistency guard
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set +e
-          mkdir -p ci-reports
-          node scripts/architecture-roadmap-consistency-check.mjs \
-            --repo "${{ github.repository }}" \
-            --out "ci-reports/arch-roadmap-consistency.json" \
-            > ci-reports/arch-roadmap-consistency.log 2>&1
-          status=$?
-          if [[ "$status" -ne 0 ]]; then
-            node scripts/arch-roadmap-sync.mjs \
-              --repo "${{ github.repository }}" \
-              --out "ci-reports/arch-roadmap-sync.json" \
-              --patch "ci-reports/arch-roadmap-sync.patch" \
-              >> ci-reports/arch-roadmap-consistency.log 2>&1 || true
-            {
-              echo ""
-              echo "Remediation:"
-              echo "  Historical-only A/B/C governance drift was detected."
-              echo "  This check is disabled by default for the active Base migration and should only be enabled for archive maintenance."
-              echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write"
-              echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write --normalize-progress"
-              echo "  GITHUB_TOKEN=\"\$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${{ github.repository }}\" --write-gate-issues --apply"
-            } >> ci-reports/arch-roadmap-consistency.log
-          fi
-          cat ci-reports/arch-roadmap-consistency.log
-          exit "$status"
-
-      - name: Upload architecture-roadmap consistency report
-        if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
-        with:
-          name: ci-report-arch-roadmap-consistency
-          path: |
-            ci-reports/arch-roadmap-consistency.json
-            ci-reports/arch-roadmap-consistency.log
-            ci-reports/arch-roadmap-sync.json
-            ci-reports/arch-roadmap-sync.patch
 
   env-profile-regression:
     name: ci/env-profile-regression
@@ -289,8 +235,6 @@ jobs:
           run_check docker-services-env-layering scripts/tests/docker-services-env-layering.test.sh
           run_check staging-e2e-real-gate-start-block scripts/tests/staging-e2e-real-gate-start-block.test.sh
           run_check notifications-wiring-health scripts/tests/notifications-wiring-health.test.sh
-          run_check arch-roadmap-consistency scripts/tests/architecture-roadmap-consistency-check.test.sh
-          run_check arch-roadmap-sync scripts/tests/architecture-roadmap-sync.test.sh
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -418,58 +362,6 @@ jobs:
           path: reports/reconciliation/staging-e2e-real-report.json
           if-no-files-found: error
 
-  asset-fee-path:
-    if: vars.ENABLE_HISTORICAL_ASSET_FEE_PATH == 'true'
-    name: ci/asset-fee-path-historical
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-
-      - name: Prepare profile env files
-        run: |
-          cp .env.example .env
-          cp .env.local.example .env.local
-          cp .env.staging-e2e-real.example .env.staging-e2e-real
-
-      - name: Run historical asset fee-path checks (config-only)
-        shell: bash
-        run: |
-          set +e
-          mkdir -p ci-reports
-          report="ci-reports/asset-fee-path.txt"
-          fail=0
-
-          run_check() {
-            local label="$1"
-            local cmd="$2"
-            echo "[$label] command: $cmd" | tee -a "$report"
-            if bash -lc "$cmd"; then
-              echo "[$label] PASS" | tee -a "$report"
-            else
-              echo "[$label] FAIL" | tee -a "$report"
-              fail=1
-            fi
-            echo "" >> "$report"
-          }
-
-          run_check local-dev "ASSET_FEE_PATH_ASSERT_CONFIG_ONLY=true bash scripts/asset-fee-path-gate.sh local-dev"
-          run_check staging-e2e-real "ASSET_FEE_PATH_ASSERT_CONFIG_ONLY=true bash scripts/asset-fee-path-gate.sh staging-e2e-real"
-          run_check regression-test "bash scripts/tests/asset-fee-path-gate.test.sh"
-
-          if [[ "$fail" -ne 0 ]]; then
-            exit 1
-          fi
-
-      - name: Upload historical asset fee-path report
-        if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
-        with:
-          name: ci-report-asset-fee-path-historical
-          path: |
-            ci-reports/asset-fee-path.txt
-            reports/asset-fee-path
-
   contracts:
     name: ci/contracts
     runs-on: ubuntu-latest
@@ -491,195 +383,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Install pinned historical resolc binary (deterministic)
-        if: vars.ENABLE_HISTORICAL_POLKAVM_COMPILE_EVIDENCE == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          RESOLC_VERSION="1.0.0"
-          RESOLC_COMMIT="b080c1"
-
-          case "$(uname -s)" in
-            Linux)
-              HH_PLATFORM="linux-amd64"
-              RESOLC_NAME="resolc-x86_64-unknown-linux-musl"
-              RESOLC_SHA256="e626ba7a1a0d26828c14713781b0082ececc9a0fbfe984f11f0d93d66bbd7806"
-              ;;
-            Darwin)
-              HH_PLATFORM="macosx-amd64"
-              RESOLC_NAME="resolc-universal-apple-darwin"
-              RESOLC_SHA256="eaee8e64a863101e95e92e68b1e4e936081a97a68bc9dbf308a63f2d0084ce83"
-              ;;
-            *)
-              echo "Unsupported OS for pinned resolc install: $(uname -s)"
-              exit 1
-              ;;
-          esac
-
-          RESOLC_FILE="${RESOLC_NAME}+commit.${RESOLC_COMMIT}"
-          COMPILERS_DIR="$(node -e "require('hardhat/internal/util/global-dir').getCompilersDir().then((d) => process.stdout.write(d))")"
-          PLATFORM_DIR="${COMPILERS_DIR}/${HH_PLATFORM}"
-          TARGET_BIN="${PLATFORM_DIR}/${RESOLC_FILE}"
-
-          mkdir -p "${PLATFORM_DIR}"
-          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors \
-            "https://github.com/paritytech/revive/releases/download/v${RESOLC_VERSION}/${RESOLC_NAME}" \
-            -o "${TARGET_BIN}"
-          echo "${RESOLC_SHA256}  ${TARGET_BIN}" | shasum -a 256 -c -
-          chmod +x "${TARGET_BIN}"
-
-          cat > "${PLATFORM_DIR}/resolc-list.json" <<EOF
-          {
-            "builds": [
-              {
-                "name": "${RESOLC_NAME}",
-                "path": "${RESOLC_FILE}",
-                "version": "${RESOLC_VERSION}",
-                "build": "${RESOLC_COMMIT}",
-                "longVersion": "${RESOLC_VERSION}+commit.${RESOLC_COMMIT}.llvm-18.1.8",
-                "sha256": "${RESOLC_SHA256}",
-                "platform": "${HH_PLATFORM}"
-              }
-            ],
-            "releases": {
-              "v${RESOLC_VERSION}": "${RESOLC_FILE}"
-            },
-            "latestRelease": "v${RESOLC_VERSION}"
-          }
-          EOF
-
-          "${TARGET_BIN}" --version
-
-      - name: Compile historical PolkaVM contracts via resolc path
-        if: vars.ENABLE_HISTORICAL_POLKAVM_COMPILE_EVIDENCE == 'true'
-        run: npm run -w contracts compile:polkavm:historical
-
-      - name: Generate historical PolkaVM compile evidence bundle
-        if: always() && vars.ENABLE_HISTORICAL_POLKAVM_COMPILE_EVIDENCE == 'true'
-        shell: bash
-        run: |
-          set +e
-          mkdir -p reports/polkavm-compile
-
-          files_file="reports/polkavm-compile/artifact-files.txt"
-          hashes_file="reports/polkavm-compile/artifact-hashes.txt"
-          bundle_file="reports/polkavm-compile/compile-evidence.json"
-
-          find contracts/artifacts -type f | LC_ALL=C sort > "$files_file"
-
-          if [[ -s "$files_file" ]]; then
-            while IFS= read -r file; do
-              shasum -a 256 "$file"
-            done < "$files_file" > "$hashes_file"
-          else
-            : > "$hashes_file"
-          fi
-
-          artifact_set_hash=$(shasum -a 256 "$hashes_file" | awk '{print $1}')
-          commit_sha=$(git rev-parse HEAD)
-          resolc_version=$(node -p "const fs=require('fs');const path=require('path');const entry=require.resolve('@parity/resolc');const pkg=JSON.parse(fs.readFileSync(path.join(path.dirname(entry),'..','package.json'),'utf8'));pkg.version" 2>/dev/null || echo "unknown")
-
-          solc_version=$(node <<'NODE'
-          const fs = require('fs');
-          const path = require('path');
-          const dir = path.join(process.cwd(), 'contracts', 'artifacts', 'build-info');
-          try {
-            const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
-            if (files.length === 0) {
-              process.stdout.write('unknown');
-              process.exit(0);
-            }
-            const buildInfo = JSON.parse(fs.readFileSync(path.join(dir, files[0]), 'utf8'));
-            process.stdout.write(buildInfo.solcVersion || 'unknown');
-          } catch {
-            process.stdout.write('unknown');
-          }
-          NODE
-          )
-
-          solc_long_version=$(node <<'NODE'
-          const fs = require('fs');
-          const path = require('path');
-          const dir = path.join(process.cwd(), 'contracts', 'artifacts', 'build-info');
-          try {
-            const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
-            if (files.length === 0) {
-              process.stdout.write('unknown');
-              process.exit(0);
-            }
-            const buildInfo = JSON.parse(fs.readFileSync(path.join(dir, files[0]), 'utf8'));
-            process.stdout.write(buildInfo.solcLongVersion || 'unknown');
-          } catch {
-            process.stdout.write('unknown');
-          }
-          NODE
-          )
-
-          pvm_artifact_count=$(node <<'NODE'
-          const fs = require('fs');
-          const path = require('path');
-          const root = path.join(process.cwd(), 'contracts', 'artifacts');
-          let count = 0;
-          function walk(dir) {
-            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-              const full = path.join(dir, entry.name);
-              if (entry.isDirectory()) {
-                walk(full);
-                continue;
-              }
-              if (!entry.name.endsWith('.json') || entry.name.endsWith('.dbg.json')) {
-                continue;
-              }
-              try {
-                const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
-                if (parsed && parsed._format === 'hh-resolc-artifact-1') {
-                  count += 1;
-                }
-              } catch {}
-            }
-          }
-          try {
-            walk(root);
-            process.stdout.write(String(count));
-          } catch {
-            process.stdout.write('0');
-          }
-          NODE
-          )
-
-          cat > "$bundle_file" <<EOF
-          {
-            "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "commitSha": "${commit_sha}",
-            "resolcVersion": "${resolc_version}",
-            "solcVersion": "${solc_version}",
-            "solcLongVersion": "${solc_long_version}",
-            "artifactFileCount": $(wc -l < "$files_file" | tr -d ' '),
-            "pvmArtifactCount": ${pvm_artifact_count},
-            "artifactHashesFile": "${hashes_file}",
-            "artifactSetHashSha256": "${artifact_set_hash}"
-          }
-          EOF
-
-      - name: Guard historical PolkaVM artifact evidence integrity
-        if: always() && vars.ENABLE_HISTORICAL_POLKAVM_COMPILE_EVIDENCE == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          bundle_file="reports/polkavm-compile/compile-evidence.json"
-          if [[ ! -f "$bundle_file" ]]; then
-            echo "Missing compile evidence bundle: $bundle_file"
-            exit 1
-          fi
-
-          pvm_count="$(jq -r '.pvmArtifactCount // empty' "$bundle_file")"
-          if [[ -z "$pvm_count" || "$pvm_count" == "0" || "$pvm_count" == "null" ]]; then
-            echo "pvmArtifactCount=$pvm_count (expected >0). resolc artifacts missing/overwritten."
-            exit 1
-          fi
-          echo "pvmArtifactCount=$pvm_count"
 
       - name: Run workspace checks
         shell: bash
@@ -711,127 +414,12 @@ jobs:
             exit 1
           fi
 
-      - name: Upload historical PolkaVM compile evidence bundle
-        if: always() && vars.ENABLE_HISTORICAL_POLKAVM_COMPILE_EVIDENCE == 'true'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
-        with:
-          name: ci-report-contracts-compile-polkavm-historical
-          path: reports/polkavm-compile
-
       - name: Upload workspace report
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
-
-  contracts_deploy_verification:
-    if: ${{ (needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.contracts == 'true') && vars.ENABLE_HISTORICAL_POLKADOT_DEPLOY_VERIFICATION == 'true' }}
-    name: ci/contracts-deploy-verification-historical
-    runs-on: ubuntu-latest
-    needs:
-      - changes
-      - contracts
-    env:
-      DEPLOY_VERIFY_RPC_URL: "https://services.polkadothub-rpc.com/testnet"
-      DEPLOY_VERIFY_NETWORK_NAME: "polkadotTestnet"
-      DEPLOY_VERIFY_RUNTIME_TARGET: "paseo-asset-hub-revive"
-      DEPLOY_VERIFY_EXPECTED_CHAIN_ID: "0x190f1b41"
-      DEPLOY_VERIFY_ARTIFACT_PATH: "contracts/artifacts/src/MockUSDC.sol/MockUSDC.json"
-      DEPLOY_VERIFY_CONTRACT_ADDRESS: "0xd58fA437C8Ad344a85D6CA99E91700a1E160d87b"
-      DEPLOY_VERIFY_TX_HASH: "0x6ea53035e3f594a40913a56c4257045a9101dbb7309b6721ab81d17d1cef574f"
-      DEPLOY_VERIFY_COMPILER_NAME: "solc"
-      DEPLOY_VERIFY_OUT_DIR: "reports/deploy-verification"
-      DEPLOY_VERIFY_TIMEOUT_MS: '12000'
-      DEPLOY_VERIFY_RETRIES: '3'
-      DEPLOY_VERIFY_BACKOFF_MS: '1000'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
-        with:
-          node-version: '20'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install pinned historical resolc binary (deterministic)
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          RESOLC_VERSION="1.0.0"
-          RESOLC_COMMIT="b080c1"
-
-          case "$(uname -s)" in
-            Linux)
-              HH_PLATFORM="linux-amd64"
-              RESOLC_NAME="resolc-x86_64-unknown-linux-musl"
-              RESOLC_SHA256="e626ba7a1a0d26828c14713781b0082ececc9a0fbfe984f11f0d93d66bbd7806"
-              ;;
-            Darwin)
-              HH_PLATFORM="macosx-amd64"
-              RESOLC_NAME="resolc-universal-apple-darwin"
-              RESOLC_SHA256="eaee8e64a863101e95e92e68b1e4e936081a97a68bc9dbf308a63f2d0084ce83"
-              ;;
-            *)
-              echo "Unsupported OS for pinned resolc install: $(uname -s)"
-              exit 1
-              ;;
-          esac
-
-          RESOLC_FILE="${RESOLC_NAME}+commit.${RESOLC_COMMIT}"
-          COMPILERS_DIR="$(node -e "require('hardhat/internal/util/global-dir').getCompilersDir().then((d) => process.stdout.write(d))")"
-          PLATFORM_DIR="${COMPILERS_DIR}/${HH_PLATFORM}"
-          TARGET_BIN="${PLATFORM_DIR}/${RESOLC_FILE}"
-
-          mkdir -p "${PLATFORM_DIR}"
-          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors \
-            "https://github.com/paritytech/revive/releases/download/v${RESOLC_VERSION}/${RESOLC_NAME}" \
-            -o "${TARGET_BIN}"
-          echo "${RESOLC_SHA256}  ${TARGET_BIN}" | shasum -a 256 -c -
-          chmod +x "${TARGET_BIN}"
-
-          cat > "${PLATFORM_DIR}/resolc-list.json" <<EOF
-          {
-            "builds": [
-              {
-                "name": "${RESOLC_NAME}",
-                "path": "${RESOLC_FILE}",
-                "version": "${RESOLC_VERSION}",
-                "build": "${RESOLC_COMMIT}",
-                "longVersion": "${RESOLC_VERSION}+commit.${RESOLC_COMMIT}.llvm-18.1.8",
-                "sha256": "${RESOLC_SHA256}",
-                "platform": "${HH_PLATFORM}"
-              }
-            ],
-            "releases": {
-              "v${RESOLC_VERSION}": "${RESOLC_FILE}"
-            },
-            "latestRelease": "v${RESOLC_VERSION}"
-          }
-          EOF
-
-          "${TARGET_BIN}" --version
-
-      - name: Generate historical PolkaVM contract artifacts for verification
-        run: npm run -w contracts compile:polkavm:historical
-
-      - name: Run historical deploy verification smoke tests
-        run: node --test scripts/tests/polkavm-deploy-verify-smoke.test.mjs
-
-      - name: Verify historical deployed contract bytecode and deployment evidence
-        run: node scripts/polkavm-deploy-verify.mjs
-
-      - name: Upload historical deploy verification artifact
-        if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
-        with:
-          name: ci-report-contracts-deploy-verification-historical
-          path: reports/deploy-verification
 
   sdk:
     name: ci/sdk
@@ -1249,12 +837,9 @@ jobs:
     needs:
       - changes
       - docs-profile-guard
-      - arch-roadmap-consistency
       - env-profile-regression
       - staging-e2e-real-gate
-      - asset-fee-path
       - contracts
-      - contracts_deploy_verification
       - sdk
       - oracle
       - indexer
@@ -1272,12 +857,9 @@ jobs:
           declare -A results
           results["ci/changes"]="${{ needs.changes.result }}"
           results["ci/docs-profile-guard"]="${{ needs.docs-profile-guard.result }}"
-          results["ci/arch-roadmap-consistency"]="${{ needs.arch-roadmap-consistency.result }}"
           results["ci/env-profile-regression"]="${{ needs.env-profile-regression.result }}"
           results["ci/staging-e2e-real-gate"]="${{ needs.staging-e2e-real-gate.result }}"
-          results["ci/asset-fee-path-historical"]="${{ needs.asset-fee-path.result }}"
           results["ci/contracts"]="${{ needs.contracts.result }}"
-          results["ci/contracts-deploy-verification-historical"]="${{ needs.contracts_deploy_verification.result }}"
           results["ci/sdk"]="${{ needs.sdk.result }}"
           results["ci/oracle"]="${{ needs.oracle.result }}"
           results["ci/indexer"]="${{ needs.indexer.result }}"

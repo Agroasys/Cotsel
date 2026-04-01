@@ -8,6 +8,10 @@ Maintain a single execution board for `Cotsel` where every roadmap item and PR i
 - The active milestone model is `M0 Base Migration Decision and Boundary Freeze`, `M1 Base Contract Runtime and Deployment`, `M2 Base Eventing, Reconciliation, and Treasury Safety`, `M3 Backend, Gateway, and Wallet Continuity`, `M4 Base Sepolia Pilot Readiness`, `M5 Base Mainnet Launch and Polkadot Retirement`, plus `Needs Triage`.
 - Historical Milestones A/B/C and their old weighted rollups are retained only for pre-Base traceability. They are not active v1 planning truth.
 - M4 is the operational installation-and-proof gate. M5 must not begin until M4 has a real Base Sepolia rehearsal result, a reviewable evidence packet, and an explicit blocker register.
+- M5 is the production cutover-and-retirement gate. It is not complete until:
+  - `docs/runbooks/base-mainnet-go-no-go.md` exists and is used as the authoritative launch decision record
+  - `docs/runbooks/base-mainnet-cutover-and-rollback.md` exists and is used as the authoritative rollback path
+  - `docs/runbooks/polkadot-retirement-checklist.md` closes the M5-owned residue from issue `#356`
 
 ## Project v2 Definition
 - Project name: `Cotsel Roadmap`
@@ -82,7 +86,8 @@ Auth for project field writes:
 
 Historical-only note:
 - The checker and sync helper apply to the archived A/B/C governance model only.
-- The release-gate job for this historical model is disabled by default during the active Base migration.
+- The active release gate must not depend on the historical A/B/C governance model during M5.
+- Historical governance maintenance belongs only in `.github/workflows/historical-archive-maintenance.yml` and `.github/workflows/roadmap-weighted-progress-sync.yml`.
 - Only enable or run these tools when maintaining archive traceability for the pre-Base roadmap record.
 
 What the checker enforces:

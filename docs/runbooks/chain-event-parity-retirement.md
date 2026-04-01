@@ -68,3 +68,4 @@ Before marking the legacy ingest retired:
 - `docs/api/cotsel-dashboard-gateway.openapi.yml`
 - `docs/runbooks/operator-audit-evidence-template.md`
 - `docs/incidents/incident-evidence-template.md`
+- `docs/runbooks/polkadot-retirement-checklist.md`
