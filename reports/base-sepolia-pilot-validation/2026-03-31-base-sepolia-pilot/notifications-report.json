@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-03-31T20:41:20.675Z",
+  "profile": "staging-e2e-real",
+  "checks": {
+    "oracleCriticalDelivery": true,
+    "reconciliationCriticalDelivery": true,
+    "oracleDedupSuppressed": true,
+    "reconciliationDedupSuppressed": true,
+    "severityRoutePager": true,
+    "templateVersionTagged": true
+  },
+  "evidence": {
+    "oracleEventType": "ORACLE_TRIGGER_EXHAUSTED_NEEDS_REDRIVE",
+    "reconciliationEventType": "RECONCILIATION_CRITICAL_DRIFT",
+    "capturedCount": 2
+  },
+  "events": [
+    {
+      "receivedAt": "2026-03-31T20:41:20.693Z",
+      "text": "[oracle] ORACLE_TRIGGER_EXHAUSTED_NEEDS_REDRIVE (critical)",
+      "severityRoute": "pager",
+      "templateVersion": "oracle-redrive-v1"
+    },
+    {
+      "receivedAt": "2026-03-31T20:41:20.694Z",
+      "text": "[reconciliation] RECONCILIATION_CRITICAL_DRIFT (critical)",
+      "severityRoute": "pager",
+      "templateVersion": "reconciliation-critical-drift-v1"
+    }
+  ],
+  "errors": [],
+  "pass": true
+}

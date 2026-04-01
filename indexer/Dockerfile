@@ -14,8 +14,10 @@ COPY reconciliation/package.json reconciliation/package.json
 COPY ricardian/package.json ricardian/package.json
 COPY sdk/package.json sdk/package.json
 COPY treasury/package.json treasury/package.json
+COPY patches patches
 
 RUN npm ci --ignore-scripts --workspace indexer --include-workspace-root=false
+RUN npx patch-package --error-on-fail
 
 COPY indexer indexer
 

@@ -184,10 +184,11 @@ ORDER BY trigger_type, status;
   Hardhat/Foundry test output (`contracts/coverage/` artifacts or CI logs).
 
 **Caveats**:
-- PolkaVM gas metering differs from EVM; use block explorer or RPC
-  `eth_getTransactionReceipt.gasUsed` to obtain per-tx gas, then correlate by `tx_hash`.
-  This template does not store gas units in the database; assert those values from the
-  chain using on-chain evidence.
+- Gas units are not stored in the pilot database. Collect them from Base
+  transaction evidence using the approved explorer or RPC
+  `eth_getTransactionReceipt.gasUsed`, then correlate by `tx_hash`.
+- Record whether the value came from Base Sepolia or Base mainnet and preserve
+  the explorer/RPC source in the evidence packet.
 
 
 ### KPI-5: Reconciliation Health (On-chain / Off-chain Parity)
@@ -387,6 +388,8 @@ Before signing off on the pilot report:
 
 
 ## Related Runbooks
+- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `scripts/base-sepolia-pilot-validation.sh`
 - `docs/runbooks/pilot-environment-onboarding.md`
 - `docs/runbooks/hybrid-split-walkthrough.md`
 - `docs/runbooks/reconciliation.md`

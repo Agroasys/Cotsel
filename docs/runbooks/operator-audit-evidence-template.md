@@ -29,6 +29,9 @@ Additional fields should be populated when available from the service boundary:
 If a field is not available for the workflow, record `N/A` instead of leaving it blank.
 If the runtime logger does not emit a field directly, source it from the nearest
 authoritative gateway ledger, request record, or operator evidence source.
+Historical pre-Base identifiers such as `extrinsicHash` are archive-only and
+must not replace `txHash` as the active transaction reference in Base-era audit
+packets.
 
 ## Audit Packet Header
 

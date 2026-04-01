@@ -1,0 +1,22 @@
+diff --git a/node_modules/@subsquid/evm-processor/lib/ds-rpc/client.js b/node_modules/@subsquid/evm-processor/lib/ds-rpc/client.js
+index 5901351..72fb813 100644
+--- a/node_modules/@subsquid/evm-processor/lib/ds-rpc/client.js
++++ b/node_modules/@subsquid/evm-processor/lib/ds-rpc/client.js
+@@ -38,7 +38,7 @@ class EvmRpcDataSource {
+             getFinalizedHeight: () => this.getFinalizedHeight(),
+             getSplit: req => this._getColdSplit(req),
+             requests: (0, util_internal_range_1.mapRangeRequestList)(requests, req => this.toMappingRequest(req)),
+-            splitSize: 10,
++            splitSize: Number(process.env.SUBSQUID_EVM_RPC_SPLIT_SIZE || '10'),
+             concurrency: Math.min(5, this.rpc.client.getConcurrency()),
+             stopOnHead,
+             headPollInterval: this.headPollInterval
+@@ -80,7 +80,7 @@ class EvmRpcDataSource {
+                 }
+                 for (let split of (0, util_internal_range_1.splitRangeByRequest)(mappingRequests, { from, to: to.height })) {
+                     let request = split.request || NO_REQUEST;
+-                    for (let range of (0, util_internal_range_1.splitRange)(10, split.range)) {
++                    for (let range of (0, util_internal_range_1.splitRange)(Number(process.env.SUBSQUID_EVM_RPC_SPLIT_SIZE || '10'), split.range)) {
+                         let rpcBlocks = await self.rpc.getHotSplit({
+                             range,
+                             request,

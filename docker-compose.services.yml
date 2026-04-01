@@ -9,7 +9,6 @@ services:
       POSTGRES_DB: "${POSTGRES_DB}"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./postgres/init/10-service-databases.sql:/docker-entrypoint-initdb.d/10-service-databases.sql:ro
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -17,6 +16,46 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  postgres-init:
+    image: postgres:16-alpine
+    profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    restart: "no"
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+      AUTH_DB_NAME: "${AUTH_DB_NAME}"
+      RICARDIAN_DB_NAME: "${RICARDIAN_DB_NAME}"
+      TREASURY_DB_NAME: "${TREASURY_DB_NAME}"
+      RECONCILIATION_DB_NAME: "${RECONCILIATION_DB_NAME}"
+      ORACLE_DB_NAME: "${ORACLE_DB_NAME}"
+      INDEXER_DB_NAME: "${INDEXER_DB_NAME}"
+      GATEWAY_DB_NAME: "${GATEWAY_DB_NAME}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -ceu
+      - |
+        export PGPASSWORD="$${POSTGRES_PASSWORD}"
+        ensure_db() {
+          db="$$1"
+          echo "ensuring database: $$db"
+          exists="$$(psql -h postgres -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -Atqc "SELECT 1 FROM pg_database WHERE datname = '$$db'")"
+          echo "exists query for $$db: $${exists:-<empty>}"
+          if [ "$${exists}" != "1" ]; then
+            psql -h postgres -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -c "CREATE DATABASE \"$$db\";"
+          fi
+        }
+        ensure_db "$${AUTH_DB_NAME}"
+        ensure_db "$${RICARDIAN_DB_NAME}"
+        ensure_db "$${TREASURY_DB_NAME}"
+        ensure_db "$${RECONCILIATION_DB_NAME}"
+        ensure_db "$${ORACLE_DB_NAME}"
+        ensure_db "$${INDEXER_DB_NAME}"
+        ensure_db "$${GATEWAY_DB_NAME}"
 
   redis:
     image: redis:7-alpine
@@ -77,8 +116,8 @@ services:
       DB_USER: "${POSTGRES_USER}"
       DB_PASSWORD: "${POSTGRES_PASSWORD}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
     command: ["npx", "squid-typeorm-migration", "apply"]
 
   indexer-pipeline:
@@ -96,11 +135,19 @@ services:
       RPC_ENDPOINT: "${INDEXER_RPC_ENDPOINT}"
       START_BLOCK: "${INDEXER_START_BLOCK}"
       RATE_LIMIT: "${INDEXER_RATE_LIMIT}"
+      RPC_CAPACITY: "${INDEXER_RPC_CAPACITY:-}"
+      RPC_MAX_BATCH_CALL_SIZE: "${INDEXER_RPC_MAX_BATCH_CALL_SIZE:-}"
+      RPC_REQUEST_TIMEOUT_MS: "${INDEXER_RPC_REQUEST_TIMEOUT_MS:-}"
+      RPC_RETRY_ATTEMPTS: "${INDEXER_RPC_RETRY_ATTEMPTS:-}"
+      RPC_HEAD_POLL_INTERVAL_MS: "${INDEXER_RPC_HEAD_POLL_INTERVAL_MS:-}"
+      RPC_INGEST_DISABLED: "${INDEXER_RPC_INGEST_DISABLED:-false}"
+      SUBSQUID_EVM_RPC_SPLIT_SIZE: "${INDEXER_RPC_BLOCK_SPLIT_SIZE:-10}"
+      FINALITY_CONFIRMATION_BLOCKS: "${FINALITY_CONFIRMATION_BLOCKS}"
       CONTRACT_ADDRESS: "${INDEXER_CONTRACT_ADDRESS}"
       GRAPHQL_PORT: "${INDEXER_GRAPHQL_PORT}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
       indexer-migrate:
         condition: service_completed_successfully
     healthcheck:
@@ -122,8 +169,8 @@ services:
       DB_PASSWORD: "${POSTGRES_PASSWORD}"
       GQL_PORT: "${INDEXER_GRAPHQL_PORT}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
       indexer-migrate:
         condition: service_completed_successfully
     command: ["npx", "squid-graphql-server"]
@@ -171,8 +218,8 @@ services:
       RATE_LIMIT_ENABLED: "${RICARDIAN_RATE_LIMIT_ENABLED}"
       RATE_LIMIT_REDIS_URL: "${RICARDIAN_RATE_LIMIT_REDIS_URL}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     ports:
@@ -206,8 +253,8 @@ services:
       DB_PASSWORD: "${POSTGRES_PASSWORD}"
       SESSION_TTL_SECONDS: "${AUTH_SESSION_TTL_SECONDS}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
     ports:
       - "${AUTH_PORT:-3005}:${AUTH_PORT:-3005}"
     healthcheck:
@@ -241,17 +288,21 @@ services:
       GATEWAY_AUTH_REQUEST_TIMEOUT_MS: "${GATEWAY_AUTH_REQUEST_TIMEOUT_MS}"
       GATEWAY_INDEXER_GRAPHQL_URL: "${GATEWAY_INDEXER_GRAPHQL_URL}"
       GATEWAY_INDEXER_REQUEST_TIMEOUT_MS: "${GATEWAY_INDEXER_REQUEST_TIMEOUT_MS}"
+      GATEWAY_SETTLEMENT_RUNTIME: "${GATEWAY_SETTLEMENT_RUNTIME:-}"
       GATEWAY_RPC_URL: "${GATEWAY_RPC_URL}"
+      GATEWAY_RPC_FALLBACK_URLS: "${GATEWAY_RPC_FALLBACK_URLS:-}"
       GATEWAY_RPC_READ_TIMEOUT_MS: "${GATEWAY_RPC_READ_TIMEOUT_MS}"
       GATEWAY_CHAIN_ID: "${GATEWAY_CHAIN_ID}"
+      GATEWAY_EXPLORER_BASE_URL: "${GATEWAY_EXPLORER_BASE_URL:-}"
       GATEWAY_ESCROW_ADDRESS: "${GATEWAY_ESCROW_ADDRESS}"
+      GATEWAY_USDC_ADDRESS: "${GATEWAY_USDC_ADDRESS:-}"
       GATEWAY_ENABLE_MUTATIONS: "${GATEWAY_ENABLE_MUTATIONS}"
       GATEWAY_WRITE_ALLOWLIST: "${GATEWAY_WRITE_ALLOWLIST}"
       GATEWAY_COMMIT_SHA: "${GATEWAY_COMMIT_SHA}"
       GATEWAY_BUILD_TIME: "${GATEWAY_BUILD_TIME}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
       auth:
         condition: service_healthy
     ports:
@@ -295,8 +346,8 @@ services:
       REDIS_URL: "${TREASURY_NONCE_REDIS_URL:-}"
       NONCE_TTL_SECONDS: "${TREASURY_NONCE_TTL_SECONDS:-${TREASURY_AUTH_NONCE_TTL_SECONDS}}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
       indexer:
         condition: service_healthy
         required: false
@@ -329,8 +380,11 @@ services:
       PORT: "${ORACLE_PORT}"
       API_KEY: "${ORACLE_API_KEY}"
       HMAC_SECRET: "${ORACLE_HMAC_SECRET}"
+      SETTLEMENT_RUNTIME: "${ORACLE_SETTLEMENT_RUNTIME:-}"
       RPC_URL: "${ORACLE_RPC_URL}"
+      RPC_FALLBACK_URLS: "${ORACLE_RPC_FALLBACK_URLS:-}"
       CHAIN_ID: "${ORACLE_CHAIN_ID}"
+      EXPLORER_BASE_URL: "${ORACLE_EXPLORER_BASE_URL:-}"
       ESCROW_ADDRESS: "${ORACLE_ESCROW_ADDRESS}"
       USDC_ADDRESS: "${ORACLE_USDC_ADDRESS}"
       ORACLE_PRIVATE_KEY: "${ORACLE_PRIVATE_KEY}"
@@ -348,8 +402,8 @@ services:
       NOTIFICATIONS_REQUEST_TIMEOUT_MS: "${ORACLE_NOTIFICATIONS_REQUEST_TIMEOUT_MS}"
       ORACLE_MANUAL_APPROVAL_ENABLED: "${ORACLE_MANUAL_APPROVAL_ENABLED}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
       indexer:
         condition: service_healthy
         required: false
@@ -390,8 +444,11 @@ services:
       INDEXER_DB_NAME: "${INDEXER_DB_NAME}"
       DB_USER: "${POSTGRES_USER}"
       DB_PASSWORD: "${POSTGRES_PASSWORD}"
+      SETTLEMENT_RUNTIME: "${RECONCILIATION_SETTLEMENT_RUNTIME:-}"
       RPC_URL: "${RECONCILIATION_RPC_URL}"
+      RPC_FALLBACK_URLS: "${RECONCILIATION_RPC_FALLBACK_URLS:-}"
       CHAIN_ID: "${RECONCILIATION_CHAIN_ID}"
+      EXPLORER_BASE_URL: "${RECONCILIATION_EXPLORER_BASE_URL:-}"
       ESCROW_ADDRESS: "${RECONCILIATION_ESCROW_ADDRESS}"
       USDC_ADDRESS: "${RECONCILIATION_USDC_ADDRESS}"
       INDEXER_GRAPHQL_URL: "${RECONCILIATION_INDEXER_GRAPHQL_URL}"
@@ -402,8 +459,8 @@ services:
       NOTIFICATIONS_COOLDOWN_MS: "${RECONCILIATION_NOTIFICATIONS_COOLDOWN_MS}"
       NOTIFICATIONS_REQUEST_TIMEOUT_MS: "${RECONCILIATION_NOTIFICATIONS_REQUEST_TIMEOUT_MS}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
       indexer:
         condition: service_healthy
         required: false

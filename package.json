@@ -51,6 +51,7 @@
     "dashboard:parity:gate": "npm run dashboard:parity:preflight",
     "dashboard:parity:ci": "bash scripts/dashboard-live-parity-gate.sh",
     "m3:continuity:ci": "bash scripts/m3-continuity-gate.sh",
+    "pilot:rehearsal": "bash scripts/base-sepolia-pilot-validation.sh",
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs"
   },

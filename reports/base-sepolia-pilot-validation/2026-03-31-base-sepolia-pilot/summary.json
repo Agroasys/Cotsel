@@ -1,0 +1,46 @@
+{
+  "windowId": "2026-03-31-base-sepolia-pilot",
+  "mode": "live",
+  "startedAt": "2026-03-31T20:40:26Z",
+  "finishedAt": "2026-03-31T20:47:30Z",
+  "profile": "staging-e2e-real",
+  "overallStatus": "pass",
+  "manualEvidenceStatus": "pass",
+  "liveRehearsalExecuted": true,
+  "statuses": {
+    "validateEnv": "pass",
+    "profileUp": "not_run",
+    "profileHealth": "pass",
+    "stagingGate": "pass",
+    "notificationsBuild": "pass",
+    "notificationsGate": "pass"
+  },
+  "blockingFailure": null,
+  "evidence": {
+    "tradeId": "1",
+    "lockTxHash": "0x91f52e2aa070788a49f60c196389b235dc86b1c105b1c94a8f3be40137ebd420",
+    "releaseStage1TxHash": "0x457bbf5117798f443f1dce8f72c5a2ea0a9b60d41262f21caf91e7c689d8b0a0",
+    "confirmArrivalTxHash": "0x1b37cfb969d62a6bec867d0a4c235b28d40b14f0fdec6a32188b55f78b72b62d",
+    "openDisputeTxHash": "0x6145c644588d96f30b1a8bff1c0f969bf73d9de91769258e9c3f6f080467fb52",
+    "indexerTradeStatus": "FROZEN",
+    "indexerHeadAtCapture": 39610827,
+    "operationalNotes": [
+      "The contract state machine requires confirmArrival before openDispute.",
+      "The live validation window fixed two runtime defects before final pass: EVM log ordering persistence and nullable extrinsic_index handling for Base event tables.",
+      "The indexed event stream now matches the on-chain lifecycle for tradeId 1."
+    ],
+    "resolvedIssues": [
+      "AddEventLogOrderingColumns1774989000000",
+      "RelaxEventExtrinsicIndexNullability1774990200000"
+    ]
+  },
+  "artifacts": {
+    "reportDir": "/private/tmp/cotsel-m4-readiness/reports/base-sepolia-pilot-validation/2026-03-31-base-sepolia-pilot",
+    "summary": "summary.json",
+    "gateOutput": "gate-output.txt",
+    "reconciliationReport": "reconciliation-report.json",
+    "notificationsReport": "notifications-report.json",
+    "txReceipts": "tx-receipts.json",
+    "readModelSnapshot": "read-model-snapshot.json"
+  }
+}

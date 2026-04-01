@@ -6,6 +6,7 @@ Historical-only note:
 - This matrix captures the pre-Base A/B/C roadmap model for traceability.
 - It is not the active v1 migration source of truth.
 - The active Base migration execution source of truth is issue `#339` and milestones `M0` through `M5`.
+- Do not use this matrix to determine current pilot readiness, M4 closure, or M5 go/no-go. Those decisions must be taken from the Base migration issue tree, active Base runbooks, and the actual pilot evidence packet.
 
 Scope:
 - Source of truth is repository code, merged/open PRs, and roadmap issues.

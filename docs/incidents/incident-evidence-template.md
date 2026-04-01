@@ -28,8 +28,14 @@ Current mandatory audit-envelope fields come from `docs/observability/logging-sc
 
 Populate the following when the service surface already provides them:
 - `actor`
-- `blockNumber` / `extrinsicHash`
+- `blockNumber`
+- `logIndex`
 - incident or ticket reference
+
+Historical compatibility only:
+- If an incident needs correlation to archived pre-Base evidence, record any
+  legacy `extrinsicHash` or `extrinsicIndex` values in Notes as historical
+  references only. They are not active v1 audit-envelope fields.
 
 If a service does not emit every field directly, source the missing values from
 the nearest authoritative request ledger, gateway action record, or operator
@@ -51,9 +57,9 @@ evidence packet rather than leaving them implicit.
 
 Populate one row per impacted action or trade.
 
-| Trade ID | Action Key | Request ID | Trace ID | Correlation ID | Tx Hash / Extrinsic | Actor | Intent | Outcome | Notes |
+| Trade ID | Action Key | Request ID | Trace ID | Correlation ID | Tx Hash | Actor | Intent | Outcome | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| `<tradeId>` | `<actionKey>` | `<requestId>` | `<traceId>` | `<correlationId or N/A>` | `<txHash/extrinsicHash or N/A>` | `<actor or N/A>` | `<intent or N/A>` | `<outcome or pending>` | `<notes>` |
+| `<tradeId>` | `<actionKey>` | `<requestId>` | `<traceId>` | `<correlationId or N/A>` | `<txHash or N/A>` | `<actor or N/A>` | `<intent or N/A>` | `<outcome or pending>` | `<notes>` |
 
 ## Containment And Rollback Decision
 

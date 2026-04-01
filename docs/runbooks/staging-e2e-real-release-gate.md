@@ -3,6 +3,7 @@
 ## Purpose
 Run a staging-grade release gate against the real indexer pipeline profile (`staging-e2e-real`) and validate reconciliation against indexed chain state.
 For pilot startup sequencing and go/no-go criteria, use `docs/runbooks/pilot-environment-onboarding.md`.
+For the controlled Base Sepolia validation itself, use `scripts/base-sepolia-pilot-validation.sh` and store the resulting packet under `reports/base-sepolia-pilot-validation/`.
 For participant-facing pilot workflow guidance, use `docs/runbooks/non-custodial-pilot-user-guide.md`.
 
 ## Profile differences
@@ -18,8 +19,28 @@ For participant-facing pilot workflow guidance, use `docs/runbooks/non-custodial
 - Env files created:
   - `.env`
   - `.env.staging-e2e-real`
+- `staging-e2e-real` must be Base Sepolia only:
+  - `STAGING_E2E_REAL_NETWORK_NAME=Base Sepolia`
+  - `STAGING_E2E_REAL_CHAIN_ID=84532`
+- Active runtime URLs must not point at historical Asset Hub / Polkadot infrastructure.
+- For the controlled pilot runtime, gateway/oracle/reconciliation must use
+  managed Base Sepolia primary + fallback provider inputs instead of public
+  Base RPC defaults.
 - Reconciliation/oracle RPC and indexer endpoints must target the same chain dataset.
 - Optional dynamic start-block controls: `STAGING_E2E_REAL_DYNAMIC_START_BLOCK=true` and `STAGING_E2E_REAL_START_BLOCK_BACKOFF=250`.
+- Indexer processor settings must include:
+  - `FINALITY_CONFIRMATION_BLOCKS=1`
+  - this is only the Squid ingestion buffer, not the operator-facing Base confirmation truth
+  - workflow progression and treasury evidence still use the explicit `safe` / `finalized` policy from issue `#377`
+- If the managed RPC provider is unstable under live tail load, the active
+  indexer supports explicit hardening knobs:
+  - `INDEXER_RPC_CAPACITY`
+  - `INDEXER_RPC_MAX_BATCH_CALL_SIZE`
+  - `INDEXER_RPC_REQUEST_TIMEOUT_MS`
+  - `INDEXER_RPC_RETRY_ATTEMPTS`
+  - `INDEXER_RPC_HEAD_POLL_INTERVAL_MS`
+  - `INDEXER_RPC_INGEST_DISABLED`
+  - `INDEXER_RPC_BLOCK_SPLIT_SIZE`
 - Lag gate controls:
   - `STAGING_E2E_MAX_INDEXER_LAG_BLOCKS` (strict default `500`)
   - `STAGING_E2E_REAL_LAG_WARMUP_SECONDS` (default `180`)
@@ -46,6 +67,8 @@ scripts/docker-services.sh down staging-e2e-real
 The manual `staging-e2e-real` flow above is a staging validation runbook.
 GitHub Actions release-gate enforces workspace lint/typecheck/test/build checks and a CI-safe staging gate path (`scripts/validate-env.sh staging-e2e-real` plus `STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true scripts/staging-e2e-real-gate.sh`).
 CI does not execute the full Docker `up/health/logs/down` staging profile sequence from this runbook.
+This runbook is a prerequisite gate for pilot readiness; it is not the
+canonical pilot rehearsal report or evidence packet.
 Source of truth for CI behavior: `.github/workflows/release-gate.yml`.
 CI also runs deterministic notification-path verification and uploads `ci-report-notifications-gate`.
 
@@ -67,6 +90,10 @@ CI also runs deterministic notification-path verification and uploads `ci-report
 - `negative lag`: RPC and indexer pipeline are on different networks.
 - `indexer head metric unavailable`: `indexer-graphql` not ready or no squid status response.
 - `indexer head metric unavailable after warmup`: startup is too slow for configured warmup window; tune `STAGING_E2E_REAL_LAG_WARMUP_SECONDS` only after confirming pipeline is healthy.
+- malformed RPC JSON / oversized live responses: reduce `INDEXER_RPC_CAPACITY`
+  and `INDEXER_RPC_MAX_BATCH_CALL_SIZE`, or temporarily switch to
+  archive-only ingest with `INDEXER_RPC_INGEST_DISABLED=true` if the pilot
+  window can tolerate archive lag.
 - `reconciliation once run failed`: invalid RPC/contract addresses or DB connectivity issue.
 - `indexed data requirement enabled but no indexed trades found`: contract/start block scope has no indexed events yet.
 - `notifications gate failed`: notifications package was not built (`notifications/dist/index.js` missing) or deterministic critical-path probe checks failed.
@@ -84,3 +111,4 @@ Escalate if any of the following persists after one clean restart:
 - Indexer GraphQL never reaches readiness.
 - Lag remains negative.
 - Reconciliation fails with repeated critical drift or on-chain read errors.
+- The profile still requires public or placeholder provider values to run.

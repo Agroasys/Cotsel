@@ -15,6 +15,7 @@ Cotsel was initially developed to support the Agroasys platform, but it is open-
 
 - **Current phase:** Pilot readiness (active development).
 - **Operational readiness criteria:** `docs/runbooks/production-readiness-checklist.md`.
+- **Active chain truth:** Base Sepolia is the controlled pilot environment and Base mainnet is the production target-state. Historical Polkadot/PolkaVM material in this repo is retained for archive traceability only.
 
 ## Who Should Read Next
 

@@ -3,6 +3,10 @@
 ## Purpose
 Provide a deterministic onboarding and go/no-go procedure for the `staging-e2e-real` pilot environment.
 
+This runbook is the environment-readiness prerequisite for the controlled pilot
+validation flow driven by `scripts/base-sepolia-pilot-validation.sh`. It is not the
+full rehearsal record on its own.
+
 ## Who This Is For
 - `Operator`: executes environment bring-up, health checks, and evidence capture.
 - `On-call Engineer`: handles runtime failures and escalation decisions.
@@ -26,14 +30,24 @@ Provide a deterministic onboarding and go/no-go procedure for the `staging-e2e-r
 ## Pilot Checklist
 - Required roles confirmed:
   - `Operator`
-  - `On-call Engineer`
-  - `Pilot Owner`
+  - `On-call Engineer` (`Platform On-Call`, pager route from `docs/runbooks/monitoring-alerting-baseline.md`)
+  - `Pilot Owner` (`Aston`, pilot default)
+  - `Service Owner` (named owning maintainer for the in-scope subsystem; record this in the pilot ticket before the window opens)
 - Required contract addresses set in `.env.staging-e2e-real`:
+  - `GATEWAY_ESCROW_ADDRESS`
   - `RECONCILIATION_ESCROW_ADDRESS`
   - `RECONCILIATION_USDC_ADDRESS`
   - `ORACLE_ESCROW_ADDRESS`
   - `ORACLE_USDC_ADDRESS`
   - `INDEXER_CONTRACT_ADDRESS`
+  - source of truth: `contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json`
+- Managed Base Sepolia provider policy is installed for pilot runtime:
+  - `GATEWAY_SETTLEMENT_RUNTIME=base-sepolia`
+  - `GATEWAY_RPC_URL` and `GATEWAY_RPC_FALLBACK_URLS`
+  - `ORACLE_SETTLEMENT_RUNTIME=base-sepolia`
+  - `ORACLE_RPC_URL` and `ORACLE_RPC_FALLBACK_URLS`
+  - `RECONCILIATION_SETTLEMENT_RUNTIME=base-sepolia`
+  - `RECONCILIATION_RPC_URL` and `RECONCILIATION_RPC_FALLBACK_URLS`
 - Oracle routing configured:
   - `ORACLE_RPC_URL`
   - `ORACLE_INDEXER_GRAPHQL_URL`
@@ -61,6 +75,8 @@ cp .env.staging-e2e-real.example .env.staging-e2e-real
 ```
 
 Set pilot addresses/chain config in `.env.staging-e2e-real` before proceeding.
+Do not leave placeholder URLs, public Base RPC endpoints, or zero-value escrow
+addresses in the live pilot profile.
 
 Expected result:
 - `.env` and `.env.staging-e2e-real` exist with pilot-specific values.
@@ -177,13 +193,21 @@ Go only when all are true:
 - `scripts/validate-env.sh staging-e2e-real` passed.
 - `scripts/docker-services.sh health staging-e2e-real` passed.
 - `scripts/staging-e2e-real-gate.sh` passed.
+- Managed Base Sepolia primary + fallback provider values are explicitly set for
+  gateway, oracle, and reconciliation.
 - Indexer and reconciliation DB checks show expected non-empty pilot evidence.
 - Oracle and reconciliation logs show healthy runtime behavior.
 - Retry/timeout ceiling values are explicitly configured and reviewed.
+- The pilot rehearsal owner list is explicit in the pilot ticket or evidence packet:
+  - `Pilot Owner`: Aston (pilot default)
+  - `On-call Engineer`: Platform On-Call
+  - `Service Owner`: owning subsystem maintainer
 
 No-go if any criterion fails:
 - Freeze pilot activity.
 - Open incident with captured logs/queries and assign on-call owner.
+- Treat placeholder, public-RPC, or stale-chain profile values as a pilot block,
+  not as acceptable bootstrap.
 
 ## Evidence To Record
 - Command transcript for env validation, health, and gate.
@@ -212,12 +236,14 @@ scripts/docker-services.sh down staging-e2e-real
 2. Capture evidence bundle (logs, DB query outputs, gate output).
 3. Run `docs/incidents/first-15-minutes-checklist.md` for severe incidents.
 4. Escalate to:
-  - `Pilot Owner` (TODO(Ops): fill named owner/contact channel)
-  - `On-call Engineer` (TODO(Ops): fill rotation/channel)
-  - `Service Owner` (TODO(Ops): fill escalation path)
+  - `Pilot Owner`: Aston (pilot default), recorded in the pilot window sign-off
+  - `On-call Engineer`: Platform On-Call via the pager/chat routing in `docs/runbooks/monitoring-alerting-baseline.md`
+  - `Service Owner`: named owning maintainer for the failing subsystem, recorded in the pilot ticket and copied into the blocker register
 
 ## Related Runbooks
 - `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `scripts/base-sepolia-pilot-validation.sh`
 - `docs/runbooks/docker-profiles.md`
 - `docs/runbooks/reconciliation.md`
 - `docs/runbooks/oracle-redrive.md`
