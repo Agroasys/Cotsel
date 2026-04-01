@@ -250,6 +250,8 @@ type AdminEvent @entity {
   txHash: String! @index
   logIndex: Int! @index
   transactionIndex: Int! @index
+  # Historical compatibility fields retained for archived Substrate-era replay
+  # evidence. Base-originated records keep these null.
   extrinsicHash: String @index
   extrinsicIndex: Int
 
@@ -280,6 +282,8 @@ type SystemEvent @entity {
   txHash: String! @index
   logIndex: Int! @index
   transactionIndex: Int! @index
+  # Historical compatibility fields retained for archived Substrate-era replay
+  # evidence. Base-originated records keep these null.
   extrinsicHash: String @index
   extrinsicIndex: Int
 
