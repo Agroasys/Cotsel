@@ -23,8 +23,8 @@ Local parity contract:
 - runtime scope: local/docker parity only
 
 Approved remote staging contract:
-- gateway target: `http://104.198.52.195:3600/api/dashboard-gateway/v1`
-- auth-service target: `http://104.198.52.195:3005/api/auth/v1`
+- gateway target: approved remote staging gateway base from the private ops inventory
+- auth-service target: approved remote staging auth base from the private ops inventory
 - chain target: Base Sepolia (`84532`)
 - explorer base: `https://sepolia-explorer.base.org/tx/`
 - mode: read-only first
@@ -127,11 +127,12 @@ nvm use 20
 npm ci
 scripts/docker-services.sh up local-dev
 scripts/docker-services.sh health local-dev
-curl -fsS http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/healthz
-curl -fsS http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/readyz
-curl -fsS http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/version
+export DASHBOARD_GATEWAY_LOCAL_BASE_URL="${DASHBOARD_GATEWAY_LOCAL_BASE_URL:-<local dashboard gateway base>}"
+curl -fsS "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/healthz"
+curl -fsS "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/readyz"
+curl -fsS "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/version"
 curl -fsS -H "Authorization: Bearer <session>" \
-  http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/operations/summary
+  "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/operations/summary"
 ```
 
 Parity-enabled local browser verification:
@@ -150,9 +151,9 @@ Parity-enabled local browser verification:
 Readiness must stay green before enabling connected dashboard mode.
 
 Approved remote staging health evidence as of `2026-04-02`:
-- `GET http://104.198.52.195:3600/api/dashboard-gateway/v1/healthz` -> `200 OK`
-- `GET http://104.198.52.195:3600/api/dashboard-gateway/v1/readyz` -> `200 OK`
-- `GET http://104.198.52.195:3600/api/dashboard-gateway/v1/version` -> `200 OK`
+- `GET <approved remote gateway>/healthz` -> `200 OK`
+- `GET <approved remote gateway>/readyz` -> `200 OK`
+- `GET <approved remote gateway>/version` -> `200 OK`
 - Protected read endpoints return `401 Unauthorized` without a bearer session and succeed with a real auth-service admin session.
 
 ## Authentication and authorization
@@ -285,8 +286,9 @@ If gateway behavior regresses after deploy:
 4. Inspect queued vs executed governance actions:
 
 ```bash
+export DASHBOARD_GATEWAY_LOCAL_BASE_URL="${DASHBOARD_GATEWAY_LOCAL_BASE_URL:-<local dashboard gateway base>}"
 curl -fsS -H "Authorization: Bearer <session>" \
-  "http://127.0.0.1:${GATEWAY_PORT:-3600}/api/dashboard-gateway/v1/governance/actions?status=requested"
+  "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/governance/actions?status=requested"
 ```
 
 5. Revert the release if required.

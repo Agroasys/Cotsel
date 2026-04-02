@@ -32,8 +32,8 @@ full rehearsal record on its own.
 ## Approved remote dashboard contract
 For remote connected-read validation against this staging target:
 
-- dashboard gateway: `http://104.198.52.195:3600/api/dashboard-gateway/v1`
-- auth service: `http://104.198.52.195:3005/api/auth/v1`
+- dashboard gateway: approved remote staging gateway base from the private ops inventory
+- auth service: approved remote staging auth base from the private ops inventory
 - chain target: Base Sepolia (`84532`)
 - explorer base: `https://sepolia-explorer.base.org/tx/`
 - posture: read-only
