@@ -15,9 +15,18 @@ Automation-governance source of truth:
 - `docs/runbooks/programmability-governance.md`
 
 ## Current connected-validation target
-Approved current-state contract:
-- gateway target: local/docker only
-- auth-service target: local/docker only
+Approved current-state contracts:
+
+Local parity contract:
+- gateway target: `http://127.0.0.1:3600/api/dashboard-gateway/v1`
+- auth-service target: `http://127.0.0.1:3005/api/auth/v1`
+- runtime scope: local/docker parity only
+
+Approved remote staging contract:
+- gateway target: `http://104.198.52.195:3600/api/dashboard-gateway/v1`
+- auth-service target: `http://104.198.52.195:3005/api/auth/v1`
+- chain target: Base Sepolia (`84532`)
+- explorer base: `https://sepolia-explorer.base.org/tx/`
 - mode: read-only first
 - executor mode: manual only
 
@@ -25,9 +34,9 @@ Local parity source of truth:
 - `docs/runbooks/dashboard-local-parity.md`
 
 This means:
-- Cotsel-Dash connected validation must target the local/docker gateway URL only until real remote staging coordinates are recorded.
+- Cotsel-Dash connected validation may target either the local/docker parity contract or the approved remote staging contract above.
 - Mutations stay disabled by default.
-- There is no approved remote staging gateway URL or remote auth-service URL yet.
+- Remote staging writes stay blocked until an explicit posture change is approved and the gateway allowlist is populated with exact auth principal IDs.
 
 ## Runtime boundary
 The gateway is a Web2 orchestration boundary. It does not change protocol logic and it does not custody governance private keys.
@@ -139,6 +148,12 @@ Parity-enabled local browser verification:
 - `/version`: build, commit, and repository metadata
 
 Readiness must stay green before enabling connected dashboard mode.
+
+Approved remote staging health evidence as of `2026-04-02`:
+- `GET http://104.198.52.195:3600/api/dashboard-gateway/v1/healthz` -> `200 OK`
+- `GET http://104.198.52.195:3600/api/dashboard-gateway/v1/readyz` -> `200 OK`
+- `GET http://104.198.52.195:3600/api/dashboard-gateway/v1/version` -> `200 OK`
+- Protected read endpoints return `401 Unauthorized` without a bearer session and succeed with a real auth-service admin session.
 
 ## Authentication and authorization
 - External dashboard clients authenticate with auth-service bearer sessions.
