@@ -18,15 +18,15 @@ Automation-governance source of truth:
 Approved current-state contracts:
 
 Local parity contract:
-- gateway target: local/docker gateway base from `.env.example`
-- auth-service target: local/docker auth base from `.env.example`
+- gateway target: `http://127.0.0.1:3600/api/dashboard-gateway/v1`
+- auth-service target: `http://127.0.0.1:3005/api/auth/v1`
 - runtime scope: local/docker parity only
 
 Approved remote staging contract:
 - gateway target: approved remote staging gateway base from the private ops inventory
 - auth-service target: approved remote staging auth base from the private ops inventory
 - chain target: Base Sepolia (`84532`)
-- explorer base: approved Base Sepolia transaction explorer base
+- explorer base: `https://sepolia-explorer.base.org/tx/`
 - mode: read-only first
 - executor mode: manual only
 

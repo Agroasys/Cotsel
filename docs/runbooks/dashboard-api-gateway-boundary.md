@@ -41,13 +41,13 @@ Operations read surface:
 
 Current connected-validation contract:
 - local/docker parity:
-  - gateway base from the local/docker env contract
-  - auth base from the local/docker env contract
+  - gateway `http://127.0.0.1:3600/api/dashboard-gateway/v1`
+  - auth `http://127.0.0.1:3005/api/auth/v1`
 - approved remote staging:
   - gateway base from the approved private staging inventory
   - auth base from the approved private staging inventory
   - Base Sepolia (`84532`)
-  - approved Base Sepolia explorer base
+  - explorer `https://sepolia-explorer.base.org/tx/`
   - read-only posture
 - Connected mode must not silently fall back to preview behavior.
 

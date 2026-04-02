@@ -35,7 +35,7 @@ For remote connected-read validation against this staging target:
 - dashboard gateway: approved remote staging gateway base from the private ops inventory
 - auth service: approved remote staging auth base from the private ops inventory
 - chain target: Base Sepolia (`84532`)
-- explorer base: approved Base Sepolia transaction explorer base
+- explorer base: `https://sepolia-explorer.base.org/tx/`
 - posture: read-only
 
 These public dashboard endpoints are not copied into `.env.staging-e2e-real`. That env file remains the internal container-profile contract for the pilot stack.
