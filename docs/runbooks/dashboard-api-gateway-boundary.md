@@ -39,16 +39,8 @@ Operations read surface:
 - Every service status and incident summary snapshot includes source and freshness timestamps.
 - `GET /overview` trade freshness must come from indexer watermarks (`lastIndexedAt`, `lastProcessedBlock`), not gateway request time.
 
-Current connected-validation contract:
-- local/docker parity:
-  - gateway `http://127.0.0.1:3600/api/dashboard-gateway/v1`
-  - auth `http://127.0.0.1:3005/api/auth/v1`
-- approved remote staging:
-  - gateway `http://104.198.52.195:3600/api/dashboard-gateway/v1`
-  - auth `http://104.198.52.195:3005/api/auth/v1`
-  - Base Sepolia (`84532`)
-  - explorer `https://sepolia-explorer.base.org/tx/`
-  - read-only posture
+Current connected-validation constraint:
+- Cotsel-Dash may run connected mode only against explicit local/docker gateway and auth-service URLs until real remote staging coordinates are recorded.
 - Connected mode must not silently fall back to preview behavior.
 
 ### Gateway -> on-chain / service backends
@@ -221,9 +213,9 @@ validation.
 - Governance status and proposal reads use direct chain reads because the current generic SDK client does not expose the full read surface.
 - Compliance decisions are append-only and resume is permitted only when policy conditions are satisfied by the latest effective `ALLOW` decision.
 
-## Remote staging contract status
-- Concrete remote staging deployment coordinates are now approved and recorded in this runbook companion and `docs/runbooks/dashboard-gateway-operations.md`.
-- Remote staging remains read-only; it is suitable for connected-read validation and auth/session validation, not for controlled write proof.
+## Remaining external deployment dependency
+- Current approved connected-validation target is local/docker only.
+- Concrete remote staging deployment coordinates (gateway base URL and auth URL binding) are still external operational inputs and must be recorded before remote staging connected-mode validation.
 - Mutations remain disabled by default; later enablement requires both `GATEWAY_ENABLE_MUTATIONS=true` and exact allowlist principal IDs for Aston and `czpyioe`.
 
 ## References

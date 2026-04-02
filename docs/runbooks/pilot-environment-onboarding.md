@@ -21,24 +21,11 @@ full rehearsal record on its own.
 - Environment initialization, validation, bring-up, health checks, and release-gate dry run.
 - Verification of indexer, reconciliation, oracle, and treasury integration readiness.
 - Pilot go/no-go decision and audit evidence capture.
-- Remote dashboard connected-read validation coordinates for the same staging target.
 
 ## Non-Scope
 - Contract deployments or governance changes.
 - Production rollout approvals.
 - KPI/case-study package content (tracked by separate roadmap items).
-- Public dashboard URLs inside `.env.staging-e2e-real`; record those separately in the dashboard gateway runbooks and issue tracker.
-
-## Approved remote dashboard contract
-For remote connected-read validation against this staging target:
-
-- dashboard gateway: `http://104.198.52.195:3600/api/dashboard-gateway/v1`
-- auth service: `http://104.198.52.195:3005/api/auth/v1`
-- chain target: Base Sepolia (`84532`)
-- explorer base: `https://sepolia-explorer.base.org/tx/`
-- posture: read-only
-
-These public dashboard endpoints are not copied into `.env.staging-e2e-real`. That env file remains the internal container-profile contract for the pilot stack.
 
 ## Pilot Checklist
 - Required roles confirmed:
