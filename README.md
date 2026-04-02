@@ -32,11 +32,6 @@ Cotsel was initially developed to support the Agroasys platform, but it is open-
 
 Optimize for deterministic operations and auditability. If a step matters in production, it should be scriptable, tested, and documented in a runbook.
 
-## Architecture
-
-This repository is the settlement layer in the Agroasys platform. It operates alongside off-chain systems while serving as the on-chain source of truth for settlement state.
-
-![cotsel](https://github.com/user-attachments/assets/05f69ccd-80da-410c-be17-c14ee3e6a337)
 
 Canonical target-state architecture:
 [`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md)
