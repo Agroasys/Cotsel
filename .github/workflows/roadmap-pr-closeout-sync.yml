@@ -1,0 +1,175 @@
+name: Roadmap PR Closeout Sync
+
+on:
+  pull_request_target:
+    types:
+      - closed
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to sync to Done
+        required: true
+        type: number
+
+jobs:
+  sync-pr-closeout:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      repository-projects: write
+    steps:
+      - name: Detect roadmap app credentials
+        id: app_config
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_id='${{ secrets.ROADMAP_APP_ID }}'
+          app_key='${{ secrets.ROADMAP_APP_PRIVATE_KEY }}'
+          app_installation='${{ secrets.ROADMAP_APP_INSTALLATION_ID }}'
+
+          if [[ -n "$app_id" && -n "$app_key" && -n "$app_installation" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create roadmap app token
+        id: app_token
+        if: ${{ steps.app_config.outputs.enabled == 'true' }}
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v2
+        with:
+          app-id: ${{ secrets.ROADMAP_APP_ID }}
+          private-key: ${{ secrets.ROADMAP_APP_PRIVATE_KEY }}
+          installation-id: ${{ secrets.ROADMAP_APP_INSTALLATION_ID }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Resolve sync auth token
+        id: auth
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          token='${{ steps.app_token.outputs.token }}'
+          source='github-app'
+
+          if [[ -z "$token" ]]; then
+            token='${{ secrets.ROADMAP_PROJECT_TOKEN }}'
+            if [[ -n "$token" ]]; then
+              source='roadmap-project-token'
+            fi
+          fi
+
+          if [[ -z "$token" ]]; then
+            token='${{ github.token }}'
+            source='github-token'
+          fi
+
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+
+      - name: Move linked PR item to Done
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          AUTH_SOURCE: ${{ steps.auth.outputs.source }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          PROJECT_ID: ${{ vars.ROADMAP_PROJECT_ID }}
+          PROJECT_TITLE: ${{ vars.ROADMAP_PROJECT_TITLE }}
+          STATUS_FIELD_ID: ${{ vars.ROADMAP_STATUS_FIELD_ID }}
+          DONE_OPTION_ID: ${{ vars.ROADMAP_STATUS_OPTION_DONE }}
+        run: |
+          set -euo pipefail
+
+          pr_number="${EVENT_PR_NUMBER:-}"
+          if [[ -z "$pr_number" || "$pr_number" == "null" ]]; then
+            pr_number="${INPUT_PR_NUMBER:-}"
+          fi
+
+          if [[ -z "$pr_number" ]]; then
+            echo "::warning::No pull request number was provided; skipping roadmap status sync."
+            exit 0
+          fi
+
+          if [[ -z "$PROJECT_ID" || -z "$STATUS_FIELD_ID" || -z "$DONE_OPTION_ID" ]]; then
+            echo "::warning::ROADMAP_PROJECT_ID, ROADMAP_STATUS_FIELD_ID, or ROADMAP_STATUS_OPTION_DONE is not configured; skipping roadmap status sync."
+            exit 0
+          fi
+
+          if [[ "$AUTH_SOURCE" == "github-token" ]]; then
+            echo "::warning::ROADMAP_PROJECT_TOKEN or ROADMAP_APP_* secrets are not configured. github.token cannot update org Projects v2 items; skipping roadmap status sync."
+            exit 0
+          fi
+
+          pr_query='
+            query($owner:String!,$repo:String!,$number:Int!){
+              repository(owner:$owner, name:$repo) {
+                pullRequest(number:$number) {
+                  id
+                  number
+                  title
+                  url
+                  merged
+                  projectItems(first:100) {
+                    nodes {
+                      id
+                      project {
+                        id
+                        title
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          '
+
+          pr_response="$(gh api graphql -f query="$pr_query" -F owner="$REPOSITORY_OWNER" -F repo="$REPOSITORY_NAME" -F number="$pr_number")"
+          merged="$(jq -r '.data.repository.pullRequest.merged // false' <<<"$pr_response")"
+
+          if [[ "$merged" != "true" ]]; then
+            echo "::notice::PR #$pr_number is not merged; nothing to sync."
+            exit 0
+          fi
+
+          item_id="$(jq -r --arg project_id "$PROJECT_ID" '.data.repository.pullRequest.projectItems.nodes // [] | map(select(.project.id == $project_id) | .id) | first // empty' <<<"$pr_response")"
+
+          if [[ -z "$item_id" ]]; then
+            project_title="${PROJECT_TITLE:-$PROJECT_ID}"
+            echo "::warning::PR #$pr_number is not linked to ${project_title}; skipping roadmap status sync."
+            exit 0
+          fi
+
+          update_mutation='
+            mutation($projectId:ID!,$itemId:ID!,$fieldId:ID!,$optionId:String!){
+              updateProjectV2ItemFieldValue(
+                input:{
+                  projectId:$projectId,
+                  itemId:$itemId,
+                  fieldId:$fieldId,
+                  value:{singleSelectOptionId:$optionId}
+                }
+              ) {
+                projectV2Item {
+                  id
+                }
+              }
+            }
+          '
+
+          gh api graphql \
+            -f query="$update_mutation" \
+            -F projectId="$PROJECT_ID" \
+            -F itemId="$item_id" \
+            -F fieldId="$STATUS_FIELD_ID" \
+            -F optionId="$DONE_OPTION_ID" >/dev/null
+
+          project_title="${PROJECT_TITLE:-$PROJECT_ID}"
+          echo "Moved PR #$pr_number to Done in ${project_title}."
