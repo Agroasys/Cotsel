@@ -16,6 +16,39 @@ export interface GatewayPrincipal {
   writeEnabled: boolean;
 }
 
+export function resolveGatewayActorKey(session: AuthSession): string {
+  const normalizedWallet = session.walletAddress?.trim().toLowerCase();
+  if (normalizedWallet) {
+    return `wallet:${normalizedWallet}`;
+  }
+
+  const normalizedAccountId = session.accountId?.trim();
+  if (normalizedAccountId) {
+    return `account:${normalizedAccountId}`;
+  }
+
+  return `user:${session.userId}`;
+}
+
+export function requireWalletBoundSession(
+  principal: GatewayPrincipal,
+  actionDescription: string,
+): string {
+  const walletAddress = principal.session.walletAddress?.trim().toLowerCase();
+  if (!walletAddress) {
+    throw new GatewayError(
+      403,
+      'FORBIDDEN',
+      `${actionDescription} still requires a linked wallet in the current gateway mutation contract`,
+      {
+        reason: 'wallet_required_for_legacy_mutation',
+      },
+    );
+  }
+
+  return walletAddress;
+}
+
 function getBearerToken(req: Request): string | null {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
@@ -39,7 +72,7 @@ export function matchesAllowlist(session: AuthSession, allowlist: string[]): boo
     return false;
   }
 
-  const candidates = [session.userId, session.walletAddress, session.email].filter(Boolean) as string[];
+  const candidates = [session.accountId, session.userId, session.walletAddress, session.email].filter(Boolean) as string[];
   const normalizedAllowlist = new Set(allowlist.map((entry) => entry.toLowerCase()));
   return candidates.some((entry) => normalizedAllowlist.has(entry.toLowerCase()));
 }

@@ -25,8 +25,9 @@ export interface OperatorWriteAccess {
 }
 
 export interface OperatorCapabilitySubject {
+  accountId: string;
   userId: string;
-  walletAddress: string;
+  walletAddress: string | null;
   authRole: AuthServiceRole;
   gatewayRoles: GatewayRole[];
 }
@@ -50,6 +51,7 @@ export function buildOperatorCapabilitySnapshot(
 
   return {
     subject: {
+      accountId: principal.session.accountId ?? principal.session.userId,
       userId: principal.session.userId,
       walletAddress: principal.session.walletAddress,
       authRole: principal.session.role,

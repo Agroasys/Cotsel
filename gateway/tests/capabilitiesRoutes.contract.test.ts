@@ -55,6 +55,7 @@ async function startServer(
       }
 
       return {
+        accountId: `acct-${role}`,
         userId: `uid-${role}`,
         walletAddress: '0x00000000000000000000000000000000000000aa',
         role,
@@ -111,6 +112,7 @@ describe('gateway capabilities route contract', () => {
       expect(response.status).toBe(200);
       expect(response.headers.get('x-request-id')).toBe('req-capabilities');
       expect(validateCapabilities(payload)).toBe(true);
+      expect(payload.data.subject.accountId).toBe('acct-admin');
       expect(payload.data.subject.authRole).toBe('admin');
       expect(payload.data.subject.gatewayRoles).toEqual(['operator:read', 'operator:write']);
       expect(payload.data.routes.overviewRead).toBe(true);
@@ -138,6 +140,7 @@ describe('gateway capabilities route contract', () => {
 
       expect(response.status).toBe(200);
       expect(validateCapabilities(payload)).toBe(true);
+      expect(payload.data.subject.accountId).toBe('acct-buyer');
       expect(payload.data.subject.authRole).toBe('buyer');
       expect(payload.data.subject.gatewayRoles).toEqual([]);
       expect(payload.data.routes.operationsRead).toBe(false);

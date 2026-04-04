@@ -43,15 +43,47 @@ export async function upsertProfile(
   orgId: string | null,
 ): Promise<UserProfile> {
   const result = await pool.query<UserProfile>(
-    `INSERT INTO user_profiles (wallet_address, role, org_id, updated_at)
-     VALUES ($1, $2, $3, NOW())
+    `INSERT INTO user_profiles (account_id, wallet_address, role, org_id, updated_at)
+     VALUES (gen_random_uuid()::text, $1, $2, $3, NOW())
      ON CONFLICT (wallet_address)
      DO UPDATE SET role = EXCLUDED.role,
                    org_id = COALESCE(EXCLUDED.org_id, user_profiles.org_id),
                    updated_at = NOW()
-     RETURNING id, wallet_address AS "walletAddress", role, org_id AS "orgId",
+     RETURNING id, account_id AS "accountId", wallet_address AS "walletAddress", email, role, org_id AS "orgId",
                created_at AS "createdAt", updated_at AS "updatedAt", active`,
     [walletAddress, role, orgId],
+  );
+  return result.rows[0];
+}
+
+export async function upsertTrustedProfile(
+  pool: Pool,
+  input: {
+    accountId: string;
+    role: UserRole;
+    orgId: string | null;
+    email: string | null;
+    walletAddress: string | null;
+  },
+): Promise<UserProfile> {
+  const result = await pool.query<UserProfile>(
+    `INSERT INTO user_profiles (account_id, wallet_address, email, role, org_id, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
+     ON CONFLICT (account_id)
+     DO UPDATE SET wallet_address = COALESCE(EXCLUDED.wallet_address, user_profiles.wallet_address),
+                   email = COALESCE(EXCLUDED.email, user_profiles.email),
+                   role = EXCLUDED.role,
+                   org_id = COALESCE(EXCLUDED.org_id, user_profiles.org_id),
+                   updated_at = NOW()
+     RETURNING id, account_id AS "accountId", wallet_address AS "walletAddress", email, role, org_id AS "orgId",
+               created_at AS "createdAt", updated_at AS "updatedAt", active`,
+    [
+      input.accountId,
+      input.walletAddress,
+      input.email,
+      input.role,
+      input.orgId,
+    ],
   );
   return result.rows[0];
 }
@@ -61,10 +93,23 @@ export async function findProfileByWallet(
   walletAddress: string,
 ): Promise<UserProfile | null> {
   const result = await pool.query<UserProfile>(
-    `SELECT id, wallet_address AS "walletAddress", role, org_id AS "orgId",
+    `SELECT id, account_id AS "accountId", wallet_address AS "walletAddress", email, role, org_id AS "orgId",
             created_at AS "createdAt", updated_at AS "updatedAt", active
      FROM user_profiles WHERE wallet_address = $1`,
     [walletAddress],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function findProfileByAccountId(
+  pool: Pool,
+  accountId: string,
+): Promise<UserProfile | null> {
+  const result = await pool.query<UserProfile>(
+    `SELECT id, account_id AS "accountId", wallet_address AS "walletAddress", email, role, org_id AS "orgId",
+            created_at AS "createdAt", updated_at AS "updatedAt", active
+     FROM user_profiles WHERE account_id = $1`,
+    [accountId],
   );
   return result.rows[0] ?? null;
 }
@@ -74,7 +119,7 @@ export async function findProfileById(
   id: string,
 ): Promise<UserProfile | null> {
   const result = await pool.query<UserProfile>(
-    `SELECT id, wallet_address AS "walletAddress", role, org_id AS "orgId",
+    `SELECT id, account_id AS "accountId", wallet_address AS "walletAddress", email, role, org_id AS "orgId",
             created_at AS "createdAt", updated_at AS "updatedAt", active
      FROM user_profiles WHERE id = $1`,
     [id],
@@ -110,11 +155,17 @@ export async function findSessionById(
   sessionId: string,
 ): Promise<UserSession | null> {
   const result = await pool.query<SessionRow>(
-    `SELECT session_id AS "sessionId", user_id AS "userId",
-            wallet_address AS "walletAddress", role,
+    `SELECT user_sessions.session_id AS "sessionId",
+            user_profiles.account_id AS "accountId",
+            user_sessions.user_id::text AS "userId",
+            user_sessions.wallet_address AS "walletAddress",
+            user_profiles.email AS "email",
+            user_sessions.role AS role,
             issued_at AS "issuedAt", expires_at AS "expiresAt",
             revoked_at AS "revokedAt"
-     FROM user_sessions WHERE session_id = $1`,
+     FROM user_sessions
+     JOIN user_profiles ON user_profiles.id = user_sessions.user_id
+     WHERE user_sessions.session_id = $1`,
     [sessionId],
   );
   const row = result.rows[0];
