@@ -33,6 +33,7 @@ function mockRes() {
 function mockSessionService(overrides: Partial<SessionService> = {}): jest.Mocked<SessionService> {
   return {
     login: jest.fn().mockResolvedValue({ sessionId: 'sess-1', expiresAt: nowSeconds() + 3600 }),
+    issueTrustedSession: jest.fn().mockResolvedValue({ sessionId: 'sess-trusted', expiresAt: nowSeconds() + 3600 }),
     refresh: jest.fn().mockResolvedValue({ sessionId: 'sess-2', expiresAt: nowSeconds() + 3600 }),
     revoke: jest.fn().mockResolvedValue(undefined),
     resolve: jest.fn().mockResolvedValue(null),
@@ -51,8 +52,10 @@ function mockChallengeStore(nonce: string | null = 'test-nonce'): jest.Mocked<Ch
 function makeSession(overrides: Partial<UserSession> = {}): UserSession {
   return {
     sessionId: 'sess-1',
+    accountId: 'acct-1',
     userId: 'uid-1',
     walletAddress: WALLET,
+    email: 'admin@example.com',
     role: 'buyer',
     issuedAt: nowSeconds(),
     expiresAt: nowSeconds() + 3600,
@@ -63,6 +66,85 @@ function makeSession(overrides: Partial<UserSession> = {}): UserSession {
 
 beforeEach(() => {
   jest.clearAllMocks();
+});
+
+describe('AuthController.exchangeTrustedSession', () => {
+  test('returns 201 when trusted identity payload is valid', async () => {
+    const svc = mockSessionService();
+    const ctrl = new AuthController(svc, mockChallengeStore());
+    const req = {
+      body: {
+        accountId: 'agroasys-user:42',
+        role: 'admin',
+        email: 'Ops.Admin@Example.com',
+        walletAddress: WALLET,
+      },
+    } as Request;
+    const res = mockRes();
+
+    await ctrl.exchangeTrustedSession(req as any, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(svc.issueTrustedSession).toHaveBeenCalledWith(
+      {
+        accountId: 'agroasys-user:42',
+        role: 'admin',
+        orgId: null,
+        email: 'ops.admin@example.com',
+        walletAddress: WALLET,
+      },
+      undefined,
+    );
+  });
+
+  test('allows trusted exchange without wallet address', async () => {
+    const svc = mockSessionService();
+    const ctrl = new AuthController(svc, mockChallengeStore());
+    const req = {
+      body: {
+        accountId: 'agroasys-user:42',
+        role: 'admin',
+        email: 'ops@example.com',
+      },
+    } as Request;
+    const res = mockRes();
+
+    await ctrl.exchangeTrustedSession(req as any, res);
+
+    expect(svc.issueTrustedSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: 'agroasys-user:42',
+        walletAddress: null,
+      }),
+      undefined,
+    );
+  });
+
+  test('returns 400 when accountId is missing', async () => {
+    const svc = mockSessionService();
+    const ctrl = new AuthController(svc, mockChallengeStore());
+    const req = { body: { role: 'admin' } } as Request;
+    const res = mockRes();
+
+    await ctrl.exchangeTrustedSession(req as any, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(svc.issueTrustedSession).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when email is invalid', async () => {
+    const svc = mockSessionService();
+    const ctrl = new AuthController(svc, mockChallengeStore());
+    const req = {
+      body: { accountId: 'acct-1', role: 'admin', email: 'not-an-email' },
+    } as Request;
+    const res = mockRes();
+
+    await ctrl.exchangeTrustedSession(req as any, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(svc.issueTrustedSession).not.toHaveBeenCalled();
+  });
 });
 
 // GET /challenge
@@ -256,8 +338,10 @@ describe('AuthController.getSession', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
       data: expect.objectContaining({
+        accountId: 'acct-1',
         userId: 'uid-1',
         walletAddress: WALLET,
+        email: 'admin@example.com',
         role: 'buyer',
       }),
     }));

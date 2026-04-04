@@ -16,6 +16,7 @@ import {
   createAuthenticationMiddleware,
   requireGatewayRole,
   requireMutationWriteAccess,
+  resolveGatewayActorKey,
   type GatewayPrincipal,
 } from '../middleware/auth';
 import { createIdempotencyMiddleware } from '../middleware/idempotency';
@@ -141,7 +142,7 @@ async function handleMutation(
     if (options.failedOperationWorkflow) {
       const failedOperation = await options.failedOperationWorkflow.captureFailure({
         operationType: failureCapture.replaySpec.type,
-        operationKey: `${failureCapture.principal.session.walletAddress.toLowerCase()}:${req.originalUrl || req.path}:${failureCapture.idempotencyKey}`,
+        operationKey: `${resolveGatewayActorKey(failureCapture.principal.session)}:${req.originalUrl || req.path}:${failureCapture.idempotencyKey}`,
         targetService: 'gateway_compliance_write',
         route: req.originalUrl || req.path,
         method: req.method,

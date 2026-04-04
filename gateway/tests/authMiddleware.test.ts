@@ -62,6 +62,7 @@ describe('gateway auth middleware', () => {
   test('maps admin session to gateway write role and allowlist', async () => {
     const client: AuthSessionClient = {
       resolveSession: jest.fn().mockResolvedValue({
+        accountId: 'acct-admin',
         userId: 'uid-admin',
         walletAddress: '0xabc',
         role: 'admin',
@@ -89,6 +90,7 @@ describe('gateway auth middleware', () => {
   test('disables write access when allowlist is empty', async () => {
     const client: AuthSessionClient = {
       resolveSession: jest.fn().mockResolvedValue({
+        accountId: 'acct-admin',
         userId: 'uid-admin',
         walletAddress: '0xabc',
         role: 'admin',
@@ -108,6 +110,30 @@ describe('gateway auth middleware', () => {
 
     expect(req.gatewayPrincipal?.writeEnabled).toBe(false);
   });
+
+  test('matches allowlist entries by accountId when present', async () => {
+    const client: AuthSessionClient = {
+      resolveSession: jest.fn().mockResolvedValue({
+        accountId: 'acct-admin',
+        userId: 'uid-admin',
+        walletAddress: '0xabc',
+        role: 'admin',
+        issuedAt: 1,
+        expiresAt: 2,
+      }),
+      checkReadiness: jest.fn(),
+    };
+    const middleware = createAuthenticationMiddleware(client, { ...baseConfig, writeAllowlist: ['acct-admin'] });
+    const req = {
+      headers: { authorization: 'Bearer sess-1' },
+      requestContext: { requestId: 'req-1', correlationId: 'corr-1', startedAtMs: Date.now() },
+    } as unknown as Request;
+    const next = jest.fn() as NextFunction;
+
+    await middleware(req, mockRes(), next);
+
+    expect(req.gatewayPrincipal?.writeEnabled).toBe(true);
+  });
 });
 
 describe('gateway role guards', () => {
@@ -116,6 +142,7 @@ describe('gateway role guards', () => {
     const req = {
       gatewayPrincipal: {
         session: {
+          accountId: 'acct-1',
           userId: 'uid-1',
           walletAddress: '0xabc',
           role: 'buyer',
@@ -138,6 +165,7 @@ describe('gateway role guards', () => {
     const req = {
       gatewayPrincipal: {
         session: {
+          accountId: 'acct-1',
           userId: 'uid-1',
           walletAddress: '0xabc',
           role: 'admin',
@@ -160,6 +188,7 @@ describe('gateway role guards', () => {
     const req = {
       gatewayPrincipal: {
         session: {
+          accountId: 'acct-1',
           userId: 'uid-1',
           walletAddress: '0xabc',
           role: 'admin',

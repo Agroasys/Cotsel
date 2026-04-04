@@ -20,7 +20,7 @@ export interface AccessAuditReference {
 
 export interface AccessLogActor {
   userId: string;
-  walletAddress: string;
+  walletAddress: string | null;
   role: string;
   sessionFingerprint: string;
   sessionDisplay: string;
@@ -82,7 +82,7 @@ interface AccessLogRow {
   surface: string;
   outcome: string;
   actorUserId: string;
-  actorWalletAddress: string;
+  actorWalletAddress: string | null;
   actorRole: string;
   sessionFingerprint: string;
   sessionDisplay: string;

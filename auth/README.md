@@ -4,7 +4,7 @@ Non-custodial identity and session management for the Agroasys settlement protoc
 
 ## Responsibility
 
-This service is the **first-class identity layer** for end-user participants (buyers, suppliers, admins). It bridges Web3Auth wallet addresses to internal user profiles, and manages the full session lifecycle (issue → refresh → revoke).
+This service currently manages a **wallet-signed compatibility session flow** for Cotsel-local integrations. In the Agroasys-integrated product model, Agroasys auth is the primary end-user identity authority and Cotsel auth becomes a compatibility or bridge layer until account-first session exchange replaces this legacy wallet-first contract.
 
 It is **separate** from `shared-auth`, which handles service-to-service HMAC authentication.
 
@@ -44,10 +44,10 @@ It is **separate** from `shared-auth`, which handles service-to-service HMAC aut
     └── sessionService.test.ts
 ```
 
-## Identity Flow
+## Current Compatibility Identity Flow
 
 ```
-Browser (Web3Auth SDK)
+Browser / signer-capable client
   1. GET  /api/auth/v1/challenge?wallet=0x...
          ← { message: "Sign in to Agroasys\nWallet: 0x...\nNonce: <hex>" }
   2. signer.signMessage(message)
@@ -59,24 +59,26 @@ Browser (Web3Auth SDK)
   4. All subsequent calls carry: Authorization: Bearer <sessionId>
 ```
 
+This is a compatibility flow, not the target long-term product architecture for Agroasys-integrated deployments.
+
 ## Session Lifecycle
 
 | Endpoint                          | Method | Auth required              |
 |-----------------------------------|--------|----------------------------|
 | `/api/auth/v1/challenge`          | GET    | None (rate-limited)        |
-| `/api/auth/v1/login`              | POST   | Wallet signature (ECDSA)   |
+| `/api/auth/v1/login`              | POST   | Wallet signature (ECDSA, compatibility path)   |
 | `/api/auth/v1/session`            | GET    | Bearer session token       |
 | `/api/auth/v1/session/refresh`    | POST   | Bearer session token       |
 | `/api/auth/v1/session/revoke`     | POST   | Bearer session token       |
 | `/api/auth/v1/health`             | GET    | None                       |
 
-## Role Model
+## Current Compatibility Role Model
 
 | Role     | Identity source | Notes |
 |----------|----------------|-------|
-| `buyer`    | Web3Auth wallet | Creates trades, opens disputes |
-| `supplier` | Web3Auth wallet | Passive recipient |
-| `admin`    | Web3Auth wallet | Governance |
+| `buyer`    | Wallet-backed compatibility session | Creates trades, opens disputes |
+| `supplier` | Wallet-backed compatibility session | Passive recipient |
+| `admin`    | Wallet-backed compatibility session | Governance |
 | `oracle`   | Service key     | Relayed by oracle service, not a user session |
 
 ## Configuration

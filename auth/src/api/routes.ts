@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction, RequestHandler } from 'express';
 import { AuthController } from './controller';
 import { createSessionMiddleware } from '../middleware/middleware';
 import { SessionService } from '../core/sessionService';
@@ -15,6 +15,9 @@ function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => P
 export function createRouter(
   controller: AuthController,
   sessionService: SessionService,
+  options?: {
+    trustedSessionExchangeMiddleware?: RequestHandler;
+  },
 ): Router {
   const router = Router();
   const sessionMiddleware = createSessionMiddleware((id) => sessionService.resolve(id));
@@ -50,6 +53,28 @@ export function createRouter(
     '/login',
     asyncHandler((req, res) => controller.login(req as Request<unknown, unknown, { walletAddress?: string; signature?: string; role?: import('../types').UserRole; orgId?: string; ttlSeconds?: number }>, res)),
   );
+
+  if (options?.trustedSessionExchangeMiddleware) {
+    router.post(
+      '/session/exchange/agroasys',
+      options.trustedSessionExchangeMiddleware,
+      asyncHandler((req, res) => controller.exchangeTrustedSession(
+        req as Request<
+          unknown,
+          unknown,
+          {
+            accountId?: string;
+            role?: import('../types').UserRole;
+            orgId?: string | null;
+            email?: string | null;
+            walletAddress?: string | null;
+            ttlSeconds?: number;
+          }
+        >,
+        res,
+      )),
+    );
+  }
 
   router.get(
     '/session',
