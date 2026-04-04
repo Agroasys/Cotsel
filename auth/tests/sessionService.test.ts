@@ -11,7 +11,9 @@ import { UserProfile, UserSession, SessionIssueResult } from '../src/types';
 function makeProfile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
     id: 'uuid-1',
+    accountId: 'acct-1',
     walletAddress: '0xdeadbeef',
+    email: 'admin@example.com',
     role: 'buyer',
     orgId: null,
     active: true,
@@ -28,8 +30,10 @@ function nowSeconds(): number {
 function makeActiveSession(overrides: Partial<UserSession> = {}): UserSession {
   return {
     sessionId: 'session-abc',
+    accountId: 'acct-1',
     userId: 'uuid-1',
     walletAddress: '0xdeadbeef',
+    email: 'admin@example.com',
     role: 'buyer',
     issuedAt: nowSeconds(),
     expiresAt: nowSeconds() + 3600,
@@ -47,8 +51,10 @@ function makeStores(profile: UserProfile) {
       const now = nowSeconds();
       const s: UserSession = {
         sessionId: id,
+        accountId: p.accountId,
         userId: p.id,
         walletAddress: p.walletAddress,
+        email: p.email,
         role: p.role,
         issuedAt: now,
         expiresAt: now + ttl,
@@ -66,7 +72,16 @@ function makeStores(profile: UserProfile) {
 
   const profileStore = {
     upsert: jest.fn(async (_w: string, _r: UserProfile['role'], _o?: string): Promise<UserProfile> => profile),
+    upsertTrustedIdentity: jest.fn(async (identity) => ({
+      ...profile,
+      accountId: identity.accountId,
+      role: identity.role,
+      walletAddress: identity.walletAddress ?? null,
+      email: identity.email ?? null,
+      orgId: identity.orgId ?? null,
+    })),
     findByWallet: jest.fn(async (_w: string): Promise<UserProfile | null> => profile),
+    findByAccountId: jest.fn(async (_accountId: string): Promise<UserProfile | null> => profile),
     findById: jest.fn(async (_id: string): Promise<UserProfile | null> => profile),
     deactivate: jest.fn(async (_id: string): Promise<void> => undefined),
   } satisfies ProfileStore;
@@ -154,6 +169,30 @@ describe('sessionService.resolve', () => {
     const svc = createSessionService(sessionStore, profileStore);
 
     expect(await svc.resolve('session-abc')).toBeNull();
+  });
+});
+
+describe('sessionService.issueTrustedSession', () => {
+  test('upserts trusted identity and issues a wallet-optional session', async () => {
+    const profile = makeProfile({ walletAddress: null, email: 'ops@example.com' });
+    const { sessionStore, profileStore } = makeStores(profile);
+    const svc = createSessionService(sessionStore, profileStore);
+
+    const result = await svc.issueTrustedSession({
+      accountId: 'agroasys-user:42',
+      role: 'admin',
+      email: 'ops@example.com',
+      walletAddress: null,
+    });
+
+    expect(result.sessionId).toBe('session-abc');
+    expect(profileStore.upsertTrustedIdentity).toHaveBeenCalledWith({
+      accountId: 'agroasys-user:42',
+      role: 'admin',
+      email: 'ops@example.com',
+      walletAddress: null,
+    });
+    expect(sessionStore.issue).toHaveBeenCalledTimes(1);
   });
 });
 

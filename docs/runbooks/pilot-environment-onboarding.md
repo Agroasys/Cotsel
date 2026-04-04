@@ -32,8 +32,8 @@ full rehearsal record on its own.
 ## Approved remote dashboard contract
 For remote connected-read validation against this staging target:
 
-- dashboard gateway: approved remote staging gateway base from the private ops inventory
-- auth service: approved remote staging auth base from the private ops inventory
+- dashboard gateway: `https://cotsel.agroasys.com/api/dashboard-gateway/v1`
+- auth service: `https://cotsel.agroasys.com/api/auth/v1`
 - chain target: Base Sepolia (`84532`)
 - explorer base: `https://sepolia-explorer.base.org/tx/`
 - posture: read-only

@@ -51,7 +51,7 @@ export interface ComplianceAuditRecord {
   evidenceLinks: EvidenceLink[];
   ticketRef: string;
   actorSessionId: string;
-  actorWallet: string;
+  actorWallet: string | null;
   actorRole: string;
   createdAt: string;
   requestedBy: string;

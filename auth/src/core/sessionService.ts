@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { UserRole, UserSession, SessionIssueResult } from '../types';
+import { TrustedSessionIdentity, UserRole, UserSession, SessionIssueResult } from '../types';
 import { ProfileStore } from './profileStore';
 import { SessionStore } from './sessionStore';
 import {
@@ -13,10 +13,16 @@ import { Logger } from '../utils/logger';
 
 export interface SessionService {
   /**
-   * Called after Web3Auth signer is resolved on the client.
+   * Called after the current legacy wallet-proof bootstrap resolves on the client.
    * Upserts the UserProfile (idempotent) and issues a fresh session.
    */
   login(walletAddress: string, role: UserRole, orgId?: string, ttlSeconds?: number): Promise<SessionIssueResult>;
+
+  /**
+   * Issues a session for a trusted upstream account identity, without requiring
+   * the legacy wallet-proof bootstrap.
+   */
+  issueTrustedSession(identity: TrustedSessionIdentity, ttlSeconds?: number): Promise<SessionIssueResult>;
 
   /**
    * Issues a new session in exchange for a valid, non-expired, non-revoked one.
@@ -61,6 +67,24 @@ export function createSessionService(
       const result = await sessions.issue(profile, ttlSeconds);
       incrementSessionIssued();
       Logger.info('Session issued', { userId: profile.id, walletAddress: profile.walletAddress, role });
+      return result;
+    },
+
+    async issueTrustedSession(identity, ttlSeconds = 3600) {
+      const profile = await profiles.upsertTrustedIdentity(identity);
+      if (!profile.active) {
+        throw new Error('User profile is deactivated');
+      }
+
+      const result = await sessions.issue(profile, ttlSeconds);
+      incrementSessionIssued();
+      Logger.info('Trusted session issued', {
+        accountId: profile.accountId,
+        userId: profile.id,
+        walletAddress: profile.walletAddress,
+        email: profile.email,
+        role: profile.role,
+      });
       return result;
     },
 

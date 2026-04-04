@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { GatewayError } from '../errors';
-import type { GatewayPrincipal } from '../middleware/auth';
+import { resolveGatewayActorKey, type GatewayPrincipal } from '../middleware/auth';
 import type { RequestContext } from '../middleware/requestContext';
 import type { AuthServiceRole } from './authSessionClient';
 import type { AuditLogStore } from './auditLogStore';
@@ -22,7 +22,7 @@ export type ReplayableOperationType =
 export interface FailedOperationPrincipalSnapshot {
   actorId: string;
   actorUserId: string | null;
-  actorWalletAddress: string;
+  actorWalletAddress: string | null;
   actorRole: AuthServiceRole;
   sessionReference: string;
 }
@@ -87,12 +87,8 @@ function toPrincipalSnapshot(
   }
 
   if ('gatewayRoles' in principal) {
-    const actorId = principal.session.userId
-      ? `user:${principal.session.userId}`
-      : `wallet:${principal.session.walletAddress.toLowerCase()}`;
-
     return {
-      actorId,
+      actorId: resolveGatewayActorKey(principal.session),
       actorUserId: principal.session.userId,
       actorWalletAddress: principal.session.walletAddress,
       actorRole: principal.session.role,

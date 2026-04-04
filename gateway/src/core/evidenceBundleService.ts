@@ -84,7 +84,7 @@ export interface EvidenceBundleEvidenceReference {
   note?: string;
   capturedAt: string;
   actorRole: string;
-  actorWallet: string;
+  actorWallet: string | null;
 }
 
 export interface EvidenceBundleManifest {
@@ -94,7 +94,7 @@ export interface EvidenceBundleManifest {
   generatedAt: string;
   generatedBy: {
     userId: string;
-    walletAddress: string;
+    walletAddress: string | null;
     role: string;
   };
   signed: false;

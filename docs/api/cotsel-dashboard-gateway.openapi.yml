@@ -1909,12 +1909,15 @@ components:
       enum: [operator:read, operator:write]
     OperatorCapabilitySubject:
       type: object
-      required: [userId, walletAddress, authRole, gatewayRoles]
+      required: [accountId, userId, walletAddress, authRole, gatewayRoles]
       properties:
+        accountId:
+          type: string
         userId:
           type: string
         walletAddress:
           type: string
+          nullable: true
         authRole:
           $ref: '#/components/schemas/AuthServiceRole'
         gatewayRoles:

@@ -6,7 +6,9 @@ export type UserRole = 'buyer' | 'supplier' | 'admin' | 'oracle';
 
 export interface UserProfile {
   id: string;
-  walletAddress: string;
+  accountId: string;
+  walletAddress: string | null;
+  email: string | null;
   role: UserRole;
   orgId: string | null;
   createdAt: Date;
@@ -16,8 +18,10 @@ export interface UserProfile {
 
 export interface UserSession {
   sessionId: string;
+  accountId: string;
   userId: string;
-  walletAddress: string;
+  walletAddress: string | null;
+  email: string | null;
   role: UserRole;
   issuedAt: number;
   expiresAt: number;
@@ -37,6 +41,18 @@ export interface AuthConfig {
   dbUser: string;
   dbPassword: string;
   sessionTtlSeconds: number;
+  trustedSessionExchangeEnabled: boolean;
+  trustedSessionExchangeApiKeysJson: string;
+  trustedSessionExchangeMaxSkewSeconds: number;
+  trustedSessionExchangeNonceTtlSeconds: number;
+}
+
+export interface TrustedSessionIdentity {
+  accountId: string;
+  role: UserRole;
+  orgId?: string | null;
+  email?: string | null;
+  walletAddress?: string | null;
 }
 
 export interface ApiSuccessResponse<T = unknown> {

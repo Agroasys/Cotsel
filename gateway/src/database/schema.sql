@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS access_log_entries (
     surface TEXT NOT NULL,
     outcome TEXT NOT NULL,
     actor_user_id TEXT NOT NULL,
-    actor_wallet_address TEXT NOT NULL,
+    actor_wallet_address TEXT,
     actor_role TEXT NOT NULL,
     session_fingerprint TEXT NOT NULL,
     session_display TEXT NOT NULL,
@@ -224,13 +224,19 @@ CREATE TABLE IF NOT EXISTS evidence_bundles (
     ricardian_hash TEXT,
     generated_at TIMESTAMP NOT NULL,
     generated_by_user_id TEXT NOT NULL,
-    generated_by_wallet TEXT NOT NULL,
+    generated_by_wallet TEXT,
     generated_by_role TEXT NOT NULL,
     request_id TEXT NOT NULL,
     correlation_id TEXT,
     manifest JSONB NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE access_log_entries
+    ALTER COLUMN actor_wallet_address DROP NOT NULL;
+
+ALTER TABLE evidence_bundles
+    ALTER COLUMN generated_by_wallet DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS service_auth_nonces (
     api_key TEXT NOT NULL,
