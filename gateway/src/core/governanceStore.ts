@@ -15,8 +15,13 @@ export const GOVERNANCE_ACTION_CATEGORIES = [
 ] as const;
 
 export const GOVERNANCE_ACTION_STATUSES = [
+  // executor flow statuses
   'requested',
   'submitted',
+  // direct_sign flow statuses
+  'prepared',
+  'broadcast',
+  // shared post-execution statuses
   'pending_approvals',
   'approved',
   'executed',
@@ -26,12 +31,17 @@ export const GOVERNANCE_ACTION_STATUSES = [
   'failed',
 ] as const;
 
+export const GOVERNANCE_FLOW_TYPES = ['executor', 'direct_sign'] as const;
+
 export type GovernanceActionCategory = typeof GOVERNANCE_ACTION_CATEGORIES[number];
 export type GovernanceActionStatus = typeof GOVERNANCE_ACTION_STATUSES[number];
+export type GovernanceFlowType = typeof GOVERNANCE_FLOW_TYPES[number];
 
 export const GOVERNANCE_OPEN_INTENT_STATUSES: readonly GovernanceActionStatus[] = [
   'requested',
   'submitted',
+  'prepared',
+  'broadcast',
   'pending_approvals',
   'approved',
 ] as const;
@@ -71,6 +81,7 @@ export interface GovernanceActionRecord {
   proposalId: number | null;
   category: GovernanceActionCategory;
   status: GovernanceActionStatus;
+  flowType: GovernanceFlowType;
   contractMethod: string;
   txHash: string | null;
   extrinsicHash: string | null;
@@ -78,6 +89,7 @@ export interface GovernanceActionRecord {
   tradeId: string | null;
   chainId: string | null;
   targetAddress: string | null;
+  broadcastAt: string | null;
   createdAt: string;
   expiresAt: string | null;
   executedAt: string | null;
@@ -128,6 +140,7 @@ interface GovernanceActionRow {
   proposalId: string | number | null;
   category: GovernanceActionCategory;
   status: GovernanceActionStatus;
+  flowType: GovernanceFlowType;
   contractMethod: string;
   txHash: string | null;
   extrinsicHash: string | null;
@@ -135,6 +148,7 @@ interface GovernanceActionRow {
   tradeId: string | null;
   chainId: string | null;
   targetAddress: string | null;
+  broadcastAt: Date | null;
   requestId: string;
   correlationId: string | null;
   idempotencyKey: string | null;
@@ -227,6 +241,7 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
     proposalId: numericOrNull(row.proposalId),
     category: row.category,
     status: row.status,
+    flowType: row.flowType ?? 'executor',
     contractMethod: row.contractMethod,
     txHash: row.txHash,
     extrinsicHash: row.extrinsicHash,
@@ -234,6 +249,7 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
     tradeId: row.tradeId,
     chainId: row.chainId,
     targetAddress: row.targetAddress,
+    broadcastAt: row.broadcastAt ? row.broadcastAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
     executedAt: row.executedAt ? row.executedAt.toISOString() : null,
@@ -295,6 +311,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
     proposal_id AS "proposalId",
     category,
     status,
+    COALESCE(flow_type, 'executor') AS "flowType",
     contract_method AS "contractMethod",
     tx_hash AS "txHash",
     extrinsic_hash AS "extrinsicHash",
@@ -302,6 +319,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
     trade_id AS "tradeId",
     chain_id AS "chainId",
     target_address AS "targetAddress",
+    broadcast_at AS "broadcastAt",
     request_id AS "requestId",
     correlation_id AS "correlationId",
     idempotency_key AS "idempotencyKey",
@@ -331,6 +349,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           proposal_id,
           category,
           status,
+          flow_type,
           contract_method,
           tx_hash,
           extrinsic_hash,
@@ -338,6 +357,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           trade_id,
           chain_id,
           target_address,
+          broadcast_at,
           request_id,
           correlation_id,
           idempotency_key,
@@ -359,8 +379,8 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, $21, $22, $23, $24,
-          $25, $26::jsonb, $27, $28, $29, $30, $31, NOW()
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb,
+          $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, NOW()
         )
         ON CONFLICT (action_id) DO UPDATE SET
           intent_key = EXCLUDED.intent_key,
@@ -368,6 +388,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           proposal_id = EXCLUDED.proposal_id,
           category = EXCLUDED.category,
           status = EXCLUDED.status,
+          flow_type = EXCLUDED.flow_type,
           contract_method = EXCLUDED.contract_method,
           tx_hash = EXCLUDED.tx_hash,
           extrinsic_hash = EXCLUDED.extrinsic_hash,
@@ -375,6 +396,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           trade_id = EXCLUDED.trade_id,
           chain_id = EXCLUDED.chain_id,
           target_address = EXCLUDED.target_address,
+          broadcast_at = EXCLUDED.broadcast_at,
           request_id = EXCLUDED.request_id,
           correlation_id = EXCLUDED.correlation_id,
           idempotency_key = EXCLUDED.idempotency_key,
@@ -401,6 +423,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           action.proposalId,
           action.category,
           action.status,
+          action.flowType,
           action.contractMethod,
           action.txHash,
           action.extrinsicHash,
@@ -408,6 +431,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           action.tradeId,
           action.chainId,
           action.targetAddress,
+          action.broadcastAt,
           action.requestId,
           action.correlationId,
           action.idempotencyKey ?? null,
@@ -455,7 +479,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
          WHERE intent_key = $1
            AND status = ANY($2::text[])
            AND (
-             status <> 'requested'
+             status NOT IN ('requested', 'prepared')
              OR expires_at IS NULL
              OR expires_at > $3::timestamp
            )
@@ -582,6 +606,7 @@ export function createInMemoryGovernanceActionStore(initial: GovernanceActionRec
         candidate.intentKey === intentKey
         && GOVERNANCE_OPEN_INTENT_STATUSES.includes(candidate.status)
         && !isExpiredRequestedGovernanceAction(candidate, now)
+        && !(candidate.status === 'prepared' && candidate.expiresAt !== null && candidate.expiresAt <= now)
       ));
 
       return action ? { ...action, audit: { ...action.audit, evidenceLinks: [...action.audit.evidenceLinks], ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}) } } : null;

@@ -85,6 +85,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-2',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Rotate oracle after governance review.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/AGRO-245' }],
@@ -123,6 +125,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-2-review',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Approve oracle rotation.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/AGRO-246' }],
@@ -160,6 +164,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-1',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Rotate treasury payout receiver.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/AGRO-244' }],

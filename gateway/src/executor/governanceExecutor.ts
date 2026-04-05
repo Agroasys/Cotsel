@@ -148,6 +148,13 @@ export class GovernanceExecutorService {
         throw new GatewayError(404, 'NOT_FOUND', 'Governance action not found', { actionId });
       }
 
+      if (existing.flowType === 'direct_sign') {
+        throw new GatewayError(409, 'CONFLICT', 'Direct-sign governance actions are signed by the admin wallet and cannot be processed by the executor', {
+          actionId,
+          contractMethod: existing.contractMethod,
+        });
+      }
+
       if (existing.status !== 'requested') {
         return existing;
       }

@@ -562,6 +562,59 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_governance_actions_actor_endpoint_idempote
 CREATE INDEX IF NOT EXISTS idx_governance_actions_intent_hash_status_created_at ON governance_actions(intent_hash, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_governance_actions_requested_expires_at ON governance_actions(expires_at ASC, action_id ASC)
 WHERE status = 'requested' AND expires_at IS NOT NULL;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS flow_type TEXT NOT NULL DEFAULT 'executor';
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS broadcast_at TIMESTAMP;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'governance_actions'::regclass
+          AND conname = 'governance_actions_flow_type_check'
+    ) THEN
+        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_flow_type_check;
+    END IF;
+END $$;
+
+ALTER TABLE governance_actions
+    ADD CONSTRAINT governance_actions_flow_type_check CHECK (flow_type IN ('executor', 'direct_sign'));
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'governance_actions'::regclass
+          AND conname = 'governance_actions_status_check'
+    ) THEN
+        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_status_check;
+    END IF;
+END $$;
+
+ALTER TABLE governance_actions
+    ADD CONSTRAINT governance_actions_status_check CHECK (status IN (
+        'requested',
+        'submitted',
+        'pending_approvals',
+        'approved',
+        'executed',
+        'cancelled',
+        'expired',
+        'stale',
+        'failed',
+        'prepared',
+        'broadcast'
+    ));
+
+CREATE INDEX IF NOT EXISTS idx_governance_actions_prepared_expires_at ON governance_actions(expires_at ASC, action_id ASC)
+WHERE status = 'prepared' AND expires_at IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_governance_actions_flow_type_status_created_at ON governance_actions(flow_type, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_trade_id_decided_at ON compliance_decisions(trade_id, decided_at DESC, decision_id DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_result_decided_at ON compliance_decisions(result, decided_at DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_reason_code_decided_at ON compliance_decisions(reason_code, decided_at DESC);

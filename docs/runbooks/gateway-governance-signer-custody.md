@@ -1,14 +1,24 @@
 # Gateway Governance Signer Custody
 
+> **Architecture decision notice — 2026-04-05**
+>
+> [ADR-0411](../adr/adr-0411-human-governance-direct-wallet-signing.md) supersedes the queued executor as the long-term target for **human privileged governance**. That ADR is the authoritative decision record for the governance signing model.
+>
+> This runbook remains the operational procedure for the **executor signer** during the migration period and for **delegated/service roles** that will remain executor-backed permanently. Procedures in this runbook that describe executor-signed human governance actions are **transitional** and will be replaced when Phase 1 (gateway prepare endpoints) and Phase 4 (runbook update) of ADR-0411 are complete.
+>
+> For the target human governance signing model, see:
+> - [ADR-0411](../adr/adr-0411-human-governance-direct-wallet-signing.md)
+
 ## Purpose and scope
 Define the approved signer-custody boundary for gateway-governed protocol actions and the operator procedures required before any governance executor action is run.
 
 This runbook applies to:
 - `gateway/src/executor/adminSdkGovernanceChainExecutor.ts`
 - `npm run -w gateway execute:governance-action -- <actionId>`
-- emergency disable and controlled unpause actions
-- treasury payout receiver governance changes
-- oracle governance changes
+- emergency disable and controlled unpause actions (transitional — human governance target is direct wallet signing per ADR-0411)
+- treasury payout receiver governance changes (transitional — target is direct wallet signing per ADR-0411)
+- oracle governance changes (transitional — target is direct wallet signing per ADR-0411)
+- delegated/service execution (oracle attestation, automated maintenance) — remains executor-backed permanently
 
 This runbook does not change protocol quorum rules. It defines how the executor signer is sourced, approved, rotated, and used safely.
 
@@ -23,7 +33,11 @@ Automation-governance source of truth:
 ## Current code boundary
 Current executor code loads a raw `GATEWAY_EXECUTOR_PRIVATE_KEY` and instantiates an `ethers.Wallet` directly inside `adminSdkGovernanceChainExecutor.ts`.
 
-Interpretation:
+**Transitional status:** This boundary is the operative model during migration. Per ADR-0411, human privileged governance actions (pause, unpause, approval methods, treasury operations, oracle updates) are migrating to direct admin wallet signing. The executor path for those actions is transitional and will be retired once Phase 1 and Phase 2 of ADR-0411 are complete.
+
+**Permanent scope:** Delegated/service operations (oracle attestation service, automated maintenance runners) remain executor-backed and are not affected by this transition.
+
+Interpretation for the executor boundary during migration:
 - local development and deterministic staging validation may use `GATEWAY_EXECUTOR_PRIVATE_KEY`
 - production readiness must not rely on a long-lived raw environment private key managed like a convenience secret
 - the gateway API process must never hold the signer key; only the isolated executor invocation may access signer material

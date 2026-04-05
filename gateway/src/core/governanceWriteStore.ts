@@ -13,6 +13,18 @@ export interface GovernanceWriteStore {
     duplicateAuditEntry: (existing: GovernanceActionRecord) => AuditLogEntry,
     now: string,
   ): Promise<{ action: GovernanceActionRecord; created: boolean }>;
+  saveDirectSignActionWithIntentDedupe(
+    action: GovernanceActionRecord,
+    auditEntry: AuditLogEntry,
+    duplicateAuditEntry: (existing: GovernanceActionRecord) => AuditLogEntry,
+    now: string,
+  ): Promise<{ action: GovernanceActionRecord; created: boolean }>;
+  confirmBroadcastWithAudit(
+    actionId: string,
+    txHash: string,
+    confirmedAt: string,
+    auditEntry: AuditLogEntry,
+  ): Promise<void>;
 }
 
 function governanceActionParams(action: GovernanceActionRecord): unknown[] {
@@ -23,6 +35,7 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
     action.proposalId,
     action.category,
     action.status,
+    action.flowType,
     action.contractMethod,
     action.txHash,
     action.extrinsicHash,
@@ -30,6 +43,7 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
     action.tradeId,
     action.chainId,
     action.targetAddress,
+    action.broadcastAt,
     action.requestId,
     action.correlationId,
     action.idempotencyKey ?? null,
@@ -60,6 +74,7 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       proposal_id,
       category,
       status,
+      flow_type,
       contract_method,
       tx_hash,
       extrinsic_hash,
@@ -67,6 +82,7 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       trade_id,
       chain_id,
       target_address,
+      broadcast_at,
       request_id,
       correlation_id,
       idempotency_key,
@@ -88,8 +104,8 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       updated_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-      $11, $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, $21, $22, $23, $24,
-      $25, $26::jsonb, $27, $28, $29, $30, $31, NOW()
+      $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb,
+      $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, NOW()
     )
     ON CONFLICT (action_id) DO UPDATE SET
       intent_key = EXCLUDED.intent_key,
@@ -97,6 +113,7 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       proposal_id = EXCLUDED.proposal_id,
       category = EXCLUDED.category,
       status = EXCLUDED.status,
+      flow_type = EXCLUDED.flow_type,
       contract_method = EXCLUDED.contract_method,
       tx_hash = EXCLUDED.tx_hash,
       extrinsic_hash = EXCLUDED.extrinsic_hash,
@@ -104,6 +121,7 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       trade_id = EXCLUDED.trade_id,
       chain_id = EXCLUDED.chain_id,
       target_address = EXCLUDED.target_address,
+      broadcast_at = EXCLUDED.broadcast_at,
       request_id = EXCLUDED.request_id,
       correlation_id = EXCLUDED.correlation_id,
       idempotency_key = EXCLUDED.idempotency_key,
@@ -269,6 +287,95 @@ export function createPostgresGovernanceWriteStore(
         created,
       };
     },
+
+    async saveDirectSignActionWithIntentDedupe(action, auditEntry, duplicateAuditEntry, now) {
+      const client = await pool.connect();
+      let existingActionId: string | null = null;
+      let created = false;
+
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [action.intentKey]);
+
+        const existing = await loadExistingOpenIntentAction(client, action.intentKey, now);
+        if (existing) {
+          existingActionId = existing.actionId;
+          const storedExisting = await readStore.get(existing.actionId);
+          if (!storedExisting) {
+            throw new Error(`Failed to load governance action ${existing.actionId} for semantic dedupe`);
+          }
+          await insertAuditLog(client, duplicateAuditEntry(storedExisting));
+        } else {
+          await upsertGovernanceAction(client, action);
+          await insertAuditLog(client, auditEntry);
+          created = true;
+          existingActionId = action.actionId;
+        }
+
+        await client.query('COMMIT');
+      } catch (error) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          const originalMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Governance direct-sign write rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`);
+        }
+
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      const stored = existingActionId ? await readStore.get(existingActionId) : null;
+      if (!stored) {
+        throw new Error(`Failed to persist direct-sign governance action ${existingActionId ?? action.actionId}`);
+      }
+
+      return {
+        action: stored,
+        created,
+      };
+    },
+
+    async confirmBroadcastWithAudit(actionId, txHash, confirmedAt, auditEntry) {
+      const client = await pool.connect();
+
+      try {
+        await client.query('BEGIN');
+
+        const result = await client.query(
+          `UPDATE governance_actions
+           SET status = 'broadcast',
+               tx_hash = $1,
+               broadcast_at = $2::timestamp,
+               updated_at = NOW()
+           WHERE action_id = $3
+             AND status = 'prepared'
+             AND flow_type = 'direct_sign'`,
+          [txHash, confirmedAt, actionId],
+        );
+
+        if (result.rowCount === 0) {
+          throw new Error(`Cannot confirm broadcast: governance action ${actionId} is not in prepared/direct_sign state`);
+        }
+
+        await insertAuditLog(client, auditEntry);
+        await client.query('COMMIT');
+      } catch (error) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          const originalMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Governance broadcast confirmation rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`);
+        }
+
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
   };
 }
 
@@ -299,6 +406,39 @@ export function createPassthroughGovernanceWriteStore(
         action: stored,
         created: true,
       };
+    },
+
+    async saveDirectSignActionWithIntentDedupe(action, auditEntry, duplicateAuditEntry, now) {
+      const existing = await actionStore.findOpenByIntentKey(action.intentKey, now);
+      if (existing) {
+        await auditLogStore.append(duplicateAuditEntry(existing));
+        return {
+          action: existing,
+          created: false,
+        };
+      }
+
+      const stored = await actionStore.save(action);
+      await auditLogStore.append(auditEntry);
+      return {
+        action: stored,
+        created: true,
+      };
+    },
+
+    async confirmBroadcastWithAudit(actionId, txHash, confirmedAt, auditEntry) {
+      const existing = await actionStore.get(actionId);
+      if (!existing || existing.status !== 'prepared' || existing.flowType !== 'direct_sign') {
+        throw new Error(`Cannot confirm broadcast: governance action ${actionId} is not in prepared/direct_sign state`);
+      }
+
+      await actionStore.save({
+        ...existing,
+        status: 'broadcast',
+        txHash,
+        broadcastAt: confirmedAt,
+      });
+      await auditLogStore.append(auditEntry);
     },
   };
 }

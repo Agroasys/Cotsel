@@ -35,6 +35,8 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
     correlationId: 'corr-1',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Queue governance action for controlled operator handling.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets.agroasys.local/AGRO-500' }],

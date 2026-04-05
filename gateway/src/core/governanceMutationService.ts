@@ -37,6 +37,23 @@ export interface GovernanceMutationAccepted {
   expiresAt: string | null;
 }
 
+export interface GovernanceActionPrepared {
+  actionId: string;
+  intentKey: string;
+  proposalId: number | null;
+  category: GovernanceActionCategory;
+  status: 'prepared';
+  preparedAt: string;
+  expiresAt: string | null;
+}
+
+export interface GovernanceBroadcastConfirmed {
+  actionId: string;
+  txHash: string;
+  status: 'broadcast';
+  confirmedAt: string;
+}
+
 export interface QueueGovernanceActionInput {
   category: GovernanceActionCategory;
   contractMethod: string;
@@ -48,6 +65,26 @@ export interface QueueGovernanceActionInput {
   principal: GatewayPrincipal;
   requestContext: RequestContext;
   idempotencyKey: string;
+}
+
+export interface PrepareGovernanceActionInput {
+  category: GovernanceActionCategory;
+  contractMethod: string;
+  routePath: string;
+  proposalId?: number | null;
+  targetAddress?: string | null;
+  tradeId?: string | null;
+  audit: GovernanceMutationAuditInput;
+  principal: GatewayPrincipal;
+  requestContext: RequestContext;
+  idempotencyKey: string;
+}
+
+export interface ConfirmGovernanceBroadcastInput {
+  actionId: string;
+  txHash: string;
+  principal: GatewayPrincipal;
+  requestContext: RequestContext;
 }
 
 function resolveGovernanceActorId(principal: GatewayPrincipal): string {
@@ -188,6 +225,8 @@ export class GovernanceMutationService {
       endpoint: input.routePath,
       errorCode: null,
       errorMessage: null,
+      flowType: 'executor',
+      broadcastAt: null,
       audit: buildAuditRecord(input.audit, input.principal, acceptedAt),
     };
 
@@ -257,6 +296,198 @@ export class GovernanceMutationService {
       status: stored.status,
       acceptedAt: stored.createdAt,
       expiresAt: stored.expiresAt,
+    };
+  }
+
+  async prepareAction(input: PrepareGovernanceActionInput): Promise<GovernanceActionPrepared> {
+    const preparedAt = new Date().toISOString();
+    const expiresAt = new Date(Date.parse(preparedAt) + (this.config.governanceQueueTtlSeconds * 1000)).toISOString();
+    const intentKey = buildGovernanceIntentKey({
+      category: input.category,
+      contractMethod: input.contractMethod,
+      proposalId: input.proposalId ?? null,
+      targetAddress: input.targetAddress ?? null,
+      tradeId: input.tradeId ?? null,
+      chainId: this.config.chainId,
+      approverWallet: input.principal.session.walletAddress,
+    });
+    const intentHash = buildGovernanceIntentHash(intentKey);
+    const actionId = randomUUID();
+    const actorId = resolveGovernanceActorId(input.principal);
+
+    const record: GovernanceActionRecord = {
+      actionId,
+      intentKey,
+      intentHash,
+      proposalId: input.proposalId ?? null,
+      category: input.category,
+      status: 'prepared',
+      flowType: 'direct_sign',
+      contractMethod: input.contractMethod,
+      txHash: null,
+      extrinsicHash: null,
+      blockNumber: null,
+      tradeId: input.tradeId ?? null,
+      chainId: String(this.config.chainId),
+      targetAddress: input.targetAddress ?? null,
+      broadcastAt: null,
+      createdAt: preparedAt,
+      expiresAt,
+      executedAt: null,
+      requestId: input.requestContext.requestId,
+      correlationId: input.requestContext.correlationId,
+      idempotencyKey: input.idempotencyKey,
+      actorId,
+      endpoint: input.routePath,
+      errorCode: null,
+      errorMessage: null,
+      audit: buildAuditRecord(input.audit, input.principal, preparedAt),
+    };
+
+    const auditEntry: AuditLogEntry = {
+      eventType: 'governance.action.prepared',
+      route: input.routePath,
+      method: 'POST',
+      requestId: input.requestContext.requestId,
+      correlationId: input.requestContext.correlationId,
+      actionId,
+      idempotencyKey: input.idempotencyKey,
+      actorId,
+      actorUserId: input.principal.session.userId,
+      actorWalletAddress: input.principal.session.walletAddress,
+      actorRole: input.principal.session.role,
+      status: 'prepared',
+      metadata: {
+        actionId,
+        category: input.category,
+        contractMethod: input.contractMethod,
+        proposalId: input.proposalId ?? null,
+        targetAddress: input.targetAddress ?? null,
+        actorId,
+        intentHash,
+        idempotencyKey: input.idempotencyKey,
+      },
+    };
+
+    const duplicateAuditEntry = (existing: GovernanceActionRecord): AuditLogEntry => ({
+      eventType: 'governance.action.duplicate_reused',
+      route: input.routePath,
+      method: 'POST',
+      requestId: input.requestContext.requestId,
+      correlationId: input.requestContext.correlationId,
+      actionId: existing.actionId,
+      idempotencyKey: input.idempotencyKey,
+      actorId,
+      actorUserId: input.principal.session.userId,
+      actorWalletAddress: input.principal.session.walletAddress,
+      actorRole: input.principal.session.role,
+      status: existing.status,
+      metadata: {
+        actionId: existing.actionId,
+        category: existing.category,
+        contractMethod: existing.contractMethod,
+        proposalId: existing.proposalId,
+        targetAddress: existing.targetAddress,
+        intentKey: existing.intentKey,
+        intentHash: existing.intentHash ?? intentHash,
+        actorId: existing.actorId ?? actorId,
+        idempotencyKey: input.idempotencyKey,
+      },
+    });
+
+    const saved = await this.writeStore.saveDirectSignActionWithIntentDedupe(
+      record,
+      auditEntry,
+      duplicateAuditEntry,
+      preparedAt,
+    );
+
+    const stored = saved.created ? record : (await this.actionStore.get(saved.action.actionId)) ?? saved.action;
+
+    return {
+      actionId: stored.actionId,
+      intentKey: stored.intentKey,
+      proposalId: stored.proposalId,
+      category: stored.category,
+      status: 'prepared',
+      preparedAt: stored.createdAt,
+      expiresAt: stored.expiresAt,
+    };
+  }
+
+  async confirmBroadcast(input: ConfirmGovernanceBroadcastInput): Promise<GovernanceBroadcastConfirmed> {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(input.txHash)) {
+      throw new GatewayError(400, 'VALIDATION_ERROR', 'txHash must be a 0x-prefixed 32-byte hex string');
+    }
+
+    const existing = await this.actionStore.get(input.actionId);
+    if (!existing) {
+      throw new GatewayError(404, 'NOT_FOUND', 'Governance action not found', { actionId: input.actionId });
+    }
+
+    if (existing.flowType !== 'direct_sign') {
+      throw new GatewayError(409, 'CONFLICT', 'Governance action is not a direct-sign action', {
+        actionId: input.actionId,
+        flowType: existing.flowType,
+      });
+    }
+
+    if (existing.status === 'broadcast') {
+      return {
+        actionId: existing.actionId,
+        txHash: existing.txHash!,
+        status: 'broadcast',
+        confirmedAt: existing.broadcastAt!,
+      };
+    }
+
+    if (existing.status !== 'prepared') {
+      throw new GatewayError(409, 'CONFLICT', 'Governance action is not in prepared status', {
+        actionId: input.actionId,
+        status: existing.status,
+      });
+    }
+
+    const actorWallet = input.principal.session.walletAddress.toLowerCase();
+    const initiatingWallet = existing.audit.actorWallet.toLowerCase();
+    if (actorWallet !== initiatingWallet) {
+      throw new GatewayError(403, 'FORBIDDEN', 'Only the initiating admin wallet may confirm broadcast of this action', {
+        actionId: input.actionId,
+      });
+    }
+
+    const confirmedAt = new Date().toISOString();
+    const actorId = resolveGovernanceActorId(input.principal);
+
+    const auditEntry: AuditLogEntry = {
+      eventType: 'governance.action.broadcast_confirmed',
+      route: input.requestContext.correlationId
+        ? `/governance/actions/${input.actionId}/confirm`
+        : `/governance/actions/${input.actionId}/confirm`,
+      method: 'POST',
+      requestId: input.requestContext.requestId,
+      correlationId: input.requestContext.correlationId,
+      actionId: input.actionId,
+      actorId,
+      actorUserId: input.principal.session.userId,
+      actorWalletAddress: input.principal.session.walletAddress,
+      actorRole: input.principal.session.role,
+      status: 'broadcast',
+      metadata: {
+        actionId: input.actionId,
+        txHash: input.txHash,
+        category: existing.category,
+        contractMethod: existing.contractMethod,
+      },
+    };
+
+    await this.writeStore.confirmBroadcastWithAudit(input.actionId, input.txHash, confirmedAt, auditEntry);
+
+    return {
+      actionId: input.actionId,
+      txHash: input.txHash,
+      status: 'broadcast',
+      confirmedAt,
     };
   }
 }
