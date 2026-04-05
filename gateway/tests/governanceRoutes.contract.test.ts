@@ -77,6 +77,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-2',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Rotate oracle after emergency disable.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/agro-2' }],
@@ -113,6 +115,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-1',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Pause protocol after treasury drift was detected.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/agro-1' }],

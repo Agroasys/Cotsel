@@ -36,6 +36,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-2',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Rotate payout receiver.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/agro-2' }],
@@ -72,6 +74,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-1',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Sweep treasury.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/agro-1' }],

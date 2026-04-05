@@ -31,6 +31,8 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
     correlationId: 'corr-1',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Enterprise operator requested a governance transition.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets.agroasys.local/AGRO-777' }],
