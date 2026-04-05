@@ -257,7 +257,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     };
   })(), async () => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
-    const walletAddress = requireWalletBoundSession(
+    requireWalletBoundSession(
       principal,
       'Treasury payout approval checks',
     );
@@ -483,7 +483,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     };
   })(), async () => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
-    const walletAddress = requireWalletBoundSession(
+    requireWalletBoundSession(
       principal,
       'Oracle update approval checks',
     );
