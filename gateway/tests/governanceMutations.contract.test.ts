@@ -594,12 +594,15 @@ describe('gateway governance mutation routes contract', () => {
       expect(confirmPayload.data.status).toBe('broadcast_pending_verification');
       expect(confirmPayload.data.verificationState).toBe('pending');
       expect(confirmPayload.data.monitoringState).toBe('pending_verification');
+      expect(confirmPayload.data.signerWallet).toBeNull();
 
       const storedAction = await readStoredAction(governanceActionStore, prepared.data.actionId);
       expect(storedAction.status).toBe('broadcast_pending_verification');
       expect(storedAction.txHash).toBe(pendingTxHash);
       expect(storedAction.verificationState).toBe('pending');
       expect(storedAction.monitoringState).toBe('pending_verification');
+      expect(storedAction.finalSignerWallet).toBeNull();
+      expect(storedAction.audit.finalSignerWallet).toBeUndefined();
     } finally {
       server.close();
     }
