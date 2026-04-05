@@ -232,6 +232,12 @@ CREATE TABLE IF NOT EXISTS evidence_bundles (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE access_log_entries
+    ALTER COLUMN actor_wallet_address DROP NOT NULL;
+
+ALTER TABLE evidence_bundles
+    ALTER COLUMN generated_by_wallet DROP NOT NULL;
+
 CREATE TABLE IF NOT EXISTS service_auth_nonces (
     api_key TEXT NOT NULL,
     nonce TEXT NOT NULL,
@@ -569,6 +575,27 @@ ALTER TABLE governance_actions
 ALTER TABLE governance_actions
     ADD COLUMN IF NOT EXISTS broadcast_at TIMESTAMP;
 
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS actor_account_id TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS final_signer_wallet TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS verification_state TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS verification_error TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS monitoring_state TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS prepared_signing_payload JSONB;
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -608,8 +635,54 @@ ALTER TABLE governance_actions
         'stale',
         'failed',
         'prepared',
+        'broadcast_pending_verification',
         'broadcast'
     ));
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'governance_actions'::regclass
+          AND conname = 'governance_actions_verification_state_check'
+    ) THEN
+        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_verification_state_check;
+    END IF;
+END $$;
+
+ALTER TABLE governance_actions
+    ADD CONSTRAINT governance_actions_verification_state_check CHECK (
+        verification_state IS NULL
+        OR verification_state IN ('not_required', 'not_started', 'pending', 'verified', 'failed')
+    );
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'governance_actions'::regclass
+          AND conname = 'governance_actions_monitoring_state_check'
+    ) THEN
+        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_monitoring_state_check;
+    END IF;
+END $$;
+
+ALTER TABLE governance_actions
+    ADD CONSTRAINT governance_actions_monitoring_state_check CHECK (
+        monitoring_state IS NULL
+        OR monitoring_state IN (
+            'not_required',
+            'not_started',
+            'pending_verification',
+            'pending_confirmation',
+            'confirmed',
+            'finalized',
+            'reverted',
+            'stale'
+        )
+    );
 
 CREATE INDEX IF NOT EXISTS idx_governance_actions_prepared_expires_at ON governance_actions(expires_at ASC, action_id ASC)
 WHERE status = 'prepared' AND expires_at IS NOT NULL;

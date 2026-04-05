@@ -16,6 +16,41 @@ export interface GatewayPrincipal {
   writeEnabled: boolean;
 }
 
+export function resolveGatewayActorKey(session: AuthSession): string {
+  const normalizedAccountId = session.accountId?.trim();
+  if (normalizedAccountId) {
+    return `account:${normalizedAccountId}`;
+  }
+
+  const normalizedUserId = session.userId?.trim();
+  if (normalizedUserId) {
+    return `user:${normalizedUserId}`;
+  }
+
+  const normalizedWallet = session.walletAddress?.trim().toLowerCase();
+  if (normalizedWallet) {
+    return `wallet:${normalizedWallet}`;
+  }
+
+  throw new GatewayError(500, 'INTERNAL_ERROR', 'Authenticated session is missing every supported actor identifier');
+}
+
+export function requireWalletBoundSession(principal: GatewayPrincipal, actionDescription: string): string {
+  const walletAddress = principal.session.walletAddress?.trim().toLowerCase();
+  if (!walletAddress) {
+    throw new GatewayError(
+      409,
+      'WALLET_SIGNER_REQUIRED',
+      `${actionDescription} requires a wallet-bound admin signer session`,
+      {
+        reason: 'wallet_signer_required',
+      },
+    );
+  }
+
+  return walletAddress;
+}
+
 function getBearerToken(req: Request): string | null {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
@@ -39,7 +74,7 @@ export function matchesAllowlist(session: AuthSession, allowlist: string[]): boo
     return false;
   }
 
-  const candidates = [session.userId, session.walletAddress, session.email].filter(Boolean) as string[];
+  const candidates = [session.accountId, session.userId, session.walletAddress, session.email].filter(Boolean) as string[];
   const normalizedAllowlist = new Set(allowlist.map((entry) => entry.toLowerCase()));
   return candidates.some((entry) => normalizedAllowlist.has(entry.toLowerCase()));
 }

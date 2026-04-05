@@ -4,6 +4,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { GatewayError } from '../errors';
 import { buildRequestFingerprint, IdempotencyStore } from '../core/idempotencyStore';
+import { resolveGatewayActorKey } from './auth';
 
 export interface IdempotencyRequestState {
   idempotencyKey: string;
@@ -14,12 +15,8 @@ export interface IdempotencyRequestState {
 
 function resolveActorId(req: Request): string {
   const principal = req.gatewayPrincipal;
-  if (principal?.session.userId) {
-    return `user:${principal.session.userId}`;
-  }
-
-  if (principal?.session.walletAddress) {
-    return `wallet:${principal.session.walletAddress.toLowerCase()}`;
+  if (principal) {
+    return resolveGatewayActorKey(principal.session);
   }
 
   if (req.serviceAuth?.apiKeyId) {

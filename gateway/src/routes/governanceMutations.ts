@@ -17,7 +17,12 @@ import type {
 } from '../core/governanceMutationService';
 import { GovernanceMutationPreflightReader } from '../core/governanceStatusService';
 import { IdempotencyStore } from '../core/idempotencyStore';
-import { createAuthenticationMiddleware, requireMutationWriteAccess } from '../middleware/auth';
+import {
+  createAuthenticationMiddleware,
+  requireMutationWriteAccess,
+  requireWalletBoundSession,
+  resolveGatewayActorKey,
+} from '../middleware/auth';
 import { createIdempotencyMiddleware } from '../middleware/idempotency';
 import { GatewayError } from '../errors';
 import { successResponse } from '../responses';
@@ -41,6 +46,10 @@ interface MutationContext {
   principal: GatewayPrincipal;
   requestContext: RequestContext;
   idempotencyKey: string;
+}
+
+interface DirectSignMutationContext extends MutationContext {
+  signerWallet: string;
 }
 
 type MutationRequest = Request<
@@ -73,6 +82,14 @@ function getMutationContext(req: MutationRequest): MutationContext {
   };
 }
 
+function getDirectSignMutationContext(req: MutationRequest, actionDescription: string): DirectSignMutationContext {
+  const context = getMutationContext(req);
+  return {
+    ...context,
+    signerWallet: requireWalletBoundSession(context.principal, actionDescription),
+  };
+}
+
 function getPathParam(value: string | string[] | undefined, field: string): string | undefined {
   if (Array.isArray(value)) {
     throw new GatewayError(400, 'VALIDATION_ERROR', `Path parameter ${field} must be a string`);
@@ -88,6 +105,9 @@ async function prepareAndRespond(
   actionFactory: () => Promise<GovernanceActionPrepared>,
 ): Promise<void> {
   try {
+    if (req.gatewayPrincipal) {
+      requireWalletBoundSession(req.gatewayPrincipal, 'Preparing privileged governance approval');
+    }
     const prepared = await actionFactory();
     res.status(200).json(successResponse(prepared));
   } catch (error) {
@@ -102,6 +122,9 @@ async function confirmAndRespond(
   actionFactory: () => Promise<GovernanceBroadcastConfirmed>,
 ): Promise<void> {
   try {
+    if (req.gatewayPrincipal) {
+      requireWalletBoundSession(req.gatewayPrincipal, 'Confirming privileged governance broadcast');
+    }
     const confirmed = await actionFactory();
     res.status(200).json(successResponse(confirmed));
   } catch (error) {
@@ -129,7 +152,7 @@ async function queueAndRespond(
     if (options.failedOperationWorkflow) {
       const failedOperation = await options.failedOperationWorkflow.captureFailure({
         operationType: 'governance.queue_action',
-        operationKey: `${failureCapture.principal.session.walletAddress.toLowerCase()}:${req.originalUrl || req.path}:${failureCapture.idempotencyKey}`,
+        operationKey: `${resolveGatewayActorKey(failureCapture.principal.session)}:${req.originalUrl || req.path}:${failureCapture.idempotencyKey}`,
         targetService: 'gateway_governance_queue',
         route: req.originalUrl || req.path,
         method: req.method,
@@ -826,14 +849,14 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
   }));
 
   router.post('/governance/unpause/proposal/approve/prepare', idempotency, (req, res, next) => prepareAndRespond(req, res, next, async () => {
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const { principal, requestContext, idempotencyKey, signerWallet } = getDirectSignMutationContext(req, 'Preparing unpause approval');
     const audit = validateGovernanceAuditInput(req.body);
     const proposal = await options.governanceReader.getUnpauseProposalState();
     if (!proposal.hasActiveProposal) {
       throw new GatewayError(409, 'CONFLICT', 'No active unpause proposal is available to approve');
     }
 
-    if (await options.governanceReader.hasApprovedUnpause(principal.session.walletAddress)) {
+    if (await options.governanceReader.hasApprovedUnpause(signerWallet)) {
       throw new GatewayError(409, 'CONFLICT', 'Caller has already approved the active unpause proposal');
     }
 
@@ -951,7 +974,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
   }));
 
   router.post('/governance/treasury/payout-receiver/proposals/:proposalId/approve/prepare', idempotency, (req, res, next) => prepareAndRespond(req, res, next, async () => {
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const { principal, requestContext, idempotencyKey, signerWallet } = getDirectSignMutationContext(req, 'Preparing treasury payout receiver approval');
     const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getTreasuryPayoutReceiverProposalState(proposalId);
@@ -962,7 +985,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Treasury payout receiver proposal is no longer approvable', { proposalId });
     }
 
-    if (await options.governanceReader.hasApprovedTreasuryPayoutReceiverProposal(proposalId, principal.session.walletAddress)) {
+    if (await options.governanceReader.hasApprovedTreasuryPayoutReceiverProposal(proposalId, signerWallet)) {
       throw new GatewayError(409, 'CONFLICT', 'Caller has already approved this treasury payout receiver proposal', { proposalId });
     }
 
@@ -1079,7 +1102,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
   }));
 
   router.post('/governance/oracle/proposals/:proposalId/approve/prepare', idempotency, (req, res, next) => prepareAndRespond(req, res, next, async () => {
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const { principal, requestContext, idempotencyKey, signerWallet } = getDirectSignMutationContext(req, 'Preparing oracle proposal approval');
     const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getOracleProposalState(proposalId);
@@ -1090,7 +1113,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Oracle update proposal is no longer approvable', { proposalId });
     }
 
-    if (await options.governanceReader.hasApprovedOracleProposal(proposalId, principal.session.walletAddress)) {
+    if (await options.governanceReader.hasApprovedOracleProposal(proposalId, signerWallet)) {
       throw new GatewayError(409, 'CONFLICT', 'Caller has already approved this oracle update proposal', { proposalId });
     }
 
@@ -1191,6 +1214,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     return options.mutationService.confirmBroadcast({
       actionId,
       txHash: body.txHash,
+      signerWallet: typeof body.signerWallet === 'string' ? body.signerWallet : null,
       principal: req.gatewayPrincipal,
       requestContext: req.requestContext,
     });

@@ -3,7 +3,11 @@
  */
 import { Pool, PoolClient } from 'pg';
 import { AuditLogEntry, AuditLogStore } from './auditLogStore';
-import { GovernanceActionRecord, GovernanceActionStore } from './governanceStore';
+import {
+  GovernanceActionRecord,
+  GovernanceActionStore,
+  GOVERNANCE_OPEN_INTENT_STATUSES,
+} from './governanceStore';
 
 export interface GovernanceWriteStore {
   saveActionWithAudit(action: GovernanceActionRecord, auditEntry: AuditLogEntry): Promise<GovernanceActionRecord>;
@@ -19,12 +23,6 @@ export interface GovernanceWriteStore {
     duplicateAuditEntry: (existing: GovernanceActionRecord) => AuditLogEntry,
     now: string,
   ): Promise<{ action: GovernanceActionRecord; created: boolean }>;
-  confirmBroadcastWithAudit(
-    actionId: string,
-    txHash: string,
-    confirmedAt: string,
-    auditEntry: AuditLogEntry,
-  ): Promise<void>;
 }
 
 function governanceActionParams(action: GovernanceActionRecord): unknown[] {
@@ -57,6 +55,13 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
     action.audit.actorRole,
     action.audit.requestedBy,
     JSON.stringify(action.audit.approvedBy ?? []),
+    action.audit.actorAccountId ?? null,
+    action.finalSignerWallet ?? null,
+    action.verificationState ?? (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
+    action.verificationError ?? null,
+    action.verifiedAt ?? null,
+    action.monitoringState ?? (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
+    action.signing ? JSON.stringify(action.signing) : null,
     action.errorCode,
     action.errorMessage,
     action.createdAt,
@@ -96,6 +101,13 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       actor_role,
       requested_by,
       approved_by,
+      actor_account_id,
+      final_signer_wallet,
+      verification_state,
+      verification_error,
+      verified_at,
+      monitoring_state,
+      prepared_signing_payload,
       error_code,
       error_message,
       created_at,
@@ -105,7 +117,8 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
       $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb,
-      $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, NOW()
+      $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, $34, $35,
+      $36, $37, $38, $39::jsonb, $40, $41, $42, $43, $44, NOW()
     )
     ON CONFLICT (action_id) DO UPDATE SET
       intent_key = EXCLUDED.intent_key,
@@ -135,6 +148,13 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       actor_role = EXCLUDED.actor_role,
       requested_by = EXCLUDED.requested_by,
       approved_by = EXCLUDED.approved_by,
+      actor_account_id = EXCLUDED.actor_account_id,
+      final_signer_wallet = EXCLUDED.final_signer_wallet,
+      verification_state = EXCLUDED.verification_state,
+      verification_error = EXCLUDED.verification_error,
+      verified_at = EXCLUDED.verified_at,
+      monitoring_state = EXCLUDED.monitoring_state,
+      prepared_signing_payload = EXCLUDED.prepared_signing_payload,
       error_code = EXCLUDED.error_code,
       error_message = EXCLUDED.error_message,
       created_at = EXCLUDED.created_at,
@@ -195,13 +215,13 @@ export function createPostgresGovernanceWriteStore(
        WHERE intent_key = $1
          AND status = ANY($2::text[])
          AND (
-           status <> 'requested'
+           status NOT IN ('requested', 'prepared')
            OR expires_at IS NULL
            OR expires_at > $3::timestamp
          )
        ORDER BY created_at DESC, action_id DESC
        LIMIT 1`,
-      [intentKey, ['requested', 'submitted', 'pending_approvals', 'approved'], now],
+      [intentKey, GOVERNANCE_OPEN_INTENT_STATUSES, now],
     );
 
     return result.rows[0] ?? null;
@@ -338,44 +358,6 @@ export function createPostgresGovernanceWriteStore(
       };
     },
 
-    async confirmBroadcastWithAudit(actionId, txHash, confirmedAt, auditEntry) {
-      const client = await pool.connect();
-
-      try {
-        await client.query('BEGIN');
-
-        const result = await client.query(
-          `UPDATE governance_actions
-           SET status = 'broadcast',
-               tx_hash = $1,
-               broadcast_at = $2::timestamp,
-               updated_at = NOW()
-           WHERE action_id = $3
-             AND status = 'prepared'
-             AND flow_type = 'direct_sign'`,
-          [txHash, confirmedAt, actionId],
-        );
-
-        if (result.rowCount === 0) {
-          throw new Error(`Cannot confirm broadcast: governance action ${actionId} is not in prepared/direct_sign state`);
-        }
-
-        await insertAuditLog(client, auditEntry);
-        await client.query('COMMIT');
-      } catch (error) {
-        try {
-          await client.query('ROLLBACK');
-        } catch (rollbackError) {
-          const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
-          const originalMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(`Governance broadcast confirmation rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`);
-        }
-
-        throw error;
-      } finally {
-        client.release();
-      }
-    },
   };
 }
 
@@ -426,19 +408,5 @@ export function createPassthroughGovernanceWriteStore(
       };
     },
 
-    async confirmBroadcastWithAudit(actionId, txHash, confirmedAt, auditEntry) {
-      const existing = await actionStore.get(actionId);
-      if (!existing || existing.status !== 'prepared' || existing.flowType !== 'direct_sign') {
-        throw new Error(`Cannot confirm broadcast: governance action ${actionId} is not in prepared/direct_sign state`);
-      }
-
-      await actionStore.save({
-        ...existing,
-        status: 'broadcast',
-        txHash,
-        broadcastAt: confirmedAt,
-      });
-      await auditLogStore.append(auditEntry);
-    },
   };
 }

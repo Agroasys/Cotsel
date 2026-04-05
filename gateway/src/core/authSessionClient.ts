@@ -9,11 +9,12 @@ export type AuthServiceRole = 'buyer' | 'supplier' | 'admin' | 'oracle';
 
 export interface AuthSession {
   userId: string;
+  accountId?: string;
   walletAddress: string;
   role: AuthServiceRole;
   issuedAt: number;
   expiresAt: number;
-  email?: string;
+  email?: string | null;
 }
 
 interface SessionResponse {

@@ -83,11 +83,12 @@ Gateway (prepare phase)
    │  ├── Validate operator session + write-access
    │  ├── Step-up auth challenge if required (Phase 3)
    │  ├── Validate pre-flight state (paused, proposal existence, quorum, timelock)
-   │  ├── Build canonical action payload (contract address, calldata, chain ID, nonce)
-   │  └── Record audit intent (actor wallet, action category, idempotency key)
+   │  ├── Build canonical action payload (`chainId`, `contractAddress`, `contractMethod`, `args`, `txRequest`)
+   │  └── Record audit intent (session/account identity, expected signer wallet, action category, idempotency key)
    │
    ▼
-Gateway response: { payload, txRequest }   ← prepared; not yet signed or broadcast
+Gateway response: { actionId, intentKey, signing: { contractMethod, args, txRequest, signerWallet, preparedPayloadHash } }
+   ← prepared; not yet signed or broadcast
    │
    ├── Step 3: Admin reviews action details in dashboard (wallet not yet involved)
    │
@@ -101,8 +102,9 @@ Chain (Base / Base Sepolia)
    ▼
 Gateway (monitor phase)
    │  ├── Receive txHash from dashboard post-broadcast
-   │  ├── Confirm on-chain inclusion and finality
-   │  ├── Update action record with txHash, blockNumber, final status
+   │  ├── Verify tx against the prepared payload when observable
+   │  ├── Record `broadcast_pending_verification` if the tx is not yet observable
+   │  ├── Update action record with txHash, final signer wallet, blockNumber, verification state, final status
    │  └── Emit audit evidence (reconciliation, evidence capture)
 ```
 
@@ -145,10 +147,10 @@ Mitigation:
 - [Decision: Dashboard gateway governance signing model #215](https://github.com/Agroasys/Cotsel/issues/215)
 
 ### Repo surfaces that must be updated in migration phases
-- `gateway/src/routes/governanceMutations.ts` — queue endpoints to be supplemented with prepare endpoints (Phase 1)
+- `gateway/src/routes/governanceMutations.ts` — queue endpoints supplemented with prepare endpoints and confirm verification (Phase 1)
 - `gateway/src/executor/governanceExecutor.ts` — executor scope to be restricted to service roles (Phase 1)
 - `docs/runbooks/gateway-governance-signer-custody.md` — transitional notice added now; full update in Phase 4
-- `docs/api/cotsel-dashboard-gateway.openapi.yml` — description updated now; prepare endpoint schemas in Phase 1/4
+- `docs/api/cotsel-dashboard-gateway.openapi.yml` — direct-sign prepare + confirm contract aligned with implementation
 - `docs/runbooks/architecture-coverage-matrix.md` — row added for this decision
 
 ### Related decisions and issues

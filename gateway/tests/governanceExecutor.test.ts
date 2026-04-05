@@ -462,7 +462,6 @@ describe('GovernanceExecutorService', () => {
         saveActionWithAudit: jest.fn().mockRejectedValue(new Error('audit storage unavailable')),
         saveQueuedActionWithIntentDedupe: jest.fn(),
         saveDirectSignActionWithIntentDedupe: jest.fn(),
-        confirmBroadcastWithAudit: jest.fn(),
       },
       auditLogStore,
       createReader(),

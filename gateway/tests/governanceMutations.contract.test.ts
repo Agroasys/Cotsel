@@ -3,6 +3,7 @@
  */
 import type { Server } from 'http';
 import { Router } from 'express';
+import { getAddress } from 'ethers';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
@@ -16,7 +17,11 @@ import {
 } from '../src/core/governanceStore';
 import { createPassthroughGovernanceWriteStore } from '../src/core/governanceWriteStore';
 import { createInMemoryIdempotencyStore } from '../src/core/idempotencyStore';
-import { GovernanceMutationService } from '../src/core/governanceMutationService';
+import {
+  GovernanceMutationService,
+  type GovernanceObservedTransaction,
+  type GovernanceTransactionVerifier,
+} from '../src/core/governanceMutationService';
 import {
   GovernanceMutationPreflightReader,
   GovernanceProposalState,
@@ -168,6 +173,7 @@ interface StartServerOptions {
   sessionFixtures?: Record<string, AuthSession | null>;
   configureReader?: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => void;
   failQueueAction?: boolean;
+  transactionVerifier?: GovernanceTransactionVerifier;
 }
 
 async function startServer(options: StartServerOptions = {}) {
@@ -252,6 +258,7 @@ async function startServer(options: StartServerOptions = {}) {
     config,
     governanceActionStore,
     createPassthroughGovernanceWriteStore(governanceActionStore, auditLogStore),
+    options.transactionVerifier,
   );
   const failedOperationWorkflow = new GatewayErrorHandlerWorkflow(failedOperationStore, auditLogStore);
 
@@ -316,6 +323,8 @@ function buildTradeReadService(): TradeReadReader {
 describe('gateway governance mutation routes contract', () => {
   const spec = loadOpenApiSpec();
   const validateAccepted = createSchemaValidator(spec, '#/components/schemas/GovernanceActionAcceptedResponse');
+  const validatePrepared = createSchemaValidator(spec, '#/components/schemas/GovernanceActionPreparedResponse');
+  const validateConfirmed = createSchemaValidator(spec, '#/components/schemas/GovernanceBroadcastConfirmedResponse');
   const validateError = createSchemaValidator(spec, '#/components/schemas/ErrorResponse');
 
   test('OpenAPI spec exposes all governance mutation endpoints', () => {
@@ -336,11 +345,330 @@ describe('gateway governance mutation routes contract', () => {
       '/governance/oracle/proposals/{proposalId}/approve',
       '/governance/oracle/proposals/{proposalId}/execute',
       '/governance/oracle/proposals/{proposalId}/cancel-expired',
+      '/governance/pause/prepare',
+      '/governance/unpause/proposal/prepare',
+      '/governance/unpause/proposal/approve/prepare',
+      '/governance/unpause/proposal/cancel/prepare',
+      '/governance/claims/pause/prepare',
+      '/governance/claims/unpause/prepare',
+      '/governance/treasury/sweep/prepare',
+      '/governance/treasury/payout-receiver/proposals/prepare',
+      '/governance/treasury/payout-receiver/proposals/{proposalId}/approve/prepare',
+      '/governance/treasury/payout-receiver/proposals/{proposalId}/execute/prepare',
+      '/governance/treasury/payout-receiver/proposals/{proposalId}/cancel-expired/prepare',
+      '/governance/oracle/disable-emergency/prepare',
+      '/governance/oracle/proposals/prepare',
+      '/governance/oracle/proposals/{proposalId}/approve/prepare',
+      '/governance/oracle/proposals/{proposalId}/execute/prepare',
+      '/governance/oracle/proposals/{proposalId}/cancel-expired/prepare',
+      '/governance/actions/{actionId}/confirm',
     ];
 
     mutationPaths.forEach((routePath) => {
       expect(hasOperation(spec, 'post', routePath)).toBe(true);
     });
+  });
+
+  test('POST /governance/pause/prepare returns the canonical signing payload and persists it', async () => {
+    const { server, baseUrl, governanceActionStore } = await startServer({
+      configureReader(reader) {
+        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
+      },
+    });
+
+    try {
+      const response = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-pause-prepare',
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(validatePrepared(payload)).toBe(true);
+      expect(payload.data.status).toBe('prepared');
+      expect(payload.data.signing).toMatchObject({
+        chainId: 31337,
+        contractAddress: baseConfig.escrowAddress,
+        contractMethod: 'pause',
+        args: [],
+        signerWallet: getAddress('0x00000000000000000000000000000000000000aa'),
+      });
+      expect(payload.data.signing.txRequest).toMatchObject({
+        chainId: 31337,
+        to: baseConfig.escrowAddress,
+        value: '0',
+      });
+      expect(payload.data.signing.txRequest.data).toMatch(/^0x[0-9a-f]+$/);
+      expect(payload.data.signing.preparedPayloadHash).toMatch(/^[a-f0-9]{64}$/);
+
+      const storedAction = await readStoredAction(governanceActionStore, payload.data.actionId);
+      expect(storedAction.flowType).toBe('direct_sign');
+      expect(storedAction.status).toBe('prepared');
+      expect(storedAction.signing).toEqual(payload.data.signing);
+      expect(storedAction.verificationState).toBe('not_started');
+      expect(storedAction.monitoringState).toBe('not_started');
+      expect(storedAction.actorId).toBe('user:uid-admin');
+    } finally {
+      server.close();
+    }
+  });
+
+  test('direct-sign prepare routes require a wallet-bound session', async () => {
+    const { server, baseUrl } = await startServer({
+      sessionFixtures: {
+        'sess-admin-no-wallet': {
+          userId: 'uid-admin',
+          walletAddress: '',
+          role: 'admin',
+          email: 'admin@agroasys.io',
+          issuedAt: Date.now(),
+          expiresAt: Date.now() + 60_000,
+        },
+      },
+      configureReader(reader) {
+        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
+      },
+    });
+
+    try {
+      const response = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin-no-wallet',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-pause-prepare-no-wallet',
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(validateError(payload)).toBe(true);
+      expect(payload.error.code).toBe('WALLET_SIGNER_REQUIRED');
+    } finally {
+      server.close();
+    }
+  });
+
+  test('prepare routes reuse the same open direct-sign action for the same governance intent', async () => {
+    const { server, baseUrl, governanceActionStore } = await startServer({
+      configureReader(reader) {
+        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
+      },
+    });
+
+    try {
+      const body = JSON.stringify(buildAuditBody());
+
+      const firstResponse = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-pause-prepare-1',
+        },
+        body,
+      });
+      const firstPayload = await firstResponse.json();
+
+      const secondResponse = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-pause-prepare-2',
+        },
+        body,
+      });
+      const secondPayload = await secondResponse.json();
+
+      expect(firstResponse.status).toBe(200);
+      expect(secondResponse.status).toBe(200);
+      expect(firstPayload.data.actionId).toBe(secondPayload.data.actionId);
+      expect(firstPayload.data.intentKey).toBe(secondPayload.data.intentKey);
+
+      const stored = await governanceActionStore.list({ limit: 10 });
+      expect(stored.items).toHaveLength(1);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('confirm rejects a broadcast transaction that does not match the prepared payload', async () => {
+    const mismatchedTxHash = `0x${'1'.repeat(64)}`;
+    const verifier: GovernanceTransactionVerifier = {
+      getTransaction: jest.fn(async () => ({
+        chainId: 31337,
+        to: baseConfig.escrowAddress,
+        from: '0x00000000000000000000000000000000000000aa',
+        data: '0xdeadbeef',
+        blockNumber: 42,
+      })),
+    };
+
+    const { server, baseUrl } = await startServer({
+      transactionVerifier: verifier,
+      configureReader(reader) {
+        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
+      },
+    });
+
+    try {
+      const prepareResponse = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-pause-prepare-mismatch',
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      const prepared = await prepareResponse.json();
+
+      const confirmResponse = await fetch(`${baseUrl}/governance/actions/${encodeURIComponent(prepared.data.actionId)}/confirm`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          txHash: mismatchedTxHash,
+          signerWallet: '0x00000000000000000000000000000000000000aa',
+        }),
+      });
+      const confirmPayload = await confirmResponse.json();
+
+      expect(confirmResponse.status).toBe(409);
+      expect(validateError(confirmPayload)).toBe(true);
+      expect(confirmPayload.error.message).toContain('calldata');
+    } finally {
+      server.close();
+    }
+  });
+
+  test('confirm stores pending verification when the tx is not yet observable on-chain', async () => {
+    const pendingTxHash = `0x${'2'.repeat(64)}`;
+    const verifier: GovernanceTransactionVerifier = {
+      getTransaction: jest.fn(async () => null),
+    };
+
+    const { server, baseUrl, governanceActionStore } = await startServer({
+      transactionVerifier: verifier,
+      configureReader(reader) {
+        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
+      },
+    });
+
+    try {
+      const prepareResponse = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-pause-prepare-pending',
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      const prepared = await prepareResponse.json();
+
+      const confirmResponse = await fetch(`${baseUrl}/governance/actions/${encodeURIComponent(prepared.data.actionId)}/confirm`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          txHash: pendingTxHash,
+          signerWallet: '0x00000000000000000000000000000000000000aa',
+        }),
+      });
+      const confirmPayload = await confirmResponse.json();
+
+      expect(confirmResponse.status).toBe(200);
+      expect(validateConfirmed(confirmPayload)).toBe(true);
+      expect(confirmPayload.data.status).toBe('broadcast_pending_verification');
+      expect(confirmPayload.data.verificationState).toBe('pending');
+      expect(confirmPayload.data.monitoringState).toBe('pending_verification');
+
+      const storedAction = await readStoredAction(governanceActionStore, prepared.data.actionId);
+      expect(storedAction.status).toBe('broadcast_pending_verification');
+      expect(storedAction.txHash).toBe(pendingTxHash);
+      expect(storedAction.verificationState).toBe('pending');
+      expect(storedAction.monitoringState).toBe('pending_verification');
+    } finally {
+      server.close();
+    }
+  });
+
+  test('confirm verifies the tx against the prepared action and records the final signer', async () => {
+    const verifiedTxHash = `0x${'3'.repeat(64)}`;
+    let preparedTxRequest: GovernanceObservedTransaction | null = null;
+    const verifier: GovernanceTransactionVerifier = {
+      getTransaction: jest.fn(async () => preparedTxRequest),
+    };
+
+    const { server, baseUrl, governanceActionStore } = await startServer({
+      transactionVerifier: verifier,
+      configureReader(reader) {
+        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
+      },
+    });
+
+    try {
+      const prepareResponse = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-pause-prepare-verified',
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      const prepared = await prepareResponse.json();
+
+      preparedTxRequest = {
+        chainId: prepared.data.signing.chainId,
+        to: prepared.data.signing.contractAddress,
+        from: prepared.data.signing.signerWallet,
+        data: prepared.data.signing.txRequest.data,
+        blockNumber: 88,
+      };
+
+      const confirmResponse = await fetch(`${baseUrl}/governance/actions/${encodeURIComponent(prepared.data.actionId)}/confirm`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          txHash: verifiedTxHash,
+          signerWallet: prepared.data.signing.signerWallet,
+        }),
+      });
+      const confirmPayload = await confirmResponse.json();
+
+      expect(confirmResponse.status).toBe(200);
+      expect(validateConfirmed(confirmPayload)).toBe(true);
+      expect(confirmPayload.data.status).toBe('broadcast');
+      expect(confirmPayload.data.verificationState).toBe('verified');
+      expect(confirmPayload.data.monitoringState).toBe('pending_confirmation');
+      expect(confirmPayload.data.signerWallet).toBe(prepared.data.signing.signerWallet);
+      expect(confirmPayload.data.blockNumber).toBe(88);
+
+      const storedAction = await readStoredAction(governanceActionStore, prepared.data.actionId);
+      expect(storedAction.status).toBe('broadcast');
+      expect(storedAction.finalSignerWallet).toBe(prepared.data.signing.signerWallet);
+      expect(storedAction.audit.finalSignerWallet).toBe(prepared.data.signing.signerWallet);
+      expect(storedAction.audit.finalSignerVerifiedAt).toBeTruthy();
+      expect(storedAction.monitoringState).toBe('pending_confirmation');
+    } finally {
+      server.close();
+    }
   });
 
   test('infrastructure failures dead-letter governance queue mutations and preserve logical idempotency', async () => {
