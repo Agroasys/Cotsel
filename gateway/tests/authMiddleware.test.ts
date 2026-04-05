@@ -2,7 +2,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { NextFunction, Request, Response } from 'express';
-import { createAuthenticationMiddleware, requireGatewayRole, requireMutationWriteAccess } from '../src/middleware/auth';
+import {
+  createAuthenticationMiddleware,
+  requireGatewayRole,
+  requireMutationWriteAccess,
+  resolveGatewayActorKey,
+} from '../src/middleware/auth';
 import type { GatewayConfig } from '../src/config/env';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
 
@@ -45,6 +50,47 @@ function mockRes() {
 }
 
 describe('gateway auth middleware', () => {
+  test('resolveGatewayActorKey prefers account identity over wallet identity', () => {
+    expect(resolveGatewayActorKey({
+      accountId: 'acct-admin',
+      userId: 'uid-admin',
+      walletAddress: '0xabc',
+      role: 'admin',
+      issuedAt: 1,
+      expiresAt: 2,
+    })).toBe('account:acct-admin');
+  });
+
+  test('resolveGatewayActorKey falls back to user identity before wallet identity', () => {
+    expect(resolveGatewayActorKey({
+      userId: 'uid-admin',
+      walletAddress: '0xABC',
+      role: 'admin',
+      issuedAt: 1,
+      expiresAt: 2,
+    })).toBe('user:uid-admin');
+  });
+
+  test('resolveGatewayActorKey falls back to wallet identity only when accountId and userId are absent', () => {
+    expect(resolveGatewayActorKey({
+      userId: '   ',
+      walletAddress: '0xABC',
+      role: 'admin',
+      issuedAt: 1,
+      expiresAt: 2,
+    })).toBe('wallet:0xabc');
+  });
+
+  test('resolveGatewayActorKey throws when every supported identifier is missing', () => {
+    expect(() => resolveGatewayActorKey({
+      userId: '   ',
+      walletAddress: null,
+      role: 'admin',
+      issuedAt: 1,
+      expiresAt: 2,
+    })).toThrow('Authenticated session is missing every supported actor identifier');
+  });
+
   test('rejects missing bearer token', async () => {
     const client: AuthSessionClient = {
       resolveSession: jest.fn(),

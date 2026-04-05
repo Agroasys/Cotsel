@@ -2379,6 +2379,7 @@ components:
           type: string
         walletAddress:
           type: string
+          nullable: true
         role:
           type: string
         sessionFingerprint:
@@ -3823,6 +3824,7 @@ components:
           type: string
         walletAddress:
           type: string
+          nullable: true
         role:
           type: string
     EvidenceBundleArtifactReference:

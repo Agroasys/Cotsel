@@ -17,17 +17,22 @@ export interface GatewayPrincipal {
 }
 
 export function resolveGatewayActorKey(session: AuthSession): string {
-  const normalizedWallet = session.walletAddress?.trim().toLowerCase();
-  if (normalizedWallet) {
-    return `wallet:${normalizedWallet}`;
-  }
-
   const normalizedAccountId = session.accountId?.trim();
   if (normalizedAccountId) {
     return `account:${normalizedAccountId}`;
   }
 
-  return `user:${session.userId}`;
+  const normalizedUserId = session.userId?.trim();
+  if (normalizedUserId) {
+    return `user:${normalizedUserId}`;
+  }
+
+  const normalizedWallet = session.walletAddress?.trim().toLowerCase();
+  if (normalizedWallet) {
+    return `wallet:${normalizedWallet}`;
+  }
+
+  throw new GatewayError(500, 'INTERNAL_ERROR', 'Authenticated session is missing every supported actor identifier');
 }
 
 export function requireWalletBoundSession(

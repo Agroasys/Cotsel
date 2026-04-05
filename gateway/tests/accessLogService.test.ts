@@ -7,17 +7,22 @@ import { createInMemoryAccessLogStore } from '../src/core/accessLogStore';
 import type { GatewayPrincipal } from '../src/middleware/auth';
 import type { RequestContext } from '../src/middleware/requestContext';
 
-function buildPrincipal(): GatewayPrincipal {
+function buildPrincipal(
+  overrides: Omit<Partial<GatewayPrincipal['session']>, 'walletAddress'> & { walletAddress?: string | null } = {},
+): GatewayPrincipal {
+  const session = {
+    userId: 'uid-admin',
+    walletAddress: '0x00000000000000000000000000000000000000aa',
+    role: 'admin',
+    email: 'admin@agroasys.io',
+    issuedAt: 1,
+    expiresAt: 2,
+    ...overrides,
+  } as GatewayPrincipal['session'];
+
   return {
     sessionReference: 'sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd',
-    session: {
-      userId: 'uid-admin',
-      walletAddress: '0x00000000000000000000000000000000000000aa',
-      role: 'admin',
-      email: 'admin@agroasys.io',
-      issuedAt: 1,
-      expiresAt: 2,
-    },
+    session,
     gatewayRoles: ['operator:read', 'operator:write'],
     writeEnabled: true,
   };
@@ -122,5 +127,29 @@ describe('AccessLogService', () => {
       surface: '/settings',
       outcome: 'allowed',
     })).toThrow('eventType contains invalid characters');
+  });
+
+  test('records access log entries when the session has no linked wallet', async () => {
+    const service = new AccessLogService(
+      createInMemoryAccessLogStore(),
+      () => new Date('2026-03-14T16:12:00.000Z'),
+      () => 'entry-2',
+    );
+
+    const entry = await service.record(
+      {
+        eventType: 'settings.access.viewed',
+        surface: '/settings/security',
+        outcome: 'allowed',
+        auditReferences: [],
+        metadata: {},
+      },
+      buildPrincipal({ walletAddress: null }),
+      buildRequestContext(),
+      buildRequest(),
+    );
+
+    expect(entry.entryId).toBe('entry-2');
+    expect(entry.actor.walletAddress).toBeNull();
   });
 });

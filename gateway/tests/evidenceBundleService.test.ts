@@ -47,18 +47,25 @@ const trade: DashboardTradeRecord = {
   },
 };
 
-const principal: GatewayPrincipal = {
-  gatewayRoles: ['operator:read', 'operator:write'],
-  sessionReference: 'sess-247',
-  writeEnabled: true,
-  session: {
+function buildPrincipal(
+  overrides: Omit<Partial<GatewayPrincipal['session']>, 'walletAddress'> & { walletAddress?: string | null } = {},
+): GatewayPrincipal {
+  const session = {
     userId: 'uid-admin',
     walletAddress: '0x00000000000000000000000000000000000000aa',
     role: 'admin',
     issuedAt: Date.now(),
     expiresAt: Date.now() + 60_000,
-  },
-};
+    ...overrides,
+  } as GatewayPrincipal['session'];
+
+  return {
+    gatewayRoles: ['operator:read', 'operator:write'],
+    sessionReference: 'sess-247',
+    writeEnabled: true,
+    session,
+  };
+}
 
 const requestContext: RequestContext = {
   requestId: 'req-247',
@@ -115,7 +122,7 @@ describe('GatewayEvidenceBundleService', () => {
 
     const manifest = await service.generate({
       tradeId: trade.id,
-      principal,
+      principal: buildPrincipal(),
       requestContext,
     });
 
@@ -156,7 +163,7 @@ describe('GatewayEvidenceBundleService', () => {
 
     const manifest = await service.generate({
       tradeId: trade.id,
-      principal,
+      principal: buildPrincipal(),
       requestContext,
     });
 
@@ -187,7 +194,7 @@ describe('GatewayEvidenceBundleService', () => {
 
     const manifest = await service.generate({
       tradeId: trade.id,
-      principal,
+      principal: buildPrincipal(),
       requestContext,
     });
 
@@ -201,5 +208,26 @@ describe('GatewayEvidenceBundleService', () => {
         href: expect.stringContaining(`/evidence/bundles/${manifest.bundleId}/download`),
       }),
     ]));
+  });
+
+  test('persists a null generatedBy wallet when the operator session is not wallet-bound', async () => {
+    const service = new GatewayEvidenceBundleService(
+      createInMemoryEvidenceBundleStore(),
+      buildTradeReader(trade),
+      createInMemoryComplianceStore(),
+      'http://127.0.0.1:3100/api/ricardian/v1',
+      () => new Date('2026-03-14T10:00:00.000Z'),
+    );
+
+    const manifest = await service.generate({
+      tradeId: trade.id,
+      principal: buildPrincipal({ walletAddress: null }),
+      requestContext,
+    });
+
+    expect(manifest.generatedBy.walletAddress).toBeNull();
+
+    const stored = await service.get(manifest.bundleId);
+    expect(stored?.generatedBy.walletAddress).toBeNull();
   });
 });
