@@ -42,11 +42,11 @@ export function requireWalletBoundSession(
   const walletAddress = principal.session.walletAddress?.trim().toLowerCase();
   if (!walletAddress) {
     throw new GatewayError(
-      403,
-      'FORBIDDEN',
-      `${actionDescription} still requires a linked wallet in the current gateway mutation contract`,
+      409,
+      'WALLET_SIGNER_REQUIRED',
+      `${actionDescription} requires a wallet-bound admin signer session`,
       {
-        reason: 'wallet_required_for_legacy_mutation',
+        reason: 'wallet_signer_required',
       },
     );
   }

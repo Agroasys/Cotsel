@@ -568,6 +568,126 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_governance_actions_actor_endpoint_idempote
 CREATE INDEX IF NOT EXISTS idx_governance_actions_intent_hash_status_created_at ON governance_actions(intent_hash, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_governance_actions_requested_expires_at ON governance_actions(expires_at ASC, action_id ASC)
 WHERE status = 'requested' AND expires_at IS NOT NULL;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS flow_type TEXT NOT NULL DEFAULT 'executor';
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS broadcast_at TIMESTAMP;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS actor_account_id TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS final_signer_wallet TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS verification_state TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS verification_error TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS monitoring_state TEXT;
+
+ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS prepared_signing_payload JSONB;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'governance_actions'::regclass
+          AND conname = 'governance_actions_flow_type_check'
+    ) THEN
+        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_flow_type_check;
+    END IF;
+END $$;
+
+ALTER TABLE governance_actions
+    ADD CONSTRAINT governance_actions_flow_type_check CHECK (flow_type IN ('executor', 'direct_sign'));
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'governance_actions'::regclass
+          AND conname = 'governance_actions_status_check'
+    ) THEN
+        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_status_check;
+    END IF;
+END $$;
+
+ALTER TABLE governance_actions
+    ADD CONSTRAINT governance_actions_status_check CHECK (status IN (
+        'requested',
+        'submitted',
+        'pending_approvals',
+        'approved',
+        'executed',
+        'cancelled',
+        'expired',
+        'stale',
+        'failed',
+        'prepared',
+        'broadcast_pending_verification',
+        'broadcast'
+    ));
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'governance_actions'::regclass
+          AND conname = 'governance_actions_verification_state_check'
+    ) THEN
+        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_verification_state_check;
+    END IF;
+END $$;
+
+ALTER TABLE governance_actions
+    ADD CONSTRAINT governance_actions_verification_state_check CHECK (
+        verification_state IS NULL
+        OR verification_state IN ('not_required', 'not_started', 'pending', 'verified', 'failed')
+    );
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'governance_actions'::regclass
+          AND conname = 'governance_actions_monitoring_state_check'
+    ) THEN
+        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_monitoring_state_check;
+    END IF;
+END $$;
+
+ALTER TABLE governance_actions
+    ADD CONSTRAINT governance_actions_monitoring_state_check CHECK (
+        monitoring_state IS NULL
+        OR monitoring_state IN (
+            'not_required',
+            'not_started',
+            'pending_verification',
+            'pending_confirmation',
+            'confirmed',
+            'finalized',
+            'reverted',
+            'stale'
+        )
+    );
+
+CREATE INDEX IF NOT EXISTS idx_governance_actions_prepared_expires_at ON governance_actions(expires_at ASC, action_id ASC)
+WHERE status = 'prepared' AND expires_at IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_governance_actions_flow_type_status_created_at ON governance_actions(flow_type, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_trade_id_decided_at ON compliance_decisions(trade_id, decided_at DESC, decision_id DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_result_decided_at ON compliance_decisions(result, decided_at DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_reason_code_decided_at ON compliance_decisions(reason_code, decided_at DESC);

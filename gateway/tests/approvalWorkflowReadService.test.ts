@@ -84,6 +84,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-request',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Rotate the oracle after anomaly review.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/AGRO-245' }],
@@ -122,6 +124,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-approve',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Second approver confirmed the proposed oracle.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/AGRO-246' }],
@@ -159,6 +163,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-execute',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Timelock elapsed and the approved proposal was executed.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/AGRO-247' }],
@@ -196,6 +202,8 @@ const seededActions: GovernanceActionRecord[] = [
     correlationId: 'corr-treasury',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Rotate treasury payout receiver.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/AGRO-248' }],

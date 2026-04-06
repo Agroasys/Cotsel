@@ -77,6 +77,8 @@ const governanceFixture: GovernanceActionRecord[] = [
     correlationId: 'corr-1',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Pause trade.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/agro-1' }],

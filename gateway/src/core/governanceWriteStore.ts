@@ -3,11 +3,21 @@
  */
 import { Pool, PoolClient } from 'pg';
 import { AuditLogEntry, AuditLogStore } from './auditLogStore';
-import { GovernanceActionRecord, GovernanceActionStore } from './governanceStore';
+import {
+  GovernanceActionRecord,
+  GovernanceActionStore,
+  GOVERNANCE_OPEN_INTENT_STATUSES,
+} from './governanceStore';
 
 export interface GovernanceWriteStore {
   saveActionWithAudit(action: GovernanceActionRecord, auditEntry: AuditLogEntry): Promise<GovernanceActionRecord>;
   saveQueuedActionWithIntentDedupe(
+    action: GovernanceActionRecord,
+    auditEntry: AuditLogEntry,
+    duplicateAuditEntry: (existing: GovernanceActionRecord) => AuditLogEntry,
+    now: string,
+  ): Promise<{ action: GovernanceActionRecord; created: boolean }>;
+  saveDirectSignActionWithIntentDedupe(
     action: GovernanceActionRecord,
     auditEntry: AuditLogEntry,
     duplicateAuditEntry: (existing: GovernanceActionRecord) => AuditLogEntry,
@@ -23,6 +33,7 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
     action.proposalId,
     action.category,
     action.status,
+    action.flowType,
     action.contractMethod,
     action.txHash,
     action.extrinsicHash,
@@ -30,6 +41,7 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
     action.tradeId,
     action.chainId,
     action.targetAddress,
+    action.broadcastAt,
     action.requestId,
     action.correlationId,
     action.idempotencyKey ?? null,
@@ -43,6 +55,13 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
     action.audit.actorRole,
     action.audit.requestedBy,
     JSON.stringify(action.audit.approvedBy ?? []),
+    action.audit.actorAccountId ?? null,
+    action.finalSignerWallet ?? null,
+    action.verificationState ?? (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
+    action.verificationError ?? null,
+    action.verifiedAt ?? null,
+    action.monitoringState ?? (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
+    action.signing ? JSON.stringify(action.signing) : null,
     action.errorCode,
     action.errorMessage,
     action.createdAt,
@@ -60,6 +79,7 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       proposal_id,
       category,
       status,
+      flow_type,
       contract_method,
       tx_hash,
       extrinsic_hash,
@@ -67,6 +87,7 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       trade_id,
       chain_id,
       target_address,
+      broadcast_at,
       request_id,
       correlation_id,
       idempotency_key,
@@ -80,6 +101,13 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       actor_role,
       requested_by,
       approved_by,
+      actor_account_id,
+      final_signer_wallet,
+      verification_state,
+      verification_error,
+      verified_at,
+      monitoring_state,
+      prepared_signing_payload,
       error_code,
       error_message,
       created_at,
@@ -88,8 +116,9 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       updated_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-      $11, $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, $21, $22, $23, $24,
-      $25, $26::jsonb, $27, $28, $29, $30, $31, NOW()
+      $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb,
+      $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, $34, $35,
+      $36, $37, $38, $39::jsonb, $40, $41, $42, $43, $44, NOW()
     )
     ON CONFLICT (action_id) DO UPDATE SET
       intent_key = EXCLUDED.intent_key,
@@ -97,6 +126,7 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       proposal_id = EXCLUDED.proposal_id,
       category = EXCLUDED.category,
       status = EXCLUDED.status,
+      flow_type = EXCLUDED.flow_type,
       contract_method = EXCLUDED.contract_method,
       tx_hash = EXCLUDED.tx_hash,
       extrinsic_hash = EXCLUDED.extrinsic_hash,
@@ -104,6 +134,7 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       trade_id = EXCLUDED.trade_id,
       chain_id = EXCLUDED.chain_id,
       target_address = EXCLUDED.target_address,
+      broadcast_at = EXCLUDED.broadcast_at,
       request_id = EXCLUDED.request_id,
       correlation_id = EXCLUDED.correlation_id,
       idempotency_key = EXCLUDED.idempotency_key,
@@ -117,6 +148,13 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       actor_role = EXCLUDED.actor_role,
       requested_by = EXCLUDED.requested_by,
       approved_by = EXCLUDED.approved_by,
+      actor_account_id = EXCLUDED.actor_account_id,
+      final_signer_wallet = EXCLUDED.final_signer_wallet,
+      verification_state = EXCLUDED.verification_state,
+      verification_error = EXCLUDED.verification_error,
+      verified_at = EXCLUDED.verified_at,
+      monitoring_state = EXCLUDED.monitoring_state,
+      prepared_signing_payload = EXCLUDED.prepared_signing_payload,
       error_code = EXCLUDED.error_code,
       error_message = EXCLUDED.error_message,
       created_at = EXCLUDED.created_at,
@@ -177,13 +215,13 @@ export function createPostgresGovernanceWriteStore(
        WHERE intent_key = $1
          AND status = ANY($2::text[])
          AND (
-           status <> 'requested'
+           status NOT IN ('requested', 'prepared')
            OR expires_at IS NULL
            OR expires_at > $3::timestamp
          )
        ORDER BY created_at DESC, action_id DESC
        LIMIT 1`,
-      [intentKey, ['requested', 'submitted', 'pending_approvals', 'approved'], now],
+      [intentKey, GOVERNANCE_OPEN_INTENT_STATUSES, now],
     );
 
     return result.rows[0] ?? null;
@@ -269,6 +307,57 @@ export function createPostgresGovernanceWriteStore(
         created,
       };
     },
+
+    async saveDirectSignActionWithIntentDedupe(action, auditEntry, duplicateAuditEntry, now) {
+      const client = await pool.connect();
+      let existingActionId: string | null = null;
+      let created = false;
+
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [action.intentKey]);
+
+        const existing = await loadExistingOpenIntentAction(client, action.intentKey, now);
+        if (existing) {
+          existingActionId = existing.actionId;
+          const storedExisting = await readStore.get(existing.actionId);
+          if (!storedExisting) {
+            throw new Error(`Failed to load governance action ${existing.actionId} for semantic dedupe`);
+          }
+          await insertAuditLog(client, duplicateAuditEntry(storedExisting));
+        } else {
+          await upsertGovernanceAction(client, action);
+          await insertAuditLog(client, auditEntry);
+          created = true;
+          existingActionId = action.actionId;
+        }
+
+        await client.query('COMMIT');
+      } catch (error) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          const originalMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Governance direct-sign write rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`);
+        }
+
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      const stored = existingActionId ? await readStore.get(existingActionId) : null;
+      if (!stored) {
+        throw new Error(`Failed to persist direct-sign governance action ${existingActionId ?? action.actionId}`);
+      }
+
+      return {
+        action: stored,
+        created,
+      };
+    },
+
   };
 }
 
@@ -300,5 +389,24 @@ export function createPassthroughGovernanceWriteStore(
         created: true,
       };
     },
+
+    async saveDirectSignActionWithIntentDedupe(action, auditEntry, duplicateAuditEntry, now) {
+      const existing = await actionStore.findOpenByIntentKey(action.intentKey, now);
+      if (existing) {
+        await auditLogStore.append(duplicateAuditEntry(existing));
+        return {
+          action: existing,
+          created: false,
+        };
+      }
+
+      const stored = await actionStore.save(action);
+      await auditLogStore.append(auditEntry);
+      return {
+        action: stored,
+        created: true,
+      };
+    },
+
   };
 }

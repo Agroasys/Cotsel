@@ -15,8 +15,14 @@ export const GOVERNANCE_ACTION_CATEGORIES = [
 ] as const;
 
 export const GOVERNANCE_ACTION_STATUSES = [
+  // executor flow statuses
   'requested',
   'submitted',
+  // direct_sign flow statuses
+  'prepared',
+  'broadcast_pending_verification',
+  'broadcast',
+  // shared post-execution statuses
   'pending_approvals',
   'approved',
   'executed',
@@ -26,12 +32,37 @@ export const GOVERNANCE_ACTION_STATUSES = [
   'failed',
 ] as const;
 
+export const GOVERNANCE_FLOW_TYPES = ['executor', 'direct_sign'] as const;
+export const GOVERNANCE_VERIFICATION_STATES = [
+  'not_required',
+  'not_started',
+  'pending',
+  'verified',
+  'failed',
+] as const;
+export const GOVERNANCE_MONITORING_STATES = [
+  'not_required',
+  'not_started',
+  'pending_verification',
+  'pending_confirmation',
+  'confirmed',
+  'finalized',
+  'reverted',
+  'stale',
+] as const;
+
 export type GovernanceActionCategory = typeof GOVERNANCE_ACTION_CATEGORIES[number];
 export type GovernanceActionStatus = typeof GOVERNANCE_ACTION_STATUSES[number];
+export type GovernanceFlowType = typeof GOVERNANCE_FLOW_TYPES[number];
+export type GovernanceVerificationState = typeof GOVERNANCE_VERIFICATION_STATES[number];
+export type GovernanceMonitoringState = typeof GOVERNANCE_MONITORING_STATES[number];
 
 export const GOVERNANCE_OPEN_INTENT_STATUSES: readonly GovernanceActionStatus[] = [
   'requested',
   'submitted',
+  'prepared',
+  'broadcast_pending_verification',
+  'broadcast',
   'pending_approvals',
   'approved',
 ] as const;
@@ -52,16 +83,38 @@ export interface EvidenceLink {
   note?: string;
 }
 
+export type GovernanceSigningArgValue = string | number | boolean;
+
+export interface GovernancePreparedTransactionRequest {
+  chainId: number;
+  to: string;
+  data: string;
+  value: string;
+}
+
+export interface GovernancePreparedSigningPayload {
+  chainId: number;
+  contractAddress: string;
+  contractMethod: string;
+  args: GovernanceSigningArgValue[];
+  txRequest: GovernancePreparedTransactionRequest;
+  signerWallet: string;
+  preparedPayloadHash: string;
+}
+
 export interface GovernanceActionAuditRecord {
   reason: string;
   evidenceLinks: EvidenceLink[];
   ticketRef: string;
   actorSessionId: string;
+  actorAccountId?: string | null;
   actorWallet: string;
   actorRole: string;
   createdAt: string;
   requestedBy: string;
   approvedBy?: string[];
+  finalSignerWallet?: string | null;
+  finalSignerVerifiedAt?: string | null;
 }
 
 export interface GovernanceActionRecord {
@@ -71,6 +124,7 @@ export interface GovernanceActionRecord {
   proposalId: number | null;
   category: GovernanceActionCategory;
   status: GovernanceActionStatus;
+  flowType: GovernanceFlowType;
   contractMethod: string;
   txHash: string | null;
   extrinsicHash: string | null;
@@ -78,6 +132,7 @@ export interface GovernanceActionRecord {
   tradeId: string | null;
   chainId: string | null;
   targetAddress: string | null;
+  broadcastAt: string | null;
   createdAt: string;
   expiresAt: string | null;
   executedAt: string | null;
@@ -89,6 +144,12 @@ export interface GovernanceActionRecord {
   errorCode: string | null;
   errorMessage: string | null;
   audit: GovernanceActionAuditRecord;
+  signing?: GovernancePreparedSigningPayload | null;
+  finalSignerWallet?: string | null;
+  verificationState?: GovernanceVerificationState;
+  verificationError?: string | null;
+  verifiedAt?: string | null;
+  monitoringState?: GovernanceMonitoringState;
 }
 
 export interface ListGovernanceActionsInput {
@@ -128,6 +189,7 @@ interface GovernanceActionRow {
   proposalId: string | number | null;
   category: GovernanceActionCategory;
   status: GovernanceActionStatus;
+  flowType: GovernanceFlowType;
   contractMethod: string;
   txHash: string | null;
   extrinsicHash: string | null;
@@ -135,6 +197,7 @@ interface GovernanceActionRow {
   tradeId: string | null;
   chainId: string | null;
   targetAddress: string | null;
+  broadcastAt: Date | null;
   requestId: string;
   correlationId: string | null;
   idempotencyKey: string | null;
@@ -148,6 +211,13 @@ interface GovernanceActionRow {
   actorRole: string;
   requestedBy: string;
   approvedBy: string[] | null;
+  actorAccountId: string | null;
+  finalSignerWallet: string | null;
+  verificationState: GovernanceVerificationState | null;
+  verificationError: string | null;
+  verifiedAt: Date | null;
+  monitoringState: GovernanceMonitoringState | null;
+  signing: GovernancePreparedSigningPayload | null;
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: Date;
@@ -211,6 +281,49 @@ function numericOrNull(value: string | number | null): number | null {
   return parsed;
 }
 
+function defaultVerificationState(row: Pick<GovernanceActionRow, 'flowType' | 'status'>): GovernanceVerificationState {
+  if (row.flowType !== 'direct_sign') {
+    return 'not_required';
+  }
+
+  switch (row.status) {
+    case 'prepared':
+      return 'not_started';
+    case 'broadcast_pending_verification':
+      return 'pending';
+    case 'broadcast':
+    case 'executed':
+      return 'verified';
+    case 'failed':
+      return 'failed';
+    default:
+      return 'not_started';
+  }
+}
+
+function defaultMonitoringState(row: Pick<GovernanceActionRow, 'flowType' | 'status'>): GovernanceMonitoringState {
+  if (row.flowType !== 'direct_sign') {
+    return 'not_required';
+  }
+
+  switch (row.status) {
+    case 'prepared':
+      return 'not_started';
+    case 'broadcast_pending_verification':
+      return 'pending_verification';
+    case 'broadcast':
+      return 'pending_confirmation';
+    case 'executed':
+      return 'finalized';
+    case 'failed':
+      return 'reverted';
+    case 'stale':
+      return 'stale';
+    default:
+      return 'not_started';
+  }
+}
+
 function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
   return {
     actionId: row.actionId,
@@ -227,6 +340,7 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
     proposalId: numericOrNull(row.proposalId),
     category: row.category,
     status: row.status,
+    flowType: row.flowType ?? 'executor',
     contractMethod: row.contractMethod,
     txHash: row.txHash,
     extrinsicHash: row.extrinsicHash,
@@ -234,6 +348,7 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
     tradeId: row.tradeId,
     chainId: row.chainId,
     targetAddress: row.targetAddress,
+    broadcastAt: row.broadcastAt ? row.broadcastAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
     executedAt: row.executedAt ? row.executedAt.toISOString() : null,
@@ -244,16 +359,25 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
     endpoint: row.endpoint ?? undefined,
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
+    signing: row.signing ?? null,
+    finalSignerWallet: row.finalSignerWallet,
+    verificationState: row.verificationState ?? defaultVerificationState(row),
+    verificationError: row.verificationError,
+    verifiedAt: row.verifiedAt ? row.verifiedAt.toISOString() : null,
+    monitoringState: row.monitoringState ?? defaultMonitoringState(row),
     audit: {
       reason: row.reason,
       evidenceLinks: row.evidenceLinks || [],
       ticketRef: row.ticketRef,
       actorSessionId: row.actorSessionId,
+      ...(row.actorAccountId ? { actorAccountId: row.actorAccountId } : {}),
       actorWallet: row.actorWallet,
       actorRole: row.actorRole,
       createdAt: row.createdAt.toISOString(),
       requestedBy: row.requestedBy,
       ...(row.approvedBy && row.approvedBy.length > 0 ? { approvedBy: row.approvedBy } : {}),
+      ...(row.finalSignerWallet ? { finalSignerWallet: row.finalSignerWallet } : {}),
+      ...(row.verifiedAt ? { finalSignerVerifiedAt: row.verifiedAt.toISOString() } : {}),
     },
   };
 }
@@ -295,6 +419,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
     proposal_id AS "proposalId",
     category,
     status,
+    COALESCE(flow_type, 'executor') AS "flowType",
     contract_method AS "contractMethod",
     tx_hash AS "txHash",
     extrinsic_hash AS "extrinsicHash",
@@ -302,6 +427,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
     trade_id AS "tradeId",
     chain_id AS "chainId",
     target_address AS "targetAddress",
+    broadcast_at AS "broadcastAt",
     request_id AS "requestId",
     correlation_id AS "correlationId",
     idempotency_key AS "idempotencyKey",
@@ -315,6 +441,13 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
     actor_role AS "actorRole",
     requested_by AS "requestedBy",
     approved_by AS "approvedBy",
+    actor_account_id AS "actorAccountId",
+    final_signer_wallet AS "finalSignerWallet",
+    verification_state AS "verificationState",
+    verification_error AS "verificationError",
+    verified_at AS "verifiedAt",
+    monitoring_state AS "monitoringState",
+    prepared_signing_payload AS "signing",
     error_code AS "errorCode",
     error_message AS "errorMessage",
     created_at AS "createdAt",
@@ -331,6 +464,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           proposal_id,
           category,
           status,
+          flow_type,
           contract_method,
           tx_hash,
           extrinsic_hash,
@@ -338,6 +472,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           trade_id,
           chain_id,
           target_address,
+          broadcast_at,
           request_id,
           correlation_id,
           idempotency_key,
@@ -351,6 +486,13 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           actor_role,
           requested_by,
           approved_by,
+          actor_account_id,
+          final_signer_wallet,
+          verification_state,
+          verification_error,
+          verified_at,
+          monitoring_state,
+          prepared_signing_payload,
           error_code,
           error_message,
           created_at,
@@ -359,8 +501,9 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, $21, $22, $23, $24,
-          $25, $26::jsonb, $27, $28, $29, $30, $31, NOW()
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb,
+          $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, $34, $35,
+          $36, $37, $38, $39::jsonb, $40, $41, $42, $43, $44, NOW()
         )
         ON CONFLICT (action_id) DO UPDATE SET
           intent_key = EXCLUDED.intent_key,
@@ -368,6 +511,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           proposal_id = EXCLUDED.proposal_id,
           category = EXCLUDED.category,
           status = EXCLUDED.status,
+          flow_type = EXCLUDED.flow_type,
           contract_method = EXCLUDED.contract_method,
           tx_hash = EXCLUDED.tx_hash,
           extrinsic_hash = EXCLUDED.extrinsic_hash,
@@ -375,6 +519,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           trade_id = EXCLUDED.trade_id,
           chain_id = EXCLUDED.chain_id,
           target_address = EXCLUDED.target_address,
+          broadcast_at = EXCLUDED.broadcast_at,
           request_id = EXCLUDED.request_id,
           correlation_id = EXCLUDED.correlation_id,
           idempotency_key = EXCLUDED.idempotency_key,
@@ -388,6 +533,13 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           actor_role = EXCLUDED.actor_role,
           requested_by = EXCLUDED.requested_by,
           approved_by = EXCLUDED.approved_by,
+          actor_account_id = EXCLUDED.actor_account_id,
+          final_signer_wallet = EXCLUDED.final_signer_wallet,
+          verification_state = EXCLUDED.verification_state,
+          verification_error = EXCLUDED.verification_error,
+          verified_at = EXCLUDED.verified_at,
+          monitoring_state = EXCLUDED.monitoring_state,
+          prepared_signing_payload = EXCLUDED.prepared_signing_payload,
           error_code = EXCLUDED.error_code,
           error_message = EXCLUDED.error_message,
           created_at = EXCLUDED.created_at,
@@ -401,6 +553,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           action.proposalId,
           action.category,
           action.status,
+          action.flowType,
           action.contractMethod,
           action.txHash,
           action.extrinsicHash,
@@ -408,6 +561,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           action.tradeId,
           action.chainId,
           action.targetAddress,
+          action.broadcastAt,
           action.requestId,
           action.correlationId,
           action.idempotencyKey ?? null,
@@ -421,6 +575,13 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           action.audit.actorRole,
           action.audit.requestedBy,
           JSON.stringify(action.audit.approvedBy ?? []),
+          action.audit.actorAccountId ?? null,
+          action.finalSignerWallet ?? null,
+          action.verificationState ?? (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
+          action.verificationError ?? null,
+          action.verifiedAt ?? null,
+          action.monitoringState ?? (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
+          action.signing ? JSON.stringify(action.signing) : null,
           action.errorCode,
           action.errorMessage,
           action.createdAt,
@@ -455,7 +616,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
          WHERE intent_key = $1
            AND status = ANY($2::text[])
            AND (
-             status <> 'requested'
+             status NOT IN ('requested', 'prepared')
              OR expires_at IS NULL
              OR expires_at > $3::timestamp
            )
@@ -582,6 +743,7 @@ export function createInMemoryGovernanceActionStore(initial: GovernanceActionRec
         candidate.intentKey === intentKey
         && GOVERNANCE_OPEN_INTENT_STATUSES.includes(candidate.status)
         && !isExpiredRequestedGovernanceAction(candidate, now)
+        && !(candidate.status === 'prepared' && candidate.expiresAt !== null && candidate.expiresAt <= now)
       ));
 
       return action ? { ...action, audit: { ...action.audit, evidenceLinks: [...action.audit.evidenceLinks], ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}) } } : null;

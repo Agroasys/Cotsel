@@ -87,6 +87,8 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
     correlationId: 'corr-1',
     errorCode: null,
     errorMessage: null,
+    flowType: 'executor',
+    broadcastAt: null,
     audit: {
       reason: 'Queue governance action for enterprise operator workflow.',
       evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets.agroasys.local/AGRO-321' }],
@@ -459,6 +461,7 @@ describe('GovernanceExecutorService', () => {
       {
         saveActionWithAudit: jest.fn().mockRejectedValue(new Error('audit storage unavailable')),
         saveQueuedActionWithIntentDedupe: jest.fn(),
+        saveDirectSignActionWithIntentDedupe: jest.fn(),
       },
       auditLogStore,
       createReader(),

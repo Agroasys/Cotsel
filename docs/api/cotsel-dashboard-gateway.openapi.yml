@@ -18,7 +18,7 @@ info:
     - Auth uses existing auth-service Bearer sessions.
     - Gateway role mapping is derived from current auth role `admin`, which maps to `operator:read` and `operator:write`.
     - All mutation endpoints additionally require `GATEWAY_ENABLE_MUTATIONS=true` and membership in `GATEWAY_WRITE_ALLOWLIST`.
-    - Governance mutations are accepted into a durable queue; a separate executor process performs the AdminSDK-backed chain execution and writes the final outcome back to the action ledger.
+    - Governance mutations use a two-endpoint direct-sign model (ADR-0411): (1) `POST /governance/<action>/prepare` validates the session and pre-flight state, records audit intent, and returns the canonical backend-authored signing payload (`chainId`, `contractAddress`, `contractMethod`, `args`, `txRequest`, `signerWallet`, `preparedPayloadHash`); (2) `POST /governance/actions/:actionId/confirm` accepts the broadcast `txHash`, verifies it against the prepared payload when observable, and records either `broadcast` or `broadcast_pending_verification` status with monitoring state. The admin wallet signs and broadcasts between these two calls. Legacy `POST /governance/<action>` queue endpoints remain for executor-backed service roles only.
 servers:
   - url: http://127.0.0.1:3600/api/dashboard-gateway/v1
     description: Local contract-first gateway base URL.
@@ -1503,6 +1503,540 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '409':
           $ref: '#/components/responses/ConflictError'
+  /governance/pause/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare protocol pause for direct admin signing
+      operationId: preparePauseProtocol
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/unpause/proposal/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare unpause proposal for direct admin signing
+      operationId: prepareProposeUnpause
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/unpause/proposal/approve/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare unpause approval for direct admin signing
+      operationId: prepareApproveUnpause
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/unpause/proposal/cancel/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare unpause proposal cancellation for direct admin signing
+      operationId: prepareCancelUnpauseProposal
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/claims/pause/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare claim pause for direct admin signing
+      operationId: preparePauseClaims
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/claims/unpause/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare claim unpause for direct admin signing
+      operationId: prepareUnpauseClaims
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/treasury/sweep/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare treasury sweep for direct admin signing
+      operationId: prepareClaimTreasury
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/treasury/payout-receiver/proposals/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare treasury payout receiver proposal for direct admin signing
+      operationId: prepareProposeTreasuryPayoutReceiverUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryPayoutReceiverProposalRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/treasury/payout-receiver/proposals/{proposalId}/approve/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare treasury payout receiver approval for direct admin signing
+      operationId: prepareApproveTreasuryPayoutReceiverUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/treasury/payout-receiver/proposals/{proposalId}/execute/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare treasury payout receiver execution for direct admin signing
+      operationId: prepareExecuteTreasuryPayoutReceiverUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/treasury/payout-receiver/proposals/{proposalId}/cancel-expired/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare expired treasury payout receiver proposal cancellation for direct admin signing
+      operationId: prepareCancelExpiredTreasuryPayoutReceiverUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/oracle/disable-emergency/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare oracle emergency disable for direct admin signing
+      operationId: prepareDisableOracleEmergency
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/oracle/proposals/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare oracle update proposal for direct admin signing
+      operationId: prepareProposeOracleUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OracleUpdateProposalRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/oracle/proposals/{proposalId}/approve/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare oracle update approval for direct admin signing
+      operationId: prepareApproveOracleUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/oracle/proposals/{proposalId}/execute/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare oracle update execution for direct admin signing
+      operationId: prepareExecuteOracleUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/oracle/proposals/{proposalId}/cancel-expired/prepare:
+    post:
+      tags: [Governance]
+      summary: Prepare expired oracle update proposal cancellation for direct admin signing
+      operationId: prepareCancelExpiredOracleUpdateProposal
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceMutationRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/actions/{actionId}/confirm:
+    post:
+      tags: [Governance]
+      summary: Confirm a direct-sign governance broadcast
+      operationId: confirmGovernanceBroadcast
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: actionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceBroadcastConfirmRequest'
+      responses:
+        '200':
+          description: Broadcast recorded and verified or queued for backend verification.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceBroadcastConfirmedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
   /compliance/decisions:
     post:
       tags: [Compliance]
@@ -2329,6 +2863,9 @@ components:
           properties:
             actorSessionId:
               type: string
+            actorAccountId:
+              type: string
+              nullable: true
             actorWallet:
               type: string
             actorRole:
@@ -2342,6 +2879,13 @@ components:
               type: array
               items:
                 type: string
+            finalSignerWallet:
+              type: string
+              nullable: true
+            finalSignerVerifiedAt:
+              type: string
+              format: date-time
+              nullable: true
     AccessAuditReference:
       type: object
       required: [type, reference]
@@ -3741,6 +4285,9 @@ components:
       enum:
         - requested
         - submitted
+        - prepared
+        - broadcast_pending_verification
+        - broadcast
         - pending_approvals
         - approved
         - executed
@@ -3748,6 +4295,12 @@ components:
         - expired
         - stale
         - failed
+    GovernanceVerificationState:
+      type: string
+      enum: [not_required, not_started, pending, verified, failed]
+    GovernanceMonitoringState:
+      type: string
+      enum: [not_required, not_started, pending_verification, pending_confirmation, confirmed, finalized, reverted, stale]
     GovernanceStatus:
       type: object
       required:
@@ -4026,6 +4579,10 @@ components:
         targetAddress:
           type: string
           nullable: true
+        broadcastAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -4037,6 +4594,24 @@ components:
           type: string
           format: date-time
           nullable: true
+        signing:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/GovernancePreparedSigningPayload'
+        finalSignerWallet:
+          type: string
+          nullable: true
+        verificationState:
+          $ref: '#/components/schemas/GovernanceVerificationState'
+        verificationError:
+          type: string
+          nullable: true
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+        monitoringState:
+          $ref: '#/components/schemas/GovernanceMonitoringState'
         audit:
           $ref: '#/components/schemas/MutationAuditRecord'
     GovernanceActionResponse:
@@ -4220,6 +4795,122 @@ components:
       properties:
         audit:
           $ref: '#/components/schemas/MutationAuditInput'
+    GovernancePreparedTransactionRequest:
+      type: object
+      required: [chainId, to, data, value]
+      properties:
+        chainId:
+          type: integer
+        to:
+          type: string
+        data:
+          type: string
+        value:
+          type: string
+    GovernancePreparedSigningPayload:
+      type: object
+      required: [chainId, contractAddress, contractMethod, args, txRequest, signerWallet, preparedPayloadHash]
+      properties:
+        chainId:
+          type: integer
+        contractAddress:
+          type: string
+        contractMethod:
+          type: string
+        args:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - type: integer
+              - type: boolean
+        txRequest:
+          $ref: '#/components/schemas/GovernancePreparedTransactionRequest'
+        signerWallet:
+          type: string
+        preparedPayloadHash:
+          type: string
+    GovernanceActionPreparedResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required: [actionId, intentKey, category, status, preparedAt, signing]
+          properties:
+            actionId:
+              type: string
+            intentKey:
+              type: string
+            proposalId:
+              type: integer
+              minimum: 0
+              nullable: true
+            category:
+              $ref: '#/components/schemas/GovernanceActionCategory'
+            status:
+              $ref: '#/components/schemas/GovernanceActionStatus'
+            preparedAt:
+              type: string
+              format: date-time
+            expiresAt:
+              type: string
+              format: date-time
+              nullable: true
+            signing:
+              $ref: '#/components/schemas/GovernancePreparedSigningPayload'
+        timestamp:
+          type: string
+          format: date-time
+    GovernanceBroadcastConfirmRequest:
+      type: object
+      required: [txHash]
+      properties:
+        txHash:
+          type: string
+        signerWallet:
+          type: string
+          nullable: true
+    GovernanceBroadcastConfirmedResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required: [actionId, txHash, status, broadcastAt, verificationState, monitoringState]
+          properties:
+            actionId:
+              type: string
+            txHash:
+              type: string
+            status:
+              $ref: '#/components/schemas/GovernanceActionStatus'
+            broadcastAt:
+              type: string
+              format: date-time
+            signerWallet:
+              type: string
+              nullable: true
+            verificationState:
+              $ref: '#/components/schemas/GovernanceVerificationState'
+            monitoringState:
+              $ref: '#/components/schemas/GovernanceMonitoringState'
+            verifiedAt:
+              type: string
+              format: date-time
+              nullable: true
+            blockNumber:
+              type: integer
+              nullable: true
+        timestamp:
+          type: string
+          format: date-time
     GovernanceActionAcceptedResponse:
       type: object
       required: [success, data, timestamp]

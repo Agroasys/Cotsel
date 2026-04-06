@@ -5,6 +5,7 @@ export type GatewayErrorCode =
   | 'AUTH_REQUIRED'
   | 'FORBIDDEN'
   | 'VALIDATION_ERROR'
+  | 'WALLET_SIGNER_REQUIRED'
   | 'UPSTREAM_UNAVAILABLE'
   | 'CONFLICT'
   | 'NOT_FOUND'
