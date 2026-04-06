@@ -22,7 +22,7 @@ export type ReplayableOperationType =
 export interface FailedOperationPrincipalSnapshot {
   actorId: string;
   actorUserId: string | null;
-  actorWalletAddress: string;
+  actorWalletAddress: string | null;
   actorRole: AuthServiceRole;
   sessionReference: string;
 }

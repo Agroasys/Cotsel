@@ -132,6 +132,9 @@ async function startServer(options: StartServerOptions = {}) {
       );
       const sessionToken = token || 'session-admin';
       return {
+        accountId: role === 'admin'
+          ? (sessionToken === 'session-admin-2' ? 'acct-admin-2' : 'acct-admin')
+          : 'acct-buyer',
         userId: role === 'admin'
           ? (sessionToken === 'session-admin-2' ? 'uid-admin-2' : 'uid-admin')
           : 'uid-buyer',
@@ -256,7 +259,7 @@ describe('gateway compliance routes contract', () => {
       expect(auditLogStore.entries[0]).toMatchObject({
         actionId: payload.data.decisionId,
         idempotencyKey: 'idem-create-1',
-        actorId: 'user:uid-admin',
+        actorId: 'account:acct-admin',
       });
     } finally {
       server.close();
@@ -581,7 +584,7 @@ describe('gateway compliance routes contract', () => {
       expect(validateError(invalidPayload)).toBe(true);
       expect(invalidPayload.error.message).toContain('decisionId is server-generated');
       expect(auditLogStore.entries.map((entry) => entry.actorId)).toEqual(
-        expect.arrayContaining(['user:uid-admin', 'user:uid-admin-2']),
+        expect.arrayContaining(['account:acct-admin', 'account:acct-admin-2']),
       );
     } finally {
       server.close();

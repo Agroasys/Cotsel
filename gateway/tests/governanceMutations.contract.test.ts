@@ -198,6 +198,7 @@ async function startServer(options: StartServerOptions = {}) {
 
   const defaultSessionFixtures: Record<string, AuthSession> = {
     'sess-admin': {
+      accountId: 'acct-admin',
       userId: 'uid-admin',
       walletAddress: '0x00000000000000000000000000000000000000aa',
       role: 'admin',
@@ -206,6 +207,7 @@ async function startServer(options: StartServerOptions = {}) {
       expiresAt: Date.now() + 60_000,
     },
     'sess-admin-2': {
+      accountId: 'acct-admin-2',
       userId: 'uid-admin-2',
       walletAddress: '0x00000000000000000000000000000000000000ac',
       role: 'admin',
@@ -214,6 +216,7 @@ async function startServer(options: StartServerOptions = {}) {
       expiresAt: Date.now() + 60_000,
     },
     'sess-buyer': {
+      accountId: 'acct-buyer',
       userId: 'uid-buyer',
       walletAddress: '0x00000000000000000000000000000000000000bb',
       role: 'buyer',
@@ -412,7 +415,7 @@ describe('gateway governance mutation routes contract', () => {
       expect(storedAction.signing).toEqual(payload.data.signing);
       expect(storedAction.verificationState).toBe('not_started');
       expect(storedAction.monitoringState).toBe('not_started');
-      expect(storedAction.actorId).toBe('user:uid-admin');
+      expect(storedAction.actorId).toBe('account:acct-admin');
     } finally {
       server.close();
     }
@@ -1030,7 +1033,7 @@ describe('gateway governance mutation routes contract', () => {
       expect(storedAction.contractMethod).toBe(expectedMethod);
       expect(storedAction.intentKey).toBe(payload.data.intentKey);
       expect(storedAction.idempotencyKey).toBe(`idem-${expectedMethod}`);
-      expect(storedAction.actorId).toBe('user:uid-admin');
+      expect(storedAction.actorId).toBe('account:acct-admin');
       expect(storedAction.endpoint).toBe(`/api/dashboard-gateway/v1${path}`);
       expect(storedAction.intentHash).toMatch(/^[a-f0-9]{64}$/);
       expect(storedAction.expiresAt).toBe(payload.data.expiresAt);
@@ -1040,7 +1043,7 @@ describe('gateway governance mutation routes contract', () => {
       expect(auditLogStore.entries[0]).toMatchObject({
         actionId: payload.data.actionId,
         idempotencyKey: `idem-${expectedMethod}`,
-        actorId: 'user:uid-admin',
+        actorId: 'account:acct-admin',
       });
     } finally {
       server.close();

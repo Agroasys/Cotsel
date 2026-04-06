@@ -35,7 +35,10 @@ export function resolveGatewayActorKey(session: AuthSession): string {
   throw new GatewayError(500, 'INTERNAL_ERROR', 'Authenticated session is missing every supported actor identifier');
 }
 
-export function requireWalletBoundSession(principal: GatewayPrincipal, actionDescription: string): string {
+export function requireWalletBoundSession(
+  principal: GatewayPrincipal,
+  actionDescription: string,
+): string {
   const walletAddress = principal.session.walletAddress?.trim().toLowerCase();
   if (!walletAddress) {
     throw new GatewayError(

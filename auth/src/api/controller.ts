@@ -12,6 +12,7 @@ import { incrementLoginError } from '../metrics/counters';
 
 const CHALLENGE_TTL_SECONDS = 300; // 5 minutes
 const WALLET_REGEX = /^0x[0-9a-f]{40}$/i;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_ROLES: UserRole[] = ['buyer', 'supplier', 'admin'];
 
 interface LoginBody {
@@ -19,6 +20,15 @@ interface LoginBody {
   signature?: string;
   role?: UserRole;
   orgId?: string;
+  ttlSeconds?: number;
+}
+
+interface TrustedSessionExchangeBody {
+  accountId?: string;
+  role?: UserRole;
+  orgId?: string | null;
+  email?: string | null;
+  walletAddress?: string | null;
   ttlSeconds?: number;
 }
 
@@ -67,7 +77,8 @@ export class AuthController {
   /**
    * POST /login
    * Verifies the wallet signature and issues a platform session.
-   * No HMAC needed — the wallet signature proves ownership of the address.
+   * This is the current compatibility login path while Agroasys-first identity
+   * and account-first session exchange are being installed.
    *
    * Flow:
    *   1. GET /challenge?wallet=0x...  → receive { message }
@@ -211,6 +222,103 @@ export class AuthController {
   }
 
   /**
+   * POST /session/exchange/agroasys
+   * Issues a bridge session from a trusted Agroasys-authenticated account identity.
+   */
+  async exchangeTrustedSession(
+    req: Request<unknown, unknown, TrustedSessionExchangeBody>,
+    res: Response<ApiSuccessResponse | ApiErrorResponse>,
+  ): Promise<void> {
+    const { accountId, role, orgId, email, walletAddress, ttlSeconds } = req.body;
+    const normalizedAccountId = accountId?.trim();
+    const normalizedEmail =
+      email === undefined || email === null || email === ''
+        ? null
+        : email.trim().toLowerCase();
+    const normalizedWallet =
+      walletAddress === undefined || walletAddress === null || walletAddress === ''
+        ? null
+        : walletAddress.toLowerCase();
+
+    if (!normalizedAccountId) {
+      res.status(400).json({
+        success: false,
+        error: 'BadRequest',
+        message: 'accountId is required',
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (!role || !VALID_ROLES.includes(role)) {
+      res.status(400).json({
+        success: false,
+        error: 'BadRequest',
+        message: `role must be one of: ${VALID_ROLES.join(', ')}`,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (normalizedEmail && !EMAIL_REGEX.test(normalizedEmail)) {
+      res.status(400).json({
+        success: false,
+        error: 'BadRequest',
+        message: 'email must be a valid email address',
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (normalizedWallet && !WALLET_REGEX.test(normalizedWallet)) {
+      res.status(400).json({
+        success: false,
+        error: 'BadRequest',
+        message: 'walletAddress must be a valid 0x address when provided',
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const safeTtl =
+      ttlSeconds !== undefined
+        ? Math.max(1, Math.min(ttlSeconds, this.maxSessionTtlSeconds))
+        : undefined;
+
+    try {
+      const result = await this.sessionService.issueTrustedSession(
+        {
+          accountId: normalizedAccountId,
+          role,
+          orgId: orgId ?? null,
+          email: normalizedEmail,
+          walletAddress: normalizedWallet,
+        },
+        safeTtl,
+      );
+      Logger.info('Trusted session exchange successful', {
+        accountId: normalizedAccountId,
+        walletAddress: normalizedWallet,
+        email: normalizedEmail,
+        role,
+      });
+      res.status(201).json({
+        success: true,
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      Logger.error('Trusted session exchange failed', err);
+      res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: err instanceof Error ? err.message : 'Trusted session exchange failed',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  /**
    * POST /session/revoke
    * Permanently invalidates the current session.
    */
@@ -239,8 +347,10 @@ export class AuthController {
     res.json({
       success: true,
       data: {
+        accountId: session.accountId,
         userId: session.userId,
         walletAddress: session.walletAddress,
+        email: session.email,
         role: session.role,
         issuedAt: session.issuedAt,
         expiresAt: session.expiresAt,

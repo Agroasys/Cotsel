@@ -142,6 +142,7 @@ describe('gateway capabilities route contract', () => {
 
       expect(response.status).toBe(200);
       expect(validateCapabilities(payload)).toBe(true);
+      expect(payload.data.subject.accountId).toBe('acct-buyer');
       expect(payload.data.subject.authRole).toBe('buyer');
       expect(payload.data.subject.gatewayRoles).toEqual([]);
       expect(payload.data.routes.operationsRead).toBe(false);

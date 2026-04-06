@@ -10,7 +10,7 @@ export type AuthServiceRole = 'buyer' | 'supplier' | 'admin' | 'oracle';
 export interface AuthSession {
   userId: string;
   accountId?: string;
-  walletAddress: string;
+  walletAddress: string | null;
   role: AuthServiceRole;
   issuedAt: number;
   expiresAt: number;

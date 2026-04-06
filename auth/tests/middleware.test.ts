@@ -21,8 +21,10 @@ function mockRes() {
 function makeSession(overrides: Partial<UserSession> = {}): UserSession {
   return {
     sessionId: 'sess-1',
+    accountId: 'acct-1',
     userId: 'uid-1',
     walletAddress: '0xdeadbeef',
+    email: 'buyer@example.com',
     role: 'buyer',
     issuedAt: nowSeconds(),
     expiresAt: nowSeconds() + 3600,

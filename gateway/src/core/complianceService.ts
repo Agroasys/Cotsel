@@ -23,7 +23,8 @@ import {
   OracleProgressionBlockRecord,
 } from './complianceStore';
 import { GovernanceMutationAuditInput } from './governanceMutationService';
-import { GatewayPrincipal, resolveGatewayActorKey } from '../middleware/auth';
+import type { GatewayPrincipal } from '../middleware/auth';
+import { resolveGatewayActorKey } from '../middleware/auth';
 import { RequestContext } from '../middleware/requestContext';
 import { GatewayError } from '../errors';
 import { EvidenceLink } from './governanceStore';

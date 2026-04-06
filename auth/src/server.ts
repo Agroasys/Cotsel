@@ -4,6 +4,12 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import {
+  createServiceAuthMiddleware,
+  parseServiceApiKeys,
+  type ServiceApiKey,
+} from '@agroasys/shared-auth/serviceAuth';
+import { createPostgresNonceStore } from '@agroasys/shared-auth/nonceStore';
 import { config } from './config';
 import { testConnection, closeConnection, pool } from './database/connection';
 import { runMigrations } from './database/migrations';
@@ -15,6 +21,12 @@ import { AuthController } from './api/controller';
 import { createRouter } from './api/routes';
 import { errorHandler } from './middleware/middleware';
 import { Logger } from './utils/logger';
+
+function createServiceApiKeyLookup(rawKeys: string): (apiKey: string) => ServiceApiKey | undefined {
+  const keys = parseServiceApiKeys(rawKeys);
+  const lookup = new Map<string, ServiceApiKey>(keys.map((key) => [key.id, key]));
+  return (apiKey: string) => lookup.get(apiKey);
+}
 
 async function initializeDatabase(): Promise<void> {
   Logger.info('Initializing database...');
@@ -43,15 +55,34 @@ async function bootstrap(): Promise<void> {
   const sessionStore = createPostgresSessionStore(pool);
   const sessionService = createSessionService(sessionStore, profileStore);
   const challengeStore = createInMemoryChallengeStore();
+  const trustedSessionExchangeNonceStore = createPostgresNonceStore({
+    tableName: 'trusted_session_exchange_nonces',
+    query: (sql, params) => pool.query(sql, params),
+  });
+  const trustedSessionExchangeMiddleware = config.trustedSessionExchangeEnabled
+    ? createServiceAuthMiddleware({
+        enabled: true,
+        maxSkewSeconds: config.trustedSessionExchangeMaxSkewSeconds,
+        nonceTtlSeconds: config.trustedSessionExchangeNonceTtlSeconds,
+        lookupApiKey: createServiceApiKeyLookup(config.trustedSessionExchangeApiKeysJson),
+        consumeNonce: trustedSessionExchangeNonceStore.consume,
+      })
+    : undefined;
 
   //  Express app 
   const app = express();
   app.use(helmet());
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({
+    verify: (req, _res, buffer) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+    },
+  }));
 
   const controller = new AuthController(sessionService, challengeStore, config.sessionTtlSeconds);
-  const router = createRouter(controller, sessionService);
+  const router = createRouter(controller, sessionService, {
+    trustedSessionExchangeMiddleware,
+  });
 
   app.use('/api/auth/v1', router);
   app.use(errorHandler);
