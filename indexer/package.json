@@ -24,7 +24,7 @@
   "devDependencies": {
     "@subsquid/typeorm-codegen": "^2.1.0",
     "@types/minimatch": "^6.0.0",
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.5.2",
     "patch-package": "8.0.1",
     "typescript": "^6.0.2"
   }
