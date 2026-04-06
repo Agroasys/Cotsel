@@ -14,7 +14,11 @@ import {
   GovernanceActionStore,
   GovernanceActionStatus,
 } from './governanceStore';
-import { GatewayPrincipal } from '../middleware/auth';
+import {
+  requireWalletBoundSession,
+  resolveGatewayActorKey,
+  type GatewayPrincipal,
+} from '../middleware/auth';
 import { RequestContext } from '../middleware/requestContext';
 import { GatewayError } from '../errors';
 import { GovernanceWriteStore } from './governanceWriteStore';
@@ -51,9 +55,7 @@ export interface QueueGovernanceActionInput {
 }
 
 function resolveGovernanceActorId(principal: GatewayPrincipal): string {
-  return principal.session.userId
-    ? `user:${principal.session.userId}`
-    : `wallet:${principal.session.walletAddress.toLowerCase()}`;
+  return resolveGatewayActorKey(principal.session);
 }
 
 function buildGovernanceIntentHash(intentKey: string): string {
@@ -129,12 +131,16 @@ function buildAuditRecord(
   principal: GatewayPrincipal,
   acceptedAt: string,
 ): GovernanceActionAuditRecord {
+  const actorWallet = requireWalletBoundSession(
+    principal,
+    'Governance mutation queuing',
+  );
   return {
     reason: audit.reason,
     evidenceLinks: audit.evidenceLinks,
     ticketRef: audit.ticketRef,
     actorSessionId: principal.sessionReference,
-    actorWallet: principal.session.walletAddress,
+    actorWallet,
     actorRole: principal.session.role,
     createdAt: acceptedAt,
     requestedBy: principal.session.userId,
@@ -151,6 +157,10 @@ export class GovernanceMutationService {
   async queueAction(input: QueueGovernanceActionInput): Promise<GovernanceMutationAccepted> {
     const acceptedAt = new Date().toISOString();
     const expiresAt = new Date(Date.parse(acceptedAt) + (this.config.governanceQueueTtlSeconds * 1000)).toISOString();
+    const approverWallet = requireWalletBoundSession(
+      input.principal,
+      'Governance mutation queuing',
+    );
     const intentKey = buildGovernanceIntentKey({
       category: input.category,
       contractMethod: input.contractMethod,
@@ -158,7 +168,7 @@ export class GovernanceMutationService {
       targetAddress: input.targetAddress ?? null,
       tradeId: input.tradeId ?? null,
       chainId: this.config.chainId,
-      approverWallet: input.principal.session.walletAddress,
+      approverWallet,
     });
     const intentHash = buildGovernanceIntentHash(intentKey);
     const actionId = randomUUID();

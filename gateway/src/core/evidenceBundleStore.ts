@@ -11,7 +11,7 @@ export interface EvidenceBundleManifestRecord {
   generatedAt: string;
   generatedBy: {
     userId: string;
-    walletAddress: string;
+    walletAddress: string | null;
     role: string;
   };
   requestId: string;
@@ -31,7 +31,7 @@ interface EvidenceBundleRow {
   ricardianHash: string | null;
   generatedAt: Date;
   generatedByUserId: string;
-  generatedByWallet: string;
+  generatedByWallet: string | null;
   generatedByRole: string;
   requestId: string;
   correlationId: string | null;

@@ -8,7 +8,7 @@ import type { GatewayConfig } from '../src/config/env';
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createCapabilitiesRouter } from '../src/routes/capabilities';
-import type { AuthSessionClient, AuthServiceRole } from '../src/core/authSessionClient';
+import type { AuthSession, AuthSessionClient, AuthServiceRole } from '../src/core/authSessionClient';
 
 const baseConfig: GatewayConfig = {
   port: 3600,
@@ -47,6 +47,7 @@ const baseConfig: GatewayConfig = {
 async function startServer(
   role: AuthServiceRole | null,
   config: GatewayConfig = baseConfig,
+  sessionOverrides: Omit<Partial<AuthSession>, 'walletAddress'> & { walletAddress?: string | null } = {},
 ) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
@@ -55,12 +56,14 @@ async function startServer(
       }
 
       return {
+        accountId: `acct-${role}`,
         userId: `uid-${role}`,
         walletAddress: '0x00000000000000000000000000000000000000aa',
         role,
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
-      };
+        ...sessionOverrides,
+      } as AuthSession;
     }),
     checkReadiness: jest.fn(),
   };
@@ -111,6 +114,7 @@ describe('gateway capabilities route contract', () => {
       expect(response.status).toBe(200);
       expect(response.headers.get('x-request-id')).toBe('req-capabilities');
       expect(validateCapabilities(payload)).toBe(true);
+      expect(payload.data.subject.accountId).toBe('acct-admin');
       expect(payload.data.subject.authRole).toBe('admin');
       expect(payload.data.subject.gatewayRoles).toEqual(['operator:read', 'operator:write']);
       expect(payload.data.routes.overviewRead).toBe(true);
@@ -138,6 +142,7 @@ describe('gateway capabilities route contract', () => {
 
       expect(response.status).toBe(200);
       expect(validateCapabilities(payload)).toBe(true);
+      expect(payload.data.subject.accountId).toBe('acct-buyer');
       expect(payload.data.subject.authRole).toBe('buyer');
       expect(payload.data.subject.gatewayRoles).toEqual([]);
       expect(payload.data.routes.operationsRead).toBe(false);
@@ -174,6 +179,25 @@ describe('gateway capabilities route contract', () => {
         allowlisted: true,
         effective: false,
       });
+    } finally {
+      server.close();
+    }
+  });
+
+  test('GET /auth/capabilities allows authenticated sessions without a linked wallet', async () => {
+    const { server, baseUrl } = await startServer('admin', baseConfig, { walletAddress: null });
+
+    try {
+      const response = await fetch(`${baseUrl}/auth/capabilities`, {
+        headers: { Authorization: 'Bearer sess-admin-no-wallet' },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(validateCapabilities(payload)).toBe(true);
+      expect(payload.data.subject.accountId).toBe('acct-admin');
+      expect(payload.data.subject.walletAddress).toBeNull();
+      expect(payload.data.actions.governanceWrite).toBe(true);
     } finally {
       server.close();
     }

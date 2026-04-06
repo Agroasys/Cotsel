@@ -13,7 +13,12 @@ import {
 } from '../core/governanceMutationService';
 import { GovernanceMutationPreflightReader } from '../core/governanceStatusService';
 import { IdempotencyStore } from '../core/idempotencyStore';
-import { createAuthenticationMiddleware, requireMutationWriteAccess } from '../middleware/auth';
+import {
+  createAuthenticationMiddleware,
+  requireMutationWriteAccess,
+  requireWalletBoundSession,
+  resolveGatewayActorKey,
+} from '../middleware/auth';
 import { createIdempotencyMiddleware } from '../middleware/idempotency';
 import { GatewayError } from '../errors';
 import { successResponse } from '../responses';
@@ -97,7 +102,7 @@ async function queueAndRespond(
     if (options.failedOperationWorkflow) {
       const failedOperation = await options.failedOperationWorkflow.captureFailure({
         operationType: 'governance.queue_action',
-        operationKey: `${failureCapture.principal.session.walletAddress.toLowerCase()}:${req.originalUrl || req.path}:${failureCapture.idempotencyKey}`,
+        operationKey: `${resolveGatewayActorKey(failureCapture.principal.session)}:${req.originalUrl || req.path}:${failureCapture.idempotencyKey}`,
         targetService: 'gateway_governance_queue',
         route: req.originalUrl || req.path,
         method: req.method,
@@ -211,13 +216,17 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     };
   })(), async () => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const walletAddress = requireWalletBoundSession(
+      principal,
+      'Governance approval checks',
+    );
     const audit = validateGovernanceAuditInput(req.body);
     const proposal = await options.governanceReader.getUnpauseProposalState();
     if (!proposal.hasActiveProposal) {
       throw new GatewayError(409, 'CONFLICT', 'No active unpause proposal is available to approve');
     }
 
-    if (await options.governanceReader.hasApprovedUnpause(principal.session.walletAddress)) {
+    if (await options.governanceReader.hasApprovedUnpause(walletAddress)) {
       throw new GatewayError(409, 'CONFLICT', 'Caller has already approved the active unpause proposal');
     }
 
@@ -248,6 +257,10 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     };
   })(), async () => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    requireWalletBoundSession(
+      principal,
+      'Treasury payout approval checks',
+    );
     const audit = validateGovernanceAuditInput(req.body);
     const proposal = await options.governanceReader.getUnpauseProposalState();
     if (!proposal.hasActiveProposal) {
@@ -424,6 +437,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     };
   })(), async () => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const walletAddress = requireWalletBoundSession(principal, 'Treasury payout receiver proposal approval');
     const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getTreasuryPayoutReceiverProposalState(proposalId);
@@ -434,7 +448,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Treasury payout receiver proposal is no longer approvable', { proposalId });
     }
 
-    if (await options.governanceReader.hasApprovedTreasuryPayoutReceiverProposal(proposalId, principal.session.walletAddress)) {
+    if (await options.governanceReader.hasApprovedTreasuryPayoutReceiverProposal(proposalId, walletAddress)) {
       throw new GatewayError(409, 'CONFLICT', 'Caller has already approved this treasury payout receiver proposal', { proposalId });
     }
 
@@ -469,6 +483,10 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     };
   })(), async () => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    requireWalletBoundSession(
+      principal,
+      'Oracle update approval checks',
+    );
     const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getTreasuryPayoutReceiverProposalState(proposalId);
@@ -630,6 +648,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     };
   })(), async () => {
     const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+    const walletAddress = requireWalletBoundSession(principal, 'Oracle proposal approval');
     const audit = validateGovernanceAuditInput(req.body);
     const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
     const proposal = await options.governanceReader.getOracleProposalState(proposalId);
@@ -640,7 +659,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       throw new GatewayError(409, 'CONFLICT', 'Oracle update proposal is no longer approvable', { proposalId });
     }
 
-    if (await options.governanceReader.hasApprovedOracleProposal(proposalId, principal.session.walletAddress)) {
+    if (await options.governanceReader.hasApprovedOracleProposal(proposalId, walletAddress)) {
       throw new GatewayError(409, 'CONFLICT', 'Caller has already approved this oracle update proposal', { proposalId });
     }
 

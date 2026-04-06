@@ -44,8 +44,8 @@ Current connected-validation contract:
   - gateway `http://127.0.0.1:3600/api/dashboard-gateway/v1`
   - auth `http://127.0.0.1:3005/api/auth/v1`
 - approved remote staging:
-  - gateway base from the approved private staging inventory
-  - auth base from the approved private staging inventory
+  - gateway `https://cotsel.agroasys.com/api/dashboard-gateway/v1`
+  - auth `https://cotsel.agroasys.com/api/auth/v1`
   - Base Sepolia (`84532`)
   - explorer `https://sepolia-explorer.base.org/tx/`
   - read-only posture
