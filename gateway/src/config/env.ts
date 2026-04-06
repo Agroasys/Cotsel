@@ -62,6 +62,7 @@ export interface GatewayConfig {
   commitSha: string;
   buildTime: string;
   nodeEnv: string;
+  corsAllowedOrigins: string[];
 }
 
 function env(name: string): string {
@@ -127,6 +128,18 @@ function parseUrlList(raw: string | undefined): string[] {
     .map((value) => value.replace(/\/$/, ''));
 }
 
+function parseOriginList(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => value.replace(/\/$/, ''));
+}
+
 function assertAddress(name: string, value: string): string {
   assert(isAddress(value), `${name} must be a valid EVM address`);
   return getAddress(value);
@@ -150,6 +163,7 @@ export function loadConfig(): GatewayConfig {
   const rpcFallbackUrls = runtime.rpcFallbackUrls;
   const chainId = runtime.chainId;
   const writeAllowlist = parseAllowlist(process.env.GATEWAY_WRITE_ALLOWLIST);
+  const corsAllowedOrigins = parseOriginList(process.env.GATEWAY_CORS_ALLOWED_ORIGINS);
   const enableMutations = envBool('GATEWAY_ENABLE_MUTATIONS', false);
   const settlementIngressEnabled = envBool('GATEWAY_SETTLEMENT_INGRESS_ENABLED', false);
   const settlementServiceAuthApiKeysJson = process.env.GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON?.trim() || '[]';
@@ -295,5 +309,6 @@ export function loadConfig(): GatewayConfig {
     commitSha: process.env.GATEWAY_COMMIT_SHA?.trim() || 'local-dev',
     buildTime,
     nodeEnv,
+    corsAllowedOrigins,
   };
 }

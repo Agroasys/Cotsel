@@ -23,8 +23,8 @@ Local parity contract:
 - runtime scope: local/docker parity only
 
 Approved remote staging contract:
-- gateway target: `https://cotsel.agroasys.com/api/dashboard-gateway/v1`
-- auth-service target: `https://cotsel.agroasys.com/api/auth/v1`
+- gateway target: `https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1`
+- auth-service target: `https://cotsel.sys.agroasys.com/api/auth/v1`
 - chain target: Base Sepolia (`84532`)
 - explorer base: `https://sepolia-explorer.base.org/tx/`
 - mode: read-only first
@@ -151,9 +151,9 @@ Parity-enabled local browser verification:
 Readiness must stay green before enabling connected dashboard mode.
 
 Approved remote staging health evidence as of `2026-04-02`:
-- `GET https://cotsel.agroasys.com/api/dashboard-gateway/v1/healthz` -> `200 OK`
-- `GET https://cotsel.agroasys.com/api/dashboard-gateway/v1/readyz` -> `200 OK`
-- `GET https://cotsel.agroasys.com/api/dashboard-gateway/v1/version` -> `200 OK`
+- `GET https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1/healthz` -> `200 OK`
+- `GET https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1/readyz` -> `200 OK`
+- `GET https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1/version` -> `200 OK`
 - Protected read endpoints return `401 Unauthorized` without a bearer session and succeed with a real auth-service admin session.
 
 ## Authentication and authorization

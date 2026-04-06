@@ -41,6 +41,7 @@ export interface AuthConfig {
   dbUser: string;
   dbPassword: string;
   sessionTtlSeconds: number;
+  corsAllowedOrigins: string[];
   trustedSessionExchangeEnabled: boolean;
   trustedSessionExchangeApiKeysJson: string;
   trustedSessionExchangeMaxSkewSeconds: number;

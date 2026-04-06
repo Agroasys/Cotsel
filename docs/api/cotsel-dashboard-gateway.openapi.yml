@@ -2443,7 +2443,7 @@ components:
       enum: [operator:read, operator:write]
     OperatorCapabilitySubject:
       type: object
-      required: [accountId, userId, walletAddress, authRole, gatewayRoles]
+      required: [accountId, userId, authRole, gatewayRoles]
       properties:
         accountId:
           type: string
