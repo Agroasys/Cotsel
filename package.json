@@ -55,6 +55,11 @@
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs"
   },
+  "devDependencies": {
+    "defu": "6.1.6",
+    "lodash": "4.18.1",
+    "undici": "6.24.0"
+  },
   "overrides": {
     "axios": "1.14.0",
     "@parity/hardhat-polkadot-node": {
@@ -85,7 +90,9 @@
     "path-to-regexp@<0.1.13": "0.1.13",
     "path-to-regexp@>=8 <8.4.0": "8.4.0",
     "serialize-javascript": "7.0.5",
+    "defu": "6.1.6",
     "lodash": "4.18.1",
+    "undici": "6.24.0",
     "@nomicfoundation/ignition-core": {
       "lodash": "4.18.1"
     }
