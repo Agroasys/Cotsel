@@ -1204,8 +1204,8 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
 
   // ── Broadcast confirm endpoint ────────────────────────────────────────────
   // Called by the dashboard after the admin wallet signs and broadcasts the tx.
-  // Accepts the txHash, transitions the action to 'broadcast', and records the
-  // final signer evidence. On-chain confirmation monitoring is Phase 2.
+  // Accepts the txHash, transitions the action into the monitored broadcast
+  // lifecycle, and records the final signer evidence for backend reconciliation.
 
   router.post('/governance/actions/:actionId/confirm', (req, res, next) => confirmAndRespond(req, res, next, async () => {
     if (!req.gatewayPrincipal) {

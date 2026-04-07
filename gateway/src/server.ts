@@ -32,7 +32,8 @@ import { SettlementCallbackDispatcher } from './core/settlementCallbackDispatche
 import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { IndexerGraphqlClient } from './core/indexerGraphqlClient';
-import { GovernanceMutationService } from './core/governanceMutationService';
+import { GovernanceDirectSignMonitor } from './core/governanceDirectSignMonitor';
+import { createDefaultTransactionVerifier, GovernanceMutationService } from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
 import { EvidenceReadService } from './core/evidenceReadService';
 import { OperationsSummaryService } from './core/operationsSummaryService';
@@ -85,7 +86,19 @@ const settlementService = new SettlementService(config, settlementStore);
 const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore, {
   failedOperationWorkflow: errorHandlerWorkflow,
 });
-const governanceMutationService = new GovernanceMutationService(config, governanceActionStore, governanceWriteStore);
+const governanceTransactionVerifier = createDefaultTransactionVerifier(config);
+const governanceMutationService = new GovernanceMutationService(
+  config,
+  governanceActionStore,
+  governanceWriteStore,
+  governanceTransactionVerifier,
+);
+const governanceDirectSignMonitor = new GovernanceDirectSignMonitor(
+  governanceActionStore,
+  governanceWriteStore,
+  auditLogStore,
+  governanceTransactionVerifier,
+);
 const treasuryReadService = new TreasuryReadService(governanceStatusService, governanceActionStore);
 const reconciliationReadService = new ReconciliationReadService(settlementStore);
 const downstreamServiceRegistry = createDownstreamServiceRegistry([
@@ -447,10 +460,12 @@ async function bootstrap(): Promise<void> {
     });
   });
   settlementCallbackDispatcher.start();
+  governanceDirectSignMonitor.start();
 
   const shutdown = async (signal: string): Promise<void> => {
     Logger.info('Shutting down dashboard gateway', { signal });
     settlementCallbackDispatcher.stop();
+    governanceDirectSignMonitor.stop();
     await closeConnection(pool);
     server.close(() => process.exit(0));
   };
@@ -466,6 +481,7 @@ async function bootstrap(): Promise<void> {
   server.on('error', async (error) => {
     Logger.error('Dashboard gateway server error', error);
     settlementCallbackDispatcher.stop();
+    governanceDirectSignMonitor.stop();
     await closeConnection(pool);
     process.exit(1);
   });
