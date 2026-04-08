@@ -19,6 +19,7 @@ const BASE_ENV: Record<string, string> = {
   GATEWAY_COMMIT_SHA: 'deadbeef',
   GATEWAY_BUILD_TIME: '2026-03-30T00:00:00.000Z',
   GATEWAY_INDEXER_REQUEST_TIMEOUT_MS: '5000',
+  GATEWAY_CORS_ALLOWED_ORIGINS: 'https://cotsel.agroasys.com,https://ops.agroasys.com',
 };
 
 function withEnv(overrides: Record<string, string | undefined>, fn: () => void): void {
@@ -98,6 +99,18 @@ describe('gateway runtime env config', () => {
     withEnv({ GATEWAY_SETTLEMENT_RUNTIME: 'polkadot-testnet' }, () => {
       const { loadConfig } = loadConfigModule();
       expect(() => loadConfig()).toThrow(/Unknown settlement runtime "polkadot-testnet"/);
+    });
+  });
+
+  test('parses the gateway CORS allowlist', () => {
+    withEnv({ GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia' }, () => {
+      const { loadConfig } = loadConfigModule();
+      const config = loadConfig();
+
+      expect(config.corsAllowedOrigins).toEqual([
+        'https://cotsel.agroasys.com',
+        'https://ops.agroasys.com',
+      ]);
     });
   });
 });

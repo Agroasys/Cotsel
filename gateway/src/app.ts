@@ -17,11 +17,36 @@ export interface GatewayAppDependencies {
   extraRouter?: Router;
 }
 
+function createCorsOptions(allowedOrigins: string[]) {
+  if (allowedOrigins.length === 0) {
+    return {};
+  }
+
+  const normalized = new Set(allowedOrigins.map((origin) => origin.replace(/\/$/, '')));
+
+  return {
+    origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const normalizedOrigin = origin.replace(/\/$/, '');
+      callback(
+        normalized.has(normalizedOrigin)
+          ? null
+          : new Error('Origin is not allowed by GATEWAY_CORS_ALLOWED_ORIGINS'),
+        normalized.has(normalizedOrigin),
+      );
+    },
+  };
+}
+
 export function createApp(config: GatewayConfig, dependencies: GatewayAppDependencies) {
   const app = express();
 
   app.use(helmet());
-  app.use(cors());
+  app.use(cors(createCorsOptions(config.corsAllowedOrigins)));
   app.use(createRequestContextMiddleware());
   app.use(express.json({
     verify: (req, _res, buffer) => {

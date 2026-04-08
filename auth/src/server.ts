@@ -28,6 +28,31 @@ function createServiceApiKeyLookup(rawKeys: string): (apiKey: string) => Service
   return (apiKey: string) => lookup.get(apiKey);
 }
 
+function createCorsOptions(allowedOrigins: string[]) {
+  if (allowedOrigins.length === 0) {
+    return {};
+  }
+
+  const normalized = new Set(allowedOrigins.map((origin) => origin.replace(/\/$/, '')));
+
+  return {
+    origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const normalizedOrigin = origin.replace(/\/$/, '');
+      callback(
+        normalized.has(normalizedOrigin)
+          ? null
+          : new Error('Origin is not allowed by AUTH_CORS_ALLOWED_ORIGINS'),
+        normalized.has(normalizedOrigin),
+      );
+    },
+  };
+}
+
 async function initializeDatabase(): Promise<void> {
   Logger.info('Initializing database...');
   await testConnection();
@@ -72,7 +97,7 @@ async function bootstrap(): Promise<void> {
   //  Express app 
   const app = express();
   app.use(helmet());
-  app.use(cors());
+  app.use(cors(createCorsOptions(config.corsAllowedOrigins)));
   app.use(express.json({
     verify: (req, _res, buffer) => {
       (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
