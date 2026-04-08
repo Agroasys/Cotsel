@@ -39,6 +39,18 @@ function envBoolean(name: string, fallback = false): boolean {
   return ['true', '1', 'yes', 'on'].includes(normalized);
 }
 
+function parseOriginList(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => value.replace(/\/$/, ''));
+}
+
 function loadConfig(): AuthConfig {
   const trustedSessionExchangeEnabled = envBoolean(
     'TRUSTED_SESSION_EXCHANGE_ENABLED',
@@ -64,6 +76,7 @@ function loadConfig(): AuthConfig {
     trustedSessionExchangeNonceTtlSeconds >= trustedSessionExchangeMaxSkewSeconds,
     'TRUSTED_SESSION_EXCHANGE_NONCE_TTL_SECONDS must be greater than or equal to TRUSTED_SESSION_EXCHANGE_MAX_SKEW_SECONDS',
   );
+  const corsAllowedOrigins = parseOriginList(process.env.AUTH_CORS_ALLOWED_ORIGINS);
 
   return {
     port: envNumber('PORT', 3005),
@@ -73,6 +86,7 @@ function loadConfig(): AuthConfig {
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
     sessionTtlSeconds: envNumber('SESSION_TTL_SECONDS', 3600),
+    corsAllowedOrigins,
     trustedSessionExchangeEnabled,
     trustedSessionExchangeApiKeysJson,
     trustedSessionExchangeMaxSkewSeconds,
