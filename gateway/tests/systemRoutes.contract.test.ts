@@ -39,6 +39,7 @@ const config: GatewayConfig = {
   commitSha: 'abc1234',
   buildTime: '2026-03-07T00:00:00.000Z',
   nodeEnv: 'test',
+  corsAllowedOrigins: [],
 };
 
 async function startServer(readinessCheck: () => Promise<any>) {
