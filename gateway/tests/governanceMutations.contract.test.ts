@@ -513,6 +513,8 @@ describe('gateway governance mutation routes contract', () => {
         data: '0xdeadbeef',
         blockNumber: 42,
       })),
+      getTransactionReceipt: jest.fn(async () => null),
+      getBlockNumber: jest.fn(async () => null),
     };
 
     const { server, baseUrl } = await startServer({
@@ -559,6 +561,8 @@ describe('gateway governance mutation routes contract', () => {
     const pendingTxHash = `0x${'2'.repeat(64)}`;
     const verifier: GovernanceTransactionVerifier = {
       getTransaction: jest.fn(async () => null),
+      getTransactionReceipt: jest.fn(async () => null),
+      getBlockNumber: jest.fn(async () => null),
     };
 
     const { server, baseUrl, governanceActionStore } = await startServer({
@@ -617,6 +621,8 @@ describe('gateway governance mutation routes contract', () => {
     let preparedTxRequest: GovernanceObservedTransaction | null = null;
     const verifier: GovernanceTransactionVerifier = {
       getTransaction: jest.fn(async () => preparedTxRequest),
+      getTransactionReceipt: jest.fn(async () => null),
+      getBlockNumber: jest.fn(async () => null),
     };
 
     const { server, baseUrl, governanceActionStore } = await startServer({

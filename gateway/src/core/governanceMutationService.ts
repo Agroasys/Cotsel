@@ -129,8 +129,15 @@ export interface GovernanceObservedTransaction {
   blockNumber: number | null;
 }
 
+export interface GovernanceObservedTransactionReceipt {
+  blockNumber: number | null;
+  status: 'success' | 'reverted' | 'unknown';
+}
+
 export interface GovernanceTransactionVerifier {
   getTransaction(txHash: string): Promise<GovernanceObservedTransaction | null>;
+  getTransactionReceipt(txHash: string): Promise<GovernanceObservedTransactionReceipt | null>;
+  getBlockNumber(): Promise<number | null>;
 }
 
 interface GovernanceVerificationOutcome {
@@ -454,9 +461,31 @@ class RpcGovernanceTransactionVerifier implements GovernanceTransactionVerifier 
       blockNumber: tx.blockNumber ?? null,
     };
   }
+
+  async getTransactionReceipt(txHash: string): Promise<GovernanceObservedTransactionReceipt | null> {
+    const receipt = await this.provider.getTransactionReceipt(txHash);
+    if (!receipt) {
+      return null;
+    }
+
+    const status = receipt.status === 1
+      ? 'success'
+      : receipt.status === 0
+        ? 'reverted'
+        : 'unknown';
+
+    return {
+      blockNumber: receipt.blockNumber ?? null,
+      status,
+    };
+  }
+
+  async getBlockNumber(): Promise<number | null> {
+    return this.provider.getBlockNumber();
+  }
 }
 
-function createDefaultTransactionVerifier(config: GatewayConfig): GovernanceTransactionVerifier {
+export function createDefaultTransactionVerifier(config: GatewayConfig): GovernanceTransactionVerifier {
   return new RpcGovernanceTransactionVerifier(
     createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
       chainId: config.chainId,
