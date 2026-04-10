@@ -15,6 +15,9 @@
     "prelint": "npm run build:sdk"
   },
   "dependencies": {
+    "@agroasys/shared-db": "^1.0.0",
+    "@agroasys/shared-http": "^1.0.0",
+    "@agroasys/shared-edge": "^1.0.0",
     "express": "^5.2.1",
     "cors": "^2.8.6",
     "helmet": "^8.1.0",

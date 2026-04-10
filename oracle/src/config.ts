@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { ethers } from 'ethers';
+import { parseAllowedOrigins } from '@agroasys/shared-edge';
 import { resolveSettlementRuntime } from '@agroasys/sdk';
 import { OracleConfig } from './types';
 
@@ -74,6 +75,7 @@ function parseUrlList(raw: string | undefined): string[] {
 
 export function loadConfig(): OracleConfig {
     try {
+        const nodeEnv = process.env.NODE_ENV || 'development';
         const notificationsEnabled = validateEnvBool('NOTIFICATIONS_ENABLED', false);
         const notificationsWebhookUrl = process.env.NOTIFICATIONS_WEBHOOK_URL;
         const indexerGraphqlTimeoutMinMs = validateEnvNumber('INDEXER_GQL_TIMEOUT_MIN_MS', 1000);
@@ -83,10 +85,16 @@ export function loadConfig(): OracleConfig {
         const retryDelay = validateEnvNumber('RETRY_DELAY', 1000);
         const hmacNonceTtlSeconds = validateEnvNumber('HMAC_NONCE_TTL_SECONDS', 600);
         const manualApprovalEnabled = validateEnvBool('ORACLE_MANUAL_APPROVAL_ENABLED', false);
+        const dbMigrationUser = optionalEnv('DB_MIGRATION_USER');
+        const dbMigrationPassword = optionalEnv('DB_MIGRATION_PASSWORD');
 
         if (notificationsEnabled) {
             assert(notificationsWebhookUrl, 'NOTIFICATIONS_WEBHOOK_URL is required when NOTIFICATIONS_ENABLED=true');
         }
+        assert(
+            Boolean(dbMigrationUser) === Boolean(dbMigrationPassword),
+            'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+        );
 
         assert(indexerGraphqlTimeoutMinMs >= 1000, 'INDEXER_GQL_TIMEOUT_MIN_MS must be >= 1000');
         assert(indexerGraphqlTimeoutMaxMs <= 60000, 'INDEXER_GQL_TIMEOUT_MAX_MS must be <= 60000');
@@ -111,10 +119,15 @@ export function loadConfig(): OracleConfig {
         });
 
         const config: OracleConfig = {
+            nodeEnv,
             // server
             port: validateEnvNumber('PORT'),
             apiKey: validateEnv('API_KEY'),
             hmacSecret: validateEnv('HMAC_SECRET'),
+            corsAllowedOrigins: parseAllowedOrigins(process.env.ORACLE_CORS_ALLOWED_ORIGINS),
+            corsAllowNoOrigin: validateEnvBool('ORACLE_CORS_ALLOW_NO_ORIGIN', false),
+            rateLimitEnabled: validateEnvBool('ORACLE_RATE_LIMIT_ENABLED', true),
+            rateLimitRedisUrl: process.env.ORACLE_RATE_LIMIT_REDIS_URL?.trim() || undefined,
             
             // network
             rpcUrl: runtime.rpcUrl,
@@ -133,6 +146,8 @@ export function loadConfig(): OracleConfig {
             dbName: validateEnv('DB_NAME'),
             dbUser: validateEnv('DB_USER'),
             dbPassword: validateEnv('DB_PASSWORD'),
+            dbMigrationUser,
+            dbMigrationPassword,
             
             // indexer graphql api
             indexerGraphqlUrl: validateEnvUrl('INDEXER_GRAPHQL_URL'),
@@ -159,8 +174,15 @@ export function loadConfig(): OracleConfig {
         
         return config;
     } catch (error) {
-        console.error(JSON.stringify({ level: 'error', message: 'Oracle config validation failed', error: error instanceof Error ? error.message : String(error), service: 'oracle', env: process.env.NODE_ENV || 'development' }));
-        process.exit(1);
+        const normalizedError = error instanceof Error ? error : new Error(String(error));
+        console.error(JSON.stringify({
+            level: 'error',
+            message: 'Oracle config validation failed',
+            error: normalizedError.message,
+            service: 'oracle',
+            env: process.env.NODE_ENV || 'development',
+        }));
+        throw normalizedError;
     }
 }
 

@@ -145,8 +145,11 @@ const address = await web3Wallet.getAddress();
 
 `CLIENT_ID` is required. `WEB3AUTH_NETWORK` defaults to `SAPPHIRE_DEVNET`.
 
-This helper is now considered legacy/demo-only. Agroasys production integrations
-should not let the SDK become the owner of wallet identity or wallet bootstrap.
+This helper is legacy/demo-only.
+
+Do not use it as the default production integration path. Production
+integrations should keep wallet bootstrap and identity ownership outside the
+SDK and inject a signer instead.
 
 ## Functions
 
@@ -205,9 +208,9 @@ Production integrations should follow this boundary:
 - this SDK consumes an injected signer
 - Cotsel remains the settlement engine, not the identity root
 
-The legacy `web3Wallet` and `AuthClient` helpers remain available from the
-`@agroasys/sdk/legacy` entrypoint for demo flows, but they are no longer the
-recommended production integration path.
+The `web3Wallet` and `AuthClient` helpers remain available from the
+`@agroasys/sdk/legacy` entrypoint for demo and backward-compatibility flows.
+They are not the recommended production integration path.
 
 
 

@@ -8,7 +8,7 @@ This runbook covers:
 - health/readiness verification,
 - request tracing and log redaction,
 - downstream timeout boundaries,
-- queued governance execution,
+- direct-sign governance monitoring,
 - rollback and incident evidence capture.
 
 Automation-governance source of truth:
@@ -28,7 +28,7 @@ Approved remote staging contract:
 - chain target: Base Sepolia (`84532`)
 - explorer base: `https://sepolia-explorer.base.org/tx/`
 - mode: read-only first
-- executor mode: manual only
+- governance signer mode: human direct-sign for privileged governance, executor only for delegated/service roles
 
 Local parity source of truth:
 - `docs/runbooks/dashboard-local-parity.md`
@@ -45,8 +45,8 @@ Authoritative dependencies:
 - Postgres: gateway ledgers and idempotency/audit persistence
 - Failed-operation replay: `node scripts/gateway-dead-letter-workflow.mjs list|replay`
 - Auth service: bearer-session validation
-- Chain RPC: governance status reads and executor-backed governance mutations
-- Executor process: `npm run -w gateway execute:governance-action -- <actionId>`
+- Chain RPC: governance prepare verification, direct-sign confirm verification, and monitoring reads
+- Executor process: optional only for delegated/service-role governance paths that still intentionally use executor execution
 
 ## Required configuration
 Minimum gateway env contract:
@@ -108,7 +108,7 @@ Signer custody source of truth:
 Safety rules:
 - If `GATEWAY_ENABLE_MUTATIONS=false`, all gateway mutation routes must reject writes.
 - If `GATEWAY_WRITE_ALLOWLIST` is empty, mutations must reject writes even when enabled.
-- The gateway process must never hold the governance signer key; only the separate executor process may do so.
+- The gateway process must never hold the human governance signer key.
 - `GATEWAY_EXECUTOR_PRIVATE_KEY` is an approved local/staging bootstrap path only, not a steady-state production custody model.
 - Approved write operators for later enablement are Aston and `czpyioe`, but `GATEWAY_WRITE_ALLOWLIST`
   must contain the exact local auth principal IDs used by the auth service. Do not guess identifiers.
@@ -209,7 +209,7 @@ Use:
 The gateway is intentionally conservative:
 - Auth session validation timeout: `GATEWAY_AUTH_REQUEST_TIMEOUT_MS` (default `5000ms`)
 - Chain read timeout: `GATEWAY_RPC_READ_TIMEOUT_MS` (default `8000ms`)
-- Governance executor timeout: `GATEWAY_EXECUTOR_TIMEOUT_MS` (default `45000ms`)
+- Governance executor timeout: `GATEWAY_EXECUTOR_TIMEOUT_MS` (default `45000ms`) for delegated/service-role executor paths only
 - Downstream read timeout: `GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS` (default `5000ms`)
 - Downstream mutation timeout: `GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS` (default `8000ms`)
 - Automatic retries for gateway mutations: `GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET` (default `0`)
@@ -246,49 +246,51 @@ Escalation:
 - Do not re-enable writes or approve overrides on the assumption that a manual
   dashboard refresh constitutes fresh verification.
 
-## Governance queue and executor procedure
-Mutation requests do not execute governance transactions inline.
+## Governance direct-sign procedure
+Human privileged governance does not execute inline and does not route through the executor by default.
 
 Flow:
 1. Gateway validates authz and payload.
 2. Gateway derives a deterministic `intentKey` from governance category, contract method, and relevant parameters.
 3. If an open action already exists for the same `intentKey`, the gateway returns that existing action instead of creating a duplicate row.
-4. Otherwise the gateway writes `governance_actions` + `audit_log` atomically with status `requested`.
-5. Requested actions receive an `expires_at` deadline derived from `GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS`.
-6. Operators may inspect or clean stale requested actions with:
+4. Otherwise the gateway writes `governance_actions` + `audit_log` atomically with status `prepared` and flow type `direct_sign`.
+5. The response includes the canonical signing payload and prepared payload hash.
+6. The admin signs and broadcasts with their own wallet.
+7. The caller submits `POST /governance/actions/:actionId/confirm`.
+8. Gateway records `broadcast` or `broadcast_pending_verification` and starts backend monitoring.
+9. Operators verify tx hash, verification state, monitoring state, and chain event depth.
+
+Prepared actions may still expire and be marked `stale`. Cleanup remains valid:
 
 ```bash
 node gateway/scripts/governance-cleanup.mjs --dry-run
 node gateway/scripts/governance-cleanup.mjs --apply
 ```
 
-7. Cleanup only marks expired `requested` actions as `stale` and appends an audit record with reason code `QUEUE_EXPIRED`.
-8. Operator/executor runs:
+Cleanup only marks expired prepared actions as `stale` and appends an audit record.
+
+## Delegated/service-role executor procedure
+Executor-backed governance remains allowed only for delegated/service/system flows that intentionally retain executor execution.
+
+For those flows:
 
 ```bash
 npm run -w gateway execute:governance-action -- <actionId>
 ```
 
-9. Executor refuses expired `requested` actions, marks them `stale`, and appends an audit record.
-10. Executor updates the action record and audit log atomically.
-11. Operator verifies tx hash, status, and chain event.
-
-Signer-custody requirements before step 8:
-- confirm the executor signer address matches the approved admin address for the queued action
-- confirm the signer source satisfies `docs/runbooks/gateway-governance-signer-custody.md`
-- record the approval or incident reference before starting the executor session
+Use `docs/runbooks/gateway-governance-signer-custody.md` when that executor path is actually in scope.
 
 ## Rollback procedure
 If gateway behavior regresses after deploy:
 1. Set `GATEWAY_ENABLE_MUTATIONS=false`.
 2. Redeploy or restart gateway with the safe config.
-3. Stop any executor invocation for queued actions until the release is assessed.
-4. Inspect queued vs executed governance actions:
+3. Stop any executor invocation for delegated/service-role actions until the release is assessed.
+4. Inspect active governance actions:
 
 ```bash
 export DASHBOARD_GATEWAY_LOCAL_BASE_URL="${DASHBOARD_GATEWAY_LOCAL_BASE_URL:-<local dashboard gateway base>}"
 curl -fsS -H "Authorization: Bearer <session>" \
-  "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/governance/actions?status=requested"
+  "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/governance/actions?status=prepared"
 ```
 
 5. Revert the release if required.

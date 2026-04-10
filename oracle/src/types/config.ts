@@ -1,8 +1,13 @@
 export interface OracleConfig {
+    nodeEnv: string;
     // server
     port: number;
     apiKey: string;
     hmacSecret: string;
+    corsAllowedOrigins: string[];
+    corsAllowNoOrigin: boolean;
+    rateLimitEnabled: boolean;
+    rateLimitRedisUrl?: string;
     
     // network
     rpcUrl: string;
@@ -21,6 +26,8 @@ export interface OracleConfig {
     dbName: string;
     dbUser: string;
     dbPassword: string;
+    dbMigrationUser?: string;
+    dbMigrationPassword?: string;
     
     // indexer graphql api
     indexerGraphqlUrl: string;

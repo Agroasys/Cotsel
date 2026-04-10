@@ -1,4 +1,18 @@
 import { Request, Response } from 'express';
+import {
+  failure,
+  HttpError,
+  optionalEnum,
+  optionalInteger,
+  optionalNullableString,
+  optionalRecord,
+  optionalString,
+  requireInteger,
+  requireIsoTimestamp,
+  requireObject,
+  requireString,
+  success,
+} from '@agroasys/shared-http';
 import { assertBankPayoutState, BankPayoutConflictError } from '../core/bankPayout';
 import { TreasuryEligibilityService } from '../core/exportEligibility';
 import { TreasuryIngestionService } from '../core/ingestion';
@@ -22,26 +36,112 @@ const PAYOUT_STATES: PayoutState[] = [
   'CANCELLED',
 ];
 
-function assertPayoutState(value: string): asserts value is PayoutState {
-  if (!PAYOUT_STATES.includes(value as PayoutState)) {
-    throw new Error('Invalid payout state');
-  }
-}
+const EXPORT_FORMATS = ['json', 'csv'] as const;
 
-function parseObservedAt(value: string): Date {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error('observedAt must be a valid ISO timestamp');
-  }
-  return parsed;
-}
+type AppendStateBody = {
+  state?: string;
+  note?: string;
+  actor?: string;
+};
 
-function toCsv(entries: Array<Awaited<ReturnType<typeof getLedgerEntries>>[number] & {
+type UpsertDepositBody = {
+  rampReference?: string;
+  tradeId?: string;
+  ledgerEntryId?: number | null;
+  depositState?: FiatDepositState;
+  sourceAmount?: string;
+  currency?: string;
+  expectedAmount?: string;
+  expectedCurrency?: string;
+  observedAt?: string;
+  providerEventId?: string;
+  providerAccountRef?: string;
+  failureCode?: string | null;
+  reversalReference?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+type UpsertBankConfirmationBody = {
+  payoutReference?: string | null;
+  bankReference?: string;
+  bankState?: BankPayoutState;
+  confirmedAt?: string;
+  source?: string;
+  actor?: string;
+  failureCode?: string | null;
+  evidenceReference?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+type EligibilitySummary = {
   confirmationStage: string | null;
+  latestBlockNumber: number | null;
+  safeBlockNumber: number | null;
+  finalizedBlockNumber: number | null;
   reconciliationStatus: string;
+  reconciliationRunKey: string | null;
+  eligibleForPayout: boolean;
   eligibleForExport: boolean;
   blockedReasons: string[];
-}>): string {
+};
+
+function fallbackEligibility(): EligibilitySummary {
+  return {
+    confirmationStage: null,
+    latestBlockNumber: null,
+    safeBlockNumber: null,
+    finalizedBlockNumber: null,
+    reconciliationStatus: 'UNKNOWN',
+    reconciliationRunKey: null,
+    eligibleForPayout: false,
+    eligibleForExport: false,
+    blockedReasons: ['Eligibility state unavailable'],
+  };
+}
+
+function parseEntryId(value: unknown): number {
+  return requireInteger(value, 'entryId', { min: 1 });
+}
+
+function parseObservedAt(value: unknown, field: string): Date {
+  return requireIsoTimestamp(value, field);
+}
+
+function buildFailure(statusCode: number, code: string, message: string, extra?: Record<string, unknown>) {
+  return {
+    ...failure(code, message),
+    ...(extra ?? {}),
+  };
+}
+
+function mapValidationError(error: unknown, fallbackMessage: string) {
+  if (error instanceof HttpError) {
+    return {
+      statusCode: error.statusCode,
+      body: failure(error.code, error.message, error.details),
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      statusCode: 400,
+      body: failure('ValidationError', error.message || fallbackMessage),
+    };
+  }
+
+  return {
+    statusCode: 400,
+    body: failure('ValidationError', fallbackMessage),
+  };
+}
+
+function assertPayoutState(value: string): asserts value is PayoutState {
+  if (!PAYOUT_STATES.includes(value as PayoutState)) {
+    throw new HttpError(400, 'ValidationError', 'state must be a valid payout state');
+  }
+}
+
+function toCsv(entries: Array<Awaited<ReturnType<typeof getLedgerEntries>>[number] & EligibilitySummary>): string {
   const headers = [
     'id',
     'trade_id',
@@ -83,252 +183,181 @@ export class TreasuryController {
   private readonly ingestion = new TreasuryIngestionService();
   private readonly eligibility = new TreasuryEligibilityService();
 
-  async ingest(req: Request, res: Response): Promise<void> {
+  async ingest(_req: Request, res: Response): Promise<void> {
     try {
       const result = await this.ingestion.ingestOnce();
-      res.status(200).json({ success: true, data: result });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error?.message || 'Ingestion failed' });
+      res.status(200).json(success(result));
+    } catch (error: unknown) {
+      res.status(500).json(failure('InternalError', error instanceof Error ? error.message : 'Ingestion failed'));
     }
   }
 
   async listEntries(req: Request, res: Response): Promise<void> {
     try {
-      const tradeId = typeof req.query.tradeId === 'string' ? req.query.tradeId : undefined;
-      const rawState = typeof req.query.state === 'string' ? req.query.state : undefined;
-      const limit = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : 50;
-      const offset = typeof req.query.offset === 'string' ? Number.parseInt(req.query.offset, 10) : 0;
+      const tradeId = optionalString(req.query.tradeId, 'tradeId');
+      const state = optionalEnum(req.query.state, PAYOUT_STATES, 'state');
+      const limit = optionalInteger(req.query.limit, 'limit', { min: 1, max: 500 }) ?? 50;
+      const offset = optionalInteger(req.query.offset, 'offset', { min: 0 }) ?? 0;
 
-      let state: PayoutState | undefined;
-      if (rawState) {
-        assertPayoutState(rawState);
-        state = rawState;
-      }
-
-      const entries = await getLedgerEntries({
-        tradeId,
-        state,
-        limit: Number.isNaN(limit) ? 50 : limit,
-        offset: Number.isNaN(offset) ? 0 : offset,
-      });
+      const entries = await getLedgerEntries({ tradeId, state, limit, offset });
       const eligibility = await this.eligibility.assessEntries(entries);
       const data = entries.map((entry) => ({
         ...entry,
-        ...(eligibility.get(entry.id) ?? {
-          confirmationStage: null,
-          latestBlockNumber: null,
-          safeBlockNumber: null,
-          finalizedBlockNumber: null,
-          reconciliationStatus: 'UNKNOWN',
-          reconciliationRunKey: null,
-          eligibleForPayout: false,
-          eligibleForExport: false,
-          blockedReasons: ['Eligibility state unavailable'],
-        }),
+        ...(eligibility.get(entry.id) ?? fallbackEligibility()),
       }));
 
-      res.status(200).json({ success: true, data });
-    } catch (error: any) {
-      res.status(400).json({ success: false, error: error?.message || 'Failed to list entries' });
+      res.status(200).json(success(data));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to list entries');
+      res.status(response.statusCode).json(response.body);
     }
   }
 
-  async appendState(req: Request<{ entryId: string }, {}, { state: string; note?: string; actor?: string }>, res: Response): Promise<void> {
+  async appendState(
+    req: Request<{ entryId: string }, {}, AppendStateBody>,
+    res: Response,
+  ): Promise<void> {
     try {
-      const entryId = Number.parseInt(req.params.entryId, 10);
-      if (Number.isNaN(entryId)) {
-        res.status(400).json({ success: false, error: 'Invalid entryId' });
-        return;
-      }
+      const entryId = parseEntryId(req.params.entryId);
+      const body = requireObject<AppendStateBody>(req.body, 'body');
+      const requestedState = requireString(body.state, 'state');
+      const note = optionalString(body.note, 'note');
+      const actor = optionalString(body.actor, 'actor');
+      assertPayoutState(requestedState);
 
       const entry = await getLedgerEntryById(entryId);
       if (!entry) {
-        res.status(404).json({ success: false, error: 'Ledger entry not found' });
+        res.status(404).json(failure('NotFound', 'Ledger entry not found'));
         return;
       }
 
-      const requestedState = req.body.state;
-      assertPayoutState(requestedState);
-
       const latest = await getLatestPayoutState(entryId);
       const currentState = latest?.state || 'PENDING_REVIEW';
-
       assertValidTransition(currentState as PayoutState, requestedState);
 
       if (requestedState === 'READY_FOR_PAYOUT') {
-        const entries = await getLedgerEntries({
-          tradeId: entry.trade_id,
-          limit: 500,
-          offset: 0,
-        });
+        const entries = await getLedgerEntries({ tradeId: entry.trade_id, limit: 500, offset: 0 });
         const candidate = entries.find((item) => item.id === entryId);
         if (!candidate) {
-          throw new Error('Ledger entry not found in payout eligibility scope');
+          throw new HttpError(404, 'NotFound', 'Ledger entry not found in payout eligibility scope');
         }
 
         const eligibility = await this.eligibility.assessEntries([candidate]);
         const gate = eligibility.get(entryId);
         if (!gate?.eligibleForPayout) {
-          throw new Error(
+          throw new HttpError(
+            409,
+            'EligibilityBlocked',
             `Ledger entry is not eligible for payout: ${gate?.blockedReasons.join('; ') || 'unknown gate failure'}`,
           );
         }
       }
 
-      const event = await appendPayoutState({
-        ledgerEntryId: entryId,
-        state: requestedState,
-        note: req.body.note,
-        actor: req.body.actor,
-      });
-
-      res.status(200).json({ success: true, data: event });
-    } catch (error: any) {
-      res.status(400).json({ success: false, error: error?.message || 'Failed to append payout state' });
+      const event = await appendPayoutState({ ledgerEntryId: entryId, state: requestedState, note, actor });
+      res.status(200).json(success(event));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to append payout state');
+      res.status(response.statusCode).json(response.body);
     }
   }
 
   async upsertDeposit(
-    req: Request<
-      {},
-      {},
-      {
-        rampReference: string;
-        tradeId: string;
-        ledgerEntryId?: number | null;
-        depositState: FiatDepositState;
-        sourceAmount: string;
-        currency: string;
-        expectedAmount: string;
-        expectedCurrency: string;
-        observedAt: string;
-        providerEventId: string;
-        providerAccountRef: string;
-        failureCode?: string | null;
-        reversalReference?: string | null;
-        metadata?: Record<string, unknown>;
-      }
-    >,
+    req: Request<{}, {}, UpsertDepositBody>,
     res: Response,
   ): Promise<void> {
     try {
-      assertFiatDepositState(req.body.depositState);
+      const body = requireObject<UpsertDepositBody>(req.body, 'body');
+      const depositState = requireString(body.depositState, 'depositState');
+      assertFiatDepositState(depositState);
 
       const result = await upsertFiatDepositReference({
-        rampReference: req.body.rampReference,
-        tradeId: req.body.tradeId,
+        rampReference: requireString(body.rampReference, 'rampReference'),
+        tradeId: requireString(body.tradeId, 'tradeId'),
         ledgerEntryId:
-          typeof req.body.ledgerEntryId === 'number' && Number.isFinite(req.body.ledgerEntryId)
-            ? req.body.ledgerEntryId
-            : null,
-        depositState: req.body.depositState,
-        sourceAmount: req.body.sourceAmount,
-        currency: req.body.currency,
-        expectedAmount: req.body.expectedAmount,
-        expectedCurrency: req.body.expectedCurrency,
-        observedAt: parseObservedAt(req.body.observedAt),
-        providerEventId: req.body.providerEventId,
-        providerAccountRef: req.body.providerAccountRef,
-        failureCode: req.body.failureCode,
-        reversalReference: req.body.reversalReference,
-        metadata: req.body.metadata,
+          body.ledgerEntryId === undefined || body.ledgerEntryId === null
+            ? null
+            : requireInteger(body.ledgerEntryId, 'ledgerEntryId', { min: 1 }),
+        depositState,
+        sourceAmount: requireString(body.sourceAmount, 'sourceAmount'),
+        currency: requireString(body.currency, 'currency'),
+        expectedAmount: requireString(body.expectedAmount, 'expectedAmount'),
+        expectedCurrency: requireString(body.expectedCurrency, 'expectedCurrency'),
+        observedAt: parseObservedAt(body.observedAt, 'observedAt'),
+        providerEventId: requireString(body.providerEventId, 'providerEventId'),
+        providerAccountRef: requireString(body.providerAccountRef, 'providerAccountRef'),
+        failureCode: optionalNullableString(body.failureCode, 'failureCode'),
+        reversalReference: optionalNullableString(body.reversalReference, 'reversalReference'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
-      res.status(200).json({
-        success: true,
-        data: {
+      res.status(200).json(
+        success({
           reference: result.reference,
           eventCreated: result.eventCreated,
           idempotentReplay: result.idempotentReplay,
-        },
-      });
-    } catch (error: any) {
+        }),
+      );
+    } catch (error: unknown) {
       if (error instanceof FiatDepositConflictError) {
-        res.status(409).json({ success: false, error: error.message, code: error.code });
+        res.status(409).json(buildFailure(409, 'Conflict', error.message, { code: error.code }));
         return;
       }
 
-      res.status(400).json({ success: false, error: error?.message || 'Failed to persist fiat deposit reference' });
+      const response = mapValidationError(error, 'Failed to persist fiat deposit reference');
+      res.status(response.statusCode).json(response.body);
     }
   }
 
   async upsertBankConfirmation(
-    req: Request<
-      { entryId: string },
-      {},
-      {
-        payoutReference?: string | null;
-        bankReference: string;
-        bankState: BankPayoutState;
-        confirmedAt: string;
-        source: string;
-        actor: string;
-        failureCode?: string | null;
-        evidenceReference?: string | null;
-        metadata?: Record<string, unknown>;
-      }
-    >,
+    req: Request<{ entryId: string }, {}, UpsertBankConfirmationBody>,
     res: Response,
   ): Promise<void> {
     try {
-      const entryId = Number.parseInt(req.params.entryId, 10);
-      if (Number.isNaN(entryId)) {
-        res.status(400).json({ success: false, error: 'Invalid entryId' });
-        return;
-      }
-
-      assertBankPayoutState(req.body.bankState);
+      const entryId = parseEntryId(req.params.entryId);
+      const body = requireObject<UpsertBankConfirmationBody>(req.body, 'body');
+      const bankState = requireString(body.bankState, 'bankState');
+      assertBankPayoutState(bankState);
 
       const result = await upsertBankPayoutConfirmation({
         ledgerEntryId: entryId,
-        payoutReference: req.body.payoutReference,
-        bankReference: req.body.bankReference,
-        bankState: req.body.bankState,
-        confirmedAt: parseObservedAt(req.body.confirmedAt),
-        source: req.body.source,
-        actor: req.body.actor,
-        failureCode: req.body.failureCode,
-        evidenceReference: req.body.evidenceReference,
-        metadata: req.body.metadata,
+        payoutReference: optionalNullableString(body.payoutReference, 'payoutReference'),
+        bankReference: requireString(body.bankReference, 'bankReference'),
+        bankState,
+        confirmedAt: parseObservedAt(body.confirmedAt, 'confirmedAt'),
+        source: requireString(body.source, 'source'),
+        actor: requireString(body.actor, 'actor'),
+        failureCode: optionalNullableString(body.failureCode, 'failureCode'),
+        evidenceReference: optionalNullableString(body.evidenceReference, 'evidenceReference'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
-      res.status(200).json({
-        success: true,
-        data: {
+      res.status(200).json(
+        success({
           confirmation: result.confirmation,
           created: result.created,
           idempotentReplay: result.idempotentReplay,
-        },
-      });
-    } catch (error: any) {
+        }),
+      );
+    } catch (error: unknown) {
       if (error instanceof BankPayoutConflictError) {
-        res.status(409).json({ success: false, error: error.message, code: error.code });
+        res.status(409).json(buildFailure(409, 'Conflict', error.message, { code: error.code }));
         return;
       }
 
-      res.status(400).json({ success: false, error: error?.message || 'Failed to persist bank payout confirmation' });
+      const response = mapValidationError(error, 'Failed to persist bank payout confirmation');
+      res.status(response.statusCode).json(response.body);
     }
   }
 
   async exportEntries(req: Request, res: Response): Promise<void> {
     try {
-      const format = typeof req.query.format === 'string' ? req.query.format : 'json';
+      const format = optionalEnum(req.query.format, EXPORT_FORMATS, 'format') ?? 'json';
       const entries = await getLedgerEntries({ limit: 5000, offset: 0 });
       const eligibility = await this.eligibility.assessEntries(entries);
       const exportableEntries = entries
         .map((entry) => ({
           ...entry,
-          ...(eligibility.get(entry.id) ?? {
-            confirmationStage: null,
-            latestBlockNumber: null,
-            safeBlockNumber: null,
-            finalizedBlockNumber: null,
-            reconciliationStatus: 'UNKNOWN',
-            reconciliationRunKey: null,
-            eligibleForPayout: false,
-            eligibleForExport: false,
-            blockedReasons: ['Eligibility state unavailable'],
-          }),
+          ...(eligibility.get(entry.id) ?? fallbackEligibility()),
         }))
         .filter((entry) => entry.eligibleForExport);
 
@@ -339,9 +368,14 @@ export class TreasuryController {
         return;
       }
 
-      res.status(200).json({ success: true, data: exportableEntries });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error?.message || 'Failed to export entries' });
+      res.status(200).json(success(exportableEntries));
+    } catch (error: unknown) {
+      if (error instanceof HttpError) {
+        res.status(error.statusCode).json(failure(error.code, error.message, error.details));
+        return;
+      }
+
+      res.status(500).json(failure('InternalError', error instanceof Error ? error.message : 'Failed to export entries'));
     }
   }
 }

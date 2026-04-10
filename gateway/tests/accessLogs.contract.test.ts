@@ -46,6 +46,9 @@ const baseConfig: GatewayConfig = {
   buildTime: '2026-03-14T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 interface StartServerOptions {

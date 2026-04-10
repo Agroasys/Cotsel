@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
 import { WebhookNotifier } from '@agroasys/notifications';
 import { config } from './config';
 import { createRouter } from './api/routes';
@@ -14,9 +15,11 @@ import { TriggerManager } from './core/trigger-manager';
 import { SDKClient } from './blockchain/sdk-client';
 import { IndexerClient } from './blockchain/indexer-client';
 import { ConfirmationWorker } from './worker/confirmation-worker';
+import { oracleRateLimitPolicy } from './httpSecurity';
 
 let confirmationWorker: ConfirmationWorker;
 let indexerClient: IndexerClient;
+let requestRateLimiterClose: (() => Promise<void>) | undefined;
 
 async function initializeDatabase(): Promise<void> {
     Logger.info('Initializing database...');
@@ -31,6 +34,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
     try {
         if (confirmationWorker) {
             confirmationWorker.stop();
+        }
+
+        if (requestRateLimiterClose) {
+            await requestRateLimiterClose();
         }
         
         if (indexerClient) {
@@ -80,11 +87,24 @@ async function bootstrap() {
         );
 
         const controller = new OracleController(triggerManager);
+        const requestRateLimiter = await createHttpRateLimiter({
+            enabled: config.rateLimitEnabled,
+            redisUrl: config.rateLimitRedisUrl,
+            nodeEnv: config.nodeEnv,
+            keyPrefix: 'oracle',
+            classifyRoute: oracleRateLimitPolicy,
+            logger: Logger,
+        });
+        requestRateLimiterClose = requestRateLimiter.close;
 
         const app = express();
 
+        app.disable('x-powered-by');
         app.use(helmet());
-        app.use(cors());
+        app.use(cors(createCorsOptions({
+            allowedOrigins: config.corsAllowedOrigins,
+            allowNoOrigin: config.corsAllowNoOrigin,
+        })));
         app.use(express.json());
 
         app.use((req, res, next) => {
@@ -96,7 +116,7 @@ async function bootstrap() {
         });
 
         const router = createRouter(controller, testConnection);
-        app.use('/api/oracle', router);
+        app.use('/api/oracle', requestRateLimiter.middleware, router);
 
         app.use(errorHandler);
 

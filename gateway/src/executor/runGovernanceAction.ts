@@ -25,10 +25,11 @@ async function main(): Promise<void> {
 
   const config = loadExecutorConfig();
   const pool = createPool(config);
+  const migrationPool = createPool(config, 'migration');
 
   try {
     await testConnection(pool);
-    await runMigrations(pool);
+    await runMigrations(migrationPool);
 
     const governanceActionStore = createPostgresGovernanceActionStore(pool);
     const service = new GovernanceExecutorService(
@@ -57,6 +58,7 @@ async function main(): Promise<void> {
       process.exitCode = 1;
     }
   } finally {
+    await closeConnection(migrationPool);
     await closeConnection(pool);
   }
 }

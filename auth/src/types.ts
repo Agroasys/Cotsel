@@ -34,14 +34,21 @@ export interface SessionIssueResult {
 }
 
 export interface AuthConfig {
+  nodeEnv: string;
   port: number;
   dbHost: string;
   dbPort: number;
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbMigrationUser?: string;
+  dbMigrationPassword?: string;
   sessionTtlSeconds: number;
+  legacyWalletLoginEnabled: boolean;
   corsAllowedOrigins: string[];
+  corsAllowNoOrigin: boolean;
+  rateLimitEnabled: boolean;
+  rateLimitRedisUrl?: string;
   trustedSessionExchangeEnabled: boolean;
   trustedSessionExchangeApiKeysJson: string;
   trustedSessionExchangeMaxSkewSeconds: number;

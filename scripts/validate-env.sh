@@ -42,6 +42,21 @@ load_env_file() {
   fi
 }
 
+ORIGINAL_ENV_KEYS=()
+ORIGINAL_ENV_VALUES=()
+while IFS='=' read -r key value; do
+  ORIGINAL_ENV_KEYS+=("$key")
+  ORIGINAL_ENV_VALUES+=("$value")
+done < <(env)
+
+restore_external_environment_overrides() {
+  local idx=0
+  for key in "${ORIGINAL_ENV_KEYS[@]}"; do
+    export "$key=${ORIGINAL_ENV_VALUES[$idx]}"
+    idx=$((idx + 1))
+  done
+}
+
 if [[ ! -f ".env" ]]; then
   echo "Missing required base env file: .env" >&2
   exit 1
@@ -53,9 +68,11 @@ if [[ "$PROFILE" != "infra" && ! -f "$PROFILE_FILE" ]]; then
 fi
 
 load_env_file ".env"
+restore_external_environment_overrides
 if [[ -f "$PROFILE_FILE" ]]; then
   load_env_file "$PROFILE_FILE"
 fi
+restore_external_environment_overrides
 
 required_groups=(
   # shared compose/database inputs

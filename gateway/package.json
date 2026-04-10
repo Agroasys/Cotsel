@@ -16,6 +16,8 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@agroasys/shared-db": "*",
+    "@agroasys/shared-edge": "*",
     "@agroasys/shared-auth": "*",
     "@agroasys/sdk": "*",
     "cors": "^2.8.6",

@@ -6,6 +6,8 @@ const BASE_ENV: Record<string, string> = {
   DB_NAME: 'agroasys_ricardian',
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
+  DB_MIGRATION_USER: '',
+  DB_MIGRATION_PASSWORD: '',
   AUTH_ENABLED: 'false',
   API_KEYS_JSON: '[]',
   HMAC_SECRET: '',
@@ -64,9 +66,41 @@ describe('ricardian nonce store config', () => {
     });
   });
 
+  test('production enables service auth and request rate limiting by default', () => {
+    withEnv(
+      {
+        NODE_ENV: 'production',
+        AUTH_ENABLED: undefined,
+        HMAC_SECRET: 'shared-secret',
+        RATE_LIMIT_ENABLED: undefined,
+        RATE_LIMIT_REDIS_URL: 'redis://localhost:6379',
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        const config = loadConfig();
+        expect(config.authEnabled).toBe(true);
+        expect(config.rateLimitEnabled).toBe(true);
+      },
+    );
+  });
+
   test('redis mode requires REDIS_URL', () => {
     withEnv({ NODE_ENV: 'production', NONCE_STORE: 'redis', REDIS_URL: '' }, () => {
       expect(() => loadConfigModule()).toThrow('REDIS_URL is required when NONCE_STORE=redis');
+    });
+  });
+
+  test('migration credentials must be configured as a pair', () => {
+    withEnv({ DB_MIGRATION_USER: 'ricardian_migrator', DB_MIGRATION_PASSWORD: undefined }, () => {
+      expect(() => loadConfigModule()).toThrow('DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together');
+    });
+  });
+
+  test('browser no-origin CORS is disabled by default', () => {
+    withEnv({}, () => {
+      const { loadConfig } = loadConfigModule();
+      const config = loadConfig();
+      expect(config.corsAllowNoOrigin).toBe(false);
     });
   });
 });

@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { createCorsOptions } from '@agroasys/shared-edge';
 import { config } from './config';
 import { RicardianController } from './api/controller';
 import { createRouter } from './api/routes';
@@ -58,8 +59,12 @@ async function bootstrap(): Promise<void> {
     },
   });
 
+  app.disable('x-powered-by');
   app.use(helmet());
-  app.use(cors());
+  app.use(cors(createCorsOptions({
+    allowedOrigins: config.corsAllowedOrigins,
+    allowNoOrigin: config.corsAllowNoOrigin,
+  })));
   app.use(
     express.json({
       verify: (req, _res, buffer) => {

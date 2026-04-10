@@ -4,6 +4,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
 import {
   createServiceAuthMiddleware,
   parseServiceApiKeys,
@@ -17,40 +18,18 @@ import { createPostgresProfileStore } from './core/profileStore';
 import { createPostgresSessionStore } from './core/sessionStore';
 import { createSessionService } from './core/sessionService';
 import { createInMemoryChallengeStore } from './core/challengeStore';
-import { AuthController } from './api/controller';
+import { LegacyWalletAuthController, SessionController } from './api/controller';
 import { createRouter } from './api/routes';
+import { authRateLimitPolicy } from './httpSecurity';
 import { errorHandler } from './middleware/middleware';
 import { Logger } from './utils/logger';
+
+let requestRateLimiterClose: (() => Promise<void>) | undefined;
 
 function createServiceApiKeyLookup(rawKeys: string): (apiKey: string) => ServiceApiKey | undefined {
   const keys = parseServiceApiKeys(rawKeys);
   const lookup = new Map<string, ServiceApiKey>(keys.map((key) => [key.id, key]));
   return (apiKey: string) => lookup.get(apiKey);
-}
-
-function createCorsOptions(allowedOrigins: string[]) {
-  if (allowedOrigins.length === 0) {
-    return {};
-  }
-
-  const normalized = new Set(allowedOrigins.map((origin) => origin.replace(/\/$/, '')));
-
-  return {
-    origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-
-      const normalizedOrigin = origin.replace(/\/$/, '');
-      callback(
-        normalized.has(normalizedOrigin)
-          ? null
-          : new Error('Origin is not allowed by AUTH_CORS_ALLOWED_ORIGINS'),
-        normalized.has(normalizedOrigin),
-      );
-    },
-  };
 }
 
 async function initializeDatabase(): Promise<void> {
@@ -63,6 +42,9 @@ async function initializeDatabase(): Promise<void> {
 async function gracefulShutdown(signal: string): Promise<void> {
   Logger.info(`${signal} received, shutting down gracefully...`);
   try {
+    if (requestRateLimiterClose) {
+      await requestRateLimiterClose();
+    }
     await closeConnection();
     Logger.info('Graceful shutdown completed');
     process.exit(0);
@@ -93,23 +75,40 @@ async function bootstrap(): Promise<void> {
         consumeNonce: trustedSessionExchangeNonceStore.consume,
       })
     : undefined;
+  const requestRateLimiter = await createHttpRateLimiter({
+    enabled: config.rateLimitEnabled,
+    redisUrl: config.rateLimitRedisUrl,
+    nodeEnv: config.nodeEnv,
+    keyPrefix: 'auth',
+    classifyRoute: authRateLimitPolicy,
+    logger: Logger,
+  });
+  requestRateLimiterClose = requestRateLimiter.close;
 
   //  Express app 
   const app = express();
+  app.disable('x-powered-by');
   app.use(helmet());
-  app.use(cors(createCorsOptions(config.corsAllowedOrigins)));
+  app.use(cors(createCorsOptions({
+    allowedOrigins: config.corsAllowedOrigins,
+    allowNoOrigin: config.corsAllowNoOrigin,
+  })));
   app.use(express.json({
     verify: (req, _res, buffer) => {
       (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
     },
   }));
 
-  const controller = new AuthController(sessionService, challengeStore, config.sessionTtlSeconds);
-  const router = createRouter(controller, sessionService, {
+  const legacyWalletController = config.legacyWalletLoginEnabled
+    ? new LegacyWalletAuthController(sessionService, challengeStore, config.sessionTtlSeconds)
+    : undefined;
+  const sessionController = new SessionController(sessionService, config.sessionTtlSeconds);
+  const router = createRouter(sessionController, sessionService, {
+    legacyWalletController,
     trustedSessionExchangeMiddleware,
   });
 
-  app.use('/api/auth/v1', router);
+  app.use('/api/auth/v1', requestRateLimiter.middleware, router);
   app.use(errorHandler);
 
   //  Start 

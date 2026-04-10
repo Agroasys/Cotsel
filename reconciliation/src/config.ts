@@ -15,6 +15,8 @@ export interface ReconciliationConfig {
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbMigrationUser?: string;
+  dbMigrationPassword?: string;
   rpcUrl: string;
   rpcFallbackUrls: string[];
   chainId: number;
@@ -162,6 +164,8 @@ export function loadConfig(): ReconciliationConfig {
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
+    dbMigrationUser: optionalEnv('DB_MIGRATION_USER'),
+    dbMigrationPassword: optionalEnv('DB_MIGRATION_PASSWORD'),
     rpcUrl: runtime.rpcUrl,
     rpcFallbackUrls: runtime.rpcFallbackUrls,
     chainId: runtime.chainId,
@@ -184,6 +188,11 @@ export function loadConfig(): ReconciliationConfig {
   assert(config.maxTradesPerRun > 0, 'RECONCILIATION_MAX_TRADES_PER_RUN must be > 0');
   assert(config.notificationsCooldownMs >= 0, 'NOTIFICATIONS_COOLDOWN_MS must be >= 0');
   assert(config.notificationsRequestTimeoutMs >= 1000, 'NOTIFICATIONS_REQUEST_TIMEOUT_MS must be >= 1000');
+  assert(
+    (!config.dbMigrationUser && !config.dbMigrationPassword) ||
+      (config.dbMigrationUser && config.dbMigrationPassword),
+    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+  );
 
   return config;
 }

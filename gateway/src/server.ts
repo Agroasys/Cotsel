@@ -4,6 +4,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Router } from 'express';
+import { createHttpRateLimiter } from '@agroasys/shared-edge';
 import { runMigrations } from './database/migrations';
 import { createPool, closeConnection, testConnection } from './database/index';
 import { loadConfig } from './config/env';
@@ -59,6 +60,7 @@ import { createSettingsRouter } from './routes/settings';
 import { createSettlementRouter } from './routes/settlement';
 import { createTreasuryRouter } from './routes/treasury';
 import { createTradeRouter } from './routes/trades';
+import { gatewayRateLimitPolicy } from './httpSecurity';
 
 const config = loadConfig();
 const pool = createPool(config);
@@ -353,7 +355,20 @@ async function readinessCheck() {
 async function bootstrap(): Promise<void> {
   Logger.info('Initializing gateway database');
   await testConnection(pool);
-  await runMigrations(pool);
+  const migrationPool = createPool(config, 'migration');
+  try {
+    await runMigrations(migrationPool);
+  } finally {
+    await closeConnection(migrationPool);
+  }
+  const requestRateLimiter = await createHttpRateLimiter({
+    enabled: config.rateLimitEnabled,
+    redisUrl: config.rateLimitRedisUrl,
+    nodeEnv: config.nodeEnv,
+    keyPrefix: 'gateway',
+    classifyRoute: gatewayRateLimitPolicy,
+    logger: Logger,
+  });
 
   const extraRouter = Router();
   extraRouter.use(createCapabilitiesRouter({
@@ -447,6 +462,7 @@ async function bootstrap(): Promise<void> {
     commitSha: config.commitSha,
     buildTime: config.buildTime,
     readinessCheck,
+    requestRateLimitMiddleware: requestRateLimiter.middleware,
     extraRouter,
   });
 
@@ -466,6 +482,7 @@ async function bootstrap(): Promise<void> {
     Logger.info('Shutting down dashboard gateway', { signal });
     settlementCallbackDispatcher.stop();
     governanceDirectSignMonitor.stop();
+    await requestRateLimiter.close();
     await closeConnection(pool);
     server.close(() => process.exit(0));
   };
@@ -482,6 +499,7 @@ async function bootstrap(): Promise<void> {
     Logger.error('Dashboard gateway server error', error);
     settlementCallbackDispatcher.stop();
     governanceDirectSignMonitor.stop();
+    await requestRateLimiter.close().catch(() => undefined);
     await closeConnection(pool);
     process.exit(1);
   });

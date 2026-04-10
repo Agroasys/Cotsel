@@ -91,11 +91,12 @@ describe('TreasuryController eligibility gates', () => {
     );
 
     expect(appendPayoutState).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.status).toHaveBeenCalledWith(409);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         success: false,
-        error: expect.stringContaining('Ledger entry is not eligible for payout'),
+        error: 'EligibilityBlocked',
+        message: expect.stringContaining('Ledger entry is not eligible for payout'),
       }),
     );
   });

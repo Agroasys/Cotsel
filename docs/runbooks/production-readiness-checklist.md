@@ -112,9 +112,18 @@ Purpose:
 - Node parity checks run under Node 20.
 - Workspace validation passes: lint, typecheck, and tests.
 - Profile checks pass for local and staging release-gate paths.
+- Repo-local proof is not sufficient by itself for a production-candidate
+  rehearsal claim. Record either:
+  - a live rehearsal packet under `reports/base-sepolia-pilot-validation/<window-id>/`
+  - or an explicit statement that only repo-local proof and config-only rehearsal
+    have been completed
 - Required runbooks are linked and up to date:
+  - `docs/runbooks/runtime-truth-deployment-guide.md`
+  - `docs/runbooks/service-auth-matrix.md`
+  - `docs/runbooks/secrets-and-token-rotation.md`
   - `docs/runbooks/docker-profiles.md`
   - `docs/runbooks/postgres-backup-restore-recovery.md`
+  - `docs/runbooks/postgres-service-roles-and-rls.md`
   - `docs/runbooks/staging-e2e-release-gate.md`
   - `docs/runbooks/staging-e2e-real-release-gate.md`
   - `docs/runbooks/base-mainnet-go-no-go.md`

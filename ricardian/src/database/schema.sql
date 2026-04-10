@@ -23,3 +23,43 @@ CREATE INDEX IF NOT EXISTS idx_ricardian_document_ref ON ricardian_hashes(docume
 CREATE INDEX IF NOT EXISTS idx_ricardian_created_at ON ricardian_hashes(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ricardian_auth_nonces_expires_at ON ricardian_auth_nonces(expires_at);
 CREATE INDEX IF NOT EXISTS idx_ricardian_auth_nonces_key_expiry ON ricardian_auth_nonces(api_key, nonce, expires_at);
+
+CREATE OR REPLACE FUNCTION current_app_service_name()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(current_setting('app.service_name', true), '');
+$$;
+
+DO $$
+DECLARE
+    runtime_user TEXT := NULLIF(current_setting('app.runtime_db_user', true), '');
+BEGIN
+    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM PUBLIC;
+
+    IF runtime_user IS NOT NULL THEN
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ricardian_hashes TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ricardian_auth_nonces TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE ricardian_hashes_id_seq TO %I', runtime_user);
+    END IF;
+END $$;
+
+ALTER TABLE ricardian_hashes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ricardian_hashes FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS ricardian_hashes_service_isolation ON ricardian_hashes;
+CREATE POLICY ricardian_hashes_service_isolation ON ricardian_hashes
+    FOR ALL
+    USING (current_app_service_name() = 'ricardian')
+    WITH CHECK (current_app_service_name() = 'ricardian');
+
+ALTER TABLE ricardian_auth_nonces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ricardian_auth_nonces FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS ricardian_auth_nonces_service_isolation ON ricardian_auth_nonces;
+CREATE POLICY ricardian_auth_nonces_service_isolation ON ricardian_auth_nonces
+    FOR ALL
+    USING (current_app_service_name() = 'ricardian')
+    WITH CHECK (current_app_service_name() = 'ricardian');

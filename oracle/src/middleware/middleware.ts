@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { failure } from '@agroasys/shared-http';
 import { config } from '../config';
 import { consumeHmacNonce } from '../database/queries';
 import { Logger } from '../utils/logger';
@@ -32,23 +33,13 @@ export function authMiddleware(req: Request, res: Response<ErrorResponse>, next:
     const token = extractBearerToken(req.headers.authorization);
     if (!token) {
         Logger.warn('Missing authorization header', { ip: req.ip });
-        res.status(401).json({
-            success: false,
-            error: 'Unauthorized',
-            message: 'Missing authorization header',
-            timestamp: new Date().toISOString(),
-        });
+        res.status(401).json(failure('Unauthorized', 'Missing authorization header'));
         return;
     }
 
     if (token !== config.apiKey) {
         Logger.warn('Invalid API key', { ip: req.ip });
-        res.status(401).json({
-            success: false,
-            error: 'Unauthorized',
-            message: 'Invalid API key',
-            timestamp: new Date().toISOString(),
-        });
+        res.status(401).json(failure('Unauthorized', 'Invalid API key'));
         return;
     }
 
@@ -64,12 +55,7 @@ export async function hmacMiddleware(req: Request, res: Response<ErrorResponse>,
 
     if (!timestamp || !signature) {
         Logger.warn('Missing HMAC headers', { ip: req.ip });
-        res.status(401).json({
-            success: false,
-            error: 'Unauthorized',
-            message: 'Missing X-Timestamp or X-Signature headers',
-            timestamp: new Date().toISOString(),
-        });
+        res.status(401).json(failure('Unauthorized', 'Missing X-Timestamp or X-Signature headers'));
         return;
     }
 
@@ -80,12 +66,7 @@ export async function hmacMiddleware(req: Request, res: Response<ErrorResponse>,
 
         if (!nonce || nonce.length > 255) {
             Logger.warn('Invalid nonce format', { ip: req.ip });
-            res.status(401).json({
-                success: false,
-                error: 'Unauthorized',
-                message: 'Invalid X-Nonce header',
-                timestamp: new Date().toISOString(),
-            });
+            res.status(401).json(failure('Unauthorized', 'Invalid X-Nonce header'));
             return;
         }
 
@@ -95,12 +76,7 @@ export async function hmacMiddleware(req: Request, res: Response<ErrorResponse>,
                 ip: req.ip,
                 nonce: nonce.substring(0, 16) + '...',
             });
-            res.status(401).json({
-                success: false,
-                error: 'Unauthorized',
-                message: 'Replay detected for nonce',
-                timestamp: new Date().toISOString(),
-            });
+            res.status(401).json(failure('Unauthorized', 'Replay detected for nonce'));
             return;
         }
         
@@ -126,12 +102,7 @@ export async function hmacMiddleware(req: Request, res: Response<ErrorResponse>,
                 error: errorMessage,
                 ip: req.ip,
             });
-            res.status(503).json({
-                success: false,
-                error: 'ServiceUnavailable',
-                message: 'Authentication nonce store unavailable',
-                timestamp: new Date().toISOString(),
-            });
+            res.status(503).json(failure('ServiceUnavailable', 'Authentication nonce store unavailable'));
             return;
         }
 
@@ -139,22 +110,12 @@ export async function hmacMiddleware(req: Request, res: Response<ErrorResponse>,
             error: errorMessage,
             ip: req.ip 
         });
-        res.status(401).json({
-            success: false,
-            error: 'Unauthorized',
-            message: errorMessage,
-            timestamp: new Date().toISOString(),
-        });
+        res.status(401).json(failure('Unauthorized', errorMessage));
     }
 }
 
 export function errorHandler(err: any, req: Request, res: Response<ErrorResponse>, next: NextFunction): void {
     Logger.error('Unhandled error', err);
 
-    res.status(500).json({
-        success: false,
-        error: 'InternalServerError',
-        message: err.message || 'An unexpected error occurred',
-        timestamp: new Date().toISOString(),
-    });
+    res.status(500).json(failure('InternalServerError', err.message || 'An unexpected error occurred'));
 }

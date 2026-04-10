@@ -4,6 +4,7 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { getAddress, isAddress } from 'ethers';
+import { parseAllowedOrigins } from '@agroasys/shared-edge';
 import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
 
 dotenv.config();
@@ -15,6 +16,8 @@ export interface GatewayConfig {
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbMigrationUser?: string;
+  dbMigrationPassword?: string;
   authBaseUrl: string;
   authRequestTimeoutMs: number;
   indexerGraphqlUrl: string;
@@ -59,10 +62,14 @@ export interface GatewayConfig {
   downstreamMutationRetryBudget?: number;
   downstreamReadTimeoutMs?: number;
   downstreamMutationTimeoutMs?: number;
+  corsAllowedOrigins: string[];
+  corsAllowNoOrigin: boolean;
+  rateLimitEnabled: boolean;
+  rateLimitRedisUrl?: string;
+  allowInsecureDownstreamAuth: boolean;
   commitSha: string;
   buildTime: string;
   nodeEnv: string;
-  corsAllowedOrigins: string[];
 }
 
 function env(name: string): string {
@@ -128,21 +135,26 @@ function parseUrlList(raw: string | undefined): string[] {
     .map((value) => value.replace(/\/$/, ''));
 }
 
-function parseOriginList(raw: string | undefined): string[] {
-  if (!raw) {
-    return [];
-  }
-
-  return raw
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0)
-    .map((value) => value.replace(/\/$/, ''));
-}
-
 function assertAddress(name: string, value: string): string {
   assert(isAddress(value), `${name} must be a valid EVM address`);
   return getAddress(value);
+}
+
+function assertDownstreamServiceAuth(
+  serviceName: string,
+  baseUrl: string | undefined,
+  apiKey: string | undefined,
+  apiSecret: string | undefined,
+  allowInsecureDownstreamAuth: boolean,
+): void {
+  if (!baseUrl || allowInsecureDownstreamAuth) {
+    return;
+  }
+
+  assert(
+    Boolean(apiKey && apiSecret),
+    `${serviceName} requires a service API key and secret when GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH=false`,
+  );
 }
 
 export function loadConfig(): GatewayConfig {
@@ -163,7 +175,6 @@ export function loadConfig(): GatewayConfig {
   const rpcFallbackUrls = runtime.rpcFallbackUrls;
   const chainId = runtime.chainId;
   const writeAllowlist = parseAllowlist(process.env.GATEWAY_WRITE_ALLOWLIST);
-  const corsAllowedOrigins = parseOriginList(process.env.GATEWAY_CORS_ALLOWED_ORIGINS);
   const enableMutations = envBool('GATEWAY_ENABLE_MUTATIONS', false);
   const settlementIngressEnabled = envBool('GATEWAY_SETTLEMENT_INGRESS_ENABLED', false);
   const settlementServiceAuthApiKeysJson = process.env.GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON?.trim() || '[]';
@@ -183,7 +194,13 @@ export function loadConfig(): GatewayConfig {
   const treasuryServiceApiSecret = process.env.GATEWAY_TREASURY_SERVICE_API_SECRET?.trim() || undefined;
   const ricardianServiceApiKey = process.env.GATEWAY_RICARDIAN_SERVICE_API_KEY?.trim() || undefined;
   const ricardianServiceApiSecret = process.env.GATEWAY_RICARDIAN_SERVICE_API_SECRET?.trim() || undefined;
+  const dbMigrationUser = process.env.DB_MIGRATION_USER?.trim() || undefined;
+  const dbMigrationPassword = process.env.DB_MIGRATION_PASSWORD?.trim() || undefined;
   const nodeEnv = process.env.NODE_ENV || 'development';
+  const allowInsecureDownstreamAuth = envBool(
+    'GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH',
+    nodeEnv !== 'production',
+  );
 
   assert(authBaseUrl.startsWith('http://') || authBaseUrl.startsWith('https://'), 'GATEWAY_AUTH_BASE_URL must be an absolute http(s) URL');
   assert(indexerGraphqlUrl.startsWith('http://') || indexerGraphqlUrl.startsWith('https://'), 'GATEWAY_INDEXER_GRAPHQL_URL must be an absolute http(s) URL');
@@ -209,6 +226,10 @@ export function loadConfig(): GatewayConfig {
   }
   assert(envNumber('PORT', 3600) > 0, 'PORT must be > 0');
   assert(envNumber('DB_PORT', 5432) > 0, 'DB_PORT must be > 0');
+  assert(
+    Boolean(dbMigrationUser) === Boolean(dbMigrationPassword),
+    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+  );
   assert(chainId > 0, 'GATEWAY_CHAIN_ID must be > 0');
   assert(envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_AUTH_REQUEST_TIMEOUT_MS must be >= 1000');
   assert(envNumber('GATEWAY_INDEXER_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_INDEXER_REQUEST_TIMEOUT_MS must be >= 1000');
@@ -238,6 +259,28 @@ export function loadConfig(): GatewayConfig {
     throw new Error('GATEWAY_RICARDIAN_SERVICE_API_KEY and GATEWAY_RICARDIAN_SERVICE_API_SECRET must be set together');
   }
 
+  assertDownstreamServiceAuth(
+    'GATEWAY_ORACLE_BASE_URL',
+    oracleBaseUrl,
+    oracleServiceApiKey,
+    oracleServiceApiSecret,
+    allowInsecureDownstreamAuth,
+  );
+  assertDownstreamServiceAuth(
+    'GATEWAY_TREASURY_BASE_URL',
+    treasuryBaseUrl,
+    treasuryServiceApiKey,
+    treasuryServiceApiSecret,
+    allowInsecureDownstreamAuth,
+  );
+  assertDownstreamServiceAuth(
+    'GATEWAY_RICARDIAN_BASE_URL',
+    ricardianBaseUrl,
+    ricardianServiceApiKey,
+    ricardianServiceApiSecret,
+    allowInsecureDownstreamAuth,
+  );
+
   if (settlementIngressEnabled) {
     assert(
       settlementServiceAuthApiKeysJson !== '[]' || settlementServiceAuthSharedSecret,
@@ -262,6 +305,8 @@ export function loadConfig(): GatewayConfig {
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
+    dbMigrationUser,
+    dbMigrationPassword,
     authBaseUrl,
     authRequestTimeoutMs: envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000),
     indexerGraphqlUrl,
@@ -306,9 +351,13 @@ export function loadConfig(): GatewayConfig {
     downstreamMutationRetryBudget: envNumber('GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET', 0),
     downstreamReadTimeoutMs: envNumber('GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS', 5000),
     downstreamMutationTimeoutMs: envNumber('GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS', 8000),
+    corsAllowedOrigins: parseAllowedOrigins(process.env.GATEWAY_CORS_ALLOWED_ORIGINS),
+    corsAllowNoOrigin: envBool('GATEWAY_CORS_ALLOW_NO_ORIGIN', false),
+    rateLimitEnabled: envBool('GATEWAY_RATE_LIMIT_ENABLED', true),
+    rateLimitRedisUrl: process.env.GATEWAY_RATE_LIMIT_REDIS_URL?.trim() || undefined,
+    allowInsecureDownstreamAuth,
     commitSha: process.env.GATEWAY_COMMIT_SHA?.trim() || 'local-dev',
     buildTime,
     nodeEnv,
-    corsAllowedOrigins,
   };
 }

@@ -57,3 +57,51 @@ CREATE TABLE IF NOT EXISTS trusted_session_exchange_nonces (
     expires_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (api_key, nonce)
 );
+
+CREATE OR REPLACE FUNCTION current_app_service_name()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(current_setting('app.service_name', true), '');
+$$;
+
+DO $$
+DECLARE
+    runtime_user TEXT := NULLIF(current_setting('app.runtime_db_user', true), '');
+BEGIN
+    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM PUBLIC;
+
+    IF runtime_user IS NOT NULL THEN
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE user_profiles TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE user_sessions TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE trusted_session_exchange_nonces TO %I', runtime_user);
+    END IF;
+END $$;
+
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_profiles FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS user_profiles_service_isolation ON user_profiles;
+CREATE POLICY user_profiles_service_isolation ON user_profiles
+    FOR ALL
+    USING (current_app_service_name() = 'auth')
+    WITH CHECK (current_app_service_name() = 'auth');
+
+ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_sessions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS user_sessions_service_isolation ON user_sessions;
+CREATE POLICY user_sessions_service_isolation ON user_sessions
+    FOR ALL
+    USING (current_app_service_name() = 'auth')
+    WITH CHECK (current_app_service_name() = 'auth');
+
+ALTER TABLE trusted_session_exchange_nonces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trusted_session_exchange_nonces FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS trusted_session_exchange_nonces_service_isolation ON trusted_session_exchange_nonces;
+CREATE POLICY trusted_session_exchange_nonces_service_isolation ON trusted_session_exchange_nonces
+    FOR ALL
+    USING (current_app_service_name() = 'auth')
+    WITH CHECK (current_app_service_name() = 'auth');

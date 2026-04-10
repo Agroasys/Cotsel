@@ -4,13 +4,17 @@
   "private": true,
   "main": "index.js",
   "types": "index.d.ts",
+  "scripts": {
+    "test": "node --test nonceStore.test.js serviceAuth.test.js"
+  },
   "files": [
     "index.js",
     "index.d.ts",
     "nonceStore.js",
     "nonceStore.d.ts",
     "serviceAuth.js",
-    "serviceAuth.d.ts"
+    "serviceAuth.d.ts",
+    "src"
   ],
   "license": "Apache-2.0"
 }

@@ -3,7 +3,7 @@
 ## Purpose
 Run a staging-grade release gate against the real indexer pipeline profile (`staging-e2e-real`) and validate reconciliation against indexed chain state.
 For pilot startup sequencing and go/no-go criteria, use `docs/runbooks/pilot-environment-onboarding.md`.
-For the controlled Base Sepolia validation itself, use `scripts/base-sepolia-pilot-validation.sh` and store the resulting packet under `reports/base-sepolia-pilot-validation/`.
+For the controlled Base Sepolia validation itself, use `npm run pilot:rehearsal -- --window-id <window-id>` and store the resulting packet under `reports/base-sepolia-pilot-validation/`.
 For participant-facing pilot workflow guidance, use `docs/runbooks/non-custodial-pilot-user-guide.md`.
 For Base mainnet launch approval and production rollback control, use:
 - `docs/runbooks/base-mainnet-go-no-go.md`
@@ -73,6 +73,8 @@ CI does not execute the full Docker `up/health/logs/down` staging profile sequen
 This runbook is a prerequisite gate for pilot readiness; it is not the
 canonical pilot rehearsal report or evidence packet.
 It is also not, by itself, a production go/no-go record.
+If only `--config-only` rehearsal was run, treat that as repo-local rehearsal
+contract proof, not a live environment rehearsal.
 Source of truth for CI behavior: `.github/workflows/release-gate.yml`.
 CI also runs deterministic notification-path verification and uploads `ci-report-notifications-gate`.
 

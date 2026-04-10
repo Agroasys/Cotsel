@@ -6,6 +6,8 @@ const BASE_ENV: Record<string, string> = {
   DB_NAME: 'agroasys_treasury',
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
+  DB_MIGRATION_USER: '',
+  DB_MIGRATION_PASSWORD: '',
   INDEXER_GRAPHQL_URL: 'http://localhost:4350/graphql',
   TREASURY_INGEST_BATCH_SIZE: '100',
   TREASURY_INGEST_MAX_EVENTS: '2000',
@@ -65,9 +67,31 @@ describe('treasury nonce store config', () => {
     });
   });
 
+  test('production enables service auth by default', () => {
+    withEnv({ NODE_ENV: 'production', AUTH_ENABLED: undefined, HMAC_SECRET: 'shared-secret' }, () => {
+      const { loadConfig } = loadConfigModule();
+      const config = loadConfig();
+      expect(config.authEnabled).toBe(true);
+    });
+  });
+
   test('redis mode requires REDIS_URL', () => {
     withEnv({ NODE_ENV: 'production', NONCE_STORE: 'redis', REDIS_URL: '' }, () => {
       expect(() => loadConfigModule()).toThrow('REDIS_URL is required when NONCE_STORE=redis');
+    });
+  });
+
+  test('migration credentials must be configured as a pair', () => {
+    withEnv({ DB_MIGRATION_USER: 'treasury_migrator', DB_MIGRATION_PASSWORD: undefined }, () => {
+      expect(() => loadConfigModule()).toThrow('DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together');
+    });
+  });
+
+  test('browser no-origin CORS is disabled by default', () => {
+    withEnv({}, () => {
+      const { loadConfig } = loadConfigModule();
+      const config = loadConfig();
+      expect(config.corsAllowNoOrigin).toBe(false);
     });
   });
 });

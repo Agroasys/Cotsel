@@ -527,6 +527,145 @@ ALTER TABLE governance_actions
         'failed'
     ));
 
+CREATE OR REPLACE FUNCTION current_app_service_name()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(current_setting('app.service_name', true), '');
+$$;
+
+DO $$
+DECLARE
+    runtime_user TEXT := NULLIF(current_setting('app.runtime_db_user', true), '');
+BEGIN
+    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM PUBLIC;
+
+    IF runtime_user IS NOT NULL THEN
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE idempotency_keys TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE audit_log TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE failed_operations TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE access_log_entries TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE role_assignments TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE governance_actions TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE compliance_decisions TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE oracle_progression_blocks TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE evidence_bundles TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE service_auth_nonces TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE settlement_handoffs TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE settlement_execution_events TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE settlement_callback_deliveries TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE audit_log_id_seq TO %I', runtime_user);
+    END IF;
+END $$;
+
+ALTER TABLE idempotency_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE idempotency_keys FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS idempotency_keys_service_isolation ON idempotency_keys;
+CREATE POLICY idempotency_keys_service_isolation ON idempotency_keys
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS audit_log_service_isolation ON audit_log;
+CREATE POLICY audit_log_service_isolation ON audit_log
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE failed_operations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE failed_operations FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS failed_operations_service_isolation ON failed_operations;
+CREATE POLICY failed_operations_service_isolation ON failed_operations
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE access_log_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_log_entries FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS access_log_entries_service_isolation ON access_log_entries;
+CREATE POLICY access_log_entries_service_isolation ON access_log_entries
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE role_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE role_assignments FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS role_assignments_service_isolation ON role_assignments;
+CREATE POLICY role_assignments_service_isolation ON role_assignments
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE governance_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE governance_actions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS governance_actions_service_isolation ON governance_actions;
+CREATE POLICY governance_actions_service_isolation ON governance_actions
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE compliance_decisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE compliance_decisions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS compliance_decisions_service_isolation ON compliance_decisions;
+CREATE POLICY compliance_decisions_service_isolation ON compliance_decisions
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE oracle_progression_blocks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE oracle_progression_blocks FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS oracle_progression_blocks_service_isolation ON oracle_progression_blocks;
+CREATE POLICY oracle_progression_blocks_service_isolation ON oracle_progression_blocks
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE evidence_bundles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE evidence_bundles FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS evidence_bundles_service_isolation ON evidence_bundles;
+CREATE POLICY evidence_bundles_service_isolation ON evidence_bundles
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE service_auth_nonces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_auth_nonces FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS service_auth_nonces_service_isolation ON service_auth_nonces;
+CREATE POLICY service_auth_nonces_service_isolation ON service_auth_nonces
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE settlement_handoffs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settlement_handoffs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS settlement_handoffs_service_isolation ON settlement_handoffs;
+CREATE POLICY settlement_handoffs_service_isolation ON settlement_handoffs
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE settlement_execution_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settlement_execution_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS settlement_execution_events_service_isolation ON settlement_execution_events;
+CREATE POLICY settlement_execution_events_service_isolation ON settlement_execution_events
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
+ALTER TABLE settlement_callback_deliveries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settlement_callback_deliveries FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS settlement_callback_deliveries_service_isolation ON settlement_callback_deliveries;
+CREATE POLICY settlement_callback_deliveries_service_isolation ON settlement_callback_deliveries
+    FOR ALL
+    USING (current_app_service_name() = 'gateway')
+    WITH CHECK (current_app_service_name() = 'gateway');
+
 UPDATE governance_actions
 SET intent_key = CONCAT_WS('|',
         'v1',

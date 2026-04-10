@@ -55,7 +55,8 @@ describe('RicardianController.createHash', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         success: false,
-        error: 'documentRef is required',
+        error: 'ValidationError',
+        message: 'documentRef is required',
       })
     );
   });
@@ -111,7 +112,8 @@ describe('RicardianController.createHash', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         success: false,
-        error: 'unexpected db error',
+        error: 'InternalError',
+        message: 'unexpected db error',
       })
     );
   });
@@ -133,7 +135,7 @@ describe('RicardianController.getHash', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, error: 'Invalid hash format' })
+      expect.objectContaining({ success: false, error: 'ValidationError', message: 'Invalid hash format' })
     );
   });
 

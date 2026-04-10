@@ -22,8 +22,6 @@ info:
 servers:
   - url: http://127.0.0.1:3600/api/dashboard-gateway/v1
     description: Local contract-first gateway base URL.
-  - url: https://gateway.agroasys.example/api/dashboard-gateway/v1
-    description: Production placeholder for future gateway deployment.
 tags:
   - name: System
   - name: Auth
@@ -2272,7 +2270,13 @@ components:
       scheme: bearer
       bearerFormat: session-id
       description: |
-        Session bearer token issued by the in-repo auth service (`/api/auth/v1/login`) after wallet-signature login.
+        Session bearer token issued by the in-repo auth service.
+
+        Production path:
+        - trusted upstream session exchange via `/api/auth/v1/session/exchange/agroasys`
+
+        Compatibility path:
+        - `/api/auth/v1/login` after explicit wallet-signature login when that legacy flow is enabled
 
         Repo evidence:
         - `auth/src/api/controller.ts`

@@ -1,369 +1,53 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import crypto from 'crypto';
-import { verifyMessage } from 'ethers';
-import { Request, Response } from 'express';
-import { SessionService } from '../core/sessionService';
+import { LegacyWalletAuthController } from './legacyWalletAuthController';
+import { SessionController } from './sessionController';
 import { ChallengeStore } from '../core/challengeStore';
-import { UserRole, ApiSuccessResponse, ApiErrorResponse } from '../types';
-import { Logger } from '../utils/logger';
-import { incrementLoginError } from '../metrics/counters';
+import { SessionService } from '../core/sessionService';
 
-const CHALLENGE_TTL_SECONDS = 300; // 5 minutes
-const WALLET_REGEX = /^0x[0-9a-f]{40}$/i;
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VALID_ROLES: UserRole[] = ['buyer', 'supplier', 'admin'];
-
-interface LoginBody {
-  walletAddress?: string;
-  signature?: string;
-  role?: UserRole;
-  orgId?: string;
-  ttlSeconds?: number;
-}
-
-interface TrustedSessionExchangeBody {
-  accountId?: string;
-  role?: UserRole;
-  orgId?: string | null;
-  email?: string | null;
-  walletAddress?: string | null;
-  ttlSeconds?: number;
-}
-
-export class AuthController {
-  constructor(
-    private readonly sessionService: SessionService,
-    private readonly challengeStore: ChallengeStore,
-    /** Maximum allowed session TTL in seconds. Clients cannot exceed this. Default: 86400 (24 h). */
-    private readonly maxSessionTtlSeconds: number = 86400,
-  ) {}
-
-  /**
-   * GET /challenge?wallet=0x...
-   * Issues a one-time nonce the user must sign with their wallet.
-   * Called by the browser before login — no authentication required.
-   */
-  async getChallenge(
-    req: Request<unknown, unknown, unknown, { wallet?: string }>,
-    res: Response<ApiSuccessResponse | ApiErrorResponse>,
-  ): Promise<void> {
-    const wallet = req.query.wallet?.toLowerCase();
-
-    if (!wallet || !WALLET_REGEX.test(wallet)) {
-      res.status(400).json({
-        success: false,
-        error: 'BadRequest',
-        message: 'Valid wallet address required (?wallet=0x...)',
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    const nonce = crypto.randomBytes(16).toString('hex');
-    this.challengeStore.set(wallet, nonce, CHALLENGE_TTL_SECONDS);
-
-    const message = buildChallengeMessage(wallet, nonce);
-    Logger.info('Challenge issued', { walletAddress: wallet });
-
-    res.json({
-      success: true,
-      data: { message, expiresIn: CHALLENGE_TTL_SECONDS },
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  /**
-   * POST /login
-   * Verifies the wallet signature and issues a platform session.
-   * This is the current compatibility login path while Agroasys-first identity
-   * and account-first session exchange are being installed.
-   *
-   * Flow:
-   *   1. GET /challenge?wallet=0x...  → receive { message }
-   *   2. signer.signMessage(message)  → receive signature (in browser)
-   *   3. POST /login { walletAddress, signature, role }
-   */
-  async login(
-    req: Request<unknown, unknown, LoginBody>,
-    res: Response<ApiSuccessResponse | ApiErrorResponse>,
-  ): Promise<void> {
-    const { walletAddress, signature, role, orgId, ttlSeconds } = req.body;
-
-    // Input validation
-    if (!walletAddress || !WALLET_REGEX.test(walletAddress)) {
-      res.status(400).json({
-        success: false,
-        error: 'BadRequest',
-        message: 'Valid walletAddress is required',
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    if (!signature || typeof signature !== 'string') {
-      res.status(400).json({
-        success: false,
-        error: 'BadRequest',
-        message: 'signature is required — call GET /challenge first',
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    if (!role || !VALID_ROLES.includes(role)) {
-      res.status(400).json({
-        success: false,
-        error: 'BadRequest',
-        message: `role must be one of: ${VALID_ROLES.join(', ')}`,
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    const wallet = walletAddress.toLowerCase();
-
-    // Retrieve the challenge nonce we issued for this wallet 
-    const nonce = this.challengeStore.get(wallet);
-    if (!nonce) {
-      res.status(401).json({
-        success: false,
-        error: 'Unauthorized',
-        message: 'No active challenge for this wallet. Call GET /challenge first.',
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    // Verify the signature — recover signer address from signed message
-    try {
-      const message = buildChallengeMessage(wallet, nonce);
-      const recovered = verifyMessage(message, signature).toLowerCase();
-
-      if (recovered !== wallet) {
-        incrementLoginError();
-        Logger.warn('Signature verification failed', { walletAddress: wallet });
-        res.status(401).json({
-          success: false,
-          error: 'Unauthorized',
-          message: 'Signature verification failed',
-          timestamp: new Date().toISOString(),
-        });
-        return;
-      }
-    } catch {
-      incrementLoginError();
-      res.status(401).json({
-        success: false,
-        error: 'Unauthorized',
-        message: 'Invalid signature format',
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    // Consume nonce immediately (replay protection)
-    this.challengeStore.delete(wallet);
-
-    // Cap ttlSeconds to the configured maximum so clients cannot mint
-    // arbitrarily long-lived sessions.
-    const safeTtl =
-      ttlSeconds !== undefined
-        ? Math.max(1, Math.min(ttlSeconds, this.maxSessionTtlSeconds))
-        : undefined;
-
-    // Issue session
-    try {
-      const result = await this.sessionService.login(wallet, role, orgId, safeTtl);
-      Logger.info('Login successful', { walletAddress: wallet, role });
-      res.status(201).json({
-        success: true,
-        data: result,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (err) {
-      incrementLoginError();
-      Logger.error('Login failed', err);
-      res.status(403).json({
-        success: false,
-        error: 'Forbidden',
-        message: err instanceof Error ? err.message : 'Login failed',
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-
-  /**
-   * POST /session/refresh
-   * Issues a new session in exchange for a valid current one.
-   */
-  async refresh(
-    req: Request,
-    res: Response<ApiSuccessResponse | ApiErrorResponse>,
-  ): Promise<void> {
-    const session = req.userSession!;
-    try {
-      const result = await this.sessionService.refresh(session.sessionId);
-      res.json({
-        success: true,
-        data: result,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (err) {
-      Logger.error('Session refresh failed', err);
-      res.status(401).json({
-        success: false,
-        error: 'Unauthorized',
-        message: err instanceof Error ? err.message : 'Refresh failed',
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-
-  /**
-   * POST /session/exchange/agroasys
-   * Issues a bridge session from a trusted Agroasys-authenticated account identity.
-   */
-  async exchangeTrustedSession(
-    req: Request<unknown, unknown, TrustedSessionExchangeBody>,
-    res: Response<ApiSuccessResponse | ApiErrorResponse>,
-  ): Promise<void> {
-    const { accountId, role, orgId, email, walletAddress, ttlSeconds } = req.body;
-    const normalizedAccountId = accountId?.trim();
-    const normalizedEmail =
-      email === undefined || email === null || email === ''
-        ? null
-        : email.trim().toLowerCase();
-    const normalizedWallet =
-      walletAddress === undefined || walletAddress === null || walletAddress === ''
-        ? null
-        : walletAddress.toLowerCase();
-
-    if (!normalizedAccountId) {
-      res.status(400).json({
-        success: false,
-        error: 'BadRequest',
-        message: 'accountId is required',
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    if (!role || !VALID_ROLES.includes(role)) {
-      res.status(400).json({
-        success: false,
-        error: 'BadRequest',
-        message: `role must be one of: ${VALID_ROLES.join(', ')}`,
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    if (normalizedEmail && !EMAIL_REGEX.test(normalizedEmail)) {
-      res.status(400).json({
-        success: false,
-        error: 'BadRequest',
-        message: 'email must be a valid email address',
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    if (normalizedWallet && !WALLET_REGEX.test(normalizedWallet)) {
-      res.status(400).json({
-        success: false,
-        error: 'BadRequest',
-        message: 'walletAddress must be a valid 0x address when provided',
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    const safeTtl =
-      ttlSeconds !== undefined
-        ? Math.max(1, Math.min(ttlSeconds, this.maxSessionTtlSeconds))
-        : undefined;
-
-    try {
-      const result = await this.sessionService.issueTrustedSession(
-        {
-          accountId: normalizedAccountId,
-          role,
-          orgId: orgId ?? null,
-          email: normalizedEmail,
-          walletAddress: normalizedWallet,
-        },
-        safeTtl,
-      );
-      Logger.info('Trusted session exchange successful', {
-        accountId: normalizedAccountId,
-        walletAddress: normalizedWallet,
-        email: normalizedEmail,
-        role,
-      });
-      res.status(201).json({
-        success: true,
-        data: result,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (err) {
-      Logger.error('Trusted session exchange failed', err);
-      res.status(403).json({
-        success: false,
-        error: 'Forbidden',
-        message: err instanceof Error ? err.message : 'Trusted session exchange failed',
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-
-  /**
-   * POST /session/revoke
-   * Permanently invalidates the current session.
-   */
-  async revoke(
-    req: Request,
-    res: Response<ApiSuccessResponse | ApiErrorResponse>,
-  ): Promise<void> {
-    const session = req.userSession!;
-    await this.sessionService.revoke(session.sessionId);
-    res.json({
-      success: true,
-      data: { revoked: true },
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  /**
-   * GET /session
-   * Returns the currently resolved session (identity, role, expiry).
-   */
-  getSession(
-    req: Request,
-    res: Response<ApiSuccessResponse | ApiErrorResponse>,
-  ): void {
-    const session = req.userSession!;
-    res.json({
-      success: true,
-      data: {
-        accountId: session.accountId,
-        userId: session.userId,
-        walletAddress: session.walletAddress,
-        email: session.email,
-        role: session.role,
-        issuedAt: session.issuedAt,
-        expiresAt: session.expiresAt,
-      },
-      timestamp: new Date().toISOString(),
-    });
-  }
-}
+export { buildChallengeMessage } from './legacyWalletAuthController';
+export { LegacyWalletAuthController } from './legacyWalletAuthController';
+export { SessionController } from './sessionController';
 
 /**
- * Builds the deterministic message a user must sign to prove wallet ownership.
- * Must be identical in the browser (SDK) and on the server (verification).
+ * Compatibility facade for tests and older internal imports.
+ * New runtime wiring should prefer the split controllers directly.
  */
-export function buildChallengeMessage(wallet: string, nonce: string): string {
-  return `Sign in to Agroasys\nWallet: ${wallet}\nNonce: ${nonce}`;
+export class AuthController {
+  private readonly legacyWallet: LegacyWalletAuthController;
+  private readonly session: SessionController;
+
+  constructor(
+    sessionService: SessionService,
+    challengeStore: ChallengeStore,
+    maxSessionTtlSeconds: number = 86400,
+  ) {
+    this.legacyWallet = new LegacyWalletAuthController(sessionService, challengeStore, maxSessionTtlSeconds);
+    this.session = new SessionController(sessionService, maxSessionTtlSeconds);
+  }
+
+  getChallenge(...args: Parameters<LegacyWalletAuthController['getChallenge']>) {
+    return this.legacyWallet.getChallenge(...args);
+  }
+
+  login(...args: Parameters<LegacyWalletAuthController['login']>) {
+    return this.legacyWallet.login(...args);
+  }
+
+  exchangeTrustedSession(...args: Parameters<SessionController['exchangeTrustedSession']>) {
+    return this.session.exchangeTrustedSession(...args);
+  }
+
+  refresh(...args: Parameters<SessionController['refresh']>) {
+    return this.session.refresh(...args);
+  }
+
+  revoke(...args: Parameters<SessionController['revoke']>) {
+    return this.session.revoke(...args);
+  }
+
+  getSession(...args: Parameters<SessionController['getSession']>) {
+    return this.session.getSession(...args);
+  }
 }

@@ -115,7 +115,8 @@ describe('treasury fiat deposit routes', () => {
     await expect(response.json()).resolves.toEqual(
       expect.objectContaining({
         success: false,
-        error: 'Invalid fiat deposit state',
+        error: 'ValidationError',
+        message: 'Invalid fiat deposit state',
       }),
     );
   });
@@ -175,7 +176,8 @@ describe('treasury fiat deposit routes', () => {
     await expect(response.json()).resolves.toEqual(
       expect.objectContaining({
         success: false,
-        error: 'Invalid bank payout state',
+        error: 'ValidationError',
+        message: 'Invalid bank payout state',
       }),
     );
   });

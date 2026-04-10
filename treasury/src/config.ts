@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
+import { parseAllowedOrigins } from '@agroasys/shared-edge';
 import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
 import { parseServiceApiKeys, ServiceApiKey } from './auth/serviceAuth';
 
@@ -8,12 +9,15 @@ dotenv.config();
 export type NonceStoreMode = 'redis' | 'postgres' | 'inmemory';
 
 export interface TreasuryConfig {
+  nodeEnv: string;
   port: number;
   dbHost: string;
   dbPort: number;
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbMigrationUser?: string;
+  dbMigrationPassword?: string;
   indexerGraphqlUrl: string;
   indexerGraphqlRequestTimeoutMs: number;
   ingestBatchSize: number;
@@ -26,6 +30,10 @@ export interface TreasuryConfig {
   nonceStore: NonceStoreMode;
   nonceRedisUrl?: string;
   nonceTtlSeconds: number;
+  corsAllowedOrigins: string[];
+  corsAllowNoOrigin: boolean;
+  rateLimitEnabled: boolean;
+  rateLimitRedisUrl?: string;
   settlementRuntimeKey?: SettlementRuntimeKey;
   networkName?: string;
   rpcUrl?: string;
@@ -133,11 +141,13 @@ function resolveNonceStoreMode(nodeEnv: string): NonceStoreMode {
 
 export function loadConfig(): TreasuryConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
-  const authEnabled = envBool('AUTH_ENABLED', false);
+  const authEnabled = envBool('AUTH_ENABLED', nodeEnv === 'production');
   const apiKeys = parseServiceApiKeys(process.env.API_KEYS_JSON);
   const hmacSecret = process.env.HMAC_SECRET?.trim();
   const nonceStore = resolveNonceStoreMode(nodeEnv);
   const nonceRedisUrl = process.env.REDIS_URL?.trim() || undefined;
+  const rateLimitEnabled = envBool('RATE_LIMIT_ENABLED', true);
+  const rateLimitRedisUrl = process.env.RATE_LIMIT_REDIS_URL?.trim() || undefined;
   const authNonceTtlSeconds = envNumber('AUTH_NONCE_TTL_SECONDS', 600);
   const nonceTtlSeconds = process.env.NONCE_TTL_SECONDS
     ? envNumber('NONCE_TTL_SECONDS')
@@ -155,6 +165,12 @@ export function loadConfig(): TreasuryConfig {
       })
     : null;
   const reconciliationDbName = optionalEnv('RECONCILIATION_DB_NAME');
+  const dbMigrationUser = optionalEnv('DB_MIGRATION_USER');
+  const dbMigrationPassword = optionalEnv('DB_MIGRATION_PASSWORD');
+  assert(
+    Boolean(dbMigrationUser) === Boolean(dbMigrationPassword),
+    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+  );
 
   if (authEnabled) {
     assert(
@@ -184,12 +200,15 @@ export function loadConfig(): TreasuryConfig {
   );
 
   const config: TreasuryConfig = {
+    nodeEnv,
     port: envNumber('PORT'),
     dbHost: env('DB_HOST'),
     dbPort: envNumber('DB_PORT'),
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
+    dbMigrationUser,
+    dbMigrationPassword,
     indexerGraphqlUrl: env('INDEXER_GRAPHQL_URL'),
     indexerGraphqlRequestTimeoutMs,
     ingestBatchSize: envNumber('TREASURY_INGEST_BATCH_SIZE', 100),
@@ -202,6 +221,10 @@ export function loadConfig(): TreasuryConfig {
     nonceStore,
     nonceRedisUrl,
     nonceTtlSeconds,
+    corsAllowedOrigins: parseAllowedOrigins(process.env.TREASURY_CORS_ALLOWED_ORIGINS),
+    corsAllowNoOrigin: envBool('TREASURY_CORS_ALLOW_NO_ORIGIN', false),
+    rateLimitEnabled,
+    rateLimitRedisUrl,
     settlementRuntimeKey: runtime?.runtimeKey,
     networkName: runtime?.networkName,
     rpcUrl: runtime?.rpcUrl,

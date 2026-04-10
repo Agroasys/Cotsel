@@ -17,6 +17,7 @@
     "healthcheck": "node dist/healthcheck.js"
   },
   "dependencies": {
+    "@agroasys/shared-db": "^1.0.0",
     "@agroasys/sdk": "^1.0.0",
     "dotenv": "^17.4.1",
     "pg": "^8.20.0",

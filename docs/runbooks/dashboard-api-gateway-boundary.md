@@ -28,7 +28,9 @@ Dashboard responsibilities:
 Gateway responsibilities:
 - authenticate and authorize operator actions
 - persist audit metadata for every mutation
-- translate governance requests into durable queued actions and executor-backed AdminSDK calls
+- prepare canonical direct-sign governance payloads for human privileged actions
+- confirm and monitor direct-sign governance broadcasts after the admin wallet signs
+- route executor-backed governance only for delegated/service/system actions that intentionally retain that flow
 - assemble read models from chain, indexer, treasury, ricardian, and future compliance storage
 - enforce idempotency, request tracing, and stable error shapes
 - own downstream HTTP orchestration policy for service-routed reads and probes through `gateway/src/core/serviceRegistry.ts` and `gateway/src/core/serviceOrchestrator.ts`
@@ -105,7 +107,8 @@ Primary source of truth:
 
 ### External client auth
 The gateway should align with the repo’s existing auth service model:
-- login flow: wallet-signature challenge/response
+- production path: bearer session issued from trusted upstream session exchange via `/api/auth/v1/session/exchange/agroasys`
+- compatibility path: wallet-signature challenge/response remains available only when explicitly enabled
 - session token: `Authorization: Bearer <sessionId>`
 - gateway role mapping: auth role `admin` -> `operator:read` + `operator:write`
 - gateway write safety gate: mutations additionally require `GATEWAY_ENABLE_MUTATIONS=true` and caller membership in `GATEWAY_WRITE_ALLOWLIST`
@@ -144,9 +147,10 @@ Every gateway action must be verifiable through one or more of:
   - verify transaction hash
   - verify `Paused`, `ClaimsPaused`, or `ClaimsUnpaused` event
 - Governance mutation execution model:
-  - gateway persists action as `QUEUED`
-  - executor process runs `npm run -w gateway execute:governance-action -- <actionId>`
-  - verify resulting action transition, audit entries, explicit `outcome`, and tx hash
+  - human privileged governance uses `prepare` -> wallet sign/broadcast -> `confirm`
+  - verify resulting action transition, audit entries, verification state, monitoring state, and tx hash
+  - direct-sign lifecycle must reflect backend-observed truth such as `prepared`, `broadcast_pending_verification`, `broadcast`, `pending_confirmation`, `confirmed`, `finalized`, `reverted`, or `stale`
+  - executor-backed execution remains valid only for delegated/service roles that intentionally use the executor path
 - Oracle recovery:
   - verify `OracleDisabledEmergency`, `OracleUpdateProposed`, `OracleUpdateApproved`, `OracleUpdated`
   - verify `oracleAddress` and `oracleActive` read model
@@ -217,7 +221,8 @@ validation.
   - `oracle_progression_blocks`
   - `idempotency_keys`
   - `audit_log`
-- Governance execution uses queued execution; the gateway does not hold private keys.
+- Human governance execution uses the direct-sign prepare/confirm model and the gateway does not hold the signer key.
+- Executor-backed queued execution remains a service-role path only and is not the default human governance model.
 - Governance status and proposal reads use direct chain reads because the current generic SDK client does not expose the full read surface.
 - Compliance decisions are append-only and resume is permitted only when policy conditions are satisfied by the latest effective `ALLOW` decision.
 

@@ -1,6 +1,9 @@
-import crypto from 'crypto';
-import { NextFunction, Request, RequestHandler, Response } from 'express';
-import Redis from 'ioredis';
+import { Request, RequestHandler } from 'express';
+import {
+  createHttpRateLimiter,
+  type HttpRateLimiter,
+  type RouteRateLimitPolicy,
+} from '@agroasys/shared-edge';
 import { Logger } from '../utils/logger';
 
 export interface RateLimitWindowConfig {
@@ -27,140 +30,20 @@ export interface RateLimiterLogger {
   error(message: string, meta?: Record<string, unknown>): void;
 }
 
-interface RateLimitStoreResult {
-  count: number;
-  resetSeconds: number;
-}
-
-interface RateLimitStore {
-  incrementAndGet(key: string, windowSeconds: number, nowSeconds: number): Promise<RateLimitStoreResult>;
-  close(): Promise<void>;
-}
-
 interface RateLimiterOptions {
   config: RicardianRateLimitConfig;
   logger?: RateLimiterLogger;
   nowSeconds?: () => number;
-  store?: RateLimitStore;
-}
-
-interface CallerContext {
-  key: string;
-  keyType: 'ip' | 'apiKey+ip';
-  fingerprint: string;
-}
-
-interface WindowResult {
-  name: 'burst' | 'sustained';
-  limit: number;
-  count: number;
-  resetSeconds: number;
+  store?: {
+    incrementAndGet(key: string, windowSeconds: number, nowSeconds: number): Promise<{ count: number; resetSeconds: number }>;
+    close(): Promise<void>;
+  };
 }
 
 export interface RicardianRateLimiter {
   middleware: RequestHandler;
   close: () => Promise<void>;
   mode: 'disabled' | 'memory' | 'redis';
-}
-
-class InMemoryRateLimitStore implements RateLimitStore {
-  private readonly buckets = new Map<string, { count: number; expiresAt: number }>();
-
-  async incrementAndGet(key: string, windowSeconds: number, nowSeconds: number): Promise<RateLimitStoreResult> {
-    const bucketKey = `${key}:${windowSeconds}`;
-    const existing = this.buckets.get(bucketKey);
-
-    if (!existing || existing.expiresAt <= nowSeconds) {
-      const expiresAt = nowSeconds + windowSeconds;
-      this.buckets.set(bucketKey, { count: 1, expiresAt });
-      return {
-        count: 1,
-        resetSeconds: windowSeconds,
-      };
-    }
-
-    existing.count += 1;
-
-    return {
-      count: existing.count,
-      resetSeconds: Math.max(0, existing.expiresAt - nowSeconds),
-    };
-  }
-
-  async close(): Promise<void> {
-    this.buckets.clear();
-  }
-}
-
-class RedisRateLimitStore implements RateLimitStore {
-  private readonly redis: Redis;
-
-  constructor(redisUrl: string) {
-    this.redis = new Redis(redisUrl, {
-      maxRetriesPerRequest: 1,
-      enableReadyCheck: true,
-      lazyConnect: true,
-    });
-  }
-
-  async incrementAndGet(key: string, windowSeconds: number, nowSeconds: number): Promise<RateLimitStoreResult> {
-    if (this.redis.status === 'wait') {
-      await this.redis.connect();
-    }
-
-    const bucket = Math.floor(nowSeconds / windowSeconds);
-    const redisKey = `ricardian:rate-limit:${key}:${windowSeconds}:${bucket}`;
-
-    const count = await this.redis.incr(redisKey);
-    if (count === 1) {
-      await this.redis.expire(redisKey, windowSeconds);
-    }
-
-    const resetSeconds = windowSeconds - (nowSeconds % windowSeconds);
-
-    return {
-      count,
-      resetSeconds,
-    };
-  }
-
-  async close(): Promise<void> {
-    await this.redis.quit();
-  }
-}
-
-function fallbackLogger(): RateLimiterLogger {
-  return Logger;
-}
-
-function fingerprint(value: string): string {
-  return crypto.createHash('sha256').update(value).digest('hex').slice(0, 12);
-}
-
-interface AuthAwareRequest extends Request {
-  serviceAuth?: {
-    apiKeyId: string;
-  };
-}
-
-function callerContext(req: Request): CallerContext {
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
-  const authContext = (req as AuthAwareRequest).serviceAuth;
-
-  if (authContext?.apiKeyId) {
-    const scopedIdentity = `apiKey:${authContext.apiKeyId}:ip:${ip}`;
-    return {
-      key: scopedIdentity,
-      keyType: 'apiKey+ip',
-      fingerprint: fingerprint(scopedIdentity),
-    };
-  }
-
-  return {
-    key: `ip:${ip}`,
-    keyType: 'ip',
-    fingerprint: fingerprint(ip),
-  };
 }
 
 function normalizeRoutePath(path: string): string {
@@ -190,15 +73,6 @@ function routeKind(req: Request): 'write' | 'read' | null {
   return null;
 }
 
-function setRateLimitHeaders(res: Response, routePolicy: RateLimitRouteConfig, currentWindow: WindowResult): void {
-  const policyValue = `burst;w=${routePolicy.burst.windowSeconds}, sustained;w=${routePolicy.sustained.windowSeconds}`;
-
-  res.setHeader('RateLimit-Limit', currentWindow.limit.toString());
-  res.setHeader('RateLimit-Remaining', Math.max(0, currentWindow.limit - currentWindow.count).toString());
-  res.setHeader('RateLimit-Reset', currentWindow.resetSeconds.toString());
-  res.setHeader('RateLimit-Policy', policyValue);
-}
-
 function validateConfig(config: RicardianRateLimitConfig): void {
   const windows: RateLimitWindowConfig[] = [
     config.writeRoute.burst,
@@ -218,172 +92,41 @@ function validateConfig(config: RicardianRateLimitConfig): void {
   });
 }
 
-async function chooseStore(options: RateLimiterOptions, logger: RateLimiterLogger): Promise<{ store: RateLimitStore; mode: 'memory' | 'redis' }> {
-  if (options.store) {
-    return {
-      store: options.store,
-      mode: 'memory',
-    };
-  }
-
-  if (!options.config.redisUrl) {
-    if (options.config.nodeEnv === 'production') {
-      throw new Error('RATE_LIMIT_REDIS_URL is required when RATE_LIMIT_ENABLED=true in production');
-    }
-
-    logger.warn('Rate limiter using in-memory store (local/dev fallback)');
-    return {
-      store: new InMemoryRateLimitStore(),
-      mode: 'memory',
-    };
-  }
-
-  const redisStore = new RedisRateLimitStore(options.config.redisUrl);
-
-  try {
-    await redisStore.incrementAndGet('bootstrap', 1, Math.floor(Date.now() / 1000));
-    return {
-      store: redisStore,
-      mode: 'redis',
-    };
-  } catch (error: any) {
-    await redisStore.close();
-
-    if (options.config.nodeEnv === 'production') {
-      throw new Error(`Failed to connect rate limiter to Redis: ${error?.message || error}`);
-    }
-
-    logger.warn('Rate limiter falling back to in-memory store after Redis connection failure', {
-      error: error?.message || error,
-    });
-
-    return {
-      store: new InMemoryRateLimitStore(),
-      mode: 'memory',
-    };
-  }
-}
-
-async function evaluateRoute(
-  store: RateLimitStore,
-  routePolicy: RateLimitRouteConfig,
-  key: string,
-  nowSeconds: number
-): Promise<{ limited: boolean; currentWindow: WindowResult; violatedWindow?: WindowResult }> {
-  const burstResult = await store.incrementAndGet(`${key}:burst`, routePolicy.burst.windowSeconds, nowSeconds);
-  const burstWindow: WindowResult = {
-    name: 'burst',
-    limit: routePolicy.burst.limit,
-    count: burstResult.count,
-    resetSeconds: burstResult.resetSeconds,
-  };
-
-  if (burstResult.count > routePolicy.burst.limit) {
-    return {
-      limited: true,
-      currentWindow: burstWindow,
-      violatedWindow: burstWindow,
-    };
-  }
-
-  const sustainedResult = await store.incrementAndGet(`${key}:sustained`, routePolicy.sustained.windowSeconds, nowSeconds);
-  const sustainedWindow: WindowResult = {
-    name: 'sustained',
-    limit: routePolicy.sustained.limit,
-    count: sustainedResult.count,
-    resetSeconds: sustainedResult.resetSeconds,
-  };
-
-  if (sustainedResult.count > routePolicy.sustained.limit) {
-    return {
-      limited: true,
-      currentWindow: sustainedWindow,
-      violatedWindow: sustainedWindow,
-    };
-  }
-
-  return {
-    limited: false,
-    currentWindow: sustainedWindow,
-  };
-}
-
 export async function createRicardianRateLimiter(options: RateLimiterOptions): Promise<RicardianRateLimiter> {
-  if (!options.config.enabled) {
-    return {
-      mode: 'disabled',
-      middleware: (_req, _res, next) => {
-        next();
-      },
-      close: async () => {
-        return;
-      },
-    };
-  }
-
   validateConfig(options.config);
-
-  const logger = options.logger || fallbackLogger();
-  const nowSeconds = options.nowSeconds || (() => Math.floor(Date.now() / 1000));
-  const { store, mode } = await chooseStore(options, logger);
-
-  const middleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const kind = routeKind(req);
-    if (!kind) {
-      next();
-      return;
-    }
-
-    const policy = kind === 'write' ? options.config.writeRoute : options.config.readRoute;
-    const caller = callerContext(req);
-
-    try {
-      const evaluated = await evaluateRoute(store, policy, `${kind}:${caller.key}`, nowSeconds());
-      setRateLimitHeaders(res, policy, evaluated.currentWindow);
-
-      if (evaluated.limited && evaluated.violatedWindow) {
-        res.setHeader('Retry-After', evaluated.violatedWindow.resetSeconds.toString());
-
-        logger.warn('Ricardian rate limit exceeded', {
-          routeKind: kind,
-          method: req.method,
-          path: req.path,
-          keyType: caller.keyType,
-          keyFingerprint: caller.fingerprint,
-          window: evaluated.violatedWindow.name,
-          limit: evaluated.violatedWindow.limit,
-          count: evaluated.violatedWindow.count,
-          retryAfterSeconds: evaluated.violatedWindow.resetSeconds,
-        });
-
-        res.status(429).json({
-          success: false,
-          error: 'Rate limit exceeded. Retry after the provided delay.',
-          retryAfterSeconds: evaluated.violatedWindow.resetSeconds,
-        });
-        return;
+  const routePolicies: Record<'write' | 'read', RouteRateLimitPolicy> = {
+    write: {
+      name: 'write',
+      burst: options.config.writeRoute.burst,
+      sustained: options.config.writeRoute.sustained,
+    },
+    read: {
+      name: 'read',
+      burst: options.config.readRoute.burst,
+      sustained: options.config.readRoute.sustained,
+    },
+  };
+  const limiter: HttpRateLimiter = await createHttpRateLimiter({
+    enabled: options.config.enabled,
+    redisUrl: options.config.redisUrl,
+    nodeEnv: options.config.nodeEnv,
+    keyPrefix: 'ricardian',
+    classifyRoute(req: Request): RouteRateLimitPolicy | null {
+      const kind = routeKind(req);
+      if (!kind) {
+        return null;
       }
 
-      next();
-    } catch (error: any) {
-      logger.error('Ricardian rate limiter failed', {
-        error: error?.message || error,
-        method: req.method,
-        path: req.path,
-      });
-
-      res.status(503).json({
-        success: false,
-        error: 'Rate limiting unavailable',
-      });
-    }
-  };
+      return routePolicies[kind];
+    },
+    logger: options.logger || Logger,
+    nowSeconds: options.nowSeconds,
+    store: options.store,
+  });
 
   return {
-    middleware,
-    mode,
-    close: async () => {
-      await store.close();
-    },
+    middleware: limiter.middleware as RequestHandler,
+    mode: limiter.mode,
+    close: limiter.close,
   };
 }

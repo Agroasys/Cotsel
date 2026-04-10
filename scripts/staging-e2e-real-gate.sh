@@ -30,6 +30,21 @@ load_env_file() {
   fi
 }
 
+ORIGINAL_ENV_KEYS=()
+ORIGINAL_ENV_VALUES=()
+while IFS='=' read -r key value; do
+  ORIGINAL_ENV_KEYS+=("$key")
+  ORIGINAL_ENV_VALUES+=("$value")
+done < <(env)
+
+restore_external_environment_overrides() {
+  local idx=0
+  for key in "${ORIGINAL_ENV_KEYS[@]}"; do
+    export "$key=${ORIGINAL_ENV_VALUES[$idx]}"
+    idx=$((idx + 1))
+  done
+}
+
 # Normalize URLs that use Docker's internal hostname so they work from the host,
 # by converting host.docker.internal to 127.0.0.1 for host-side access.
 normalize_host_url() {
@@ -469,7 +484,9 @@ else:
 }
 
 load_env_file ".env"
+restore_external_environment_overrides
 load_env_file ".env.staging-e2e-real"
+restore_external_environment_overrides
 
 INDEXER_GRAPHQL_DEFAULT_URL="http://127.0.0.1:${INDEXER_GRAPHQL_PORT:-4350}/graphql"
 INDEXER_GATEWAY_URL_HOST="${STAGING_E2E_REAL_GATE_INDEXER_GRAPHQL_URL:-$INDEXER_GRAPHQL_DEFAULT_URL}"

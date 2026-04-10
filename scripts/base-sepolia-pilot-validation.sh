@@ -284,6 +284,21 @@ load_env_file() {
   fi
 }
 
+ORIGINAL_ENV_KEYS=()
+ORIGINAL_ENV_VALUES=()
+while IFS='=' read -r key value; do
+  ORIGINAL_ENV_KEYS+=("$key")
+  ORIGINAL_ENV_VALUES+=("$value")
+done < <(env)
+
+restore_external_environment_overrides() {
+  local idx=0
+  for key in "${ORIGINAL_ENV_KEYS[@]}"; do
+    export "$key=${ORIGINAL_ENV_VALUES[$idx]}"
+    idx=$((idx + 1))
+  done
+}
+
 contains_stale_chain_marker() {
   local value="${1:-}"
   [[ "$value" == *asset-hub-paseo* || "$value" == *paseo* || "$value" == *polkadot* || "$value" == *polkavm* ]]
@@ -316,7 +331,9 @@ fail_live_preflight() {
 
 validate_pilot_profile_truth() {
   load_env_file "$ROOT_DIR/.env"
+  restore_external_environment_overrides
   load_env_file "$ROOT_DIR/.env.staging-e2e-real"
+  restore_external_environment_overrides
 
   if [[ "${STAGING_E2E_REAL_NETWORK_NAME:-}" != "Base Sepolia" ]]; then
     fail_live_preflight "PILOT_PROFILE_NOT_BASE_SEPOLIA" "pilot-profile-truth" "STAGING_E2E_REAL_NETWORK_NAME must be 'Base Sepolia'."

@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
+import { parseAllowedOrigins } from '@agroasys/shared-edge';
 import { parseServiceApiKeys, ServiceApiKey } from './auth/serviceAuth';
 
 dotenv.config();
@@ -7,12 +8,15 @@ dotenv.config();
 export type NonceStoreMode = 'redis' | 'postgres' | 'inmemory';
 
 export interface RicardianConfig {
+  nodeEnv: string;
   port: number;
   dbHost: string;
   dbPort: number;
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbMigrationUser?: string;
+  dbMigrationPassword?: string;
   authEnabled: boolean;
   apiKeys: ServiceApiKey[];
   hmacSecret?: string;
@@ -21,6 +25,8 @@ export interface RicardianConfig {
   nonceStore: NonceStoreMode;
   nonceRedisUrl?: string;
   nonceTtlSeconds: number;
+  corsAllowedOrigins: string[];
+  corsAllowNoOrigin: boolean;
   rateLimitEnabled: boolean;
   rateLimitRedisUrl?: string;
   rateLimitWriteBurstLimit: number;
@@ -88,11 +94,13 @@ function resolveNonceStoreMode(nodeEnv: string): NonceStoreMode {
 
 export function loadConfig(): RicardianConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
-  const authEnabled = envBool('AUTH_ENABLED', false);
+  const authEnabled = envBool('AUTH_ENABLED', nodeEnv === 'production');
   const apiKeys = parseServiceApiKeys(process.env.API_KEYS_JSON);
   const hmacSecret = process.env.HMAC_SECRET?.trim();
   const nonceStore = resolveNonceStoreMode(nodeEnv);
   const nonceRedisUrl = process.env.REDIS_URL?.trim() || undefined;
+  const dbMigrationUser = process.env.DB_MIGRATION_USER?.trim() || undefined;
+  const dbMigrationPassword = process.env.DB_MIGRATION_PASSWORD?.trim() || undefined;
   const authNonceTtlSeconds = envNumber('AUTH_NONCE_TTL_SECONDS', 600);
   const nonceTtlSeconds = process.env.NONCE_TTL_SECONDS
     ? envNumber('NONCE_TTL_SECONDS')
@@ -112,16 +120,23 @@ export function loadConfig(): RicardianConfig {
   if (nonceStore === 'redis') {
     assert(nonceRedisUrl, 'REDIS_URL is required when NONCE_STORE=redis');
   }
+  assert(
+    Boolean(dbMigrationUser) === Boolean(dbMigrationPassword),
+    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+  );
 
-  const rateLimitEnabled = envBool('RATE_LIMIT_ENABLED', false);
+  const rateLimitEnabled = envBool('RATE_LIMIT_ENABLED', true);
 
   const config: RicardianConfig = {
+    nodeEnv,
     port: envNumber('PORT'),
     dbHost: env('DB_HOST'),
     dbPort: envNumber('DB_PORT'),
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
+    dbMigrationUser,
+    dbMigrationPassword,
     authEnabled,
     apiKeys,
     hmacSecret,
@@ -130,6 +145,8 @@ export function loadConfig(): RicardianConfig {
     nonceStore,
     nonceRedisUrl,
     nonceTtlSeconds,
+    corsAllowedOrigins: parseAllowedOrigins(process.env.RICARDIAN_CORS_ALLOWED_ORIGINS),
+    corsAllowNoOrigin: envBool('RICARDIAN_CORS_ALLOW_NO_ORIGIN', false),
     rateLimitEnabled,
     rateLimitRedisUrl: process.env.RATE_LIMIT_REDIS_URL,
     rateLimitWriteBurstLimit: envNumber('RATE_LIMIT_WRITE_BURST_LIMIT', 10),
