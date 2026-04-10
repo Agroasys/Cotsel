@@ -47,8 +47,13 @@
   ],
   "scripts": {
     "build": "npm run build -w sdk",
-    "lint": "npm run lint --workspaces --if-present",
-    "prepare": "npm run build",
+    "lint": "eslint --max-warnings=0 .",
+    "lint:fix": "eslint --max-warnings=0 --fix .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "bash -lc 'files=$(git diff --name-only --diff-filter=ACMR HEAD); if [ -z \"$files\" ]; then echo \"No changed files to check\"; else npx prettier --check --ignore-unknown $files; fi'",
+    "format:check:full": "prettier --check .",
+    "prepare": "husky && npm run build",
     "dashboard:parity:session": "node scripts/dashboard-operator-session.mjs",
     "dashboard:parity:preflight": "node scripts/dashboard-local-parity-preflight.mjs",
     "dashboard:parity:gate": "npm run dashboard:parity:preflight",
@@ -59,18 +64,29 @@
     "security:deps": "node scripts/security-deps-report.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "defu": "6.1.6",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "lodash": "4.18.1",
+    "prettier": "^3.8.2",
+    "typescript-eslint": "^8.58.1",
     "undici": "6.24.0"
+  },
+  "lint-staged": {
+    "*.{js,cjs,mjs,ts}": [
+      "eslint --max-warnings=0 --fix --no-warn-ignored",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "overrides": {
     "axios": "1.14.0",
-    "@parity/hardhat-polkadot-node": {
-      "axios": "1.14.0"
-    },
-    "@parity/hardhat-polkadot-resolc": {
-      "axios": "1.14.0"
-    },
     "hardhat-gas-reporter": {
       "axios": "1.14.0"
     },

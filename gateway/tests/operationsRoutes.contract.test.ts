@@ -9,7 +9,10 @@ import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createOperationsRouter } from '../src/routes/operations';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
-import type { OperationsSummaryReader, OperationsSummarySnapshot } from '../src/core/operationsSummaryService';
+import type {
+  OperationsSummaryReader,
+  OperationsSummarySnapshot,
+} from '../src/core/operationsSummaryService';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -148,7 +151,10 @@ const operationsFixture: OperationsSummarySnapshot = {
   },
 };
 
-async function startServer(role: 'admin' | 'buyer' | null, fixture: OperationsSummarySnapshot = operationsFixture) {
+async function startServer(
+  role: 'admin' | 'buyer' | null,
+  fixture: OperationsSummarySnapshot = operationsFixture,
+) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
       if (role === null) {
@@ -198,7 +204,10 @@ async function startServer(role: 'admin' | 'buyer' | null, fixture: OperationsSu
 
 describe('gateway operations summary route contract', () => {
   const spec = loadOpenApiSpec();
-  const validateOperationsSummary = createSchemaValidator(spec, '#/components/schemas/OperationsSummaryResponse');
+  const validateOperationsSummary = createSchemaValidator(
+    spec,
+    '#/components/schemas/OperationsSummaryResponse',
+  );
 
   test('OpenAPI spec exposes operations summary endpoint', () => {
     expect(hasOperation(spec, 'get', '/operations/summary')).toBe(true);

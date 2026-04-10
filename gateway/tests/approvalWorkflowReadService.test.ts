@@ -1,9 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import {
-  GovernanceApprovalWorkflowReadService,
-} from '../src/core/approvalWorkflowReadService';
+import { GovernanceApprovalWorkflowReadService } from '../src/core/approvalWorkflowReadService';
 import {
   buildGovernanceIntentKey,
   createInMemoryGovernanceActionStore,
@@ -16,7 +14,9 @@ import {
   UnpauseProposalState,
 } from '../src/core/governanceStatusService';
 
-function buildStatusSnapshot(overrides: Partial<GovernanceStatusSnapshot> = {}): GovernanceStatusSnapshot {
+function buildStatusSnapshot(
+  overrides: Partial<GovernanceStatusSnapshot> = {},
+): GovernanceStatusSnapshot {
   return {
     paused: false,
     claimsPaused: false,
@@ -35,7 +35,9 @@ function buildStatusSnapshot(overrides: Partial<GovernanceStatusSnapshot> = {}):
   };
 }
 
-function buildProposalState(overrides: Partial<GovernanceProposalState> = {}): GovernanceProposalState {
+function buildProposalState(
+  overrides: Partial<GovernanceProposalState> = {},
+): GovernanceProposalState {
   return {
     proposalId: 7,
     approvalCount: 1,
@@ -72,7 +74,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'pending_approvals',
     contractMethod: 'proposeOracleUpdate',
     txHash: '0xrequest',
-    extrinsicHash: null,
     blockNumber: 51,
     tradeId: null,
     chainId: '31337',
@@ -112,7 +113,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'approved',
     contractMethod: 'approveOracleUpdate',
     txHash: '0xapprove',
-    extrinsicHash: null,
     blockNumber: 52,
     tradeId: null,
     chainId: '31337',
@@ -151,7 +151,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'executed',
     contractMethod: 'executeOracleUpdate',
     txHash: '0xexecute',
-    extrinsicHash: null,
     blockNumber: 53,
     tradeId: null,
     chainId: '31337',
@@ -190,7 +189,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'pending_approvals',
     contractMethod: 'proposeTreasuryPayoutAddressUpdate',
     txHash: null,
-    extrinsicHash: null,
     blockNumber: null,
     tradeId: null,
     chainId: '31337',
@@ -222,11 +220,15 @@ function buildReader(): jest.Mocked<GovernanceMutationPreflightReader> {
     checkReadiness: jest.fn(),
     getGovernanceStatus: jest.fn().mockResolvedValue(buildStatusSnapshot()),
     getUnpauseProposalState: jest.fn().mockResolvedValue(buildUnpauseProposal()),
-    getOracleProposalState: jest.fn().mockResolvedValue(buildProposalState({ executed: true, approvalCount: 2 })),
-    getTreasuryPayoutReceiverProposalState: jest.fn().mockResolvedValue(buildProposalState({
-      proposalId: 9,
-      targetAddress: '0x0000000000000000000000000000000000000055',
-    })),
+    getOracleProposalState: jest
+      .fn()
+      .mockResolvedValue(buildProposalState({ executed: true, approvalCount: 2 })),
+    getTreasuryPayoutReceiverProposalState: jest.fn().mockResolvedValue(
+      buildProposalState({
+        proposalId: 9,
+        targetAddress: '0x0000000000000000000000000000000000000055',
+      }),
+    ),
     getTreasuryClaimableBalance: jest.fn().mockResolvedValue(10n),
     hasApprovedUnpause: jest.fn().mockResolvedValue(false),
     hasApprovedOracleProposal: jest.fn().mockResolvedValue(false),

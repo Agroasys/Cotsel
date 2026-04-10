@@ -96,7 +96,7 @@ function createPostgresNonceStore(options) {
           RETURNING 1
         )
         SELECT EXISTS(SELECT 1 FROM consumed_nonce) AS accepted`,
-        [apiKey, nonce, ttlSeconds]
+        [apiKey, nonce, ttlSeconds],
       );
 
       return Boolean(result?.rows?.[0]?.accepted);
@@ -111,11 +111,13 @@ function createRedisNonceStore(options) {
 
   const keyPrefix = options.keyPrefix ?? 'auth_nonce';
   const Redis = options.Redis ?? require('ioredis');
-  const redis = options.redisClient ?? new Redis(redisUrl, {
-    lazyConnect: true,
-    maxRetriesPerRequest: 1,
-    enableOfflineQueue: false,
-  });
+  const redis =
+    options.redisClient ??
+    new Redis(redisUrl, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+    });
 
   const ownsClient = !options.redisClient;
 

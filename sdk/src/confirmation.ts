@@ -3,7 +3,7 @@
  */
 export const SETTLEMENT_CONFIRMATION_STAGES = ['INDEXED', 'SAFE', 'FINALIZED'] as const;
 
-export type SettlementConfirmationStage = typeof SETTLEMENT_CONFIRMATION_STAGES[number];
+export type SettlementConfirmationStage = (typeof SETTLEMENT_CONFIRMATION_STAGES)[number];
 
 export interface SettlementConfirmationHeads {
   latestBlockNumber: number;

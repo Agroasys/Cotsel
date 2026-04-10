@@ -47,14 +47,8 @@ function optionalEnv(name: string): string | undefined {
 
 export function loadConfig(): AuthConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
-  const legacyWalletLoginEnabled = envBoolean(
-    'LEGACY_WALLET_LOGIN_ENABLED',
-    false,
-  );
-  const trustedSessionExchangeEnabled = envBoolean(
-    'TRUSTED_SESSION_EXCHANGE_ENABLED',
-    false,
-  );
+  const legacyWalletLoginEnabled = envBoolean('LEGACY_WALLET_LOGIN_ENABLED', false);
+  const trustedSessionExchangeEnabled = envBoolean('TRUSTED_SESSION_EXCHANGE_ENABLED', false);
   const trustedSessionExchangeMaxSkewSeconds = envNumber(
     'TRUSTED_SESSION_EXCHANGE_MAX_SKEW_SECONDS',
     300,

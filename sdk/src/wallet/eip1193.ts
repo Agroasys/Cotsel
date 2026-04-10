@@ -22,7 +22,7 @@ export type Eip1193ProviderLike = {
  * methods for the flows the SDK will execute.
  */
 export async function createSignerFromEip1193Provider(
-  provider: Eip1193ProviderLike
+  provider: Eip1193ProviderLike,
 ): Promise<ethers.JsonRpcSigner> {
   if (!provider || typeof provider.request !== 'function') {
     throw new Error('EIP-1193 provider must expose a request(...) function');

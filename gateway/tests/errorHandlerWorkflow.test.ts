@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createInMemoryAuditLogStore } from '../src/core/auditLogStore';
+import { ComplianceService } from '../src/core/complianceService';
 import {
   GatewayErrorHandlerWorkflow,
   GatewayFailedOperationReplayer,
@@ -11,6 +12,8 @@ import {
   createInMemoryFailedOperationStore,
   FailedOperationConflictError,
 } from '../src/core/failedOperationStore';
+import { GovernanceMutationService } from '../src/core/governanceMutationService';
+import { SettlementCallbackDispatcher } from '../src/core/settlementCallbackDispatcher';
 import { GatewayError } from '../src/errors';
 
 describe('gateway error handler workflow', () => {
@@ -167,9 +170,9 @@ describe('gateway error handler workflow', () => {
       queueAction: jest.fn().mockResolvedValue({
         actionId: 'action-1',
       }),
-    } as any;
-    const complianceService = {} as any;
-    const settlementCallbackDispatcher = {} as any;
+    } as Pick<GovernanceMutationService, 'queueAction'> as GovernanceMutationService;
+    const complianceService = {} as ComplianceService;
+    const settlementCallbackDispatcher = {} as SettlementCallbackDispatcher;
 
     const replayer = new GatewayFailedOperationReplayer(
       failedOperationStore,

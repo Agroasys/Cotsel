@@ -18,7 +18,10 @@ export interface GovernanceCleanupResult {
   inspectedAt: string;
 }
 
-function buildStaleRecord(action: GovernanceActionRecord, inspectedAt: string): GovernanceActionRecord {
+function buildStaleRecord(
+  action: GovernanceActionRecord,
+  inspectedAt: string,
+): GovernanceActionRecord {
   return {
     ...action,
     status: 'stale',
@@ -28,7 +31,11 @@ function buildStaleRecord(action: GovernanceActionRecord, inspectedAt: string): 
   };
 }
 
-function buildAuditEntry(action: GovernanceActionRecord, requestId: string, inspectedAt: string): AuditLogEntry {
+function buildAuditEntry(
+  action: GovernanceActionRecord,
+  requestId: string,
+  inspectedAt: string,
+): AuditLogEntry {
   return {
     eventType: 'governance.action.cleanup.stale',
     route: '/internal/cleanup/governance-actions',
@@ -76,10 +83,12 @@ export class GovernanceCleanupService {
         continue;
       }
 
-      staleActions.push(await this.writeStore.saveActionWithAudit(
-        buildStaleRecord(current, now),
-        buildAuditEntry(current, requestId, now),
-      ));
+      staleActions.push(
+        await this.writeStore.saveActionWithAudit(
+          buildStaleRecord(current, now),
+          buildAuditEntry(current, requestId, now),
+        ),
+      );
     }
 
     return {

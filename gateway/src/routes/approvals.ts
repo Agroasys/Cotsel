@@ -30,7 +30,11 @@ function parseLimit(raw: unknown): number {
 
   const limit = Number.parseInt(raw, 10);
   if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'limit' must be between 1 and 200");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'limit' must be between 1 and 200",
+    );
   }
 
   return limit;
@@ -42,7 +46,11 @@ function parseCursor(raw: unknown): string | undefined {
   }
 
   if (typeof raw !== 'string' || raw.trim() === '') {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'cursor' must be a non-empty string");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'cursor' must be a non-empty string",
+    );
   }
 
   try {
@@ -61,14 +69,17 @@ function parseCategory(raw: unknown) {
     return undefined;
   }
 
-  if (typeof raw !== 'string' || !APPROVAL_WORKFLOW_CATEGORIES.includes(raw as typeof APPROVAL_WORKFLOW_CATEGORIES[number])) {
+  if (
+    typeof raw !== 'string' ||
+    !APPROVAL_WORKFLOW_CATEGORIES.includes(raw as (typeof APPROVAL_WORKFLOW_CATEGORIES)[number])
+  ) {
     throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'category' is invalid", {
       field: 'category',
       allowed: APPROVAL_WORKFLOW_CATEGORIES,
     });
   }
 
-  return raw as typeof APPROVAL_WORKFLOW_CATEGORIES[number];
+  return raw as (typeof APPROVAL_WORKFLOW_CATEGORIES)[number];
 }
 
 export function createApprovalWorkflowRouter(options: ApprovalWorkflowRouterOptions): Router {

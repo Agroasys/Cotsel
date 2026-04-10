@@ -150,13 +150,15 @@ export class OverviewService implements OverviewReader {
         indexerClientOrUrl,
         indexerRequestTimeoutOrGovernanceStatusService as number,
       );
-      this.governanceStatusService = governanceStatusServiceOrComplianceStore as EscrowGovernanceReader;
+      this.governanceStatusService =
+        governanceStatusServiceOrComplianceStore as EscrowGovernanceReader;
       this.complianceStore = maybeComplianceStore as ComplianceStore;
       return;
     }
 
     this.indexerClient = indexerClientOrUrl;
-    this.governanceStatusService = indexerRequestTimeoutOrGovernanceStatusService as EscrowGovernanceReader;
+    this.governanceStatusService =
+      indexerRequestTimeoutOrGovernanceStatusService as EscrowGovernanceReader;
     this.complianceStore = governanceStatusServiceOrComplianceStore as ComplianceStore;
   }
 
@@ -201,25 +203,26 @@ export class OverviewService implements OverviewReader {
       : null;
 
     const blockedTrades = complianceAvailable ? complianceResult.value : 0;
-    const tradesFeedFreshness: OverviewTradeFeedStatus = snapshotAvailable && indexerSnapshot
-      ? {
-          source: 'indexer_graphql',
-          queriedAt: now,
-          freshAt: indexerSnapshot.lastIndexedAt,
-          available: true,
-          lastIndexedAt: indexerSnapshot.lastIndexedAt,
-          lastProcessedBlock: indexerSnapshot.lastProcessedBlock,
-          lastTradeEventAt: indexerSnapshot.lastTradeEventAt,
-        }
-      : {
-          source: 'indexer_graphql',
-          queriedAt: null,
-          freshAt: null,
-          available: false,
-          lastIndexedAt: null,
-          lastProcessedBlock: null,
-          lastTradeEventAt: null,
-        };
+    const tradesFeedFreshness: OverviewTradeFeedStatus =
+      snapshotAvailable && indexerSnapshot
+        ? {
+            source: 'indexer_graphql',
+            queriedAt: now,
+            freshAt: indexerSnapshot.lastIndexedAt,
+            available: true,
+            lastIndexedAt: indexerSnapshot.lastIndexedAt,
+            lastProcessedBlock: indexerSnapshot.lastProcessedBlock,
+            lastTradeEventAt: indexerSnapshot.lastTradeEventAt,
+          }
+        : {
+            source: 'indexer_graphql',
+            queriedAt: null,
+            freshAt: null,
+            available: false,
+            lastIndexedAt: null,
+            lastProcessedBlock: null,
+            lastTradeEventAt: null,
+          };
 
     return {
       kpis: {
@@ -229,17 +232,26 @@ export class OverviewService implements OverviewReader {
       posture,
       feedFreshness: {
         trades: tradesFeedFreshness,
-        governance: { source: 'chain_rpc', queriedAt: governanceAvailable ? now : null, freshAt: governanceAvailable ? now : null, available: governanceAvailable },
-        compliance: { source: 'gateway_ledger', queriedAt: complianceAvailable ? now : null, freshAt: complianceAvailable ? now : null, available: complianceAvailable },
+        governance: {
+          source: 'chain_rpc',
+          queriedAt: governanceAvailable ? now : null,
+          freshAt: governanceAvailable ? now : null,
+          available: governanceAvailable,
+        },
+        compliance: {
+          source: 'gateway_ledger',
+          queriedAt: complianceAvailable ? now : null,
+          freshAt: complianceAvailable ? now : null,
+          available: complianceAvailable,
+        },
       },
     };
   }
 
   private async fetchIndexerSnapshot(): Promise<IndexerOverviewSnapshot> {
-    const payload = await this.indexerClient.query<{ overviewSnapshotById?: IndexerOverviewSnapshot | null }>(
-      'OverviewSnapshot',
-      overviewSnapshotQuery,
-    ) as OverviewSnapshotGraphQlResponse;
+    const payload = (await this.indexerClient.query<{
+      overviewSnapshotById?: IndexerOverviewSnapshot | null;
+    }>('OverviewSnapshot', overviewSnapshotQuery)) as OverviewSnapshotGraphQlResponse;
     const snapshot = payload.data?.overviewSnapshotById;
     if (!snapshot) {
       throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned no overview snapshot');
@@ -250,12 +262,27 @@ export class OverviewService implements OverviewReader {
       lockedTrades: parseNonNegativeInteger(snapshot.lockedTrades, 'overviewSnapshot.lockedTrades'),
       stage1Trades: parseNonNegativeInteger(snapshot.stage1Trades, 'overviewSnapshot.stage1Trades'),
       stage2Trades: parseNonNegativeInteger(snapshot.stage2Trades, 'overviewSnapshot.stage2Trades'),
-      completedTrades: parseNonNegativeInteger(snapshot.completedTrades, 'overviewSnapshot.completedTrades'),
-      disputedTrades: parseNonNegativeInteger(snapshot.disputedTrades, 'overviewSnapshot.disputedTrades'),
-      cancelledTrades: parseNonNegativeInteger(snapshot.cancelledTrades, 'overviewSnapshot.cancelledTrades'),
-      lastProcessedBlock: parseBlockNumber(snapshot.lastProcessedBlock, 'overviewSnapshot.lastProcessedBlock'),
+      completedTrades: parseNonNegativeInteger(
+        snapshot.completedTrades,
+        'overviewSnapshot.completedTrades',
+      ),
+      disputedTrades: parseNonNegativeInteger(
+        snapshot.disputedTrades,
+        'overviewSnapshot.disputedTrades',
+      ),
+      cancelledTrades: parseNonNegativeInteger(
+        snapshot.cancelledTrades,
+        'overviewSnapshot.cancelledTrades',
+      ),
+      lastProcessedBlock: parseBlockNumber(
+        snapshot.lastProcessedBlock,
+        'overviewSnapshot.lastProcessedBlock',
+      ),
       lastIndexedAt: parseIsoTimestamp(snapshot.lastIndexedAt, 'overviewSnapshot.lastIndexedAt'),
-      lastTradeEventAt: parseOptionalIsoTimestamp(snapshot.lastTradeEventAt, 'overviewSnapshot.lastTradeEventAt'),
+      lastTradeEventAt: parseOptionalIsoTimestamp(
+        snapshot.lastTradeEventAt,
+        'overviewSnapshot.lastTradeEventAt',
+      ),
     };
   }
 }

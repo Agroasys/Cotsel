@@ -14,7 +14,7 @@ function usage() {
       'Notes:',
       '  - Output hash is deterministic for identical documentRef/terms/metadata inputs.',
       '  - requestId is not part of the hash preimage and is intentionally omitted from output.',
-    ].join('\n')
+    ].join('\n'),
   );
 }
 
@@ -76,7 +76,7 @@ function readJsonFile(filePath, label) {
   try {
     return JSON.parse(raw);
   } catch (error) {
-    throw new Error(`Invalid JSON in ${label} (${filePath}): ${error.message}`);
+    throw new Error(`Invalid JSON in ${label} (${filePath}): ${error.message}`, { cause: error });
   }
 }
 
@@ -140,7 +140,9 @@ function buildPayload(opts) {
   }
 
   const terms = readJsonFile(opts.termsFile, '--terms-file');
-  const metadata = opts.metadataFile ? readJsonFile(opts.metadataFile, '--metadata-file') : undefined;
+  const metadata = opts.metadataFile
+    ? readJsonFile(opts.metadataFile, '--metadata-file')
+    : undefined;
 
   return {
     documentRef: opts.documentRef,

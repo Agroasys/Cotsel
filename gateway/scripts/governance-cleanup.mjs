@@ -40,25 +40,29 @@ async function main() {
       createPostgresGovernanceWriteStore(pool, governanceActionStore),
     );
 
-    const result = apply
-      ? await cleanupService.apply()
-      : await cleanupService.dryRun();
+    const result = apply ? await cleanupService.apply() : await cleanupService.dryRun();
 
-    console.log(JSON.stringify({
-      mode: apply ? 'apply' : 'dry-run',
-      requestId: result.requestId,
-      inspectedAt: result.inspectedAt,
-      staleCount: result.staleCount,
-      actions: result.actions.map((action) => ({
-        actionId: action.actionId,
-        intentKey: action.intentKey,
-        category: action.category,
-        contractMethod: action.contractMethod,
-        status: action.status,
-        createdAt: action.createdAt,
-        expiresAt: action.expiresAt,
-      })),
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          mode: apply ? 'apply' : 'dry-run',
+          requestId: result.requestId,
+          inspectedAt: result.inspectedAt,
+          staleCount: result.staleCount,
+          actions: result.actions.map((action) => ({
+            actionId: action.actionId,
+            intentKey: action.intentKey,
+            category: action.category,
+            contractMethod: action.contractMethod,
+            status: action.status,
+            createdAt: action.createdAt,
+            expiresAt: action.expiresAt,
+          })),
+        },
+        null,
+        2,
+      ),
+    );
   } finally {
     await closeConnection(pool);
   }

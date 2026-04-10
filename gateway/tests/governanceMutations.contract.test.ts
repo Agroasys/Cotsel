@@ -43,7 +43,7 @@ const baseConfig: GatewayConfig = {
   dbPassword: 'postgres',
   authBaseUrl: 'http://127.0.0.1:3005',
   authRequestTimeoutMs: 5000,
-  indexerGraphqlUrl: "http://127.0.0.1:4350/graphql",
+  indexerGraphqlUrl: 'http://127.0.0.1:4350/graphql',
   indexerRequestTimeoutMs: 5000,
   rpcUrl: 'http://127.0.0.1:8545',
   rpcFallbackUrls: [],
@@ -118,7 +118,9 @@ const tradeFixture: DashboardTradeRecord = {
   ],
 };
 
-function buildStatusSnapshot(overrides: Partial<GovernanceStatusSnapshot> = {}): GovernanceStatusSnapshot {
+function buildStatusSnapshot(
+  overrides: Partial<GovernanceStatusSnapshot> = {},
+): GovernanceStatusSnapshot {
   return {
     paused: false,
     claimsPaused: false,
@@ -137,7 +139,9 @@ function buildStatusSnapshot(overrides: Partial<GovernanceStatusSnapshot> = {}):
   };
 }
 
-function buildProposalState(overrides: Partial<GovernanceProposalState> = {}): GovernanceProposalState {
+function buildProposalState(
+  overrides: Partial<GovernanceProposalState> = {},
+): GovernanceProposalState {
   return {
     proposalId: 7,
     approvalCount: 1,
@@ -237,9 +241,10 @@ async function startServer(options: StartServerOptions = {}) {
       }
 
       if (options.sessionRole) {
-        const fixture = options.sessionRole === 'admin'
-          ? defaultSessionFixtures['sess-admin']
-          : defaultSessionFixtures['sess-buyer'];
+        const fixture =
+          options.sessionRole === 'admin'
+            ? defaultSessionFixtures['sess-admin']
+            : defaultSessionFixtures['sess-buyer'];
         return { ...fixture, issuedAt: Date.now(), expiresAt: Date.now() + 60_000 };
       }
 
@@ -267,21 +272,28 @@ async function startServer(options: StartServerOptions = {}) {
     createPassthroughGovernanceWriteStore(governanceActionStore, auditLogStore),
     options.transactionVerifier,
   );
-  const failedOperationWorkflow = new GatewayErrorHandlerWorkflow(failedOperationStore, auditLogStore);
+  const failedOperationWorkflow = new GatewayErrorHandlerWorkflow(
+    failedOperationStore,
+    auditLogStore,
+  );
 
   if (options.failQueueAction) {
-    jest.spyOn(mutationService, 'queueAction').mockRejectedValue(new Error('governance queue unavailable'));
+    jest
+      .spyOn(mutationService, 'queueAction')
+      .mockRejectedValue(new Error('governance queue unavailable'));
   }
 
   const router = Router();
-  router.use(createGovernanceMutationRouter({
-    authSessionClient,
-    config,
-    governanceReader,
-    mutationService,
-    idempotencyStore,
-    failedOperationWorkflow,
-  }));
+  router.use(
+    createGovernanceMutationRouter({
+      authSessionClient,
+      config,
+      governanceReader,
+      mutationService,
+      idempotencyStore,
+      failedOperationWorkflow,
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -323,15 +335,28 @@ function buildTradeReadService(): TradeReadReader {
   return {
     checkReadiness: jest.fn(),
     listTrades: jest.fn().mockResolvedValue([tradeFixture]),
-    getTrade: jest.fn().mockImplementation(async (tradeId: string) => (tradeId === tradeFixture.id ? tradeFixture : null)),
+    getTrade: jest
+      .fn()
+      .mockImplementation(async (tradeId: string) =>
+        tradeId === tradeFixture.id ? tradeFixture : null,
+      ),
   };
 }
 
 describe('gateway governance mutation routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateAccepted = createSchemaValidator(spec, '#/components/schemas/GovernanceActionAcceptedResponse');
-  const validatePrepared = createSchemaValidator(spec, '#/components/schemas/GovernanceActionPreparedResponse');
-  const validateConfirmed = createSchemaValidator(spec, '#/components/schemas/GovernanceBroadcastConfirmedResponse');
+  const validateAccepted = createSchemaValidator(
+    spec,
+    '#/components/schemas/GovernanceActionAcceptedResponse',
+  );
+  const validatePrepared = createSchemaValidator(
+    spec,
+    '#/components/schemas/GovernanceActionPreparedResponse',
+  );
+  const validateConfirmed = createSchemaValidator(
+    spec,
+    '#/components/schemas/GovernanceBroadcastConfirmedResponse',
+  );
   const validateError = createSchemaValidator(spec, '#/components/schemas/ErrorResponse');
 
   test('OpenAPI spec exposes all governance mutation endpoints', () => {
@@ -539,17 +564,20 @@ describe('gateway governance mutation routes contract', () => {
       });
       const prepared = await prepareResponse.json();
 
-      const confirmResponse = await fetch(`${baseUrl}/governance/actions/${encodeURIComponent(prepared.data.actionId)}/confirm`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
+      const confirmResponse = await fetch(
+        `${baseUrl}/governance/actions/${encodeURIComponent(prepared.data.actionId)}/confirm`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer sess-admin',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            txHash: mismatchedTxHash,
+            signerWallet: '0x00000000000000000000000000000000000000aa',
+          }),
         },
-        body: JSON.stringify({
-          txHash: mismatchedTxHash,
-          signerWallet: '0x00000000000000000000000000000000000000aa',
-        }),
-      });
+      );
       const confirmPayload = await confirmResponse.json();
 
       expect(confirmResponse.status).toBe(409);
@@ -587,17 +615,20 @@ describe('gateway governance mutation routes contract', () => {
       });
       const prepared = await prepareResponse.json();
 
-      const confirmResponse = await fetch(`${baseUrl}/governance/actions/${encodeURIComponent(prepared.data.actionId)}/confirm`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
+      const confirmResponse = await fetch(
+        `${baseUrl}/governance/actions/${encodeURIComponent(prepared.data.actionId)}/confirm`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer sess-admin',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            txHash: pendingTxHash,
+            signerWallet: '0x00000000000000000000000000000000000000aa',
+          }),
         },
-        body: JSON.stringify({
-          txHash: pendingTxHash,
-          signerWallet: '0x00000000000000000000000000000000000000aa',
-        }),
-      });
+      );
       const confirmPayload = await confirmResponse.json();
 
       expect(confirmResponse.status).toBe(200);
@@ -655,17 +686,20 @@ describe('gateway governance mutation routes contract', () => {
         blockNumber: 88,
       };
 
-      const confirmResponse = await fetch(`${baseUrl}/governance/actions/${encodeURIComponent(prepared.data.actionId)}/confirm`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
+      const confirmResponse = await fetch(
+        `${baseUrl}/governance/actions/${encodeURIComponent(prepared.data.actionId)}/confirm`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer sess-admin',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            txHash: verifiedTxHash,
+            signerWallet: prepared.data.signing.signerWallet,
+          }),
         },
-        body: JSON.stringify({
-          txHash: verifiedTxHash,
-          signerWallet: prepared.data.signing.signerWallet,
-        }),
-      });
+      );
       const confirmPayload = await confirmResponse.json();
 
       expect(confirmResponse.status).toBe(200);
@@ -766,26 +800,30 @@ describe('gateway governance mutation routes contract', () => {
     const governanceActionStore = createInMemoryGovernanceActionStore();
     const auditLogStore = createInMemoryAuditLogStore();
     const router = Router();
-    router.use(createGovernanceMutationRouter({
-      authSessionClient,
-      config,
-      governanceReader,
-      mutationService: new GovernanceMutationService(
+    router.use(
+      createGovernanceMutationRouter({
+        authSessionClient,
         config,
-        governanceActionStore,
-        createPassthroughGovernanceWriteStore(governanceActionStore, auditLogStore),
-      ),
-      idempotencyStore: createInMemoryIdempotencyStore(),
-      failedOperationWorkflow: new GatewayErrorHandlerWorkflow(
-        createInMemoryFailedOperationStore(),
-        auditLogStore,
-      ),
-    }));
-    router.use(createTradeRouter({
-      authSessionClient,
-      config,
-      tradeReadService: buildTradeReadService(),
-    }));
+        governanceReader,
+        mutationService: new GovernanceMutationService(
+          config,
+          governanceActionStore,
+          createPassthroughGovernanceWriteStore(governanceActionStore, auditLogStore),
+        ),
+        idempotencyStore: createInMemoryIdempotencyStore(),
+        failedOperationWorkflow: new GatewayErrorHandlerWorkflow(
+          createInMemoryFailedOperationStore(),
+          auditLogStore,
+        ),
+      }),
+    );
+    router.use(
+      createTradeRouter({
+        authSessionClient,
+        config,
+        tradeReadService: buildTradeReadService(),
+      }),
+    );
 
     const app = createApp(config, {
       version: '0.1.0',
@@ -805,9 +843,12 @@ describe('gateway governance mutation routes contract', () => {
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:${address.port}/api/dashboard-gateway/v1/trades?limit=1&offset=0`, {
-        headers: { Authorization: 'Bearer sess-admin', 'x-request-id': 'req-trades' },
-      });
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1/trades?limit=1&offset=0`,
+        {
+          headers: { Authorization: 'Bearer sess-admin', 'x-request-id': 'req-trades' },
+        },
+      );
       const payload = await response.json();
 
       expect(response.status).toBe(200);
@@ -835,7 +876,9 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'unpause',
       expectedMethod: 'proposeUnpause',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: true, oracleActive: true }));
+        reader.getGovernanceStatus.mockResolvedValue(
+          buildStatusSnapshot({ paused: true, oracleActive: true }),
+        );
       },
     },
     {
@@ -845,7 +888,9 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'unpause',
       expectedMethod: 'approveUnpause',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getUnpauseProposalState.mockResolvedValue(buildUnpauseProposal({ hasActiveProposal: true, approvalCount: 1 }));
+        reader.getUnpauseProposalState.mockResolvedValue(
+          buildUnpauseProposal({ hasActiveProposal: true, approvalCount: 1 }),
+        );
         reader.hasApprovedUnpause.mockResolvedValue(false);
       },
     },
@@ -856,7 +901,9 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'unpause',
       expectedMethod: 'cancelUnpauseProposal',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getUnpauseProposalState.mockResolvedValue(buildUnpauseProposal({ hasActiveProposal: true }));
+        reader.getUnpauseProposalState.mockResolvedValue(
+          buildUnpauseProposal({ hasActiveProposal: true }),
+        );
       },
     },
     {
@@ -897,9 +944,11 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'treasury_payout_receiver_update',
       expectedMethod: 'proposeTreasuryPayoutAddressUpdate',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({
-          treasuryPayoutAddress: '0x0000000000000000000000000000000000000033',
-        }));
+        reader.getGovernanceStatus.mockResolvedValue(
+          buildStatusSnapshot({
+            treasuryPayoutAddress: '0x0000000000000000000000000000000000000033',
+          }),
+        );
       },
     },
     {
@@ -909,13 +958,15 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'treasury_payout_receiver_update',
       expectedMethod: 'approveTreasuryPayoutAddressUpdate',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getTreasuryPayoutReceiverProposalState.mockResolvedValue(buildProposalState({
-          proposalId: 7,
-          approvalCount: 1,
-          expired: false,
-          cancelled: false,
-          executed: false,
-        }));
+        reader.getTreasuryPayoutReceiverProposalState.mockResolvedValue(
+          buildProposalState({
+            proposalId: 7,
+            approvalCount: 1,
+            expired: false,
+            cancelled: false,
+            executed: false,
+          }),
+        );
         reader.hasApprovedTreasuryPayoutReceiverProposal.mockResolvedValue(false);
       },
     },
@@ -926,12 +977,16 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'treasury_payout_receiver_update',
       expectedMethod: 'executeTreasuryPayoutAddressUpdate',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ governanceApprovalsRequired: 2 }));
-        reader.getTreasuryPayoutReceiverProposalState.mockResolvedValue(buildProposalState({
-          proposalId: 7,
-          approvalCount: 2,
-          etaSeconds: Math.floor(Date.now() / 1000) - 5,
-        }));
+        reader.getGovernanceStatus.mockResolvedValue(
+          buildStatusSnapshot({ governanceApprovalsRequired: 2 }),
+        );
+        reader.getTreasuryPayoutReceiverProposalState.mockResolvedValue(
+          buildProposalState({
+            proposalId: 7,
+            approvalCount: 2,
+            etaSeconds: Math.floor(Date.now() / 1000) - 5,
+          }),
+        );
       },
     },
     {
@@ -941,10 +996,12 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'treasury_payout_receiver_update',
       expectedMethod: 'cancelExpiredTreasuryPayoutAddressUpdateProposal',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getTreasuryPayoutReceiverProposalState.mockResolvedValue(buildProposalState({
-          proposalId: 7,
-          expired: true,
-        }));
+        reader.getTreasuryPayoutReceiverProposalState.mockResolvedValue(
+          buildProposalState({
+            proposalId: 7,
+            expired: true,
+          }),
+        );
       },
     },
     {
@@ -964,9 +1021,11 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'oracle_update',
       expectedMethod: 'proposeOracleUpdate',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({
-          oracleAddress: '0x0000000000000000000000000000000000000011',
-        }));
+        reader.getGovernanceStatus.mockResolvedValue(
+          buildStatusSnapshot({
+            oracleAddress: '0x0000000000000000000000000000000000000011',
+          }),
+        );
       },
     },
     {
@@ -976,13 +1035,15 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'oracle_update',
       expectedMethod: 'approveOracleUpdate',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getOracleProposalState.mockResolvedValue(buildProposalState({
-          proposalId: 7,
-          approvalCount: 1,
-          expired: false,
-          cancelled: false,
-          executed: false,
-        }));
+        reader.getOracleProposalState.mockResolvedValue(
+          buildProposalState({
+            proposalId: 7,
+            approvalCount: 1,
+            expired: false,
+            cancelled: false,
+            executed: false,
+          }),
+        );
         reader.hasApprovedOracleProposal.mockResolvedValue(false);
       },
     },
@@ -993,12 +1054,16 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'oracle_update',
       expectedMethod: 'executeOracleUpdate',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ governanceApprovalsRequired: 2 }));
-        reader.getOracleProposalState.mockResolvedValue(buildProposalState({
-          proposalId: 7,
-          approvalCount: 2,
-          etaSeconds: Math.floor(Date.now() / 1000) - 5,
-        }));
+        reader.getGovernanceStatus.mockResolvedValue(
+          buildStatusSnapshot({ governanceApprovalsRequired: 2 }),
+        );
+        reader.getOracleProposalState.mockResolvedValue(
+          buildProposalState({
+            proposalId: 7,
+            approvalCount: 2,
+            etaSeconds: Math.floor(Date.now() / 1000) - 5,
+          }),
+        );
       },
     },
     {
@@ -1008,57 +1073,64 @@ describe('gateway governance mutation routes contract', () => {
       expectedCategory: 'oracle_update',
       expectedMethod: 'cancelExpiredOracleUpdateProposal',
       configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getOracleProposalState.mockResolvedValue(buildProposalState({
-          proposalId: 7,
-          expired: true,
-        }));
+        reader.getOracleProposalState.mockResolvedValue(
+          buildProposalState({
+            proposalId: 7,
+            expired: true,
+          }),
+        );
       },
     },
-  ])('POST $path accepts and persists $name', async ({ path, body, expectedCategory, expectedMethod, configureReader }) => {
-    const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({ configureReader });
-
-    try {
-      const response = await fetch(`${baseUrl}${path}`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
-          'Idempotency-Key': `idem-${expectedMethod}`,
-          'x-request-id': `req-${expectedMethod}`,
-        },
-        body: JSON.stringify(body),
+  ])(
+    'POST $path accepts and persists $name',
+    async ({ path, body, expectedCategory, expectedMethod, configureReader }) => {
+      const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({
+        configureReader,
       });
-      const payload = await response.json();
 
-      expect(response.status).toBe(202);
-      expect(response.headers.get('x-request-id')).toBe(`req-${expectedMethod}`);
-      expect(validateAccepted(payload)).toBe(true);
-      expect(payload.data.category).toBe(expectedCategory);
-      expect(payload.data.status).toBe('requested');
-      expect(typeof payload.data.intentKey).toBe('string');
-      expect(payload.data.expiresAt).toMatch(/Z$/);
+      try {
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer sess-admin',
+            'content-type': 'application/json',
+            'Idempotency-Key': `idem-${expectedMethod}`,
+            'x-request-id': `req-${expectedMethod}`,
+          },
+          body: JSON.stringify(body),
+        });
+        const payload = await response.json();
 
-      const storedAction = await readStoredAction(governanceActionStore, payload.data.actionId);
-      expect(storedAction.category).toBe(expectedCategory);
-      expect(storedAction.contractMethod).toBe(expectedMethod);
-      expect(storedAction.intentKey).toBe(payload.data.intentKey);
-      expect(storedAction.idempotencyKey).toBe(`idem-${expectedMethod}`);
-      expect(storedAction.actorId).toBe('account:acct-admin');
-      expect(storedAction.endpoint).toBe(`/api/dashboard-gateway/v1${path}`);
-      expect(storedAction.intentHash).toMatch(/^[a-f0-9]{64}$/);
-      expect(storedAction.expiresAt).toBe(payload.data.expiresAt);
-      expect(storedAction.requestId).toBe(`req-${expectedMethod}`);
-      expect(storedAction.audit.actorSessionId).toMatch(/^sha256:[a-f0-9]{64}$/);
-      expect(storedAction.audit.actorSessionId).not.toBe('sess-admin');
-      expect(auditLogStore.entries[0]).toMatchObject({
-        actionId: payload.data.actionId,
-        idempotencyKey: `idem-${expectedMethod}`,
-        actorId: 'account:acct-admin',
-      });
-    } finally {
-      server.close();
-    }
-  });
+        expect(response.status).toBe(202);
+        expect(response.headers.get('x-request-id')).toBe(`req-${expectedMethod}`);
+        expect(validateAccepted(payload)).toBe(true);
+        expect(payload.data.category).toBe(expectedCategory);
+        expect(payload.data.status).toBe('requested');
+        expect(typeof payload.data.intentKey).toBe('string');
+        expect(payload.data.expiresAt).toMatch(/Z$/);
+
+        const storedAction = await readStoredAction(governanceActionStore, payload.data.actionId);
+        expect(storedAction.category).toBe(expectedCategory);
+        expect(storedAction.contractMethod).toBe(expectedMethod);
+        expect(storedAction.intentKey).toBe(payload.data.intentKey);
+        expect(storedAction.idempotencyKey).toBe(`idem-${expectedMethod}`);
+        expect(storedAction.actorId).toBe('account:acct-admin');
+        expect(storedAction.endpoint).toBe(`/api/dashboard-gateway/v1${path}`);
+        expect(storedAction.intentHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(storedAction.expiresAt).toBe(payload.data.expiresAt);
+        expect(storedAction.requestId).toBe(`req-${expectedMethod}`);
+        expect(storedAction.audit.actorSessionId).toMatch(/^sha256:[a-f0-9]{64}$/);
+        expect(storedAction.audit.actorSessionId).not.toBe('sess-admin');
+        expect(auditLogStore.entries[0]).toMatchObject({
+          actionId: payload.data.actionId,
+          idempotencyKey: `idem-${expectedMethod}`,
+          actorId: 'account:acct-admin',
+        });
+      } finally {
+        server.close();
+      }
+    },
+  );
 
   test('mutation routes replay accepted responses for duplicate idempotency keys', async () => {
     const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({
@@ -1098,13 +1170,15 @@ describe('gateway governance mutation routes contract', () => {
     const { server, baseUrl, governanceActionStore } = await startServer({
       writeAllowlist: ['uid-admin', 'uid-admin-2'],
       configureReader(reader) {
-        reader.getOracleProposalState.mockResolvedValue(buildProposalState({
-          proposalId: 7,
-          approvalCount: 1,
-          expired: false,
-          cancelled: false,
-          executed: false,
-        }));
+        reader.getOracleProposalState.mockResolvedValue(
+          buildProposalState({
+            proposalId: 7,
+            approvalCount: 1,
+            expired: false,
+            cancelled: false,
+            executed: false,
+          }),
+        );
         reader.hasApprovedOracleProposal.mockResolvedValue(false);
       },
     });
@@ -1212,13 +1286,15 @@ describe('gateway governance mutation routes contract', () => {
     const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({
       writeAllowlist: ['uid-admin', 'uid-admin-2'],
       configureReader(reader) {
-        reader.getOracleProposalState.mockResolvedValue(buildProposalState({
-          proposalId: 7,
-          approvalCount: 1,
-          expired: false,
-          cancelled: false,
-          executed: false,
-        }));
+        reader.getOracleProposalState.mockResolvedValue(
+          buildProposalState({
+            proposalId: 7,
+            approvalCount: 1,
+            expired: false,
+            cancelled: false,
+            executed: false,
+          }),
+        );
         reader.hasApprovedOracleProposal.mockResolvedValue(false);
       },
     });
@@ -1255,10 +1331,12 @@ describe('gateway governance mutation routes contract', () => {
 
       const stored = await governanceActionStore.list({ limit: 10 });
       expect(stored.items).toHaveLength(2);
-      expect(stored.items.map((action) => action.audit.actorWallet)).toEqual(expect.arrayContaining([
-        '0x00000000000000000000000000000000000000aa',
-        '0x00000000000000000000000000000000000000ac',
-      ]));
+      expect(stored.items.map((action) => action.audit.actorWallet)).toEqual(
+        expect.arrayContaining([
+          '0x00000000000000000000000000000000000000aa',
+          '0x00000000000000000000000000000000000000ac',
+        ]),
+      );
       expect(auditLogStore.entries.map((entry) => entry.eventType)).toEqual([
         'governance.action.queued',
         'governance.action.queued',
@@ -1271,9 +1349,11 @@ describe('gateway governance mutation routes contract', () => {
   test('different governance parameters produce different intent keys', async () => {
     const { server, baseUrl, governanceActionStore } = await startServer({
       configureReader(reader) {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({
-          oracleAddress: '0x0000000000000000000000000000000000000011',
-        }));
+        reader.getGovernanceStatus.mockResolvedValue(
+          buildStatusSnapshot({
+            oracleAddress: '0x0000000000000000000000000000000000000011',
+          }),
+        );
       },
     });
 
@@ -1285,7 +1365,9 @@ describe('gateway governance mutation routes contract', () => {
           'content-type': 'application/json',
           'Idempotency-Key': 'idem-oracle-1',
         },
-        body: JSON.stringify(buildAuditBody({ newOracleAddress: '0x00000000000000000000000000000000000000f1' })),
+        body: JSON.stringify(
+          buildAuditBody({ newOracleAddress: '0x00000000000000000000000000000000000000f1' }),
+        ),
       });
       const firstPayload = await first.json();
 
@@ -1296,7 +1378,9 @@ describe('gateway governance mutation routes contract', () => {
           'content-type': 'application/json',
           'Idempotency-Key': 'idem-oracle-2',
         },
-        body: JSON.stringify(buildAuditBody({ newOracleAddress: '0x00000000000000000000000000000000000000f2' })),
+        body: JSON.stringify(
+          buildAuditBody({ newOracleAddress: '0x00000000000000000000000000000000000000f2' }),
+        ),
       });
       const secondPayload = await second.json();
 
@@ -1327,7 +1411,10 @@ describe('gateway governance mutation routes contract', () => {
         body: JSON.stringify(buildAuditBody()),
       };
 
-      const unauthenticatedResponse = await fetch(`${unauthenticated.baseUrl}/governance/pause`, requestInit);
+      const unauthenticatedResponse = await fetch(
+        `${unauthenticated.baseUrl}/governance/pause`,
+        requestInit,
+      );
       const unauthenticatedPayload = await unauthenticatedResponse.json();
       expect(unauthenticatedResponse.status).toBe(401);
       expect(validateError(unauthenticatedPayload)).toBe(true);
@@ -1426,15 +1513,18 @@ describe('gateway governance mutation routes contract', () => {
       expect(validateError(conflictPayload)).toBe(true);
       expect(conflictPayload.error.code).toBe('CONFLICT');
 
-      const missingResponse = await fetch(`${conflictServer.baseUrl}/governance/oracle/proposals/99/approve`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
-          'Idempotency-Key': 'idem-missing',
+      const missingResponse = await fetch(
+        `${conflictServer.baseUrl}/governance/oracle/proposals/99/approve`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer sess-admin',
+            'content-type': 'application/json',
+            'Idempotency-Key': 'idem-missing',
+          },
+          body: JSON.stringify(buildAuditBody()),
         },
-        body: JSON.stringify(buildAuditBody()),
-      });
+      );
       const missingPayload = await missingResponse.json();
       expect(missingResponse.status).toBe(404);
       expect(validateError(missingPayload)).toBe(true);

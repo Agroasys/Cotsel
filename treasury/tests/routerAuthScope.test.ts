@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { AddressInfo } from 'net';
 import { Server } from 'http';
 import { RequestHandler } from 'express';
+import { TreasuryController } from '../src/api/controller';
 import { createRouter } from '../src/api/routes';
 
 function buildAuthMiddleware(): RequestHandler {
@@ -42,9 +43,12 @@ describe('treasury router auth scope', () => {
       exportEntries: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
       },
-    };
+    } as unknown as TreasuryController;
 
-    app.use('/api/treasury/v1', createRouter(controller as any, { authMiddleware: buildAuthMiddleware() }));
+    app.use(
+      '/api/treasury/v1',
+      createRouter(controller, { authMiddleware: buildAuthMiddleware() }),
+    );
 
     await new Promise<void>((resolve) => {
       server = app.listen(0, () => resolve());
@@ -76,7 +80,7 @@ describe('treasury router auth scope', () => {
     await expect(response.json()).resolves.toEqual(
       expect.objectContaining({
         success: true,
-      })
+      }),
     );
   });
 

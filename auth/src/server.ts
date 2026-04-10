@@ -57,7 +57,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
 async function bootstrap(): Promise<void> {
   await initializeDatabase();
 
-  //  Stores & service 
+  //  Stores & service
   const profileStore = createPostgresProfileStore(pool);
   const sessionStore = createPostgresSessionStore(pool);
   const sessionService = createSessionService(sessionStore, profileStore);
@@ -85,19 +85,25 @@ async function bootstrap(): Promise<void> {
   });
   requestRateLimiterClose = requestRateLimiter.close;
 
-  //  Express app 
+  //  Express app
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet());
-  app.use(cors(createCorsOptions({
-    allowedOrigins: config.corsAllowedOrigins,
-    allowNoOrigin: config.corsAllowNoOrigin,
-  })));
-  app.use(express.json({
-    verify: (req, _res, buffer) => {
-      (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
-    },
-  }));
+  app.use(
+    cors(
+      createCorsOptions({
+        allowedOrigins: config.corsAllowedOrigins,
+        allowNoOrigin: config.corsAllowNoOrigin,
+      }),
+    ),
+  );
+  app.use(
+    express.json({
+      verify: (req, _res, buffer) => {
+        (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+      },
+    }),
+  );
 
   const legacyWalletController = config.legacyWalletLoginEnabled
     ? new LegacyWalletAuthController(sessionService, challengeStore, config.sessionTtlSeconds)
@@ -111,7 +117,7 @@ async function bootstrap(): Promise<void> {
   app.use('/api/auth/v1', requestRateLimiter.middleware, router);
   app.use(errorHandler);
 
-  //  Start 
+  //  Start
   const server = app.listen(config.port, () => {
     Logger.info(`Auth service listening on port ${config.port}`);
   });

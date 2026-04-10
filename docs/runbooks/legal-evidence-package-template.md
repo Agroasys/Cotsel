@@ -1,7 +1,9 @@
 # Legal Evidence Package Template
 
 ## Purpose
+
 Provide a deterministic, audit-ready evidence pack format that proves:
+
 - off-chain Ricardian document identity (`documentRef`)
 - deterministic hash derivation
 - on-chain trade anchoring (`ricardianHash`)
@@ -10,47 +12,54 @@ Provide a deterministic, audit-ready evidence pack format that proves:
 Use this template for enforceability consultations, pilot sign-off, and legal review requests.
 
 ## When To Use
+
 - At pilot window close for legal/compliance handoff.
 - Before governance sign-off for production-readiness evidence.
 - During dispute or audit requests that require proof of document-to-chain linkage.
 
 ## Scope
+
 - Ricardian PDF/hash reproducibility evidence.
 - Trade-level chain/indexer/reconciliation linkage.
 - Versioned handoff packet structure and reproducibility checklist.
 - Legal or enforceability-facing packet composition only.
 
 ## Non-Scope
+
 - Legal interpretation of contract terms.
 - Court filing process by jurisdiction.
 - Storage of raw private keys or secret material.
 - Incident commander notes or operator audit packets that belong in the incident and operator templates below.
 
 ## Related Operational Templates
+
 Use these templates for operational evidence that is not part of the legal handoff packet:
+
 - `docs/incidents/incident-evidence-template.md`
 - `docs/runbooks/operator-audit-evidence-template.md`
 
 ## Required Inputs
 
-| Input | Description | Source |
-|---|---|---|
-| `tradeId` | Trade identifier used by escrow/indexer/reconciliation | Escrow + indexer |
-| `documentRef` | Off-chain Ricardian document reference | Ricardian payload |
-| `ricardianHash` | Canonical hash for the legal agreement | Ricardian API + on-chain/indexer |
-| `rulesVersion` | Canonicalization/version marker | Ricardian response |
-| `txHash` | Settlement transaction identifier | Oracle/indexer/chain explorer |
-| `runKey` | Reconciliation run identifier for evidence window | Reconciliation |
-| `from` / `to` UTC | Evidence window boundaries | Pilot owner/operator |
-| `chainId` + network name | Chain context for verifier | Environment config |
-| Evidence owner/sign-off | Responsible operator and reviewer | Ops/legal |
+| Input                    | Description                                            | Source                           |
+| ------------------------ | ------------------------------------------------------ | -------------------------------- |
+| `tradeId`                | Trade identifier used by escrow/indexer/reconciliation | Escrow + indexer                 |
+| `documentRef`            | Off-chain Ricardian document reference                 | Ricardian payload                |
+| `ricardianHash`          | Canonical hash for the legal agreement                 | Ricardian API + on-chain/indexer |
+| `rulesVersion`           | Canonicalization/version marker                        | Ricardian response               |
+| `txHash`                 | Settlement transaction identifier                      | Oracle/indexer/chain explorer    |
+| `runKey`                 | Reconciliation run identifier for evidence window      | Reconciliation                   |
+| `from` / `to` UTC        | Evidence window boundaries                             | Pilot owner/operator             |
+| `chainId` + network name | Chain context for verifier                             | Environment config               |
+| Evidence owner/sign-off  | Responsible operator and reviewer                      | Ops/legal                        |
 
 ## Deterministic Hash Recipe and Verification Steps
 
 Reference runbook: `docs/runbooks/ricardian-hash-repro.md`.
 
 ### Step 1: Reproduce Hash Locally From Canonical Payload
+
 Prepare a payload JSON with:
+
 - `documentRef`
 - `terms`
 - `metadata` (optional)
@@ -62,6 +71,7 @@ node scripts/reproduce-ricardian-hash.mjs --payload-file /tmp/ricardian-payload.
 ```
 
 Record:
+
 - `rulesVersion`
 - `canonicalJson`
 - `preimage`
@@ -74,6 +84,7 @@ curl -fsS "http://127.0.0.1:${RICARDIAN_PORT:-3100}/api/ricardian/v1/hash/<hash>
 ```
 
 Confirm:
+
 - `hash` matches Step 1 output
 - `documentRef` matches legal document reference
 - `rulesVersion` matches expected canonicalization version
@@ -87,14 +98,17 @@ curl -fsS "${INDEXER_GRAPHQL_URL}" \
 ```
 
 Confirm:
+
 - `tradeId` exists
 - indexed `ricardianHash` equals Step 1/Step 2 hash
 
 ### Step 4: Verify Chain Reference
+
 - Capture the chain explorer URL for each relevant `txHash`.
 - Confirm explorer details match the expected trade lifecycle events for the same trade.
 
 ### Step 5: Verify Reconciliation Linkage
+
 - Run or retrieve reconciliation evidence for the same time window/run key.
 - Confirm any drift status is documented and consistent with pilot sign-off criteria.
 
@@ -102,11 +116,12 @@ Confirm:
 
 Populate one row per trade in scope.
 
-| Trade ID | Document Ref | Reproduced Hash | API Hash | Indexed Hash | Chain Tx Hash | Explorer URL | Reconciliation Run Key | Reconciliation Result | Verifier Initials | Notes |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `<tradeId>` | `<documentRef>` | `<0x/hex>` | `<0x/hex>` | `<0x/hex>` | `<txHash>` | `<url>` | `<runKey>` | `PASS / FAIL` | `<initials>` | `<notes>` |
+| Trade ID    | Document Ref    | Reproduced Hash | API Hash   | Indexed Hash | Chain Tx Hash | Explorer URL | Reconciliation Run Key | Reconciliation Result | Verifier Initials | Notes     |
+| ----------- | --------------- | --------------- | ---------- | ------------ | ------------- | ------------ | ---------------------- | --------------------- | ----------------- | --------- |
+| `<tradeId>` | `<documentRef>` | `<0x/hex>`      | `<0x/hex>` | `<0x/hex>`   | `<txHash>`    | `<url>`      | `<runKey>`             | `PASS / FAIL`         | `<initials>`      | `<notes>` |
 
 Validation rule:
+
 - `Reproduced Hash == API Hash == Indexed Hash` for a PASS linkage result.
 
 ## Versioned Legal Handoff Packet Format
@@ -136,6 +151,7 @@ legal-evidence/
 ```
 
 Required packet metadata (include in `01-cover-sheet.md`):
+
 - `packetVersion`: `LEGAL_EVIDENCE_PACKET_V1`
 - `generatedAt` (UTC)
 - `environment`
@@ -167,6 +183,7 @@ Required packet metadata (include in `01-cover-sheet.md`):
 - Preserve original file hashes for any redacted document derivatives.
 
 ## Related Runbooks
+
 - `docs/incidents/incident-evidence-template.md`
 - `docs/runbooks/operator-audit-evidence-template.md`
 - `docs/runbooks/ricardian-hash-repro.md`

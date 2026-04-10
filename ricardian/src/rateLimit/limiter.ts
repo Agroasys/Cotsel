@@ -1,6 +1,7 @@
 import { Request, RequestHandler } from 'express';
 import {
   createHttpRateLimiter,
+  normalizeRoutePath,
   type HttpRateLimiter,
   type RouteRateLimitPolicy,
 } from '@agroasys/shared-edge';
@@ -35,7 +36,11 @@ interface RateLimiterOptions {
   logger?: RateLimiterLogger;
   nowSeconds?: () => number;
   store?: {
-    incrementAndGet(key: string, windowSeconds: number, nowSeconds: number): Promise<{ count: number; resetSeconds: number }>;
+    incrementAndGet(
+      key: string,
+      windowSeconds: number,
+      nowSeconds: number,
+    ): Promise<{ count: number; resetSeconds: number }>;
     close(): Promise<void>;
   };
 }
@@ -44,15 +49,6 @@ export interface RicardianRateLimiter {
   middleware: RequestHandler;
   close: () => Promise<void>;
   mode: 'disabled' | 'memory' | 'redis';
-}
-
-function normalizeRoutePath(path: string): string {
-  if (path.length <= 1) {
-    return path;
-  }
-
-  const normalized = path.replace(/\/+$/, '');
-  return normalized.length === 0 ? '/' : normalized;
 }
 
 function routeKind(req: Request): 'write' | 'read' | null {
@@ -92,7 +88,9 @@ function validateConfig(config: RicardianRateLimitConfig): void {
   });
 }
 
-export async function createRicardianRateLimiter(options: RateLimiterOptions): Promise<RicardianRateLimiter> {
+export async function createRicardianRateLimiter(
+  options: RateLimiterOptions,
+): Promise<RicardianRateLimiter> {
   validateConfig(options.config);
   const routePolicies: Record<'write' | 'read', RouteRateLimitPolicy> = {
     write: {

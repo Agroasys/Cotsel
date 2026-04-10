@@ -27,11 +27,7 @@
     "input": {
       "documentRef": "doc://shipment/abc",
       "terms": {
-        "steps": [
-          "LOCKED",
-          "IN_TRANSIT",
-          "ARRIVAL_CONFIRMED"
-        ],
+        "steps": ["LOCKED", "IN_TRANSIT", "ARRIVAL_CONFIRMED"],
         "fees": {
           "platform": 2000,
           "logistics": 5000
@@ -52,10 +48,7 @@
         "commodity": "Café Arabica",
         "notes": "Msimu wa mvua — kupakia bandarini",
         "logistics": {
-          "ports": [
-            "Dar es Salaam",
-            "Mombasa"
-          ],
+          "ports": ["Dar es Salaam", "Mombasa"],
           "vessel": null,
           "milestones": [
             {
@@ -72,10 +65,7 @@
       "metadata": {
         "locale": "sw-TZ",
         "reviewer": "李雷",
-        "tags": [
-          "pilot",
-          "مرحبا"
-        ]
+        "tags": ["pilot", "مرحبا"]
       }
     },
     "expectedCanonicalJson": "{\"documentRef\":\"ipfs://QmZx9c7/contract-cafe.pdf\",\"metadata\":{\"locale\":\"sw-TZ\",\"reviewer\":\"李雷\",\"tags\":[\"pilot\",\"مرحبا\"]},\"terms\":{\"commodity\":\"Café Arabica\",\"logistics\":{\"milestones\":[{\"at\":\"2026-02-01T12:00:00Z\",\"code\":\"LOADED\"},{\"at\":\"2026-02-21T09:30:00Z\",\"code\":\"DELIVERED\"}],\"ports\":[\"Dar es Salaam\",\"Mombasa\"],\"vessel\":null},\"notes\":\"Msimu wa mvua — kupakia bandarini\"}}",

@@ -141,7 +141,6 @@ CREATE TABLE IF NOT EXISTS governance_actions (
     )),
     contract_method TEXT NOT NULL,
     tx_hash TEXT,
-    extrinsic_hash TEXT,
     block_number BIGINT,
     trade_id TEXT,
     chain_id TEXT,
@@ -238,6 +237,9 @@ ALTER TABLE access_log_entries
 ALTER TABLE evidence_bundles
     ALTER COLUMN generated_by_wallet DROP NOT NULL;
 
+ALTER TABLE governance_actions
+    DROP COLUMN IF EXISTS extrinsic_hash;
+
 CREATE TABLE IF NOT EXISTS service_auth_nonces (
     api_key TEXT NOT NULL,
     nonce TEXT NOT NULL,
@@ -284,7 +286,6 @@ CREATE TABLE IF NOT EXISTS settlement_handoffs (
     )),
     provider_status TEXT,
     tx_hash TEXT,
-    extrinsic_hash TEXT,
     latest_event_id TEXT,
     latest_event_type TEXT,
     latest_event_detail TEXT,
@@ -327,7 +328,6 @@ CREATE TABLE IF NOT EXISTS settlement_execution_events (
     )),
     provider_status TEXT,
     tx_hash TEXT,
-    extrinsic_hash TEXT,
     detail TEXT,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     observed_at TIMESTAMP NOT NULL,
@@ -360,6 +360,12 @@ CREATE TABLE IF NOT EXISTS settlement_callback_deliveries (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE settlement_handoffs
+    DROP COLUMN IF EXISTS extrinsic_hash;
+
+ALTER TABLE settlement_execution_events
+    DROP COLUMN IF EXISTS extrinsic_hash;
 
 ALTER TABLE governance_actions
     ADD COLUMN IF NOT EXISTS intent_key TEXT;

@@ -42,15 +42,10 @@ export const SETTLEMENT_EVENT_TYPES = [
   'drift_detected',
 ] as const;
 
-export type SettlementExecutionStatus = typeof SETTLEMENT_EXECUTION_STATUSES[number];
-export type SettlementReconciliationStatus = typeof SETTLEMENT_RECONCILIATION_STATUSES[number];
-export type SettlementCallbackStatus = typeof SETTLEMENT_CALLBACK_STATUSES[number];
-export type SettlementEventType = typeof SETTLEMENT_EVENT_TYPES[number];
-
-// `extrinsicHash` remains in the internal store only to preserve archived
-// Substrate-era records already persisted in the database. Active Base-native
-// handoffs and execution events must rely on `txHash`; new Base writes should
-// leave the legacy field null.
+export type SettlementExecutionStatus = (typeof SETTLEMENT_EXECUTION_STATUSES)[number];
+export type SettlementReconciliationStatus = (typeof SETTLEMENT_RECONCILIATION_STATUSES)[number];
+export type SettlementCallbackStatus = (typeof SETTLEMENT_CALLBACK_STATUSES)[number];
+export type SettlementEventType = (typeof SETTLEMENT_EVENT_TYPES)[number];
 
 export interface SettlementHandoffRecord {
   handoffId: string;
@@ -71,7 +66,6 @@ export interface SettlementHandoffRecord {
   callbackStatus: SettlementCallbackStatus;
   providerStatus: string | null;
   txHash: string | null;
-  extrinsicHash: string | null;
   latestEventId: string | null;
   latestEventType: SettlementEventType | null;
   latestEventDetail: string | null;
@@ -91,7 +85,6 @@ export interface SettlementExecutionEventRecord {
   reconciliationStatus: SettlementReconciliationStatus;
   providerStatus: string | null;
   txHash: string | null;
-  extrinsicHash: string | null;
   detail: string | null;
   metadata: Record<string, unknown>;
   observedAt: string;
@@ -142,7 +135,6 @@ export interface CreateSettlementExecutionEventInput {
   reconciliationStatus: SettlementReconciliationStatus;
   providerStatus?: string | null;
   txHash?: string | null;
-  extrinsicHash?: string | null;
   detail?: string | null;
   metadata?: Record<string, unknown>;
   observedAt: string;
@@ -173,7 +165,6 @@ export interface TradeSettlementProjection {
   callbackStatus: SettlementCallbackStatus;
   providerStatus: string | null;
   txHash: string | null;
-  extrinsicHash: string | null;
   externalReference: string | null;
   latestEventType: SettlementEventType | null;
   latestEventDetail: string | null;
@@ -200,24 +191,46 @@ export interface ListSettlementHandoffsResult {
 export interface SettlementStore {
   createHandoff(input: CreateSettlementHandoffInput): Promise<SettlementHandoffRecord>;
   getHandoff(handoffId: string): Promise<SettlementHandoffRecord | null>;
-  getHandoffByPlatformRef(platformId: string, platformHandoffId: string): Promise<SettlementHandoffRecord | null>;
+  getHandoffByPlatformRef(
+    platformId: string,
+    platformHandoffId: string,
+  ): Promise<SettlementHandoffRecord | null>;
   listHandoffs(input: ListSettlementHandoffsInput): Promise<ListSettlementHandoffsResult>;
-  createExecutionEvent(input: CreateSettlementExecutionEventInput): Promise<SettlementExecutionEventRecord>;
+  createExecutionEvent(
+    input: CreateSettlementExecutionEventInput,
+  ): Promise<SettlementExecutionEventRecord>;
   listExecutionEvents(handoffId: string): Promise<SettlementExecutionEventRecord[]>;
-  queueCallbackDelivery(input: QueueSettlementCallbackInput): Promise<SettlementCallbackDeliveryRecord>;
+  queueCallbackDelivery(
+    input: QueueSettlementCallbackInput,
+  ): Promise<SettlementCallbackDeliveryRecord>;
   getCallbackDelivery(deliveryId: string): Promise<SettlementCallbackDeliveryRecord | null>;
   getDueCallbackDeliveries(limit: number, now: string): Promise<SettlementCallbackDeliveryRecord[]>;
-  markCallbackDelivering(deliveryId: string, attemptedAt: string): Promise<SettlementCallbackDeliveryRecord | null>;
-  markCallbackDelivered(deliveryId: string, completedAt: string, responseStatus: number): Promise<void>;
-  markCallbackFailed(deliveryId: string, update: {
-    attemptedAt: string;
-    responseStatus?: number | null;
-    errorMessage: string;
-    nextAttemptAt: string;
-    deadLetter: boolean;
-  }): Promise<void>;
-  requeueCallbackDelivery(deliveryId: string, nextAttemptAt: string): Promise<SettlementCallbackDeliveryRecord | null>;
-  getTradeSettlementProjectionMap(tradeIds: string[]): Promise<Map<string, TradeSettlementProjection>>;
+  markCallbackDelivering(
+    deliveryId: string,
+    attemptedAt: string,
+  ): Promise<SettlementCallbackDeliveryRecord | null>;
+  markCallbackDelivered(
+    deliveryId: string,
+    completedAt: string,
+    responseStatus: number,
+  ): Promise<void>;
+  markCallbackFailed(
+    deliveryId: string,
+    update: {
+      attemptedAt: string;
+      responseStatus?: number | null;
+      errorMessage: string;
+      nextAttemptAt: string;
+      deadLetter: boolean;
+    },
+  ): Promise<void>;
+  requeueCallbackDelivery(
+    deliveryId: string,
+    nextAttemptAt: string,
+  ): Promise<SettlementCallbackDeliveryRecord | null>;
+  getTradeSettlementProjectionMap(
+    tradeIds: string[],
+  ): Promise<Map<string, TradeSettlementProjection>>;
 }
 
 interface SettlementHandoffRow {
@@ -239,7 +252,6 @@ interface SettlementHandoffRow {
   callbackStatus: SettlementCallbackStatus;
   providerStatus: string | null;
   txHash: string | null;
-  extrinsicHash: string | null;
   latestEventId: string | null;
   latestEventType: SettlementEventType | null;
   latestEventDetail: string | null;
@@ -259,7 +271,6 @@ interface SettlementExecutionEventRow {
   reconciliationStatus: SettlementReconciliationStatus;
   providerStatus: string | null;
   txHash: string | null;
-  extrinsicHash: string | null;
   detail: string | null;
   metadata: Record<string, unknown>;
   observedAt: Date;
@@ -293,7 +304,9 @@ function parseDecimal(value: string | null): number | null {
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new GatewayError(500, 'INTERNAL_ERROR', 'Stored settlement numeric value is invalid', { value });
+    throw new GatewayError(500, 'INTERNAL_ERROR', 'Stored settlement numeric value is invalid', {
+      value,
+    });
   }
 
   return parsed;
@@ -319,7 +332,6 @@ function mapHandoffRow(row: SettlementHandoffRow): SettlementHandoffRecord {
     callbackStatus: row.callbackStatus,
     providerStatus: row.providerStatus,
     txHash: row.txHash,
-    extrinsicHash: row.extrinsicHash,
     latestEventId: row.latestEventId,
     latestEventType: row.latestEventType,
     latestEventDetail: row.latestEventDetail,
@@ -341,7 +353,6 @@ function mapEventRow(row: SettlementExecutionEventRow): SettlementExecutionEvent
     reconciliationStatus: row.reconciliationStatus,
     providerStatus: row.providerStatus,
     txHash: row.txHash,
-    extrinsicHash: row.extrinsicHash,
     detail: row.detail,
     metadata: row.metadata || {},
     observedAt: row.observedAt.toISOString(),
@@ -402,7 +413,10 @@ async function cleanupExpiredNonces(pool: Pool): Promise<void> {
   await pool.query('DELETE FROM service_auth_nonces WHERE expires_at < NOW()');
 }
 
-async function createEventWithClient(client: PoolClient, input: CreateSettlementExecutionEventInput): Promise<SettlementExecutionEventRecord> {
+async function createEventWithClient(
+  client: PoolClient,
+  input: CreateSettlementExecutionEventInput,
+): Promise<SettlementExecutionEventRecord> {
   const eventId = randomUUID();
   const insertEvent = await client.query<SettlementExecutionEventRow>(
     `INSERT INTO settlement_execution_events (
@@ -410,16 +424,15 @@ async function createEventWithClient(client: PoolClient, input: CreateSettlement
        handoff_id,
        event_type,
        execution_status,
-       reconciliation_status,
-       provider_status,
-       tx_hash,
-       extrinsic_hash,
-       detail,
-       metadata,
-       observed_at,
-       request_id,
-       source_api_key_id
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13)
+     reconciliation_status,
+     provider_status,
+     tx_hash,
+     detail,
+     metadata,
+     observed_at,
+     request_id,
+     source_api_key_id
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)
      RETURNING
        event_id AS "eventId",
        handoff_id AS "handoffId",
@@ -428,7 +441,6 @@ async function createEventWithClient(client: PoolClient, input: CreateSettlement
        reconciliation_status AS "reconciliationStatus",
        provider_status AS "providerStatus",
        tx_hash AS "txHash",
-       extrinsic_hash AS "extrinsicHash",
        detail,
        metadata,
        observed_at AS "observedAt",
@@ -443,7 +455,6 @@ async function createEventWithClient(client: PoolClient, input: CreateSettlement
       input.reconciliationStatus,
       input.providerStatus ?? null,
       input.txHash ?? null,
-      input.extrinsicHash ?? null,
       input.detail ?? null,
       JSON.stringify(input.metadata ?? {}),
       input.observedAt,
@@ -467,11 +478,10 @@ async function createEventWithClient(client: PoolClient, input: CreateSettlement
          END,
          provider_status = COALESCE($4, provider_status),
          tx_hash = COALESCE($5, tx_hash),
-         extrinsic_hash = COALESCE($6, extrinsic_hash),
-         latest_event_id = $7,
-         latest_event_type = $8,
-         latest_event_detail = $9,
-         latest_event_at = $10,
+         latest_event_id = $6,
+         latest_event_type = $7,
+         latest_event_detail = $8,
+         latest_event_at = $9,
          updated_at = NOW()
      WHERE handoff_id = $1`,
     [
@@ -480,7 +490,6 @@ async function createEventWithClient(client: PoolClient, input: CreateSettlement
       input.reconciliationStatus,
       input.providerStatus ?? null,
       input.txHash ?? null,
-      input.extrinsicHash ?? null,
       event.eventId,
       input.eventType,
       input.detail ?? null,
@@ -513,7 +522,6 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
          callback_status AS "callbackStatus",
          provider_status AS "providerStatus",
          tx_hash AS "txHash",
-         extrinsic_hash AS "extrinsicHash",
          latest_event_id AS "latestEventId",
          latest_event_type AS "latestEventType",
          latest_event_detail AS "latestEventDetail",
@@ -531,7 +539,10 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
     return result.rows[0] ? mapHandoffRow(result.rows[0]) : null;
   };
 
-  const getHandoffByPlatformRef = async (platformId: string, platformHandoffId: string): Promise<SettlementHandoffRecord | null> => {
+  const getHandoffByPlatformRef = async (
+    platformId: string,
+    platformHandoffId: string,
+  ): Promise<SettlementHandoffRecord | null> => {
     const result = await pool.query<SettlementHandoffRow>(
       `SELECT
          handoff_id AS "handoffId",
@@ -552,7 +563,6 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
          callback_status AS "callbackStatus",
          provider_status AS "providerStatus",
          tx_hash AS "txHash",
-         extrinsic_hash AS "extrinsicHash",
          latest_event_id AS "latestEventId",
          latest_event_type AS "latestEventType",
          latest_event_detail AS "latestEventDetail",
@@ -618,7 +628,6 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
            callback_status AS "callbackStatus",
            provider_status AS "providerStatus",
            tx_hash AS "txHash",
-           extrinsic_hash AS "extrinsicHash",
            latest_event_id AS "latestEventId",
            latest_event_type AS "latestEventType",
            latest_event_detail AS "latestEventDetail",
@@ -638,7 +647,9 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           input.displayCurrency,
           input.displayAmount.toFixed(2),
           input.assetSymbol ?? null,
-          input.assetAmount === undefined || input.assetAmount === null ? null : input.assetAmount.toFixed(6),
+          input.assetAmount === undefined || input.assetAmount === null
+            ? null
+            : input.assetAmount.toFixed(6),
           input.ricardianHash ?? null,
           input.externalReference ?? null,
           JSON.stringify(input.metadata ?? {}),
@@ -682,7 +693,6 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
              callback_status AS "callbackStatus",
              provider_status AS "providerStatus",
              tx_hash AS "txHash",
-             extrinsic_hash AS "extrinsicHash",
              latest_event_id AS "latestEventId",
              latest_event_type AS "latestEventType",
              latest_event_detail AS "latestEventDetail",
@@ -728,7 +738,10 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const handoffCheck = await client.query<{ handoffId: string; executionStatus: SettlementExecutionStatus }>(
+        const handoffCheck = await client.query<{
+          handoffId: string;
+          executionStatus: SettlementExecutionStatus;
+        }>(
           `SELECT
              handoff_id AS "handoffId",
              execution_status AS "executionStatus"
@@ -738,10 +751,16 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           [input.handoffId],
         );
         if (!handoffCheck.rows[0]) {
-          throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', { handoffId: input.handoffId });
+          throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', {
+            handoffId: input.handoffId,
+          });
         }
 
-        validateExecutionTransition(handoffCheck.rows[0].executionStatus, input.executionStatus, input.eventType);
+        validateExecutionTransition(
+          handoffCheck.rows[0].executionStatus,
+          input.executionStatus,
+          input.eventType,
+        );
 
         const event = await createEventWithClient(client, input);
         await client.query('COMMIT');
@@ -764,7 +783,6 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
            reconciliation_status AS "reconciliationStatus",
            provider_status AS "providerStatus",
            tx_hash AS "txHash",
-           extrinsic_hash AS "extrinsicHash",
            detail,
            metadata,
            observed_at AS "observedAt",
@@ -1031,7 +1049,6 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
            callback_status AS "callbackStatus",
            provider_status AS "providerStatus",
            tx_hash AS "txHash",
-           extrinsic_hash AS "extrinsicHash",
            latest_event_id AS "latestEventId",
            latest_event_type AS "latestEventType",
            latest_event_detail AS "latestEventDetail",
@@ -1063,7 +1080,6 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           callbackStatus: handoff.callbackStatus,
           providerStatus: handoff.providerStatus,
           txHash: handoff.txHash,
-          extrinsicHash: handoff.extrinsicHash,
           externalReference: handoff.externalReference,
           latestEventType: handoff.latestEventType,
           latestEventDetail: handoff.latestEventDetail,
@@ -1100,9 +1116,18 @@ export function createGatewayServiceAuthNonceStore(pool: Pool) {
   };
 }
 
-export function createInMemorySettlementStore(initialHandoffs: SettlementHandoffRecord[] = []): SettlementStore {
-  const handoffs = new Map(initialHandoffs.map((record) => [record.handoffId, structuredClone(record)]));
-  const platformIndex = new Map(initialHandoffs.map((record) => [`${record.platformId}:${record.platformHandoffId}`, record.handoffId]));
+export function createInMemorySettlementStore(
+  initialHandoffs: SettlementHandoffRecord[] = [],
+): SettlementStore {
+  const handoffs = new Map(
+    initialHandoffs.map((record) => [record.handoffId, structuredClone(record)]),
+  );
+  const platformIndex = new Map(
+    initialHandoffs.map((record) => [
+      `${record.platformId}:${record.platformHandoffId}`,
+      record.handoffId,
+    ]),
+  );
   const events = new Map<string, SettlementExecutionEventRecord[]>();
   const deliveries = new Map<string, SettlementCallbackDeliveryRecord>();
 
@@ -1139,7 +1164,6 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
         callbackStatus: 'pending',
         providerStatus: null,
         txHash: null,
-        extrinsicHash: null,
         latestEventId: null,
         latestEventType: null,
         latestEventDetail: null,
@@ -1169,8 +1193,14 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
     async listHandoffs(input) {
       const filtered = [...handoffs.values()]
         .filter((record) => (input.tradeId ? record.tradeId === input.tradeId : true))
-        .filter((record) => (input.reconciliationStatus ? record.reconciliationStatus === input.reconciliationStatus : true))
-        .filter((record) => (input.executionStatus ? record.executionStatus === input.executionStatus : true))
+        .filter((record) =>
+          input.reconciliationStatus
+            ? record.reconciliationStatus === input.reconciliationStatus
+            : true,
+        )
+        .filter((record) =>
+          input.executionStatus ? record.executionStatus === input.executionStatus : true,
+        )
         .sort((left, right) => {
           const updatedOrder = right.updatedAt.localeCompare(left.updatedAt);
           if (updatedOrder !== 0) {
@@ -1192,7 +1222,9 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
     async createExecutionEvent(input) {
       const handoff = handoffs.get(input.handoffId);
       if (!handoff) {
-        throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', { handoffId: input.handoffId });
+        throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', {
+          handoffId: input.handoffId,
+        });
       }
 
       validateExecutionTransition(handoff.executionStatus, input.executionStatus, input.eventType);
@@ -1205,7 +1237,6 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
         reconciliationStatus: input.reconciliationStatus,
         providerStatus: input.providerStatus ?? null,
         txHash: input.txHash ?? null,
-        extrinsicHash: input.extrinsicHash ?? null,
         detail: input.detail ?? null,
         metadata: structuredClone(input.metadata ?? {}),
         observedAt: input.observedAt,
@@ -1225,7 +1256,6 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
         callbackStatus: handoff.callbackStatus === 'disabled' ? 'disabled' : 'pending',
         providerStatus: input.providerStatus ?? handoff.providerStatus,
         txHash: input.txHash ?? handoff.txHash,
-        extrinsicHash: input.extrinsicHash ?? handoff.extrinsicHash,
         latestEventId: event.eventId,
         latestEventType: input.eventType,
         latestEventDetail: input.detail ?? null,
@@ -1262,14 +1292,22 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
       deliveries.set(record.deliveryId, record);
       const handoff = handoffs.get(input.handoffId);
       if (handoff && input.status === 'disabled') {
-        handoffs.set(input.handoffId, { ...handoff, callbackStatus: 'disabled', updatedAt: new Date().toISOString() });
+        handoffs.set(input.handoffId, {
+          ...handoff,
+          callbackStatus: 'disabled',
+          updatedAt: new Date().toISOString(),
+        });
       }
       return structuredClone(record);
     },
 
     async getDueCallbackDeliveries(limit, now) {
       return [...deliveries.values()]
-        .filter((delivery) => (delivery.status === 'pending' || delivery.status === 'failed') && delivery.nextAttemptAt <= now)
+        .filter(
+          (delivery) =>
+            (delivery.status === 'pending' || delivery.status === 'failed') &&
+            delivery.nextAttemptAt <= now,
+        )
         .sort((left, right) => left.nextAttemptAt.localeCompare(right.nextAttemptAt))
         .slice(0, limit)
         .map((delivery) => structuredClone(delivery));
@@ -1389,7 +1427,6 @@ export function createInMemorySettlementStore(initialHandoffs: SettlementHandoff
           callbackStatus: record.callbackStatus,
           providerStatus: record.providerStatus,
           txHash: record.txHash,
-          extrinsicHash: record.extrinsicHash,
           externalReference: record.externalReference,
           latestEventType: record.latestEventType,
           latestEventDetail: record.latestEventDetail,

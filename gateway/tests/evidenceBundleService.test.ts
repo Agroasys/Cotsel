@@ -48,7 +48,9 @@ const trade: DashboardTradeRecord = {
 };
 
 function buildPrincipal(
-  overrides: Omit<Partial<GatewayPrincipal['session']>, 'walletAddress'> & { walletAddress?: string | null } = {},
+  overrides: Omit<Partial<GatewayPrincipal['session']>, 'walletAddress'> & {
+    walletAddress?: string | null;
+  } = {},
 ): GatewayPrincipal {
   const session = {
     userId: 'uid-admin',
@@ -129,17 +131,19 @@ describe('GatewayEvidenceBundleService', () => {
     expect(manifest.manifestDigest).toMatch(/^sha256:/);
     expect(manifest.available).toBe(true);
     expect(manifest.generatedBy.userId).toBe('uid-admin');
-    expect(manifest.artifactReferences).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        artifactId: 'bundle-manifest',
-        href: expect.stringContaining(`/evidence/bundles/${manifest.bundleId}/download`),
-      }),
-      expect.objectContaining({
-        artifactId: 'ricardian-document',
-        available: true,
-        href: '/api/dashboard-gateway/v1/ricardian/TRD-247',
-      }),
-    ]));
+    expect(manifest.artifactReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          artifactId: 'bundle-manifest',
+          href: expect.stringContaining(`/evidence/bundles/${manifest.bundleId}/download`),
+        }),
+        expect.objectContaining({
+          artifactId: 'ricardian-document',
+          available: true,
+          href: '/api/dashboard-gateway/v1/ricardian/TRD-247',
+        }),
+      ]),
+    );
     expect(manifest.evidenceReferences).toEqual([
       expect.objectContaining({
         sourceType: 'compliance_decision',
@@ -169,18 +173,22 @@ describe('GatewayEvidenceBundleService', () => {
 
     expect(manifest.available).toBe(false);
     expect(manifest.degradedReason).toContain('GATEWAY_RICARDIAN_BASE_URL');
-    expect(manifest.artifactReferences).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        artifactId: 'ricardian-document',
-        available: false,
-      }),
-    ]));
+    expect(manifest.artifactReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          artifactId: 'ricardian-document',
+          available: false,
+        }),
+      ]),
+    );
   });
 
   test('generates a degraded manifest when compliance evidence sources are unavailable', async () => {
     const complianceStore = {
       getTradeStatus: jest.fn().mockRejectedValue(new Error('compliance status unavailable')),
-      getOracleProgressionBlock: jest.fn().mockRejectedValue(new Error('oracle progression unavailable')),
+      getOracleProgressionBlock: jest
+        .fn()
+        .mockRejectedValue(new Error('oracle progression unavailable')),
       listTradeDecisions: jest.fn().mockRejectedValue(new Error('trade decisions unavailable')),
     } as unknown as ComplianceStore;
 
@@ -202,12 +210,14 @@ describe('GatewayEvidenceBundleService', () => {
     expect(manifest.degradedReason).toContain('compliance status unavailable');
     expect(manifest.degradedReason).toContain('trade decisions unavailable');
     expect(manifest.evidenceReferences).toEqual([]);
-    expect(manifest.artifactReferences).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        artifactId: 'bundle-manifest',
-        href: expect.stringContaining(`/evidence/bundles/${manifest.bundleId}/download`),
-      }),
-    ]));
+    expect(manifest.artifactReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          artifactId: 'bundle-manifest',
+          href: expect.stringContaining(`/evidence/bundles/${manifest.bundleId}/download`),
+        }),
+      ]),
+    );
   });
 
   test('persists a null generatedBy wallet when the operator session is not wallet-bound', async () => {

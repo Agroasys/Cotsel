@@ -45,9 +45,8 @@ export function buildOperatorCapabilitySnapshot(
 ): OperatorCapabilitySnapshot {
   const canReadOperatorRoutes = principal.gatewayRoles.includes('operator:read');
   const allowlisted = matchesAllowlist(principal.session, config.writeAllowlist);
-  const canWriteOperatorActions = principal.gatewayRoles.includes('operator:write')
-    && config.enableMutations
-    && allowlisted;
+  const canWriteOperatorActions =
+    principal.gatewayRoles.includes('operator:write') && config.enableMutations && allowlisted;
 
   return {
     subject: {

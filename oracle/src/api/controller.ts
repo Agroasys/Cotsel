@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import {
   HttpError,
   failure,
@@ -91,7 +92,11 @@ function parseTriggerBody(body: unknown): { tradeId: string; requestId: string }
   };
 }
 
-function parseRedriveBody(body: unknown): { tradeId: string; requestId: string; triggerType: TriggerType } {
+function parseRedriveBody(body: unknown): {
+  tradeId: string;
+  requestId: string;
+  triggerType: TriggerType;
+} {
   const payload = requireObject(body, 'body') as unknown as RedriveRequestBody;
 
   return {
@@ -110,7 +115,11 @@ function parseApprovalBody(body: unknown): { idempotencyKey: string; actor: stri
   };
 }
 
-function parseRejectBody(body: unknown): { idempotencyKey: string; actor: string; reason?: string } {
+function parseRejectBody(body: unknown): {
+  idempotencyKey: string;
+  actor: string;
+  reason?: string;
+} {
   const payload = requireObject(body, 'body') as unknown as RejectRequest;
 
   return {
@@ -124,7 +133,7 @@ export class OracleController {
   constructor(private triggerManager: TriggerManager) {}
 
   async releaseStage1(
-    req: Request<{}, {}, ReleaseStage1Request>,
+    req: Request<ParamsDictionary, unknown, ReleaseStage1Request>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
@@ -144,7 +153,7 @@ export class OracleController {
   }
 
   async confirmArrival(
-    req: Request<{}, {}, ConfirmArrivalRequest>,
+    req: Request<ParamsDictionary, unknown, ConfirmArrivalRequest>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
@@ -164,7 +173,7 @@ export class OracleController {
   }
 
   async finalizeTrade(
-    req: Request<{}, {}, FinalizeTradeRequest>,
+    req: Request<ParamsDictionary, unknown, FinalizeTradeRequest>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
@@ -184,7 +193,11 @@ export class OracleController {
   }
 
   async redriveTrigger(
-    req: Request<{}, {}, { tradeId: string; triggerType: TriggerType; requestId: string }>,
+    req: Request<
+      ParamsDictionary,
+      unknown,
+      { tradeId: string; triggerType: TriggerType; requestId: string }
+    >,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
@@ -207,7 +220,7 @@ export class OracleController {
   }
 
   async approveTrigger(
-    req: Request<{}, {}, ApprovalRequest>,
+    req: Request<ParamsDictionary, unknown, ApprovalRequest>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
@@ -222,7 +235,7 @@ export class OracleController {
   }
 
   async rejectTrigger(
-    req: Request<{}, {}, RejectRequest>,
+    req: Request<ParamsDictionary, unknown, RejectRequest>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {

@@ -5,6 +5,7 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
+    "lint": "eslint --max-warnings=0 .",
     "test": "node --test validation.test.js"
   },
   "files": [

@@ -20,7 +20,7 @@ const baseConfig: GatewayConfig = {
   dbPassword: 'postgres',
   authBaseUrl: 'http://127.0.0.1:3005',
   authRequestTimeoutMs: 5000,
-  indexerGraphqlUrl: "http://127.0.0.1:4350/graphql",
+  indexerGraphqlUrl: 'http://127.0.0.1:4350/graphql',
   indexerRequestTimeoutMs: 5000,
   rpcUrl: 'http://127.0.0.1:8545',
   rpcFallbackUrls: [],
@@ -55,44 +55,52 @@ function mockRes() {
 
 describe('gateway auth middleware', () => {
   test('resolveGatewayActorKey prefers account identity over wallet identity', () => {
-    expect(resolveGatewayActorKey({
-      accountId: 'acct-admin',
-      userId: 'uid-admin',
-      walletAddress: '0xabc',
-      role: 'admin',
-      issuedAt: 1,
-      expiresAt: 2,
-    })).toBe('account:acct-admin');
+    expect(
+      resolveGatewayActorKey({
+        accountId: 'acct-admin',
+        userId: 'uid-admin',
+        walletAddress: '0xabc',
+        role: 'admin',
+        issuedAt: 1,
+        expiresAt: 2,
+      }),
+    ).toBe('account:acct-admin');
   });
 
   test('resolveGatewayActorKey falls back to user identity before wallet identity', () => {
-    expect(resolveGatewayActorKey({
-      userId: 'uid-admin',
-      walletAddress: '0xABC',
-      role: 'admin',
-      issuedAt: 1,
-      expiresAt: 2,
-    })).toBe('user:uid-admin');
+    expect(
+      resolveGatewayActorKey({
+        userId: 'uid-admin',
+        walletAddress: '0xABC',
+        role: 'admin',
+        issuedAt: 1,
+        expiresAt: 2,
+      }),
+    ).toBe('user:uid-admin');
   });
 
   test('resolveGatewayActorKey falls back to wallet identity only when accountId and userId are absent', () => {
-    expect(resolveGatewayActorKey({
-      userId: '   ',
-      walletAddress: '0xABC',
-      role: 'admin',
-      issuedAt: 1,
-      expiresAt: 2,
-    })).toBe('wallet:0xabc');
+    expect(
+      resolveGatewayActorKey({
+        userId: '   ',
+        walletAddress: '0xABC',
+        role: 'admin',
+        issuedAt: 1,
+        expiresAt: 2,
+      }),
+    ).toBe('wallet:0xabc');
   });
 
   test('resolveGatewayActorKey throws when every supported identifier is missing', () => {
-    expect(() => resolveGatewayActorKey({
-      userId: '   ',
-      walletAddress: null,
-      role: 'admin',
-      issuedAt: 1,
-      expiresAt: 2,
-    })).toThrow('Authenticated session is missing every supported actor identifier');
+    expect(() =>
+      resolveGatewayActorKey({
+        userId: '   ',
+        walletAddress: null,
+        role: 'admin',
+        issuedAt: 1,
+        expiresAt: 2,
+      }),
+    ).toThrow('Authenticated session is missing every supported actor identifier');
   });
 
   test('rejects missing bearer token', async () => {
@@ -101,12 +109,17 @@ describe('gateway auth middleware', () => {
       checkReadiness: jest.fn(),
     };
     const middleware = createAuthenticationMiddleware(client, baseConfig);
-    const req = { headers: {}, requestContext: { requestId: 'req-1', correlationId: 'corr-1', startedAtMs: Date.now() } } as unknown as Request;
+    const req = {
+      headers: {},
+      requestContext: { requestId: 'req-1', correlationId: 'corr-1', startedAtMs: Date.now() },
+    } as unknown as Request;
     const next = jest.fn() as NextFunction;
 
     await middleware(req, mockRes(), next);
 
-    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401, code: 'AUTH_REQUIRED' }));
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 401, code: 'AUTH_REQUIRED' }),
+    );
   });
 
   test('maps admin session to gateway write role and allowlist', async () => {
@@ -149,7 +162,10 @@ describe('gateway auth middleware', () => {
       }),
       checkReadiness: jest.fn(),
     };
-    const middleware = createAuthenticationMiddleware(client, { ...baseConfig, writeAllowlist: [] });
+    const middleware = createAuthenticationMiddleware(client, {
+      ...baseConfig,
+      writeAllowlist: [],
+    });
     const req = {
       headers: { authorization: 'Bearer sess-1' },
       requestContext: { requestId: 'req-1', correlationId: 'corr-1', startedAtMs: Date.now() },
@@ -173,7 +189,10 @@ describe('gateway auth middleware', () => {
       }),
       checkReadiness: jest.fn(),
     };
-    const middleware = createAuthenticationMiddleware(client, { ...baseConfig, writeAllowlist: ['acct-admin'] });
+    const middleware = createAuthenticationMiddleware(client, {
+      ...baseConfig,
+      writeAllowlist: ['acct-admin'],
+    });
     const req = {
       headers: { authorization: 'Bearer sess-1' },
       requestContext: { requestId: 'req-1', correlationId: 'corr-1', startedAtMs: Date.now() },
@@ -207,7 +226,9 @@ describe('gateway role guards', () => {
 
     middleware(req, mockRes(), next);
 
-    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403, code: 'FORBIDDEN' }));
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, code: 'FORBIDDEN' }),
+    );
   });
 
   test('requireMutationWriteAccess blocks disabled writes', () => {
@@ -230,7 +251,9 @@ describe('gateway role guards', () => {
 
     middleware(req, mockRes(), next);
 
-    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403, code: 'FORBIDDEN' }));
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, code: 'FORBIDDEN' }),
+    );
   });
 
   test('requireMutationWriteAccess allows enabled write callers', () => {

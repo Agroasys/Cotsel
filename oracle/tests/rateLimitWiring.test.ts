@@ -12,7 +12,10 @@ jest.mock('../src/middleware/middleware', () => ({
 import { createRouter } from '../src/api/routes';
 import { oracleRateLimitPolicy } from '../src/httpSecurity';
 
-async function withServer(app: express.Express, run: (baseUrl: string) => Promise<void>): Promise<void> {
+async function withServer(
+  app: express.Express,
+  run: (baseUrl: string) => Promise<void>,
+): Promise<void> {
   const server = app.listen(0);
   await new Promise<void>((resolve) => server.once('listening', resolve));
 
@@ -20,7 +23,9 @@ async function withServer(app: express.Express, run: (baseUrl: string) => Promis
     const address = server.address() as AddressInfo;
     await run(`http://127.0.0.1:${address.port}`);
   } finally {
-    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
   }
 }
 

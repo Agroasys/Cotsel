@@ -172,7 +172,9 @@ describe('settlement callback dispatcher', () => {
       requestId: 'req-event-3a',
     });
 
-    const originalDelivery = (await settlementStore.getDueCallbackDeliveries(10, '2100-03-11T12:20:10.000Z'))[0];
+    const originalDelivery = (
+      await settlementStore.getDueCallbackDeliveries(10, '2100-03-11T12:20:10.000Z')
+    )[0];
     expect(originalDelivery).toBeDefined();
 
     await settlementService.recordExecutionEvent({

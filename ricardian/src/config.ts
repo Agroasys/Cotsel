@@ -109,7 +109,7 @@ export function loadConfig(): RicardianConfig {
   if (authEnabled) {
     assert(
       apiKeys.length > 0 || Boolean(hmacSecret),
-      'AUTH_ENABLED=true requires either API_KEYS_JSON entries or HMAC_SECRET'
+      'AUTH_ENABLED=true requires either API_KEYS_JSON entries or HMAC_SECRET',
     );
   }
 
@@ -152,7 +152,10 @@ export function loadConfig(): RicardianConfig {
     rateLimitWriteBurstLimit: envNumber('RATE_LIMIT_WRITE_BURST_LIMIT', 10),
     rateLimitWriteBurstWindowSeconds: envNumber('RATE_LIMIT_WRITE_BURST_WINDOW_SECONDS', 10),
     rateLimitWriteSustainedLimit: envNumber('RATE_LIMIT_WRITE_SUSTAINED_LIMIT', 120),
-    rateLimitWriteSustainedWindowSeconds: envNumber('RATE_LIMIT_WRITE_SUSTAINED_WINDOW_SECONDS', 60),
+    rateLimitWriteSustainedWindowSeconds: envNumber(
+      'RATE_LIMIT_WRITE_SUSTAINED_WINDOW_SECONDS',
+      60,
+    ),
     rateLimitReadBurstLimit: envNumber('RATE_LIMIT_READ_BURST_LIMIT', 30),
     rateLimitReadBurstWindowSeconds: envNumber('RATE_LIMIT_READ_BURST_WINDOW_SECONDS', 10),
     rateLimitReadSustainedLimit: envNumber('RATE_LIMIT_READ_SUSTAINED_LIMIT', 600),
@@ -163,13 +166,25 @@ export function loadConfig(): RicardianConfig {
   assert(config.authNonceTtlSeconds > 0, 'AUTH_NONCE_TTL_SECONDS must be > 0');
   assert(config.nonceTtlSeconds > 0, 'NONCE_TTL_SECONDS must be > 0');
   assert(config.rateLimitWriteBurstLimit > 0, 'RATE_LIMIT_WRITE_BURST_LIMIT must be > 0');
-  assert(config.rateLimitWriteBurstWindowSeconds > 0, 'RATE_LIMIT_WRITE_BURST_WINDOW_SECONDS must be > 0');
+  assert(
+    config.rateLimitWriteBurstWindowSeconds > 0,
+    'RATE_LIMIT_WRITE_BURST_WINDOW_SECONDS must be > 0',
+  );
   assert(config.rateLimitWriteSustainedLimit > 0, 'RATE_LIMIT_WRITE_SUSTAINED_LIMIT must be > 0');
-  assert(config.rateLimitWriteSustainedWindowSeconds > 0, 'RATE_LIMIT_WRITE_SUSTAINED_WINDOW_SECONDS must be > 0');
+  assert(
+    config.rateLimitWriteSustainedWindowSeconds > 0,
+    'RATE_LIMIT_WRITE_SUSTAINED_WINDOW_SECONDS must be > 0',
+  );
   assert(config.rateLimitReadBurstLimit > 0, 'RATE_LIMIT_READ_BURST_LIMIT must be > 0');
-  assert(config.rateLimitReadBurstWindowSeconds > 0, 'RATE_LIMIT_READ_BURST_WINDOW_SECONDS must be > 0');
+  assert(
+    config.rateLimitReadBurstWindowSeconds > 0,
+    'RATE_LIMIT_READ_BURST_WINDOW_SECONDS must be > 0',
+  );
   assert(config.rateLimitReadSustainedLimit > 0, 'RATE_LIMIT_READ_SUSTAINED_LIMIT must be > 0');
-  assert(config.rateLimitReadSustainedWindowSeconds > 0, 'RATE_LIMIT_READ_SUSTAINED_WINDOW_SECONDS must be > 0');
+  assert(
+    config.rateLimitReadSustainedWindowSeconds > 0,
+    'RATE_LIMIT_READ_SUSTAINED_WINDOW_SECONDS must be > 0',
+  );
 
   return config;
 }

@@ -163,7 +163,9 @@ export function createPostgresAuditFeedStore(pool: Pool): AuditFeedStore {
         const createdAtIndex = values.length;
         values.push(cursor.eventId);
         const eventIdIndex = values.length;
-        conditions.push(`(created_at < $${createdAtIndex}::timestamp OR (created_at = $${createdAtIndex}::timestamp AND id < $${eventIdIndex}::bigint))`);
+        conditions.push(
+          `(created_at < $${createdAtIndex}::timestamp OR (created_at = $${createdAtIndex}::timestamp AND id < $${eventIdIndex}::bigint))`,
+        );
       }
 
       values.push(input.limit + 1);
@@ -215,10 +217,12 @@ export function createInMemoryAuditFeedStore(initial: AuditFeedEvent[] = []): Au
 
       if (input.cursor) {
         const cursor = decodeAuditFeedCursor(input.cursor);
-        candidates = candidates.filter((event) => (
-          event.createdAt < cursor.createdAt
-          || (event.createdAt === cursor.createdAt && compareEventIds(event.eventId, cursor.eventId) < 0)
-        ));
+        candidates = candidates.filter(
+          (event) =>
+            event.createdAt < cursor.createdAt ||
+            (event.createdAt === cursor.createdAt &&
+              compareEventIds(event.eventId, cursor.eventId) < 0),
+        );
       }
 
       const page = candidates.slice(0, input.limit + 1);

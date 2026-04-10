@@ -28,7 +28,11 @@ function parseLimit(raw: unknown): number {
 
   const limit = Number.parseInt(raw, 10);
   if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'limit' must be between 1 and 200");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'limit' must be between 1 and 200",
+    );
   }
 
   return limit;
@@ -40,7 +44,11 @@ function parseString(raw: unknown, field: string): string | undefined {
   }
 
   if (typeof raw !== 'string' || raw.trim() === '') {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `Query parameter '${field}' must be a non-empty string`);
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      `Query parameter '${field}' must be a non-empty string`,
+    );
   }
 
   return raw.trim();
@@ -52,7 +60,11 @@ function parseCursor(raw: unknown, decoder: (cursor: string) => unknown): string
   }
 
   if (typeof raw !== 'string' || raw.trim() === '') {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'cursor' must be a non-empty string");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'cursor' must be a non-empty string",
+    );
   }
 
   try {

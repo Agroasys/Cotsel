@@ -25,6 +25,15 @@ function validateWindow(window) {
   }
 }
 
+function normalizeRoutePath(pathname) {
+  if (pathname.length <= 1) {
+    return pathname;
+  }
+
+  const normalized = pathname.replace(/\/+$/, '');
+  return normalized.length === 0 ? '/' : normalized;
+}
+
 class InMemoryRateLimitStore {
   constructor() {
     this.buckets = new Map();
@@ -108,7 +117,10 @@ function defaultCallerContext(req) {
 
 function setRateLimitHeaders(res, policy, currentWindow) {
   res.setHeader('RateLimit-Limit', String(currentWindow.limit));
-  res.setHeader('RateLimit-Remaining', String(Math.max(0, currentWindow.limit - currentWindow.count)));
+  res.setHeader(
+    'RateLimit-Remaining',
+    String(Math.max(0, currentWindow.limit - currentWindow.count)),
+  );
   res.setHeader('RateLimit-Reset', String(currentWindow.resetSeconds));
   res.setHeader(
     'RateLimit-Policy',
@@ -123,7 +135,9 @@ async function chooseStore(options, logger) {
 
   if (!options.redisUrl) {
     if (options.nodeEnv === 'production') {
-      throw new Error(`${options.keyPrefix.toUpperCase()}_RATE_LIMIT_REDIS_URL is required when rate limiting is enabled in production`);
+      throw new Error(
+        `${options.keyPrefix.toUpperCase()}_RATE_LIMIT_REDIS_URL is required when rate limiting is enabled in production`,
+      );
     }
 
     logger.warn('Rate limiter using in-memory store (local/dev fallback)', {
@@ -146,7 +160,9 @@ async function chooseStore(options, logger) {
     await redisStore.close();
 
     if (options.nodeEnv === 'production') {
-      throw new Error(`Failed to connect rate limiter to Redis: ${error?.message || error}`);
+      throw new Error(`Failed to connect rate limiter to Redis: ${error?.message || error}`, {
+        cause: error,
+      });
     }
 
     logger.warn('Rate limiter falling back to in-memory store after Redis connection failure', {
@@ -268,4 +284,5 @@ async function createHttpRateLimiter(options) {
 
 module.exports = {
   createHttpRateLimiter,
+  normalizeRoutePath,
 };

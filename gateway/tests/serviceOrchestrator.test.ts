@@ -1,10 +1,15 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { createDownstreamServiceRegistry, type DownstreamServiceContract } from '../src/core/serviceRegistry';
+import {
+  createDownstreamServiceRegistry,
+  type DownstreamServiceContract,
+} from '../src/core/serviceRegistry';
 import { ServiceOrchestrator } from '../src/core/serviceOrchestrator';
 
-function createContract(overrides: Partial<DownstreamServiceContract> = {}): DownstreamServiceContract {
+function createContract(
+  overrides: Partial<DownstreamServiceContract> = {},
+): DownstreamServiceContract {
   return {
     key: 'treasury',
     name: 'Treasury',
@@ -34,7 +39,8 @@ describe('service orchestrator', () => {
   });
 
   test('propagates correlation headers and regenerates signed service auth headers on read retries', async () => {
-    const fetchMock = jest.fn()
+    const fetchMock = jest
+      .fn()
       .mockResolvedValueOnce({ ok: false, status: 503, text: async () => '' } as Response)
       .mockResolvedValueOnce({ ok: true, status: 200, text: async () => '' } as Response);
     global.fetch = fetchMock;
@@ -71,7 +77,9 @@ describe('service orchestrator', () => {
   });
 
   test('applies legacy oracle auth contract without forwarding user bearer auth', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '' } as Response);
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, text: async () => '' } as Response);
     global.fetch = fetchMock;
 
     const orchestrator = new ServiceOrchestrator(
@@ -113,7 +121,9 @@ describe('service orchestrator', () => {
   });
 
   test('honors retry limits and fails closed for mutations', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({ ok: false, status: 503, text: async () => '' } as Response);
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue({ ok: false, status: 503, text: async () => '' } as Response);
     global.fetch = fetchMock;
 
     const orchestrator = new ServiceOrchestrator(
@@ -135,7 +145,8 @@ describe('service orchestrator', () => {
   });
 
   test('does not force JSON content type for raw string or buffer payloads', async () => {
-    const fetchMock = jest.fn()
+    const fetchMock = jest
+      .fn()
       .mockResolvedValue({ ok: true, status: 202, text: async () => '' } as Response);
     global.fetch = fetchMock;
 
@@ -161,28 +172,34 @@ describe('service orchestrator', () => {
 
   test('times out reads with an explicit upstream-unavailable error', async () => {
     global.fetch = jest.fn().mockImplementation(
-      (_input, init) => new Promise<Response>((resolve, reject) => {
-        const timer = setTimeout(() => resolve({ ok: true, status: 200, text: async () => '' } as Response), 100);
-        init?.signal?.addEventListener('abort', () => {
-          clearTimeout(timer);
-          const abortError = new Error('aborted');
-          abortError.name = 'AbortError';
-          reject(abortError);
-        });
-      }),
+      (_input, init) =>
+        new Promise<Response>((resolve, reject) => {
+          const timer = setTimeout(
+            () => resolve({ ok: true, status: 200, text: async () => '' } as Response),
+            100,
+          );
+          init?.signal?.addEventListener('abort', () => {
+            clearTimeout(timer);
+            const abortError = new Error('aborted');
+            abortError.name = 'AbortError';
+            reject(abortError);
+          });
+        }),
     );
 
     const orchestrator = new ServiceOrchestrator(
       createDownstreamServiceRegistry([createContract({ readTimeoutMs: 25, readRetryBudget: 0 })]),
     );
 
-    await expect(orchestrator.fetch('treasury', {
-      method: 'GET',
-      path: '/api/treasury/v1/entries',
-      readOnly: true,
-      authenticated: true,
-      operation: 'treasury:listEntries',
-    })).rejects.toMatchObject({
+    await expect(
+      orchestrator.fetch('treasury', {
+        method: 'GET',
+        path: '/api/treasury/v1/entries',
+        readOnly: true,
+        authenticated: true,
+        operation: 'treasury:listEntries',
+      }),
+    ).rejects.toMatchObject({
       statusCode: 504,
       code: 'UPSTREAM_UNAVAILABLE',
     });

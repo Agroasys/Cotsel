@@ -23,7 +23,11 @@ function resolveActorId(req: Request): string {
     return `service:${req.serviceAuth.apiKeyId}`;
   }
 
-  throw new GatewayError(500, 'INTERNAL_ERROR', 'Idempotency scope could not resolve actor context');
+  throw new GatewayError(
+    500,
+    'INTERNAL_ERROR',
+    'Idempotency scope could not resolve actor context',
+  );
 }
 
 function resolveEndpoint(req: Request): string {
@@ -74,7 +78,13 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const idempotencyKey = req.header('Idempotency-Key')?.trim();
     if (!idempotencyKey) {
-      next(new GatewayError(400, 'VALIDATION_ERROR', 'Idempotency-Key header is required for mutation routes'));
+      next(
+        new GatewayError(
+          400,
+          'VALIDATION_ERROR',
+          'Idempotency-Key header is required for mutation routes',
+        ),
+      );
       return;
     }
 
@@ -99,9 +109,16 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
         existing.requestMethod !== req.method ||
         existing.requestPath !== requestPath
       ) {
-        next(new GatewayError(409, 'CONFLICT', 'Idempotency key is already in use for a different request', {
-          idempotencyKey,
-        }));
+        next(
+          new GatewayError(
+            409,
+            'CONFLICT',
+            'Idempotency key is already in use for a different request',
+            {
+              idempotencyKey,
+            },
+          ),
+        );
         return;
       }
 
@@ -115,9 +132,16 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
         return;
       }
 
-      next(new GatewayError(409, 'CONFLICT', 'A request with this idempotency key is already in progress', {
-        idempotencyKey,
-      }));
+      next(
+        new GatewayError(
+          409,
+          'CONFLICT',
+          'A request with this idempotency key is already in progress',
+          {
+            idempotencyKey,
+          },
+        ),
+      );
       return;
     }
 
@@ -150,11 +174,14 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
         return;
       }
 
-      void store.complete({ actorId, endpoint, idempotencyKey }, {
-        responseStatus: res.statusCode,
-        responseHeaders: replayHeaders(res),
-        responseBody,
-      });
+      void store.complete(
+        { actorId, endpoint, idempotencyKey },
+        {
+          responseStatus: res.statusCode,
+          responseHeaders: replayHeaders(res),
+          responseBody,
+        },
+      );
     });
 
     next();

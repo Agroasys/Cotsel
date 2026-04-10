@@ -4,7 +4,10 @@ import { createHttpRateLimiter } from '@agroasys/shared-edge';
 import { createRouter } from '../src/api/routes';
 import { authRateLimitPolicy } from '../src/httpSecurity';
 
-async function withServer(app: express.Express, run: (baseUrl: string) => Promise<void>): Promise<void> {
+async function withServer(
+  app: express.Express,
+  run: (baseUrl: string) => Promise<void>,
+): Promise<void> {
   const server = app.listen(0);
   await new Promise<void>((resolve) => server.once('listening', resolve));
 
@@ -12,7 +15,9 @@ async function withServer(app: express.Express, run: (baseUrl: string) => Promis
     const address = server.address() as AddressInfo;
     await run(`http://127.0.0.1:${address.port}`);
   } finally {
-    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
   }
 }
 
@@ -67,7 +72,8 @@ function buildApp(): Promise<{ app: express.Express; close: () => Promise<void> 
       limiter.middleware,
       createRouter(sessionController as never, sessionService as never, {
         legacyWalletController: legacyWalletController as never,
-        trustedSessionExchangeMiddleware: (_req: Request, _res: Response, next: NextFunction) => next(),
+        trustedSessionExchangeMiddleware: (_req: Request, _res: Response, next: NextFunction) =>
+          next(),
       }),
     );
 

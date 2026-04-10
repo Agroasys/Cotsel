@@ -21,4 +21,8 @@ export class HttpError extends Error {
 
 export function timestamp(): string;
 export function success<T>(data: T): ApiSuccessResponse<T>;
-export function failure(code: string, message: string, details?: Record<string, unknown>): ApiFailureResponse;
+export function failure(
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+): ApiFailureResponse;

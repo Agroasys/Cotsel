@@ -1,4 +1,5 @@
 # Cotsel: Commercial Trade Settlement Layer
+
 A non-custodial, evidence-driven settlement layer for cross-border trade workflows.
 
 Cotsel is a modular settlement infrastructure for milestone-gated escrow and conditional release. It is designed for B2B trade workflows that require stablecoin escrow settlement, Ricardian agreement anchoring, and audit-grade traceability without introducing a custodial operator.
@@ -32,7 +33,6 @@ Cotsel was initially developed to support the Agroasys platform, but it is open-
 
 Optimize for deterministic operations and auditability. If a step matters in production, it should be scriptable, tested, and documented in a runbook.
 
-
 Canonical target-state architecture:
 [`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md)
 
@@ -45,16 +45,16 @@ Canonical target-state architecture:
 ## Core Components
 
 - **Escrow Contract (`/contracts`)**  
-A settlement state machine implemented in Solidity for Base-first delivery. The contract governs milestone-gated releases, dispute holds, pause controls, and deterministic settlement transitions.
+  A settlement state machine implemented in Solidity for Base-first delivery. The contract governs milestone-gated releases, dispute holds, pause controls, and deterministic settlement transitions.
 
 - **Oracle Service (`/oracle`)**  
-A Node.js service that submits signed milestone attestations to the contract. Attestations are schema-validated and designed to be replay-safe and idempotent. Each attestation references external evidence identifiers, such as Bill of Lading or inspection certificate references, that support operational and audit review.
+  A Node.js service that submits signed milestone attestations to the contract. Attestations are schema-validated and designed to be replay-safe and idempotent. Each attestation references external evidence identifiers, such as Bill of Lading or inspection certificate references, that support operational and audit review.
 
 - **Ricardian Anchoring (`/ricardian`)**  
-The protocol does not store contracts on-chain. Each trade is anchored by a SHA-256 hash of the signed off-chain agreement (TradeID). Evidence references and settlement actions are linked to this immutable identifier across the lifecycle.
+  The protocol does not store contracts on-chain. Each trade is anchored by a SHA-256 hash of the signed off-chain agreement (TradeID). Evidence references and settlement actions are linked to this immutable identifier across the lifecycle.
 
 - **Indexer (`/indexer`)**  
-An indexing service that tracks settlement events to support reconciliation, operational monitoring, and audit-style reporting. It provides a normalized trade timeline, state transitions, and payout references.
+  An indexing service that tracks settlement events to support reconciliation, operational monitoring, and audit-style reporting. It provides a normalized trade timeline, state transitions, and payout references.
 
 ## How It Works
 
@@ -63,33 +63,37 @@ Cotsel implements a deterministic two-stage settlement flow. This supports comme
 ## Lifecycle
 
 - **Lock (Encumbrance)**
-The buyer locks stablecoin funds into escrow to cover goods value plus configured fees. The contract records the Ricardian TradeID and encumbers funds into two logical buckets: `stageOneAmount` for operational and fee release, and `stageTwoAmount` for final net settlement.
+  The buyer locks stablecoin funds into escrow to cover goods value plus configured fees. The contract records the Ricardian TradeID and encumbers funds into two logical buckets: `stageOneAmount` for operational and fee release, and `stageTwoAmount` for final net settlement.
 
 - **Stage 1 Release (Operational)**
-Trigger: the oracle submits a signed attestation referencing validated shipment or milestone evidence.
-Action: in a single state transition, configured fees are allocated to their recipients and the supplier receives tranche one of the principal.
+  Trigger: the oracle submits a signed attestation referencing validated shipment or milestone evidence.
+  Action: in a single state transition, configured fees are allocated to their recipients and the supplier receives tranche one of the principal.
 
 - **Stage 2 Release (Final Settlement)**
-Trigger: the oracle submits a signed attestation referencing destination inspection or final acceptance evidence.
-Action: the remaining supplier tranche is released, completing settlement.
+  Trigger: the oracle submits a signed attestation referencing destination inspection or final acceptance evidence.
+  Action: the remaining supplier tranche is released, completing settlement.
 
 ## Tech Stack
 
-**Contracts and toolchain**  
+**Contracts and toolchain**
+
 - Smart contracts: Solidity with a Base-first runtime target.
 - Testing and fuzzing: Hardhat for integration tests; Foundry for fuzz and invariant testing where applicable.
 
-**Services and runtime**  
-- Service logic: TypeScript on Node.js 20.x  
-- Infrastructure: Docker and Docker Compose  
+**Services and runtime**
+
+- Service logic: TypeScript on Node.js 20.x
+- Infrastructure: Docker and Docker Compose
 - Storage: Postgres for indexed and operational views
 
-**Network and assets**  
+**Network and assets**
+
 - Settlement rails: Base Sepolia for verified pilot validation; Base mainnet runtime configuration and launch controls are implemented, but live mainnet activation evidence is external unless separately recorded in-repo.
 - Stablecoin rail: USDC on Base for active settlement design.
 - Gas management: any sponsorship or fee abstraction is optional, buyer-bounded, and not a prerequisite for settlement safety.
 
-**Indexing and APIs**  
+**Indexing and APIs**
+
 - Indexing: EVM-native indexing with a GraphQL API backed by Postgres.
 
 ## Job and Eventing Strategy
@@ -138,10 +142,10 @@ cotsel/
 
 See `SECURITY.md` for disclosure policy.
 
-
 ## Partners and Contributors
 
 We welcome partners, sponsors, and contributors who are building secure and practical trade settlement systems. Collaboration details are in `CONTRIBUTING.md`.
 
-_____
+---
+
 Cotsel is an open settlement layer developed by [Agroasys](https://github.com/Agroasys). [Agroasys](https://github.com/Agroasys) is the first production adopter and contributes the operational reference implementation.

@@ -10,7 +10,9 @@ import {
 } from '../src/core/complianceStore';
 import { createPostgresComplianceWriteStore } from '../src/core/complianceWriteStore';
 
-function buildDecision(overrides: Partial<ComplianceDecisionRecord> = {}): ComplianceDecisionRecord {
+function buildDecision(
+  overrides: Partial<ComplianceDecisionRecord> = {},
+): ComplianceDecisionRecord {
   return {
     decisionId: 'decision-1',
     tradeId: 'TRD-1',
@@ -40,7 +42,9 @@ function buildDecision(overrides: Partial<ComplianceDecisionRecord> = {}): Compl
   };
 }
 
-function buildBlock(overrides: Partial<OracleProgressionBlockRecord> = {}): OracleProgressionBlockRecord {
+function buildBlock(
+  overrides: Partial<OracleProgressionBlockRecord> = {},
+): OracleProgressionBlockRecord {
   return {
     tradeId: 'TRD-1',
     latestDecisionId: 'decision-1',
@@ -122,12 +126,16 @@ describe('createPostgresComplianceWriteStore', () => {
 
     const writeStore = createPostgresComplianceWriteStore(pool, store);
 
-    await expect(writeStore.saveDecisionWithAudit(buildDecision(), buildAuditEntry())).rejects.toThrow('audit insert failed');
+    await expect(
+      writeStore.saveDecisionWithAudit(buildDecision(), buildAuditEntry()),
+    ).rejects.toThrow('audit insert failed');
 
     expect(query).toHaveBeenNthCalledWith(1, 'BEGIN');
     expect(query).toHaveBeenNthCalledWith(4, 'ROLLBACK');
-    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('COMMIT'))).toBe(false);
-    expect((store.getDecision as jest.Mock)).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('COMMIT')),
+    ).toBe(false);
+    expect(store.getDecision as jest.Mock).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledTimes(1);
   });
 
@@ -156,8 +164,10 @@ describe('createPostgresComplianceWriteStore', () => {
 
     expect(query).toHaveBeenNthCalledWith(1, 'BEGIN');
     expect(query).toHaveBeenNthCalledWith(4, 'ROLLBACK');
-    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('COMMIT'))).toBe(false);
-    expect((store.getOracleProgressionBlock as jest.Mock)).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('COMMIT')),
+    ).toBe(false);
+    expect(store.getOracleProgressionBlock as jest.Mock).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledTimes(1);
   });
 });

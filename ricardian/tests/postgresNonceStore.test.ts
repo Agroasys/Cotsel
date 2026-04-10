@@ -6,7 +6,10 @@ interface StoreState {
 }
 
 function createQuery(state: StoreState) {
-  return async (_sql: string, params: unknown[]): Promise<{ rows: Array<{ accepted: boolean }> }> => {
+  return async (
+    _sql: string,
+    params: unknown[],
+  ): Promise<{ rows: Array<{ accepted: boolean }> }> => {
     const [apiKey, nonce, ttlSeconds] = params as [string, string, number];
 
     for (const [key, expiresAt] of state.entries.entries()) {

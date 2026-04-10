@@ -61,16 +61,20 @@ async function bootstrap(): Promise<void> {
 
   app.disable('x-powered-by');
   app.use(helmet());
-  app.use(cors(createCorsOptions({
-    allowedOrigins: config.corsAllowedOrigins,
-    allowNoOrigin: config.corsAllowNoOrigin,
-  })));
+  app.use(
+    cors(
+      createCorsOptions({
+        allowedOrigins: config.corsAllowedOrigins,
+        allowNoOrigin: config.corsAllowNoOrigin,
+      }),
+    ),
+  );
   app.use(
     express.json({
       verify: (req, _res, buffer) => {
         (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
       },
-    })
+    }),
   );
 
   app.use(
@@ -79,7 +83,7 @@ async function bootstrap(): Promise<void> {
       authMiddleware,
       rateLimitMiddleware: rateLimiter.middleware,
       readinessCheck: testConnection,
-    })
+    }),
   );
 
   app.listen(config.port, () => {
@@ -109,8 +113,10 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-bootstrap().catch(async (error: any) => {
-  Logger.error('Ricardian bootstrap failed', { error: error?.message || error });
+bootstrap().catch(async (error: unknown) => {
+  Logger.error('Ricardian bootstrap failed', {
+    error: error instanceof Error ? error.message : error,
+  });
   await closeConnection();
   process.exit(1);
 });

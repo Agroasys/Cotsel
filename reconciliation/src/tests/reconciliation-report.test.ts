@@ -1,55 +1,62 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildReconciliationReport, buildReconciliationReportRows, RECONCILIATION_REPORT_VERSION } from '../core/reconciliationReport';
+import {
+  buildReconciliationReport,
+  buildReconciliationReportRows,
+  RECONCILIATION_REPORT_VERSION,
+} from '../core/reconciliationReport';
 
 test('reconciliation report rows are deterministically ordered and keep stable schema fields', () => {
-  const rows = buildReconciliationReportRows([
-    {
-      tradeId: '10',
-      txHash: '0xbb',
-      payoutState: 'PENDING_REVIEW',
-      rampReference: 'ramp-b',
-      fiatDepositState: 'PARTIAL',
-      fiatDepositFailureClass: 'PARTIAL_FUNDING',
-      fiatDepositObservedAt: new Date('2026-03-25T00:00:00.000Z'),
-      bankReference: 'bank-b',
-      bankPayoutState: 'CONFIRMED',
-      bankFailureCode: null,
-      bankConfirmedAt: new Date('2026-03-25T02:00:00.000Z'),
-      mismatchCodes: ['STATUS_MISMATCH', 'STATUS_MISMATCH', 'HASH_MISMATCH'],
-      ledgerEntryId: 4,
-    },
-    {
-      tradeId: '2',
-      txHash: null,
-      payoutState: null,
-      rampReference: 'ramp-a',
-      fiatDepositState: 'PENDING',
-      fiatDepositFailureClass: null,
-      fiatDepositObservedAt: new Date('2026-03-24T00:00:00.000Z'),
-      bankReference: null,
-      bankPayoutState: null,
-      bankFailureCode: null,
-      bankConfirmedAt: null,
-      mismatchCodes: ['ONCHAIN_READ_ERROR'],
-      ledgerEntryId: null,
-    },
-    {
-      tradeId: '10',
-      txHash: '0xaa',
-      payoutState: 'PAID',
-      rampReference: 'ramp-a',
-      fiatDepositState: 'FUNDED',
-      fiatDepositFailureClass: null,
-      fiatDepositObservedAt: new Date('2026-03-26T00:00:00.000Z'),
-      bankReference: 'bank-a',
-      bankPayoutState: 'PENDING',
-      bankFailureCode: null,
-      bankConfirmedAt: new Date('2026-03-26T04:00:00.000Z'),
-      mismatchCodes: [],
-      ledgerEntryId: 1,
-    },
-  ], { now: new Date('2026-03-26T12:00:00.000Z') });
+  const rows = buildReconciliationReportRows(
+    [
+      {
+        tradeId: '10',
+        txHash: '0xbb',
+        payoutState: 'PENDING_REVIEW',
+        rampReference: 'ramp-b',
+        fiatDepositState: 'PARTIAL',
+        fiatDepositFailureClass: 'PARTIAL_FUNDING',
+        fiatDepositObservedAt: new Date('2026-03-25T00:00:00.000Z'),
+        bankReference: 'bank-b',
+        bankPayoutState: 'CONFIRMED',
+        bankFailureCode: null,
+        bankConfirmedAt: new Date('2026-03-25T02:00:00.000Z'),
+        mismatchCodes: ['STATUS_MISMATCH', 'STATUS_MISMATCH', 'HASH_MISMATCH'],
+        ledgerEntryId: 4,
+      },
+      {
+        tradeId: '2',
+        txHash: null,
+        payoutState: null,
+        rampReference: 'ramp-a',
+        fiatDepositState: 'PENDING',
+        fiatDepositFailureClass: null,
+        fiatDepositObservedAt: new Date('2026-03-24T00:00:00.000Z'),
+        bankReference: null,
+        bankPayoutState: null,
+        bankFailureCode: null,
+        bankConfirmedAt: null,
+        mismatchCodes: ['ONCHAIN_READ_ERROR'],
+        ledgerEntryId: null,
+      },
+      {
+        tradeId: '10',
+        txHash: '0xaa',
+        payoutState: 'PAID',
+        rampReference: 'ramp-a',
+        fiatDepositState: 'FUNDED',
+        fiatDepositFailureClass: null,
+        fiatDepositObservedAt: new Date('2026-03-26T00:00:00.000Z'),
+        bankReference: 'bank-a',
+        bankPayoutState: 'PENDING',
+        bankFailureCode: null,
+        bankConfirmedAt: new Date('2026-03-26T04:00:00.000Z'),
+        mismatchCodes: [],
+        ledgerEntryId: 1,
+      },
+    ],
+    { now: new Date('2026-03-26T12:00:00.000Z') },
+  );
 
   assert.deepEqual(rows, [
     {
@@ -98,7 +105,8 @@ test('reconciliation report rows are deterministically ordered and keep stable s
       bankConfirmedAt: '2026-03-25T02:00:00.000Z',
       bankPayoutDivergenceReason: 'TREASURY_BANK_STATE_DIVERGENCE',
       reconciliationVerdict: 'MISMATCH',
-      mismatchReason: 'HASH_MISMATCH,PARTIAL_FUNDING,STATUS_MISMATCH,TREASURY_BANK_STATE_DIVERGENCE',
+      mismatchReason:
+        'HASH_MISMATCH,PARTIAL_FUNDING,STATUS_MISMATCH,TREASURY_BANK_STATE_DIVERGENCE',
     },
   ]);
 });

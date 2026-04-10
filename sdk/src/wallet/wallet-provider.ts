@@ -20,7 +20,9 @@ type WalletProviderConfig = {
 function loadWalletProviderConfig(): WalletProviderConfig {
   const clientId = process.env.CLIENT_ID?.trim();
   if (!clientId) {
-    throw new Error('Missing Web3Auth CLIENT_ID. Set CLIENT_ID in your environment before connect().');
+    throw new Error(
+      'Missing Web3Auth CLIENT_ID. Set CLIENT_ID in your environment before connect().',
+    );
   }
 
   const rawNetwork = (process.env.WEB3AUTH_NETWORK ?? 'SAPPHIRE_DEVNET').trim().toUpperCase();
@@ -28,7 +30,7 @@ function loadWalletProviderConfig(): WalletProviderConfig {
 
   if (!network) {
     throw new Error(
-      `Unsupported WEB3AUTH_NETWORK="${rawNetwork}". Valid options: ${Object.keys(WEB3AUTH_NETWORK).join(', ')}`
+      `Unsupported WEB3AUTH_NETWORK="${rawNetwork}". Valid options: ${Object.keys(WEB3AUTH_NETWORK).join(', ')}`,
     );
   }
 

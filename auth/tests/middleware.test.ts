@@ -33,7 +33,7 @@ function makeSession(overrides: Partial<UserSession> = {}): UserSession {
   };
 }
 
-// createSessionMiddleware 
+// createSessionMiddleware
 
 describe('createSessionMiddleware', () => {
   test('calls next() and attaches session for valid Bearer token', async () => {

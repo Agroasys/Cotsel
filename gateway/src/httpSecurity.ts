@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { Request } from 'express';
-import type { RouteRateLimitPolicy } from '@agroasys/shared-edge';
+import { normalizeRoutePath, type RouteRateLimitPolicy } from '@agroasys/shared-edge';
 
 const SYSTEM_RATE_LIMIT: RouteRateLimitPolicy = {
   name: 'system',
@@ -22,16 +22,9 @@ const WRITE_RATE_LIMIT: RouteRateLimitPolicy = {
   sustained: { limit: 120, windowSeconds: 60 },
 };
 
-function normalizeRoutePath(pathname: string): string {
-  if (pathname.length <= 1) {
-    return pathname;
-  }
-
-  const normalized = pathname.replace(/\/+$/, '');
-  return normalized.length === 0 ? '/' : normalized;
-}
-
-export function gatewayRateLimitPolicy(req: Pick<Request, 'path' | 'method'>): RouteRateLimitPolicy | null {
+export function gatewayRateLimitPolicy(
+  req: Pick<Request, 'path' | 'method'>,
+): RouteRateLimitPolicy | null {
   const path = normalizeRoutePath(req.path);
 
   if (path === '/healthz' || path === '/readyz' || path === '/version') {
@@ -44,4 +37,3 @@ export function gatewayRateLimitPolicy(req: Pick<Request, 'path' | 'method'>): R
 
   return WRITE_RATE_LIMIT;
 }
-

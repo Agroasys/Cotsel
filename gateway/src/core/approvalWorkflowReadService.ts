@@ -22,7 +22,7 @@ export const APPROVAL_WORKFLOW_CATEGORIES = [
   'oracle_update',
 ] as const satisfies readonly GovernanceActionCategory[];
 
-type ApprovalWorkflowCategory = typeof APPROVAL_WORKFLOW_CATEGORIES[number];
+type ApprovalWorkflowCategory = (typeof APPROVAL_WORKFLOW_CATEGORIES)[number];
 
 const APPROVAL_REQUEST_METHODS: Record<ApprovalWorkflowCategory, string> = {
   unpause: 'proposeUnpause',
@@ -52,15 +52,21 @@ const TERMINAL_STATUSES = new Set<GovernanceActionStatus>([
   'failed',
 ]);
 
-function isApprovalWorkflowCategory(category: GovernanceActionCategory): category is ApprovalWorkflowCategory {
+function isApprovalWorkflowCategory(
+  category: GovernanceActionCategory,
+): category is ApprovalWorkflowCategory {
   return (APPROVAL_WORKFLOW_CATEGORIES as readonly string[]).includes(category);
 }
 
-function isApprovalWorkflowRequest(action: GovernanceActionRecord): action is GovernanceActionRecord & {
+function isApprovalWorkflowRequest(
+  action: GovernanceActionRecord,
+): action is GovernanceActionRecord & {
   category: ApprovalWorkflowCategory;
 } {
-  return isApprovalWorkflowCategory(action.category)
-    && action.contractMethod === APPROVAL_REQUEST_METHODS[action.category];
+  return (
+    isApprovalWorkflowCategory(action.category) &&
+    action.contractMethod === APPROVAL_REQUEST_METHODS[action.category]
+  );
 }
 
 function isReviewMethod(category: ApprovalWorkflowCategory, contractMethod: string): boolean {
@@ -146,9 +152,9 @@ function selectExecutionAction(
         return true;
       }
 
-      return requestAction.category === 'unpause'
-        && reviewType === 'approve'
-        && status === 'executed';
+      return (
+        requestAction.category === 'unpause' && reviewType === 'approve' && status === 'executed'
+      );
     }),
   )[0];
 
@@ -333,22 +339,27 @@ export class GovernanceApprovalWorkflowReadService implements ApprovalWorkflowRe
       decodeGovernanceActionCursor(input.cursor);
     }
 
-    const categoryPages = await Promise.all(categories.map((category) => (
-      this.actionStore.list({
-        category,
-        limit: input.limit + 1,
-        cursor: input.cursor,
-      })
-    )));
+    const categoryPages = await Promise.all(
+      categories.map((category) =>
+        this.actionStore.list({
+          category,
+          limit: input.limit + 1,
+          cursor: input.cursor,
+        }),
+      ),
+    );
 
-    const merged = sortActionsDesc(categoryPages.flatMap((page) => page.items))
-      .filter(isApprovalWorkflowRequest);
+    const merged = sortActionsDesc(categoryPages.flatMap((page) => page.items)).filter(
+      isApprovalWorkflowRequest,
+    );
 
     const selected = merged.slice(0, input.limit);
     const live = await this.resolveGovernanceSnapshot(queriedAt);
     const summaries = await Promise.all(selected.map((action) => this.buildSummary(action, live)));
     const degradedReason = live.available
-      ? summaries.map((entry) => entry.degradedReason).find((value): value is string => Boolean(value))
+      ? summaries
+          .map((entry) => entry.degradedReason)
+          .find((value): value is string => Boolean(value))
       : live.degradedReason;
 
     return {
@@ -361,7 +372,9 @@ export class GovernanceApprovalWorkflowReadService implements ApprovalWorkflowRe
     };
   }
 
-  async get(approvalId: string): Promise<(ApprovalWorkflowDetail & ApprovalWorkflowFreshness) | null> {
+  async get(
+    approvalId: string,
+  ): Promise<(ApprovalWorkflowDetail & ApprovalWorkflowFreshness) | null> {
     const queriedAt = isoTimestamp();
     const action = await this.actionStore.get(approvalId);
     if (!action || !isApprovalWorkflowRequest(action)) {
@@ -372,7 +385,8 @@ export class GovernanceApprovalWorkflowReadService implements ApprovalWorkflowRe
     const live = await this.resolveGovernanceSnapshot(queriedAt);
     const detail = await this.buildDetail(action, relatedActions, live);
 
-    const responseDegradedReason = detail.degradedReason ?? (!live.available ? live.degradedReason : undefined);
+    const responseDegradedReason =
+      detail.degradedReason ?? (!live.available ? live.degradedReason : undefined);
 
     return {
       ...detail.detail,
@@ -410,9 +424,13 @@ export class GovernanceApprovalWorkflowReadService implements ApprovalWorkflowRe
     live: LiveResolution,
     relatedActionsInput?: GovernanceActionRecord[],
   ): Promise<{ summary: ApprovalWorkflowSummary; degradedReason?: string }> {
-    const relatedActions = relatedActionsInput ?? await this.listRelatedActions(action);
+    const relatedActions = relatedActionsInput ?? (await this.listRelatedActions(action));
     const workflowState = await this.resolveWorkflowState(action, live, relatedActions);
-    const executionAction = selectExecutionAction(action, relatedActions, workflowState.currentStatus);
+    const executionAction = selectExecutionAction(
+      action,
+      relatedActions,
+      workflowState.currentStatus,
+    );
 
     return {
       summary: {
@@ -511,7 +529,10 @@ export class GovernanceApprovalWorkflowReadService implements ApprovalWorkflowRe
     if (!live.available) {
       return {
         approvalsRequired: null,
-        approvalCount: approvedBy.length > 0 ? approvedBy.length : requestAction.audit.approvedBy?.length ?? null,
+        approvalCount:
+          approvedBy.length > 0
+            ? approvedBy.length
+            : (requestAction.audit.approvedBy?.length ?? null),
         approvedBy,
         currentStatus: fallbackStatus,
         pendingExecution: fallbackStatus === 'approved',
@@ -541,9 +562,10 @@ export class GovernanceApprovalWorkflowReadService implements ApprovalWorkflowRe
           };
         }
 
-        const currentStatus = proposal.approvalCount >= live.governanceStatus.governanceApprovalsRequired
-          ? 'approved'
-          : 'pending_approvals';
+        const currentStatus =
+          proposal.approvalCount >= live.governanceStatus.governanceApprovalsRequired
+            ? 'approved'
+            : 'pending_approvals';
 
         return {
           approvalsRequired: live.governanceStatus.governanceApprovalsRequired,
@@ -554,9 +576,12 @@ export class GovernanceApprovalWorkflowReadService implements ApprovalWorkflowRe
         };
       }
 
-      const proposal = requestAction.category === 'oracle_update'
-        ? await this.governanceReader.getOracleProposalState(requestAction.proposalId ?? -1)
-        : await this.governanceReader.getTreasuryPayoutReceiverProposalState(requestAction.proposalId ?? -1);
+      const proposal =
+        requestAction.category === 'oracle_update'
+          ? await this.governanceReader.getOracleProposalState(requestAction.proposalId ?? -1)
+          : await this.governanceReader.getTreasuryPayoutReceiverProposalState(
+              requestAction.proposalId ?? -1,
+            );
 
       const proposalResolution = proposalStateToStatus(
         proposal,
@@ -593,15 +618,19 @@ export class GovernanceApprovalWorkflowReadService implements ApprovalWorkflowRe
 
     const requestMethod = APPROVAL_REQUEST_METHODS[requestAction.category];
     const newerRequestBoundary = categoryActions.items
-      .filter((candidate) => (
-        candidate.actionId !== requestAction.actionId
-        && candidate.contractMethod === requestMethod
-        && (
-          candidate.createdAt > requestAction.createdAt
-          || (candidate.createdAt === requestAction.createdAt && candidate.actionId > requestAction.actionId)
-        )
-      ))
-      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.actionId.localeCompare(right.actionId))[0];
+      .filter(
+        (candidate) =>
+          candidate.actionId !== requestAction.actionId &&
+          candidate.contractMethod === requestMethod &&
+          (candidate.createdAt > requestAction.createdAt ||
+            (candidate.createdAt === requestAction.createdAt &&
+              candidate.actionId > requestAction.actionId)),
+      )
+      .sort(
+        (left, right) =>
+          left.createdAt.localeCompare(right.createdAt) ||
+          left.actionId.localeCompare(right.actionId),
+      )[0];
 
     return categoryActions.items.filter((candidate) => {
       if (candidate.actionId === requestAction.actionId) {
@@ -618,10 +647,9 @@ export class GovernanceApprovalWorkflowReadService implements ApprovalWorkflowRe
 
       const lowerBound = candidate.createdAt >= requestAction.createdAt;
       const upperBound = newerRequestBoundary
-        ? (
-          candidate.createdAt < newerRequestBoundary.createdAt
-          || (candidate.createdAt === newerRequestBoundary.createdAt && candidate.actionId < newerRequestBoundary.actionId)
-        )
+        ? candidate.createdAt < newerRequestBoundary.createdAt ||
+          (candidate.createdAt === newerRequestBoundary.createdAt &&
+            candidate.actionId < newerRequestBoundary.actionId)
         : true;
 
       return lowerBound && upperBound;

@@ -36,6 +36,7 @@ This runbook describes the escrow payout model after issue `#142` migration from
   - emits `TreasuryClaimed(treasuryIdentity, payoutReceiver, amount, triggeredBy)`
 
 Operational consequence:
+
 - treasury signing key usage is no longer required for routine sweeps.
 - rotating payout destination does not change treasury identity and does not require signature-preimage changes.
 
@@ -120,6 +121,7 @@ cast call <ESCROW_ADDRESS> "treasuryPayoutAddress()(address)"
 ```
 
 Expected:
+
 - Non-zero value after accrual events.
 - Zero after successful `claim()`.
 - Treasury sweep always pays the configured `treasuryPayoutAddress`.

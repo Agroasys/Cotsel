@@ -45,7 +45,10 @@ function createRequest(overrides = {}) {
 test('parseServiceApiKeys validates active and trims values', () => {
   const keys = parseServiceApiKeys('[{"id":" gateway ","secret":" top-secret ","active":true}]');
   assert.deepEqual(keys, [{ id: 'gateway', secret: 'top-secret', active: true }]);
-  assert.throws(() => parseServiceApiKeys('[{"id":"a","secret":"b","active":"yes"}]'), /active must be a boolean/);
+  assert.throws(
+    () => parseServiceApiKeys('[{"id":"a","secret":"b","active":"yes"}]'),
+    /active must be a boolean/,
+  );
 });
 
 test('service auth middleware accepts a valid signed request', async () => {
@@ -69,7 +72,8 @@ test('service auth middleware accepts a valid signed request', async () => {
     maxSkewSeconds: 30,
     nonceTtlSeconds: 60,
     nowSeconds: () => Number(timestamp),
-    lookupApiKey: (candidate) => (candidate === apiKey ? { id: apiKey, secret, active: true } : undefined),
+    lookupApiKey: (candidate) =>
+      candidate === apiKey ? { id: apiKey, secret, active: true } : undefined,
     consumeNonce: async (...args) => {
       consumeCalls.push(args);
       return true;

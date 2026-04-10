@@ -29,7 +29,10 @@ export function createEmptyOverviewCounters(): OverviewCounters {
   };
 }
 
-export function applyTradeCreated(initialStatus: TradeStatus, counters: OverviewCounters): OverviewCounters {
+export function applyTradeCreated(
+  initialStatus: TradeStatus,
+  counters: OverviewCounters,
+): OverviewCounters {
   const next = { ...counters, totalTrades: counters.totalTrades + 1 };
   incrementStatusBucket(initialStatus, next);
   return next;
@@ -86,9 +89,11 @@ export function buildCountersFromExistingState(
 }
 
 function isCancellationEvent(eventName: string | undefined): boolean {
-  return eventName === 'TradeCancelledAfterLockTimeout'
-    || eventName === 'InTransitTimeoutRefunded'
-    || eventName === 'DisputePayout:REFUND';
+  return (
+    eventName === 'TradeCancelledAfterLockTimeout' ||
+    eventName === 'InTransitTimeoutRefunded' ||
+    eventName === 'DisputePayout:REFUND'
+  );
 }
 
 function incrementStatusBucket(status: TradeStatus, counters: OverviewCounters): void {

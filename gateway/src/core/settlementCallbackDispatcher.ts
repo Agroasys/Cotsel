@@ -13,8 +13,12 @@ interface CallbackDispatcherOptions {
   failedOperationWorkflow?: GatewayErrorHandlerWorkflow;
 }
 
-function computeBackoffMs(attemptCount: number, initialBackoffMs: number, maxBackoffMs: number): number {
-  const backoff = initialBackoffMs * (2 ** Math.max(0, attemptCount - 1));
+function computeBackoffMs(
+  attemptCount: number,
+  initialBackoffMs: number,
+  maxBackoffMs: number,
+): number {
+  const backoff = initialBackoffMs * 2 ** Math.max(0, attemptCount - 1);
   return Math.min(maxBackoffMs, backoff);
 }
 
@@ -113,7 +117,11 @@ export class SettlementCallbackDispatcher {
       });
 
       if (response.ok) {
-        await this.store.markCallbackDelivered(deliveryId, this.now().toISOString(), response.status);
+        await this.store.markCallbackDelivered(
+          deliveryId,
+          this.now().toISOString(),
+          response.status,
+        );
         Logger.info('Settlement callback delivered', {
           deliveryId,
           handoffId: delivery.handoffId,
@@ -140,8 +148,12 @@ export class SettlementCallbackDispatcher {
   ): Promise<void> {
     const deadLetter = delivery.attemptCount >= this.config.settlementCallbackMaxAttempts;
     const nextAttemptAt = new Date(
-      this.now().getTime()
-      + computeBackoffMs(delivery.attemptCount, this.config.settlementCallbackInitialBackoffMs, this.config.settlementCallbackMaxBackoffMs),
+      this.now().getTime() +
+        computeBackoffMs(
+          delivery.attemptCount,
+          this.config.settlementCallbackInitialBackoffMs,
+          this.config.settlementCallbackMaxBackoffMs,
+        ),
     ).toISOString();
 
     await this.store.markCallbackFailed(delivery.deliveryId, {

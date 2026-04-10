@@ -30,7 +30,10 @@ interface IndexerHealthData {
   overviewSnapshotById?: IndexerHealthSnapshot | null;
 }
 
-function createIndexerContract(graphqlUrl: string, requestTimeoutMs: number): DownstreamServiceContract {
+function createIndexerContract(
+  graphqlUrl: string,
+  requestTimeoutMs: number,
+): DownstreamServiceContract {
   return {
     key: 'indexer',
     name: 'Indexer GraphQL',
@@ -47,14 +50,15 @@ function createIndexerContract(graphqlUrl: string, requestTimeoutMs: number): Do
 export class IndexerGraphqlClient {
   private readonly contract: DownstreamServiceContract;
 
-  constructor(
-    graphqlUrl: string,
-    requestTimeoutMs: number,
-  ) {
+  constructor(graphqlUrl: string, requestTimeoutMs: number) {
     this.contract = createIndexerContract(graphqlUrl, requestTimeoutMs);
   }
 
-  async query<T>(operationName: string, query: string, variables?: Record<string, unknown>): Promise<GraphQlResponse<T>> {
+  async query<T>(
+    operationName: string,
+    query: string,
+    variables?: Record<string, unknown>,
+  ): Promise<GraphQlResponse<T>> {
     const response = await executeHttpRequestWithPolicy({
       service: this.contract,
       method: 'POST',
@@ -70,13 +74,18 @@ export class IndexerGraphqlClient {
     });
 
     if (!response.ok) {
-      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer request failed with HTTP ${response.status}`, {
-        operationName,
-        status: response.status,
-      });
+      throw new GatewayError(
+        502,
+        'UPSTREAM_UNAVAILABLE',
+        `Indexer request failed with HTTP ${response.status}`,
+        {
+          operationName,
+          status: response.status,
+        },
+      );
     }
 
-    const payload = await response.json() as GraphQlResponse<T>;
+    const payload = (await response.json()) as GraphQlResponse<T>;
     if (payload.errors?.length) {
       throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned GraphQL errors', {
         operationName,

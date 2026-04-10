@@ -5,6 +5,7 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
+    "lint": "eslint --max-warnings=0 .",
     "test": "node --test index.test.js rls-schema.test.js postgres-rls.integration.test.js"
   },
   "dependencies": {

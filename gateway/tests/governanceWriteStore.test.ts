@@ -3,7 +3,11 @@
  */
 import { Pool, PoolClient } from 'pg';
 import { AuditLogEntry } from '../src/core/auditLogStore';
-import { buildGovernanceIntentKey, GovernanceActionRecord, GovernanceActionStore } from '../src/core/governanceStore';
+import {
+  buildGovernanceIntentKey,
+  GovernanceActionRecord,
+  GovernanceActionStore,
+} from '../src/core/governanceStore';
 import { createPostgresGovernanceWriteStore } from '../src/core/governanceWriteStore';
 
 function buildAction(overrides: Partial<GovernanceActionRecord> = {}): GovernanceActionRecord {
@@ -19,7 +23,6 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
     status: 'requested',
     contractMethod: 'pause',
     txHash: null,
-    extrinsicHash: null,
     blockNumber: null,
     tradeId: null,
     chainId: '31337',
@@ -101,14 +104,16 @@ describe('createPostgresGovernanceWriteStore', () => {
 
     const writeStore = createPostgresGovernanceWriteStore(pool, readStore);
 
-    await expect(
-      writeStore.saveActionWithAudit(buildAction(), buildAuditEntry()),
-    ).rejects.toThrow('audit insert failed');
+    await expect(writeStore.saveActionWithAudit(buildAction(), buildAuditEntry())).rejects.toThrow(
+      'audit insert failed',
+    );
 
     expect(query).toHaveBeenNthCalledWith(1, 'BEGIN');
     expect(query).toHaveBeenNthCalledWith(4, 'ROLLBACK');
-    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('COMMIT'))).toBe(false);
-    expect((readStore.get as jest.Mock)).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('COMMIT')),
+    ).toBe(false);
+    expect(readStore.get as jest.Mock).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledTimes(1);
   });
 
@@ -146,8 +151,10 @@ describe('createPostgresGovernanceWriteStore', () => {
 
     expect(query).toHaveBeenNthCalledWith(1, 'BEGIN');
     expect(query).toHaveBeenNthCalledWith(4, 'ROLLBACK');
-    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('COMMIT'))).toBe(false);
-    expect((readStore.get as jest.Mock)).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('COMMIT')),
+    ).toBe(false);
+    expect(readStore.get as jest.Mock).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledTimes(1);
   });
 
@@ -157,9 +164,7 @@ describe('createPostgresGovernanceWriteStore', () => {
       status: 'requested',
     });
     const readStore = createReadStore();
-    (readStore.get as jest.Mock)
-      .mockResolvedValueOnce(existing)
-      .mockResolvedValueOnce(existing);
+    (readStore.get as jest.Mock).mockResolvedValueOnce(existing).mockResolvedValueOnce(existing);
 
     const { pool, query, release } = createPoolMocks();
     query
@@ -180,20 +185,25 @@ describe('createPostgresGovernanceWriteStore', () => {
           actionId: 'action-duplicate',
         },
       }),
-      () => buildAuditEntry({
-        eventType: 'governance.action.duplicate_reused',
-        status: existing.status,
-        metadata: {
-          actionId: existing.actionId,
-        },
-      }),
+      () =>
+        buildAuditEntry({
+          eventType: 'governance.action.duplicate_reused',
+          status: existing.status,
+          metadata: {
+            actionId: existing.actionId,
+          },
+        }),
       '2026-03-07T10:00:00.000Z',
     );
 
     expect(result.created).toBe(false);
     expect(result.action.actionId).toBe('action-existing');
     expect(query).toHaveBeenNthCalledWith(1, 'BEGIN');
-    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO governance_actions'))).toBe(false);
+    expect(
+      query.mock.calls.some(
+        ([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO governance_actions'),
+      ),
+    ).toBe(false);
     expect(release).toHaveBeenCalledTimes(1);
   });
 });

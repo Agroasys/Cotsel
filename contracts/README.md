@@ -4,7 +4,6 @@
 
 A Solidity-based state machine prepared for Base EVM deployment. It handles the locking, dispute resolution, and atomic splitting of funds.
 
-
 ## Architecture
 
 ```bash
@@ -20,13 +19,13 @@ A Solidity-based state machine prepared for Base EVM deployment. It handles the 
 ├── tsconfig.json
 ├── ignition
 │   └── modules // deployment scripts
-│      ├── AgroasysEscrow.ts 
+│      ├── AgroasysEscrow.ts
 │      └── MockUSDC.ts
 ├── foundry
 │   ├── foundry.toml // foundry config file
 │   ├── src
 │   │   ├── AgroasysEscrow.sol
-│   │   └── MockUSDC.sol // tmp contract just for testing 
+│   │   └── MockUSDC.sol // tmp contract just for testing
 │   └── test
 │       ├── AgroasysEscrowFuzz.t.sol // Stateless fuzzing tests
 │       └── AgroasysEscrowInvariant.t.sol // Stateful invariant tests
@@ -39,9 +38,10 @@ A Solidity-based state machine prepared for Base EVM deployment. It handles the 
 
 Escrow contract implementing secure trade execution with multi-stage fund releases and dispute resolution.
 
-
 #### **Enums**
+
 **`TradeStatus`**
+
 - `LOCKED`: Initial deposit, funds locked in escrow
 - `IN_TRANSIT`: BOL verified, stage 1 funds released (logistics + first tranche)
 - `ARRIVAL_CONFIRMED`: Oracle confirms arrival, 24-hour dispute window starts
@@ -49,13 +49,15 @@ Escrow contract implementing secure trade execution with multi-stage fund releas
 - `CLOSED`: Trade completed or dispute resolved
 
 **`DisputeStatus`**
+
 - `REFUND`: Refund buyer remaining escrowed principal (`supplierSecondTranche` only)
 - `RESOLVE`: Pay supplier remaining escrowed principal (`supplierSecondTranche` only)
 
-
 #### **Structs**
+
 **`Trade`**
 Complete trade data structure stored on-chain:
+
 - `tradeId` (uint256): Unique identifier, auto-incremented
 - `ricardianHash` (bytes32): Immutable proof of agreement (SHA-256 of legal contract)
 - `status` (TradeStatus): Current trade state
@@ -71,6 +73,7 @@ Complete trade data structure stored on-chain:
 
 **`DisputeProposal`**
 Multi-signature dispute proposal structure:
+
 - `tradeId` (uint256): Trade being disputed
 - `disputeStatus` (DisputeStatus): Proposed resolution method
 - `approvalCount` (uint256): Number of admin approvals received
@@ -80,6 +83,7 @@ Multi-signature dispute proposal structure:
 
 **`OracleUpdateProposal`**
 Timelock-based oracle rotation proposal:
+
 - `newOracle` (address): Proposed new oracle address
 - `approvalCount` (uint256): Number of admin approvals received
 - `executed` (bool): Prevents double execution
@@ -90,6 +94,7 @@ Timelock-based oracle rotation proposal:
 
 **`AdminAddProposal`**
 Timelock-based admin addition proposal:
+
 - `newAdmin` (address): Proposed new admin address
 - `approvalCount` (uint256): Number of admin approvals received
 - `executed` (bool): Prevents double execution
@@ -97,9 +102,10 @@ Timelock-based admin addition proposal:
 - `eta` (uint256): Earliest execution timestamp (timelock)
 - `proposer` (address): Admin who proposed the addition
 
-
 #### **State Variables**
+
 **Storage Mappings:**
+
 - `trades` (mapping(uint256 => Trade)): All trades indexed by ID
 - `nonces` (mapping(address => uint256)): Buyer-scoped nonces for signature replay protection
 - `disputeProposals` (mapping(uint256 => DisputeProposal)): All dispute proposals
@@ -112,12 +118,14 @@ Timelock-based admin addition proposal:
 - `adminAddHasApproved` (mapping(uint256 => mapping(address => bool))): Tracks approvals per admin addition
 
 **Counters:**
+
 - `tradeCounter` (uint256): Auto-incrementing trade ID
 - `disputeCounter` (uint256): Auto-incrementing dispute proposal ID
 - `oracleUpdateCounter` (uint256): Auto-incrementing oracle update proposal ID
 - `adminAddCounter` (uint256): Auto-incrementing admin addition proposal ID
 
 **Configuration:**
+
 - `usdcToken` (IERC20): USDC token contract interface
 - `oracleAddress` (address): Authorized oracle for fund releases and arrival confirmation
 - `treasuryAddress` (address): Receives logistics and platform fees
@@ -131,7 +139,6 @@ Timelock-based admin addition proposal:
 - `IN_TRANSIT_TIMEOUT` (constant uint256): Buyer timeout to refund principal while IN_TRANSIT
 - `DISPUTE_PROPOSAL_TTL` (constant uint256): Dispute proposal expiry
 - `GOVERNANCE_PROPOSAL_TTL` (constant uint256): Governance proposal expiry
-
 
 #### **Functions**
 
@@ -205,45 +212,53 @@ Timelock-based admin addition proposal:
    - Requires: Not already approved by this admin, proposal not executed
 
 10. **`cancelExpiredDisputeProposal(proposalId)`**
-   - Cancels expired dispute proposal
-   - Emits: `DisputeProposalExpiredCancelled`
-   - Access: `onlyAdmin`, `whenNotPaused`
+
+- Cancels expired dispute proposal
+- Emits: `DisputeProposalExpiredCancelled`
+- Access: `onlyAdmin`, `whenNotPaused`
 
 11. **`pause()`**
-   - Emergency pause for protocol operations
-   - Emits: `Paused`
-   - Access: `onlyAdmin`
+
+- Emergency pause for protocol operations
+- Emits: `Paused`
+- Access: `onlyAdmin`
 
 12. **`proposeUnpause()`**
-   - Starts unpause recovery proposal
-   - Emits: `UnpauseProposed`, `UnpauseApproved`
-   - Access: `onlyAdmin`
-   - Requires: `paused == true` and `oracleActive == true`
+
+- Starts unpause recovery proposal
+- Emits: `UnpauseProposed`, `UnpauseApproved`
+- Access: `onlyAdmin`
+- Requires: `paused == true` and `oracleActive == true`
 
 13. **`approveUnpause()`**
-   - Adds approval to active unpause proposal
-   - Emits: `UnpauseApproved`, and `Unpaused` once quorum is reached
-   - Access: `onlyAdmin`
+
+- Adds approval to active unpause proposal
+- Emits: `UnpauseApproved`, and `Unpaused` once quorum is reached
+- Access: `onlyAdmin`
 
 14. **`cancelUnpauseProposal()`**
-   - Cancels active unpause proposal
-   - Emits: `UnpauseProposalCancelled`
-   - Access: `onlyAdmin`
+
+- Cancels active unpause proposal
+- Emits: `UnpauseProposalCancelled`
+- Access: `onlyAdmin`
 
 15. **`disableOracleEmergency()`**
-   - Emergency containment: disables oracle-triggered transitions and pauses protocol
-   - Emits: `OracleDisabledEmergency` (and `Paused` if not already paused)
-   - Access: `onlyAdmin`
+
+- Emergency containment: disables oracle-triggered transitions and pauses protocol
+- Emits: `OracleDisabledEmergency` (and `Paused` if not already paused)
+- Access: `onlyAdmin`
 
 16. **`getNextTradeId()`**
-   - Returns the next available trade ID
-   - Returns: `tradeCounter`
-   - Access: View function (anyone)
+
+- Returns the next available trade ID
+- Returns: `tradeCounter`
+- Access: View function (anyone)
 
 17. **`getBuyerNonce(buyer)`**
-   - Returns the current nonce for a buyer address
-   - Returns: `nonces[buyer]`
-   - Access: View function (anyone)
+
+- Returns the current nonce for a buyer address
+- Returns: `nonces[buyer]`
+- Access: View function (anyone)
 
 **Governance Functions:**
 
@@ -320,18 +335,18 @@ Timelock-based admin addition proposal:
     - Emits: `DisputeFinalized`
     - Access: Internal (called by `approveDisputeSolution`)
 
-
 #### **Modifiers**
+
 - `onlyOracle`: Restricts function to authorized oracle address
 - `onlyAdmin`: Restricts function to approved admin addresses
 - `whenNotPaused`: Blocks normal state transitions while paused
 - `onlyOracleActive`: Blocks oracle-triggered functions when oracle is disabled
 - `nonReentrant`: OpenZeppelin protection against reentrancy attacks
 
-
 #### **Events**
 
 **Trade Events:**
+
 - `TradeLocked(tradeId, buyer, supplier, totalAmount, logisticsAmount, platformFeesAmount, supplierFirstTranche, supplierSecondTranche, ricardianHash)`: New trade created and funds locked
 - `FundsReleasedStage1(tradeId, supplier, supplierFirstTranche, treasury, logisticsAmount)`: Stage 1 funds released (first tranche + logistics)
 - `PlatformFeesPaidStage1(tradeId, treasury, platformFeesAmount)`: Platform fees paid at Stage 1
@@ -340,12 +355,14 @@ Timelock-based admin addition proposal:
 - `DisputeOpenedByBuyer(tradeId)`: Buyer opened dispute, trade frozen
 
 **Dispute Events:**
+
 - `DisputeSolutionProposed(proposalId, tradeId, disputeStatus, proposer)`: Admin proposed dispute solution
 - `DisputeApproved(proposalId, approver, approvalCount, requiredApprovals)`: Admin approved dispute proposal
 - `DisputeFinalized(proposalId, tradeId, disputeStatus)`: Dispute executed, funds distributed
 - `DisputePayout(tradeId, proposalId, recipient, amount, payoutType)`: Explicit dispute payout recipient/amount by resolution type
 
 **Governance Events:**
+
 - `OracleUpdateProposed(proposalId, proposer, newOracle, eta, emergencyFastTrack)`: Oracle update proposed with timelock or emergency fast-track
 - `OracleUpdateApproved(proposalId, approver, approvalCount, requiredApprovals)`: Admin approved oracle update
 - `OracleUpdated(oldOracle, newOracle)`: Oracle address updated
@@ -354,6 +371,7 @@ Timelock-based admin addition proposal:
 - `AdminAdded(newAdmin)`: New admin added to contract
 
 **Emergency/Timeout/Recovery Events:**
+
 - `Paused(by)`, `Unpaused(by)`, `OracleDisabledEmergency(by, previousOracle)`
 - `UnpauseProposed(proposer)`, `UnpauseApproved(approver, approvalCount, requiredApprovals)`, `UnpauseProposalCancelled(cancelledBy)`
 - `TradeCancelledAfterLockTimeout(tradeId, buyer, refundedAmount)`
@@ -362,15 +380,14 @@ Timelock-based admin addition proposal:
 - `OracleUpdateProposalExpiredCancelled(proposalId, cancelledBy)`
 - `AdminAddProposalExpiredCancelled(proposalId, cancelledBy)`
 
-
 ### Contract: `MockUSDC.sol`
 
 ERC20 test token for local development and testing.
 
-
 ## Tests:
 
 ### Test Coverage Summary
+
 Use commands below to get the current test counts and pass/fail status (counts evolve as tests are added):
 
 ```bash
@@ -383,7 +400,9 @@ npm run test:foundry
 ---
 
 ### Hardhat Tests `AgroasysEscrow.ts`
+
 Current suites include:
+
 - `Deployment`
 - `Emergency Controls`
 - `Paused Matrix Hardening`
@@ -399,11 +418,14 @@ Current suites include:
 - `Expiry Edge Boundaries`
 
 ### Foundry Suites
+
 - `foundry/test/AgroasysEscrowFuzz.t.sol`
 - `foundry/test/AgroasysEscrowInvariant.t.sol`
 
-## Scripts: 
+## Scripts:
+
 Deployment scripts for the 2 contracts in:
+
 ```
 ignition
 └── modules
@@ -414,12 +436,14 @@ ignition
 ## Set Up project
 
 ### Hardhat Config
+
 ```bash
 cd contracts
 npm install
 ```
 
 ### Foundry Config
+
 ```bash
 cd foundry
 forge install --no-git foundry-rs/forge-std
@@ -427,10 +451,10 @@ forge install --no-git OpenZeppelin/openzeppelin-contracts
 forge build
 ```
 
-
 ## Running Tests
 
 ### Hardhat Unit Tests
+
 ```bash
 npm run compile
 npm run test
@@ -438,6 +462,7 @@ npm run coverage
 ```
 
 ### Foundry Fuzzing Tests
+
 Requires `forge` in PATH.
 
 ```bash
@@ -451,18 +476,21 @@ forge test --match-contract InvariantTest -vvv
 ```
 
 ## Deploy Contracts
+
 ```bash
 npm run deploy:base-sepolia
 npm run deploy:base-mainnet
 ```
 
 Required deploy-time inputs:
+
 - `DEPLOY_ORACLE_ADDRESS`
 - `DEPLOY_TREASURY_ADDRESS`
 - `DEPLOY_ADMINS` (comma-separated)
 - `DEPLOY_REQUIRED_APPROVALS`
 
 Optional deploy-time inputs:
+
 - `DEPLOY_VERIFY=true|false`
 - `DEPLOY_CONFIRMATIONS`
 - `DEPLOY_EVIDENCE_OUT_DIR`
@@ -479,11 +507,13 @@ Use Hardhat Ignition deployment output as the source of truth for the current en
 
 Legacy runtime scripts under `contracts/scripts/` have been removed.
 Use the SDK modules for operational execution paths instead:
+
 - `sdk/src/modules/buyerSDK.ts`
 - `sdk/src/modules/adminSDK.ts`
 - `sdk/src/modules/oracleSDK.ts`
 
 Run SDK smoke tests from repository root (workspace `sdk`):
+
 ```bash
 npm -w sdk run test:buyer
 npm -w sdk run test:admin
@@ -491,5 +521,6 @@ npm -w sdk run test:oracle
 ```
 
 ## License
+
 Licensed under Apache-2.0.
 See the repository root `LICENSE` file.

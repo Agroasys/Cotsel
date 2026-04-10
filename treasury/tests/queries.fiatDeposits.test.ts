@@ -9,7 +9,11 @@ jest.mock('../src/database/connection', () => ({
   },
 }));
 
-import { createFiatDepositPayloadHash, FiatDepositConflictError, normalizeFiatDepositInput } from '../src/core/fiatDeposit';
+import {
+  createFiatDepositPayloadHash,
+  FiatDepositConflictError,
+  normalizeFiatDepositInput,
+} from '../src/core/fiatDeposit';
 import { upsertFiatDepositReference } from '../src/database/queries';
 
 describe('upsertFiatDepositReference', () => {

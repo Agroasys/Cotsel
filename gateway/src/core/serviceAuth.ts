@@ -38,13 +38,14 @@ export function createServiceAuthHeaders(input: {
   const timestamp = String(input.timestamp ?? Math.floor(Date.now() / 1000));
   const nonce = input.nonce || crypto.randomBytes(16).toString('hex');
   const query = input.query ? input.query.replace(/^\?/, '') : '';
-  const bodyBuffer = input.body === undefined || input.body === null
-    ? Buffer.alloc(0)
-    : Buffer.isBuffer(input.body)
-      ? input.body
-      : typeof input.body === 'string'
-        ? Buffer.from(input.body)
-        : Buffer.from(JSON.stringify(input.body));
+  const bodyBuffer =
+    input.body === undefined || input.body === null
+      ? Buffer.alloc(0)
+      : Buffer.isBuffer(input.body)
+        ? input.body
+        : typeof input.body === 'string'
+          ? Buffer.from(input.body)
+          : Buffer.from(JSON.stringify(input.body));
 
   const canonical = buildServiceAuthCanonicalString({
     method: input.method.toUpperCase(),
@@ -67,7 +68,9 @@ export function createServiceAuthMiddleware(options: ServiceAuthMiddlewareOption
   return createSharedServiceAuthMiddleware(options);
 }
 
-export function createServiceApiKeyLookup(rawKeys: string): (apiKey: string) => ServiceApiKey | undefined {
+export function createServiceApiKeyLookup(
+  rawKeys: string,
+): (apiKey: string) => ServiceApiKey | undefined {
   const keys = parseServiceApiKeys(rawKeys);
   const lookup = new Map<string, ServiceApiKey>(keys.map((key) => [key.id, key]));
   return (apiKey: string) => lookup.get(apiKey);

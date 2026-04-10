@@ -8,7 +8,8 @@ process.env.DB_PORT = process.env.DB_PORT || '5432';
 process.env.DB_NAME = process.env.DB_NAME || 'treasury_test';
 process.env.DB_USER = process.env.DB_USER || 'postgres';
 process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'postgres';
-process.env.INDEXER_GRAPHQL_URL = process.env.INDEXER_GRAPHQL_URL || 'http://127.0.0.1:3100/graphql';
+process.env.INDEXER_GRAPHQL_URL =
+  process.env.INDEXER_GRAPHQL_URL || 'http://127.0.0.1:3100/graphql';
 
 jest.mock('../src/database/queries', () => ({
   ...jest.requireActual('../src/database/queries'),
@@ -16,18 +17,30 @@ jest.mock('../src/database/queries', () => ({
   upsertFiatDepositReference: jest.fn(),
 }));
 
-const { createRouter } = require('../src/api/routes') as typeof import('../src/api/routes');
-const { TreasuryController } = require('../src/api/controller') as typeof import('../src/api/controller');
-const { upsertBankPayoutConfirmation, upsertFiatDepositReference } = require('../src/database/queries') as typeof import('../src/database/queries');
-
-const mockedUpsertBankPayoutConfirmation = upsertBankPayoutConfirmation as jest.MockedFunction<typeof upsertBankPayoutConfirmation>;
-const mockedUpsertFiatDepositReference = upsertFiatDepositReference as jest.MockedFunction<typeof upsertFiatDepositReference>;
+let createRouter: typeof import('../src/api/routes').createRouter;
+let TreasuryController: typeof import('../src/api/controller').TreasuryController;
+let upsertBankPayoutConfirmation: typeof import('../src/database/queries').upsertBankPayoutConfirmation;
+let upsertFiatDepositReference: typeof import('../src/database/queries').upsertFiatDepositReference;
+let mockedUpsertBankPayoutConfirmation: jest.MockedFunction<typeof upsertBankPayoutConfirmation>;
+let mockedUpsertFiatDepositReference: jest.MockedFunction<typeof upsertFiatDepositReference>;
 
 describe('treasury fiat deposit routes', () => {
   let server: Server;
   let baseUrl: string;
 
   beforeEach(async () => {
+    jest.resetModules();
+    ({ createRouter } = await import('../src/api/routes'));
+    ({ TreasuryController } = await import('../src/api/controller'));
+    ({ upsertBankPayoutConfirmation, upsertFiatDepositReference } =
+      await import('../src/database/queries'));
+    mockedUpsertBankPayoutConfirmation = upsertBankPayoutConfirmation as jest.MockedFunction<
+      typeof upsertBankPayoutConfirmation
+    >;
+    mockedUpsertFiatDepositReference = upsertFiatDepositReference as jest.MockedFunction<
+      typeof upsertFiatDepositReference
+    >;
+
     mockedUpsertFiatDepositReference.mockReset();
     mockedUpsertBankPayoutConfirmation.mockReset();
 

@@ -13,14 +13,14 @@ export const ATTESTATION_REFERENCE_STATUSES = ['active', 'revoked', 'expired', '
 export const ATTESTATION_AVAILABILITIES = ['available', 'degraded', 'unavailable'] as const;
 export const ATTESTATION_FRESHNESS_STATES = ['current', 'stale', 'expired', 'unknown'] as const;
 
-export type ComplianceDecisionType = typeof COMPLIANCE_DECISION_TYPES[number];
-export type ComplianceDecisionResult = typeof COMPLIANCE_DECISION_RESULTS[number];
-export type ComplianceBlockState = typeof COMPLIANCE_BLOCK_STATES[number];
-export type ComplianceRiskLevel = typeof COMPLIANCE_RISK_LEVELS[number];
-export type AttestationIssuerKind = typeof ATTESTATION_ISSUER_KINDS[number];
-export type AttestationReferenceStatus = typeof ATTESTATION_REFERENCE_STATUSES[number];
-export type AttestationAvailability = typeof ATTESTATION_AVAILABILITIES[number];
-export type AttestationFreshnessState = typeof ATTESTATION_FRESHNESS_STATES[number];
+export type ComplianceDecisionType = (typeof COMPLIANCE_DECISION_TYPES)[number];
+export type ComplianceDecisionResult = (typeof COMPLIANCE_DECISION_RESULTS)[number];
+export type ComplianceBlockState = (typeof COMPLIANCE_BLOCK_STATES)[number];
+export type ComplianceRiskLevel = (typeof COMPLIANCE_RISK_LEVELS)[number];
+export type AttestationIssuerKind = (typeof ATTESTATION_ISSUER_KINDS)[number];
+export type AttestationReferenceStatus = (typeof ATTESTATION_REFERENCE_STATUSES)[number];
+export type AttestationAvailability = (typeof ATTESTATION_AVAILABILITIES)[number];
+export type AttestationFreshnessState = (typeof ATTESTATION_FRESHNESS_STATES)[number];
 
 export interface AttestationIssuerRef {
   id: string;
@@ -142,7 +142,9 @@ export interface ComplianceStore {
   getLatestDecision(tradeId: string): Promise<ComplianceDecisionRecord | null>;
   getLatestDecisionWithAttestation(tradeId: string): Promise<ComplianceDecisionRecord | null>;
   listTradeDecisions(input: ListComplianceDecisionsInput): Promise<ListComplianceDecisionsResult>;
-  saveOracleProgressionBlock(block: OracleProgressionBlockRecord): Promise<OracleProgressionBlockRecord>;
+  saveOracleProgressionBlock(
+    block: OracleProgressionBlockRecord,
+  ): Promise<OracleProgressionBlockRecord>;
   getOracleProgressionBlock(tradeId: string): Promise<OracleProgressionBlockRecord | null>;
   getTradeStatus(tradeId: string): Promise<ComplianceTradeStatusRecord | null>;
   countBlockedTrades(): Promise<number>;
@@ -177,7 +179,9 @@ interface ComplianceDecisionRow {
   approvedBy: string[] | null;
 }
 
-function cloneAttestationRecord(attestation: AttestationReferenceRecord): AttestationReferenceRecord {
+function cloneAttestationRecord(
+  attestation: AttestationReferenceRecord,
+): AttestationReferenceRecord {
   return {
     ...attestation,
     issuer: {
@@ -244,7 +248,10 @@ function cloneBlockRecord(block: OracleProgressionBlockRecord): OracleProgressio
   };
 }
 
-function mapDecisionRow(row: ComplianceDecisionRow, blockState: ComplianceBlockState): ComplianceDecisionRecord {
+function mapDecisionRow(
+  row: ComplianceDecisionRow,
+  blockState: ComplianceBlockState,
+): ComplianceDecisionRecord {
   return {
     decisionId: row.decisionId,
     tradeId: row.tradeId,
@@ -309,7 +316,9 @@ export function encodeComplianceDecisionCursor(cursor: ComplianceDecisionCursor)
 }
 
 export function decodeComplianceDecisionCursor(cursor: string): ComplianceDecisionCursor {
-  const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as ComplianceDecisionCursor;
+  const parsed = JSON.parse(
+    Buffer.from(cursor, 'base64url').toString('utf8'),
+  ) as ComplianceDecisionCursor;
   if (!parsed.decidedAt || !parsed.decisionId) {
     throw new Error('Cursor is missing required fields');
   }
@@ -337,7 +346,10 @@ function blockedFlag(state: ComplianceBlockState): boolean {
   return state === 'blocked' || state === 'resume_pending';
 }
 
-async function loadBlockState(pool: Pool, tradeId: string): Promise<OracleProgressionBlockRecord | null> {
+async function loadBlockState(
+  pool: Pool,
+  tradeId: string,
+): Promise<OracleProgressionBlockRecord | null> {
   const result = await pool.query<OracleProgressionBlockRow>(
     `SELECT
        trade_id AS "tradeId",
@@ -532,7 +544,9 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
         const decidedAtIndex = values.length;
         values.push(cursor.decisionId);
         const decisionIdIndex = values.length;
-        conditions.push(`(decided_at < $${decidedAtIndex}::timestamp OR (decided_at = $${decidedAtIndex}::timestamp AND decision_id < $${decisionIdIndex}))`);
+        conditions.push(
+          `(decided_at < $${decidedAtIndex}::timestamp OR (decided_at = $${decidedAtIndex}::timestamp AND decision_id < $${decisionIdIndex}))`,
+        );
       }
 
       values.push(input.limit + 1);
@@ -548,7 +562,9 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
       );
 
       const block = await loadBlockState(pool, input.tradeId);
-      const mapped = result.rows.map((row) => mapDecisionRow(row, block?.blockState ?? 'not_blocked'));
+      const mapped = result.rows.map((row) =>
+        mapDecisionRow(row, block?.blockState ?? 'not_blocked'),
+      );
       return {
         items: mapped.slice(0, input.limit),
         nextCursor: nextCursorFromItems(mapped, input.limit),
@@ -619,7 +635,9 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
 
       const stored = await this.getOracleProgressionBlock(block.tradeId);
       if (!stored) {
-        throw new Error(`Failed to persist oracle progression block state for trade ${block.tradeId}`);
+        throw new Error(
+          `Failed to persist oracle progression block state for trade ${block.tradeId}`,
+        );
       }
 
       return stored;
@@ -638,7 +656,9 @@ export function createPostgresComplianceStore(pool: Pool): ComplianceStore {
       const block = await this.getOracleProgressionBlock(tradeId);
       const blockState = block?.blockState ?? 'not_blocked';
       const updatedAt = block
-        ? (block.updatedAt > latestDecision.decidedAt ? block.updatedAt : latestDecision.decidedAt)
+        ? block.updatedAt > latestDecision.decidedAt
+          ? block.updatedAt
+          : latestDecision.decidedAt
         : latestDecision.decidedAt;
 
       return {
@@ -736,10 +756,11 @@ export function createInMemoryComplianceStore(
 
       if (input.cursor) {
         const cursor = decodeComplianceDecisionCursor(input.cursor);
-        candidates = candidates.filter((decision) => (
-          decision.decidedAt < cursor.decidedAt
-          || (decision.decidedAt === cursor.decidedAt && decision.decisionId < cursor.decisionId)
-        ));
+        candidates = candidates.filter(
+          (decision) =>
+            decision.decidedAt < cursor.decidedAt ||
+            (decision.decidedAt === cursor.decidedAt && decision.decisionId < cursor.decisionId),
+        );
       }
 
       const blockState = blocks.get(input.tradeId)?.blockState ?? 'not_blocked';
@@ -772,7 +793,9 @@ export function createInMemoryComplianceStore(
       const block = await this.getOracleProgressionBlock(tradeId);
       const blockState = block?.blockState ?? 'not_blocked';
       const updatedAt = block
-        ? (block.updatedAt > latestDecision.decidedAt ? block.updatedAt : latestDecision.decidedAt)
+        ? block.updatedAt > latestDecision.decidedAt
+          ? block.updatedAt
+          : latestDecision.decidedAt
         : latestDecision.decidedAt;
 
       return {

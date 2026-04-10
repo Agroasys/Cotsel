@@ -14,12 +14,15 @@ process.env.DB_PORT = process.env.DB_PORT || '5432';
 process.env.DB_NAME = process.env.DB_NAME || 'treasury';
 process.env.DB_USER = process.env.DB_USER || 'postgres';
 process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'postgres';
-process.env.INDEXER_GRAPHQL_URL = process.env.INDEXER_GRAPHQL_URL || 'http://localhost:3000/graphql';
+process.env.INDEXER_GRAPHQL_URL =
+  process.env.INDEXER_GRAPHQL_URL || 'http://localhost:3000/graphql';
 
 import { TreasuryIngestionService } from '../src/core/ingestion';
 import { IndexerTradeEvent } from '../src/types';
 
-function makeEvent(data: Partial<IndexerTradeEvent> & Pick<IndexerTradeEvent, 'id' | 'tradeId' | 'eventName'>): IndexerTradeEvent {
+function makeEvent(
+  data: Partial<IndexerTradeEvent> & Pick<IndexerTradeEvent, 'id' | 'tradeId' | 'eventName'>,
+): IndexerTradeEvent {
   return {
     id: data.id,
     tradeId: data.tradeId,
@@ -74,7 +77,9 @@ describe('TreasuryIngestionService', () => {
       return events.slice(offset);
     });
 
-    (service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }).indexerClient = {
+    (
+      service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }
+    ).indexerClient = {
       fetchTreasuryEvents,
     };
 
@@ -122,7 +127,9 @@ describe('TreasuryIngestionService', () => {
       ])
       .mockResolvedValueOnce([]);
 
-    (service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }).indexerClient = {
+    (
+      service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }
+    ).indexerClient = {
       fetchTreasuryEvents,
     };
 
@@ -151,7 +158,9 @@ describe('TreasuryIngestionService', () => {
       ])
       .mockResolvedValueOnce([]);
 
-    (service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }).indexerClient = {
+    (
+      service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }
+    ).indexerClient = {
       fetchTreasuryEvents,
     };
 
@@ -179,7 +188,9 @@ describe('TreasuryIngestionService', () => {
       ])
       .mockResolvedValueOnce([]);
 
-    (service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }).indexerClient = {
+    (
+      service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }
+    ).indexerClient = {
       fetchTreasuryEvents,
     };
 
@@ -217,7 +228,9 @@ describe('TreasuryIngestionService', () => {
       ])
       .mockResolvedValueOnce([]);
 
-    (service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }).indexerClient = {
+    (
+      service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }
+    ).indexerClient = {
       fetchTreasuryEvents,
     };
 

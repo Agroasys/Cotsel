@@ -183,10 +183,7 @@ export class WebhookNotifier {
       attachments: [
         {
           color: this.colorForSeverity(event.severity),
-          fields: [
-            { title: 'message', value: event.message, short: false },
-            ...fields,
-          ],
+          fields: [{ title: 'message', value: event.message, short: false }, ...fields],
         },
       ],
     };
@@ -258,9 +255,9 @@ export class WebhookNotifier {
           attempt,
           totalAttempts,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         this.logError('Notification webhook request errored', {
-          error: error?.message || error,
+          error: error instanceof Error ? error.message : error,
           source: event.source,
           type: event.type,
           attempt,

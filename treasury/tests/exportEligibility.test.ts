@@ -4,10 +4,11 @@ process.env.DB_PORT = process.env.DB_PORT || '5432';
 process.env.DB_NAME = process.env.DB_NAME || 'treasury_test';
 process.env.DB_USER = process.env.DB_USER || 'postgres';
 process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'postgres';
-process.env.INDEXER_GRAPHQL_URL = process.env.INDEXER_GRAPHQL_URL || 'http://127.0.0.1:3100/graphql';
+process.env.INDEXER_GRAPHQL_URL =
+  process.env.INDEXER_GRAPHQL_URL || 'http://127.0.0.1:3100/graphql';
 
-const { TreasuryEligibilityService } = require('../src/core/exportEligibility') as typeof import('../src/core/exportEligibility');
 import { LedgerEntryWithState } from '../src/types';
+import { TreasuryEligibilityService } from '../src/core/exportEligibility';
 
 function makeEntry(overrides?: Partial<LedgerEntryWithState>): LedgerEntryWithState {
   return {
@@ -40,7 +41,16 @@ describe('TreasuryEligibilityService', () => {
       reconciliationGate: {
         assessTrades: async () =>
           new Map([
-            ['trade-1', { tradeId: 'trade-1', status: 'CLEAR', runKey: 'run-1', driftCount: 0, blockedReasons: [] }],
+            [
+              'trade-1',
+              {
+                tradeId: 'trade-1',
+                status: 'CLEAR',
+                runKey: 'run-1',
+                driftCount: 0,
+                blockedReasons: [],
+              },
+            ],
           ]),
       },
     });
@@ -71,7 +81,16 @@ describe('TreasuryEligibilityService', () => {
       reconciliationGate: {
         assessTrades: async () =>
           new Map([
-            ['trade-1', { tradeId: 'trade-1', status: 'CLEAR', runKey: 'run-1', driftCount: 0, blockedReasons: [] }],
+            [
+              'trade-1',
+              {
+                tradeId: 'trade-1',
+                status: 'CLEAR',
+                runKey: 'run-1',
+                driftCount: 0,
+                blockedReasons: [],
+              },
+            ],
           ]),
       },
     });
@@ -86,7 +105,9 @@ describe('TreasuryEligibilityService', () => {
         eligibleForExport: false,
       }),
     );
-    expect(gate?.blockedReasons).toContain('Entry has not reached Base finalized stage (current stage: SAFE)');
+    expect(gate?.blockedReasons).toContain(
+      'Entry has not reached Base finalized stage (current stage: SAFE)',
+    );
   });
 
   test('blocks payout when reconciliation drift exists even after finalization', async () => {
@@ -97,7 +118,16 @@ describe('TreasuryEligibilityService', () => {
       reconciliationGate: {
         assessTrades: async () =>
           new Map([
-            ['trade-1', { tradeId: 'trade-1', status: 'BLOCKED', runKey: 'run-2', driftCount: 2, blockedReasons: ['Latest reconciliation run reported 2 drift finding(s)'] }],
+            [
+              'trade-1',
+              {
+                tradeId: 'trade-1',
+                status: 'BLOCKED',
+                runKey: 'run-2',
+                driftCount: 2,
+                blockedReasons: ['Latest reconciliation run reported 2 drift finding(s)'],
+              },
+            ],
           ]),
       },
     });

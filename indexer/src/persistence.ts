@@ -35,7 +35,10 @@ async function upsertIfPresent(store: IndexerStore, entities: Iterable<unknown>)
   }
 }
 
-export async function persistIndexerBatch(store: IndexerStore, state: IndexerBatchState): Promise<void> {
+export async function persistIndexerBatch(
+  store: IndexerStore,
+  state: IndexerBatchState,
+): Promise<void> {
   await upsertIfPresent(store, state.trades);
   await upsertIfPresent(store, state.tradeEvents);
   await upsertIfPresent(store, state.disputeProposals);

@@ -8,7 +8,11 @@ import { config } from '../config';
 import { LedgerEntryWithState, PayoutState, TreasuryEntryEligibility } from '../types';
 import { ReconciliationGateService, type TradeReconciliationGate } from './reconciliationGate';
 
-const EXPORTABLE_STATES: ReadonlySet<PayoutState> = new Set(['READY_FOR_PAYOUT', 'PROCESSING', 'PAID']);
+const EXPORTABLE_STATES: ReadonlySet<PayoutState> = new Set([
+  'READY_FOR_PAYOUT',
+  'PROCESSING',
+  'PAID',
+]);
 
 interface SettlementHeadProvider {
   getBlock(tag: 'latest' | 'safe' | 'finalized'): Promise<{ number: bigint | number } | null>;
@@ -29,7 +33,10 @@ function buildBlockedReasons(input: {
 
   if (input.confirmationFailureReason) {
     reasons.push(input.confirmationFailureReason);
-  } else if (!input.confirmationState || !isTreasuryConfirmationStage(input.confirmationState.stage)) {
+  } else if (
+    !input.confirmationState ||
+    !isTreasuryConfirmationStage(input.confirmationState.stage)
+  ) {
     reasons.push(
       `Entry has not reached Base finalized stage${input.confirmationState ? ` (current stage: ${input.confirmationState.stage})` : ''}`,
     );
@@ -54,11 +61,13 @@ export class TreasuryEligibilityService {
     provider?: SettlementHeadProvider | null;
     reconciliationGate?: ReconciliationGateReader;
   }) {
-    this.provider = deps?.provider ?? (
-      config.rpcUrl && config.chainId
-        ? createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, { chainId: config.chainId })
-        : null
-    );
+    this.provider =
+      deps?.provider ??
+      (config.rpcUrl && config.chainId
+        ? createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
+            chainId: config.chainId,
+          })
+        : null);
     this.reconciliationGate = deps?.reconciliationGate ?? new ReconciliationGateService();
   }
 
@@ -82,7 +91,8 @@ export class TreasuryEligibilityService {
     if (!latestBlock) {
       return {
         state: null,
-        failureReason: 'Managed RPC provider returned no latest block for treasury confirmation checks',
+        failureReason:
+          'Managed RPC provider returned no latest block for treasury confirmation checks',
       };
     }
 
@@ -96,13 +106,17 @@ export class TreasuryEligibilityService {
     };
   }
 
-  async assessEntries(entries: LedgerEntryWithState[]): Promise<Map<number, TreasuryEntryEligibility>> {
+  async assessEntries(
+    entries: LedgerEntryWithState[],
+  ): Promise<Map<number, TreasuryEntryEligibility>> {
     const gates = new Map<number, TreasuryEntryEligibility>();
     if (entries.length === 0) {
       return gates;
     }
 
-    const reconciliationByTradeId = await this.reconciliationGate.assessTrades(entries.map((entry) => entry.trade_id));
+    const reconciliationByTradeId = await this.reconciliationGate.assessTrades(
+      entries.map((entry) => entry.trade_id),
+    );
 
     for (const entry of entries) {
       const confirmation = await this.getConfirmationState(entry.block_number);

@@ -20,7 +20,9 @@ import {
   UnpauseProposalState,
 } from '../src/core/governanceStatusService';
 
-function buildStatusSnapshot(overrides: Partial<GovernanceStatusSnapshot> = {}): GovernanceStatusSnapshot {
+function buildStatusSnapshot(
+  overrides: Partial<GovernanceStatusSnapshot> = {},
+): GovernanceStatusSnapshot {
   return {
     paused: true,
     claimsPaused: false,
@@ -39,7 +41,9 @@ function buildStatusSnapshot(overrides: Partial<GovernanceStatusSnapshot> = {}):
   };
 }
 
-function buildProposalState(overrides: Partial<GovernanceProposalState> = {}): GovernanceProposalState {
+function buildProposalState(
+  overrides: Partial<GovernanceProposalState> = {},
+): GovernanceProposalState {
   return {
     proposalId: 7,
     approvalCount: 2,
@@ -75,7 +79,6 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
     status: 'requested',
     contractMethod: 'pause',
     txHash: null,
-    extrinsicHash: null,
     blockNumber: null,
     tradeId: null,
     chainId: '31337',
@@ -103,13 +106,17 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
   };
 }
 
-function createReader(overrides: Partial<jest.Mocked<GovernanceMutationPreflightReader>> = {}): jest.Mocked<GovernanceMutationPreflightReader> {
+function createReader(
+  overrides: Partial<jest.Mocked<GovernanceMutationPreflightReader>> = {},
+): jest.Mocked<GovernanceMutationPreflightReader> {
   return {
     checkReadiness: jest.fn(),
     getGovernanceStatus: jest.fn().mockResolvedValue(buildStatusSnapshot()),
     getUnpauseProposalState: jest.fn().mockResolvedValue(buildUnpauseProposal()),
     getOracleProposalState: jest.fn().mockResolvedValue(buildProposalState()),
-    getTreasuryPayoutReceiverProposalState: jest.fn().mockResolvedValue(buildProposalState({ proposalId: 8 })),
+    getTreasuryPayoutReceiverProposalState: jest
+      .fn()
+      .mockResolvedValue(buildProposalState({ proposalId: 8 })),
     getTreasuryClaimableBalance: jest.fn().mockResolvedValue(10n),
     hasApprovedUnpause: jest.fn().mockResolvedValue(false),
     hasApprovedOracleProposal: jest.fn().mockResolvedValue(false),
@@ -119,10 +126,12 @@ function createReader(overrides: Partial<jest.Mocked<GovernanceMutationPreflight
 }
 
 function createExecutor(
-  overrides: Partial<GovernanceChainExecutor & {
-    getSignerAddress: jest.Mock;
-    execute: jest.Mock;
-  }> = {},
+  overrides: Partial<
+    GovernanceChainExecutor & {
+      getSignerAddress: jest.Mock;
+      execute: jest.Mock;
+    }
+  > = {},
 ): GovernanceChainExecutor & {
   getSignerAddress: jest.Mock;
   execute: jest.Mock;
@@ -211,14 +220,18 @@ describe('GovernanceExecutorService', () => {
       }),
     ]);
     const reader = createReader({
-      getGovernanceStatus: jest.fn().mockResolvedValue(buildStatusSnapshot({ governanceApprovalsRequired: 2 })),
-      getOracleProposalState: jest.fn().mockResolvedValue(buildProposalState({
-        proposalId: 7,
-        approvalCount: 2,
-        executed: false,
-        cancelled: false,
-        expired: false,
-      })),
+      getGovernanceStatus: jest
+        .fn()
+        .mockResolvedValue(buildStatusSnapshot({ governanceApprovalsRequired: 2 })),
+      getOracleProposalState: jest.fn().mockResolvedValue(
+        buildProposalState({
+          proposalId: 7,
+          approvalCount: 2,
+          executed: false,
+          cancelled: false,
+          expired: false,
+        }),
+      ),
     });
     const auditLogStore = createInMemoryAuditLogStore();
     const service = new GovernanceExecutorService(
@@ -267,17 +280,17 @@ describe('GovernanceExecutorService', () => {
       executor,
     );
 
-    await expect(service.executeAction('action-approve-oracle-mismatch', 'executor-req-mismatch'))
-      .rejects
-      .toMatchObject({
-        statusCode: 409,
-        code: 'CONFLICT',
-        details: expect.objectContaining({
-          actionId: 'action-approve-oracle-mismatch',
-          expectedApproverWallet: '0x00000000000000000000000000000000000000aa',
-          executorWallet: '0x00000000000000000000000000000000000000ff',
-        }),
-      });
+    await expect(
+      service.executeAction('action-approve-oracle-mismatch', 'executor-req-mismatch'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
+      details: expect.objectContaining({
+        actionId: 'action-approve-oracle-mismatch',
+        expectedApproverWallet: '0x00000000000000000000000000000000000000aa',
+        executorWallet: '0x00000000000000000000000000000000000000ff',
+      }),
+    });
 
     expect(executor.execute).not.toHaveBeenCalled();
     const stored = await store.get('action-approve-oracle-mismatch');
@@ -401,7 +414,10 @@ describe('GovernanceExecutorService', () => {
       10,
     );
 
-    const result = await service.executeAction('action-execute-timeout', 'executor-req-execute-timeout');
+    const result = await service.executeAction(
+      'action-execute-timeout',
+      'executor-req-execute-timeout',
+    );
 
     expect(result.status).toBe('submitted');
     expect(result.errorCode).toBe('EXECUTION_TIMEOUT');
@@ -469,16 +485,16 @@ describe('GovernanceExecutorService', () => {
       executor,
     );
 
-    await expect(service.executeAction('action-persist-fail', 'executor-req-6'))
-      .rejects
-      .toMatchObject({
-        code: 'INTERNAL_ERROR',
-        details: expect.objectContaining({
-          actionId: 'action-persist-fail',
-          txHash: '0xpersist123',
-          blockNumber: 144,
-        }),
-      });
+    await expect(
+      service.executeAction('action-persist-fail', 'executor-req-6'),
+    ).rejects.toMatchObject({
+      code: 'INTERNAL_ERROR',
+      details: expect.objectContaining({
+        actionId: 'action-persist-fail',
+        txHash: '0xpersist123',
+        blockNumber: 144,
+      }),
+    });
 
     const unchanged = await store.get('action-persist-fail');
     expect(unchanged?.status).toBe('requested');

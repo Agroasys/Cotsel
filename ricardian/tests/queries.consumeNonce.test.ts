@@ -33,7 +33,7 @@ describe('ricardian consumeServiceAuthNonce', () => {
 
   test('throws for non-positive ttl before querying database', async () => {
     await expect(consumeServiceAuthNonce('svc-a', 'nonce-1', 0)).rejects.toThrow(
-      'nonce ttlSeconds must be a positive integer'
+      'nonce ttlSeconds must be a positive integer',
     );
 
     expect(mockPoolQuery).not.toHaveBeenCalled();

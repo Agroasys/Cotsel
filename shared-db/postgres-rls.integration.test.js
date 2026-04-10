@@ -130,9 +130,15 @@ test(
 
         try {
           await runSql(adminServiceDbPool, 'REVOKE CREATE ON SCHEMA public FROM PUBLIC');
-          await runSql(adminServiceDbPool, 'GRANT USAGE ON SCHEMA public TO reconciliation_runtime');
+          await runSql(
+            adminServiceDbPool,
+            'GRANT USAGE ON SCHEMA public TO reconciliation_runtime',
+          );
           await runSql(adminServiceDbPool, 'GRANT USAGE ON SCHEMA public TO unrelated_runtime');
-          await runSql(adminServiceDbPool, 'GRANT USAGE, CREATE ON SCHEMA public TO reconciliation_migrator');
+          await runSql(
+            adminServiceDbPool,
+            'GRANT USAGE, CREATE ON SCHEMA public TO reconciliation_migrator',
+          );
         } finally {
           await adminServiceDbPool.end();
         }
@@ -150,7 +156,10 @@ test(
         });
 
         try {
-          const schema = fs.readFileSync(path.resolve(__dirname, '../reconciliation/src/database/schema.sql'), 'utf8');
+          const schema = fs.readFileSync(
+            path.resolve(__dirname, '../reconciliation/src/database/schema.sql'),
+            'utf8',
+          );
           await migrationPool.query(schema);
         } finally {
           await migrationPool.end();
@@ -174,7 +183,10 @@ test(
             "INSERT INTO reconcile_runs (run_key, mode, status) VALUES ('run-1', 'once', 'completed')",
           );
           const result = await runSql(runtimePool, 'SELECT run_key FROM reconcile_runs');
-          assert.deepEqual(result.rows.map((row) => row.run_key), ['run-1']);
+          assert.deepEqual(
+            result.rows.map((row) => row.run_key),
+            ['run-1'],
+          );
         } finally {
           await runtimePool.end();
         }
@@ -192,7 +204,10 @@ test(
         });
 
         try {
-          const filteredResult = await runSql(wrongServicePool, 'SELECT run_key FROM reconcile_runs');
+          const filteredResult = await runSql(
+            wrongServicePool,
+            'SELECT run_key FROM reconcile_runs',
+          );
           assert.equal(filteredResult.rowCount, 0);
           await assert.rejects(
             () =>
@@ -226,7 +241,10 @@ test(
         });
 
         try {
-          const filteredResult = await runSql(missingServicePool, 'SELECT run_key FROM reconcile_runs');
+          const filteredResult = await runSql(
+            missingServicePool,
+            'SELECT run_key FROM reconcile_runs',
+          );
           assert.equal(filteredResult.rowCount, 0);
           await assert.rejects(
             () =>

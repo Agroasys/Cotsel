@@ -23,7 +23,11 @@ export class AuthController {
     challengeStore: ChallengeStore,
     maxSessionTtlSeconds: number = 86400,
   ) {
-    this.legacyWallet = new LegacyWalletAuthController(sessionService, challengeStore, maxSessionTtlSeconds);
+    this.legacyWallet = new LegacyWalletAuthController(
+      sessionService,
+      challengeStore,
+      maxSessionTtlSeconds,
+    );
     this.session = new SessionController(sessionService, maxSessionTtlSeconds);
   }
 

@@ -51,11 +51,11 @@ export const GOVERNANCE_MONITORING_STATES = [
   'stale',
 ] as const;
 
-export type GovernanceActionCategory = typeof GOVERNANCE_ACTION_CATEGORIES[number];
-export type GovernanceActionStatus = typeof GOVERNANCE_ACTION_STATUSES[number];
-export type GovernanceFlowType = typeof GOVERNANCE_FLOW_TYPES[number];
-export type GovernanceVerificationState = typeof GOVERNANCE_VERIFICATION_STATES[number];
-export type GovernanceMonitoringState = typeof GOVERNANCE_MONITORING_STATES[number];
+export type GovernanceActionCategory = (typeof GOVERNANCE_ACTION_CATEGORIES)[number];
+export type GovernanceActionStatus = (typeof GOVERNANCE_ACTION_STATUSES)[number];
+export type GovernanceFlowType = (typeof GOVERNANCE_FLOW_TYPES)[number];
+export type GovernanceVerificationState = (typeof GOVERNANCE_VERIFICATION_STATES)[number];
+export type GovernanceMonitoringState = (typeof GOVERNANCE_MONITORING_STATES)[number];
 
 export const GOVERNANCE_OPEN_INTENT_STATUSES: readonly GovernanceActionStatus[] = [
   'requested',
@@ -73,12 +73,17 @@ export const GOVERNANCE_APPROVAL_CONTRACT_METHODS = [
   'approveOracleUpdate',
 ] as const;
 
-// Governance records retain `extrinsicHash` only for archived Substrate-era
-// actions. Active Base governance evidence uses `txHash`; new Base-originated
-// actions should continue storing the legacy field as null.
-
 export interface EvidenceLink {
-  kind: 'runbook' | 'incident' | 'ticket' | 'tx' | 'event' | 'document' | 'log' | 'dashboard' | 'other';
+  kind:
+    | 'runbook'
+    | 'incident'
+    | 'ticket'
+    | 'tx'
+    | 'event'
+    | 'document'
+    | 'log'
+    | 'dashboard'
+    | 'other';
   uri: string;
   note?: string;
 }
@@ -127,7 +132,6 @@ export interface GovernanceActionRecord {
   flowType: GovernanceFlowType;
   contractMethod: string;
   txHash: string | null;
-  extrinsicHash: string | null;
   blockNumber: number | null;
   tradeId: string | null;
   chainId: string | null;
@@ -180,7 +184,8 @@ export interface GovernanceActionStore {
   listActiveProposalIds(category: GovernanceActionCategory): Promise<number[]>;
 }
 
-const ACTIVE_PROPOSAL_STATUSES: readonly GovernanceActionStatus[] = GOVERNANCE_OPEN_INTENT_STATUSES.filter((status) => status !== 'submitted');
+const ACTIVE_PROPOSAL_STATUSES: readonly GovernanceActionStatus[] =
+  GOVERNANCE_OPEN_INTENT_STATUSES.filter((status) => status !== 'submitted');
 
 interface GovernanceActionRow {
   actionId: string;
@@ -192,7 +197,6 @@ interface GovernanceActionRow {
   flowType: GovernanceFlowType;
   contractMethod: string;
   txHash: string | null;
-  extrinsicHash: string | null;
   blockNumber: string | number | null;
   tradeId: string | null;
   chainId: string | null;
@@ -256,16 +260,17 @@ export function buildGovernanceIntentKey(input: {
     normalizeIntentFragment(input.chainId),
     normalizeIntentFragment(
       isApprovalGovernanceContractMethod(input.contractMethod)
-        ? input.approverWallet ?? null
+        ? (input.approverWallet ?? null)
         : null,
     ),
   ].join('|');
 }
 
-export function isExpiredRequestedGovernanceAction(action: GovernanceActionRecord, now: string): boolean {
-  return action.status === 'requested'
-    && action.expiresAt !== null
-    && action.expiresAt <= now;
+export function isExpiredRequestedGovernanceAction(
+  action: GovernanceActionRecord,
+  now: string,
+): boolean {
+  return action.status === 'requested' && action.expiresAt !== null && action.expiresAt <= now;
 }
 
 function numericOrNull(value: string | number | null): number | null {
@@ -281,7 +286,9 @@ function numericOrNull(value: string | number | null): number | null {
   return parsed;
 }
 
-function defaultVerificationState(row: Pick<GovernanceActionRow, 'flowType' | 'status'>): GovernanceVerificationState {
+function defaultVerificationState(
+  row: Pick<GovernanceActionRow, 'flowType' | 'status'>,
+): GovernanceVerificationState {
   if (row.flowType !== 'direct_sign') {
     return 'not_required';
   }
@@ -301,7 +308,9 @@ function defaultVerificationState(row: Pick<GovernanceActionRow, 'flowType' | 's
   }
 }
 
-function defaultMonitoringState(row: Pick<GovernanceActionRow, 'flowType' | 'status'>): GovernanceMonitoringState {
+function defaultMonitoringState(
+  row: Pick<GovernanceActionRow, 'flowType' | 'status'>,
+): GovernanceMonitoringState {
   if (row.flowType !== 'direct_sign') {
     return 'not_required';
   }
@@ -327,15 +336,17 @@ function defaultMonitoringState(row: Pick<GovernanceActionRow, 'flowType' | 'sta
 function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
   return {
     actionId: row.actionId,
-    intentKey: row.intentKey ?? buildGovernanceIntentKey({
-      category: row.category,
-      contractMethod: row.contractMethod,
-      proposalId: numericOrNull(row.proposalId),
-      targetAddress: row.targetAddress,
-      tradeId: row.tradeId,
-      chainId: row.chainId,
-      approverWallet: row.actorWallet,
-    }),
+    intentKey:
+      row.intentKey ??
+      buildGovernanceIntentKey({
+        category: row.category,
+        contractMethod: row.contractMethod,
+        proposalId: numericOrNull(row.proposalId),
+        targetAddress: row.targetAddress,
+        tradeId: row.tradeId,
+        chainId: row.chainId,
+        approverWallet: row.actorWallet,
+      }),
     intentHash: row.intentHash ?? undefined,
     proposalId: numericOrNull(row.proposalId),
     category: row.category,
@@ -343,7 +354,6 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
     flowType: row.flowType ?? 'executor',
     contractMethod: row.contractMethod,
     txHash: row.txHash,
-    extrinsicHash: row.extrinsicHash,
     blockNumber: numericOrNull(row.blockNumber),
     tradeId: row.tradeId,
     chainId: row.chainId,
@@ -387,7 +397,9 @@ export function encodeGovernanceActionCursor(cursor: GovernanceActionCursor): st
 }
 
 export function decodeGovernanceActionCursor(cursor: string): GovernanceActionCursor {
-  const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as GovernanceActionCursor;
+  const parsed = JSON.parse(
+    Buffer.from(cursor, 'base64url').toString('utf8'),
+  ) as GovernanceActionCursor;
   if (!parsed.createdAt || !parsed.actionId) {
     throw new Error('Cursor is missing required fields');
   }
@@ -422,7 +434,6 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
     COALESCE(flow_type, 'executor') AS "flowType",
     contract_method AS "contractMethod",
     tx_hash AS "txHash",
-    extrinsic_hash AS "extrinsicHash",
     block_number AS "blockNumber",
     trade_id AS "tradeId",
     chain_id AS "chainId",
@@ -467,7 +478,6 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           flow_type,
           contract_method,
           tx_hash,
-          extrinsic_hash,
           block_number,
           trade_id,
           chain_id,
@@ -502,8 +512,8 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
           $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb,
-          $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, $34, $35,
-          $36, $37, $38, $39::jsonb, $40, $41, $42, $43, $44, NOW()
+          $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, $34::jsonb,
+          $35, $36, $37, $38, $39, NOW()
         )
         ON CONFLICT (action_id) DO UPDATE SET
           intent_key = EXCLUDED.intent_key,
@@ -514,7 +524,6 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           flow_type = EXCLUDED.flow_type,
           contract_method = EXCLUDED.contract_method,
           tx_hash = EXCLUDED.tx_hash,
-          extrinsic_hash = EXCLUDED.extrinsic_hash,
           block_number = EXCLUDED.block_number,
           trade_id = EXCLUDED.trade_id,
           chain_id = EXCLUDED.chain_id,
@@ -556,7 +565,6 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           action.flowType,
           action.contractMethod,
           action.txHash,
-          action.extrinsicHash,
           action.blockNumber,
           action.tradeId,
           action.chainId,
@@ -577,10 +585,12 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
           JSON.stringify(action.audit.approvedBy ?? []),
           action.audit.actorAccountId ?? null,
           action.finalSignerWallet ?? null,
-          action.verificationState ?? (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
+          action.verificationState ??
+            (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
           action.verificationError ?? null,
           action.verifiedAt ?? null,
-          action.monitoringState ?? (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
+          action.monitoringState ??
+            (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
           action.signing ? JSON.stringify(action.signing) : null,
           action.errorCode,
           action.errorMessage,
@@ -658,7 +668,9 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
         const createdAtIndex = values.length;
         values.push(cursor.actionId);
         const actionIdIndex = values.length;
-        conditions.push(`(created_at < $${createdAtIndex}::timestamp OR (created_at = $${createdAtIndex}::timestamp AND action_id < $${actionIdIndex}))`);
+        conditions.push(
+          `(created_at < $${createdAtIndex}::timestamp OR (created_at = $${createdAtIndex}::timestamp AND action_id < $${actionIdIndex}))`,
+        );
       }
 
       values.push(input.limit + 1);
@@ -714,8 +726,12 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
   };
 }
 
-export function createInMemoryGovernanceActionStore(initial: GovernanceActionRecord[] = []): GovernanceActionStore {
-  const items = new Map<string, GovernanceActionRecord>(initial.map((action) => [action.actionId, action]));
+export function createInMemoryGovernanceActionStore(
+  initial: GovernanceActionRecord[] = [],
+): GovernanceActionStore {
+  const items = new Map<string, GovernanceActionRecord>(
+    initial.map((action) => [action.actionId, action]),
+  );
 
   function sorted(): GovernanceActionRecord[] {
     return [...items.values()].sort((left, right) => {
@@ -729,24 +745,54 @@ export function createInMemoryGovernanceActionStore(initial: GovernanceActionRec
 
   return {
     async save(action) {
-      items.set(action.actionId, { ...action, audit: { ...action.audit, evidenceLinks: [...action.audit.evidenceLinks], ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}) } });
+      items.set(action.actionId, {
+        ...action,
+        audit: {
+          ...action.audit,
+          evidenceLinks: [...action.audit.evidenceLinks],
+          ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}),
+        },
+      });
       return (await this.get(action.actionId))!;
     },
 
     async get(actionId) {
       const action = items.get(actionId);
-      return action ? { ...action, audit: { ...action.audit, evidenceLinks: [...action.audit.evidenceLinks], ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}) } } : null;
+      return action
+        ? {
+            ...action,
+            audit: {
+              ...action.audit,
+              evidenceLinks: [...action.audit.evidenceLinks],
+              ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}),
+            },
+          }
+        : null;
     },
 
     async findOpenByIntentKey(intentKey, now) {
-      const action = sorted().find((candidate) => (
-        candidate.intentKey === intentKey
-        && GOVERNANCE_OPEN_INTENT_STATUSES.includes(candidate.status)
-        && !isExpiredRequestedGovernanceAction(candidate, now)
-        && !(candidate.status === 'prepared' && candidate.expiresAt !== null && candidate.expiresAt <= now)
-      ));
+      const action = sorted().find(
+        (candidate) =>
+          candidate.intentKey === intentKey &&
+          GOVERNANCE_OPEN_INTENT_STATUSES.includes(candidate.status) &&
+          !isExpiredRequestedGovernanceAction(candidate, now) &&
+          !(
+            candidate.status === 'prepared' &&
+            candidate.expiresAt !== null &&
+            candidate.expiresAt <= now
+          ),
+      );
 
-      return action ? { ...action, audit: { ...action.audit, evidenceLinks: [...action.audit.evidenceLinks], ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}) } } : null;
+      return action
+        ? {
+            ...action,
+            audit: {
+              ...action.audit,
+              evidenceLinks: [...action.audit.evidenceLinks],
+              ...(action.audit.approvedBy ? { approvedBy: [...action.audit.approvedBy] } : {}),
+            },
+          }
+        : null;
     },
 
     async list(input) {
@@ -770,10 +816,11 @@ export function createInMemoryGovernanceActionStore(initial: GovernanceActionRec
 
       if (input.cursor) {
         const cursor = decodeGovernanceActionCursor(input.cursor);
-        candidates = candidates.filter((action) => (
-          action.createdAt < cursor.createdAt
-          || (action.createdAt === cursor.createdAt && action.actionId < cursor.actionId)
-        ));
+        candidates = candidates.filter(
+          (action) =>
+            action.createdAt < cursor.createdAt ||
+            (action.createdAt === cursor.createdAt && action.actionId < cursor.actionId),
+        );
       }
 
       const page = candidates.slice(0, input.limit + 1);

@@ -102,7 +102,6 @@ describe('trade read service', () => {
         callbackStatus: 'delivered',
         providerStatus: 'confirmed',
         txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        extrinsicHash: null,
         latestEventId: 'evt-1',
         latestEventType: 'reconciled',
         latestEventDetail: 'Settlement confirmed and reconciled.',
@@ -115,7 +114,12 @@ describe('trade read service', () => {
       },
     ]);
 
-    const service = new TradeReadService('http://127.0.0.1:4350/graphql', 5000, complianceStore, settlementStore);
+    const service = new TradeReadService(
+      'http://127.0.0.1:4350/graphql',
+      5000,
+      complianceStore,
+      settlementStore,
+    );
     const records = await service.listTrades();
 
     expect(records).toHaveLength(1);
@@ -178,7 +182,10 @@ describe('trade read service', () => {
     global.fetch = jest
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { trades: [] } }) } as Response)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ errors: [{ message: 'boom' }] }) } as Response);
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ errors: [{ message: 'boom' }] }),
+      } as Response);
 
     const service = new TradeReadService('http://127.0.0.1:4350/graphql', 5000, complianceStore);
 

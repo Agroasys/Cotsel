@@ -29,21 +29,35 @@ function assertPrivateKey(name: string, value: string): string {
 
 export function loadExecutorConfig(baseConfig?: GatewayConfig): GovernanceExecutorConfig {
   const gatewayConfig = baseConfig ?? loadConfig();
-  const executionTimeoutMs = Number.parseInt(process.env.GATEWAY_EXECUTOR_TIMEOUT_MS || '45000', 10);
-  assert(Number.isInteger(executionTimeoutMs) && executionTimeoutMs >= 1000, 'GATEWAY_EXECUTOR_TIMEOUT_MS must be >= 1000');
+  const executionTimeoutMs = Number.parseInt(
+    process.env.GATEWAY_EXECUTOR_TIMEOUT_MS || '45000',
+    10,
+  );
+  assert(
+    Number.isInteger(executionTimeoutMs) && executionTimeoutMs >= 1000,
+    'GATEWAY_EXECUTOR_TIMEOUT_MS must be >= 1000',
+  );
 
   return {
     ...gatewayConfig,
-    usdcAddress: assertAddress('GATEWAY_USDC_ADDRESS', resolveSettlementRuntime({
-      runtimeKey: gatewayConfig.settlementRuntimeKey,
-      rpcUrl: gatewayConfig.rpcUrl,
-      rpcFallbackUrls: gatewayConfig.rpcFallbackUrls,
-      chainId: gatewayConfig.chainId,
-      explorerBaseUrl: gatewayConfig.explorerBaseUrl,
-      escrowAddress: gatewayConfig.escrowAddress,
-      usdcAddress: process.env.GATEWAY_USDC_ADDRESS ? assertAddress('GATEWAY_USDC_ADDRESS', env('GATEWAY_USDC_ADDRESS')) : null,
-    }).usdcAddress ?? assertAddress('GATEWAY_USDC_ADDRESS', env('GATEWAY_USDC_ADDRESS'))),
-    executorPrivateKey: assertPrivateKey('GATEWAY_EXECUTOR_PRIVATE_KEY', env('GATEWAY_EXECUTOR_PRIVATE_KEY')),
+    usdcAddress: assertAddress(
+      'GATEWAY_USDC_ADDRESS',
+      resolveSettlementRuntime({
+        runtimeKey: gatewayConfig.settlementRuntimeKey,
+        rpcUrl: gatewayConfig.rpcUrl,
+        rpcFallbackUrls: gatewayConfig.rpcFallbackUrls,
+        chainId: gatewayConfig.chainId,
+        explorerBaseUrl: gatewayConfig.explorerBaseUrl,
+        escrowAddress: gatewayConfig.escrowAddress,
+        usdcAddress: process.env.GATEWAY_USDC_ADDRESS
+          ? assertAddress('GATEWAY_USDC_ADDRESS', env('GATEWAY_USDC_ADDRESS'))
+          : null,
+      }).usdcAddress ?? assertAddress('GATEWAY_USDC_ADDRESS', env('GATEWAY_USDC_ADDRESS')),
+    ),
+    executorPrivateKey: assertPrivateKey(
+      'GATEWAY_EXECUTOR_PRIVATE_KEY',
+      env('GATEWAY_EXECUTOR_PRIVATE_KEY'),
+    ),
     executionTimeoutMs,
   };
 }

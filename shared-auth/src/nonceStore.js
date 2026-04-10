@@ -111,11 +111,13 @@ function createRedisNonceStore(options) {
 
   const keyPrefix = options.keyPrefix ?? 'auth_nonce';
   const Redis = options.Redis ?? require('ioredis');
-  const redis = options.redisClient ?? new Redis(redisUrl, {
-    lazyConnect: true,
-    maxRetriesPerRequest: 1,
-    enableOfflineQueue: false,
-  });
+  const redis =
+    options.redisClient ??
+    new Redis(redisUrl, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+    });
 
   const ownsClient = !options.redisClient;
 

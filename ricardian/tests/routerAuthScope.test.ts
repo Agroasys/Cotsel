@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { AddressInfo } from 'net';
 import { Server } from 'http';
 import { RequestHandler } from 'express';
+import { RicardianController } from '../src/api/controller';
 import { createRouter } from '../src/api/routes';
 
 function buildAuthMiddleware(): RequestHandler {
@@ -30,9 +31,12 @@ describe('ricardian router auth scope', () => {
       getHash: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { hash: 'ok' } });
       },
-    };
+    } as unknown as RicardianController;
 
-    app.use('/api/ricardian/v1', createRouter(controller as any, { authMiddleware: buildAuthMiddleware() }));
+    app.use(
+      '/api/ricardian/v1',
+      createRouter(controller, { authMiddleware: buildAuthMiddleware() }),
+    );
 
     await new Promise<void>((resolve) => {
       server = app.listen(0, () => resolve());
@@ -64,7 +68,7 @@ describe('ricardian router auth scope', () => {
     await expect(response.json()).resolves.toEqual(
       expect.objectContaining({
         success: true,
-      })
+      }),
     );
   });
 });

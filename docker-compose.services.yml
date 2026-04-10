@@ -1,61 +1,61 @@
 services:
   postgres:
     image: postgres:16-alpine
-    profiles: ["local-dev", "staging-e2e", "staging-e2e-real", "infra"]
+    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real', 'infra']
     restart: unless-stopped
     environment:
-      POSTGRES_USER: "${POSTGRES_USER}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-      POSTGRES_DB: "${POSTGRES_DB}"
+      POSTGRES_USER: '${POSTGRES_USER}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      POSTGRES_DB: '${POSTGRES_DB}'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - '${POSTGRES_PORT:-5432}:5432'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
       interval: 10s
       timeout: 5s
       retries: 5
 
   postgres-init:
     image: postgres:16-alpine
-    profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
-    restart: "no"
+    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
+    restart: 'no'
     environment:
-      POSTGRES_USER: "${POSTGRES_USER}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-      POSTGRES_DB: "${POSTGRES_DB}"
-      AUTH_DB_NAME: "${AUTH_DB_NAME}"
-      RICARDIAN_DB_NAME: "${RICARDIAN_DB_NAME}"
-      TREASURY_DB_NAME: "${TREASURY_DB_NAME}"
-      RECONCILIATION_DB_NAME: "${RECONCILIATION_DB_NAME}"
-      ORACLE_DB_NAME: "${ORACLE_DB_NAME}"
-      INDEXER_DB_NAME: "${INDEXER_DB_NAME}"
-      GATEWAY_DB_NAME: "${GATEWAY_DB_NAME}"
-      AUTH_DB_RUNTIME_USER: "${AUTH_DB_RUNTIME_USER}"
-      AUTH_DB_RUNTIME_PASSWORD: "${AUTH_DB_RUNTIME_PASSWORD}"
-      AUTH_DB_MIGRATION_USER: "${AUTH_DB_MIGRATION_USER}"
-      AUTH_DB_MIGRATION_PASSWORD: "${AUTH_DB_MIGRATION_PASSWORD}"
-      RICARDIAN_DB_RUNTIME_USER: "${RICARDIAN_DB_RUNTIME_USER}"
-      RICARDIAN_DB_RUNTIME_PASSWORD: "${RICARDIAN_DB_RUNTIME_PASSWORD}"
-      RICARDIAN_DB_MIGRATION_USER: "${RICARDIAN_DB_MIGRATION_USER}"
-      RICARDIAN_DB_MIGRATION_PASSWORD: "${RICARDIAN_DB_MIGRATION_PASSWORD}"
-      TREASURY_DB_RUNTIME_USER: "${TREASURY_DB_RUNTIME_USER}"
-      TREASURY_DB_RUNTIME_PASSWORD: "${TREASURY_DB_RUNTIME_PASSWORD}"
-      TREASURY_DB_MIGRATION_USER: "${TREASURY_DB_MIGRATION_USER}"
-      TREASURY_DB_MIGRATION_PASSWORD: "${TREASURY_DB_MIGRATION_PASSWORD}"
-      RECONCILIATION_DB_RUNTIME_USER: "${RECONCILIATION_DB_RUNTIME_USER}"
-      RECONCILIATION_DB_RUNTIME_PASSWORD: "${RECONCILIATION_DB_RUNTIME_PASSWORD}"
-      RECONCILIATION_DB_MIGRATION_USER: "${RECONCILIATION_DB_MIGRATION_USER}"
-      RECONCILIATION_DB_MIGRATION_PASSWORD: "${RECONCILIATION_DB_MIGRATION_PASSWORD}"
-      ORACLE_DB_RUNTIME_USER: "${ORACLE_DB_RUNTIME_USER}"
-      ORACLE_DB_RUNTIME_PASSWORD: "${ORACLE_DB_RUNTIME_PASSWORD}"
-      ORACLE_DB_MIGRATION_USER: "${ORACLE_DB_MIGRATION_USER}"
-      ORACLE_DB_MIGRATION_PASSWORD: "${ORACLE_DB_MIGRATION_PASSWORD}"
-      GATEWAY_DB_RUNTIME_USER: "${GATEWAY_DB_RUNTIME_USER}"
-      GATEWAY_DB_RUNTIME_PASSWORD: "${GATEWAY_DB_RUNTIME_PASSWORD}"
-      GATEWAY_DB_MIGRATION_USER: "${GATEWAY_DB_MIGRATION_USER}"
-      GATEWAY_DB_MIGRATION_PASSWORD: "${GATEWAY_DB_MIGRATION_PASSWORD}"
+      POSTGRES_USER: '${POSTGRES_USER}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      POSTGRES_DB: '${POSTGRES_DB}'
+      AUTH_DB_NAME: '${AUTH_DB_NAME}'
+      RICARDIAN_DB_NAME: '${RICARDIAN_DB_NAME}'
+      TREASURY_DB_NAME: '${TREASURY_DB_NAME}'
+      RECONCILIATION_DB_NAME: '${RECONCILIATION_DB_NAME}'
+      ORACLE_DB_NAME: '${ORACLE_DB_NAME}'
+      INDEXER_DB_NAME: '${INDEXER_DB_NAME}'
+      GATEWAY_DB_NAME: '${GATEWAY_DB_NAME}'
+      AUTH_DB_RUNTIME_USER: '${AUTH_DB_RUNTIME_USER}'
+      AUTH_DB_RUNTIME_PASSWORD: '${AUTH_DB_RUNTIME_PASSWORD}'
+      AUTH_DB_MIGRATION_USER: '${AUTH_DB_MIGRATION_USER}'
+      AUTH_DB_MIGRATION_PASSWORD: '${AUTH_DB_MIGRATION_PASSWORD}'
+      RICARDIAN_DB_RUNTIME_USER: '${RICARDIAN_DB_RUNTIME_USER}'
+      RICARDIAN_DB_RUNTIME_PASSWORD: '${RICARDIAN_DB_RUNTIME_PASSWORD}'
+      RICARDIAN_DB_MIGRATION_USER: '${RICARDIAN_DB_MIGRATION_USER}'
+      RICARDIAN_DB_MIGRATION_PASSWORD: '${RICARDIAN_DB_MIGRATION_PASSWORD}'
+      TREASURY_DB_RUNTIME_USER: '${TREASURY_DB_RUNTIME_USER}'
+      TREASURY_DB_RUNTIME_PASSWORD: '${TREASURY_DB_RUNTIME_PASSWORD}'
+      TREASURY_DB_MIGRATION_USER: '${TREASURY_DB_MIGRATION_USER}'
+      TREASURY_DB_MIGRATION_PASSWORD: '${TREASURY_DB_MIGRATION_PASSWORD}'
+      RECONCILIATION_DB_RUNTIME_USER: '${RECONCILIATION_DB_RUNTIME_USER}'
+      RECONCILIATION_DB_RUNTIME_PASSWORD: '${RECONCILIATION_DB_RUNTIME_PASSWORD}'
+      RECONCILIATION_DB_MIGRATION_USER: '${RECONCILIATION_DB_MIGRATION_USER}'
+      RECONCILIATION_DB_MIGRATION_PASSWORD: '${RECONCILIATION_DB_MIGRATION_PASSWORD}'
+      ORACLE_DB_RUNTIME_USER: '${ORACLE_DB_RUNTIME_USER}'
+      ORACLE_DB_RUNTIME_PASSWORD: '${ORACLE_DB_RUNTIME_PASSWORD}'
+      ORACLE_DB_MIGRATION_USER: '${ORACLE_DB_MIGRATION_USER}'
+      ORACLE_DB_MIGRATION_PASSWORD: '${ORACLE_DB_MIGRATION_PASSWORD}'
+      GATEWAY_DB_RUNTIME_USER: '${GATEWAY_DB_RUNTIME_USER}'
+      GATEWAY_DB_RUNTIME_PASSWORD: '${GATEWAY_DB_RUNTIME_PASSWORD}'
+      GATEWAY_DB_MIGRATION_USER: '${GATEWAY_DB_MIGRATION_USER}'
+      GATEWAY_DB_MIGRATION_PASSWORD: '${GATEWAY_DB_MIGRATION_PASSWORD}'
     depends_on:
       postgres:
         condition: service_healthy
@@ -128,27 +128,27 @@ services:
 
   redis:
     image: redis:7-alpine
-    profiles: ["local-dev", "staging-e2e", "staging-e2e-real", "infra"]
+    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real', 'infra']
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ['redis-server', '--appendonly', 'yes']
     volumes:
       - redis-data:/data
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - '${REDIS_PORT:-6379}:6379'
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
 
   indexer:
     image: node:20-alpine
-    profiles: ["local-dev"]
+    profiles: ['local-dev']
     restart: unless-stopped
     environment:
-      LOCAL_DEV_INDEXER_FIXTURE_MODE: "${LOCAL_DEV_INDEXER_FIXTURE_MODE:-empty}"
-      LOCAL_DEV_INDEXER_FIXTURE_PATH: "/app/scripts/fixtures/local-dev-dashboard-parity-trade.json"
-      LOCAL_DEV_INDEXER_PORT: "4350"
+      LOCAL_DEV_INDEXER_FIXTURE_MODE: '${LOCAL_DEV_INDEXER_FIXTURE_MODE:-empty}'
+      LOCAL_DEV_INDEXER_FIXTURE_PATH: '/app/scripts/fixtures/local-dev-dashboard-parity-trade.json'
+      LOCAL_DEV_INDEXER_PORT: '4350'
     command:
       - node
       - /app/scripts/local-dev-indexer-responder.mjs
@@ -174,77 +174,77 @@ services:
       retries: 5
 
   indexer-migrate:
-    profiles: ["staging-e2e", "staging-e2e-real"]
+    profiles: ['staging-e2e', 'staging-e2e-real']
     build:
       context: .
       dockerfile: indexer/Dockerfile
     environment:
       DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: "${INDEXER_DB_NAME}"
-      DB_USER: "${POSTGRES_USER}"
-      DB_PASSWORD: "${POSTGRES_PASSWORD}"
+      DB_PORT: '5432'
+      DB_NAME: '${INDEXER_DB_NAME}'
+      DB_USER: '${POSTGRES_USER}'
+      DB_PASSWORD: '${POSTGRES_PASSWORD}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
-    command: ["npx", "squid-typeorm-migration", "apply"]
+    command: ['npx', 'squid-typeorm-migration', 'apply']
 
   indexer-pipeline:
-    profiles: ["staging-e2e", "staging-e2e-real"]
+    profiles: ['staging-e2e', 'staging-e2e-real']
     build:
       context: .
       dockerfile: indexer/Dockerfile
     environment:
       DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: "${INDEXER_DB_NAME}"
-      DB_USER: "${POSTGRES_USER}"
-      DB_PASSWORD: "${POSTGRES_PASSWORD}"
-      GATEWAY_URL: "${INDEXER_GATEWAY_URL}"
-      RPC_ENDPOINT: "${INDEXER_RPC_ENDPOINT}"
-      START_BLOCK: "${INDEXER_START_BLOCK}"
-      RATE_LIMIT: "${INDEXER_RATE_LIMIT}"
-      RPC_CAPACITY: "${INDEXER_RPC_CAPACITY:-}"
-      RPC_MAX_BATCH_CALL_SIZE: "${INDEXER_RPC_MAX_BATCH_CALL_SIZE:-}"
-      RPC_REQUEST_TIMEOUT_MS: "${INDEXER_RPC_REQUEST_TIMEOUT_MS:-}"
-      RPC_RETRY_ATTEMPTS: "${INDEXER_RPC_RETRY_ATTEMPTS:-}"
-      RPC_HEAD_POLL_INTERVAL_MS: "${INDEXER_RPC_HEAD_POLL_INTERVAL_MS:-}"
-      RPC_INGEST_DISABLED: "${INDEXER_RPC_INGEST_DISABLED:-false}"
-      SUBSQUID_EVM_RPC_SPLIT_SIZE: "${INDEXER_RPC_BLOCK_SPLIT_SIZE:-10}"
-      FINALITY_CONFIRMATION_BLOCKS: "${FINALITY_CONFIRMATION_BLOCKS}"
-      CONTRACT_ADDRESS: "${INDEXER_CONTRACT_ADDRESS}"
-      GRAPHQL_PORT: "${INDEXER_GRAPHQL_PORT}"
+      DB_PORT: '5432'
+      DB_NAME: '${INDEXER_DB_NAME}'
+      DB_USER: '${POSTGRES_USER}'
+      DB_PASSWORD: '${POSTGRES_PASSWORD}'
+      GATEWAY_URL: '${INDEXER_GATEWAY_URL}'
+      RPC_ENDPOINT: '${INDEXER_RPC_ENDPOINT}'
+      START_BLOCK: '${INDEXER_START_BLOCK}'
+      RATE_LIMIT: '${INDEXER_RATE_LIMIT}'
+      RPC_CAPACITY: '${INDEXER_RPC_CAPACITY:-}'
+      RPC_MAX_BATCH_CALL_SIZE: '${INDEXER_RPC_MAX_BATCH_CALL_SIZE:-}'
+      RPC_REQUEST_TIMEOUT_MS: '${INDEXER_RPC_REQUEST_TIMEOUT_MS:-}'
+      RPC_RETRY_ATTEMPTS: '${INDEXER_RPC_RETRY_ATTEMPTS:-}'
+      RPC_HEAD_POLL_INTERVAL_MS: '${INDEXER_RPC_HEAD_POLL_INTERVAL_MS:-}'
+      RPC_INGEST_DISABLED: '${INDEXER_RPC_INGEST_DISABLED:-false}'
+      SUBSQUID_EVM_RPC_SPLIT_SIZE: '${INDEXER_RPC_BLOCK_SPLIT_SIZE:-10}'
+      FINALITY_CONFIRMATION_BLOCKS: '${FINALITY_CONFIRMATION_BLOCKS}'
+      CONTRACT_ADDRESS: '${INDEXER_CONTRACT_ADDRESS}'
+      GRAPHQL_PORT: '${INDEXER_GRAPHQL_PORT}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
       indexer-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "cat /proc/1/cmdline | tr '\\0' ' ' | grep -q 'lib/main.js'"]
+      test: ['CMD-SHELL', "cat /proc/1/cmdline | tr '\\0' ' ' | grep -q 'lib/main.js'"]
       interval: 15s
       timeout: 5s
       retries: 5
 
   indexer-graphql:
-    profiles: ["staging-e2e", "staging-e2e-real"]
+    profiles: ['staging-e2e', 'staging-e2e-real']
     build:
       context: .
       dockerfile: indexer/Dockerfile
     environment:
       DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: "${INDEXER_DB_NAME}"
-      DB_USER: "${POSTGRES_USER}"
-      DB_PASSWORD: "${POSTGRES_PASSWORD}"
-      GQL_PORT: "${INDEXER_GRAPHQL_PORT}"
+      DB_PORT: '5432'
+      DB_NAME: '${INDEXER_DB_NAME}'
+      DB_USER: '${POSTGRES_USER}'
+      DB_PASSWORD: '${POSTGRES_PASSWORD}'
+      GQL_PORT: '${INDEXER_GRAPHQL_PORT}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
       indexer-migrate:
         condition: service_completed_successfully
-    command: ["npx", "squid-graphql-server"]
+    command: ['npx', 'squid-graphql-server']
     ports:
-      - "${INDEXER_GRAPHQL_PORT:-4350}:${INDEXER_GRAPHQL_PORT:-4350}"
+      - '${INDEXER_GRAPHQL_PORT:-4350}:${INDEXER_GRAPHQL_PORT:-4350}'
     healthcheck:
       test:
         - CMD
@@ -264,37 +264,37 @@ services:
       retries: 8
 
   ricardian:
-    profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
     restart: unless-stopped
     build:
       context: .
       dockerfile: ricardian/Dockerfile
     environment:
-      PORT: "${RICARDIAN_PORT}"
+      PORT: '${RICARDIAN_PORT}'
       DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: "${RICARDIAN_DB_NAME}"
-      DB_USER: "${RICARDIAN_DB_RUNTIME_USER}"
-      DB_PASSWORD: "${RICARDIAN_DB_RUNTIME_PASSWORD}"
-      DB_MIGRATION_USER: "${RICARDIAN_DB_MIGRATION_USER}"
-      DB_MIGRATION_PASSWORD: "${RICARDIAN_DB_MIGRATION_PASSWORD}"
-      AUTH_ENABLED: "${RICARDIAN_AUTH_ENABLED}"
-      API_KEYS_JSON: "${RICARDIAN_API_KEYS_JSON}"
-      HMAC_SECRET: "${RICARDIAN_HMAC_SECRET:-}"
-      AUTH_MAX_SKEW_SECONDS: "${RICARDIAN_AUTH_MAX_SKEW_SECONDS}"
-      AUTH_NONCE_TTL_SECONDS: "${RICARDIAN_AUTH_NONCE_TTL_SECONDS}"
-      NONCE_STORE: "${RICARDIAN_NONCE_STORE:-inmemory}"
-      REDIS_URL: "${RICARDIAN_NONCE_REDIS_URL:-}"
-      NONCE_TTL_SECONDS: "${RICARDIAN_NONCE_TTL_SECONDS:-${RICARDIAN_AUTH_NONCE_TTL_SECONDS}}"
-      RATE_LIMIT_ENABLED: "${RICARDIAN_RATE_LIMIT_ENABLED}"
-      RATE_LIMIT_REDIS_URL: "${RICARDIAN_RATE_LIMIT_REDIS_URL}"
+      DB_PORT: '5432'
+      DB_NAME: '${RICARDIAN_DB_NAME}'
+      DB_USER: '${RICARDIAN_DB_RUNTIME_USER}'
+      DB_PASSWORD: '${RICARDIAN_DB_RUNTIME_PASSWORD}'
+      DB_MIGRATION_USER: '${RICARDIAN_DB_MIGRATION_USER}'
+      DB_MIGRATION_PASSWORD: '${RICARDIAN_DB_MIGRATION_PASSWORD}'
+      AUTH_ENABLED: '${RICARDIAN_AUTH_ENABLED}'
+      API_KEYS_JSON: '${RICARDIAN_API_KEYS_JSON}'
+      HMAC_SECRET: '${RICARDIAN_HMAC_SECRET:-}'
+      AUTH_MAX_SKEW_SECONDS: '${RICARDIAN_AUTH_MAX_SKEW_SECONDS}'
+      AUTH_NONCE_TTL_SECONDS: '${RICARDIAN_AUTH_NONCE_TTL_SECONDS}'
+      NONCE_STORE: '${RICARDIAN_NONCE_STORE:-inmemory}'
+      REDIS_URL: '${RICARDIAN_NONCE_REDIS_URL:-}'
+      NONCE_TTL_SECONDS: '${RICARDIAN_NONCE_TTL_SECONDS:-${RICARDIAN_AUTH_NONCE_TTL_SECONDS}}'
+      RATE_LIMIT_ENABLED: '${RICARDIAN_RATE_LIMIT_ENABLED}'
+      RATE_LIMIT_REDIS_URL: '${RICARDIAN_RATE_LIMIT_REDIS_URL}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
     ports:
-      - "${RICARDIAN_PORT:-3100}:${RICARDIAN_PORT:-3100}"
+      - '${RICARDIAN_PORT:-3100}:${RICARDIAN_PORT:-3100}'
     healthcheck:
       test:
         - CMD
@@ -310,26 +310,26 @@ services:
       retries: 8
 
   auth:
-    profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
     restart: unless-stopped
     build:
       context: .
       dockerfile: auth/Dockerfile
     environment:
-      PORT: "${AUTH_PORT}"
+      PORT: '${AUTH_PORT}'
       DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: "${AUTH_DB_NAME}"
-      DB_USER: "${AUTH_DB_RUNTIME_USER}"
-      DB_PASSWORD: "${AUTH_DB_RUNTIME_PASSWORD}"
-      DB_MIGRATION_USER: "${AUTH_DB_MIGRATION_USER}"
-      DB_MIGRATION_PASSWORD: "${AUTH_DB_MIGRATION_PASSWORD}"
-      SESSION_TTL_SECONDS: "${AUTH_SESSION_TTL_SECONDS}"
+      DB_PORT: '5432'
+      DB_NAME: '${AUTH_DB_NAME}'
+      DB_USER: '${AUTH_DB_RUNTIME_USER}'
+      DB_PASSWORD: '${AUTH_DB_RUNTIME_PASSWORD}'
+      DB_MIGRATION_USER: '${AUTH_DB_MIGRATION_USER}'
+      DB_MIGRATION_PASSWORD: '${AUTH_DB_MIGRATION_PASSWORD}'
+      SESSION_TTL_SECONDS: '${AUTH_SESSION_TTL_SECONDS}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
     ports:
-      - "${AUTH_PORT:-3005}:${AUTH_PORT:-3005}"
+      - '${AUTH_PORT:-3005}:${AUTH_PORT:-3005}'
     healthcheck:
       test:
         - CMD
@@ -345,43 +345,43 @@ services:
       retries: 8
 
   gateway:
-    profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
     restart: unless-stopped
     build:
       context: .
       dockerfile: gateway/Dockerfile
     environment:
-      PORT: "${GATEWAY_PORT}"
+      PORT: '${GATEWAY_PORT}'
       DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: "${GATEWAY_DB_NAME}"
-      DB_USER: "${GATEWAY_DB_RUNTIME_USER}"
-      DB_PASSWORD: "${GATEWAY_DB_RUNTIME_PASSWORD}"
-      DB_MIGRATION_USER: "${GATEWAY_DB_MIGRATION_USER}"
-      DB_MIGRATION_PASSWORD: "${GATEWAY_DB_MIGRATION_PASSWORD}"
-      GATEWAY_AUTH_BASE_URL: "${GATEWAY_AUTH_BASE_URL}"
-      GATEWAY_AUTH_REQUEST_TIMEOUT_MS: "${GATEWAY_AUTH_REQUEST_TIMEOUT_MS}"
-      GATEWAY_INDEXER_GRAPHQL_URL: "${GATEWAY_INDEXER_GRAPHQL_URL}"
-      GATEWAY_INDEXER_REQUEST_TIMEOUT_MS: "${GATEWAY_INDEXER_REQUEST_TIMEOUT_MS}"
-      GATEWAY_SETTLEMENT_RUNTIME: "${GATEWAY_SETTLEMENT_RUNTIME:-}"
-      GATEWAY_RPC_URL: "${GATEWAY_RPC_URL}"
-      GATEWAY_RPC_FALLBACK_URLS: "${GATEWAY_RPC_FALLBACK_URLS:-}"
-      GATEWAY_RPC_READ_TIMEOUT_MS: "${GATEWAY_RPC_READ_TIMEOUT_MS}"
-      GATEWAY_CHAIN_ID: "${GATEWAY_CHAIN_ID}"
-      GATEWAY_EXPLORER_BASE_URL: "${GATEWAY_EXPLORER_BASE_URL:-}"
-      GATEWAY_ESCROW_ADDRESS: "${GATEWAY_ESCROW_ADDRESS}"
-      GATEWAY_USDC_ADDRESS: "${GATEWAY_USDC_ADDRESS:-}"
-      GATEWAY_ENABLE_MUTATIONS: "${GATEWAY_ENABLE_MUTATIONS}"
-      GATEWAY_WRITE_ALLOWLIST: "${GATEWAY_WRITE_ALLOWLIST}"
-      GATEWAY_COMMIT_SHA: "${GATEWAY_COMMIT_SHA}"
-      GATEWAY_BUILD_TIME: "${GATEWAY_BUILD_TIME}"
+      DB_PORT: '5432'
+      DB_NAME: '${GATEWAY_DB_NAME}'
+      DB_USER: '${GATEWAY_DB_RUNTIME_USER}'
+      DB_PASSWORD: '${GATEWAY_DB_RUNTIME_PASSWORD}'
+      DB_MIGRATION_USER: '${GATEWAY_DB_MIGRATION_USER}'
+      DB_MIGRATION_PASSWORD: '${GATEWAY_DB_MIGRATION_PASSWORD}'
+      GATEWAY_AUTH_BASE_URL: '${GATEWAY_AUTH_BASE_URL}'
+      GATEWAY_AUTH_REQUEST_TIMEOUT_MS: '${GATEWAY_AUTH_REQUEST_TIMEOUT_MS}'
+      GATEWAY_INDEXER_GRAPHQL_URL: '${GATEWAY_INDEXER_GRAPHQL_URL}'
+      GATEWAY_INDEXER_REQUEST_TIMEOUT_MS: '${GATEWAY_INDEXER_REQUEST_TIMEOUT_MS}'
+      GATEWAY_SETTLEMENT_RUNTIME: '${GATEWAY_SETTLEMENT_RUNTIME:-}'
+      GATEWAY_RPC_URL: '${GATEWAY_RPC_URL}'
+      GATEWAY_RPC_FALLBACK_URLS: '${GATEWAY_RPC_FALLBACK_URLS:-}'
+      GATEWAY_RPC_READ_TIMEOUT_MS: '${GATEWAY_RPC_READ_TIMEOUT_MS}'
+      GATEWAY_CHAIN_ID: '${GATEWAY_CHAIN_ID}'
+      GATEWAY_EXPLORER_BASE_URL: '${GATEWAY_EXPLORER_BASE_URL:-}'
+      GATEWAY_ESCROW_ADDRESS: '${GATEWAY_ESCROW_ADDRESS}'
+      GATEWAY_USDC_ADDRESS: '${GATEWAY_USDC_ADDRESS:-}'
+      GATEWAY_ENABLE_MUTATIONS: '${GATEWAY_ENABLE_MUTATIONS}'
+      GATEWAY_WRITE_ALLOWLIST: '${GATEWAY_WRITE_ALLOWLIST}'
+      GATEWAY_COMMIT_SHA: '${GATEWAY_COMMIT_SHA}'
+      GATEWAY_BUILD_TIME: '${GATEWAY_BUILD_TIME}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
       auth:
         condition: service_healthy
     ports:
-      - "${GATEWAY_PORT:-3600}:${GATEWAY_PORT:-3600}"
+      - '${GATEWAY_PORT:-3600}:${GATEWAY_PORT:-3600}'
     healthcheck:
       test:
         - CMD
@@ -397,31 +397,31 @@ services:
       retries: 8
 
   treasury:
-    profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
     restart: unless-stopped
     build:
       context: .
       dockerfile: treasury/Dockerfile
     environment:
-      PORT: "${TREASURY_PORT}"
+      PORT: '${TREASURY_PORT}'
       DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: "${TREASURY_DB_NAME}"
-      DB_USER: "${TREASURY_DB_RUNTIME_USER}"
-      DB_PASSWORD: "${TREASURY_DB_RUNTIME_PASSWORD}"
-      DB_MIGRATION_USER: "${TREASURY_DB_MIGRATION_USER}"
-      DB_MIGRATION_PASSWORD: "${TREASURY_DB_MIGRATION_PASSWORD}"
-      INDEXER_GRAPHQL_URL: "${TREASURY_INDEXER_GRAPHQL_URL}"
-      TREASURY_INGEST_BATCH_SIZE: "${TREASURY_INGEST_BATCH_SIZE}"
-      TREASURY_INGEST_MAX_EVENTS: "${TREASURY_INGEST_MAX_EVENTS}"
-      AUTH_ENABLED: "${TREASURY_AUTH_ENABLED}"
-      API_KEYS_JSON: "${TREASURY_API_KEYS_JSON}"
-      HMAC_SECRET: "${TREASURY_HMAC_SECRET:-}"
-      AUTH_MAX_SKEW_SECONDS: "${TREASURY_AUTH_MAX_SKEW_SECONDS}"
-      AUTH_NONCE_TTL_SECONDS: "${TREASURY_AUTH_NONCE_TTL_SECONDS}"
-      NONCE_STORE: "${TREASURY_NONCE_STORE:-inmemory}"
-      REDIS_URL: "${TREASURY_NONCE_REDIS_URL:-}"
-      NONCE_TTL_SECONDS: "${TREASURY_NONCE_TTL_SECONDS:-${TREASURY_AUTH_NONCE_TTL_SECONDS}}"
+      DB_PORT: '5432'
+      DB_NAME: '${TREASURY_DB_NAME}'
+      DB_USER: '${TREASURY_DB_RUNTIME_USER}'
+      DB_PASSWORD: '${TREASURY_DB_RUNTIME_PASSWORD}'
+      DB_MIGRATION_USER: '${TREASURY_DB_MIGRATION_USER}'
+      DB_MIGRATION_PASSWORD: '${TREASURY_DB_MIGRATION_PASSWORD}'
+      INDEXER_GRAPHQL_URL: '${TREASURY_INDEXER_GRAPHQL_URL}'
+      TREASURY_INGEST_BATCH_SIZE: '${TREASURY_INGEST_BATCH_SIZE}'
+      TREASURY_INGEST_MAX_EVENTS: '${TREASURY_INGEST_MAX_EVENTS}'
+      AUTH_ENABLED: '${TREASURY_AUTH_ENABLED}'
+      API_KEYS_JSON: '${TREASURY_API_KEYS_JSON}'
+      HMAC_SECRET: '${TREASURY_HMAC_SECRET:-}'
+      AUTH_MAX_SKEW_SECONDS: '${TREASURY_AUTH_MAX_SKEW_SECONDS}'
+      AUTH_NONCE_TTL_SECONDS: '${TREASURY_AUTH_NONCE_TTL_SECONDS}'
+      NONCE_STORE: '${TREASURY_NONCE_STORE:-inmemory}'
+      REDIS_URL: '${TREASURY_NONCE_REDIS_URL:-}'
+      NONCE_TTL_SECONDS: '${TREASURY_NONCE_TTL_SECONDS:-${TREASURY_AUTH_NONCE_TTL_SECONDS}}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
@@ -432,7 +432,7 @@ services:
         condition: service_healthy
         required: false
     ports:
-      - "${TREASURY_PORT:-3200}:${TREASURY_PORT:-3200}"
+      - '${TREASURY_PORT:-3200}:${TREASURY_PORT:-3200}'
     healthcheck:
       test:
         - CMD
@@ -448,38 +448,38 @@ services:
       retries: 8
 
   oracle:
-    profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
     restart: unless-stopped
     build:
       context: .
       dockerfile: oracle/Dockerfile
     environment:
-      PORT: "${ORACLE_PORT}"
-      API_KEY: "${ORACLE_API_KEY}"
-      HMAC_SECRET: "${ORACLE_HMAC_SECRET}"
-      SETTLEMENT_RUNTIME: "${ORACLE_SETTLEMENT_RUNTIME:-}"
-      RPC_URL: "${ORACLE_RPC_URL}"
-      RPC_FALLBACK_URLS: "${ORACLE_RPC_FALLBACK_URLS:-}"
-      CHAIN_ID: "${ORACLE_CHAIN_ID}"
-      EXPLORER_BASE_URL: "${ORACLE_EXPLORER_BASE_URL:-}"
-      ESCROW_ADDRESS: "${ORACLE_ESCROW_ADDRESS}"
-      USDC_ADDRESS: "${ORACLE_USDC_ADDRESS}"
-      ORACLE_PRIVATE_KEY: "${ORACLE_PRIVATE_KEY}"
+      PORT: '${ORACLE_PORT}'
+      API_KEY: '${ORACLE_API_KEY}'
+      HMAC_SECRET: '${ORACLE_HMAC_SECRET}'
+      SETTLEMENT_RUNTIME: '${ORACLE_SETTLEMENT_RUNTIME:-}'
+      RPC_URL: '${ORACLE_RPC_URL}'
+      RPC_FALLBACK_URLS: '${ORACLE_RPC_FALLBACK_URLS:-}'
+      CHAIN_ID: '${ORACLE_CHAIN_ID}'
+      EXPLORER_BASE_URL: '${ORACLE_EXPLORER_BASE_URL:-}'
+      ESCROW_ADDRESS: '${ORACLE_ESCROW_ADDRESS}'
+      USDC_ADDRESS: '${ORACLE_USDC_ADDRESS}'
+      ORACLE_PRIVATE_KEY: '${ORACLE_PRIVATE_KEY}'
       DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: "${ORACLE_DB_NAME}"
-      DB_USER: "${ORACLE_DB_RUNTIME_USER}"
-      DB_PASSWORD: "${ORACLE_DB_RUNTIME_PASSWORD}"
-      DB_MIGRATION_USER: "${ORACLE_DB_MIGRATION_USER}"
-      DB_MIGRATION_PASSWORD: "${ORACLE_DB_MIGRATION_PASSWORD}"
-      INDEXER_GRAPHQL_URL: "${ORACLE_INDEXER_GRAPHQL_URL}"
-      RETRY_ATTEMPTS: "${ORACLE_RETRY_ATTEMPTS}"
-      RETRY_DELAY: "${ORACLE_RETRY_DELAY}"
-      NOTIFICATIONS_ENABLED: "${ORACLE_NOTIFICATIONS_ENABLED}"
-      NOTIFICATIONS_WEBHOOK_URL: "${ORACLE_NOTIFICATIONS_WEBHOOK_URL}"
-      NOTIFICATIONS_COOLDOWN_MS: "${ORACLE_NOTIFICATIONS_COOLDOWN_MS}"
-      NOTIFICATIONS_REQUEST_TIMEOUT_MS: "${ORACLE_NOTIFICATIONS_REQUEST_TIMEOUT_MS}"
-      ORACLE_MANUAL_APPROVAL_ENABLED: "${ORACLE_MANUAL_APPROVAL_ENABLED}"
+      DB_PORT: '5432'
+      DB_NAME: '${ORACLE_DB_NAME}'
+      DB_USER: '${ORACLE_DB_RUNTIME_USER}'
+      DB_PASSWORD: '${ORACLE_DB_RUNTIME_PASSWORD}'
+      DB_MIGRATION_USER: '${ORACLE_DB_MIGRATION_USER}'
+      DB_MIGRATION_PASSWORD: '${ORACLE_DB_MIGRATION_PASSWORD}'
+      INDEXER_GRAPHQL_URL: '${ORACLE_INDEXER_GRAPHQL_URL}'
+      RETRY_ATTEMPTS: '${ORACLE_RETRY_ATTEMPTS}'
+      RETRY_DELAY: '${ORACLE_RETRY_DELAY}'
+      NOTIFICATIONS_ENABLED: '${ORACLE_NOTIFICATIONS_ENABLED}'
+      NOTIFICATIONS_WEBHOOK_URL: '${ORACLE_NOTIFICATIONS_WEBHOOK_URL}'
+      NOTIFICATIONS_COOLDOWN_MS: '${ORACLE_NOTIFICATIONS_COOLDOWN_MS}'
+      NOTIFICATIONS_REQUEST_TIMEOUT_MS: '${ORACLE_NOTIFICATIONS_REQUEST_TIMEOUT_MS}'
+      ORACLE_MANUAL_APPROVAL_ENABLED: '${ORACLE_MANUAL_APPROVAL_ENABLED}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
@@ -490,7 +490,7 @@ services:
         condition: service_healthy
         required: false
     ports:
-      - "${ORACLE_PORT:-3001}:${ORACLE_PORT:-3001}"
+      - '${ORACLE_PORT:-3001}:${ORACLE_PORT:-3001}'
     healthcheck:
       test:
         - CMD
@@ -506,39 +506,39 @@ services:
       retries: 8
 
   reconciliation:
-    profiles: ["local-dev", "staging-e2e", "staging-e2e-real"]
+    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
     restart: unless-stopped
     build:
       context: .
       dockerfile: reconciliation/Dockerfile
     environment:
-      RECONCILIATION_ENABLED: "${RECONCILIATION_ENABLED}"
-      RECONCILIATION_DAEMON_INTERVAL_MS: "${RECONCILIATION_DAEMON_INTERVAL_MS}"
-      RECONCILIATION_BATCH_SIZE: "${RECONCILIATION_BATCH_SIZE}"
-      RECONCILIATION_MAX_TRADES_PER_RUN: "${RECONCILIATION_MAX_TRADES_PER_RUN}"
+      RECONCILIATION_ENABLED: '${RECONCILIATION_ENABLED}'
+      RECONCILIATION_DAEMON_INTERVAL_MS: '${RECONCILIATION_DAEMON_INTERVAL_MS}'
+      RECONCILIATION_BATCH_SIZE: '${RECONCILIATION_BATCH_SIZE}'
+      RECONCILIATION_MAX_TRADES_PER_RUN: '${RECONCILIATION_MAX_TRADES_PER_RUN}'
       DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: "${RECONCILIATION_DB_NAME}"
-      TREASURY_DB_NAME: "${TREASURY_DB_NAME}"
-      INDEXER_DB_NAME: "${INDEXER_DB_NAME}"
-      DB_USER: "${RECONCILIATION_DB_RUNTIME_USER}"
-      DB_PASSWORD: "${RECONCILIATION_DB_RUNTIME_PASSWORD}"
-      DB_MIGRATION_USER: "${RECONCILIATION_DB_MIGRATION_USER}"
-      DB_MIGRATION_PASSWORD: "${RECONCILIATION_DB_MIGRATION_PASSWORD}"
-      SETTLEMENT_RUNTIME: "${RECONCILIATION_SETTLEMENT_RUNTIME:-}"
-      RPC_URL: "${RECONCILIATION_RPC_URL}"
-      RPC_FALLBACK_URLS: "${RECONCILIATION_RPC_FALLBACK_URLS:-}"
-      CHAIN_ID: "${RECONCILIATION_CHAIN_ID}"
-      EXPLORER_BASE_URL: "${RECONCILIATION_EXPLORER_BASE_URL:-}"
-      ESCROW_ADDRESS: "${RECONCILIATION_ESCROW_ADDRESS}"
-      USDC_ADDRESS: "${RECONCILIATION_USDC_ADDRESS}"
-      INDEXER_GRAPHQL_URL: "${RECONCILIATION_INDEXER_GRAPHQL_URL}"
-      RECONCILIATION_REQUIRE_CONTAINER_SAFE_INDEXER_URL: "${RECONCILIATION_REQUIRE_CONTAINER_SAFE_INDEXER_URL:-false}"
-      NETWORK_NAME: "${STAGING_E2E_REAL_NETWORK_NAME:-}"
-      NOTIFICATIONS_ENABLED: "${RECONCILIATION_NOTIFICATIONS_ENABLED}"
-      NOTIFICATIONS_WEBHOOK_URL: "${RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL}"
-      NOTIFICATIONS_COOLDOWN_MS: "${RECONCILIATION_NOTIFICATIONS_COOLDOWN_MS}"
-      NOTIFICATIONS_REQUEST_TIMEOUT_MS: "${RECONCILIATION_NOTIFICATIONS_REQUEST_TIMEOUT_MS}"
+      DB_PORT: '5432'
+      DB_NAME: '${RECONCILIATION_DB_NAME}'
+      TREASURY_DB_NAME: '${TREASURY_DB_NAME}'
+      INDEXER_DB_NAME: '${INDEXER_DB_NAME}'
+      DB_USER: '${RECONCILIATION_DB_RUNTIME_USER}'
+      DB_PASSWORD: '${RECONCILIATION_DB_RUNTIME_PASSWORD}'
+      DB_MIGRATION_USER: '${RECONCILIATION_DB_MIGRATION_USER}'
+      DB_MIGRATION_PASSWORD: '${RECONCILIATION_DB_MIGRATION_PASSWORD}'
+      SETTLEMENT_RUNTIME: '${RECONCILIATION_SETTLEMENT_RUNTIME:-}'
+      RPC_URL: '${RECONCILIATION_RPC_URL}'
+      RPC_FALLBACK_URLS: '${RECONCILIATION_RPC_FALLBACK_URLS:-}'
+      CHAIN_ID: '${RECONCILIATION_CHAIN_ID}'
+      EXPLORER_BASE_URL: '${RECONCILIATION_EXPLORER_BASE_URL:-}'
+      ESCROW_ADDRESS: '${RECONCILIATION_ESCROW_ADDRESS}'
+      USDC_ADDRESS: '${RECONCILIATION_USDC_ADDRESS}'
+      INDEXER_GRAPHQL_URL: '${RECONCILIATION_INDEXER_GRAPHQL_URL}'
+      RECONCILIATION_REQUIRE_CONTAINER_SAFE_INDEXER_URL: '${RECONCILIATION_REQUIRE_CONTAINER_SAFE_INDEXER_URL:-false}'
+      NETWORK_NAME: '${STAGING_E2E_REAL_NETWORK_NAME:-}'
+      NOTIFICATIONS_ENABLED: '${RECONCILIATION_NOTIFICATIONS_ENABLED}'
+      NOTIFICATIONS_WEBHOOK_URL: '${RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL}'
+      NOTIFICATIONS_COOLDOWN_MS: '${RECONCILIATION_NOTIFICATIONS_COOLDOWN_MS}'
+      NOTIFICATIONS_REQUEST_TIMEOUT_MS: '${RECONCILIATION_NOTIFICATIONS_REQUEST_TIMEOUT_MS}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
@@ -562,16 +562,15 @@ services:
       timeout: 5s
       retries: 8
   hardhat:
-    profiles: ["local-dev"]
+    profiles: ['local-dev']
     restart: unless-stopped
     build:
       context: ./contracts
       dockerfile: Dockerfile
     ports:
-      - "8545:8545"
+      - '8545:8545'
     networks:
       - default
-
 
 volumes:
   postgres-data:

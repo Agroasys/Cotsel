@@ -37,12 +37,12 @@ async function parseOptionalJson(response: Response): Promise<RicardianHashRespo
 
 function isDocumentRecord(value: unknown): value is RicardianDocumentRecord {
   return Boolean(
-    value
-      && typeof value === 'object'
-      && typeof (value as RicardianDocumentRecord).hash === 'string'
-      && typeof (value as RicardianDocumentRecord).documentRef === 'string'
-      && typeof (value as RicardianDocumentRecord).requestId === 'string'
-      && typeof (value as RicardianDocumentRecord).createdAt === 'string',
+    value &&
+    typeof value === 'object' &&
+    typeof (value as RicardianDocumentRecord).hash === 'string' &&
+    typeof (value as RicardianDocumentRecord).documentRef === 'string' &&
+    typeof (value as RicardianDocumentRecord).requestId === 'string' &&
+    typeof (value as RicardianDocumentRecord).createdAt === 'string',
   );
 }
 
@@ -94,9 +94,14 @@ export class RicardianClient {
       }
 
       if (!payload?.success || !isDocumentRecord(payload.data)) {
-        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Ricardian service returned an invalid payload', {
-          upstream: 'ricardian',
-        });
+        throw new GatewayError(
+          502,
+          'UPSTREAM_UNAVAILABLE',
+          'Ricardian service returned an invalid payload',
+          {
+            upstream: 'ricardian',
+          },
+        );
       }
 
       return payload.data;

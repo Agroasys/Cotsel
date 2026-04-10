@@ -9,10 +9,10 @@
     "dev": "ts-node src/server.ts",
     "pretest": "npm run build:sdk",
     "test": "jest --runInBand",
-    "lint": "tsc --noEmit",
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit",
     "build:sdk": "npm --prefix ../sdk run build",
-    "prebuild": "npm run build:sdk",
-    "prelint": "npm run build:sdk"
+    "prebuild": "npm run build:sdk"
   },
   "dependencies": {
     "@agroasys/shared-db": "^1.0.0",

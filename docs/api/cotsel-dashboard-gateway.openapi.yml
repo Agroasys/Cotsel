@@ -4241,7 +4241,8 @@ components:
           format: date-time
     TradeEvidencePayload:
       type: object
-      required: [tradeId, ricardianHash, settlement, complianceDecisions, governanceActions, freshness]
+      required:
+        [tradeId, ricardianHash, settlement, complianceDecisions, governanceActions, freshness]
       properties:
         tradeId:
           type: string
@@ -4304,7 +4305,17 @@ components:
       enum: [not_required, not_started, pending, verified, failed]
     GovernanceMonitoringState:
       type: string
-      enum: [not_required, not_started, pending_verification, pending_confirmation, confirmed, finalized, reverted, stale]
+      enum:
+        [
+          not_required,
+          not_started,
+          pending_verification,
+          pending_confirmation,
+          confirmed,
+          finalized,
+          reverted,
+          stale,
+        ]
     GovernanceStatus:
       type: object
       required:
@@ -4813,7 +4824,16 @@ components:
           type: string
     GovernancePreparedSigningPayload:
       type: object
-      required: [chainId, contractAddress, contractMethod, args, txRequest, signerWallet, preparedPayloadHash]
+      required:
+        [
+          chainId,
+          contractAddress,
+          contractMethod,
+          args,
+          txRequest,
+          signerWallet,
+          preparedPayloadHash,
+        ]
       properties:
         chainId:
           type: integer

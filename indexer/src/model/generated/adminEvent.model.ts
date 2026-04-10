@@ -38,13 +38,6 @@ export class AdminEvent {
     @IntColumn_({nullable: false})
     transactionIndex!: number
 
-    @Index_()
-    @StringColumn_({nullable: true})
-    extrinsicHash!: string | undefined | null
-
-    @IntColumn_({nullable: true})
-    extrinsicIndex!: number | undefined | null
-
     @StringColumn_({nullable: true})
     proposedAdmin!: string | undefined | null
 

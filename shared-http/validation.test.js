@@ -40,12 +40,18 @@ test('optionalInteger enforces configured bounds', () => {
 test('optionalEnum only accepts declared values', () => {
   assert.equal(optionalEnum('csv', ['json', 'csv'], 'format'), 'csv');
   assert.equal(optionalEnum(undefined, ['json', 'csv'], 'format'), undefined);
-  assert.throws(() => optionalEnum('xml', ['json', 'csv'], 'format'), /format must be one of: json, csv/);
+  assert.throws(
+    () => optionalEnum('xml', ['json', 'csv'], 'format'),
+    /format must be one of: json, csv/,
+  );
 });
 
 test('requireIsoTimestamp parses valid timestamps', () => {
   const parsed = requireIsoTimestamp('2026-04-09T10:00:00.000Z', 'observedAt');
   assert.ok(parsed instanceof Date);
   assert.equal(parsed.toISOString(), '2026-04-09T10:00:00.000Z');
-  assert.throws(() => requireIsoTimestamp('not-a-date', 'observedAt'), /observedAt must be a valid ISO timestamp/);
+  assert.throws(
+    () => requireIsoTimestamp('not-a-date', 'observedAt'),
+    /observedAt must be a valid ISO timestamp/,
+  );
 });

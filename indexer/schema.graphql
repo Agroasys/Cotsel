@@ -14,7 +14,7 @@ type Trade @entity {
   ricardianHash: String!
   createdAt: DateTime! @index
   arrivalTimestamp: DateTime
-  
+
   events: [TradeEvent!]! @derivedFrom(field: "trade")
   disputes: [DisputeProposal!]! @derivedFrom(field: "trade")
 }
@@ -43,12 +43,6 @@ type TradeEvent @entity {
   txHash: String! @index
   logIndex: Int! @index
   transactionIndex: Int! @index
-  # Historical compatibility fields retained for archived Substrate-era replay
-  # evidence. Base-originated records keep these null and use txHash +
-  # logIndex/transactionIndex as the active identity tuple.
-  extrinsicHash: String @index
-  extrinsicIndex: Int
-
   # TradeLocked specific
   totalAmount: BigInt
   logisticsAmount: BigInt
@@ -111,8 +105,6 @@ enum TradeStatus {
   CLOSED
 }
 
-
-
 ## DISPUTES
 
 type DisputeProposal @entity {
@@ -140,11 +132,6 @@ type DisputeEvent @entity {
   txHash: String! @index
   logIndex: Int! @index
   transactionIndex: Int! @index
-  # Historical compatibility fields retained for archived Substrate-era replay
-  # evidence. Base-originated records keep these null.
-  extrinsicHash: String @index
-  extrinsicIndex: Int
-
   # DisputeSolutionProposed specific
   proposedDisputeStatus: DisputeStatus
   proposer: String
@@ -165,8 +152,6 @@ enum DisputeStatus {
   REFUND
   RESOLVE
 }
-
-
 
 ## ORACLE UPDATES
 
@@ -196,11 +181,6 @@ type OracleEvent @entity {
   txHash: String! @index
   logIndex: Int! @index
   transactionIndex: Int! @index
-  # Historical compatibility fields retained for archived Substrate-era replay
-  # evidence. Base-originated records keep these null.
-  extrinsicHash: String @index
-  extrinsicIndex: Int
-
   # OracleUpdateProposed specific
   proposedOracle: String
   eta: BigInt
@@ -250,11 +230,6 @@ type AdminEvent @entity {
   txHash: String! @index
   logIndex: Int! @index
   transactionIndex: Int! @index
-  # Historical compatibility fields retained for archived Substrate-era replay
-  # evidence. Base-originated records keep these null.
-  extrinsicHash: String @index
-  extrinsicIndex: Int
-
   # AdminAddProposed specific
   proposedAdmin: String
   eta: BigInt
@@ -282,11 +257,6 @@ type SystemEvent @entity {
   txHash: String! @index
   logIndex: Int! @index
   transactionIndex: Int! @index
-  # Historical compatibility fields retained for archived Substrate-era replay
-  # evidence. Base-originated records keep these null.
-  extrinsicHash: String @index
-  extrinsicIndex: Int
-
   # Paused/Unpaused/ClaimsPaused/ClaimsUnpaused specific
   triggeredBy: String
 

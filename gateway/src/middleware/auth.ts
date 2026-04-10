@@ -32,7 +32,11 @@ export function resolveGatewayActorKey(session: AuthSession): string {
     return `wallet:${normalizedWallet}`;
   }
 
-  throw new GatewayError(500, 'INTERNAL_ERROR', 'Authenticated session is missing every supported actor identifier');
+  throw new GatewayError(
+    500,
+    'INTERNAL_ERROR',
+    'Authenticated session is missing every supported actor identifier',
+  );
 }
 
 export function requireWalletBoundSession(
@@ -77,7 +81,12 @@ export function matchesAllowlist(session: AuthSession, allowlist: string[]): boo
     return false;
   }
 
-  const candidates = [session.accountId, session.userId, session.walletAddress, session.email].filter(Boolean) as string[];
+  const candidates = [
+    session.accountId,
+    session.userId,
+    session.walletAddress,
+    session.email,
+  ].filter(Boolean) as string[];
   const normalizedAllowlist = new Set(allowlist.map((entry) => entry.toLowerCase()));
   return candidates.some((entry) => normalizedAllowlist.has(entry.toLowerCase()));
 }
@@ -136,9 +145,16 @@ export function requireMutationWriteAccess() {
     }
 
     if (!principal.writeEnabled) {
-      next(new GatewayError(403, 'FORBIDDEN', 'Gateway mutations are disabled or caller is not allowlisted', {
-        reason: 'disabled_or_not_allowlisted',
-      }));
+      next(
+        new GatewayError(
+          403,
+          'FORBIDDEN',
+          'Gateway mutations are disabled or caller is not allowlisted',
+          {
+            reason: 'disabled_or_not_allowlisted',
+          },
+        ),
+      );
       return;
     }
 

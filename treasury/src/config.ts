@@ -98,7 +98,10 @@ function envUrl(name: string): string {
   }
 
   assert(
-    parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'ws:' || parsed.protocol === 'wss:',
+    parsed.protocol === 'http:' ||
+      parsed.protocol === 'https:' ||
+      parsed.protocol === 'ws:' ||
+      parsed.protocol === 'wss:',
     `${name} must use http, https, ws, or wss protocol`,
   );
 
@@ -118,7 +121,9 @@ function parseUrlList(raw: string | undefined): string[] {
 }
 
 function hasSettlementRuntimeOverride(): boolean {
-  return Boolean(optionalEnv('SETTLEMENT_RUNTIME') || optionalEnv('RPC_URL') || optionalEnv('CHAIN_ID'));
+  return Boolean(
+    optionalEnv('SETTLEMENT_RUNTIME') || optionalEnv('RPC_URL') || optionalEnv('CHAIN_ID'),
+  );
 }
 
 function resolveNonceStoreMode(nodeEnv: string): NonceStoreMode {
@@ -175,7 +180,7 @@ export function loadConfig(): TreasuryConfig {
   if (authEnabled) {
     assert(
       apiKeys.length > 0 || Boolean(hmacSecret),
-      'AUTH_ENABLED=true requires either API_KEYS_JSON entries or HMAC_SECRET'
+      'AUTH_ENABLED=true requires either API_KEYS_JSON entries or HMAC_SECRET',
     );
   }
 
@@ -191,12 +196,12 @@ export function loadConfig(): TreasuryConfig {
   assert(indexerGraphqlTimeoutMaxMs <= 60000, 'INDEXER_GQL_TIMEOUT_MAX_MS must be <= 60000');
   assert(
     indexerGraphqlTimeoutMinMs <= indexerGraphqlTimeoutMaxMs,
-    'INDEXER_GQL_TIMEOUT_MIN_MS must be <= INDEXER_GQL_TIMEOUT_MAX_MS'
+    'INDEXER_GQL_TIMEOUT_MIN_MS must be <= INDEXER_GQL_TIMEOUT_MAX_MS',
   );
   assert(
     indexerGraphqlRequestTimeoutMs >= indexerGraphqlTimeoutMinMs &&
       indexerGraphqlRequestTimeoutMs <= indexerGraphqlTimeoutMaxMs,
-    `INDEXER_GQL_TIMEOUT_MS must be between ${indexerGraphqlTimeoutMinMs} and ${indexerGraphqlTimeoutMaxMs}`
+    `INDEXER_GQL_TIMEOUT_MS must be between ${indexerGraphqlTimeoutMinMs} and ${indexerGraphqlTimeoutMaxMs}`,
   );
 
   const config: TreasuryConfig = {

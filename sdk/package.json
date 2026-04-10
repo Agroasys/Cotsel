@@ -48,7 +48,8 @@
     "test:admin": "jest tests/adminSDK.test.ts --runInBand",
     "test:buyer-manual": "jest tests/manualBuyerSDK.test.ts --runInBand",
     "test:admin-manual": "jest tests/manualAdminSDK.test.ts --runInBand",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "ethers": "^6.4.0",

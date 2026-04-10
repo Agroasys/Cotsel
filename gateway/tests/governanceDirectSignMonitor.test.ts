@@ -50,7 +50,6 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
     flowType: 'direct_sign',
     contractMethod: 'pause',
     txHash: `0x${'1'.repeat(64)}`,
-    extrinsicHash: null,
     blockNumber: null,
     tradeId: null,
     chainId: '31337',
@@ -84,7 +83,9 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
   };
 }
 
-function buildObservedTransaction(overrides: Partial<GovernanceObservedTransaction> = {}): GovernanceObservedTransaction {
+function buildObservedTransaction(
+  overrides: Partial<GovernanceObservedTransaction> = {},
+): GovernanceObservedTransaction {
   const signing = buildSigningPayload();
   return {
     chainId: signing.chainId,
@@ -96,7 +97,9 @@ function buildObservedTransaction(overrides: Partial<GovernanceObservedTransacti
   };
 }
 
-function buildReceipt(overrides: Partial<GovernanceObservedTransactionReceipt> = {}): GovernanceObservedTransactionReceipt {
+function buildReceipt(
+  overrides: Partial<GovernanceObservedTransactionReceipt> = {},
+): GovernanceObservedTransactionReceipt {
   return {
     blockNumber: 88,
     status: 'success',
@@ -104,7 +107,9 @@ function buildReceipt(overrides: Partial<GovernanceObservedTransactionReceipt> =
   };
 }
 
-function createVerifier(overrides: Partial<GovernanceTransactionVerifier> = {}): GovernanceTransactionVerifier {
+function createVerifier(
+  overrides: Partial<GovernanceTransactionVerifier> = {},
+): GovernanceTransactionVerifier {
   return {
     getTransaction: jest.fn(async () => null),
     getTransactionReceipt: jest.fn(async () => null),
@@ -115,9 +120,7 @@ function createVerifier(overrides: Partial<GovernanceTransactionVerifier> = {}):
 
 describe('GovernanceDirectSignMonitor', () => {
   test('verifies a previously unobserved tx and moves it into pending confirmation monitoring', async () => {
-    const store = createInMemoryGovernanceActionStore([
-      buildAction(),
-    ]);
+    const store = createInMemoryGovernanceActionStore([buildAction()]);
     const auditLogStore = createInMemoryAuditLogStore();
     const verifier = createVerifier({
       getTransaction: jest.fn(async () => buildObservedTransaction({ blockNumber: 91 })),
@@ -162,7 +165,11 @@ describe('GovernanceDirectSignMonitor', () => {
       createPassthroughGovernanceWriteStore(store, auditLogStore),
       auditLogStore,
       verifier,
-      { now: () => new Date('2026-04-07T10:02:00.000Z'), confirmationDepth: 1, finalizationDepth: 5 },
+      {
+        now: () => new Date('2026-04-07T10:02:00.000Z'),
+        confirmationDepth: 1,
+        finalizationDepth: 5,
+      },
     );
 
     await service.processPendingActions();
@@ -194,7 +201,11 @@ describe('GovernanceDirectSignMonitor', () => {
       createPassthroughGovernanceWriteStore(store, auditLogStore),
       auditLogStore,
       verifier,
-      { now: () => new Date('2026-04-07T10:05:00.000Z'), confirmationDepth: 1, finalizationDepth: 5 },
+      {
+        now: () => new Date('2026-04-07T10:05:00.000Z'),
+        confirmationDepth: 1,
+        finalizationDepth: 5,
+      },
     );
 
     await service.processPendingActions();
@@ -217,7 +228,9 @@ describe('GovernanceDirectSignMonitor', () => {
     ]);
     const auditLogStore = createInMemoryAuditLogStore();
     const verifier = createVerifier({
-      getTransactionReceipt: jest.fn(async () => buildReceipt({ blockNumber: 90, status: 'reverted' })),
+      getTransactionReceipt: jest.fn(async () =>
+        buildReceipt({ blockNumber: 90, status: 'reverted' }),
+      ),
       getBlockNumber: jest.fn(async () => 90),
     });
     const service = new GovernanceDirectSignMonitor(
@@ -266,9 +279,7 @@ describe('GovernanceDirectSignMonitor', () => {
   });
 
   test('marks verification as failed when the observed tx does not match the prepared payload', async () => {
-    const store = createInMemoryGovernanceActionStore([
-      buildAction(),
-    ]);
+    const store = createInMemoryGovernanceActionStore([buildAction()]);
     const auditLogStore = createInMemoryAuditLogStore();
     const verifier = createVerifier({
       getTransaction: jest.fn(async () => buildObservedTransaction({ data: '0xdeadbeef' })),
@@ -288,7 +299,9 @@ describe('GovernanceDirectSignMonitor', () => {
     expect(updated?.verificationState).toBe('failed');
     expect(updated?.monitoringState).toBe('pending_verification');
     expect(updated?.errorCode).toBe('BROADCAST_VERIFICATION_FAILED');
-    expect(auditLogStore.entries[0]?.eventType).toBe('governance.action.monitoring.verification_failed');
+    expect(auditLogStore.entries[0]?.eventType).toBe(
+      'governance.action.monitoring.verification_failed',
+    );
   });
 
   test('ignores executor-flow actions even if they share a broadcast status', async () => {

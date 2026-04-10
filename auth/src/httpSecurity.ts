@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { Request } from 'express';
-import type { RouteRateLimitPolicy } from '@agroasys/shared-edge';
+import { normalizeRoutePath, type RouteRateLimitPolicy } from '@agroasys/shared-edge';
 
 const HEALTH_RATE_LIMIT: RouteRateLimitPolicy = {
   name: 'health',
@@ -28,15 +28,6 @@ const TRUSTED_EXCHANGE_RATE_LIMIT: RouteRateLimitPolicy = {
   sustained: { limit: 180, windowSeconds: 300 },
 };
 
-function normalizeRoutePath(pathname: string): string {
-  if (pathname.length <= 1) {
-    return pathname;
-  }
-
-  const normalized = pathname.replace(/\/+$/, '');
-  return normalized.length === 0 ? '/' : normalized;
-}
-
 export function authRateLimitPolicy(req: Pick<Request, 'path'>): RouteRateLimitPolicy | null {
   const path = normalizeRoutePath(req.path);
 
@@ -58,4 +49,3 @@ export function authRateLimitPolicy(req: Pick<Request, 'path'>): RouteRateLimitP
 
   return null;
 }
-

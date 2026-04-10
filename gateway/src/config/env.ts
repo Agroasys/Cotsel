@@ -177,23 +177,35 @@ export function loadConfig(): GatewayConfig {
   const writeAllowlist = parseAllowlist(process.env.GATEWAY_WRITE_ALLOWLIST);
   const enableMutations = envBool('GATEWAY_ENABLE_MUTATIONS', false);
   const settlementIngressEnabled = envBool('GATEWAY_SETTLEMENT_INGRESS_ENABLED', false);
-  const settlementServiceAuthApiKeysJson = process.env.GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON?.trim() || '[]';
-  const settlementServiceAuthSharedSecret = process.env.GATEWAY_SETTLEMENT_SERVICE_SHARED_SECRET?.trim() || undefined;
+  const settlementServiceAuthApiKeysJson =
+    process.env.GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON?.trim() || '[]';
+  const settlementServiceAuthSharedSecret =
+    process.env.GATEWAY_SETTLEMENT_SERVICE_SHARED_SECRET?.trim() || undefined;
   const settlementCallbackEnabled = envBool('GATEWAY_SETTLEMENT_CALLBACK_ENABLED', false);
-  const settlementCallbackUrl = process.env.GATEWAY_SETTLEMENT_CALLBACK_URL?.trim()?.replace(/\/$/, '') || undefined;
-  const settlementCallbackApiKey = process.env.GATEWAY_SETTLEMENT_CALLBACK_API_KEY?.trim() || undefined;
-  const settlementCallbackApiSecret = process.env.GATEWAY_SETTLEMENT_CALLBACK_API_SECRET?.trim() || undefined;
-  const oracleBaseUrl = process.env.GATEWAY_ORACLE_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
-  const treasuryBaseUrl = process.env.GATEWAY_TREASURY_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
-  const reconciliationBaseUrl = process.env.GATEWAY_RECONCILIATION_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
-  const ricardianBaseUrl = process.env.GATEWAY_RICARDIAN_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
-  const notificationsBaseUrl = process.env.GATEWAY_NOTIFICATIONS_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const settlementCallbackUrl =
+    process.env.GATEWAY_SETTLEMENT_CALLBACK_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const settlementCallbackApiKey =
+    process.env.GATEWAY_SETTLEMENT_CALLBACK_API_KEY?.trim() || undefined;
+  const settlementCallbackApiSecret =
+    process.env.GATEWAY_SETTLEMENT_CALLBACK_API_SECRET?.trim() || undefined;
+  const oracleBaseUrl =
+    process.env.GATEWAY_ORACLE_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const treasuryBaseUrl =
+    process.env.GATEWAY_TREASURY_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const reconciliationBaseUrl =
+    process.env.GATEWAY_RECONCILIATION_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const ricardianBaseUrl =
+    process.env.GATEWAY_RICARDIAN_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const notificationsBaseUrl =
+    process.env.GATEWAY_NOTIFICATIONS_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
   const oracleServiceApiKey = process.env.GATEWAY_ORACLE_SERVICE_API_KEY?.trim() || undefined;
   const oracleServiceApiSecret = process.env.GATEWAY_ORACLE_SERVICE_API_SECRET?.trim() || undefined;
   const treasuryServiceApiKey = process.env.GATEWAY_TREASURY_SERVICE_API_KEY?.trim() || undefined;
-  const treasuryServiceApiSecret = process.env.GATEWAY_TREASURY_SERVICE_API_SECRET?.trim() || undefined;
+  const treasuryServiceApiSecret =
+    process.env.GATEWAY_TREASURY_SERVICE_API_SECRET?.trim() || undefined;
   const ricardianServiceApiKey = process.env.GATEWAY_RICARDIAN_SERVICE_API_KEY?.trim() || undefined;
-  const ricardianServiceApiSecret = process.env.GATEWAY_RICARDIAN_SERVICE_API_SECRET?.trim() || undefined;
+  const ricardianServiceApiSecret =
+    process.env.GATEWAY_RICARDIAN_SERVICE_API_SECRET?.trim() || undefined;
   const dbMigrationUser = process.env.DB_MIGRATION_USER?.trim() || undefined;
   const dbMigrationPassword = process.env.DB_MIGRATION_PASSWORD?.trim() || undefined;
   const nodeEnv = process.env.NODE_ENV || 'development';
@@ -202,9 +214,18 @@ export function loadConfig(): GatewayConfig {
     nodeEnv !== 'production',
   );
 
-  assert(authBaseUrl.startsWith('http://') || authBaseUrl.startsWith('https://'), 'GATEWAY_AUTH_BASE_URL must be an absolute http(s) URL');
-  assert(indexerGraphqlUrl.startsWith('http://') || indexerGraphqlUrl.startsWith('https://'), 'GATEWAY_INDEXER_GRAPHQL_URL must be an absolute http(s) URL');
-  assert(rpcUrl.startsWith('http://') || rpcUrl.startsWith('https://'), 'GATEWAY_RPC_URL must be an absolute http(s) URL');
+  assert(
+    authBaseUrl.startsWith('http://') || authBaseUrl.startsWith('https://'),
+    'GATEWAY_AUTH_BASE_URL must be an absolute http(s) URL',
+  );
+  assert(
+    indexerGraphqlUrl.startsWith('http://') || indexerGraphqlUrl.startsWith('https://'),
+    'GATEWAY_INDEXER_GRAPHQL_URL must be an absolute http(s) URL',
+  );
+  assert(
+    rpcUrl.startsWith('http://') || rpcUrl.startsWith('https://'),
+    'GATEWAY_RPC_URL must be an absolute http(s) URL',
+  );
   for (const [index, fallbackUrl] of rpcFallbackUrls.entries()) {
     assert(
       fallbackUrl.startsWith('http://') || fallbackUrl.startsWith('https://'),
@@ -222,7 +243,10 @@ export function loadConfig(): GatewayConfig {
       continue;
     }
 
-    assert(value.startsWith('http://') || value.startsWith('https://'), `${name} must be an absolute http(s) URL`);
+    assert(
+      value.startsWith('http://') || value.startsWith('https://'),
+      `${name} must be an absolute http(s) URL`,
+    );
   }
   assert(envNumber('PORT', 3600) > 0, 'PORT must be > 0');
   assert(envNumber('DB_PORT', 5432) > 0, 'DB_PORT must be > 0');
@@ -231,32 +255,93 @@ export function loadConfig(): GatewayConfig {
     'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
   );
   assert(chainId > 0, 'GATEWAY_CHAIN_ID must be > 0');
-  assert(envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_AUTH_REQUEST_TIMEOUT_MS must be >= 1000');
-  assert(envNumber('GATEWAY_INDEXER_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_INDEXER_REQUEST_TIMEOUT_MS must be >= 1000');
-  assert(envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000) >= 1000, 'GATEWAY_RPC_READ_TIMEOUT_MS must be >= 1000');
-  assert(envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400) >= 60, 'GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS must be >= 60');
-  assert(envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS', 300) >= 30, 'GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS must be >= 30');
-  assert(envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_NONCE_TTL_SECONDS', 600) >= 60, 'GATEWAY_SETTLEMENT_SERVICE_AUTH_NONCE_TTL_SECONDS must be >= 60');
-  assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_REQUEST_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_SETTLEMENT_CALLBACK_REQUEST_TIMEOUT_MS must be >= 1000');
-  assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_POLL_INTERVAL_MS', 5000) >= 1000, 'GATEWAY_SETTLEMENT_CALLBACK_POLL_INTERVAL_MS must be >= 1000');
-  assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS', 8) >= 1, 'GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS must be >= 1');
-  assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000) >= 250, 'GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS must be >= 250');
-  assert(envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000) >= envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000), 'GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS must be >= GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS');
-  assert(envNumber('GATEWAY_DOWNSTREAM_READ_RETRY_BUDGET', 1) >= 0, 'GATEWAY_DOWNSTREAM_READ_RETRY_BUDGET must be >= 0');
-  assert(envNumber('GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET', 0) >= 0, 'GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET must be >= 0');
-  assert(envNumber('GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS', 5000) >= 1000, 'GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS must be >= 1000');
-  assert(envNumber('GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS', 8000) >= 1000, 'GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS must be >= 1000');
+  assert(
+    envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000) >= 1000,
+    'GATEWAY_AUTH_REQUEST_TIMEOUT_MS must be >= 1000',
+  );
+  assert(
+    envNumber('GATEWAY_INDEXER_REQUEST_TIMEOUT_MS', 5000) >= 1000,
+    'GATEWAY_INDEXER_REQUEST_TIMEOUT_MS must be >= 1000',
+  );
+  assert(
+    envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000) >= 1000,
+    'GATEWAY_RPC_READ_TIMEOUT_MS must be >= 1000',
+  );
+  assert(
+    envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400) >= 60,
+    'GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS must be >= 60',
+  );
+  assert(
+    envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS', 300) >= 30,
+    'GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS must be >= 30',
+  );
+  assert(
+    envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_NONCE_TTL_SECONDS', 600) >= 60,
+    'GATEWAY_SETTLEMENT_SERVICE_AUTH_NONCE_TTL_SECONDS must be >= 60',
+  );
+  assert(
+    envNumber('GATEWAY_SETTLEMENT_CALLBACK_REQUEST_TIMEOUT_MS', 5000) >= 1000,
+    'GATEWAY_SETTLEMENT_CALLBACK_REQUEST_TIMEOUT_MS must be >= 1000',
+  );
+  assert(
+    envNumber('GATEWAY_SETTLEMENT_CALLBACK_POLL_INTERVAL_MS', 5000) >= 1000,
+    'GATEWAY_SETTLEMENT_CALLBACK_POLL_INTERVAL_MS must be >= 1000',
+  );
+  assert(
+    envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS', 8) >= 1,
+    'GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS must be >= 1',
+  );
+  assert(
+    envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000) >= 250,
+    'GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS must be >= 250',
+  );
+  assert(
+    envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000) >=
+      envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000),
+    'GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS must be >= GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS',
+  );
+  assert(
+    envNumber('GATEWAY_DOWNSTREAM_READ_RETRY_BUDGET', 1) >= 0,
+    'GATEWAY_DOWNSTREAM_READ_RETRY_BUDGET must be >= 0',
+  );
+  assert(
+    envNumber('GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET', 0) >= 0,
+    'GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET must be >= 0',
+  );
+  assert(
+    envNumber('GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS', 5000) >= 1000,
+    'GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS must be >= 1000',
+  );
+  assert(
+    envNumber('GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS', 8000) >= 1000,
+    'GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS must be >= 1000',
+  );
 
-  if ((oracleServiceApiKey && !oracleServiceApiSecret) || (!oracleServiceApiKey && oracleServiceApiSecret)) {
-    throw new Error('GATEWAY_ORACLE_SERVICE_API_KEY and GATEWAY_ORACLE_SERVICE_API_SECRET must be set together');
+  if (
+    (oracleServiceApiKey && !oracleServiceApiSecret) ||
+    (!oracleServiceApiKey && oracleServiceApiSecret)
+  ) {
+    throw new Error(
+      'GATEWAY_ORACLE_SERVICE_API_KEY and GATEWAY_ORACLE_SERVICE_API_SECRET must be set together',
+    );
   }
 
-  if ((treasuryServiceApiKey && !treasuryServiceApiSecret) || (!treasuryServiceApiKey && treasuryServiceApiSecret)) {
-    throw new Error('GATEWAY_TREASURY_SERVICE_API_KEY and GATEWAY_TREASURY_SERVICE_API_SECRET must be set together');
+  if (
+    (treasuryServiceApiKey && !treasuryServiceApiSecret) ||
+    (!treasuryServiceApiKey && treasuryServiceApiSecret)
+  ) {
+    throw new Error(
+      'GATEWAY_TREASURY_SERVICE_API_KEY and GATEWAY_TREASURY_SERVICE_API_SECRET must be set together',
+    );
   }
 
-  if ((ricardianServiceApiKey && !ricardianServiceApiSecret) || (!ricardianServiceApiKey && ricardianServiceApiSecret)) {
-    throw new Error('GATEWAY_RICARDIAN_SERVICE_API_KEY and GATEWAY_RICARDIAN_SERVICE_API_SECRET must be set together');
+  if (
+    (ricardianServiceApiKey && !ricardianServiceApiSecret) ||
+    (!ricardianServiceApiKey && ricardianServiceApiSecret)
+  ) {
+    throw new Error(
+      'GATEWAY_RICARDIAN_SERVICE_API_KEY and GATEWAY_RICARDIAN_SERVICE_API_SECRET must be set together',
+    );
   }
 
   assertDownstreamServiceAuth(
@@ -289,13 +374,22 @@ export function loadConfig(): GatewayConfig {
   }
 
   if (settlementCallbackEnabled) {
-    assert(settlementCallbackUrl, 'GATEWAY_SETTLEMENT_CALLBACK_URL is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true');
+    assert(
+      settlementCallbackUrl,
+      'GATEWAY_SETTLEMENT_CALLBACK_URL is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true',
+    );
     assert(
       settlementCallbackUrl.startsWith('http://') || settlementCallbackUrl.startsWith('https://'),
       'GATEWAY_SETTLEMENT_CALLBACK_URL must be an absolute http(s) URL',
     );
-    assert(settlementCallbackApiKey, 'GATEWAY_SETTLEMENT_CALLBACK_API_KEY is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true');
-    assert(settlementCallbackApiSecret, 'GATEWAY_SETTLEMENT_CALLBACK_API_SECRET is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true');
+    assert(
+      settlementCallbackApiKey,
+      'GATEWAY_SETTLEMENT_CALLBACK_API_KEY is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true',
+    );
+    assert(
+      settlementCallbackApiSecret,
+      'GATEWAY_SETTLEMENT_CALLBACK_API_SECRET is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true',
+    );
   }
 
   return {
@@ -325,16 +419,31 @@ export function loadConfig(): GatewayConfig {
     settlementIngressEnabled,
     settlementServiceAuthApiKeysJson,
     settlementServiceAuthSharedSecret,
-    settlementServiceAuthMaxSkewSeconds: envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS', 300),
-    settlementServiceAuthNonceTtlSeconds: envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_NONCE_TTL_SECONDS', 600),
+    settlementServiceAuthMaxSkewSeconds: envNumber(
+      'GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS',
+      300,
+    ),
+    settlementServiceAuthNonceTtlSeconds: envNumber(
+      'GATEWAY_SETTLEMENT_SERVICE_AUTH_NONCE_TTL_SECONDS',
+      600,
+    ),
     settlementCallbackEnabled,
     settlementCallbackUrl,
     settlementCallbackApiKey,
     settlementCallbackApiSecret,
-    settlementCallbackRequestTimeoutMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_REQUEST_TIMEOUT_MS', 5000),
-    settlementCallbackPollIntervalMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_POLL_INTERVAL_MS', 5000),
+    settlementCallbackRequestTimeoutMs: envNumber(
+      'GATEWAY_SETTLEMENT_CALLBACK_REQUEST_TIMEOUT_MS',
+      5000,
+    ),
+    settlementCallbackPollIntervalMs: envNumber(
+      'GATEWAY_SETTLEMENT_CALLBACK_POLL_INTERVAL_MS',
+      5000,
+    ),
     settlementCallbackMaxAttempts: envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_ATTEMPTS', 8),
-    settlementCallbackInitialBackoffMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS', 2000),
+    settlementCallbackInitialBackoffMs: envNumber(
+      'GATEWAY_SETTLEMENT_CALLBACK_INITIAL_BACKOFF_MS',
+      2000,
+    ),
     settlementCallbackMaxBackoffMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000),
     oracleBaseUrl,
     oracleServiceApiKey,

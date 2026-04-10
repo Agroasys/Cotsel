@@ -52,8 +52,12 @@ function withEnv(overrides: Record<string, string | undefined>, fn: () => void):
 
 function loadConfigModule(): typeof import('../src/config/env') {
   const modulePath = path.resolve(__dirname, '../src/config/env');
-  delete require.cache[require.resolve(modulePath)];
-  return require(modulePath) as typeof import('../src/config/env');
+  jest.resetModules();
+  let loaded!: typeof import('../src/config/env');
+  jest.isolateModules(() => {
+    loaded = jest.requireActual(modulePath) as typeof import('../src/config/env');
+  });
+  return loaded;
 }
 
 describe('gateway runtime env config', () => {
@@ -99,9 +103,9 @@ describe('gateway runtime env config', () => {
   });
 
   test('fails clearly for unknown settlement runtime keys', () => {
-    withEnv({ GATEWAY_SETTLEMENT_RUNTIME: 'polkadot-testnet' }, () => {
+    withEnv({ GATEWAY_SETTLEMENT_RUNTIME: 'legacy-runtime' }, () => {
       const { loadConfig } = loadConfigModule();
-      expect(() => loadConfig()).toThrow(/Unknown settlement runtime "polkadot-testnet"/);
+      expect(() => loadConfig()).toThrow(/Unknown settlement runtime "legacy-runtime"/);
     });
   });
 
@@ -137,7 +141,9 @@ describe('gateway runtime env config', () => {
       },
       () => {
         const { loadConfig } = loadConfigModule();
-        expect(() => loadConfig()).toThrow('DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together');
+        expect(() => loadConfig()).toThrow(
+          'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+        );
       },
     );
   });

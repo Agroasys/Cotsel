@@ -50,16 +50,20 @@ async function bootstrap(): Promise<void> {
 
   app.use(helmet());
   app.disable('x-powered-by');
-  app.use(cors(createCorsOptions({
-    allowedOrigins: config.corsAllowedOrigins,
-    allowNoOrigin: config.corsAllowNoOrigin,
-  })));
+  app.use(
+    cors(
+      createCorsOptions({
+        allowedOrigins: config.corsAllowedOrigins,
+        allowNoOrigin: config.corsAllowNoOrigin,
+      }),
+    ),
+  );
   app.use(
     express.json({
       verify: (req, _res, buffer) => {
         (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
       },
-    })
+    }),
   );
 
   app.use(
@@ -68,7 +72,7 @@ async function bootstrap(): Promise<void> {
     createRouter(controller, {
       authMiddleware,
       readinessCheck: testConnection,
-    })
+    }),
   );
 
   app.listen(config.port, () => {
@@ -97,9 +101,9 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-bootstrap().catch(async (error: any) => {
+bootstrap().catch(async (error: unknown) => {
   Logger.error('Treasury bootstrap failed', {
-    error: error?.message || error,
+    error: error instanceof Error ? error.message : error,
   });
 
   await closeConnection();

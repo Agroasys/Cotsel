@@ -5,6 +5,10 @@ import { TradeStatus, type Trade } from '@agroasys/sdk';
 import { classifyDrifts } from '../core/classifier';
 import type { IndexedTradeRecord } from '../types';
 
+type ProviderWithResolveName = typeof ethers.JsonRpcProvider.prototype & {
+  resolveName: (name: string) => Promise<string | null>;
+};
+
 function baseIndexedTrade(): IndexedTradeRecord {
   return {
     tradeId: '1',
@@ -40,10 +44,11 @@ function baseOnchainTrade(): Trade {
 }
 
 test('invalid indexed address is classified explicitly and does not invoke provider ENS resolution', () => {
-  const originalResolveName = ethers.JsonRpcProvider.prototype.resolveName;
+  const providerPrototype = ethers.JsonRpcProvider.prototype as ProviderWithResolveName;
+  const originalResolveName = providerPrototype.resolveName;
   let resolveNameCalled = false;
 
-  (ethers.JsonRpcProvider.prototype as any).resolveName = async () => {
+  providerPrototype.resolveName = async () => {
     resolveNameCalled = true;
     return null;
   };
@@ -58,12 +63,15 @@ test('invalid indexed address is classified explicitly and does not invoke provi
     });
 
     assert.ok(
-      findings.some((finding) => finding.mismatchCode === 'INDEXED_INVALID_ADDRESS' && finding.comparedField === 'buyer'),
+      findings.some(
+        (finding) =>
+          finding.mismatchCode === 'INDEXED_INVALID_ADDRESS' && finding.comparedField === 'buyer',
+      ),
       'expected INDEXED_INVALID_ADDRESS finding for buyer field',
     );
     assert.equal(resolveNameCalled, false, 'classifier should not trigger ENS resolution');
   } finally {
-    ethers.JsonRpcProvider.prototype.resolveName = originalResolveName;
+    providerPrototype.resolveName = originalResolveName;
   }
 });
 

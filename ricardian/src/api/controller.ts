@@ -22,13 +22,12 @@ function parseCreateHashBody(body: unknown): RicardianHashRequest {
   const payload = requireObject(body, 'body') as unknown as RicardianHashRequest;
 
   return {
-    requestId: payload.requestId === undefined ? undefined : requireString(payload.requestId, 'requestId'),
+    requestId:
+      payload.requestId === undefined ? undefined : requireString(payload.requestId, 'requestId'),
     documentRef: requireString(payload.documentRef, 'documentRef'),
     terms: requireObject(payload.terms, 'terms'),
     metadata:
-      payload.metadata === undefined
-        ? undefined
-        : requireObject(payload.metadata, 'metadata'),
+      payload.metadata === undefined ? undefined : requireObject(payload.metadata, 'metadata'),
   };
 }
 
@@ -42,7 +41,10 @@ function parseHashParam(value: unknown): string {
 }
 
 export class RicardianController {
-  async createHash(req: Request<{}, {}, RicardianHashRequest>, res: Response): Promise<void> {
+  async createHash(
+    req: Request<Record<string, never>, Record<string, never>, RicardianHashRequest>,
+    res: Response,
+  ): Promise<void> {
     try {
       const payload = parseCreateHashBody(req.body);
       const hashed = buildRicardianHash(payload);
@@ -66,9 +68,14 @@ export class RicardianController {
           return;
         }
 
-        res.status(500).json(
-          failure('InternalError', error instanceof Error ? error.message : 'Failed to persist Ricardian hash'),
-        );
+        res
+          .status(500)
+          .json(
+            failure(
+              'InternalError',
+              error instanceof Error ? error.message : 'Failed to persist Ricardian hash',
+            ),
+          );
       }
     } catch (error: unknown) {
       if (error instanceof HttpError) {
@@ -76,7 +83,14 @@ export class RicardianController {
         return;
       }
 
-      res.status(400).json(failure('ValidationError', error instanceof Error ? error.message : 'Invalid Ricardian payload'));
+      res
+        .status(400)
+        .json(
+          failure(
+            'ValidationError',
+            error instanceof Error ? error.message : 'Invalid Ricardian payload',
+          ),
+        );
     }
   }
 
@@ -108,7 +122,14 @@ export class RicardianController {
         return;
       }
 
-      res.status(500).json(failure('InternalError', error instanceof Error ? error.message : 'Failed to fetch Ricardian hash'));
+      res
+        .status(500)
+        .json(
+          failure(
+            'InternalError',
+            error instanceof Error ? error.message : 'Failed to fetch Ricardian hash',
+          ),
+        );
     }
   }
 }

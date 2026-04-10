@@ -41,40 +41,48 @@ export class Logger {
   }
 
   static info(message: string, meta?: LogMeta): void {
-    console.log(JSON.stringify({
-      level: 'info',
-      timestamp: this.formatTimestamp(),
-      message,
-      ...baseContext(meta),
-    }));
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        timestamp: this.formatTimestamp(),
+        message,
+        ...baseContext(meta),
+      }),
+    );
   }
 
   static warn(message: string, meta?: LogMeta): void {
-    console.warn(JSON.stringify({
-      level: 'warn',
-      timestamp: this.formatTimestamp(),
-      message,
-      ...baseContext(meta),
-    }));
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        timestamp: this.formatTimestamp(),
+        message,
+        ...baseContext(meta),
+      }),
+    );
   }
 
   static error(message: string, metaOrError?: unknown): void {
-    console.error(JSON.stringify({
-      level: 'error',
-      timestamp: this.formatTimestamp(),
-      message,
-      ...baseContext(normalizeErrorMeta(metaOrError)),
-    }));
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        timestamp: this.formatTimestamp(),
+        message,
+        ...baseContext(normalizeErrorMeta(metaOrError)),
+      }),
+    );
   }
 
   static debug(message: string, meta?: LogMeta): void {
     if (process.env.NODE_ENV === 'development') {
-      console.debug(JSON.stringify({
-        level: 'debug',
-        timestamp: this.formatTimestamp(),
-        message,
-        ...baseContext(meta),
-      }));
+      console.debug(
+        JSON.stringify({
+          level: 'debug',
+          timestamp: this.formatTimestamp(),
+          message,
+          ...baseContext(meta),
+        }),
+      );
     }
   }
 }

@@ -49,8 +49,12 @@ function withEnv(overrides: Record<string, string | undefined>, fn: () => void):
 
 function loadConfigModule(): typeof import('./config') {
   const modulePath = path.resolve(__dirname, './config');
-  delete require.cache[require.resolve(modulePath)];
-  return require(modulePath) as typeof import('./config');
+  jest.resetModules();
+  let loaded!: typeof import('./config');
+  jest.isolateModules(() => {
+    loaded = jest.requireActual(modulePath) as typeof import('./config');
+  });
+  return loaded;
 }
 
 describe('oracle runtime config', () => {
@@ -90,9 +94,9 @@ describe('oracle runtime config', () => {
         USDC_ADDRESS: undefined,
       },
       () => {
-      const { loadConfig } = loadConfigModule();
-      const config = loadConfig();
-      expect(config.corsAllowNoOrigin).toBe(false);
+        const { loadConfig } = loadConfigModule();
+        const config = loadConfig();
+        expect(config.corsAllowNoOrigin).toBe(false);
       },
     );
   });

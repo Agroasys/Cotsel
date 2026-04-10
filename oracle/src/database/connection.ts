@@ -6,58 +6,58 @@ import { Logger } from '../utils/logger';
 const SERVICE_NAME = 'oracle';
 
 export const pool = createServicePool({
+  serviceName: SERVICE_NAME,
+  connectionRole: 'runtime',
+  runtimeDbUser: config.dbUser,
+  host: config.dbHost,
+  port: config.dbPort,
+  database: config.dbName,
+  user: config.dbUser,
+  password: config.dbPassword,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+pool.on('connect', () => {
+  Logger.info('New database connection established');
+});
+
+pool.on('error', (err) => {
+  Logger.error('Unexpected database error', err);
+});
+
+export async function testConnection(): Promise<void> {
+  try {
+    const result = await pool.query('SELECT NOW() as current_time');
+    Logger.info('Database connection test successful', {
+      currentTime: result.rows[0].current_time,
+    });
+  } catch (error) {
+    Logger.error('Database connection test failed', error);
+    throw error;
+  }
+}
+
+export async function closeConnection(): Promise<void> {
+  await pool.end();
+  Logger.info('Database connection pool closed');
+}
+
+export function createMigrationPool(): Pool {
+  const credentials = resolveMigrationCredentials(config);
+
+  return createServicePool({
     serviceName: SERVICE_NAME,
-    connectionRole: 'runtime',
+    connectionRole: 'migration',
     runtimeDbUser: config.dbUser,
     host: config.dbHost,
     port: config.dbPort,
     database: config.dbName,
-    user: config.dbUser,
-    password: config.dbPassword,
-    max: 20,
-    idleTimeoutMillis: 30000,
+    user: credentials.user,
+    password: credentials.password,
+    max: 4,
+    idleTimeoutMillis: 5000,
     connectionTimeoutMillis: 2000,
-});
-
-pool.on('connect', () => {
-    Logger.info('New database connection established');
-});
-
-pool.on('error', (err) => {
-    Logger.error('Unexpected database error', err);
-});
-
-export async function testConnection(): Promise<void> {
-    try {
-        const result = await pool.query('SELECT NOW() as current_time');
-        Logger.info('Database connection test successful', {
-            currentTime: result.rows[0].current_time
-        });
-    } catch (error) {
-        Logger.error('Database connection test failed', error);
-        throw error;
-    }
-}
-
-export async function closeConnection(): Promise<void> {
-    await pool.end();
-    Logger.info('Database connection pool closed');
-}
-
-export function createMigrationPool(): Pool {
-    const credentials = resolveMigrationCredentials(config);
-
-    return createServicePool({
-        serviceName: SERVICE_NAME,
-        connectionRole: 'migration',
-        runtimeDbUser: config.dbUser,
-        host: config.dbHost,
-        port: config.dbPort,
-        database: config.dbName,
-        user: credentials.user,
-        password: credentials.password,
-        max: 4,
-        idleTimeoutMillis: 5000,
-        connectionTimeoutMillis: 2000,
-    });
+  });
 }

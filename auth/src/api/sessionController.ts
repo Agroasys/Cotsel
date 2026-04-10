@@ -36,10 +36,7 @@ export class SessionController {
     private readonly maxSessionTtlSeconds: number = 86400,
   ) {}
 
-  async refresh(
-    req: Request,
-    res: Response<ApiSuccessResponse | ApiErrorResponse>,
-  ): Promise<void> {
+  async refresh(req: Request, res: Response<ApiSuccessResponse | ApiErrorResponse>): Promise<void> {
     const session = req.userSession!;
     try {
       const result = await this.sessionService.refresh(session.sessionId);
@@ -78,7 +75,13 @@ export class SessionController {
           : assertWalletAddress(walletAddress, 'walletAddress');
       ttlSeconds = parseOptionalSessionTtl(body.ttlSeconds);
     } catch (error) {
-      handleControllerError(res, error, 'BadRequest', 400, 'Invalid trusted session exchange request');
+      handleControllerError(
+        res,
+        error,
+        'BadRequest',
+        400,
+        'Invalid trusted session exchange request',
+      );
       return;
     }
 
@@ -111,28 +114,24 @@ export class SessionController {
     }
   }
 
-  async revoke(
-    req: Request,
-    res: Response<ApiSuccessResponse | ApiErrorResponse>,
-  ): Promise<void> {
+  async revoke(req: Request, res: Response<ApiSuccessResponse | ApiErrorResponse>): Promise<void> {
     const session = req.userSession!;
     await this.sessionService.revoke(session.sessionId);
     res.json(success({ revoked: true }));
   }
 
-  getSession(
-    req: Request,
-    res: Response<ApiSuccessResponse | ApiErrorResponse>,
-  ): void {
+  getSession(req: Request, res: Response<ApiSuccessResponse | ApiErrorResponse>): void {
     const session = req.userSession!;
-    res.json(success({
-      accountId: session.accountId,
-      userId: session.userId,
-      walletAddress: session.walletAddress,
-      email: session.email,
-      role: session.role,
-      issuedAt: session.issuedAt,
-      expiresAt: session.expiresAt,
-    }));
+    res.json(
+      success({
+        accountId: session.accountId,
+        userId: session.userId,
+        walletAddress: session.walletAddress,
+        email: session.email,
+        role: session.role,
+        issuedAt: session.issuedAt,
+        expiresAt: session.expiresAt,
+      }),
+    );
   }
 }

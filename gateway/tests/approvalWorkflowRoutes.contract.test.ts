@@ -5,9 +5,7 @@ import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
-import {
-  GovernanceApprovalWorkflowReadService,
-} from '../src/core/approvalWorkflowReadService';
+import { GovernanceApprovalWorkflowReadService } from '../src/core/approvalWorkflowReadService';
 import {
   buildGovernanceIntentKey,
   createInMemoryGovernanceActionStore,
@@ -77,7 +75,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'pending_approvals',
     contractMethod: 'proposeOracleUpdate',
     txHash: '0xreq2',
-    extrinsicHash: null,
     blockNumber: 22,
     tradeId: null,
     chainId: '31337',
@@ -117,7 +114,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'approved',
     contractMethod: 'approveOracleUpdate',
     txHash: '0xapprove2',
-    extrinsicHash: null,
     blockNumber: 23,
     tradeId: null,
     chainId: '31337',
@@ -156,7 +152,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'approved',
     contractMethod: 'proposeTreasuryPayoutAddressUpdate',
     txHash: '0xreq1',
-    extrinsicHash: null,
     blockNumber: 21,
     tradeId: null,
     chainId: '31337',
@@ -183,7 +178,9 @@ const seededActions: GovernanceActionRecord[] = [
   },
 ];
 
-function buildStatusSnapshot(overrides: Partial<GovernanceStatusSnapshot> = {}): GovernanceStatusSnapshot {
+function buildStatusSnapshot(
+  overrides: Partial<GovernanceStatusSnapshot> = {},
+): GovernanceStatusSnapshot {
   return {
     paused: false,
     claimsPaused: false,
@@ -202,7 +199,9 @@ function buildStatusSnapshot(overrides: Partial<GovernanceStatusSnapshot> = {}):
   };
 }
 
-function buildProposalState(overrides: Partial<GovernanceProposalState> = {}): GovernanceProposalState {
+function buildProposalState(
+  overrides: Partial<GovernanceProposalState> = {},
+): GovernanceProposalState {
   return {
     proposalId: 7,
     approvalCount: 2,
@@ -247,10 +246,12 @@ async function startServer(sessionRole: 'admin' | 'buyer' | null) {
     getGovernanceStatus: jest.fn().mockResolvedValue(buildStatusSnapshot()),
     getUnpauseProposalState: jest.fn().mockResolvedValue(buildUnpauseProposal()),
     getOracleProposalState: jest.fn().mockResolvedValue(buildProposalState()),
-    getTreasuryPayoutReceiverProposalState: jest.fn().mockResolvedValue(buildProposalState({
-      proposalId: 4,
-      targetAddress: '0x0000000000000000000000000000000000000055',
-    })),
+    getTreasuryPayoutReceiverProposalState: jest.fn().mockResolvedValue(
+      buildProposalState({
+        proposalId: 4,
+        targetAddress: '0x0000000000000000000000000000000000000055',
+      }),
+    ),
     getTreasuryClaimableBalance: jest.fn().mockResolvedValue(10n),
     hasApprovedUnpause: jest.fn().mockResolvedValue(false),
     hasApprovedOracleProposal: jest.fn().mockResolvedValue(false),
@@ -258,14 +259,16 @@ async function startServer(sessionRole: 'admin' | 'buyer' | null) {
   };
 
   const router = Router();
-  router.use(createApprovalWorkflowRouter({
-    authSessionClient,
-    config,
-    approvalWorkflowReadService: new GovernanceApprovalWorkflowReadService(
-      createInMemoryGovernanceActionStore(seededActions),
-      governanceReader,
-    ),
-  }));
+  router.use(
+    createApprovalWorkflowRouter({
+      authSessionClient,
+      config,
+      approvalWorkflowReadService: new GovernanceApprovalWorkflowReadService(
+        createInMemoryGovernanceActionStore(seededActions),
+        governanceReader,
+      ),
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -280,8 +283,14 @@ async function startServer(sessionRole: 'admin' | 'buyer' | null) {
 
 describe('gateway approval workflow routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateList = createSchemaValidator(spec, '#/components/schemas/ApprovalWorkflowListResponse');
-  const validateDetail = createSchemaValidator(spec, '#/components/schemas/ApprovalWorkflowDetailResponse');
+  const validateList = createSchemaValidator(
+    spec,
+    '#/components/schemas/ApprovalWorkflowListResponse',
+  );
+  const validateDetail = createSchemaValidator(
+    spec,
+    '#/components/schemas/ApprovalWorkflowDetailResponse',
+  );
 
   test('OpenAPI spec exposes approval workflow routes', () => {
     expect(hasOperation(spec, 'get', '/approvals')).toBe(true);
@@ -324,7 +333,9 @@ describe('gateway approval workflow routes contract', () => {
         'x-request-id': 'req-approval-detail',
       },
     });
-    const payload = response.json<{ data: { approvalId: string; review: { items: Array<{ actionId: string }> } } }>();
+    const payload = response.json<{
+      data: { approvalId: string; review: { items: Array<{ actionId: string }> } };
+    }>();
 
     expect(response.status).toBe(200);
     expect(validateDetail(payload)).toBe(true);

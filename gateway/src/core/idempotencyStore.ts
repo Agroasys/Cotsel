@@ -24,17 +24,22 @@ export interface IdempotencyRecord extends IdempotencyScope {
 
 export interface IdempotencyStore {
   get(scope: IdempotencyScope): Promise<IdempotencyRecord | null>;
-  createPending(entry: IdempotencyScope & {
-    requestMethod: string;
-    requestPath: string;
-    requestFingerprint: string;
-    requestId: string;
-  }): Promise<{ record: IdempotencyRecord; created: boolean }>;
-  complete(scope: IdempotencyScope, response: {
-    responseStatus: number;
-    responseHeaders: Record<string, string>;
-    responseBody: unknown;
-  }): Promise<void>;
+  createPending(
+    entry: IdempotencyScope & {
+      requestMethod: string;
+      requestPath: string;
+      requestFingerprint: string;
+      requestId: string;
+    },
+  ): Promise<{ record: IdempotencyRecord; created: boolean }>;
+  complete(
+    scope: IdempotencyScope,
+    response: {
+      responseStatus: number;
+      responseHeaders: Record<string, string>;
+      responseBody: unknown;
+    },
+  ): Promise<void>;
   releasePending(scope: IdempotencyScope): Promise<void>;
   markReplay(scope: IdempotencyScope): Promise<void>;
 }
@@ -75,11 +80,7 @@ function toScopedKey(scope: IdempotencyScope): string {
   return `${scope.actorId}\u0000${scope.endpoint}\u0000${scope.idempotencyKey}`;
 }
 
-export function buildRequestFingerprint(
-  method: string,
-  path: string,
-  rawBody?: Buffer,
-): string {
+export function buildRequestFingerprint(method: string, path: string, rawBody?: Buffer): string {
   return crypto
     .createHash('sha256')
     .update(method.toUpperCase())
@@ -266,9 +267,7 @@ export function createInMemoryIdempotencyStore(): IdempotencyStore {
       const scopedKey = toScopedKey(scope);
       const existing = store.get(scopedKey);
       if (!existing) {
-        throw new Error(
-          `Missing in-memory idempotency record for ${scope.idempotencyKey}`,
-        );
+        throw new Error(`Missing in-memory idempotency record for ${scope.idempotencyKey}`);
       }
 
       store.set(scopedKey, {

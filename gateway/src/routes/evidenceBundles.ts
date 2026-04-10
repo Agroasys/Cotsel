@@ -4,9 +4,7 @@
 import { Request, Router } from 'express';
 import { GatewayConfig } from '../config/env';
 import { AuthSessionClient } from '../core/authSessionClient';
-import {
-  EvidenceBundleService,
-} from '../core/evidenceBundleService';
+import { EvidenceBundleService } from '../core/evidenceBundleService';
 import { IdempotencyStore } from '../core/idempotencyStore';
 import { GatewayError } from '../errors';
 import {
@@ -26,11 +24,7 @@ export interface EvidenceBundleRouterOptions {
   idempotencyStore: IdempotencyStore;
 }
 
-type MutationRequest = Request<
-  Record<string, string | string[]>,
-  unknown,
-  Record<string, unknown>
->;
+type MutationRequest = Request<Record<string, string | string[]>, unknown, Record<string, unknown>>;
 
 interface MutationContext {
   principal: GatewayPrincipal;
@@ -85,56 +79,72 @@ export function createEvidenceBundleRouter(options: EvidenceBundleRouterOptions)
 
   router.use(authenticate);
 
-  router.post('/evidence/bundles', requireMutationWriteAccess(), idempotency, async (req, res, next) => {
-    try {
-      const { principal, requestContext } = getMutationContext(req);
-      const manifest = await options.evidenceBundleService.generate({
-        tradeId: parseTradeId((req.body as Record<string, unknown>)?.tradeId),
-        principal,
-        requestContext,
-      });
-
-      res.status(201).json(successResponse(manifest));
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.get('/evidence/bundles/:bundleId', requireGatewayRole('operator:read'), async (req, res, next) => {
-    try {
-      const bundleId = parseBundleId(req.params.bundleId);
-      const manifest = await options.evidenceBundleService.get(bundleId);
-      if (!manifest) {
-        throw new GatewayError(404, 'NOT_FOUND', 'Evidence bundle not found', {
-          bundleId,
+  router.post(
+    '/evidence/bundles',
+    requireMutationWriteAccess(),
+    idempotency,
+    async (req, res, next) => {
+      try {
+        const { principal, requestContext } = getMutationContext(req);
+        const manifest = await options.evidenceBundleService.generate({
+          tradeId: parseTradeId((req.body as Record<string, unknown>)?.tradeId),
+          principal,
+          requestContext,
         });
+
+        res.status(201).json(successResponse(manifest));
+      } catch (error) {
+        next(error);
       }
+    },
+  );
 
-      res.status(200).json(successResponse(manifest));
-    } catch (error) {
-      next(error);
-    }
-  });
+  router.get(
+    '/evidence/bundles/:bundleId',
+    requireGatewayRole('operator:read'),
+    async (req, res, next) => {
+      try {
+        const bundleId = parseBundleId(req.params.bundleId);
+        const manifest = await options.evidenceBundleService.get(bundleId);
+        if (!manifest) {
+          throw new GatewayError(404, 'NOT_FOUND', 'Evidence bundle not found', {
+            bundleId,
+          });
+        }
 
-  router.get('/evidence/bundles/:bundleId/download', requireGatewayRole('operator:read'), async (req, res, next) => {
-    try {
-      const bundleId = parseBundleId(req.params.bundleId);
-      const manifest = await options.evidenceBundleService.get(bundleId);
-      if (!manifest) {
-        throw new GatewayError(404, 'NOT_FOUND', 'Evidence bundle not found', {
-          bundleId,
-        });
+        res.status(200).json(successResponse(manifest));
+      } catch (error) {
+        next(error);
       }
+    },
+  );
 
-      res
-        .status(200)
-        .setHeader('content-type', 'application/json; charset=utf-8')
-        .setHeader('content-disposition', `attachment; filename=\"evidence-bundle-${bundleId}.json\"`)
-        .json(manifest);
-    } catch (error) {
-      next(error);
-    }
-  });
+  router.get(
+    '/evidence/bundles/:bundleId/download',
+    requireGatewayRole('operator:read'),
+    async (req, res, next) => {
+      try {
+        const bundleId = parseBundleId(req.params.bundleId);
+        const manifest = await options.evidenceBundleService.get(bundleId);
+        if (!manifest) {
+          throw new GatewayError(404, 'NOT_FOUND', 'Evidence bundle not found', {
+            bundleId,
+          });
+        }
+
+        res
+          .status(200)
+          .setHeader('content-type', 'application/json; charset=utf-8')
+          .setHeader(
+            'content-disposition',
+            `attachment; filename=\"evidence-bundle-${bundleId}.json\"`,
+          )
+          .json(manifest);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   return router;
 }

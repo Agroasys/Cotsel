@@ -22,16 +22,18 @@ export async function withTimeout<T>(
       promise,
       new Promise<T>((_resolve, reject) => {
         timeoutHandle = setTimeout(() => {
-          reject(new GatewayError(
-            options.statusCode ?? 503,
-            options.code ?? 'UPSTREAM_UNAVAILABLE',
-            message,
-            {
-              timeoutMs,
-              cause: 'timeout',
-              ...(options.details ?? {}),
-            },
-          ));
+          reject(
+            new GatewayError(
+              options.statusCode ?? 503,
+              options.code ?? 'UPSTREAM_UNAVAILABLE',
+              message,
+              {
+                timeoutMs,
+                cause: 'timeout',
+                ...(options.details ?? {}),
+              },
+            ),
+          );
         }, timeoutMs);
       }),
     ]);

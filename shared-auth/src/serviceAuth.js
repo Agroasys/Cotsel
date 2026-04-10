@@ -8,12 +8,19 @@ const NONCE_MAX_LENGTH = 255;
 const SHARED_HMAC_KEY_ID = '__shared_hmac__';
 
 function bodyHash(rawBody) {
-  return crypto.createHash('sha256').update(rawBody || Buffer.alloc(0)).digest('hex');
+  return crypto
+    .createHash('sha256')
+    .update(rawBody || Buffer.alloc(0))
+    .digest('hex');
 }
 
 function timingSafeHexEquals(a, b) {
-  const normalizedA = String(a || '').trim().toLowerCase();
-  const normalizedB = String(b || '').trim().toLowerCase();
+  const normalizedA = String(a || '')
+    .trim()
+    .toLowerCase();
+  const normalizedB = String(b || '')
+    .trim()
+    .toLowerCase();
 
   if (!SIGNATURE_HEX_REGEX.test(normalizedA) || !SIGNATURE_HEX_REGEX.test(normalizedB)) {
     return false;
@@ -123,7 +130,14 @@ function deriveNonce(parts) {
 }
 
 function buildServiceAuthCanonicalString(parts) {
-  return [parts.method, parts.path, parts.query, parts.bodySha256, parts.timestamp, parts.nonce].join('\n');
+  return [
+    parts.method,
+    parts.path,
+    parts.query,
+    parts.bodySha256,
+    parts.timestamp,
+    parts.nonce,
+  ].join('\n');
 }
 
 function signServiceAuthCanonicalString(secret, canonicalString) {
@@ -178,8 +192,10 @@ function parseServiceApiKeys(raw) {
 
 function createServiceAuthMiddleware(options) {
   const nowSeconds = options.nowSeconds || (() => Math.floor(Date.now() / 1000));
-  const onAuthFailure = typeof options.onAuthFailure === 'function' ? options.onAuthFailure : () => undefined;
-  const onReplayReject = typeof options.onReplayReject === 'function' ? options.onReplayReject : () => undefined;
+  const onAuthFailure =
+    typeof options.onAuthFailure === 'function' ? options.onAuthFailure : () => undefined;
+  const onReplayReject =
+    typeof options.onReplayReject === 'function' ? options.onReplayReject : () => undefined;
 
   return async (req, res, next) => {
     if (!options.enabled) {
@@ -210,7 +226,12 @@ function createServiceAuthMiddleware(options) {
 
     const skew = Math.abs(nowSeconds() - timestampSeconds);
     if (skew > options.maxSkewSeconds) {
-      unauthorized(res, 'AUTH_TIMESTAMP_SKEW', 'Timestamp outside allowed skew window', onAuthFailure);
+      unauthorized(
+        res,
+        'AUTH_TIMESTAMP_SKEW',
+        'Timestamp outside allowed skew window',
+        onAuthFailure,
+      );
       return;
     }
 
@@ -227,13 +248,15 @@ function createServiceAuthMiddleware(options) {
 
     const { path, query } = requestPathAndQuery(req);
     const bodySha256 = bodyHash(req.rawBody);
-    const nonce = nonceHeader || deriveNonce({
-      method: req.method.toUpperCase(),
-      path,
-      query,
-      bodySha256,
-      timestamp,
-    });
+    const nonce =
+      nonceHeader ||
+      deriveNonce({
+        method: req.method.toUpperCase(),
+        path,
+        query,
+        bodySha256,
+        timestamp,
+      });
 
     if (!nonce.trim() || nonce.length > NONCE_MAX_LENGTH) {
       unauthorized(res, 'AUTH_INVALID_NONCE', 'Invalid nonce format', onAuthFailure);

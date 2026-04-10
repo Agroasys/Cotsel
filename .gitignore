@@ -14,6 +14,7 @@ reports/reconciliation/staging-e2e-real-report.json
 reports/dashboard-parity/
 reports/pilot-rehearsal/*
 !reports/pilot-rehearsal/README.md
+.husky/_
 .DS_Store
 
 reports/licenses

@@ -122,10 +122,6 @@ export function inspectCanonicalTradeDetailPayload(payload, expectedTradeId) {
     );
   }
 
-  if (hasNestedField(trade, "extrinsicHash")) {
-    throw new Error("Gateway /trades/:tradeId still exposes extrinsicHash in the live parity payload.");
-  }
-
   if (!Array.isArray(trade.timeline) || trade.timeline.length === 0) {
     throw new Error("Gateway /trades/:tradeId returned no timeline records for the canonical parity trade.");
   }

@@ -9,10 +9,10 @@ describe('Payout lifecycle transitions', () => {
 
   test('blocks invalid transitions', () => {
     expect(() => assertValidTransition('PENDING_REVIEW', 'PAID')).toThrow(
-      'Invalid payout state transition: PENDING_REVIEW -> PAID'
+      'Invalid payout state transition: PENDING_REVIEW -> PAID',
     );
     expect(() => assertValidTransition('PAID', 'PROCESSING')).toThrow(
-      'Invalid payout state transition: PAID -> PROCESSING'
+      'Invalid payout state transition: PAID -> PROCESSING',
     );
   });
 });

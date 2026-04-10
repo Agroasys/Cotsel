@@ -6,152 +6,152 @@ import { Logger } from '../utils/logger';
 import { IndexerClient, IndexerTrade } from './indexer-client';
 
 export interface BlockchainResult {
-    txHash: string;
-    blockNumber: number;
+  txHash: string;
+  blockNumber: number;
 }
 
 export class SDKClient {
-    private sdk: OracleSDK;
-    private provider: ethers.AbstractProvider;
-    private signer: ethers.Wallet;
-    private indexer: IndexerClient;
+  private sdk: OracleSDK;
+  private provider: ethers.AbstractProvider;
+  private signer: ethers.Wallet;
+  private indexer: IndexerClient;
 
-    constructor(
-        rpcUrl: string,
-        rpcFallbackUrls: string[],
-        privateKey: string,
-        escrowAddress: string,
-        usdcAddress: string,
-        chainId: number,
-        indexer: IndexerClient
+  constructor(
+    rpcUrl: string,
+    rpcFallbackUrls: string[],
+    privateKey: string,
+    escrowAddress: string,
+    usdcAddress: string,
+    chainId: number,
+    indexer: IndexerClient,
+  ) {
+    const provider = createManagedRpcProvider(rpcUrl, rpcFallbackUrls, { chainId });
+    this.provider = provider;
+    this.signer = new ethers.Wallet(privateKey, provider);
+
+    this.sdk = new OracleSDK({
+      rpc: rpcUrl,
+      rpcFallbackUrls,
+      chainId,
+      escrowAddress,
+      usdcAddress,
+    });
+
+    this.indexer = indexer;
+
+    Logger.info('SDKClient initialized', {
+      oracleAddress: this.signer.address,
+      escrowAddress,
+      chainId,
+    });
+  }
+
+  private async getBlockNumberForTag(tag: 'latest' | 'safe' | 'finalized'): Promise<number | null> {
+    const block = await this.provider.getBlock(tag);
+    return block ? Number(block.number) : null;
+  }
+
+  async getSettlementConfirmationHeads(): Promise<SettlementConfirmationHeads> {
+    const [latestBlockNumber, safeBlockNumber, finalizedBlockNumber] = await Promise.all([
+      this.getBlockNumberForTag('latest'),
+      this.getBlockNumberForTag('safe'),
+      this.getBlockNumberForTag('finalized'),
+    ]);
+
+    if (latestBlockNumber === null) {
+      throw new Error('Managed RPC provider returned no latest block for settlement confirmation');
+    }
+
+    return {
+      latestBlockNumber,
+      safeBlockNumber,
+      finalizedBlockNumber,
+    };
+  }
+
+  async getTransactionReceiptBlockNumber(txHash: string): Promise<number | null> {
+    const receipt = await this.provider.getTransactionReceipt(txHash);
+    return receipt ? Number(receipt.blockNumber) : null;
+  }
+
+  async getTrade(tradeId: string): Promise<Trade> {
+    Logger.info('Querying on-chain trade state', { tradeId });
+    const trade = await this.sdk.getTrade(tradeId);
+
+    if (
+      !trade ||
+      trade.tradeId === '0' ||
+      trade.buyer === '0x0000000000000000000000000000000000000000'
     ) {
-        const provider = createManagedRpcProvider(rpcUrl, rpcFallbackUrls, { chainId });
-        this.provider = provider;
-        this.signer = new ethers.Wallet(privateKey, provider);
-
-        this.sdk = new OracleSDK({
-            rpc: rpcUrl,
-            rpcFallbackUrls,
-            chainId,
-            escrowAddress,
-            usdcAddress,
-        });
-
-        this.indexer = indexer;
-
-        Logger.info('SDKClient initialized', {
-            oracleAddress: this.signer.address,
-            escrowAddress,
-            chainId,
-        });
+      const { ValidationError } = await import('../utils/errors');
+      throw new ValidationError(`Trade ${tradeId} does not exist on-chain`);
     }
 
-    private async getBlockNumberForTag(tag: 'latest' | 'safe' | 'finalized'): Promise<number | null> {
-        const block = await this.provider.getBlock(tag);
-        return block ? Number(block.number) : null;
-    }
+    return trade;
+  }
 
-    async getSettlementConfirmationHeads(): Promise<SettlementConfirmationHeads> {
-        const [latestBlockNumber, safeBlockNumber, finalizedBlockNumber] = await Promise.all([
-            this.getBlockNumberForTag('latest'),
-            this.getBlockNumberForTag('safe'),
-            this.getBlockNumberForTag('finalized'),
-        ]);
+  private mapIndexerTradeToSDK(indexerTrade: IndexerTrade): Trade {
+    return {
+      tradeId: indexerTrade.tradeId,
+      buyer: indexerTrade.buyer,
+      supplier: indexerTrade.supplier,
+      status: indexerTrade.status,
+      totalAmountLocked: indexerTrade.totalAmountLocked,
+      logisticsAmount: indexerTrade.logisticsAmount,
+      platformFeesAmount: indexerTrade.platformFeesAmount,
+      supplierFirstTranche: indexerTrade.supplierFirstTranche,
+      supplierSecondTranche: indexerTrade.supplierSecondTranche,
+      ricardianHash: indexerTrade.ricardianHash,
+      createdAt: indexerTrade.createdAt,
+      arrivalTimestamp: indexerTrade.arrivalTimestamp ?? undefined,
+    };
+  }
 
-        if (latestBlockNumber === null) {
-            throw new Error('Managed RPC provider returned no latest block for settlement confirmation');
-        }
+  async releaseFundsStage1(tradeId: string): Promise<BlockchainResult> {
+    Logger.info('Executing releaseFundsStage1', { tradeId });
 
-        return {
-            latestBlockNumber,
-            safeBlockNumber,
-            finalizedBlockNumber,
-        };
-    }
+    const result = await this.sdk.releaseFundsStage1(tradeId, this.signer);
 
-    async getTransactionReceiptBlockNumber(txHash: string): Promise<number | null> {
-        const receipt = await this.provider.getTransactionReceipt(txHash);
-        return receipt ? Number(receipt.blockNumber) : null;
-    }
+    Logger.info('Stage 1 release successful', {
+      tradeId,
+      txHash: result.txHash,
+    });
 
-    async getTrade(tradeId: string): Promise<Trade> {
-        Logger.info('Querying on-chain trade state', { tradeId });
-        const trade = await this.sdk.getTrade(tradeId);
+    return {
+      txHash: result.txHash,
+      blockNumber: result.blockNumber,
+    };
+  }
 
-        if (
-            !trade ||
-            trade.tradeId === '0' ||
-            trade.buyer === '0x0000000000000000000000000000000000000000'
-        ) {
-            const { ValidationError } = await import('../utils/errors');
-            throw new ValidationError(`Trade ${tradeId} does not exist on-chain`);
-        }
+  async confirmArrival(tradeId: string): Promise<BlockchainResult> {
+    Logger.info('Executing confirmArrival', { tradeId });
 
-        return trade;
-    }
+    const result = await this.sdk.confirmArrival(tradeId, this.signer);
 
-    private mapIndexerTradeToSDK(indexerTrade: IndexerTrade): Trade {
-        return {
-            tradeId: indexerTrade.tradeId,
-            buyer: indexerTrade.buyer,
-            supplier: indexerTrade.supplier,
-            status: indexerTrade.status,
-            totalAmountLocked: indexerTrade.totalAmountLocked,
-            logisticsAmount: indexerTrade.logisticsAmount,
-            platformFeesAmount: indexerTrade.platformFeesAmount,
-            supplierFirstTranche: indexerTrade.supplierFirstTranche,
-            supplierSecondTranche: indexerTrade.supplierSecondTranche,
-            ricardianHash: indexerTrade.ricardianHash,
-            createdAt: indexerTrade.createdAt,
-            arrivalTimestamp: indexerTrade.arrivalTimestamp ?? undefined,
-        };
-    }
+    Logger.info('Arrival confirmation successful', {
+      tradeId,
+      txHash: result.txHash,
+    });
 
-    async releaseFundsStage1(tradeId: string): Promise<BlockchainResult> {
-        Logger.info('Executing releaseFundsStage1', { tradeId });
-        
-        const result = await this.sdk.releaseFundsStage1(tradeId, this.signer);
-        
-        Logger.info('Stage 1 release successful', { 
-            tradeId, 
-            txHash: result.txHash 
-        });
+    return {
+      txHash: result.txHash,
+      blockNumber: result.blockNumber,
+    };
+  }
 
-        return {
-            txHash: result.txHash,
-            blockNumber: result.blockNumber,
-        };
-    }
+  async finalizeTrade(tradeId: string): Promise<BlockchainResult> {
+    Logger.info('Executing finalizeTrade', { tradeId });
 
-    async confirmArrival(tradeId: string): Promise<BlockchainResult> {
-        Logger.info('Executing confirmArrival', { tradeId });
-        
-        const result = await this.sdk.confirmArrival(tradeId, this.signer);
-        
-        Logger.info('Arrival confirmation successful', { 
-            tradeId, 
-            txHash: result.txHash 
-        });
+    const result = await this.sdk.finalizeAfterDisputeWindow(tradeId, this.signer);
 
-        return {
-            txHash: result.txHash,
-            blockNumber: result.blockNumber,
-        };
-    }
+    Logger.info('Trade finalization successful', {
+      tradeId,
+      txHash: result.txHash,
+    });
 
-    async finalizeTrade(tradeId: string): Promise<BlockchainResult> {
-        Logger.info('Executing finalizeTrade', { tradeId });
-        
-        const result = await this.sdk.finalizeAfterDisputeWindow(tradeId, this.signer);
-        
-        Logger.info('Trade finalization successful', { 
-            tradeId, 
-            txHash: result.txHash 
-        });
-
-        return {
-            txHash: result.txHash,
-            blockNumber: result.blockNumber,
-        };
-    }
+    return {
+      txHash: result.txHash,
+      blockNumber: result.blockNumber,
+    };
+  }
 }

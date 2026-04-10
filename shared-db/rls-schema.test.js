@@ -9,11 +9,7 @@ const schemaExpectations = [
   {
     serviceName: 'auth',
     schemaPath: path.resolve(__dirname, '../auth/src/database/schema.sql'),
-    tables: [
-      'user_profiles',
-      'user_sessions',
-      'trusted_session_exchange_nonces',
-    ],
+    tables: ['user_profiles', 'user_sessions', 'trusted_session_exchange_nonces'],
   },
   {
     serviceName: 'gateway',
@@ -50,27 +46,17 @@ const schemaExpectations = [
   {
     serviceName: 'oracle',
     schemaPath: path.resolve(__dirname, '../oracle/src/database/schema.sql'),
-    tables: [
-      'oracle_triggers',
-      'oracle_hmac_nonces',
-    ],
+    tables: ['oracle_triggers', 'oracle_hmac_nonces'],
   },
   {
     serviceName: 'reconciliation',
     schemaPath: path.resolve(__dirname, '../reconciliation/src/database/schema.sql'),
-    tables: [
-      'reconcile_runs',
-      'reconcile_drifts',
-      'reconcile_run_trades',
-    ],
+    tables: ['reconcile_runs', 'reconcile_drifts', 'reconcile_run_trades'],
   },
   {
     serviceName: 'ricardian',
     schemaPath: path.resolve(__dirname, '../ricardian/src/database/schema.sql'),
-    tables: [
-      'ricardian_hashes',
-      'ricardian_auth_nonces',
-    ],
+    tables: ['ricardian_hashes', 'ricardian_auth_nonces'],
   },
 ];
 

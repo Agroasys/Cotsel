@@ -70,7 +70,11 @@ function validatePattern(
 
   const trimmed = value.trim();
   if (trimmed.length < min || trimmed.length > max) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be between ${min} and ${max} characters`);
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      `${field} must be between ${min} and ${max} characters`,
+    );
   }
 
   if (pattern && !pattern.test(trimmed)) {
@@ -91,11 +95,20 @@ function validateAuditReferences(value: unknown): AccessAuditReference[] {
 
   return value.map((item, index) => {
     if (!item || typeof item !== 'object') {
-      throw new GatewayError(400, 'VALIDATION_ERROR', `auditReferences[${index}] must be an object`);
+      throw new GatewayError(
+        400,
+        'VALIDATION_ERROR',
+        `auditReferences[${index}] must be an object`,
+      );
     }
 
     const record = item as Record<string, unknown>;
-    const type = validatePattern(record.type, `auditReferences[${index}].type`, 3, 64) as AccessAuditReference['type'];
+    const type = validatePattern(
+      record.type,
+      `auditReferences[${index}].type`,
+      3,
+      64,
+    ) as AccessAuditReference['type'];
     if (!ACCESS_AUDIT_REFERENCE_TYPES.includes(type)) {
       throw new GatewayError(400, 'VALIDATION_ERROR', `auditReferences[${index}].type is invalid`, {
         allowed: ACCESS_AUDIT_REFERENCE_TYPES,

@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import type { RouteRateLimitPolicy } from '@agroasys/shared-edge';
+import { normalizeRoutePath, type RouteRateLimitPolicy } from '@agroasys/shared-edge';
 
 const TREASURY_HEALTH_RATE_LIMIT: RouteRateLimitPolicy = {
   name: 'health',
@@ -19,16 +19,9 @@ const TREASURY_WRITE_RATE_LIMIT: RouteRateLimitPolicy = {
   sustained: { limit: 120, windowSeconds: 60 },
 };
 
-function normalizeRoutePath(pathname: string): string {
-  if (pathname.length <= 1) {
-    return pathname;
-  }
-
-  const normalized = pathname.replace(/\/+$/, '');
-  return normalized.length === 0 ? '/' : normalized;
-}
-
-export function treasuryRateLimitPolicy(req: Pick<Request, 'path' | 'method'>): RouteRateLimitPolicy | null {
+export function treasuryRateLimitPolicy(
+  req: Pick<Request, 'path' | 'method'>,
+): RouteRateLimitPolicy | null {
   const path = normalizeRoutePath(req.path);
 
   if (path === '/health' || path === '/ready') {
@@ -41,4 +34,3 @@ export function treasuryRateLimitPolicy(req: Pick<Request, 'path' | 'method'>): 
 
   return TREASURY_WRITE_RATE_LIMIT;
 }
-

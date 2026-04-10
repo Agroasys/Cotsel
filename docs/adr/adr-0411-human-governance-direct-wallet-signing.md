@@ -29,33 +29,33 @@ The backend gateway continues to play a role, it authenticates the operator sess
 
 Every governance action is signed directly by the admin wallet.
 
-| Action | Contract method |
-|---|---|
-| Protocol pause | `pause` |
-| Unpause proposal | `proposeUnpause` |
-| Unpause approval | `approveUnpause` |
-| Unpause proposal cancel | `cancelUnpauseProposal` |
-| Claims pause | `pauseClaims` |
-| Claims unpause | `unpauseClaims` |
-| Treasury sweep | `claimTreasury` |
-| Treasury payout receiver proposal | `proposeTreasuryPayoutAddressUpdate` |
-| Treasury payout receiver approval | `approveTreasuryPayoutAddressUpdate` |
-| Treasury payout receiver execute | `executeTreasuryPayoutAddressUpdate` |
+| Action                                  | Contract method                                    |
+| --------------------------------------- | -------------------------------------------------- |
+| Protocol pause                          | `pause`                                            |
+| Unpause proposal                        | `proposeUnpause`                                   |
+| Unpause approval                        | `approveUnpause`                                   |
+| Unpause proposal cancel                 | `cancelUnpauseProposal`                            |
+| Claims pause                            | `pauseClaims`                                      |
+| Claims unpause                          | `unpauseClaims`                                    |
+| Treasury sweep                          | `claimTreasury`                                    |
+| Treasury payout receiver proposal       | `proposeTreasuryPayoutAddressUpdate`               |
+| Treasury payout receiver approval       | `approveTreasuryPayoutAddressUpdate`               |
+| Treasury payout receiver execute        | `executeTreasuryPayoutAddressUpdate`               |
 | Treasury payout receiver cancel expired | `cancelExpiredTreasuryPayoutAddressUpdateProposal` |
-| Oracle disable emergency | `disableOracleEmergency` |
-| Oracle update proposal | `proposeOracleUpdate` |
-| Oracle update approval | `approveOracleUpdate` |
-| Oracle update execute | `executeOracleUpdate` |
-| Oracle update cancel expired | `cancelExpiredOracleUpdateProposal` |
+| Oracle disable emergency                | `disableOracleEmergency`                           |
+| Oracle update proposal                  | `proposeOracleUpdate`                              |
+| Oracle update approval                  | `approveOracleUpdate`                              |
+| Oracle update execute                   | `executeOracleUpdate`                              |
+| Oracle update cancel expired            | `cancelExpiredOracleUpdateProposal`                |
 
 ### Non-governance service roles — executor-backed (separate concern, not governance)
 
 The executor model is retained only for service-owned automated roles. These are not governance actions and are out of scope for this ADR.
 
-| Role | Operations |
-|---|---|
-| Oracle service | Stage releases, arrival confirmations, finalizations |
-| Automated maintenance runners | Service-triggered background operations |
+| Role                          | Operations                                           |
+| ----------------------------- | ---------------------------------------------------- |
+| Oracle service                | Stage releases, arrival confirmations, finalizations |
+| Automated maintenance runners | Service-triggered background operations              |
 
 ## Target Architecture
 
@@ -113,11 +113,12 @@ The gateway retains its role as the trusted orchestration backend. It moves from
 ## Alternatives Considered
 
 ### A) Keep queued executor with enforced signer match (current model, rejected for human governance)
+
 - Pros: simpler dashboard integration; no frontend wallet-sign flow required.
 - Cons: backend process holds admin key material; human approval identity is mediated by a machine key rather than the approving wallet signing directly; does not meet audit requirements for multi-admin governance.
 
-
 ### B) Direct wallet signing for human governance + retain executor for service roles (chosen)
+
 - Pros: satisfies audit requirements for human governance; preserves intentional delegation for service roles; aligns signing identity with approver identity for on-chain approval methods.
 - Cons: requires phased migration across gateway, dashboard, auth/step-up, and runbooks.
 
@@ -132,6 +133,7 @@ The queued executor remains deployed during migration but is being narrowed in s
 Direct wallet signing requires the operator wallet to be available and connected at execution time. Hardware wallet must be confirmed before any emergency governance action.
 
 Mitigation:
+
 - Emergency runbooks must be updated to include wallet availability as a pre-execution check.
 - Step-up auth (Phase 3) adds an additional confirmation layer before the payload is prepared.
 
@@ -140,13 +142,15 @@ Mitigation:
 The dashboard must implement wallet-connect governance signing. Until Phase 2 is complete, human operators using the dashboard cannot use the new flow.
 
 Mitigation:
+
 - Gateway prepare endpoint ships first and can be tested independently via CLI/SDK before the dashboard integration lands.
 
-
 ### Superseded decision
+
 - [Decision: Dashboard gateway governance signing model #215](https://github.com/Agroasys/Cotsel/issues/215)
 
 ### Repo surfaces that must be updated in migration phases
+
 - `gateway/src/routes/governanceMutations.ts` — queue endpoints supplemented with prepare endpoints and confirm verification (Phase 1)
 - `gateway/src/executor/governanceExecutor.ts` — executor scope to be restricted to service roles (Phase 1)
 - `docs/runbooks/gateway-governance-signer-custody.md` — transitional notice added now; full update in Phase 4
@@ -154,6 +158,7 @@ Mitigation:
 - `docs/runbooks/architecture-coverage-matrix.md` — row added for this decision
 
 ### Related decisions and issues
+
 - [#215](https://github.com/Agroasys/Cotsel/issues/215) — superseded by this ADR (anchored; no longer treated as forward direction)
 - [#412](https://github.com/Agroasys/Cotsel/issues/412) — Phase 1 gateway implementation (prepare + confirm endpoints)
 - [Cotsel-Dash #137](https://github.com/Agroasys/Cotsel-Dash/issues/137) — Phase 2 dashboard governance signing migration

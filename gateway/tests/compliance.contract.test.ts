@@ -26,7 +26,7 @@ const baseConfig: GatewayConfig = {
   dbPassword: 'postgres',
   authBaseUrl: 'http://127.0.0.1:3005',
   authRequestTimeoutMs: 5000,
-  indexerGraphqlUrl: "http://127.0.0.1:4350/graphql",
+  indexerGraphqlUrl: 'http://127.0.0.1:4350/graphql',
   indexerRequestTimeoutMs: 5000,
   rpcUrl: 'http://127.0.0.1:8545',
   rpcFallbackUrls: [],
@@ -131,28 +131,34 @@ async function startServer(options: StartServerOptions = {}) {
         return null;
       }
 
-      const role = options.sessionRole ?? (
-        token === 'session-admin-2' ? 'admin' : 'admin'
-      );
+      const role = options.sessionRole ?? (token === 'session-admin-2' ? 'admin' : 'admin');
       const sessionToken = token || 'session-admin';
       return {
-        accountId: role === 'admin'
-          ? (sessionToken === 'session-admin-2' ? 'acct-admin-2' : 'acct-admin')
-          : 'acct-buyer',
-        userId: role === 'admin'
-          ? (sessionToken === 'session-admin-2' ? 'uid-admin-2' : 'uid-admin')
-          : 'uid-buyer',
-        walletAddress: role === 'admin'
-          ? (
-            sessionToken === 'session-admin-2'
+        accountId:
+          role === 'admin'
+            ? sessionToken === 'session-admin-2'
+              ? 'acct-admin-2'
+              : 'acct-admin'
+            : 'acct-buyer',
+        userId:
+          role === 'admin'
+            ? sessionToken === 'session-admin-2'
+              ? 'uid-admin-2'
+              : 'uid-admin'
+            : 'uid-buyer',
+        walletAddress:
+          role === 'admin'
+            ? sessionToken === 'session-admin-2'
               ? '0x00000000000000000000000000000000000000ac'
               : '0x00000000000000000000000000000000000000aa'
-          )
-          : '0x00000000000000000000000000000000000000bb',
+            : '0x00000000000000000000000000000000000000bb',
         role,
-        email: role === 'admin'
-          ? (sessionToken === 'session-admin-2' ? 'admin2@agroasys.io' : 'admin@agroasys.io')
-          : 'buyer@agroasys.io',
+        email:
+          role === 'admin'
+            ? sessionToken === 'session-admin-2'
+              ? 'admin2@agroasys.io'
+              : 'admin@agroasys.io'
+            : 'buyer@agroasys.io',
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
       };
@@ -168,20 +174,27 @@ async function startServer(options: StartServerOptions = {}) {
     complianceStore,
     createPassthroughComplianceWriteStore(complianceStore, auditLogStore),
   );
-  const failedOperationWorkflow = new GatewayErrorHandlerWorkflow(failedOperationStore, auditLogStore);
+  const failedOperationWorkflow = new GatewayErrorHandlerWorkflow(
+    failedOperationStore,
+    auditLogStore,
+  );
 
   if (options.failCreateDecision) {
-    jest.spyOn(complianceService, 'createDecision').mockRejectedValue(new Error('compliance store unavailable'));
+    jest
+      .spyOn(complianceService, 'createDecision')
+      .mockRejectedValue(new Error('compliance store unavailable'));
   }
 
   const router = Router();
-  router.use(createComplianceRouter({
-    authSessionClient,
-    config,
-    complianceService,
-    idempotencyStore,
-    failedOperationWorkflow,
-  }));
+  router.use(
+    createComplianceRouter({
+      authSessionClient,
+      config,
+      complianceService,
+      idempotencyStore,
+      failedOperationWorkflow,
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -208,7 +221,11 @@ async function startServer(options: StartServerOptions = {}) {
   };
 }
 
-async function createDecision(baseUrl: string, body: Record<string, unknown>, idempotencyKey: string) {
+async function createDecision(
+  baseUrl: string,
+  body: Record<string, unknown>,
+  idempotencyKey: string,
+) {
   return fetch(`${baseUrl}/compliance/decisions`, {
     method: 'POST',
     headers: {
@@ -222,10 +239,22 @@ async function createDecision(baseUrl: string, body: Record<string, unknown>, id
 
 describe('gateway compliance routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateDecision = createSchemaValidator(spec, '#/components/schemas/ComplianceDecisionResponse');
-  const validateDecisionList = createSchemaValidator(spec, '#/components/schemas/ComplianceDecisionListResponse');
-  const validateTradeStatus = createSchemaValidator(spec, '#/components/schemas/ComplianceTradeStatusResponse');
-  const validateAttestationStatus = createSchemaValidator(spec, '#/components/schemas/ComplianceTradeAttestationStatusResponse');
+  const validateDecision = createSchemaValidator(
+    spec,
+    '#/components/schemas/ComplianceDecisionResponse',
+  );
+  const validateDecisionList = createSchemaValidator(
+    spec,
+    '#/components/schemas/ComplianceDecisionListResponse',
+  );
+  const validateTradeStatus = createSchemaValidator(
+    spec,
+    '#/components/schemas/ComplianceTradeStatusResponse',
+  );
+  const validateAttestationStatus = createSchemaValidator(
+    spec,
+    '#/components/schemas/ComplianceTradeAttestationStatusResponse',
+  );
   const validateError = createSchemaValidator(spec, '#/components/schemas/ErrorResponse');
 
   test('OpenAPI spec exposes all compliance endpoints', () => {
@@ -240,7 +269,12 @@ describe('gateway compliance routes contract', () => {
     ];
 
     paths.forEach((routePath) => {
-      const method = routePath === '/compliance/decisions' ? 'post' : routePath.includes('block-') || routePath.includes('resume-') ? 'post' : 'get';
+      const method =
+        routePath === '/compliance/decisions'
+          ? 'post'
+          : routePath.includes('block-') || routePath.includes('resume-')
+            ? 'post'
+            : 'get';
       expect(hasOperation(spec, method, routePath)).toBe(true);
     });
   });
@@ -277,13 +311,21 @@ describe('gateway compliance routes contract', () => {
     });
 
     try {
-      const firstResponse = await createDecision(baseUrl, buildDecisionBody(), 'idem-dead-letter-1');
+      const firstResponse = await createDecision(
+        baseUrl,
+        buildDecisionBody(),
+        'idem-dead-letter-1',
+      );
       const firstPayload = await firstResponse.json();
       expect(firstResponse.status).toBe(503);
       expect(validateError(firstPayload)).toBe(true);
       expect(firstPayload.error.details.failedOperationId).toBeTruthy();
 
-      const secondResponse = await createDecision(baseUrl, buildDecisionBody(), 'idem-dead-letter-1');
+      const secondResponse = await createDecision(
+        baseUrl,
+        buildDecisionBody(),
+        'idem-dead-letter-1',
+      );
       expect(secondResponse.status).toBe(503);
 
       const failedOperations = await failedOperationStore.list();
@@ -307,16 +349,23 @@ describe('gateway compliance routes contract', () => {
       const firstResponse = await createDecision(baseUrl, buildDecisionBody(), 'idem-create-2');
       const firstPayload = await firstResponse.json();
 
-      await createDecision(baseUrl, buildDecisionBody({
-        result: 'ALLOW',
-        reasonCode: 'CMP_OVERRIDE_ACTIVE',
-        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-        correlationId: 'corr-2',
-      }), 'idem-create-3');
+      await createDecision(
+        baseUrl,
+        buildDecisionBody({
+          result: 'ALLOW',
+          reasonCode: 'CMP_OVERRIDE_ACTIVE',
+          overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          correlationId: 'corr-2',
+        }),
+        'idem-create-3',
+      );
 
-      const detailResponse = await fetch(`${baseUrl}/compliance/decisions/${firstPayload.data.decisionId}`, {
-        headers: { Authorization: 'Bearer session-admin' },
-      });
+      const detailResponse = await fetch(
+        `${baseUrl}/compliance/decisions/${firstPayload.data.decisionId}`,
+        {
+          headers: { Authorization: 'Bearer session-admin' },
+        },
+      );
       const detailPayload = await detailResponse.json();
 
       const listResponse = await fetch(`${baseUrl}/compliance/trades/TRD-1/decisions`, {
@@ -354,11 +403,15 @@ describe('gateway compliance routes contract', () => {
     const { server, baseUrl } = await startServer();
 
     try {
-      await createDecision(baseUrl, buildDecisionBody({
-        result: 'ALLOW',
-        reasonCode: 'CMP_OVERRIDE_ACTIVE',
-        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      }), 'idem-attestation-1');
+      await createDecision(
+        baseUrl,
+        buildDecisionBody({
+          result: 'ALLOW',
+          reasonCode: 'CMP_OVERRIDE_ACTIVE',
+          overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }),
+        'idem-attestation-1',
+      );
 
       const response = await fetch(`${baseUrl}/compliance/trades/TRD-1/attestation-status`, {
         headers: { Authorization: 'Bearer session-admin' },
@@ -380,16 +433,24 @@ describe('gateway compliance routes contract', () => {
     const { server, baseUrl } = await startServer();
 
     try {
-      await createDecision(baseUrl, buildDecisionBody({
-        result: 'ALLOW',
-        reasonCode: 'CMP_OVERRIDE_ACTIVE',
-        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      }), 'idem-attestation-last-known-1');
+      await createDecision(
+        baseUrl,
+        buildDecisionBody({
+          result: 'ALLOW',
+          reasonCode: 'CMP_OVERRIDE_ACTIVE',
+          overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }),
+        'idem-attestation-last-known-1',
+      );
 
-      await createDecision(baseUrl, buildDecisionBody({
-        correlationId: 'corr-attestation-outage-2',
-        attestation: null,
-      }), 'idem-attestation-last-known-2');
+      await createDecision(
+        baseUrl,
+        buildDecisionBody({
+          correlationId: 'corr-attestation-outage-2',
+          attestation: null,
+        }),
+        'idem-attestation-last-known-2',
+      );
 
       const response = await fetch(`${baseUrl}/compliance/trades/TRD-1/attestation-status`, {
         headers: { Authorization: 'Bearer session-admin' },
@@ -416,41 +477,53 @@ describe('gateway compliance routes contract', () => {
       const denyResponse = await createDecision(baseUrl, buildDecisionBody(), 'idem-create-4');
       const denyPayload = await denyResponse.json();
 
-      const blockResponse = await fetch(`${baseUrl}/compliance/trades/TRD-1/block-oracle-progression`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer session-admin',
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'idem-block-1',
+      const blockResponse = await fetch(
+        `${baseUrl}/compliance/trades/TRD-1/block-oracle-progression`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer session-admin',
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'idem-block-1',
+          },
+          body: JSON.stringify(buildControlBody({ decisionId: denyPayload.data.decisionId })),
         },
-        body: JSON.stringify(buildControlBody({ decisionId: denyPayload.data.decisionId })),
-      });
+      );
       const blockPayload = await blockResponse.json();
 
       expect(blockResponse.status).toBe(202);
       expect(validateTradeStatus(blockPayload)).toBe(true);
       expect(blockPayload.data.oracleProgressionBlocked).toBe(true);
 
-      const allowResponse = await createDecision(baseUrl, buildDecisionBody({
-        result: 'ALLOW',
-        reasonCode: 'CMP_OVERRIDE_ACTIVE',
-        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-        correlationId: 'corr-allow',
-      }), 'idem-create-5');
+      const allowResponse = await createDecision(
+        baseUrl,
+        buildDecisionBody({
+          result: 'ALLOW',
+          reasonCode: 'CMP_OVERRIDE_ACTIVE',
+          overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          correlationId: 'corr-allow',
+        }),
+        'idem-create-5',
+      );
       const allowPayload = await allowResponse.json();
 
-      const resumeResponse = await fetch(`${baseUrl}/compliance/trades/TRD-1/resume-oracle-progression`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer session-admin',
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'idem-resume-1',
+      const resumeResponse = await fetch(
+        `${baseUrl}/compliance/trades/TRD-1/resume-oracle-progression`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer session-admin',
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'idem-resume-1',
+          },
+          body: JSON.stringify(
+            buildControlBody({
+              reasonCode: 'CMP_OVERRIDE_ACTIVE',
+              decisionId: allowPayload.data.decisionId,
+            }),
+          ),
         },
-        body: JSON.stringify(buildControlBody({
-          reasonCode: 'CMP_OVERRIDE_ACTIVE',
-          decisionId: allowPayload.data.decisionId,
-        })),
-      });
+      );
       const resumePayload = await resumeResponse.json();
 
       expect(resumeResponse.status).toBe(202);
@@ -466,17 +539,25 @@ describe('gateway compliance routes contract', () => {
     const { server, baseUrl } = await startServer();
 
     try {
-      const allowResponse = await createDecision(baseUrl, buildDecisionBody({
-        result: 'ALLOW',
-        reasonCode: 'CMP_OVERRIDE_ACTIVE',
-        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-        correlationId: 'corr-allow-stale',
-      }), 'idem-create-stale-allow');
+      const allowResponse = await createDecision(
+        baseUrl,
+        buildDecisionBody({
+          result: 'ALLOW',
+          reasonCode: 'CMP_OVERRIDE_ACTIVE',
+          overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          correlationId: 'corr-allow-stale',
+        }),
+        'idem-create-stale-allow',
+      );
       const allowPayload = await allowResponse.json();
 
-      const denyResponse = await createDecision(baseUrl, buildDecisionBody({
-        correlationId: 'corr-deny-stale',
-      }), 'idem-create-stale-deny');
+      const denyResponse = await createDecision(
+        baseUrl,
+        buildDecisionBody({
+          correlationId: 'corr-deny-stale',
+        }),
+        'idem-create-stale-deny',
+      );
       const denyPayload = await denyResponse.json();
 
       await fetch(`${baseUrl}/compliance/trades/TRD-1/block-oracle-progression`, {
@@ -489,24 +570,31 @@ describe('gateway compliance routes contract', () => {
         body: JSON.stringify(buildControlBody({ decisionId: denyPayload.data.decisionId })),
       });
 
-      const resumeResponse = await fetch(`${baseUrl}/compliance/trades/TRD-1/resume-oracle-progression`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer session-admin',
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'idem-resume-stale',
+      const resumeResponse = await fetch(
+        `${baseUrl}/compliance/trades/TRD-1/resume-oracle-progression`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer session-admin',
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'idem-resume-stale',
+          },
+          body: JSON.stringify(
+            buildControlBody({
+              reasonCode: 'CMP_OVERRIDE_ACTIVE',
+              decisionId: allowPayload.data.decisionId,
+            }),
+          ),
         },
-        body: JSON.stringify(buildControlBody({
-          reasonCode: 'CMP_OVERRIDE_ACTIVE',
-          decisionId: allowPayload.data.decisionId,
-        })),
-      });
+      );
       const resumePayload = await resumeResponse.json();
 
       expect(resumeResponse.status).toBe(409);
       expect(validateError(resumePayload)).toBe(true);
       expect(resumePayload.error.code).toBe('CONFLICT');
-      expect(resumePayload.error.message).toContain('latest effective compliance decision must be used');
+      expect(resumePayload.error.message).toContain(
+        'latest effective compliance decision must be used',
+      );
     } finally {
       server.close();
     }

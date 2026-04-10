@@ -5,6 +5,7 @@
 - Related issue: [#279](https://github.com/Agroasys/Cotsel/issues/279)
 
 ## Context
+
 Cotsel is a non-custodial trade-settlement protocol with off-chain services for oracle progression, reconciliation, Ricardian evidence anchoring, treasury operations, and operator control-plane workflows.
 
 Enterprise adopters need an explicit statement of scope for three questions:
@@ -16,6 +17,7 @@ Enterprise adopters need an explicit statement of scope for three questions:
 Without a written boundary, integrations can drift toward unsafe patterns such as placing raw personal or compliance data on-chain, treating Cotsel as the primary source of truth for identity, or introducing custom off-chain automation that weakens determinism and auditability.
 
 ## Decision
+
 Cotsel will remain a settlement and evidence-traceability layer, not an identity ledger, privacy product, or general-purpose workflow engine.
 
 This decision establishes the following posture:
@@ -26,7 +28,9 @@ This decision establishes the following posture:
 - composability is supported through stable contracts, deterministic service boundaries, and evidence-linked integrations rather than arbitrary embedded customer logic
 
 ## On-Chain vs Off-Chain Data Boundary
+
 ### Allowed on-chain by default
+
 - trade lifecycle state and escrow balances
 - participant wallet or signing addresses already required by the protocol
 - Ricardian document hashes and other immutable evidence anchors
@@ -34,6 +38,7 @@ This decision establishes the following posture:
 - bounded operational identifiers that do not expose raw personal or regulated data
 
 ### Off-chain by default
+
 - raw PII, passports, national IDs, tax documents, bank account details, and account recovery material
 - raw KYB, KYT, AML, sanctions-screening, or vendor decision payloads
 - invoices, bills of lading, inspection reports, legal PDFs, and other supporting documents in their full content form
@@ -41,6 +46,7 @@ This decision establishes the following posture:
 - vendor-specific evidence payloads that can be re-fetched or revalidated by reference
 
 ### Escalation rule
+
 If a team believes new data must be published on-chain, the change must first document:
 
 - why an off-chain reference is insufficient
@@ -50,6 +56,7 @@ If a team believes new data must be published on-chain, the change must first do
 No such expansion is approved by this ADR.
 
 ## Attestation Boundary
+
 Cotsel may consume or reference attestations issued by external systems, operators, or service-owned workflows, but it will not become the canonical source of truth for identity data.
 
 Rules:
@@ -63,6 +70,7 @@ Rules:
 This keeps identity, compliance, and settlement concerns separated while preserving audit-grade linkage between them.
 
 ## Composability Stance
+
 Cotsel is integration-friendly, but composition must preserve determinism, auditability, and clear ownership.
 
 Supported composition patterns:
@@ -79,41 +87,53 @@ Unsupported by default:
 - use of Cotsel as a generic identity registry, privacy-preserving wallet platform, or confidential-data host
 
 ## Alternatives Considered
+
 ### A) Treat Cotsel as the enterprise system of record for identity and compliance
+
 - Pros: fewer external dependencies for integrators.
 - Cons: expands the protocol surface into high-liability data stewardship, weakens separation of concerns, and pushes privacy-sensitive data toward the wrong trust boundary.
 
 ### B) Keep all enterprise boundary questions implicit
+
 - Pros: less documentation work up front.
 - Cons: invites inconsistent integrations, makes audits harder, and increases the risk of unsafe data placement or misleading product claims.
 
 ### C) Explicit settlement-only boundary with attestation references (chosen)
+
 - Pros: keeps the protocol focused, preserves evidence traceability, and makes integration expectations auditable.
 - Cons: integrators still need external systems for identity and compliance truth.
 
 ## Risk Analysis
+
 ### Privacy and regulatory posture
+
 - Keeping raw PII and full compliance payloads off-chain reduces irreversible disclosure risk.
 - Minimal on-chain references still require review to avoid accidental leakage through identifiers.
 
 ### Operational complexity
+
 - External attestations introduce dependency on off-chain issuers and operator workflows.
 - This is acceptable because Cotsel already depends on off-chain evidence and service-owned control planes for safe operation.
 
 ### Product clarity
+
 - The ADR reduces the risk of overclaiming by stating what Cotsel does not provide.
 - Integrations remain composable, but only through bounded contracts and reviewable service paths.
 
 ## Evidence
+
 ### Canonical repository surfaces
+
 - [README.md](../../README.md)
 - [docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md](../runbooks/compliance-boundary-kyb-kyt-sanctions.md)
 - [docs/runbooks/hybrid-split-walkthrough.md](../runbooks/hybrid-split-walkthrough.md)
 - [docs/runbooks/dashboard-gateway-operations.md](../runbooks/dashboard-gateway-operations.md)
 
 ### Closeout expectation
+
 - merged ADR PR linked to issue #279
 - passing docs/roadmap consistency guard in CI
 
 ## Rollback
+
 If this ADR is superseded or rejected, revert the ADR file and replace it with a new decision record that explicitly documents the revised boundary. Any implementation work that depends on this ADR must reference the superseding record before changing protocol or service behavior.

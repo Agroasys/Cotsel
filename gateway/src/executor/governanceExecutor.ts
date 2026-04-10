@@ -43,7 +43,9 @@ function sanitizeError(error: unknown): { code: string; message: string } {
   };
 }
 
-function fallbackPostExecutionStatus(action: GovernanceActionRecord): GovernanceActionStatus | null {
+function fallbackPostExecutionStatus(
+  action: GovernanceActionRecord,
+): GovernanceActionStatus | null {
   switch (action.contractMethod) {
     case 'proposeUnpause':
     case 'approveUnpause':
@@ -100,7 +102,9 @@ async function resolveUnpauseApprovalStatus(
     return 'executed';
   }
 
-  return proposal.approvalCount >= status.governanceApprovalsRequired ? 'approved' : 'pending_approvals';
+  return proposal.approvalCount >= status.governanceApprovalsRequired
+    ? 'approved'
+    : 'pending_approvals';
 }
 
 export function createPostgresGovernanceExecutionLock(pool: Pool): GovernanceExecutionLock {
@@ -141,7 +145,11 @@ export class GovernanceExecutorService {
     private readonly executionTimeoutMs = 45000,
   ) {}
 
-  async executeAction(actionId: string, requestId: string, correlationId?: string | null): Promise<GovernanceActionRecord> {
+  async executeAction(
+    actionId: string,
+    requestId: string,
+    correlationId?: string | null,
+  ): Promise<GovernanceActionRecord> {
     return this.executionLock.runExclusive(actionId, async () => {
       const existing = await this.store.get(actionId);
       if (!existing) {
@@ -149,10 +157,15 @@ export class GovernanceExecutorService {
       }
 
       if (existing.flowType === 'direct_sign') {
-        throw new GatewayError(409, 'CONFLICT', 'Direct-sign governance actions are signed by the admin wallet and cannot be processed by the executor', {
-          actionId,
-          contractMethod: existing.contractMethod,
-        });
+        throw new GatewayError(
+          409,
+          'CONFLICT',
+          'Direct-sign governance actions are signed by the admin wallet and cannot be processed by the executor',
+          {
+            actionId,
+            contractMethod: existing.contractMethod,
+          },
+        );
       }
 
       if (existing.status !== 'requested') {
@@ -186,7 +199,11 @@ export class GovernanceExecutorService {
         const actualExecutorWallet = normalizeWalletAddress(executorWallet);
 
         if (!expectedApproverWallet) {
-          throw new GatewayError(500, 'INTERNAL_ERROR', 'Queued approval action is missing the approver wallet');
+          throw new GatewayError(
+            500,
+            'INTERNAL_ERROR',
+            'Queued approval action is missing the approver wallet',
+          );
         }
 
         if (expectedApproverWallet !== actualExecutorWallet) {
@@ -208,12 +225,17 @@ export class GovernanceExecutorService {
             },
           });
 
-          throw new GatewayError(409, 'CONFLICT', 'Executor signer does not match the queued approval approver wallet', {
-            actionId,
-            contractMethod: existing.contractMethod,
-            expectedApproverWallet,
-            executorWallet,
-          });
+          throw new GatewayError(
+            409,
+            'CONFLICT',
+            'Executor signer does not match the queued approval approver wallet',
+            {
+              actionId,
+              contractMethod: existing.contractMethod,
+              expectedApproverWallet,
+              executorWallet,
+            },
+          );
         }
       }
 
@@ -249,7 +271,13 @@ export class GovernanceExecutorService {
         );
       } catch (error) {
         if (isTimeoutError(error)) {
-          return this.persistExecutionTimeout(existing, requestId, correlationId, executorWallet, error);
+          return this.persistExecutionTimeout(
+            existing,
+            requestId,
+            correlationId,
+            executorWallet,
+            error,
+          );
         }
         return this.persistFailure(existing, requestId, correlationId, executorWallet, error);
       }
@@ -277,13 +305,18 @@ export class GovernanceExecutorService {
       try {
         return await this.writeStore.saveActionWithAudit(persisted, auditEntry);
       } catch (error) {
-        throw new GatewayError(500, 'INTERNAL_ERROR', 'Failed to persist executed governance action; manual reconciliation is required', {
-          actionId,
-          txHash: execution.txHash,
-          blockNumber: execution.blockNumber,
-          proposalId: execution.proposalId ?? null,
-          reason: error instanceof Error ? error.message : String(error),
-        });
+        throw new GatewayError(
+          500,
+          'INTERNAL_ERROR',
+          'Failed to persist executed governance action; manual reconciliation is required',
+          {
+            actionId,
+            txHash: execution.txHash,
+            blockNumber: execution.blockNumber,
+            proposalId: execution.proposalId ?? null,
+            reason: error instanceof Error ? error.message : String(error),
+          },
+        );
       }
     });
   }
@@ -399,7 +432,10 @@ export class GovernanceExecutorService {
     let statusResolutionFailure: { code: string; message: string } | null = null;
 
     try {
-      finalStatus = await this.resolvePostExecutionStatus(action, execution.proposalId ?? action.proposalId);
+      finalStatus = await this.resolvePostExecutionStatus(
+        action,
+        execution.proposalId ?? action.proposalId,
+      );
     } catch (error) {
       const fallbackStatus = fallbackPostExecutionStatus(action);
       if (!fallbackStatus) {
@@ -410,7 +446,10 @@ export class GovernanceExecutorService {
       finalStatus = fallbackStatus;
       statusResolutionFailure = {
         code: 'STATUS_RECONCILIATION_REQUIRED',
-        message: `Executed on-chain but failed to resolve final status: ${sanitized.message}`.slice(0, 1000),
+        message: `Executed on-chain but failed to resolve final status: ${sanitized.message}`.slice(
+          0,
+          1000,
+        ),
       };
     }
 
@@ -465,9 +504,14 @@ export class GovernanceExecutorService {
         );
       }
       default:
-        throw new GatewayError(500, 'INTERNAL_ERROR', 'Unsupported governance contract method for post-execution state resolution', {
-          contractMethod: action.contractMethod,
-        });
+        throw new GatewayError(
+          500,
+          'INTERNAL_ERROR',
+          'Unsupported governance contract method for post-execution state resolution',
+          {
+            contractMethod: action.contractMethod,
+          },
+        );
     }
   }
 }

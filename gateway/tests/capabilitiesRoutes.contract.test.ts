@@ -8,7 +8,11 @@ import type { GatewayConfig } from '../src/config/env';
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createCapabilitiesRouter } from '../src/routes/capabilities';
-import type { AuthSession, AuthSessionClient, AuthServiceRole } from '../src/core/authSessionClient';
+import type {
+  AuthSession,
+  AuthSessionClient,
+  AuthServiceRole,
+} from '../src/core/authSessionClient';
 
 const baseConfig: GatewayConfig = {
   port: 3600,
@@ -51,7 +55,9 @@ const baseConfig: GatewayConfig = {
 async function startServer(
   role: AuthServiceRole | null,
   config: GatewayConfig = baseConfig,
-  sessionOverrides: Omit<Partial<AuthSession>, 'walletAddress'> & { walletAddress?: string | null } = {},
+  sessionOverrides: Omit<Partial<AuthSession>, 'walletAddress'> & {
+    walletAddress?: string | null;
+  } = {},
 ) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
@@ -100,7 +106,10 @@ async function startServer(
 
 describe('gateway capabilities route contract', () => {
   const spec = loadOpenApiSpec();
-  const validateCapabilities = createSchemaValidator(spec, '#/components/schemas/OperatorCapabilitiesResponse');
+  const validateCapabilities = createSchemaValidator(
+    spec,
+    '#/components/schemas/OperatorCapabilitiesResponse',
+  );
 
   test('OpenAPI spec exposes capabilities endpoint', () => {
     expect(hasOperation(spec, 'get', '/auth/capabilities')).toBe(true);

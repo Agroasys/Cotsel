@@ -48,7 +48,10 @@ export function createRouter(
     router.get(
       '/challenge',
       asyncHandler((req, res) =>
-        options.legacyWalletController!.getChallenge(req as Request<unknown, unknown, unknown, { wallet?: string }>, res),
+        options.legacyWalletController!.getChallenge(
+          req as Request<unknown, unknown, unknown, { wallet?: string }>,
+          res,
+        ),
       ),
     );
 
@@ -78,28 +81,28 @@ export function createRouter(
     router.post(
       '/session/exchange/agroasys',
       options.trustedSessionExchangeMiddleware,
-      asyncHandler((req, res) => sessionController.exchangeTrustedSession(
-        req as Request<
-          unknown,
-          unknown,
-          {
-            accountId?: string;
-            role?: import('../types').UserRole;
-            orgId?: string | null;
-            email?: string | null;
-            walletAddress?: string | null;
-            ttlSeconds?: number;
-          }
-        >,
-        res,
-      )),
+      asyncHandler((req, res) =>
+        sessionController.exchangeTrustedSession(
+          req as Request<
+            unknown,
+            unknown,
+            {
+              accountId?: string;
+              role?: import('../types').UserRole;
+              orgId?: string | null;
+              email?: string | null;
+              walletAddress?: string | null;
+              ttlSeconds?: number;
+            }
+          >,
+          res,
+        ),
+      ),
     );
   }
 
-  router.get(
-    '/session',
-    asyncHandler(sessionMiddleware),
-    (req, res) => sessionController.getSession(req, res),
+  router.get('/session', asyncHandler(sessionMiddleware), (req, res) =>
+    sessionController.getSession(req, res),
   );
 
   router.post(

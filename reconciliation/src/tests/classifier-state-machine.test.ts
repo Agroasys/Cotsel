@@ -68,8 +68,16 @@ test('hash mismatch is classified as critical and stable across repeated runs', 
     onchainTrade: onchain,
   });
 
-  assert.deepEqual(first, second, 'expected deterministic finding order and payload across repeated classification');
-  assert.ok(first.some((finding) => finding.mismatchCode === 'HASH_MISMATCH' && finding.severity === 'CRITICAL'));
+  assert.deepEqual(
+    first,
+    second,
+    'expected deterministic finding order and payload across repeated classification',
+  );
+  assert.ok(
+    first.some(
+      (finding) => finding.mismatchCode === 'HASH_MISMATCH' && finding.severity === 'CRITICAL',
+    ),
+  );
 });
 
 test('amount mismatch remains critical and field-specific', () => {

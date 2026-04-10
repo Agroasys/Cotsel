@@ -88,24 +88,24 @@ This is not the target production architecture for Agroasys-integrated deploymen
 
 ## Session Lifecycle
 
-| Endpoint | Method | Auth required |
-|---|---|---|
-| `/api/auth/v1/challenge` | GET | None, rate-limited, only when `LEGACY_WALLET_LOGIN_ENABLED=true` in `development` or `test` |
-| `/api/auth/v1/login` | POST | Wallet signature compatibility flow, disabled outside `development` and `test` |
-| `/api/auth/v1/session/exchange/agroasys` | POST | Trusted upstream service auth |
-| `/api/auth/v1/session` | GET | Bearer session token |
-| `/api/auth/v1/session/refresh` | POST | Bearer session token |
-| `/api/auth/v1/session/revoke` | POST | Bearer session token |
-| `/api/auth/v1/health` | GET | None |
+| Endpoint                                 | Method | Auth required                                                                               |
+| ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------- |
+| `/api/auth/v1/challenge`                 | GET    | None, rate-limited, only when `LEGACY_WALLET_LOGIN_ENABLED=true` in `development` or `test` |
+| `/api/auth/v1/login`                     | POST   | Wallet signature compatibility flow, disabled outside `development` and `test`              |
+| `/api/auth/v1/session/exchange/agroasys` | POST   | Trusted upstream service auth                                                               |
+| `/api/auth/v1/session`                   | GET    | Bearer session token                                                                        |
+| `/api/auth/v1/session/refresh`           | POST   | Bearer session token                                                                        |
+| `/api/auth/v1/session/revoke`            | POST   | Bearer session token                                                                        |
+| `/api/auth/v1/health`                    | GET    | None                                                                                        |
 
 ## Role Model
 
-| Role | Identity source | Notes |
-|---|---|---|
-| `buyer` | Trusted upstream session or compatibility wallet session | Creates trades, opens disputes |
-| `supplier` | Trusted upstream session or compatibility wallet session | Passive recipient |
-| `admin` | Trusted upstream session or compatibility wallet session | Governance |
-| `oracle` | Service key | Relayed by oracle service, not a user session |
+| Role       | Identity source                                          | Notes                                         |
+| ---------- | -------------------------------------------------------- | --------------------------------------------- |
+| `buyer`    | Trusted upstream session or compatibility wallet session | Creates trades, opens disputes                |
+| `supplier` | Trusted upstream session or compatibility wallet session | Passive recipient                             |
+| `admin`    | Trusted upstream session or compatibility wallet session | Governance                                    |
+| `oracle`   | Service key                                              | Relayed by oracle service, not a user session |
 
 ## Configuration
 

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { jest } from '@jest/globals';
 
 const BASE_ENV: Record<string, string> = {
   RECONCILIATION_ENABLED: 'true',
@@ -53,8 +54,11 @@ function withEnv(overrides: Record<string, string | undefined>, fn: () => void):
 
 function loadConfigModule(): typeof import('../config') {
   const modulePath = path.resolve(__dirname, '../config');
-  delete require.cache[require.resolve(modulePath)];
-  return require(modulePath) as typeof import('../config');
+  let loaded!: typeof import('../config');
+  jest.isolateModules(() => {
+    loaded = jest.requireActual(modulePath) as typeof import('../config');
+  });
+  return loaded;
 }
 
 test('invalid address in config fails with explicit field-level error', () => {
@@ -78,22 +82,15 @@ test('valid lowercase config addresses are normalized and accepted', () => {
 
 test('missing INDEXER_GRAPHQL_URL fails with explicit config error', () => {
   withEnv({ INDEXER_GRAPHQL_URL: undefined }, () => {
-    assert.throws(
-      () => loadConfigModule(),
-      /INDEXER_GRAPHQL_URL is missing/,
-    );
+    assert.throws(() => loadConfigModule(), /INDEXER_GRAPHQL_URL is missing/);
   });
 });
 
 test('malformed RPC_URL fails with explicit config error', () => {
   withEnv({ RPC_URL: 'not-a-url' }, () => {
-    assert.throws(
-      () => loadConfigModule(),
-      /RPC_URL must be a valid URL, received "not-a-url"/,
-    );
+    assert.throws(() => loadConfigModule(), /RPC_URL must be a valid URL, received "not-a-url"/);
   });
 });
-
 
 test('container-safe indexer URL check rejects localhost when enabled', () => {
   withEnv(
@@ -126,10 +123,13 @@ test('container-safe indexer URL check allows service DNS names when enabled', (
 });
 
 test('migration credentials must be configured as a complete pair', () => {
-  withEnv({ DB_MIGRATION_USER: 'reconciliation_migrator', DB_MIGRATION_PASSWORD: undefined }, () => {
-    assert.throws(
-      () => loadConfigModule(),
-      /DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together/,
-    );
-  });
+  withEnv(
+    { DB_MIGRATION_USER: 'reconciliation_migrator', DB_MIGRATION_PASSWORD: undefined },
+    () => {
+      assert.throws(
+        () => loadConfigModule(),
+        /DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together/,
+      );
+    },
+  );
 });

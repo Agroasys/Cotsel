@@ -56,7 +56,7 @@ describe('ricardian rate limiter', () => {
   });
 
   test('under limit succeeds', async () => {
-    let now = 1700000000;
+    const now = 1700000000;
 
     const limiter = await createRicardianRateLimiter({
       config: {
@@ -90,7 +90,7 @@ describe('ricardian rate limiter', () => {
   });
 
   test('above limit returns 429', async () => {
-    let now = 1700000000;
+    const now = 1700000000;
 
     const limiter = await createRicardianRateLimiter({
       config: {
@@ -121,7 +121,7 @@ describe('ricardian rate limiter', () => {
       expect.objectContaining({
         success: false,
         error: 'Rate limit exceeded. Retry after the provided delay.',
-      })
+      }),
     );
     expect(second.setHeader).toHaveBeenCalledWith('Retry-After', expect.any(String));
 

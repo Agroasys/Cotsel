@@ -10,7 +10,10 @@ import {
 } from './governanceStore';
 
 export interface GovernanceWriteStore {
-  saveActionWithAudit(action: GovernanceActionRecord, auditEntry: AuditLogEntry): Promise<GovernanceActionRecord>;
+  saveActionWithAudit(
+    action: GovernanceActionRecord,
+    auditEntry: AuditLogEntry,
+  ): Promise<GovernanceActionRecord>;
   saveQueuedActionWithIntentDedupe(
     action: GovernanceActionRecord,
     auditEntry: AuditLogEntry,
@@ -36,7 +39,6 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
     action.flowType,
     action.contractMethod,
     action.txHash,
-    action.extrinsicHash,
     action.blockNumber,
     action.tradeId,
     action.chainId,
@@ -57,7 +59,8 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
     JSON.stringify(action.audit.approvedBy ?? []),
     action.audit.actorAccountId ?? null,
     action.finalSignerWallet ?? null,
-    action.verificationState ?? (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
+    action.verificationState ??
+      (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
     action.verificationError ?? null,
     action.verifiedAt ?? null,
     action.monitoringState ?? (action.flowType === 'direct_sign' ? 'not_started' : 'not_required'),
@@ -70,7 +73,10 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
   ];
 }
 
-async function upsertGovernanceAction(client: PoolClient, action: GovernanceActionRecord): Promise<void> {
+async function upsertGovernanceAction(
+  client: PoolClient,
+  action: GovernanceActionRecord,
+): Promise<void> {
   await client.query(
     `INSERT INTO governance_actions (
       action_id,
@@ -82,7 +88,6 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       flow_type,
       contract_method,
       tx_hash,
-      extrinsic_hash,
       block_number,
       trade_id,
       chain_id,
@@ -117,8 +122,8 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
       $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb,
-      $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, $34, $35,
-      $36, $37, $38, $39::jsonb, $40, $41, $42, $43, $44, NOW()
+      $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, $34::jsonb,
+      $35, $36, $37, $38, $39, NOW()
     )
     ON CONFLICT (action_id) DO UPDATE SET
       intent_key = EXCLUDED.intent_key,
@@ -129,7 +134,6 @@ async function upsertGovernanceAction(client: PoolClient, action: GovernanceActi
       flow_type = EXCLUDED.flow_type,
       contract_method = EXCLUDED.contract_method,
       tx_hash = EXCLUDED.tx_hash,
-      extrinsic_hash = EXCLUDED.extrinsic_hash,
       block_number = EXCLUDED.block_number,
       trade_id = EXCLUDED.trade_id,
       chain_id = EXCLUDED.chain_id,
@@ -240,9 +244,12 @@ export function createPostgresGovernanceWriteStore(
         try {
           await client.query('ROLLBACK');
         } catch (rollbackError) {
-          const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          const rollbackMessage =
+            rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
           const originalMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(`Governance write rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`);
+          throw new Error(
+            `Governance write rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`,
+          );
         }
 
         throw error;
@@ -272,7 +279,9 @@ export function createPostgresGovernanceWriteStore(
           existingActionId = existing.actionId;
           const storedExisting = await readStore.get(existing.actionId);
           if (!storedExisting) {
-            throw new Error(`Failed to load governance action ${existing.actionId} for semantic dedupe`);
+            throw new Error(
+              `Failed to load governance action ${existing.actionId} for semantic dedupe`,
+            );
           }
           await insertAuditLog(client, duplicateAuditEntry(storedExisting));
         } else {
@@ -287,9 +296,12 @@ export function createPostgresGovernanceWriteStore(
         try {
           await client.query('ROLLBACK');
         } catch (rollbackError) {
-          const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          const rollbackMessage =
+            rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
           const originalMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(`Governance write rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`);
+          throw new Error(
+            `Governance write rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`,
+          );
         }
 
         throw error;
@@ -299,7 +311,9 @@ export function createPostgresGovernanceWriteStore(
 
       const stored = existingActionId ? await readStore.get(existingActionId) : null;
       if (!stored) {
-        throw new Error(`Failed to persist governance action ${existingActionId ?? action.actionId}`);
+        throw new Error(
+          `Failed to persist governance action ${existingActionId ?? action.actionId}`,
+        );
       }
 
       return {
@@ -322,7 +336,9 @@ export function createPostgresGovernanceWriteStore(
           existingActionId = existing.actionId;
           const storedExisting = await readStore.get(existing.actionId);
           if (!storedExisting) {
-            throw new Error(`Failed to load governance action ${existing.actionId} for semantic dedupe`);
+            throw new Error(
+              `Failed to load governance action ${existing.actionId} for semantic dedupe`,
+            );
           }
           await insertAuditLog(client, duplicateAuditEntry(storedExisting));
         } else {
@@ -337,9 +353,12 @@ export function createPostgresGovernanceWriteStore(
         try {
           await client.query('ROLLBACK');
         } catch (rollbackError) {
-          const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          const rollbackMessage =
+            rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
           const originalMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(`Governance direct-sign write rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`);
+          throw new Error(
+            `Governance direct-sign write rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`,
+          );
         }
 
         throw error;
@@ -349,7 +368,9 @@ export function createPostgresGovernanceWriteStore(
 
       const stored = existingActionId ? await readStore.get(existingActionId) : null;
       if (!stored) {
-        throw new Error(`Failed to persist direct-sign governance action ${existingActionId ?? action.actionId}`);
+        throw new Error(
+          `Failed to persist direct-sign governance action ${existingActionId ?? action.actionId}`,
+        );
       }
 
       return {
@@ -357,7 +378,6 @@ export function createPostgresGovernanceWriteStore(
         created,
       };
     },
-
   };
 }
 
@@ -407,6 +427,5 @@ export function createPassthroughGovernanceWriteStore(
         created: true,
       };
     },
-
   };
 }

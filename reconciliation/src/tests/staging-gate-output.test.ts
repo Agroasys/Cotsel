@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadStagingGateSqlContract, sqlFingerprint, loadStagingGateScript } from './helpers/stagingGateSqlContract';
+import {
+  loadStagingGateSqlContract,
+  sqlFingerprint,
+  loadStagingGateScript,
+} from './helpers/stagingGateSqlContract';
 
 const GATE_SCRIPT_CONTENTS = loadStagingGateScript();
 

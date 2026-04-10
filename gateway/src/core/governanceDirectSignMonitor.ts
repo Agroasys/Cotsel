@@ -100,7 +100,7 @@ function confirmationsFromHead(
     return null;
   }
 
-  return (headBlockNumber - receipt.blockNumber) + 1;
+  return headBlockNumber - receipt.blockNumber + 1;
 }
 
 function actionAgeMs(action: GovernanceActionRecord, referenceTime: string): number {
@@ -157,10 +157,15 @@ export class GovernanceDirectSignMonitor {
   ) {
     this.now = options.now ?? (() => new Date());
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-    this.pendingVerificationStaleAfterMs = options.pendingVerificationStaleAfterMs ?? DEFAULT_PENDING_VERIFICATION_STALE_AFTER_MS;
-    this.pendingConfirmationStaleAfterMs = options.pendingConfirmationStaleAfterMs ?? DEFAULT_PENDING_CONFIRMATION_STALE_AFTER_MS;
+    this.pendingVerificationStaleAfterMs =
+      options.pendingVerificationStaleAfterMs ?? DEFAULT_PENDING_VERIFICATION_STALE_AFTER_MS;
+    this.pendingConfirmationStaleAfterMs =
+      options.pendingConfirmationStaleAfterMs ?? DEFAULT_PENDING_CONFIRMATION_STALE_AFTER_MS;
     this.confirmationDepth = Math.max(1, options.confirmationDepth ?? DEFAULT_CONFIRMATION_DEPTH);
-    this.finalizationDepth = Math.max(this.confirmationDepth, options.finalizationDepth ?? DEFAULT_FINALIZATION_DEPTH);
+    this.finalizationDepth = Math.max(
+      this.confirmationDepth,
+      options.finalizationDepth ?? DEFAULT_FINALIZATION_DEPTH,
+    );
   }
 
   start(): void {
@@ -303,7 +308,9 @@ export class GovernanceDirectSignMonitor {
         requestId,
         inspectedAt,
         'BROADCAST_VERIFICATION_FAILED',
-        error instanceof Error ? error.message : 'Observed transaction does not match the prepared governance action',
+        error instanceof Error
+          ? error.message
+          : 'Observed transaction does not match the prepared governance action',
         'governance.action.monitoring.verification_failed',
         'pending_verification',
         'failed',
@@ -402,11 +409,17 @@ export class GovernanceDirectSignMonitor {
         executedAt: inspectedAt,
       };
 
-      const auditEntry = buildAuditEntry(action, requestId, 'governance.action.monitoring.reverted', 'failed', {
-        newStatus: 'failed',
-        newMonitoringState: 'reverted',
-        blockNumber: revertedAction.blockNumber,
-      });
+      const auditEntry = buildAuditEntry(
+        action,
+        requestId,
+        'governance.action.monitoring.reverted',
+        'failed',
+        {
+          newStatus: 'failed',
+          newMonitoringState: 'reverted',
+          blockNumber: revertedAction.blockNumber,
+        },
+      );
 
       return this.writeStore.saveActionWithAudit(revertedAction, auditEntry);
     }
@@ -417,20 +430,21 @@ export class GovernanceDirectSignMonitor {
 
     const headBlockNumber = await this.safeGetBlockNumber();
     const confirmations = confirmationsFromHead(receipt, headBlockNumber);
-    const nextMonitoringState = confirmations !== null && confirmations >= this.finalizationDepth
-      ? 'finalized'
-      : confirmations !== null && confirmations >= this.confirmationDepth
-        ? 'confirmed'
-        : 'pending_confirmation';
+    const nextMonitoringState =
+      confirmations !== null && confirmations >= this.finalizationDepth
+        ? 'finalized'
+        : confirmations !== null && confirmations >= this.confirmationDepth
+          ? 'confirmed'
+          : 'pending_confirmation';
 
     const nextStatus = nextMonitoringState === 'finalized' ? 'executed' : 'broadcast';
     const shouldSetExecutedAt = nextMonitoringState === 'finalized';
 
     const hasChanged =
-      action.status !== nextStatus
-      || action.monitoringState !== nextMonitoringState
-      || action.blockNumber !== (receipt.blockNumber ?? action.blockNumber)
-      || (shouldSetExecutedAt && !action.executedAt);
+      action.status !== nextStatus ||
+      action.monitoringState !== nextMonitoringState ||
+      action.blockNumber !== (receipt.blockNumber ?? action.blockNumber) ||
+      (shouldSetExecutedAt && !action.executedAt);
 
     if (!hasChanged) {
       return null;
@@ -474,11 +488,11 @@ export class GovernanceDirectSignMonitor {
     monitoringState: GovernanceMonitoringState;
     finalSignerWallet: string;
     verifiedAt: string;
-      blockNumber: number | null;
-      executedAt: string | null;
-      eventType: string;
-      errorCode: string | null;
-      errorMessage: string | null;
+    blockNumber: number | null;
+    executedAt: string | null;
+    eventType: string;
+    errorCode: string | null;
+    errorMessage: string | null;
   }> {
     if (!action.txHash) {
       return {
@@ -614,17 +628,25 @@ export class GovernanceDirectSignMonitor {
       executedAt: inspectedAt,
     };
 
-    const auditEntry = buildAuditEntry(action, requestId, 'governance.action.monitoring.stale', 'stale', {
-      newStatus: 'stale',
-      newMonitoringState: 'stale',
-      errorCode,
-      errorMessage,
-    });
+    const auditEntry = buildAuditEntry(
+      action,
+      requestId,
+      'governance.action.monitoring.stale',
+      'stale',
+      {
+        newStatus: 'stale',
+        newMonitoringState: 'stale',
+        errorCode,
+        errorMessage,
+      },
+    );
 
     return this.writeStore.saveActionWithAudit(staleAction, auditEntry);
   }
 
-  private async safeGetReceipt(txHash: string): Promise<GovernanceObservedTransactionReceipt | null> {
+  private async safeGetReceipt(
+    txHash: string,
+  ): Promise<GovernanceObservedTransactionReceipt | null> {
     try {
       return await this.verifier.getTransactionReceipt(txHash);
     } catch {

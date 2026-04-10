@@ -157,7 +157,10 @@ export class OperationsSummaryService implements OperationsSummaryReader {
     };
   }
 
-  private async evaluateProbe(probe: ServiceProbeDefinition, nowValue: Date): Promise<OperationsServiceStatus> {
+  private async evaluateProbe(
+    probe: ServiceProbeDefinition,
+    nowValue: Date,
+  ): Promise<OperationsServiceStatus> {
     const checkedAt = nowValue.toISOString();
     const staleAfterMs = probe.staleAfterMs;
     const degradedLatencyMs = probe.degradedLatencyMs ?? DEFAULT_DEGRADED_LATENCY_MS;
@@ -205,7 +208,9 @@ export class OperationsSummaryService implements OperationsSummaryReader {
         staleAfterMs,
         latencyMs,
         ...(state === 'degraded'
-          ? { detail: `Probe latency ${latencyMs}ms exceeded degraded threshold ${degradedLatencyMs}ms` }
+          ? {
+              detail: `Probe latency ${latencyMs}ms exceeded degraded threshold ${degradedLatencyMs}ms`,
+            }
           : {}),
         ...(cacheEntry?.firstFailureAt
           ? { detail: `Recovered from prior failure observed at ${cacheEntry.firstFailureAt}` }
@@ -264,7 +269,10 @@ export class OperationsSummaryService implements OperationsSummaryReader {
     }
   }
 
-  private deriveIncidentSummary(services: OperationsServiceStatus[], generatedAt: string): OperationsIncidentSummary {
+  private deriveIncidentSummary(
+    services: OperationsServiceStatus[],
+    generatedAt: string,
+  ): OperationsIncidentSummary {
     const impactedServices = services.filter((service) => service.state !== 'healthy');
     const items = impactedServices.map((service) => ({
       incidentId: `ops-${service.key}-${service.state}`,

@@ -5,6 +5,8 @@ import { JsonRpcProvider } from 'ethers';
 import { GatewayError } from '../src/errors';
 import { GovernanceStatusService } from '../src/core/governanceStatusService';
 
+type GovernanceContract = ConstructorParameters<typeof GovernanceStatusService>[1];
+
 describe('GovernanceStatusService', () => {
   test('maps on-chain governance state into the dashboard status shape', async () => {
     const provider = {
@@ -20,7 +22,9 @@ describe('GovernanceStatusService', () => {
         oracleActive: jest.fn().mockResolvedValue(true),
         oracleAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000011'),
         treasuryAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000022'),
-        treasuryPayoutAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000033'),
+        treasuryPayoutAddress: jest
+          .fn()
+          .mockResolvedValue('0x0000000000000000000000000000000000000033'),
         governanceApprovals: jest.fn().mockResolvedValue(2n),
         governanceTimelock: jest.fn().mockResolvedValue(86400n),
         requiredApprovals: jest.fn().mockResolvedValue(1n),
@@ -31,28 +35,34 @@ describe('GovernanceStatusService', () => {
           createdAt: 100n,
           proposer: '0x0000000000000000000000000000000000000099',
         }),
-        oracleUpdateProposals: jest.fn()
+        oracleUpdateProposals: jest
+          .fn()
           .mockResolvedValueOnce({ createdAt: 10n, executed: false })
           .mockResolvedValueOnce({ createdAt: 11n, executed: true })
           .mockResolvedValueOnce({ createdAt: 12n, executed: false }),
-        oracleUpdateProposalExpiresAt: jest.fn()
+        oracleUpdateProposalExpiresAt: jest
+          .fn()
           .mockResolvedValueOnce(4102444800n)
           .mockResolvedValueOnce(4102444800n)
           .mockResolvedValueOnce(1n),
-        oracleUpdateProposalCancelled: jest.fn()
+        oracleUpdateProposalCancelled: jest
+          .fn()
           .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(false),
-        treasuryPayoutAddressUpdateProposals: jest.fn()
+        treasuryPayoutAddressUpdateProposals: jest
+          .fn()
           .mockResolvedValueOnce({ createdAt: 20n, executed: false })
           .mockResolvedValueOnce({ createdAt: 21n, executed: false }),
-        treasuryPayoutAddressUpdateProposalExpiresAt: jest.fn()
+        treasuryPayoutAddressUpdateProposalExpiresAt: jest
+          .fn()
           .mockResolvedValueOnce(4102444800n)
           .mockResolvedValueOnce(4102444800n),
-        treasuryPayoutAddressUpdateProposalCancelled: jest.fn()
+        treasuryPayoutAddressUpdateProposalCancelled: jest
+          .fn()
           .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(true),
-      } as any,
+      } as GovernanceContract,
       31337,
       50,
     );
@@ -88,15 +98,17 @@ describe('GovernanceStatusService', () => {
       provider,
       {
         paused: jest.fn().mockResolvedValue(false),
-      } as any,
+      } as GovernanceContract,
       31337,
       50,
     );
 
-    await expect(service.checkReadiness()).rejects.toEqual(expect.objectContaining<Partial<GatewayError>>({
-      statusCode: 503,
-      code: 'UPSTREAM_UNAVAILABLE',
-    }));
+    await expect(service.checkReadiness()).rejects.toEqual(
+      expect.objectContaining<Partial<GatewayError>>({
+        statusCode: 503,
+        code: 'UPSTREAM_UNAVAILABLE',
+      }),
+    );
   });
 
   test('uses latest chain timestamp instead of host time when filtering active proposals', async () => {
@@ -113,19 +125,28 @@ describe('GovernanceStatusService', () => {
         oracleActive: jest.fn().mockResolvedValue(true),
         oracleAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000011'),
         treasuryAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000022'),
-        treasuryPayoutAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000033'),
+        treasuryPayoutAddress: jest
+          .fn()
+          .mockResolvedValue('0x0000000000000000000000000000000000000033'),
         governanceApprovals: jest.fn().mockResolvedValue(2n),
         governanceTimelock: jest.fn().mockResolvedValue(86400n),
         requiredApprovals: jest.fn().mockResolvedValue(1n),
         hasActiveUnpauseProposal: jest.fn().mockResolvedValue(false),
-        unpauseProposal: jest.fn().mockResolvedValue({ approvalCount: 0n, executed: false, createdAt: 0n, proposer: '0x0' }),
+        unpauseProposal: jest.fn().mockResolvedValue({
+          approvalCount: 0n,
+          executed: false,
+          createdAt: 0n,
+          proposer: '0x0',
+        }),
         oracleUpdateProposals: jest.fn().mockResolvedValue({ createdAt: 10n, executed: false }),
         oracleUpdateProposalExpiresAt: jest.fn().mockResolvedValue(600n),
         oracleUpdateProposalCancelled: jest.fn().mockResolvedValue(false),
-        treasuryPayoutAddressUpdateProposals: jest.fn().mockResolvedValue({ createdAt: 0n, executed: false }),
+        treasuryPayoutAddressUpdateProposals: jest
+          .fn()
+          .mockResolvedValue({ createdAt: 0n, executed: false }),
         treasuryPayoutAddressUpdateProposalExpiresAt: jest.fn().mockResolvedValue(0n),
         treasuryPayoutAddressUpdateProposalCancelled: jest.fn().mockResolvedValue(false),
-      } as any,
+      } as GovernanceContract,
       31337,
       50,
     );
@@ -149,19 +170,21 @@ describe('GovernanceStatusService', () => {
       provider,
       {
         paused: jest.fn().mockReturnValue(never),
-      } as any,
+      } as GovernanceContract,
       31337,
       10,
     );
 
-    await expect(service.checkReadiness()).rejects.toEqual(expect.objectContaining<Partial<GatewayError>>({
-      statusCode: 503,
-      code: 'UPSTREAM_UNAVAILABLE',
-      details: expect.objectContaining({
-        cause: 'timeout',
-        upstream: 'chain-rpc',
-        operation: 'checkReadiness',
+    await expect(service.checkReadiness()).rejects.toEqual(
+      expect.objectContaining<Partial<GatewayError>>({
+        statusCode: 503,
+        code: 'UPSTREAM_UNAVAILABLE',
+        details: expect.objectContaining({
+          cause: 'timeout',
+          upstream: 'chain-rpc',
+          operation: 'checkReadiness',
+        }),
       }),
-    }));
+    );
   });
 });

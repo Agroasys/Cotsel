@@ -39,11 +39,31 @@ test('applyTradeTransition preserves total and moves counts between buckets', ()
   };
 
   const cases = [
-    [TradeStatus.LOCKED, TradeStatus.IN_TRANSIT, { lockedTrades: 0, stage1Trades: 2, stage2Trades: 1, completedTrades: 1, disputedTrades: 1 }],
-    [TradeStatus.IN_TRANSIT, TradeStatus.ARRIVAL_CONFIRMED, { lockedTrades: 1, stage1Trades: 0, stage2Trades: 2, completedTrades: 1, disputedTrades: 1 }],
-    [TradeStatus.ARRIVAL_CONFIRMED, TradeStatus.CLOSED, { lockedTrades: 1, stage1Trades: 1, stage2Trades: 0, completedTrades: 2, disputedTrades: 1 }],
-    [TradeStatus.LOCKED, TradeStatus.FROZEN, { lockedTrades: 0, stage1Trades: 1, stage2Trades: 1, completedTrades: 1, disputedTrades: 2 }],
-    [TradeStatus.FROZEN, TradeStatus.CLOSED, { lockedTrades: 1, stage1Trades: 1, stage2Trades: 1, completedTrades: 2, disputedTrades: 0 }],
+    [
+      TradeStatus.LOCKED,
+      TradeStatus.IN_TRANSIT,
+      { lockedTrades: 0, stage1Trades: 2, stage2Trades: 1, completedTrades: 1, disputedTrades: 1 },
+    ],
+    [
+      TradeStatus.IN_TRANSIT,
+      TradeStatus.ARRIVAL_CONFIRMED,
+      { lockedTrades: 1, stage1Trades: 0, stage2Trades: 2, completedTrades: 1, disputedTrades: 1 },
+    ],
+    [
+      TradeStatus.ARRIVAL_CONFIRMED,
+      TradeStatus.CLOSED,
+      { lockedTrades: 1, stage1Trades: 1, stage2Trades: 0, completedTrades: 2, disputedTrades: 1 },
+    ],
+    [
+      TradeStatus.LOCKED,
+      TradeStatus.FROZEN,
+      { lockedTrades: 0, stage1Trades: 1, stage2Trades: 1, completedTrades: 1, disputedTrades: 2 },
+    ],
+    [
+      TradeStatus.FROZEN,
+      TradeStatus.CLOSED,
+      { lockedTrades: 1, stage1Trades: 1, stage2Trades: 1, completedTrades: 2, disputedTrades: 0 },
+    ],
   ];
 
   for (const [fromStatus, toStatus, expectedBuckets] of cases) {
@@ -161,7 +181,6 @@ test('buildCountersFromExistingState defaults closed trades without cancellation
   });
 });
 
-
 test('DisputePayout REFUND: applyTradeCancelled from FROZEN lands in cancelledTrades', () => {
   const counters = {
     totalTrades: 3,
@@ -211,7 +230,6 @@ test('DisputePayout RESOLVE: applyTradeTransition from FROZEN to CLOSED lands in
   });
   assert.deepEqual(counters.completedTrades, 1, 'input counters must remain unchanged');
 });
-
 
 test('buildCountersFromExistingState classifies DisputePayout:REFUND terminal event as cancelled', () => {
   const counters = buildCountersFromExistingState(

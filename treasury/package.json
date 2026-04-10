@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
     "test": "jest --runInBand",
-    "lint": "tsc --noEmit",
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit",
     "ingest:once": "ts-node src/server.ts --ingest-once"
   },
   "dependencies": {

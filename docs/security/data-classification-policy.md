@@ -1,6 +1,7 @@
 # Data Classification Policy For Logs And Runbooks
 
 ## Purpose
+
 Define which data classes may appear in generic service logs, operator evidence
 packets, and runbook examples, and which classes must remain masked,
 referenced, or excluded entirely.
@@ -9,6 +10,7 @@ This policy is the source of truth for observability and documentation surfaces
 that align to `docs/observability/logging-schema.md`.
 
 ## Scope
+
 This policy applies to:
 
 - service logs
@@ -22,12 +24,12 @@ databases, or compliance evidence stores.
 
 ## Classification levels
 
-| Class | Meaning | Generic logs/runbooks |
-| --- | --- | --- |
-| `public_operational` | Non-sensitive operational metadata such as `tradeId`, `requestId`, `traceId`, `txHash`, environment, route, and service name. | Allowed |
-| `internal_operational` | Internal workflow metadata such as actor role, masked account references, provider references, ticket references, and normalized outcome/error codes. | Allowed when operationally necessary |
-| `confidential_regulated` | Regulated or partner-sensitive data such as compliance subject records, bank account identifiers, and full payout instructions. | Reference-only, hashed, or masked form only |
-| `restricted_secret` | Secrets or authentication material such as private keys, seed phrases, bearer tokens, API secrets, and HMAC secrets. | Never allowed |
+| Class                    | Meaning                                                                                                                                               | Generic logs/runbooks                       |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `public_operational`     | Non-sensitive operational metadata such as `tradeId`, `requestId`, `traceId`, `txHash`, environment, route, and service name.                         | Allowed                                     |
+| `internal_operational`   | Internal workflow metadata such as actor role, masked account references, provider references, ticket references, and normalized outcome/error codes. | Allowed when operationally necessary        |
+| `confidential_regulated` | Regulated or partner-sensitive data such as compliance subject records, bank account identifiers, and full payout instructions.                       | Reference-only, hashed, or masked form only |
+| `restricted_secret`      | Secrets or authentication material such as private keys, seed phrases, bearer tokens, API secrets, and HMAC secrets.                                  | Never allowed                               |
 
 ## Allowed in generic logs and runbooks
 
@@ -41,6 +43,7 @@ Allowed examples:
 - masked references such as `accountLast4`, `ibanLast4`, or equivalent bounded suffixes
 
 Rules:
+
 - Use stable references, hashes, or masked suffixes instead of raw subject data.
 - Prefer `providerRef` or `subjectRef` over full compliance payloads.
 - Prefer `ticketRef` or evidence URI over pasted incident chat content.
@@ -60,12 +63,12 @@ or operator audit templates:
 
 ## Allowed transformations for sensitive domains
 
-| Domain | Allowed representation | Disallowed representation |
-| --- | --- | --- |
-| Wallet/auth | `actorWallet`, `actorRole`, masked principal ref | private key, seed phrase, bearer token |
-| Banking | `accountLast4`, `providerRef`, payout ticket ref | full account number, routing number, IBAN, SWIFT |
-| Compliance | `subjectRef`, `providerRef`, `decisionId`, `evidenceRef`, normalized reason code | raw subject profile, raw provider request/response payload |
-| Signatures | `txHash`, `signatureRef`, normalized verification outcome | full HMAC secret, full canonical string, signing secret |
+| Domain      | Allowed representation                                                           | Disallowed representation                                  |
+| ----------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Wallet/auth | `actorWallet`, `actorRole`, masked principal ref                                 | private key, seed phrase, bearer token                     |
+| Banking     | `accountLast4`, `providerRef`, payout ticket ref                                 | full account number, routing number, IBAN, SWIFT           |
+| Compliance  | `subjectRef`, `providerRef`, `decisionId`, `evidenceRef`, normalized reason code | raw subject profile, raw provider request/response payload |
+| Signatures  | `txHash`, `signatureRef`, normalized verification outcome                        | full HMAC secret, full canonical string, signing secret    |
 
 ## Enforcement
 

@@ -6,12 +6,9 @@ import { failure } from '@agroasys/shared-http';
 import { ApiErrorResponse, UserSession } from '../types';
 import { Logger } from '../utils/logger';
 
-// Augment Express Request to carry resolved session
-declare global {
-  namespace Express {
-    interface Request {
-      userSession?: UserSession;
-    }
+declare module 'express-serve-static-core' {
+  interface Request {
+    userSession?: UserSession;
   }
 }
 
@@ -59,7 +56,9 @@ export function requireRole(...roles: string[]) {
   return (req: Request, res: Response<ApiErrorResponse>, next: NextFunction): void => {
     const session = req.userSession;
     if (!session || !roles.includes(session.role)) {
-      res.status(403).json(failure('Forbidden', `Role '${session?.role ?? 'unknown'}' is not permitted`));
+      res
+        .status(403)
+        .json(failure('Forbidden', `Role '${session?.role ?? 'unknown'}' is not permitted`));
       return;
     }
     next();

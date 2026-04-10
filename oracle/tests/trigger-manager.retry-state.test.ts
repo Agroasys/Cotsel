@@ -46,13 +46,14 @@ const mockedGetTriggerByIdempotencyKey = getTriggerByIdempotencyKey as jest.Mock
   typeof getTriggerByIdempotencyKey
 >;
 const mockedUpdateTrigger = updateTrigger as jest.MockedFunction<typeof updateTrigger>;
-const mockedIncrementOracleExhaustedRetries = incrementOracleExhaustedRetries as jest.MockedFunction<
-  typeof incrementOracleExhaustedRetries
->;
+const mockedIncrementOracleExhaustedRetries =
+  incrementOracleExhaustedRetries as jest.MockedFunction<typeof incrementOracleExhaustedRetries>;
 
 const TRADE_STATUS_LOCKED = 0;
+type TriggerManagerSdkClient = ConstructorParameters<typeof TriggerManager>[0];
+type TradeRecord = Awaited<ReturnType<TriggerManagerSdkClient['getTrade']>>;
 
-function buildTrade(status: number = TRADE_STATUS_LOCKED): any {
+function buildTrade(status: number = TRADE_STATUS_LOCKED): TradeRecord {
   return {
     tradeId: '1',
     buyer: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
@@ -113,12 +114,12 @@ describe('TriggerManager retry and idempotency states', () => {
 
     mockedGetLatestTriggerByActionKey.mockResolvedValue(latest);
 
-    const sdkClient = {
+    const sdkClient: TriggerManagerSdkClient = {
       getTrade: jest.fn(),
       releaseFundsStage1: jest.fn(),
       confirmArrival: jest.fn(),
       finalizeTrade: jest.fn(),
-    } as any;
+    } as unknown as TriggerManagerSdkClient;
 
     const manager = new TriggerManager(sdkClient, 3, 1);
     const response = await manager.executeTrigger({
@@ -138,12 +139,14 @@ describe('TriggerManager retry and idempotency states', () => {
     mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
     mockedCreateTrigger.mockResolvedValue(buildTrigger(TriggerStatus.PENDING));
 
-    const sdkClient = {
+    const sdkClient: TriggerManagerSdkClient = {
       getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
-      releaseFundsStage1: jest.fn().mockRejectedValue(new Error('timeout while sending transaction')),
+      releaseFundsStage1: jest
+        .fn()
+        .mockRejectedValue(new Error('timeout while sending transaction')),
       confirmArrival: jest.fn(),
       finalizeTrade: jest.fn(),
-    } as any;
+    } as unknown as TriggerManagerSdkClient;
 
     const manager = new TriggerManager(sdkClient, 2, 1);
     const response = await manager.executeTrigger({
@@ -170,12 +173,14 @@ describe('TriggerManager retry and idempotency states', () => {
     mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
     mockedCreateTrigger.mockResolvedValue(buildTrigger(TriggerStatus.PENDING));
 
-    const sdkClient = {
+    const sdkClient: TriggerManagerSdkClient = {
       getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
-      releaseFundsStage1: jest.fn().mockRejectedValue(new Error('execution reverted: oracle disabled')),
+      releaseFundsStage1: jest
+        .fn()
+        .mockRejectedValue(new Error('execution reverted: oracle disabled')),
       confirmArrival: jest.fn(),
       finalizeTrade: jest.fn(),
-    } as any;
+    } as unknown as TriggerManagerSdkClient;
 
     const manager = new TriggerManager(sdkClient, 3, 1);
     const response = await manager.executeTrigger({

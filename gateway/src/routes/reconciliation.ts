@@ -4,9 +4,7 @@
 import { Router } from 'express';
 import { GatewayConfig } from '../config/env';
 import { AuthSessionClient } from '../core/authSessionClient';
-import {
-  ReconciliationReadReader,
-} from '../core/reconciliationReadService';
+import { ReconciliationReadReader } from '../core/reconciliationReadService';
 import {
   SETTLEMENT_EXECUTION_STATUSES,
   SETTLEMENT_RECONCILIATION_STATUSES,
@@ -46,7 +44,11 @@ function parseTradeId(raw: unknown): string | undefined {
   }
 
   if (typeof raw !== 'string' || raw.trim() === '') {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'tradeId' must be a non-empty string");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'tradeId' must be a non-empty string",
+    );
   }
 
   return raw.trim();
@@ -63,7 +65,11 @@ function parseLimit(raw: unknown): number {
 
   const limit = Number.parseInt(raw, 10);
   if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'limit' must be between 1 and 200");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'limit' must be between 1 and 200",
+    );
   }
 
   return limit;
@@ -80,7 +86,11 @@ function parseOffset(raw: unknown): number {
 
   const offset = Number.parseInt(raw, 10);
   if (!Number.isInteger(offset) || offset < 0) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'offset' must be zero or greater");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'offset' must be zero or greater",
+    );
   }
 
   return offset;

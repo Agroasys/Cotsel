@@ -35,7 +35,7 @@ export async function createRicardianHash(data: {
       data.rulesVersion,
       data.canonicalJson,
       JSON.stringify(data.metadata),
-    ]
+    ],
   );
 
   return result.rows[0];
@@ -48,12 +48,16 @@ export async function getRicardianHash(hash: string): Promise<RicardianHashRow |
      WHERE hash = $1
      ORDER BY created_at DESC
      LIMIT 1`,
-    [hash]
+    [hash],
   );
 
   return result.rows[0] || null;
 }
 
-export async function consumeServiceAuthNonce(apiKey: string, nonce: string, ttlSeconds: number): Promise<boolean> {
+export async function consumeServiceAuthNonce(
+  apiKey: string,
+  nonce: string,
+  ttlSeconds: number,
+): Promise<boolean> {
   return serviceAuthNonceStore.consume(apiKey, nonce, ttlSeconds);
 }

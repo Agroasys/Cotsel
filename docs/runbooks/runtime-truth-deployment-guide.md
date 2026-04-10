@@ -40,24 +40,24 @@ Active contract/runtime target:
 
 Out of active runtime scope:
 
-- historical Polkadot / Asset Hub / PolkaVM paths retained only for archived audit context
+- retired legacy settlement paths are out of active runtime scope and must not reappear in live profiles
 - backlog completion items such as treasury/off-ramp completion that are not yet closed runtime truth
 
 ## Service map
 
-| Service | Runtime role | Required in local parity | Required in staging-e2e-real | Production-candidate role |
-|---|---|---|---|---|
-| `auth` | Cotsel bearer session service | yes | yes | yes |
-| `gateway` | dashboard/operator control plane | yes | yes | yes |
-| `oracle` | trade-progression attestation runner | yes | yes | yes |
-| `reconciliation` | drift detection and evidence worker | optional in narrow local work, expected in profile health | yes | yes |
-| `ricardian` | document hash / record service | yes | yes | yes |
-| `treasury` | ledger and payout lifecycle service | yes | yes | yes |
-| `notifications` | outbound event delivery hooks | yes when gate is enabled | yes | yes |
-| `indexer-pipeline` | chain event ingestion | mocked in plain local-dev, real in staging-e2e-real | yes | yes |
-| `indexer-graphql` | read model / evidence query surface | mocked in plain local-dev, real in staging-e2e-real | yes | yes |
-| `postgres` | system of record | yes | yes | yes |
-| `redis` | nonce/rate-limit support where configured | yes | yes | yes |
+| Service            | Runtime role                              | Required in local parity                                  | Required in staging-e2e-real | Production-candidate role |
+| ------------------ | ----------------------------------------- | --------------------------------------------------------- | ---------------------------- | ------------------------- |
+| `auth`             | Cotsel bearer session service             | yes                                                       | yes                          | yes                       |
+| `gateway`          | dashboard/operator control plane          | yes                                                       | yes                          | yes                       |
+| `oracle`           | trade-progression attestation runner      | yes                                                       | yes                          | yes                       |
+| `reconciliation`   | drift detection and evidence worker       | optional in narrow local work, expected in profile health | yes                          | yes                       |
+| `ricardian`        | document hash / record service            | yes                                                       | yes                          | yes                       |
+| `treasury`         | ledger and payout lifecycle service       | yes                                                       | yes                          | yes                       |
+| `notifications`    | outbound event delivery hooks             | yes when gate is enabled                                  | yes                          | yes                       |
+| `indexer-pipeline` | chain event ingestion                     | mocked in plain local-dev, real in staging-e2e-real       | yes                          | yes                       |
+| `indexer-graphql`  | read model / evidence query surface       | mocked in plain local-dev, real in staging-e2e-real       | yes                          | yes                       |
+| `postgres`         | system of record                          | yes                                                       | yes                          | yes                       |
+| `redis`            | nonce/rate-limit support where configured | yes                                                       | yes                          | yes                       |
 
 ## Identity and auth boundary
 

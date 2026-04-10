@@ -299,9 +299,9 @@ restore_external_environment_overrides() {
   done
 }
 
-contains_stale_chain_marker() {
-  local value="${1:-}"
-  [[ "$value" == *asset-hub-paseo* || "$value" == *paseo* || "$value" == *polkadot* || "$value" == *polkavm* ]]
+contains_retired_runtime_marker() {
+  local value="${1,,}"
+  [[ "$value" == *legacy* || "$value" == *retired* || "$value" == *archive* || "$value" == *deprecated* ]]
 }
 
 contains_placeholder_value() {
@@ -354,7 +354,7 @@ validate_pilot_profile_truth() {
   do
     name="${pair%%:*}"
     value="${pair#*:}"
-    if contains_stale_chain_marker "$value"; then
+    if contains_retired_runtime_marker "$value"; then
       fail_live_preflight "HISTORICAL_CHAIN_VALUE_PRESENT" "$name" "$name still points at historical chain infrastructure: $value"
       return 1
     fi

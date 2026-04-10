@@ -227,9 +227,9 @@ if [[ -n "${INDEXER_RPC_INGEST_DISABLED:-}" && "${INDEXER_RPC_INGEST_DISABLED}" 
   exit 1
 fi
 
-contains_stale_chain_marker() {
-  local value="${1:-}"
-  [[ "$value" == *asset-hub-paseo* || "$value" == *paseo* || "$value" == *polkadot* || "$value" == *polkavm* ]]
+contains_retired_runtime_marker() {
+  local value="${1,,}"
+  [[ "$value" == *legacy* || "$value" == *retired* || "$value" == *archive* || "$value" == *deprecated* ]]
 }
 
 if [[ "$PROFILE" == "staging-e2e-real" ]]; then
@@ -245,7 +245,7 @@ if [[ "$PROFILE" == "staging-e2e-real" ]]; then
 
   for var_name in INDEXER_GATEWAY_URL INDEXER_RPC_ENDPOINT ORACLE_RPC_URL RECONCILIATION_RPC_URL GATEWAY_RPC_URL; do
     value="${!var_name:-}"
-    if contains_stale_chain_marker "$value"; then
+    if contains_retired_runtime_marker "$value"; then
       echo "$var_name still points at historical chain infrastructure: $value" >&2
       exit 1
     fi

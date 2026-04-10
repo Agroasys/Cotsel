@@ -23,7 +23,6 @@ function buildAction(overrides: Partial<GovernanceActionRecord> = {}): Governanc
     status: 'requested',
     contractMethod: 'pause',
     txHash: null,
-    extrinsicHash: null,
     blockNumber: null,
     tradeId: null,
     chainId: '31337',

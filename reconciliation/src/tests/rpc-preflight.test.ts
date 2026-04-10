@@ -62,7 +62,8 @@ test('startup RPC failure messages do not leak RPC credentials', async () => {
 
   await assert.rejects(
     () => assertRpcEndpointReachable(rpcUrl, 300),
-    (error: any) => {
+    (error: unknown) => {
+      assert(error instanceof Error, 'expected startup validation to throw an Error');
       assert.match(error.message, /RPC endpoint is not reachable at startup/);
       assert.match(error.message, new RegExp(`RPC_URL=http:\\/\\/127.0.0.1:${address.port}`));
       assert.doesNotMatch(error.message, /secret/);

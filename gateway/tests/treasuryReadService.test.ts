@@ -5,6 +5,7 @@ import {
   buildGovernanceIntentKey,
   createInMemoryGovernanceActionStore,
   GovernanceActionRecord,
+  type GovernanceActionStore,
 } from '../src/core/governanceStore';
 import { TreasuryReadService } from '../src/core/treasuryReadService';
 import type { GovernanceMutationPreflightReader } from '../src/core/governanceStatusService';
@@ -24,7 +25,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'pending_approvals',
     contractMethod: 'proposeTreasuryPayoutAddressUpdate',
     txHash: null,
-    extrinsicHash: null,
     blockNumber: null,
     tradeId: null,
     chainId: '31337',
@@ -62,7 +62,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'executed',
     contractMethod: 'sweepTreasury',
     txHash: '0xabc',
-    extrinsicHash: null,
     blockNumber: 17,
     tradeId: null,
     chainId: '31337',
@@ -220,7 +219,7 @@ describe('treasury read service', () => {
   });
 
   test('lists treasury governance actions through the treasury contract filter', async () => {
-    const governanceReader = {
+    const governanceReader: GovernanceMutationPreflightReader = {
       checkReadiness: jest.fn(),
       getGovernanceStatus: jest.fn(),
       getUnpauseProposalState: jest.fn(),
@@ -230,7 +229,7 @@ describe('treasury read service', () => {
       hasApprovedUnpause: jest.fn(),
       hasApprovedOracleProposal: jest.fn(),
       hasApprovedTreasuryPayoutReceiverProposal: jest.fn(),
-    } as unknown as GovernanceMutationPreflightReader;
+    };
 
     const service = new TreasuryReadService(
       governanceReader,
@@ -256,8 +255,8 @@ describe('treasury read service', () => {
   test('returns an explicit degraded treasury action feed when governance history is unavailable', async () => {
     const failingStore = {
       list: jest.fn().mockRejectedValue(new Error('gateway governance ledger unavailable')),
-    } as any;
-    const governanceReader = {
+    } as Pick<GovernanceActionStore, 'list'> as GovernanceActionStore;
+    const governanceReader: GovernanceMutationPreflightReader = {
       checkReadiness: jest.fn(),
       getGovernanceStatus: jest.fn(),
       getUnpauseProposalState: jest.fn(),
@@ -267,7 +266,7 @@ describe('treasury read service', () => {
       hasApprovedUnpause: jest.fn(),
       hasApprovedOracleProposal: jest.fn(),
       hasApprovedTreasuryPayoutReceiverProposal: jest.fn(),
-    } as unknown as GovernanceMutationPreflightReader;
+    };
 
     const service = new TreasuryReadService(
       governanceReader,

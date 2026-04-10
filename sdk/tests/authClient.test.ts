@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { AuthClient, AuthRole, SessionResult } from '../src/modules/authClient';
+import { web3Wallet } from '../src/wallet/wallet-provider';
 
 // Mock web3Wallet
 
@@ -62,6 +63,7 @@ const SESSION: SessionResult = {
 
 describe('AuthClient', () => {
   let client: AuthClient;
+  const mockedGetSigner = jest.mocked(web3Wallet.getSigner);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -107,10 +109,7 @@ describe('AuthClient', () => {
     });
 
     test('rejects when wallet signer cannot be obtained', async () => {
-      const walletModule = require('../src/wallet/wallet-provider');
-      (walletModule.web3Wallet.getSigner as jest.Mock).mockRejectedValueOnce(
-        new Error('wallet not available'),
-      );
+      mockedGetSigner.mockRejectedValueOnce(new Error('wallet not available'));
 
       await expect(client.login({ role: 'buyer' })).rejects.toThrow('wallet not available');
     });

@@ -4,12 +4,7 @@
 import crypto from 'crypto';
 import { verifyMessage } from 'ethers';
 import { Request, Response } from 'express';
-import {
-  failure,
-  requireObject,
-  requireString,
-  success,
-} from '@agroasys/shared-http';
+import { failure, requireObject, requireString, success } from '@agroasys/shared-http';
 import { SessionService } from '../core/sessionService';
 import { ChallengeStore } from '../core/challengeStore';
 import { ApiErrorResponse, ApiSuccessResponse, UserRole } from '../types';
@@ -54,7 +49,9 @@ export class LegacyWalletAuthController {
     this.challengeStore.set(wallet, nonce, CHALLENGE_TTL_SECONDS);
 
     Logger.info('Challenge issued', { walletAddress: wallet });
-    res.json(success({ message: buildChallengeMessage(wallet, nonce), expiresIn: CHALLENGE_TTL_SECONDS }));
+    res.json(
+      success({ message: buildChallengeMessage(wallet, nonce), expiresIn: CHALLENGE_TTL_SECONDS }),
+    );
   }
 
   async login(
@@ -69,7 +66,10 @@ export class LegacyWalletAuthController {
 
     try {
       const body = requireObject(req.body, 'body') as LoginBody;
-      wallet = assertWalletAddress(requireString(body.walletAddress, 'walletAddress'), 'walletAddress');
+      wallet = assertWalletAddress(
+        requireString(body.walletAddress, 'walletAddress'),
+        'walletAddress',
+      );
       signature = requireString(body.signature, 'signature');
       role = requireAuthRole(body.role);
       orgId = typeof body.orgId === 'string' && body.orgId.trim() ? body.orgId.trim() : undefined;
@@ -81,7 +81,14 @@ export class LegacyWalletAuthController {
 
     const nonce = this.challengeStore.get(wallet);
     if (!nonce) {
-      res.status(401).json(failure('Unauthorized', 'No active challenge for this wallet. Call GET /challenge first.'));
+      res
+        .status(401)
+        .json(
+          failure(
+            'Unauthorized',
+            'No active challenge for this wallet. Call GET /challenge first.',
+          ),
+        );
       return;
     }
 

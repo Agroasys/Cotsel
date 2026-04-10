@@ -41,8 +41,12 @@ function withEnv(overrides: Record<string, string | undefined>, run: () => void)
 
 function loadConfigModule(): typeof import('../src/config') {
   const modulePath = path.resolve(__dirname, '../src/config');
-  delete require.cache[require.resolve(modulePath)];
-  return require(modulePath) as typeof import('../src/config');
+  jest.resetModules();
+  let loaded!: typeof import('../src/config');
+  jest.isolateModules(() => {
+    loaded = jest.requireActual(modulePath) as typeof import('../src/config');
+  });
+  return loaded;
 }
 
 describe('auth config', () => {
@@ -91,7 +95,9 @@ describe('auth config', () => {
       },
       () => {
         const { loadConfig } = loadConfigModule();
-        expect(() => loadConfig()).toThrow('DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together');
+        expect(() => loadConfig()).toThrow(
+          'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+        );
       },
     );
   });

@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
     "test": "jest --runInBand",
-    "lint": "tsc --noEmit"
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@agroasys/shared-db": "^1.0.0",

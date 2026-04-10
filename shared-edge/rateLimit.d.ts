@@ -1,4 +1,4 @@
-import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import type { Request, RequestHandler } from 'express';
 
 export interface RateLimitWindowConfig {
   limit: number;
@@ -33,7 +33,11 @@ export interface HttpRateLimiterOptions {
   logger?: RateLimiterLogger;
   nowSeconds?: () => number;
   store?: {
-    incrementAndGet(key: string, windowSeconds: number, nowSeconds: number): Promise<{ count: number; resetSeconds: number }>;
+    incrementAndGet(
+      key: string,
+      windowSeconds: number,
+      nowSeconds: number,
+    ): Promise<{ count: number; resetSeconds: number }>;
     close(): Promise<void>;
   };
 }
@@ -45,3 +49,4 @@ export interface HttpRateLimiter {
 }
 
 export function createHttpRateLimiter(options: HttpRateLimiterOptions): Promise<HttpRateLimiter>;
+export function normalizeRoutePath(pathname: string): string;

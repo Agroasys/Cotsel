@@ -19,6 +19,7 @@
     "jest": "^30.3.0"
   },
   "scripts": {
+    "lint": "eslint --max-warnings=0 .",
     "test": "jest --runInBand"
   },
   "license": "Apache-2.0"

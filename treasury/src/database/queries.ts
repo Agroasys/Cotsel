@@ -31,12 +31,14 @@ const serviceAuthNonceStore = createPostgresNonceStore({
   query: (sql, params) => pool.query(sql, params),
 });
 
-export async function getIngestionOffset(cursorName: string = INGESTION_CURSOR_NAME): Promise<number> {
+export async function getIngestionOffset(
+  cursorName: string = INGESTION_CURSOR_NAME,
+): Promise<number> {
   const result = await pool.query<{ next_offset: number }>(
     `SELECT next_offset
      FROM treasury_ingestion_state
      WHERE cursor_name = $1`,
-    [cursorName]
+    [cursorName],
   );
 
   if (result.rows[0]) {
@@ -47,13 +49,16 @@ export async function getIngestionOffset(cursorName: string = INGESTION_CURSOR_N
     `INSERT INTO treasury_ingestion_state (cursor_name, next_offset)
      VALUES ($1, 0)
      ON CONFLICT (cursor_name) DO NOTHING`,
-    [cursorName]
+    [cursorName],
   );
 
   return 0;
 }
 
-export async function setIngestionOffset(nextOffset: number, cursorName: string = INGESTION_CURSOR_NAME): Promise<void> {
+export async function setIngestionOffset(
+  nextOffset: number,
+  cursorName: string = INGESTION_CURSOR_NAME,
+): Promise<void> {
   await pool.query(
     `INSERT INTO treasury_ingestion_state (cursor_name, next_offset, updated_at)
      VALUES ($1, $2, NOW())
@@ -61,11 +66,15 @@ export async function setIngestionOffset(nextOffset: number, cursorName: string 
      DO UPDATE SET
        next_offset = EXCLUDED.next_offset,
        updated_at = NOW()`,
-    [cursorName, nextOffset]
+    [cursorName, nextOffset],
   );
 }
 
-export async function consumeServiceAuthNonce(apiKey: string, nonce: string, ttlSeconds: number): Promise<boolean> {
+export async function consumeServiceAuthNonce(
+  apiKey: string,
+  nonce: string,
+  ttlSeconds: number,
+): Promise<boolean> {
   return serviceAuthNonceStore.consume(apiKey, nonce, ttlSeconds);
 }
 
@@ -120,7 +129,7 @@ export async function upsertLedgerEntryWithInitialState(data: {
         data.amountRaw,
         data.sourceTimestamp,
         JSON.stringify(data.metadata),
-      ]
+      ],
     );
 
     const entry = entryResult.rows[0];
@@ -143,7 +152,7 @@ export async function upsertLedgerEntryWithInitialState(data: {
         'PENDING_REVIEW',
         data.initialStateNote || 'Auto-created from indexer ingestion',
         data.initialStateActor || 'system:indexer-ingest',
-      ]
+      ],
     );
 
     await client.query('COMMIT');
@@ -174,33 +183,37 @@ export async function appendPayoutState(data: {
       actor
     ) VALUES ($1, $2, $3, $4)
     RETURNING *`,
-    [data.ledgerEntryId, data.state, data.note || null, data.actor || null]
+    [data.ledgerEntryId, data.state, data.note || null, data.actor || null],
   );
 
   return result.rows[0];
 }
 
-export async function getLatestPayoutState(ledgerEntryId: number): Promise<PayoutLifecycleEvent | null> {
+export async function getLatestPayoutState(
+  ledgerEntryId: number,
+): Promise<PayoutLifecycleEvent | null> {
   const result = await pool.query<PayoutLifecycleEvent>(
     `SELECT *
      FROM payout_lifecycle_events
      WHERE ledger_entry_id = $1
      ORDER BY created_at DESC, id DESC
      LIMIT 1`,
-    [ledgerEntryId]
+    [ledgerEntryId],
   );
 
   return result.rows[0] || null;
 }
 
-export async function getLatestBankPayoutConfirmation(ledgerEntryId: number): Promise<BankPayoutConfirmation | null> {
+export async function getLatestBankPayoutConfirmation(
+  ledgerEntryId: number,
+): Promise<BankPayoutConfirmation | null> {
   const result = await pool.query<BankPayoutConfirmation>(
     `SELECT *
      FROM bank_payout_confirmations
      WHERE ledger_entry_id = $1
      ORDER BY confirmed_at DESC, id DESC
      LIMIT 1`,
-    [ledgerEntryId]
+    [ledgerEntryId],
   );
 
   return result.rows[0] || null;
@@ -249,7 +262,7 @@ export async function getLedgerEntries(params: {
       ${whereClause}
       ORDER BY e.created_at DESC, e.id DESC
       LIMIT ${limitParam} OFFSET ${offsetParam}`,
-    values
+    values,
   );
 
   return result.rows;
@@ -258,7 +271,7 @@ export async function getLedgerEntries(params: {
 export async function getLedgerEntryById(entryId: number): Promise<LedgerEntry | null> {
   const result = await pool.query<LedgerEntry>(
     'SELECT * FROM treasury_ledger_entries WHERE id = $1',
-    [entryId]
+    [entryId],
   );
 
   return result.rows[0] || null;
@@ -271,18 +284,20 @@ export async function getLedgerEntryByTradeId(tradeId: string): Promise<LedgerEn
      WHERE trade_id = $1
      ORDER BY created_at DESC, id DESC
      LIMIT 1`,
-    [tradeId]
+    [tradeId],
   );
 
   return result.rows[0] || null;
 }
 
-export async function getFiatDepositByProviderEventId(providerEventId: string): Promise<FiatDepositReference | null> {
+export async function getFiatDepositByProviderEventId(
+  providerEventId: string,
+): Promise<FiatDepositReference | null> {
   const result = await pool.query<FiatDepositReference>(
     `SELECT *
      FROM fiat_deposit_references
      WHERE provider_event_id = $1`,
-    [providerEventId]
+    [providerEventId],
   );
 
   return result.rows[0] || null;
@@ -300,11 +315,14 @@ export async function upsertFiatDepositReference(data: FiatDepositUpsertInput): 
   try {
     await client.query('BEGIN');
 
-    const existingEvent = await client.query<{ payload_hash: string; fiat_deposit_reference_id: number }>(
+    const existingEvent = await client.query<{
+      payload_hash: string;
+      fiat_deposit_reference_id: number;
+    }>(
       `SELECT payload_hash, fiat_deposit_reference_id
        FROM fiat_deposit_events
        WHERE provider_event_id = $1`,
-      [normalized.providerEventId]
+      [normalized.providerEventId],
     );
 
     if (existingEvent.rows[0]) {
@@ -316,7 +334,7 @@ export async function upsertFiatDepositReference(data: FiatDepositUpsertInput): 
         `SELECT *
          FROM fiat_deposit_references
          WHERE id = $1`,
-        [existingEvent.rows[0].fiat_deposit_reference_id]
+        [existingEvent.rows[0].fiat_deposit_reference_id],
       );
 
       await client.query('COMMIT');
@@ -333,7 +351,7 @@ export async function upsertFiatDepositReference(data: FiatDepositUpsertInput): 
         `SELECT *
          FROM treasury_ledger_entries
          WHERE id = $1`,
-        [normalized.ledgerEntryId]
+        [normalized.ledgerEntryId],
       );
       matchedLedgerEntry = ledgerEntryResult.rows[0] || null;
     } else {
@@ -343,13 +361,15 @@ export async function upsertFiatDepositReference(data: FiatDepositUpsertInput): 
          WHERE trade_id = $1
          ORDER BY created_at DESC, id DESC
          LIMIT 1`,
-        [normalized.tradeId]
+        [normalized.tradeId],
       );
       matchedLedgerEntry = tradeLedgerResult.rows[0] || null;
     }
 
     const canonicalLedgerEntry =
-      matchedLedgerEntry && matchedLedgerEntry.trade_id === normalized.tradeId ? matchedLedgerEntry : null;
+      matchedLedgerEntry && matchedLedgerEntry.trade_id === normalized.tradeId
+        ? matchedLedgerEntry
+        : null;
     const ledgerEntryId = canonicalLedgerEntry ? canonicalLedgerEntry.id : null;
     const failureClass = deriveFiatDepositFailureClass(normalized, canonicalLedgerEntry);
 
@@ -357,7 +377,7 @@ export async function upsertFiatDepositReference(data: FiatDepositUpsertInput): 
       `SELECT id, trade_id
        FROM fiat_deposit_references
        WHERE ramp_reference = $1`,
-      [normalized.rampReference]
+      [normalized.rampReference],
     );
 
     if (existingReference.rows[0] && existingReference.rows[0].trade_id !== normalized.tradeId) {
@@ -423,7 +443,7 @@ export async function upsertFiatDepositReference(data: FiatDepositUpsertInput): 
         normalized.reversalReference,
         payloadHash,
         JSON.stringify(normalized.metadata ?? {}),
-      ]
+      ],
     );
 
     const reference = referenceResult.rows[0];
@@ -469,7 +489,7 @@ export async function upsertFiatDepositReference(data: FiatDepositUpsertInput): 
         normalized.reversalReference,
         payloadHash,
         JSON.stringify(normalized.metadata ?? {}),
-      ]
+      ],
     );
 
     await client.query('COMMIT');
@@ -487,7 +507,9 @@ export async function upsertFiatDepositReference(data: FiatDepositUpsertInput): 
   }
 }
 
-export async function upsertBankPayoutConfirmation(data: BankPayoutConfirmationUpsertInput): Promise<{
+export async function upsertBankPayoutConfirmation(
+  data: BankPayoutConfirmationUpsertInput,
+): Promise<{
   confirmation: BankPayoutConfirmation;
   created: boolean;
   idempotentReplay: boolean;
@@ -503,7 +525,7 @@ export async function upsertBankPayoutConfirmation(data: BankPayoutConfirmationU
       `SELECT *
        FROM bank_payout_confirmations
        WHERE bank_reference = $1`,
-      [normalized.bankReference]
+      [normalized.bankReference],
     );
 
     if (existingByReference.rows[0]) {
@@ -523,7 +545,7 @@ export async function upsertBankPayoutConfirmation(data: BankPayoutConfirmationU
       `SELECT *
        FROM treasury_ledger_entries
        WHERE id = $1`,
-      [normalized.ledgerEntryId]
+      [normalized.ledgerEntryId],
     );
 
     const ledgerEntry = ledgerEntryResult.rows[0];
@@ -537,7 +559,7 @@ export async function upsertBankPayoutConfirmation(data: BankPayoutConfirmationU
        WHERE ledger_entry_id = $1
        ORDER BY created_at DESC, id DESC
        LIMIT 1`,
-      [normalized.ledgerEntryId]
+      [normalized.ledgerEntryId],
     );
 
     const latestPayoutState = payoutStateResult.rows[0];
@@ -573,7 +595,7 @@ export async function upsertBankPayoutConfirmation(data: BankPayoutConfirmationU
         normalized.evidenceReference,
         payloadHash,
         JSON.stringify(normalized.metadata ?? {}),
-      ]
+      ],
     );
 
     await client.query('COMMIT');

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import process from "node:process";
+import process from 'node:process';
 import {
   createDashboardParityFailure,
   DASHBOARD_PARITY_FAILURE_CODES,
@@ -17,7 +17,7 @@ import {
   readDashboardParitySessionArtifact,
   readTradeDetailFromGatewayPayload,
   readTradeListFromGatewayPayload,
-} from "./lib/dashboard-local-parity.mjs";
+} from './lib/dashboard-local-parity.mjs';
 
 function fail(code, message, details = null, context = {}) {
   const failure = createDashboardParityFailure(code, message, details);
@@ -28,18 +28,18 @@ function fail(code, message, details = null, context = {}) {
 async function fetchJson(name, url, failureCode, { bearer } = {}, context = {}) {
   const controller = new AbortController();
   const timeoutMs = Number(
-    optionalEnv("DASHBOARD_PARITY_REQUEST_TIMEOUT_MS", String(DEFAULT_DASHBOARD_PARITY_TIMEOUT_MS)),
+    optionalEnv('DASHBOARD_PARITY_REQUEST_TIMEOUT_MS', String(DEFAULT_DASHBOARD_PARITY_TIMEOUT_MS)),
   );
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const headers = new Headers({ Accept: "application/json" });
+    const headers = new Headers({ Accept: 'application/json' });
     if (bearer) {
-      headers.set("Authorization", `Bearer ${bearer}`);
+      headers.set('Authorization', `Bearer ${bearer}`);
     }
 
     const response = await fetch(url, {
-      method: "GET",
+      method: 'GET',
       headers,
       signal: controller.signal,
     });
@@ -56,13 +56,8 @@ async function fetchJson(name, url, failureCode, { bearer } = {}, context = {}) 
 
     return payload;
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      fail(
-        failureCode,
-        `${name} timed out after ${timeoutMs}ms`,
-        { url, timeoutMs },
-        context,
-      );
+    if (error instanceof Error && error.name === 'AbortError') {
+      fail(failureCode, `${name} timed out after ${timeoutMs}ms`, { url, timeoutMs }, context);
     }
 
     fail(
@@ -77,14 +72,20 @@ async function fetchJson(name, url, failureCode, { bearer } = {}, context = {}) 
 }
 
 async function main() {
-  const authBaseUrl = optionalEnv("DASHBOARD_PARITY_AUTH_BASE_URL", DEFAULT_DASHBOARD_PARITY_AUTH_BASE_URL);
+  const authBaseUrl = optionalEnv(
+    'DASHBOARD_PARITY_AUTH_BASE_URL',
+    DEFAULT_DASHBOARD_PARITY_AUTH_BASE_URL,
+  );
   const gatewayBaseUrl = optionalEnv(
-    "DASHBOARD_PARITY_GATEWAY_BASE_URL",
+    'DASHBOARD_PARITY_GATEWAY_BASE_URL',
     DEFAULT_DASHBOARD_PARITY_GATEWAY_BASE_URL,
   );
-  const sessionFile = optionalEnv("DASHBOARD_PARITY_SESSION_FILE", DEFAULT_DASHBOARD_PARITY_SESSION_FILE);
+  const sessionFile = optionalEnv(
+    'DASHBOARD_PARITY_SESSION_FILE',
+    DEFAULT_DASHBOARD_PARITY_SESSION_FILE,
+  );
   const expectedTradeId = optionalEnv(
-    "DASHBOARD_PARITY_EXPECTED_TRADE_ID",
+    'DASHBOARD_PARITY_EXPECTED_TRADE_ID',
     DEFAULT_DASHBOARD_PARITY_EXPECTED_TRADE_ID,
   );
   const parityContext = {
@@ -99,7 +100,7 @@ async function main() {
   } catch (error) {
     fail(
       DASHBOARD_PARITY_FAILURE_CODES.SESSION_ARTIFACT_INVALID,
-      "dashboard parity session artifact is invalid",
+      'dashboard parity session artifact is invalid',
       { error: error instanceof Error ? error.message : String(error) },
       parityContext,
     );
@@ -107,42 +108,42 @@ async function main() {
   const sessionBearer = sessionArtifact.sessionId.trim();
 
   const sessionEnvelope = await fetchJson(
-    "auth /session",
-    buildUrl(authBaseUrl, "session"),
+    'auth /session',
+    buildUrl(authBaseUrl, 'session'),
     DASHBOARD_PARITY_FAILURE_CODES.AUTH_SESSION_REQUEST_FAILED,
     { bearer: sessionBearer },
     parityContext,
   );
   const healthz = await fetchJson(
-    "gateway /healthz",
-    buildUrl(gatewayBaseUrl, "healthz"),
+    'gateway /healthz',
+    buildUrl(gatewayBaseUrl, 'healthz'),
     DASHBOARD_PARITY_FAILURE_CODES.GATEWAY_HEALTH_REQUEST_FAILED,
     {},
     parityContext,
   );
   const readyz = await fetchJson(
-    "gateway /readyz",
-    buildUrl(gatewayBaseUrl, "readyz"),
+    'gateway /readyz',
+    buildUrl(gatewayBaseUrl, 'readyz'),
     DASHBOARD_PARITY_FAILURE_CODES.GATEWAY_READY_REQUEST_FAILED,
     {},
     parityContext,
   );
   const version = await fetchJson(
-    "gateway /version",
-    buildUrl(gatewayBaseUrl, "version"),
+    'gateway /version',
+    buildUrl(gatewayBaseUrl, 'version'),
     DASHBOARD_PARITY_FAILURE_CODES.GATEWAY_VERSION_REQUEST_FAILED,
     {},
     parityContext,
   );
   const tradesEnvelope = await fetchJson(
-    "gateway /trades",
-    buildUrl(gatewayBaseUrl, "trades", { limit: 1, offset: 0 }),
+    'gateway /trades',
+    buildUrl(gatewayBaseUrl, 'trades', { limit: 1, offset: 0 }),
     DASHBOARD_PARITY_FAILURE_CODES.GATEWAY_TRADES_REQUEST_FAILED,
     { bearer: sessionBearer },
     parityContext,
   );
   const tradeDetailEnvelope = await fetchJson(
-    "gateway /trades/:tradeId",
+    'gateway /trades/:tradeId',
     buildUrl(gatewayBaseUrl, `trades/${encodeURIComponent(expectedTradeId)}`),
     DASHBOARD_PARITY_FAILURE_CODES.GATEWAY_TRADE_DETAIL_REQUEST_FAILED,
     { bearer: sessionBearer },
@@ -150,19 +151,19 @@ async function main() {
   );
 
   const session = sessionEnvelope?.data ?? null;
-  if (!session || typeof session !== "object") {
+  if (!session || typeof session !== 'object') {
     fail(
       DASHBOARD_PARITY_FAILURE_CODES.AUTH_SESSION_PAYLOAD_INVALID,
-      "auth /session returned no usable session payload",
+      'auth /session returned no usable session payload',
       { payload: sessionEnvelope },
       parityContext,
     );
   }
 
-  if (session.role !== "admin") {
+  if (session.role !== 'admin') {
     fail(
       DASHBOARD_PARITY_FAILURE_CODES.AUTH_SESSION_ROLE_INVALID,
-      `local dashboard parity expects an admin session, received role=${String(session.role ?? "unknown")}`,
+      `local dashboard parity expects an admin session, received role=${String(session.role ?? 'unknown')}`,
       { role: session.role ?? null },
       parityContext,
     );
@@ -183,7 +184,7 @@ async function main() {
   } catch (error) {
     fail(
       DASHBOARD_PARITY_FAILURE_CODES.GATEWAY_TRADES_PAYLOAD_INVALID,
-      "gateway /trades returned an unexpected payload shape",
+      'gateway /trades returned an unexpected payload shape',
       {
         error: error instanceof Error ? error.message : String(error),
         payload: tradesEnvelope,
@@ -191,11 +192,11 @@ async function main() {
       parityContext,
     );
   }
-  const firstTradeId = trades[0] && typeof trades[0].id === "string" ? trades[0].id : null;
+  const firstTradeId = trades[0] && typeof trades[0].id === 'string' ? trades[0].id : null;
   if (!firstTradeId) {
     fail(
       DASHBOARD_PARITY_FAILURE_CODES.SEEDED_TRADE_MISSING,
-      "gateway /trades returned zero trades. Enable `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity` and restart local-dev before running dashboard live parity.",
+      'gateway /trades returned zero trades. Enable `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity` and restart local-dev before running dashboard live parity.',
       { payload: tradesEnvelope },
       parityContext,
     );
@@ -217,7 +218,7 @@ async function main() {
   } catch (error) {
     fail(
       DASHBOARD_PARITY_FAILURE_CODES.GATEWAY_TRADE_DETAIL_PAYLOAD_INVALID,
-      "gateway /trades/:tradeId did not preserve the canonical Base-era trade detail contract",
+      'gateway /trades/:tradeId did not preserve the canonical Base-era trade detail contract',
       {
         error: error instanceof Error ? error.message : String(error),
         payload: tradeDetailEnvelope,

@@ -1,4 +1,8 @@
-import { isTreasuryConfirmationStage, isWorkflowConfirmationStage, resolveSettlementConfirmationStage } from '../src/confirmation';
+import {
+  isTreasuryConfirmationStage,
+  isWorkflowConfirmationStage,
+  resolveSettlementConfirmationStage,
+} from '../src/confirmation';
 
 describe('settlement confirmation stages', () => {
   test('keeps indexed blocks below the safe head out of workflow-confirmed state', () => {

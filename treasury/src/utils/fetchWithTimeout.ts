@@ -12,7 +12,11 @@ export class IndexerNetworkError extends Error {
   }
 }
 
-export async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 

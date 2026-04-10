@@ -15,7 +15,9 @@ const { createPostgresComplianceStore } = require('../gateway/src/core/complianc
 const { createPostgresComplianceWriteStore } = require('../gateway/src/core/complianceWriteStore');
 const { ComplianceService } = require('../gateway/src/core/complianceService');
 const { createPostgresSettlementStore } = require('../gateway/src/core/settlementStore');
-const { SettlementCallbackDispatcher } = require('../gateway/src/core/settlementCallbackDispatcher');
+const {
+  SettlementCallbackDispatcher,
+} = require('../gateway/src/core/settlementCallbackDispatcher');
 const { GatewayFailedOperationReplayer } = require('../gateway/src/core/errorHandlerWorkflow');
 
 async function main() {

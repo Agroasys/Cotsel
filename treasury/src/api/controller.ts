@@ -107,7 +107,12 @@ function parseObservedAt(value: unknown, field: string): Date {
   return requireIsoTimestamp(value, field);
 }
 
-function buildFailure(statusCode: number, code: string, message: string, extra?: Record<string, unknown>) {
+function buildFailure(
+  statusCode: number,
+  code: string,
+  message: string,
+  extra?: Record<string, unknown>,
+) {
   return {
     ...failure(code, message),
     ...(extra ?? {}),
@@ -141,7 +146,9 @@ function assertPayoutState(value: string): asserts value is PayoutState {
   }
 }
 
-function toCsv(entries: Array<Awaited<ReturnType<typeof getLedgerEntries>>[number] & EligibilitySummary>): string {
+function toCsv(
+  entries: Array<Awaited<ReturnType<typeof getLedgerEntries>>[number] & EligibilitySummary>,
+): string {
   const headers = [
     'id',
     'trade_id',
@@ -188,7 +195,11 @@ export class TreasuryController {
       const result = await this.ingestion.ingestOnce();
       res.status(200).json(success(result));
     } catch (error: unknown) {
-      res.status(500).json(failure('InternalError', error instanceof Error ? error.message : 'Ingestion failed'));
+      res
+        .status(500)
+        .json(
+          failure('InternalError', error instanceof Error ? error.message : 'Ingestion failed'),
+        );
     }
   }
 
@@ -214,7 +225,7 @@ export class TreasuryController {
   }
 
   async appendState(
-    req: Request<{ entryId: string }, {}, AppendStateBody>,
+    req: Request<{ entryId: string }, Record<string, never>, AppendStateBody>,
     res: Response,
   ): Promise<void> {
     try {
@@ -239,7 +250,11 @@ export class TreasuryController {
         const entries = await getLedgerEntries({ tradeId: entry.trade_id, limit: 500, offset: 0 });
         const candidate = entries.find((item) => item.id === entryId);
         if (!candidate) {
-          throw new HttpError(404, 'NotFound', 'Ledger entry not found in payout eligibility scope');
+          throw new HttpError(
+            404,
+            'NotFound',
+            'Ledger entry not found in payout eligibility scope',
+          );
         }
 
         const eligibility = await this.eligibility.assessEntries([candidate]);
@@ -253,7 +268,12 @@ export class TreasuryController {
         }
       }
 
-      const event = await appendPayoutState({ ledgerEntryId: entryId, state: requestedState, note, actor });
+      const event = await appendPayoutState({
+        ledgerEntryId: entryId,
+        state: requestedState,
+        note,
+        actor,
+      });
       res.status(200).json(success(event));
     } catch (error: unknown) {
       const response = mapValidationError(error, 'Failed to append payout state');
@@ -262,7 +282,7 @@ export class TreasuryController {
   }
 
   async upsertDeposit(
-    req: Request<{}, {}, UpsertDepositBody>,
+    req: Request<Record<string, never>, Record<string, never>, UpsertDepositBody>,
     res: Response,
   ): Promise<void> {
     try {
@@ -309,7 +329,7 @@ export class TreasuryController {
   }
 
   async upsertBankConfirmation(
-    req: Request<{ entryId: string }, {}, UpsertBankConfirmationBody>,
+    req: Request<{ entryId: string }, Record<string, never>, UpsertBankConfirmationBody>,
     res: Response,
   ): Promise<void> {
     try {
@@ -375,7 +395,14 @@ export class TreasuryController {
         return;
       }
 
-      res.status(500).json(failure('InternalError', error instanceof Error ? error.message : 'Failed to export entries'));
+      res
+        .status(500)
+        .json(
+          failure(
+            'InternalError',
+            error instanceof Error ? error.message : 'Failed to export entries',
+          ),
+        );
     }
   }
 }

@@ -37,15 +37,21 @@ function withEnv(overrides: Record<string, string | undefined>, run: () => void)
   }
 }
 
-function loadConfigModule() {
+function loadConfigModule(): typeof import('../src/config') {
   jest.resetModules();
-  return require('../src/config') as typeof import('../src/config');
+  let loaded!: typeof import('../src/config');
+  jest.isolateModules(() => {
+    loaded = jest.requireActual('../src/config') as typeof import('../src/config');
+  });
+  return loaded;
 }
 
 describe('ricardian nonce store config', () => {
   test('production rejects in-memory nonce store', () => {
     withEnv({ NODE_ENV: 'production', NONCE_STORE: 'inmemory' }, () => {
-      expect(() => loadConfigModule()).toThrow('NONCE_STORE=inmemory is not allowed when NODE_ENV=production');
+      expect(() => loadConfigModule()).toThrow(
+        'NONCE_STORE=inmemory is not allowed when NODE_ENV=production',
+      );
     });
   });
 
@@ -58,12 +64,15 @@ describe('ricardian nonce store config', () => {
   });
 
   test('production defaults to redis when REDIS_URL is set', () => {
-    withEnv({ NODE_ENV: 'production', NONCE_STORE: undefined, REDIS_URL: 'redis://localhost:6379' }, () => {
-      const { loadConfig } = loadConfigModule();
-      const config = loadConfig();
-      expect(config.nonceStore).toBe('redis');
-      expect(config.nonceRedisUrl).toBe('redis://localhost:6379');
-    });
+    withEnv(
+      { NODE_ENV: 'production', NONCE_STORE: undefined, REDIS_URL: 'redis://localhost:6379' },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        const config = loadConfig();
+        expect(config.nonceStore).toBe('redis');
+        expect(config.nonceRedisUrl).toBe('redis://localhost:6379');
+      },
+    );
   });
 
   test('production enables service auth and request rate limiting by default', () => {
@@ -92,7 +101,9 @@ describe('ricardian nonce store config', () => {
 
   test('migration credentials must be configured as a pair', () => {
     withEnv({ DB_MIGRATION_USER: 'ricardian_migrator', DB_MIGRATION_PASSWORD: undefined }, () => {
-      expect(() => loadConfigModule()).toThrow('DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together');
+      expect(() => loadConfigModule()).toThrow(
+        'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+      );
     });
   });
 

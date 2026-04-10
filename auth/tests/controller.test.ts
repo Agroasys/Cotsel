@@ -17,6 +17,9 @@ const mockVerifyMessage = verifyMessage as jest.MockedFunction<typeof verifyMess
 
 const WALLET = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 const VALID_SIG = '0xsig';
+type ExchangeTrustedSessionRequest = Parameters<AuthController['exchangeTrustedSession']>[0];
+type LoginRequest = Parameters<AuthController['login']>[0];
+type ChallengeRequest = Parameters<AuthController['getChallenge']>[0];
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
@@ -33,7 +36,9 @@ function mockRes() {
 function mockSessionService(overrides: Partial<SessionService> = {}): jest.Mocked<SessionService> {
   return {
     login: jest.fn().mockResolvedValue({ sessionId: 'sess-1', expiresAt: nowSeconds() + 3600 }),
-    issueTrustedSession: jest.fn().mockResolvedValue({ sessionId: 'sess-trusted', expiresAt: nowSeconds() + 3600 }),
+    issueTrustedSession: jest
+      .fn()
+      .mockResolvedValue({ sessionId: 'sess-trusted', expiresAt: nowSeconds() + 3600 }),
     refresh: jest.fn().mockResolvedValue({ sessionId: 'sess-2', expiresAt: nowSeconds() + 3600 }),
     revoke: jest.fn().mockResolvedValue(undefined),
     resolve: jest.fn().mockResolvedValue(null),
@@ -64,6 +69,20 @@ function makeSession(overrides: Partial<UserSession> = {}): UserSession {
   };
 }
 
+function makeExchangeRequest(
+  body: ExchangeTrustedSessionRequest['body'],
+): ExchangeTrustedSessionRequest {
+  return { body } as ExchangeTrustedSessionRequest;
+}
+
+function makeChallengeRequest(query: ChallengeRequest['query']): ChallengeRequest {
+  return { query } as ChallengeRequest;
+}
+
+function makeLoginRequest(body: LoginRequest['body']): LoginRequest {
+  return { body } as LoginRequest;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -72,17 +91,15 @@ describe('AuthController.exchangeTrustedSession', () => {
   test('returns 201 when trusted identity payload is valid', async () => {
     const svc = mockSessionService();
     const ctrl = new AuthController(svc, mockChallengeStore());
-    const req = {
-      body: {
-        accountId: 'agroasys-user:42',
-        role: 'admin',
-        email: 'Ops.Admin@Example.com',
-        walletAddress: WALLET,
-      },
-    } as Request;
+    const req = makeExchangeRequest({
+      accountId: 'agroasys-user:42',
+      role: 'admin',
+      email: 'Ops.Admin@Example.com',
+      walletAddress: WALLET,
+    });
     const res = mockRes();
 
-    await ctrl.exchangeTrustedSession(req as any, res);
+    await ctrl.exchangeTrustedSession(req, res);
 
     expect(res.status).toHaveBeenCalledWith(201);
     expect(svc.issueTrustedSession).toHaveBeenCalledWith(
@@ -100,16 +117,14 @@ describe('AuthController.exchangeTrustedSession', () => {
   test('allows trusted exchange without wallet address', async () => {
     const svc = mockSessionService();
     const ctrl = new AuthController(svc, mockChallengeStore());
-    const req = {
-      body: {
-        accountId: 'agroasys-user:42',
-        role: 'admin',
-        email: 'ops@example.com',
-      },
-    } as Request;
+    const req = makeExchangeRequest({
+      accountId: 'agroasys-user:42',
+      role: 'admin',
+      email: 'ops@example.com',
+    });
     const res = mockRes();
 
-    await ctrl.exchangeTrustedSession(req as any, res);
+    await ctrl.exchangeTrustedSession(req, res);
 
     expect(svc.issueTrustedSession).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -123,10 +138,10 @@ describe('AuthController.exchangeTrustedSession', () => {
   test('returns 400 when accountId is missing', async () => {
     const svc = mockSessionService();
     const ctrl = new AuthController(svc, mockChallengeStore());
-    const req = { body: { role: 'admin' } } as Request;
+    const req = makeExchangeRequest({ role: 'admin' });
     const res = mockRes();
 
-    await ctrl.exchangeTrustedSession(req as any, res);
+    await ctrl.exchangeTrustedSession(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(svc.issueTrustedSession).not.toHaveBeenCalled();
@@ -135,12 +150,14 @@ describe('AuthController.exchangeTrustedSession', () => {
   test('returns 400 when email is invalid', async () => {
     const svc = mockSessionService();
     const ctrl = new AuthController(svc, mockChallengeStore());
-    const req = {
-      body: { accountId: 'acct-1', role: 'admin', email: 'not-an-email' },
-    } as Request;
+    const req = makeExchangeRequest({
+      accountId: 'acct-1',
+      role: 'admin',
+      email: 'not-an-email',
+    });
     const res = mockRes();
 
-    await ctrl.exchangeTrustedSession(req as any, res);
+    await ctrl.exchangeTrustedSession(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(svc.issueTrustedSession).not.toHaveBeenCalled();
@@ -153,25 +170,27 @@ describe('AuthController.getChallenge', () => {
   test('returns message and stores nonce for valid wallet', async () => {
     const cs = mockChallengeStore();
     const ctrl = new AuthController(mockSessionService(), cs);
-    const req = { query: { wallet: WALLET } } as unknown as Request;
+    const req = makeChallengeRequest({ wallet: WALLET });
     const res = mockRes();
 
-    await ctrl.getChallenge(req as any, res);
+    await ctrl.getChallenge(req, res);
 
     expect(cs.set).toHaveBeenCalledWith(WALLET, expect.any(String), 300);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-      success: true,
-      data: expect.objectContaining({ message: expect.stringContaining(WALLET) }),
-    }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ message: expect.stringContaining(WALLET) }),
+      }),
+    );
   });
 
   test('returns 400 for missing wallet param', async () => {
     const cs = mockChallengeStore();
     const ctrl = new AuthController(mockSessionService(), cs);
-    const req = { query: {} } as unknown as Request;
+    const req = makeChallengeRequest({});
     const res = mockRes();
 
-    await ctrl.getChallenge(req as any, res);
+    await ctrl.getChallenge(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(cs.set).not.toHaveBeenCalled();
@@ -180,10 +199,10 @@ describe('AuthController.getChallenge', () => {
   test('returns 400 for invalid wallet format', async () => {
     const cs = mockChallengeStore();
     const ctrl = new AuthController(mockSessionService(), cs);
-    const req = { query: { wallet: 'not-a-wallet' } } as unknown as Request;
+    const req = makeChallengeRequest({ wallet: 'not-a-wallet' });
     const res = mockRes();
 
-    await ctrl.getChallenge(req as any, res);
+    await ctrl.getChallenge(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
   });
@@ -198,16 +217,18 @@ describe('AuthController.login', () => {
     const svc = mockSessionService();
     const cs = mockChallengeStore('test-nonce');
     const ctrl = new AuthController(svc, cs);
-    const req = { body: { walletAddress: WALLET, signature: VALID_SIG, role: 'buyer' } } as Request;
+    const req = makeLoginRequest({ walletAddress: WALLET, signature: VALID_SIG, role: 'buyer' });
     const res = mockRes();
 
-    await ctrl.login(req as any, res);
+    await ctrl.login(req, res);
 
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-      success: true,
-      data: { sessionId: 'sess-1', expiresAt: expect.any(Number) },
-    }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: { sessionId: 'sess-1', expiresAt: expect.any(Number) },
+      }),
+    );
     expect(cs.delete).toHaveBeenCalledWith(WALLET); // nonce consumed
     expect(svc.login).toHaveBeenCalledWith(WALLET, 'buyer', undefined, undefined);
   });
@@ -217,10 +238,10 @@ describe('AuthController.login', () => {
     const svc = mockSessionService();
     const cs = mockChallengeStore('test-nonce');
     const ctrl = new AuthController(svc, cs);
-    const req = { body: { walletAddress: WALLET, signature: VALID_SIG, role: 'buyer' } } as Request;
+    const req = makeLoginRequest({ walletAddress: WALLET, signature: VALID_SIG, role: 'buyer' });
     const res = mockRes();
 
-    await ctrl.login(req as any, res);
+    await ctrl.login(req, res);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(svc.login).not.toHaveBeenCalled();
@@ -231,10 +252,10 @@ describe('AuthController.login', () => {
     const svc = mockSessionService();
     const cs = mockChallengeStore(null); // no nonce issued
     const ctrl = new AuthController(svc, cs);
-    const req = { body: { walletAddress: WALLET, signature: VALID_SIG, role: 'buyer' } } as Request;
+    const req = makeLoginRequest({ walletAddress: WALLET, signature: VALID_SIG, role: 'buyer' });
     const res = mockRes();
 
-    await ctrl.login(req as any, res);
+    await ctrl.login(req, res);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(mockVerifyMessage).not.toHaveBeenCalled();
@@ -245,10 +266,10 @@ describe('AuthController.login', () => {
     const svc = mockSessionService();
     const cs = mockChallengeStore();
     const ctrl = new AuthController(svc, cs);
-    const req = { body: { signature: VALID_SIG, role: 'buyer' } } as Request;
+    const req = makeLoginRequest({ signature: VALID_SIG, role: 'buyer' });
     const res = mockRes();
 
-    await ctrl.login(req as any, res);
+    await ctrl.login(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(svc.login).not.toHaveBeenCalled();
@@ -258,10 +279,10 @@ describe('AuthController.login', () => {
     const svc = mockSessionService();
     const cs = mockChallengeStore();
     const ctrl = new AuthController(svc, cs);
-    const req = { body: { walletAddress: WALLET, role: 'buyer' } } as Request;
+    const req = makeLoginRequest({ walletAddress: WALLET, role: 'buyer' });
     const res = mockRes();
 
-    await ctrl.login(req as any, res);
+    await ctrl.login(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(svc.login).not.toHaveBeenCalled();
@@ -271,10 +292,14 @@ describe('AuthController.login', () => {
     const svc = mockSessionService();
     const cs = mockChallengeStore();
     const ctrl = new AuthController(svc, cs);
-    const req = { body: { walletAddress: WALLET, signature: VALID_SIG, role: 'superuser' } } as Request;
+    const req = makeLoginRequest({
+      walletAddress: WALLET,
+      signature: VALID_SIG,
+      role: 'superuser' as never,
+    });
     const res = mockRes();
 
-    await ctrl.login(req as any, res);
+    await ctrl.login(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(svc.login).not.toHaveBeenCalled();
@@ -286,10 +311,10 @@ describe('AuthController.login', () => {
     svc.login.mockRejectedValue(new Error('User profile is deactivated'));
     const cs = mockChallengeStore('test-nonce');
     const ctrl = new AuthController(svc, cs);
-    const req = { body: { walletAddress: WALLET, signature: VALID_SIG, role: 'buyer' } } as Request;
+    const req = makeLoginRequest({ walletAddress: WALLET, signature: VALID_SIG, role: 'buyer' });
     const res = mockRes();
 
-    await ctrl.login(req as any, res);
+    await ctrl.login(req, res);
 
     expect(res.status).toHaveBeenCalledWith(403);
   });
@@ -300,10 +325,15 @@ describe('AuthController.login', () => {
     const cs = mockChallengeStore('test-nonce');
     // max configured to 3600; client requests 999999
     const ctrl = new AuthController(svc, cs, 3600);
-    const req = { body: { walletAddress: WALLET, signature: VALID_SIG, role: 'buyer', ttlSeconds: 999999 } } as Request;
+    const req = makeLoginRequest({
+      walletAddress: WALLET,
+      signature: VALID_SIG,
+      role: 'buyer',
+      ttlSeconds: 999999,
+    });
     const res = mockRes();
 
-    await ctrl.login(req as any, res);
+    await ctrl.login(req, res);
 
     // sessionService.login must be called with ttl capped at 3600, not 999999
     expect(svc.login).toHaveBeenCalledWith(WALLET, 'buyer', undefined, 3600);
@@ -314,10 +344,15 @@ describe('AuthController.login', () => {
     const svc = mockSessionService();
     const cs = mockChallengeStore('test-nonce');
     const ctrl = new AuthController(svc, cs, 3600);
-    const req = { body: { walletAddress: WALLET, signature: VALID_SIG, role: 'buyer', ttlSeconds: 0 } } as Request;
+    const req = makeLoginRequest({
+      walletAddress: WALLET,
+      signature: VALID_SIG,
+      role: 'buyer',
+      ttlSeconds: 0,
+    });
     const res = mockRes();
 
-    await ctrl.login(req as any, res);
+    await ctrl.login(req, res);
 
     expect(svc.login).toHaveBeenCalledWith(WALLET, 'buyer', undefined, 1);
   });
@@ -335,16 +370,18 @@ describe('AuthController.getSession', () => {
 
     ctrl.getSession(req, res);
 
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-      success: true,
-      data: expect.objectContaining({
-        accountId: 'acct-1',
-        userId: 'uid-1',
-        walletAddress: WALLET,
-        email: 'admin@example.com',
-        role: 'buyer',
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({
+          accountId: 'acct-1',
+          userId: 'uid-1',
+          walletAddress: WALLET,
+          email: 'admin@example.com',
+          role: 'buyer',
+        }),
       }),
-    }));
+    );
   });
 });
 
@@ -359,10 +396,12 @@ describe('AuthController.refresh', () => {
 
     await ctrl.refresh(req, res);
 
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-      success: true,
-      data: { sessionId: 'sess-2', expiresAt: expect.any(Number) },
-    }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: { sessionId: 'sess-2', expiresAt: expect.any(Number) },
+      }),
+    );
   });
 
   test('returns 401 when service throws', async () => {
@@ -391,10 +430,12 @@ describe('AuthController.revoke', () => {
 
     await ctrl.revoke(req, res);
 
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-      success: true,
-      data: { revoked: true },
-    }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: { revoked: true },
+      }),
+    );
     expect(svc.revoke).toHaveBeenCalledWith('sess-1');
   });
 });

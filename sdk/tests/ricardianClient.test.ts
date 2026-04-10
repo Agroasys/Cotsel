@@ -42,7 +42,7 @@ describe('RicardianClient', () => {
       'http://localhost:3100/api/ricardian/v1/hash',
       expect.objectContaining({
         method: 'POST',
-      })
+      }),
     );
   });
 

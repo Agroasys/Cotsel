@@ -191,7 +191,7 @@ describe('service auth middleware (treasury)', () => {
     expect(next).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(401);
     expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: 'Invalid signature', code: 'AUTH_INVALID_SIGNATURE' })
+      expect.objectContaining({ error: 'Invalid signature', code: 'AUTH_INVALID_SIGNATURE' }),
     );
   });
 
@@ -216,7 +216,10 @@ describe('service auth middleware (treasury)', () => {
     expect(next).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(401);
     expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: 'Timestamp outside allowed skew window', code: 'AUTH_TIMESTAMP_SKEW' })
+      expect.objectContaining({
+        error: 'Timestamp outside allowed skew window',
+        code: 'AUTH_TIMESTAMP_SKEW',
+      }),
     );
   });
 
@@ -239,7 +242,7 @@ describe('service auth middleware (treasury)', () => {
     expect(next).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(401);
     expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: 'Replay detected for nonce', code: 'AUTH_NONCE_REPLAY' })
+      expect.objectContaining({ error: 'Replay detected for nonce', code: 'AUTH_NONCE_REPLAY' }),
     );
   });
 
@@ -264,7 +267,10 @@ describe('service auth middleware (treasury)', () => {
     expect(next).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(401);
     expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: 'Missing authentication headers', code: 'AUTH_MISSING_HEADERS' })
+      expect.objectContaining({
+        error: 'Missing authentication headers',
+        code: 'AUTH_MISSING_HEADERS',
+      }),
     );
   });
 
@@ -334,26 +340,28 @@ describe('service auth middleware (treasury)', () => {
     expect(next).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(403);
     expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: 'API key is inactive', code: 'AUTH_FORBIDDEN' })
+      expect.objectContaining({ error: 'API key is inactive', code: 'AUTH_FORBIDDEN' }),
     );
   });
 
   test('parseServiceApiKeys rejects string active values', () => {
     expect(() =>
-      parseServiceApiKeys(JSON.stringify([{ id: 'svc-string', secret: 'secret', active: 'false' }]))
+      parseServiceApiKeys(
+        JSON.stringify([{ id: 'svc-string', secret: 'secret', active: 'false' }]),
+      ),
     ).toThrow('API_KEYS_JSON[0].active must be a boolean true or false');
   });
 
   test('parseServiceApiKeys rejects missing active values', () => {
-    expect(() => parseServiceApiKeys(JSON.stringify([{ id: 'svc-missing', secret: 'secret' }]))).toThrow(
-      'API_KEYS_JSON[0].active must be a boolean true or false'
-    );
+    expect(() =>
+      parseServiceApiKeys(JSON.stringify([{ id: 'svc-missing', secret: 'secret' }])),
+    ).toThrow('API_KEYS_JSON[0].active must be a boolean true or false');
   });
 
   test('parseServiceApiKeys rejects API key ids over max length', () => {
     const oversizedId = 'a'.repeat(129);
-    expect(() => parseServiceApiKeys(JSON.stringify([{ id: oversizedId, secret: 'secret', active: true }]))).toThrow(
-      'API_KEYS_JSON[0].id must be <= 128 characters'
-    );
+    expect(() =>
+      parseServiceApiKeys(JSON.stringify([{ id: oversizedId, secret: 'secret', active: true }])),
+    ).toThrow('API_KEYS_JSON[0].id must be <= 128 characters');
   });
 });

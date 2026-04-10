@@ -1,6 +1,7 @@
 # Docker Service Profiles Runbook
 
 This runbook covers containerized orchestration for these services:
+
 - `auth`
 - `oracle`
 - `ricardian`
@@ -10,32 +11,40 @@ This runbook covers containerized orchestration for these services:
 
 `notifications` remains a library workspace (`@agroasys/notifications`), not a standalone runtime container.
 Notification runtime wiring is validated via:
+
 - `scripts/notifications-wiring-health.sh`
 - `scripts/notifications-gate.sh`
 
 ## Profiles
 
 ### `local-dev`
+
 Fast feedback mode with a lightweight in-memory indexer GraphQL responder.
 
 Default `local-dev` behavior:
+
 - empty trade registry for fast iteration
 
 Parity-enabled `local-dev` behavior:
+
 - set `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity`
 - exposes canonical seeded trade `TRD-LOCAL-9001`
 - intended for dashboard live local-contract browser verification
 
 ### `staging-e2e`
+
 Existing staging profile.
 
 ### `staging-e2e-real`
+
 Staging-grade release-gate profile with real indexer pipeline components:
+
 - `indexer-migrate`
 - `indexer-pipeline`
 - `indexer-graphql`
 
 ## Prerequisites
+
 - Docker Engine with Compose plugin (`docker compose`)
 - Root env files created from examples
 - Reachable `RPC_URL` if reconciliation/oracle on-chain checks are enabled
@@ -86,6 +95,7 @@ scripts/docker-services.sh down staging-e2e-real
 - Reconciliation: `node reconciliation/dist/healthcheck.js` (inside container)
 
 `scripts/docker-services.sh health <profile>` waits for required services to become healthy (bounded timeout), then runs endpoint checks. Tune with:
+
 - `DOCKER_SERVICES_WAIT_TIMEOUT_SECONDS` (default `120`)
 - `DOCKER_SERVICES_WAIT_POLL_SECONDS` (default `2`)
 - `DOCKER_SERVICES_HEALTH_LOG_TAIL_LINES` (default `80`)

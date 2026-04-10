@@ -100,10 +100,14 @@ function buildService() {
 
 describe('compliance service', () => {
   test('enforces fail-closed mapping for provider unavailable decisions', () => {
-    expect(() => validateComplianceDecisionCreateRequest(buildDecisionInput({
-      result: 'ALLOW',
-      reasonCode: 'CMP_PROVIDER_UNAVAILABLE',
-    }))).toThrow('CMP_PROVIDER_UNAVAILABLE requires result=DENY');
+    expect(() =>
+      validateComplianceDecisionCreateRequest(
+        buildDecisionInput({
+          result: 'ALLOW',
+          reasonCode: 'CMP_PROVIDER_UNAVAILABLE',
+        }),
+      ),
+    ).toThrow('CMP_PROVIDER_UNAVAILABLE requires result=DENY');
   });
 
   test('records append-only decisions and audit trail entries', async () => {
@@ -120,12 +124,14 @@ describe('compliance service', () => {
     });
 
     const second = await service.createDecision({
-      ...validateComplianceDecisionCreateRequest(buildDecisionInput({
-        result: 'ALLOW',
-        reasonCode: 'CMP_OVERRIDE_ACTIVE',
-        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-        correlationId: 'corr-2',
-      })),
+      ...validateComplianceDecisionCreateRequest(
+        buildDecisionInput({
+          result: 'ALLOW',
+          reasonCode: 'CMP_OVERRIDE_ACTIVE',
+          overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          correlationId: 'corr-2',
+        }),
+      ),
       principal,
       requestContext: { ...requestContext, requestId: 'req-2', correlationId: 'corr-2' },
       routePath: '/api/dashboard-gateway/v1/compliance/decisions',
@@ -154,11 +160,13 @@ describe('compliance service', () => {
     const requestContext = buildRequestContext();
 
     await service.createDecision({
-      ...validateComplianceDecisionCreateRequest(buildDecisionInput({
-        result: 'ALLOW',
-        reasonCode: 'CMP_OVERRIDE_ACTIVE',
-        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      })),
+      ...validateComplianceDecisionCreateRequest(
+        buildDecisionInput({
+          result: 'ALLOW',
+          reasonCode: 'CMP_OVERRIDE_ACTIVE',
+          overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }),
+      ),
       principal,
       requestContext,
       routePath: '/api/dashboard-gateway/v1/compliance/decisions',
@@ -210,11 +218,13 @@ describe('compliance service', () => {
     const requestContext = buildRequestContext();
 
     const attestedDecision = await service.createDecision({
-      ...validateComplianceDecisionCreateRequest(buildDecisionInput({
-        result: 'ALLOW',
-        reasonCode: 'CMP_OVERRIDE_ACTIVE',
-        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      })),
+      ...validateComplianceDecisionCreateRequest(
+        buildDecisionInput({
+          result: 'ALLOW',
+          reasonCode: 'CMP_OVERRIDE_ACTIVE',
+          overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }),
+      ),
       principal,
       requestContext,
       routePath: '/api/dashboard-gateway/v1/compliance/decisions',
@@ -222,9 +232,11 @@ describe('compliance service', () => {
     });
 
     const outageDecision = await service.createDecision({
-      ...validateComplianceDecisionCreateRequest(buildDecisionInput({
-        attestation: null,
-      })),
+      ...validateComplianceDecisionCreateRequest(
+        buildDecisionInput({
+          attestation: null,
+        }),
+      ),
       principal,
       requestContext: { ...requestContext, requestId: 'req-2', correlationId: 'corr-2' },
       routePath: '/api/dashboard-gateway/v1/compliance/decisions',
@@ -257,10 +269,12 @@ describe('compliance service', () => {
 
     try {
       const first = await service.createDecision({
-        ...validateComplianceDecisionCreateRequest(buildDecisionInput({
-          tradeId: 'TRD-2',
-          correlationId: 'corr-a',
-        })),
+        ...validateComplianceDecisionCreateRequest(
+          buildDecisionInput({
+            tradeId: 'TRD-2',
+            correlationId: 'corr-a',
+          }),
+        ),
         principal,
         requestContext,
         routePath: '/api/dashboard-gateway/v1/compliance/decisions',
@@ -268,10 +282,12 @@ describe('compliance service', () => {
       });
 
       const second = await service.createDecision({
-        ...validateComplianceDecisionCreateRequest(buildDecisionInput({
-          tradeId: 'TRD-2',
-          correlationId: 'corr-b',
-        })),
+        ...validateComplianceDecisionCreateRequest(
+          buildDecisionInput({
+            tradeId: 'TRD-2',
+            correlationId: 'corr-b',
+          }),
+        ),
         principal,
         requestContext: { ...requestContext, requestId: 'req-b', correlationId: 'corr-b' },
         routePath: '/api/dashboard-gateway/v1/compliance/decisions',
@@ -328,11 +344,13 @@ describe('compliance service', () => {
     const requestContext = buildRequestContext();
 
     const allowDecision = await service.createDecision({
-      ...validateComplianceDecisionCreateRequest(buildDecisionInput({
-        result: 'ALLOW',
-        reasonCode: 'CMP_OVERRIDE_ACTIVE',
-        overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      })),
+      ...validateComplianceDecisionCreateRequest(
+        buildDecisionInput({
+          result: 'ALLOW',
+          reasonCode: 'CMP_OVERRIDE_ACTIVE',
+          overrideWindowEndsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }),
+      ),
       principal,
       requestContext,
       routePath: '/api/dashboard-gateway/v1/compliance/decisions',
@@ -340,9 +358,11 @@ describe('compliance service', () => {
     });
 
     const denyDecision = await service.createDecision({
-      ...validateComplianceDecisionCreateRequest(buildDecisionInput({
-        correlationId: 'corr-2',
-      })),
+      ...validateComplianceDecisionCreateRequest(
+        buildDecisionInput({
+          correlationId: 'corr-2',
+        }),
+      ),
       principal,
       requestContext: { ...requestContext, requestId: 'req-deny', correlationId: 'corr-2' },
       routePath: '/api/dashboard-gateway/v1/compliance/decisions',

@@ -8,9 +8,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     shm_size: 1gb
     ports:
-      - "${DB_PORT}:5432"
+      - '${DB_PORT}:5432'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER}']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -44,7 +44,7 @@ services:
       RETRY_DELAY: ${RETRY_DELAY}
       INDEXER_GRAPHQL_URL: ${INDEXER_GRAPHQL_URL}
     ports:
-      - "${PORT}:3001"
+      - '${PORT}:3001'
     networks:
       - oracle-network
       - shared-network

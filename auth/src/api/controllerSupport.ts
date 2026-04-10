@@ -2,12 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Response } from 'express';
-import {
-  HttpError,
-  failure,
-  requireEnum,
-  requireInteger,
-} from '@agroasys/shared-http';
+import { HttpError, failure, requireEnum, requireInteger } from '@agroasys/shared-http';
 import { ApiErrorResponse, ApiSuccessResponse, UserRole } from '../types';
 
 export const CHALLENGE_TTL_SECONDS = 300;
@@ -47,7 +42,7 @@ export function handleControllerError(
     return;
   }
 
-  res.status(defaultStatusCode).json(
-    failure(defaultCode, error instanceof Error ? error.message : defaultMessage),
-  );
+  res
+    .status(defaultStatusCode)
+    .json(failure(defaultCode, error instanceof Error ? error.message : defaultMessage));
 }

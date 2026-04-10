@@ -3,10 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const {
-  createInMemoryNonceStore,
-  createPostgresNonceStore,
-} = require('./nonceStore');
+const { createInMemoryNonceStore, createPostgresNonceStore } = require('./nonceStore');
 
 test('in-memory nonce store rejects replays until ttl expires', async () => {
   let now = 1_000;

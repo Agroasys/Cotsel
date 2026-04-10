@@ -1,35 +1,40 @@
 # GitHub Roadmap Governance
 
 ## Purpose
+
 Maintain a single execution board for `Cotsel` where every roadmap item and PR is mapped to milestone scope and delivery status.
 
 ## Active migration truth
+
 - The active v1 migration governance source of truth is the Base migration program rooted at issue `#339`.
-- The active milestone model is `M0 Base Migration Decision and Boundary Freeze`, `M1 Base Contract Runtime and Deployment`, `M2 Base Eventing, Reconciliation, and Treasury Safety`, `M3 Backend, Gateway, and Wallet Continuity`, `M4 Base Sepolia Pilot Readiness`, `M5 Base Mainnet Launch and Polkadot Retirement`, plus `Needs Triage`.
+- The active milestone model is `M0 Base Migration Decision and Boundary Freeze`, `M1 Base Contract Runtime and Deployment`, `M2 Base Eventing, Reconciliation, and Treasury Safety`, `M3 Backend, Gateway, and Wallet Continuity`, `M4 Base Sepolia Pilot Readiness`, `M5 Base Mainnet Launch`, plus `Needs Triage`.
 - Historical Milestones A/B/C and their old weighted rollups are retained only for pre-Base traceability. They are not active v1 planning truth.
 - M4 is the operational installation-and-proof gate. M5 must not begin until M4 has a real Base Sepolia rehearsal result, a reviewable evidence packet, and an explicit blocker register.
-- M5 is the production cutover-and-retirement gate. It is not complete until:
+- M5 is the production cutover gate. It is not complete until:
   - `docs/runbooks/base-mainnet-go-no-go.md` exists and is used as the authoritative launch decision record
   - `docs/runbooks/base-mainnet-cutover-and-rollback.md` exists and is used as the authoritative rollback path
-  - `docs/runbooks/polkadot-retirement-checklist.md` closes the M5-owned residue from issue `#356`
 
 ## Project v2 Definition
+
 - Project name: `Cotsel Roadmap`
 - Project URL: `https://github.com/orgs/Agroasys/projects/5`
 - Project node ID: `PVT_kwDODMhsg84BPnYZ`
 - Status values: `Backlog`, `In Progress`, `In Review`, `Blocked`, `Done`
-- Repository milestone model: `M0 Base Migration Decision and Boundary Freeze`, `M1 Base Contract Runtime and Deployment`, `M2 Base Eventing, Reconciliation, and Treasury Safety`, `M3 Backend, Gateway, and Wallet Continuity`, `M4 Base Sepolia Pilot Readiness`, `M5 Base Mainnet Launch and Polkadot Retirement`, `Needs Triage`
+- Repository milestone model: `M0 Base Migration Decision and Boundary Freeze`, `M1 Base Contract Runtime and Deployment`, `M2 Base Eventing, Reconciliation, and Treasury Safety`, `M3 Backend, Gateway, and Wallet Continuity`, `M4 Base Sepolia Pilot Readiness`, `M5 Base Mainnet Launch`, `Needs Triage`
 - Active Project v2 fields: `Status`, `Area`, `Priority`, `Work Type`, `Risk`, `% Complete`, `Target Date`
 - Area values: `Contracts`, `Oracle`, `Indexer`, `SDK`, `Reconciliation`, `Ricardian`, `Treasury`, `Notifications`, `Ops/CI`, `Docs/Runbooks`, `Security`
 - Work type values: `Feature`, `Bug`, `Refactor`, `Ops`, `Docs`, `Security` (`Type` is a reserved project field name in GitHub UI/API).
 
 ## Runtime Profile Context
+
 - `local-dev`: fast local feedback with lightweight indexer responder.
 - `staging-e2e-real`: release-gate profile using real indexer pipeline (`indexer-migrate`, `indexer-pipeline`, `indexer-graphql`).
 - Release gate policy: `staging-e2e-real` health + gate checks must pass before release promotion.
 
 ## PR Policy (Required)
+
 Every PR must:
+
 1. Have a repo milestone assigned.
 2. Be added to Project v2 (`Cotsel Roadmap`).
 3. Keep CI green and avoid ABI/economics/token-flow changes unless explicitly approved.
@@ -38,6 +43,7 @@ The workflow `.github/workflows/pr-roadmap-policy.yml` enforces (1) and (2).
 During temporary rollout without GitHub App auth, project-link enforcement is advisory (warnings only); milestone enforcement remains blocking.
 
 ## Weighted Progress (Historical)
+
 - Historical milestone A/B/C weighted rollups are retained for pre-Base traceability only.
 - Authoritative active v1 delivery status is tracked through the Base migration issue tree rooted at `#339`, not through the historical A/B/C rollup.
 - Source of truth for component mapping: `docs/runbooks/architecture-coverage-matrix.md`.
@@ -49,11 +55,15 @@ During temporary rollout without GitHub App auth, project-link enforcement is ad
   4. Do not use this rollup as active Base migration planning truth.
 
 ## Maintainer Steps For Each PR
+
 1. Assign milestone:
+
 ```bash
 gh pr edit <PR_NUMBER> --repo Agroasys/Cotsel --milestone "<Milestone Name>"
 ```
+
 2. Add PR to Project v2:
+
 ```bash
 pr_id="$(gh pr view <PR_NUMBER> --repo Agroasys/Cotsel --json id -q .id)"
 gh api graphql \
@@ -61,14 +71,17 @@ gh api graphql \
   -F project="$ROADMAP_PROJECT_ID" \
   -F content="$pr_id"
 ```
+
 3. Set active project fields (`Status`, `Area`, `Priority`, `Work Type`, `Risk`, `% Complete`, `Target Date`).
 
 ## Required Repository Configuration
+
 - Repository variable: `ROADMAP_PROJECT_ID` (Project v2 node id).
 - Workflow permission: `.github/workflows/pr-roadmap-policy.yml` must keep `repository-projects: read`.
 - Roadmap policy auth/runbook: `docs/runbooks/roadmap-policy.md`.
 
 For weighted progress sync (optional overrides; defaults are built in for current project):
+
 - `ROADMAP_PERCENT_FIELD_ID`
 - `ROADMAP_STATUS_FIELD_ID`
 - `ROADMAP_STATUS_OPTION_BACKLOG`
@@ -76,22 +89,26 @@ For weighted progress sync (optional overrides; defaults are built in for curren
 - `ROADMAP_STATUS_OPTION_DONE`
 
 Auth for project field writes:
+
 - Preferred: `ROADMAP_APP_ID` + `ROADMAP_APP_PRIVATE_KEY` (+ optional `ROADMAP_APP_INSTALLATION_ID`).
 - Fallback: `github.token` (may be unable to write org ProjectV2 fields depending on org visibility/policy).
 
 ## Architecture-Matrix Consistency Guard
+
 - Historical checker script: `scripts/architecture-roadmap-consistency-check.mjs`
 - Historical sync helper: `scripts/arch-roadmap-sync.mjs`
 - CI artifact: `ci-report-arch-roadmap-consistency`
 - CI drift artifacts (on failure): `arch-roadmap-sync.json`, `arch-roadmap-sync.patch`
 
 Historical-only note:
+
 - The checker and sync helper apply to the archived A/B/C governance model only.
 - The active release gate must not depend on the historical A/B/C governance model during M5.
-- Historical governance maintenance belongs only in `.github/workflows/historical-archive-maintenance.yml` and `.github/workflows/roadmap-weighted-progress-sync.yml`.
+- Historical governance maintenance belongs only in `.github/workflows/roadmap-weighted-progress-sync.yml`.
 - Only enable or run these tools when maintaining archive traceability for the pre-Base roadmap record.
 
 What the checker enforces:
+
 1. Required matrix row metadata columns exist and are populated:
    - `Owner`
    - `Last Refreshed`
@@ -104,33 +121,46 @@ What the checker enforces:
    - Gate issue bodies must reference `docs/runbooks/architecture-coverage-matrix.md`.
 
 Operator flow (deterministic + safe defaults):
+
 1. Check drift locally:
+
 ```bash
 GITHUB_TOKEN="$(gh auth token)" node scripts/architecture-roadmap-consistency-check.mjs --repo Agroasys/Cotsel
 ```
+
 2. Generate deterministic sync plan + patch:
+
 ```bash
 GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Cotsel
 ```
+
 3. Apply minimum-safe matrix sync updates (default):
+
 ```bash
 GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Cotsel --write
 ```
+
 4. Optional: normalize `% Complete` + `Remaining Gap` when you intentionally want policy normalization:
+
 ```bash
 GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Cotsel --write --normalize-progress
 ```
+
 5. If gate issue metadata is out of sync, update gate issues (requires explicit apply flag):
+
 ```bash
 GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo Agroasys/Cotsel --write-gate-issues --apply
 ```
+
 6. Commit matrix changes and rerun CI checks only when maintaining the historical matrix:
+
 ```bash
 git add docs/runbooks/architecture-coverage-matrix.md
 git commit -m "docs(roadmap): sync architecture coverage matrix"
 ```
 
 Manual/offline commands:
+
 ```bash
 # offline schema/format checks
 node scripts/architecture-roadmap-consistency-check.mjs --offline

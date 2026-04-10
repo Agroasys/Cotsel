@@ -35,7 +35,10 @@ async function queryLastRun(): Promise<LastRunRow | null> {
 
 function json(res: http.ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
-  res.writeHead(status, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) });
+  res.writeHead(status, {
+    'content-type': 'application/json',
+    'content-length': Buffer.byteLength(payload),
+  });
   res.end(payload);
 }
 
@@ -58,7 +61,13 @@ export function startHealthServer(): http.Server {
       try {
         await testConnection();
         const lastRun = await queryLastRun();
-        json(res, 200, { success: true, service: 'reconciliation', ready: true, lastRun, timestamp });
+        json(res, 200, {
+          success: true,
+          service: 'reconciliation',
+          ready: true,
+          lastRun,
+          timestamp,
+        });
       } catch (error) {
         json(res, 503, {
           success: false,
@@ -77,7 +86,12 @@ export function startHealthServer(): http.Server {
 
   server.listen(HEALTH_PORT, () => {
     process.stdout.write(
-      JSON.stringify({ level: 'info', service: 'reconciliation', message: 'Health server started', port: HEALTH_PORT }) + '\n',
+      JSON.stringify({
+        level: 'info',
+        service: 'reconciliation',
+        message: 'Health server started',
+        port: HEALTH_PORT,
+      }) + '\n',
     );
   });
 

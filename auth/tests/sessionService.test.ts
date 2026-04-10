@@ -6,7 +6,7 @@ import { ProfileStore } from '../src/core/profileStore';
 import { SessionStore } from '../src/core/sessionStore';
 import { UserProfile, UserSession, SessionIssueResult } from '../src/types';
 
-//  Helpers 
+//  Helpers
 
 function makeProfile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
@@ -43,7 +43,7 @@ function makeActiveSession(overrides: Partial<UserSession> = {}): UserSession {
 }
 
 function makeStores(profile: UserProfile) {
-  let sessionDb: Record<string, UserSession> = {};
+  const sessionDb: Record<string, UserSession> = {};
 
   const sessionStore = {
     issue: jest.fn(async (p: UserProfile, ttl: number): Promise<SessionIssueResult> => {
@@ -71,7 +71,9 @@ function makeStores(profile: UserProfile) {
   } satisfies SessionStore;
 
   const profileStore = {
-    upsert: jest.fn(async (_w: string, _r: UserProfile['role'], _o?: string): Promise<UserProfile> => profile),
+    upsert: jest.fn(
+      async (_w: string, _r: UserProfile['role'], _o?: string): Promise<UserProfile> => profile,
+    ),
     upsertTrustedIdentity: jest.fn(async (identity) => ({
       ...profile,
       accountId: identity.accountId,

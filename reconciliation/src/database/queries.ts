@@ -1,13 +1,16 @@
 import { pool } from './connection';
 import type { DriftFinding, ReconcileMode, ReconcileRunRow, RunStats } from '../types';
 
-export async function createRun(runKey: string, mode: ReconcileMode): Promise<{ row: ReconcileRunRow; created: boolean }> {
+export async function createRun(
+  runKey: string,
+  mode: ReconcileMode,
+): Promise<{ row: ReconcileRunRow; created: boolean }> {
   const insertResult = await pool.query<ReconcileRunRow>(
     `INSERT INTO reconcile_runs (run_key, mode, status)
      VALUES ($1, $2, 'RUNNING')
      ON CONFLICT (run_key) DO NOTHING
      RETURNING *`,
-    [runKey, mode]
+    [runKey, mode],
   );
 
   if (insertResult.rows[0]) {
@@ -16,13 +19,17 @@ export async function createRun(runKey: string, mode: ReconcileMode): Promise<{ 
 
   const existing = await pool.query<ReconcileRunRow>(
     'SELECT * FROM reconcile_runs WHERE run_key = $1',
-    [runKey]
+    [runKey],
   );
 
   return { row: existing.rows[0], created: false };
 }
 
-export async function upsertDrift(runId: number, runKey: string, finding: DriftFinding): Promise<void> {
+export async function upsertDrift(
+  runId: number,
+  runKey: string,
+  finding: DriftFinding,
+): Promise<void> {
   await pool.query(
     `INSERT INTO reconcile_drifts (
         run_id,
@@ -54,16 +61,20 @@ export async function upsertDrift(runId: number, runKey: string, finding: DriftF
       finding.onchainValue,
       finding.indexedValue,
       JSON.stringify(finding.details),
-    ]
+    ],
   );
 }
 
-export async function upsertRunTradeScope(runId: number, runKey: string, tradeId: string): Promise<void> {
+export async function upsertRunTradeScope(
+  runId: number,
+  runKey: string,
+  tradeId: string,
+): Promise<void> {
   await pool.query(
     `INSERT INTO reconcile_run_trades (run_id, run_key, trade_id)
      VALUES ($1, $2, $3)
      ON CONFLICT (run_key, trade_id) DO NOTHING`,
-    [runId, runKey, tradeId]
+    [runId, runKey, tradeId],
   );
 }
 
@@ -88,7 +99,7 @@ export async function completeRun(stats: RunStats): Promise<void> {
       stats.severityCounts.HIGH,
       stats.severityCounts.MEDIUM,
       stats.severityCounts.LOW,
-    ]
+    ],
   );
 }
 
@@ -99,6 +110,6 @@ export async function failRun(runKey: string, errorMessage: string): Promise<voi
          completed_at = NOW(),
          error_message = $2
      WHERE run_key = $1`,
-    [runKey, errorMessage]
+    [runKey, errorMessage],
   );
 }

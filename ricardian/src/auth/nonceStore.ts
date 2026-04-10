@@ -1,9 +1,13 @@
-import { createInMemoryNonceStore, createRedisNonceStore, type NonceStore } from '@agroasys/shared-auth';
+import {
+  createInMemoryNonceStore,
+  createRedisNonceStore,
+  type NonceStore,
+} from '@agroasys/shared-auth';
 import { RicardianConfig } from '../config';
 import { consumeServiceAuthNonce } from '../database/queries';
 import { Logger } from '../utils/logger';
 
-export interface RicardianNonceStore extends NonceStore {}
+export type RicardianNonceStore = NonceStore;
 
 export function createRicardianNonceStore(config: RicardianConfig): RicardianNonceStore {
   if (config.nonceStore === 'postgres') {

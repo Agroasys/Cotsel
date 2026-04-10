@@ -27,14 +27,20 @@ import { createPostgresFailedOperationStore } from './core/failedOperationStore'
 import { createPostgresIdempotencyStore } from './core/idempotencyStore';
 import { OperatorSettingsReadService } from './core/operatorSettingsReadService';
 import { createPostgresRoleAssignmentStore } from './core/roleAssignmentStore';
-import { createGatewayServiceAuthNonceStore, createPostgresSettlementStore } from './core/settlementStore';
+import {
+  createGatewayServiceAuthNonceStore,
+  createPostgresSettlementStore,
+} from './core/settlementStore';
 import { createServiceApiKeyLookup } from './core/serviceAuth';
 import { SettlementCallbackDispatcher } from './core/settlementCallbackDispatcher';
 import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { IndexerGraphqlClient } from './core/indexerGraphqlClient';
 import { GovernanceDirectSignMonitor } from './core/governanceDirectSignMonitor';
-import { createDefaultTransactionVerifier, GovernanceMutationService } from './core/governanceMutationService';
+import {
+  createDefaultTransactionVerifier,
+  GovernanceMutationService,
+} from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
 import { EvidenceReadService } from './core/evidenceReadService';
 import { OperationsSummaryService } from './core/operationsSummaryService';
@@ -76,14 +82,19 @@ const evidenceBundleStore = createPostgresEvidenceBundleStore(pool);
 const governanceActionStore = createPostgresGovernanceActionStore(pool);
 const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
 const governanceStatusService = createGovernanceStatusService(config);
-const approvalWorkflowReadService = new GovernanceApprovalWorkflowReadService(governanceActionStore, governanceStatusService);
+const approvalWorkflowReadService = new GovernanceApprovalWorkflowReadService(
+  governanceActionStore,
+  governanceStatusService,
+);
 const failedOperationStore = createPostgresFailedOperationStore(pool);
 const errorHandlerWorkflow = new GatewayErrorHandlerWorkflow(failedOperationStore, auditLogStore);
 const idempotencyStore = createPostgresIdempotencyStore(pool);
 const roleAssignmentStore = createPostgresRoleAssignmentStore(pool);
 const settlementStore = createPostgresSettlementStore(pool);
 const settlementNonceStore = createGatewayServiceAuthNonceStore(pool);
-const settlementServiceApiKeyLookup = createServiceApiKeyLookup(config.settlementServiceAuthApiKeysJson);
+const settlementServiceApiKeyLookup = createServiceApiKeyLookup(
+  config.settlementServiceAuthApiKeysJson,
+);
 const settlementService = new SettlementService(config, settlementStore);
 const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore, {
   failedOperationWorkflow: errorHandlerWorkflow,
@@ -201,10 +212,7 @@ const overviewService = new OverviewService(
   governanceStatusService,
   complianceStore,
 );
-const settingsReadService = new OperatorSettingsReadService(
-  roleAssignmentStore,
-  auditFeedStore,
-);
+const settingsReadService = new OperatorSettingsReadService(roleAssignmentStore, auditFeedStore);
 const ricardianClient = new RicardianClient(orchestrator);
 const evidenceReadService = new EvidenceReadService(
   tradeReadService,
@@ -227,9 +235,7 @@ const operationsSummaryService = new OperationsSummaryService([
     source: 'oracle_http',
     staleAfterMs: 120_000,
     timeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
-    check: config.oracleBaseUrl
-      ? async () => orchestrator.probeHealth('oracle')
-      : undefined,
+    check: config.oracleBaseUrl ? async () => orchestrator.probeHealth('oracle') : undefined,
   },
   {
     key: 'indexer',
@@ -255,9 +261,7 @@ const operationsSummaryService = new OperationsSummaryService([
     source: 'treasury_http',
     staleAfterMs: 120_000,
     timeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
-    check: config.treasuryBaseUrl
-      ? async () => orchestrator.probeHealth('treasury')
-      : undefined,
+    check: config.treasuryBaseUrl ? async () => orchestrator.probeHealth('treasury') : undefined,
   },
   {
     key: 'ricardian',
@@ -265,9 +269,7 @@ const operationsSummaryService = new OperationsSummaryService([
     source: 'ricardian_http',
     staleAfterMs: 120_000,
     timeoutMs: config.downstreamReadTimeoutMs ?? 5_000,
-    check: config.ricardianBaseUrl
-      ? async () => orchestrator.probeHealth('ricardian')
-      : undefined,
+    check: config.ricardianBaseUrl ? async () => orchestrator.probeHealth('ricardian') : undefined,
   },
   {
     key: 'notifications',
@@ -303,7 +305,11 @@ function loadPackageVersion(): string {
 
 async function readinessCheck() {
   const requestId = `readyz-${Date.now()}`;
-  const dependencies = [] as { name: string; status: 'ok' | 'degraded' | 'unavailable'; detail?: string }[];
+  const dependencies = [] as {
+    name: string;
+    status: 'ok' | 'degraded' | 'unavailable';
+    detail?: string;
+  }[];
 
   try {
     await testConnection(pool);
@@ -371,91 +377,121 @@ async function bootstrap(): Promise<void> {
   });
 
   const extraRouter = Router();
-  extraRouter.use(createCapabilitiesRouter({
-    authSessionClient,
-    config,
-  }));
-  extraRouter.use(createApprovalWorkflowRouter({
-    authSessionClient,
-    config,
-    approvalWorkflowReadService,
-  }));
-  extraRouter.use(createAccessLogRouter({
-    authSessionClient,
-    config,
-    accessLogService,
-    idempotencyStore,
-  }));
-  extraRouter.use(createComplianceRouter({
-    authSessionClient,
-    config,
-    complianceService,
-    idempotencyStore,
-    failedOperationWorkflow: errorHandlerWorkflow,
-  }));
-  extraRouter.use(createEvidenceBundleRouter({
-    authSessionClient,
-    config,
-    evidenceBundleService,
-    idempotencyStore,
-  }));
-  extraRouter.use(createGovernanceRouter({
-    authSessionClient,
-    config,
-    governanceStatusService,
-    governanceActionStore,
-  }));
-  extraRouter.use(createTreasuryRouter({
-    authSessionClient,
-    config,
-    treasuryReadService,
-  }));
-  extraRouter.use(createGovernanceMutationRouter({
-    authSessionClient,
-    config,
-    governanceReader: governanceStatusService,
-    mutationService: governanceMutationService,
-    idempotencyStore,
-    failedOperationWorkflow: errorHandlerWorkflow,
-  }));
-  extraRouter.use(createTradeRouter({
-    authSessionClient,
-    config,
-    tradeReadService,
-  }));
-  extraRouter.use(createReconciliationRouter({
-    authSessionClient,
-    config,
-    reconciliationReadService,
-  }));
-  extraRouter.use(createRicardianRouter({
-    authSessionClient,
-    config,
-    evidenceReadService,
-  }));
-  extraRouter.use(createSettingsRouter({
-    authSessionClient,
-    config,
-    settingsReadService,
-  }));
-  extraRouter.use(createSettlementRouter({
-    config,
-    settlementService,
-    settlementStore,
-    nonceStore: settlementNonceStore,
-    idempotencyStore,
-    lookupServiceApiKey: settlementServiceApiKeyLookup,
-  }));
-  extraRouter.use(createOverviewRouter({
-    authSessionClient,
-    config,
-    overviewService,
-  }));
-  extraRouter.use(createOperationsRouter({
-    authSessionClient,
-    config,
-    operationsSummaryService,
-  }));
+  extraRouter.use(
+    createCapabilitiesRouter({
+      authSessionClient,
+      config,
+    }),
+  );
+  extraRouter.use(
+    createApprovalWorkflowRouter({
+      authSessionClient,
+      config,
+      approvalWorkflowReadService,
+    }),
+  );
+  extraRouter.use(
+    createAccessLogRouter({
+      authSessionClient,
+      config,
+      accessLogService,
+      idempotencyStore,
+    }),
+  );
+  extraRouter.use(
+    createComplianceRouter({
+      authSessionClient,
+      config,
+      complianceService,
+      idempotencyStore,
+      failedOperationWorkflow: errorHandlerWorkflow,
+    }),
+  );
+  extraRouter.use(
+    createEvidenceBundleRouter({
+      authSessionClient,
+      config,
+      evidenceBundleService,
+      idempotencyStore,
+    }),
+  );
+  extraRouter.use(
+    createGovernanceRouter({
+      authSessionClient,
+      config,
+      governanceStatusService,
+      governanceActionStore,
+    }),
+  );
+  extraRouter.use(
+    createTreasuryRouter({
+      authSessionClient,
+      config,
+      treasuryReadService,
+    }),
+  );
+  extraRouter.use(
+    createGovernanceMutationRouter({
+      authSessionClient,
+      config,
+      governanceReader: governanceStatusService,
+      mutationService: governanceMutationService,
+      idempotencyStore,
+      failedOperationWorkflow: errorHandlerWorkflow,
+    }),
+  );
+  extraRouter.use(
+    createTradeRouter({
+      authSessionClient,
+      config,
+      tradeReadService,
+    }),
+  );
+  extraRouter.use(
+    createReconciliationRouter({
+      authSessionClient,
+      config,
+      reconciliationReadService,
+    }),
+  );
+  extraRouter.use(
+    createRicardianRouter({
+      authSessionClient,
+      config,
+      evidenceReadService,
+    }),
+  );
+  extraRouter.use(
+    createSettingsRouter({
+      authSessionClient,
+      config,
+      settingsReadService,
+    }),
+  );
+  extraRouter.use(
+    createSettlementRouter({
+      config,
+      settlementService,
+      settlementStore,
+      nonceStore: settlementNonceStore,
+      idempotencyStore,
+      lookupServiceApiKey: settlementServiceApiKeyLookup,
+    }),
+  );
+  extraRouter.use(
+    createOverviewRouter({
+      authSessionClient,
+      config,
+      overviewService,
+    }),
+  );
+  extraRouter.use(
+    createOperationsRouter({
+      authSessionClient,
+      config,
+      operationsSummaryService,
+    }),
+  );
 
   const app = createApp(config, {
     version: loadPackageVersion(),

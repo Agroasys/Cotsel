@@ -20,18 +20,18 @@ This is the operational source of truth for:
 
 ## Matrix
 
-| Caller | Callee | Purpose | Auth model | Config location |
-|---|---|---|---|---|
-| Agroasys upstream | `auth` | trusted session exchange | shared-auth HMAC/API-key auth | auth service env/config |
-| dashboard browser | `auth` | bearer session lifecycle | Cotsel bearer session | auth HTTP contract |
-| dashboard browser | `gateway` | operator/admin reads and writes | Cotsel bearer session | gateway HTTP contract |
-| `gateway` | `oracle` | downstream service actions/reads | oracle bearer + HMAC contract | gateway + oracle env/config |
-| `gateway` | `treasury` | ledger and payout reads/mutations | shared-auth HMAC/API-key auth | gateway + treasury env/config |
-| `gateway` | `ricardian` | ricardian reads | shared-auth HMAC/API-key auth | gateway + ricardian env/config |
-| settlement ingress callers | `gateway` settlement ingress | service-origin settlement handoff/callback contract | shared-auth HMAC/API-key auth | gateway env/config |
-| `treasury` direct clients | `treasury` | treasury HTTP surface | shared-auth HMAC/API-key auth when enabled | treasury env/config |
-| `ricardian` direct clients | `ricardian` | ricardian HTTP surface | shared-auth HMAC/API-key auth when enabled | ricardian env/config |
-| direct oracle callers | `oracle` | oracle HTTP surface | oracle bearer + HMAC contract | oracle env/config |
+| Caller                     | Callee                       | Purpose                                             | Auth model                                 | Config location                |
+| -------------------------- | ---------------------------- | --------------------------------------------------- | ------------------------------------------ | ------------------------------ |
+| Agroasys upstream          | `auth`                       | trusted session exchange                            | shared-auth HMAC/API-key auth              | auth service env/config        |
+| dashboard browser          | `auth`                       | bearer session lifecycle                            | Cotsel bearer session                      | auth HTTP contract             |
+| dashboard browser          | `gateway`                    | operator/admin reads and writes                     | Cotsel bearer session                      | gateway HTTP contract          |
+| `gateway`                  | `oracle`                     | downstream service actions/reads                    | oracle bearer + HMAC contract              | gateway + oracle env/config    |
+| `gateway`                  | `treasury`                   | ledger and payout reads/mutations                   | shared-auth HMAC/API-key auth              | gateway + treasury env/config  |
+| `gateway`                  | `ricardian`                  | ricardian reads                                     | shared-auth HMAC/API-key auth              | gateway + ricardian env/config |
+| settlement ingress callers | `gateway` settlement ingress | service-origin settlement handoff/callback contract | shared-auth HMAC/API-key auth              | gateway env/config             |
+| `treasury` direct clients  | `treasury`                   | treasury HTTP surface                               | shared-auth HMAC/API-key auth when enabled | treasury env/config            |
+| `ricardian` direct clients | `ricardian`                  | ricardian HTTP surface                              | shared-auth HMAC/API-key auth when enabled | ricardian env/config           |
+| direct oracle callers      | `oracle`                     | oracle HTTP surface                                 | oracle bearer + HMAC contract              | oracle env/config              |
 
 ## Canonical config references
 

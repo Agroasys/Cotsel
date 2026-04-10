@@ -20,7 +20,11 @@ function baseContext(meta?: LogMeta): Record<string, unknown> {
     requestId: meta?.requestId ?? null,
     txHash: meta?.txHash ?? null,
     chainId: meta?.chainId ?? process.env.CHAIN_ID ?? null,
-    networkName: meta?.networkName ?? process.env.NETWORK_NAME ?? process.env.STAGING_E2E_REAL_NETWORK_NAME ?? null,
+    networkName:
+      meta?.networkName ??
+      process.env.NETWORK_NAME ??
+      process.env.STAGING_E2E_REAL_NETWORK_NAME ??
+      null,
     traceId: meta?.traceId ?? null,
     ...meta,
   };

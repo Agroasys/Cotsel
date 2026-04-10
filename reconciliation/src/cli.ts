@@ -8,6 +8,10 @@ import { startHealthServer } from './health-server';
 
 type Mode = 'once' | 'daemon';
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function parseArgs(argv: string[]): { mode: Mode; runKey?: string } {
   const mode = argv[2] as Mode | undefined;
 
@@ -67,9 +71,9 @@ async function bootstrap(): Promise<void> {
   await service.runDaemon();
 }
 
-bootstrap().catch(async (error: any) => {
+bootstrap().catch(async (error: unknown) => {
   Logger.error('Reconciliation bootstrap failed', {
-    error: error?.message || error,
+    error: getErrorMessage(error),
   });
 
   try {

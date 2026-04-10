@@ -3,15 +3,15 @@
 // This script is preserved for archive traceability and should not be treated
 // as active v1 migration planning truth. The active Base migration program is
 // governed by issue #339 and milestones M0-M5.
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import process from "node:process";
-import { spawnSync } from "node:child_process";
-import crypto from "node:crypto";
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import process from 'node:process';
+import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 
 const GATE_ISSUE_NUMBERS = [70, 71, 72];
-const MATRIX_PATH_REFERENCE = "docs/runbooks/architecture-coverage-matrix.md";
+const MATRIX_PATH_REFERENCE = 'docs/runbooks/architecture-coverage-matrix.md';
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -19,10 +19,10 @@ const MATRIX_PATH_REFERENCE = "docs/runbooks/architecture-coverage-matrix.md";
 function parseArgs(argv) {
   const args = {
     matrix: MATRIX_PATH_REFERENCE,
-    repo: process.env.GITHUB_REPOSITORY || "Agroasys/Cotsel",
-    out: "reports/governance/arch-roadmap-sync.json",
-    patch: "reports/governance/arch-roadmap-sync.patch",
-    cache: "reports/governance/arch-roadmap-sync-cache.json",
+    repo: process.env.GITHUB_REPOSITORY || 'Agroasys/Cotsel',
+    out: 'reports/governance/arch-roadmap-sync.json',
+    patch: 'reports/governance/arch-roadmap-sync.patch',
+    cache: 'reports/governance/arch-roadmap-sync-cache.json',
     offline: false,
     write: false,
     normalizeProgress: false,
@@ -33,76 +33,76 @@ function parseArgs(argv) {
 
   for (let index = 2; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--offline") {
+    if (arg === '--offline') {
       args.offline = true;
       continue;
     }
-    if (arg === "--write") {
+    if (arg === '--write') {
       args.write = true;
       continue;
     }
-    if (arg === "--normalize-progress") {
+    if (arg === '--normalize-progress') {
       args.normalizeProgress = true;
       continue;
     }
-    if (arg === "--write-gate-issues") {
+    if (arg === '--write-gate-issues') {
       args.writeGateIssues = true;
       continue;
     }
-    if (arg === "--apply") {
+    if (arg === '--apply') {
       args.apply = true;
       continue;
     }
-    if (arg.startsWith("--matrix=")) {
-      args.matrix = arg.slice("--matrix=".length);
+    if (arg.startsWith('--matrix=')) {
+      args.matrix = arg.slice('--matrix='.length);
       continue;
     }
-    if (arg === "--matrix" && argv[index + 1]) {
+    if (arg === '--matrix' && argv[index + 1]) {
       args.matrix = argv[index + 1];
       index += 1;
       continue;
     }
-    if (arg.startsWith("--repo=")) {
-      args.repo = arg.slice("--repo=".length);
+    if (arg.startsWith('--repo=')) {
+      args.repo = arg.slice('--repo='.length);
       continue;
     }
-    if (arg === "--repo" && argv[index + 1]) {
+    if (arg === '--repo' && argv[index + 1]) {
       args.repo = argv[index + 1];
       index += 1;
       continue;
     }
-    if (arg.startsWith("--out=")) {
-      args.out = arg.slice("--out=".length);
+    if (arg.startsWith('--out=')) {
+      args.out = arg.slice('--out='.length);
       continue;
     }
-    if (arg === "--out" && argv[index + 1]) {
+    if (arg === '--out' && argv[index + 1]) {
       args.out = argv[index + 1];
       index += 1;
       continue;
     }
-    if (arg.startsWith("--patch=")) {
-      args.patch = arg.slice("--patch=".length);
+    if (arg.startsWith('--patch=')) {
+      args.patch = arg.slice('--patch='.length);
       continue;
     }
-    if (arg === "--patch" && argv[index + 1]) {
+    if (arg === '--patch' && argv[index + 1]) {
       args.patch = argv[index + 1];
       index += 1;
       continue;
     }
-    if (arg.startsWith("--cache=")) {
-      args.cache = arg.slice("--cache=".length);
+    if (arg.startsWith('--cache=')) {
+      args.cache = arg.slice('--cache='.length);
       continue;
     }
-    if (arg === "--cache" && argv[index + 1]) {
+    if (arg === '--cache' && argv[index + 1]) {
       args.cache = argv[index + 1];
       index += 1;
       continue;
     }
-    if (arg.startsWith("--snapshot-date=")) {
-      args.snapshotDate = arg.slice("--snapshot-date=".length);
+    if (arg.startsWith('--snapshot-date=')) {
+      args.snapshotDate = arg.slice('--snapshot-date='.length);
       continue;
     }
-    if (arg === "--snapshot-date" && argv[index + 1]) {
+    if (arg === '--snapshot-date' && argv[index + 1]) {
       args.snapshotDate = argv[index + 1];
       index += 1;
       continue;
@@ -114,7 +114,7 @@ function parseArgs(argv) {
     throw new Error(`invalid --snapshot-date value: ${args.snapshotDate}`);
   }
   if (args.apply && !args.writeGateIssues) {
-    throw new Error("--apply requires --write-gate-issues");
+    throw new Error('--apply requires --write-gate-issues');
   }
 
   return args;
@@ -133,59 +133,61 @@ function isIsoDate(value) {
 
 function parseRow(line) {
   const trimmed = line.trim();
-  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) {
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) {
     return null;
   }
   return trimmed
     .slice(1, -1)
-    .split("|")
+    .split('|')
     .map((value) => value.trim());
 }
 
 function parseIssueNumbers(text) {
   const issues = [];
   const regex = /#(\d+)/gu;
-  for (const match of String(text || "").matchAll(regex)) {
+  for (const match of String(text || '').matchAll(regex)) {
     issues.push(Number(match[1]));
   }
   return Array.from(new Set(issues)).sort((a, b) => a - b);
 }
 
 function formatRow(cells) {
-  return `| ${cells.join(" | ")} |`;
+  return `| ${cells.join(' | ')} |`;
 }
 
 function parseComponentTable(markdown) {
   const lines = markdown.split(/\r?\n/u);
-  const mappingIndex = lines.findIndex((line) => line.trim() === "## Component Mapping");
+  const mappingIndex = lines.findIndex((line) => line.trim() === '## Component Mapping');
   if (mappingIndex < 0) {
     throw new Error('missing "## Component Mapping" section');
   }
 
-  const snapshotIndex = lines.findIndex((line) => /^Snapshot date:\s*\d{4}-\d{2}-\d{2}$/.test(line.trim()));
+  const snapshotIndex = lines.findIndex((line) =>
+    /^Snapshot date:\s*\d{4}-\d{2}-\d{2}$/.test(line.trim()),
+  );
   if (snapshotIndex < 0) {
     throw new Error("matrix is missing 'Snapshot date: YYYY-MM-DD'");
   }
-  const snapshotDate = lines[snapshotIndex].trim().replace(/^Snapshot date:\s*/u, "");
+  const snapshotDate = lines[snapshotIndex].trim().replace(/^Snapshot date:\s*/u, '');
   if (!isIsoDate(snapshotDate)) {
     throw new Error(`invalid matrix snapshot date: ${snapshotDate}`);
   }
 
   let tableStart = -1;
   for (let index = mappingIndex + 1; index < lines.length; index += 1) {
-    if (lines[index].trim().startsWith("|")) {
+    if (lines[index].trim().startsWith('|')) {
       tableStart = index;
       break;
     }
   }
   if (tableStart < 0 || tableStart + 1 >= lines.length) {
-    throw new Error("component mapping table header not found");
+    throw new Error('component mapping table header not found');
   }
 
   const header = parseRow(lines[tableStart]);
   const separator = parseRow(lines[tableStart + 1]);
   if (!header || !separator || header.length !== separator.length) {
-    throw new Error("invalid component mapping table header");
+    throw new Error('invalid component mapping table header');
   }
 
   const rows = [];
@@ -202,23 +204,23 @@ function parseComponentTable(markdown) {
       line: index + 1,
       index,
       cells: values.slice(),
-      Component: "",
-      Status: "",
-      LastRefreshed: "",
-      RoadmapIssues: "",
+      Component: '',
+      Status: '',
+      LastRefreshed: '',
+      RoadmapIssues: '',
       issueNumbers: [],
     };
 
     for (let column = 0; column < header.length; column += 1) {
       const name = header[column];
       const value = values[column];
-      if (name === "Component") {
+      if (name === 'Component') {
         row.Component = value;
-      } else if (name === "Status") {
+      } else if (name === 'Status') {
         row.Status = value;
-      } else if (name === "Last Refreshed") {
+      } else if (name === 'Last Refreshed') {
         row.LastRefreshed = value;
-      } else if (name === "Roadmap Issue(s)") {
+      } else if (name === 'Roadmap Issue(s)') {
         row.RoadmapIssues = value;
       }
     }
@@ -245,7 +247,7 @@ function parseComponentTable(markdown) {
 // Issue fetch/cache helpers
 // ---------------------------------------------------------------------------
 function getToken() {
-  return process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
+  return process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '';
 }
 
 function sleep(ms) {
@@ -259,10 +261,10 @@ async function fetchIssue(repo, issueNumber, token) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const response = await fetch(url, {
       headers: {
-        Accept: "application/vnd.github+json",
+        Accept: 'application/vnd.github+json',
         Authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "agroasys-arch-roadmap-sync",
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'agroasys-arch-roadmap-sync',
       },
     });
 
@@ -271,7 +273,7 @@ async function fetchIssue(repo, issueNumber, token) {
       return {
         number: issue.number,
         state: issue.state,
-        body: issue.body || "",
+        body: issue.body || '',
         url: issue.html_url,
       };
     }
@@ -279,7 +281,9 @@ async function fetchIssue(repo, issueNumber, token) {
     const body = await response.text();
     const retryable = response.status >= 500 || response.status === 429;
     if (!retryable || attempt === maxAttempts) {
-      throw new Error(`github issue fetch failed (#${issueNumber}): http ${response.status} ${body}`);
+      throw new Error(
+        `github issue fetch failed (#${issueNumber}): http ${response.status} ${body}`,
+      );
     }
 
     const delayMs = Math.min(1000 * 2 ** (attempt - 1), 8000);
@@ -300,7 +304,7 @@ function saveIssueCache(cachePath, repo, issueMap) {
     issues: Array.from(issueMap.values()).sort((a, b) => a.number - b.number),
   };
   fs.mkdirSync(path.dirname(cachePath), { recursive: true });
-  fs.writeFileSync(cachePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  fs.writeFileSync(cachePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 }
 
 function loadIssueCache(cachePath) {
@@ -309,28 +313,28 @@ function loadIssueCache(cachePath) {
       `offline cache not found: ${cachePath}. Run without --offline once to populate cache.`,
     );
   }
-  const payload = JSON.parse(fs.readFileSync(cachePath, "utf8"));
+  const payload = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
   const issues = new Map();
 
   if (Array.isArray(payload.issues)) {
     for (const issue of payload.issues) {
       issues.set(Number(issue.number), {
         number: Number(issue.number),
-        state: String(issue.state || ""),
-        body: String(issue.body || ""),
-        url: String(issue.url || ""),
+        state: String(issue.state || ''),
+        body: String(issue.body || ''),
+        url: String(issue.url || ''),
       });
     }
     return issues;
   }
 
-  if (payload.issues && typeof payload.issues === "object") {
+  if (payload.issues && typeof payload.issues === 'object') {
     for (const [key, issue] of Object.entries(payload.issues)) {
       issues.set(Number(key), {
         number: Number(key),
-        state: String(issue.state || ""),
-        body: String(issue.body || ""),
-        url: String(issue.url || ""),
+        state: String(issue.state || ''),
+        body: String(issue.body || ''),
+        url: String(issue.url || ''),
       });
     }
     return issues;
@@ -340,24 +344,24 @@ function loadIssueCache(cachePath) {
 }
 
 function parseLastSynchronizedDate(issueBody) {
-  const match = String(issueBody || "").match(/Last synchronized:\s*(\d{4}-\d{2}-\d{2})/u);
+  const match = String(issueBody || '').match(/Last synchronized:\s*(\d{4}-\d{2}-\d{2})/u);
   return match ? match[1] : null;
 }
 
 function syncGateIssueBody(issueBody, snapshotDate) {
-  const current = String(issueBody || "");
+  const current = String(issueBody || '');
   const targetLine = `Last synchronized: ${snapshotDate}`;
   let next = current;
 
   if (/Last synchronized:\s*\d{4}-\d{2}-\d{2}/u.test(next)) {
     next = next.replace(/Last synchronized:\s*\d{4}-\d{2}-\d{2}/u, targetLine);
   } else {
-    const suffix = next.endsWith("\n") ? "" : "\n";
+    const suffix = next.endsWith('\n') ? '' : '\n';
     next = `${next}${suffix}\n${targetLine}\n`;
   }
 
   if (!next.includes(MATRIX_PATH_REFERENCE)) {
-    const suffix = next.endsWith("\n") ? "" : "\n";
+    const suffix = next.endsWith('\n') ? '' : '\n';
     next = `${next}${suffix}\nSource matrix: ${MATRIX_PATH_REFERENCE}\n`;
   }
 
@@ -366,13 +370,13 @@ function syncGateIssueBody(issueBody, snapshotDate) {
 
 async function patchIssueBody(repo, issueNumber, body, token) {
   const response = await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
-    method: "PATCH",
+    method: 'PATCH',
     headers: {
-      Accept: "application/vnd.github+json",
+      Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": "agroasys-arch-roadmap-sync",
-      "Content-Type": "application/json",
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'agroasys-arch-roadmap-sync',
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({ body }),
   });
@@ -386,19 +390,19 @@ async function patchIssueBody(repo, issueNumber, body, token) {
 function buildUnifiedDiff(originalPath, updatedContent) {
   const tempPath = path.join(
     os.tmpdir(),
-    `arch-roadmap-sync-${Date.now()}-${crypto.randomBytes(8).toString("hex")}.md`,
+    `arch-roadmap-sync-${Date.now()}-${crypto.randomBytes(8).toString('hex')}.md`,
   );
-  fs.writeFileSync(tempPath, updatedContent, "utf8");
-  const diff = spawnSync("diff", ["-u", originalPath, tempPath], { encoding: "utf8" });
+  fs.writeFileSync(tempPath, updatedContent, 'utf8');
+  const diff = spawnSync('diff', ['-u', originalPath, tempPath], { encoding: 'utf8' });
   fs.rmSync(tempPath, { force: true });
 
   if (diff.status === 0) {
-    return "";
+    return '';
   }
   if (diff.status === 1) {
     return diff.stdout;
   }
-  throw new Error(`failed to generate patch: ${diff.stderr || "diff exited unexpectedly"}`);
+  throw new Error(`failed to generate patch: ${diff.stderr || 'diff exited unexpectedly'}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -413,12 +417,16 @@ function applyRowSync({
   effectiveSnapshotDate,
   normalizeProgress,
 }) {
-  row.cells[statusIndex] = "Done";
+  row.cells[statusIndex] = 'Done';
   row.cells[lastRefreshedIndex] = effectiveSnapshotDate;
   if (normalizeProgress) {
-    row.cells[percentIndex] = "100";
-    if (!String(row.cells[remainingGapIndex] || "").toLowerCase().startsWith("none")) {
-      row.cells[remainingGapIndex] = "None (auto-synced from closed issues)";
+    row.cells[percentIndex] = '100';
+    if (
+      !String(row.cells[remainingGapIndex] || '')
+        .toLowerCase()
+        .startsWith('none')
+    ) {
+      row.cells[remainingGapIndex] = 'None (auto-synced from closed issues)';
     }
   }
 }
@@ -435,20 +443,22 @@ function buildStaleRowProposal({
     component: row.Component,
     linkedIssues: row.issueNumbers.map((issueNumber) => `#${issueNumber}`),
     currentStatus: row.Status,
-    suggestedStatus: "Done",
+    suggestedStatus: 'Done',
     currentLastRefreshed: row.LastRefreshed,
     suggestedLastRefreshed: effectiveSnapshotDate,
-    reason: "all linked issues are closed",
+    reason: 'all linked issues are closed',
     normalizeProgress,
   };
 
   if (normalizeProgress) {
     proposal.currentPercentComplete = row.cells[percentIndex];
-    proposal.suggestedPercentComplete = "100";
+    proposal.suggestedPercentComplete = '100';
     proposal.currentRemainingGap = row.cells[remainingGapIndex];
-    proposal.suggestedRemainingGap = String(row.cells[remainingGapIndex] || "").toLowerCase().startsWith("none")
+    proposal.suggestedRemainingGap = String(row.cells[remainingGapIndex] || '')
+      .toLowerCase()
+      .startsWith('none')
       ? row.cells[remainingGapIndex]
-      : "None (auto-synced from closed issues)";
+      : 'None (auto-synced from closed issues)';
   }
 
   return proposal;
@@ -461,7 +471,7 @@ function buildGateIssueDrift(issueMap, effectiveSnapshotDate) {
     if (!issue) {
       gateIssueDrift.push({
         issue: `#${issueNumber}`,
-        error: "issue could not be loaded",
+        error: 'issue could not be loaded',
         needsSync: true,
       });
       continue;
@@ -488,13 +498,13 @@ async function main() {
     throw new Error(`matrix file not found: ${matrixPath}`);
   }
 
-  const matrixRaw = fs.readFileSync(matrixPath, "utf8");
-  const hadTrailingNewline = matrixRaw.endsWith("\n");
+  const matrixRaw = fs.readFileSync(matrixPath, 'utf8');
+  const hadTrailingNewline = matrixRaw.endsWith('\n');
   const table = parseComponentTable(matrixRaw);
-  const statusIndex = table.headerIndex.get("Status");
-  const lastRefreshedIndex = table.headerIndex.get("Last Refreshed");
-  const percentIndex = table.headerIndex.get("% Complete");
-  const remainingGapIndex = table.headerIndex.get("Remaining Gap");
+  const statusIndex = table.headerIndex.get('Status');
+  const lastRefreshedIndex = table.headerIndex.get('Last Refreshed');
+  const percentIndex = table.headerIndex.get('% Complete');
+  const remainingGapIndex = table.headerIndex.get('Remaining Gap');
   if (
     statusIndex === undefined ||
     lastRefreshedIndex === undefined ||
@@ -502,7 +512,7 @@ async function main() {
     remainingGapIndex === undefined
   ) {
     throw new Error(
-      "component mapping table is missing one or more required columns: Status, % Complete, Remaining Gap, Last Refreshed",
+      'component mapping table is missing one or more required columns: Status, % Complete, Remaining Gap, Last Refreshed',
     );
   }
 
@@ -520,7 +530,7 @@ async function main() {
     issueMap = loadIssueCache(path.resolve(args.cache));
   } else {
     if (!token) {
-      throw new Error("online mode requires GITHUB_TOKEN or GH_TOKEN (or use --offline)");
+      throw new Error('online mode requires GITHUB_TOKEN or GH_TOKEN (or use --offline)');
     }
     issueMap = new Map();
     const sortedIssues = Array.from(issueNumbers).sort((a, b) => a - b);
@@ -537,8 +547,10 @@ async function main() {
       continue;
     }
 
-    const allClosed = row.issueNumbers.every((issueNumber) => issueMap.get(issueNumber)?.state === "closed");
-    if (!allClosed || row.Status === "Done" || row.Status === "Out of Scope") {
+    const allClosed = row.issueNumbers.every(
+      (issueNumber) => issueMap.get(issueNumber)?.state === 'closed',
+    );
+    if (!allClosed || row.Status === 'Done' || row.Status === 'Out of Scope') {
       continue;
     }
 
@@ -569,18 +581,20 @@ async function main() {
     nextLines[table.snapshotIndex] = `Snapshot date: ${args.snapshotDate}`;
   }
 
-  const proposedMatrix = `${nextLines.join("\n")}${hadTrailingNewline ? "\n" : ""}`;
+  const proposedMatrix = `${nextLines.join('\n')}${hadTrailingNewline ? '\n' : ''}`;
   const matrixChanged = proposedMatrix !== matrixRaw;
   const patchPath = path.resolve(args.patch);
   fs.mkdirSync(path.dirname(patchPath), { recursive: true });
   fs.writeFileSync(
     patchPath,
-    matrixChanged ? buildUnifiedDiff(matrixPath, proposedMatrix) : "# No matrix content changes proposed.\n",
-    "utf8",
+    matrixChanged
+      ? buildUnifiedDiff(matrixPath, proposedMatrix)
+      : '# No matrix content changes proposed.\n',
+    'utf8',
   );
 
   if (args.write && matrixChanged) {
-    fs.writeFileSync(matrixPath, proposedMatrix, "utf8");
+    fs.writeFileSync(matrixPath, proposedMatrix, 'utf8');
   }
 
   const remainingStaleRows = args.write ? [] : staleRows;
@@ -595,17 +609,17 @@ async function main() {
       );
     }
     if (args.offline) {
-      throw new Error("--write-gate-issues requires online mode");
+      throw new Error('--write-gate-issues requires online mode');
     }
     if (!token) {
-      throw new Error("--write-gate-issues requires GITHUB_TOKEN or GH_TOKEN");
+      throw new Error('--write-gate-issues requires GITHUB_TOKEN or GH_TOKEN');
     }
 
     for (const gate of gateIssueDrift) {
       if (!gate.needsSync) {
         continue;
       }
-      const issueNumber = Number(gate.issue.replace("#", ""));
+      const issueNumber = Number(gate.issue.replace('#', ''));
       const issue = issueMap.get(issueNumber);
       if (!issue) {
         continue;
@@ -634,8 +648,7 @@ async function main() {
     }
   }
 
-  const baseRemediationCommand =
-    `GITHUB_TOKEN=\"$(gh auth token)\" node scripts/arch-roadmap-sync.mjs --repo \"${args.repo}\"`;
+  const baseRemediationCommand = `GITHUB_TOKEN="$(gh auth token)" node scripts/arch-roadmap-sync.mjs --repo "${args.repo}"`;
   const report = {
     generatedAt: new Date().toISOString(),
     repo: args.repo,
@@ -654,8 +667,8 @@ async function main() {
       snapshotDateChanged: Boolean(snapshotChanged),
       wroteChanges: Boolean(args.write && matrixChanged),
       syncMode: args.normalizeProgress
-        ? "status,last-refreshed,percent-complete,remaining-gap"
-        : "status,last-refreshed",
+        ? 'status,last-refreshed,percent-complete,remaining-gap'
+        : 'status,last-refreshed',
       normalizeProgress: args.normalizeProgress,
     },
     staleRows,
@@ -674,7 +687,7 @@ async function main() {
 
   const outPath = path.resolve(args.out);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  fs.writeFileSync(outPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
   console.log(`Architecture-roadmap sync report: ${outPath}`);
   console.log(`Matrix patch: ${patchPath}`);
@@ -682,10 +695,12 @@ async function main() {
   console.log(`Gate issues requiring sync: ${remainingGateIssueDrift.length}`);
 
   if (!report.pass) {
-    console.error("ERROR: architecture-roadmap drift remains.");
+    console.error('ERROR: architecture-roadmap drift remains.');
     if (remainingStaleRows.length > 0) {
       console.error(`ERROR: run ${report.remediation.writeMatrix}`);
-      console.error(`ERROR: optional progress normalization: ${report.remediation.writeMatrixNormalized}`);
+      console.error(
+        `ERROR: optional progress normalization: ${report.remediation.writeMatrixNormalized}`,
+      );
     }
     if (remainingGateIssueDrift.length > 0) {
       console.error(`ERROR: run ${report.remediation.writeGateIssues}`);
@@ -693,7 +708,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("Roadmap sync check passed");
+  console.log('Roadmap sync check passed');
 }
 
 main().catch((error) => {

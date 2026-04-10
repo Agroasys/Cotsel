@@ -17,12 +17,15 @@ jest.mock('../src/database/queries', () => ({
   consumeHmacNonce: jest.fn(),
 }));
 
-function createSignedHeaders(body: Record<string, unknown>, overrides?: {
-  timestamp?: string;
-  signature?: string;
-  nonce?: string;
-  authorization?: string;
-}) {
+function createSignedHeaders(
+  body: Record<string, unknown>,
+  overrides?: {
+    timestamp?: string;
+    signature?: string;
+    nonce?: string;
+    authorization?: string;
+  },
+) {
   const timestamp = overrides?.timestamp ?? Date.now().toString();
   const authorization = overrides?.authorization ?? 'Bearer test-api-key';
   const bodyText = JSON.stringify(body);

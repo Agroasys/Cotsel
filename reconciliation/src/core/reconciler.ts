@@ -4,7 +4,13 @@ import { OnchainClient } from '../blockchain/client';
 import { IndexerClient } from '../indexer/client';
 import { Logger } from '../utils/logger';
 import { classifyDrifts } from './classifier';
-import { completeRun, createRun, failRun, upsertDrift, upsertRunTradeScope } from '../database/queries';
+import {
+  completeRun,
+  createRun,
+  failRun,
+  upsertDrift,
+  upsertRunTradeScope,
+} from '../database/queries';
 import { DriftFinding, DriftSeverity, ReconcileMode, RunStats } from '../types';
 import { incrementDriftClassification } from '../metrics/counters';
 
@@ -14,6 +20,10 @@ const DEFAULT_SEVERITY_COUNTS: Record<DriftSeverity, number> = {
   MEDIUM: 0,
   LOW: 0,
 };
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function generateRunKey(mode: ReconcileMode): string {
   if (mode === 'DAEMON') {
@@ -130,8 +140,8 @@ export class ReconciliationService {
 
           try {
             onchainTrade = await this.onchainClient.getTrade(indexedTrade.tradeId);
-          } catch (error: any) {
-            onchainReadError = error?.message || 'Unknown on-chain read error';
+          } catch (error: unknown) {
+            onchainReadError = getErrorMessage(error);
           }
 
           const findings = classifyDrifts({
@@ -176,8 +186,8 @@ export class ReconciliationService {
       });
 
       return stats;
-    } catch (error: any) {
-      const message = error?.message || 'Unknown reconciliation failure';
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
       await failRun(runKey, message);
       Logger.error('Reconciliation run failed', { runKey, mode, error: message });
       throw error;
@@ -202,8 +212,8 @@ export class ReconciliationService {
     while (true) {
       try {
         await this.reconcileOnce('DAEMON');
-      } catch (error: any) {
-        Logger.error('Daemon run failed', { error: error?.message || error });
+      } catch (error: unknown) {
+        Logger.error('Daemon run failed', { error: getErrorMessage(error) });
       }
 
       await sleep(config.daemonIntervalMs);

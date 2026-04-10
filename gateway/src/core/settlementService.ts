@@ -19,7 +19,10 @@ import { validateExecutionTransition } from './settlementStateMachine';
 function parseIsoTimestamp(value: string, field: string): string {
   const timestamp = new Date(value);
   if (Number.isNaN(timestamp.getTime())) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be an ISO-8601 timestamp`, { field, value });
+    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be an ISO-8601 timestamp`, {
+      field,
+      value,
+    });
   }
 
   return timestamp.toISOString();
@@ -36,7 +39,10 @@ function requireNonEmpty(value: string, field: string): string {
 
 function validateAmount(value: number, field: string): number {
   if (!Number.isFinite(value) || value < 0) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be a non-negative number`, { field, value });
+    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be a non-negative number`, {
+      field,
+      value,
+    });
   }
 
   return value;
@@ -80,9 +86,10 @@ export class SettlementService {
       settlementChannel: requireNonEmpty(input.settlementChannel, 'settlementChannel'),
       displayCurrency: requireNonEmpty(input.displayCurrency, 'displayCurrency'),
       displayAmount: validateAmount(input.displayAmount, 'displayAmount'),
-      assetAmount: input.assetAmount === undefined || input.assetAmount === null
-        ? null
-        : validateAmount(input.assetAmount, 'assetAmount'),
+      assetAmount:
+        input.assetAmount === undefined || input.assetAmount === null
+          ? null
+          : validateAmount(input.assetAmount, 'assetAmount'),
       ricardianHash: input.ricardianHash?.trim() || null,
       externalReference: input.externalReference?.trim() || null,
       metadata: input.metadata ?? {},
@@ -96,7 +103,9 @@ export class SettlementService {
   }> {
     const handoff = await this.store.getHandoff(input.handoffId);
     if (!handoff) {
-      throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', { handoffId: input.handoffId });
+      throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', {
+        handoffId: input.handoffId,
+      });
     }
 
     validateExecutionTransition(handoff.executionStatus, input.executionStatus, input.eventType);
@@ -109,9 +118,14 @@ export class SettlementService {
 
     const updatedHandoff = await this.store.getHandoff(input.handoffId);
     if (!updatedHandoff) {
-      throw new GatewayError(500, 'INTERNAL_ERROR', 'Settlement handoff disappeared after event persistence', {
-        handoffId: input.handoffId,
-      });
+      throw new GatewayError(
+        500,
+        'INTERNAL_ERROR',
+        'Settlement handoff disappeared after event persistence',
+        {
+          handoffId: input.handoffId,
+        },
+      );
     }
 
     let callbackDelivery: SettlementCallbackDeliveryRecord | null = null;
@@ -148,7 +162,10 @@ export class SettlementService {
     return this.store.listExecutionEvents(requireNonEmpty(handoffId, 'handoffId'));
   }
 
-  buildCallbackPayload(handoff: SettlementHandoffRecord, event: SettlementExecutionEventRecord): SettlementCallbackPayload {
+  buildCallbackPayload(
+    handoff: SettlementHandoffRecord,
+    event: SettlementExecutionEventRecord,
+  ): SettlementCallbackPayload {
     return {
       eventId: event.eventId,
       handoffId: handoff.handoffId,
@@ -176,9 +193,11 @@ export class SettlementService {
   }
 
   private shouldQueueCallback(): boolean {
-    return this.config.settlementCallbackEnabled
-      && Boolean(this.config.settlementCallbackUrl)
-      && Boolean(this.config.settlementCallbackApiKey)
-      && Boolean(this.config.settlementCallbackApiSecret);
+    return (
+      this.config.settlementCallbackEnabled &&
+      Boolean(this.config.settlementCallbackUrl) &&
+      Boolean(this.config.settlementCallbackApiKey) &&
+      Boolean(this.config.settlementCallbackApiSecret)
+    );
   }
 }

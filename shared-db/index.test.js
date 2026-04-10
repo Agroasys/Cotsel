@@ -3,10 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const {
-  buildSessionOptions,
-  resolveMigrationCredentials,
-} = require('./index');
+const { buildSessionOptions, resolveMigrationCredentials } = require('./index');
 
 test('buildSessionOptions pins service session settings', () => {
   const options = buildSessionOptions({
