@@ -81,7 +81,7 @@ jobs:
 
       - name: Upload dashboard parity report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ci-report-dashboard-live-parity
           path: reports/dashboard-parity
@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload dashboard parity logs
         if: always() && (failure() || inputs.retain_logs_on_success)
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ci-report-dashboard-live-parity-logs
           path: reports/dashboard-parity/logs
@@ -97,7 +97,7 @@ jobs:
 
       - name: Upload Dash Playwright report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ci-report-dashboard-live-parity-playwright
           path: cotsel-dash/output/playwright/report
