@@ -54,7 +54,7 @@
   "dependencies": {
     "ethers": "^6.4.0",
     "@web3auth/modal": "^10.15.0",
-    "ox": "^0.14.10"
+    "ox": "^0.14.15"
   },
   "devDependencies": {
     "dotenv": "^17.4.1",
