@@ -44,6 +44,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-14T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 const listFixture = {
@@ -66,7 +69,6 @@ const listFixture = {
       callbackStatus: 'pending',
       providerStatus: 'dispatch_received',
       txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      extrinsicHash: null,
       latestEventType: 'submitted',
       latestEventDetail: 'Dispatch accepted by settlement engine.',
       latestEventAt: '2026-03-14T09:15:00.000Z',
@@ -86,7 +88,6 @@ const listFixture = {
         callbackStatus: 'pending',
         providerStatus: 'dispatch_received',
         txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        extrinsicHash: null,
         externalReference: 'EXT-1',
         latestEventType: 'submitted',
         latestEventDetail: 'Dispatch accepted by settlement engine.',
@@ -121,7 +122,6 @@ const detailFixture = {
       reconciliationStatus: 'pending',
       providerStatus: 'dispatch_received',
       txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      extrinsicHash: null,
       detail: 'Dispatch accepted by settlement engine.',
       metadata: { queue: 'primary' },
       observedAt: '2026-03-14T09:15:00.000Z',
@@ -138,7 +138,10 @@ const detailFixture = {
   },
 };
 
-async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<ReconciliationReadReader>) {
+async function startServer(
+  role: 'admin' | 'buyer' | null,
+  overrides?: Partial<ReconciliationReadReader>,
+) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
       if (role === null) {
@@ -158,7 +161,7 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<R
 
   const reconciliationReadService: ReconciliationReadReader = {
     listReconciliation: jest.fn().mockResolvedValue(listFixture),
-    getReconciliationHandoff: jest.fn().mockImplementation(async (handoffId: string) => (
+    getReconciliationHandoff: jest.fn().mockImplementation(async (handoffId: string) =>
       handoffId === 'sth-1'
         ? detailFixture
         : {
@@ -170,17 +173,19 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<R
               queriedAt: '2026-03-14T09:16:00.000Z',
               available: true,
             },
-          }
-    )),
+          },
+    ),
     ...overrides,
   };
 
   const router = Router();
-  router.use(createReconciliationRouter({
-    authSessionClient,
-    config,
-    reconciliationReadService,
-  }));
+  router.use(
+    createReconciliationRouter({
+      authSessionClient,
+      config,
+      reconciliationReadService,
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -195,8 +200,14 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<R
 
 describe('gateway reconciliation routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateList = createSchemaValidator(spec, '#/components/schemas/ReconciliationListResponse');
-  const validateDetail = createSchemaValidator(spec, '#/components/schemas/ReconciliationDetailResponse');
+  const validateList = createSchemaValidator(
+    spec,
+    '#/components/schemas/ReconciliationListResponse',
+  );
+  const validateDetail = createSchemaValidator(
+    spec,
+    '#/components/schemas/ReconciliationDetailResponse',
+  );
 
   test('OpenAPI spec exposes reconciliation read endpoints', () => {
     expect(hasOperation(spec, 'get', '/reconciliation')).toBe(true);
@@ -205,17 +216,14 @@ describe('gateway reconciliation routes contract', () => {
 
   test('GET /reconciliation returns schema-valid records', async () => {
     const app = await startServer('admin');
-    const response = await sendInProcessRequest(
-      app,
-      {
-        method: 'GET',
-        path: '/api/dashboard-gateway/v1/reconciliation?tradeId=TRD-9001&reconciliationStatus=pending&executionStatus=submitted&limit=20&offset=0',
-        headers: {
-          authorization: 'Bearer sess-admin',
-          'x-request-id': 'req-reconciliation-list',
-        },
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/reconciliation?tradeId=TRD-9001&reconciliationStatus=pending&executionStatus=submitted&limit=20&offset=0',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'x-request-id': 'req-reconciliation-list',
       },
-    );
+    });
     const payload = response.json<{ data: { items: Array<{ handoffId: string }> } }>();
 
     expect(response.status).toBe(200);
@@ -268,7 +276,9 @@ describe('gateway reconciliation routes contract', () => {
       path: '/api/dashboard-gateway/v1/reconciliation',
       headers: { authorization: 'Bearer sess-admin' },
     });
-    const payload = response.json<{ data: { freshness: { available: boolean; degradedReason?: string } } }>();
+    const payload = response.json<{
+      data: { freshness: { available: boolean; degradedReason?: string } };
+    }>();
 
     expect(response.status).toBe(200);
     expect(validateList(payload)).toBe(true);

@@ -15,6 +15,8 @@ export interface ReconciliationConfig {
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbMigrationUser?: string;
+  dbMigrationPassword?: string;
   rpcUrl: string;
   rpcFallbackUrls: string[];
   chainId: number;
@@ -78,7 +80,10 @@ function envUrl(name: string): string {
   }
 
   assert(
-    parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'ws:' || parsed.protocol === 'wss:',
+    parsed.protocol === 'http:' ||
+      parsed.protocol === 'https:' ||
+      parsed.protocol === 'ws:' ||
+      parsed.protocol === 'wss:',
     `${name} must use http, https, ws, or wss protocol`,
   );
 
@@ -117,14 +122,20 @@ export function loadConfig(): ReconciliationConfig {
   const notificationsWebhookUrl = process.env.NOTIFICATIONS_WEBHOOK_URL;
 
   if (notificationsEnabled) {
-    assert(notificationsWebhookUrl, 'NOTIFICATIONS_WEBHOOK_URL is required when NOTIFICATIONS_ENABLED=true');
+    assert(
+      notificationsWebhookUrl,
+      'NOTIFICATIONS_WEBHOOK_URL is required when NOTIFICATIONS_ENABLED=true',
+    );
   }
 
   const indexerGraphqlUrl = envUrl('INDEXER_GRAPHQL_URL');
   const indexerGraphqlTimeoutMinMs = envNumber('INDEXER_GQL_TIMEOUT_MIN_MS', 1000);
   const indexerGraphqlTimeoutMaxMs = envNumber('INDEXER_GQL_TIMEOUT_MAX_MS', 60000);
   const indexerGraphqlRequestTimeoutMs = envNumber('INDEXER_GQL_TIMEOUT_MS', 10000);
-  const enforceContainerSafeIndexerUrl = envBool('RECONCILIATION_REQUIRE_CONTAINER_SAFE_INDEXER_URL', false);
+  const enforceContainerSafeIndexerUrl = envBool(
+    'RECONCILIATION_REQUIRE_CONTAINER_SAFE_INDEXER_URL',
+    false,
+  );
 
   if (enforceContainerSafeIndexerUrl) {
     assertContainerSafeIndexerUrl(indexerGraphqlUrl, 'INDEXER_GRAPHQL_URL');
@@ -162,11 +173,19 @@ export function loadConfig(): ReconciliationConfig {
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
+    dbMigrationUser: optionalEnv('DB_MIGRATION_USER'),
+    dbMigrationPassword: optionalEnv('DB_MIGRATION_PASSWORD'),
     rpcUrl: runtime.rpcUrl,
     rpcFallbackUrls: runtime.rpcFallbackUrls,
     chainId: runtime.chainId,
-    escrowAddress: normalizeAddressOrThrow(runtime.escrowAddress ?? envAddress('ESCROW_ADDRESS'), 'ESCROW_ADDRESS'),
-    usdcAddress: normalizeAddressOrThrow(runtime.usdcAddress ?? envAddress('USDC_ADDRESS'), 'USDC_ADDRESS'),
+    escrowAddress: normalizeAddressOrThrow(
+      runtime.escrowAddress ?? envAddress('ESCROW_ADDRESS'),
+      'ESCROW_ADDRESS',
+    ),
+    usdcAddress: normalizeAddressOrThrow(
+      runtime.usdcAddress ?? envAddress('USDC_ADDRESS'),
+      'USDC_ADDRESS',
+    ),
     settlementRuntimeKey: runtime.runtimeKey,
     networkName: runtime.networkName,
     explorerBaseUrl: runtime.explorerBaseUrl,
@@ -183,7 +202,15 @@ export function loadConfig(): ReconciliationConfig {
   assert(config.batchSize > 0, 'RECONCILIATION_BATCH_SIZE must be > 0');
   assert(config.maxTradesPerRun > 0, 'RECONCILIATION_MAX_TRADES_PER_RUN must be > 0');
   assert(config.notificationsCooldownMs >= 0, 'NOTIFICATIONS_COOLDOWN_MS must be >= 0');
-  assert(config.notificationsRequestTimeoutMs >= 1000, 'NOTIFICATIONS_REQUEST_TIMEOUT_MS must be >= 1000');
+  assert(
+    config.notificationsRequestTimeoutMs >= 1000,
+    'NOTIFICATIONS_REQUEST_TIMEOUT_MS must be >= 1000',
+  );
+  assert(
+    (!config.dbMigrationUser && !config.dbMigrationPassword) ||
+      (config.dbMigrationUser && config.dbMigrationPassword),
+    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+  );
 
   return config;
 }

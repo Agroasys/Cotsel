@@ -3,7 +3,7 @@
  */
 export const BASE_SETTLEMENT_RUNTIME_KEYS = ['base-sepolia', 'base-mainnet'] as const;
 
-export type BaseSettlementRuntimeKey = typeof BASE_SETTLEMENT_RUNTIME_KEYS[number];
+export type BaseSettlementRuntimeKey = (typeof BASE_SETTLEMENT_RUNTIME_KEYS)[number];
 export type SettlementRuntimeKey = BaseSettlementRuntimeKey | 'custom';
 
 export interface BaseSettlementRuntimeDefinition {
@@ -37,26 +37,27 @@ export interface ResolvedSettlementRuntime {
   usdcAddress: string | null;
 }
 
-const BASE_SETTLEMENT_RUNTIMES: Record<BaseSettlementRuntimeKey, BaseSettlementRuntimeDefinition> = {
-  'base-sepolia': {
-    key: 'base-sepolia',
-    networkName: 'Base Sepolia',
-    chainId: 84532,
-    rpcUrl: 'https://sepolia.base.org',
-    rpcFallbackUrls: [],
-    explorerBaseUrl: 'https://sepolia-explorer.base.org/tx/',
-    usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-  },
-  'base-mainnet': {
-    key: 'base-mainnet',
-    networkName: 'Base Mainnet',
-    chainId: 8453,
-    rpcUrl: 'https://mainnet.base.org',
-    rpcFallbackUrls: [],
-    explorerBaseUrl: 'https://base.blockscout.com/tx/',
-    usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-  },
-};
+const BASE_SETTLEMENT_RUNTIMES: Record<BaseSettlementRuntimeKey, BaseSettlementRuntimeDefinition> =
+  {
+    'base-sepolia': {
+      key: 'base-sepolia',
+      networkName: 'Base Sepolia',
+      chainId: 84532,
+      rpcUrl: 'https://sepolia.base.org',
+      rpcFallbackUrls: [],
+      explorerBaseUrl: 'https://sepolia-explorer.base.org/tx/',
+      usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+    },
+    'base-mainnet': {
+      key: 'base-mainnet',
+      networkName: 'Base Mainnet',
+      chainId: 8453,
+      rpcUrl: 'https://mainnet.base.org',
+      rpcFallbackUrls: [],
+      explorerBaseUrl: 'https://base.blockscout.com/tx/',
+      usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    },
+  };
 
 function normalizeOptionalUrl(value?: string | null): string | null {
   const normalized = value?.trim();
@@ -103,10 +104,14 @@ function findBaseRuntimeByChainId(chainId?: number | null): BaseSettlementRuntim
     return null;
   }
 
-  return Object.values(BASE_SETTLEMENT_RUNTIMES).find((runtime) => runtime.chainId === chainId) ?? null;
+  return (
+    Object.values(BASE_SETTLEMENT_RUNTIMES).find((runtime) => runtime.chainId === chainId) ?? null
+  );
 }
 
-export function getBaseSettlementRuntime(key: BaseSettlementRuntimeKey): BaseSettlementRuntimeDefinition {
+export function getBaseSettlementRuntime(
+  key: BaseSettlementRuntimeKey,
+): BaseSettlementRuntimeDefinition {
   return BASE_SETTLEMENT_RUNTIMES[key];
 }
 
@@ -127,7 +132,9 @@ export function buildExplorerTxUrl(
   return `${baseUrl}${normalizedTxHash}`;
 }
 
-export function resolveSettlementRuntime(input: ResolveSettlementRuntimeInput): ResolvedSettlementRuntime {
+export function resolveSettlementRuntime(
+  input: ResolveSettlementRuntimeInput,
+): ResolvedSettlementRuntime {
   const explicitRuntimeKey = input.runtimeKey?.trim().toLowerCase() || null;
   const normalizedRpcUrl = normalizeOptionalUrl(input.rpcUrl);
   const normalizedFallbackUrls = normalizeUrlList(input.rpcFallbackUrls);
@@ -161,7 +168,8 @@ export function resolveSettlementRuntime(input: ResolveSettlementRuntimeInput): 
       networkName: baseRuntime.networkName,
       chainId: baseRuntime.chainId,
       rpcUrl: normalizedRpcUrl ?? baseRuntime.rpcUrl,
-      rpcFallbackUrls: normalizedFallbackUrls.length > 0 ? normalizedFallbackUrls : baseRuntime.rpcFallbackUrls,
+      rpcFallbackUrls:
+        normalizedFallbackUrls.length > 0 ? normalizedFallbackUrls : baseRuntime.rpcFallbackUrls,
       explorerBaseUrl: normalizedExplorerBaseUrl ?? baseRuntime.explorerBaseUrl,
       escrowAddress: normalizedEscrowAddress,
       usdcAddress: normalizedUsdcAddress ?? baseRuntime.usdcAddress,

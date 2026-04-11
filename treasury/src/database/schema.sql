@@ -110,3 +110,92 @@ CREATE INDEX IF NOT EXISTS idx_fiat_deposit_ledger_observed ON fiat_deposit_refe
 CREATE INDEX IF NOT EXISTS idx_fiat_deposit_state_observed ON fiat_deposit_references(deposit_state, observed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_fiat_deposit_event_reference_created ON fiat_deposit_events(fiat_deposit_reference_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bank_payout_confirmation_ledger_confirmed ON bank_payout_confirmations(ledger_entry_id, confirmed_at DESC);
+
+CREATE OR REPLACE FUNCTION current_app_service_name()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(current_setting('app.service_name', true), '');
+$$;
+
+DO $$
+DECLARE
+    runtime_user TEXT := NULLIF(current_setting('app.runtime_db_user', true), '');
+BEGIN
+    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM PUBLIC;
+
+    IF runtime_user IS NOT NULL THEN
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE treasury_ledger_entries TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE payout_lifecycle_events TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE treasury_ingestion_state TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE treasury_auth_nonces TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE fiat_deposit_references TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE fiat_deposit_events TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bank_payout_confirmations TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE treasury_ledger_entries_id_seq TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE payout_lifecycle_events_id_seq TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE fiat_deposit_references_id_seq TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE fiat_deposit_events_id_seq TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE bank_payout_confirmations_id_seq TO %I', runtime_user);
+    END IF;
+END $$;
+
+ALTER TABLE treasury_ledger_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE treasury_ledger_entries FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS treasury_ledger_entries_service_isolation ON treasury_ledger_entries;
+CREATE POLICY treasury_ledger_entries_service_isolation ON treasury_ledger_entries
+    FOR ALL
+    USING (current_app_service_name() = 'treasury')
+    WITH CHECK (current_app_service_name() = 'treasury');
+
+ALTER TABLE payout_lifecycle_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payout_lifecycle_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS payout_lifecycle_events_service_isolation ON payout_lifecycle_events;
+CREATE POLICY payout_lifecycle_events_service_isolation ON payout_lifecycle_events
+    FOR ALL
+    USING (current_app_service_name() = 'treasury')
+    WITH CHECK (current_app_service_name() = 'treasury');
+
+ALTER TABLE treasury_ingestion_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE treasury_ingestion_state FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS treasury_ingestion_state_service_isolation ON treasury_ingestion_state;
+CREATE POLICY treasury_ingestion_state_service_isolation ON treasury_ingestion_state
+    FOR ALL
+    USING (current_app_service_name() = 'treasury')
+    WITH CHECK (current_app_service_name() = 'treasury');
+
+ALTER TABLE treasury_auth_nonces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE treasury_auth_nonces FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS treasury_auth_nonces_service_isolation ON treasury_auth_nonces;
+CREATE POLICY treasury_auth_nonces_service_isolation ON treasury_auth_nonces
+    FOR ALL
+    USING (current_app_service_name() = 'treasury')
+    WITH CHECK (current_app_service_name() = 'treasury');
+
+ALTER TABLE fiat_deposit_references ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fiat_deposit_references FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS fiat_deposit_references_service_isolation ON fiat_deposit_references;
+CREATE POLICY fiat_deposit_references_service_isolation ON fiat_deposit_references
+    FOR ALL
+    USING (current_app_service_name() = 'treasury')
+    WITH CHECK (current_app_service_name() = 'treasury');
+
+ALTER TABLE fiat_deposit_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fiat_deposit_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS fiat_deposit_events_service_isolation ON fiat_deposit_events;
+CREATE POLICY fiat_deposit_events_service_isolation ON fiat_deposit_events
+    FOR ALL
+    USING (current_app_service_name() = 'treasury')
+    WITH CHECK (current_app_service_name() = 'treasury');
+
+ALTER TABLE bank_payout_confirmations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bank_payout_confirmations FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS bank_payout_confirmations_service_isolation ON bank_payout_confirmations;
+CREATE POLICY bank_payout_confirmations_service_isolation ON bank_payout_confirmations
+    FOR ALL
+    USING (current_app_service_name() = 'treasury')
+    WITH CHECK (current_app_service_name() = 'treasury');

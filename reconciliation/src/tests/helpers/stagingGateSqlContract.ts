@@ -47,7 +47,10 @@ function extractHeredocSql(script: string, config: SqlBlockConfig): string {
     throw new Error(`Unable to find heredoc terminator for ${config.label}`);
   }
 
-  const sql = lines.slice(startIndex + 1, endIndex).join('\n').trim();
+  const sql = lines
+    .slice(startIndex + 1, endIndex)
+    .join('\n')
+    .trim();
   if (!sql) {
     throw new Error(`Extracted SQL for ${config.label} is empty`);
   }
@@ -65,7 +68,9 @@ export function loadStagingGateScript(): string {
   return fs.readFileSync(gatePath, 'utf8');
 }
 
-export function loadStagingGateSqlContract(script = loadStagingGateScript()): StagingGateSqlContract {
+export function loadStagingGateSqlContract(
+  script = loadStagingGateScript(),
+): StagingGateSqlContract {
   try {
     return {
       runSummarySql: extractHeredocSql(script, RUN_SUMMARY_SQL_BLOCK),

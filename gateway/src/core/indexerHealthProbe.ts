@@ -43,7 +43,7 @@ export async function checkIndexerHealth(
       throw new Error(`Indexer GraphQL responded with HTTP ${response.status}`);
     }
 
-    const payload = await response.json() as IndexerHealthGraphQlResponse;
+    const payload = (await response.json()) as IndexerHealthGraphQlResponse;
 
     if (payload.errors?.length) {
       throw new Error(`Indexer GraphQL error: ${payload.errors[0].message}`);

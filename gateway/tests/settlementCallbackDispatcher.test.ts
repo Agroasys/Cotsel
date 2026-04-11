@@ -45,6 +45,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-11T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 describe('settlement callback dispatcher', () => {
@@ -169,7 +172,9 @@ describe('settlement callback dispatcher', () => {
       requestId: 'req-event-3a',
     });
 
-    const originalDelivery = (await settlementStore.getDueCallbackDeliveries(10, '2100-03-11T12:20:10.000Z'))[0];
+    const originalDelivery = (
+      await settlementStore.getDueCallbackDeliveries(10, '2100-03-11T12:20:10.000Z')
+    )[0];
     expect(originalDelivery).toBeDefined();
 
     await settlementService.recordExecutionEvent({

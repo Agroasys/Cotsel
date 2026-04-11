@@ -1,14 +1,8 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type {
-  ComplianceDecisionRecord,
-  ComplianceStore,
-} from './complianceStore';
-import type {
-  GovernanceActionRecord,
-  GovernanceActionStore,
-} from './governanceStore';
+import type { ComplianceDecisionRecord, ComplianceStore } from './complianceStore';
+import type { GovernanceActionRecord, GovernanceActionStore } from './governanceStore';
 import type { DashboardTradeSettlementRecord, TradeReadReader } from './tradeReadService';
 import type { SettlementStore } from './settlementStore';
 import type { RicardianClient, RicardianDocumentRecord } from './ricardianClient';
@@ -90,7 +84,13 @@ function degradedReason(error: unknown, fallback: string): string {
 }
 
 function combineDegradedReasons(reasons: Array<string | null | undefined>): string | undefined {
-  const values = [...new Set(reasons.filter((reason): reason is string => Boolean(reason?.trim())).map((reason) => reason.trim()))];
+  const values = [
+    ...new Set(
+      reasons
+        .filter((reason): reason is string => Boolean(reason?.trim()))
+        .map((reason) => reason.trim()),
+    ),
+  ];
   if (values.length === 0) {
     return undefined;
   }
@@ -164,13 +164,17 @@ export class EvidenceReadService implements EvidenceReadReader {
           ? settlementHandoff.ricardianHash.toLowerCase() === trade.ricardianHash.toLowerCase()
           : null;
       } catch (error) {
-        settlementLookupDegradedReason = degradedReason(error, 'Settlement handoff lookup is unavailable');
+        settlementLookupDegradedReason = degradedReason(
+          error,
+          'Settlement handoff lookup is unavailable',
+        );
       }
     }
 
     try {
       const document = await this.ricardianClient.getDocument(trade.ricardianHash);
-      const tradeHashMatchesDocument = document.hash.toLowerCase() === trade.ricardianHash.toLowerCase();
+      const tradeHashMatchesDocument =
+        document.hash.toLowerCase() === trade.ricardianHash.toLowerCase();
       const responseDegradedReason = combineDegradedReasons([settlementLookupDegradedReason]);
       const verificationStatus = responseDegradedReason
         ? 'unavailable'
@@ -233,7 +237,8 @@ export class EvidenceReadService implements EvidenceReadReader {
       readAllGovernanceActions(this.governanceActionStore, tradeId),
     ]);
 
-    const complianceDecisions = complianceResult.status === 'fulfilled' ? complianceResult.value : [];
+    const complianceDecisions =
+      complianceResult.status === 'fulfilled' ? complianceResult.value : [];
     const governanceActions = governanceResult.status === 'fulfilled' ? governanceResult.value : [];
     const responseDegradedReason = combineDegradedReasons([
       complianceResult.status === 'rejected'

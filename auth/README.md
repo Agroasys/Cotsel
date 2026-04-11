@@ -4,7 +4,15 @@ Non-custodial identity and session management for the Agroasys settlement protoc
 
 ## Responsibility
 
-This service currently manages a **wallet-signed compatibility session flow** for Cotsel-local integrations. In the Agroasys-integrated product model, Agroasys auth is the primary end-user identity authority and Cotsel auth becomes a compatibility or bridge layer until account-first session exchange replaces this legacy wallet-first contract.
+This service is the Cotsel session boundary.
+
+In the Agroasys-integrated production model:
+
+- Agroasys auth is the primary end-user identity authority
+- Cotsel auth exchanges trusted upstream identity for a Cotsel session
+- bearer session lifecycle stays in this service
+
+The older wallet-signature login path still exists only as a compatibility flow for local development and test environments. It is disabled by default outside those environments because the current challenge store is process-local and not horizontally safe.
 
 It is **separate** from `shared-auth`, which handles service-to-service HMAC authentication.
 
@@ -18,33 +26,50 @@ It is **separate** from `shared-auth`, which handles service-to-service HMAC aut
 ├── tsconfig.json
 ├── src
 │   ├── api
-│   │   ├── controller.ts       # Login / session HTTP handlers
-│   │   └── routes.ts           # Express router
-│   ├── config.ts               # Env-driven config
+│   │   ├── controller.ts                # Compatibility facade for split controllers
+│   │   ├── controllerSupport.ts
+│   │   ├── legacyWalletAuthController.ts
+│   │   ├── routes.ts                    # Express router
+│   │   └── sessionController.ts
+│   ├── config.ts                        # Env-driven config
 │   ├── core
-│   │   ├── challengeStore.ts   # In-memory one-time login nonces
-│   │   ├── profileStore.ts     # UserProfile store interface + Postgres impl
-│   │   ├── sessionService.ts   # login / refresh / revoke / resolve
-│   │   └── sessionStore.ts     # UserSession store interface + Postgres impl
+│   │   ├── challengeStore.ts            # In-memory one-time login nonces
+│   │   ├── profileStore.ts              # UserProfile store interface + Postgres impl
+│   │   ├── sessionService.ts            # Login / trusted issue / refresh / revoke / resolve
+│   │   └── sessionStore.ts              # UserSession store interface + Postgres impl
 │   ├── database
-│   │   ├── connection.ts       # pg Pool
-│   │   ├── migrations.ts       # schema.sql runner
-│   │   ├── queries.ts          # raw SQL helpers
-│   │   └── schema.sql          # user_profiles, user_sessions
+│   │   ├── connection.ts                # pg Pool
+│   │   ├── migrations.ts                # schema.sql runner
+│   │   ├── queries.ts                   # raw SQL helpers
+│   │   └── schema.sql                   # user_profiles, user_sessions, trusted nonces
 │   ├── metrics
-│   │   └── counters.ts         # In-process event counters
+│   │   └── counters.ts                  # In-process event counters
 │   ├── middleware
-│   │   └── middleware.ts       # Session Bearer middleware + role guard
-│   ├── server.ts               # Bootstrap
+│   │   └── middleware.ts                # Session bearer middleware + role guard
+│   ├── server.ts                        # Bootstrap
 │   └── utils
-│       └── logger.ts           # Structured JSON logger
+│       └── logger.ts                    # Structured JSON logger
 └── tests
     ├── controller.test.ts
     ├── middleware.test.ts
     └── sessionService.test.ts
 ```
 
-## Current Compatibility Identity Flow
+## Production Identity Flow
+
+```
+Agroasys platform
+  1. Authenticates the operator or admin
+  2. Calls POST /api/auth/v1/session/exchange/agroasys with trusted service auth
+         and the normalized identity payload
+         ← Cotsel issues { sessionId, expiresAt }
+  3. Browser or upstream service uses Authorization: Bearer <sessionId>
+  4. Cotsel session refresh / revoke / resolve stay local to this service
+```
+
+This is the primary production path.
+
+## Legacy Compatibility Flow
 
 ```
 Browser / signer-capable client
@@ -59,32 +84,32 @@ Browser / signer-capable client
   4. All subsequent calls carry: Authorization: Bearer <sessionId>
 ```
 
-This is a compatibility flow, not the target long-term product architecture for Agroasys-integrated deployments.
+This is not the target production architecture for Agroasys-integrated deployments. Treat it as development/test-only unless the challenge store is replaced with a horizontally safe persistent store.
 
 ## Session Lifecycle
 
-| Endpoint                          | Method | Auth required              |
-|-----------------------------------|--------|----------------------------|
-| `/api/auth/v1/challenge`          | GET    | None (rate-limited)        |
-| `/api/auth/v1/login`              | POST   | Wallet signature (ECDSA, compatibility path)   |
-| `/api/auth/v1/session`            | GET    | Bearer session token       |
-| `/api/auth/v1/session/refresh`    | POST   | Bearer session token       |
-| `/api/auth/v1/session/revoke`     | POST   | Bearer session token       |
-| `/api/auth/v1/health`             | GET    | None                       |
+| Endpoint                                 | Method | Auth required                                                                               |
+| ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------- |
+| `/api/auth/v1/challenge`                 | GET    | None, rate-limited, only when `LEGACY_WALLET_LOGIN_ENABLED=true` in `development` or `test` |
+| `/api/auth/v1/login`                     | POST   | Wallet signature compatibility flow, disabled outside `development` and `test`              |
+| `/api/auth/v1/session/exchange/agroasys` | POST   | Trusted upstream service auth                                                               |
+| `/api/auth/v1/session`                   | GET    | Bearer session token                                                                        |
+| `/api/auth/v1/session/refresh`           | POST   | Bearer session token                                                                        |
+| `/api/auth/v1/session/revoke`            | POST   | Bearer session token                                                                        |
+| `/api/auth/v1/health`                    | GET    | None                                                                                        |
 
-## Current Compatibility Role Model
+## Role Model
 
-| Role     | Identity source | Notes |
-|----------|----------------|-------|
-| `buyer`    | Wallet-backed compatibility session | Creates trades, opens disputes |
-| `supplier` | Wallet-backed compatibility session | Passive recipient |
-| `admin`    | Wallet-backed compatibility session | Governance |
-| `oracle`   | Service key     | Relayed by oracle service, not a user session |
+| Role       | Identity source                                          | Notes                                         |
+| ---------- | -------------------------------------------------------- | --------------------------------------------- |
+| `buyer`    | Trusted upstream session or compatibility wallet session | Creates trades, opens disputes                |
+| `supplier` | Trusted upstream session or compatibility wallet session | Passive recipient                             |
+| `admin`    | Trusted upstream session or compatibility wallet session | Governance                                    |
+| `oracle`   | Service key                                              | Relayed by oracle service, not a user session |
 
 ## Configuration
 
 See [`env/auth.env.example`](../env/auth.env.example) for all required variables.
-
 
 ## License
 

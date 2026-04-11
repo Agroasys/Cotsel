@@ -32,7 +32,12 @@ function runNpmLsJson() {
     });
   } catch (error) {
     // npm ls can return non-zero while still emitting parseable JSON.
-    if (error && typeof error === 'object' && 'stdout' in error && typeof error.stdout === 'string') {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'stdout' in error &&
+      typeof error.stdout === 'string'
+    ) {
       return error.stdout;
     }
     throw error;
@@ -43,10 +48,12 @@ function normalizeLicense(value) {
   if (!value) return 'UNKNOWN';
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) {
-    return value
-      .map((item) => (typeof item === 'string' ? item : item?.type))
-      .filter(Boolean)
-      .join(' OR ') || 'UNKNOWN';
+    return (
+      value
+        .map((item) => (typeof item === 'string' ? item : item?.type))
+        .filter(Boolean)
+        .join(' OR ') || 'UNKNOWN'
+    );
   }
   if (typeof value === 'object' && value.type) return String(value.type);
   return 'UNKNOWN';

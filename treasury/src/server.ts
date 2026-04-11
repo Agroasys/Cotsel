@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
 import { config } from './config';
 import { createRouter } from './api/routes';
 import { TreasuryController } from './api/controller';
@@ -10,6 +11,7 @@ import { Logger } from './utils/logger';
 import { TreasuryIngestionService } from './core/ingestion';
 import { createServiceAuthMiddleware } from './auth/serviceAuth';
 import { createTreasuryNonceStore } from './auth/nonceStore';
+import { treasuryRateLimitPolicy } from './httpSecurity';
 
 async function bootstrap(): Promise<void> {
   await testConnection();
@@ -37,23 +39,40 @@ async function bootstrap(): Promise<void> {
     lookupApiKey: (apiKey) => apiKeysById.get(apiKey),
     consumeNonce: nonceStore.consume,
   });
+  const requestRateLimiter = await createHttpRateLimiter({
+    enabled: config.rateLimitEnabled,
+    redisUrl: config.rateLimitRedisUrl,
+    nodeEnv: config.nodeEnv,
+    keyPrefix: 'treasury',
+    classifyRoute: treasuryRateLimitPolicy,
+    logger: Logger,
+  });
 
   app.use(helmet());
-  app.use(cors());
+  app.disable('x-powered-by');
+  app.use(
+    cors(
+      createCorsOptions({
+        allowedOrigins: config.corsAllowedOrigins,
+        allowNoOrigin: config.corsAllowNoOrigin,
+      }),
+    ),
+  );
   app.use(
     express.json({
       verify: (req, _res, buffer) => {
         (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
       },
-    })
+    }),
   );
 
   app.use(
     '/api/treasury/v1',
+    requestRateLimiter.middleware,
     createRouter(controller, {
       authMiddleware,
       readinessCheck: testConnection,
-    })
+    }),
   );
 
   app.listen(config.port, () => {
@@ -68,6 +87,7 @@ async function bootstrap(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     Logger.info('Shutting down treasury service', { signal });
     await nonceStore.close();
+    await requestRateLimiter.close();
     await closeConnection();
     process.exit(0);
   };
@@ -81,9 +101,9 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-bootstrap().catch(async (error: any) => {
+bootstrap().catch(async (error: unknown) => {
   Logger.error('Treasury bootstrap failed', {
-    error: error?.message || error,
+    error: error instanceof Error ? error.message : error,
   });
 
   await closeConnection();

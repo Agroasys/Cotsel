@@ -124,7 +124,11 @@ describe('treasury replay protection', () => {
 
     const secondResponse = createMockResponse();
     const secondNext = jest.fn() as NextFunction;
-    await middleware(createSignedRequest({ nonce: 'dup-nonce' }).request, secondResponse, secondNext);
+    await middleware(
+      createSignedRequest({ nonce: 'dup-nonce' }).request,
+      secondResponse,
+      secondNext,
+    );
 
     expect(firstNext).toHaveBeenCalledTimes(1);
     expect(secondNext).not.toHaveBeenCalled();
@@ -146,17 +150,23 @@ describe('treasury replay protection', () => {
       Array.from({ length: 10 }, async () => {
         const response = createMockResponse();
         const next = jest.fn();
-        await middleware(createSignedRequest({ nonce: 'parallel-nonce' }).request, response, next as unknown as NextFunction);
+        await middleware(
+          createSignedRequest({ nonce: 'parallel-nonce' }).request,
+          response,
+          next as unknown as NextFunction,
+        );
 
         return {
           accepted: next.mock.calls.length === 1,
           status: response.status.mock.calls[0]?.[0],
         };
-      })
+      }),
     );
 
     const acceptedCount = outcomes.filter((entry) => entry.accepted).length;
-    const replayRejectedCount = outcomes.filter((entry) => !entry.accepted && entry.status === 401).length;
+    const replayRejectedCount = outcomes.filter(
+      (entry) => !entry.accepted && entry.status === 401,
+    ).length;
 
     expect(acceptedCount).toBe(1);
     expect(replayRejectedCount).toBe(9);
@@ -182,12 +192,20 @@ describe('treasury replay protection', () => {
     now = 1700000009;
     const beforeExpiryResponse = createMockResponse();
     const beforeExpiryNext = jest.fn() as NextFunction;
-    await middleware(createSignedRequest({ nonce, timestamp: '1700000009' }).request, beforeExpiryResponse, beforeExpiryNext);
+    await middleware(
+      createSignedRequest({ nonce, timestamp: '1700000009' }).request,
+      beforeExpiryResponse,
+      beforeExpiryNext,
+    );
 
     now = 1700000010;
     const atExpiryResponse = createMockResponse();
     const atExpiryNext = jest.fn() as NextFunction;
-    await middleware(createSignedRequest({ nonce, timestamp: '1700000010' }).request, atExpiryResponse, atExpiryNext);
+    await middleware(
+      createSignedRequest({ nonce, timestamp: '1700000010' }).request,
+      atExpiryResponse,
+      atExpiryNext,
+    );
 
     expect(firstNext).toHaveBeenCalledTimes(1);
     expect(beforeExpiryNext).not.toHaveBeenCalled();
@@ -210,11 +228,19 @@ describe('treasury replay protection', () => {
 
     const responseA = createMockResponse();
     const nextA = jest.fn() as NextFunction;
-    await middleware(createSignedRequest({ apiKey: 'svc-a', secret: 'secret-a', nonce }).request, responseA, nextA);
+    await middleware(
+      createSignedRequest({ apiKey: 'svc-a', secret: 'secret-a', nonce }).request,
+      responseA,
+      nextA,
+    );
 
     const responseB = createMockResponse();
     const nextB = jest.fn() as NextFunction;
-    await middleware(createSignedRequest({ apiKey: 'svc-b', secret: 'secret-b', nonce }).request, responseB, nextB);
+    await middleware(
+      createSignedRequest({ apiKey: 'svc-b', secret: 'secret-b', nonce }).request,
+      responseB,
+      nextB,
+    );
 
     expect(nextA).toHaveBeenCalledTimes(1);
     expect(nextB).toHaveBeenCalledTimes(1);
@@ -233,7 +259,11 @@ describe('treasury replay protection', () => {
     const response = createMockResponse();
     const next = jest.fn();
 
-    await middleware(createSignedRequest({ nonce: 'db-error' }).request, response, next as unknown as NextFunction);
+    await middleware(
+      createSignedRequest({ nonce: 'db-error' }).request,
+      response,
+      next as unknown as NextFunction,
+    );
 
     expect(next).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(503);

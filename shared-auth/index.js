@@ -1,6 +1,3 @@
 'use strict';
 
-module.exports = {
-  ...require('./nonceStore'),
-  ...require('./serviceAuth'),
-};
+module.exports = require('./src');

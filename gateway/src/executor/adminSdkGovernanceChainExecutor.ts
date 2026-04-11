@@ -7,10 +7,7 @@ import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import { GovernanceExecutorConfig } from '../config/executorEnv';
 import { GatewayError } from '../errors';
 import { GovernanceActionRecord } from '../core/governanceStore';
-import {
-  GovernanceChainExecutor,
-  GovernanceExecutionResult,
-} from './governanceExecutor';
+import { GovernanceChainExecutor, GovernanceExecutionResult } from './governanceExecutor';
 
 function toSafeNumber(value: bigint | undefined): number | null {
   if (value === undefined) {
@@ -41,7 +38,10 @@ function requireTargetAddress(action: GovernanceActionRecord, message: string): 
   return action.targetAddress;
 }
 
-function toProposalResult(execution: GovernanceProposalResult, missingProposalMessage: string): GovernanceExecutionResult {
+function toProposalResult(
+  execution: GovernanceProposalResult,
+  missingProposalMessage: string,
+): GovernanceExecutionResult {
   const proposalId = toSafeNumber(execution.proposalId);
   if (proposalId === null) {
     throw new GatewayError(500, 'INTERNAL_ERROR', missingProposalMessage);
@@ -54,7 +54,9 @@ function toProposalResult(execution: GovernanceProposalResult, missingProposalMe
   };
 }
 
-export function createAdminSdkGovernanceChainExecutor(config: GovernanceExecutorConfig): GovernanceChainExecutor {
+export function createAdminSdkGovernanceChainExecutor(
+  config: GovernanceExecutorConfig,
+): GovernanceChainExecutor {
   const adminSdk = new AdminSDK({
     rpc: config.rpcUrl,
     rpcFallbackUrls: config.rpcFallbackUrls,
@@ -92,24 +94,39 @@ export function createAdminSdkGovernanceChainExecutor(config: GovernanceExecutor
           return adminSdk.claimTreasury(signer);
         case 'proposeTreasuryPayoutAddressUpdate': {
           const result = await adminSdk.proposeTreasuryPayoutAddressUpdate(
-            requireTargetAddress(action, 'Queued treasury payout receiver action is missing targetAddress'),
+            requireTargetAddress(
+              action,
+              'Queued treasury payout receiver action is missing targetAddress',
+            ),
             signer,
           );
-          return toProposalResult(result, 'Treasury payout receiver proposal execution did not return a proposal id');
+          return toProposalResult(
+            result,
+            'Treasury payout receiver proposal execution did not return a proposal id',
+          );
         }
         case 'approveTreasuryPayoutAddressUpdate':
           return adminSdk.approveTreasuryPayoutAddressUpdate(
-            requireProposalId(action, 'Queued treasury payout receiver approval is missing proposalId'),
+            requireProposalId(
+              action,
+              'Queued treasury payout receiver approval is missing proposalId',
+            ),
             signer,
           );
         case 'executeTreasuryPayoutAddressUpdate':
           return adminSdk.executeTreasuryPayoutAddressUpdate(
-            requireProposalId(action, 'Queued treasury payout receiver execution is missing proposalId'),
+            requireProposalId(
+              action,
+              'Queued treasury payout receiver execution is missing proposalId',
+            ),
             signer,
           );
         case 'cancelExpiredTreasuryPayoutAddressUpdateProposal':
           return adminSdk.cancelExpiredTreasuryPayoutAddressUpdateProposal(
-            requireProposalId(action, 'Queued treasury payout receiver cancellation is missing proposalId'),
+            requireProposalId(
+              action,
+              'Queued treasury payout receiver cancellation is missing proposalId',
+            ),
             signer,
           );
         case 'disableOracleEmergency':
@@ -137,9 +154,14 @@ export function createAdminSdkGovernanceChainExecutor(config: GovernanceExecutor
             signer,
           );
         default:
-          throw new GatewayError(500, 'INTERNAL_ERROR', 'Unsupported governance contract method for executor', {
-            contractMethod: action.contractMethod,
-          });
+          throw new GatewayError(
+            500,
+            'INTERNAL_ERROR',
+            'Unsupported governance contract method for executor',
+            {
+              contractMethod: action.contractMethod,
+            },
+          );
       }
     },
   };

@@ -1,8 +1,8 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox";
+import { HardhatUserConfig } from 'hardhat/config';
+import '@nomicfoundation/hardhat-toolbox';
 import { vars } from 'hardhat/config';
 
 function optionalVar(name: string): string | undefined {
@@ -19,30 +19,31 @@ function optionalVar(name: string): string | undefined {
   }
 }
 
-const pk1 = optionalVar("PRIVATE_KEY");
-const pk2 = optionalVar("PRIVATE_KEY2");
+const pk1 = optionalVar('PRIVATE_KEY');
+const pk2 = optionalVar('PRIVATE_KEY2');
 const deployerAccounts = [pk1, pk2].filter(Boolean) as string[];
 
-const baseSepoliaRpcUrl = optionalVar("BASE_SEPOLIA_RPC_URL") ?? "https://sepolia.base.org";
-const baseMainnetRpcUrl = optionalVar("BASE_MAINNET_RPC_URL") ?? "https://mainnet.base.org";
-const etherscanApiKey = optionalVar("ETHERSCAN_API_KEY") ?? optionalVar("BASESCAN_API_KEY") ?? "PLACEHOLDER";
+const baseSepoliaRpcUrl = optionalVar('BASE_SEPOLIA_RPC_URL') ?? 'https://sepolia.base.org';
+const baseMainnetRpcUrl = optionalVar('BASE_MAINNET_RPC_URL') ?? 'https://mainnet.base.org';
+const etherscanApiKey =
+  optionalVar('ETHERSCAN_API_KEY') ?? optionalVar('BASESCAN_API_KEY') ?? 'PLACEHOLDER';
 
 const config: HardhatUserConfig = {
   solidity: {
-    version:"0.8.34",
+    version: '0.8.34',
     settings: {
-      viaIR:true,
+      viaIR: true,
       optimizer: {
         enabled: true,
         runs: 200,
-      }
-    }
+      },
+    },
   },
   paths: {
-    sources: "./src",
-    tests: "./tests",
-    cache: "./cache",
-    artifacts: "./artifacts"
+    sources: './src',
+    tests: './tests',
+    cache: './cache',
+    artifacts: './artifacts',
   },
   networks: {
     hardhat: {},
@@ -51,7 +52,7 @@ const config: HardhatUserConfig = {
       chainId: 84532,
       accounts: deployerAccounts,
     },
-    "base-sepolia": {
+    'base-sepolia': {
       url: baseSepoliaRpcUrl,
       chainId: 84532,
       accounts: deployerAccounts,
@@ -61,7 +62,7 @@ const config: HardhatUserConfig = {
       chainId: 8453,
       accounts: deployerAccounts,
     },
-    "base-mainnet": {
+    'base-mainnet': {
       url: baseMainnetRpcUrl,
       chainId: 8453,
       accounts: deployerAccounts,

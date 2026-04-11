@@ -20,7 +20,17 @@ export function errorResponse(
   code: string,
   message: string,
   details?: Record<string, unknown>,
-): { success: false; error: { code: string; message: string; requestId?: string; traceId?: string; details?: Record<string, unknown> }; timestamp: string } {
+): {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    requestId?: string;
+    traceId?: string;
+    details?: Record<string, unknown>;
+  };
+  timestamp: string;
+} {
   return {
     success: false,
     error: {

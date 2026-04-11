@@ -14,8 +14,6 @@ import {
   incrementDocumentStoreRetry,
 } from '../metrics/counters';
 
-
-
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 100;
 
@@ -77,7 +75,6 @@ async function withRetry<T>(operation: () => Promise<T>, operationName: string):
   throw lastError;
 }
 
-
 export interface DocumentCreateInput {
   requestId: string;
   documentRef: string;
@@ -86,7 +83,6 @@ export interface DocumentCreateInput {
   canonicalJson: string;
   metadata: Record<string, unknown>;
 }
-
 
 export async function createDocument(data: DocumentCreateInput): Promise<RicardianHashRow> {
   try {
@@ -100,11 +96,10 @@ export async function createDocument(data: DocumentCreateInput): Promise<Ricardi
     });
     throw new DocumentPersistenceError(
       `Failed to persist Ricardian hash for documentRef: ${data.documentRef}`,
-      error
+      error,
     );
   }
 }
-
 
 export async function getDocument(hash: string): Promise<RicardianHashRow> {
   let row: RicardianHashRow | null;

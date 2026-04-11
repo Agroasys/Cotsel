@@ -23,7 +23,9 @@ describe('service auth client helper', () => {
     expect(headers['X-Api-Key']).toBe('svc-a');
     expect(headers['X-Timestamp']).toBe('1700000000');
     expect(headers['X-Nonce']).toBe('nonce-1');
-    expect(headers['X-Signature']).toBe('a8db0468fa0ffe8da6d75da757be1b6feda3530092339f903c9745ccfd519e63');
+    expect(headers['X-Signature']).toBe(
+      'a8db0468fa0ffe8da6d75da757be1b6feda3530092339f903c9745ccfd519e63',
+    );
   });
 
   test('canonical string builder and signer match helper output', () => {

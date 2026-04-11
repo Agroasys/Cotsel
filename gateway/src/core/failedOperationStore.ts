@@ -43,11 +43,18 @@ export interface FailedOperationStore {
   recordFailure(input: RecordFailedOperationInput): Promise<FailedOperationRecord>;
   get(failedOperationId: string): Promise<FailedOperationRecord | null>;
   list(input?: ListFailedOperationsInput): Promise<FailedOperationRecord[]>;
-  markReplayed(failedOperationId: string, replayedAt: string, metadata?: Record<string, unknown>): Promise<void>;
+  markReplayed(
+    failedOperationId: string,
+    replayedAt: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void>;
   markReplayFailed(
     failedOperationId: string,
     replayedAt: string,
-    failure: Pick<RecordFailedOperationInput, 'terminalErrorClass' | 'terminalErrorCode' | 'terminalErrorMessage'>,
+    failure: Pick<
+      RecordFailedOperationInput,
+      'terminalErrorClass' | 'terminalErrorCode' | 'terminalErrorMessage'
+    >,
     metadata?: Record<string, unknown>,
   ): Promise<void>;
 }
@@ -429,7 +436,9 @@ export function createInMemoryFailedOperationStore(
 
     async recordFailure(input) {
       const scopedKey = toScopedKey(input.operationType, input.operationKey);
-      const existing = records.find((record) => toScopedKey(record.operationType, record.operationKey) === scopedKey);
+      const existing = records.find(
+        (record) => toScopedKey(record.operationType, record.operationKey) === scopedKey,
+      );
       const now = input.failedAt;
 
       if (existing) {
@@ -508,8 +517,14 @@ export function createInMemoryFailedOperationStore(
 
     async list(input = {}) {
       return records
-        .filter((record) => (input.failureState ? record.failureState === input.failureState : true))
-        .filter((record) => (input.replayEligible !== undefined ? record.replayEligible === input.replayEligible : true))
+        .filter((record) =>
+          input.failureState ? record.failureState === input.failureState : true,
+        )
+        .filter((record) =>
+          input.replayEligible !== undefined
+            ? record.replayEligible === input.replayEligible
+            : true,
+        )
         .sort((left, right) => right.lastFailedAt.localeCompare(left.lastFailedAt))
         .map((record) => ({ ...record, metadata: { ...record.metadata } }));
     },

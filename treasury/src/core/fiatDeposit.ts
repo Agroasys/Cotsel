@@ -15,7 +15,13 @@ export class FiatDepositConflictError extends Error {
   }
 }
 
-export const FIAT_DEPOSIT_STATES: FiatDepositState[] = ['PENDING', 'FUNDED', 'PARTIAL', 'REVERSED', 'FAILED'];
+export const FIAT_DEPOSIT_STATES: FiatDepositState[] = [
+  'PENDING',
+  'FUNDED',
+  'PARTIAL',
+  'REVERSED',
+  'FAILED',
+];
 
 export function assertFiatDepositState(value: string): asserts value is FiatDepositState {
   if (!FIAT_DEPOSIT_STATES.includes(value as FiatDepositState)) {

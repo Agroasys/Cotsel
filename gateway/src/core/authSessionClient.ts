@@ -42,7 +42,10 @@ export function createAuthSessionClient(config: GatewayConfig): AuthSessionClien
         },
         signal: AbortSignal.timeout(config.authRequestTimeoutMs),
       }).catch((error) => {
-        Logger.error('Auth session lookup failed', { requestId, error: error instanceof Error ? error.message : String(error) });
+        Logger.error('Auth session lookup failed', {
+          requestId,
+          error: error instanceof Error ? error.message : String(error),
+        });
         throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Auth service is unavailable');
       });
 
@@ -58,7 +61,11 @@ export function createAuthSessionClient(config: GatewayConfig): AuthSessionClien
 
       const payload = (await response.json()) as SessionResponse;
       if (!payload.success || !payload.data) {
-        throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Auth service returned an invalid session payload');
+        throw new GatewayError(
+          503,
+          'UPSTREAM_UNAVAILABLE',
+          'Auth service returned an invalid session payload',
+        );
       }
 
       return payload.data;

@@ -67,7 +67,10 @@ export function createBankPayoutPayloadHash(input: BankPayoutConfirmationUpsertI
     .digest('hex');
 }
 
-export function assertBankPayoutTransition(currentPayoutState: PayoutState, bankState: BankPayoutState): void {
+export function assertBankPayoutTransition(
+  currentPayoutState: PayoutState,
+  bankState: BankPayoutState,
+): void {
   if (currentPayoutState === 'PENDING_REVIEW' || currentPayoutState === 'READY_FOR_PAYOUT') {
     throw new Error(`Bank confirmation is not valid while payout state is ${currentPayoutState}`);
   }

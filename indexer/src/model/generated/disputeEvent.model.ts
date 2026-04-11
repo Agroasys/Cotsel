@@ -39,13 +39,6 @@ export class DisputeEvent {
     @IntColumn_({nullable: false})
     transactionIndex!: number
 
-    @Index_()
-    @StringColumn_({nullable: true})
-    extrinsicHash!: string | undefined | null
-
-    @IntColumn_({nullable: true})
-    extrinsicIndex!: number | undefined | null
-
     @Column_("varchar", {length: 7, nullable: true})
     proposedDisputeStatus!: DisputeStatus | undefined | null
 

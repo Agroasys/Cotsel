@@ -38,8 +38,36 @@ load_env_file() {
 }
 
 require_compose_mapping() {
-  local expected="$1"
-  if ! grep -Fq "$expected" "$COMPOSE_FILE"; then
+  local env_var="$1"
+  local expected="NOTIFICATIONS_ENABLED: \${${env_var}}"
+  local pattern="NOTIFICATIONS_ENABLED:[[:space:]]*['\"]?\\\$\{${env_var}\}['\"]?"
+
+  if ! grep -Eq "$pattern" "$COMPOSE_FILE"; then
+    echo "missing compose notifications mapping: $expected" >&2
+    return 1
+  fi
+  return 0
+}
+
+require_compose_url_mapping() {
+  local env_var="$1"
+  local expected="NOTIFICATIONS_WEBHOOK_URL: \${${env_var}}"
+  local pattern="NOTIFICATIONS_WEBHOOK_URL:[[:space:]]*['\"]?\\\$\{${env_var}\}['\"]?"
+
+  if ! grep -Eq "$pattern" "$COMPOSE_FILE"; then
+    echo "missing compose notifications mapping: $expected" >&2
+    return 1
+  fi
+  return 0
+}
+
+require_compose_number_mapping() {
+  local field_name="$1"
+  local env_var="$2"
+  local expected="${field_name}: \${${env_var}}"
+  local pattern="${field_name}:[[:space:]]*['\"]?\\\$\{${env_var}(:-[^}]*)?\}['\"]?"
+
+  if ! grep -Eq "$pattern" "$COMPOSE_FILE"; then
     echo "missing compose notifications mapping: $expected" >&2
     return 1
   fi
@@ -95,15 +123,15 @@ reconciliation_webhook="${RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL:-}"
 reconciliation_cooldown="${RECONCILIATION_NOTIFICATIONS_COOLDOWN_MS:-300000}"
 reconciliation_timeout="${RECONCILIATION_NOTIFICATIONS_REQUEST_TIMEOUT_MS:-5000}"
 
-require_compose_mapping 'NOTIFICATIONS_ENABLED: "${ORACLE_NOTIFICATIONS_ENABLED}"'
-require_compose_mapping 'NOTIFICATIONS_WEBHOOK_URL: "${ORACLE_NOTIFICATIONS_WEBHOOK_URL}"'
-require_compose_mapping 'NOTIFICATIONS_COOLDOWN_MS: "${ORACLE_NOTIFICATIONS_COOLDOWN_MS}"'
-require_compose_mapping 'NOTIFICATIONS_REQUEST_TIMEOUT_MS: "${ORACLE_NOTIFICATIONS_REQUEST_TIMEOUT_MS}"'
+require_compose_mapping 'ORACLE_NOTIFICATIONS_ENABLED'
+require_compose_url_mapping 'ORACLE_NOTIFICATIONS_WEBHOOK_URL'
+require_compose_number_mapping 'NOTIFICATIONS_COOLDOWN_MS' 'ORACLE_NOTIFICATIONS_COOLDOWN_MS'
+require_compose_number_mapping 'NOTIFICATIONS_REQUEST_TIMEOUT_MS' 'ORACLE_NOTIFICATIONS_REQUEST_TIMEOUT_MS'
 
-require_compose_mapping 'NOTIFICATIONS_ENABLED: "${RECONCILIATION_NOTIFICATIONS_ENABLED}"'
-require_compose_mapping 'NOTIFICATIONS_WEBHOOK_URL: "${RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL}"'
-require_compose_mapping 'NOTIFICATIONS_COOLDOWN_MS: "${RECONCILIATION_NOTIFICATIONS_COOLDOWN_MS}"'
-require_compose_mapping 'NOTIFICATIONS_REQUEST_TIMEOUT_MS: "${RECONCILIATION_NOTIFICATIONS_REQUEST_TIMEOUT_MS}"'
+require_compose_mapping 'RECONCILIATION_NOTIFICATIONS_ENABLED'
+require_compose_url_mapping 'RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL'
+require_compose_number_mapping 'NOTIFICATIONS_COOLDOWN_MS' 'RECONCILIATION_NOTIFICATIONS_COOLDOWN_MS'
+require_compose_number_mapping 'NOTIFICATIONS_REQUEST_TIMEOUT_MS' 'RECONCILIATION_NOTIFICATIONS_REQUEST_TIMEOUT_MS'
 
 require_boolean "ORACLE_NOTIFICATIONS_ENABLED" "$oracle_enabled"
 require_boolean "RECONCILIATION_NOTIFICATIONS_ENABLED" "$reconciliation_enabled"

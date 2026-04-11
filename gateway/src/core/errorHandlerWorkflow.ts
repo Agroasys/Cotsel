@@ -9,7 +9,10 @@ import type { AuditLogStore } from './auditLogStore';
 import { ComplianceService } from './complianceService';
 import { createGatewayErrorEnvelope } from './errorEnvelope';
 import type { FailedOperationRecord, FailedOperationStore } from './failedOperationStore';
-import { GovernanceMutationService, type GovernanceMutationAuditInput } from './governanceMutationService';
+import {
+  GovernanceMutationService,
+  type GovernanceMutationAuditInput,
+} from './governanceMutationService';
 import { SettlementCallbackDispatcher } from './settlementCallbackDispatcher';
 
 export type ReplayableOperationType =
@@ -41,13 +44,19 @@ export interface GovernanceReplaySpec {
 export interface ComplianceDecisionReplaySpec {
   type: 'compliance.create_decision';
   routePath: string;
-  payload: Omit<Parameters<ComplianceService['createDecision']>[0], 'principal' | 'requestContext' | 'routePath' | 'idempotencyKey'>;
+  payload: Omit<
+    Parameters<ComplianceService['createDecision']>[0],
+    'principal' | 'requestContext' | 'routePath' | 'idempotencyKey'
+  >;
 }
 
 export interface ComplianceControlReplaySpec {
   type: 'compliance.block_oracle_progression' | 'compliance.resume_oracle_progression';
   routePath: string;
-  payload: Omit<Parameters<ComplianceService['blockOracleProgression']>[0], 'principal' | 'requestContext' | 'routePath' | 'idempotencyKey'>;
+  payload: Omit<
+    Parameters<ComplianceService['blockOracleProgression']>[0],
+    'principal' | 'requestContext' | 'routePath' | 'idempotencyKey'
+  >;
 }
 
 export interface SettlementCallbackReplaySpec {
@@ -190,7 +199,9 @@ export class GatewayErrorHandlerWorkflow {
       correlationId: null,
       replayEligible: true,
       terminalErrorClass: 'infrastructure',
-      terminalErrorCode: input.responseStatus ? `HTTP_${input.responseStatus}` : 'UPSTREAM_UNAVAILABLE',
+      terminalErrorCode: input.responseStatus
+        ? `HTTP_${input.responseStatus}`
+        : 'UPSTREAM_UNAVAILABLE',
       terminalErrorMessage: input.errorMessage,
       failedAt: new Date().toISOString(),
       metadata: {
@@ -293,7 +304,8 @@ export class GatewayFailedOperationReplayer {
           const principal = restorePrincipal({
             actorId: record.actorId || 'user:replay',
             actorUserId: record.actorUserId,
-            actorWalletAddress: record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
+            actorWalletAddress:
+              record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
             actorRole: (record.actorRole as AuthServiceRole | null) ?? 'admin',
             sessionReference: record.sessionReference || `replay:${failedOperationId}`,
           });
@@ -319,7 +331,8 @@ export class GatewayFailedOperationReplayer {
           const principal = restorePrincipal({
             actorId: record.actorId || 'user:replay',
             actorUserId: record.actorUserId,
-            actorWalletAddress: record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
+            actorWalletAddress:
+              record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
             actorRole: (record.actorRole as AuthServiceRole | null) ?? 'admin',
             sessionReference: record.sessionReference || `replay:${failedOperationId}`,
           });
@@ -340,7 +353,8 @@ export class GatewayFailedOperationReplayer {
           const principal = restorePrincipal({
             actorId: record.actorId || 'user:replay',
             actorUserId: record.actorUserId,
-            actorWalletAddress: record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
+            actorWalletAddress:
+              record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
             actorRole: (record.actorRole as AuthServiceRole | null) ?? 'admin',
             sessionReference: record.sessionReference || `replay:${failedOperationId}`,
           });
@@ -361,7 +375,8 @@ export class GatewayFailedOperationReplayer {
           const principal = restorePrincipal({
             actorId: record.actorId || 'user:replay',
             actorUserId: record.actorUserId,
-            actorWalletAddress: record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
+            actorWalletAddress:
+              record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
             actorRole: (record.actorRole as AuthServiceRole | null) ?? 'admin',
             sessionReference: record.sessionReference || `replay:${failedOperationId}`,
           });

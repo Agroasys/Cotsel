@@ -25,7 +25,10 @@ const USER_PROFILE_FIELDS = `
 const LEGACY_ACCOUNT_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function parseSessionEpoch(value: number | string, field: 'issuedAt' | 'expiresAt' | 'revokedAt'): number {
+function parseSessionEpoch(
+  value: number | string,
+  field: 'issuedAt' | 'expiresAt' | 'revokedAt',
+): number {
   if (typeof value === 'number' && Number.isSafeInteger(value)) {
     return value;
   }
@@ -102,14 +105,7 @@ async function updateTrustedProfileRow(
          updated_at = NOW()
      WHERE id = $1
      RETURNING ${USER_PROFILE_FIELDS}`,
-    [
-      profileId,
-      input.accountId,
-      input.walletAddress,
-      input.email,
-      input.role,
-      input.orgId,
-    ],
+    [profileId, input.accountId, input.walletAddress, input.email, input.role, input.orgId],
   );
   return result.rows[0];
 }
@@ -128,13 +124,7 @@ async function insertTrustedProfileRow(
     `INSERT INTO user_profiles (account_id, wallet_address, email, role, org_id, updated_at)
      VALUES ($1, $2, $3, $4, $5, NOW())
      RETURNING ${USER_PROFILE_FIELDS}`,
-    [
-      input.accountId,
-      input.walletAddress,
-      input.email,
-      input.role,
-      input.orgId,
-    ],
+    [input.accountId, input.walletAddress, input.email, input.role, input.orgId],
   );
   return result.rows[0];
 }
@@ -208,8 +198,8 @@ export async function upsertTrustedProfile(
 
     if (walletMatch) {
       if (
-        walletMatch.accountId !== input.accountId
-        && !isLegacyAccountIdPlaceholder(walletMatch.accountId)
+        walletMatch.accountId !== input.accountId &&
+        !isLegacyAccountIdPlaceholder(walletMatch.accountId)
       ) {
         throw new Error('walletAddress is already linked to a different account');
       }
@@ -254,10 +244,7 @@ export async function findProfileByAccountId(
   return result.rows[0] ?? null;
 }
 
-export async function findProfileById(
-  pool: Pool,
-  id: string,
-): Promise<UserProfile | null> {
+export async function findProfileById(pool: Pool, id: string): Promise<UserProfile | null> {
   const result = await pool.query<UserProfile>(
     `SELECT ${USER_PROFILE_FIELDS}
      FROM user_profiles WHERE id = $1`,
@@ -267,13 +254,12 @@ export async function findProfileById(
 }
 
 export async function deactivateProfile(pool: Pool, id: string): Promise<void> {
-  await pool.query(
-    `UPDATE user_profiles SET active = FALSE, updated_at = NOW() WHERE id = $1`,
-    [id],
-  );
+  await pool.query(`UPDATE user_profiles SET active = FALSE, updated_at = NOW() WHERE id = $1`, [
+    id,
+  ]);
 }
 
-//  Session queries 
+//  Session queries
 
 export async function insertSession(
   client: Pool | PoolClient,
@@ -289,10 +275,7 @@ export async function insertSession(
   );
 }
 
-export async function findSessionById(
-  pool: Pool,
-  sessionId: string,
-): Promise<UserSession | null> {
+export async function findSessionById(pool: Pool, sessionId: string): Promise<UserSession | null> {
   const result = await pool.query<SessionRow>(
     `SELECT user_sessions.session_id AS "sessionId",
             user_profiles.account_id AS "accountId",
@@ -312,15 +295,14 @@ export async function findSessionById(
 }
 
 export async function revokeSession(pool: Pool, sessionId: string): Promise<void> {
-  await pool.query(
-    `UPDATE user_sessions SET revoked_at = $1 WHERE session_id = $2`,
-    [Math.floor(Date.now() / 1000), sessionId],
-  );
+  await pool.query(`UPDATE user_sessions SET revoked_at = $1 WHERE session_id = $2`, [
+    Math.floor(Date.now() / 1000),
+    sessionId,
+  ]);
 }
 
 export async function pruneExpiredSessions(pool: Pool): Promise<void> {
-  await pool.query(
-    `DELETE FROM user_sessions WHERE expires_at <= $1`,
-    [Math.floor(Date.now() / 1000)],
-  );
+  await pool.query(`DELETE FROM user_sessions WHERE expires_at <= $1`, [
+    Math.floor(Date.now() / 1000),
+  ]);
 }

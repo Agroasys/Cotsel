@@ -2,8 +2,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import cors from 'cors';
-import express, { Router } from 'express';
+import express, { RequestHandler, Router } from 'express';
 import helmet from 'helmet';
+import { createCorsOptions } from '@agroasys/shared-edge';
 import { GatewayConfig } from './config/env';
 import { createRequestContextMiddleware } from './middleware/requestContext';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -14,52 +15,45 @@ export interface GatewayAppDependencies {
   commitSha: string;
   buildTime: string;
   readinessCheck: () => Promise<DependencyStatus[]>;
+  requestRateLimitMiddleware?: RequestHandler;
   extraRouter?: Router;
-}
-
-function createCorsOptions(allowedOrigins: string[]) {
-  if (allowedOrigins.length === 0) {
-    return {};
-  }
-
-  const normalized = new Set(allowedOrigins.map((origin) => origin.replace(/\/$/, '')));
-
-  return {
-    origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-
-      const normalizedOrigin = origin.replace(/\/$/, '');
-      callback(
-        normalized.has(normalizedOrigin)
-          ? null
-          : new Error('Origin is not allowed by GATEWAY_CORS_ALLOWED_ORIGINS'),
-        normalized.has(normalizedOrigin),
-      );
-    },
-  };
 }
 
 export function createApp(config: GatewayConfig, dependencies: GatewayAppDependencies) {
   const app = express();
 
+  app.disable('x-powered-by');
   app.use(helmet());
-  app.use(cors(createCorsOptions(config.corsAllowedOrigins)));
+  app.use(
+    cors(
+      createCorsOptions({
+        allowedOrigins: config.corsAllowedOrigins,
+        allowNoOrigin: config.corsAllowNoOrigin,
+      }),
+    ),
+  );
   app.use(createRequestContextMiddleware());
-  app.use(express.json({
-    verify: (req, _res, buffer) => {
-      (req as express.Request).rawBody = Buffer.from(buffer);
-    },
-  }));
+  app.use(
+    express.json({
+      verify: (req, _res, buffer) => {
+        (req as express.Request).rawBody = Buffer.from(buffer);
+      },
+    }),
+  );
 
-  app.use('/api/dashboard-gateway/v1', createSystemRouter({
-    version: dependencies.version,
-    commitSha: dependencies.commitSha,
-    buildTime: dependencies.buildTime,
-    readinessCheck: dependencies.readinessCheck,
-  }));
+  if (dependencies.requestRateLimitMiddleware) {
+    app.use('/api/dashboard-gateway/v1', dependencies.requestRateLimitMiddleware);
+  }
+
+  app.use(
+    '/api/dashboard-gateway/v1',
+    createSystemRouter({
+      version: dependencies.version,
+      commitSha: dependencies.commitSha,
+      buildTime: dependencies.buildTime,
+      readinessCheck: dependencies.readinessCheck,
+    }),
+  );
 
   if (dependencies.extraRouter) {
     app.use('/api/dashboard-gateway/v1', dependencies.extraRouter);

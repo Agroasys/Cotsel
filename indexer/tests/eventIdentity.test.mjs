@@ -18,5 +18,8 @@ test('compareOrderedEvmEvents sorts deterministically by block, tx, log, id', ()
 
   const sorted = [...events].sort(compareOrderedEvmEvents);
 
-  assert.deepEqual(sorted.map((event) => event.id), ['e', 'd', 'a', 'b', 'c']);
+  assert.deepEqual(
+    sorted.map((event) => event.id),
+    ['e', 'd', 'a', 'b', 'c'],
+  );
 });

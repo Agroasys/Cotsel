@@ -128,7 +128,6 @@ export class AuthClient {
     });
   }
 
-
   async revoke(sessionToken: string): Promise<void> {
     await apiRequest<unknown>(`${this.base}/session/revoke`, {
       method: 'POST',
@@ -139,7 +138,6 @@ export class AuthClient {
     });
   }
 
-  
   async getSession(sessionToken: string): Promise<SessionResult> {
     return apiRequest<SessionResult>(`${this.base}/session`, {
       method: 'GET',

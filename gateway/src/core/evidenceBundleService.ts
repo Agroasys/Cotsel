@@ -2,7 +2,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createHash, randomUUID } from 'crypto';
-import type { ComplianceDecisionRecord, ComplianceStore, OracleProgressionBlockRecord } from './complianceStore';
+import type {
+  ComplianceDecisionRecord,
+  ComplianceStore,
+  OracleProgressionBlockRecord,
+} from './complianceStore';
 import type { EvidenceLink } from './governanceStore';
 import type { DashboardTradeRecord, TradeReadReader } from './tradeReadService';
 import type { GatewayPrincipal } from '../middleware/auth';
@@ -56,7 +60,13 @@ function latestTimestamp(values: Array<string | null | undefined>): string | nul
 }
 
 function combineDegradedReasons(reasons: Array<string | null | undefined>): string | undefined {
-  const values = [...new Set(reasons.filter((reason): reason is string => Boolean(reason?.trim())).map((reason) => reason.trim()))];
+  const values = [
+    ...new Set(
+      reasons
+        .filter((reason): reason is string => Boolean(reason?.trim()))
+        .map((reason) => reason.trim()),
+    ),
+  ];
   if (values.length === 0) {
     return undefined;
   }
@@ -145,16 +155,18 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
     }
 
     const queriedAt = this.now().toISOString();
-    const [tradeStatusResult, decisionsResult, oracleProgressionBlockResult] = await Promise.allSettled([
-      this.complianceStore.getTradeStatus(trade.id),
-      this.collectTradeDecisions(trade.id),
-      this.complianceStore.getOracleProgressionBlock(trade.id),
-    ]);
+    const [tradeStatusResult, decisionsResult, oracleProgressionBlockResult] =
+      await Promise.allSettled([
+        this.complianceStore.getTradeStatus(trade.id),
+        this.collectTradeDecisions(trade.id),
+        this.complianceStore.getOracleProgressionBlock(trade.id),
+      ]);
     const tradeStatus = tradeStatusResult.status === 'fulfilled' ? tradeStatusResult.value : null;
     const decisions = decisionsResult.status === 'fulfilled' ? decisionsResult.value : [];
-    const oracleProgressionBlock = oracleProgressionBlockResult.status === 'fulfilled'
-      ? oracleProgressionBlockResult.value
-      : null;
+    const oracleProgressionBlock =
+      oracleProgressionBlockResult.status === 'fulfilled'
+        ? oracleProgressionBlockResult.value
+        : null;
 
     const bundleId = randomUUID();
     const generatedAt = queriedAt;
@@ -166,8 +178,12 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
     });
     const degradedReason = combineDegradedReasons([
       this.resolveDegradedReason(trade),
-      tradeStatusResult.status === 'rejected' ? this.describeDegradedReason(tradeStatusResult.reason) : undefined,
-      decisionsResult.status === 'rejected' ? this.describeDegradedReason(decisionsResult.reason) : undefined,
+      tradeStatusResult.status === 'rejected'
+        ? this.describeDegradedReason(tradeStatusResult.reason)
+        : undefined,
+      decisionsResult.status === 'rejected'
+        ? this.describeDegradedReason(decisionsResult.reason)
+        : undefined,
       oracleProgressionBlockResult.status === 'rejected'
         ? this.describeDegradedReason(oracleProgressionBlockResult.reason)
         : undefined,
@@ -310,7 +326,9 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
           : null,
         available: input.tradeHasCompliance,
         digest: null,
-        ...(input.tradeHasCompliance ? {} : { unavailableReason: 'No compliance status exists for this trade' }),
+        ...(input.tradeHasCompliance
+          ? {}
+          : { unavailableReason: 'No compliance status exists for this trade' }),
       },
       {
         artifactId: 'compliance-decisions',
@@ -322,7 +340,9 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
           : null,
         available: input.tradeHasCompliance,
         digest: null,
-        ...(input.tradeHasCompliance ? {} : { unavailableReason: 'No compliance decision history exists for this trade' }),
+        ...(input.tradeHasCompliance
+          ? {}
+          : { unavailableReason: 'No compliance decision history exists for this trade' }),
       },
     ];
 
@@ -335,7 +355,9 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
         href: buildGatewayHref(`/ricardian/${encodeURIComponent(input.trade.id)}`),
         available: Boolean(this.ricardianBaseUrl),
         digest: input.trade.ricardianHash,
-        ...(this.ricardianBaseUrl ? {} : { unavailableReason: 'GATEWAY_RICARDIAN_BASE_URL is not configured' }),
+        ...(this.ricardianBaseUrl
+          ? {}
+          : { unavailableReason: 'GATEWAY_RICARDIAN_BASE_URL is not configured' }),
         metadata: {
           ricardianHash: input.trade.ricardianHash,
         },

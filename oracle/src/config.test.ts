@@ -12,6 +12,8 @@ const BASE_ENV: Record<string, string> = {
   DB_NAME: 'oracle',
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
+  DB_MIGRATION_USER: '',
+  DB_MIGRATION_PASSWORD: '',
   INDEXER_GRAPHQL_URL: 'https://indexer.example.com/graphql',
   INDEXER_GQL_TIMEOUT_MS: '10000',
   RETRY_ATTEMPTS: '3',
@@ -25,13 +27,8 @@ const BASE_ENV: Record<string, string> = {
 };
 
 function withEnv(overrides: Record<string, string | undefined>, fn: () => void): void {
-  const snapshot = { ...process.env };
-
-  for (const key of Object.keys(BASE_ENV)) {
-    delete process.env[key];
-  }
-
-  Object.assign(process.env, BASE_ENV);
+  const snapshot = process.env;
+  process.env = { ...snapshot, ...BASE_ENV };
 
   for (const [key, value] of Object.entries(overrides)) {
     if (value === undefined) {
@@ -46,13 +43,18 @@ function withEnv(overrides: Record<string, string | undefined>, fn: () => void):
     fn();
   } finally {
     process.env = snapshot;
+    jest.resetModules();
   }
 }
 
 function loadConfigModule(): typeof import('./config') {
   const modulePath = path.resolve(__dirname, './config');
-  delete require.cache[require.resolve(modulePath)];
-  return require(modulePath) as typeof import('./config');
+  jest.resetModules();
+  let loaded!: typeof import('./config');
+  jest.isolateModules(() => {
+    loaded = jest.requireActual(modulePath) as typeof import('./config');
+  });
+  return loaded;
 }
 
 describe('oracle runtime config', () => {
@@ -77,6 +79,24 @@ describe('oracle runtime config', () => {
         expect(config.explorerBaseUrl).toBe('https://sepolia-explorer.base.org/tx/');
         expect(config.escrowAddress).toBe('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
         expect(config.usdcAddress).toBe('0x036CbD53842c5426634e7929541eC2318f3dCF7e');
+      },
+    );
+  });
+
+  test('browser no-origin CORS is disabled by default', () => {
+    withEnv(
+      {
+        SETTLEMENT_RUNTIME: 'base-sepolia',
+        RPC_URL: undefined,
+        RPC_FALLBACK_URLS: undefined,
+        CHAIN_ID: undefined,
+        EXPLORER_BASE_URL: undefined,
+        USDC_ADDRESS: undefined,
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        const config = loadConfig();
+        expect(config.corsAllowNoOrigin).toBe(false);
       },
     );
   });

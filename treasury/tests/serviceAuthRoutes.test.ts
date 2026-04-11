@@ -55,7 +55,9 @@ function createSignedRequestParts(options?: {
 describe('treasury service-authenticated routes', () => {
   let server: Server;
   let baseUrl: string;
-  let consumeNonce: jest.MockedFunction<(apiKey: string, nonce: string, ttlSeconds: number) => Promise<boolean>>;
+  let consumeNonce: jest.MockedFunction<
+    (apiKey: string, nonce: string, ttlSeconds: number) => Promise<boolean>
+  >;
 
   const lookupApiKey = (apiKey: string) => {
     if (apiKey === 'svc-a') {

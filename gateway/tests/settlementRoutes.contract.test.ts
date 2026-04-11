@@ -49,6 +49,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-11T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 async function startServer(overrides: Partial<GatewayConfig> = {}) {
@@ -58,14 +61,18 @@ async function startServer(overrides: Partial<GatewayConfig> = {}) {
   const nonceStore = createInMemoryNonceStore();
   const idempotencyStore = createInMemoryIdempotencyStore();
   const router = Router();
-  router.use(createSettlementRouter({
-    config: runtimeConfig,
-    settlementService,
-    settlementStore,
-    nonceStore,
-    idempotencyStore,
-    lookupServiceApiKey: createServiceApiKeyLookup(runtimeConfig.settlementServiceAuthApiKeysJson),
-  }));
+  router.use(
+    createSettlementRouter({
+      config: runtimeConfig,
+      settlementService,
+      settlementStore,
+      nonceStore,
+      idempotencyStore,
+      lookupServiceApiKey: createServiceApiKeyLookup(
+        runtimeConfig.settlementServiceAuthApiKeysJson,
+      ),
+    }),
+  );
 
   const app = createApp(runtimeConfig, {
     version: '0.1.0',
@@ -104,16 +111,28 @@ function withServiceAuth(path: string, body?: Record<string, unknown> | null, me
 
 describe('gateway settlement routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateHandoffResponse = createSchemaValidator(spec, '#/components/schemas/SettlementHandoffResponse');
-  const validateMutationResponse = createSchemaValidator(spec, '#/components/schemas/SettlementExecutionEventMutationResponse');
-  const validateEventListResponse = createSchemaValidator(spec, '#/components/schemas/SettlementExecutionEventListResponse');
+  const validateHandoffResponse = createSchemaValidator(
+    spec,
+    '#/components/schemas/SettlementHandoffResponse',
+  );
+  const validateMutationResponse = createSchemaValidator(
+    spec,
+    '#/components/schemas/SettlementExecutionEventMutationResponse',
+  );
+  const validateEventListResponse = createSchemaValidator(
+    spec,
+    '#/components/schemas/SettlementExecutionEventListResponse',
+  );
 
   test('OpenAPI spec exposes settlement ingress routes', () => {
     expect(hasOperation(spec, 'post', '/settlement/handoffs')).toBe(true);
-    expect(hasOperation(spec, 'post', '/settlement/handoffs/{handoffId}/execution-events')).toBe(true);
-    expect(hasOperation(spec, 'get', '/settlement/handoffs/{handoffId}/execution-events')).toBe(true);
+    expect(hasOperation(spec, 'post', '/settlement/handoffs/{handoffId}/execution-events')).toBe(
+      true,
+    );
+    expect(hasOperation(spec, 'get', '/settlement/handoffs/{handoffId}/execution-events')).toBe(
+      true,
+    );
   });
-
 
   test('settlement ingress disabled rejects requests instead of bypassing auth', async () => {
     const { server, baseUrl } = await startServer({ settlementIngressEnabled: false });
@@ -178,7 +197,6 @@ describe('gateway settlement routes contract', () => {
 
       expect(handoffResponse.status).toBe(202);
       expect(validateHandoffResponse(handoffPayload)).toBe(true);
-      expect(handoffPayload.data.extrinsicHash).toBeUndefined();
 
       const handoffId = handoffPayload.data.handoffId as string;
       const eventBody = {
@@ -193,42 +211,45 @@ describe('gateway settlement routes contract', () => {
       };
       const eventPath = `/api/dashboard-gateway/v1/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`;
 
-      const eventResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'event-1',
-          'X-Request-Id': 'req-event-1',
-          ...withServiceAuth(eventPath, eventBody),
+      const eventResponse = await fetch(
+        `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'event-1',
+            'X-Request-Id': 'req-event-1',
+            ...withServiceAuth(eventPath, eventBody),
+          },
+          body: JSON.stringify(eventBody),
         },
-        body: JSON.stringify(eventBody),
-      });
+      );
       const eventPayload = await eventResponse.json();
 
       expect(eventResponse.status).toBe(202);
       expect(validateMutationResponse(eventPayload)).toBe(true);
       expect(eventPayload.data.callbackDelivery.status).toBe('disabled');
-      expect(eventPayload.data.handoff.extrinsicHash).toBeUndefined();
-      expect(eventPayload.data.event.extrinsicHash).toBeUndefined();
 
-      const listResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
-        headers: {
-          'X-Request-Id': 'req-events-list',
-          ...withServiceAuth(eventPath, null, 'GET'),
+      const listResponse = await fetch(
+        `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+        {
+          headers: {
+            'X-Request-Id': 'req-events-list',
+            ...withServiceAuth(eventPath, null, 'GET'),
+          },
         },
-      });
+      );
       const listPayload = await listResponse.json();
 
       expect(listResponse.status).toBe(200);
       expect(validateEventListResponse(listPayload)).toBe(true);
       expect(listPayload.data).toHaveLength(1);
-      expect(listPayload.data[0].extrinsicHash).toBeUndefined();
     } finally {
       server.close();
     }
   });
 
-  test('submitted execution events reject retired extrinsicHash payloads', async () => {
+  test('submitted execution events reject unsupported payload fields', async () => {
     const { server, baseUrl } = await startServer();
 
     try {
@@ -259,26 +280,30 @@ describe('gateway settlement routes contract', () => {
         eventType: 'submitted',
         executionStatus: 'submitted',
         reconciliationStatus: 'pending',
-        extrinsicHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        legacyExecutionRef: 'archived-chain-reference',
         observedAt: '2026-03-11T12:00:00.000Z',
       };
       const eventPath = `/api/dashboard-gateway/v1/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`;
 
-      const eventResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'event-compat',
-          'X-Request-Id': 'req-event-compat',
-          ...withServiceAuth(eventPath, eventBody),
+      const eventResponse = await fetch(
+        `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'event-compat',
+            'X-Request-Id': 'req-event-compat',
+            ...withServiceAuth(eventPath, eventBody),
+          },
+          body: JSON.stringify(eventBody),
         },
-        body: JSON.stringify(eventBody),
-      });
+      );
       const eventPayload = await eventResponse.json();
 
       expect(eventResponse.status).toBe(400);
       expect(eventPayload.error.code).toBe('VALIDATION_ERROR');
-      expect(eventPayload.error.message).toContain('extrinsicHash is retired');
+      expect(eventPayload.error.message).toContain('unsupported fields');
+      expect(eventPayload.error.details.unsupportedFields).toEqual(['legacyExecutionRef']);
     } finally {
       server.close();
     }
@@ -344,15 +369,18 @@ describe('gateway settlement routes contract', () => {
         observedAt: '2026-03-11T12:30:00.000Z',
       };
       const eventPath = `/api/dashboard-gateway/v1/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`;
-      const invalidTransition = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'event-invalid-transition',
-          ...withServiceAuth(eventPath, invalidTransitionBody),
+      const invalidTransition = await fetch(
+        `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'event-invalid-transition',
+            ...withServiceAuth(eventPath, invalidTransitionBody),
+          },
+          body: JSON.stringify(invalidTransitionBody),
         },
-        body: JSON.stringify(invalidTransitionBody),
-      });
+      );
 
       expect(invalidTransition.status).toBe(409);
 
@@ -362,15 +390,18 @@ describe('gateway settlement routes contract', () => {
         reconciliationStatus: 'pending',
         observedAt: '2026-03-11T12:20:00.000Z',
       };
-      const submitResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'event-submitted-before-confirm',
-          ...withServiceAuth(eventPath, submitBody),
+      const submitResponse = await fetch(
+        `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'event-submitted-before-confirm',
+            ...withServiceAuth(eventPath, submitBody),
+          },
+          body: JSON.stringify(submitBody),
         },
-        body: JSON.stringify(submitBody),
-      });
+      );
       expect(submitResponse.status).toBe(202);
 
       const confirmBody = {
@@ -379,15 +410,18 @@ describe('gateway settlement routes contract', () => {
         reconciliationStatus: 'pending',
         observedAt: '2026-03-11T12:20:30.000Z',
       };
-      const confirmResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'event-confirmed',
-          ...withServiceAuth(eventPath, confirmBody),
+      const confirmResponse = await fetch(
+        `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'event-confirmed',
+            ...withServiceAuth(eventPath, confirmBody),
+          },
+          body: JSON.stringify(confirmBody),
         },
-        body: JSON.stringify(confirmBody),
-      });
+      );
       expect(confirmResponse.status).toBe(202);
 
       const staleReconcileBody = {
@@ -396,15 +430,18 @@ describe('gateway settlement routes contract', () => {
         reconciliationStatus: 'matched',
         observedAt: '2026-03-11T12:31:00.000Z',
       };
-      const staleReconcileResponse = await fetch(`${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'event-reconcile-mutates-execution',
-          ...withServiceAuth(eventPath, staleReconcileBody),
+      const staleReconcileResponse = await fetch(
+        `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'event-reconcile-mutates-execution',
+            ...withServiceAuth(eventPath, staleReconcileBody),
+          },
+          body: JSON.stringify(staleReconcileBody),
         },
-        body: JSON.stringify(staleReconcileBody),
-      });
+      );
 
       expect(staleReconcileResponse.status).toBe(409);
     } finally {

@@ -104,7 +104,7 @@ describe('Ricardian deterministic hash vectors', () => {
     };
 
     const payloadEscaped = JSON.parse(
-      '{"documentRef":"doc://unicode","metadata":{},"terms":{"commodity":"Caf\\u00e9","buyer":"\\u674e\\u96f7"}}'
+      '{"documentRef":"doc://unicode","metadata":{},"terms":{"commodity":"Caf\\u00e9","buyer":"\\u674e\\u96f7"}}',
     ) as {
       documentRef: string;
       metadata: Record<string, unknown>;

@@ -74,7 +74,11 @@ function normalizeMeta(metaOrError?: unknown): LogMeta | undefined {
 }
 
 export class Logger {
-  private static write(level: 'info' | 'warn' | 'error' | 'debug', message: string, meta?: LogMeta): void {
+  private static write(
+    level: 'info' | 'warn' | 'error' | 'debug',
+    message: string,
+    meta?: LogMeta,
+  ): void {
     const payload = {
       level,
       timestamp: new Date().toISOString(),

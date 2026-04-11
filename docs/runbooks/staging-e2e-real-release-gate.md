@@ -1,15 +1,18 @@
 # Staging E2E Real Release Gate
 
 ## Purpose
+
 Run a staging-grade release gate against the real indexer pipeline profile (`staging-e2e-real`) and validate reconciliation against indexed chain state.
 For pilot startup sequencing and go/no-go criteria, use `docs/runbooks/pilot-environment-onboarding.md`.
-For the controlled Base Sepolia validation itself, use `scripts/base-sepolia-pilot-validation.sh` and store the resulting packet under `reports/base-sepolia-pilot-validation/`.
+For the controlled Base Sepolia validation itself, use `npm run pilot:rehearsal -- --window-id <window-id>` and store the resulting packet under `reports/base-sepolia-pilot-validation/`.
 For participant-facing pilot workflow guidance, use `docs/runbooks/non-custodial-pilot-user-guide.md`.
 For Base mainnet launch approval and production rollback control, use:
+
 - `docs/runbooks/base-mainnet-go-no-go.md`
 - `docs/runbooks/base-mainnet-cutover-and-rollback.md`
 
 ## Profile differences
+
 - `local-dev`: lightweight in-memory GraphQL responder (`indexer`) for fast iteration.
 - `staging-e2e`: existing staging profile.
 - `staging-e2e-real`: explicit release-gate profile using real indexer components:
@@ -18,6 +21,7 @@ For Base mainnet launch approval and production rollback control, use:
   - `indexer-graphql`
 
 ## Preconditions
+
 - Docker Engine + Compose plugin installed.
 - Env files created:
   - `.env`
@@ -25,7 +29,7 @@ For Base mainnet launch approval and production rollback control, use:
 - `staging-e2e-real` must be Base Sepolia only:
   - `STAGING_E2E_REAL_NETWORK_NAME=Base Sepolia`
   - `STAGING_E2E_REAL_CHAIN_ID=84532`
-- Active runtime URLs must not point at historical Asset Hub / Polkadot infrastructure.
+- Active runtime URLs must not point at retired legacy settlement infrastructure.
 - For the controlled pilot runtime, gateway/oracle/reconciliation must use
   managed Base Sepolia primary + fallback provider inputs instead of public
   Base RPC defaults.
@@ -50,6 +54,7 @@ For Base mainnet launch approval and production rollback control, use:
   - `STAGING_E2E_REAL_LAG_POLL_SECONDS` (default `5`)
 
 ## Commands
+
 ```bash
 cp .env.example .env
 cp .env.staging-e2e-real.example .env.staging-e2e-real
@@ -67,16 +72,20 @@ scripts/docker-services.sh down staging-e2e-real
 ```
 
 ## CI scope note
+
 The manual `staging-e2e-real` flow above is a staging validation runbook.
 GitHub Actions release-gate enforces workspace lint/typecheck/test/build checks and a CI-safe staging gate path (`scripts/validate-env.sh staging-e2e-real` plus `STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true scripts/staging-e2e-real-gate.sh`).
 CI does not execute the full Docker `up/health/logs/down` staging profile sequence from this runbook.
 This runbook is a prerequisite gate for pilot readiness; it is not the
 canonical pilot rehearsal report or evidence packet.
 It is also not, by itself, a production go/no-go record.
+If only `--config-only` rehearsal was run, treat that as repo-local rehearsal
+contract proof, not a live environment rehearsal.
 Source of truth for CI behavior: `.github/workflows/release-gate.yml`.
 CI also runs deterministic notification-path verification and uploads `ci-report-notifications-gate`.
 
 ## Expected output
+
 - `health staging-e2e-real` reports required services running and healthy.
 - `scripts/staging-e2e-real-gate.sh` reports:
   - schema parity result
@@ -90,6 +99,7 @@ CI also runs deterministic notification-path verification and uploads `ci-report
   - severity-route/template metadata validation
 
 ## Common failure modes
+
 - `STAGING_E2E_REAL_REQUIRE_INDEXED_DATA=true` with empty contract scope: gate fails until a seeded contract/event stream is available.
 - `negative lag`: RPC and indexer pipeline are on different networks.
 - `indexer head metric unavailable`: `indexer-graphql` not ready or no squid status response.
@@ -103,15 +113,20 @@ CI also runs deterministic notification-path verification and uploads `ci-report
 - `notifications gate failed`: notifications package was not built (`notifications/dist/index.js` missing) or deterministic critical-path probe checks failed.
 
 ## Rollback / backout
+
 1. Stop profile:
+
 ```bash
 scripts/docker-services.sh down staging-e2e-real
 ```
+
 2. Revert `.env.staging-e2e-real` to last known-good values.
 3. Re-run the command sequence from a clean start.
 
 ## Escalation
+
 Escalate if any of the following persists after one clean restart:
+
 - Indexer GraphQL never reaches readiness.
 - Lag remains negative.
 - Reconciliation fails with repeated critical drift or on-chain read errors.

@@ -21,6 +21,9 @@ type TriggerLike = {
   submitted_at: Date;
 };
 
+type IndexerClientLike = ConstructorParameters<typeof ConfirmationWorker>[0];
+type SdkClientLike = ConstructorParameters<typeof ConfirmationWorker>[1];
+
 function makeTrigger(overrides: Partial<TriggerLike> = {}): TriggerLike {
   return {
     idempotency_key: 'idem-1234567890abcdef1234567890abcdef',
@@ -40,20 +43,23 @@ describe('ConfirmationWorker on-chain fallback', () => {
   });
 
   it('marks trigger confirmed when indexer is unavailable but chain state has advanced', async () => {
-    const indexerClient = {
+    const indexerClient: IndexerClientLike = {
       findConfirmationEvent: jest.fn().mockResolvedValue(null),
-    } as any;
+    } as unknown as IndexerClientLike;
 
-    const sdkClient = {
+    const sdkClient: SdkClientLike = {
       getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(null),
       getSettlementConfirmationHeads: jest.fn(),
       getTrade: jest.fn().mockResolvedValue({ status: TRADE_STATUS_IN_TRANSIT }),
-    } as any;
+    } as unknown as SdkClientLike;
 
     const worker = new ConfirmationWorker(indexerClient, sdkClient);
-    const checkConfirmation = (worker as any).checkConfirmation.bind(worker);
+    const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
+      trigger: TriggerLike,
+    ) => Promise<void>;
+    const boundCheckConfirmation = checkConfirmation.bind(worker);
 
-    await checkConfirmation(makeTrigger());
+    await boundCheckConfirmation(makeTrigger());
 
     expect(sdkClient.getTrade).toHaveBeenCalledWith('1');
     expect(mockUpdateTrigger).toHaveBeenCalledWith(
@@ -66,20 +72,23 @@ describe('ConfirmationWorker on-chain fallback', () => {
   });
 
   it('does not mark confirmed when chain state is still pending', async () => {
-    const indexerClient = {
+    const indexerClient: IndexerClientLike = {
       findConfirmationEvent: jest.fn().mockResolvedValue(null),
-    } as any;
+    } as unknown as IndexerClientLike;
 
-    const sdkClient = {
+    const sdkClient: SdkClientLike = {
       getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(null),
       getSettlementConfirmationHeads: jest.fn(),
       getTrade: jest.fn().mockResolvedValue({ status: TRADE_STATUS_LOCKED }),
-    } as any;
+    } as unknown as SdkClientLike;
 
     const worker = new ConfirmationWorker(indexerClient, sdkClient);
-    const checkConfirmation = (worker as any).checkConfirmation.bind(worker);
+    const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
+      trigger: TriggerLike,
+    ) => Promise<void>;
+    const boundCheckConfirmation = checkConfirmation.bind(worker);
 
-    await checkConfirmation(makeTrigger());
+    await boundCheckConfirmation(makeTrigger());
 
     expect(sdkClient.getTrade).toHaveBeenCalledWith('1');
     expect(mockUpdateTrigger).not.toHaveBeenCalledWith(
@@ -89,32 +98,35 @@ describe('ConfirmationWorker on-chain fallback', () => {
   });
 
   it('rate-limits on-chain fallback checks per tradeId', async () => {
-    const indexerClient = {
+    const indexerClient: IndexerClientLike = {
       findConfirmationEvent: jest.fn().mockResolvedValue(null),
-    } as any;
+    } as unknown as IndexerClientLike;
 
-    const sdkClient = {
+    const sdkClient: SdkClientLike = {
       getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(null),
       getSettlementConfirmationHeads: jest.fn(),
       getTrade: jest.fn().mockResolvedValue({ status: TRADE_STATUS_LOCKED }),
-    } as any;
+    } as unknown as SdkClientLike;
 
     const worker = new ConfirmationWorker(indexerClient, sdkClient);
-    const checkConfirmation = (worker as any).checkConfirmation.bind(worker);
+    const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
+      trigger: TriggerLike,
+    ) => Promise<void>;
+    const boundCheckConfirmation = checkConfirmation.bind(worker);
     const trigger = makeTrigger();
 
-    await checkConfirmation(trigger);
-    await checkConfirmation(trigger);
+    await boundCheckConfirmation(trigger);
+    await boundCheckConfirmation(trigger);
 
     expect(sdkClient.getTrade).toHaveBeenCalledTimes(1);
   });
 
   it('confirms from receipt once the block has reached the safe stage', async () => {
-    const indexerClient = {
+    const indexerClient: IndexerClientLike = {
       findConfirmationEvent: jest.fn().mockResolvedValue(null),
-    } as any;
+    } as unknown as IndexerClientLike;
 
-    const sdkClient = {
+    const sdkClient: SdkClientLike = {
       getTransactionReceiptBlockNumber: jest.fn().mockResolvedValue(123),
       getSettlementConfirmationHeads: jest.fn().mockResolvedValue({
         latestBlockNumber: 140,
@@ -122,13 +134,16 @@ describe('ConfirmationWorker on-chain fallback', () => {
         finalizedBlockNumber: 100,
       }),
       getTrade: jest.fn(),
-    } as any;
+    } as unknown as SdkClientLike;
 
     const worker = new ConfirmationWorker(indexerClient, sdkClient);
-    const checkConfirmation = (worker as any).checkConfirmation.bind(worker);
+    const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
+      trigger: TriggerLike,
+    ) => Promise<void>;
+    const boundCheckConfirmation = checkConfirmation.bind(worker);
 
-    await checkConfirmation(
-      makeTrigger({ submitted_at: new Date(Date.now() - 35 * 60 * 1000) })
+    await boundCheckConfirmation(
+      makeTrigger({ submitted_at: new Date(Date.now() - 35 * 60 * 1000) }),
     );
 
     expect(mockUpdateTrigger).toHaveBeenCalledWith(

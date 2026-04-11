@@ -4,66 +4,72 @@
 // status, roadmap linkage, and evidence freshness. Historical rows may still
 // appear in the matrix for audit traceability, but the script validates the
 // current Base-era schema.
-import fs from "node:fs";
-import path from "node:path";
-import process from "node:process";
+import fs from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
 
-const STATUS_VALUES = new Set(["Done", "In Progress", "Blocked", "Backlog", "Out of Scope"]);
-const CADENCE_VALUES = new Set(["daily", "weekly", "biweekly", "monthly", "quarterly", "on-change", "archive-only"]);
+const STATUS_VALUES = new Set(['Done', 'In Progress', 'Blocked', 'Backlog', 'Out of Scope']);
+const CADENCE_VALUES = new Set([
+  'daily',
+  'weekly',
+  'biweekly',
+  'monthly',
+  'quarterly',
+  'on-change',
+  'archive-only',
+]);
 const GATE_ISSUE_NUMBERS = [70, 71, 72];
 const REQUIRED_COLUMNS = [
-  "Component",
-  "Program Scope",
-  "Status",
-  "% Complete",
-  "Roadmap Issue(s)",
-  "Evidence",
-  "Remaining Gap",
-  "Owner",
-  "Last Refreshed",
-  "Refresh Cadence",
+  'Component',
+  'Program Scope',
+  'Status',
+  '% Complete',
+  'Roadmap Issue(s)',
+  'Evidence',
+  'Remaining Gap',
+  'Owner',
+  'Last Refreshed',
+  'Refresh Cadence',
 ];
-const LEGACY_COLUMN_ALIASES = new Map([
-  ["Milestone Target", "Program Scope"],
-]);
+const LEGACY_COLUMN_ALIASES = new Map([['Milestone Target', 'Program Scope']]);
 
 function parseArgs(argv) {
   const args = {
-    matrix: "docs/runbooks/architecture-coverage-matrix.md",
-    out: "reports/governance/architecture-roadmap-consistency.json",
+    matrix: 'docs/runbooks/architecture-coverage-matrix.md',
+    out: 'reports/governance/architecture-roadmap-consistency.json',
     offline: false,
-    repo: process.env.GITHUB_REPOSITORY || "Agroasys/Cotsel",
+    repo: process.env.GITHUB_REPOSITORY || 'Agroasys/Cotsel',
   };
 
   for (let index = 2; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--offline") {
+    if (arg === '--offline') {
       args.offline = true;
       continue;
     }
-    if (arg.startsWith("--matrix=")) {
-      args.matrix = arg.slice("--matrix=".length);
+    if (arg.startsWith('--matrix=')) {
+      args.matrix = arg.slice('--matrix='.length);
       continue;
     }
-    if (arg === "--matrix" && argv[index + 1]) {
+    if (arg === '--matrix' && argv[index + 1]) {
       args.matrix = argv[index + 1];
       index += 1;
       continue;
     }
-    if (arg.startsWith("--out=")) {
-      args.out = arg.slice("--out=".length);
+    if (arg.startsWith('--out=')) {
+      args.out = arg.slice('--out='.length);
       continue;
     }
-    if (arg === "--out" && argv[index + 1]) {
+    if (arg === '--out' && argv[index + 1]) {
       args.out = argv[index + 1];
       index += 1;
       continue;
     }
-    if (arg.startsWith("--repo=")) {
-      args.repo = arg.slice("--repo=".length);
+    if (arg.startsWith('--repo=')) {
+      args.repo = arg.slice('--repo='.length);
       continue;
     }
-    if (arg === "--repo" && argv[index + 1]) {
+    if (arg === '--repo' && argv[index + 1]) {
       args.repo = argv[index + 1];
       index += 1;
       continue;
@@ -84,43 +90,43 @@ function isIsoDate(value) {
 
 function parseRow(line) {
   const trimmed = line.trim();
-  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) {
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) {
     return null;
   }
   return trimmed
     .slice(1, -1)
-    .split("|")
+    .split('|')
     .map((value) => value.trim());
 }
 
 function parseComponentTable(markdown) {
   const lines = markdown.split(/\r?\n/u);
-  const mappingIndex = lines.findIndex((line) => line.trim() === "## Component Mapping");
+  const mappingIndex = lines.findIndex((line) => line.trim() === '## Component Mapping');
   if (mappingIndex < 0) {
     throw new Error('missing "## Component Mapping" section');
   }
 
   let tableStart = -1;
   for (let index = mappingIndex + 1; index < lines.length; index += 1) {
-    if (lines[index].trim().startsWith("|")) {
+    if (lines[index].trim().startsWith('|')) {
       tableStart = index;
       break;
     }
   }
   if (tableStart < 0 || tableStart + 1 >= lines.length) {
-    throw new Error("component mapping table header not found");
+    throw new Error('component mapping table header not found');
   }
 
   const header = parseRow(lines[tableStart]);
   const separator = parseRow(lines[tableStart + 1]);
   if (!header || !separator) {
-    throw new Error("invalid component mapping table header");
+    throw new Error('invalid component mapping table header');
   }
 
   const rows = [];
   for (let index = tableStart + 2; index < lines.length; index += 1) {
     const line = lines[index];
-    if (!line.trim().startsWith("|")) {
+    if (!line.trim().startsWith('|')) {
       break;
     }
     const values = parseRow(line);
@@ -173,16 +179,16 @@ function parseIssueNumbers(text) {
 }
 
 function getToken() {
-  return process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
+  return process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '';
 }
 
 async function fetchIssue(repo, issueNumber, token) {
   const response = await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
     headers: {
-      Accept: "application/vnd.github+json",
+      Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": "agroasys-arch-roadmap-consistency-check",
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'agroasys-arch-roadmap-consistency-check',
     },
   });
 
@@ -196,17 +202,17 @@ async function fetchIssue(repo, issueNumber, token) {
 
 function checkStatusConsistency(row, errors) {
   const status = row.Status;
-  const percentRaw = row["% Complete"];
+  const percentRaw = row['% Complete'];
   const percent = Number.parseInt(percentRaw, 10);
   if (Number.isNaN(percent) || percent < 0 || percent > 100) {
     errors.push(`line ${row._line}: invalid % Complete value (${percentRaw})`);
     return;
   }
 
-  const remainingGap = row["Remaining Gap"].toLowerCase();
-  const noGap = remainingGap.startsWith("none");
+  const remainingGap = row['Remaining Gap'].toLowerCase();
+  const noGap = remainingGap.startsWith('none');
 
-  if (status === "Done") {
+  if (status === 'Done') {
     if (percent !== 100) {
       errors.push(`line ${row._line}: Done row must have % Complete = 100`);
     }
@@ -216,9 +222,11 @@ function checkStatusConsistency(row, errors) {
     return;
   }
 
-  if (status === "Out of Scope") {
-    if (row["Remaining Gap"].trim().length === 0) {
-      errors.push(`line ${row._line}: Out of Scope row must explain scope boundary in Remaining Gap`);
+  if (status === 'Out of Scope') {
+    if (row['Remaining Gap'].trim().length === 0) {
+      errors.push(
+        `line ${row._line}: Out of Scope row must explain scope boundary in Remaining Gap`,
+      );
     }
     return;
   }
@@ -237,7 +245,7 @@ function validateMatrixRows(rows, errors) {
       if (!Object.prototype.hasOwnProperty.call(row, column)) {
         continue;
       }
-      if (String(row[column] || "").trim().length === 0) {
+      if (String(row[column] || '').trim().length === 0) {
         errors.push(`line ${row._line}: required field is empty (${column})`);
       }
     }
@@ -246,20 +254,24 @@ function validateMatrixRows(rows, errors) {
       errors.push(`line ${row._line}: unsupported Status value (${row.Status})`);
     }
 
-    if (!isIsoDate(row["Last Refreshed"])) {
-      errors.push(`line ${row._line}: Last Refreshed must be YYYY-MM-DD (${row["Last Refreshed"]})`);
+    if (!isIsoDate(row['Last Refreshed'])) {
+      errors.push(
+        `line ${row._line}: Last Refreshed must be YYYY-MM-DD (${row['Last Refreshed']})`,
+      );
     }
 
-    const cadence = row["Refresh Cadence"].toLowerCase();
+    const cadence = row['Refresh Cadence'].toLowerCase();
     if (!CADENCE_VALUES.has(cadence)) {
-      errors.push(`line ${row._line}: Refresh Cadence must be one of ${Array.from(CADENCE_VALUES).join(", ")} (${row["Refresh Cadence"]})`);
+      errors.push(
+        `line ${row._line}: Refresh Cadence must be one of ${Array.from(CADENCE_VALUES).join(', ')} (${row['Refresh Cadence']})`,
+      );
     }
 
-    if (row.Evidence.trim().toLowerCase() === "none") {
+    if (row.Evidence.trim().toLowerCase() === 'none') {
       errors.push(`line ${row._line}: Evidence cannot be "None"`);
     }
 
-    const issueNumbers = parseIssueNumbers(row["Roadmap Issue(s)"]);
+    const issueNumbers = parseIssueNumbers(row['Roadmap Issue(s)']);
     if (issueNumbers.length === 0) {
       errors.push(`line ${row._line}: Roadmap Issue(s) must include at least one #issue reference`);
     }
@@ -281,7 +293,7 @@ async function main() {
     throw new Error(`matrix file not found: ${matrixPath}`);
   }
 
-  const markdown = fs.readFileSync(matrixPath, "utf8");
+  const markdown = fs.readFileSync(matrixPath, 'utf8');
   const snapshotMatch = markdown.match(/^Snapshot date:\s*(\d{4}-\d{2}-\d{2})$/mu);
   if (!snapshotMatch) {
     throw new Error("matrix is missing 'Snapshot date: YYYY-MM-DD'");
@@ -326,11 +338,13 @@ async function main() {
   if (!args.offline) {
     const token = getToken();
     if (!token) {
-      errors.push("online mode requires GITHUB_TOKEN or GH_TOKEN (use --offline to skip issue-state checks)");
+      errors.push(
+        'online mode requires GITHUB_TOKEN or GH_TOKEN (use --offline to skip issue-state checks)',
+      );
     } else {
       const issueNumbers = new Set(GATE_ISSUE_NUMBERS);
       for (const row of rows) {
-        for (const issueNumber of parseIssueNumbers(row["Roadmap Issue(s)"])) {
+        for (const issueNumber of parseIssueNumbers(row['Roadmap Issue(s)'])) {
           issueNumbers.add(issueNumber);
         }
       }
@@ -342,21 +356,23 @@ async function main() {
         issueState.set(issueNumber, {
           number: issue.number,
           state: issue.state,
-          body: issue.body || "",
+          body: issue.body || '',
           url: issue.html_url,
         });
       }
 
       for (const row of rows) {
-        const linkedIssues = parseIssueNumbers(row["Roadmap Issue(s)"]);
+        const linkedIssues = parseIssueNumbers(row['Roadmap Issue(s)']);
         if (linkedIssues.length === 0) {
           continue;
         }
 
-        const allClosed = linkedIssues.every((issueNumber) => issueState.get(issueNumber)?.state === "closed");
-        if (allClosed && row.Status !== "Done" && row.Status !== "Out of Scope") {
+        const allClosed = linkedIssues.every(
+          (issueNumber) => issueState.get(issueNumber)?.state === 'closed',
+        );
+        if (allClosed && row.Status !== 'Done' && row.Status !== 'Out of Scope') {
           errors.push(
-            `line ${row._line}: stale drift - all linked issues are closed (${linkedIssues.map((n) => `#${n}`).join(", ")}); expected Status=Done or Out of Scope, actual=${row.Status}`,
+            `line ${row._line}: stale drift - all linked issues are closed (${linkedIssues.map((n) => `#${n}`).join(', ')}); expected Status=Done or Out of Scope, actual=${row.Status}`,
           );
         }
       }
@@ -380,7 +396,9 @@ async function main() {
         const lastSynchronized = parseLastSynchronizedDate(gateIssue.body);
         gateResult.lastSynchronized = lastSynchronized;
         gateResult.matchesSnapshotDate = lastSynchronized === snapshotDate;
-        gateResult.referencesMatrix = gateIssue.body.includes("docs/runbooks/architecture-coverage-matrix.md");
+        gateResult.referencesMatrix = gateIssue.body.includes(
+          'docs/runbooks/architecture-coverage-matrix.md',
+        );
 
         if (!lastSynchronized) {
           errors.push(`gate issue #${gateIssueNumber} is missing 'Last synchronized: YYYY-MM-DD'`);
@@ -391,7 +409,9 @@ async function main() {
         }
 
         if (!gateResult.referencesMatrix) {
-          errors.push(`gate issue #${gateIssueNumber} does not reference architecture-coverage-matrix.md`);
+          errors.push(
+            `gate issue #${gateIssueNumber} does not reference architecture-coverage-matrix.md`,
+          );
         }
 
         report.gateChecks.push(gateResult);
@@ -403,7 +423,7 @@ async function main() {
 
   const outPath = path.resolve(args.out);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  fs.writeFileSync(outPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
   console.log(`Architecture-roadmap consistency report: ${outPath}`);
   console.log(`Rows checked: ${rows.length}`);
@@ -417,12 +437,14 @@ async function main() {
       console.error(`ERROR: ${error}`);
     }
     console.error(`ERROR: remediation (matrix): ${report.remediation.writeMatrix}`);
-    console.error(`ERROR: remediation (matrix+progress): ${report.remediation.writeMatrixNormalized}`);
+    console.error(
+      `ERROR: remediation (matrix+progress): ${report.remediation.writeMatrixNormalized}`,
+    );
     console.error(`ERROR: remediation (gate issues): ${report.remediation.writeGateIssues}`);
     process.exit(1);
   }
 
-  console.log("Consistency check passed");
+  console.log('Consistency check passed');
 }
 
 main().catch((error) => {

@@ -1,0 +1,34 @@
+export function isPlainObject(value: unknown): value is Record<string, unknown>;
+export function requireObject<T extends Record<string, unknown> = Record<string, unknown>>(
+  value: unknown,
+  field: string,
+): T;
+export function requireString(value: unknown, field: string): string;
+export function optionalString(value: unknown, field: string): string | undefined;
+export function optionalNullableString(value: unknown, field: string): string | null | undefined;
+export function requireEnum<T extends string>(
+  value: unknown,
+  allowedValues: readonly T[],
+  field: string,
+): T;
+export function optionalEnum<T extends string>(
+  value: unknown,
+  allowedValues: readonly T[],
+  field: string,
+): T | undefined;
+export function requireInteger(
+  value: unknown,
+  field: string,
+  options?: { min?: number; max?: number },
+): number;
+export function optionalInteger(
+  value: unknown,
+  field: string,
+  options?: { min?: number; max?: number },
+): number | undefined;
+export function optionalBoolean(value: unknown, field: string): boolean | undefined;
+export function requireIsoTimestamp(value: unknown, field: string): Date;
+export function optionalRecord<T extends Record<string, unknown> = Record<string, unknown>>(
+  value: unknown,
+  field: string,
+): T | undefined;

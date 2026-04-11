@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { RicardianController } from '../src/api/controller';
+import type { RicardianHashRequest } from '../src/types';
 import { buildRicardianHash } from '../src/utils/hash';
 import { createDocument, getDocument } from '../src/database/documentStore';
 import {
@@ -23,6 +24,16 @@ type MockedResponse = Response & {
   json: jest.Mock;
 };
 
+function asHashRequest(
+  body: unknown,
+): Request<Record<string, never>, Record<string, never>, RicardianHashRequest> {
+  return { body } as unknown as Request<
+    Record<string, never>,
+    Record<string, never>,
+    RicardianHashRequest
+  >;
+}
+
 function createMockResponse(): MockedResponse {
   const res = {} as MockedResponse;
   res.status = jest.fn().mockReturnValue(res);
@@ -32,7 +43,9 @@ function createMockResponse(): MockedResponse {
 
 describe('RicardianController.createHash', () => {
   const controller = new RicardianController();
-  const mockedBuildRicardianHash = buildRicardianHash as jest.MockedFunction<typeof buildRicardianHash>;
+  const mockedBuildRicardianHash = buildRicardianHash as jest.MockedFunction<
+    typeof buildRicardianHash
+  >;
   const mockedCreateDocument = createDocument as jest.MockedFunction<typeof createDocument>;
 
   beforeEach(() => {
@@ -44,19 +57,18 @@ describe('RicardianController.createHash', () => {
       throw new Error('documentRef is required');
     });
 
-    const req = {
-      body: {},
-    } as Request;
+    const req = asHashRequest({});
     const res = createMockResponse();
 
-    await controller.createHash(req as Request<{}, {}, any>, res);
+    await controller.createHash(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         success: false,
-        error: 'documentRef is required',
-      })
+        error: 'ValidationError',
+        message: 'documentRef is required',
+      }),
     );
   });
 
@@ -72,19 +84,17 @@ describe('RicardianController.createHash', () => {
 
     mockedCreateDocument.mockRejectedValue(new DocumentPersistenceError('db unavailable'));
 
-    const req = {
-      body: { documentRef: 'doc://ok', terms: { ok: true } },
-    } as Request;
+    const req = asHashRequest({ documentRef: 'doc://ok', terms: { ok: true } });
     const res = createMockResponse();
 
-    await controller.createHash(req as Request<{}, {}, any>, res);
+    await controller.createHash(req, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         success: false,
         code: 'DOCUMENT_PERSISTENCE_FAILURE',
-      })
+      }),
     );
   });
 
@@ -100,19 +110,18 @@ describe('RicardianController.createHash', () => {
 
     mockedCreateDocument.mockRejectedValue(new Error('unexpected db error'));
 
-    const req = {
-      body: { documentRef: 'doc://ok', terms: { ok: true } },
-    } as Request;
+    const req = asHashRequest({ documentRef: 'doc://ok', terms: { ok: true } });
     const res = createMockResponse();
 
-    await controller.createHash(req as Request<{}, {}, any>, res);
+    await controller.createHash(req, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         success: false,
-        error: 'unexpected db error',
-      })
+        error: 'InternalError',
+        message: 'unexpected db error',
+      }),
     );
   });
 });
@@ -133,7 +142,11 @@ describe('RicardianController.getHash', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, error: 'Invalid hash format' })
+      expect.objectContaining({
+        success: false,
+        error: 'ValidationError',
+        message: 'Invalid hash format',
+      }),
     );
   });
 
@@ -170,7 +183,7 @@ describe('RicardianController.getHash', () => {
 
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, code: 'DOCUMENT_NOT_FOUND' })
+      expect.objectContaining({ success: false, code: 'DOCUMENT_NOT_FOUND' }),
     );
   });
 
@@ -185,7 +198,7 @@ describe('RicardianController.getHash', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, code: 'DOCUMENT_RETRIEVAL_FAILURE' })
+      expect.objectContaining({ success: false, code: 'DOCUMENT_RETRIEVAL_FAILURE' }),
     );
   });
 
@@ -200,7 +213,7 @@ describe('RicardianController.getHash', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, code: 'DOCUMENT_INTEGRITY_FAILURE' })
+      expect.objectContaining({ success: false, code: 'DOCUMENT_INTEGRITY_FAILURE' }),
     );
   });
 });

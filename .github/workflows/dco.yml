@@ -11,9 +11,30 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - name: Check DCO sign-offs
-        uses: cpanato/dco-check-action@5a8e740b20f923cfc576219c32a2112f2cf74220
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          pull_request_number: ${{ github.event.number }}
+          fetch-depth: 0
+
+      - name: Validate DCO sign-offs across PR commits
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.event.pull_request.head.sha }}"
+
+          missing=0
+          while IFS= read -r commit_sha; do
+            [[ -z "$commit_sha" ]] && continue
+
+            if ! git log -1 --format=%B "$commit_sha" | grep -qi '^Signed-off-by:'; then
+              echo "missing DCO sign-off: $commit_sha" >&2
+              git log -1 --format='%h %s' "$commit_sha" >&2
+              missing=1
+            fi
+          done < <(git rev-list "${base_sha}..${head_sha}")
+
+          if [[ "$missing" -ne 0 ]]; then
+            exit 1
+          fi

@@ -4,7 +4,6 @@
   "private": true,
   "main": "dist/server.js",
   "scripts": {
-    "prelint": "npm --prefix ../sdk run build",
     "build": "tsc && npm run copy-files",
     "prebuild": "npm --prefix ../sdk run build",
     "copy-files": "mkdir -p dist/database dist/openapi && cp src/database/schema.sql dist/database/ && cp ../docs/api/cotsel-dashboard-gateway.openapi.yml dist/openapi/",
@@ -13,9 +12,12 @@
     "dev": "ts-node src/server.ts",
     "pretest": "npm --prefix ../sdk run build",
     "test": "jest --runInBand",
-    "lint": "tsc --noEmit"
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agroasys/shared-db": "*",
+    "@agroasys/shared-edge": "*",
     "@agroasys/shared-auth": "*",
     "@agroasys/sdk": "*",
     "cors": "^2.8.6",

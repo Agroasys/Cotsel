@@ -1,0 +1,22 @@
+{
+  "name": "@agroasys/shared-db",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "lint": "eslint --max-warnings=0 .",
+    "test": "node --test index.test.js rls-schema.test.js postgres-rls.integration.test.js"
+  },
+  "dependencies": {
+    "pg": "^8.20.0"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "index.test.js",
+    "rls-schema.test.js",
+    "postgres-rls.integration.test.js"
+  ],
+  "license": "Apache-2.0"
+}

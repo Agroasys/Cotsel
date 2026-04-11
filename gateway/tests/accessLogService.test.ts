@@ -8,7 +8,9 @@ import type { GatewayPrincipal } from '../src/middleware/auth';
 import type { RequestContext } from '../src/middleware/requestContext';
 
 function buildPrincipal(
-  overrides: Omit<Partial<GatewayPrincipal['session']>, 'walletAddress'> & { walletAddress?: string | null } = {},
+  overrides: Omit<Partial<GatewayPrincipal['session']>, 'walletAddress'> & {
+    walletAddress?: string | null;
+  } = {},
 ): GatewayPrincipal {
   const session = {
     userId: 'uid-admin',
@@ -42,9 +44,11 @@ function buildRequest(): Request {
     originalUrl: '/api/dashboard-gateway/v1/access-logs',
     path: '/access-logs',
     ip: '::ffff:127.0.0.1',
-    get: jest.fn().mockImplementation((name: string) => (
-      name.toLowerCase() === 'user-agent' ? 'ctsp-dash/1.0' : undefined
-    )),
+    get: jest
+      .fn()
+      .mockImplementation((name: string) =>
+        name.toLowerCase() === 'user-agent' ? 'ctsp-dash/1.0' : undefined,
+      ),
   } as unknown as Request;
 }
 
@@ -122,11 +126,13 @@ describe('AccessLogService', () => {
   });
 
   test('validates access log create payloads', () => {
-    expect(() => validateAccessLogCreateRequest({
-      eventType: 'bad event',
-      surface: '/settings',
-      outcome: 'allowed',
-    })).toThrow('eventType contains invalid characters');
+    expect(() =>
+      validateAccessLogCreateRequest({
+        eventType: 'bad event',
+        surface: '/settings',
+        outcome: 'allowed',
+      }),
+    ).toThrow('eventType contains invalid characters');
   });
 
   test('records access log entries when the session has no linked wallet', async () => {

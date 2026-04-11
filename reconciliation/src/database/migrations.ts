@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { pool } from './connection';
+import { createMigrationPool } from './connection';
 
 export async function runMigrations(): Promise<void> {
   const candidates = [
@@ -16,5 +16,11 @@ export async function runMigrations(): Promise<void> {
   }
 
   const sql = fs.readFileSync(schemaPath, 'utf8');
-  await pool.query(sql);
+  const migrationPool = createMigrationPool();
+
+  try {
+    await migrationPool.query(sql);
+  } finally {
+    await migrationPool.end();
+  }
 }

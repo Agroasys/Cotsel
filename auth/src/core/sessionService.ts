@@ -16,13 +16,21 @@ export interface SessionService {
    * Called after the current legacy wallet-proof bootstrap resolves on the client.
    * Upserts the UserProfile (idempotent) and issues a fresh session.
    */
-  login(walletAddress: string, role: UserRole, orgId?: string, ttlSeconds?: number): Promise<SessionIssueResult>;
+  login(
+    walletAddress: string,
+    role: UserRole,
+    orgId?: string,
+    ttlSeconds?: number,
+  ): Promise<SessionIssueResult>;
 
   /**
    * Issues a session for a trusted upstream account identity, without requiring
    * the legacy wallet-proof bootstrap.
    */
-  issueTrustedSession(identity: TrustedSessionIdentity, ttlSeconds?: number): Promise<SessionIssueResult>;
+  issueTrustedSession(
+    identity: TrustedSessionIdentity,
+    ttlSeconds?: number,
+  ): Promise<SessionIssueResult>;
 
   /**
    * Issues a new session in exchange for a valid, non-expired, non-revoked one.
@@ -66,7 +74,11 @@ export function createSessionService(
       }
       const result = await sessions.issue(profile, ttlSeconds);
       incrementSessionIssued();
-      Logger.info('Session issued', { userId: profile.id, walletAddress: profile.walletAddress, role });
+      Logger.info('Session issued', {
+        userId: profile.id,
+        walletAddress: profile.walletAddress,
+        role,
+      });
       return result;
     },
 
@@ -101,7 +113,10 @@ export function createSessionService(
       const result = await sessions.issue(profile, ttlSeconds);
       await sessions.revoke(sessionId);
       incrementSessionRefreshed();
-      Logger.info('Session refreshed', { userId: profile.id, walletAddress: profile.walletAddress });
+      Logger.info('Session refreshed', {
+        userId: profile.id,
+        walletAddress: profile.walletAddress,
+      });
       return result;
     },
 

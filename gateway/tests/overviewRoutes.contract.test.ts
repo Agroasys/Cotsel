@@ -44,6 +44,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-09T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 const overviewFixture: OverviewSnapshot = {
@@ -60,9 +63,27 @@ const overviewFixture: OverviewSnapshot = {
     oracleActive: true,
   },
   feedFreshness: {
-    trades: { source: 'indexer_graphql', queriedAt: '2026-03-09T00:00:05.000Z', freshAt: '2026-03-09T00:00:00.000Z', available: true, lastIndexedAt: '2026-03-09T00:00:00.000Z', lastProcessedBlock: '42000', lastTradeEventAt: '2026-03-08T12:00:00.000Z' },
-    governance: { source: 'chain_rpc', queriedAt: '2026-03-09T00:00:00.000Z', freshAt: '2026-03-09T00:00:00.000Z', available: true },
-    compliance: { source: 'gateway_ledger', queriedAt: '2026-03-09T00:00:00.000Z', freshAt: '2026-03-09T00:00:00.000Z', available: true },
+    trades: {
+      source: 'indexer_graphql',
+      queriedAt: '2026-03-09T00:00:05.000Z',
+      freshAt: '2026-03-09T00:00:00.000Z',
+      available: true,
+      lastIndexedAt: '2026-03-09T00:00:00.000Z',
+      lastProcessedBlock: '42000',
+      lastTradeEventAt: '2026-03-08T12:00:00.000Z',
+    },
+    governance: {
+      source: 'chain_rpc',
+      queriedAt: '2026-03-09T00:00:00.000Z',
+      freshAt: '2026-03-09T00:00:00.000Z',
+      available: true,
+    },
+    compliance: {
+      source: 'gateway_ledger',
+      queriedAt: '2026-03-09T00:00:00.000Z',
+      freshAt: '2026-03-09T00:00:00.000Z',
+      available: true,
+    },
   },
 };
 
@@ -76,13 +97,24 @@ const degradedFixture: OverviewSnapshot = {
   },
   posture: null,
   feedFreshness: {
-    trades: { source: 'indexer_graphql', queriedAt: null, freshAt: null, available: false, lastIndexedAt: null, lastProcessedBlock: null, lastTradeEventAt: null },
+    trades: {
+      source: 'indexer_graphql',
+      queriedAt: null,
+      freshAt: null,
+      available: false,
+      lastIndexedAt: null,
+      lastProcessedBlock: null,
+      lastTradeEventAt: null,
+    },
     governance: { source: 'chain_rpc', queriedAt: null, freshAt: null, available: false },
     compliance: { source: 'gateway_ledger', queriedAt: null, freshAt: null, available: false },
   },
 };
 
-async function startServer(role: 'admin' | 'buyer' | null, fixture: OverviewSnapshot = overviewFixture) {
+async function startServer(
+  role: 'admin' | 'buyer' | null,
+  fixture: OverviewSnapshot = overviewFixture,
+) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
       if (role === null) {

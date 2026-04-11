@@ -115,3 +115,43 @@ DROP INDEX IF EXISTS idx_active_action_key_unique;
 CREATE UNIQUE INDEX idx_active_action_key_unique
     ON oracle_triggers(action_key)
     WHERE status IN ('PENDING', 'EXECUTING', 'SUBMITTED', 'PENDING_APPROVAL');
+
+CREATE OR REPLACE FUNCTION current_app_service_name()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(current_setting('app.service_name', true), '');
+$$;
+
+DO $$
+DECLARE
+    runtime_user TEXT := NULLIF(current_setting('app.runtime_db_user', true), '');
+BEGIN
+    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM PUBLIC;
+
+    IF runtime_user IS NOT NULL THEN
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE oracle_triggers TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE oracle_hmac_nonces TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE oracle_triggers_id_seq TO %I', runtime_user);
+    END IF;
+END $$;
+
+ALTER TABLE oracle_triggers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE oracle_triggers FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS oracle_triggers_service_isolation ON oracle_triggers;
+CREATE POLICY oracle_triggers_service_isolation ON oracle_triggers
+    FOR ALL
+    USING (current_app_service_name() = 'oracle')
+    WITH CHECK (current_app_service_name() = 'oracle');
+
+ALTER TABLE oracle_hmac_nonces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE oracle_hmac_nonces FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS oracle_hmac_nonces_service_isolation ON oracle_hmac_nonces;
+CREATE POLICY oracle_hmac_nonces_service_isolation ON oracle_hmac_nonces
+    FOR ALL
+    USING (current_app_service_name() = 'oracle')
+    WITH CHECK (current_app_service_name() = 'oracle');

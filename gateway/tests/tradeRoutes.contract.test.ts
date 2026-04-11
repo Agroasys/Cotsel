@@ -44,6 +44,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-07T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 const tradeFixture: DashboardTradeRecord = {
@@ -113,7 +116,11 @@ async function startServer(role: 'admin' | 'buyer' | null) {
   const tradeReadService: TradeReadReader = {
     checkReadiness: jest.fn(),
     listTrades: jest.fn().mockResolvedValue([tradeFixture]),
-    getTrade: jest.fn().mockImplementation(async (tradeId: string) => (tradeId === tradeFixture.id ? tradeFixture : null)),
+    getTrade: jest
+      .fn()
+      .mockImplementation(async (tradeId: string) =>
+        tradeId === tradeFixture.id ? tradeFixture : null,
+      ),
   };
 
   const router = Router();
@@ -196,7 +203,8 @@ describe('gateway trade routes contract', () => {
   });
 
   test('GET /trades enforces auth and validates pagination inputs', async () => {
-    const { server: unauthenticatedServer, baseUrl: unauthenticatedBaseUrl } = await startServer(null);
+    const { server: unauthenticatedServer, baseUrl: unauthenticatedBaseUrl } =
+      await startServer(null);
     try {
       const unauthenticated = await fetch(`${unauthenticatedBaseUrl}/trades`);
       expect(unauthenticated.status).toBe(401);

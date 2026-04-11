@@ -11,10 +11,14 @@ describe('runGovernanceAction exit status mapping', () => {
     },
   );
 
-  test.each(['requested', 'pending_approvals', 'approved', 'executed', 'cancelled', 'expired'] as const)(
-    'returns zero for %s outcomes',
-    (status) => {
-      expect(shouldExitNonZeroForGovernanceAction(status)).toBe(false);
-    },
-  );
+  test.each([
+    'requested',
+    'pending_approvals',
+    'approved',
+    'executed',
+    'cancelled',
+    'expired',
+  ] as const)('returns zero for %s outcomes', (status) => {
+    expect(shouldExitNonZeroForGovernanceAction(status)).toBe(false);
+  });
 });

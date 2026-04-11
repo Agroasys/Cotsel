@@ -48,7 +48,6 @@ function validateTradeEvent(event) {
   assertStringField(event, "eventName");
   assertStringField(event, "timestamp");
   assertNullableStringField(event, "txHash");
-  assertNullableStringField(event, "extrinsicHash");
 }
 
 export function validateLocalDevParityTradeFixture(record) {

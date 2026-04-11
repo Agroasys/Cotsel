@@ -9,12 +9,7 @@ import { pathToFileURL } from 'node:url';
 const ROOT = process.cwd();
 
 const POLICY_PATH = 'docs/security/data-classification-policy.md';
-const DOC_TARGET_ROOTS = [
-  'docs/api',
-  'docs/incidents',
-  'docs/observability',
-  'docs/runbooks',
-];
+const DOC_TARGET_ROOTS = ['docs/api', 'docs/incidents', 'docs/observability', 'docs/runbooks'];
 const DOC_TARGET_EXTENSIONS = new Set(['.md', '.yml', '.yaml']);
 
 const LOGGER_TARGETS = [
@@ -97,8 +92,9 @@ function listFilesRecursively(rootPath) {
 }
 
 export function collectDocTargets() {
-  return DOC_TARGET_ROOTS.flatMap((rootPath) => listFilesRecursively(rootPath))
-    .sort((left, right) => left.localeCompare(right));
+  return DOC_TARGET_ROOTS.flatMap((rootPath) => listFilesRecursively(rootPath)).sort(
+    (left, right) => left.localeCompare(right),
+  );
 }
 
 function shouldIgnoreMarkdownContext(sectionHeading, listLabel) {
@@ -207,7 +203,9 @@ function checkForBannedFields(targetPath, fieldNames, errors) {
     const bannedSource = bannedNormalized.get(normalized);
 
     if (bannedSource) {
-      errors.push(`${targetPath}: prohibited field surfaced in log/doc contract: ${fieldName} (matches ${bannedSource})`);
+      errors.push(
+        `${targetPath}: prohibited field surfaced in log/doc contract: ${fieldName} (matches ${bannedSource})`,
+      );
     }
   }
 }

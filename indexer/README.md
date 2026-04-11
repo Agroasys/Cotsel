@@ -2,8 +2,6 @@
 
 This module indexes **AgroasysEscrow** EVM logs from **Base Sepolia** and **Base Mainnet** into a queryable PostgreSQL datastore (TypeORM) and exposes a read-only GraphQL API for the rest of the platform.
 
-The active processor is EVM-native and Base-first. Historical Substrate / extrinsic-shaped assumptions are not part of the live v1 path.
-
 ---
 
 ## What this indexer does
@@ -43,6 +41,7 @@ The indexer is expected to capture and store the following escrow events:
 - `AdminAdded`
 
 > Note: If the contract changes event names/arguments, update:
+>
 > - the ABI/event decoder
 > - `schema.graphql` types
 > - mappings/handlers
@@ -91,6 +90,7 @@ indexer/
 ├── schema.graphql
 ├── tsconfig.json
 ```
+
 ### Validation checklist
 
 - Schema enforces strict types (no any equivalents).
@@ -101,6 +101,7 @@ indexer/
 - No secrets / endpoints are hardcoded in code.
 
 ---
+
 ### Local Dev
 
 #### Prerequisites
@@ -139,7 +140,9 @@ npm run build
 # run the indexer
 node -r dotenv/config lib/main.js
 ```
+
 ---
+
 ### Updating `schema.graphql`
 
 When you edit `schema.graphql`, you must re-generate models and migrations:
@@ -156,7 +159,9 @@ npx squid-typeorm-migration apply
 npm run build
 node -r dotenv/config lib/main.js
 ```
+
 ---
+
 ### Running the indexer in Docker
 
 ```
@@ -181,6 +186,7 @@ docker compose logs -f
 ```
 
 ---
+
 ### Operational notes
 
 1. Always confirm the GraphQL endpoint and RPC point to the same Base runtime.
@@ -195,9 +201,11 @@ docker compose logs -f
    - confirm contract address filtering is correct
 
 ---
+
 ### GraphQL API
 
 The indexer exposes a GraphQL endpoint for read-only queries. Use it from the backend to retrieve:
+
 - Trade lifecycle state (LOCKED → IN_TRANSIT → ARRIVAL_CONFIRMED → CLOSED/FROZEN)
 - Milestone settlements (stage 1 releases and final tranche)
 - Dispute proposals, approvals, and final outcomes
@@ -206,5 +214,6 @@ The indexer exposes a GraphQL endpoint for read-only queries. Use it from the ba
 > Do not expose write/mutation operations from this indexer.
 
 ## License
+
 Licensed under Apache-2.0.
 See the repository root `LICENSE` file.

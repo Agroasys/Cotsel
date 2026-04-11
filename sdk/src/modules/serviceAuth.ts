@@ -53,7 +53,14 @@ export function buildServiceAuthCanonicalString(parts: {
   timestamp: string;
   nonce: string;
 }): string {
-  return [parts.method, parts.path, parts.query, parts.bodySha256, parts.timestamp, parts.nonce].join('\n');
+  return [
+    parts.method,
+    parts.path,
+    parts.query,
+    parts.bodySha256,
+    parts.timestamp,
+    parts.nonce,
+  ].join('\n');
 }
 
 export function signServiceAuthCanonicalString(secret: string, canonicalString: string): string {

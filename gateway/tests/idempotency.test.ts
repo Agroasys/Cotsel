@@ -7,6 +7,7 @@ import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
 import { createIdempotencyMiddleware } from '../src/middleware/idempotency';
 import { createInMemoryIdempotencyStore } from '../src/core/idempotencyStore';
+import type { GatewayPrincipal } from '../src/middleware/auth';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -17,7 +18,7 @@ const config: GatewayConfig = {
   dbPassword: 'postgres',
   authBaseUrl: 'http://127.0.0.1:3005',
   authRequestTimeoutMs: 5000,
-  indexerGraphqlUrl: "http://127.0.0.1:4350/graphql",
+  indexerGraphqlUrl: 'http://127.0.0.1:4350/graphql',
   indexerRequestTimeoutMs: 5000,
   rpcUrl: 'http://127.0.0.1:8545',
   rpcFallbackUrls: [],
@@ -41,6 +42,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-07T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 async function startServer() {
@@ -51,35 +55,46 @@ async function startServer() {
   let failOnce = false;
   let slowMutationMs = 0;
 
-  router.post('/test-mutation', (req, _res, next) => {
-    const actor = req.header('x-test-actor') ?? 'admin';
-    (req as any).gatewayPrincipal = {
-      sessionReference: `sess-${actor}`,
-      session: {
-        userId: actor === 'buyer' ? 'uid-buyer' : 'uid-admin',
-        walletAddress: actor === 'buyer'
-          ? '0x00000000000000000000000000000000000000bb'
-          : '0x00000000000000000000000000000000000000aa',
-        role: actor === 'buyer' ? 'buyer' : 'admin',
-      },
-    };
-    next();
-  }, mutationMiddleware, (_req, res) => {
-    if (slowMutationMs > 0) {
-      return setTimeout(() => {
-        executionCount += 1;
-        res.status(202).json({ success: true, executionCount });
-      }, slowMutationMs);
-    }
+  router.post(
+    '/test-mutation',
+    (req, _res, next) => {
+      const actor = req.header('x-test-actor') ?? 'admin';
+      const gatewayPrincipal: GatewayPrincipal = {
+        sessionReference: `sess-${actor}`,
+        session: {
+          userId: actor === 'buyer' ? 'uid-buyer' : 'uid-admin',
+          walletAddress:
+            actor === 'buyer'
+              ? '0x00000000000000000000000000000000000000bb'
+              : '0x00000000000000000000000000000000000000aa',
+          role: actor === 'buyer' ? 'buyer' : 'admin',
+          issuedAt: 1_744_243_200,
+          expiresAt: 1_744_246_800,
+        },
+        gatewayRoles: actor === 'buyer' ? [] : ['operator:read', 'operator:write'],
+        writeEnabled: actor !== 'buyer',
+      };
+      req.gatewayPrincipal = gatewayPrincipal;
+      next();
+    },
+    mutationMiddleware,
+    (_req, res) => {
+      if (slowMutationMs > 0) {
+        return setTimeout(() => {
+          executionCount += 1;
+          res.status(202).json({ success: true, executionCount });
+        }, slowMutationMs);
+      }
 
-    executionCount += 1;
-    if (failOnce) {
-      failOnce = false;
-      res.status(500).json({ success: false, executionCount });
-      return;
-    }
-    res.status(202).json({ success: true, executionCount });
-  });
+      executionCount += 1;
+      if (failOnce) {
+        failOnce = false;
+        res.status(500).json({ success: false, executionCount });
+        return;
+      }
+      res.status(202).json({ success: true, executionCount });
+    },
+  );
 
   const app = createApp(config, {
     version: '0.1.0',

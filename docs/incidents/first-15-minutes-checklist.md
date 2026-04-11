@@ -31,5 +31,5 @@ scripts/docker-services.sh logs local-dev ricardian
 10. Notify stakeholders with current blast radius and next update time.
 
 Launch-window rule:
-- Do not improvise historical Polkadot rollback paths during a Base mainnet incident.
-- Historical artifacts remain audit-only and are enumerated in `docs/runbooks/polkadot-retirement-checklist.md`.
+
+- Do not improvise retired runtime rollback paths during a Base mainnet incident.

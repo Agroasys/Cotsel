@@ -45,6 +45,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-14T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 const ricardianFixture = {
@@ -89,7 +92,6 @@ const evidenceFixture = {
     callbackStatus: 'delivered',
     providerStatus: 'confirmed',
     txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    extrinsicHash: null,
     externalReference: 'EXT-1',
     latestEventType: 'reconciled',
     latestEventDetail: 'Settlement confirmed and reconciled.',
@@ -108,7 +110,10 @@ const evidenceFixture = {
   },
 };
 
-async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<EvidenceReadReader>) {
+async function startServer(
+  role: 'admin' | 'buyer' | null,
+  overrides?: Partial<EvidenceReadReader>,
+) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
       if (role === null) {
@@ -157,11 +162,13 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<E
   };
 
   const router = Router();
-  router.use(createRicardianRouter({
-    authSessionClient,
-    config,
-    evidenceReadService,
-  }));
+  router.use(
+    createRicardianRouter({
+      authSessionClient,
+      config,
+      evidenceReadService,
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -176,8 +183,14 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<E
 
 describe('gateway ricardian and evidence routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateRicardian = createSchemaValidator(spec, '#/components/schemas/RicardianDocumentResponse');
-  const validateEvidence = createSchemaValidator(spec, '#/components/schemas/TradeEvidenceResponse');
+  const validateRicardian = createSchemaValidator(
+    spec,
+    '#/components/schemas/RicardianDocumentResponse',
+  );
+  const validateEvidence = createSchemaValidator(
+    spec,
+    '#/components/schemas/TradeEvidenceResponse',
+  );
 
   test('OpenAPI spec exposes ricardian and evidence read endpoints', () => {
     expect(hasOperation(spec, 'get', '/ricardian/{tradeId}')).toBe(true);

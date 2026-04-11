@@ -1,37 +1,40 @@
 // SPDX-License-Identifier: Apache-2.0
-import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-import { execSync } from "node:child_process";
-import hre, { ethers } from "hardhat";
-import { loadBaseDeploymentConfig } from "./lib/baseDeploymentConfig";
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
+import hre, { ethers } from 'hardhat';
+import { loadBaseDeploymentConfig } from './lib/baseDeploymentConfig';
 
 function sha256Hex(input: string): string {
-  return crypto.createHash("sha256").update(input).digest("hex");
+  return crypto.createHash('sha256').update(input).digest('hex');
 }
 
 function getCommitSha(): string {
   try {
-    return execSync("git rev-parse HEAD", { cwd: path.join(__dirname, "..", ".."), stdio: ["ignore", "pipe", "ignore"] })
-      .toString("utf8")
+    return execSync('git rev-parse HEAD', {
+      cwd: path.join(__dirname, '..', '..'),
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString('utf8')
       .trim();
   } catch {
-    return "unknown";
+    return 'unknown';
   }
 }
 
 function getConfiguredCompilerVersion(): string | null {
-  if (typeof hre.config.solidity === "string") {
+  if (typeof hre.config.solidity === 'string') {
     return hre.config.solidity;
   }
 
-  if ("version" in hre.config.solidity && typeof hre.config.solidity.version === "string") {
+  if ('version' in hre.config.solidity && typeof hre.config.solidity.version === 'string') {
     return hre.config.solidity.version;
   }
 
-  if ("compilers" in hre.config.solidity && Array.isArray(hre.config.solidity.compilers)) {
+  if ('compilers' in hre.config.solidity && Array.isArray(hre.config.solidity.compilers)) {
     const primaryCompiler = hre.config.solidity.compilers[0];
-    if (primaryCompiler && typeof primaryCompiler.version === "string") {
+    if (primaryCompiler && typeof primaryCompiler.version === 'string') {
       return primaryCompiler.version;
     }
   }
@@ -47,7 +50,9 @@ async function main(): Promise<void> {
   const [deployer] = await ethers.getSigners();
 
   if (!deployer) {
-    throw new Error(`No deployer account configured for ${hre.network.name}. Set Hardhat vars PRIVATE_KEY/PRIVATE_KEY2.`);
+    throw new Error(
+      `No deployer account configured for ${hre.network.name}. Set Hardhat vars PRIVATE_KEY/PRIVATE_KEY2.`,
+    );
   }
 
   const deployArgs = [
@@ -58,26 +63,28 @@ async function main(): Promise<void> {
     config.requiredApprovals,
   ] as const;
 
-  console.log("=== AgroasysEscrow Base deploy ===");
+  console.log('=== AgroasysEscrow Base deploy ===');
   console.log(`Network           : ${config.target.networkName} (${config.target.chainId})`);
   console.log(`Deployer          : ${deployer.address}`);
   console.log(`USDC              : ${config.usdcAddress}`);
   console.log(`Oracle            : ${config.oracleAddress}`);
   console.log(`Treasury          : ${config.treasuryAddress}`);
-  console.log(`Admins            : ${config.admins.join(", ")}`);
+  console.log(`Admins            : ${config.admins.join(', ')}`);
   console.log(`Required approvals: ${config.requiredApprovals}`);
   console.log(`Verify            : ${config.verify}`);
 
   const balance = await ethers.provider.getBalance(deployer.address);
   if (balance === 0n) {
-    throw new Error(`Deployer balance is 0 on ${config.target.networkName}. Fund the account before deployment.`);
+    throw new Error(
+      `Deployer balance is 0 on ${config.target.networkName}. Fund the account before deployment.`,
+    );
   }
 
   const factory = await ethers.getContractFactory(config.escrowName, deployer);
   const contract = await factory.deploy(...deployArgs);
   const deploymentTx = contract.deploymentTransaction();
   if (!deploymentTx) {
-    throw new Error("Deployment transaction was not created");
+    throw new Error('Deployment transaction was not created');
   }
 
   console.log(`Deployment tx     : ${deploymentTx.hash}`);
@@ -90,18 +97,18 @@ async function main(): Promise<void> {
   const explorerAddressUrl = `${config.target.explorerBaseUrl}${contractAddress}`;
   const verificationUrl = `${explorerAddressUrl}#code`;
 
-  let verificationStatus: "skipped" | "verified" | "already-verified" = "skipped";
+  let verificationStatus: 'skipped' | 'verified' | 'already-verified' = 'skipped';
   if (config.verify) {
     try {
-      await hre.run("verify:verify", {
+      await hre.run('verify:verify', {
         address: contractAddress,
         constructorArguments: deployArgs,
       });
-      verificationStatus = "verified";
+      verificationStatus = 'verified';
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (/already verified/i.test(message)) {
-        verificationStatus = "already-verified";
+        verificationStatus = 'already-verified';
       } else {
         throw error;
       }
@@ -144,8 +151,11 @@ async function main(): Promise<void> {
   };
 
   fs.mkdirSync(config.evidenceOutDir, { recursive: true });
-  const outputPath = path.join(config.evidenceOutDir, `${config.escrowName.toLowerCase()}-deploy.json`);
-  fs.writeFileSync(outputPath, `${JSON.stringify(bundle, null, 2)}\n`, "utf8");
+  const outputPath = path.join(
+    config.evidenceOutDir,
+    `${config.escrowName.toLowerCase()}-deploy.json`,
+  );
+  fs.writeFileSync(outputPath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8');
 
   console.log(`Contract address  : ${contractAddress}`);
   console.log(`Explorer URL      : ${explorerAddressUrl}`);

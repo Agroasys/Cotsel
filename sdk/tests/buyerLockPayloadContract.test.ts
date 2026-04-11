@@ -28,7 +28,7 @@ function extractRunbookFields(markdown: string): string[] {
   return markdown
     .split('\n')
     .filter((line) => line.startsWith('| `'))
-    .map((line) => line.match(/^\| `([^`]+)` \|/)?.[1] ?? null)
+    .map((line) => line.match(/^\| `([^`]+)`\s+\|/)?.[1] ?? null)
     .filter((field): field is string => field !== null);
 }
 

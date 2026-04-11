@@ -1,0 +1,13 @@
+node_modules
+dist
+lib
+coverage
+reports
+contracts/artifacts
+contracts/cache
+contracts/typechain-types
+contracts/foundry/cache
+contracts/foundry/out
+sdk/src/types/typechain-types
+indexer/src/model/generated
+.husky

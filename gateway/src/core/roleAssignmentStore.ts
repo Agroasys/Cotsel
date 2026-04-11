@@ -3,12 +3,9 @@
  */
 import { Pool } from 'pg';
 
-export const ROLE_ASSIGNMENT_SOURCES = [
-  'gateway_seed',
-  'manual_sync',
-] as const;
+export const ROLE_ASSIGNMENT_SOURCES = ['gateway_seed', 'manual_sync'] as const;
 
-export type RoleAssignmentSource = typeof ROLE_ASSIGNMENT_SOURCES[number];
+export type RoleAssignmentSource = (typeof ROLE_ASSIGNMENT_SOURCES)[number];
 
 export interface RoleAssignmentRecord {
   assignmentId: string;
@@ -84,7 +81,9 @@ export function encodeRoleAssignmentCursor(cursor: RoleAssignmentCursor): string
 }
 
 export function decodeRoleAssignmentCursor(cursor: string): RoleAssignmentCursor {
-  const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as RoleAssignmentCursor;
+  const parsed = JSON.parse(
+    Buffer.from(cursor, 'base64url').toString('utf8'),
+  ) as RoleAssignmentCursor;
   if (!parsed.assignedAt || !parsed.assignmentId) {
     throw new Error('Cursor is missing required fields');
   }
@@ -142,7 +141,9 @@ export function createPostgresRoleAssignmentStore(pool: Pool): RoleAssignmentSto
         const assignedAtIndex = values.length;
         values.push(cursor.assignmentId);
         const assignmentIdIndex = values.length;
-        conditions.push(`(assigned_at < $${assignedAtIndex}::timestamp OR (assigned_at = $${assignedAtIndex}::timestamp AND assignment_id < $${assignmentIdIndex}))`);
+        conditions.push(
+          `(assigned_at < $${assignedAtIndex}::timestamp OR (assigned_at = $${assignedAtIndex}::timestamp AND assignment_id < $${assignmentIdIndex}))`,
+        );
       }
 
       values.push(input.limit + 1);
@@ -167,7 +168,9 @@ export function createPostgresRoleAssignmentStore(pool: Pool): RoleAssignmentSto
   };
 }
 
-export function createInMemoryRoleAssignmentStore(initial: RoleAssignmentRecord[] = []): RoleAssignmentStore {
+export function createInMemoryRoleAssignmentStore(
+  initial: RoleAssignmentRecord[] = [],
+): RoleAssignmentStore {
   const items = initial.map(cloneRecord);
 
   function sorted(): RoleAssignmentRecord[] {
@@ -185,7 +188,9 @@ export function createInMemoryRoleAssignmentStore(initial: RoleAssignmentRecord[
       let candidates = sorted();
 
       if (input.gatewayRole) {
-        candidates = candidates.filter((record) => record.gatewayRoles.includes(input.gatewayRole!));
+        candidates = candidates.filter((record) =>
+          record.gatewayRoles.includes(input.gatewayRole!),
+        );
       }
 
       if (input.authRole) {
@@ -194,10 +199,11 @@ export function createInMemoryRoleAssignmentStore(initial: RoleAssignmentRecord[
 
       if (input.cursor) {
         const cursor = decodeRoleAssignmentCursor(input.cursor);
-        candidates = candidates.filter((record) => (
-          record.assignedAt < cursor.assignedAt
-          || (record.assignedAt === cursor.assignedAt && record.assignmentId < cursor.assignmentId)
-        ));
+        candidates = candidates.filter(
+          (record) =>
+            record.assignedAt < cursor.assignedAt ||
+            (record.assignedAt === cursor.assignedAt && record.assignmentId < cursor.assignmentId),
+        );
       }
 
       const page = candidates.slice(0, input.limit + 1);

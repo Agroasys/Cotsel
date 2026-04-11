@@ -10,10 +10,13 @@ env/*.env
 !.env.staging-e2e.example
 !.env.staging-e2e-real.example
 reports/licenses
+reports/notifications/*.json
 reports/reconciliation/staging-e2e-real-report.json
+reports/base-sepolia-pilot-validation/*
 reports/dashboard-parity/
 reports/pilot-rehearsal/*
 !reports/pilot-rehearsal/README.md
+.husky/_
 .DS_Store
 
 reports/licenses

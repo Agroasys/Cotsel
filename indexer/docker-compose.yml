@@ -8,9 +8,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     shm_size: 1gb
     ports:
-      - "${DB_PORT}:${DB_DOCKER_PORT}"
+      - '${DB_PORT}:${DB_DOCKER_PORT}'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER}']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -55,8 +55,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       GQL_PORT: ${GRAPHQL_PORT}
     ports:
-      - "${GRAPHQL_PORT}:${GRAPHQL_PORT}"
-    command: ["npx", "squid-graphql-server"]
+      - '${GRAPHQL_PORT}:${GRAPHQL_PORT}'
+    command: ['npx', 'squid-graphql-server']
     restart: unless-stopped
     networks:
       - indexer-network
@@ -64,7 +64,6 @@ services:
 
 volumes:
   postgres_data:
-
 
 networks:
   indexer-network:

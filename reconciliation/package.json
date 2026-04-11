@@ -7,9 +7,9 @@
     "build:sdk": "npm --prefix ../sdk run build",
     "build": "tsc",
     "prebuild": "npm run build:sdk",
-    "lint": "tsc --noEmit",
-    "prelint": "npm run build:sdk",
+    "lint": "eslint --max-warnings=0 .",
     "pretest": "npm run build:sdk",
+    "typecheck": "tsc --noEmit",
     "test": "node -r ts-node/register --test src/tests/*.test.ts",
     "reconcile:once": "ts-node src/cli.ts once",
     "reconcile:daemon": "ts-node src/cli.ts daemon",
@@ -17,6 +17,7 @@
     "healthcheck": "node dist/healthcheck.js"
   },
   "dependencies": {
+    "@agroasys/shared-db": "^1.0.0",
     "@agroasys/sdk": "^1.0.0",
     "dotenv": "^17.4.1",
     "pg": "^8.20.0",

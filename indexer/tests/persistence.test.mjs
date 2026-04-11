@@ -25,16 +25,19 @@ test('persistIndexerBatch uses idempotent upserts for replay-safe writes', async
   });
 
   assert.equal(calls.length, 10);
-  assert.deepEqual(calls.map((batch) => batch[0].id), [
-    'trade-1',
-    'trade-event-1',
-    'proposal-1',
-    'dispute-event-1',
-    'oracle-proposal-1',
-    'oracle-event-1',
-    'admin-proposal-1',
-    'admin-event-1',
-    'system-event-1',
-    'overview',
-  ]);
+  assert.deepEqual(
+    calls.map((batch) => batch[0].id),
+    [
+      'trade-1',
+      'trade-event-1',
+      'proposal-1',
+      'dispute-event-1',
+      'oracle-proposal-1',
+      'oracle-event-1',
+      'admin-proposal-1',
+      'admin-event-1',
+      'system-event-1',
+      'overview',
+    ],
+  );
 });

@@ -10,8 +10,14 @@ import {
 } from './complianceStore';
 
 export interface ComplianceWriteStore {
-  saveDecisionWithAudit(decision: ComplianceDecisionRecord, auditEntry: AuditLogEntry): Promise<ComplianceDecisionRecord>;
-  saveBlockStateWithAudit(block: OracleProgressionBlockRecord, auditEntry: AuditLogEntry): Promise<OracleProgressionBlockRecord>;
+  saveDecisionWithAudit(
+    decision: ComplianceDecisionRecord,
+    auditEntry: AuditLogEntry,
+  ): Promise<ComplianceDecisionRecord>;
+  saveBlockStateWithAudit(
+    block: OracleProgressionBlockRecord,
+    auditEntry: AuditLogEntry,
+  ): Promise<OracleProgressionBlockRecord>;
 }
 
 async function insertAuditLog(client: PoolClient, entry: AuditLogEntry): Promise<void> {
@@ -49,7 +55,10 @@ async function insertAuditLog(client: PoolClient, entry: AuditLogEntry): Promise
   );
 }
 
-async function insertComplianceDecision(client: PoolClient, decision: ComplianceDecisionRecord): Promise<void> {
+async function insertComplianceDecision(
+  client: PoolClient,
+  decision: ComplianceDecisionRecord,
+): Promise<void> {
   await client.query(
     `INSERT INTO compliance_decisions (
       decision_id,
@@ -113,7 +122,10 @@ async function insertComplianceDecision(client: PoolClient, decision: Compliance
   );
 }
 
-async function upsertOracleProgressionBlock(client: PoolClient, block: OracleProgressionBlockRecord): Promise<void> {
+async function upsertOracleProgressionBlock(
+  client: PoolClient,
+  block: OracleProgressionBlockRecord,
+): Promise<void> {
   await client.query(
     `INSERT INTO oracle_progression_blocks (
       trade_id,
@@ -191,9 +203,12 @@ async function runTransactionalWrite<T>(
     try {
       await client.query('ROLLBACK');
     } catch (rollbackError) {
-      const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+      const rollbackMessage =
+        rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
       const originalMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`Compliance write rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`);
+      throw new Error(
+        `Compliance write rollback failed after original error: ${originalMessage}; rollback error: ${rollbackMessage}`,
+      );
     }
 
     throw error;
@@ -229,7 +244,9 @@ export function createPostgresComplianceWriteStore(
 
       const stored = await store.getOracleProgressionBlock(block.tradeId);
       if (!stored) {
-        throw new Error(`Failed to persist oracle progression block state for trade ${block.tradeId}`);
+        throw new Error(
+          `Failed to persist oracle progression block state for trade ${block.tradeId}`,
+        );
       }
 
       return stored;

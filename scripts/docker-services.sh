@@ -154,7 +154,14 @@ wait_until_healthy() {
 
 is_running() {
   local service_name="$1"
-  run_compose ps --services --filter status=running | grep -qx "$service_name"
+  local running_service
+  while IFS= read -r running_service; do
+    if [[ "$running_service" == "$service_name" ]]; then
+      return 0
+    fi
+  done < <(run_compose ps --services --filter status=running)
+
+  return 1
 }
 
 with_retries() {

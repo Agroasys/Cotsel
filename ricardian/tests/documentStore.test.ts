@@ -60,7 +60,6 @@ function makeTransientPgCodeError(code: string): Error & { code: string } {
   return err;
 }
 
-
 describe('documentStore.createDocument', () => {
   const validInput = {
     requestId: 'req-1',
@@ -132,7 +131,6 @@ describe('documentStore.createDocument', () => {
     });
   });
 });
-
 
 describe('documentStore.getDocument', () => {
   beforeEach(() => {
@@ -215,4 +213,3 @@ describe('documentStore.getDocument', () => {
     });
   });
 });
-

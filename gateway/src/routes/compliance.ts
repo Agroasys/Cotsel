@@ -36,11 +36,7 @@ export interface ComplianceRouterOptions {
   failedOperationWorkflow?: GatewayErrorHandlerWorkflow;
 }
 
-type MutationRequest = Request<
-  Record<string, string | string[]>,
-  unknown,
-  Record<string, unknown>
->;
+type MutationRequest = Request<Record<string, string | string[]>, unknown, Record<string, unknown>>;
 
 interface MutationContext {
   principal: GatewayPrincipal;
@@ -75,7 +71,11 @@ function parseLimit(raw: unknown): number {
 
   const limit = Number.parseInt(raw, 10);
   if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'limit' must be between 1 and 200");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'limit' must be between 1 and 200",
+    );
   }
 
   return limit;
@@ -87,7 +87,11 @@ function parseCursor(raw: unknown): string | undefined {
   }
 
   if (typeof raw !== 'string' || raw.trim() === '') {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'cursor' must be a non-empty string");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'cursor' must be a non-empty string",
+    );
   }
 
   try {
@@ -155,7 +159,12 @@ async function handleMutation(
       });
 
       if (failedOperation) {
-        next(options.failedOperationWorkflow.buildClientError(failedOperation, failureCapture.requestContext));
+        next(
+          options.failedOperationWorkflow.buildClientError(
+            failedOperation,
+            failureCapture.requestContext,
+          ),
+        );
         return;
       }
     }
@@ -171,147 +180,214 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
 
   router.use(authenticate);
 
-  router.get('/compliance/decisions/:decisionId', requireGatewayRole('operator:read'), async (req, res, next) => {
-    try {
-      const decisionId = parseDecisionId(req.params.decisionId);
-      const decision = await options.complianceService.getDecision(decisionId);
-      if (!decision) {
-        throw new GatewayError(404, 'NOT_FOUND', 'Compliance decision not found', { decisionId });
+  router.get(
+    '/compliance/decisions/:decisionId',
+    requireGatewayRole('operator:read'),
+    async (req, res, next) => {
+      try {
+        const decisionId = parseDecisionId(req.params.decisionId);
+        const decision = await options.complianceService.getDecision(decisionId);
+        if (!decision) {
+          throw new GatewayError(404, 'NOT_FOUND', 'Compliance decision not found', { decisionId });
+        }
+
+        res.status(200).json(successResponse(decision));
+      } catch (error) {
+        next(error);
       }
+    },
+  );
 
-      res.status(200).json(successResponse(decision));
-    } catch (error) {
-      next(error);
-    }
-  });
+  router.get(
+    '/compliance/trades/:tradeId',
+    requireGatewayRole('operator:read'),
+    async (req, res, next) => {
+      try {
+        const tradeId = parseTradeId(req.params.tradeId);
+        const status = await options.complianceService.getTradeStatus(tradeId);
+        if (!status) {
+          throw new GatewayError(404, 'NOT_FOUND', 'Compliance status not found for trade', {
+            tradeId,
+          });
+        }
 
-  router.get('/compliance/trades/:tradeId', requireGatewayRole('operator:read'), async (req, res, next) => {
-    try {
-      const tradeId = parseTradeId(req.params.tradeId);
-      const status = await options.complianceService.getTradeStatus(tradeId);
-      if (!status) {
-        throw new GatewayError(404, 'NOT_FOUND', 'Compliance status not found for trade', { tradeId });
+        res.status(200).json(successResponse(status));
+      } catch (error) {
+        next(error);
       }
+    },
+  );
 
-      res.status(200).json(successResponse(status));
-    } catch (error) {
-      next(error);
-    }
-  });
+  router.get(
+    '/compliance/trades/:tradeId/attestation-status',
+    requireGatewayRole('operator:read'),
+    async (req, res, next) => {
+      try {
+        const tradeId = parseTradeId(req.params.tradeId);
+        const status = await options.complianceService.getAttestationStatus(tradeId);
+        if (!status) {
+          throw new GatewayError(404, 'NOT_FOUND', 'Attestation status not found for trade', {
+            tradeId,
+          });
+        }
 
-  router.get('/compliance/trades/:tradeId/attestation-status', requireGatewayRole('operator:read'), async (req, res, next) => {
-    try {
-      const tradeId = parseTradeId(req.params.tradeId);
-      const status = await options.complianceService.getAttestationStatus(tradeId);
-      if (!status) {
-        throw new GatewayError(404, 'NOT_FOUND', 'Attestation status not found for trade', { tradeId });
+        res.status(200).json(successResponse(status));
+      } catch (error) {
+        next(error);
       }
+    },
+  );
 
-      res.status(200).json(successResponse(status));
-    } catch (error) {
-      next(error);
-    }
-  });
+  router.get(
+    '/compliance/trades/:tradeId/decisions',
+    requireGatewayRole('operator:read'),
+    async (req, res, next) => {
+      try {
+        const tradeId = parseTradeId(req.params.tradeId);
+        const latest = await options.complianceService.getTradeStatus(tradeId);
+        if (!latest) {
+          throw new GatewayError(
+            404,
+            'NOT_FOUND',
+            'Compliance decision history not found for trade',
+            { tradeId },
+          );
+        }
 
-  router.get('/compliance/trades/:tradeId/decisions', requireGatewayRole('operator:read'), async (req, res, next) => {
-    try {
-      const tradeId = parseTradeId(req.params.tradeId);
-      const latest = await options.complianceService.getTradeStatus(tradeId);
-      if (!latest) {
-        throw new GatewayError(404, 'NOT_FOUND', 'Compliance decision history not found for trade', { tradeId });
+        const result = await options.complianceService.listTradeDecisions(
+          tradeId,
+          parseLimit(req.query.limit),
+          parseCursor(req.query.cursor),
+        );
+
+        res.status(200).json(successResponse(result));
+      } catch (error) {
+        next(error);
       }
+    },
+  );
 
-      const result = await options.complianceService.listTradeDecisions(
-        tradeId,
-        parseLimit(req.query.limit),
-        parseCursor(req.query.cursor),
-      );
-
-      res.status(200).json(successResponse(result));
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.post('/compliance/decisions', requireMutationWriteAccess(), idempotency, (req, res, next) => handleMutation(req, res, next, 201, options, (() => {
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
-    return {
-      principal,
-      requestContext,
-      idempotencyKey,
-      replaySpec: {
-        type: 'compliance.create_decision',
-        routePath: req.originalUrl || req.path,
-        payload: validateComplianceDecisionCreateRequest(req.body),
-      } satisfies ComplianceDecisionReplaySpec,
-    };
-  })(), async () => {
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
-    const payload = validateComplianceDecisionCreateRequest(req.body);
-    return options.complianceService.createDecision({
-      ...payload,
-      principal,
-      requestContext,
-      routePath: req.originalUrl || req.path,
-      idempotencyKey,
-    });
-  }));
-
-  router.post('/compliance/trades/:tradeId/block-oracle-progression', requireMutationWriteAccess(), idempotency, (req, res, next) => handleMutation(req, res, next, 202, options, (() => {
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
-    return {
-      principal,
-      requestContext,
-      idempotencyKey,
-      replaySpec: {
-        type: 'compliance.block_oracle_progression',
-        routePath: req.originalUrl || req.path,
-        payload: {
-          ...validateComplianceOperationalControlRequest(req.body),
-          tradeId: parseTradeId(req.params.tradeId),
+  router.post(
+    '/compliance/decisions',
+    requireMutationWriteAccess(),
+    idempotency,
+    (req, res, next) =>
+      handleMutation(
+        req,
+        res,
+        next,
+        201,
+        options,
+        (() => {
+          const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+          return {
+            principal,
+            requestContext,
+            idempotencyKey,
+            replaySpec: {
+              type: 'compliance.create_decision',
+              routePath: req.originalUrl || req.path,
+              payload: validateComplianceDecisionCreateRequest(req.body),
+            } satisfies ComplianceDecisionReplaySpec,
+          };
+        })(),
+        async () => {
+          const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+          const payload = validateComplianceDecisionCreateRequest(req.body);
+          return options.complianceService.createDecision({
+            ...payload,
+            principal,
+            requestContext,
+            routePath: req.originalUrl || req.path,
+            idempotencyKey,
+          });
         },
-      } satisfies ComplianceControlReplaySpec,
-    };
-  })(), async () => {
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
-    const payload = validateComplianceOperationalControlRequest(req.body);
-    return options.complianceService.blockOracleProgression({
-      ...payload,
-      tradeId: parseTradeId(req.params.tradeId),
-      principal,
-      requestContext,
-      routePath: req.originalUrl || req.path,
-      idempotencyKey,
-    });
-  }));
+      ),
+  );
 
-  router.post('/compliance/trades/:tradeId/resume-oracle-progression', requireMutationWriteAccess(), idempotency, (req, res, next) => handleMutation(req, res, next, 202, options, (() => {
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
-    return {
-      principal,
-      requestContext,
-      idempotencyKey,
-      replaySpec: {
-        type: 'compliance.resume_oracle_progression',
-        routePath: req.originalUrl || req.path,
-        payload: {
-          ...validateComplianceOperationalControlRequest(req.body),
-          tradeId: parseTradeId(req.params.tradeId),
+  router.post(
+    '/compliance/trades/:tradeId/block-oracle-progression',
+    requireMutationWriteAccess(),
+    idempotency,
+    (req, res, next) =>
+      handleMutation(
+        req,
+        res,
+        next,
+        202,
+        options,
+        (() => {
+          const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+          return {
+            principal,
+            requestContext,
+            idempotencyKey,
+            replaySpec: {
+              type: 'compliance.block_oracle_progression',
+              routePath: req.originalUrl || req.path,
+              payload: {
+                ...validateComplianceOperationalControlRequest(req.body),
+                tradeId: parseTradeId(req.params.tradeId),
+              },
+            } satisfies ComplianceControlReplaySpec,
+          };
+        })(),
+        async () => {
+          const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+          const payload = validateComplianceOperationalControlRequest(req.body);
+          return options.complianceService.blockOracleProgression({
+            ...payload,
+            tradeId: parseTradeId(req.params.tradeId),
+            principal,
+            requestContext,
+            routePath: req.originalUrl || req.path,
+            idempotencyKey,
+          });
         },
-      } satisfies ComplianceControlReplaySpec,
-    };
-  })(), async () => {
-    const { principal, requestContext, idempotencyKey } = getMutationContext(req);
-    const payload = validateComplianceOperationalControlRequest(req.body);
-    return options.complianceService.resumeOracleProgression({
-      ...payload,
-      tradeId: parseTradeId(req.params.tradeId),
-      principal,
-      requestContext,
-      routePath: req.originalUrl || req.path,
-      idempotencyKey,
-    });
-  }));
+      ),
+  );
+
+  router.post(
+    '/compliance/trades/:tradeId/resume-oracle-progression',
+    requireMutationWriteAccess(),
+    idempotency,
+    (req, res, next) =>
+      handleMutation(
+        req,
+        res,
+        next,
+        202,
+        options,
+        (() => {
+          const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+          return {
+            principal,
+            requestContext,
+            idempotencyKey,
+            replaySpec: {
+              type: 'compliance.resume_oracle_progression',
+              routePath: req.originalUrl || req.path,
+              payload: {
+                ...validateComplianceOperationalControlRequest(req.body),
+                tradeId: parseTradeId(req.params.tradeId),
+              },
+            } satisfies ComplianceControlReplaySpec,
+          };
+        })(),
+        async () => {
+          const { principal, requestContext, idempotencyKey } = getMutationContext(req);
+          const payload = validateComplianceOperationalControlRequest(req.body);
+          return options.complianceService.resumeOracleProgression({
+            ...payload,
+            tradeId: parseTradeId(req.params.tradeId),
+            principal,
+            requestContext,
+            routePath: req.originalUrl || req.path,
+            idempotencyKey,
+          });
+        },
+      ),
+  );
 
   return router;
 }

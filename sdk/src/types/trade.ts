@@ -41,69 +41,69 @@
  * checkout UI calls `createTrade`.
  */
 export interface BuyerLockPayload {
-    /**
-     * EVM address of the supplier (goods/service provider).
-     *
-     * Required. Must be a valid non-zero EVM address.
-     */
-    supplier: string;
+  /**
+   * EVM address of the supplier (goods/service provider).
+   *
+   * Required. Must be a valid non-zero EVM address.
+   */
+  supplier: string;
 
-    /**
-     * Total USDC amount to lock in escrow, in the smallest USDC unit (6 decimals).
-     *
-     * Required. Must be positive and MUST satisfy the amount invariant:
-     * `totalAmount === logisticsAmount + platformFeesAmount + supplierFirstTranche + supplierSecondTranche`
-     *
-     * This is the amount the buyer wallet approves and the escrow contract
-     * pulls atomically during `createTrade`.
-     */
-    totalAmount: bigint;
+  /**
+   * Total USDC amount to lock in escrow, in the smallest USDC unit (6 decimals).
+   *
+   * Required. Must be positive and MUST satisfy the amount invariant:
+   * `totalAmount === logisticsAmount + platformFeesAmount + supplierFirstTranche + supplierSecondTranche`
+   *
+   * This is the amount the buyer wallet approves and the escrow contract
+   * pulls atomically during `createTrade`.
+   */
+  totalAmount: bigint;
 
-    /**
-     * Logistics fee component, in the smallest USDC unit.
-     *
-     * Routed to the `TreasuryWallet` during Stage 1.
-     */
-    logisticsAmount: bigint;
+  /**
+   * Logistics fee component, in the smallest USDC unit.
+   *
+   * Routed to the `TreasuryWallet` during Stage 1.
+   */
+  logisticsAmount: bigint;
 
-    /**
-     * Platform service fee component, in the smallest USDC unit.
-     *
-     * Routed to the `TreasuryWallet` during Stage 1.
-     */
-    platformFeesAmount: bigint;
+  /**
+   * Platform service fee component, in the smallest USDC unit.
+   *
+   * Routed to the `TreasuryWallet` during Stage 1.
+   */
+  platformFeesAmount: bigint;
 
-    /**
-     * First supplier tranche, released at Stage 1.
-     */
-    supplierFirstTranche: bigint;
+  /**
+   * First supplier tranche, released at Stage 1.
+   */
+  supplierFirstTranche: bigint;
 
-    /**
-     * Second supplier tranche, released at Stage 2 (arrival / inspection
-     * attestation).
-     */
-    supplierSecondTranche: bigint;
+  /**
+   * Second supplier tranche, released at Stage 2 (arrival / inspection
+   * attestation).
+   */
+  supplierSecondTranche: bigint;
 
-    /**
-     * SHA-256 hash of the off-chain Ricardian contract (the legal trade
-     * agreement), encoded as a `0x`-prefixed 32-byte hex string (66 chars).
-     *
-     * This value is immutable after `createTrade` and serves as the on-chain
-     * anchor linking settlement state to the exact legal document version.
-     * External checkout UIs MUST obtain this hash from the Ricardian service
-     * **before** calling `createTrade` — it cannot be back-filled later.
-     */
-    ricardianHash: string;
+  /**
+   * SHA-256 hash of the off-chain Ricardian contract (the legal trade
+   * agreement), encoded as a `0x`-prefixed 32-byte hex string (66 chars).
+   *
+   * This value is immutable after `createTrade` and serves as the on-chain
+   * anchor linking settlement state to the exact legal document version.
+   * External checkout UIs MUST obtain this hash from the Ricardian service
+   * **before** calling `createTrade` — it cannot be back-filled later.
+   */
+  ricardianHash: string;
 
-    /**
-     * Optional UNIX timestamp (seconds since epoch) after which the lock
-     * signature is considered expired and the contract will reject the call.
-     *
-     * When omitted the SDK defaults to `Math.floor(Date.now() / 1000) + 3600`
-     * (one hour from now). Checkout UIs MAY supply an explicit value for
-     * tighter session-scoped expiry control.
-     */
-    deadline?: number;
+  /**
+   * Optional UNIX timestamp (seconds since epoch) after which the lock
+   * signature is considered expired and the contract will reject the call.
+   *
+   * When omitted the SDK defaults to `Math.floor(Date.now() / 1000) + 3600`
+   * (one hour from now). Checkout UIs MAY supply an explicit value for
+   * tighter session-scoped expiry control.
+   */
+  deadline?: number;
 }
 
 /**
@@ -115,30 +115,30 @@ export interface BuyerLockPayload {
 export type TradeParameters = BuyerLockPayload;
 
 export interface TradeResult {
-    txHash: string;
-    blockNumber: number;
-    tradeId?: string;
+  txHash: string;
+  blockNumber: number;
+  tradeId?: string;
 }
 
 export enum TradeStatus {
-    LOCKED = 0,
-    IN_TRANSIT = 1,
-    ARRIVAL_CONFIRMED = 2,
-    FROZEN = 3,
-    CLOSED = 4
+  LOCKED = 0,
+  IN_TRANSIT = 1,
+  ARRIVAL_CONFIRMED = 2,
+  FROZEN = 3,
+  CLOSED = 4,
 }
 
 export interface Trade {
-    tradeId: string;
-    buyer: string;
-    supplier: string;
-    status: TradeStatus;
-    totalAmountLocked: bigint;
-    logisticsAmount: bigint;
-    platformFeesAmount: bigint;
-    supplierFirstTranche: bigint;
-    supplierSecondTranche: bigint;
-    ricardianHash: string;
-    createdAt: Date;
-    arrivalTimestamp?: Date;
+  tradeId: string;
+  buyer: string;
+  supplier: string;
+  status: TradeStatus;
+  totalAmountLocked: bigint;
+  logisticsAmount: bigint;
+  platformFeesAmount: bigint;
+  supplierFirstTranche: bigint;
+  supplierSecondTranche: bigint;
+  ricardianHash: string;
+  createdAt: Date;
+  arrivalTimestamp?: Date;
 }

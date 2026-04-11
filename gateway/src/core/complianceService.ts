@@ -77,15 +77,23 @@ export interface ComplianceOperationalControlInput {
   idempotencyKey: string;
 }
 
-function validateStringField(value: unknown, field: string, minLength: number, maxLength: number): string {
+function validateStringField(
+  value: unknown,
+  field: string,
+  minLength: number,
+  maxLength: number,
+): string {
   const normalized = typeof value === 'string' ? value.trim() : '';
   if (normalized.length < minLength || normalized.length > maxLength) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be between ${minLength} and ${maxLength} characters`);
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      `${field} must be between ${minLength} and ${maxLength} characters`,
+    );
   }
 
   return normalized;
 }
-
 
 function validateAuditInput(raw: unknown): MutationAuditInput {
   if (!raw || typeof raw !== 'object') {
@@ -101,10 +109,16 @@ function validateAuditInput(raw: unknown): MutationAuditInput {
   const auditRecord = audit as Record<string, unknown>;
   const reason = validateStringField(auditRecord.reason, 'audit.reason', 8, 2000);
   const ticketRef = validateStringField(auditRecord.ticketRef, 'audit.ticketRef', 2, 128);
-  const evidenceLinks = Array.isArray(auditRecord.evidenceLinks) ? auditRecord.evidenceLinks as EvidenceLink[] : [];
+  const evidenceLinks = Array.isArray(auditRecord.evidenceLinks)
+    ? (auditRecord.evidenceLinks as EvidenceLink[])
+    : [];
 
   if (evidenceLinks.length < 1) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', 'audit.evidenceLinks must contain at least one item');
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      'audit.evidenceLinks must contain at least one item',
+    );
   }
 
   evidenceLinks.forEach((link, index) => validateEvidenceLink(link, index));
@@ -255,16 +269,29 @@ function validateAttestationReference(raw: unknown): AttestationReferenceRecord 
 
   return {
     attestationId: validateStringField(record.attestationId, 'attestation.attestationId', 1, 256),
-    attestationType: validateStringField(record.attestationType, 'attestation.attestationType', 2, 128),
+    attestationType: validateStringField(
+      record.attestationType,
+      'attestation.attestationType',
+      2,
+      128,
+    ),
     status: validateEnum(record.status, ATTESTATION_REFERENCE_STATUSES, 'attestation.status'),
     issuer: {
       id: validateStringField(issuerRecord.id, 'attestation.issuer.id', 1, 128),
       kind: validateEnum(issuerRecord.kind, ATTESTATION_ISSUER_KINDS, 'attestation.issuer.kind'),
-      displayName: validateOptionalDisplayName(issuerRecord.displayName, 'attestation.issuer.displayName'),
+      displayName: validateOptionalDisplayName(
+        issuerRecord.displayName,
+        'attestation.issuer.displayName',
+      ),
     },
     subjectRef: {
       type: validateStringField(subjectRecord.type, 'attestation.subjectRef.type', 1, 128),
-      reference: validateStringField(subjectRecord.reference, 'attestation.subjectRef.reference', 1, 256),
+      reference: validateStringField(
+        subjectRecord.reference,
+        'attestation.subjectRef.reference',
+        1,
+        256,
+      ),
     },
     issuedAt: validateRequiredTimestamp(record.issuedAt, 'attestation.issuedAt'),
     expiresAt: validateOptionalTimestamp(record.expiresAt, 'attestation.expiresAt'),
@@ -274,23 +301,39 @@ function validateAttestationReference(raw: unknown): AttestationReferenceRecord 
   };
 }
 
-export function validateComplianceDecisionCreateRequest(raw: unknown): Omit<ComplianceDecisionCreateInput, 'principal' | 'requestContext' | 'routePath' | 'idempotencyKey'> {
+export function validateComplianceDecisionCreateRequest(
+  raw: unknown,
+): Omit<
+  ComplianceDecisionCreateInput,
+  'principal' | 'requestContext' | 'routePath' | 'idempotencyKey'
+> {
   if (!raw || typeof raw !== 'object') {
     throw new GatewayError(400, 'VALIDATION_ERROR', 'Request body must be a JSON object');
   }
 
   const body = raw as Record<string, unknown>;
   if (body.actionId !== undefined) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', 'actionId is server-generated and must not be provided by the client');
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      'actionId is server-generated and must not be provided by the client',
+    );
   }
 
   if (body.decisionId !== undefined) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', 'decisionId is server-generated and must not be provided by the client');
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      'decisionId is server-generated and must not be provided by the client',
+    );
   }
 
   const result = validateEnum(body.result, COMPLIANCE_DECISION_RESULTS, 'result');
   const reasonCode = validateStringField(body.reasonCode, 'reasonCode', 3, 128);
-  const overrideWindowEndsAt = validateOptionalTimestamp(body.overrideWindowEndsAt, 'overrideWindowEndsAt');
+  const overrideWindowEndsAt = validateOptionalTimestamp(
+    body.overrideWindowEndsAt,
+    'overrideWindowEndsAt',
+  );
 
   if (DENY_ONLY_REASON_CODES.has(reasonCode) && result !== 'DENY') {
     throw new GatewayError(400, 'VALIDATION_ERROR', `${reasonCode} requires result=DENY`);
@@ -302,14 +345,22 @@ export function validateComplianceDecisionCreateRequest(raw: unknown): Omit<Comp
     }
 
     if (!overrideWindowEndsAt) {
-      throw new GatewayError(400, 'VALIDATION_ERROR', 'overrideWindowEndsAt is required when reasonCode=CMP_OVERRIDE_ACTIVE');
+      throw new GatewayError(
+        400,
+        'VALIDATION_ERROR',
+        'overrideWindowEndsAt is required when reasonCode=CMP_OVERRIDE_ACTIVE',
+      );
     }
 
     if (Date.parse(overrideWindowEndsAt) <= Date.now()) {
       throw new GatewayError(400, 'VALIDATION_ERROR', 'overrideWindowEndsAt must be in the future');
     }
   } else if (overrideWindowEndsAt) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', 'overrideWindowEndsAt is allowed only when reasonCode=CMP_OVERRIDE_ACTIVE');
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      'overrideWindowEndsAt is allowed only when reasonCode=CMP_OVERRIDE_ACTIVE',
+    );
   }
 
   return {
@@ -329,14 +380,23 @@ export function validateComplianceDecisionCreateRequest(raw: unknown): Omit<Comp
   };
 }
 
-export function validateComplianceOperationalControlRequest(raw: unknown): Omit<ComplianceOperationalControlInput, 'tradeId' | 'principal' | 'requestContext' | 'routePath' | 'idempotencyKey'> {
+export function validateComplianceOperationalControlRequest(
+  raw: unknown,
+): Omit<
+  ComplianceOperationalControlInput,
+  'tradeId' | 'principal' | 'requestContext' | 'routePath' | 'idempotencyKey'
+> {
   if (!raw || typeof raw !== 'object') {
     throw new GatewayError(400, 'VALIDATION_ERROR', 'Request body must be a JSON object');
   }
 
   const body = raw as Record<string, unknown>;
   if (body.actionId !== undefined) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', 'actionId is server-generated and must not be provided by the client');
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      'actionId is server-generated and must not be provided by the client',
+    );
   }
 
   return {
@@ -464,7 +524,11 @@ export class ComplianceService {
     };
   }
 
-  async listTradeDecisions(tradeId: string, limit: number, cursor?: string): Promise<{ items: ComplianceDecisionRecord[]; nextCursor: string | null }> {
+  async listTradeDecisions(
+    tradeId: string,
+    limit: number,
+    cursor?: string,
+  ): Promise<{ items: ComplianceDecisionRecord[]; nextCursor: string | null }> {
     return this.store.listTradeDecisions({ tradeId, limit, cursor });
   }
 
@@ -534,19 +598,31 @@ export class ComplianceService {
     return this.writeStore.saveDecisionWithAudit(decision, auditEntry);
   }
 
-  async blockOracleProgression(input: ComplianceOperationalControlInput): Promise<ComplianceTradeStatusRecord> {
+  async blockOracleProgression(
+    input: ComplianceOperationalControlInput,
+  ): Promise<ComplianceTradeStatusRecord> {
     const existingBlock = await this.store.getOracleProgressionBlock(input.tradeId);
     if (existingBlock && existingBlock.blockState === 'blocked') {
-      throw new GatewayError(409, 'CONFLICT', 'Oracle progression is already blocked for this trade', {
-        tradeId: input.tradeId,
-      });
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'Oracle progression is already blocked for this trade',
+        {
+          tradeId: input.tradeId,
+        },
+      );
     }
 
     const decision = await this.resolveDecisionForTrade(input.tradeId, input.decisionId);
     if (!decision) {
-      throw new GatewayError(409, 'CONFLICT', 'A compliance decision must exist before blocking oracle progression', {
-        tradeId: input.tradeId,
-      });
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'A compliance decision must exist before blocking oracle progression',
+        {
+          tradeId: input.tradeId,
+        },
+      );
     }
 
     const updatedAt = new Date().toISOString();
@@ -583,12 +659,19 @@ export class ComplianceService {
     return this.requireTradeStatus(input.tradeId);
   }
 
-  async resumeOracleProgression(input: ComplianceOperationalControlInput): Promise<ComplianceTradeStatusRecord> {
+  async resumeOracleProgression(
+    input: ComplianceOperationalControlInput,
+  ): Promise<ComplianceTradeStatusRecord> {
     const existingBlock = await this.store.getOracleProgressionBlock(input.tradeId);
     if (!existingBlock || existingBlock.blockState === 'not_blocked') {
-      throw new GatewayError(409, 'CONFLICT', 'Oracle progression is not currently blocked for this trade', {
-        tradeId: input.tradeId,
-      });
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'Oracle progression is not currently blocked for this trade',
+        {
+          tradeId: input.tradeId,
+        },
+      );
     }
 
     const [requestedDecision, latestDecision] = await Promise.all([
@@ -596,33 +679,56 @@ export class ComplianceService {
       this.store.getLatestDecision(input.tradeId),
     ]);
     if (!latestDecision) {
-      throw new GatewayError(409, 'CONFLICT', 'An ALLOW compliance decision is required before resuming oracle progression', {
-        tradeId: input.tradeId,
-      });
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'An ALLOW compliance decision is required before resuming oracle progression',
+        {
+          tradeId: input.tradeId,
+        },
+      );
     }
 
     if (requestedDecision && requestedDecision.decisionId !== latestDecision.decisionId) {
-      throw new GatewayError(409, 'CONFLICT', 'The latest effective compliance decision must be used when resuming oracle progression', {
-        tradeId: input.tradeId,
-        decisionId: requestedDecision.decisionId,
-        latestDecisionId: latestDecision.decisionId,
-      });
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'The latest effective compliance decision must be used when resuming oracle progression',
+        {
+          tradeId: input.tradeId,
+          decisionId: requestedDecision.decisionId,
+          latestDecisionId: latestDecision.decisionId,
+        },
+      );
     }
 
     if (latestDecision.result !== 'ALLOW') {
-      throw new GatewayError(409, 'CONFLICT', 'The latest effective compliance decision must be ALLOW before resuming oracle progression', {
-        tradeId: input.tradeId,
-        decisionId: latestDecision.decisionId,
-        result: latestDecision.result,
-      });
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'The latest effective compliance decision must be ALLOW before resuming oracle progression',
+        {
+          tradeId: input.tradeId,
+          decisionId: latestDecision.decisionId,
+          result: latestDecision.result,
+        },
+      );
     }
 
     if (latestDecision.reasonCode === 'CMP_OVERRIDE_ACTIVE') {
-      if (!latestDecision.overrideWindowEndsAt || Date.parse(latestDecision.overrideWindowEndsAt) <= Date.now()) {
-        throw new GatewayError(409, 'CONFLICT', 'The active override window has expired; oracle progression cannot be resumed', {
-          tradeId: input.tradeId,
-          decisionId: latestDecision.decisionId,
-        });
+      if (
+        !latestDecision.overrideWindowEndsAt ||
+        Date.parse(latestDecision.overrideWindowEndsAt) <= Date.now()
+      ) {
+        throw new GatewayError(
+          409,
+          'CONFLICT',
+          'The active override window has expired; oracle progression cannot be resumed',
+          {
+            tradeId: input.tradeId,
+            decisionId: latestDecision.decisionId,
+          },
+        );
       }
     }
 
@@ -670,10 +776,15 @@ export class ComplianceService {
       }
 
       if (decision.tradeId !== tradeId) {
-        throw new GatewayError(409, 'CONFLICT', 'Compliance decision does not belong to the requested trade', {
-          tradeId,
-          decisionId,
-        });
+        throw new GatewayError(
+          409,
+          'CONFLICT',
+          'Compliance decision does not belong to the requested trade',
+          {
+            tradeId,
+            decisionId,
+          },
+        );
       }
 
       return decision;
@@ -685,9 +796,14 @@ export class ComplianceService {
   private async requireTradeStatus(tradeId: string): Promise<ComplianceTradeStatusRecord> {
     const status = await this.store.getTradeStatus(tradeId);
     if (!status) {
-      throw new GatewayError(500, 'INTERNAL_ERROR', 'Failed to assemble compliance trade status after mutation', {
-        tradeId,
-      });
+      throw new GatewayError(
+        500,
+        'INTERNAL_ERROR',
+        'Failed to assemble compliance trade status after mutation',
+        {
+          tradeId,
+        },
+      );
     }
 
     return status;

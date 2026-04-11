@@ -139,7 +139,13 @@ function degradedReason(error: unknown): string {
 }
 
 function combineDegradedReasons(reasons: Array<string | null | undefined>): string | undefined {
-  const values = [...new Set(reasons.filter((reason): reason is string => Boolean(reason?.trim())).map((reason) => reason.trim()))];
+  const values = [
+    ...new Set(
+      reasons
+        .filter((reason): reason is string => Boolean(reason?.trim()))
+        .map((reason) => reason.trim()),
+    ),
+  ];
   if (values.length === 0) {
     return undefined;
   }
@@ -157,18 +163,21 @@ export class ReconciliationReadService implements ReconciliationReadReader {
     const queriedAt = this.now().toISOString();
 
     try {
-      const handoffs = await this.settlementStore.listHandoffs(query as ListSettlementHandoffsInput);
-      const projectionResult = await this.settlementStore.getTradeSettlementProjectionMap(
-        [...new Set(handoffs.items.map((item) => item.tradeId))],
-      ).then((value) => ({ ok: true as const, value })).catch((error) => ({
-        ok: false as const,
-        error: degradedReason(error),
-      }));
+      const handoffs = await this.settlementStore.listHandoffs(
+        query as ListSettlementHandoffsInput,
+      );
+      const projectionResult = await this.settlementStore
+        .getTradeSettlementProjectionMap([...new Set(handoffs.items.map((item) => item.tradeId))])
+        .then((value) => ({ ok: true as const, value }))
+        .catch((error) => ({
+          ok: false as const,
+          error: degradedReason(error),
+        }));
 
       const items = handoffs.items.map((handoff) =>
         mapReconciliationRecord(
           handoff,
-          projectionResult.ok ? projectionResult.value.get(handoff.tradeId) ?? null : null,
+          projectionResult.ok ? (projectionResult.value.get(handoff.tradeId) ?? null) : null,
         ),
       );
       const responseDegradedReason = combineDegradedReasons([
@@ -236,12 +245,15 @@ export class ReconciliationReadService implements ReconciliationReadReader {
       ]);
 
       const events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
-      const tradeProjection = projectionsResult.status === 'fulfilled'
-        ? projectionsResult.value.get(handoff.tradeId) ?? null
-        : null;
+      const tradeProjection =
+        projectionsResult.status === 'fulfilled'
+          ? (projectionsResult.value.get(handoff.tradeId) ?? null)
+          : null;
       const responseDegradedReason = combineDegradedReasons([
         eventsResult.status === 'rejected' ? degradedReason(eventsResult.reason) : undefined,
-        projectionsResult.status === 'rejected' ? degradedReason(projectionsResult.reason) : undefined,
+        projectionsResult.status === 'rejected'
+          ? degradedReason(projectionsResult.reason)
+          : undefined,
       ]);
 
       return {

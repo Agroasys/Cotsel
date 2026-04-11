@@ -22,8 +22,6 @@ info:
 servers:
   - url: http://127.0.0.1:3600/api/dashboard-gateway/v1
     description: Local contract-first gateway base URL.
-  - url: https://gateway.agroasys.example/api/dashboard-gateway/v1
-    description: Production placeholder for future gateway deployment.
 tags:
   - name: System
   - name: Auth
@@ -2272,7 +2270,13 @@ components:
       scheme: bearer
       bearerFormat: session-id
       description: |
-        Session bearer token issued by the in-repo auth service (`/api/auth/v1/login`) after wallet-signature login.
+        Session bearer token issued by the in-repo auth service.
+
+        Production path:
+        - trusted upstream session exchange via `/api/auth/v1/session/exchange/agroasys`
+
+        Compatibility path:
+        - `/api/auth/v1/login` after explicit wallet-signature login when that legacy flow is enabled
 
         Repo evidence:
         - `auth/src/api/controller.ts`
@@ -4237,7 +4241,8 @@ components:
           format: date-time
     TradeEvidencePayload:
       type: object
-      required: [tradeId, ricardianHash, settlement, complianceDecisions, governanceActions, freshness]
+      required:
+        [tradeId, ricardianHash, settlement, complianceDecisions, governanceActions, freshness]
       properties:
         tradeId:
           type: string
@@ -4300,7 +4305,17 @@ components:
       enum: [not_required, not_started, pending, verified, failed]
     GovernanceMonitoringState:
       type: string
-      enum: [not_required, not_started, pending_verification, pending_confirmation, confirmed, finalized, reverted, stale]
+      enum:
+        [
+          not_required,
+          not_started,
+          pending_verification,
+          pending_confirmation,
+          confirmed,
+          finalized,
+          reverted,
+          stale,
+        ]
     GovernanceStatus:
       type: object
       required:
@@ -4809,7 +4824,16 @@ components:
           type: string
     GovernancePreparedSigningPayload:
       type: object
-      required: [chainId, contractAddress, contractMethod, args, txRequest, signerWallet, preparedPayloadHash]
+      required:
+        [
+          chainId,
+          contractAddress,
+          contractMethod,
+          args,
+          txRequest,
+          signerWallet,
+          preparedPayloadHash,
+        ]
       properties:
         chainId:
           type: integer

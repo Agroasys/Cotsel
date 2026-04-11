@@ -26,7 +26,11 @@ function parseLimit(raw: unknown): number {
 
   const limit = Number.parseInt(raw, 10);
   if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'limit' must be between 1 and 200");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'limit' must be between 1 and 200",
+    );
   }
 
   return limit;
@@ -43,7 +47,11 @@ function parseOffset(raw: unknown): number {
 
   const offset = Number.parseInt(raw, 10);
   if (!Number.isInteger(offset) || offset < 0) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'offset' must be zero or greater");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'offset' must be zero or greater",
+    );
   }
 
   return offset;
@@ -57,7 +65,10 @@ export function createTradeRouter(options: TradeRouterOptions): Router {
 
   router.get('/trades', async (req, res, next) => {
     try {
-      const records = await options.tradeReadService.listTrades(parseLimit(req.query.limit), parseOffset(req.query.offset));
+      const records = await options.tradeReadService.listTrades(
+        parseLimit(req.query.limit),
+        parseOffset(req.query.offset),
+      );
       res.status(200).json(successResponse(records));
     } catch (error) {
       next(error);

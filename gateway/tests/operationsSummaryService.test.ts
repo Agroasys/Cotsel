@@ -98,10 +98,7 @@ describe('OperationsSummaryService', () => {
 
   test('unavailable outranks stale when mixed in aggregate state', async () => {
     let staleShouldFail = false;
-    const timeline = [
-      new Date('2026-03-12T00:00:00.000Z'),
-      new Date('2026-03-12T01:00:00.000Z'),
-    ];
+    const timeline = [new Date('2026-03-12T00:00:00.000Z'), new Date('2026-03-12T01:00:00.000Z')];
 
     const service = new OperationsSummaryService(
       [
@@ -178,9 +175,13 @@ describe('OperationsSummaryService', () => {
     shouldFail = true;
 
     const firstFailureSnapshot = await service.getOperationsSummary();
-    expect(firstFailureSnapshot.incidents.items[0]?.firstObservedAt).toBe('2026-03-12T00:01:00.000Z');
+    expect(firstFailureSnapshot.incidents.items[0]?.firstObservedAt).toBe(
+      '2026-03-12T00:01:00.000Z',
+    );
 
     const secondFailureSnapshot = await service.getOperationsSummary();
-    expect(secondFailureSnapshot.incidents.items[0]?.firstObservedAt).toBe('2026-03-12T00:01:00.000Z');
+    expect(secondFailureSnapshot.incidents.items[0]?.firstObservedAt).toBe(
+      '2026-03-12T00:01:00.000Z',
+    );
   });
 });

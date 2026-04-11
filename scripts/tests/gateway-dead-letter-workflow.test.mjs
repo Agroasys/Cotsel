@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseGatewayDeadLetterArgs, runGatewayDeadLetterWorkflow } from '../lib/gateway-dead-letter-workflow-lib.mjs';
+import {
+  parseGatewayDeadLetterArgs,
+  runGatewayDeadLetterWorkflow,
+} from '../lib/gateway-dead-letter-workflow-lib.mjs';
 
 test('parseGatewayDeadLetterArgs defaults list to open failures', () => {
   assert.deepEqual(parseGatewayDeadLetterArgs(['list']), {
@@ -16,14 +19,16 @@ test('runGatewayDeadLetterWorkflow lists records as JSON', async () => {
     ['list', '--json'],
     {
       async listFailedOperations() {
-        return [{
-          failedOperationId: 'failed-op-1',
-          failureState: 'open',
-          operationType: 'compliance.create_decision',
-          targetService: 'gateway_compliance_write',
-          retryCount: 1,
-          lastFailedAt: '2026-03-26T18:00:00.000Z',
-        }];
+        return [
+          {
+            failedOperationId: 'failed-op-1',
+            failureState: 'open',
+            operationType: 'compliance.create_decision',
+            targetService: 'gateway_compliance_write',
+            retryCount: 1,
+            lastFailedAt: '2026-03-26T18:00:00.000Z',
+          },
+        ];
       },
       async replayFailedOperation() {
         throw new Error('not used');

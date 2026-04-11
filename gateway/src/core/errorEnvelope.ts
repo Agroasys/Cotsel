@@ -27,10 +27,10 @@ function classifyGatewayErrorCode(error: GatewayError): GatewayFailureClass {
   }
 
   if (
-    error.code === 'AUTH_REQUIRED'
-    || error.code === 'FORBIDDEN'
-    || error.code === 'VALIDATION_ERROR'
-    || error.code === 'NOT_FOUND'
+    error.code === 'AUTH_REQUIRED' ||
+    error.code === 'FORBIDDEN' ||
+    error.code === 'VALIDATION_ERROR' ||
+    error.code === 'NOT_FOUND'
   ) {
     return 'client_contract';
   }

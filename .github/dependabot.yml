@@ -1,73 +1,73 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
       day: monday
-      time: "06:00"
-      timezone: "UTC"
+      time: '06:00'
+      timezone: 'UTC'
     open-pull-requests-limit: 10
     ignore:
       # Temporary Hardhat v3 migration deferral (issue #192):
       # keep major updates muted only for the blocked Hardhat plugin chain.
-      - dependency-name: "hardhat"
+      - dependency-name: 'hardhat'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@parity/hardhat-polkadot"
+          - 'version-update:semver-major'
+      - dependency-name: '@parity/hardhat-polkadot'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@parity/hardhat-polkadot-resolc"
+          - 'version-update:semver-major'
+      - dependency-name: '@parity/hardhat-polkadot-resolc'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@nomicfoundation/hardhat-toolbox"
+          - 'version-update:semver-major'
+      - dependency-name: '@nomicfoundation/hardhat-toolbox'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@nomicfoundation/hardhat-ethers"
+          - 'version-update:semver-major'
+      - dependency-name: '@nomicfoundation/hardhat-ethers'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@nomicfoundation/hardhat-chai-matchers"
+          - 'version-update:semver-major'
+      - dependency-name: '@nomicfoundation/hardhat-chai-matchers'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@nomicfoundation/hardhat-ignition"
+          - 'version-update:semver-major'
+      - dependency-name: '@nomicfoundation/hardhat-ignition'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@nomicfoundation/hardhat-ignition-ethers"
+          - 'version-update:semver-major'
+      - dependency-name: '@nomicfoundation/hardhat-ignition-ethers'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@nomicfoundation/hardhat-network-helpers"
+          - 'version-update:semver-major'
+      - dependency-name: '@nomicfoundation/hardhat-network-helpers'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@nomicfoundation/hardhat-verify"
+          - 'version-update:semver-major'
+      - dependency-name: '@nomicfoundation/hardhat-verify'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@typechain/hardhat"
+          - 'version-update:semver-major'
+      - dependency-name: '@typechain/hardhat'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "hardhat-gas-reporter"
+          - 'version-update:semver-major'
+      - dependency-name: 'hardhat-gas-reporter'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "solidity-coverage"
+          - 'version-update:semver-major'
+      - dependency-name: 'solidity-coverage'
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "chai"
+          - 'version-update:semver-major'
+      - dependency-name: 'chai'
         update-types:
-          - "version-update:semver-major"
+          - 'version-update:semver-major'
     groups:
       npm-runtime:
         patterns:
-          - "*"
+          - '*'
         dependency-type: production
       npm-dev:
         patterns:
-          - "*"
+          - '*'
         dependency-type: development
 
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
       day: monday
-      time: "06:00"
-      timezone: "UTC"
+      time: '06:00'
+      timezone: 'UTC'
     open-pull-requests-limit: 5

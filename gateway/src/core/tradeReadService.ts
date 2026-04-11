@@ -111,15 +111,22 @@ interface TradesGraphQlResponse {
 }
 
 export interface TradeSettlementReadStore {
-  getTradeSettlementProjectionMap(tradeIds: string[]): Promise<Map<string, TradeSettlementProjection>>;
+  getTradeSettlementProjectionMap(
+    tradeIds: string[],
+  ): Promise<Map<string, TradeSettlementProjection>>;
 }
 
 function assertIsoTimestamp(value: string, field: string): string {
   if (Number.isNaN(Date.parse(value))) {
-    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer returned invalid ${field} timestamp`, {
-      field,
-      value,
-    });
+    throw new GatewayError(
+      502,
+      'UPSTREAM_UNAVAILABLE',
+      `Indexer returned invalid ${field} timestamp`,
+      {
+        field,
+        value,
+      },
+    );
   }
 
   return new Date(value).toISOString();
@@ -128,18 +135,28 @@ function assertIsoTimestamp(value: string, field: string): string {
 function assertUnixSecondsTimestamp(value: string, field: string): string {
   const seconds = Number(value);
   if (!Number.isFinite(seconds)) {
-    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer returned invalid ${field} timestamp`, {
-      field,
-      value,
-    });
+    throw new GatewayError(
+      502,
+      'UPSTREAM_UNAVAILABLE',
+      `Indexer returned invalid ${field} timestamp`,
+      {
+        field,
+        value,
+      },
+    );
   }
 
   const timestamp = new Date(seconds * 1000);
   if (Number.isNaN(timestamp.getTime())) {
-    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer returned invalid ${field} timestamp`, {
-      field,
-      value,
-    });
+    throw new GatewayError(
+      502,
+      'UPSTREAM_UNAVAILABLE',
+      `Indexer returned invalid ${field} timestamp`,
+      {
+        field,
+        value,
+      },
+    );
   }
 
   return timestamp.toISOString();
@@ -159,11 +176,16 @@ function asUsdcNumber(raw: string, field: string): number {
     }
     return value;
   } catch (error) {
-    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', `Indexer returned invalid ${field} amount`, {
-      field,
-      raw,
-      reason: error instanceof Error ? error.message : String(error),
-    });
+    throw new GatewayError(
+      502,
+      'UPSTREAM_UNAVAILABLE',
+      `Indexer returned invalid ${field} amount`,
+      {
+        field,
+        raw,
+        reason: error instanceof Error ? error.message : String(error),
+      },
+    );
   }
 }
 
@@ -180,7 +202,9 @@ function mapTradeStatus(status: TradeGraphQlRecord['status']): DashboardTradeSta
     case 'CLOSED':
       return 'completed';
     default:
-      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned unknown trade status', { status });
+      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned unknown trade status', {
+        status,
+      });
   }
 }
 
@@ -247,7 +271,9 @@ function mapEventActor(eventName: string): string {
 function mapEventDetail(event: TradeEventGraphQlRecord): string | undefined {
   switch (event.eventName) {
     case 'TradeLocked':
-      return event.totalAmount ? `Escrow locked for ${asUsdcNumber(event.totalAmount, 'event.totalAmount').toLocaleString()} USDC.` : undefined;
+      return event.totalAmount
+        ? `Escrow locked for ${asUsdcNumber(event.totalAmount, 'event.totalAmount').toLocaleString()} USDC.`
+        : undefined;
     case 'FundsReleasedStage1':
       return `Stage 1 released ${asUsdcNumber(event.releasedFirstTranche ?? '0', 'event.releasedFirstTranche').toLocaleString()} USDC plus ${asUsdcNumber(event.releasedLogisticsAmount ?? '0', 'event.releasedLogisticsAmount').toLocaleString()} USDC logistics.`;
     case 'PlatformFeesPaidStage1':
@@ -298,15 +324,28 @@ function mapTimeline(
 
 function parseGraphQlResponse(payload: unknown): TradesGraphQlResponse {
   if (!payload || typeof payload !== 'object') {
-    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned an invalid GraphQL payload');
+    throw new GatewayError(
+      502,
+      'UPSTREAM_UNAVAILABLE',
+      'Indexer returned an invalid GraphQL payload',
+    );
   }
 
   return payload as TradesGraphQlResponse;
 }
 
 function readTradesArray(payload: TradesGraphQlResponse): TradeGraphQlRecord[] {
-  if (!payload.data || typeof payload.data !== 'object' || !('trades' in payload.data) || !Array.isArray(payload.data.trades)) {
-    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Indexer returned an invalid GraphQL payload');
+  if (
+    !payload.data ||
+    typeof payload.data !== 'object' ||
+    !('trades' in payload.data) ||
+    !Array.isArray(payload.data.trades)
+  ) {
+    throw new GatewayError(
+      502,
+      'UPSTREAM_UNAVAILABLE',
+      'Indexer returned an invalid GraphQL payload',
+    );
   }
 
   return payload.data.trades;
@@ -413,21 +452,26 @@ export class TradeReadService implements TradeReadReader {
         indexerRequestTimeoutOrComplianceStore as number,
       );
       this.complianceStore = complianceStoreOrSettlementStore as ComplianceStore;
-      this.settlementReadStore = typeof maybeSettlementReadStoreOrExplorerBaseUrl === 'string'
-        ? undefined
-        : maybeSettlementReadStoreOrExplorerBaseUrl ?? undefined;
-      this.explorerBaseUrl = typeof maybeSettlementReadStoreOrExplorerBaseUrl === 'string'
-        ? maybeSettlementReadStoreOrExplorerBaseUrl
-        : maybeExplorerBaseUrl;
+      this.settlementReadStore =
+        typeof maybeSettlementReadStoreOrExplorerBaseUrl === 'string'
+          ? undefined
+          : (maybeSettlementReadStoreOrExplorerBaseUrl ?? undefined);
+      this.explorerBaseUrl =
+        typeof maybeSettlementReadStoreOrExplorerBaseUrl === 'string'
+          ? maybeSettlementReadStoreOrExplorerBaseUrl
+          : maybeExplorerBaseUrl;
       return;
     }
 
     this.indexerClient = indexerClientOrUrl;
     this.complianceStore = indexerRequestTimeoutOrComplianceStore as ComplianceStore;
-    this.settlementReadStore = complianceStoreOrSettlementStore as TradeSettlementReadStore | undefined;
-    this.explorerBaseUrl = typeof maybeSettlementReadStoreOrExplorerBaseUrl === 'string'
-      ? maybeSettlementReadStoreOrExplorerBaseUrl
-      : maybeExplorerBaseUrl;
+    this.settlementReadStore = complianceStoreOrSettlementStore as
+      | TradeSettlementReadStore
+      | undefined;
+    this.explorerBaseUrl =
+      typeof maybeSettlementReadStoreOrExplorerBaseUrl === 'string'
+        ? maybeSettlementReadStoreOrExplorerBaseUrl
+        : maybeExplorerBaseUrl;
   }
 
   async checkReadiness(): Promise<void> {
@@ -442,10 +486,16 @@ export class TradeReadService implements TradeReadReader {
     const response = await this.executeQuery('DashboardTrades', listTradesQuery, { limit, offset });
     const trades = readTradesArray(response);
     const settlementProjectionMap = this.settlementReadStore
-      ? await this.settlementReadStore.getTradeSettlementProjectionMap(trades.map((trade) => trade.tradeId))
+      ? await this.settlementReadStore.getTradeSettlementProjectionMap(
+          trades.map((trade) => trade.tradeId),
+        )
       : new Map<string, TradeSettlementProjection>();
 
-    return Promise.all(trades.map((trade) => this.mapTradeRecord(trade, settlementProjectionMap.get(trade.tradeId) ?? null)));
+    return Promise.all(
+      trades.map((trade) =>
+        this.mapTradeRecord(trade, settlementProjectionMap.get(trade.tradeId) ?? null),
+      ),
+    );
   }
 
   async getTrade(tradeId: string): Promise<DashboardTradeRecord | null> {
@@ -467,12 +517,14 @@ export class TradeReadService implements TradeReadReader {
     settlementProjection: TradeSettlementProjection | null,
   ): Promise<DashboardTradeRecord> {
     const timeline = mapTimeline(trade.events, this.explorerBaseUrl);
-    const lockReference = timeline.find((event) => event.stage === 'Lock' && event.txHash)?.txHash
-      ?? timeline.find((event) => event.txHash)?.txHash
-      ?? null;
+    const lockReference =
+      timeline.find((event) => event.stage === 'Lock' && event.txHash)?.txHash ??
+      timeline.find((event) => event.txHash)?.txHash ??
+      null;
     const compliance = await this.complianceStore.getTradeStatus(trade.tradeId);
     const latestTimelineEntry = timeline.length > 0 ? timeline[timeline.length - 1] : null;
-    const updatedAt = latestTimelineEntry?.timestamp ?? assertIsoTimestamp(trade.createdAt, 'trade.createdAt');
+    const updatedAt =
+      latestTimelineEntry?.timestamp ?? assertIsoTimestamp(trade.createdAt, 'trade.createdAt');
     const settlementReference = buildSettlementTransactionReference(
       settlementProjection?.txHash ?? null,
       this.explorerBaseUrl,
@@ -493,28 +545,32 @@ export class TradeReadService implements TradeReadReader {
       logisticsAmount: asUsdcNumber(trade.logisticsAmount, 'trade.logisticsAmount'),
       timeline,
       complianceStatus: mapComplianceStatus(compliance?.currentResult ?? null),
-      settlement: settlementProjection ? {
-        handoffId: settlementProjection.handoffId,
-        platformId: settlementProjection.platformId,
-        platformHandoffId: settlementProjection.platformHandoffId,
-        phase: settlementProjection.phase,
-        settlementChannel: settlementProjection.settlementChannel,
-        displayCurrency: settlementProjection.displayCurrency,
-        displayAmount: settlementProjection.displayAmount,
-        executionStatus: settlementProjection.executionStatus,
-        reconciliationStatus: settlementProjection.reconciliationStatus,
-        callbackStatus: settlementProjection.callbackStatus,
-        providerStatus: settlementProjection.providerStatus,
-        txHash: settlementReference.txHash,
-        ...(settlementReference.explorerUrl ? { explorerUrl: settlementReference.explorerUrl } : {}),
-        externalReference: settlementProjection.externalReference,
-        latestEventType: settlementProjection.latestEventType,
-        latestEventDetail: settlementProjection.latestEventDetail,
-        latestEventAt: settlementProjection.latestEventAt,
-        callbackDeliveredAt: settlementProjection.callbackDeliveredAt,
-        createdAt: settlementProjection.createdAt,
-        updatedAt: settlementProjection.updatedAt,
-      } : null,
+      settlement: settlementProjection
+        ? {
+            handoffId: settlementProjection.handoffId,
+            platformId: settlementProjection.platformId,
+            platformHandoffId: settlementProjection.platformHandoffId,
+            phase: settlementProjection.phase,
+            settlementChannel: settlementProjection.settlementChannel,
+            displayCurrency: settlementProjection.displayCurrency,
+            displayAmount: settlementProjection.displayAmount,
+            executionStatus: settlementProjection.executionStatus,
+            reconciliationStatus: settlementProjection.reconciliationStatus,
+            callbackStatus: settlementProjection.callbackStatus,
+            providerStatus: settlementProjection.providerStatus,
+            txHash: settlementReference.txHash,
+            ...(settlementReference.explorerUrl
+              ? { explorerUrl: settlementReference.explorerUrl }
+              : {}),
+            externalReference: settlementProjection.externalReference,
+            latestEventType: settlementProjection.latestEventType,
+            latestEventDetail: settlementProjection.latestEventDetail,
+            latestEventAt: settlementProjection.latestEventAt,
+            callbackDeliveredAt: settlementProjection.callbackDeliveredAt,
+            createdAt: settlementProjection.createdAt,
+            updatedAt: settlementProjection.updatedAt,
+          }
+        : null,
     };
   }
 

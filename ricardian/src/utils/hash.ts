@@ -15,7 +15,6 @@ function sha256Hex(input: string): string {
   return createHash('sha256').update(input).digest('hex');
 }
 
-
 export function verifyHashIntegrity(row: {
   hash: string;
   rulesVersion: string;

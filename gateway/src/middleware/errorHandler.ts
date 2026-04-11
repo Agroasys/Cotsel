@@ -35,7 +35,9 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
       details: envelope.details,
     });
 
-    res.status(envelope.statusCode).json(errorResponse(req.requestContext, envelope.code, envelope.message, envelope.details));
+    res
+      .status(envelope.statusCode)
+      .json(errorResponse(req.requestContext, envelope.code, envelope.message, envelope.details));
     return;
   }
 
@@ -51,5 +53,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     stack: err instanceof Error ? err.stack : undefined,
   });
 
-  res.status(500).json(errorResponse(req.requestContext, 'INTERNAL_ERROR', 'An unexpected error occurred'));
+  res
+    .status(500)
+    .json(errorResponse(req.requestContext, 'INTERNAL_ERROR', 'An unexpected error occurred'));
 }

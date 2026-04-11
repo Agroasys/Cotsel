@@ -46,6 +46,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-14T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 async function startServer(role: 'admin' | 'buyer' | null = 'admin') {
@@ -57,9 +60,10 @@ async function startServer(role: 'admin' | 'buyer' | null = 'admin') {
 
       return {
         userId: role === 'admin' ? 'uid-admin' : 'uid-buyer',
-        walletAddress: role === 'admin'
-          ? '0x00000000000000000000000000000000000000aa'
-          : '0x00000000000000000000000000000000000000bb',
+        walletAddress:
+          role === 'admin'
+            ? '0x00000000000000000000000000000000000000aa'
+            : '0x00000000000000000000000000000000000000bb',
         role,
         email: role === 'admin' ? 'admin@agroasys.io' : 'buyer@agroasys.io',
         issuedAt: Date.now(),
@@ -107,11 +111,13 @@ async function startServer(role: 'admin' | 'buyer' | null = 'admin') {
   );
 
   const router = Router();
-  router.use(createSettingsRouter({
-    authSessionClient,
-    config,
-    settingsReadService,
-  }));
+  router.use(
+    createSettingsRouter({
+      authSessionClient,
+      config,
+      settingsReadService,
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -126,8 +132,14 @@ async function startServer(role: 'admin' | 'buyer' | null = 'admin') {
 
 describe('gateway settings routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateRoleAssignments = createSchemaValidator(spec, '#/components/schemas/RoleAssignmentListResponse');
-  const validateAuditFeed = createSchemaValidator(spec, '#/components/schemas/AuditFeedListResponse');
+  const validateRoleAssignments = createSchemaValidator(
+    spec,
+    '#/components/schemas/RoleAssignmentListResponse',
+  );
+  const validateAuditFeed = createSchemaValidator(
+    spec,
+    '#/components/schemas/AuditFeedListResponse',
+  );
 
   test('OpenAPI spec exposes settings role-assignment and audit-feed routes', () => {
     expect(hasOperation(spec, 'get', '/settings/role-assignments')).toBe(true);
@@ -141,7 +153,9 @@ describe('gateway settings routes contract', () => {
       path: '/api/dashboard-gateway/v1/settings/role-assignments',
       headers: { authorization: 'Bearer session-admin' },
     });
-    const rolesPayload = rolesResponse.json<{ data: { items: Array<{ subjectUserId?: string }> } }>();
+    const rolesPayload = rolesResponse.json<{
+      data: { items: Array<{ subjectUserId?: string }> };
+    }>();
 
     const auditFeedResponse = await sendInProcessRequest(app, {
       method: 'GET',

@@ -1,10 +1,12 @@
 # Docker Profiles Runbook
 
 ## Purpose
+
 Run deterministic build/start/health/log actions for each supported compose profile.
 Production launch criteria are defined in `docs/runbooks/production-readiness-checklist.md`.
 
 ## Profiles
+
 - `local-dev`: lightweight mock indexer responder (`indexer`) for fast iteration with an empty trade registry by default.
 - `local-dev` with `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity`: parity-enabled local profile exposing canonical seeded trade `TRD-LOCAL-9001` for dashboard live-contract verification.
 - `staging-e2e`: existing staging profile.
@@ -12,6 +14,7 @@ Production launch criteria are defined in `docs/runbooks/production-readiness-ch
 - `infra`: shared infra only (`postgres`, `redis`).
 
 ## Preconditions
+
 ```bash
 cp .env.example .env
 cp .env.local.example .env.local
@@ -20,6 +23,7 @@ cp .env.staging-e2e-real.example .env.staging-e2e-real
 ```
 
 ## Commands
+
 ```bash
 scripts/docker-services.sh build local-dev
 scripts/docker-services.sh up local-dev
@@ -44,6 +48,7 @@ scripts/docker-services.sh down staging-e2e-real
 ```
 
 ## Expected outputs
+
 - `health <profile>` verifies required services for that profile.
 - Non-infra profiles verify indexer GraphQL readiness.
 - Reconciliation healthcheck passes when DB is reachable.
@@ -51,19 +56,24 @@ scripts/docker-services.sh down staging-e2e-real
 - Dashboard live local-contract verification uses `npm run dashboard:parity:gate` as its narrower upstream readiness gate; that is related to, but distinct from, whole-profile `health local-dev`.
 
 ## Failure modes
+
 - `required service is not running`: profile mismatch or startup failure.
 - `indexer graphql endpoint failed`: indexer service not ready.
 - `reconciliation healthcheck` failure: DB/auth/config mismatch.
 - `notifications wiring health` failure: profile env values are missing/invalid for notification runtime keys.
 
 ## Rollback
+
 1. Stop profile:
+
 ```bash
 scripts/docker-services.sh down <profile>
 ```
+
 2. Restore last known-good env values.
 3. Re-run profile startup and health commands.
 
 ## Related
+
 - Production readiness checklist: `docs/runbooks/production-readiness-checklist.md`
 - Dashboard local parity: `docs/runbooks/dashboard-local-parity.md`

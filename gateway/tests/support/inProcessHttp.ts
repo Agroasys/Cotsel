@@ -109,7 +109,10 @@ export async function sendInProcessRequest(
       resolve({
         status: response.statusCode,
         headers: Object.fromEntries(
-          Object.entries(response.getHeaders()).map(([key, value]) => [key.toLowerCase(), String(value)]),
+          Object.entries(response.getHeaders()).map(([key, value]) => [
+            key.toLowerCase(),
+            String(value),
+          ]),
         ),
         text,
         json<T>() {
@@ -118,9 +121,11 @@ export async function sendInProcessRequest(
       });
     });
 
-    (app as unknown as {
-      handle(req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void): void;
-    }).handle(request, response, (error: unknown) => {
+    (
+      app as unknown as {
+        handle(req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void): void;
+      }
+    ).handle(request, response, (error: unknown) => {
       if (error) {
         reject(error);
       }

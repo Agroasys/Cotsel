@@ -1,20 +1,22 @@
 # Oracle Re-drive Runbook
 
 ## Purpose
+
 Handle `EXHAUSTED_NEEDS_REDRIVE` oracle triggers with explicit ownership, bounded retries, and on-chain verification safeguards.
 
 Gateway-boundary handoff: when failures indicate routing/auth propagation/correlation drift across services (not oracle business-state logic), follow `docs/runbooks/api-gateway-boundary.md` first, then return here for redrive actions with the same `tradeId`/`actionKey`/`requestId` evidence.
 
 Automation-governance source of truth:
+
 - `docs/runbooks/programmability-governance.md`
 
 Webhook authenticity and replay regression fixtures:
+
 - `oracle/tests/hmac-middleware.test.ts`
 - `oracle/tests/authenticated-routes.test.ts`
 - `treasury/tests/authMiddleware.test.ts`
 - `treasury/tests/replayProtection.test.ts`
 - `treasury/tests/serviceAuthRoutes.test.ts`
-
 
 ## Reference Flow: Logistics-Triggered Release
 
@@ -26,7 +28,7 @@ Cotsel supports logistics-triggered fund release when an external logistics or t
 
 ```
 Logistics event signal
-  └─> Oracle POST 
+  └─> Oracle POST
         ├─> [1] HMAC authenticity check
         ├─> [2] Replay protection check
         ├─> [3] Duplicate / idempotency check (actionKey)
@@ -42,6 +44,7 @@ Logistics event signal
 **[3] Idempotency** — `actionKey` is the string `${triggerType}:${tradeId}`. When a trigger for the same `actionKey` already exists in `SUBMITTED` or `CONFIRMED` state, the existing record is returned without creating a new execution path. Other terminal states (`TERMINAL_FAILURE`, `EXHAUSTED_NEEDS_REDRIVE`) are returned as-is. Concurrent duplicate active triggers are prevented by a unique index on active action keys. This guard substantially reduces double-release risk on retry, but operators should treat it as a defence-in-depth control rather than a general retry-safe dedupe contract for every repeat submission.
 
 **[4] On-chain pre-condition** — before submitting any transaction, the oracle reads current escrow state:
+
 - `RELEASE_STAGE_1` requires trade in `LOCKED` state
 - `CONFIRM_ARRIVAL` requires trade in `IN_TRANSIT` state
 - `FINALIZE_TRADE` requires trade in `ARRIVAL_CONFIRMED` state with expired dispute window
@@ -56,14 +59,15 @@ If the pre-condition fails, the trigger is moved to `TERMINAL_FAILURE` (non-retr
 
 Callers must include on every request:
 
-| Header | Required | Description |
-|---|---|---|
-| `Authorization` | Yes | `Bearer <API_KEY>` — validated against `ORACLE_API_KEY` |
-| `x-timestamp` | Yes | Unix timestamp in milliseconds; must be within clock-skew window |
-| `x-signature` | Yes | HMAC-SHA256 of `timestamp + body` (no separator) using `ORACLE_HMAC_SECRET` |
-| `x-nonce` | Optional | Unique string per request; if omitted, one is derived from the signed request and still consumed |
+| Header          | Required | Description                                                                                      |
+| --------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `Authorization` | Yes      | `Bearer <API_KEY>` — validated against `ORACLE_API_KEY`                                          |
+| `x-timestamp`   | Yes      | Unix timestamp in milliseconds; must be within clock-skew window                                 |
+| `x-signature`   | Yes      | HMAC-SHA256 of `timestamp + body` (no separator) using `ORACLE_HMAC_SECRET`                      |
+| `x-nonce`       | Optional | Unique string per request; if omitted, one is derived from the signed request and still consumed |
 
 See test coverage for the enforcement boundary:
+
 - `oracle/tests/hmac-middleware.test.ts`
 - `oracle/tests/authenticated-routes.test.ts`
 
@@ -80,9 +84,8 @@ For each logistics-triggered release, operators must be able to provide:
 
 Template: `docs/runbooks/operator-audit-evidence-template.md`
 
-
-
 ## Ownership And Intervention Rules
+
 - `Operator`:
   - Runs health/diagnostic checks.
   - Collects incident evidence (`tradeId`, `actionKey`, `requestId`, `txHash`).
@@ -96,6 +99,7 @@ Template: `docs/runbooks/operator-audit-evidence-template.md`
 Manual intervention is allowed only when a trigger reached `EXHAUSTED_NEEDS_REDRIVE` (or a hard-timeout path moved it there). For `SUBMITTED` triggers below hard timeout, continue monitoring unless an on-call engineer declares escalation.
 
 ## Runtime Retry Ceilings And Stop Conditions
+
 - Trigger execution retries:
   - Controlled by `RETRY_ATTEMPTS` (default `3`, allowed range `0..10`).
   - Backoff uses exponential delay from `RETRY_DELAY` (default `1000ms`) with jitter, capped at `30000ms`.
@@ -106,17 +110,20 @@ Manual intervention is allowed only when a trigger reached `EXHAUSTED_NEEDS_REDR
   - Hard timeout: `30m` then status becomes `EXHAUSTED_NEEDS_REDRIVE`.
 
 Stop and escalate immediately when any of the following happens:
+
 - `TERMINAL_FAILURE` status (non-retryable business/contract error).
 - Re-drive attempt returns repeated `EXHAUSTED_NEEDS_REDRIVE` for the same `actionKey`.
 - Conflicting truth sources (indexer/reconciliation/on-chain disagreement that cannot be resolved in one pass).
 - Any signal of duplicate action risk for one `actionKey`.
 
 ## Preconditions
+
 - Oracle service is running and reachable.
 - Trigger status targeted for re-drive is `EXHAUSTED_NEEDS_REDRIVE`.
 - RPC and indexer endpoints are reachable and on the same chain dataset.
 
 ## Decision Flow
+
 ```mermaid
 flowchart TD
   A[Trigger needs attention] --> B[Check oracle health + readiness]
@@ -134,6 +141,7 @@ flowchart TD
 ```
 
 ## Commands
+
 Service health:
 
 ```bash
@@ -162,12 +170,14 @@ curl -X POST http://127.0.0.1:3001/api/oracle/redrive \
 ```
 
 ## Expected Results
+
 - Idempotency is preserved by `actionKey`/`idempotencyKey`.
 - If action was already executed on-chain: trigger is marked confirmed without duplicate execution.
 - If still pending: one new re-drive attempt is created and processed under bounded retry policy.
 - If re-drive behavior or approval state deviates from the allowed automation classes, stop and route the decision through `docs/runbooks/programmability-governance.md`.
 
 ## Evidence To Collect For Incidents
+
 - Service health and readiness output.
 - Oracle/reconciliation/indexer logs around affected `tradeId`.
 - Trigger record status history with `attempt_count`, `last_error`, and timestamps.
@@ -176,6 +186,7 @@ curl -X POST http://127.0.0.1:3001/api/oracle/redrive \
 - Operator audit packet for approved/manual actions: `docs/runbooks/operator-audit-evidence-template.md`
 
 ## Escalation Matrix
+
 - `SEV-1` (page immediately, response target: `<= 15 min`):
   - Duplicate release risk, conflicting confirmation outcomes, or widespread terminal failures.
 - `SEV-2` (response target: `<= 30 min`):
@@ -186,20 +197,20 @@ curl -X POST http://127.0.0.1:3001/api/oracle/redrive \
 When escalating, include: `tradeId`, `actionKey`, `requestId`, `txHash`, current status, retry count, and last 15 minutes of logs from oracle/reconciliation/indexer.
 
 ## Rollback / Backout
+
 1. Pause manual re-drive operations.
 2. Run `docs/incidents/first-15-minutes-checklist.md`.
 3. Capture evidence bundle and notify on-call/service owner.
 4. Restore previous known-good oracle deployment/config if regression is suspected.
 
 ## Cross-Links
+
 - Incident checklist: `docs/incidents/first-15-minutes-checklist.md`
 - Incident evidence template: `docs/incidents/incident-evidence-template.md`
 - Operator audit evidence template: `docs/runbooks/operator-audit-evidence-template.md`
 - Staging gate runbook: `docs/runbooks/staging-e2e-real-release-gate.md`
 - Staging gate diagnostics (non-real profile): `docs/runbooks/staging-e2e-release-gate.md`
 - Hybrid lifecycle walkthrough: `docs/runbooks/hybrid-split-walkthrough.md`
-
-
 
 ## Manual Approval Mode (Pilot)
 
@@ -209,16 +220,14 @@ When `ORACLE_MANUAL_APPROVAL_ENABLED=true`, every newly submitted trigger pauses
 at `PENDING_APPROVAL` before any blockchain transaction is attempted.
 The trigger sits in the DB waiting for an explicit human decision.
 
-
 ### Flag Behaviour
 
-| `ORACLE_MANUAL_APPROVAL_ENABLED` | What happens on trigger submit |
-|---|---|
-| `false` (default) | Trigger executes immediately as before |
-| `true` | Trigger is persisted as `PENDING_APPROVAL` and returned to caller. No blockchain call is made until `/approve` is called. |
+| `ORACLE_MANUAL_APPROVAL_ENABLED` | What happens on trigger submit                                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `false` (default)                | Trigger executes immediately as before                                                                                    |
+| `true`                           | Trigger is persisted as `PENDING_APPROVAL` and returned to caller. No blockchain call is made until `/approve` is called. |
 
 Setting the flag requires a service restart (it is read at boot from env).
-
 
 ### Pre-Approval Checklist (Operator)
 
@@ -232,16 +241,13 @@ Before calling `/approve`, verify all of the following:
    - `FINALIZE_TRADE` -> trade must be `ARRIVAL_CONFIRMED` and dispute window expired
 4. Confirm no recent `CONFIRMED` or `SUBMITTED` trigger exists for the same `action_key`.
 
-
-
 All approve and reject actions are also emitted as `audit`-level log entries
 (`TRIGGER_APPROVED`, `TRIGGER_REJECTED`) searchable by `idempotencyKey` and `tradeId`.
 
-
 ### Escalation And Rollback Path
 
-| Situation | Action |
-|---|---|
-| Trigger approved but blockchain action fails and exhausts retries | Use standard redrive flow  |
-| Same `actionKey` appears in `PENDING_APPROVAL` a second time | Do **not** approve. Escalate to Service Owner, indicates a duplicate submission at the API layer |
-| On-chain state does not match expected pre-condition | Reject with reason, escalate to Service Owner for hotfix decision |
+| Situation                                                         | Action                                                                                           |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Trigger approved but blockchain action fails and exhausts retries | Use standard redrive flow                                                                        |
+| Same `actionKey` appears in `PENDING_APPROVAL` a second time      | Do **not** approve. Escalate to Service Owner, indicates a duplicate submission at the API layer |
+| On-chain state does not match expected pre-condition              | Reject with reason, escalate to Service Owner for hotfix decision                                |

@@ -48,6 +48,9 @@ const baseConfig: GatewayConfig = {
   buildTime: '2026-03-14T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 const trade: DashboardTradeRecord = {
@@ -179,12 +182,14 @@ async function startServer(options: StartServerOptions = {}) {
   );
 
   const router = Router();
-  router.use(createEvidenceBundleRouter({
-    authSessionClient,
-    config,
-    evidenceBundleService,
-    idempotencyStore: createInMemoryIdempotencyStore(),
-  }));
+  router.use(
+    createEvidenceBundleRouter({
+      authSessionClient,
+      config,
+      evidenceBundleService,
+      idempotencyStore: createInMemoryIdempotencyStore(),
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -199,7 +204,10 @@ async function startServer(options: StartServerOptions = {}) {
 
 describe('gateway evidence bundle routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateBundleResponse = createSchemaValidator(spec, '#/components/schemas/EvidenceBundleResponse');
+  const validateBundleResponse = createSchemaValidator(
+    spec,
+    '#/components/schemas/EvidenceBundleResponse',
+  );
 
   test('OpenAPI spec exposes evidence bundle generation and retrieval routes', () => {
     expect(hasOperation(spec, 'post', '/evidence/bundles')).toBe(true);
@@ -224,7 +232,9 @@ describe('gateway evidence bundle routes contract', () => {
 
     expect(createResponse.status).toBe(201);
     expect(validateBundleResponse(createPayload)).toBe(true);
-    expect((createPayload as { data: { bundleId: string; trade: { id: string } } }).data.trade.id).toBe(trade.id);
+    expect(
+      (createPayload as { data: { bundleId: string; trade: { id: string } } }).data.trade.id,
+    ).toBe(trade.id);
 
     const getResponse = await sendInProcessRequest(app, {
       method: 'GET',

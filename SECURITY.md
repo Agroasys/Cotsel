@@ -4,10 +4,10 @@
 
 The project follows a rolling support model.
 
-| Version branch | Supported |
-| --- | --- |
-| `main` | Yes |
-| release tags older than current cycle | No |
+| Version branch                        | Supported |
+| ------------------------------------- | --------- |
+| `main`                                | Yes       |
+| release tags older than current cycle | No        |
 
 ## Reporting a Vulnerability
 
@@ -16,6 +16,7 @@ Please do not open public GitHub issues for security vulnerabilities.
 Report privately to: `security@agroasys.com`
 
 Include:
+
 - affected workspace/module
 - severity and impact
 - reproducible steps or proof of concept

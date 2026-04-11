@@ -44,6 +44,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-14T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 const treasuryFixture = {
@@ -88,7 +91,6 @@ const treasuryActionsFixture = {
       status: 'executed',
       contractMethod: 'sweepTreasury',
       txHash: '0xabc',
-      extrinsicHash: null,
       blockNumber: 17,
       tradeId: null,
       chainId: '31337',
@@ -121,7 +123,10 @@ const treasuryActionsFixture = {
   },
 };
 
-async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<TreasuryReadReader>) {
+async function startServer(
+  role: 'admin' | 'buyer' | null,
+  overrides?: Partial<TreasuryReadReader>,
+) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
       if (role === null) {
@@ -146,11 +151,13 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<T
   };
 
   const router = Router();
-  router.use(createTreasuryRouter({
-    authSessionClient,
-    config,
-    treasuryReadService,
-  }));
+  router.use(
+    createTreasuryRouter({
+      authSessionClient,
+      config,
+      treasuryReadService,
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -165,8 +172,14 @@ async function startServer(role: 'admin' | 'buyer' | null, overrides?: Partial<T
 
 describe('gateway treasury routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateSnapshot = createSchemaValidator(spec, '#/components/schemas/TreasurySnapshotResponse');
-  const validateActions = createSchemaValidator(spec, '#/components/schemas/TreasuryActionListResponse');
+  const validateSnapshot = createSchemaValidator(
+    spec,
+    '#/components/schemas/TreasurySnapshotResponse',
+  );
+  const validateActions = createSchemaValidator(
+    spec,
+    '#/components/schemas/TreasuryActionListResponse',
+  );
 
   test('OpenAPI spec exposes treasury read endpoints', () => {
     expect(hasOperation(spec, 'get', '/treasury')).toBe(true);
@@ -183,7 +196,9 @@ describe('gateway treasury routes contract', () => {
         'x-request-id': 'req-treasury',
       },
     });
-    const payload = response.json<{ data: { state: { sweepVisibility: { canSweep: boolean } } } }>();
+    const payload = response.json<{
+      data: { state: { sweepVisibility: { canSweep: boolean } } };
+    }>();
 
     expect(response.status).toBe(200);
     expect(response.headers['x-request-id']).toBe('req-treasury');

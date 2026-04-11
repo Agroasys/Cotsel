@@ -25,7 +25,7 @@ const config: GatewayConfig = {
   dbPassword: 'postgres',
   authBaseUrl: 'http://127.0.0.1:3005',
   authRequestTimeoutMs: 5000,
-  indexerGraphqlUrl: "http://127.0.0.1:4350/graphql",
+  indexerGraphqlUrl: 'http://127.0.0.1:4350/graphql',
   indexerRequestTimeoutMs: 5000,
   rpcUrl: 'http://127.0.0.1:8545',
   rpcFallbackUrls: [],
@@ -49,6 +49,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-07T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 const seededActions: GovernanceActionRecord[] = [
@@ -66,7 +69,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'pending_approvals',
     contractMethod: 'proposeOracleUpdate',
     txHash: null,
-    extrinsicHash: null,
     blockNumber: null,
     tradeId: null,
     chainId: '31337',
@@ -104,7 +106,6 @@ const seededActions: GovernanceActionRecord[] = [
     status: 'executed',
     contractMethod: 'pause',
     txHash: '0xabc',
-    extrinsicHash: null,
     blockNumber: 17,
     tradeId: null,
     chainId: '31337',
@@ -169,12 +170,14 @@ async function startServer(sessionRole: 'admin' | 'buyer' | null) {
   };
 
   const router = Router();
-  router.use(createGovernanceRouter({
-    authSessionClient,
-    config,
-    governanceStatusService,
-    governanceActionStore: createInMemoryGovernanceActionStore(seededActions),
-  }));
+  router.use(
+    createGovernanceRouter({
+      authSessionClient,
+      config,
+      governanceStatusService,
+      governanceActionStore: createInMemoryGovernanceActionStore(seededActions),
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -201,9 +204,18 @@ async function startServer(sessionRole: 'admin' | 'buyer' | null) {
 
 describe('gateway governance read routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateStatus = createSchemaValidator(spec, '#/components/schemas/GovernanceStatusResponse');
-  const validateList = createSchemaValidator(spec, '#/components/schemas/GovernanceActionListResponse');
-  const validateDetail = createSchemaValidator(spec, '#/components/schemas/GovernanceActionResponse');
+  const validateStatus = createSchemaValidator(
+    spec,
+    '#/components/schemas/GovernanceStatusResponse',
+  );
+  const validateList = createSchemaValidator(
+    spec,
+    '#/components/schemas/GovernanceActionListResponse',
+  );
+  const validateDetail = createSchemaValidator(
+    spec,
+    '#/components/schemas/GovernanceActionResponse',
+  );
 
   test('OpenAPI spec exposes governance read endpoints', () => {
     expect(hasOperation(spec, 'get', '/governance/status')).toBe(true);
@@ -247,9 +259,12 @@ describe('gateway governance read routes contract', () => {
       expect(firstPayload.data.items[0].actionId).toBe('gov-002');
       expect(firstPayload.data.nextCursor).toBeTruthy();
 
-      const secondResponse = await fetch(`${baseUrl}/governance/actions?status=executed&limit=1&cursor=${encodeURIComponent(firstPayload.data.nextCursor)}`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
+      const secondResponse = await fetch(
+        `${baseUrl}/governance/actions?status=executed&limit=1&cursor=${encodeURIComponent(firstPayload.data.nextCursor)}`,
+        {
+          headers: { Authorization: 'Bearer sess-admin' },
+        },
+      );
       const secondPayload = await secondResponse.json();
 
       expect(secondResponse.status).toBe(200);

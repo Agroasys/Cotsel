@@ -46,13 +46,17 @@ export class IndexerClient {
       }
     `;
 
-    const response = await fetchWithTimeout(this.graphqlUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const response = await fetchWithTimeout(
+      this.graphqlUrl,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, variables: { limit, offset } }),
       },
-      body: JSON.stringify({ query, variables: { limit, offset } }),
-    }, config.indexerGraphqlRequestTimeoutMs);
+      config.indexerGraphqlRequestTimeoutMs,
+    );
 
     if (!response.ok) {
       throw new Error(`Indexer request failed: ${response.status} ${response.statusText}`);
@@ -61,7 +65,9 @@ export class IndexerClient {
     const body = (await response.json()) as GraphQlResponse;
 
     if (body.errors?.length) {
-      throw new Error(`Indexer GraphQL error: ${body.errors.map((error) => error.message).join('; ')}`);
+      throw new Error(
+        `Indexer GraphQL error: ${body.errors.map((error) => error.message).join('; ')}`,
+      );
     }
 
     const trades = body.data?.trades ?? [];

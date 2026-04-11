@@ -15,7 +15,7 @@ export const TREASURY_ACTION_CATEGORIES = [
   'treasury_payout_receiver_update',
 ] as const;
 
-export type TreasuryActionCategory = typeof TREASURY_ACTION_CATEGORIES[number];
+export type TreasuryActionCategory = (typeof TREASURY_ACTION_CATEGORIES)[number];
 
 export interface TreasuryFreshness {
   source: 'chain_rpc' | 'gateway_governance_ledger';
@@ -120,9 +120,8 @@ export class TreasuryReadService implements TreasuryReadReader {
     const queriedAt = this.now().toISOString();
 
     try {
-      const treasuryPayoutReceiverProposalIds = await this.governanceActionStore.listActiveProposalIds(
-        'treasury_payout_receiver_update',
-      );
+      const treasuryPayoutReceiverProposalIds =
+        await this.governanceActionStore.listActiveProposalIds('treasury_payout_receiver_update');
       const [status, claimableBalance] = await Promise.all([
         this.governanceReader.getGovernanceStatus({
           treasuryPayoutReceiverProposalIds,
@@ -188,7 +187,7 @@ export class TreasuryReadService implements TreasuryReadReader {
       const result = await this.governanceActionStore.list({
         categories: query.category
           ? [query.category]
-          : [...TREASURY_ACTION_CATEGORIES] as GovernanceActionCategory[],
+          : ([...TREASURY_ACTION_CATEGORIES] as GovernanceActionCategory[]),
         status: query.status,
         limit: query.limit,
         cursor: query.cursor,
@@ -199,7 +198,9 @@ export class TreasuryReadService implements TreasuryReadReader {
         nextCursor: result.nextCursor,
         freshness: {
           source: 'gateway_governance_ledger',
-          sourceFreshAt: maxTimestamp(result.items.flatMap((item) => [item.executedAt, item.createdAt])),
+          sourceFreshAt: maxTimestamp(
+            result.items.flatMap((item) => [item.executedAt, item.createdAt]),
+          ),
           queriedAt,
           available: true,
         },

@@ -16,7 +16,7 @@ const config: GatewayConfig = {
   dbPassword: 'postgres',
   authBaseUrl: 'http://127.0.0.1:3005',
   authRequestTimeoutMs: 5000,
-  indexerGraphqlUrl: "http://127.0.0.1:4350/graphql",
+  indexerGraphqlUrl: 'http://127.0.0.1:4350/graphql',
   indexerRequestTimeoutMs: 5000,
   rpcUrl: 'http://127.0.0.1:8545',
   rpcFallbackUrls: [],
@@ -40,6 +40,9 @@ const config: GatewayConfig = {
   buildTime: '2026-03-07T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 async function withServer(extraRouter: Router) {
@@ -70,7 +73,9 @@ describe('gateway error envelope', () => {
   test('normalizes GatewayError instances', async () => {
     const router = Router();
     router.get('/boom', () => {
-      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Auth service is unavailable', { upstream: 'auth' });
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Auth service is unavailable', {
+        upstream: 'auth',
+      });
     });
 
     const { server, baseUrl } = await withServer(router);

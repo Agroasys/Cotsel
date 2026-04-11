@@ -1,9 +1,11 @@
 # Base Mainnet Cutover and Rollback
 
 ## Purpose and scope
+
 Define the canonical operator sequence for Base mainnet cutover, rollback, and containment.
 
 This runbook covers:
+
 - preconditions before cutover starts
 - ordered cutover steps
 - rollback triggers and ordered rollback steps
@@ -11,11 +13,13 @@ This runbook covers:
 - role-based ownership during the launch window
 
 This runbook does not cover:
+
 - protocol feature delivery
 - ad hoc deployment commands outside the approved change record
-- historical Polkadot runtime reactivation
+- reactivating retired settlement runtimes during rollback
 
 ## Authoritative references
+
 - Launch approval record: `docs/runbooks/base-mainnet-go-no-go.md`
 - Production readiness baseline: `docs/runbooks/production-readiness-checklist.md`
 - Staging real validation: `docs/runbooks/staging-e2e-real-release-gate.md`
@@ -24,25 +28,27 @@ This runbook does not cover:
 - Signer custody controls: `docs/runbooks/gateway-governance-signer-custody.md`
 - Gateway operator boundary: `docs/runbooks/dashboard-gateway-operations.md`
 - Reconciliation evidence generation: `docs/runbooks/reconciliation.md`
-- Polkadot retirement closure: `docs/runbooks/polkadot-retirement-checklist.md`
 
 ## Launch-day ownership matrix
+
 Use roles, not personal names, in the canonical path:
 
-| Responsibility | Owner role |
-| --- | --- |
-| Launch approval authority | `Engineering Lead` |
-| Runtime promotion execution | `Ops Lead` |
-| Treasury and reconciliation verification | `Treasury Owner` |
+| Responsibility                                    | Owner role           |
+| ------------------------------------------------- | -------------------- |
+| Launch approval authority                         | `Engineering Lead`   |
+| Runtime promotion execution                       | `Ops Lead`           |
+| Treasury and reconciliation verification          | `Treasury Owner`     |
 | Incident declaration and containment coordination | `Incident Commander` |
-| Provider escalation coordination | `Ops Lead` |
-| Communications update owner | `Incident Commander` |
+| Provider escalation coordination                  | `Ops Lead`           |
+| Communications update owner                       | `Incident Commander` |
 
 ## Preconditions before cutover begins
+
 All of the following must be true before step 1 starts:
+
 - `docs/runbooks/base-mainnet-go-no-go.md` approval record is present and marked `GO`
 - M4 is complete in GitHub state
-- `docs/runbooks/polkadot-retirement-checklist.md` is complete for active CI, API, and runbook surfaces
+- retired runtime references have been removed from active CI, API, and runbook surfaces
 - the production change record or external deployment record is attached
 - current escrow address, chain ID `8453`, and Base mainnet USDC address are recorded
 - signer custody review is complete
@@ -50,6 +56,7 @@ All of the following must be true before step 1 starts:
 - rollback owner and communications owner are assigned
 
 ## Cutover steps
+
 Execute these steps in order. If any step fails, stop and evaluate rollback triggers.
 
 1. Freeze the approval packet.
@@ -95,7 +102,9 @@ Execute these steps in order. If any step fails, stop and evaluate rollback trig
    - Record the stabilization timestamp.
 
 ## Rollback triggers
+
 Rollback is mandatory if any of the following occurs during the launch window:
+
 - production deployment/change execution deviates from the approved approval packet
 - wrong chain, wrong escrow address, or wrong runtime is detected
 - provider posture collapses and fallback is not healthy
@@ -104,6 +113,7 @@ Rollback is mandatory if any of the following occurs during the launch window:
 - emergency containment is requested by the `Incident Commander`
 
 ## Rollback steps
+
 Execute these steps in order unless the `Incident Commander` invokes immediate containment first.
 
 1. Declare incident control.
@@ -116,7 +126,7 @@ Execute these steps in order unless the `Incident Commander` invokes immediate c
 
 3. Apply the approved rollback entry from the same change-control surface used for cutover.
    - Revert to the last known-good Base-era production deployment and configuration bundle.
-   - Do not reactivate historical Polkadot runtime paths as a rollback shortcut.
+   - Do not reactivate retired runtime paths as a rollback shortcut.
 
 4. Verify containment state.
    - Follow `docs/runbooks/emergency-disable-unpause.md` if settlement correctness is uncertain.
@@ -131,29 +141,24 @@ Execute these steps in order unless the `Incident Commander` invokes immediate c
    - If not stable, continue under incident management and do not resume launch activity.
 
 ## Containment posture when rollback is partial or blocked
+
 If rollback cannot complete cleanly:
+
 - `Incident Commander` owns the active incident
 - `Ops Lead` owns runtime containment
 - `Treasury Owner` owns settlement freeze and audit posture
 - `Engineering Lead` owns remediation change review
 
 Containment rules:
+
 - prefer disable/pause controls over improvised runtime edits
 - preserve audit evidence for all launch and rollback actions
-- do not restore historical Polkadot operational flows
-- keep historical Polkadot artifacts visible only as archived evidence for operator reference
-
-## Historical Polkadot artifacts during rollback
-Historical Polkadot artifacts may remain visible for audit and traceability only:
-- `docs/runbooks/polkavm-deploy-verification.md`
-- `docs/runbooks/asset-conversion-fee-validation.md`
-- `.github/workflows/historical-archive-maintenance.yml`
-- `.github/workflows/roadmap-weighted-progress-sync.yml`
-
-They must not be used as active production rollback paths.
+- do not restore retired operational flows
 
 ## Communications path
+
 For every cutover, rollback, or containment event record:
+
 - window ID
 - change record URL
 - incident record URL when applicable

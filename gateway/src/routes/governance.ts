@@ -4,10 +4,7 @@
 import { Router } from 'express';
 import { GatewayConfig } from '../config/env';
 import { AuthSessionClient } from '../core/authSessionClient';
-import {
-  createAuthenticationMiddleware,
-  requireGatewayRole,
-} from '../middleware/auth';
+import { createAuthenticationMiddleware, requireGatewayRole } from '../middleware/auth';
 import { successResponse } from '../responses';
 import {
   decodeGovernanceActionCursor,
@@ -55,7 +52,11 @@ function parseLimit(raw: unknown): number {
 
   const limit = Number.parseInt(raw, 10);
   if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'limit' must be between 1 and 200");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'limit' must be between 1 and 200",
+    );
   }
 
   return limit;
@@ -67,7 +68,11 @@ function parseCursor(raw: unknown): string | undefined {
   }
 
   if (typeof raw !== 'string' || raw.trim() === '') {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'cursor' must be a non-empty string");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'cursor' must be a non-empty string",
+    );
   }
 
   try {
@@ -87,7 +92,11 @@ function parseTradeId(raw: unknown): string | undefined {
   }
 
   if (typeof raw !== 'string' || raw.trim() === '') {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'tradeId' must be a non-empty string");
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'tradeId' must be a non-empty string",
+    );
   }
 
   return raw.trim();

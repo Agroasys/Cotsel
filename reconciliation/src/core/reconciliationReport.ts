@@ -80,7 +80,10 @@ function compareTradeIds(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
-function deriveMismatchCodes(row: ReconciliationReportInputRow, options: ReconciliationReportBuildOptions): string[] {
+function deriveMismatchCodes(
+  row: ReconciliationReportInputRow,
+  options: ReconciliationReportBuildOptions,
+): string[] {
   const mismatchCodes = [...row.mismatchCodes];
 
   if (row.fiatDepositFailureClass) {
@@ -104,17 +107,11 @@ function deriveMismatchCodes(row: ReconciliationReportInputRow, options: Reconci
     }
   }
 
-  if (
-    row.bankPayoutState === 'CONFIRMED' &&
-    row.payoutState !== 'PAID'
-  ) {
+  if (row.bankPayoutState === 'CONFIRMED' && row.payoutState !== 'PAID') {
     mismatchCodes.push('TREASURY_BANK_STATE_DIVERGENCE');
   }
 
-  if (
-    row.bankPayoutState === 'PENDING' &&
-    row.payoutState === 'PAID'
-  ) {
+  if (row.bankPayoutState === 'PENDING' && row.payoutState === 'PAID') {
     mismatchCodes.push('TREASURY_BANK_STATE_DIVERGENCE');
   }
 
@@ -128,9 +125,10 @@ export function buildReconciliationReportRows(
   const rows = inputRows.map((row) => {
     const uniqueMismatchCodes = deriveMismatchCodes(row, options);
     const mismatchReason = uniqueMismatchCodes.length > 0 ? uniqueMismatchCodes.join(',') : null;
-    const reconciliationVerdict: ReconciliationVerdict = uniqueMismatchCodes.length > 0 ? 'MISMATCH' : 'MATCH';
-    const bankMismatchCodes = uniqueMismatchCodes.filter((code) =>
-      code === 'BANK_REJECTED' || code === 'TREASURY_BANK_STATE_DIVERGENCE',
+    const reconciliationVerdict: ReconciliationVerdict =
+      uniqueMismatchCodes.length > 0 ? 'MISMATCH' : 'MATCH';
+    const bankMismatchCodes = uniqueMismatchCodes.filter(
+      (code) => code === 'BANK_REJECTED' || code === 'TREASURY_BANK_STATE_DIVERGENCE',
     );
 
     return {
@@ -140,7 +138,9 @@ export function buildReconciliationReportRows(
       rampReference: row.rampReference,
       fiatDepositState: row.fiatDepositState,
       fiatDepositFailureReason: row.fiatDepositFailureClass,
-      fiatDepositObservedAt: row.fiatDepositObservedAt ? row.fiatDepositObservedAt.toISOString() : null,
+      fiatDepositObservedAt: row.fiatDepositObservedAt
+        ? row.fiatDepositObservedAt.toISOString()
+        : null,
       bankReference: row.bankReference,
       bankPayoutState: row.bankPayoutState,
       bankFailureCode: row.bankFailureCode,

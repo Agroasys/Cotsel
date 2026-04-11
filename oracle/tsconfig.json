@@ -4,7 +4,7 @@
     "target": "es2020",
     "ignoreDeprecations": "6.0",
     "rootDir": "src",
-    "outDir": "dist",  
+    "outDir": "dist",
     "strict": true,
     "declaration": false,
     "sourceMap": true,
@@ -14,7 +14,5 @@
     "types": ["node", "jest"]
   },
   "include": ["src"],
-  "exclude": [
-    "node_modules"
-  ]
+  "exclude": ["node_modules"]
 }

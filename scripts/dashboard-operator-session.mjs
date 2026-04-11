@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import process from "node:process";
-import { Wallet } from "ethers";
+import process from 'node:process';
+import { Wallet } from 'ethers';
 import {
   assertExpectedSession,
   DEFAULT_SESSION_OUTPUT_FILE,
@@ -8,9 +8,9 @@ import {
   maskSessionId,
   normalizeTimeoutMs,
   writeSessionArtifact,
-} from "./lib/dashboard-operator-session.mjs";
+} from './lib/dashboard-operator-session.mjs';
 
-const DEFAULT_AUTH_BASE_URL = "http://127.0.0.1:3005/api/auth/v1";
+const DEFAULT_AUTH_BASE_URL = 'http://127.0.0.1:3005/api/auth/v1';
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -19,7 +19,7 @@ function fail(message) {
 
 function optionalEnv(name, fallback) {
   const value = process.env[name];
-  if (typeof value !== "string" || value.trim().length === 0) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
     return fallback;
   }
   return value.trim();
@@ -27,18 +27,18 @@ function optionalEnv(name, fallback) {
 
 function requiredEnv(name) {
   const value = process.env[name];
-  if (typeof value !== "string" || value.trim().length === 0) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
     fail(`missing required env var: ${name}`);
   }
   return value.trim();
 }
 
 function buildUrl(baseUrl, pathname, query = {}) {
-  const base = new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
-  const url = new URL(pathname.replace(/^\//u, ""), base);
+  const base = new URL(baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+  const url = new URL(pathname.replace(/^\//u, ''), base);
 
   for (const [key, value] of Object.entries(query)) {
-    if (typeof value === "string" && value.length > 0) {
+    if (typeof value === 'string' && value.length > 0) {
       url.searchParams.set(key, value);
     }
   }
@@ -48,15 +48,17 @@ function buildUrl(baseUrl, pathname, query = {}) {
 
 async function fetchJson(url, options = {}) {
   const controller = new AbortController();
-  const timeoutMs = normalizeTimeoutMs(optionalEnv("DASHBOARD_SMOKE_REQUEST_TIMEOUT_MS", String(DEFAULT_TIMEOUT_MS)));
+  const timeoutMs = normalizeTimeoutMs(
+    optionalEnv('DASHBOARD_SMOKE_REQUEST_TIMEOUT_MS', String(DEFAULT_TIMEOUT_MS)),
+  );
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, {
       ...options,
       headers: {
-        Accept: "application/json",
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        Accept: 'application/json',
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
         ...options.headers,
       },
       signal: controller.signal,
@@ -68,7 +70,7 @@ async function fetchJson(url, options = {}) {
     }
     return payload;
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
+    if (error instanceof Error && error.name === 'AbortError') {
       fail(`${url} timed out after ${timeoutMs}ms`);
     }
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -78,17 +80,20 @@ async function fetchJson(url, options = {}) {
 }
 
 async function main() {
-  const authBaseUrl = optionalEnv("DASHBOARD_SMOKE_AUTH_BASE_URL", DEFAULT_AUTH_BASE_URL);
-  const outputPath = optionalEnv("DASHBOARD_SMOKE_SESSION_OUTPUT_FILE", DEFAULT_SESSION_OUTPUT_FILE);
-  const privateKey = requiredEnv("DASHBOARD_SMOKE_PRIVATE_KEY");
-  const role = optionalEnv("DASHBOARD_SMOKE_ROLE", "admin");
-  const orgId = optionalEnv("DASHBOARD_SMOKE_ORG_ID", "");
+  const authBaseUrl = optionalEnv('DASHBOARD_SMOKE_AUTH_BASE_URL', DEFAULT_AUTH_BASE_URL);
+  const outputPath = optionalEnv(
+    'DASHBOARD_SMOKE_SESSION_OUTPUT_FILE',
+    DEFAULT_SESSION_OUTPUT_FILE,
+  );
+  const privateKey = requiredEnv('DASHBOARD_SMOKE_PRIVATE_KEY');
+  const role = optionalEnv('DASHBOARD_SMOKE_ROLE', 'admin');
+  const orgId = optionalEnv('DASHBOARD_SMOKE_ORG_ID', '');
 
   const wallet = new Wallet(privateKey);
   const walletAddress = wallet.address;
 
   const challengeEnvelope = await fetchJson(
-    buildUrl(authBaseUrl, "challenge", { wallet: walletAddress }).toString(),
+    buildUrl(authBaseUrl, 'challenge', { wallet: walletAddress }).toString(),
   );
   const challenge = challengeEnvelope?.data;
   if (!challenge?.message) {
@@ -97,8 +102,8 @@ async function main() {
 
   const signature = await wallet.signMessage(challenge.message);
 
-  const loginEnvelope = await fetchJson(buildUrl(authBaseUrl, "login").toString(), {
-    method: "POST",
+  const loginEnvelope = await fetchJson(buildUrl(authBaseUrl, 'login').toString(), {
+    method: 'POST',
     body: JSON.stringify({
       walletAddress,
       signature,
@@ -111,7 +116,7 @@ async function main() {
     fail(`auth login payload missing sessionId: ${JSON.stringify(loginEnvelope)}`);
   }
 
-  const sessionEnvelope = await fetchJson(buildUrl(authBaseUrl, "session").toString(), {
+  const sessionEnvelope = await fetchJson(buildUrl(authBaseUrl, 'session').toString(), {
     headers: {
       Authorization: `Bearer ${login.sessionId}`,
     },
@@ -120,7 +125,9 @@ async function main() {
   try {
     assertExpectedSession({ session, walletAddress, role });
   } catch (error) {
-    fail(`${error instanceof Error ? error.message : String(error)}: ${JSON.stringify(sessionEnvelope)}`);
+    fail(
+      `${error instanceof Error ? error.message : String(error)}: ${JSON.stringify(sessionEnvelope)}`,
+    );
   }
 
   writeSessionArtifact({

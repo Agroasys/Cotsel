@@ -3,6 +3,7 @@
  */
 import { BuyerSDK } from '../src/modules/buyerSDK';
 import { createSignerFromEip1193Provider } from '../src/wallet/eip1193';
+import type { Eip1193ProviderLike } from '../src/wallet/eip1193';
 import { Interface } from 'ethers';
 
 const UNIT_CONFIG = {
@@ -26,12 +27,19 @@ const CANONICAL_PAYLOAD = {
   ricardianHash: `0x${'a'.repeat(64)}`,
 };
 
+type BuyerSdkContract = BuyerSDK['contract'];
+type BuyerContractConnector = Pick<BuyerSdkContract, 'connect' | 'interface'>;
+
 class FakeEip1193Provider {
   readonly address = '0x2222222222222222222222222222222222222222';
-  readonly calls: Array<{ method: string; params?: readonly unknown[] | Record<string, unknown> }> = [];
+  readonly calls: Array<{ method: string; params?: readonly unknown[] | Record<string, unknown> }> =
+    [];
   private readonly signature = `0x${'1'.repeat(130)}`;
 
-  async request(args: { method: string; params?: readonly unknown[] | Record<string, unknown> }): Promise<unknown> {
+  async request(args: {
+    method: string;
+    params?: readonly unknown[] | Record<string, unknown>;
+  }): Promise<unknown> {
     this.calls.push(args);
 
     switch (args.method) {
@@ -49,20 +57,17 @@ class FakeEip1193Provider {
 }
 
 function encodeTradeLockedLog(tradeId: bigint) {
-  return TRADE_LOCKED_INTERFACE.encodeEventLog(
-    TRADE_LOCKED_INTERFACE.getEvent('TradeLocked')!,
-    [
-      tradeId,
-      '0x2222222222222222222222222222222222222222',
-      CANONICAL_PAYLOAD.supplier,
-      CANONICAL_PAYLOAD.totalAmount,
-      CANONICAL_PAYLOAD.logisticsAmount,
-      CANONICAL_PAYLOAD.platformFeesAmount,
-      CANONICAL_PAYLOAD.supplierFirstTranche,
-      CANONICAL_PAYLOAD.supplierSecondTranche,
-      CANONICAL_PAYLOAD.ricardianHash,
-    ],
-  );
+  return TRADE_LOCKED_INTERFACE.encodeEventLog(TRADE_LOCKED_INTERFACE.getEvent('TradeLocked')!, [
+    tradeId,
+    '0x2222222222222222222222222222222222222222',
+    CANONICAL_PAYLOAD.supplier,
+    CANONICAL_PAYLOAD.totalAmount,
+    CANONICAL_PAYLOAD.logisticsAmount,
+    CANONICAL_PAYLOAD.platformFeesAmount,
+    CANONICAL_PAYLOAD.supplierFirstTranche,
+    CANONICAL_PAYLOAD.supplierSecondTranche,
+    CANONICAL_PAYLOAD.ricardianHash,
+  ]);
 }
 
 describe('Web3Auth-compatible signer validation', () => {
@@ -112,10 +117,10 @@ describe('Web3Auth-compatible signer validation', () => {
       return { createTrade };
     });
 
-    (buyerSdk as any).contract = {
+    (buyerSdk as unknown as { contract: BuyerContractConnector }).contract = {
       connect,
       interface: TRADE_LOCKED_INTERFACE,
-    };
+    } as unknown as BuyerContractConnector;
 
     jest.spyOn(buyerSdk, 'getUSDCAllowance').mockResolvedValue(0n);
     const approveUsdcSpy = jest.spyOn(buyerSdk, 'approveUSDC').mockResolvedValue({
@@ -123,9 +128,9 @@ describe('Web3Auth-compatible signer validation', () => {
       blockNumber: 123,
     });
     jest.spyOn(buyerSdk, 'getBuyerNonce').mockResolvedValue(7n);
-    jest.spyOn(buyerSdk, 'getTreasuryAddress').mockResolvedValue(
-      '0x3000000000000000000000000000000000000003',
-    );
+    jest
+      .spyOn(buyerSdk, 'getTreasuryAddress')
+      .mockResolvedValue('0x3000000000000000000000000000000000000003');
 
     const result = await buyerSdk.createTrade(CANONICAL_PAYLOAD, buyerSigner);
     const methods = provider.calls.map((call) => call.method);
@@ -158,8 +163,9 @@ describe('Web3Auth-compatible signer validation', () => {
   });
 
   test('createSignerFromEip1193Provider rejects providers without request support', async () => {
-    await expect(
-      createSignerFromEip1193Provider({} as any),
-    ).rejects.toThrow('EIP-1193 provider must expose a request(...) function');
+    const invalidProvider = {} as unknown as Eip1193ProviderLike;
+    await expect(createSignerFromEip1193Provider(invalidProvider)).rejects.toThrow(
+      'EIP-1193 provider must expose a request(...) function',
+    );
   });
 });

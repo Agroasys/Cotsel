@@ -11,7 +11,7 @@ export const ACCESS_AUDIT_REFERENCE_TYPES = [
   'external',
 ] as const;
 
-export type AccessAuditReferenceType = typeof ACCESS_AUDIT_REFERENCE_TYPES[number];
+export type AccessAuditReferenceType = (typeof ACCESS_AUDIT_REFERENCE_TYPES)[number];
 
 export interface AccessAuditReference {
   type: AccessAuditReferenceType;
@@ -288,7 +288,9 @@ export function createPostgresAccessLogStore(pool: Pool): AccessLogStore {
         const createdAtIndex = values.length;
         values.push(cursor.entryId);
         const entryIdIndex = values.length;
-        conditions.push(`(created_at < $${createdAtIndex}::timestamp OR (created_at = $${createdAtIndex}::timestamp AND entry_id < $${entryIdIndex}))`);
+        conditions.push(
+          `(created_at < $${createdAtIndex}::timestamp OR (created_at = $${createdAtIndex}::timestamp AND entry_id < $${entryIdIndex}))`,
+        );
       }
 
       values.push(input.limit + 1);
@@ -314,7 +316,9 @@ export function createPostgresAccessLogStore(pool: Pool): AccessLogStore {
 }
 
 export function createInMemoryAccessLogStore(initial: AccessLogEntry[] = []): AccessLogStore {
-  const items = new Map<string, AccessLogEntry>(initial.map((entry) => [entry.entryId, cloneEntry(entry)]));
+  const items = new Map<string, AccessLogEntry>(
+    initial.map((entry) => [entry.entryId, cloneEntry(entry)]),
+  );
 
   function sorted(): AccessLogEntry[] {
     return [...items.values()].sort((left, right) => {
@@ -354,10 +358,11 @@ export function createInMemoryAccessLogStore(initial: AccessLogEntry[] = []): Ac
 
       if (input.cursor) {
         const cursor = decodeAccessLogCursor(input.cursor);
-        candidates = candidates.filter((entry) => (
-          entry.createdAt < cursor.createdAt
-          || (entry.createdAt === cursor.createdAt && entry.entryId < cursor.entryId)
-        ));
+        candidates = candidates.filter(
+          (entry) =>
+            entry.createdAt < cursor.createdAt ||
+            (entry.createdAt === cursor.createdAt && entry.entryId < cursor.entryId),
+        );
       }
 
       const page = candidates.slice(0, input.limit + 1);

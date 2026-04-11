@@ -13,7 +13,11 @@ function resolvePointer(spec: OpenApiSpec, ref: string): unknown {
   let current: unknown = spec;
 
   for (const segment of segments) {
-    if (!current || typeof current !== 'object' || !(segment in (current as Record<string, unknown>))) {
+    if (
+      !current ||
+      typeof current !== 'object' ||
+      !(segment in (current as Record<string, unknown>))
+    ) {
       throw new Error(`Unable to resolve OpenAPI reference: ${ref}`);
     }
 

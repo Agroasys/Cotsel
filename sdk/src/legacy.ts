@@ -13,9 +13,4 @@ export { web3Wallet } from './wallet/wallet-provider';
  * bootstrap flow instead of SDK-owned wallet challenge auth.
  */
 export { AuthClient } from './modules/authClient';
-export type {
-  AuthClientConfig,
-  AuthRole,
-  SessionResult,
-  LoginOptions,
-} from './modules/authClient';
+export type { AuthClientConfig, AuthRole, SessionResult, LoginOptions } from './modules/authClient';

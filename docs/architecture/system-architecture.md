@@ -4,12 +4,14 @@ This document is the canonical target-state architecture view for the completed
 Agroasys + Cotsel platform model.
 
 It is intentionally disciplined:
+
 - one target-state diagram only
 - one short current-vs-target note only
 - no speculative container-by-container deployment sheet
 - no treatment of `platform.v1` transitional Supabase ownership as canonical
 
 The stack and infra expectations reflected here come from:
+
 - `docs/architecture/job-and-eventing-strategy.md`
 - `docs/runbooks/dashboard-local-parity.md`
 - `docs/runbooks/dashboard-gateway-operations.md`
@@ -277,7 +279,7 @@ flowchart LR
 - Current repo truth already contains the major Cotsel settlement/control
   services represented above: auth, gateway, ricardian, oracle, indexer,
   reconciliation, treasury, notifications, SDK, and shared-auth.
-- Base is the active v1 settlement target-state. Historical Polkadot/PolkaVM
+- Base is the active v1 settlement target-state. Retired legacy settlement
   references elsewhere in the repo are migration residue or archive material,
   not active architecture truth.
 - M4 and later operational readiness work must use this Base-only architecture

@@ -4,20 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       cotsel_ref:
-        description: "Cotsel ref to run"
+        description: 'Cotsel ref to run'
         required: false
-        default: ""
+        default: ''
       dash_ref:
-        description: "Cotsel-Dash ref to run"
+        description: 'Cotsel-Dash ref to run'
         required: false
-        default: "main"
+        default: 'main'
       retain_logs_on_success:
-        description: "Upload Cotsel parity logs even when the run passes"
+        description: 'Upload Cotsel parity logs even when the run passes'
         required: false
         type: boolean
         default: false
   schedule:
-    - cron: "0 4 * * 1-5"
+    - cron: '0 4 * * 1-5'
 
 permissions:
   contents: read
@@ -48,7 +48,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
-          node-version: "20"
+          node-version: '20'
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -60,14 +60,14 @@ jobs:
           cp .env.example .env
           cp .env.local.example .env.local
           python3 - <<'PY'
-from pathlib import Path
+          from pathlib import Path
 
-path = Path(".env.local")
-text = path.read_text()
-text = text.replace("LOCAL_DEV_INDEXER_FIXTURE_MODE=empty", "LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity")
-text = text.replace("GATEWAY_AUTH_BASE_URL=http://host.docker.internal:3005", "GATEWAY_AUTH_BASE_URL=http://auth:3005")
-path.write_text(text)
-PY
+          path = Path(".env.local")
+          text = path.read_text()
+          text = text.replace("LOCAL_DEV_INDEXER_FIXTURE_MODE=empty", "LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity")
+          text = text.replace("GATEWAY_AUTH_BASE_URL=http://host.docker.internal:3005", "GATEWAY_AUTH_BASE_URL=http://auth:3005")
+          path.write_text(text)
+          PY
 
       - name: Install Cotsel dependencies
         run: npm ci

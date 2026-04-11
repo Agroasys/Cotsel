@@ -1,0 +1,26 @@
+{
+  "name": "@agroasys/shared-edge",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "cors.js",
+    "cors.d.ts",
+    "rateLimit.js",
+    "rateLimit.d.ts"
+  ],
+  "dependencies": {
+    "ioredis": "^5.10.1"
+  },
+  "devDependencies": {
+    "jest": "^30.3.0"
+  },
+  "scripts": {
+    "lint": "eslint --max-warnings=0 .",
+    "test": "jest --runInBand"
+  },
+  "license": "Apache-2.0"
+}

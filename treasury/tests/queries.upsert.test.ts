@@ -84,7 +84,7 @@ describe('upsertLedgerEntryWithInitialState', () => {
         amountRaw: '15',
         sourceTimestamp: new Date('2026-01-01T00:00:00.000Z'),
         metadata: { sourceEventId: 'evt-2' },
-      })
+      }),
     ).rejects.toThrow('lifecycle insert failed');
 
     expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');

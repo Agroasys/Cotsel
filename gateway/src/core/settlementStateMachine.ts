@@ -23,18 +23,28 @@ export function validateExecutionTransition(
 ): void {
   if (RECONCILIATION_EVENT_TYPES.has(eventType)) {
     if (current !== 'confirmed') {
-      throw new GatewayError(409, 'CONFLICT', 'Reconciliation events require a confirmed settlement handoff', {
-        currentExecutionStatus: current,
-        eventType,
-      });
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'Reconciliation events require a confirmed settlement handoff',
+        {
+          currentExecutionStatus: current,
+          eventType,
+        },
+      );
     }
 
     if (next !== current) {
-      throw new GatewayError(409, 'CONFLICT', 'Reconciliation events cannot mutate settlement execution state', {
-        currentExecutionStatus: current,
-        nextExecutionStatus: next,
-        eventType,
-      });
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'Reconciliation events cannot mutate settlement execution state',
+        {
+          currentExecutionStatus: current,
+          nextExecutionStatus: next,
+          eventType,
+        },
+      );
     }
     return;
   }
@@ -44,10 +54,15 @@ export function validateExecutionTransition(
   }
 
   if (!EXECUTION_TRANSITIONS[current].includes(next)) {
-    throw new GatewayError(409, 'CONFLICT', 'Settlement execution event violates the handoff state machine', {
-      currentExecutionStatus: current,
-      nextExecutionStatus: next,
-      eventType,
-    });
+    throw new GatewayError(
+      409,
+      'CONFLICT',
+      'Settlement execution event violates the handoff state machine',
+      {
+        currentExecutionStatus: current,
+        nextExecutionStatus: next,
+        eventType,
+      },
+    );
   }
 }

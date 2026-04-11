@@ -22,7 +22,9 @@ export interface SettlementRouterOptions {
   settlementStore: SettlementStore;
   nonceStore: { consume(apiKey: string, nonce: string, ttlSeconds: number): Promise<boolean> };
   idempotencyStore: IdempotencyStore;
-  lookupServiceApiKey: (apiKey: string) => { id: string; secret: string; active: boolean } | undefined;
+  lookupServiceApiKey: (
+    apiKey: string,
+  ) => { id: string; secret: string; active: boolean } | undefined;
 }
 
 function requireObject(value: unknown, field: string): Record<string, unknown> {
@@ -57,37 +59,47 @@ function requireNumber(value: unknown, field: string): number {
   return value;
 }
 
-function requireEventType(value: unknown): typeof SETTLEMENT_EVENT_TYPES[number] {
+function requireEventType(value: unknown): (typeof SETTLEMENT_EVENT_TYPES)[number] {
   const eventType = requireString(value, 'eventType');
-  if (!SETTLEMENT_EVENT_TYPES.includes(eventType as typeof SETTLEMENT_EVENT_TYPES[number])) {
+  if (!SETTLEMENT_EVENT_TYPES.includes(eventType as (typeof SETTLEMENT_EVENT_TYPES)[number])) {
     throw new GatewayError(400, 'VALIDATION_ERROR', 'eventType is not supported', {
       allowed: SETTLEMENT_EVENT_TYPES,
     });
   }
 
-  return eventType as typeof SETTLEMENT_EVENT_TYPES[number];
+  return eventType as (typeof SETTLEMENT_EVENT_TYPES)[number];
 }
 
-function requireExecutionStatus(value: unknown): typeof SETTLEMENT_EXECUTION_STATUSES[number] {
+function requireExecutionStatus(value: unknown): (typeof SETTLEMENT_EXECUTION_STATUSES)[number] {
   const executionStatus = requireString(value, 'executionStatus');
-  if (!SETTLEMENT_EXECUTION_STATUSES.includes(executionStatus as typeof SETTLEMENT_EXECUTION_STATUSES[number])) {
+  if (
+    !SETTLEMENT_EXECUTION_STATUSES.includes(
+      executionStatus as (typeof SETTLEMENT_EXECUTION_STATUSES)[number],
+    )
+  ) {
     throw new GatewayError(400, 'VALIDATION_ERROR', 'executionStatus is not supported', {
       allowed: SETTLEMENT_EXECUTION_STATUSES,
     });
   }
 
-  return executionStatus as typeof SETTLEMENT_EXECUTION_STATUSES[number];
+  return executionStatus as (typeof SETTLEMENT_EXECUTION_STATUSES)[number];
 }
 
-function requireReconciliationStatus(value: unknown): typeof SETTLEMENT_RECONCILIATION_STATUSES[number] {
+function requireReconciliationStatus(
+  value: unknown,
+): (typeof SETTLEMENT_RECONCILIATION_STATUSES)[number] {
   const reconciliationStatus = requireString(value, 'reconciliationStatus');
-  if (!SETTLEMENT_RECONCILIATION_STATUSES.includes(reconciliationStatus as typeof SETTLEMENT_RECONCILIATION_STATUSES[number])) {
+  if (
+    !SETTLEMENT_RECONCILIATION_STATUSES.includes(
+      reconciliationStatus as (typeof SETTLEMENT_RECONCILIATION_STATUSES)[number],
+    )
+  ) {
     throw new GatewayError(400, 'VALIDATION_ERROR', 'reconciliationStatus is not supported', {
       allowed: SETTLEMENT_RECONCILIATION_STATUSES,
     });
   }
 
-  return reconciliationStatus as typeof SETTLEMENT_RECONCILIATION_STATUSES[number];
+  return reconciliationStatus as (typeof SETTLEMENT_RECONCILIATION_STATUSES)[number];
 }
 
 function optionalMetadata(value: unknown): Record<string, unknown> {
@@ -98,6 +110,20 @@ function optionalMetadata(value: unknown): Record<string, unknown> {
   return requireObject(value, 'metadata');
 }
 
+function rejectUnexpectedFields(
+  value: Record<string, unknown>,
+  allowedFields: readonly string[],
+  field: string,
+): void {
+  const unexpectedFields = Object.keys(value).filter((key) => !allowedFields.includes(key));
+  if (unexpectedFields.length > 0) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} contains unsupported fields`, {
+      field,
+      unsupportedFields: unexpectedFields,
+    });
+  }
+}
+
 function getRequestId(req: Request): string {
   return req.requestContext?.requestId || 'unknown';
 }
@@ -106,25 +132,17 @@ function getServiceApiKeyId(req: Request): string | null {
   return req.serviceAuth?.apiKeyId ?? null;
 }
 
-async function handleRequest(handler: () => Promise<unknown>, res: Response, next: NextFunction): Promise<void> {
+async function handleRequest(
+  handler: () => Promise<unknown>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const payload = await handler();
     res.status(202).json(successResponse(payload));
   } catch (error) {
     next(error);
   }
-}
-
-function sanitizeSettlementHandoff<T extends { extrinsicHash?: string | null }>(handoff: T): Omit<T, 'extrinsicHash'> {
-  const { extrinsicHash: _extrinsicHash, ...publicHandoff } = handoff;
-  return publicHandoff;
-}
-
-function sanitizeSettlementExecutionEvent<T extends { extrinsicHash?: string | null }>(
-  event: T,
-): Omit<T, 'extrinsicHash'> {
-  const { extrinsicHash: _extrinsicHash, ...publicEvent } = event;
-  return publicEvent;
 }
 
 export function createSettlementRouter(options: SettlementRouterOptions): Router {
@@ -141,9 +159,11 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
 
   router.use((req, _res, next) => {
     if (!options.config.settlementIngressEnabled) {
-      next(new GatewayError(403, 'FORBIDDEN', 'Settlement ingress is disabled', {
-        reason: 'settlement_ingress_disabled',
-      }));
+      next(
+        new GatewayError(403, 'FORBIDDEN', 'Settlement ingress is disabled', {
+          reason: 'settlement_ingress_disabled',
+        }),
+      );
       return;
     }
 
@@ -152,66 +172,106 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
 
   router.use(serviceAuth);
 
-  router.post('/settlement/handoffs', idempotency, (req, res, next) => handleRequest(async () => {
-    const body = requireObject(req.body, 'body');
-    const handoff = await options.settlementService.createHandoff({
-      platformId: requireString(body.platformId, 'platformId'),
-      platformHandoffId: requireString(body.platformHandoffId, 'platformHandoffId'),
-      tradeId: requireString(body.tradeId, 'tradeId'),
-      phase: requireString(body.phase, 'phase'),
-      settlementChannel: requireString(body.settlementChannel, 'settlementChannel'),
-      displayCurrency: requireString(body.displayCurrency, 'displayCurrency'),
-      displayAmount: requireNumber(body.displayAmount, 'displayAmount'),
-      assetSymbol: optionalString(body.assetSymbol, 'assetSymbol'),
-      assetAmount: body.assetAmount === undefined || body.assetAmount === null ? null : requireNumber(body.assetAmount, 'assetAmount'),
-      ricardianHash: optionalString(body.ricardianHash, 'ricardianHash'),
-      externalReference: optionalString(body.externalReference, 'externalReference'),
-      metadata: optionalMetadata(body.metadata),
-      requestId: getRequestId(req),
-      sourceApiKeyId: getServiceApiKeyId(req),
-    });
+  router.post('/settlement/handoffs', idempotency, (req, res, next) =>
+    handleRequest(
+      async () => {
+        const body = requireObject(req.body, 'body');
+        rejectUnexpectedFields(
+          body,
+          [
+            'platformId',
+            'platformHandoffId',
+            'tradeId',
+            'phase',
+            'settlementChannel',
+            'displayCurrency',
+            'displayAmount',
+            'assetSymbol',
+            'assetAmount',
+            'ricardianHash',
+            'externalReference',
+            'metadata',
+          ],
+          'body',
+        );
+        const handoff = await options.settlementService.createHandoff({
+          platformId: requireString(body.platformId, 'platformId'),
+          platformHandoffId: requireString(body.platformHandoffId, 'platformHandoffId'),
+          tradeId: requireString(body.tradeId, 'tradeId'),
+          phase: requireString(body.phase, 'phase'),
+          settlementChannel: requireString(body.settlementChannel, 'settlementChannel'),
+          displayCurrency: requireString(body.displayCurrency, 'displayCurrency'),
+          displayAmount: requireNumber(body.displayAmount, 'displayAmount'),
+          assetSymbol: optionalString(body.assetSymbol, 'assetSymbol'),
+          assetAmount:
+            body.assetAmount === undefined || body.assetAmount === null
+              ? null
+              : requireNumber(body.assetAmount, 'assetAmount'),
+          ricardianHash: optionalString(body.ricardianHash, 'ricardianHash'),
+          externalReference: optionalString(body.externalReference, 'externalReference'),
+          metadata: optionalMetadata(body.metadata),
+          requestId: getRequestId(req),
+          sourceApiKeyId: getServiceApiKeyId(req),
+        });
 
-    return sanitizeSettlementHandoff(handoff);
-  }, res, next));
+        return handoff;
+      },
+      res,
+      next,
+    ),
+  );
 
-  router.post('/settlement/handoffs/:handoffId/execution-events', idempotency, (req, res, next) => handleRequest(async () => {
-    const handoffId = requireString(req.params.handoffId, 'handoffId');
-    const body = requireObject(req.body, 'body');
-    if (body.extrinsicHash !== undefined && body.extrinsicHash !== null && body.extrinsicHash !== '') {
-      throw new GatewayError(
-        400,
-        'VALIDATION_ERROR',
-        'extrinsicHash is retired from the active settlement ingress contract; use txHash',
-      );
-    }
-    const executionStatus = requireExecutionStatus(body.executionStatus);
-    const txHash = optionalString(body.txHash, 'txHash');
-    const result = await options.settlementService.recordExecutionEvent({
-      handoffId,
-      eventType: requireEventType(body.eventType),
-      executionStatus,
-      reconciliationStatus: requireReconciliationStatus(body.reconciliationStatus),
-      providerStatus: optionalString(body.providerStatus, 'providerStatus'),
-      txHash,
-      detail: optionalString(body.detail, 'detail'),
-      metadata: optionalMetadata(body.metadata),
-      observedAt: requireString(body.observedAt, 'observedAt'),
-      requestId: getRequestId(req),
-      sourceApiKeyId: getServiceApiKeyId(req),
-    });
+  router.post('/settlement/handoffs/:handoffId/execution-events', idempotency, (req, res, next) =>
+    handleRequest(
+      async () => {
+        const handoffId = requireString(req.params.handoffId, 'handoffId');
+        const body = requireObject(req.body, 'body');
+        rejectUnexpectedFields(
+          body,
+          [
+            'eventType',
+            'executionStatus',
+            'reconciliationStatus',
+            'providerStatus',
+            'txHash',
+            'detail',
+            'metadata',
+            'observedAt',
+          ],
+          'body',
+        );
+        const executionStatus = requireExecutionStatus(body.executionStatus);
+        const txHash = optionalString(body.txHash, 'txHash');
+        const result = await options.settlementService.recordExecutionEvent({
+          handoffId,
+          eventType: requireEventType(body.eventType),
+          executionStatus,
+          reconciliationStatus: requireReconciliationStatus(body.reconciliationStatus),
+          providerStatus: optionalString(body.providerStatus, 'providerStatus'),
+          txHash,
+          detail: optionalString(body.detail, 'detail'),
+          metadata: optionalMetadata(body.metadata),
+          observedAt: requireString(body.observedAt, 'observedAt'),
+          requestId: getRequestId(req),
+          sourceApiKeyId: getServiceApiKeyId(req),
+        });
 
-    return {
-      handoff: sanitizeSettlementHandoff(result.handoff),
-      event: sanitizeSettlementExecutionEvent(result.event),
-      callbackDelivery: result.callbackDelivery,
-    };
-  }, res, next));
+        return {
+          handoff: result.handoff,
+          event: result.event,
+          callbackDelivery: result.callbackDelivery,
+        };
+      },
+      res,
+      next,
+    ),
+  );
 
   router.get('/settlement/handoffs/:handoffId/execution-events', async (req, res, next) => {
     try {
       const handoffId = requireString(req.params.handoffId, 'handoffId');
       const events = await options.settlementService.listExecutionEvents(handoffId);
-      res.status(200).json(successResponse(events.map((event) => sanitizeSettlementExecutionEvent(event))));
+      res.status(200).json(successResponse(events));
     } catch (error) {
       next(error);
     }

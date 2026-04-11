@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Pool } from 'pg';
-import { buildReconciliationReport, type ReconciliationReportInputRow } from './core/reconciliationReport';
+import {
+  buildReconciliationReport,
+  type ReconciliationReportInputRow,
+} from './core/reconciliationReport';
 
 interface CliArgs {
   runKey?: string;
@@ -58,7 +61,9 @@ function parseArgs(argv: string[]): CliArgs {
       continue;
     }
 
-    throw new Error('Usage: ts-node src/report-cli.ts [--run-key=<runKey>] [--out=<path>] [--compact]');
+    throw new Error(
+      'Usage: ts-node src/report-cli.ts [--run-key=<runKey>] [--out=<path>] [--compact]',
+    );
   }
 
   return {
@@ -121,7 +126,7 @@ async function resolveRunKey(pool: Pool, requestedRunKey?: string): Promise<stri
       `SELECT run_key
        FROM reconcile_runs
        WHERE run_key = $1`,
-      [requestedRunKey]
+      [requestedRunKey],
     );
 
     if (!run.rows[0]) {
@@ -136,7 +141,7 @@ async function resolveRunKey(pool: Pool, requestedRunKey?: string): Promise<stri
      FROM reconcile_runs
      WHERE status = 'COMPLETED'
      ORDER BY completed_at DESC, id DESC
-     LIMIT 1`
+     LIMIT 1`,
   );
 
   return latest.rows[0]?.run_key ?? null;
@@ -148,7 +153,7 @@ async function fetchDriftSummaries(pool: Pool, runKey: string): Promise<Map<stri
      FROM reconcile_drifts
      WHERE run_key = $1
      GROUP BY trade_id`,
-    [runKey]
+    [runKey],
   );
 
   const map = new Map<string, string[]>();
@@ -165,13 +170,16 @@ async function fetchRunTradeScope(pool: Pool, runKey: string): Promise<string[]>
      FROM reconcile_run_trades
      WHERE run_key = $1
      ORDER BY trade_id ASC`,
-    [runKey]
+    [runKey],
   );
 
   return result.rows.map((row) => row.trade_id);
 }
 
-async function fetchTreasuryLedgerStates(pool: Pool, scopedTradeIds: string[]): Promise<TreasuryLedgerStateRow[]> {
+async function fetchTreasuryLedgerStates(
+  pool: Pool,
+  scopedTradeIds: string[],
+): Promise<TreasuryLedgerStateRow[]> {
   if (scopedTradeIds.length === 0) {
     return [];
   }
@@ -222,9 +230,8 @@ async function fetchTreasuryLedgerStates(pool: Pool, scopedTradeIds: string[]): 
         LIMIT 1
       ) b ON TRUE
       WHERE e.trade_id = ANY($1::text[])
-      ORDER BY e.trade_id ASC, e.tx_hash ASC, e.id ASC`
-    ,
-    [scopedTradeIds]
+      ORDER BY e.trade_id ASC, e.tx_hash ASC, e.id ASC`,
+    [scopedTradeIds],
   );
 
   return result.rows;
@@ -285,7 +292,9 @@ async function main(): Promise<void> {
       rampReference: row.ramp_reference,
       fiatDepositState: row.fiat_deposit_state,
       fiatDepositFailureClass: row.fiat_deposit_failure_class,
-      fiatDepositObservedAt: row.fiat_deposit_observed_at ? new Date(row.fiat_deposit_observed_at) : null,
+      fiatDepositObservedAt: row.fiat_deposit_observed_at
+        ? new Date(row.fiat_deposit_observed_at)
+        : null,
       bankReference: row.bank_reference,
       bankPayoutState: row.bank_payout_state,
       bankFailureCode: row.bank_failure_code,

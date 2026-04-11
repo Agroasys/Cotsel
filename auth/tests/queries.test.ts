@@ -78,7 +78,9 @@ describe('upsertTrustedProfile', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
-        rows: [buildProfile({ id: 'profile-legacy', accountId: 'f62ccf55-b3d8-4b35-a0d0-f8f1daaeb6cb' })],
+        rows: [
+          buildProfile({ id: 'profile-legacy', accountId: 'f62ccf55-b3d8-4b35-a0d0-f8f1daaeb6cb' }),
+        ],
       })
       .mockResolvedValueOnce({ rows: [relinkedProfile] })
       .mockResolvedValueOnce({ rows: [] });
@@ -139,16 +141,14 @@ describe('upsertTrustedProfile', () => {
     });
 
     expect(profile).toEqual(mergedProfile);
-    expect(query).toHaveBeenNthCalledWith(
-      4,
-      expect.stringContaining('UPDATE user_sessions'),
-      ['profile-canonical', '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'profile-legacy'],
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      5,
-      expect.stringContaining('DELETE FROM user_profiles'),
-      ['profile-legacy'],
-    );
+    expect(query).toHaveBeenNthCalledWith(4, expect.stringContaining('UPDATE user_sessions'), [
+      'profile-canonical',
+      '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+      'profile-legacy',
+    ]);
+    expect(query).toHaveBeenNthCalledWith(5, expect.stringContaining('DELETE FROM user_profiles'), [
+      'profile-legacy',
+    ]);
     expect(query).toHaveBeenLastCalledWith('COMMIT');
   });
 

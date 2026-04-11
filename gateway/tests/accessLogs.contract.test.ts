@@ -46,6 +46,9 @@ const baseConfig: GatewayConfig = {
   buildTime: '2026-03-14T00:00:00.000Z',
   nodeEnv: 'test',
   corsAllowedOrigins: [],
+  corsAllowNoOrigin: true,
+  rateLimitEnabled: true,
+  allowInsecureDownstreamAuth: true,
 };
 
 interface StartServerOptions {
@@ -70,9 +73,10 @@ async function startServer(options: StartServerOptions = {}) {
       const role = options.sessionRole ?? 'admin';
       return {
         userId: role === 'admin' ? 'uid-admin' : 'uid-buyer',
-        walletAddress: role === 'admin'
-          ? '0x00000000000000000000000000000000000000aa'
-          : '0x00000000000000000000000000000000000000bb',
+        walletAddress:
+          role === 'admin'
+            ? '0x00000000000000000000000000000000000000aa'
+            : '0x00000000000000000000000000000000000000bb',
         role,
         email: role === 'admin' ? 'admin@agroasys.io' : 'buyer@agroasys.io',
         issuedAt: Date.now(),
@@ -86,12 +90,14 @@ async function startServer(options: StartServerOptions = {}) {
   const idempotencyStore = createInMemoryIdempotencyStore();
 
   const router = Router();
-  router.use(createAccessLogRouter({
-    authSessionClient,
-    config,
-    accessLogService,
-    idempotencyStore,
-  }));
+  router.use(
+    createAccessLogRouter({
+      authSessionClient,
+      config,
+      accessLogService,
+      idempotencyStore,
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -149,7 +155,10 @@ describe('gateway access log routes contract', () => {
     expect(validateEntry(createPayload)).toBe(true);
     expect(createPayload.data.item.actor.sessionDisplay).toContain('...');
     expect(createPayload.data.item.network.ipDisplay).toBe('127.0.0.x');
-    expect(createPayload.data.item.auditReferences[0]).toEqual({ type: 'governance_action', reference: 'act-100' });
+    expect(createPayload.data.item.auditReferences[0]).toEqual({
+      type: 'governance_action',
+      reference: 'act-100',
+    });
 
     const detailResponse = await sendInProcessRequest(app, {
       method: 'GET',
@@ -163,7 +172,9 @@ describe('gateway access log routes contract', () => {
       path: '/api/dashboard-gateway/v1/access-logs?eventType=settings.access.granted',
       headers: { authorization: 'Bearer session-admin' },
     });
-    const listPayload = listResponse.json<{ data: { items: unknown[]; freshness: { available: boolean } } }>();
+    const listPayload = listResponse.json<{
+      data: { items: unknown[]; freshness: { available: boolean } };
+    }>();
 
     expect(detailResponse.status).toBe(200);
     expect(validateEntry(detailPayload)).toBe(true);

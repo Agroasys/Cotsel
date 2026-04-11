@@ -32,7 +32,10 @@ export interface OrchestratedRequestOptions extends DownstreamFetchContext {
 
 export interface DownstreamServiceOrchestrator {
   fetch(service: DownstreamServiceKey, options: OrchestratedRequestOptions): Promise<Response>;
-  probeHealth(service: DownstreamServiceKey, requestContext?: Pick<RequestContext, 'requestId' | 'correlationId'>): Promise<void>;
+  probeHealth(
+    service: DownstreamServiceKey,
+    requestContext?: Pick<RequestContext, 'requestId' | 'correlationId'>,
+  ): Promise<void>;
 }
 
 interface ExecuteRequestInput extends OrchestratedRequestOptions {
@@ -72,9 +75,7 @@ function buildUrl(baseUrl: string, path: string, query: ExecuteRequestInput['que
   return url.toString();
 }
 
-function serializeBody(
-  body: ExecuteRequestInput['body'],
-): {
+function serializeBody(body: ExecuteRequestInput['body']): {
   requestBody: BodyInit | undefined;
   bodyForSigning: string | Buffer;
   contentType?: string;
@@ -95,7 +96,10 @@ function serializeBody(
   return { requestBody: serialized, bodyForSigning: serialized, contentType: 'application/json' };
 }
 
-function toSharedAuthHeaders(headers: ReturnType<typeof createServiceAuthHeaders>, style: DownstreamHeaderStyle): Record<string, string> {
+function toSharedAuthHeaders(
+  headers: ReturnType<typeof createServiceAuthHeaders>,
+  style: DownstreamHeaderStyle,
+): Record<string, string> {
   if (style === 'agroasys') {
     return {
       ...(headers['X-Api-Key'] ? { 'X-Api-Key': headers['X-Api-Key'] } : {}),
@@ -113,10 +117,15 @@ function createOracleLegacyAuthHeaders(
   body: string | Buffer,
 ): Record<string, string> {
   if (!auth.apiKey || !auth.apiSecret) {
-    throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Gateway oracle auth contract is incomplete', {
-      required: ['apiKey', 'apiSecret'],
-      upstream: 'oracle',
-    });
+    throw new GatewayError(
+      503,
+      'UPSTREAM_UNAVAILABLE',
+      'Gateway oracle auth contract is incomplete',
+      {
+        required: ['apiKey', 'apiSecret'],
+        upstream: 'oracle',
+      },
+    );
   }
 
   const timestamp = Date.now().toString();
@@ -152,10 +161,15 @@ function createAuthenticatedHeaders(
   }
 
   if (!service.auth.apiSecret) {
-    throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Gateway service auth contract is incomplete', {
-      upstream: service.key,
-      required: ['apiSecret'],
-    });
+    throw new GatewayError(
+      503,
+      'UPSTREAM_UNAVAILABLE',
+      'Gateway service auth contract is incomplete',
+      {
+        upstream: service.key,
+        required: ['apiSecret'],
+      },
+    );
   }
 
   const url = buildUrl(service.baseUrl!, input.path ?? '', input.query);
@@ -173,7 +187,11 @@ function createAuthenticatedHeaders(
   );
 }
 
-function shouldRetry(options: ExecuteRequestInput, failure: { responseStatus?: number; error?: unknown }, attemptsRemaining: number): boolean {
+function shouldRetry(
+  options: ExecuteRequestInput,
+  failure: { responseStatus?: number; error?: unknown },
+  attemptsRemaining: number,
+): boolean {
   if (!options.readOnly || attemptsRemaining <= 0) {
     return false;
   }
@@ -196,8 +214,12 @@ export async function executeHttpRequestWithPolicy(input: ExecuteRequestInput): 
     });
   }
 
-  const timeoutMs = input.timeoutMs ?? (input.readOnly ? input.service.readTimeoutMs : input.service.mutationTimeoutMs);
-  const retryBudget = input.retryBudget ?? (input.readOnly ? input.service.readRetryBudget : input.service.mutationRetryBudget);
+  const timeoutMs =
+    input.timeoutMs ??
+    (input.readOnly ? input.service.readTimeoutMs : input.service.mutationTimeoutMs);
+  const retryBudget =
+    input.retryBudget ??
+    (input.readOnly ? input.service.readRetryBudget : input.service.mutationRetryBudget);
   const attempts = retryBudget + 1;
   let lastError: unknown;
 
@@ -206,8 +228,12 @@ export async function executeHttpRequestWithPolicy(input: ExecuteRequestInput): 
     const headers = {
       Accept: 'application/json',
       ...(contentType ? { 'content-type': contentType } : {}),
-      ...(input.requestContext?.requestId ? { 'x-request-id': input.requestContext.requestId } : {}),
-      ...(input.requestContext?.correlationId ? { 'x-correlation-id': input.requestContext.correlationId } : {}),
+      ...(input.requestContext?.requestId
+        ? { 'x-request-id': input.requestContext.requestId }
+        : {}),
+      ...(input.requestContext?.correlationId
+        ? { 'x-correlation-id': input.requestContext.correlationId }
+        : {}),
       ...(input.headers ?? {}),
       ...createAuthenticatedHeaders(input.service, input, bodyForSigning),
     };
@@ -224,25 +250,29 @@ export async function executeHttpRequestWithPolicy(input: ExecuteRequestInput): 
 
       clearTimeout(timeout);
 
-      if (response.ok || !shouldRetry(input, { responseStatus: response.status }, attempts - attempt)) {
+      if (
+        response.ok ||
+        !shouldRetry(input, { responseStatus: response.status }, attempts - attempt)
+      ) {
         return response;
       }
     } catch (error) {
       clearTimeout(timeout);
 
-      const normalizedError = error instanceof Error && error.name === 'AbortError'
-        ? new GatewayError(504, 'UPSTREAM_UNAVAILABLE', 'Downstream request timed out', {
-            upstream: input.service.key,
-            operation: input.operation,
-            timeoutMs,
-          })
-        : error instanceof GatewayError
-          ? error
-          : new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Downstream request failed', {
+      const normalizedError =
+        error instanceof Error && error.name === 'AbortError'
+          ? new GatewayError(504, 'UPSTREAM_UNAVAILABLE', 'Downstream request timed out', {
               upstream: input.service.key,
               operation: input.operation,
-              reason: error instanceof Error ? error.message : String(error),
-            });
+              timeoutMs,
+            })
+          : error instanceof GatewayError
+            ? error
+            : new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Downstream request failed', {
+                upstream: input.service.key,
+                operation: input.operation,
+                reason: error instanceof Error ? error.message : String(error),
+              });
 
       lastError = normalizedError;
 
@@ -264,7 +294,10 @@ export async function executeHttpRequestWithPolicy(input: ExecuteRequestInput): 
 export class ServiceOrchestrator implements DownstreamServiceOrchestrator {
   constructor(private readonly registry: DownstreamServiceRegistry) {}
 
-  async fetch(serviceKey: DownstreamServiceKey, options: OrchestratedRequestOptions): Promise<Response> {
+  async fetch(
+    serviceKey: DownstreamServiceKey,
+    options: OrchestratedRequestOptions,
+  ): Promise<Response> {
     return executeHttpRequestWithPolicy({
       ...options,
       service: this.registry.get(serviceKey),

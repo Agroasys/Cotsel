@@ -32,6 +32,10 @@ function formatRpcFailureMessage(rpcUrl: string, reason: string): string {
   return `RPC endpoint is not reachable at startup (RPC_URL=${redactedRpcUrl}). Start a JSON-RPC node or update RPC_URL. Reason: ${safeReason}`;
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function assertRpcEndpointReachable(
   rpcUrl: string,
   timeoutMs: number = DEFAULT_RPC_TIMEOUT_MS,
@@ -71,18 +75,20 @@ export async function assertRpcEndpointReachable(
     }
 
     if (payload.error) {
-      throw new Error(`RPC error ${payload.error.code ?? 'UNKNOWN'}: ${payload.error.message ?? 'Unknown error'}`);
+      throw new Error(
+        `RPC error ${payload.error.code ?? 'UNKNOWN'}: ${payload.error.message ?? 'Unknown error'}`,
+      );
     }
 
     if (!payload.result) {
       throw new Error('Missing eth_chainId result');
     }
-  } catch (error: any) {
-    if (error?.name === 'AbortError') {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(formatRpcFailureMessage(rpcUrl, `Timeout after ${timeoutMs}ms`));
     }
 
-    throw new Error(formatRpcFailureMessage(rpcUrl, error?.message || 'Unknown RPC connection error'));
+    throw new Error(formatRpcFailureMessage(rpcUrl, getErrorMessage(error)));
   } finally {
     clearTimeout(timeout);
   }

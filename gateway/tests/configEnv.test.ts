@@ -10,6 +10,8 @@ const BASE_ENV: Record<string, string> = {
   DB_NAME: 'gateway',
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
+  DB_MIGRATION_USER: '',
+  DB_MIGRATION_PASSWORD: '',
   GATEWAY_AUTH_BASE_URL: 'http://127.0.0.1:4100',
   GATEWAY_INDEXER_GRAPHQL_URL: 'http://127.0.0.1:4350/graphql',
   GATEWAY_ESCROW_ADDRESS: '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
@@ -20,6 +22,7 @@ const BASE_ENV: Record<string, string> = {
   GATEWAY_BUILD_TIME: '2026-03-30T00:00:00.000Z',
   GATEWAY_INDEXER_REQUEST_TIMEOUT_MS: '5000',
   GATEWAY_CORS_ALLOWED_ORIGINS: 'https://cotsel.agroasys.com,https://ops.agroasys.com',
+  GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH: 'true',
 };
 
 function withEnv(overrides: Record<string, string | undefined>, fn: () => void): void {
@@ -49,8 +52,12 @@ function withEnv(overrides: Record<string, string | undefined>, fn: () => void):
 
 function loadConfigModule(): typeof import('../src/config/env') {
   const modulePath = path.resolve(__dirname, '../src/config/env');
-  delete require.cache[require.resolve(modulePath)];
-  return require(modulePath) as typeof import('../src/config/env');
+  jest.resetModules();
+  let loaded!: typeof import('../src/config/env');
+  jest.isolateModules(() => {
+    loaded = jest.requireActual(modulePath) as typeof import('../src/config/env');
+  });
+  return loaded;
 }
 
 describe('gateway runtime env config', () => {
@@ -96,10 +103,65 @@ describe('gateway runtime env config', () => {
   });
 
   test('fails clearly for unknown settlement runtime keys', () => {
-    withEnv({ GATEWAY_SETTLEMENT_RUNTIME: 'polkadot-testnet' }, () => {
+    withEnv({ GATEWAY_SETTLEMENT_RUNTIME: 'legacy-runtime' }, () => {
       const { loadConfig } = loadConfigModule();
-      expect(() => loadConfig()).toThrow(/Unknown settlement runtime "polkadot-testnet"/);
+      expect(() => loadConfig()).toThrow(/Unknown settlement runtime "legacy-runtime"/);
     });
+  });
+
+  test('production rejects insecure downstream auth fallback when a protected dependency is configured', () => {
+    withEnv(
+      {
+        NODE_ENV: 'production',
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH: 'false',
+        GATEWAY_TREASURY_BASE_URL: 'http://127.0.0.1:3200',
+        GATEWAY_TREASURY_SERVICE_API_KEY: undefined,
+        GATEWAY_TREASURY_SERVICE_API_SECRET: undefined,
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'GATEWAY_TREASURY_BASE_URL requires a service API key and secret when GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH=false',
+        );
+      },
+    );
+  });
+
+  test('migration credentials must be configured as a pair', () => {
+    withEnv(
+      {
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+        DB_MIGRATION_USER: 'gateway_migrator',
+        DB_MIGRATION_PASSWORD: undefined,
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+        );
+      },
+    );
+  });
+
+  test('browser no-origin CORS is disabled by default', () => {
+    withEnv(
+      {
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_CORS_ALLOW_NO_ORIGIN: undefined,
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        const config = loadConfig();
+        expect(config.corsAllowNoOrigin).toBe(false);
+      },
+    );
   });
 
   test('parses the gateway CORS allowlist', () => {

@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { AdminSDK } from '../src/modules/adminSDK';
+import type { ethers } from 'ethers';
 import { DisputeStatus } from '../src/types/dispute';
 import { AuthorizationError, ValidationError } from '../src/types/errors';
 import { TEST_CONFIG, assertRequiredEnv, getAdminSigner, hasRequiredEnv } from './setup';
@@ -9,15 +10,16 @@ import { TEST_CONFIG, assertRequiredEnv, getAdminSigner, hasRequiredEnv } from '
 const describeIntegration = hasRequiredEnv ? describe : describe.skip;
 
 const UNIT_CONFIG = {
-  rpc: "http://127.0.0.1:8545",
+  rpc: 'http://127.0.0.1:8545',
   chainId: 31337,
-  escrowAddress: "0x1000000000000000000000000000000000000001",
-  usdcAddress: "0x2000000000000000000000000000000000000002",
+  escrowAddress: '0x1000000000000000000000000000000000000001',
+  usdcAddress: '0x2000000000000000000000000000000000000002',
 };
 
 const RECEIPT = {
   hash: `0x${'1'.repeat(64)}`,
   blockNumber: 123,
+  logs: [],
 };
 
 type MockTx = {
@@ -50,10 +52,15 @@ type MockContractWithSigner = {
   cancelExpiredTreasuryPayoutAddressUpdateProposal: jest.Mock;
 };
 
-function makeSigner(address = '0x1111111111111111111111111111111111111111'): any {
-  return {
+type SignerLike = Pick<ethers.Signer, 'getAddress'>;
+type AdminSdkContract = AdminSDK['contract'];
+type ContractConnector = Pick<AdminSdkContract, 'connect' | 'interface'>;
+
+function makeSigner(address = '0x1111111111111111111111111111111111111111'): ethers.Signer {
+  const signer: SignerLike = {
     getAddress: jest.fn().mockResolvedValue(address),
   };
+  return signer as unknown as ethers.Signer;
 }
 
 function makeSdkUnit(isAdmin = true) {
@@ -87,7 +94,11 @@ function makeSdkUnit(isAdmin = true) {
 
   const connect = jest.fn().mockReturnValue(contractWithSigner);
   const parseLog = jest.fn().mockReturnValue(undefined);
-  (sdk as any).contract = { connect, interface: { parseLog } };
+  const contract = {
+    connect,
+    interface: { parseLog },
+  } as unknown as ContractConnector;
+  (sdk as unknown as { contract: ContractConnector }).contract = contract;
   jest.spyOn(sdk, 'isAdmin').mockResolvedValue(isAdmin);
 
   return { sdk, contractWithSigner, connect, parseLog };
@@ -127,9 +138,18 @@ describe('AdminSDK unit', () => {
     mockSuccessCall(contractWithSigner.approveUnpause);
     mockSuccessCall(contractWithSigner.cancelUnpauseProposal);
 
-    await expect(sdk.proposeUnpause(signer)).resolves.toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
-    await expect(sdk.approveUnpause(signer)).resolves.toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
-    await expect(sdk.cancelUnpauseProposal(signer)).resolves.toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
+    await expect(sdk.proposeUnpause(signer)).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+    });
+    await expect(sdk.approveUnpause(signer)).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+    });
+    await expect(sdk.cancelUnpauseProposal(signer)).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+    });
 
     expect(contractWithSigner.proposeUnpause).toHaveBeenCalledTimes(1);
     expect(contractWithSigner.approveUnpause).toHaveBeenCalledTimes(1);
@@ -233,7 +253,7 @@ describe('AdminSDK unit', () => {
     mockSuccessCall(contractWithSigner.cancelExpiredTreasuryPayoutAddressUpdateProposal);
 
     await expect(
-      sdk.proposeTreasuryPayoutAddressUpdate('0x2222222222222222222222222222222222222222', signer)
+      sdk.proposeTreasuryPayoutAddressUpdate('0x2222222222222222222222222222222222222222', signer),
     ).resolves.toEqual({
       txHash: RECEIPT.hash,
       blockNumber: RECEIPT.blockNumber,
@@ -248,18 +268,20 @@ describe('AdminSDK unit', () => {
       blockNumber: RECEIPT.blockNumber,
     });
     await expect(
-      sdk.cancelExpiredTreasuryPayoutAddressUpdateProposal(11n, signer)
+      sdk.cancelExpiredTreasuryPayoutAddressUpdateProposal(11n, signer),
     ).resolves.toEqual({
       txHash: RECEIPT.hash,
       blockNumber: RECEIPT.blockNumber,
     });
 
     expect(contractWithSigner.proposeTreasuryPayoutAddressUpdate).toHaveBeenCalledWith(
-      '0x2222222222222222222222222222222222222222'
+      '0x2222222222222222222222222222222222222222',
     );
     expect(contractWithSigner.approveTreasuryPayoutAddressUpdate).toHaveBeenCalledWith(11n);
     expect(contractWithSigner.executeTreasuryPayoutAddressUpdate).toHaveBeenCalledWith(11n);
-    expect(contractWithSigner.cancelExpiredTreasuryPayoutAddressUpdateProposal).toHaveBeenCalledWith(11n);
+    expect(
+      contractWithSigner.cancelExpiredTreasuryPayoutAddressUpdateProposal,
+    ).toHaveBeenCalledWith(11n);
   });
 
   test('proposeOracleUpdate returns proposal id when receipt contains OracleUpdateProposed', async () => {
@@ -296,7 +318,7 @@ describe('AdminSDK unit', () => {
     const signer = makeSigner();
 
     await expect(
-      sdk.proposeDisputeSolution(1n, 99 as DisputeStatus, signer)
+      sdk.proposeDisputeSolution(1n, 99 as DisputeStatus, signer),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -306,22 +328,28 @@ describe('AdminSDK unit', () => {
 
     await expect(sdk.pause(signer)).rejects.toBeInstanceOf(AuthorizationError);
     await expect(sdk.disableOracleEmergency(signer)).rejects.toBeInstanceOf(AuthorizationError);
-    await expect(sdk.cancelExpiredOracleUpdateProposal(1n, signer)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(sdk.cancelExpiredOracleUpdateProposal(1n, signer)).rejects.toBeInstanceOf(
+      AuthorizationError,
+    );
     await expect(
-      sdk.proposeTreasuryPayoutAddressUpdate('0x2222222222222222222222222222222222222222', signer)
+      sdk.proposeTreasuryPayoutAddressUpdate('0x2222222222222222222222222222222222222222', signer),
     ).rejects.toBeInstanceOf(AuthorizationError);
-    await expect(sdk.approveTreasuryPayoutAddressUpdate(1n, signer)).rejects.toBeInstanceOf(AuthorizationError);
-    await expect(sdk.executeTreasuryPayoutAddressUpdate(1n, signer)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(sdk.approveTreasuryPayoutAddressUpdate(1n, signer)).rejects.toBeInstanceOf(
+      AuthorizationError,
+    );
+    await expect(sdk.executeTreasuryPayoutAddressUpdate(1n, signer)).rejects.toBeInstanceOf(
+      AuthorizationError,
+    );
     await expect(
-      sdk.cancelExpiredTreasuryPayoutAddressUpdateProposal(1n, signer)
+      sdk.cancelExpiredTreasuryPayoutAddressUpdateProposal(1n, signer),
     ).rejects.toBeInstanceOf(AuthorizationError);
   });
 });
 
 describeIntegration('AdminSDK integration smoke', () => {
   let adminSDK: AdminSDK;
-  let adminSigner1: any;
-  let adminSigner2: any;
+  let adminSigner1: ethers.Signer;
+  let adminSigner2: ethers.Signer;
 
   beforeAll(() => {
     assertRequiredEnv();

@@ -1,6 +1,7 @@
 # Pilot Environment Onboarding
 
 ## Purpose
+
 Provide a deterministic onboarding and go/no-go procedure for the `staging-e2e-real` pilot environment.
 
 This runbook is the environment-readiness prerequisite for the controlled pilot
@@ -8,28 +9,33 @@ validation flow driven by `scripts/base-sepolia-pilot-validation.sh`. It is not 
 full rehearsal record on its own.
 
 ## Who This Is For
+
 - `Operator`: executes environment bring-up, health checks, and evidence capture.
 - `On-call Engineer`: handles runtime failures and escalation decisions.
 - `Pilot Owner`: approves go/no-go decision for pilot activity.
 
 ## When To Use
+
 - Before pilot execution windows.
 - After environment resets or config changes.
 - During incident recovery when pilot readiness must be re-established.
 
 ## Scope
+
 - Environment initialization, validation, bring-up, health checks, and release-gate dry run.
 - Verification of indexer, reconciliation, oracle, and treasury integration readiness.
 - Pilot go/no-go decision and audit evidence capture.
 - Remote dashboard connected-read validation coordinates for the same staging target.
 
 ## Non-Scope
+
 - Contract deployments or governance changes.
 - Production rollout approvals.
 - KPI/case-study package content (tracked by separate roadmap items).
 - Public dashboard URLs inside `.env.staging-e2e-real`; record those separately in the dashboard gateway runbooks and issue tracker.
 
 ## Approved remote dashboard contract
+
 For remote connected-read validation against this staging target:
 
 - dashboard gateway: `https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1`
@@ -41,6 +47,7 @@ For remote connected-read validation against this staging target:
 These public dashboard endpoints are not copied into `.env.staging-e2e-real`. That env file remains the internal container-profile contract for the pilot stack.
 
 ## Pilot Checklist
+
 - Required roles confirmed:
   - `Operator`
   - `On-call Engineer` (`Platform On-Call`, pager route from `docs/runbooks/monitoring-alerting-baseline.md`)
@@ -75,6 +82,7 @@ These public dashboard endpoints are not copied into `.env.staging-e2e-real`. Th
   - `INDEXER_GATEWAY_URL` only when an archive gateway is explicitly provisioned for the pilot profile
 
 ## Prerequisites
+
 - Docker Engine + Compose plugin installed.
 - Node 20 available for local parity checks.
 - Repository root env files present.
@@ -82,6 +90,7 @@ These public dashboard endpoints are not copied into `.env.staging-e2e-real`. Th
 ## Procedure
 
 ### 1. Initialize environment files
+
 ```bash
 cp .env.example .env
 cp .env.staging-e2e-real.example .env.staging-e2e-real
@@ -92,24 +101,30 @@ Do not leave placeholder URLs, public Base RPC endpoints, or zero-value escrow
 addresses in the live pilot profile.
 
 Expected result:
+
 - `.env` and `.env.staging-e2e-real` exist with pilot-specific values.
 
 If not:
+
 - Stop and fix env files before running validation or Docker commands.
 
 ### 2. Validate env deterministically
+
 ```bash
 scripts/validate-env.sh staging-e2e-real
 ```
 
 Expected result:
+
 - Output includes `env validation passed for profile: staging-e2e-real`.
 
 If not:
+
 - Fix missing keys reported by the script.
 - Re-run until validation passes.
 
 ### 3. Bring up pilot profile and verify health
+
 ```bash
 scripts/docker-services.sh down staging-e2e-real || true
 scripts/docker-services.sh up staging-e2e-real
@@ -117,12 +132,14 @@ scripts/docker-services.sh health staging-e2e-real
 ```
 
 Expected result:
+
 - Required services are running and healthy:
   - `postgres`, `redis`
   - `indexer-pipeline`, `indexer-graphql`
   - `oracle`, `reconciliation`, `ricardian`, `treasury`
 
 If not:
+
 - Capture logs and fix startup/health failures before continuing:
 
 ```bash
@@ -133,18 +150,22 @@ scripts/docker-services.sh logs staging-e2e-real treasury
 ```
 
 ### 4. Run staging gate dry run
+
 ```bash
 scripts/staging-e2e-real-gate.sh
 ```
 
 Expected result:
+
 - Gate reports schema parity, lag metrics, reorg/resync probe, reconciliation run summary, and drift snapshot.
 
 If not:
+
 - Follow `docs/runbooks/staging-e2e-real-release-gate.md` failure modes.
 - Do not start pilot activity while gate is red.
 
 ### 5. Verify DB population and reconciliation evidence
+
 Load env values into shell:
 
 ```bash
@@ -169,13 +190,16 @@ docker compose -f docker-compose.services.yml --profile staging-e2e-real exec -T
 ```
 
 Expected result:
+
 - Both queries return non-zero counts for an environment with indexed data and at least one reconciliation run.
 
 If not:
+
 - Re-check contract/start-block scope and gate output.
 - Re-run gate after indexer readiness is restored.
 
 ### 6. Verify oracle/reconciliation runtime signals
+
 Capture logs:
 
 ```bash
@@ -184,25 +208,32 @@ scripts/docker-services.sh logs staging-e2e-real reconciliation
 ```
 
 Expected result:
+
 - Oracle logs show trigger processing paths for active pilot activity.
 - Reconciliation logs show successful run completion and no unresolved critical drift patterns.
 
 If not:
+
 - Escalate using `docs/runbooks/oracle-redrive.md` and `docs/runbooks/reconciliation.md`.
 
 ### 7. Verify retry/timeout ceilings are configured
+
 ```bash
 rg -n "ORACLE_RETRY_ATTEMPTS|ORACLE_RETRY_DELAY|STAGING_E2E_REAL_LAG_WARMUP_SECONDS|STAGING_E2E_REAL_LAG_POLL_SECONDS|STAGING_E2E_MAX_INDEXER_LAG_BLOCKS" .env .env.staging-e2e-real
 ```
 
 Expected result:
+
 - Retry and lag thresholds are explicitly set and match approved pilot profile.
 
 If not:
+
 - Do not approve go/no-go until ceilings are set.
 
 ## Go/No-Go Criteria
+
 Go only when all are true:
+
 - `scripts/validate-env.sh staging-e2e-real` passed.
 - `scripts/docker-services.sh health staging-e2e-real` passed.
 - `scripts/staging-e2e-real-gate.sh` passed.
@@ -217,12 +248,14 @@ Go only when all are true:
   - `Service Owner`: owning subsystem maintainer
 
 No-go if any criterion fails:
+
 - Freeze pilot activity.
 - Open incident with captured logs/queries and assign on-call owner.
 - Treat placeholder, public-RPC, or stale-chain profile values as a pilot block,
   not as acceptable bootstrap.
 
 ## Evidence To Record
+
 - Command transcript for env validation, health, and gate.
 - DB query outputs (`trade_event`, `reconcile_runs` counts).
 - Oracle/reconciliation log excerpts for pilot window.
@@ -230,6 +263,7 @@ No-go if any criterion fails:
 - Final go/no-go decision with approver identity and timestamp.
 
 ## Failure Handling
+
 - Env validation failure:
   - Correct missing/empty keys, then re-run validation.
 - Health check failure:
@@ -240,6 +274,7 @@ No-go if any criterion fails:
   - Re-check start block, contract address scope, and indexer head progress.
 
 ## Rollback / Escalation
+
 1. Stop pilot profile if correctness is uncertain:
 
 ```bash
@@ -249,11 +284,13 @@ scripts/docker-services.sh down staging-e2e-real
 2. Capture evidence bundle (logs, DB query outputs, gate output).
 3. Run `docs/incidents/first-15-minutes-checklist.md` for severe incidents.
 4. Escalate to:
-  - `Pilot Owner`: Aston (pilot default), recorded in the pilot window sign-off
-  - `On-call Engineer`: Platform On-Call via the pager/chat routing in `docs/runbooks/monitoring-alerting-baseline.md`
-  - `Service Owner`: named owning maintainer for the failing subsystem, recorded in the pilot ticket and copied into the blocker register
+
+- `Pilot Owner`: Aston (pilot default), recorded in the pilot window sign-off
+- `On-call Engineer`: Platform On-Call via the pager/chat routing in `docs/runbooks/monitoring-alerting-baseline.md`
+- `Service Owner`: named owning maintainer for the failing subsystem, recorded in the pilot ticket and copied into the blocker register
 
 ## Related Runbooks
+
 - `docs/runbooks/staging-e2e-real-release-gate.md`
 - `docs/runbooks/staging-e2e-real-release-gate.md`
 - `scripts/base-sepolia-pilot-validation.sh`

@@ -3,6 +3,7 @@
  */
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
+import { parseAllowedOrigins } from '@agroasys/shared-edge';
 import { AuthConfig } from './types';
 
 dotenv.config();
@@ -39,23 +40,15 @@ function envBoolean(name: string, fallback = false): boolean {
   return ['true', '1', 'yes', 'on'].includes(normalized);
 }
 
-function parseOriginList(raw: string | undefined): string[] {
-  if (!raw) {
-    return [];
-  }
-
-  return raw
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0)
-    .map((value) => value.replace(/\/$/, ''));
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
 }
 
-function loadConfig(): AuthConfig {
-  const trustedSessionExchangeEnabled = envBoolean(
-    'TRUSTED_SESSION_EXCHANGE_ENABLED',
-    false,
-  );
+export function loadConfig(): AuthConfig {
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const legacyWalletLoginEnabled = envBoolean('LEGACY_WALLET_LOGIN_ENABLED', false);
+  const trustedSessionExchangeEnabled = envBoolean('TRUSTED_SESSION_EXCHANGE_ENABLED', false);
   const trustedSessionExchangeMaxSkewSeconds = envNumber(
     'TRUSTED_SESSION_EXCHANGE_MAX_SKEW_SECONDS',
     300,
@@ -76,17 +69,33 @@ function loadConfig(): AuthConfig {
     trustedSessionExchangeNonceTtlSeconds >= trustedSessionExchangeMaxSkewSeconds,
     'TRUSTED_SESSION_EXCHANGE_NONCE_TTL_SECONDS must be greater than or equal to TRUSTED_SESSION_EXCHANGE_MAX_SKEW_SECONDS',
   );
-  const corsAllowedOrigins = parseOriginList(process.env.AUTH_CORS_ALLOWED_ORIGINS);
+  assert(
+    !legacyWalletLoginEnabled || nodeEnv === 'development' || nodeEnv === 'test',
+    'LEGACY_WALLET_LOGIN_ENABLED=true is allowed only when NODE_ENV is development or test',
+  );
+  const dbMigrationUser = optionalEnv('DB_MIGRATION_USER');
+  const dbMigrationPassword = optionalEnv('DB_MIGRATION_PASSWORD');
+  assert(
+    Boolean(dbMigrationUser) === Boolean(dbMigrationPassword),
+    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+  );
 
   return {
+    nodeEnv,
     port: envNumber('PORT', 3005),
     dbHost: env('DB_HOST'),
     dbPort: envNumber('DB_PORT', 5432),
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
+    dbMigrationUser,
+    dbMigrationPassword,
     sessionTtlSeconds: envNumber('SESSION_TTL_SECONDS', 3600),
-    corsAllowedOrigins,
+    legacyWalletLoginEnabled,
+    corsAllowedOrigins: parseAllowedOrigins(process.env.AUTH_CORS_ALLOWED_ORIGINS),
+    corsAllowNoOrigin: envBoolean('AUTH_CORS_ALLOW_NO_ORIGIN', false),
+    rateLimitEnabled: envBoolean('AUTH_RATE_LIMIT_ENABLED', true),
+    rateLimitRedisUrl: process.env.AUTH_RATE_LIMIT_REDIS_URL?.trim() || undefined,
     trustedSessionExchangeEnabled,
     trustedSessionExchangeApiKeysJson,
     trustedSessionExchangeMaxSkewSeconds,

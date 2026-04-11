@@ -27,7 +27,14 @@ function compareAmounts(indexed: CompareInput['indexedTrade'], onchain: Trade): 
   const mismatches: DriftFinding[] = [];
 
   const amountFields: Array<{
-    field: keyof Pick<Trade, 'totalAmountLocked' | 'logisticsAmount' | 'platformFeesAmount' | 'supplierFirstTranche' | 'supplierSecondTranche'>;
+    field: keyof Pick<
+      Trade,
+      | 'totalAmountLocked'
+      | 'logisticsAmount'
+      | 'platformFeesAmount'
+      | 'supplierFirstTranche'
+      | 'supplierSecondTranche'
+    >;
     indexedValue: bigint;
   }> = [
     { field: 'totalAmountLocked', indexedValue: indexed.totalAmountLocked },
@@ -62,7 +69,7 @@ function invalidAddressFinding(
   tradeId: string,
   source: 'indexed' | 'onchain',
   field: 'buyer' | 'supplier',
-  value: string
+  value: string,
 ): DriftFinding {
   return {
     tradeId,
@@ -132,22 +139,30 @@ export function classifyDrifts(input: CompareInput): DriftFinding[] {
 
   const indexedBuyer = normalizeAddressOrNull(indexedTrade.buyer);
   if (!indexedBuyer) {
-    findings.push(invalidAddressFinding(indexedTrade.tradeId, 'indexed', 'buyer', indexedTrade.buyer));
+    findings.push(
+      invalidAddressFinding(indexedTrade.tradeId, 'indexed', 'buyer', indexedTrade.buyer),
+    );
   }
 
   const indexedSupplier = normalizeAddressOrNull(indexedTrade.supplier);
   if (!indexedSupplier) {
-    findings.push(invalidAddressFinding(indexedTrade.tradeId, 'indexed', 'supplier', indexedTrade.supplier));
+    findings.push(
+      invalidAddressFinding(indexedTrade.tradeId, 'indexed', 'supplier', indexedTrade.supplier),
+    );
   }
 
   const onchainBuyer = normalizeAddressOrNull(onchainTrade.buyer);
   if (!onchainBuyer) {
-    findings.push(invalidAddressFinding(indexedTrade.tradeId, 'onchain', 'buyer', onchainTrade.buyer));
+    findings.push(
+      invalidAddressFinding(indexedTrade.tradeId, 'onchain', 'buyer', onchainTrade.buyer),
+    );
   }
 
   const onchainSupplier = normalizeAddressOrNull(onchainTrade.supplier);
   if (!onchainSupplier) {
-    findings.push(invalidAddressFinding(indexedTrade.tradeId, 'onchain', 'supplier', onchainTrade.supplier));
+    findings.push(
+      invalidAddressFinding(indexedTrade.tradeId, 'onchain', 'supplier', onchainTrade.supplier),
+    );
   }
 
   if (indexedBuyer && onchainBuyer && onchainBuyer !== indexedBuyer) {
@@ -194,8 +209,12 @@ export function classifyDrifts(input: CompareInput): DriftFinding[] {
     });
   }
 
-  const onchainArrivalIso = onchainTrade.arrivalTimestamp ? onchainTrade.arrivalTimestamp.toISOString() : null;
-  const indexedArrivalIso = indexedTrade.arrivalTimestamp ? indexedTrade.arrivalTimestamp.toISOString() : null;
+  const onchainArrivalIso = onchainTrade.arrivalTimestamp
+    ? onchainTrade.arrivalTimestamp.toISOString()
+    : null;
+  const indexedArrivalIso = indexedTrade.arrivalTimestamp
+    ? indexedTrade.arrivalTimestamp.toISOString()
+    : null;
 
   if (onchainArrivalIso !== indexedArrivalIso) {
     findings.push({

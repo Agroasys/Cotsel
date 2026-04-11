@@ -42,6 +42,21 @@ load_env_file() {
   fi
 }
 
+ORIGINAL_ENV_KEYS=()
+ORIGINAL_ENV_VALUES=()
+while IFS='=' read -r key value; do
+  ORIGINAL_ENV_KEYS+=("$key")
+  ORIGINAL_ENV_VALUES+=("$value")
+done < <(env)
+
+restore_external_environment_overrides() {
+  local idx=0
+  for key in "${ORIGINAL_ENV_KEYS[@]}"; do
+    export "$key=${ORIGINAL_ENV_VALUES[$idx]}"
+    idx=$((idx + 1))
+  done
+}
+
 if [[ ! -f ".env" ]]; then
   echo "Missing required base env file: .env" >&2
   exit 1
@@ -53,9 +68,11 @@ if [[ "$PROFILE" != "infra" && ! -f "$PROFILE_FILE" ]]; then
 fi
 
 load_env_file ".env"
+restore_external_environment_overrides
 if [[ -f "$PROFILE_FILE" ]]; then
   load_env_file "$PROFILE_FILE"
 fi
+restore_external_environment_overrides
 
 required_groups=(
   # shared compose/database inputs
@@ -210,9 +227,10 @@ if [[ -n "${INDEXER_RPC_INGEST_DISABLED:-}" && "${INDEXER_RPC_INGEST_DISABLED}" 
   exit 1
 fi
 
-contains_stale_chain_marker() {
-  local value="${1:-}"
-  [[ "$value" == *asset-hub-paseo* || "$value" == *paseo* || "$value" == *polkadot* || "$value" == *polkavm* ]]
+contains_retired_runtime_marker() {
+  local value
+  value="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  [[ "$value" == *legacy* || "$value" == *retired* || "$value" == *archive* || "$value" == *deprecated* ]]
 }
 
 if [[ "$PROFILE" == "staging-e2e-real" ]]; then
@@ -228,7 +246,7 @@ if [[ "$PROFILE" == "staging-e2e-real" ]]; then
 
   for var_name in INDEXER_GATEWAY_URL INDEXER_RPC_ENDPOINT ORACLE_RPC_URL RECONCILIATION_RPC_URL GATEWAY_RPC_URL; do
     value="${!var_name:-}"
-    if contains_stale_chain_marker "$value"; then
+    if contains_retired_runtime_marker "$value"; then
       echo "$var_name still points at historical chain infrastructure: $value" >&2
       exit 1
     fi

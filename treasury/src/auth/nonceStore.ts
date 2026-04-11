@@ -1,9 +1,13 @@
-import { createInMemoryNonceStore, createRedisNonceStore, type NonceStore } from '@agroasys/shared-auth';
+import {
+  createInMemoryNonceStore,
+  createRedisNonceStore,
+  type NonceStore,
+} from '@agroasys/shared-auth';
 import { TreasuryConfig } from '../config';
 import { consumeServiceAuthNonce } from '../database/queries';
 import { Logger } from '../utils/logger';
 
-export interface TreasuryNonceStore extends NonceStore {}
+export type TreasuryNonceStore = NonceStore;
 
 export function createTreasuryNonceStore(config: TreasuryConfig): TreasuryNonceStore {
   if (config.nonceStore === 'postgres') {

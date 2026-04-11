@@ -2,21 +2,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { BuyerSDK } from '../src/modules/buyerSDK';
+import type { ethers } from 'ethers';
 import { Interface } from 'ethers';
-import {
-  TEST_CONFIG,
-  assertRequiredEnv,
-  getBuyerSigner,
-  hasRequiredEnv,
-} from './setup';
+import { TEST_CONFIG, assertRequiredEnv, getBuyerSigner, hasRequiredEnv } from './setup';
 
 const describeIntegration = hasRequiredEnv ? describe : describe.skip;
 
 const UNIT_CONFIG = {
-  rpc: "http://127.0.0.1:8545",
+  rpc: 'http://127.0.0.1:8545',
   chainId: 31337,
-  escrowAddress: "0x1000000000000000000000000000000000000001",
-  usdcAddress: "0x2000000000000000000000000000000000000002",
+  escrowAddress: '0x1000000000000000000000000000000000000001',
+  usdcAddress: '0x2000000000000000000000000000000000000002',
 };
 
 const RECEIPT = {
@@ -35,13 +31,25 @@ type MockContractWithSigner = {
   claim: jest.Mock;
 };
 
-function makeBuyerSigner(address = '0x2222222222222222222222222222222222222222'): any {
-  return {
+type BuyerSignerLike = Pick<ethers.Signer, 'getAddress' | 'signMessage' | 'provider'>;
+type BuyerSdkContract = BuyerSDK['contract'];
+type BuyerContractConnector = Pick<BuyerSdkContract, 'connect' | 'interface'>;
+
+function makeBuyerSigner(address = '0x2222222222222222222222222222222222222222'): {
+  signer: ethers.Signer;
+  provider: { getNetwork: jest.Mock };
+} {
+  const provider = {
+    getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
+  };
+  const signer: BuyerSignerLike = {
     getAddress: jest.fn().mockResolvedValue(address),
     signMessage: jest.fn().mockResolvedValue(`0x${'1'.repeat(130)}`),
-    provider: {
-      getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
-    },
+    provider: provider as unknown as ethers.Signer['provider'],
+  };
+  return {
+    signer: signer as unknown as ethers.Signer,
+    provider,
   };
 }
 
@@ -57,15 +65,15 @@ function makeSdkUnit() {
   };
 
   const connect = jest.fn().mockReturnValue(contractWithSigner);
-  (sdk as any).contract = {
+  (sdk as unknown as { contract: BuyerContractConnector }).contract = {
     connect,
     interface: TRADE_LOCKED_INTERFACE,
-  };
+  } as unknown as BuyerContractConnector;
   jest.spyOn(sdk, 'getUSDCAllowance').mockResolvedValue(1_000_000n);
   jest.spyOn(sdk, 'getBuyerNonce').mockResolvedValue(7n);
-  jest.spyOn(sdk, 'getTreasuryAddress').mockResolvedValue(
-    '0x3000000000000000000000000000000000000003',
-  );
+  jest
+    .spyOn(sdk, 'getTreasuryAddress')
+    .mockResolvedValue('0x3000000000000000000000000000000000000003');
 
   return { sdk, contractWithSigner, connect };
 }
@@ -85,8 +93,8 @@ describe('BuyerSDK unit', () => {
 
   test('createTrade should reject signer network mismatches', async () => {
     const { sdk } = makeSdkUnit();
-    const signer = makeBuyerSigner();
-    signer.provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
+    const { signer, provider } = makeBuyerSigner();
+    provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
 
     await expect(
       sdk.createTrade(
@@ -106,7 +114,7 @@ describe('BuyerSDK unit', () => {
 
   test('createTrade should surface tradeId from TradeLocked receipt logs', async () => {
     const { sdk, contractWithSigner } = makeSdkUnit();
-    const signer = makeBuyerSigner();
+    const { signer } = makeBuyerSigner();
     const encodedLog = TRADE_LOCKED_INTERFACE.encodeEventLog(
       TRADE_LOCKED_INTERFACE.getEvent('TradeLocked')!,
       [
@@ -133,7 +141,7 @@ describe('BuyerSDK unit', () => {
         ],
       }),
     };
-    (contractWithSigner as any).createTrade = jest.fn().mockResolvedValue(tx);
+    contractWithSigner.createTrade = jest.fn().mockResolvedValue(tx);
 
     const result = await sdk.createTrade(
       {
@@ -157,7 +165,7 @@ describe('BuyerSDK unit', () => {
 
   test('openDispute should call contract and return tx result', async () => {
     const { sdk, contractWithSigner, connect } = makeSdkUnit();
-    const signer = makeBuyerSigner();
+    const { signer } = makeBuyerSigner();
     const tx = mockSuccessCall(contractWithSigner.openDispute);
 
     const result = await sdk.openDispute(10n, signer);
@@ -170,7 +178,7 @@ describe('BuyerSDK unit', () => {
 
   test('cancelLockedTradeAfterTimeout should call contract and return tx result', async () => {
     const { sdk, contractWithSigner } = makeSdkUnit();
-    const signer = makeBuyerSigner();
+    const { signer } = makeBuyerSigner();
     const tx = mockSuccessCall(contractWithSigner.cancelLockedTradeAfterTimeout);
 
     const result = await sdk.cancelLockedTradeAfterTimeout(11n, signer);
@@ -182,7 +190,7 @@ describe('BuyerSDK unit', () => {
 
   test('refundInTransitAfterTimeout should call contract and return tx result', async () => {
     const { sdk, contractWithSigner } = makeSdkUnit();
-    const signer = makeBuyerSigner();
+    const { signer } = makeBuyerSigner();
     const tx = mockSuccessCall(contractWithSigner.refundInTransitAfterTimeout);
 
     const result = await sdk.refundInTransitAfterTimeout(12n, signer);
@@ -194,7 +202,7 @@ describe('BuyerSDK unit', () => {
 
   test('claim should call contract and return tx result', async () => {
     const { sdk, contractWithSigner, connect } = makeSdkUnit();
-    const signer = makeBuyerSigner();
+    const { signer } = makeBuyerSigner();
     const tx = mockSuccessCall(contractWithSigner.claim);
 
     const result = await sdk.claim(signer);
@@ -208,7 +216,7 @@ describe('BuyerSDK unit', () => {
 
 describeIntegration('BuyerSDK integration smoke', () => {
   let buyerSDK: BuyerSDK;
-  let buyerSigner: any;
+  let buyerSigner: ethers.Signer;
 
   beforeAll(() => {
     assertRequiredEnv();

@@ -2,130 +2,138 @@ import { ErrorType, TriggerStatus } from '../types/trigger';
 import { Logger } from './logger';
 
 export class OracleError extends Error {
-    constructor(
-        message: string,
-        public errorType: ErrorType,
-        public isTerminal: boolean = false
-    ) {
-        super(message);
-        this.name = 'OracleError';
-    }
+  constructor(
+    message: string,
+    public errorType: ErrorType,
+    public isTerminal: boolean = false,
+  ) {
+    super(message);
+    this.name = 'OracleError';
+  }
 }
 
 export class ValidationError extends OracleError {
-    constructor(message: string) {
-        super(message, ErrorType.VALIDATION, true);
-        this.name = 'ValidationError';
-    }
+  constructor(message: string) {
+    super(message, ErrorType.VALIDATION, true);
+    this.name = 'ValidationError';
+  }
 }
 
 export class NetworkError extends OracleError {
-    constructor(message: string) {
-        super(message, ErrorType.NETWORK, false);
-        this.name = 'NetworkError';
-    }
+  constructor(message: string) {
+    super(message, ErrorType.NETWORK, false);
+    this.name = 'NetworkError';
+  }
 }
 
 export class ContractError extends OracleError {
-    constructor(message: string, isTerminal: boolean = false) {
-        super(message, ErrorType.CONTRACT, isTerminal);
-        this.name = 'ContractError';
-    }
+  constructor(message: string, isTerminal: boolean = false) {
+    super(message, ErrorType.CONTRACT, isTerminal);
+    this.name = 'ContractError';
+  }
 }
 
-export function classifyError(error: any): OracleError {
-    const message = error.message || error.toString();
-    const lowerMessage = message.toLowerCase();
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
 
-    Logger.info('Classifying error', { 
-        message: message.substring(0, 200) 
-    });
+  return String(error);
+}
 
-    if (error instanceof OracleError) {
-        return error;
-    }
+export function classifyError(error: unknown): OracleError {
+  const message = getErrorMessage(error);
+  const lowerMessage = message.toLowerCase();
 
-    // Terminal validation errors (business logic violations)
-    if (
-        message.includes('Cannot release stage 1') ||
-        message.includes('Cannot confirm arrival') ||
-        message.includes('Cannot finalize') ||
-        message.includes('Invalid trade ID') ||
-        message.includes('Dispute window') ||
-        message.includes('expected LOCKED') ||
-        message.includes('expected IN_TRANSIT') ||
-        message.includes('expected ARRIVAL_CONFIRMED')
-    ) {
-        Logger.warn('Validation error - terminal', { message });
-        return new ValidationError(message);
-    }
+  Logger.info('Classifying error', {
+    message: message.substring(0, 200),
+  });
 
-    // Network errors (retryable)
-    if (
-        message.includes('network') ||
-        message.includes('timeout') ||
-        message.includes('ECONNREFUSED') ||
-        message.includes('ETIMEDOUT') ||
-        message.includes('ENOTFOUND') ||
-        message.includes('fetch failed') ||
-        message.includes('connection')
-    ) {
-        Logger.info('Network error - will retry', { message });
-        return new NetworkError(message);
-    }
+  if (error instanceof OracleError) {
+    return error;
+  }
 
-    // Contract errors (some terminal, some retryable)
-    if (
-        message.includes('execution reverted') ||
-        message.includes('revert') ||
-        message.includes('require')
-    ) {
-        const isTerminal =
-            lowerMessage.includes('invalid state') ||
-            lowerMessage.includes('not authorized') ||
-            lowerMessage.includes('trade does not exist') ||
-            lowerMessage.includes('already executed') ||
-            lowerMessage.includes('paused') ||
-            lowerMessage.includes('oracle disabled') ||
-            lowerMessage.includes('only oracle') ||
-            lowerMessage.includes('proposal expired') ||
-            lowerMessage.includes('timelock not elapsed');
+  // Terminal validation errors (business logic violations)
+  if (
+    message.includes('Cannot release stage 1') ||
+    message.includes('Cannot confirm arrival') ||
+    message.includes('Cannot finalize') ||
+    message.includes('Invalid trade ID') ||
+    message.includes('Dispute window') ||
+    message.includes('expected LOCKED') ||
+    message.includes('expected IN_TRANSIT') ||
+    message.includes('expected ARRIVAL_CONFIRMED')
+  ) {
+    Logger.warn('Validation error - terminal', { message });
+    return new ValidationError(message);
+  }
 
-        Logger.warn('Contract error', { isTerminal, message });
-        return new ContractError(message, isTerminal);
-    }
-
-    Logger.info('Unclassified error - treating as retryable network error');
+  // Network errors (retryable)
+  if (
+    message.includes('network') ||
+    message.includes('timeout') ||
+    message.includes('ECONNREFUSED') ||
+    message.includes('ETIMEDOUT') ||
+    message.includes('ENOTFOUND') ||
+    message.includes('fetch failed') ||
+    message.includes('connection')
+  ) {
+    Logger.info('Network error - will retry', { message });
     return new NetworkError(message);
+  }
+
+  // Contract errors (some terminal, some retryable)
+  if (
+    message.includes('execution reverted') ||
+    message.includes('revert') ||
+    message.includes('require')
+  ) {
+    const isTerminal =
+      lowerMessage.includes('invalid state') ||
+      lowerMessage.includes('not authorized') ||
+      lowerMessage.includes('trade does not exist') ||
+      lowerMessage.includes('already executed') ||
+      lowerMessage.includes('paused') ||
+      lowerMessage.includes('oracle disabled') ||
+      lowerMessage.includes('only oracle') ||
+      lowerMessage.includes('proposal expired') ||
+      lowerMessage.includes('timelock not elapsed');
+
+    Logger.warn('Contract error', { isTerminal, message });
+    return new ContractError(message, isTerminal);
+  }
+
+  Logger.info('Unclassified error - treating as retryable network error');
+  return new NetworkError(message);
 }
 
 export function determineNextStatus(
-    error: OracleError,
-    attemptCount: number,
-    maxAttempts: number
+  error: OracleError,
+  attemptCount: number,
+  maxAttempts: number,
 ): TriggerStatus {
-    // terminal errors immediately fail (validation/business logic)
-    if (error.isTerminal) {
-        Logger.warn('Terminal error - no retry possible', { 
-            errorType: error.errorType 
-        });
-        return TriggerStatus.TERMINAL_FAILURE;
-    }
-
-    // Max attempts reached - move to recoverable exhausted state
-    if (attemptCount >= maxAttempts) {
-        Logger.warn('Max attempts reached - moving to EXHAUSTED_NEEDS_REDRIVE', { 
-            attemptCount, 
-            maxAttempts 
-        });
-        return TriggerStatus.EXHAUSTED_NEEDS_REDRIVE;
-    }
-
-    // Still retryable
-    Logger.info('Error is retryable', { 
-        attemptCount, 
-        maxAttempts,
-        remainingAttempts: maxAttempts - attemptCount
+  // terminal errors immediately fail (validation/business logic)
+  if (error.isTerminal) {
+    Logger.warn('Terminal error - no retry possible', {
+      errorType: error.errorType,
     });
-    return TriggerStatus.FAILED;
+    return TriggerStatus.TERMINAL_FAILURE;
+  }
+
+  // Max attempts reached - move to recoverable exhausted state
+  if (attemptCount >= maxAttempts) {
+    Logger.warn('Max attempts reached - moving to EXHAUSTED_NEEDS_REDRIVE', {
+      attemptCount,
+      maxAttempts,
+    });
+    return TriggerStatus.EXHAUSTED_NEEDS_REDRIVE;
+  }
+
+  // Still retryable
+  Logger.info('Error is retryable', {
+    attemptCount,
+    maxAttempts,
+    remainingAttempts: maxAttempts - attemptCount,
+  });
+  return TriggerStatus.FAILED;
 }

@@ -43,7 +43,6 @@ cutover_headings=(
   "## Rollback triggers"
   "## Rollback steps"
   "## Containment posture when rollback is partial or blocked"
-  "## Historical Polkadot artifacts during rollback"
 )
 
 for heading in "${cutover_headings[@]}"; do
@@ -58,7 +57,6 @@ required_refs=(
   "scripts/staging-e2e-real-gate.sh"
   "scripts/notifications-gate.sh staging-e2e-real"
   "npm run -w reconciliation reconcile:report"
-  "docs/runbooks/polkadot-retirement-checklist.md"
 )
 
 for ref in "${required_refs[@]}"; do

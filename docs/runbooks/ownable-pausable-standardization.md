@@ -20,20 +20,21 @@ Adopt **OpenZeppelin `Pausable`** for pause state and pause modifiers, and **ret
   - oracle/admin timelock proposal flows
 
 Rationale:
+
 - This provides standards-based pause internals with minimal protocol behavior change.
 - Migrating to `Ownable`/`Ownable2Step` would collapse or complicate current quorum governance, increasing role-regression risk.
 
 ## Control Path Mapping
 
-| Current control path | Location | Decision | Result |
-|---|---|---|---|
-| Admin auth (`onlyAdmin`) | `AgroasysEscrow.sol` | Retain custom | Quorum governance unchanged |
-| Oracle auth (`onlyOracle`, `onlyOracleActive`) | `AgroasysEscrow.sol` | Retain custom | Oracle safety semantics unchanged |
-| Pause storage + guard | `paused` bool + custom `whenNotPaused` | Replace with OZ `Pausable` | Standardized pause internals |
-| Pause trigger | `pause()` | Keep admin entrypoint; call `_pause()` | Behavior equivalent |
-| Unpause with approvals | `proposeUnpause/approveUnpause/_executeUnpause` | Keep flow; call `_unpause()` in execute | Quorum unpause retained |
-| Emergency oracle disable | `disableOracleEmergency()` | Keep flow; use `_pause()` if needed | Emergency behavior preserved |
-| Timeout payout/cancel escape hatches | `cancelLockedTradeAfterTimeout`, `refundInTransitAfterTimeout` | Add pause gating | Pause now blocks all state-mutating transfer paths |
+| Current control path                           | Location                                                       | Decision                                | Result                                             |
+| ---------------------------------------------- | -------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------- |
+| Admin auth (`onlyAdmin`)                       | `AgroasysEscrow.sol`                                           | Retain custom                           | Quorum governance unchanged                        |
+| Oracle auth (`onlyOracle`, `onlyOracleActive`) | `AgroasysEscrow.sol`                                           | Retain custom                           | Oracle safety semantics unchanged                  |
+| Pause storage + guard                          | `paused` bool + custom `whenNotPaused`                         | Replace with OZ `Pausable`              | Standardized pause internals                       |
+| Pause trigger                                  | `pause()`                                                      | Keep admin entrypoint; call `_pause()`  | Behavior equivalent                                |
+| Unpause with approvals                         | `proposeUnpause/approveUnpause/_executeUnpause`                | Keep flow; call `_unpause()` in execute | Quorum unpause retained                            |
+| Emergency oracle disable                       | `disableOracleEmergency()`                                     | Keep flow; use `_pause()` if needed     | Emergency behavior preserved                       |
+| Timeout payout/cancel escape hatches           | `cancelLockedTradeAfterTimeout`, `refundInTransitAfterTimeout` | Add pause gating                        | Pause now blocks all state-mutating transfer paths |
 
 ## Security Regression Analysis
 

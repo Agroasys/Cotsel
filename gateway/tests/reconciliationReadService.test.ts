@@ -26,7 +26,6 @@ describe('reconciliation read service', () => {
         callbackStatus: 'delivered',
         providerStatus: 'confirmed',
         txHash: '0x2',
-        extrinsicHash: null,
         latestEventId: 'evt-2',
         latestEventType: 'reconciled',
         latestEventDetail: 'Matched',
@@ -56,7 +55,6 @@ describe('reconciliation read service', () => {
         callbackStatus: 'failed',
         providerStatus: 'dispatch_received',
         txHash: '0x1',
-        extrinsicHash: null,
         latestEventId: 'evt-1',
         latestEventType: 'drift_detected',
         latestEventDetail: 'Mismatch detected',
@@ -69,7 +67,10 @@ describe('reconciliation read service', () => {
       },
     ]);
 
-    const service = new ReconciliationReadService(store, () => new Date('2026-03-14T11:00:00.000Z'));
+    const service = new ReconciliationReadService(
+      store,
+      () => new Date('2026-03-14T11:00:00.000Z'),
+    );
     const snapshot = await service.listReconciliation({
       reconciliationStatus: 'matched',
       limit: 10,
@@ -106,7 +107,10 @@ describe('reconciliation read service', () => {
       requeueCallbackDelivery: jest.fn(),
     };
 
-    const service = new ReconciliationReadService(store, () => new Date('2026-03-14T11:00:00.000Z'));
+    const service = new ReconciliationReadService(
+      store,
+      () => new Date('2026-03-14T11:00:00.000Z'),
+    );
     const snapshot = await service.listReconciliation({
       limit: 25,
       offset: 0,
@@ -148,7 +152,6 @@ describe('reconciliation read service', () => {
             callbackStatus: 'delivered',
             providerStatus: 'confirmed',
             txHash: '0x2',
-            extrinsicHash: null,
             latestEventId: 'evt-2',
             latestEventType: 'reconciled',
             latestEventDetail: 'Matched',
@@ -163,7 +166,9 @@ describe('reconciliation read service', () => {
         total: 1,
         sourceFreshAt: '2026-03-14T10:06:00.000Z',
       }),
-      getTradeSettlementProjectionMap: jest.fn().mockRejectedValue(new Error('projection lookup unavailable')),
+      getTradeSettlementProjectionMap: jest
+        .fn()
+        .mockRejectedValue(new Error('projection lookup unavailable')),
       getHandoff: jest.fn(),
       getHandoffByPlatformRef: jest.fn(),
       createHandoff: jest.fn(),
@@ -178,7 +183,10 @@ describe('reconciliation read service', () => {
       requeueCallbackDelivery: jest.fn(),
     };
 
-    const service = new ReconciliationReadService(store as never, () => new Date('2026-03-14T11:00:00.000Z'));
+    const service = new ReconciliationReadService(
+      store as never,
+      () => new Date('2026-03-14T11:00:00.000Z'),
+    );
     const snapshot = await service.listReconciliation({
       limit: 25,
       offset: 0,
