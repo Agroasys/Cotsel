@@ -122,8 +122,12 @@ async function bootstrap(): Promise<void> {
     Logger.info(`Auth service listening on port ${config.port}`);
   });
 
-  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => {
+    void gracefulShutdown('SIGTERM');
+  });
+  process.on('SIGINT', () => {
+    void gracefulShutdown('SIGINT');
+  });
 
   server.on('error', (error) => {
     Logger.error('Server error', error);
@@ -131,7 +135,7 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-bootstrap().catch((error) => {
+void bootstrap().catch((error) => {
   Logger.error('Failed to start auth service', error);
   process.exit(1);
 });

@@ -176,8 +176,7 @@ describe('AgroasysEscrow - Claim Security', function () {
     expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
 
     const treasuryBefore = await usdc.balanceOf(treasury.address);
-    const escrowAny = escrow as any;
-    await expect(escrowAny.connect(buyer).claimTreasury())
+    await expect(escrow.connect(buyer).claimTreasury())
       .to.emit(escrow, 'TreasuryClaimed')
       .withArgs(treasury.address, treasury.address, treasuryClaimable, buyer.address);
     expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore + treasuryClaimable);
@@ -192,19 +191,18 @@ describe('AgroasysEscrow - Claim Security', function () {
     const treasuryClaimable = logisticsAmount + platformFeesAmount;
     expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
 
-    const escrowAny = escrow as any;
-    await escrowAny.connect(admin1).proposeTreasuryPayoutAddressUpdate(await receiver.getAddress());
-    await escrowAny.connect(admin2).approveTreasuryPayoutAddressUpdate(0);
+    await escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(await receiver.getAddress());
+    await escrow.connect(admin2).approveTreasuryPayoutAddressUpdate(0);
 
     const timelock = await escrow.governanceTimelock();
     await ethers.provider.send('evm_increaseTime', [Number(timelock) + 1]);
     await ethers.provider.send('evm_mine', []);
-    await escrowAny.connect(admin1).executeTreasuryPayoutAddressUpdate(0);
+    await escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0);
 
     await usdc.setHookEnabled(await receiver.getAddress(), true);
     await receiver.configure(false, true);
 
-    await expect(escrowAny.connect(buyer).claimTreasury()).to.be.revertedWith('hook revert');
+    await expect(escrow.connect(buyer).claimTreasury()).to.be.revertedWith('hook revert');
     expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
 
     // treasury cannot bypass the rotated payout address via claim()
@@ -216,7 +214,7 @@ describe('AgroasysEscrow - Claim Security', function () {
     await usdc.setHookEnabled(await receiver.getAddress(), false);
     const receiverBefore = await usdc.balanceOf(await receiver.getAddress());
     const treasuryWalletBefore = await usdc.balanceOf(treasury.address);
-    await expect(escrowAny.connect(buyer).claimTreasury())
+    await expect(escrow.connect(buyer).claimTreasury())
       .to.emit(escrow, 'TreasuryClaimed')
       .withArgs(treasury.address, await receiver.getAddress(), treasuryClaimable, buyer.address);
     expect(await usdc.balanceOf(await receiver.getAddress())).to.equal(

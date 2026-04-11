@@ -44,7 +44,9 @@ export class ConfirmationWorker {
       onChainFallbackMinIntervalMinutes: ON_CHAIN_FALLBACK_MIN_INTERVAL_MS / 60000,
     });
 
-    this.intervalId = setInterval(() => this.pollConfirmations(), POLL_INTERVAL_MS);
+    this.intervalId = setInterval(() => {
+      void this.pollConfirmations();
+    }, POLL_INTERVAL_MS);
   }
 
   stop(): void {

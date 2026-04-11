@@ -145,11 +145,10 @@ describe('AgroasysEscrow', function () {
   }
 
   async function rotateTreasuryPayoutReceiver(newReceiver: string, proposalId: bigint = 0n) {
-    const escrowAny = escrow as any;
-    await escrowAny.connect(admin1).proposeTreasuryPayoutAddressUpdate(newReceiver);
-    await escrowAny.connect(admin2).approveTreasuryPayoutAddressUpdate(proposalId);
+    await escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(newReceiver);
+    await escrow.connect(admin2).approveTreasuryPayoutAddressUpdate(proposalId);
     await time.increase(24 * 3600 + 1);
-    await escrowAny.connect(admin1).executeTreasuryPayoutAddressUpdate(proposalId);
+    await escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(proposalId);
   }
 
   beforeEach(async function () {
@@ -177,7 +176,7 @@ describe('AgroasysEscrow', function () {
     it('Should set correct initial values', async function () {
       expect(await escrow.oracleAddress()).to.equal(oracle.address);
       expect(await escrow.treasuryAddress()).to.equal(treasury.address);
-      expect(await (escrow as any).treasuryPayoutAddress()).to.equal(treasury.address);
+      expect(await escrow.treasuryPayoutAddress()).to.equal(treasury.address);
       expect(await escrow.requiredApprovals()).to.equal(2);
       expect(await escrow.governanceTimelock()).to.equal(24 * 3600);
       expect(await escrow.oracleActive()).to.be.true;
@@ -710,8 +709,7 @@ describe('AgroasysEscrow', function () {
       );
       const treasuryClaimable = await escrow.claimableUsdc(treasury.address);
       const treasuryBefore = await usdc.balanceOf(treasury.address);
-      const escrowAny = escrow as any;
-      await expect(escrowAny.connect(buyer).claimTreasury())
+      await expect(escrow.connect(buyer).claimTreasury())
         .to.emit(escrow, 'TreasuryClaimed')
         .withArgs(treasury.address, treasury.address, treasuryClaimable, buyer.address);
       expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore + treasuryClaimable);
@@ -736,14 +734,13 @@ describe('AgroasysEscrow', function () {
 
       await rotateTreasuryPayoutReceiver(admin3.address);
 
-      const escrowAny = escrow as any;
       const expectedTreasuryClaimable = logisticsAmount + platformFeesAmount;
       const callerBefore = await usdc.balanceOf(buyer.address);
       const receiverBefore = await usdc.balanceOf(admin3.address);
       const supplierClaimableBefore = await escrow.claimableUsdc(supplier.address);
       const buyerClaimableBefore = await escrow.claimableUsdc(buyer.address);
 
-      await expect(escrowAny.connect(buyer).claimTreasury())
+      await expect(escrow.connect(buyer).claimTreasury())
         .to.emit(escrow, 'TreasuryClaimed')
         .withArgs(treasury.address, admin3.address, expectedTreasuryClaimable, buyer.address);
 
@@ -758,8 +755,7 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should reject treasury sweep when no treasury claimable exists', async function () {
-      const escrowAny = escrow as any;
-      await expect(escrowAny.connect(buyer).claimTreasury()).to.be.revertedWith(
+      await expect(escrow.connect(buyer).claimTreasury()).to.be.revertedWith(
         'nothing treasury claimable',
       );
     });
@@ -770,9 +766,8 @@ describe('AgroasysEscrow', function () {
       );
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
-      const escrowAny = escrow as any;
       await escrow.connect(admin1).pause();
-      await expect(escrowAny.connect(buyer).claimTreasury())
+      await expect(escrow.connect(buyer).claimTreasury())
         .to.emit(escrow, 'TreasuryClaimed')
         .withArgs(
           treasury.address,
@@ -786,9 +781,8 @@ describe('AgroasysEscrow', function () {
       const { tradeId } = await createDefaultTrade(ethers.id('treasury-sweep-claims-paused'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
-      const escrowAny = escrow as any;
       await escrow.connect(admin1).pauseClaims();
-      await expect(escrowAny.connect(buyer).claimTreasury()).to.be.revertedWith('claims paused');
+      await expect(escrow.connect(buyer).claimTreasury()).to.be.revertedWith('claims paused');
     });
   });
 
@@ -1693,61 +1687,58 @@ describe('AgroasysEscrow', function () {
 
   describe('Governance: Treasury Payout Receiver', function () {
     it('Should rotate treasury payout receiver with quorum and timelock', async function () {
-      const escrowAny = escrow as any;
       const newReceiver = admin3.address;
 
       await expect(
-        escrowAny.connect(buyer).proposeTreasuryPayoutAddressUpdate(newReceiver),
+        escrow.connect(buyer).proposeTreasuryPayoutAddressUpdate(newReceiver),
       ).to.be.revertedWith('only admin');
 
-      await escrowAny.connect(admin1).proposeTreasuryPayoutAddressUpdate(newReceiver);
-      await expect(
-        escrowAny.connect(admin1).executeTreasuryPayoutAddressUpdate(0),
-      ).to.be.revertedWith('not enough approvals');
+      await escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(newReceiver);
+      await expect(escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0)).to.be.revertedWith(
+        'not enough approvals',
+      );
 
-      await escrowAny.connect(admin2).approveTreasuryPayoutAddressUpdate(0);
-      await expect(
-        escrowAny.connect(admin1).executeTreasuryPayoutAddressUpdate(0),
-      ).to.be.revertedWith('timelock not elapsed');
+      await escrow.connect(admin2).approveTreasuryPayoutAddressUpdate(0);
+      await expect(escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0)).to.be.revertedWith(
+        'timelock not elapsed',
+      );
 
       await time.increase(24 * 3600 + 1);
-      await expect(escrowAny.connect(admin1).executeTreasuryPayoutAddressUpdate(0))
+      await expect(escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0))
         .to.emit(escrow, 'TreasuryPayoutAddressUpdated')
         .withArgs(treasury.address, newReceiver);
 
-      expect(await escrowAny.treasuryPayoutAddress()).to.equal(newReceiver);
+      expect(await escrow.treasuryPayoutAddress()).to.equal(newReceiver);
     });
 
     it('Should reject invalid treasury payout receiver update proposals', async function () {
-      const escrowAny = escrow as any;
       await expect(
-        escrowAny.connect(admin1).proposeTreasuryPayoutAddressUpdate(ethers.ZeroAddress),
+        escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(ethers.ZeroAddress),
       ).to.be.revertedWith('invalid treasury payout receiver');
 
       await expect(
-        escrowAny.connect(admin1).proposeTreasuryPayoutAddressUpdate(treasury.address),
+        escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(treasury.address),
       ).to.be.revertedWith('same treasury payout receiver');
     });
 
     it('Should reject execution after proposal expiry and allow cancel', async function () {
-      const escrowAny = escrow as any;
-      await escrowAny.connect(admin1).proposeTreasuryPayoutAddressUpdate(admin3.address);
-      await escrowAny.connect(admin2).approveTreasuryPayoutAddressUpdate(0);
+      await escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(admin3.address);
+      await escrow.connect(admin2).approveTreasuryPayoutAddressUpdate(0);
 
       const ttl = await escrow.GOVERNANCE_PROPOSAL_TTL();
       await time.increase(ttl + 1n);
 
-      await expect(
-        escrowAny.connect(admin1).executeTreasuryPayoutAddressUpdate(0),
-      ).to.be.revertedWith('proposal expired');
+      await expect(escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0)).to.be.revertedWith(
+        'proposal expired',
+      );
 
-      await expect(escrowAny.connect(admin2).cancelExpiredTreasuryPayoutAddressUpdateProposal(0))
+      await expect(escrow.connect(admin2).cancelExpiredTreasuryPayoutAddressUpdateProposal(0))
         .to.emit(escrow, 'TreasuryPayoutAddressUpdateProposalExpiredCancelled')
         .withArgs(0, admin2.address);
 
-      await expect(
-        escrowAny.connect(admin1).executeTreasuryPayoutAddressUpdate(0),
-      ).to.be.revertedWith('proposal cancelled');
+      await expect(escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0)).to.be.revertedWith(
+        'proposal cancelled',
+      );
     });
 
     it('Should keep trade signature flow valid after payout receiver rotation', async function () {
@@ -1755,7 +1746,7 @@ describe('AgroasysEscrow', function () {
       const { tradeId } = await createDefaultTrade(ethers.id('sig-valid-after-payout-rotation'));
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(0); // LOCKED
-      expect(await (escrow as any).treasuryPayoutAddress()).to.equal(admin3.address);
+      expect(await escrow.treasuryPayoutAddress()).to.equal(admin3.address);
       expect(await escrow.treasuryAddress()).to.equal(treasury.address);
     });
   });

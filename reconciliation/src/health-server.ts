@@ -43,45 +43,47 @@ function json(res: http.ServerResponse, status: number, body: unknown): void {
 }
 
 export function startHealthServer(): http.Server {
-  const server = http.createServer(async (req, res) => {
-    if (req.method !== 'GET') {
-      res.writeHead(405);
-      res.end();
-      return;
-    }
-
-    const timestamp = new Date().toISOString();
-
-    if (req.url === '/health') {
-      json(res, 200, { success: true, service: 'reconciliation', status: 'ok', timestamp });
-      return;
-    }
-
-    if (req.url === '/ready') {
-      try {
-        await testConnection();
-        const lastRun = await queryLastRun();
-        json(res, 200, {
-          success: true,
-          service: 'reconciliation',
-          ready: true,
-          lastRun,
-          timestamp,
-        });
-      } catch (error) {
-        json(res, 503, {
-          success: false,
-          service: 'reconciliation',
-          ready: false,
-          error: error instanceof Error ? error.message : 'Dependency unavailable',
-          timestamp,
-        });
+  const server = http.createServer((req, res) => {
+    void (async () => {
+      if (req.method !== 'GET') {
+        res.writeHead(405);
+        res.end();
+        return;
       }
-      return;
-    }
 
-    res.writeHead(404);
-    res.end();
+      const timestamp = new Date().toISOString();
+
+      if (req.url === '/health') {
+        json(res, 200, { success: true, service: 'reconciliation', status: 'ok', timestamp });
+        return;
+      }
+
+      if (req.url === '/ready') {
+        try {
+          await testConnection();
+          const lastRun = await queryLastRun();
+          json(res, 200, {
+            success: true,
+            service: 'reconciliation',
+            ready: true,
+            lastRun,
+            timestamp,
+          });
+        } catch (error) {
+          json(res, 503, {
+            success: false,
+            service: 'reconciliation',
+            ready: false,
+            error: error instanceof Error ? error.message : 'Dependency unavailable',
+            timestamp,
+          });
+        }
+        return;
+      }
+
+      res.writeHead(404);
+      res.end();
+    })();
   });
 
   server.listen(HEALTH_PORT, () => {

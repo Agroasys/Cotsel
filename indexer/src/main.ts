@@ -1,5 +1,7 @@
+import type { BlockData, DataHandlerContext } from '@subsquid/evm-processor';
 import { TypeormDatabase } from '@subsquid/typeorm-store';
-import { processor, ESCROW_ADDRESS } from './processor';
+import type { Store } from '@subsquid/typeorm-store';
+import { processor, ESCROW_ADDRESS, type Fields } from './processor';
 import { contractInterface } from './abi';
 import {
   Trade,
@@ -25,6 +27,10 @@ import {
 } from './overviewAggregate';
 import { buildEvmEventId, compareOrderedEvmEvents } from './eventIdentity';
 import { persistIndexerBatch } from './persistence';
+
+type IndexerContext = DataHandlerContext<Store, Fields>;
+type IndexerBlock = BlockData<Fields>;
+type DecodedEscrowLog = NonNullable<ReturnType<typeof contractInterface.parseLog>>;
 
 processor.run(new TypeormDatabase(), async (ctx) => {
   const trades: Map<string, Trade> = new Map();
@@ -605,7 +611,7 @@ processor.run(new TypeormDatabase(), async (ctx) => {
 async function getOrLoadTrade(
   tradeId: string,
   trades: Map<string, Trade>,
-  ctx: any,
+  ctx: IndexerContext,
 ): Promise<Trade | null> {
   let trade = trades.get(tradeId);
   if (trade) {
@@ -621,7 +627,7 @@ async function getOrLoadTrade(
   return null;
 }
 
-async function getOrLoadOverviewSnapshot(ctx: any): Promise<OverviewSnapshot> {
+async function getOrLoadOverviewSnapshot(ctx: IndexerContext): Promise<OverviewSnapshot> {
   const snapshot = await ctx.store.get(OverviewSnapshot, OVERVIEW_SNAPSHOT_ID);
   if (snapshot) {
     return snapshot;
@@ -645,17 +651,17 @@ async function getOrLoadOverviewSnapshot(ctx: any): Promise<OverviewSnapshot> {
 // ########################### trade events ##########################
 
 async function handleTradeLocked(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   events: TradeEvent[],
   overviewSnapshot: OverviewSnapshot,
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [
     tradeId,
@@ -680,11 +686,11 @@ async function handleTradeLocked(
     supplier: supplier.toLowerCase(),
     status: TradeStatus.LOCKED,
     totalAmountLocked: totalAmount,
-    logisticsAmount: logisticsAmount,
-    platformFeesAmount: platformFeesAmount,
-    supplierFirstTranche: supplierFirstTranche,
-    supplierSecondTranche: supplierSecondTranche,
-    ricardianHash: ricardianHash,
+    logisticsAmount,
+    platformFeesAmount,
+    supplierFirstTranche,
+    supplierSecondTranche,
+    ricardianHash,
     createdAt: timestamp,
   });
 
@@ -700,11 +706,11 @@ async function handleTradeLocked(
       txHash,
       logIndex,
       transactionIndex,
-      totalAmount: totalAmount,
-      logisticsAmount: logisticsAmount,
-      platformFeesAmount: platformFeesAmount,
-      supplierFirstTranche: supplierFirstTranche,
-      supplierSecondTranche: supplierSecondTranche,
+      totalAmount,
+      logisticsAmount,
+      platformFeesAmount,
+      supplierFirstTranche,
+      supplierSecondTranche,
     }),
   );
 
@@ -713,17 +719,17 @@ async function handleTradeLocked(
 }
 
 async function handleFundsReleasedStage1(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   events: TradeEvent[],
   overviewSnapshot: OverviewSnapshot,
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [tradeId, , supplierFirstTranche, treasury, logisticsAmount] = log.args;
 
@@ -766,17 +772,17 @@ async function handleFundsReleasedStage1(
 }
 
 async function handlePlatformFeesPaidStage1(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   events: TradeEvent[],
   overviewSnapshot: OverviewSnapshot,
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [tradeId, treasury, platformFeesAmount] = log.args;
 
@@ -809,17 +815,17 @@ async function handlePlatformFeesPaidStage1(
 }
 
 async function handleArrivalConfirmed(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   events: TradeEvent[],
   overviewSnapshot: OverviewSnapshot,
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [tradeId, arrivalTimestamp] = log.args;
 
@@ -852,7 +858,7 @@ async function handleArrivalConfirmed(
       txHash,
       logIndex,
       transactionIndex,
-      arrivalTimestamp: arrivalTimestamp,
+      arrivalTimestamp,
     }),
   );
 
@@ -861,17 +867,17 @@ async function handleArrivalConfirmed(
 }
 
 async function handleFinalTrancheReleased(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   events: TradeEvent[],
   overviewSnapshot: OverviewSnapshot,
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [tradeId, supplier, supplierSecondTranche] = log.args;
 
@@ -913,17 +919,17 @@ async function handleFinalTrancheReleased(
 }
 
 async function handleDisputeOpenedByBuyer(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   events: TradeEvent[],
   overviewSnapshot: OverviewSnapshot,
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [tradeId] = log.args;
 
@@ -961,17 +967,17 @@ async function handleDisputeOpenedByBuyer(
 }
 
 async function handleTradeCancelledAfterLockTimeout(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   events: TradeEvent[],
   overviewSnapshot: OverviewSnapshot,
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [tradeId, buyer, refundedAmount] = log.args;
 
@@ -999,7 +1005,7 @@ async function handleTradeCancelledAfterLockTimeout(
       txHash,
       logIndex,
       transactionIndex,
-      refundedAmount: refundedAmount,
+      refundedAmount,
       refundedTo: buyer.toLowerCase(),
     }),
   );
@@ -1011,17 +1017,17 @@ async function handleTradeCancelledAfterLockTimeout(
 }
 
 async function handleInTransitTimeoutRefunded(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   events: TradeEvent[],
   overviewSnapshot: OverviewSnapshot,
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [tradeId, buyer, refundedAmount] = log.args;
 
@@ -1124,17 +1130,17 @@ function applySnapshotCounters(
 // ########################### dispute events ##########################
 
 async function handleDisputeSolutionProposed(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   disputeProposals: Map<string, DisputeProposal>,
   events: DisputeEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, tradeId, disputeStatus, proposer] = log.args;
 
@@ -1160,7 +1166,7 @@ async function handleDisputeSolutionProposed(
     executed: false,
     createdAt: timestamp,
     proposer: proposer.toLowerCase(),
-    expiresAt: expiresAt,
+    expiresAt,
     cancelled: false,
   });
 
@@ -1187,16 +1193,16 @@ async function handleDisputeSolutionProposed(
 }
 
 async function handleDisputeApproved(
-  log: any,
+  log: DecodedEscrowLog,
   disputeProposals: Map<string, DisputeProposal>,
   events: DisputeEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, approver, approvalCount, requiredApprovals] = log.args;
 
@@ -1235,16 +1241,16 @@ async function handleDisputeApproved(
 }
 
 async function handleDisputeFinalized(
-  log: any,
+  log: DecodedEscrowLog,
   disputeProposals: Map<string, DisputeProposal>,
   events: DisputeEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, tradeId, disputeStatus] = log.args;
 
@@ -1283,16 +1289,16 @@ async function handleDisputeFinalized(
 }
 
 async function handleDisputeProposalExpiredCancelled(
-  log: any,
+  log: DecodedEscrowLog,
   disputeProposals: Map<string, DisputeProposal>,
   events: DisputeEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, tradeId, cancelledBy] = log.args;
 
@@ -1329,17 +1335,17 @@ async function handleDisputeProposalExpiredCancelled(
 }
 
 async function handleDisputePayout(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   events: TradeEvent[],
   overviewSnapshot: OverviewSnapshot,
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [tradeId, proposalId, recipient, amount, payoutType] = log.args;
 
@@ -1387,16 +1393,16 @@ async function handleDisputePayout(
 // ########################### oracle events ##########################
 
 async function handleOracleUpdateProposed(
-  log: any,
+  log: DecodedEscrowLog,
   proposals: Map<string, OracleUpdateProposal>,
   events: OracleEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, proposer, newOracle, eta, emergencyFastTrack] = log.args;
 
@@ -1411,10 +1417,10 @@ async function handleOracleUpdateProposed(
     approvalCount: 1,
     executed: false,
     createdAt: timestamp,
-    eta: eta,
+    eta,
     proposer: proposer.toLowerCase(),
     emergencyFastTrack: Boolean(emergencyFastTrack),
-    expiresAt: expiresAt,
+    expiresAt,
     cancelled: false,
   });
 
@@ -1431,7 +1437,7 @@ async function handleOracleUpdateProposed(
       logIndex,
       transactionIndex,
       proposedOracle: newOracle.toLowerCase(),
-      eta: eta,
+      eta,
       proposer: proposer.toLowerCase(),
     }),
   );
@@ -1442,16 +1448,16 @@ async function handleOracleUpdateProposed(
 }
 
 async function handleOracleUpdateApproved(
-  log: any,
+  log: DecodedEscrowLog,
   proposals: Map<string, OracleUpdateProposal>,
   events: OracleEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, approver, approvalCount, requiredApprovals] = log.args;
 
@@ -1488,22 +1494,22 @@ async function handleOracleUpdateApproved(
 }
 
 async function handleOracleUpdated(
-  log: any,
+  log: DecodedEscrowLog,
   events: OracleEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [oldOracle, newOracle] = log.args;
 
   events.push(
     new OracleEvent({
       id: eventId,
-      oracleUpdate: null as any,
+      oracleUpdate: null,
       eventName: 'OracleUpdated',
       blockNumber: block.header.height,
       timestamp,
@@ -1519,16 +1525,16 @@ async function handleOracleUpdated(
 }
 
 async function handleOracleUpdateProposalExpiredCancelled(
-  log: any,
+  log: DecodedEscrowLog,
   proposals: Map<string, OracleUpdateProposal>,
   events: OracleEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, cancelledBy] = log.args;
 
@@ -1563,22 +1569,22 @@ async function handleOracleUpdateProposalExpiredCancelled(
 }
 
 async function handleOracleDisabledEmergency(
-  log: any,
+  log: DecodedEscrowLog,
   events: OracleEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [disabledBy, previousOracle] = log.args;
 
   events.push(
     new OracleEvent({
       id: eventId,
-      oracleUpdate: null as any,
+      oracleUpdate: null,
       eventName: 'OracleDisabledEmergency',
       blockNumber: block.header.height,
       timestamp,
@@ -1598,16 +1604,16 @@ async function handleOracleDisabledEmergency(
 // ########################### admin events ##########################
 
 async function handleAdminAddProposed(
-  log: any,
+  log: DecodedEscrowLog,
   proposals: Map<string, AdminAddProposal>,
   events: AdminEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, proposer, newAdmin, eta] = log.args;
 
@@ -1622,9 +1628,9 @@ async function handleAdminAddProposed(
     approvalCount: 1,
     executed: false,
     createdAt: timestamp,
-    eta: eta,
+    eta,
     proposer: proposer.toLowerCase(),
-    expiresAt: expiresAt,
+    expiresAt,
     cancelled: false,
   });
 
@@ -1641,7 +1647,7 @@ async function handleAdminAddProposed(
       logIndex,
       transactionIndex,
       proposedAdmin: newAdmin.toLowerCase(),
-      eta: eta,
+      eta,
       proposer: proposer.toLowerCase(),
     }),
   );
@@ -1650,16 +1656,16 @@ async function handleAdminAddProposed(
 }
 
 async function handleAdminAddApproved(
-  log: any,
+  log: DecodedEscrowLog,
   proposals: Map<string, AdminAddProposal>,
   events: AdminEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, approver, approvalCount, requiredApprovals] = log.args;
 
@@ -1696,22 +1702,22 @@ async function handleAdminAddApproved(
 }
 
 async function handleAdminAdded(
-  log: any,
+  log: DecodedEscrowLog,
   events: AdminEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [newAdmin] = log.args;
 
   events.push(
     new AdminEvent({
       id: eventId,
-      adminAddProposal: null as any,
+      adminAddProposal: null,
       eventName: 'AdminAdded',
       blockNumber: block.header.height,
       timestamp,
@@ -1726,16 +1732,16 @@ async function handleAdminAdded(
 }
 
 async function handleAdminAddProposalExpiredCancelled(
-  log: any,
+  log: DecodedEscrowLog,
   proposals: Map<string, AdminAddProposal>,
   events: AdminEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, cancelledBy] = log.args;
 
@@ -1772,15 +1778,15 @@ async function handleAdminAddProposalExpiredCancelled(
 // ########################### system events ##########################
 
 async function handlePaused(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [triggeredBy] = log.args;
 
@@ -1801,15 +1807,15 @@ async function handlePaused(
 }
 
 async function handleUnpauseProposed(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [triggeredBy] = log.args;
 
@@ -1830,15 +1836,15 @@ async function handleUnpauseProposed(
 }
 
 async function handleUnpauseApproved(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [triggeredBy, approvalCount, requiredApprovals] = log.args;
 
@@ -1859,15 +1865,15 @@ async function handleUnpauseApproved(
 }
 
 async function handleUnpauseProposalCancelled(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [triggeredBy] = log.args;
 
@@ -1888,15 +1894,15 @@ async function handleUnpauseProposalCancelled(
 }
 
 async function handleUnpaused(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [triggeredBy] = log.args;
 
@@ -1921,17 +1927,17 @@ async function handleUnpaused(
 const CLAIM_TYPE_VALUES = Object.values(ClaimType);
 
 async function handleClaimableAccrued(
-  log: any,
+  log: DecodedEscrowLog,
   trades: Map<string, Trade>,
   events: TradeEvent[],
   overviewSnapshot: OverviewSnapshot,
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [tradeId, recipient, amount, claimType] = log.args;
 
@@ -1968,15 +1974,15 @@ async function handleClaimableAccrued(
 }
 
 async function handleClaimed(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [claimant, amount] = log.args;
 
@@ -1998,15 +2004,15 @@ async function handleClaimed(
 }
 
 async function handleTreasuryClaimed(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [treasuryIdentity, payoutReceiver, amount, triggeredBy] = log.args;
 
@@ -2030,15 +2036,15 @@ async function handleTreasuryClaimed(
 }
 
 async function handleTreasuryPayoutAddressUpdateProposed(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, proposer, newPayoutReceiver, eta] = log.args;
 
@@ -2065,15 +2071,15 @@ async function handleTreasuryPayoutAddressUpdateProposed(
 }
 
 async function handleTreasuryPayoutAddressUpdateApproved(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, approver, approvalCount, requiredApprovals] = log.args;
 
@@ -2099,15 +2105,15 @@ async function handleTreasuryPayoutAddressUpdateApproved(
 }
 
 async function handleTreasuryPayoutAddressUpdated(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [oldPayoutReceiver, newPayoutReceiver] = log.args;
 
@@ -2132,15 +2138,15 @@ async function handleTreasuryPayoutAddressUpdated(
 }
 
 async function handleTreasuryPayoutAddressUpdateProposalExpiredCancelled(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [proposalId, cancelledBy] = log.args;
 
@@ -2164,15 +2170,15 @@ async function handleTreasuryPayoutAddressUpdateProposalExpiredCancelled(
 }
 
 async function handleClaimsPaused(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [triggeredBy] = log.args;
 
@@ -2193,15 +2199,15 @@ async function handleClaimsPaused(
 }
 
 async function handleClaimsUnpaused(
-  log: any,
+  log: DecodedEscrowLog,
   events: SystemEvent[],
   eventId: string,
-  block: any,
+  block: IndexerBlock,
   timestamp: Date,
   txHash: string,
   logIndex: number,
   transactionIndex: number,
-  ctx: any,
+  ctx: IndexerContext,
 ) {
   const [triggeredBy] = log.args;
 

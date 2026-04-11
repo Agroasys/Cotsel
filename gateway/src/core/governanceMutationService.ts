@@ -1099,7 +1099,7 @@ export class GovernanceMutationService {
         verificationState: verification.verificationState,
         monitoringState: verification.monitoringState,
         expectedSignerWallet: expectedSigning.signerWallet,
-        assertedSignerWallet: assertedSignerWallet,
+        assertedSignerWallet,
         finalSignerWallet: verification.finalSignerWallet,
         preparedPayloadHash: expectedSigning.preparedPayloadHash,
       },

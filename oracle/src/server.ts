@@ -145,12 +145,16 @@ async function bootstrap() {
       });
     });
 
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    process.on('SIGTERM', () => {
+      void gracefulShutdown('SIGTERM');
+    });
+    process.on('SIGINT', () => {
+      void gracefulShutdown('SIGINT');
+    });
   } catch (error) {
     Logger.error('Failed to start server', error);
     process.exit(1);
   }
 }
 
-bootstrap();
+void bootstrap();

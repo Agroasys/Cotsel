@@ -3,30 +3,34 @@ import globals from 'globals';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
+const sharedCodeQualityRules = {
+  eqeqeq: ['error', 'always'],
+  curly: ['error', 'all'],
+  'no-var': 'error',
+  'prefer-const': 'error',
+  'no-implicit-coercion': 'error',
+  'no-useless-return': 'error',
+  'no-useless-concat': 'error',
+  'no-extra-boolean-cast': 'error',
+  'object-shorthand': ['error', 'always'],
+};
+
 const testFilePatterns = [
   '**/*.test.{js,cjs,mjs,ts}',
   '**/*.spec.{js,cjs,mjs,ts}',
   '**/tests/**/*.{js,cjs,mjs,ts}',
 ];
 
-const legacyRequireImportPatterns = [
-  'auth/tests/config.test.ts',
-  'gateway/tests/configEnv.test.ts',
-  'oracle/src/config.test.ts',
-  'reconciliation/src/tests/config-address-validation.test.ts',
-  'ricardian/tests/config.nonceStore.test.ts',
-  'treasury/tests/config.nonceStore.test.ts',
-];
-
-const legacyAnyPatterns = [
-  'auth/tests/**/*.ts',
-  'gateway/tests/**/*.ts',
-  'indexer/src/main.ts',
-  'oracle/tests/**/*.ts',
-  'ricardian/tests/routerAuthScope.test.ts',
-  'sdk/tests/**/*.ts',
-  'treasury/tests/routerAuthScope.test.ts',
-  'contracts/tests/**/*.ts',
+const typeAwareRuntimePatterns = [
+  'auth/src/**/*.ts',
+  'gateway/src/**/*.ts',
+  'indexer/src/**/*.ts',
+  'oracle/src/**/*.ts',
+  'sdk/src/**/*.ts',
+  'reconciliation/src/**/*.ts',
+  'notifications/src/**/*.ts',
+  'ricardian/src/**/*.ts',
+  'treasury/src/**/*.ts',
 ];
 
 export default [
@@ -55,6 +59,10 @@ export default [
         ...globals.node,
       },
     },
+    rules: {
+      ...js.configs.recommended.rules,
+      ...sharedCodeQualityRules,
+    },
   },
   {
     files: ['**/*.{js,cjs}'],
@@ -65,6 +73,7 @@ export default [
         ...globals.node,
       },
     },
+    rules: sharedCodeQualityRules,
   },
   ...tseslint.configs.recommended.map((config) => ({
     ...config,
@@ -79,6 +88,7 @@ export default [
     },
     rules: {
       ...config.rules,
+      ...sharedCodeQualityRules,
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -91,15 +101,25 @@ export default [
     },
   })),
   {
-    files: legacyRequireImportPatterns,
-    rules: {
-      '@typescript-eslint/no-require-imports': 'off',
+    files: typeAwareRuntimePatterns,
+    ignores: testFilePatterns,
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
-  },
-  {
-    files: legacyAnyPatterns,
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': [
+        'error',
+        {
+          checksVoidReturn: {
+            attributes: false,
+          },
+        },
+      ],
     },
   },
   {
