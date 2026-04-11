@@ -228,7 +228,8 @@ if [[ -n "${INDEXER_RPC_INGEST_DISABLED:-}" && "${INDEXER_RPC_INGEST_DISABLED}" 
 fi
 
 contains_retired_runtime_marker() {
-  local value="${1,,}"
+  local value
+  value="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
   [[ "$value" == *legacy* || "$value" == *retired* || "$value" == *archive* || "$value" == *deprecated* ]]
 }
 

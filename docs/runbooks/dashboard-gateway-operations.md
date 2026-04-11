@@ -211,16 +211,12 @@ Structured logs must include:
 - durationMs
 - actor identifiers when authenticated
 
-Redacted log keys:
+Redacted log classes:
 
-- `authorization`
-- `token`
-- `accessToken`
-- `refreshToken`
-- `apiKey`
-- `secret`
-- `password`
-- `hmacSecret`
+- bearer auth headers and session credentials
+- API credential material
+- HMAC/shared-secret material
+- password or secret-bearing fields
 
 Evidence capture for incidents:
 

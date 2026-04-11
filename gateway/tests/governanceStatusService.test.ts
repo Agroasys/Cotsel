@@ -7,6 +7,59 @@ import { GovernanceStatusService } from '../src/core/governanceStatusService';
 
 type GovernanceContract = ConstructorParameters<typeof GovernanceStatusService>[1];
 
+function createGovernanceContractMock(
+  overrides: Partial<GovernanceContract> = {},
+): GovernanceContract {
+  return {
+    paused: jest.fn().mockResolvedValue(false),
+    claimsPaused: jest.fn().mockResolvedValue(false),
+    oracleActive: jest.fn().mockResolvedValue(false),
+    oracleAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000000'),
+    treasuryAddress: jest.fn().mockResolvedValue('0x0000000000000000000000000000000000000000'),
+    treasuryPayoutAddress: jest
+      .fn()
+      .mockResolvedValue('0x0000000000000000000000000000000000000000'),
+    claimableUsdc: jest.fn().mockResolvedValue(0n),
+    governanceApprovals: jest.fn().mockResolvedValue(0n),
+    governanceTimelock: jest.fn().mockResolvedValue(0n),
+    requiredApprovals: jest.fn().mockResolvedValue(0n),
+    hasActiveUnpauseProposal: jest.fn().mockResolvedValue(false),
+    unpauseHasApproved: jest.fn().mockResolvedValue(false),
+    unpauseProposal: jest.fn().mockResolvedValue({
+      approvalCount: 0n,
+      executed: false,
+      createdAt: 0n,
+      proposer: '0x0000000000000000000000000000000000000000',
+    }),
+    oracleUpdateCounter: jest.fn().mockResolvedValue(0n),
+    oracleUpdateHasApproved: jest.fn().mockResolvedValue(false),
+    oracleUpdateProposals: jest.fn().mockResolvedValue({
+      newOracle: '0x0000000000000000000000000000000000000000',
+      approvalCount: 0n,
+      executed: false,
+      createdAt: 0n,
+      eta: 0n,
+      proposer: '0x0000000000000000000000000000000000000000',
+      emergencyFastTrack: false,
+    }),
+    oracleUpdateProposalExpiresAt: jest.fn().mockResolvedValue(0n),
+    oracleUpdateProposalCancelled: jest.fn().mockResolvedValue(false),
+    treasuryPayoutAddressUpdateCounter: jest.fn().mockResolvedValue(0n),
+    treasuryPayoutAddressUpdateHasApproved: jest.fn().mockResolvedValue(false),
+    treasuryPayoutAddressUpdateProposals: jest.fn().mockResolvedValue({
+      newPayoutReceiver: '0x0000000000000000000000000000000000000000',
+      approvalCount: 0n,
+      executed: false,
+      createdAt: 0n,
+      eta: 0n,
+      proposer: '0x0000000000000000000000000000000000000000',
+    }),
+    treasuryPayoutAddressUpdateProposalExpiresAt: jest.fn().mockResolvedValue(0n),
+    treasuryPayoutAddressUpdateProposalCancelled: jest.fn().mockResolvedValue(false),
+    ...overrides,
+  };
+}
+
 describe('GovernanceStatusService', () => {
   test('maps on-chain governance state into the dashboard status shape', async () => {
     const provider = {
@@ -16,7 +69,7 @@ describe('GovernanceStatusService', () => {
 
     const service = new GovernanceStatusService(
       provider,
-      {
+      createGovernanceContractMock({
         paused: jest.fn().mockResolvedValue(false),
         claimsPaused: jest.fn().mockResolvedValue(true),
         oracleActive: jest.fn().mockResolvedValue(true),
@@ -62,7 +115,7 @@ describe('GovernanceStatusService', () => {
           .fn()
           .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(true),
-      } as GovernanceContract,
+      }),
       31337,
       50,
     );
@@ -96,9 +149,9 @@ describe('GovernanceStatusService', () => {
 
     const service = new GovernanceStatusService(
       provider,
-      {
+      createGovernanceContractMock({
         paused: jest.fn().mockResolvedValue(false),
-      } as GovernanceContract,
+      }),
       31337,
       50,
     );
@@ -119,7 +172,7 @@ describe('GovernanceStatusService', () => {
 
     const service = new GovernanceStatusService(
       provider,
-      {
+      createGovernanceContractMock({
         paused: jest.fn().mockResolvedValue(false),
         claimsPaused: jest.fn().mockResolvedValue(false),
         oracleActive: jest.fn().mockResolvedValue(true),
@@ -146,7 +199,7 @@ describe('GovernanceStatusService', () => {
           .mockResolvedValue({ createdAt: 0n, executed: false }),
         treasuryPayoutAddressUpdateProposalExpiresAt: jest.fn().mockResolvedValue(0n),
         treasuryPayoutAddressUpdateProposalCancelled: jest.fn().mockResolvedValue(false),
-      } as GovernanceContract,
+      }),
       31337,
       50,
     );
@@ -168,9 +221,9 @@ describe('GovernanceStatusService', () => {
 
     const service = new GovernanceStatusService(
       provider,
-      {
+      createGovernanceContractMock({
         paused: jest.fn().mockReturnValue(never),
-      } as GovernanceContract,
+      }),
       31337,
       10,
     );

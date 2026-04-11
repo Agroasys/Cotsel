@@ -68,7 +68,11 @@ async function startServer() {
               ? '0x00000000000000000000000000000000000000bb'
               : '0x00000000000000000000000000000000000000aa',
           role: actor === 'buyer' ? 'buyer' : 'admin',
+          issuedAt: 1_744_243_200,
+          expiresAt: 1_744_246_800,
         },
+        gatewayRoles: actor === 'buyer' ? [] : ['operator:read', 'operator:write'],
+        writeEnabled: actor !== 'buyer',
       };
       req.gatewayPrincipal = gatewayPrincipal;
       next();

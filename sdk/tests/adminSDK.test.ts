@@ -19,6 +19,7 @@ const UNIT_CONFIG = {
 const RECEIPT = {
   hash: `0x${'1'.repeat(64)}`,
   blockNumber: 123,
+  logs: [],
 };
 
 type MockTx = {
@@ -55,10 +56,11 @@ type SignerLike = Pick<ethers.Signer, 'getAddress'>;
 type AdminSdkContract = AdminSDK['contract'];
 type ContractConnector = Pick<AdminSdkContract, 'connect' | 'interface'>;
 
-function makeSigner(address = '0x1111111111111111111111111111111111111111'): SignerLike {
-  return {
+function makeSigner(address = '0x1111111111111111111111111111111111111111'): ethers.Signer {
+  const signer: SignerLike = {
     getAddress: jest.fn().mockResolvedValue(address),
   };
+  return signer as unknown as ethers.Signer;
 }
 
 function makeSdkUnit(isAdmin = true) {

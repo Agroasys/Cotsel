@@ -35,13 +35,21 @@ type BuyerSignerLike = Pick<ethers.Signer, 'getAddress' | 'signMessage' | 'provi
 type BuyerSdkContract = BuyerSDK['contract'];
 type BuyerContractConnector = Pick<BuyerSdkContract, 'connect' | 'interface'>;
 
-function makeBuyerSigner(address = '0x2222222222222222222222222222222222222222'): BuyerSignerLike {
-  return {
+function makeBuyerSigner(address = '0x2222222222222222222222222222222222222222'): {
+  signer: ethers.Signer;
+  provider: { getNetwork: jest.Mock };
+} {
+  const provider = {
+    getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
+  };
+  const signer: BuyerSignerLike = {
     getAddress: jest.fn().mockResolvedValue(address),
     signMessage: jest.fn().mockResolvedValue(`0x${'1'.repeat(130)}`),
-    provider: {
-      getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
-    },
+    provider: provider as unknown as ethers.Signer['provider'],
+  };
+  return {
+    signer: signer as unknown as ethers.Signer,
+    provider,
   };
 }
 
@@ -85,8 +93,8 @@ describe('BuyerSDK unit', () => {
 
   test('createTrade should reject signer network mismatches', async () => {
     const { sdk } = makeSdkUnit();
-    const signer = makeBuyerSigner();
-    signer.provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
+    const { signer, provider } = makeBuyerSigner();
+    provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
 
     await expect(
       sdk.createTrade(
@@ -106,7 +114,7 @@ describe('BuyerSDK unit', () => {
 
   test('createTrade should surface tradeId from TradeLocked receipt logs', async () => {
     const { sdk, contractWithSigner } = makeSdkUnit();
-    const signer = makeBuyerSigner();
+    const { signer } = makeBuyerSigner();
     const encodedLog = TRADE_LOCKED_INTERFACE.encodeEventLog(
       TRADE_LOCKED_INTERFACE.getEvent('TradeLocked')!,
       [
@@ -157,7 +165,7 @@ describe('BuyerSDK unit', () => {
 
   test('openDispute should call contract and return tx result', async () => {
     const { sdk, contractWithSigner, connect } = makeSdkUnit();
-    const signer = makeBuyerSigner();
+    const { signer } = makeBuyerSigner();
     const tx = mockSuccessCall(contractWithSigner.openDispute);
 
     const result = await sdk.openDispute(10n, signer);
@@ -170,7 +178,7 @@ describe('BuyerSDK unit', () => {
 
   test('cancelLockedTradeAfterTimeout should call contract and return tx result', async () => {
     const { sdk, contractWithSigner } = makeSdkUnit();
-    const signer = makeBuyerSigner();
+    const { signer } = makeBuyerSigner();
     const tx = mockSuccessCall(contractWithSigner.cancelLockedTradeAfterTimeout);
 
     const result = await sdk.cancelLockedTradeAfterTimeout(11n, signer);
@@ -182,7 +190,7 @@ describe('BuyerSDK unit', () => {
 
   test('refundInTransitAfterTimeout should call contract and return tx result', async () => {
     const { sdk, contractWithSigner } = makeSdkUnit();
-    const signer = makeBuyerSigner();
+    const { signer } = makeBuyerSigner();
     const tx = mockSuccessCall(contractWithSigner.refundInTransitAfterTimeout);
 
     const result = await sdk.refundInTransitAfterTimeout(12n, signer);
@@ -194,7 +202,7 @@ describe('BuyerSDK unit', () => {
 
   test('claim should call contract and return tx result', async () => {
     const { sdk, contractWithSigner, connect } = makeSdkUnit();
-    const signer = makeBuyerSigner();
+    const { signer } = makeBuyerSigner();
     const tx = mockSuccessCall(contractWithSigner.claim);
 
     const result = await sdk.claim(signer);

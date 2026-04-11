@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { jest } from '@jest/globals';
 
 const BASE_ENV: Record<string, string> = {
   RECONCILIATION_ENABLED: 'true',
@@ -54,11 +53,9 @@ function withEnv(overrides: Record<string, string | undefined>, fn: () => void):
 
 function loadConfigModule(): typeof import('../config') {
   const modulePath = path.resolve(__dirname, '../config');
-  let loaded!: typeof import('../config');
-  jest.isolateModules(() => {
-    loaded = jest.requireActual(modulePath) as typeof import('../config');
-  });
-  return loaded;
+  const resolvedPath = require.resolve(modulePath);
+  delete require.cache[resolvedPath];
+  return require(resolvedPath) as typeof import('../config');
 }
 
 test('invalid address in config fails with explicit field-level error', () => {

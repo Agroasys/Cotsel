@@ -57,8 +57,9 @@ describe('ConfirmationWorker on-chain fallback', () => {
     const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
       trigger: TriggerLike,
     ) => Promise<void>;
+    const boundCheckConfirmation = checkConfirmation.bind(worker);
 
-    await checkConfirmation(makeTrigger());
+    await boundCheckConfirmation(makeTrigger());
 
     expect(sdkClient.getTrade).toHaveBeenCalledWith('1');
     expect(mockUpdateTrigger).toHaveBeenCalledWith(
@@ -85,8 +86,9 @@ describe('ConfirmationWorker on-chain fallback', () => {
     const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
       trigger: TriggerLike,
     ) => Promise<void>;
+    const boundCheckConfirmation = checkConfirmation.bind(worker);
 
-    await checkConfirmation(makeTrigger());
+    await boundCheckConfirmation(makeTrigger());
 
     expect(sdkClient.getTrade).toHaveBeenCalledWith('1');
     expect(mockUpdateTrigger).not.toHaveBeenCalledWith(
@@ -110,10 +112,11 @@ describe('ConfirmationWorker on-chain fallback', () => {
     const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
       trigger: TriggerLike,
     ) => Promise<void>;
+    const boundCheckConfirmation = checkConfirmation.bind(worker);
     const trigger = makeTrigger();
 
-    await checkConfirmation(trigger);
-    await checkConfirmation(trigger);
+    await boundCheckConfirmation(trigger);
+    await boundCheckConfirmation(trigger);
 
     expect(sdkClient.getTrade).toHaveBeenCalledTimes(1);
   });
@@ -137,8 +140,11 @@ describe('ConfirmationWorker on-chain fallback', () => {
     const checkConfirmation = Reflect.get(worker, 'checkConfirmation') as (
       trigger: TriggerLike,
     ) => Promise<void>;
+    const boundCheckConfirmation = checkConfirmation.bind(worker);
 
-    await checkConfirmation(makeTrigger({ submitted_at: new Date(Date.now() - 35 * 60 * 1000) }));
+    await boundCheckConfirmation(
+      makeTrigger({ submitted_at: new Date(Date.now() - 35 * 60 * 1000) }),
+    );
 
     expect(mockUpdateTrigger).toHaveBeenCalledWith(
       expect.any(String),
