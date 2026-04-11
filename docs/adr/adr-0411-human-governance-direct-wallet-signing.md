@@ -153,7 +153,7 @@ Mitigation:
 
 - `gateway/src/routes/governanceMutations.ts` — queue endpoints supplemented with prepare endpoints and confirm verification (Phase 1)
 - `gateway/src/executor/governanceExecutor.ts` — executor scope to be restricted to service roles (Phase 1)
-- `docs/runbooks/gateway-governance-signer-custody.md` — transitional notice added now; full update in Phase 4
+- `docs/runbooks/gateway-governance-signer-custody.md` — updated to reflect direct-sign human governance and executor-only delegated/service flows
 - `docs/api/cotsel-dashboard-gateway.openapi.yml` — direct-sign prepare + confirm contract aligned with implementation
 - `docs/runbooks/architecture-coverage-matrix.md` — row added for this decision
 
