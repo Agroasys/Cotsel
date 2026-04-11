@@ -531,17 +531,19 @@ async function bootstrap(): Promise<void> {
     void shutdown('SIGTERM');
   });
 
-  server.on('error', async (error) => {
-    Logger.error('Dashboard gateway server error', error);
-    settlementCallbackDispatcher.stop();
-    governanceDirectSignMonitor.stop();
-    await requestRateLimiter.close().catch(() => undefined);
-    await closeConnection(pool);
-    process.exit(1);
+  server.on('error', (error) => {
+    void (async () => {
+      Logger.error('Dashboard gateway server error', error);
+      settlementCallbackDispatcher.stop();
+      governanceDirectSignMonitor.stop();
+      await requestRateLimiter.close().catch(() => undefined);
+      await closeConnection(pool);
+      process.exit(1);
+    })();
   });
 }
 
-bootstrap().catch(async (error) => {
+void bootstrap().catch(async (error) => {
   Logger.error('Failed to start dashboard gateway', error);
   await closeConnection(pool).catch(() => undefined);
   process.exit(1);

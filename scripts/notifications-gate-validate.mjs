@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 
 function readNumberEnv(name, fallback) {
   const raw = process.env[name];
-  if (raw == null || raw.trim() === '') {
+  if (raw === undefined || raw === null || raw.trim() === '') {
     return fallback;
   }
   const parsed = Number(raw);

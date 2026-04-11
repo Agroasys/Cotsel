@@ -170,7 +170,7 @@ export function loadConfig(): OracleConfig {
       notificationsWebhookUrl,
       notificationsCooldownMs: validateEnvNumber('NOTIFICATIONS_COOLDOWN_MS', 300000),
       notificationsRequestTimeoutMs: validateEnvNumber('NOTIFICATIONS_REQUEST_TIMEOUT_MS', 5000),
-      manualApprovalEnabled: manualApprovalEnabled,
+      manualApprovalEnabled,
     };
 
     assert(

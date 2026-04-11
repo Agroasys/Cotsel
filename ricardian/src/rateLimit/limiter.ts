@@ -123,7 +123,7 @@ export async function createRicardianRateLimiter(
   });
 
   return {
-    middleware: limiter.middleware as RequestHandler,
+    middleware: limiter.middleware,
     mode: limiter.mode,
     close: limiter.close,
   };

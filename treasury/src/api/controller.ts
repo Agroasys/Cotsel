@@ -244,7 +244,7 @@ export class TreasuryController {
 
       const latest = await getLatestPayoutState(entryId);
       const currentState = latest?.state || 'PENDING_REVIEW';
-      assertValidTransition(currentState as PayoutState, requestedState);
+      assertValidTransition(currentState, requestedState);
 
       if (requestedState === 'READY_FOR_PAYOUT') {
         const entries = await getLedgerEntries({ tradeId: entry.trade_id, limit: 500, offset: 0 });

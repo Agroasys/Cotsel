@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 const BASE_ENV: Record<string, string> = {
@@ -25,6 +26,8 @@ const BASE_ENV: Record<string, string> = {
   NOTIFICATIONS_COOLDOWN_MS: '300000',
   NOTIFICATIONS_REQUEST_TIMEOUT_MS: '5000',
 };
+
+const localRequire = createRequire(__filename);
 
 function withEnv(overrides: Record<string, string | undefined>, fn: () => void): void {
   const snapshot = { ...process.env };
@@ -53,9 +56,9 @@ function withEnv(overrides: Record<string, string | undefined>, fn: () => void):
 
 function loadConfigModule(): typeof import('../config') {
   const modulePath = path.resolve(__dirname, '../config');
-  const resolvedPath = require.resolve(modulePath);
-  delete require.cache[resolvedPath];
-  return require(resolvedPath) as typeof import('../config');
+  const resolvedPath = localRequire.resolve(modulePath);
+  delete localRequire.cache[resolvedPath];
+  return localRequire(resolvedPath) as typeof import('../config');
 }
 
 test('invalid address in config fails with explicit field-level error', () => {

@@ -292,7 +292,7 @@ export function createPostgresFailedOperationStore(pool: Pool): FailedOperationS
         );
       }
 
-      return mapRow(result.rows[0]!);
+      return mapRow(result.rows[0]);
     },
 
     async get(failedOperationId) {
