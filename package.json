@@ -74,7 +74,7 @@
     "lodash": "4.18.1",
     "prettier": "^3.8.2",
     "typescript-eslint": "^8.58.1",
-    "undici": "8.0.2"
+    "undici": "6.24.0"
   },
   "lint-staged": {
     "*.{js,cjs,mjs,ts}": [
@@ -111,7 +111,7 @@
     "serialize-javascript": "7.0.5",
     "defu": "6.1.7",
     "lodash": "4.18.1",
-    "undici": "8.0.2",
+    "undici": "6.24.0",
     "@nomicfoundation/ignition-core": {
       "lodash": "4.18.1"
     }
