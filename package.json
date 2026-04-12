@@ -86,9 +86,9 @@
     ]
   },
   "overrides": {
-    "axios": "1.14.0",
+    "axios": "1.15.0",
     "hardhat-gas-reporter": {
-      "axios": "1.14.0"
+      "axios": "1.15.0"
     },
     "bn.js": "5.2.3",
     "brace-expansion@<1.1.13": "1.1.13",
