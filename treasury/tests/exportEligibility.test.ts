@@ -23,7 +23,7 @@ function makeEntry(overrides?: Partial<LedgerEntryWithState>): LedgerEntryWithSt
     source_timestamp: overrides?.source_timestamp ?? new Date('2026-03-31T00:00:00.000Z'),
     metadata: overrides?.metadata ?? {},
     created_at: overrides?.created_at ?? new Date('2026-03-31T00:00:00.000Z'),
-    latest_state: overrides?.latest_state ?? 'READY_FOR_PAYOUT',
+    latest_state: overrides?.latest_state ?? 'READY_FOR_PARTNER_SUBMISSION',
     latest_state_at: overrides?.latest_state_at ?? new Date('2026-03-31T00:00:00.000Z'),
   };
 }

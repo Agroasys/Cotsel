@@ -71,15 +71,20 @@ export function assertBankPayoutTransition(
   currentPayoutState: PayoutState,
   bankState: BankPayoutState,
 ): void {
-  if (currentPayoutState === 'PENDING_REVIEW' || currentPayoutState === 'READY_FOR_PAYOUT') {
-    throw new Error(`Bank confirmation is not valid while payout state is ${currentPayoutState}`);
+  if (
+    currentPayoutState === 'PENDING_REVIEW' ||
+    currentPayoutState === 'READY_FOR_PARTNER_SUBMISSION'
+  ) {
+    throw new Error(
+      `Partner payout evidence is not valid while payout state is ${currentPayoutState}`,
+    );
   }
 
   if (currentPayoutState === 'CANCELLED') {
-    throw new Error('Bank confirmation is not valid for cancelled payout entries');
+    throw new Error('Partner payout evidence is not valid for cancelled payout entries');
   }
 
-  if (bankState === 'PENDING' && currentPayoutState !== 'PROCESSING') {
-    throw new Error('Pending bank confirmation requires payout state PROCESSING');
+  if (bankState === 'PENDING' && currentPayoutState !== 'AWAITING_PARTNER_UPDATE') {
+    throw new Error('Pending partner payout evidence requires state AWAITING_PARTNER_UPDATE');
   }
 }

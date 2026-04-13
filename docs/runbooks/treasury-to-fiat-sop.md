@@ -22,7 +22,7 @@ Automation-governance source of truth:
 
 ## Scope
 
-- Treasury ledger state progression (`PENDING_REVIEW` -> `READY_FOR_PAYOUT` -> `PROCESSING` -> `PAID` or `CANCELLED`).
+- Treasury ledger state progression (`PENDING_REVIEW` -> `READY_FOR_PARTNER_SUBMISSION` -> `AWAITING_PARTNER_UPDATE` -> `PARTNER_REPORTED_COMPLETED` or `CANCELLED`).
 - Fiat ramp deposit evidence contract used to anchor off-chain funding to trade and ledger context.
 - Approval and evidence requirements for treasury-to-fiat execution.
 - Exception handling for failed, incorrect, or partial payouts.
@@ -62,7 +62,7 @@ Required headers:
 ## Safety Guardrails
 
 - Never execute payout without an approved ledger entry and evidence package.
-- Never skip payout state transitions or force `PAID` directly.
+- Never skip payout state transitions or force `PARTNER_REPORTED_COMPLETED` directly.
 - Never log secrets, private keys, or full credentialed webhook URLs.
 - Never continue processing when destination details are ambiguous.
 - Never use an arbitrary payout destination for treasury claim execution; destination is contract-controlled.
@@ -143,8 +143,8 @@ Each bank-finality record must include:
 
 Transition guardrails:
 
-- Bank confirmation is not valid while treasury payout state is `PENDING_REVIEW` or `READY_FOR_PAYOUT`.
-- `PENDING` bank state is only valid while treasury payout state is `PROCESSING`.
+- Partner payout evidence is not valid while treasury payout state is `PENDING_REVIEW` or `READY_FOR_PARTNER_SUBMISSION`.
+- `PENDING` bank state is only valid while treasury payout state is `AWAITING_PARTNER_UPDATE`.
 - Bank confirmation is not valid after treasury payout entry is `CANCELLED`.
 - Replaying the same `bankReference` with the same payload is idempotent.
 - Replaying the same `bankReference` with a different payload is rejected as a conflict.
@@ -218,14 +218,14 @@ If not:
 
 - Mark entry `CANCELLED` with reason and stop payout path for that entry.
 
-### 3. Move approved entry to `READY_FOR_PAYOUT`
+### 3. Move approved entry to `READY_FOR_PARTNER_SUBMISSION`
 
 Append state transition:
 
 ```bash
 curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/state" \
   -H "Content-Type: application/json" \
-  -d '{"state":"READY_FOR_PAYOUT","note":"Approved for treasury-to-fiat execution","actor":"Treasury Approver"}'
+  -d '{"state":"READY_FOR_PARTNER_SUBMISSION","note":"Approved for partner submission","actor":"Treasury Approver"}'
 ```
 
 Expected result:
@@ -237,14 +237,14 @@ If not:
 - Validate current state and transition legality against state machine rules in `treasury/src/core/payout.ts` (source of truth for validation behavior).
 - Do not continue until transition path is valid.
 
-### 4. Start fiat transfer execution (`PROCESSING`)
+### 4. Submit to partner and await payout evidence (`AWAITING_PARTNER_UPDATE`)
 
 Record start of execution window:
 
 ```bash
 curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/state" \
   -H "Content-Type: application/json" \
-  -d '{"state":"PROCESSING","note":"Transfer initiated with approved off-ramp","actor":"Treasury Operator"}'
+  -d '{"state":"AWAITING_PARTNER_UPDATE","note":"Submitted to licensed payout partner; awaiting partner update","actor":"Treasury Operator"}'
 ```
 
 Execute transfer in approved off-ramp channel (bank/exchange workflow).
@@ -277,7 +277,7 @@ If not:
 
 - Append `CANCELLED` if transfer cannot be safely executed and record reason.
 
-### 5. Finalize entry (`PAID`) and attach evidence
+### 5. Record partner-reported completion (`PARTNER_REPORTED_COMPLETED`) and attach evidence
 
 After transfer confirmation:
 
@@ -300,7 +300,7 @@ curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entri
 ```bash
 curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/state" \
   -H "Content-Type: application/json" \
-  -d '{"state":"PAID","note":"Transfer settled; receipt and FX evidence attached","actor":"Treasury Operator"}'
+  -d '{"state":"PARTNER_REPORTED_COMPLETED","note":"Partner reported settlement; receipt and FX evidence attached","actor":"Treasury Operator"}'
 ```
 
 Record post-transfer evidence:
@@ -309,15 +309,15 @@ Record post-transfer evidence:
 - FX rate and timestamp used for conversion.
 - Linked `trade_id`, ledger `entry_id`, and source on-chain `tx_hash`.
 - Final fiat deposit event for the same `rampReference` recorded as `FUNDED` or `REVERSED` with the provider confirmation identifier.
-- Bank confirmation receipt stored under `bankReference` before or at the same time as the `PAID` lifecycle transition.
+- Bank confirmation receipt stored under `bankReference` before or at the same time as the `PARTNER_REPORTED_COMPLETED` lifecycle transition.
 
 Expected result:
 
-- Entry appears with `latest_state=PAID`.
+- Entry appears with `latest_state=PARTNER_REPORTED_COMPLETED`.
 
 If not:
 
-- Keep entry in `PROCESSING`, investigate with approver + on-call engineer, and avoid duplicate transfer attempts.
+- Keep entry in `AWAITING_PARTNER_UPDATE`, investigate with approver + on-call engineer, and avoid duplicate transfer attempts.
 
 ## Evidence To Record (Audit Minimum)
 
@@ -372,14 +372,14 @@ cast send <ESCROW_ADDRESS> "unpauseClaims()" --private-key "$ADMIN_KEY"
 
 ### Off-ramp transfer failed
 
-- Keep state at `PROCESSING` only while active retry plan exists.
+- Keep state at `AWAITING_PARTNER_UPDATE` only while active retry plan exists.
 - If transfer cannot recover safely, set `CANCELLED` and open incident.
 - Persist the provider failure as a treasury deposit event with `depositState="FAILED"` and `failureCode`.
-- If bank rejects settlement after transfer initiation, persist `bankState="REJECTED"` with `failureCode` before deciding whether treasury state remains `PROCESSING` or moves to `CANCELLED`.
+- If bank rejects settlement after transfer initiation, persist `bankState="REJECTED"` with `failureCode` before deciding whether treasury state remains `AWAITING_PARTNER_UPDATE` or moves to `CANCELLED`.
 
 ### Partial settlement confirmed
 
-- Do not mark `PAID` until full amount is reconciled.
+- Do not mark `PARTNER_REPORTED_COMPLETED` until full amount is reconciled.
 - Record partial receipt and discrepancy details.
 - Persist the provider event with `depositState="PARTIAL"` so reconciliation emits `PARTIAL_FUNDING`.
 - Escalate for controlled remediation and evidence review.

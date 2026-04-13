@@ -9,9 +9,9 @@ import { LedgerEntryWithState, PayoutState, TreasuryEntryEligibility } from '../
 import { ReconciliationGateService, type TradeReconciliationGate } from './reconciliationGate';
 
 const EXPORTABLE_STATES: ReadonlySet<PayoutState> = new Set([
-  'READY_FOR_PAYOUT',
-  'PROCESSING',
-  'PAID',
+  'READY_FOR_PARTNER_SUBMISSION',
+  'AWAITING_PARTNER_UPDATE',
+  'PARTNER_REPORTED_COMPLETED',
 ]);
 
 interface SettlementHeadProvider {

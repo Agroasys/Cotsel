@@ -4,9 +4,9 @@ export type TreasuryComponent = 'LOGISTICS' | 'PLATFORM_FEE';
 
 export type PayoutState =
   | 'PENDING_REVIEW'
-  | 'READY_FOR_PAYOUT'
-  | 'PROCESSING'
-  | 'PAID'
+  | 'READY_FOR_PARTNER_SUBMISSION'
+  | 'AWAITING_PARTNER_UPDATE'
+  | 'PARTNER_REPORTED_COMPLETED'
   | 'CANCELLED';
 
 export type FiatDepositState = 'PENDING' | 'FUNDED' | 'PARTIAL' | 'REVERSED' | 'FAILED';
