@@ -65,16 +65,16 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "defu": "6.1.6",
+    "defu": "6.1.7",
     "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",
-    "globals": "^17.4.0",
+    "globals": "^17.5.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "lodash": "4.18.1",
     "prettier": "^3.8.2",
     "typescript-eslint": "^8.58.1",
-    "undici": "6.24.0"
+    "undici": "8.1.0"
   },
   "lint-staged": {
     "*.{js,cjs,mjs,ts}": [
@@ -109,9 +109,9 @@
     "path-to-regexp@<0.1.13": "0.1.13",
     "path-to-regexp@>=8 <8.4.0": "8.4.0",
     "serialize-javascript": "7.0.5",
-    "defu": "6.1.6",
+    "defu": "6.1.7",
     "lodash": "4.18.1",
-    "undici": "6.24.0",
+    "undici": "8.1.0",
     "@nomicfoundation/ignition-core": {
       "lodash": "4.18.1"
     }
