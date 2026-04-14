@@ -10,7 +10,7 @@ Automation-governance source of truth:
 
 ## Who This Is For
 
-- `Treasury Operator`: prepares payout package and executes approved transfer.
+- `Treasury Operator`: prepares payout evidence, submits the approved payout request to the licensed partner workflow, and records partner-reported updates.
 - `Treasury Approver`: validates controls and authorizes payout progression.
 - `Compliance Reviewer`: verifies audit completeness and exception handling.
 - `On-call Engineer`: supports technical remediation when service paths fail.
@@ -68,6 +68,7 @@ Required headers:
 - Never use an arbitrary payout destination for treasury claim execution; destination is contract-controlled.
 - Never enable or improvise new treasury automation outside the approved automation classes and change-control path.
 - Never route treasury execution through buyer-facing AA, paymaster, or sponsored-gas shortcuts; treasury operators must use the explicit privileged signer path only.
+- Never represent Cotsel or Agroasys as the party that executes bank payout finality; the licensed payout partner owns rail execution and completion truth.
 
 ## Fiat Ramp Deposit Contract
 
@@ -205,7 +206,7 @@ curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/inges
 
 For each candidate entry, confirm:
 
-- Destination account details match approved beneficiary record.
+- Destination routing matches the approved beneficiary reference or masked partner-held payout profile.
 - Payout purpose links to the correct `trade_id` and settlement component.
 - Amount/currency alignment with ledger record.
 - Required approvals are collected (operator + independent approver).
@@ -239,7 +240,7 @@ If not:
 
 ### 4. Submit to partner and await payout evidence (`AWAITING_PARTNER_UPDATE`)
 
-Record start of execution window:
+Record start of the partner-execution window:
 
 ```bash
 curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/state" \
@@ -247,7 +248,8 @@ curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entri
   -d '{"state":"AWAITING_PARTNER_UPDATE","note":"Submitted to licensed payout partner; awaiting partner update","actor":"Treasury Operator"}'
 ```
 
-Execute transfer in approved off-ramp channel (bank/exchange workflow).
+Submit the approved payout request through the licensed payout partner channel.
+The partner, not Cotsel or Agroasys, executes the bank/exchange disbursement.
 
 Before external execution, persist the approved funding reference:
 
@@ -271,15 +273,15 @@ curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/depos
 
 Expected result:
 
-- External transfer reference is generated.
+- Partner submission reference is generated and linked to the payout record.
 
 If not:
 
-- Append `CANCELLED` if transfer cannot be safely executed and record reason.
+- Append `CANCELLED` if the payout request cannot be safely submitted to the partner and record reason.
 
 ### 5. Record partner-reported completion (`PARTNER_REPORTED_COMPLETED`) and attach evidence
 
-After transfer confirmation:
+After partner-reported transfer confirmation:
 
 Record bank finality first:
 
@@ -366,7 +368,7 @@ cast send <ESCROW_ADDRESS> "unpauseClaims()" --private-key "$ADMIN_KEY"
 
 ### Wrong destination submitted
 
-- Stop immediately; do not execute transfer.
+- Stop immediately; do not submit or advance the payout request through the partner.
 - Mark entry `CANCELLED` with explicit reason.
 - Escalate to compliance reviewer and on-call engineer.
 
