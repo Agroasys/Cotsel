@@ -23,7 +23,7 @@ function makeEntry(overrides?: Partial<LedgerEntryWithState>): LedgerEntryWithSt
     source_timestamp: overrides?.source_timestamp ?? new Date('2026-03-31T00:00:00.000Z'),
     metadata: overrides?.metadata ?? {},
     created_at: overrides?.created_at ?? new Date('2026-03-31T00:00:00.000Z'),
-    latest_state: overrides?.latest_state ?? 'READY_FOR_PAYOUT',
+    latest_state: overrides?.latest_state ?? 'READY_FOR_PARTNER_SUBMISSION',
     latest_state_at: overrides?.latest_state_at ?? new Date('2026-03-31T00:00:00.000Z'),
   };
 }
@@ -66,6 +66,48 @@ describe('TreasuryEligibilityService', () => {
         eligibleForExport: true,
         blockedReasons: [],
       }),
+    );
+  });
+
+  test('blocks completed-state export when confirmed payout evidence is missing', async () => {
+    const service = new TreasuryEligibilityService({
+      provider: {
+        getBlock: async () => ({ number: 150n }),
+      },
+      reconciliationGate: {
+        assessTrades: async () =>
+          new Map([
+            [
+              'trade-1',
+              {
+                tradeId: 'trade-1',
+                status: 'CLEAR',
+                runKey: 'run-1',
+                driftCount: 0,
+                blockedReasons: [],
+              },
+            ],
+          ]),
+      },
+      bankConfirmationReader: {
+        getLatestConfirmation: async () => null,
+      },
+    });
+
+    const gates = await service.assessEntries([
+      makeEntry({ block_number: 100, latest_state: 'PARTNER_REPORTED_COMPLETED' }),
+    ]);
+    const gate = gates.get(1);
+
+    expect(gate).toEqual(
+      expect.objectContaining({
+        confirmationStage: 'FINALIZED',
+        eligibleForPayout: false,
+        eligibleForExport: false,
+      }),
+    );
+    expect(gate?.blockedReasons).toContain(
+      'Confirmed partner payout evidence is required before completion export.',
     );
   });
 

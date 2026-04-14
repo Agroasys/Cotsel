@@ -51,6 +51,8 @@ export interface ReconciliationReportBuildOptions {
   stalePendingAfterHours?: number;
 }
 
+const TERMINAL_PARTNER_COMPLETION_STATE = 'PARTNER_REPORTED_COMPLETED';
+
 function compareNullableStrings(a: string | null, b: string | null): number {
   if (a === b) {
     return 0;
@@ -107,11 +109,14 @@ function deriveMismatchCodes(
     }
   }
 
-  if (row.bankPayoutState === 'CONFIRMED' && row.payoutState !== 'PAID') {
+  if (
+    row.bankPayoutState === 'CONFIRMED' &&
+    row.payoutState !== TERMINAL_PARTNER_COMPLETION_STATE
+  ) {
     mismatchCodes.push('TREASURY_BANK_STATE_DIVERGENCE');
   }
 
-  if (row.bankPayoutState === 'PENDING' && row.payoutState === 'PAID') {
+  if (row.bankPayoutState === 'PENDING' && row.payoutState === TERMINAL_PARTNER_COMPLETION_STATE) {
     mismatchCodes.push('TREASURY_BANK_STATE_DIVERGENCE');
   }
 

@@ -175,8 +175,8 @@ Deterministic bank divergence classes visible in reconciliation output:
 
 Operator rules:
 
-- `bankPayoutState="CONFIRMED"` with treasury `payoutState != "PAID"` is a divergence and must be remediated before closeout.
-- `bankPayoutState="PENDING"` with treasury `payoutState="PAID"` is a divergence and must be treated as missing bank evidence.
+- `bankPayoutState="CONFIRMED"` with treasury `payoutState != "PARTNER_REPORTED_COMPLETED"` is a divergence and must be remediated before closeout.
+- `bankPayoutState="PENDING"` with treasury `payoutState="PARTNER_REPORTED_COMPLETED"` is a divergence and must be treated as missing bank evidence.
 - `bankPayoutState="REJECTED"` is always a payout exception and must be linked to the bank failure code or incident evidence.
 
 ## Migration: Dual-Escrow Reconciliation
@@ -259,7 +259,7 @@ CI artifact name:
   - mismatch reasons include `AMOUNT_MISMATCH`, `PARTICIPANT_MISMATCH`, or `HASH_MISMATCH`
   - mismatch reasons include `PARTIAL_FUNDING`, `REVERSED_FUNDING`, `CURRENCY_MISMATCH`, or `STALE_PENDING_DEPOSIT`
   - mismatch reasons include `BANK_REJECTED` or `TREASURY_BANK_STATE_DIVERGENCE`
-  - payout state is `PROCESSING` for longer than the agreed treasury operations window
+  - payout state is `AWAITING_PARTNER_UPDATE` for longer than the agreed treasury operations window
 - Escalation runbooks:
   - `docs/runbooks/gateway-dead-letter-workflow.md`
   - `docs/runbooks/oracle-redrive.md`

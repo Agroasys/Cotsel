@@ -33,7 +33,7 @@ describe('upsertBankPayoutConfirmation', () => {
         rows: [{ id: 11 }],
       })
       .mockResolvedValueOnce({
-        rows: [{ state: 'PROCESSING' }],
+        rows: [{ state: 'AWAITING_PARTNER_UPDATE' }],
       })
       .mockResolvedValueOnce({
         rows: [{ id: 1, bank_reference: 'bank-1', bank_state: 'CONFIRMED' }],
@@ -142,7 +142,7 @@ describe('upsertBankPayoutConfirmation', () => {
         rows: [{ id: 11 }],
       })
       .mockResolvedValueOnce({
-        rows: [{ state: 'READY_FOR_PAYOUT' }],
+        rows: [{ state: 'READY_FOR_PARTNER_SUBMISSION' }],
       })
       .mockResolvedValueOnce({});
 
@@ -156,7 +156,9 @@ describe('upsertBankPayoutConfirmation', () => {
         source: 'bank:webhook',
         actor: 'Treasury Operator',
       }),
-    ).rejects.toThrow('Bank confirmation is not valid while payout state is READY_FOR_PAYOUT');
+    ).rejects.toThrow(
+      'Partner payout evidence is not valid while payout state is READY_FOR_PARTNER_SUBMISSION',
+    );
 
     expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
   });

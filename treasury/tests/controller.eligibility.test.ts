@@ -64,7 +64,7 @@ function makeEntry(id: number): LedgerEntryWithState {
     source_timestamp: new Date('2026-03-31T00:00:00.000Z'),
     metadata: {},
     created_at: new Date('2026-03-31T00:00:00.000Z'),
-    latest_state: 'READY_FOR_PAYOUT' satisfies PayoutState,
+    latest_state: 'READY_FOR_PARTNER_SUBMISSION' satisfies PayoutState,
     latest_state_at: new Date('2026-03-31T00:00:00.000Z'),
   };
 }
@@ -107,7 +107,7 @@ describe('TreasuryController eligibility gates', () => {
     jest.clearAllMocks();
   });
 
-  test('appendState blocks READY_FOR_PAYOUT when eligibility is not clear', async () => {
+  test('appendState blocks READY_FOR_PARTNER_SUBMISSION when eligibility is not clear', async () => {
     jest.spyOn(LoadedTreasuryEligibilityService.prototype, 'assessEntries').mockResolvedValue(
       new Map([
         [
@@ -140,7 +140,7 @@ describe('TreasuryController eligibility gates', () => {
     const res = mockResponse();
     const req = {
       params: { entryId: '11' },
-      body: { state: 'READY_FOR_PAYOUT' },
+      body: { state: 'READY_FOR_PARTNER_SUBMISSION' },
     } as unknown as AppendStateRequest;
 
     await controller.appendState(req, res);
@@ -156,6 +156,31 @@ describe('TreasuryController eligibility gates', () => {
     );
   });
 
+  test('appendState blocks manual completion without confirmed payout evidence', async () => {
+    jest.mocked(queriesModule.getLedgerEntryById).mockResolvedValue(makeLedgerEntry(11, 'trade-1'));
+    jest
+      .mocked(queriesModule.getLatestPayoutState)
+      .mockResolvedValue(makePayoutEvent('AWAITING_PARTNER_UPDATE'));
+
+    const controller = new LoadedTreasuryController();
+    const res = mockResponse();
+    const req = {
+      params: { entryId: '11' },
+      body: { state: 'PARTNER_REPORTED_COMPLETED' },
+    } as unknown as AppendStateRequest;
+
+    await controller.appendState(req, res);
+
+    expect(queriesModule.appendPayoutState).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: 'EvidenceRequired',
+      }),
+    );
+  });
+
   test('exportEntries returns only entries that passed confirmation and reconciliation gates', async () => {
     jest.spyOn(LoadedTreasuryEligibilityService.prototype, 'assessEntries').mockResolvedValue(
       new Map([
@@ -164,7 +189,7 @@ describe('TreasuryController eligibility gates', () => {
           {
             entryId: 11,
             tradeId: 'trade-11',
-            payoutState: 'READY_FOR_PAYOUT',
+            payoutState: 'READY_FOR_PARTNER_SUBMISSION',
             confirmationStage: 'FINALIZED',
             latestBlockNumber: 120,
             safeBlockNumber: 115,
@@ -181,7 +206,7 @@ describe('TreasuryController eligibility gates', () => {
           {
             entryId: 12,
             tradeId: 'trade-12',
-            payoutState: 'READY_FOR_PAYOUT',
+            payoutState: 'READY_FOR_PARTNER_SUBMISSION',
             confirmationStage: 'SAFE',
             latestBlockNumber: 120,
             safeBlockNumber: 115,

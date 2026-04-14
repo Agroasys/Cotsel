@@ -30,9 +30,9 @@ import { BankPayoutState, FiatDepositState, PayoutState } from '../types';
 
 const PAYOUT_STATES: PayoutState[] = [
   'PENDING_REVIEW',
-  'READY_FOR_PAYOUT',
-  'PROCESSING',
-  'PAID',
+  'READY_FOR_PARTNER_SUBMISSION',
+  'AWAITING_PARTNER_UPDATE',
+  'PARTNER_REPORTED_COMPLETED',
   'CANCELLED',
 ];
 
@@ -246,7 +246,15 @@ export class TreasuryController {
       const currentState = latest?.state || 'PENDING_REVIEW';
       assertValidTransition(currentState, requestedState);
 
-      if (requestedState === 'READY_FOR_PAYOUT') {
+      if (requestedState === 'PARTNER_REPORTED_COMPLETED') {
+        throw new HttpError(
+          409,
+          'EvidenceRequired',
+          'Partner-reported completion must be recorded through confirmed payout evidence, not manual state updates.',
+        );
+      }
+
+      if (requestedState === 'READY_FOR_PARTNER_SUBMISSION') {
         const entries = await getLedgerEntries({ tradeId: entry.trade_id, limit: 500, offset: 0 });
         const candidate = entries.find((item) => item.id === entryId);
         if (!candidate) {
@@ -351,11 +359,25 @@ export class TreasuryController {
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
+      let completionEvent = null;
+      if (result.confirmation.bank_state === 'CONFIRMED') {
+        const latest = await getLatestPayoutState(entryId);
+        if (latest?.state === 'AWAITING_PARTNER_UPDATE') {
+          completionEvent = await appendPayoutState({
+            ledgerEntryId: entryId,
+            state: 'PARTNER_REPORTED_COMPLETED',
+            note: 'Auto-completed from confirmed partner payout evidence recorded through bank confirmation.',
+            actor: result.confirmation.actor,
+          });
+        }
+      }
+
       res.status(200).json(
         success({
           confirmation: result.confirmation,
           created: result.created,
           idempotentReplay: result.idempotentReplay,
+          completionEvent,
         }),
       );
     } catch (error: unknown) {

@@ -42,7 +42,7 @@ test('reconciliation report rows are deterministically ordered and keep stable s
       {
         tradeId: '10',
         txHash: '0xaa',
-        payoutState: 'PAID',
+        payoutState: 'PARTNER_REPORTED_COMPLETED',
         rampReference: 'ramp-a',
         fiatDepositState: 'FUNDED',
         fiatDepositFailureClass: null,
@@ -78,7 +78,7 @@ test('reconciliation report rows are deterministically ordered and keep stable s
     {
       tradeId: '10',
       txHash: '0xaa',
-      payoutState: 'PAID',
+      payoutState: 'PARTNER_REPORTED_COMPLETED',
       rampReference: 'ramp-a',
       fiatDepositState: 'FUNDED',
       fiatDepositFailureReason: null,
@@ -116,7 +116,7 @@ test('reconciliation report summary counts are stable', () => {
     {
       tradeId: '1',
       txHash: '0xabc',
-      payoutState: 'PAID',
+      payoutState: 'PARTNER_REPORTED_COMPLETED',
       rampReference: 'ramp-1',
       fiatDepositState: 'FUNDED',
       fiatDepositFailureClass: null,
