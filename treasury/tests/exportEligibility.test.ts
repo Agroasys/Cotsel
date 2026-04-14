@@ -69,6 +69,48 @@ describe('TreasuryEligibilityService', () => {
     );
   });
 
+  test('blocks completed-state export when confirmed payout evidence is missing', async () => {
+    const service = new TreasuryEligibilityService({
+      provider: {
+        getBlock: async () => ({ number: 150n }),
+      },
+      reconciliationGate: {
+        assessTrades: async () =>
+          new Map([
+            [
+              'trade-1',
+              {
+                tradeId: 'trade-1',
+                status: 'CLEAR',
+                runKey: 'run-1',
+                driftCount: 0,
+                blockedReasons: [],
+              },
+            ],
+          ]),
+      },
+      bankConfirmationReader: {
+        getLatestConfirmation: async () => null,
+      },
+    });
+
+    const gates = await service.assessEntries([
+      makeEntry({ block_number: 100, latest_state: 'PARTNER_REPORTED_COMPLETED' }),
+    ]);
+    const gate = gates.get(1);
+
+    expect(gate).toEqual(
+      expect.objectContaining({
+        confirmationStage: 'FINALIZED',
+        eligibleForPayout: false,
+        eligibleForExport: false,
+      }),
+    );
+    expect(gate?.blockedReasons).toContain(
+      'Confirmed partner payout evidence is required before completion export.',
+    );
+  });
+
   test('blocks export before Base finalized stage even when reconciliation is clear', async () => {
     const service = new TreasuryEligibilityService({
       provider: {

@@ -7,6 +7,7 @@ import {
 import { config } from '../config';
 import { LedgerEntryWithState, PayoutState, TreasuryEntryEligibility } from '../types';
 import { ReconciliationGateService, type TradeReconciliationGate } from './reconciliationGate';
+import { getLatestBankPayoutConfirmation } from '../database/queries';
 
 const EXPORTABLE_STATES: ReadonlySet<PayoutState> = new Set([
   'READY_FOR_PARTNER_SUBMISSION',
@@ -22,12 +23,19 @@ interface ReconciliationGateReader {
   assessTrades(tradeIds: string[]): Promise<Map<string, TradeReconciliationGate>>;
 }
 
+interface BankConfirmationReader {
+  getLatestConfirmation(
+    ledgerEntryId: number,
+  ): Promise<{ bank_state: 'PENDING' | 'CONFIRMED' | 'REJECTED' } | null>;
+}
+
 function buildBlockedReasons(input: {
   latestState: PayoutState | null;
   confirmationState: SettlementConfirmationState | null;
   reconciliationStatus: TreasuryEntryEligibility['reconciliationStatus'];
   confirmationFailureReason: string | null;
   reconciliationBlockedReasons: string[];
+  bankConfirmationState: 'PENDING' | 'CONFIRMED' | 'REJECTED' | null;
 }): string[] {
   const reasons: string[] = [];
 
@@ -46,6 +54,13 @@ function buildBlockedReasons(input: {
     reasons.push(...input.reconciliationBlockedReasons);
   }
 
+  if (
+    input.latestState === 'PARTNER_REPORTED_COMPLETED' &&
+    input.bankConfirmationState !== 'CONFIRMED'
+  ) {
+    reasons.push('Confirmed partner payout evidence is required before completion export.');
+  }
+
   return Array.from(new Set(reasons));
 }
 
@@ -56,10 +71,12 @@ function isExportableState(state: PayoutState | null): boolean {
 export class TreasuryEligibilityService {
   private readonly provider: SettlementHeadProvider | null;
   private readonly reconciliationGate: ReconciliationGateReader;
+  private readonly bankConfirmationReader: BankConfirmationReader;
 
   constructor(deps?: {
     provider?: SettlementHeadProvider | null;
     reconciliationGate?: ReconciliationGateReader;
+    bankConfirmationReader?: BankConfirmationReader;
   }) {
     this.provider =
       deps?.provider ??
@@ -69,6 +86,9 @@ export class TreasuryEligibilityService {
           })
         : null);
     this.reconciliationGate = deps?.reconciliationGate ?? new ReconciliationGateService();
+    this.bankConfirmationReader = deps?.bankConfirmationReader ?? {
+      getLatestConfirmation: getLatestBankPayoutConfirmation,
+    };
   }
 
   private async getConfirmationState(blockNumber: number): Promise<{
@@ -120,6 +140,10 @@ export class TreasuryEligibilityService {
 
     for (const entry of entries) {
       const confirmation = await this.getConfirmationState(entry.block_number);
+      const latestBankConfirmation =
+        entry.latest_state === 'PARTNER_REPORTED_COMPLETED'
+          ? await this.bankConfirmationReader.getLatestConfirmation(entry.id)
+          : null;
       const reconciliationGate = reconciliationByTradeId.get(entry.trade_id) ?? {
         tradeId: entry.trade_id,
         status: 'UNKNOWN',
@@ -133,6 +157,7 @@ export class TreasuryEligibilityService {
         confirmationFailureReason: confirmation.failureReason,
         reconciliationStatus: reconciliationGate.status,
         reconciliationBlockedReasons: reconciliationGate.blockedReasons,
+        bankConfirmationState: latestBankConfirmation?.bank_state ?? null,
       });
       const eligibleForPayout = blockedReasons.length === 0;
       const eligibleForExport = eligibleForPayout && isExportableState(entry.latest_state);

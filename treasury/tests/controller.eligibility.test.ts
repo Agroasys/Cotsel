@@ -156,6 +156,31 @@ describe('TreasuryController eligibility gates', () => {
     );
   });
 
+  test('appendState blocks manual completion without confirmed payout evidence', async () => {
+    jest.mocked(queriesModule.getLedgerEntryById).mockResolvedValue(makeLedgerEntry(11, 'trade-1'));
+    jest
+      .mocked(queriesModule.getLatestPayoutState)
+      .mockResolvedValue(makePayoutEvent('AWAITING_PARTNER_UPDATE'));
+
+    const controller = new LoadedTreasuryController();
+    const res = mockResponse();
+    const req = {
+      params: { entryId: '11' },
+      body: { state: 'PARTNER_REPORTED_COMPLETED' },
+    } as unknown as AppendStateRequest;
+
+    await controller.appendState(req, res);
+
+    expect(queriesModule.appendPayoutState).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: 'EvidenceRequired',
+      }),
+    );
+  });
+
   test('exportEntries returns only entries that passed confirmation and reconciliation gates', async () => {
     jest.spyOn(LoadedTreasuryEligibilityService.prototype, 'assessEntries').mockResolvedValue(
       new Map([
