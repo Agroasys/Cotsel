@@ -78,7 +78,12 @@ describe('treasury nonce store config', () => {
 
   test('production enables service auth by default', () => {
     withEnv(
-      { NODE_ENV: 'production', AUTH_ENABLED: undefined, HMAC_SECRET: 'shared-secret' },
+      {
+        NODE_ENV: 'production',
+        AUTH_ENABLED: undefined,
+        HMAC_SECRET: 'shared-secret',
+        API_KEYS_JSON: '[{"id":"gateway-internal","secret":"shared-secret","active":true}]',
+      },
       () => {
         const { loadConfig } = loadConfigModule();
         const config = loadConfig();

@@ -31,7 +31,7 @@ Only the following automation categories are in scope for current Cotsel operati
    - deterministic report generation and drift classification
 3. Treasury bridge and payout-support automation
    - destination-locked treasury sweep support
-   - treasury ledger progression and payout preparation steps that remain subject to operator approval
+   - treasury execution-evidence progression and payout preparation steps that remain subject to operator approval
 4. Gateway control-plane automation
    - queued governance actions
    - read-model aggregation and operator-facing health/reporting surfaces

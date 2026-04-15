@@ -159,7 +159,7 @@ Every gateway action must be verifiable through one or more of:
 - gateway action record / audit entry
 - chain transaction hash
 - emitted contract event
-- treasury ledger record
+- treasury execution-evidence record
 - ricardian hash record
 - correlated logs using request/correlation IDs
 
@@ -181,7 +181,7 @@ Every gateway action must be verifiable through one or more of:
 - Treasury sweep:
   - verify `TreasuryClaimed`
   - verify current `treasuryPayoutAddress`
-  - verify treasury ledger/export state if payout workflow continues off-chain
+  - verify treasury execution evidence and export-eligibility state if payout workflow continues off-chain
 - Treasury payout receiver rotation:
   - verify proposal approval count, timelock, execution status
   - verify `TreasuryPayoutAddressUpdated`

@@ -9,6 +9,7 @@ import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createTreasuryRouter } from '../src/routes/treasury';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
 import type { TreasuryReadReader } from '../src/core/treasuryReadService';
+import type { TreasuryWorkflowClient } from '../src/core/treasuryWorkflowService';
 import { sendInProcessRequest } from './support/inProcessHttp';
 
 const config: GatewayConfig = {
@@ -123,9 +124,127 @@ const treasuryActionsFixture = {
   },
 };
 
+const accountingPeriodsFixture = [
+  {
+    id: 7,
+    period_key: '2026-Q1',
+    starts_at: '2026-01-01T00:00:00.000Z',
+    ends_at: '2026-03-31T23:59:59.000Z',
+    status: 'OPEN',
+    created_by: 'user:uid-admin',
+    pending_close_at: null,
+    close_reason: null,
+    closed_by: null,
+    closed_at: null,
+    created_at: '2026-03-14T10:00:00.000Z',
+    updated_at: '2026-03-14T10:00:00.000Z',
+    metadata: {
+      auditReason: 'Quarter close prep',
+      auditTicketRef: 'FIN-100',
+    },
+  },
+];
+
+const sweepBatchFixture = {
+  batch: {
+    id: 11,
+    batch_key: 'batch-q1-001',
+    accounting_period_id: 7,
+    accounting_period_key: '2026-Q1',
+    accounting_period_status: 'OPEN',
+    status: 'EXECUTED',
+    asset_symbol: 'USDC',
+    expected_total_raw: '125000000',
+    matched_sweep_tx_hash: '0xsweep-1',
+    matched_sweep_block_number: '101',
+    matched_swept_at: '2026-03-31T12:00:00.000Z',
+    payout_receiver_address: '0x0000000000000000000000000000000000000033',
+    created_by: 'user:uid-admin',
+    approved_by: 'user:uid-approver',
+    closed_by: null,
+    close_reason: null,
+    created_at: '2026-03-31T11:00:00.000Z',
+    updated_at: '2026-03-31T12:00:00.000Z',
+    closed_at: null,
+    metadata: {
+      auditReason: 'Quarter close sweep',
+      auditTicketRef: 'FIN-101',
+    },
+  },
+  totals: {
+    entryCount: 1,
+    allocatedAmountRaw: '125000000',
+  },
+  entries: [
+    {
+      ledger_entry_id: 501,
+      trade_id: 'trade-501',
+      component_type: 'PLATFORM_FEE',
+      amount_raw: '125000000',
+      earned_at: '2026-03-31T10:00:00.000Z',
+      payout_state: 'EXTERNAL_EXECUTION_CONFIRMED',
+      accounting_period_id: 7,
+      accounting_period_key: '2026-Q1',
+      accounting_period_status: 'OPEN',
+      sweep_batch_id: 11,
+      sweep_batch_status: 'EXECUTED',
+      allocation_status: 'ALLOCATED',
+      matched_sweep_tx_hash: '0xsweep-1',
+      matched_swept_at: '2026-03-31T12:00:00.000Z',
+      partner_handoff_id: null,
+      partner_name: null,
+      partner_reference: null,
+      partner_handoff_status: null,
+      partner_completed_at: null,
+      latest_fiat_deposit_state: 'FUNDED',
+      latest_bank_payout_state: 'CONFIRMED',
+      revenue_realization_status: null,
+      realized_at: null,
+      accounting_state: 'SWEPT',
+      accounting_state_reason: 'Matched on-chain treasury claim recorded',
+    },
+  ],
+  partnerHandoff: null,
+};
+
+const entryAccountingFixture = {
+  ledger_entry_id: 501,
+  trade_id: 'trade-501',
+  component_type: 'PLATFORM_FEE',
+  amount_raw: '125000000',
+  earned_at: '2026-03-31T10:00:00.000Z',
+  payout_state: 'EXTERNAL_EXECUTION_CONFIRMED',
+  accounting_period_id: 7,
+  accounting_period_key: '2026-Q1',
+  accounting_period_status: 'OPEN',
+  sweep_batch_id: 11,
+  sweep_batch_status: 'EXECUTED',
+  allocation_status: 'ALLOCATED',
+  matched_sweep_tx_hash: '0xsweep-1',
+  matched_swept_at: '2026-03-31T12:00:00.000Z',
+  partner_handoff_id: null,
+  partner_name: null,
+  partner_reference: null,
+  partner_handoff_status: null,
+  partner_completed_at: null,
+  latest_fiat_deposit_state: 'FUNDED',
+  latest_bank_payout_state: 'CONFIRMED',
+  revenue_realization_status: null,
+  realized_at: null,
+  accounting_state: 'SWEPT',
+  accounting_state_reason: 'Matched on-chain treasury claim recorded',
+};
+
+const entryAccountingListFixture = [entryAccountingFixture];
+
 async function startServer(
   role: 'admin' | 'buyer' | null,
-  overrides?: Partial<TreasuryReadReader>,
+  options?: {
+    config?: Partial<GatewayConfig>;
+    treasuryRead?: Partial<TreasuryReadReader>;
+    treasuryWorkflow?: Partial<TreasuryWorkflowClient>;
+    session?: Partial<NonNullable<Awaited<ReturnType<AuthSessionClient['resolveSession']>>>>;
+  },
 ) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
@@ -139,6 +258,7 @@ async function startServer(
         role,
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60000,
+        ...(options?.session ?? {}),
       };
     }),
     checkReadiness: jest.fn(),
@@ -147,22 +267,83 @@ async function startServer(
   const treasuryReadService: TreasuryReadReader = {
     getTreasurySnapshot: jest.fn().mockResolvedValue(treasuryFixture),
     listTreasuryActions: jest.fn().mockResolvedValue(treasuryActionsFixture),
-    ...overrides,
+    ...(options?.treasuryRead ?? {}),
   };
 
+  const treasuryWorkflowService: TreasuryWorkflowClient = {
+    listAccountingPeriods: jest.fn().mockResolvedValue(accountingPeriodsFixture),
+    listSweepBatches: jest.fn().mockResolvedValue([sweepBatchFixture.batch]),
+    listEntryAccounting: jest.fn().mockResolvedValue(entryAccountingListFixture),
+    getSweepBatch: jest.fn().mockResolvedValue(sweepBatchFixture),
+    getEntryAccounting: jest.fn().mockResolvedValue(entryAccountingFixture),
+    createAccountingPeriod: jest.fn().mockResolvedValue(accountingPeriodsFixture[0]),
+    requestAccountingPeriodClose: jest.fn().mockResolvedValue({
+      ...accountingPeriodsFixture[0],
+      status: 'PENDING_CLOSE',
+    }),
+    closeAccountingPeriod: jest.fn().mockResolvedValue({
+      ...accountingPeriodsFixture[0],
+      status: 'CLOSED',
+      closed_by: 'user:uid-admin',
+      closed_at: '2026-03-31T23:59:59.000Z',
+    }),
+    createSweepBatch: jest.fn().mockResolvedValue(sweepBatchFixture.batch),
+    addSweepBatchEntry: jest.fn().mockResolvedValue({
+      id: 21,
+      sweep_batch_id: 11,
+      ledger_entry_id: 501,
+      entry_amount_raw: '125000000',
+      allocation_status: 'ALLOCATED',
+    }),
+    requestSweepBatchApproval: jest.fn().mockResolvedValue({
+      ...sweepBatchFixture.batch,
+      status: 'PENDING_APPROVAL',
+    }),
+    approveSweepBatch: jest.fn().mockResolvedValue({
+      ...sweepBatchFixture.batch,
+      status: 'APPROVED',
+      approved_by: 'user:uid-admin',
+    }),
+    markSweepBatchExecuted: jest.fn().mockResolvedValue(sweepBatchFixture.batch),
+    recordPartnerHandoff: jest.fn().mockResolvedValue({
+      id: 33,
+      sweep_batch_id: 11,
+      partner_name: 'licensed-partner',
+      partner_reference: 'partner-ref-1',
+      handoff_status: 'ACKNOWLEDGED',
+    }),
+    closeSweepBatch: jest.fn().mockResolvedValue({
+      ...sweepBatchFixture.batch,
+      status: 'CLOSED',
+      closed_by: 'user:uid-admin',
+      closed_at: '2026-03-31T23:00:00.000Z',
+    }),
+    createEntryRealization: jest.fn().mockResolvedValue({
+      id: 44,
+      ledger_entry_id: 501,
+      accounting_period_id: 7,
+      realization_status: 'REALIZED',
+      realized_by: 'user:uid-admin',
+      realized_at: '2026-03-31T23:15:00.000Z',
+    }),
+    ...(options?.treasuryWorkflow ?? {}),
+  };
+
+  const effectiveConfig = { ...config, ...(options?.config ?? {}) };
   const router = Router();
   router.use(
     createTreasuryRouter({
       authSessionClient,
-      config,
+      config: effectiveConfig,
       treasuryReadService,
+      treasuryWorkflowService,
     }),
   );
 
-  const app = createApp(config, {
+  const app = createApp(effectiveConfig, {
     version: '0.1.0',
-    commitSha: config.commitSha,
-    buildTime: config.buildTime,
+    commitSha: effectiveConfig.commitSha,
+    buildTime: effectiveConfig.buildTime,
     readinessCheck: async () => [{ name: 'postgres', status: 'ok' }],
     extraRouter: router,
   });
@@ -180,10 +361,44 @@ describe('gateway treasury routes contract', () => {
     spec,
     '#/components/schemas/TreasuryActionListResponse',
   );
+  const validateAccountingPeriods = createSchemaValidator(
+    spec,
+    '#/components/schemas/TreasuryAccountingPeriodListResponse',
+  );
+  const validateSweepBatch = createSchemaValidator(
+    spec,
+    '#/components/schemas/TreasurySweepBatchDetailResponse',
+  );
+  const validateEntryAccounting = createSchemaValidator(
+    spec,
+    '#/components/schemas/TreasuryEntryAccountingResponse',
+  );
+  const validateEntryAccountingList = createSchemaValidator(
+    spec,
+    '#/components/schemas/TreasuryEntryAccountingListResponse',
+  );
 
   test('OpenAPI spec exposes treasury read endpoints', () => {
     expect(hasOperation(spec, 'get', '/treasury')).toBe(true);
     expect(hasOperation(spec, 'get', '/treasury/actions')).toBe(true);
+    expect(hasOperation(spec, 'get', '/treasury/accounting-periods')).toBe(true);
+    expect(hasOperation(spec, 'get', '/treasury/sweep-batches')).toBe(true);
+    expect(hasOperation(spec, 'get', '/treasury/sweep-batches/{batchId}')).toBe(true);
+    expect(hasOperation(spec, 'get', '/treasury/entries/accounting')).toBe(true);
+    expect(hasOperation(spec, 'get', '/treasury/entries/{entryId}/accounting')).toBe(true);
+    expect(hasOperation(spec, 'post', '/treasury/accounting-periods')).toBe(true);
+    expect(hasOperation(spec, 'post', '/treasury/sweep-batches')).toBe(true);
+    expect(hasOperation(spec, 'post', '/treasury/sweep-batches/{batchId}/approve')).toBe(true);
+    expect(hasOperation(spec, 'post', '/treasury/sweep-batches/{batchId}/match-execution')).toBe(
+      true,
+    );
+    expect(hasOperation(spec, 'post', '/treasury/sweep-batches/{batchId}/external-handoff')).toBe(
+      true,
+    );
+    expect(hasOperation(spec, 'post', '/treasury/sweep-batches/{batchId}/partner-handoff')).toBe(
+      true,
+    );
+    expect(hasOperation(spec, 'post', '/treasury/entries/{entryId}/realizations')).toBe(true);
   });
 
   test('GET /treasury returns a schema-valid treasury snapshot', async () => {
@@ -220,18 +435,196 @@ describe('gateway treasury routes contract', () => {
     expect(payload.data.items[0].category).toBe('treasury_sweep');
   });
 
-  test('GET /treasury returns degraded payloads when the chain source is unavailable', async () => {
+  test('GET treasury revenue-control reads return schema-valid payloads', async () => {
+    const app = await startServer('admin');
+
+    const periodsResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury/accounting-periods?status=OPEN&limit=20&offset=0',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const periodsPayload = periodsResponse.json<{ data: unknown }>();
+    expect(periodsResponse.status).toBe(200);
+    expect(validateAccountingPeriods(periodsPayload)).toBe(true);
+
+    const batchResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury/sweep-batches/11',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const batchPayload = batchResponse.json<{ data: unknown }>();
+    expect(batchResponse.status).toBe(200);
+    expect(validateSweepBatch(batchPayload)).toBe(true);
+
+    const entryListResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury/entries/accounting?accountingState=SWEPT&limit=20&offset=0',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const entryListPayload = entryListResponse.json<{ data: unknown }>();
+    expect(entryListResponse.status).toBe(200);
+    expect(validateEntryAccountingList(entryListPayload)).toBe(true);
+
+    const entryResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury/entries/501/accounting',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    const entryPayload = entryResponse.json<{ data: unknown }>();
+    expect(entryResponse.status).toBe(200);
+    expect(validateEntryAccounting(entryPayload)).toBe(true);
+  });
+
+  test('POST treasury revenue-control mutations require write access and structured audit payloads', async () => {
     const app = await startServer('admin', {
-      getTreasurySnapshot: jest.fn().mockResolvedValue({
-        state: null,
-        freshness: {
-          source: 'chain_rpc',
-          sourceFreshAt: null,
-          queriedAt: '2026-03-14T10:16:00.000Z',
-          available: false,
-          degradedReason: 'rpc unavailable',
+      config: {
+        enableMutations: true,
+        writeAllowlist: ['uid-admin'],
+      },
+      treasuryWorkflow: {
+        createAccountingPeriod: jest.fn().mockResolvedValue(accountingPeriodsFixture[0]),
+      },
+    });
+
+    const response = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/treasury/accounting-periods',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        periodKey: '2026-Q2',
+        startsAt: '2026-04-01T00:00:00.000Z',
+        endsAt: '2026-06-30T23:59:59.000Z',
+        audit: {
+          reason: 'Open next revenue close period',
+          ticketRef: 'FIN-200',
+          metadata: { source: 'contract-test' },
         },
       }),
+    });
+
+    expect(response.status).toBe(201);
+
+    const blockedApp = await startServer('admin');
+    const blockedResponse = await sendInProcessRequest(blockedApp, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/treasury/accounting-periods',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        periodKey: '2026-Q2',
+        startsAt: '2026-04-01T00:00:00.000Z',
+        endsAt: '2026-06-30T23:59:59.000Z',
+        audit: {
+          reason: 'Open next revenue close period',
+          ticketRef: 'FIN-200',
+        },
+      }),
+    });
+
+    expect(blockedResponse.status).toBe(403);
+  });
+
+  test('critical treasury execution matching requires a wallet-bound admin session', async () => {
+    const app = await startServer('admin', {
+      config: {
+        enableMutations: true,
+        writeAllowlist: ['uid-admin'],
+      },
+      session: {
+        walletAddress: null,
+      },
+    });
+
+    const response = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/treasury/sweep-batches/11/match-execution',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        matchedSweepTxHash: '0xclaim',
+        audit: {
+          reason: 'Match chain-observed treasury claim evidence',
+          ticketRef: 'FIN-201',
+        },
+      }),
+    });
+
+    expect(response.status).toBe(409);
+  });
+
+  test('canonical external handoff route and legacy alias both remain available', async () => {
+    const recordPartnerHandoff = jest.fn().mockResolvedValue({
+      id: 33,
+      sweep_batch_id: 11,
+      partner_name: 'licensed-counterparty',
+      partner_reference: 'handoff-1',
+      handoff_status: 'ACKNOWLEDGED',
+    });
+    const app = await startServer('admin', {
+      config: {
+        enableMutations: true,
+        writeAllowlist: ['uid-admin'],
+      },
+      treasuryWorkflow: {
+        recordPartnerHandoff,
+      },
+    });
+
+    const requestBody = JSON.stringify({
+      partnerName: 'licensed-counterparty',
+      partnerReference: 'handoff-1',
+      handoffStatus: 'ACKNOWLEDGED',
+      audit: {
+        reason: 'Record external execution handoff evidence',
+        ticketRef: 'FIN-202',
+      },
+    });
+
+    const canonicalResponse = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/treasury/sweep-batches/11/external-handoff',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: requestBody,
+    });
+    expect(canonicalResponse.status).toBe(200);
+
+    const legacyResponse = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/treasury/sweep-batches/11/partner-handoff',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: requestBody,
+    });
+    expect(legacyResponse.status).toBe(200);
+    expect(recordPartnerHandoff).toHaveBeenCalledTimes(2);
+  });
+
+  test('GET /treasury returns degraded payloads when the chain source is unavailable', async () => {
+    const app = await startServer('admin', {
+      treasuryRead: {
+        getTreasurySnapshot: jest.fn().mockResolvedValue({
+          state: null,
+          freshness: {
+            source: 'chain_rpc',
+            sourceFreshAt: null,
+            queriedAt: '2026-03-14T10:16:00.000Z',
+            available: false,
+            degradedReason: 'rpc unavailable',
+          },
+        }),
+      },
     });
 
     const response = await sendInProcessRequest(app, {

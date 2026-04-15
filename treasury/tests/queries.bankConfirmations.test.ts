@@ -33,7 +33,7 @@ describe('upsertBankPayoutConfirmation', () => {
         rows: [{ id: 11 }],
       })
       .mockResolvedValueOnce({
-        rows: [{ state: 'AWAITING_PARTNER_UPDATE' }],
+        rows: [{ state: 'AWAITING_EXTERNAL_CONFIRMATION' }],
       })
       .mockResolvedValueOnce({
         rows: [{ id: 1, bank_reference: 'bank-1', bank_state: 'CONFIRMED' }],
@@ -142,7 +142,7 @@ describe('upsertBankPayoutConfirmation', () => {
         rows: [{ id: 11 }],
       })
       .mockResolvedValueOnce({
-        rows: [{ state: 'READY_FOR_PARTNER_SUBMISSION' }],
+        rows: [{ state: 'READY_FOR_EXTERNAL_HANDOFF' }],
       })
       .mockResolvedValueOnce({});
 
@@ -157,7 +157,7 @@ describe('upsertBankPayoutConfirmation', () => {
         actor: 'Treasury Operator',
       }),
     ).rejects.toThrow(
-      'Partner payout evidence is not valid while payout state is READY_FOR_PARTNER_SUBMISSION',
+      'External execution evidence is not valid while payout state is READY_FOR_EXTERNAL_HANDOFF',
     );
 
     expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');

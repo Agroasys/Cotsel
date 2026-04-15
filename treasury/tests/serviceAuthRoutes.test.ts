@@ -9,6 +9,12 @@ import {
   signServiceAuthCanonicalString,
 } from '../src/auth/serviceAuth';
 
+type ServiceAuthRequest = Request & {
+  serviceAuth?: {
+    apiKeyId: string;
+  };
+};
+
 function createSignedRequestParts(options?: {
   method?: string;
   path?: string;
@@ -21,7 +27,7 @@ function createSignedRequestParts(options?: {
   signatureOverride?: string;
 }) {
   const method = options?.method ?? 'POST';
-  const path = options?.path ?? '/api/treasury/v1/ingest';
+  const path = options?.path ?? '/api/treasury/v1/internal/ingest';
   const query = options?.query ?? '';
   const body = options?.body ?? Buffer.from(JSON.stringify({ entryId: 'entry-1' }));
   const timestamp = options?.timestamp ?? '1700000000';
@@ -77,6 +83,14 @@ describe('treasury service-authenticated routes', () => {
       consumeNonce,
       nowSeconds: () => 1700000000,
     });
+    const mutationAuthMiddleware = (req: ServiceAuthRequest, res: Response, next: () => void) => {
+      if (req.serviceAuth?.apiKeyId === 'svc-a') {
+        next();
+        return;
+      }
+
+      res.status(403).json({ success: false, error: 'Internal mutation caller required' });
+    };
 
     const controller = {
       ingest: (_req: Request, res: Response) => {
@@ -85,14 +99,65 @@ describe('treasury service-authenticated routes', () => {
       listEntries: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
       },
+      listEntryAccounting: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: [] });
+      },
+      getEntryAccounting: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
       appendState: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { updated: true } });
+      },
+      createEntryRealization: (_req: Request, res: Response) => {
+        res.status(201).json({ success: true, route: 'realization' });
       },
       upsertBankConfirmation: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, route: 'bank-confirmation' });
       },
+      listAccountingPeriods: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: [] });
+      },
+      createAccountingPeriod: (_req: Request, res: Response) => {
+        res.status(201).json({ success: true, route: 'periods' });
+      },
+      requestAccountingPeriodClose: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'period-request-close' });
+      },
+      closeAccountingPeriod: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'period-close' });
+      },
+      listSweepBatches: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: [] });
+      },
+      createSweepBatch: (_req: Request, res: Response) => {
+        res.status(201).json({ success: true, route: 'batch-create' });
+      },
+      getSweepBatch: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
+      addSweepBatchEntry: (_req: Request, res: Response) => {
+        res.status(201).json({ success: true, route: 'batch-entry' });
+      },
+      requestSweepBatchApproval: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'batch-request-approval' });
+      },
+      approveSweepBatch: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'batch-approve' });
+      },
+      markSweepBatchExecuted: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'batch-match-execution' });
+      },
+      recordPartnerHandoff: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'external-handoff' });
+      },
+      closeSweepBatch: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'batch-close' });
+      },
       upsertDeposit: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, route: 'deposits' });
+      },
+      getReconciliationControlSummary: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
       },
       exportEntries: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
@@ -107,7 +172,10 @@ describe('treasury service-authenticated routes', () => {
         },
       }),
     );
-    app.use('/api/treasury/v1', createRouter(controller as never, { authMiddleware }));
+    app.use(
+      '/api/treasury/v1',
+      createRouter(controller as never, { authMiddleware, mutationAuthMiddleware }),
+    );
 
     await new Promise<void>((resolve) => {
       server = app.listen(0, () => resolve());
@@ -126,7 +194,7 @@ describe('treasury service-authenticated routes', () => {
   test('valid signed ingest request reaches the route once', async () => {
     const signed = createSignedRequestParts({ nonce: 'treasury-route-nonce' });
 
-    const response = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/internal/ingest`, {
       method: 'POST',
       headers: signed.headers,
       body: signed.bodyText,
@@ -146,13 +214,13 @@ describe('treasury service-authenticated routes', () => {
     consumeNonce.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     const signed = createSignedRequestParts({ nonce: 'treasury-replay' });
 
-    const firstResponse = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+    const firstResponse = await fetch(`${baseUrl}/api/treasury/v1/internal/ingest`, {
       method: 'POST',
       headers: signed.headers,
       body: signed.bodyText,
     });
 
-    const secondResponse = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+    const secondResponse = await fetch(`${baseUrl}/api/treasury/v1/internal/ingest`, {
       method: 'POST',
       headers: signed.headers,
       body: signed.bodyText,
@@ -174,7 +242,7 @@ describe('treasury service-authenticated routes', () => {
       signatureOverride: 'f'.repeat(64),
     });
 
-    const response = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/internal/ingest`, {
       method: 'POST',
       headers: signed.headers,
       body: signed.bodyText,
@@ -196,7 +264,7 @@ describe('treasury service-authenticated routes', () => {
       timestamp: '1699999600',
     });
 
-    const response = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/internal/ingest`, {
       method: 'POST',
       headers: signed.headers,
       body: signed.bodyText,
@@ -216,7 +284,7 @@ describe('treasury service-authenticated routes', () => {
     consumeNonce.mockRejectedValue(new Error('redis unavailable'));
     const signed = createSignedRequestParts({ nonce: 'treasury-db-error' });
 
-    const response = await fetch(`${baseUrl}/api/treasury/v1/ingest`, {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/internal/ingest`, {
       method: 'POST',
       headers: signed.headers,
       body: signed.bodyText,
@@ -247,12 +315,12 @@ describe('treasury service-authenticated routes', () => {
       }),
     );
     const signed = createSignedRequestParts({
-      path: '/api/treasury/v1/deposits',
+      path: '/api/treasury/v1/internal/deposits',
       body,
       nonce: 'treasury-deposit-route-nonce',
     });
 
-    const response = await fetch(`${baseUrl}/api/treasury/v1/deposits`, {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/internal/deposits`, {
       method: 'POST',
       headers: signed.headers,
       body: signed.bodyText,
@@ -279,16 +347,19 @@ describe('treasury service-authenticated routes', () => {
       }),
     );
     const signed = createSignedRequestParts({
-      path: '/api/treasury/v1/entries/11/bank-confirmation',
+      path: '/api/treasury/v1/internal/entries/11/bank-confirmation',
       body,
       nonce: 'treasury-bank-confirmation-nonce',
     });
 
-    const response = await fetch(`${baseUrl}/api/treasury/v1/entries/11/bank-confirmation`, {
-      method: 'POST',
-      headers: signed.headers,
-      body: signed.bodyText,
-    });
+    const response = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/entries/11/bank-confirmation`,
+      {
+        method: 'POST',
+        headers: signed.headers,
+        body: signed.bodyText,
+      },
+    );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual(
@@ -298,5 +369,75 @@ describe('treasury service-authenticated routes', () => {
       }),
     );
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-bank-confirmation-nonce', 600);
+  });
+
+  test('valid signed external handoff request reaches the canonical internal route once', async () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        partnerName: 'licensed-counterparty',
+        partnerReference: 'handoff-1',
+        handoffStatus: 'ACKNOWLEDGED',
+      }),
+    );
+    const signed = createSignedRequestParts({
+      path: '/api/treasury/v1/internal/sweep-batches/11/external-handoff',
+      body,
+      nonce: 'treasury-external-handoff-nonce',
+    });
+
+    const response = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/sweep-batches/11/external-handoff`,
+      {
+        method: 'POST',
+        headers: signed.headers,
+        body: signed.bodyText,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        route: 'external-handoff',
+      }),
+    );
+    expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-external-handoff-nonce', 600);
+  });
+
+  test('legacy partner-handoff alias remains wired to the same internal controller', async () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        partnerName: 'licensed-counterparty',
+        partnerReference: 'handoff-legacy-1',
+        handoffStatus: 'ACKNOWLEDGED',
+      }),
+    );
+    const signed = createSignedRequestParts({
+      path: '/api/treasury/v1/internal/sweep-batches/11/partner-handoff',
+      body,
+      nonce: 'treasury-legacy-partner-handoff-nonce',
+    });
+
+    const response = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/sweep-batches/11/partner-handoff`,
+      {
+        method: 'POST',
+        headers: signed.headers,
+        body: signed.bodyText,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        route: 'external-handoff',
+      }),
+    );
+    expect(consumeNonce).toHaveBeenCalledWith(
+      'svc-a',
+      'treasury-legacy-partner-handoff-nonce',
+      600,
+    );
   });
 });

@@ -3,24 +3,24 @@ import { assertValidTransition } from '../src/core/payout';
 describe('Payout lifecycle transitions', () => {
   test('allows valid transitions', () => {
     expect(() =>
-      assertValidTransition('PENDING_REVIEW', 'READY_FOR_PARTNER_SUBMISSION'),
+      assertValidTransition('PENDING_REVIEW', 'READY_FOR_EXTERNAL_HANDOFF'),
     ).not.toThrow();
     expect(() =>
-      assertValidTransition('READY_FOR_PARTNER_SUBMISSION', 'AWAITING_PARTNER_UPDATE'),
+      assertValidTransition('READY_FOR_EXTERNAL_HANDOFF', 'AWAITING_EXTERNAL_CONFIRMATION'),
     ).not.toThrow();
     expect(() =>
-      assertValidTransition('AWAITING_PARTNER_UPDATE', 'PARTNER_REPORTED_COMPLETED'),
+      assertValidTransition('AWAITING_EXTERNAL_CONFIRMATION', 'EXTERNAL_EXECUTION_CONFIRMED'),
     ).not.toThrow();
   });
 
   test('blocks invalid transitions', () => {
-    expect(() => assertValidTransition('PENDING_REVIEW', 'PARTNER_REPORTED_COMPLETED')).toThrow(
-      'Invalid payout state transition: PENDING_REVIEW -> PARTNER_REPORTED_COMPLETED',
+    expect(() => assertValidTransition('PENDING_REVIEW', 'EXTERNAL_EXECUTION_CONFIRMED')).toThrow(
+      'Invalid payout state transition: PENDING_REVIEW -> EXTERNAL_EXECUTION_CONFIRMED',
     );
     expect(() =>
-      assertValidTransition('PARTNER_REPORTED_COMPLETED', 'AWAITING_PARTNER_UPDATE'),
+      assertValidTransition('EXTERNAL_EXECUTION_CONFIRMED', 'AWAITING_EXTERNAL_CONFIRMATION'),
     ).toThrow(
-      'Invalid payout state transition: PARTNER_REPORTED_COMPLETED -> AWAITING_PARTNER_UPDATE',
+      'Invalid payout state transition: EXTERNAL_EXECUTION_CONFIRMED -> AWAITING_EXTERNAL_CONFIRMATION',
     );
   });
 });

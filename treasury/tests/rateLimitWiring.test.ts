@@ -41,13 +41,64 @@ describe('treasury rate-limit wiring', () => {
       async listEntries(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
+      async listEntryAccounting(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async getEntryAccounting(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
       async appendState(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async createEntryRealization(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
       async upsertBankConfirmation(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
+      async listAccountingPeriods(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async createAccountingPeriod(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async requestAccountingPeriodClose(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async closeAccountingPeriod(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async listSweepBatches(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async createSweepBatch(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async getSweepBatch(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async addSweepBatchEntry(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async requestSweepBatchApproval(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async approveSweepBatch(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async markSweepBatchExecuted(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async recordPartnerHandoff(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async closeSweepBatch(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
       async upsertDeposit(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async getReconciliationControlSummary(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
       async exportEntries(_req: express.Request, res: express.Response) {
@@ -62,7 +113,7 @@ describe('treasury rate-limit wiring', () => {
     try {
       await withServer(app, async (baseUrl) => {
         for (let attempt = 0; attempt < 20; attempt += 1) {
-          const response = await request(baseUrl, '/api/treasury/v1/deposits', {
+          const response = await request(baseUrl, '/api/treasury/v1/internal/deposits', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
@@ -70,7 +121,7 @@ describe('treasury rate-limit wiring', () => {
           expect(response.status).toBe(200);
         }
 
-        const writeBlocked = await request(baseUrl, '/api/treasury/v1/deposits', {
+        const writeBlocked = await request(baseUrl, '/api/treasury/v1/internal/deposits', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),

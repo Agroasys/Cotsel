@@ -1,39 +1,61 @@
-# Treasury-to-Fiat SOP
+# Treasury-to-Fiat External Handoff SOP
 
 ## Purpose
 
-Define a controlled, auditable procedure to move treasury-observed settlement value into fiat rails without bypassing payout controls.
+Define the controlled operational procedure for moving already-swept treasury value from
+Cotsel-held treasury evidence into an external regulated execution path without collapsing the
+treasury boundary.
 
-Automation-governance source of truth:
+This runbook is intentionally narrow:
 
-- `docs/runbooks/programmability-governance.md`
+- Cotsel remains treasury truth, governance truth, and reconciliation truth.
+- External regulated counterparties remain the owners of fiat movement and completion truth.
+- Agroasys and Cotsel do not become direct bank or off-ramp executors through this flow.
+
+Canonical control model:
+
+- `docs/adr/adr-0412-treasury-revenue-controls-boundary.md`
+- `docs/runbooks/treasury-revenue-close.md`
 
 ## Who This Is For
 
-- `Treasury Operator`: prepares payout evidence, submits the approved payout request to the licensed partner workflow, and records partner-reported updates.
-- `Treasury Approver`: validates controls and authorizes payout progression.
-- `Compliance Reviewer`: verifies audit completeness and exception handling.
-- `On-call Engineer`: supports technical remediation when service paths fail.
-
-## When To Use
-
-- Stage-1 treasury components are ready for payout processing.
-- Pilot/staging exercises that require operational evidence for fiat settlement path.
+- `Treasury Operator`: prepares evidence packages and records external execution evidence through
+  approved internal service paths
+- `Treasury Approver`: validates controls and independently approves treasury batch progression
+- `Compliance Reviewer`: verifies audit completeness and exception handling
+- `On-call Engineer`: supports service-path failures, reconciliation mismatches, and evidence gaps
 
 ## Scope
 
-- Treasury ledger state progression (`PENDING_REVIEW` -> `READY_FOR_PARTNER_SUBMISSION` -> `AWAITING_PARTNER_UPDATE` -> `PARTNER_REPORTED_COMPLETED` or `CANCELLED`).
-- Fiat ramp deposit evidence contract used to anchor off-chain funding to trade and ledger context.
-- Approval and evidence requirements for treasury-to-fiat execution.
-- Exception handling for failed, incorrect, or partial payouts.
+- external execution handoff after treasury sweep has already been governed inside Cotsel
+- internal evidence recording for fiat-ramp deposits and bank settlement confirmation
+- exception handling for failed, partial, reversed, or rejected external execution
 
 ## Non-Scope
 
-- Contract-level release logic or dispute governance.
-- External bank/exchange onboarding contracts or legal policy text.
-- UI workflow implementation.
+- participant walleting
+- participant banking or payout products
+- direct fiat execution by Cotsel
+- replacing sweep-batch governance with provider workflow
+- contract-level settlement logic or fee computation
 
-## Prerequisites
+## Boundary Summary
+
+Truth owners:
+
+- Contract: treasury claim execution truth
+- Treasury: fee accrual ledger, payout lifecycle evidence, deposit evidence, and bank settlement
+  evidence
+- Gateway: operator approval and privileged treasury-batch actions
+- Reconciliation: tie-out and exception truth
+- External regulated counterparty: fiat-rail execution, transfer completion, failure, reversal
+
+Key rule:
+
+- External execution is a handoff plus evidence path.
+- It is not the core treasury truth and it does not replace Cotsel governance.
+
+## Preconditions
 
 - Treasury service is healthy:
 
@@ -42,17 +64,12 @@ curl -fsS "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/health"
 curl -fsS "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/ready"
 ```
 
-- Ledger entries are present from indexed stage-1 events (`FundsReleasedStage1`, `PlatformFeesPaidStage1`).
-- Service auth headers available when `TREASURY_AUTH_ENABLED=true`.
-- Approval separation is active:
-  - Treasury Operator cannot self-approve their own payout request.
-- Escrow treasury model is understood:
-  - `treasuryAddress` is immutable signed identity.
-  - `treasuryPayoutAddress` is rotatable payout destination.
-  - Treasury entitlement accrues to `claimableUsdc[treasuryAddress]` and is paid by `claimTreasury()`.
+- Treasury-entitled amounts have already been swept on-chain through governed treasury controls.
+- Any batch-level prepare/approve/execute flow has already happened through gateway.
+- Treasury entries exist from indexed stage-1 events (`FundsReleasedStage1`, `PlatformFeesPaidStage1`).
+- Service-auth headers are available when `TREASURY_AUTH_ENABLED=true`.
 
-If `TREASURY_AUTH_ENABLED=true`, include required HMAC headers on every treasury API call.
-Required headers:
+If `TREASURY_AUTH_ENABLED=true`, include required HMAC headers on internal treasury calls:
 
 - `x-agroasys-timestamp`
 - `x-agroasys-signature`
@@ -61,46 +78,60 @@ Required headers:
 
 ## Safety Guardrails
 
-- Never execute payout without an approved ledger entry and evidence package.
-- Never skip payout state transitions or force `PARTNER_REPORTED_COMPLETED` directly.
-- Never log secrets, private keys, or full credentialed webhook URLs.
-- Never continue processing when destination details are ambiguous.
-- Never use an arbitrary payout destination for treasury claim execution; destination is contract-controlled.
-- Never enable or improvise new treasury automation outside the approved automation classes and change-control path.
-- Never route treasury execution through buyer-facing AA, paymaster, or sponsored-gas shortcuts; treasury operators must use the explicit privileged signer path only.
-- Never represent Cotsel or Agroasys as the party that executes bank payout finality; the licensed payout partner owns rail execution and completion truth.
+- Never treat this SOP as a substitute for gateway-owned treasury sweep approval.
+- Never use treasury evidence routes as a public admin mutation surface.
+- Never skip payout state transitions or force `EXTERNAL_EXECUTION_CONFIRMED` directly.
+- Never represent Cotsel or Agroasys as the direct bank or off-ramp executor.
+- Never route treasury execution through participant wallet infrastructure.
+- Never improvise a new payout destination; treasury sweep destination remains contract-controlled.
 
-## Fiat Ramp Deposit Contract
+## Treasury Payout Lifecycle
+
+Treasury payout lifecycle source of truth:
+
+- `treasury/src/types.ts`
+- `treasury/src/core/payout.ts`
+- `treasury/src/api/controller.ts`
+
+Lifecycle:
+
+- `PENDING_REVIEW`
+- `READY_FOR_EXTERNAL_HANDOFF`
+- `AWAITING_EXTERNAL_CONFIRMATION`
+- `EXTERNAL_EXECUTION_CONFIRMED`
+- `CANCELLED`
+
+These states are operational evidence states for payout follow-through. They do not replace:
+
+- sweep-batch accounting state
+- revenue realization state
+- reconciliation close truth
+
+## Fiat Ramp Deposit Evidence Contract
 
 Treasury source of truth:
 
 - `treasury/src/types.ts`
 - `treasury/src/database/schema.sql`
 - `treasury/src/database/queries.ts`
-- `POST /api/treasury/v1/deposits`
+- `POST /api/treasury/v1/internal/deposits`
 
-Each off-ramp funding observation must be recorded with this contract:
+Each funding or settlement-related external money observation must be recorded with:
 
-- `rampReference`: stable off-ramp or provider-side reference for the logical funding path.
-- `tradeId`: trade-level business anchor.
-- `ledgerEntryId`: optional but preferred treasury ledger anchor when the deposit is funding a specific payout entry.
-- `depositState`: `PENDING`, `FUNDED`, `PARTIAL`, `REVERSED`, or `FAILED`.
-- `sourceAmount`: provider-observed amount as an integer string.
-- `currency`: provider-observed currency code.
-- `expectedAmount`: approved expected amount as an integer string.
-- `expectedCurrency`: approved expected currency code.
-- `observedAt`: provider observation timestamp.
-- `providerEventId`: idempotency key for the provider event.
-- `providerAccountRef`: provider-side account or wallet reference.
-- `failureCode`: optional provider failure code.
-- `reversalReference`: optional reversal or clawback reference.
-- `metadata`: optional structured evidence fields.
-
-Idempotency and conflict rules:
-
-- Replaying the same `providerEventId` with the exact same payload is accepted as an idempotent replay.
-- Reusing the same `providerEventId` with a different payload is rejected as a conflict.
-- Reusing the same `rampReference` for a different `tradeId` is rejected as a conflict.
+- `rampReference`: stable external funding-path reference
+- `tradeId`: business anchor
+- `ledgerEntryId`: optional but preferred treasury entry anchor
+- `depositState`: `PENDING`, `FUNDED`, `PARTIAL`, `REVERSED`, or `FAILED`
+- `sourceAmount`: observed amount as an integer string
+- `currency`: observed currency code
+- `expectedAmount`: approved expected amount as an integer string
+- `expectedCurrency`: approved expected currency code
+- `observedAt`: provider observation timestamp
+- `providerEventId`: idempotency key for the external event
+- `providerAccountRef`: external account or rail reference
+- `failureCode`: optional external failure code
+- `reversalReference`: optional reversal or clawback reference
+- `metadata`: optional structured evidence fields
 
 Deterministic failure classes:
 
@@ -112,149 +143,90 @@ Deterministic failure classes:
 - `AMOUNT_MISMATCH`
 - `CURRENCY_MISMATCH`
 
-Failure-class interpretation:
-
-- `MISSING_TRADE_MAPPING`: no treasury ledger evidence was found for the declared trade/entry.
-- `PARTIAL_FUNDING`: provider-observed amount is below approved expected amount or the event was explicitly marked `PARTIAL`.
-- `REVERSED_FUNDING`: provider indicates funding was reversed after observation.
-- `AMOUNT_MISMATCH`: observed and expected amounts differ without matching the controlled partial-funding path.
-- `CURRENCY_MISMATCH`: observed and expected currency do not match.
-- `STALE_PENDING_DEPOSIT`: reconciliation-only classification for deposits left in `PENDING` longer than the report threshold.
-
-## Bank Payout Confirmation Contract
+## Bank Settlement Confirmation Contract
 
 Treasury source of truth:
 
 - `treasury/src/core/bankPayout.ts`
 - `treasury/src/database/schema.sql`
 - `treasury/src/database/queries.ts`
-- `POST /api/treasury/v1/entries/:entryId/bank-confirmation`
+- `POST /api/treasury/v1/internal/entries/:entryId/bank-confirmation`
 
-Each bank-finality record must include:
+Each bank settlement record must include:
 
-- `bankReference`: stable bank-side settlement identifier.
-- `bankState`: `PENDING`, `CONFIRMED`, or `REJECTED`.
-- `confirmedAt`: bank observation timestamp.
-- `source`: originating integration path such as `bank:webhook` or `operator:manual`.
-- `actor`: operator or system actor recording the evidence.
-- `payoutReference`: optional treasury or provider-side payout reference.
-- `failureCode`: optional bank failure code.
-- `evidenceReference`: optional receipt, statement row, or case identifier.
-- `metadata`: optional structured evidence fields.
+- `bankReference`: stable bank-side settlement identifier
+- `bankState`: `PENDING`, `CONFIRMED`, or `REJECTED`
+- `confirmedAt`: observation timestamp
+- `source`: integration source such as `bank:webhook` or `operator:manual`
+- `actor`: operator or system actor recording the evidence
+- `payoutReference`: optional treasury or external reference
+- `failureCode`: optional bank failure code
+- `evidenceReference`: optional receipt, statement row, or case identifier
+- `metadata`: optional structured evidence fields
 
-Transition guardrails:
+Guardrails:
 
-- Partner payout evidence is not valid while treasury payout state is `PENDING_REVIEW` or `READY_FOR_PARTNER_SUBMISSION`.
-- `PENDING` bank state is only valid while treasury payout state is `AWAITING_PARTNER_UPDATE`.
-- Bank confirmation is not valid after treasury payout entry is `CANCELLED`.
-- Replaying the same `bankReference` with the same payload is idempotent.
-- Replaying the same `bankReference` with a different payload is rejected as a conflict.
+- bank settlement evidence is not valid while treasury payout state is `PENDING_REVIEW` or
+  `READY_FOR_EXTERNAL_HANDOFF`
+- `PENDING` bank state is only valid while treasury payout state is
+  `AWAITING_EXTERNAL_CONFIRMATION`
+- bank settlement evidence is not valid after treasury payout entry is `CANCELLED`
+- replaying the same `bankReference` with the same payload is idempotent
+- replaying the same `bankReference` with a different payload is rejected as a conflict
 
 ## Procedure
 
-### 0. Sweep treasury entitlement on-chain (destination-locked)
+### 1. Confirm treasury sweep and entry eligibility
 
-Before preparing fiat payout records, move treasury claimable value from escrow to the active payout receiver:
+Before beginning any external execution handoff, confirm:
 
-```bash
-cast send <ESCROW_ADDRESS> "claimTreasury()" --private-key "$OPS_TRIGGER_KEY"
-```
+- governed treasury sweep has already completed on-chain
+- the relevant `TreasuryClaimed` evidence is matched in treasury
+- the entry is approved for payout evidence progression
 
-AdminSDK equivalent (same destination-locked behavior):
-
-```ts
-const adminSDK = new AdminSDK({ rpc, chainId, escrowAddress, usdcAddress });
-await adminSDK.claimTreasury(triggerSigner);
-```
-
-Verification:
-
-```bash
-cast call <ESCROW_ADDRESS> "claimableUsdc(address)(uint256)" <TREASURY_IDENTITY_ADDRESS>
-cast call <ESCROW_ADDRESS> "treasuryPayoutAddress()(address)"
-```
-
-Expected:
-
-- `claimableUsdc(treasuryAddress)` decreases to `0` for swept amount.
-- `TreasuryClaimed` event exists with:
-  - immutable `treasuryIdentity`
-  - destination equal to current `treasuryPayoutAddress`
-  - `triggeredBy` matching caller address.
-
-### 1. Build payout candidate list
-
-Fetch entries for review:
+Check entries:
 
 ```bash
 curl -fsS "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries?state=PENDING_REVIEW&limit=100&offset=0"
 ```
 
-Expected result:
-
-- Candidate entries include `trade_id`, `tx_hash`, `component_type`, `amount_raw`, and `latest_state`.
-
-If not:
-
-- Run ingestion once and retry listing:
+If entries are missing, ingest indexed evidence:
 
 ```bash
-curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/ingest"
+curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/internal/ingest"
 ```
 
-### 2. Control checklist before approval
+### 2. Move entry to `READY_FOR_EXTERNAL_HANDOFF`
 
-For each candidate entry, confirm:
-
-- Destination routing matches the approved beneficiary reference or masked partner-held payout profile.
-- Payout purpose links to the correct `trade_id` and settlement component.
-- Amount/currency alignment with ledger record.
-- Required approvals are collected (operator + independent approver).
-
-Expected result:
-
-- Entry is either approved for payout or rejected with a documented reason.
-
-If not:
-
-- Mark entry `CANCELLED` with reason and stop payout path for that entry.
-
-### 3. Move approved entry to `READY_FOR_PARTNER_SUBMISSION`
-
-Append state transition:
+This is an internal evidence progression step after the entry has been approved for follow-through:
 
 ```bash
-curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/state" \
+curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/internal/entries/<entry-id>/state" \
   -H "Content-Type: application/json" \
-  -d '{"state":"READY_FOR_PARTNER_SUBMISSION","note":"Approved for partner submission","actor":"Treasury Approver"}'
+  -d '{"state":"READY_FOR_EXTERNAL_HANDOFF","note":"Approved for external execution handoff","actor":"Treasury Approver"}'
 ```
 
-Expected result:
+Do not continue if:
 
-- Response is `success: true`; transition is accepted by state machine rules.
+- destination details are ambiguous
+- approval lineage is incomplete
+- the entry still has unresolved exception evidence
 
-If not:
+### 3. Start the external execution window
 
-- Validate current state and transition legality against state machine rules in `treasury/src/core/payout.ts` (source of truth for validation behavior).
-- Do not continue until transition path is valid.
-
-### 4. Submit to partner and await payout evidence (`AWAITING_PARTNER_UPDATE`)
-
-Record start of the partner-execution window:
+Once the request has been handed to the external regulated counterparty, move the entry into
+waiting state:
 
 ```bash
-curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/state" \
+curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/internal/entries/<entry-id>/state" \
   -H "Content-Type: application/json" \
-  -d '{"state":"AWAITING_PARTNER_UPDATE","note":"Submitted to licensed payout partner; awaiting partner update","actor":"Treasury Operator"}'
+  -d '{"state":"AWAITING_EXTERNAL_CONFIRMATION","note":"Submitted to external execution counterparty; awaiting confirmation","actor":"Treasury Operator"}'
 ```
 
-Submit the approved payout request through the licensed payout partner channel.
-The partner, not Cotsel or Agroasys, executes the bank/exchange disbursement.
-
-Before external execution, persist the approved funding reference:
+Record the initial external funding or execution reference:
 
 ```bash
-curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/deposits" \
+curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/internal/deposits" \
   -H "Content-Type: application/json" \
   -d '{
     "rampReference":"ramp-2026-03-26-001",
@@ -273,20 +245,15 @@ curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/depos
 
 Expected result:
 
-- Partner submission reference is generated and linked to the payout record.
+- the handoff window is recorded in treasury evidence
+- the external counterparty reference is persisted for later reconciliation
 
-If not:
+### 4. Record external completion evidence
 
-- Append `CANCELLED` if the payout request cannot be safely submitted to the partner and record reason.
-
-### 5. Record partner-reported completion (`PARTNER_REPORTED_COMPLETED`) and attach evidence
-
-After partner-reported transfer confirmation:
-
-Record bank finality first:
+When external execution reaches a bank-observed confirmation point, record bank settlement evidence:
 
 ```bash
-curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/bank-confirmation" \
+curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/internal/entries/<entry-id>/bank-confirmation" \
   -H "Content-Type: application/json" \
   -d '{
     "payoutReference":"payout-2026-03-26-001",
@@ -299,112 +266,71 @@ curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entri
   }'
 ```
 
-```bash
-curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/state" \
-  -H "Content-Type: application/json" \
-  -d '{"state":"PARTNER_REPORTED_COMPLETED","note":"Partner reported settlement; receipt and FX evidence attached","actor":"Treasury Operator"}'
-```
+When bank confirmation is accepted, treasury can auto-progress the payout lifecycle to
+`EXTERNAL_EXECUTION_CONFIRMED`.
 
-Record post-transfer evidence:
-
-- Transfer reference/receipt ID.
-- FX rate and timestamp used for conversion.
-- Linked `trade_id`, ledger `entry_id`, and source on-chain `tx_hash`.
-- Final fiat deposit event for the same `rampReference` recorded as `FUNDED` or `REVERSED` with the provider confirmation identifier.
-- Bank confirmation receipt stored under `bankReference` before or at the same time as the `PARTNER_REPORTED_COMPLETED` lifecycle transition.
+Record any matching deposit/funding update for the same `rampReference` as `FUNDED`,
+`PARTIAL`, `REVERSED`, or `FAILED` as observed.
 
 Expected result:
 
-- Entry appears with `latest_state=PARTNER_REPORTED_COMPLETED`.
+- entry ends in `EXTERNAL_EXECUTION_CONFIRMED` only when confirmation evidence is present
+- external evidence is linked to the same treasury entry and trade context
 
-If not:
+### 5. Hand off to reconciliation and revenue close
 
-- Keep entry in `AWAITING_PARTNER_UPDATE`, investigate with approver + on-call engineer, and avoid duplicate transfer attempts.
+After payout evidence is complete:
 
-## Evidence To Record (Audit Minimum)
+- reconciliation consumes the same treasury evidence and sweep linkage
+- revenue realization remains a separate controlled step
+- batch and period close remain governed by the treasury revenue-close workflow
 
-- Actor for every state transition and approval timestamp.
-- Payout destination validation result.
-- Amount/currency checks and approval artifacts.
-- Off-ramp transfer reference, FX rate, and settlement timestamp.
-- Associated `trade_id`, `entry_id`, `tx_hash`, incident/ticket IDs (if any).
-- Template reference: `docs/runbooks/operator-audit-evidence-template.md`
-- Incident escalation template: `docs/incidents/incident-evidence-template.md`
+This SOP does not itself realize revenue or close accounting periods.
 
 ## Exception Handling
 
-### Treasury payout receiver incident (compromise/lost key/freeze)
+### Wrong destination or incorrect submission
 
-1. Freeze claim path:
+- stop immediately
+- do not advance the entry to `AWAITING_EXTERNAL_CONFIRMATION` if the handoff is not valid
+- mark entry `CANCELLED` with explicit reason when safe cancellation is the correct action
+- escalate to compliance reviewer and on-call engineer
 
-```bash
-cast send <ESCROW_ADDRESS> "pauseClaims()" --private-key "$ADMIN_KEY"
-```
+### External execution failure
 
-2. Rotate payout receiver through governance:
+- keep state at `AWAITING_EXTERNAL_CONFIRMATION` only while an active retry or investigation plan
+  exists
+- persist failure through deposit evidence with `depositState="FAILED"` and `failureCode`
+- if the path cannot recover safely, set `CANCELLED` and open an incident
 
-```bash
-cast send <ESCROW_ADDRESS> "proposeTreasuryPayoutAddressUpdate(address)" <NEW_RECEIVER> --private-key "$ADMIN1_KEY"
-cast send <ESCROW_ADDRESS> "approveTreasuryPayoutAddressUpdate(uint256)" <PROPOSAL_ID> --private-key "$ADMIN2_KEY"
-# wait governance timelock
-cast send <ESCROW_ADDRESS> "executeTreasuryPayoutAddressUpdate(uint256)" <PROPOSAL_ID> --private-key "$ADMIN1_KEY"
-```
+### Partial settlement
 
-AdminSDK equivalent:
+- do not treat the entry as externally confirmed until the full amount is reconciled
+- persist the external event with `depositState="PARTIAL"`
+- escalate discrepancy handling through reconciliation
 
-```ts
-const proposal = await adminSDK.proposeTreasuryPayoutAddressUpdate(newReceiver, admin1Signer);
-await adminSDK.approveTreasuryPayoutAddressUpdate(proposal.proposalId!, admin2Signer);
-// wait governance timelock
-await adminSDK.executeTreasuryPayoutAddressUpdate(proposal.proposalId!, admin1Signer);
-```
+### Reversal or bank rejection
 
-3. Verify receiver and unfreeze:
+- persist `depositState="REVERSED"` or `bankState="REJECTED"` before deciding whether the entry
+  remains in investigation or is cancelled
+- do not mark or keep the entry as externally confirmed after a reversal or rejected settlement
 
-```bash
-cast call <ESCROW_ADDRESS> "treasuryPayoutAddress()(address)"
-cast send <ESCROW_ADDRESS> "unpauseClaims()" --private-key "$ADMIN_KEY"
-```
+## Evidence Minimum
 
-### Wrong destination submitted
+- actor for every lifecycle transition and evidence write
+- destination validation result
+- amount/currency checks and approval artifacts
+- external reference, settlement timestamp, and linked trade/entry context
+- `trade_id`, `entry_id`, `tx_hash`, and incident/ticket IDs
 
-- Stop immediately; do not submit or advance the payout request through the partner.
-- Mark entry `CANCELLED` with explicit reason.
-- Escalate to compliance reviewer and on-call engineer.
+Templates:
 
-### Off-ramp transfer failed
-
-- Keep state at `AWAITING_PARTNER_UPDATE` only while active retry plan exists.
-- If transfer cannot recover safely, set `CANCELLED` and open incident.
-- Persist the provider failure as a treasury deposit event with `depositState="FAILED"` and `failureCode`.
-- If bank rejects settlement after transfer initiation, persist `bankState="REJECTED"` with `failureCode` before deciding whether treasury state remains `AWAITING_PARTNER_UPDATE` or moves to `CANCELLED`.
-
-### Partial settlement confirmed
-
-- Do not mark `PARTNER_REPORTED_COMPLETED` until full amount is reconciled.
-- Record partial receipt and discrepancy details.
-- Persist the provider event with `depositState="PARTIAL"` so reconciliation emits `PARTIAL_FUNDING`.
-- Escalate for controlled remediation and evidence review.
-
-## Rollback / Escalation
-
-1. Pause payout progression for impacted entries.
-2. Capture treasury API responses, logs, and transfer references.
-3. Run `docs/incidents/first-15-minutes-checklist.md` for high-risk incidents.
-4. Escalate with full evidence to Treasury Approver, Compliance Reviewer, and On-call Engineer.
-
-## Migration Notes (Non-Upgradeable Escrow)
-
-- Legacy escrow instances may still hold treasury claimables during transition.
-- Treasury operations must drain old escrow balances before sunsetting legacy monitoring.
-- Maintain dual-tracking until all are true:
-  - all legacy escrows have `claimableUsdc(treasuryAddress) == 0`
-  - all expected `TreasuryClaimed` events are reconciled to payout ledger entries (verify via `scripts/staging-e2e-real-gate.sh` and `docs/runbooks/reconciliation.md#treasury-sweep-reconciliation-invariants`)
-  - no pending treasury payout rotation incidents remain open
+- `docs/runbooks/operator-audit-evidence-template.md`
+- `docs/incidents/incident-evidence-template.md`
 
 ## Related References
 
 - `treasury/README.md`
 - `docs/runbooks/reconciliation.md`
-- `docs/runbooks/hybrid-split-walkthrough.md`
-- `docs/runbooks/oracle-redrive.md`
+- `docs/runbooks/treasury-revenue-close.md`
+- `docs/runbooks/programmability-governance.md`

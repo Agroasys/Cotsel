@@ -1,6 +1,7 @@
 import express from 'express';
-import { AddressInfo } from 'net';
+import { RequestHandler } from 'express';
 import { Server } from 'http';
+import { AddressInfo } from 'net';
 
 process.env.PORT = process.env.PORT || '3200';
 process.env.DB_HOST = process.env.DB_HOST || '127.0.0.1';
@@ -17,6 +18,28 @@ jest.mock('../src/database/queries', () => ({
   upsertFiatDepositReference: jest.fn(),
 }));
 
+function buildAuthMiddleware(): RequestHandler {
+  return (req, res, next) => {
+    if (req.header('x-test-auth') === 'ok') {
+      next();
+      return;
+    }
+
+    res.status(401).json({ success: false, error: 'Unauthorized' });
+  };
+}
+
+function buildMutationAuthMiddleware(): RequestHandler {
+  return (req, res, next) => {
+    if (req.header('x-test-mutation-auth') === 'ok') {
+      next();
+      return;
+    }
+
+    res.status(403).json({ success: false, error: 'Internal mutation caller required' });
+  };
+}
+
 let createRouter: typeof import('../src/api/routes').createRouter;
 let TreasuryController: typeof import('../src/api/controller').TreasuryController;
 let upsertBankPayoutConfirmation: typeof import('../src/database/queries').upsertBankPayoutConfirmation;
@@ -24,7 +47,7 @@ let upsertFiatDepositReference: typeof import('../src/database/queries').upsertF
 let mockedUpsertBankPayoutConfirmation: jest.MockedFunction<typeof upsertBankPayoutConfirmation>;
 let mockedUpsertFiatDepositReference: jest.MockedFunction<typeof upsertFiatDepositReference>;
 
-describe('treasury fiat deposit routes', () => {
+describe('treasury internal deposit routes', () => {
   let server: Server;
   let baseUrl: string;
 
@@ -46,7 +69,13 @@ describe('treasury fiat deposit routes', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/api/treasury/v1', createRouter(new TreasuryController()));
+    app.use(
+      '/api/treasury/v1',
+      createRouter(new TreasuryController(), {
+        authMiddleware: buildAuthMiddleware(),
+        mutationAuthMiddleware: buildMutationAuthMiddleware(),
+      }),
+    );
 
     await new Promise<void>((resolve) => {
       server = app.listen(0, () => resolve());
@@ -72,10 +101,12 @@ describe('treasury fiat deposit routes', () => {
       idempotentReplay: false,
     });
 
-    const response = await fetch(`${baseUrl}/api/treasury/v1/deposits`, {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/internal/deposits`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
+        'x-test-auth': 'ok',
+        'x-test-mutation-auth': 'ok',
       },
       body: JSON.stringify({
         rampReference: 'ramp-1',
@@ -105,10 +136,12 @@ describe('treasury fiat deposit routes', () => {
   });
 
   test('invalid deposit state is rejected', async () => {
-    const response = await fetch(`${baseUrl}/api/treasury/v1/deposits`, {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/internal/deposits`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
+        'x-test-auth': 'ok',
+        'x-test-mutation-auth': 'ok',
       },
       body: JSON.stringify({
         rampReference: 'ramp-1',
@@ -144,20 +177,25 @@ describe('treasury fiat deposit routes', () => {
       idempotentReplay: false,
     });
 
-    const response = await fetch(`${baseUrl}/api/treasury/v1/entries/11/bank-confirmation`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
+    const response = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/entries/11/bank-confirmation`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-test-auth': 'ok',
+          'x-test-mutation-auth': 'ok',
+        },
+        body: JSON.stringify({
+          payoutReference: 'payout-1',
+          bankReference: 'bank-1',
+          bankState: 'CONFIRMED',
+          confirmedAt: '2026-03-26T00:00:00.000Z',
+          source: 'bank:webhook',
+          actor: 'Treasury Operator',
+        }),
       },
-      body: JSON.stringify({
-        payoutReference: 'payout-1',
-        bankReference: 'bank-1',
-        bankState: 'CONFIRMED',
-        confirmedAt: '2026-03-26T00:00:00.000Z',
-        source: 'bank:webhook',
-        actor: 'Treasury Operator',
-      }),
-    });
+    );
 
     expect(response.status).toBe(200);
     expect(mockedUpsertBankPayoutConfirmation).toHaveBeenCalledWith(
@@ -171,19 +209,24 @@ describe('treasury fiat deposit routes', () => {
   });
 
   test('invalid bank state is rejected', async () => {
-    const response = await fetch(`${baseUrl}/api/treasury/v1/entries/11/bank-confirmation`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
+    const response = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/entries/11/bank-confirmation`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-test-auth': 'ok',
+          'x-test-mutation-auth': 'ok',
+        },
+        body: JSON.stringify({
+          bankReference: 'bank-1',
+          bankState: 'SETTLED',
+          confirmedAt: '2026-03-26T00:00:00.000Z',
+          source: 'bank:webhook',
+          actor: 'Treasury Operator',
+        }),
       },
-      body: JSON.stringify({
-        bankReference: 'bank-1',
-        bankState: 'SETTLED',
-        confirmedAt: '2026-03-26T00:00:00.000Z',
-        source: 'bank:webhook',
-        actor: 'Treasury Operator',
-      }),
-    });
+    );
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual(
@@ -191,6 +234,36 @@ describe('treasury fiat deposit routes', () => {
         success: false,
         error: 'ValidationError',
         message: 'Invalid bank payout state',
+      }),
+    );
+  });
+
+  test('internal mutation routes reject callers without internal mutation scope', async () => {
+    const response = await fetch(`${baseUrl}/api/treasury/v1/internal/deposits`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-test-auth': 'ok',
+      },
+      body: JSON.stringify({
+        rampReference: 'ramp-1',
+        tradeId: 'trade-1',
+        depositState: 'PENDING',
+        sourceAmount: '100',
+        currency: 'USD',
+        expectedAmount: '100',
+        expectedCurrency: 'USD',
+        observedAt: '2026-03-26T00:00:00.000Z',
+        providerEventId: 'provider-event-1',
+        providerAccountRef: 'acct-1',
+      }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: false,
+        error: 'Internal mutation caller required',
       }),
     );
   });

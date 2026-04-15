@@ -117,7 +117,7 @@ cotsel/
 ├── gateway/            # Operator control-plane gateway
 ├── reconciliation/     # Drift detection and settlement verification
 ├── ricardian/          # Ricardian hash and evidence-linking service
-├── treasury/           # Treasury ledger and payout operations
+├── treasury/           # Settlement evidence, payout eligibility, and treasury operations
 ├── notifications/      # Operational notification service
 ├── auth/               # Session and user-profile service
 ├── sdk/                # External integration SDK

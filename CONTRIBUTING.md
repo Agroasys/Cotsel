@@ -30,7 +30,7 @@ This monorepo currently contains:
 - `reconciliation`: reconciliation worker
 - `notifications`: shared notifications library (no standalone runtime)
 - `ricardian`: deterministic hash service
-- `treasury`: treasury ledger service
+- `treasury`: settlement-evidence and payout-eligibility service
 
 ## Hard Safety Guardrails
 
