@@ -9,7 +9,7 @@ participant-visible funds state.
 
 Canonical boundary:
 
-- [`../docs/contracts/ledger-abstraction-contract.md`](../docs/contracts/ledger-abstraction-contract.md)
+- [`../docs/adr/adr-0412-treasury-revenue-controls-boundary.md`](../docs/adr/adr-0412-treasury-revenue-controls-boundary.md)
 
 ## Capabilities
 
