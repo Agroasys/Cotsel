@@ -73,18 +73,20 @@ export function assertBankPayoutTransition(
 ): void {
   if (
     currentPayoutState === 'PENDING_REVIEW' ||
-    currentPayoutState === 'READY_FOR_PARTNER_SUBMISSION'
+    currentPayoutState === 'READY_FOR_EXTERNAL_HANDOFF'
   ) {
     throw new Error(
-      `Partner payout evidence is not valid while payout state is ${currentPayoutState}`,
+      `External execution evidence is not valid while payout state is ${currentPayoutState}`,
     );
   }
 
   if (currentPayoutState === 'CANCELLED') {
-    throw new Error('Partner payout evidence is not valid for cancelled payout entries');
+    throw new Error('External execution evidence is not valid for cancelled payout entries');
   }
 
-  if (bankState === 'PENDING' && currentPayoutState !== 'AWAITING_PARTNER_UPDATE') {
-    throw new Error('Pending partner payout evidence requires state AWAITING_PARTNER_UPDATE');
+  if (bankState === 'PENDING' && currentPayoutState !== 'AWAITING_EXTERNAL_CONFIRMATION') {
+    throw new Error(
+      'Pending external execution evidence requires state AWAITING_EXTERNAL_CONFIRMATION',
+    );
   }
 }

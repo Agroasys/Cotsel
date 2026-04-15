@@ -24,6 +24,7 @@ export interface TreasuryConfig {
   ingestMaxEvents: number;
   authEnabled: boolean;
   apiKeys: ServiceApiKey[];
+  internalMutationApiKeys: string[];
   hmacSecret?: string;
   authMaxSkewSeconds: number;
   authNonceTtlSeconds: number;
@@ -47,6 +48,8 @@ export interface TreasuryConfig {
     user: string;
     password: string;
   } | null;
+  reconciliationMaxAgeSeconds: number;
+  reconciliationMaxRunningRunAgeSeconds: number;
 }
 
 function env(name: string): string {
@@ -120,6 +123,17 @@ function parseUrlList(raw: string | undefined): string[] {
     .map((value) => value.replace(/\/$/, ''));
 }
 
+function parseAllowlist(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
 function hasSettlementRuntimeOverride(): boolean {
   return Boolean(
     optionalEnv('SETTLEMENT_RUNTIME') || optionalEnv('RPC_URL') || optionalEnv('CHAIN_ID'),
@@ -148,6 +162,17 @@ export function loadConfig(): TreasuryConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const authEnabled = envBool('AUTH_ENABLED', nodeEnv === 'production');
   const apiKeys = parseServiceApiKeys(process.env.API_KEYS_JSON);
+  const configuredMutationApiKeys = parseAllowlist(process.env.TREASURY_INTERNAL_MUTATION_API_KEYS);
+  const inferredMutationApiKeys =
+    configuredMutationApiKeys.length > 0
+      ? configuredMutationApiKeys
+      : apiKeys.filter((key) => /gateway/i.test(key.id)).map((key) => key.id);
+  const internalMutationApiKeys =
+    inferredMutationApiKeys.length > 0
+      ? inferredMutationApiKeys
+      : apiKeys.length === 1
+        ? [apiKeys[0].id]
+        : [];
   const hmacSecret = process.env.HMAC_SECRET?.trim();
   const nonceStore = resolveNonceStoreMode(nodeEnv);
   const nonceRedisUrl = process.env.REDIS_URL?.trim() || undefined;
@@ -181,6 +206,10 @@ export function loadConfig(): TreasuryConfig {
     assert(
       apiKeys.length > 0 || Boolean(hmacSecret),
       'AUTH_ENABLED=true requires either API_KEYS_JSON entries or HMAC_SECRET',
+    );
+    assert(
+      internalMutationApiKeys.length > 0,
+      'AUTH_ENABLED=true requires TREASURY_INTERNAL_MUTATION_API_KEYS or a gateway-designated API key',
     );
   }
 
@@ -220,6 +249,7 @@ export function loadConfig(): TreasuryConfig {
     ingestMaxEvents: envNumber('TREASURY_INGEST_MAX_EVENTS', 2000),
     authEnabled,
     apiKeys,
+    internalMutationApiKeys,
     hmacSecret,
     authMaxSkewSeconds: envNumber('AUTH_MAX_SKEW_SECONDS', 300),
     authNonceTtlSeconds,
@@ -245,6 +275,11 @@ export function loadConfig(): TreasuryConfig {
           password: optionalEnv('RECONCILIATION_DB_PASSWORD') || env('DB_PASSWORD'),
         }
       : null,
+    reconciliationMaxAgeSeconds: envNumber('RECONCILIATION_MAX_AGE_SECONDS', 900),
+    reconciliationMaxRunningRunAgeSeconds: envNumber(
+      'RECONCILIATION_MAX_RUNNING_RUN_AGE_SECONDS',
+      900,
+    ),
   };
 
   assert(config.ingestBatchSize > 0, 'TREASURY_INGEST_BATCH_SIZE must be > 0');
@@ -252,6 +287,11 @@ export function loadConfig(): TreasuryConfig {
   assert(config.authMaxSkewSeconds > 0, 'AUTH_MAX_SKEW_SECONDS must be > 0');
   assert(config.authNonceTtlSeconds > 0, 'AUTH_NONCE_TTL_SECONDS must be > 0');
   assert(config.nonceTtlSeconds > 0, 'NONCE_TTL_SECONDS must be > 0');
+  assert(config.reconciliationMaxAgeSeconds > 0, 'RECONCILIATION_MAX_AGE_SECONDS must be > 0');
+  assert(
+    config.reconciliationMaxRunningRunAgeSeconds > 0,
+    'RECONCILIATION_MAX_RUNNING_RUN_AGE_SECONDS must be > 0',
+  );
 
   return config;
 }

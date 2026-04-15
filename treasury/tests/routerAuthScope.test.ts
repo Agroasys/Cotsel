@@ -16,6 +16,17 @@ function buildAuthMiddleware(): RequestHandler {
   };
 }
 
+function buildMutationAuthMiddleware(): RequestHandler {
+  return (req, res, next) => {
+    if (req.header('x-test-mutation-auth') === 'ok') {
+      next();
+      return;
+    }
+
+    res.status(403).json({ success: false, error: 'Internal mutation caller required' });
+  };
+}
+
 describe('treasury router auth scope', () => {
   let server: Server;
   let baseUrl: string;
@@ -31,14 +42,65 @@ describe('treasury router auth scope', () => {
       listEntries: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
       },
+      listEntryAccounting: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: [] });
+      },
+      getEntryAccounting: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
       appendState: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { updated: true } });
+      },
+      createEntryRealization: (_req: Request, res: Response) => {
+        res.status(201).json({ success: true, data: { realized: true } });
       },
       upsertBankConfirmation: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { confirmed: true } });
       },
+      listAccountingPeriods: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: [] });
+      },
+      createAccountingPeriod: (_req: Request, res: Response) => {
+        res.status(201).json({ success: true, data: { created: true } });
+      },
+      requestAccountingPeriodClose: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { pendingClose: true } });
+      },
+      closeAccountingPeriod: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { closed: true } });
+      },
+      listSweepBatches: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: [] });
+      },
+      createSweepBatch: (_req: Request, res: Response) => {
+        res.status(201).json({ success: true, data: { created: true } });
+      },
+      getSweepBatch: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
+      addSweepBatchEntry: (_req: Request, res: Response) => {
+        res.status(201).json({ success: true, data: { allocated: true } });
+      },
+      requestSweepBatchApproval: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { requested: true } });
+      },
+      approveSweepBatch: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { approved: true } });
+      },
+      markSweepBatchExecuted: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { executed: true } });
+      },
+      recordPartnerHandoff: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { handedOff: true } });
+      },
+      closeSweepBatch: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { closed: true } });
+      },
       upsertDeposit: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { stored: true } });
+      },
+      getReconciliationControlSummary: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
       },
       exportEntries: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
@@ -47,7 +109,10 @@ describe('treasury router auth scope', () => {
 
     app.use(
       '/api/treasury/v1',
-      createRouter(controller, { authMiddleware: buildAuthMiddleware() }),
+      createRouter(controller, {
+        authMiddleware: buildAuthMiddleware(),
+        mutationAuthMiddleware: buildMutationAuthMiddleware(),
+      }),
     );
 
     await new Promise<void>((resolve) => {
@@ -84,7 +149,7 @@ describe('treasury router auth scope', () => {
     );
   });
 
-  test('unauthenticated deposit write route is rejected', async () => {
+  test('legacy public mutation routes are removed', async () => {
     const response = await fetch(`${baseUrl}/api/treasury/v1/deposits`, {
       method: 'POST',
       headers: {
@@ -93,18 +158,91 @@ describe('treasury router auth scope', () => {
       body: JSON.stringify({ rampReference: 'ramp-1' }),
     });
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(404);
   });
 
-  test('unauthenticated bank confirmation route is rejected', async () => {
-    const response = await fetch(`${baseUrl}/api/treasury/v1/entries/1/bank-confirmation`, {
+  test('internal mutation route requires both auth and internal mutation caller context', async () => {
+    const unauthenticated = await fetch(`${baseUrl}/api/treasury/v1/internal/deposits`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ bankReference: 'bank-1' }),
+      body: JSON.stringify({ rampReference: 'ramp-1' }),
     });
+    expect(unauthenticated.status).toBe(401);
 
-    expect(response.status).toBe(401);
+    const forbidden = await fetch(`${baseUrl}/api/treasury/v1/internal/deposits`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-test-auth': 'ok',
+      },
+      body: JSON.stringify({ rampReference: 'ramp-1' }),
+    });
+    expect(forbidden.status).toBe(403);
+
+    const allowed = await fetch(`${baseUrl}/api/treasury/v1/internal/deposits`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-test-auth': 'ok',
+        'x-test-mutation-auth': 'ok',
+      },
+      body: JSON.stringify({ rampReference: 'ramp-1' }),
+    });
+    expect(allowed.status).toBe(200);
+  });
+
+  test('external handoff mutation requires the same internal auth boundary as other treasury writes', async () => {
+    const unauthenticated = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/sweep-batches/11/external-handoff`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          partnerName: 'licensed-counterparty',
+          partnerReference: 'handoff-1',
+          handoffStatus: 'ACKNOWLEDGED',
+        }),
+      },
+    );
+    expect(unauthenticated.status).toBe(401);
+
+    const forbidden = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/sweep-batches/11/external-handoff`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-test-auth': 'ok',
+        },
+        body: JSON.stringify({
+          partnerName: 'licensed-counterparty',
+          partnerReference: 'handoff-1',
+          handoffStatus: 'ACKNOWLEDGED',
+        }),
+      },
+    );
+    expect(forbidden.status).toBe(403);
+
+    const allowed = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/sweep-batches/11/external-handoff`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-test-auth': 'ok',
+          'x-test-mutation-auth': 'ok',
+        },
+        body: JSON.stringify({
+          partnerName: 'licensed-counterparty',
+          partnerReference: 'handoff-1',
+          handoffStatus: 'ACKNOWLEDGED',
+        }),
+      },
+    );
+    expect(allowed.status).toBe(200);
   });
 });

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Pool } from 'pg';
+import { projectTreasuryAccountingState } from '@agroasys/sdk';
 import {
   buildReconciliationReport,
   type ReconciliationReportInputRow,
@@ -30,6 +31,21 @@ interface TreasuryLedgerStateRow {
   trade_id: string;
   tx_hash: string;
   latest_state: string;
+  amount_raw: string;
+  allocated_amount_raw: string | null;
+  allocation_status: string | null;
+  accounting_period_key: string | null;
+  accounting_period_status: string | null;
+  sweep_batch_id: number | null;
+  sweep_batch_status: string | null;
+  matched_sweep_tx_hash: string | null;
+  matched_sweep_block_number: number | null;
+  matched_swept_at: Date | null;
+  partner_name: string | null;
+  partner_reference: string | null;
+  partner_handoff_status: string | null;
+  revenue_realization_status: string | null;
+  realized_at: Date | null;
   ramp_reference: string | null;
   fiat_deposit_state: string | null;
   fiat_deposit_failure_class: string | null;
@@ -190,6 +206,21 @@ async function fetchTreasuryLedgerStates(
         e.trade_id,
         e.tx_hash,
         s.state AS latest_state,
+        e.amount_raw,
+        alloc.entry_amount_raw AS allocated_amount_raw,
+        alloc.allocation_status,
+        period.period_key AS accounting_period_key,
+        period.status AS accounting_period_status,
+        batch.id AS sweep_batch_id,
+        batch.status AS sweep_batch_status,
+        claim.tx_hash AS matched_sweep_tx_hash,
+        claim.block_number AS matched_sweep_block_number,
+        claim.observed_at AS matched_swept_at,
+        handoff.partner_name,
+        handoff.partner_reference,
+        handoff.handoff_status AS partner_handoff_status,
+        realization.realization_status AS revenue_realization_status,
+        realization.realized_at,
         d.ramp_reference,
         d.deposit_state AS fiat_deposit_state,
         d.failure_class AS fiat_deposit_failure_class,
@@ -206,6 +237,25 @@ async function fetchTreasuryLedgerStates(
         ORDER BY p.created_at DESC, p.id DESC
         LIMIT 1
       ) s ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT *
+        FROM sweep_batch_entries sbe
+        WHERE sbe.ledger_entry_id = e.id
+          AND sbe.allocation_status = 'ALLOCATED'
+        ORDER BY sbe.updated_at DESC, sbe.id DESC
+        LIMIT 1
+      ) alloc ON TRUE
+      LEFT JOIN sweep_batches batch ON batch.id = alloc.sweep_batch_id
+      LEFT JOIN accounting_periods period ON period.id = batch.accounting_period_id
+      LEFT JOIN treasury_claim_events claim ON claim.matched_sweep_batch_id = batch.id
+      LEFT JOIN partner_handoffs handoff ON handoff.sweep_batch_id = batch.id
+      LEFT JOIN LATERAL (
+        SELECT r.realization_status, r.realized_at
+        FROM revenue_realizations r
+        WHERE r.ledger_entry_id = e.id
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT 1
+      ) realization ON TRUE
       LEFT JOIN LATERAL (
         SELECT
           r.ramp_reference,
@@ -285,23 +335,64 @@ async function main(): Promise<void> {
       treasuryRows = await fetchTreasuryLedgerStates(treasuryPool, scopeTradeIds);
     }
 
-    const rows: ReconciliationReportInputRow[] = treasuryRows.map((row) => ({
-      tradeId: row.trade_id,
-      txHash: row.tx_hash,
-      payoutState: row.latest_state,
-      rampReference: row.ramp_reference,
-      fiatDepositState: row.fiat_deposit_state,
-      fiatDepositFailureClass: row.fiat_deposit_failure_class,
-      fiatDepositObservedAt: row.fiat_deposit_observed_at
-        ? new Date(row.fiat_deposit_observed_at)
-        : null,
-      bankReference: row.bank_reference,
-      bankPayoutState: row.bank_payout_state,
-      bankFailureCode: row.bank_failure_code,
-      bankConfirmedAt: row.bank_confirmed_at ? new Date(row.bank_confirmed_at) : null,
-      mismatchCodes: driftByTradeId.get(row.trade_id) || [],
-      ledgerEntryId: row.id,
-    }));
+    const rows: ReconciliationReportInputRow[] = treasuryRows.map((row) => {
+      const accountingProjection = projectTreasuryAccountingState({
+        allocationStatus: row.allocation_status as 'ALLOCATED' | 'RELEASED' | null,
+        allocatedAmountRaw: row.allocated_amount_raw,
+        partnerReference: row.partner_reference,
+        partnerHandoffStatus: row.partner_handoff_status as
+          | 'CREATED'
+          | 'SUBMITTED'
+          | 'ACKNOWLEDGED'
+          | 'COMPLETED'
+          | 'FAILED'
+          | null,
+        matchedSweepTxHash: row.matched_sweep_tx_hash,
+        matchedSweptAt: row.matched_swept_at ? new Date(row.matched_swept_at) : null,
+        latestFiatDepositState: row.fiat_deposit_state as
+          | 'PENDING'
+          | 'FUNDED'
+          | 'PARTIAL'
+          | 'REVERSED'
+          | 'FAILED'
+          | null,
+        latestBankPayoutState: row.bank_payout_state as 'PENDING' | 'CONFIRMED' | 'REJECTED' | null,
+        revenueRealizationStatus: row.revenue_realization_status as 'REALIZED' | 'REVERSED' | null,
+        realizedAt: row.realized_at ? new Date(row.realized_at) : null,
+      });
+
+      return {
+        tradeId: row.trade_id,
+        txHash: row.tx_hash,
+        payoutState: row.latest_state,
+        accountingState: accountingProjection.accountingState,
+        accountingStateReason: accountingProjection.accountingStateReason,
+        accountingPeriodKey: row.accounting_period_key,
+        accountingPeriodStatus: row.accounting_period_status,
+        sweepBatchId: row.sweep_batch_id,
+        sweepBatchStatus: row.sweep_batch_status,
+        matchedSweepTxHash: row.matched_sweep_tx_hash,
+        matchedSweptAt: row.matched_swept_at ? new Date(row.matched_swept_at) : null,
+        partnerName: row.partner_name,
+        partnerReference: row.partner_reference,
+        partnerHandoffStatus: row.partner_handoff_status,
+        realizedAt: row.realized_at ? new Date(row.realized_at) : null,
+        rampReference: row.ramp_reference,
+        fiatDepositState: row.fiat_deposit_state,
+        fiatDepositFailureClass: row.fiat_deposit_failure_class,
+        fiatDepositObservedAt: row.fiat_deposit_observed_at
+          ? new Date(row.fiat_deposit_observed_at)
+          : null,
+        bankReference: row.bank_reference,
+        bankPayoutState: row.bank_payout_state,
+        bankFailureCode: row.bank_failure_code,
+        bankConfirmedAt: row.bank_confirmed_at ? new Date(row.bank_confirmed_at) : null,
+        mismatchCodes: driftByTradeId.get(row.trade_id) || [],
+        ledgerEntryId: row.id,
+        allocatedAmountRaw: row.allocated_amount_raw,
+        sourceAmountRaw: row.amount_raw,
+      };
+    });
 
     const seenTradeIds = new Set(rows.map((row) => row.tradeId));
     for (const tradeId of scopeTradeIds) {
@@ -313,6 +404,18 @@ async function main(): Promise<void> {
         tradeId,
         txHash: null,
         payoutState: null,
+        accountingState: null,
+        accountingStateReason: null,
+        accountingPeriodKey: null,
+        accountingPeriodStatus: null,
+        sweepBatchId: null,
+        sweepBatchStatus: null,
+        matchedSweepTxHash: null,
+        matchedSweptAt: null,
+        partnerName: null,
+        partnerReference: null,
+        partnerHandoffStatus: null,
+        realizedAt: null,
         rampReference: null,
         fiatDepositState: null,
         fiatDepositFailureClass: null,
@@ -336,6 +439,18 @@ async function main(): Promise<void> {
         tradeId,
         txHash: null,
         payoutState: null,
+        accountingState: null,
+        accountingStateReason: null,
+        accountingPeriodKey: null,
+        accountingPeriodStatus: null,
+        sweepBatchId: null,
+        sweepBatchStatus: null,
+        matchedSweepTxHash: null,
+        matchedSweptAt: null,
+        partnerName: null,
+        partnerReference: null,
+        partnerHandoffStatus: null,
+        realizedAt: null,
         rampReference: null,
         fiatDepositState: null,
         fiatDepositFailureClass: null,

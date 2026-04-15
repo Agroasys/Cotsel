@@ -20,12 +20,15 @@ jest.mock('../src/database/queries', () => ({
   getLedgerEntries: jest.fn(),
   getLedgerEntryById: jest.fn(),
   getLatestPayoutState: jest.fn(),
+  listDistinctLedgerTradeIds: jest.fn(),
   appendPayoutState: jest.fn(),
 }));
 
 type TreasuryControllerType = typeof import('../src/api/controller').TreasuryController;
 type TreasuryEligibilityServiceType =
   typeof import('../src/core/exportEligibility').TreasuryEligibilityService;
+type ReconciliationGateServiceType =
+  typeof import('../src/core/reconciliationGate').ReconciliationGateService;
 type QueriesModule = typeof import('../src/database/queries');
 
 type MockResponse = Response & {
@@ -40,6 +43,7 @@ type ExportEntriesRequest = Request<Record<string, never>, unknown, unknown, { f
 
 let LoadedTreasuryController: TreasuryControllerType;
 let LoadedTreasuryEligibilityService: TreasuryEligibilityServiceType;
+let LoadedReconciliationGateService: ReconciliationGateServiceType;
 let queriesModule: QueriesModule;
 
 function mockResponse(): MockResponse {
@@ -64,7 +68,7 @@ function makeEntry(id: number): LedgerEntryWithState {
     source_timestamp: new Date('2026-03-31T00:00:00.000Z'),
     metadata: {},
     created_at: new Date('2026-03-31T00:00:00.000Z'),
-    latest_state: 'READY_FOR_PARTNER_SUBMISSION' satisfies PayoutState,
+    latest_state: 'READY_FOR_EXTERNAL_HANDOFF' satisfies PayoutState,
     latest_state_at: new Date('2026-03-31T00:00:00.000Z'),
   };
 }
@@ -102,12 +106,14 @@ describe('TreasuryController eligibility gates', () => {
     ({ TreasuryController: LoadedTreasuryController } = await import('../src/api/controller'));
     ({ TreasuryEligibilityService: LoadedTreasuryEligibilityService } =
       await import('../src/core/exportEligibility'));
+    ({ ReconciliationGateService: LoadedReconciliationGateService } =
+      await import('../src/core/reconciliationGate'));
     queriesModule = await import('../src/database/queries');
 
     jest.clearAllMocks();
   });
 
-  test('appendState blocks READY_FOR_PARTNER_SUBMISSION when eligibility is not clear', async () => {
+  test('appendState blocks READY_FOR_EXTERNAL_HANDOFF when eligibility is not clear', async () => {
     jest.spyOn(LoadedTreasuryEligibilityService.prototype, 'assessEntries').mockResolvedValue(
       new Map([
         [
@@ -122,6 +128,9 @@ describe('TreasuryController eligibility gates', () => {
             finalizedBlockNumber: 100,
             reconciliationStatus: 'BLOCKED',
             reconciliationRunKey: 'run-1',
+            reconciliationFreshness: 'STALE',
+            reconciliationCompletedAt: new Date('2026-03-31T00:00:00.000Z'),
+            staleRunningRunCount: 1,
             eligibleForPayout: false,
             eligibleForExport: false,
             blockedReasons: ['Entry has not reached Base finalized stage (current stage: SAFE)'],
@@ -140,7 +149,7 @@ describe('TreasuryController eligibility gates', () => {
     const res = mockResponse();
     const req = {
       params: { entryId: '11' },
-      body: { state: 'READY_FOR_PARTNER_SUBMISSION' },
+      body: { state: 'READY_FOR_EXTERNAL_HANDOFF' },
     } as unknown as AppendStateRequest;
 
     await controller.appendState(req, res);
@@ -160,13 +169,13 @@ describe('TreasuryController eligibility gates', () => {
     jest.mocked(queriesModule.getLedgerEntryById).mockResolvedValue(makeLedgerEntry(11, 'trade-1'));
     jest
       .mocked(queriesModule.getLatestPayoutState)
-      .mockResolvedValue(makePayoutEvent('AWAITING_PARTNER_UPDATE'));
+      .mockResolvedValue(makePayoutEvent('AWAITING_EXTERNAL_CONFIRMATION'));
 
     const controller = new LoadedTreasuryController();
     const res = mockResponse();
     const req = {
       params: { entryId: '11' },
-      body: { state: 'PARTNER_REPORTED_COMPLETED' },
+      body: { state: 'EXTERNAL_EXECUTION_CONFIRMED' },
     } as unknown as AppendStateRequest;
 
     await controller.appendState(req, res);
@@ -189,13 +198,16 @@ describe('TreasuryController eligibility gates', () => {
           {
             entryId: 11,
             tradeId: 'trade-11',
-            payoutState: 'READY_FOR_PARTNER_SUBMISSION',
+            payoutState: 'READY_FOR_EXTERNAL_HANDOFF',
             confirmationStage: 'FINALIZED',
             latestBlockNumber: 120,
             safeBlockNumber: 115,
             finalizedBlockNumber: 110,
             reconciliationStatus: 'CLEAR',
             reconciliationRunKey: 'run-1',
+            reconciliationFreshness: 'FRESH',
+            reconciliationCompletedAt: new Date('2026-03-31T00:05:00.000Z'),
+            staleRunningRunCount: 0,
             eligibleForPayout: true,
             eligibleForExport: true,
             blockedReasons: [],
@@ -206,13 +218,16 @@ describe('TreasuryController eligibility gates', () => {
           {
             entryId: 12,
             tradeId: 'trade-12',
-            payoutState: 'READY_FOR_PARTNER_SUBMISSION',
+            payoutState: 'READY_FOR_EXTERNAL_HANDOFF',
             confirmationStage: 'SAFE',
             latestBlockNumber: 120,
             safeBlockNumber: 115,
             finalizedBlockNumber: 110,
             reconciliationStatus: 'CLEAR',
             reconciliationRunKey: 'run-1',
+            reconciliationFreshness: 'FRESH',
+            reconciliationCompletedAt: new Date('2026-03-31T00:05:00.000Z'),
+            staleRunningRunCount: 0,
             eligibleForPayout: false,
             eligibleForExport: false,
             blockedReasons: ['Entry has not reached Base finalized stage (current stage: SAFE)'],
@@ -237,8 +252,53 @@ describe('TreasuryController eligibility gates', () => {
           expect.objectContaining({
             id: 11,
             eligibleForExport: true,
+            reconciliationFreshness: 'FRESH',
+            reconciliationCompletedAt: '2026-03-31T00:05:00.000Z',
           }),
         ],
+      }),
+    );
+  });
+
+  test('reconciliation control summary exposes upstream freshness and coverage state', async () => {
+    jest.spyOn(LoadedReconciliationGateService.prototype, 'summarizeTrades').mockResolvedValue({
+      status: 'UNKNOWN',
+      freshness: 'FRESH',
+      latestCompletedRunKey: 'run-88',
+      latestCompletedRunAt: new Date('2026-03-31T00:10:00.000Z'),
+      latestCompletedRunAgeSeconds: 300,
+      staleRunningRunCount: 0,
+      trackedTradeCount: 12,
+      clearTradeCount: 9,
+      blockedTradeCount: 1,
+      unknownTradeCount: 2,
+      driftBlockedTradeCount: 1,
+      blockedReasons: ['Trade is not covered by the latest completed reconciliation run'],
+    });
+    jest
+      .mocked(queriesModule.listDistinctLedgerTradeIds)
+      .mockResolvedValue(['trade-1', 'trade-2', 'trade-3']);
+
+    const controller = new LoadedTreasuryController();
+    const res = mockResponse();
+
+    await controller.getReconciliationControlSummary({} as Request, res);
+
+    expect(queriesModule.listDistinctLedgerTradeIds).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({
+          status: 'UNKNOWN',
+          freshness: 'FRESH',
+          latestCompletedRunKey: 'run-88',
+          latestCompletedRunAt: '2026-03-31T00:10:00.000Z',
+          latestCompletedRunAgeSeconds: 300,
+          staleRunningRunCount: 0,
+          trackedTradeCount: 12,
+          unknownTradeCount: 2,
+        }),
       }),
     );
   });

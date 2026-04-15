@@ -23,7 +23,7 @@ function makeEntry(overrides?: Partial<LedgerEntryWithState>): LedgerEntryWithSt
     source_timestamp: overrides?.source_timestamp ?? new Date('2026-03-31T00:00:00.000Z'),
     metadata: overrides?.metadata ?? {},
     created_at: overrides?.created_at ?? new Date('2026-03-31T00:00:00.000Z'),
-    latest_state: overrides?.latest_state ?? 'READY_FOR_PARTNER_SUBMISSION',
+    latest_state: overrides?.latest_state ?? 'READY_FOR_EXTERNAL_HANDOFF',
     latest_state_at: overrides?.latest_state_at ?? new Date('2026-03-31T00:00:00.000Z'),
   };
 }
@@ -48,6 +48,9 @@ describe('TreasuryEligibilityService', () => {
                 status: 'CLEAR',
                 runKey: 'run-1',
                 driftCount: 0,
+                freshness: 'FRESH',
+                completedAt: new Date('2026-03-31T00:05:00.000Z'),
+                staleRunningRunCount: 0,
                 blockedReasons: [],
               },
             ],
@@ -62,6 +65,9 @@ describe('TreasuryEligibilityService', () => {
       expect.objectContaining({
         confirmationStage: 'FINALIZED',
         reconciliationStatus: 'CLEAR',
+        reconciliationFreshness: 'FRESH',
+        reconciliationCompletedAt: new Date('2026-03-31T00:05:00.000Z'),
+        staleRunningRunCount: 0,
         eligibleForPayout: true,
         eligibleForExport: true,
         blockedReasons: [],
@@ -84,6 +90,9 @@ describe('TreasuryEligibilityService', () => {
                 status: 'CLEAR',
                 runKey: 'run-1',
                 driftCount: 0,
+                freshness: 'FRESH',
+                completedAt: new Date('2026-03-31T00:05:00.000Z'),
+                staleRunningRunCount: 0,
                 blockedReasons: [],
               },
             ],
@@ -95,7 +104,7 @@ describe('TreasuryEligibilityService', () => {
     });
 
     const gates = await service.assessEntries([
-      makeEntry({ block_number: 100, latest_state: 'PARTNER_REPORTED_COMPLETED' }),
+      makeEntry({ block_number: 100, latest_state: 'EXTERNAL_EXECUTION_CONFIRMED' }),
     ]);
     const gate = gates.get(1);
 
@@ -107,7 +116,7 @@ describe('TreasuryEligibilityService', () => {
       }),
     );
     expect(gate?.blockedReasons).toContain(
-      'Confirmed partner payout evidence is required before completion export.',
+      'Confirmed external execution evidence is required before completion export.',
     );
   });
 
@@ -130,6 +139,9 @@ describe('TreasuryEligibilityService', () => {
                 status: 'CLEAR',
                 runKey: 'run-1',
                 driftCount: 0,
+                freshness: 'FRESH',
+                completedAt: new Date('2026-03-31T00:05:00.000Z'),
+                staleRunningRunCount: 0,
                 blockedReasons: [],
               },
             ],
@@ -167,6 +179,9 @@ describe('TreasuryEligibilityService', () => {
                 status: 'BLOCKED',
                 runKey: 'run-2',
                 driftCount: 2,
+                freshness: 'FRESH',
+                completedAt: new Date('2026-03-31T00:05:00.000Z'),
+                staleRunningRunCount: 0,
                 blockedReasons: ['Latest reconciliation run reported 2 drift finding(s)'],
               },
             ],
@@ -186,5 +201,53 @@ describe('TreasuryEligibilityService', () => {
       }),
     );
     expect(gate?.blockedReasons).toContain('Latest reconciliation run reported 2 drift finding(s)');
+  });
+
+  test('blocks payout when reconciliation freshness is stale even after finalization', async () => {
+    const staleCompletedAt = new Date('2026-03-31T00:00:00.000Z');
+    const service = new TreasuryEligibilityService({
+      provider: {
+        getBlock: async () => ({ number: 150n }),
+      },
+      reconciliationGate: {
+        assessTrades: async () =>
+          new Map([
+            [
+              'trade-1',
+              {
+                tradeId: 'trade-1',
+                status: 'BLOCKED',
+                runKey: 'run-3',
+                driftCount: 0,
+                freshness: 'STALE',
+                completedAt: staleCompletedAt,
+                staleRunningRunCount: 1,
+                blockedReasons: [
+                  'Latest completed reconciliation run is older than 900 seconds',
+                  '1 reconciliation run(s) have remained RUNNING beyond 900 seconds',
+                ],
+              },
+            ],
+          ]),
+      },
+    });
+
+    const gates = await service.assessEntries([makeEntry({ block_number: 100 })]);
+    const gate = gates.get(1);
+
+    expect(gate).toEqual(
+      expect.objectContaining({
+        confirmationStage: 'FINALIZED',
+        reconciliationStatus: 'BLOCKED',
+        reconciliationFreshness: 'STALE',
+        reconciliationCompletedAt: staleCompletedAt,
+        staleRunningRunCount: 1,
+        eligibleForPayout: false,
+        eligibleForExport: false,
+      }),
+    );
+    expect(gate?.blockedReasons).toContain(
+      'Latest completed reconciliation run is older than 900 seconds',
+    );
   });
 });
