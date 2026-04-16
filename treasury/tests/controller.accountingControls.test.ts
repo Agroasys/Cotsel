@@ -271,4 +271,92 @@ describe('TreasuryController accounting controls', () => {
       }),
     );
   });
+
+  test('closeAccountingPeriod scans every sweep-batch page before allowing period close', async () => {
+    jest
+      .mocked(queriesModule.listSweepBatches)
+      .mockResolvedValueOnce(
+        Array.from({ length: 500 }, (_, index) => ({
+          id: index + 1,
+          batch_key: `batch-q1-${index + 1}`,
+          accounting_period_id: 7,
+          accounting_period_key: '2026-Q1',
+          accounting_period_status: 'OPEN',
+          asset_symbol: 'USDC',
+          status: 'CLOSED',
+          expected_total_raw: '125000000',
+          payout_receiver_address: null,
+          approval_requested_at: null,
+          approval_requested_by: null,
+          approved_at: null,
+          approved_by: null,
+          matched_sweep_tx_hash: '0xsweep-1',
+          matched_sweep_block_number: '101',
+          matched_swept_at: new Date('2026-03-31T12:00:00.000Z'),
+          executed_by: 'user:uid-admin',
+          closed_at: new Date('2026-03-31T13:00:00.000Z'),
+          closed_by: 'user:uid-close',
+          created_by: 'user:uid-admin',
+          metadata: {},
+          created_at: new Date('2026-03-31T11:00:00.000Z'),
+          updated_at: new Date('2026-03-31T12:00:00.000Z'),
+        })),
+      )
+      .mockResolvedValueOnce([
+        {
+          id: 999,
+          batch_key: 'batch-q1-999',
+          accounting_period_id: 7,
+          accounting_period_key: '2026-Q1',
+          accounting_period_status: 'OPEN',
+          asset_symbol: 'USDC',
+          status: 'APPROVED',
+          expected_total_raw: '125000000',
+          payout_receiver_address: null,
+          approval_requested_at: null,
+          approval_requested_by: null,
+          approved_at: null,
+          approved_by: null,
+          matched_sweep_tx_hash: '0xsweep-999',
+          matched_sweep_block_number: '101',
+          matched_swept_at: new Date('2026-03-31T12:00:00.000Z'),
+          executed_by: 'user:uid-admin',
+          closed_at: null,
+          closed_by: null,
+          created_by: 'user:uid-admin',
+          metadata: {},
+          created_at: new Date('2026-03-31T11:00:00.000Z'),
+          updated_at: new Date('2026-03-31T12:00:00.000Z'),
+        },
+      ]);
+
+    const controller = new LoadedTreasuryController();
+    const req = {
+      params: { periodId: '7' },
+      body: { actor: 'user:uid-admin', closeReason: 'Quarter close review' },
+    } as unknown as CloseAccountingPeriodRequest;
+    const res = mockResponse();
+
+    await controller.closeAccountingPeriod(req, res);
+
+    expect(queriesModule.listSweepBatches).toHaveBeenNthCalledWith(1, {
+      accountingPeriodId: 7,
+      limit: 500,
+      offset: 0,
+    });
+    expect(queriesModule.listSweepBatches).toHaveBeenNthCalledWith(2, {
+      accountingPeriodId: 7,
+      limit: 500,
+      offset: 500,
+    });
+    expect(queriesModule.updateAccountingPeriodStatus).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: 'CloseBlocked',
+        message: expect.stringContaining('sweep batches remain open'),
+      }),
+    );
+  });
 });

@@ -22,6 +22,13 @@ export type FiatDepositFailureClass =
 
 export type BankPayoutState = 'PENDING' | 'CONFIRMED' | 'REJECTED';
 export type ReconciliationGateStatus = 'CLEAR' | 'BLOCKED' | 'UNKNOWN';
+export type TreasuryPartnerCode = 'bridge';
+export type TreasuryPartnerHandoffStatus =
+  | 'SUBMITTED'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'RETURNED';
 export type AccountingPeriodStatus = 'OPEN' | 'PENDING_CLOSE' | 'CLOSED';
 export type SweepBatchStatus =
   | 'DRAFT'
@@ -335,6 +342,94 @@ export interface BankPayoutConfirmationUpsertInput {
   actor: string;
   failureCode?: string | null;
   evidenceReference?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TreasuryPartnerHandoff {
+  id: number;
+  ledger_entry_id: number;
+  partner_code: TreasuryPartnerCode;
+  handoff_reference: string;
+  partner_status: TreasuryPartnerHandoffStatus;
+  payout_reference: string | null;
+  transfer_reference: string | null;
+  drain_reference: string | null;
+  destination_external_account_id: string | null;
+  liquidation_address_id: string | null;
+  source_amount: string | null;
+  source_currency: string | null;
+  destination_amount: string | null;
+  destination_currency: string | null;
+  actor: string;
+  note: string | null;
+  failure_code: string | null;
+  latest_event_payload_hash: string;
+  metadata: Record<string, unknown>;
+  initiated_at: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface TreasuryPartnerHandoffInput {
+  ledgerEntryId: number;
+  partnerCode: TreasuryPartnerCode;
+  handoffReference: string;
+  partnerStatus: TreasuryPartnerHandoffStatus;
+  payoutReference?: string | null;
+  transferReference?: string | null;
+  drainReference?: string | null;
+  destinationExternalAccountId?: string | null;
+  liquidationAddressId?: string | null;
+  sourceAmount?: string | null;
+  sourceCurrency?: string | null;
+  destinationAmount?: string | null;
+  destinationCurrency?: string | null;
+  actor: string;
+  note?: string | null;
+  failureCode?: string | null;
+  initiatedAt: Date;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TreasuryPartnerHandoffEvent {
+  id: number;
+  partner_handoff_id: number;
+  ledger_entry_id: number;
+  partner_code: TreasuryPartnerCode;
+  provider_event_id: string;
+  event_type: string;
+  partner_status: TreasuryPartnerHandoffStatus;
+  payout_reference: string | null;
+  transfer_reference: string | null;
+  drain_reference: string | null;
+  destination_external_account_id: string | null;
+  liquidation_address_id: string | null;
+  bank_reference: string | null;
+  bank_state: BankPayoutState | null;
+  evidence_reference: string | null;
+  failure_code: string | null;
+  payload_hash: string;
+  metadata: Record<string, unknown>;
+  observed_at: Date;
+  created_at: Date;
+}
+
+export interface TreasuryPartnerHandoffEvidenceInput {
+  ledgerEntryId: number;
+  partnerCode: TreasuryPartnerCode;
+  providerEventId: string;
+  eventType: string;
+  partnerStatus: TreasuryPartnerHandoffStatus;
+  payoutReference?: string | null;
+  transferReference?: string | null;
+  drainReference?: string | null;
+  destinationExternalAccountId?: string | null;
+  liquidationAddressId?: string | null;
+  bankReference?: string | null;
+  bankState?: BankPayoutState | null;
+  evidenceReference?: string | null;
+  failureCode?: string | null;
+  observedAt: Date;
   metadata?: Record<string, unknown>;
 }
 

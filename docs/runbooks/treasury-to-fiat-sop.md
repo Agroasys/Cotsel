@@ -48,12 +48,16 @@ If `TREASURY_AUTH_ENABLED=true`, include required HMAC headers on internal treas
 
 ## Safety Guardrails
 
+- Never execute payout without an approved ledger entry and evidence package.
 - Never treat this SOP as a substitute for gateway-owned treasury sweep approval.
 - Never use treasury evidence routes as a public admin mutation surface.
 - Never skip payout state transitions or force `EXTERNAL_EXECUTION_CONFIRMED` directly.
 - Never represent Cotsel or Agroasys as the direct bank or off-ramp executor.
+- Never represent Cotsel or Agroasys as the party that owns bank payout finality; the licensed payout partner owns rail execution and completion truth.
 - Never route treasury execution through participant wallet infrastructure.
+- Never route treasury execution through buyer-facing AA, paymaster, or sponsored-gas shortcuts; treasury operators must use the explicit privileged signer path only.
 - Never improvise a new payout destination; treasury sweep destination remains contract-controlled.
+- When Bridge is the execution partner, never bypass the treasury handoff and evidence routes. Use the controlled flow documented in [`bridge-treasury-handoff-operations.md`](./bridge-treasury-handoff-operations.md).
 
 ## Treasury Payout Lifecycle
 
@@ -183,6 +187,30 @@ Do not continue if:
 - the entry still has unresolved exception evidence
 
 ### 3. Start the external execution window
+
+Validate current state and transition legality against the payout state machine in `treasury/src/core/payout.ts` before sending anything to the external execution partner.
+
+Record the Bridge execution handoff itself through the treasury handoff route:
+
+```bash
+curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/internal/entries/<entry-id>/partner-handoff" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "partnerCode":"bridge",
+    "handoffReference":"bridge-handoff-2026-03-26-001",
+    "partnerStatus":"SUBMITTED",
+    "transferReference":"bridge-transfer-2026-03-26-001",
+    "destinationExternalAccountId":"bridge-external-account-001",
+    "sourceAmount":"1000000",
+    "sourceCurrency":"USDC",
+    "destinationAmount":"1000000",
+    "destinationCurrency":"USD",
+    "actor":"Treasury Operator",
+    "note":"Bridge execution handoff recorded from Cotsel treasury",
+    "initiatedAt":"2026-03-26T00:00:00.000Z",
+    "metadata":{"submittedBy":"Treasury Operator"}
+  }'
+```
 
 Once the request has been handed to the external regulated counterparty, move the entry into
 waiting state:

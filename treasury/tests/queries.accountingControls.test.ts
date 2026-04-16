@@ -13,6 +13,7 @@ jest.mock('../src/database/connection', () => ({
 import {
   addSweepBatchEntry,
   createAccountingPeriod,
+  listLedgerEntryAccountingProjections,
   createSweepBatch,
   updateSweepBatchStatus,
   upsertTreasuryClaimEvent,
@@ -187,6 +188,93 @@ describe('treasury accounting control queries', () => {
 
     expect(result.status).toBe('APPROVED');
     expect(result.approved_by).toBe('approver-2');
+  });
+
+  it('preserves the original executor when a sweep batch advances from EXECUTED to HANDED_OFF', async () => {
+    mockClientQuery
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 10,
+            status: 'EXECUTED',
+            created_by: 'operator-1',
+            approval_requested_by: 'operator-1',
+            approved_by: 'approver-2',
+            executed_by: 'executor-3',
+            closed_at: null,
+            closed_by: null,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ id: 10, status: 'HANDED_OFF', executed_by: 'executor-3' }],
+      })
+      .mockResolvedValueOnce({});
+
+    const result = await updateSweepBatchStatus({
+      batchId: 10,
+      status: 'HANDED_OFF',
+      actor: 'handoff-operator-4',
+    });
+
+    expect(mockClientQuery.mock.calls[2][1][9]).toBe('executor-3');
+    expect(result.executed_by).toBe('executor-3');
+  });
+
+  it('applies accountingState filtering before pagination semantics', async () => {
+    const makeFacts = (id: number, state: 'READY' | 'SWEPT') => ({
+      ledger_entry_id: id,
+      trade_id: `trade-${id}`,
+      component_type: 'PLATFORM_FEE',
+      amount_raw: '125000000',
+      allocated_amount_raw: state === 'READY' ? null : '125000000',
+      earned_at: new Date(`2026-03-${String((id % 28) + 1).padStart(2, '0')}T10:00:00.000Z`),
+      payout_state:
+        state === 'READY' ? 'READY_FOR_EXTERNAL_HANDOFF' : 'EXTERNAL_EXECUTION_CONFIRMED',
+      accounting_period_id: 7,
+      accounting_period_key: '2026-Q1',
+      accounting_period_status: 'OPEN',
+      sweep_batch_id: state === 'READY' ? null : 11,
+      sweep_batch_status: state === 'READY' ? null : 'EXECUTED',
+      allocation_status: state === 'READY' ? null : 'ALLOCATED',
+      matched_sweep_tx_hash: state === 'READY' ? null : `0xsweep-${id}`,
+      matched_sweep_block_number: state === 'READY' ? null : 101,
+      matched_swept_at: state === 'READY' ? null : new Date('2026-03-31T12:00:00.000Z'),
+      matched_treasury_identity: state === 'READY' ? null : '0xtreasury',
+      matched_payout_receiver: state === 'READY' ? null : '0xpayout',
+      matched_claim_amount_raw: state === 'READY' ? null : '125000000',
+      partner_handoff_id: null,
+      partner_name: null,
+      partner_reference: null,
+      partner_handoff_status: null,
+      partner_completed_at: null,
+      latest_fiat_deposit_state: 'FUNDED',
+      latest_bank_payout_state: 'CONFIRMED',
+      revenue_realization_status: null,
+      realized_at: null,
+    });
+
+    mockPoolQuery
+      .mockResolvedValueOnce({
+        rows: [
+          makeFacts(1, 'READY'),
+          ...Array.from({ length: 49 }, (_, index) => makeFacts(index + 2, 'SWEPT')),
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [makeFacts(99, 'SWEPT')],
+      });
+
+    const projections = await listLedgerEntryAccountingProjections({
+      accountingState: 'SWEPT',
+      limit: 1,
+      offset: 49,
+    });
+
+    expect(projections).toHaveLength(1);
+    expect(projections[0].ledger_entry_id).toBe(99);
+    expect(mockPoolQuery).toHaveBeenCalledTimes(2);
   });
 
   it('blocks treasury claim evidence reuse across sweep batches', async () => {

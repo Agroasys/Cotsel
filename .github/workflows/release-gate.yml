@@ -840,6 +840,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.treasury == 'true'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       WORKSPACE: treasury
     steps:

@@ -108,6 +108,31 @@ CREATE TABLE IF NOT EXISTS bank_payout_confirmations (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS treasury_partner_handoffs (
+    id SERIAL PRIMARY KEY,
+    ledger_entry_id INT NOT NULL UNIQUE REFERENCES treasury_ledger_entries(id) ON DELETE CASCADE,
+    partner_code VARCHAR(32) NOT NULL,
+    handoff_reference VARCHAR(255) NOT NULL UNIQUE,
+    partner_status VARCHAR(32) NOT NULL,
+    payout_reference VARCHAR(255),
+    transfer_reference VARCHAR(255),
+    drain_reference VARCHAR(255),
+    destination_external_account_id VARCHAR(255),
+    liquidation_address_id VARCHAR(255),
+    source_amount TEXT,
+    source_currency VARCHAR(32),
+    destination_amount TEXT,
+    destination_currency VARCHAR(32),
+    actor VARCHAR(255) NOT NULL,
+    note TEXT,
+    failure_code VARCHAR(255),
+    latest_event_payload_hash CHAR(64) NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    initiated_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS accounting_periods (
     id SERIAL PRIMARY KEY,
     period_key VARCHAR(64) NOT NULL UNIQUE CHECK (length(trim(period_key)) > 0),
@@ -147,6 +172,29 @@ CREATE TABLE IF NOT EXISTS sweep_batches (
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS treasury_partner_handoff_events (
+    id SERIAL PRIMARY KEY,
+    partner_handoff_id INT NOT NULL REFERENCES treasury_partner_handoffs(id) ON DELETE CASCADE,
+    ledger_entry_id INT NOT NULL REFERENCES treasury_ledger_entries(id) ON DELETE CASCADE,
+    partner_code VARCHAR(32) NOT NULL,
+    provider_event_id VARCHAR(255) NOT NULL UNIQUE,
+    event_type VARCHAR(64) NOT NULL,
+    partner_status VARCHAR(32) NOT NULL,
+    payout_reference VARCHAR(255),
+    transfer_reference VARCHAR(255),
+    drain_reference VARCHAR(255),
+    destination_external_account_id VARCHAR(255),
+    liquidation_address_id VARCHAR(255),
+    bank_reference VARCHAR(255),
+    bank_state VARCHAR(32),
+    evidence_reference VARCHAR(255),
+    failure_code VARCHAR(255),
+    payload_hash CHAR(64) NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    observed_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS sweep_batch_entries (
@@ -211,7 +259,6 @@ CREATE TABLE IF NOT EXISTS treasury_claim_events (
 ALTER TABLE sweep_batches
     ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP,
     ADD COLUMN IF NOT EXISTS closed_by VARCHAR(255);
-
 INSERT INTO treasury_ingestion_state (cursor_name, next_offset)
 VALUES ('trade_events', 0)
 ON CONFLICT (cursor_name) DO NOTHING;
@@ -227,6 +274,9 @@ CREATE INDEX IF NOT EXISTS idx_fiat_deposit_ledger_observed ON fiat_deposit_refe
 CREATE INDEX IF NOT EXISTS idx_fiat_deposit_state_observed ON fiat_deposit_references(deposit_state, observed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_fiat_deposit_event_reference_created ON fiat_deposit_events(fiat_deposit_reference_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bank_payout_confirmation_ledger_confirmed ON bank_payout_confirmations(ledger_entry_id, confirmed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_treasury_partner_handoff_ledger_updated ON treasury_partner_handoffs(ledger_entry_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_treasury_partner_handoff_status_updated ON treasury_partner_handoffs(partner_status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_treasury_partner_handoff_event_ledger_created ON treasury_partner_handoff_events(ledger_entry_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_accounting_period_status_dates ON accounting_periods(status, starts_at DESC, ends_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sweep_batches_period_status_created ON sweep_batches(accounting_period_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sweep_batch_entries_batch_created ON sweep_batch_entries(sweep_batch_id, created_at DESC);
@@ -263,6 +313,8 @@ BEGIN
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE fiat_deposit_references TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE fiat_deposit_events TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bank_payout_confirmations TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE treasury_partner_handoffs TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE treasury_partner_handoff_events TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE accounting_periods TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE sweep_batches TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE sweep_batch_entries TO %I', runtime_user);
@@ -274,6 +326,8 @@ BEGIN
         EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE fiat_deposit_references_id_seq TO %I', runtime_user);
         EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE fiat_deposit_events_id_seq TO %I', runtime_user);
         EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE bank_payout_confirmations_id_seq TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE treasury_partner_handoffs_id_seq TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE treasury_partner_handoff_events_id_seq TO %I', runtime_user);
         EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE accounting_periods_id_seq TO %I', runtime_user);
         EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE sweep_batches_id_seq TO %I', runtime_user);
         EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE sweep_batch_entries_id_seq TO %I', runtime_user);
@@ -339,10 +393,26 @@ CREATE POLICY bank_payout_confirmations_service_isolation ON bank_payout_confirm
     USING (current_app_service_name() = 'treasury')
     WITH CHECK (current_app_service_name() = 'treasury');
 
+ALTER TABLE treasury_partner_handoffs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE treasury_partner_handoffs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS treasury_partner_handoffs_service_isolation ON treasury_partner_handoffs;
+CREATE POLICY treasury_partner_handoffs_service_isolation ON treasury_partner_handoffs
+    FOR ALL
+    USING (current_app_service_name() = 'treasury')
+    WITH CHECK (current_app_service_name() = 'treasury');
+
 ALTER TABLE accounting_periods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE accounting_periods FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS accounting_periods_service_isolation ON accounting_periods;
 CREATE POLICY accounting_periods_service_isolation ON accounting_periods
+    FOR ALL
+    USING (current_app_service_name() = 'treasury')
+    WITH CHECK (current_app_service_name() = 'treasury');
+
+ALTER TABLE treasury_partner_handoff_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE treasury_partner_handoff_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS treasury_partner_handoff_events_service_isolation ON treasury_partner_handoff_events;
+CREATE POLICY treasury_partner_handoff_events_service_isolation ON treasury_partner_handoff_events
     FOR ALL
     USING (current_app_service_name() = 'treasury')
     WITH CHECK (current_app_service_name() = 'treasury');
