@@ -701,10 +701,7 @@ export async function updateSweepBatchStatus(data: {
       data.status === 'PENDING_APPROVAL' ? data.actor : existing.approval_requested_by;
     const approvedAt = data.status === 'APPROVED' ? new Date() : existing.approved_at;
     const approvedBy = data.status === 'APPROVED' ? data.actor : existing.approved_by;
-    const executedBy =
-      data.status === 'EXECUTED' || data.status === 'HANDED_OFF'
-        ? data.actor
-        : existing.executed_by;
+    const executedBy = data.status === 'EXECUTED' ? data.actor : existing.executed_by;
     const closedAt = data.status === 'CLOSED' ? new Date() : existing.closed_at;
     const closedBy = data.status === 'CLOSED' ? data.actor : existing.closed_by;
 
@@ -1222,15 +1219,10 @@ export async function listLedgerEntryAccountingProjections(filters?: {
   }
 
   const limit = filters?.limit ?? 50;
-  values.push(limit);
-  const limitParam = `$${values.length}`;
   const offset = filters?.offset ?? 0;
-  values.push(offset);
-  const offsetParam = `$${values.length}`;
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
 
-  const result = await pool.query<LedgerEntryAccountingFacts>(
-    `SELECT
+  const baseQuery = `SELECT
         e.id AS ledger_entry_id,
         e.trade_id,
         e.component_type,
@@ -1301,19 +1293,60 @@ export async function listLedgerEntryAccountingProjections(filters?: {
         LIMIT 1
       ) bank ON TRUE
       ${whereClause}
-      ORDER BY e.source_timestamp DESC, e.id DESC
-      LIMIT ${limitParam} OFFSET ${offsetParam}`,
-    values,
-  );
+      ORDER BY e.source_timestamp DESC, e.id DESC`;
 
-  const projections = result.rows.map((row) => projectLedgerEntryAccountingState(row));
   if (!filters?.accountingState) {
-    return projections;
+    const unfilteredValues = [...values, limit, offset];
+    const limitParam = `$${unfilteredValues.length - 1}`;
+    const offsetParam = `$${unfilteredValues.length}`;
+    const result = await pool.query<LedgerEntryAccountingFacts>(
+      `${baseQuery}
+       LIMIT ${limitParam} OFFSET ${offsetParam}`,
+      unfilteredValues,
+    );
+    return result.rows.map((row) => projectLedgerEntryAccountingState(row));
   }
 
-  return projections.filter(
-    (projection) => projection.accounting_state === filters.accountingState,
-  );
+  const projections: ReturnType<typeof projectLedgerEntryAccountingState>[] = [];
+  const chunkSize = Math.max(limit * 4, 50);
+  let rawOffset = 0;
+  let filteredOffset = offset;
+
+  while (projections.length < limit) {
+    const chunkValues = [...values, chunkSize, rawOffset];
+    const limitParam = `$${chunkValues.length - 1}`;
+    const offsetParam = `$${chunkValues.length}`;
+    const result = await pool.query<LedgerEntryAccountingFacts>(
+      `${baseQuery}
+       LIMIT ${limitParam} OFFSET ${offsetParam}`,
+      chunkValues,
+    );
+    if (result.rows.length === 0) {
+      break;
+    }
+
+    const matchingProjections = result.rows
+      .map((row) => projectLedgerEntryAccountingState(row))
+      .filter((projection) => projection.accounting_state === filters.accountingState);
+
+    for (const projection of matchingProjections) {
+      if (filteredOffset > 0) {
+        filteredOffset -= 1;
+        continue;
+      }
+      projections.push(projection);
+      if (projections.length === limit) {
+        break;
+      }
+    }
+
+    rawOffset += result.rows.length;
+    if (result.rows.length < chunkSize) {
+      break;
+    }
+  }
+
+  return projections;
 }
 
 export async function getLedgerEntryAccountingProjection(

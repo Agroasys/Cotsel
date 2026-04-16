@@ -537,11 +537,19 @@ export class TreasuryController {
     try {
       const periodId = parsePeriodId(req.params.periodId);
       const body = requireObject<UpdateAccountingPeriodStatusBody>(req.body, 'body');
-      const batches = await listSweepBatches({
-        accountingPeriodId: periodId,
-        limit: 500,
-        offset: 0,
-      });
+      const batches = [];
+      const pageSize = 500;
+      for (let offset = 0; ; offset += pageSize) {
+        const page = await listSweepBatches({
+          accountingPeriodId: periodId,
+          limit: pageSize,
+          offset,
+        });
+        batches.push(...page);
+        if (page.length < pageSize) {
+          break;
+        }
+      }
       const openBatches = batches.filter((batch) => !['CLOSED', 'VOID'].includes(batch.status));
       if (openBatches.length > 0) {
         throw new HttpError(
