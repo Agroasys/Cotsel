@@ -91,6 +91,15 @@ describe('treasury service-authenticated routes', () => {
       upsertBankConfirmation: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, route: 'bank-confirmation' });
       },
+      getPartnerHandoff: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'partner-handoff' });
+      },
+      upsertPartnerHandoff: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'partner-handoff-upsert' });
+      },
+      appendPartnerHandoffEvidence: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'partner-handoff-evidence' });
+      },
       upsertDeposit: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, route: 'deposits' });
       },

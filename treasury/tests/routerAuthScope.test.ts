@@ -37,6 +37,15 @@ describe('treasury router auth scope', () => {
       upsertBankConfirmation: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { confirmed: true } });
       },
+      getPartnerHandoff: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { handoff: true } });
+      },
+      upsertPartnerHandoff: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { handoffCreated: true } });
+      },
+      appendPartnerHandoffEvidence: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { evidence: true } });
+      },
       upsertDeposit: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { stored: true } });
       },

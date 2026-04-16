@@ -20,13 +20,22 @@ import { assertFiatDepositState, FiatDepositConflictError } from '../core/fiatDe
 import { assertValidTransition } from '../core/payout';
 import {
   appendPayoutState,
+  appendTreasuryPartnerHandoffEvidence,
+  getTreasuryPartnerHandoffByLedgerEntryId,
   getLatestPayoutState,
   getLedgerEntries,
   getLedgerEntryById,
+  upsertTreasuryPartnerHandoff,
   upsertBankPayoutConfirmation,
   upsertFiatDepositReference,
 } from '../database/queries';
-import { BankPayoutState, FiatDepositState, PayoutState } from '../types';
+import {
+  BankPayoutState,
+  FiatDepositState,
+  PayoutState,
+  TreasuryPartnerCode,
+  TreasuryPartnerHandoffStatus,
+} from '../types';
 
 const PAYOUT_STATES: PayoutState[] = [
   'PENDING_REVIEW',
@@ -37,6 +46,14 @@ const PAYOUT_STATES: PayoutState[] = [
 ];
 
 const EXPORT_FORMATS = ['json', 'csv'] as const;
+const PARTNER_CODES: TreasuryPartnerCode[] = ['bridge'];
+const PARTNER_HANDOFF_STATUSES: TreasuryPartnerHandoffStatus[] = [
+  'SUBMITTED',
+  'PROCESSING',
+  'COMPLETED',
+  'FAILED',
+  'RETURNED',
+];
 
 type AppendStateBody = {
   state?: string;
@@ -70,6 +87,46 @@ type UpsertBankConfirmationBody = {
   actor?: string;
   failureCode?: string | null;
   evidenceReference?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+type UpsertPartnerHandoffBody = {
+  partnerCode?: TreasuryPartnerCode;
+  handoffReference?: string;
+  partnerStatus?: TreasuryPartnerHandoffStatus;
+  payoutReference?: string | null;
+  transferReference?: string | null;
+  drainReference?: string | null;
+  destinationExternalAccountId?: string | null;
+  liquidationAddressId?: string | null;
+  sourceAmount?: string | null;
+  sourceCurrency?: string | null;
+  destinationAmount?: string | null;
+  destinationCurrency?: string | null;
+  actor?: string;
+  note?: string | null;
+  failureCode?: string | null;
+  initiatedAt?: string;
+  metadata?: Record<string, unknown>;
+};
+
+type UpsertPartnerEvidenceBody = {
+  partnerCode?: TreasuryPartnerCode;
+  providerEventId?: string;
+  eventType?: string;
+  partnerStatus?: TreasuryPartnerHandoffStatus;
+  payoutReference?: string | null;
+  transferReference?: string | null;
+  drainReference?: string | null;
+  destinationExternalAccountId?: string | null;
+  liquidationAddressId?: string | null;
+  bankReference?: string | null;
+  bankState?: BankPayoutState | null;
+  evidenceReference?: string | null;
+  failureCode?: string | null;
+  actor?: string;
+  source?: string;
+  observedAt?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -143,6 +200,22 @@ function mapValidationError(error: unknown, fallbackMessage: string) {
 function assertPayoutState(value: string): asserts value is PayoutState {
   if (!PAYOUT_STATES.includes(value as PayoutState)) {
     throw new HttpError(400, 'ValidationError', 'state must be a valid payout state');
+  }
+}
+
+function assertPartnerCode(value: string): asserts value is TreasuryPartnerCode {
+  if (!PARTNER_CODES.includes(value as TreasuryPartnerCode)) {
+    throw new HttpError(400, 'ValidationError', 'partnerCode must be a supported partner code');
+  }
+}
+
+function assertPartnerHandoffStatus(value: string): asserts value is TreasuryPartnerHandoffStatus {
+  if (!PARTNER_HANDOFF_STATUSES.includes(value as TreasuryPartnerHandoffStatus)) {
+    throw new HttpError(
+      400,
+      'ValidationError',
+      'partnerStatus must be a valid treasury partner handoff status',
+    );
   }
 }
 
@@ -387,6 +460,200 @@ export class TreasuryController {
       }
 
       const response = mapValidationError(error, 'Failed to persist bank payout confirmation');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async getPartnerHandoff(req: Request<{ entryId: string }>, res: Response): Promise<void> {
+    try {
+      const entryId = parseEntryId(req.params.entryId);
+      const handoff = await getTreasuryPartnerHandoffByLedgerEntryId(entryId);
+
+      if (!handoff) {
+        res.status(404).json(failure('NotFound', 'Treasury partner handoff not found'));
+        return;
+      }
+
+      res.status(200).json(success(handoff));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to load treasury partner handoff');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async upsertPartnerHandoff(
+    req: Request<{ entryId: string }, Record<string, never>, UpsertPartnerHandoffBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const entryId = parseEntryId(req.params.entryId);
+      const body = requireObject<UpsertPartnerHandoffBody>(req.body, 'body');
+      const partnerCode = requireString(body.partnerCode, 'partnerCode');
+      const partnerStatus = requireString(body.partnerStatus, 'partnerStatus');
+      assertPartnerCode(partnerCode);
+      assertPartnerHandoffStatus(partnerStatus);
+
+      const latest = await getLatestPayoutState(entryId);
+      if ((latest?.state ?? 'PENDING_REVIEW') !== 'READY_FOR_PARTNER_SUBMISSION') {
+        throw new HttpError(
+          409,
+          'InvalidState',
+          'Treasury partner handoff can only start from READY_FOR_PARTNER_SUBMISSION.',
+        );
+      }
+
+      const result = await upsertTreasuryPartnerHandoff({
+        ledgerEntryId: entryId,
+        partnerCode,
+        handoffReference: requireString(body.handoffReference, 'handoffReference'),
+        partnerStatus,
+        payoutReference: optionalNullableString(body.payoutReference, 'payoutReference'),
+        transferReference: optionalNullableString(body.transferReference, 'transferReference'),
+        drainReference: optionalNullableString(body.drainReference, 'drainReference'),
+        destinationExternalAccountId: optionalNullableString(
+          body.destinationExternalAccountId,
+          'destinationExternalAccountId',
+        ),
+        liquidationAddressId: optionalNullableString(
+          body.liquidationAddressId,
+          'liquidationAddressId',
+        ),
+        sourceAmount: optionalNullableString(body.sourceAmount, 'sourceAmount'),
+        sourceCurrency: optionalNullableString(body.sourceCurrency, 'sourceCurrency'),
+        destinationAmount: optionalNullableString(body.destinationAmount, 'destinationAmount'),
+        destinationCurrency: optionalNullableString(
+          body.destinationCurrency,
+          'destinationCurrency',
+        ),
+        actor: requireString(body.actor, 'actor'),
+        note: optionalNullableString(body.note, 'note'),
+        failureCode: optionalNullableString(body.failureCode, 'failureCode'),
+        initiatedAt: parseObservedAt(body.initiatedAt, 'initiatedAt'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      let stateEvent = null;
+      if (result.created) {
+        stateEvent = await appendPayoutState({
+          ledgerEntryId: entryId,
+          state: 'AWAITING_PARTNER_UPDATE',
+          note:
+            result.handoff.note ||
+            'Treasury handoff recorded for Bridge execution; awaiting partner update.',
+          actor: result.handoff.actor,
+        });
+      }
+
+      res.status(200).json(
+        success({
+          handoff: result.handoff,
+          created: result.created,
+          idempotentReplay: result.idempotentReplay,
+          stateEvent,
+        }),
+      );
+    } catch (error: unknown) {
+      if (error instanceof BankPayoutConflictError) {
+        res.status(409).json(buildFailure(409, 'Conflict', error.message, { code: error.code }));
+        return;
+      }
+
+      const response = mapValidationError(error, 'Failed to persist treasury partner handoff');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async appendPartnerHandoffEvidence(
+    req: Request<{ entryId: string }, Record<string, never>, UpsertPartnerEvidenceBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const entryId = parseEntryId(req.params.entryId);
+      const body = requireObject<UpsertPartnerEvidenceBody>(req.body, 'body');
+      const partnerCode = requireString(body.partnerCode, 'partnerCode');
+      const partnerStatus = requireString(body.partnerStatus, 'partnerStatus');
+      assertPartnerCode(partnerCode);
+      assertPartnerHandoffStatus(partnerStatus);
+
+      const evidence = await appendTreasuryPartnerHandoffEvidence({
+        ledgerEntryId: entryId,
+        partnerCode,
+        providerEventId: requireString(body.providerEventId, 'providerEventId'),
+        eventType: requireString(body.eventType, 'eventType'),
+        partnerStatus,
+        payoutReference: optionalNullableString(body.payoutReference, 'payoutReference'),
+        transferReference: optionalNullableString(body.transferReference, 'transferReference'),
+        drainReference: optionalNullableString(body.drainReference, 'drainReference'),
+        destinationExternalAccountId: optionalNullableString(
+          body.destinationExternalAccountId,
+          'destinationExternalAccountId',
+        ),
+        liquidationAddressId: optionalNullableString(
+          body.liquidationAddressId,
+          'liquidationAddressId',
+        ),
+        bankReference: optionalNullableString(body.bankReference, 'bankReference'),
+        bankState:
+          body.bankState === undefined || body.bankState === null
+            ? null
+            : (requireString(body.bankState, 'bankState') as BankPayoutState),
+        evidenceReference: optionalNullableString(body.evidenceReference, 'evidenceReference'),
+        failureCode: optionalNullableString(body.failureCode, 'failureCode'),
+        observedAt: parseObservedAt(body.observedAt, 'observedAt'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      let confirmation = null;
+      let completionEvent = null;
+      if (body.bankReference && body.bankState && body.actor && body.source) {
+        assertBankPayoutState(body.bankState);
+        const bankResult = await upsertBankPayoutConfirmation({
+          ledgerEntryId: entryId,
+          payoutReference: optionalNullableString(body.payoutReference, 'payoutReference'),
+          bankReference: requireString(body.bankReference, 'bankReference'),
+          bankState: body.bankState,
+          confirmedAt: parseObservedAt(body.observedAt, 'observedAt'),
+          source: requireString(body.source, 'source'),
+          actor: requireString(body.actor, 'actor'),
+          failureCode: optionalNullableString(body.failureCode, 'failureCode'),
+          evidenceReference: optionalNullableString(body.evidenceReference, 'evidenceReference'),
+          metadata: optionalRecord(body.metadata, 'metadata'),
+        });
+        confirmation = bankResult.confirmation;
+
+        if (confirmation.bank_state === 'CONFIRMED') {
+          const latest = await getLatestPayoutState(entryId);
+          if (latest?.state === 'AWAITING_PARTNER_UPDATE') {
+            completionEvent = await appendPayoutState({
+              ledgerEntryId: entryId,
+              state: 'PARTNER_REPORTED_COMPLETED',
+              note: 'Auto-completed from confirmed Bridge payout evidence recorded through treasury partner handoff.',
+              actor: requireString(body.actor, 'actor'),
+            });
+          }
+        }
+      }
+
+      res.status(200).json(
+        success({
+          handoff: evidence.handoff,
+          event: evidence.event,
+          created: evidence.created,
+          idempotentReplay: evidence.idempotentReplay,
+          confirmation,
+          completionEvent,
+        }),
+      );
+    } catch (error: unknown) {
+      if (error instanceof BankPayoutConflictError) {
+        res.status(409).json(buildFailure(409, 'Conflict', error.message, { code: error.code }));
+        return;
+      }
+
+      const response = mapValidationError(
+        error,
+        'Failed to persist treasury partner handoff evidence',
+      );
       res.status(response.statusCode).json(response.body);
     }
   }

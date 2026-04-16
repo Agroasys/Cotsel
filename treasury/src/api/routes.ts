@@ -59,6 +59,21 @@ export function createRouter(
     ...protectedMiddlewares,
     controller.upsertBankConfirmation.bind(controller),
   );
+  router.get(
+    '/entries/:entryId/partner-handoff',
+    ...protectedMiddlewares,
+    controller.getPartnerHandoff.bind(controller),
+  );
+  router.post(
+    '/entries/:entryId/partner-handoff',
+    ...protectedMiddlewares,
+    controller.upsertPartnerHandoff.bind(controller),
+  );
+  router.post(
+    '/entries/:entryId/partner-handoff/evidence',
+    ...protectedMiddlewares,
+    controller.appendPartnerHandoffEvidence.bind(controller),
+  );
   router.post('/deposits', ...protectedMiddlewares, controller.upsertDeposit.bind(controller));
   router.get('/export', ...protectedMiddlewares, controller.exportEntries.bind(controller));
 

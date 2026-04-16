@@ -238,14 +238,21 @@ If not:
 - Validate current state and transition legality against state machine rules in `treasury/src/core/payout.ts` (source of truth for validation behavior).
 - Do not continue until transition path is valid.
 
-### 4. Submit to partner and await payout evidence (`AWAITING_PARTNER_UPDATE`)
+### 4. Record Bridge handoff and await payout evidence (`AWAITING_PARTNER_UPDATE`)
 
-Record start of the partner-execution window:
+Persist the external execution handoff instead of relying on a note-only state change:
 
 ```bash
-curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/state" \
+curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/partner-handoff" \
   -H "Content-Type: application/json" \
-  -d '{"state":"AWAITING_PARTNER_UPDATE","note":"Submitted to licensed payout partner; awaiting partner update","actor":"Treasury Operator"}'
+  -d '{
+    "partnerCode":"bridge",
+    "handoffReference":"bridge-handoff-2026-03-26-001",
+    "partnerStatus":"SUBMITTED",
+    "actor":"Treasury Operator",
+    "note":"Submitted to Bridge treasury execution adapter",
+    "initiatedAt":"2026-03-26T00:00:00.000Z"
+  }'
 ```
 
 Submit the approved payout request through the licensed payout partner channel.
@@ -273,7 +280,7 @@ curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/depos
 
 Expected result:
 
-- Partner submission reference is generated and linked to the payout record.
+- Bridge handoff reference is stored and the payout entry advances to `AWAITING_PARTNER_UPDATE`.
 
 If not:
 
@@ -281,7 +288,28 @@ If not:
 
 ### 5. Record partner-reported completion (`PARTNER_REPORTED_COMPLETED`) and attach evidence
 
-After partner-reported transfer confirmation:
+After Bridge-reported transfer or drain confirmation:
+
+Record Bridge evidence first:
+
+```bash
+curl -fsS -X POST "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries/<entry-id>/partner-handoff/evidence" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "partnerCode":"bridge",
+    "providerEventId":"bridge-transfer-2026-03-26-001",
+    "eventType":"transfer.updated",
+    "partnerStatus":"COMPLETED",
+    "payoutReference":"payout-2026-03-26-001",
+    "transferReference":"bridge-transfer-2026-03-26-001",
+    "bankReference":"bank-2026-03-26-001",
+    "bankState":"CONFIRMED",
+    "evidenceReference":"receipt-2026-03-26-001",
+    "actor":"Treasury Operator",
+    "source":"bridge:webhook",
+    "observedAt":"2026-03-26T04:30:00.000Z"
+  }'
+```
 
 Record bank finality first:
 
