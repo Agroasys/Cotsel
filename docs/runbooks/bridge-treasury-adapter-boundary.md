@@ -7,3 +7,10 @@ The contracts remain unchanged. `AgroasysEscrow.sol` continues to own settlement
 The Bridge integration point in this repo is the treasury handoff and evidence layer. A treasury payout entry can be handed off to Bridge through the treasury API, which records a durable handoff reference and a stream of Bridge evidence events. Those records are audit support for external execution. They are not a second ledger and they do not replace the existing payout lifecycle or bank-confirmation rules.
 
 Completion truth still follows the existing treasury boundary: confirmed bank payout evidence is required before an entry reaches `PARTNER_REPORTED_COMPLETED`, and export remains blocked until that evidence exists. Bridge handoff records and Bridge evidence events add partner execution traceability without moving treasury authority out of `Cotsel`.
+
+Operationally, this means:
+
+- Bridge handoff creation is a durable treasury record, not an in-memory dispatch
+- duplicate handoff or evidence payloads are treated as idempotent replay only when the payload matches exactly
+- conflicting handoff or evidence payloads are rejected instead of silently mutating treasury truth
+- confirmed bank evidence still gates treasury completion and export eligibility

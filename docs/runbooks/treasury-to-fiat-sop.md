@@ -69,6 +69,7 @@ Required headers:
 - Never enable or improvise new treasury automation outside the approved automation classes and change-control path.
 - Never route treasury execution through buyer-facing AA, paymaster, or sponsored-gas shortcuts; treasury operators must use the explicit privileged signer path only.
 - Never represent Cotsel or Agroasys as the party that executes bank payout finality; the licensed payout partner owns rail execution and completion truth.
+- When Bridge is the execution partner, never bypass the treasury handoff and evidence routes. Use the controlled flow documented in [`bridge-treasury-handoff-operations.md`](./bridge-treasury-handoff-operations.md).
 
 ## Fiat Ramp Deposit Contract
 
