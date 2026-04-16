@@ -4,27 +4,15 @@
 
 Operate treasury fee close as a controlled revenue-evidence workflow.
 
-This runbook covers the off-chain control layer that sits between:
+This runbook is the operator procedure for the off-chain control layer between:
 
 - on-chain fee accrual and treasury claim events
 - external execution handoff evidence
-- revenue realization
+- controlled revenue realization
 
-It does not turn Cotsel into an off-ramp or banking executor. Licensed partners remain the owner of fiat movement and completion truth.
-
-## System Truth Boundaries
-
-Canonical boundary:
+Architecture boundary, truth ownership, and canonical state semantics are defined once in:
 
 - `docs/adr/adr-0412-treasury-revenue-controls-boundary.md`
-
-Truth owners:
-
-- Contract: settlement execution truth
-- Treasury: ledger, accounting period, sweep batch, handoff, and realization truth
-- Gateway: approval and privileged action truth
-- Reconciliation: tie-out and exception truth
-- Partner: fiat movement truth
 
 ## Preconditions
 
@@ -42,15 +30,6 @@ curl -fsS "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/ready"
   - preparer must not be approver
   - approver must not be executor
   - approver or executor must not be closer
-
-## State Semantics
-
-- `HELD`: fee was earned and remains unallocated
-- `ALLOCATED_TO_SWEEP`: linked to an active draft/pending batch
-- `SWEPT`: matched on-chain treasury claim evidence exists
-- `HANDED_OFF`: partner reference has been recorded
-- `REALIZED`: controlled revenue realization has been recorded
-- `EXCEPTION`: failed partner/bank/reversal or invalid accounting condition
 
 ## Procedure
 

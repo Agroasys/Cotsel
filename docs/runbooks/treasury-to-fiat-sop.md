@@ -6,54 +6,24 @@ Define the controlled operational procedure for moving already-swept treasury va
 Cotsel-held treasury evidence into an external regulated execution path without collapsing the
 treasury boundary.
 
-This runbook is intentionally narrow:
+This SOP is intentionally narrow:
 
-- Cotsel remains treasury truth, governance truth, and reconciliation truth.
-- External regulated counterparties remain the owners of fiat movement and completion truth.
-- Agroasys and Cotsel do not become direct bank or off-ramp executors through this flow.
+- it starts after treasury value has already been swept through governed Cotsel controls
+- it covers only external execution handoff evidence, deposit evidence, bank confirmation evidence,
+  and exception handling
+- it does not make Cotsel a bank, off-ramp executor, or provider workflow engine
 
 Canonical control model:
 
 - `docs/adr/adr-0412-treasury-revenue-controls-boundary.md`
 - `docs/runbooks/treasury-revenue-close.md`
 
-## Who This Is For
+Primary operators:
 
-- `Treasury Operator`: prepares evidence packages and records external execution evidence through
-  approved internal service paths
-- `Treasury Approver`: validates controls and independently approves treasury batch progression
-- `Compliance Reviewer`: verifies audit completeness and exception handling
-- `On-call Engineer`: supports service-path failures, reconciliation mismatches, and evidence gaps
-
-## Scope
-
-- external execution handoff after treasury sweep has already been governed inside Cotsel
-- internal evidence recording for fiat-ramp deposits and bank settlement confirmation
-- exception handling for failed, partial, reversed, or rejected external execution
-
-## Non-Scope
-
-- participant walleting
-- participant banking or payout products
-- direct fiat execution by Cotsel
-- replacing sweep-batch governance with provider workflow
-- contract-level settlement logic or fee computation
-
-## Boundary Summary
-
-Truth owners:
-
-- Contract: treasury claim execution truth
-- Treasury: fee accrual ledger, payout lifecycle evidence, deposit evidence, and bank settlement
-  evidence
-- Gateway: operator approval and privileged treasury-batch actions
-- Reconciliation: tie-out and exception truth
-- External regulated counterparty: fiat-rail execution, transfer completion, failure, reversal
-
-Key rule:
-
-- External execution is a handoff plus evidence path.
-- It is not the core treasury truth and it does not replace Cotsel governance.
+- `Treasury Operator`
+- `Treasury Approver`
+- `Compliance Reviewer`
+- `On-call Engineer`
 
 ## Preconditions
 
