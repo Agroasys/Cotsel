@@ -8,6 +8,17 @@ export { OracleSDK } from './modules/oracleSDK';
 
 // ricardian helper
 export { RicardianClient } from './modules/ricardianClient';
+export { projectTreasuryAccountingState } from './modules/treasuryAccounting';
+export type {
+  TreasuryAccountingProjection,
+  TreasuryAccountingProjectionFacts,
+  TreasuryAccountingState,
+  SweepBatchAllocationStatus,
+  PartnerHandoffStatus as TreasuryPartnerHandoffStatus,
+  RevenueRealizationStatus as TreasuryRevenueRealizationStatus,
+  FiatDepositState as TreasuryFiatDepositState,
+  BankPayoutState as TreasuryBankPayoutState,
+} from './modules/treasuryAccounting';
 
 // service-to-service auth helper
 export {

@@ -3,6 +3,7 @@ import { TreasuryController } from './controller';
 
 export interface TreasuryRouterOptions {
   authMiddleware?: RequestHandler;
+  mutationAuthMiddleware?: RequestHandler;
   readinessCheck?: () => Promise<void>;
 }
 
@@ -46,36 +47,123 @@ export function createRouter(
   const protectedMiddlewares: RequestHandler[] = [options.authMiddleware].filter(
     Boolean,
   ) as RequestHandler[];
+  const internalMutationMiddlewares: RequestHandler[] = [
+    options.authMiddleware,
+    options.mutationAuthMiddleware,
+  ].filter(Boolean) as RequestHandler[];
 
-  router.post('/ingest', ...protectedMiddlewares, controller.ingest.bind(controller));
-  router.get('/entries', ...protectedMiddlewares, controller.listEntries.bind(controller));
-  router.post(
-    '/entries/:entryId/state',
+  router.get(
+    '/reconciliation/control-summary',
     ...protectedMiddlewares,
+    controller.getReconciliationControlSummary.bind(controller),
+  );
+  router.get('/entries', ...protectedMiddlewares, controller.listEntries.bind(controller));
+  router.get(
+    '/entries/accounting',
+    ...protectedMiddlewares,
+    controller.listEntryAccounting.bind(controller),
+  );
+  router.get(
+    '/entries/:entryId/accounting',
+    ...protectedMiddlewares,
+    controller.getEntryAccounting.bind(controller),
+  );
+  router.get(
+    '/accounting-periods',
+    ...protectedMiddlewares,
+    controller.listAccountingPeriods.bind(controller),
+  );
+  router.get(
+    '/sweep-batches',
+    ...protectedMiddlewares,
+    controller.listSweepBatches.bind(controller),
+  );
+  router.get(
+    '/sweep-batches/:batchId',
+    ...protectedMiddlewares,
+    controller.getSweepBatch.bind(controller),
+  );
+  router.get('/export', ...protectedMiddlewares, controller.exportEntries.bind(controller));
+  router.post(
+    '/internal/ingest',
+    ...internalMutationMiddlewares,
+    controller.ingest.bind(controller),
+  );
+  router.post(
+    '/internal/entries/:entryId/state',
+    ...internalMutationMiddlewares,
     controller.appendState.bind(controller),
   );
   router.post(
-    '/entries/:entryId/bank-confirmation',
-    ...protectedMiddlewares,
+    '/internal/entries/:entryId/realizations',
+    ...internalMutationMiddlewares,
+    controller.createEntryRealization.bind(controller),
+  );
+  router.post(
+    '/internal/entries/:entryId/bank-confirmation',
+    ...internalMutationMiddlewares,
     controller.upsertBankConfirmation.bind(controller),
   );
-  router.get(
-    '/entries/:entryId/partner-handoff',
-    ...protectedMiddlewares,
-    controller.getPartnerHandoff.bind(controller),
+  router.post(
+    '/internal/accounting-periods',
+    ...internalMutationMiddlewares,
+    controller.createAccountingPeriod.bind(controller),
   );
   router.post(
-    '/entries/:entryId/partner-handoff',
-    ...protectedMiddlewares,
-    controller.upsertPartnerHandoff.bind(controller),
+    '/internal/accounting-periods/:periodId/request-close',
+    ...internalMutationMiddlewares,
+    controller.requestAccountingPeriodClose.bind(controller),
   );
   router.post(
-    '/entries/:entryId/partner-handoff/evidence',
-    ...protectedMiddlewares,
-    controller.appendPartnerHandoffEvidence.bind(controller),
+    '/internal/accounting-periods/:periodId/close',
+    ...internalMutationMiddlewares,
+    controller.closeAccountingPeriod.bind(controller),
   );
-  router.post('/deposits', ...protectedMiddlewares, controller.upsertDeposit.bind(controller));
-  router.get('/export', ...protectedMiddlewares, controller.exportEntries.bind(controller));
+  router.post(
+    '/internal/sweep-batches',
+    ...internalMutationMiddlewares,
+    controller.createSweepBatch.bind(controller),
+  );
+  router.post(
+    '/internal/sweep-batches/:batchId/entries',
+    ...internalMutationMiddlewares,
+    controller.addSweepBatchEntry.bind(controller),
+  );
+  router.post(
+    '/internal/sweep-batches/:batchId/request-approval',
+    ...internalMutationMiddlewares,
+    controller.requestSweepBatchApproval.bind(controller),
+  );
+  router.post(
+    '/internal/sweep-batches/:batchId/approve',
+    ...internalMutationMiddlewares,
+    controller.approveSweepBatch.bind(controller),
+  );
+  router.post(
+    '/internal/sweep-batches/:batchId/match-execution',
+    ...internalMutationMiddlewares,
+    controller.markSweepBatchExecuted.bind(controller),
+  );
+  router.post(
+    '/internal/sweep-batches/:batchId/external-handoff',
+    ...internalMutationMiddlewares,
+    controller.recordPartnerHandoff.bind(controller),
+  );
+  router.post(
+    '/internal/sweep-batches/:batchId/partner-handoff',
+    ...internalMutationMiddlewares,
+    controller.recordPartnerHandoff.bind(controller),
+  );
+  router.post(
+    '/internal/sweep-batches/:batchId/close',
+    ...internalMutationMiddlewares,
+    controller.closeSweepBatch.bind(controller),
+  );
+  router.post(
+    '/internal/deposits',
+    ...internalMutationMiddlewares,
+    controller.upsertDeposit.bind(controller),
+  );
 
   return router;
 }

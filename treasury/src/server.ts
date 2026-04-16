@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import type { Request, Response, NextFunction } from 'express';
 import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
 import { config } from './config';
 import { createRouter } from './api/routes';
@@ -12,6 +13,12 @@ import { TreasuryIngestionService } from './core/ingestion';
 import { createServiceAuthMiddleware } from './auth/serviceAuth';
 import { createTreasuryNonceStore } from './auth/nonceStore';
 import { treasuryRateLimitPolicy } from './httpSecurity';
+
+type ServiceAuthRequest = Request & {
+  serviceAuth?: {
+    apiKeyId: string;
+  };
+};
 
 async function bootstrap(): Promise<void> {
   await testConnection();
@@ -39,6 +46,24 @@ async function bootstrap(): Promise<void> {
     lookupApiKey: (apiKey) => apiKeysById.get(apiKey),
     consumeNonce: nonceStore.consume,
   });
+  const mutationAuthMiddleware = (req: ServiceAuthRequest, res: Response, next: NextFunction) => {
+    if (!config.authEnabled) {
+      next();
+      return;
+    }
+
+    const apiKeyId = req.serviceAuth?.apiKeyId ?? null;
+    if (!apiKeyId || !config.internalMutationApiKeys.includes(apiKeyId)) {
+      res.status(403).json({
+        success: false,
+        code: 'INTERNAL_MUTATION_CALLER_REQUIRED',
+        error: 'Treasury mutations require an approved internal caller identity',
+      });
+      return;
+    }
+
+    next();
+  };
   const requestRateLimiter = await createHttpRateLimiter({
     enabled: config.rateLimitEnabled,
     redisUrl: config.rateLimitRedisUrl,
@@ -71,6 +96,7 @@ async function bootstrap(): Promise<void> {
     requestRateLimiter.middleware,
     createRouter(controller, {
       authMiddleware,
+      mutationAuthMiddleware,
       readinessCheck: testConnection,
     }),
   );

@@ -16,43 +16,74 @@ import {
 import { assertBankPayoutState, BankPayoutConflictError } from '../core/bankPayout';
 import { TreasuryEligibilityService } from '../core/exportEligibility';
 import { TreasuryIngestionService } from '../core/ingestion';
+import { ReconciliationGateService } from '../core/reconciliationGate';
+import { SweepExecutionMatcherService } from '../core/sweepExecutionMatcher';
 import { assertFiatDepositState, FiatDepositConflictError } from '../core/fiatDeposit';
 import { assertValidTransition } from '../core/payout';
 import {
   appendPayoutState,
-  appendTreasuryPartnerHandoffEvidence,
-  getTreasuryPartnerHandoffByLedgerEntryId,
+  addSweepBatchEntry,
+  createAccountingPeriod,
+  createRevenueRealization,
+  createSweepBatch,
+  listLedgerEntryAccountingProjections,
+  getLedgerEntryAccountingProjection,
   getLatestPayoutState,
   getLedgerEntries,
   getLedgerEntryById,
-  upsertTreasuryPartnerHandoff,
+  getSweepBatchDetail,
+  listDistinctLedgerTradeIds,
+  listAccountingPeriods,
+  listSweepBatches,
+  updateAccountingPeriodStatus,
+  updateSweepBatchStatus,
+  upsertPartnerHandoff,
   upsertBankPayoutConfirmation,
   upsertFiatDepositReference,
 } from '../database/queries';
 import {
+  AccountingPeriodStatus,
   BankPayoutState,
   FiatDepositState,
+  PartnerHandoffStatus,
   PayoutState,
-  TreasuryPartnerCode,
-  TreasuryPartnerHandoffStatus,
+  SweepBatchStatus,
+  TreasuryAccountingState,
 } from '../types';
 
 const PAYOUT_STATES: PayoutState[] = [
   'PENDING_REVIEW',
-  'READY_FOR_PARTNER_SUBMISSION',
-  'AWAITING_PARTNER_UPDATE',
-  'PARTNER_REPORTED_COMPLETED',
+  'READY_FOR_EXTERNAL_HANDOFF',
+  'AWAITING_EXTERNAL_CONFIRMATION',
+  'EXTERNAL_EXECUTION_CONFIRMED',
   'CANCELLED',
 ];
 
 const EXPORT_FORMATS = ['json', 'csv'] as const;
-const PARTNER_CODES: TreasuryPartnerCode[] = ['bridge'];
-const PARTNER_HANDOFF_STATUSES: TreasuryPartnerHandoffStatus[] = [
+const ACCOUNTING_PERIOD_STATUSES: AccountingPeriodStatus[] = ['OPEN', 'PENDING_CLOSE', 'CLOSED'];
+const SWEEP_BATCH_STATUSES: SweepBatchStatus[] = [
+  'DRAFT',
+  'PENDING_APPROVAL',
+  'APPROVED',
+  'EXECUTED',
+  'HANDED_OFF',
+  'CLOSED',
+  'VOID',
+];
+const PARTNER_HANDOFF_STATUSES: PartnerHandoffStatus[] = [
+  'CREATED',
   'SUBMITTED',
-  'PROCESSING',
+  'ACKNOWLEDGED',
   'COMPLETED',
   'FAILED',
-  'RETURNED',
+];
+const ACCOUNTING_STATES: TreasuryAccountingState[] = [
+  'HELD',
+  'ALLOCATED_TO_SWEEP',
+  'SWEPT',
+  'HANDED_OFF',
+  'REALIZED',
+  'EXCEPTION',
 ];
 
 type AppendStateBody = {
@@ -90,43 +121,56 @@ type UpsertBankConfirmationBody = {
   metadata?: Record<string, unknown>;
 };
 
-type UpsertPartnerHandoffBody = {
-  partnerCode?: TreasuryPartnerCode;
-  handoffReference?: string;
-  partnerStatus?: TreasuryPartnerHandoffStatus;
-  payoutReference?: string | null;
-  transferReference?: string | null;
-  drainReference?: string | null;
-  destinationExternalAccountId?: string | null;
-  liquidationAddressId?: string | null;
-  sourceAmount?: string | null;
-  sourceCurrency?: string | null;
-  destinationAmount?: string | null;
-  destinationCurrency?: string | null;
-  actor?: string;
-  note?: string | null;
-  failureCode?: string | null;
-  initiatedAt?: string;
+type CreateAccountingPeriodBody = {
+  periodKey?: string;
+  startsAt?: string;
+  endsAt?: string;
+  createdBy?: string;
   metadata?: Record<string, unknown>;
 };
 
-type UpsertPartnerEvidenceBody = {
-  partnerCode?: TreasuryPartnerCode;
-  providerEventId?: string;
-  eventType?: string;
-  partnerStatus?: TreasuryPartnerHandoffStatus;
-  payoutReference?: string | null;
-  transferReference?: string | null;
-  drainReference?: string | null;
-  destinationExternalAccountId?: string | null;
-  liquidationAddressId?: string | null;
-  bankReference?: string | null;
-  bankState?: BankPayoutState | null;
-  evidenceReference?: string | null;
-  failureCode?: string | null;
+type UpdateAccountingPeriodStatusBody = {
   actor?: string;
-  source?: string;
-  observedAt?: string;
+  closeReason?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+type CreateSweepBatchBody = {
+  batchKey?: string;
+  accountingPeriodId?: number;
+  assetSymbol?: string;
+  expectedTotalRaw?: string;
+  payoutReceiverAddress?: string | null;
+  createdBy?: string;
+  metadata?: Record<string, unknown>;
+};
+
+type AddSweepBatchEntryBody = {
+  ledgerEntryId?: number;
+  allocatedBy?: string;
+  entryAmountRaw?: string;
+};
+
+type UpdateSweepBatchStatusBody = {
+  actor?: string;
+  matchedSweepTxHash?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+type UpsertPartnerHandoffBody = {
+  partnerName?: string;
+  partnerReference?: string;
+  handoffStatus?: PartnerHandoffStatus;
+  evidenceReference?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+type CreateRevenueRealizationBody = {
+  accountingPeriodId?: number;
+  sweepBatchId?: number | null;
+  partnerHandoffId?: number | null;
+  actor?: string;
+  note?: string | null;
   metadata?: Record<string, unknown>;
 };
 
@@ -137,6 +181,9 @@ type EligibilitySummary = {
   finalizedBlockNumber: number | null;
   reconciliationStatus: string;
   reconciliationRunKey: string | null;
+  reconciliationFreshness: 'FRESH' | 'STALE' | 'MISSING';
+  reconciliationCompletedAt: string | null;
+  staleRunningRunCount: number;
   eligibleForPayout: boolean;
   eligibleForExport: boolean;
   blockedReasons: string[];
@@ -150,14 +197,95 @@ function fallbackEligibility(): EligibilitySummary {
     finalizedBlockNumber: null,
     reconciliationStatus: 'UNKNOWN',
     reconciliationRunKey: null,
+    reconciliationFreshness: 'MISSING',
+    reconciliationCompletedAt: null,
+    staleRunningRunCount: 0,
     eligibleForPayout: false,
     eligibleForExport: false,
     blockedReasons: ['Eligibility state unavailable'],
   };
 }
 
+function serializeEligibility(
+  eligibility:
+    | EligibilitySummary
+    | {
+        confirmationStage: string | null;
+        latestBlockNumber: number | null;
+        safeBlockNumber: number | null;
+        finalizedBlockNumber: number | null;
+        reconciliationStatus: string;
+        reconciliationRunKey: string | null;
+        reconciliationFreshness: 'FRESH' | 'STALE' | 'MISSING';
+        reconciliationCompletedAt: Date | null;
+        staleRunningRunCount: number;
+        eligibleForPayout: boolean;
+        eligibleForExport: boolean;
+        blockedReasons: string[];
+      },
+): EligibilitySummary {
+  return {
+    confirmationStage: eligibility.confirmationStage,
+    latestBlockNumber: eligibility.latestBlockNumber,
+    safeBlockNumber: eligibility.safeBlockNumber,
+    finalizedBlockNumber: eligibility.finalizedBlockNumber,
+    reconciliationStatus: eligibility.reconciliationStatus,
+    reconciliationRunKey: eligibility.reconciliationRunKey,
+    reconciliationFreshness: eligibility.reconciliationFreshness,
+    reconciliationCompletedAt:
+      eligibility.reconciliationCompletedAt instanceof Date
+        ? eligibility.reconciliationCompletedAt.toISOString()
+        : eligibility.reconciliationCompletedAt,
+    staleRunningRunCount: eligibility.staleRunningRunCount,
+    eligibleForPayout: eligibility.eligibleForPayout,
+    eligibleForExport: eligibility.eligibleForExport,
+    blockedReasons: eligibility.blockedReasons,
+  };
+}
+
+function serializeReconciliationControlSummary(summary: {
+  status: 'CLEAR' | 'BLOCKED' | 'STALE' | 'MISSING' | 'UNKNOWN';
+  freshness: 'FRESH' | 'STALE' | 'MISSING';
+  latestCompletedRunKey: string | null;
+  latestCompletedRunAt: Date | null;
+  latestCompletedRunAgeSeconds: number | null;
+  staleRunningRunCount: number;
+  trackedTradeCount: number;
+  clearTradeCount: number;
+  blockedTradeCount: number;
+  unknownTradeCount: number;
+  driftBlockedTradeCount: number;
+  blockedReasons: string[];
+}) {
+  return {
+    status: summary.status,
+    freshness: summary.freshness,
+    latestCompletedRunKey: summary.latestCompletedRunKey,
+    latestCompletedRunAt:
+      summary.latestCompletedRunAt instanceof Date
+        ? summary.latestCompletedRunAt.toISOString()
+        : summary.latestCompletedRunAt,
+    latestCompletedRunAgeSeconds: summary.latestCompletedRunAgeSeconds,
+    staleRunningRunCount: summary.staleRunningRunCount,
+    trackedTradeCount: summary.trackedTradeCount,
+    clearTradeCount: summary.clearTradeCount,
+    blockedTradeCount: summary.blockedTradeCount,
+    unknownTradeCount: summary.unknownTradeCount,
+    driftBlockedTradeCount: summary.driftBlockedTradeCount,
+    blockedReasons: summary.blockedReasons,
+  };
+}
+
 function parseEntryId(value: unknown): number {
   return requireInteger(value, 'entryId', { min: 1 });
+}
+
+function parsePeriodId(value: unknown): number {
+  return requireInteger(value, 'periodId', { min: 1 });
+}
+
+function parseBatchId(value: unknown): number {
+  return requireInteger(value, 'batchId', { min: 1 });
 }
 
 function parseObservedAt(value: unknown, field: string): Date {
@@ -203,22 +331,6 @@ function assertPayoutState(value: string): asserts value is PayoutState {
   }
 }
 
-function assertPartnerCode(value: string): asserts value is TreasuryPartnerCode {
-  if (!PARTNER_CODES.includes(value as TreasuryPartnerCode)) {
-    throw new HttpError(400, 'ValidationError', 'partnerCode must be a supported partner code');
-  }
-}
-
-function assertPartnerHandoffStatus(value: string): asserts value is TreasuryPartnerHandoffStatus {
-  if (!PARTNER_HANDOFF_STATUSES.includes(value as TreasuryPartnerHandoffStatus)) {
-    throw new HttpError(
-      400,
-      'ValidationError',
-      'partnerStatus must be a valid treasury partner handoff status',
-    );
-  }
-}
-
 function toCsv(
   entries: Array<Awaited<ReturnType<typeof getLedgerEntries>>[number] & EligibilitySummary>,
 ): string {
@@ -233,6 +345,9 @@ function toCsv(
     'latest_state',
     'confirmation_stage',
     'reconciliation_status',
+    'reconciliation_freshness',
+    'reconciliation_completed_at',
+    'stale_running_run_count',
     'eligible_for_export',
     'blocked_reasons',
     'latest_state_at',
@@ -250,6 +365,9 @@ function toCsv(
     entry.latest_state,
     entry.confirmationStage ?? '',
     entry.reconciliationStatus,
+    entry.reconciliationFreshness,
+    entry.reconciliationCompletedAt ?? '',
+    entry.staleRunningRunCount,
     entry.eligibleForExport ? 'true' : 'false',
     entry.blockedReasons.join('|'),
     entry.latest_state_at.toISOString(),
@@ -262,6 +380,8 @@ function toCsv(
 export class TreasuryController {
   private readonly ingestion = new TreasuryIngestionService();
   private readonly eligibility = new TreasuryEligibilityService();
+  private readonly reconciliationGate = new ReconciliationGateService();
+  private readonly sweepExecutionMatcher = new SweepExecutionMatcherService();
 
   async ingest(_req: Request, res: Response): Promise<void> {
     try {
@@ -287,12 +407,528 @@ export class TreasuryController {
       const eligibility = await this.eligibility.assessEntries(entries);
       const data = entries.map((entry) => ({
         ...entry,
-        ...(eligibility.get(entry.id) ?? fallbackEligibility()),
+        ...(eligibility.has(entry.id)
+          ? serializeEligibility(eligibility.get(entry.id)!)
+          : fallbackEligibility()),
       }));
 
       res.status(200).json(success(data));
     } catch (error: unknown) {
       const response = mapValidationError(error, 'Failed to list entries');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async getReconciliationControlSummary(_req: Request, res: Response): Promise<void> {
+    try {
+      const tradeIds = await listDistinctLedgerTradeIds();
+      const summary = await this.reconciliationGate.summarizeTrades(tradeIds);
+      res.status(200).json(success(serializeReconciliationControlSummary(summary)));
+    } catch (error: unknown) {
+      res
+        .status(500)
+        .json(
+          failure(
+            'InternalError',
+            error instanceof Error
+              ? error.message
+              : 'Failed to read reconciliation control summary',
+          ),
+        );
+    }
+  }
+
+  async listAccountingPeriods(req: Request, res: Response): Promise<void> {
+    try {
+      const status = optionalEnum(req.query.status, ACCOUNTING_PERIOD_STATUSES, 'status');
+      const limit = optionalInteger(req.query.limit, 'limit', { min: 1, max: 200 }) ?? 50;
+      const offset = optionalInteger(req.query.offset, 'offset', { min: 0 }) ?? 0;
+
+      const periods = await listAccountingPeriods({ status, limit, offset });
+      res.status(200).json(success(periods));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to list accounting periods');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async listEntryAccounting(req: Request, res: Response): Promise<void> {
+    try {
+      const accountingState = optionalEnum(
+        req.query.accountingState,
+        ACCOUNTING_STATES,
+        'accountingState',
+      );
+      const accountingPeriodId =
+        req.query.accountingPeriodId === undefined
+          ? undefined
+          : requireInteger(req.query.accountingPeriodId, 'accountingPeriodId', { min: 1 });
+      const sweepBatchId =
+        req.query.sweepBatchId === undefined
+          ? undefined
+          : requireInteger(req.query.sweepBatchId, 'sweepBatchId', { min: 1 });
+      const tradeId = optionalString(req.query.tradeId, 'tradeId');
+      const limit = optionalInteger(req.query.limit, 'limit', { min: 1, max: 200 }) ?? 50;
+      const offset = optionalInteger(req.query.offset, 'offset', { min: 0 }) ?? 0;
+
+      const projections = await listLedgerEntryAccountingProjections({
+        accountingState,
+        accountingPeriodId,
+        sweepBatchId,
+        tradeId,
+        limit,
+        offset,
+      });
+
+      res.status(200).json(success(projections));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to list entry accounting state');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async createAccountingPeriod(
+    req: Request<Record<string, never>, Record<string, never>, CreateAccountingPeriodBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const body = requireObject<CreateAccountingPeriodBody>(req.body, 'body');
+      const period = await createAccountingPeriod({
+        periodKey: requireString(body.periodKey, 'periodKey'),
+        startsAt: parseObservedAt(body.startsAt, 'startsAt'),
+        endsAt: parseObservedAt(body.endsAt, 'endsAt'),
+        createdBy: requireString(body.createdBy, 'createdBy'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      res.status(201).json(success(period));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to create accounting period');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async requestAccountingPeriodClose(
+    req: Request<{ periodId: string }, Record<string, never>, UpdateAccountingPeriodStatusBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const periodId = parsePeriodId(req.params.periodId);
+      const body = requireObject<UpdateAccountingPeriodStatusBody>(req.body, 'body');
+      const period = await updateAccountingPeriodStatus({
+        periodId,
+        status: 'PENDING_CLOSE',
+        actor: requireString(body.actor, 'actor'),
+        closeReason: optionalNullableString(body.closeReason, 'closeReason'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      res.status(200).json(success(period));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to request accounting period close');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async closeAccountingPeriod(
+    req: Request<{ periodId: string }, Record<string, never>, UpdateAccountingPeriodStatusBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const periodId = parsePeriodId(req.params.periodId);
+      const body = requireObject<UpdateAccountingPeriodStatusBody>(req.body, 'body');
+      const batches = await listSweepBatches({
+        accountingPeriodId: periodId,
+        limit: 500,
+        offset: 0,
+      });
+      const openBatches = batches.filter((batch) => !['CLOSED', 'VOID'].includes(batch.status));
+      if (openBatches.length > 0) {
+        throw new HttpError(
+          409,
+          'CloseBlocked',
+          'Accounting period cannot close while sweep batches remain open',
+          {
+            openBatchIds: openBatches.map((batch) => batch.id),
+          },
+        );
+      }
+
+      const detailEntries = await Promise.all(
+        batches.map(async (batch) => {
+          const detail = await getSweepBatchDetail(batch.id);
+          return detail?.entries ?? [];
+        }),
+      );
+      const tradeIds = Array.from(
+        new Set(detailEntries.flatMap((entries) => entries.map((entry) => entry.trade_id))),
+      );
+      if (tradeIds.length > 0) {
+        const summary = await this.reconciliationGate.summarizeTrades(tradeIds);
+        if (summary.status !== 'CLEAR') {
+          throw new HttpError(
+            409,
+            'CloseBlocked',
+            'Accounting period cannot close while reconciliation is not clear for batch trades',
+            {
+              reconciliationStatus: summary.status,
+              blockedReasons: summary.blockedReasons,
+              tradeIds,
+            },
+          );
+        }
+      }
+
+      const period = await updateAccountingPeriodStatus({
+        periodId,
+        status: 'CLOSED',
+        actor: requireString(body.actor, 'actor'),
+        closeReason: optionalNullableString(body.closeReason, 'closeReason'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      res.status(200).json(success(period));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to close accounting period');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async listSweepBatches(req: Request, res: Response): Promise<void> {
+    try {
+      const accountingPeriodId =
+        req.query.accountingPeriodId === undefined
+          ? undefined
+          : requireInteger(req.query.accountingPeriodId, 'accountingPeriodId', { min: 1 });
+      const status = optionalEnum(req.query.status, SWEEP_BATCH_STATUSES, 'status');
+      const limit = optionalInteger(req.query.limit, 'limit', { min: 1, max: 200 }) ?? 50;
+      const offset = optionalInteger(req.query.offset, 'offset', { min: 0 }) ?? 0;
+
+      const batches = await listSweepBatches({ accountingPeriodId, status, limit, offset });
+      res.status(200).json(success(batches));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to list sweep batches');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async createSweepBatch(
+    req: Request<Record<string, never>, Record<string, never>, CreateSweepBatchBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const body = requireObject<CreateSweepBatchBody>(req.body, 'body');
+      const batch = await createSweepBatch({
+        batchKey: requireString(body.batchKey, 'batchKey'),
+        accountingPeriodId: requireInteger(body.accountingPeriodId, 'accountingPeriodId', {
+          min: 1,
+        }),
+        assetSymbol: requireString(body.assetSymbol, 'assetSymbol'),
+        expectedTotalRaw: requireString(body.expectedTotalRaw, 'expectedTotalRaw'),
+        payoutReceiverAddress: optionalNullableString(
+          body.payoutReceiverAddress,
+          'payoutReceiverAddress',
+        ),
+        createdBy: requireString(body.createdBy, 'createdBy'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      res.status(201).json(success(batch));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to create sweep batch');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async getSweepBatch(req: Request<{ batchId: string }>, res: Response): Promise<void> {
+    try {
+      const batchId = parseBatchId(req.params.batchId);
+      const detail = await getSweepBatchDetail(batchId);
+      if (!detail) {
+        res.status(404).json(failure('NotFound', 'Sweep batch not found'));
+        return;
+      }
+
+      res.status(200).json(success(detail));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to read sweep batch');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async addSweepBatchEntry(
+    req: Request<{ batchId: string }, Record<string, never>, AddSweepBatchEntryBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const batchId = parseBatchId(req.params.batchId);
+      const body = requireObject<AddSweepBatchEntryBody>(req.body, 'body');
+      const result = await addSweepBatchEntry({
+        sweepBatchId: batchId,
+        ledgerEntryId: requireInteger(body.ledgerEntryId, 'ledgerEntryId', { min: 1 }),
+        allocatedBy: requireString(body.allocatedBy, 'allocatedBy'),
+        entryAmountRaw: optionalString(body.entryAmountRaw, 'entryAmountRaw'),
+      });
+
+      res.status(201).json(success(result));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to allocate sweep batch entry');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async requestSweepBatchApproval(
+    req: Request<{ batchId: string }, Record<string, never>, UpdateSweepBatchStatusBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const batchId = parseBatchId(req.params.batchId);
+      const body = requireObject<UpdateSweepBatchStatusBody>(req.body, 'body');
+      const detail = await getSweepBatchDetail(batchId);
+      if (!detail) {
+        throw new HttpError(404, 'NotFound', 'Sweep batch not found');
+      }
+      if (detail.entries.length === 0) {
+        throw new HttpError(409, 'ApprovalBlocked', 'Sweep batch has no allocated entries');
+      }
+      if (!detail.batch.payout_receiver_address) {
+        throw new HttpError(
+          409,
+          'ApprovalBlocked',
+          'Sweep batch requires a recorded payout receiver before approval can begin',
+        );
+      }
+      if (detail.totals.allocatedAmountRaw !== detail.batch.expected_total_raw) {
+        throw new HttpError(
+          409,
+          'ApprovalBlocked',
+          'Sweep batch total does not match allocated entry total',
+          {
+            expectedTotalRaw: detail.batch.expected_total_raw,
+            allocatedAmountRaw: detail.totals.allocatedAmountRaw,
+          },
+        );
+      }
+
+      const batch = await updateSweepBatchStatus({
+        batchId,
+        status: 'PENDING_APPROVAL',
+        actor: requireString(body.actor, 'actor'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      res.status(200).json(success(batch));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to request sweep batch approval');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async approveSweepBatch(
+    req: Request<{ batchId: string }, Record<string, never>, UpdateSweepBatchStatusBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const batchId = parseBatchId(req.params.batchId);
+      const body = requireObject<UpdateSweepBatchStatusBody>(req.body, 'body');
+      const detail = await getSweepBatchDetail(batchId);
+      if (!detail) {
+        throw new HttpError(404, 'NotFound', 'Sweep batch not found');
+      }
+      if (detail.totals.allocatedAmountRaw !== detail.batch.expected_total_raw) {
+        throw new HttpError(
+          409,
+          'ApprovalBlocked',
+          'Sweep batch total does not match allocated entry total',
+        );
+      }
+
+      const batch = await updateSweepBatchStatus({
+        batchId,
+        status: 'APPROVED',
+        actor: requireString(body.actor, 'actor'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      res.status(200).json(success(batch));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to approve sweep batch');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async markSweepBatchExecuted(
+    req: Request<{ batchId: string }, Record<string, never>, UpdateSweepBatchStatusBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const batchId = parseBatchId(req.params.batchId);
+      const body = requireObject<UpdateSweepBatchStatusBody>(req.body, 'body');
+      const matchedSweepTxHash = optionalNullableString(
+        body.matchedSweepTxHash,
+        'matchedSweepTxHash',
+      );
+      if (!matchedSweepTxHash) {
+        throw new HttpError(
+          400,
+          'ValidationError',
+          'matchedSweepTxHash is required for executed sweep batches',
+        );
+      }
+
+      let batch;
+      try {
+        batch = await this.sweepExecutionMatcher.matchApprovedBatch({
+          batchId,
+          txHash: matchedSweepTxHash,
+          actor: requireString(body.actor, 'actor'),
+          metadata: optionalRecord(body.metadata, 'metadata'),
+        });
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new HttpError(409, 'ExecutionMatchFailed', error.message);
+        }
+        throw error;
+      }
+
+      res.status(200).json(success(batch));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to mark sweep batch executed');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async recordPartnerHandoff(
+    req: Request<{ batchId: string }, Record<string, never>, UpsertPartnerHandoffBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const batchId = parseBatchId(req.params.batchId);
+      const body = requireObject<UpsertPartnerHandoffBody>(req.body, 'body');
+      const handoffStatus = requireString(body.handoffStatus, 'handoffStatus');
+      if (!PARTNER_HANDOFF_STATUSES.includes(handoffStatus as PartnerHandoffStatus)) {
+        throw new HttpError(400, 'ValidationError', 'handoffStatus must be valid');
+      }
+
+      const handoff = await upsertPartnerHandoff({
+        sweepBatchId: batchId,
+        partnerName: requireString(body.partnerName, 'partnerName'),
+        partnerReference: requireString(body.partnerReference, 'partnerReference'),
+        handoffStatus: handoffStatus as PartnerHandoffStatus,
+        evidenceReference: optionalNullableString(body.evidenceReference, 'evidenceReference'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      const detail = await getSweepBatchDetail(batchId);
+      if (detail?.batch.status === 'EXECUTED') {
+        await updateSweepBatchStatus({
+          batchId,
+          status: 'HANDED_OFF',
+          actor: `system:external-handoff:${handoff.partner_name}`,
+          metadata: { partnerReference: handoff.partner_reference },
+        });
+      }
+
+      res.status(200).json(success(handoff));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to record external handoff');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async closeSweepBatch(
+    req: Request<{ batchId: string }, Record<string, never>, UpdateSweepBatchStatusBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const batchId = parseBatchId(req.params.batchId);
+      const body = requireObject<UpdateSweepBatchStatusBody>(req.body, 'body');
+      const detail = await getSweepBatchDetail(batchId);
+      if (!detail) {
+        throw new HttpError(404, 'NotFound', 'Sweep batch not found');
+      }
+
+      if (!detail.partnerHandoff || detail.partnerHandoff.handoff_status !== 'COMPLETED') {
+        throw new HttpError(
+          409,
+          'CloseBlocked',
+          'Sweep batch cannot close without completed external handoff evidence',
+        );
+      }
+
+      const unresolved = detail.entries.filter(
+        (entry) => !['REALIZED'].includes(entry.accounting_state),
+      );
+      if (unresolved.length > 0) {
+        throw new HttpError(
+          409,
+          'CloseBlocked',
+          'Sweep batch cannot close while entries remain unrealized or in exception',
+          {
+            entryIds: unresolved.map((entry) => entry.ledger_entry_id),
+            states: unresolved.map((entry) => entry.accounting_state),
+          },
+        );
+      }
+
+      const batch = await updateSweepBatchStatus({
+        batchId,
+        status: 'CLOSED',
+        actor: requireString(body.actor, 'actor'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      res.status(200).json(success(batch));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to close sweep batch');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async getEntryAccounting(req: Request<{ entryId: string }>, res: Response): Promise<void> {
+    try {
+      const entryId = parseEntryId(req.params.entryId);
+      const projection = await getLedgerEntryAccountingProjection(entryId);
+      if (!projection) {
+        res.status(404).json(failure('NotFound', 'Ledger entry accounting projection not found'));
+        return;
+      }
+
+      res.status(200).json(success(projection));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to read entry accounting state');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async createEntryRealization(
+    req: Request<{ entryId: string }, Record<string, never>, CreateRevenueRealizationBody>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const entryId = parseEntryId(req.params.entryId);
+      const body = requireObject<CreateRevenueRealizationBody>(req.body, 'body');
+      const realization = await createRevenueRealization({
+        ledgerEntryId: entryId,
+        accountingPeriodId: requireInteger(body.accountingPeriodId, 'accountingPeriodId', {
+          min: 1,
+        }),
+        sweepBatchId:
+          body.sweepBatchId === undefined || body.sweepBatchId === null
+            ? null
+            : requireInteger(body.sweepBatchId, 'sweepBatchId', { min: 1 }),
+        partnerHandoffId:
+          body.partnerHandoffId === undefined || body.partnerHandoffId === null
+            ? null
+            : requireInteger(body.partnerHandoffId, 'partnerHandoffId', { min: 1 }),
+        actor: requireString(body.actor, 'actor'),
+        note: optionalNullableString(body.note, 'note'),
+        metadata: optionalRecord(body.metadata, 'metadata'),
+      });
+
+      res.status(201).json(success(realization));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to create revenue realization');
       res.status(response.statusCode).json(response.body);
     }
   }
@@ -319,15 +955,15 @@ export class TreasuryController {
       const currentState = latest?.state || 'PENDING_REVIEW';
       assertValidTransition(currentState, requestedState);
 
-      if (requestedState === 'PARTNER_REPORTED_COMPLETED') {
+      if (requestedState === 'EXTERNAL_EXECUTION_CONFIRMED') {
         throw new HttpError(
           409,
           'EvidenceRequired',
-          'Partner-reported completion must be recorded through confirmed payout evidence, not manual state updates.',
+          'External execution completion must be recorded through confirmed payout evidence, not manual state updates.',
         );
       }
 
-      if (requestedState === 'READY_FOR_PARTNER_SUBMISSION') {
+      if (requestedState === 'READY_FOR_EXTERNAL_HANDOFF') {
         const entries = await getLedgerEntries({ tradeId: entry.trade_id, limit: 500, offset: 0 });
         const candidate = entries.find((item) => item.id === entryId);
         if (!candidate) {
@@ -435,11 +1071,11 @@ export class TreasuryController {
       let completionEvent = null;
       if (result.confirmation.bank_state === 'CONFIRMED') {
         const latest = await getLatestPayoutState(entryId);
-        if (latest?.state === 'AWAITING_PARTNER_UPDATE') {
+        if (latest?.state === 'AWAITING_EXTERNAL_CONFIRMATION') {
           completionEvent = await appendPayoutState({
             ledgerEntryId: entryId,
-            state: 'PARTNER_REPORTED_COMPLETED',
-            note: 'Auto-completed from confirmed partner payout evidence recorded through bank confirmation.',
+            state: 'EXTERNAL_EXECUTION_CONFIRMED',
+            note: 'Auto-completed from confirmed external execution evidence recorded through bank confirmation.',
             actor: result.confirmation.actor,
           });
         }
@@ -464,200 +1100,6 @@ export class TreasuryController {
     }
   }
 
-  async getPartnerHandoff(req: Request<{ entryId: string }>, res: Response): Promise<void> {
-    try {
-      const entryId = parseEntryId(req.params.entryId);
-      const handoff = await getTreasuryPartnerHandoffByLedgerEntryId(entryId);
-
-      if (!handoff) {
-        res.status(404).json(failure('NotFound', 'Treasury partner handoff not found'));
-        return;
-      }
-
-      res.status(200).json(success(handoff));
-    } catch (error: unknown) {
-      const response = mapValidationError(error, 'Failed to load treasury partner handoff');
-      res.status(response.statusCode).json(response.body);
-    }
-  }
-
-  async upsertPartnerHandoff(
-    req: Request<{ entryId: string }, Record<string, never>, UpsertPartnerHandoffBody>,
-    res: Response,
-  ): Promise<void> {
-    try {
-      const entryId = parseEntryId(req.params.entryId);
-      const body = requireObject<UpsertPartnerHandoffBody>(req.body, 'body');
-      const partnerCode = requireString(body.partnerCode, 'partnerCode');
-      const partnerStatus = requireString(body.partnerStatus, 'partnerStatus');
-      assertPartnerCode(partnerCode);
-      assertPartnerHandoffStatus(partnerStatus);
-
-      const latest = await getLatestPayoutState(entryId);
-      if ((latest?.state ?? 'PENDING_REVIEW') !== 'READY_FOR_PARTNER_SUBMISSION') {
-        throw new HttpError(
-          409,
-          'InvalidState',
-          'Treasury partner handoff can only start from READY_FOR_PARTNER_SUBMISSION.',
-        );
-      }
-
-      const result = await upsertTreasuryPartnerHandoff({
-        ledgerEntryId: entryId,
-        partnerCode,
-        handoffReference: requireString(body.handoffReference, 'handoffReference'),
-        partnerStatus,
-        payoutReference: optionalNullableString(body.payoutReference, 'payoutReference'),
-        transferReference: optionalNullableString(body.transferReference, 'transferReference'),
-        drainReference: optionalNullableString(body.drainReference, 'drainReference'),
-        destinationExternalAccountId: optionalNullableString(
-          body.destinationExternalAccountId,
-          'destinationExternalAccountId',
-        ),
-        liquidationAddressId: optionalNullableString(
-          body.liquidationAddressId,
-          'liquidationAddressId',
-        ),
-        sourceAmount: optionalNullableString(body.sourceAmount, 'sourceAmount'),
-        sourceCurrency: optionalNullableString(body.sourceCurrency, 'sourceCurrency'),
-        destinationAmount: optionalNullableString(body.destinationAmount, 'destinationAmount'),
-        destinationCurrency: optionalNullableString(
-          body.destinationCurrency,
-          'destinationCurrency',
-        ),
-        actor: requireString(body.actor, 'actor'),
-        note: optionalNullableString(body.note, 'note'),
-        failureCode: optionalNullableString(body.failureCode, 'failureCode'),
-        initiatedAt: parseObservedAt(body.initiatedAt, 'initiatedAt'),
-        metadata: optionalRecord(body.metadata, 'metadata'),
-      });
-
-      let stateEvent = null;
-      if (result.created) {
-        stateEvent = await appendPayoutState({
-          ledgerEntryId: entryId,
-          state: 'AWAITING_PARTNER_UPDATE',
-          note:
-            result.handoff.note ||
-            'Treasury handoff recorded for Bridge execution; awaiting partner update.',
-          actor: result.handoff.actor,
-        });
-      }
-
-      res.status(200).json(
-        success({
-          handoff: result.handoff,
-          created: result.created,
-          idempotentReplay: result.idempotentReplay,
-          stateEvent,
-        }),
-      );
-    } catch (error: unknown) {
-      if (error instanceof BankPayoutConflictError) {
-        res.status(409).json(buildFailure(409, 'Conflict', error.message, { code: error.code }));
-        return;
-      }
-
-      const response = mapValidationError(error, 'Failed to persist treasury partner handoff');
-      res.status(response.statusCode).json(response.body);
-    }
-  }
-
-  async appendPartnerHandoffEvidence(
-    req: Request<{ entryId: string }, Record<string, never>, UpsertPartnerEvidenceBody>,
-    res: Response,
-  ): Promise<void> {
-    try {
-      const entryId = parseEntryId(req.params.entryId);
-      const body = requireObject<UpsertPartnerEvidenceBody>(req.body, 'body');
-      const partnerCode = requireString(body.partnerCode, 'partnerCode');
-      const partnerStatus = requireString(body.partnerStatus, 'partnerStatus');
-      assertPartnerCode(partnerCode);
-      assertPartnerHandoffStatus(partnerStatus);
-
-      const evidence = await appendTreasuryPartnerHandoffEvidence({
-        ledgerEntryId: entryId,
-        partnerCode,
-        providerEventId: requireString(body.providerEventId, 'providerEventId'),
-        eventType: requireString(body.eventType, 'eventType'),
-        partnerStatus,
-        payoutReference: optionalNullableString(body.payoutReference, 'payoutReference'),
-        transferReference: optionalNullableString(body.transferReference, 'transferReference'),
-        drainReference: optionalNullableString(body.drainReference, 'drainReference'),
-        destinationExternalAccountId: optionalNullableString(
-          body.destinationExternalAccountId,
-          'destinationExternalAccountId',
-        ),
-        liquidationAddressId: optionalNullableString(
-          body.liquidationAddressId,
-          'liquidationAddressId',
-        ),
-        bankReference: optionalNullableString(body.bankReference, 'bankReference'),
-        bankState:
-          body.bankState === undefined || body.bankState === null
-            ? null
-            : (requireString(body.bankState, 'bankState') as BankPayoutState),
-        evidenceReference: optionalNullableString(body.evidenceReference, 'evidenceReference'),
-        failureCode: optionalNullableString(body.failureCode, 'failureCode'),
-        observedAt: parseObservedAt(body.observedAt, 'observedAt'),
-        metadata: optionalRecord(body.metadata, 'metadata'),
-      });
-
-      let confirmation = null;
-      let completionEvent = null;
-      if (body.bankReference && body.bankState && body.actor && body.source) {
-        assertBankPayoutState(body.bankState);
-        const bankResult = await upsertBankPayoutConfirmation({
-          ledgerEntryId: entryId,
-          payoutReference: optionalNullableString(body.payoutReference, 'payoutReference'),
-          bankReference: requireString(body.bankReference, 'bankReference'),
-          bankState: body.bankState,
-          confirmedAt: parseObservedAt(body.observedAt, 'observedAt'),
-          source: requireString(body.source, 'source'),
-          actor: requireString(body.actor, 'actor'),
-          failureCode: optionalNullableString(body.failureCode, 'failureCode'),
-          evidenceReference: optionalNullableString(body.evidenceReference, 'evidenceReference'),
-          metadata: optionalRecord(body.metadata, 'metadata'),
-        });
-        confirmation = bankResult.confirmation;
-
-        if (confirmation.bank_state === 'CONFIRMED') {
-          const latest = await getLatestPayoutState(entryId);
-          if (latest?.state === 'AWAITING_PARTNER_UPDATE') {
-            completionEvent = await appendPayoutState({
-              ledgerEntryId: entryId,
-              state: 'PARTNER_REPORTED_COMPLETED',
-              note: 'Auto-completed from confirmed Bridge payout evidence recorded through treasury partner handoff.',
-              actor: requireString(body.actor, 'actor'),
-            });
-          }
-        }
-      }
-
-      res.status(200).json(
-        success({
-          handoff: evidence.handoff,
-          event: evidence.event,
-          created: evidence.created,
-          idempotentReplay: evidence.idempotentReplay,
-          confirmation,
-          completionEvent,
-        }),
-      );
-    } catch (error: unknown) {
-      if (error instanceof BankPayoutConflictError) {
-        res.status(409).json(buildFailure(409, 'Conflict', error.message, { code: error.code }));
-        return;
-      }
-
-      const response = mapValidationError(
-        error,
-        'Failed to persist treasury partner handoff evidence',
-      );
-      res.status(response.statusCode).json(response.body);
-    }
-  }
-
   async exportEntries(req: Request, res: Response): Promise<void> {
     try {
       const format = optionalEnum(req.query.format, EXPORT_FORMATS, 'format') ?? 'json';
@@ -666,7 +1108,9 @@ export class TreasuryController {
       const exportableEntries = entries
         .map((entry) => ({
           ...entry,
-          ...(eligibility.get(entry.id) ?? fallbackEligibility()),
+          ...(eligibility.has(entry.id)
+            ? serializeEligibility(eligibility.get(entry.id)!)
+            : fallbackEligibility()),
         }))
         .filter((entry) => entry.eligibleForExport);
 

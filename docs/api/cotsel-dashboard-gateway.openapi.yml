@@ -986,6 +986,550 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
+  /treasury/accounting-periods:
+    get:
+      tags: [Treasury]
+      summary: List treasury accounting periods
+      description: |
+        Read-only treasury close surface. Returns accounting periods tracked by the treasury
+        evidence layer so operators can review which close windows are open, pending close, or closed.
+      operationId: listTreasuryAccountingPeriods
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/TreasuryAccountingPeriodStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Accounting periods visible to treasury operators.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryAccountingPeriodListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      tags: [Treasury]
+      summary: Create treasury accounting period
+      operationId: createTreasuryAccountingPeriod
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCreateAccountingPeriodRequest'
+      responses:
+        '201':
+          description: Accounting period created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryAccountingPeriodResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/accounting-periods/{periodId}/request-close:
+    post:
+      tags: [Treasury]
+      summary: Request accounting period close
+      operationId: requestTreasuryAccountingPeriodClose
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/AccountingPeriodId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryWorkflowAuditOnlyRequest'
+      responses:
+        '200':
+          description: Accounting period moved to pending close.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryAccountingPeriodResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/accounting-periods/{periodId}/close:
+    post:
+      tags: [Treasury]
+      summary: Close accounting period
+      operationId: closeTreasuryAccountingPeriod
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/AccountingPeriodId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryWorkflowAuditOnlyRequest'
+      responses:
+        '200':
+          description: Accounting period closed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryAccountingPeriodResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/sweep-batches:
+    get:
+      tags: [Treasury]
+      summary: List treasury sweep batches
+      operationId: listTreasurySweepBatches
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: accountingPeriodId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/TreasurySweepBatchStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Sweep batches with accounting period linkage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      tags: [Treasury]
+      summary: Create treasury sweep batch
+      operationId: createTreasurySweepBatch
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCreateSweepBatchRequest'
+      responses:
+        '201':
+          description: Sweep batch created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/sweep-batches/{batchId}:
+    get:
+      tags: [Treasury]
+      summary: Get treasury sweep batch detail
+      operationId: getTreasurySweepBatch
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      responses:
+        '200':
+          description: Sweep batch detail, entry projections, and external execution handoff evidence.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchDetailResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /treasury/sweep-batches/{batchId}/entries:
+    post:
+      tags: [Treasury]
+      summary: Allocate ledger entry to sweep batch
+      operationId: addTreasurySweepBatchEntry
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySweepBatchEntryAllocationRequest'
+      responses:
+        '201':
+          description: Ledger entry allocated to batch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchEntryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/sweep-batches/{batchId}/request-approval:
+    post:
+      tags: [Treasury]
+      summary: Request sweep batch approval
+      operationId: requestTreasurySweepBatchApproval
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryWorkflowAuditOnlyRequest'
+      responses:
+        '200':
+          description: Sweep batch moved to pending approval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/sweep-batches/{batchId}/approve:
+    post:
+      tags: [Treasury]
+      summary: Approve sweep batch
+      operationId: approveTreasurySweepBatch
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryWorkflowAuditOnlyRequest'
+      responses:
+        '200':
+          description: Sweep batch approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/sweep-batches/{batchId}/match-execution:
+    post:
+      tags: [Treasury]
+      summary: Match approved sweep batch to authoritative on-chain treasury claim evidence
+      description: |
+        Matches an approved treasury sweep batch to indexed `TreasuryClaimed` evidence using the
+        provided transaction hash. The batch only transitions to `EXECUTED` when the indexed claim
+        evidence matches the expected payout receiver and allocated amount for the batch.
+      operationId: matchTreasurySweepBatchExecution
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySweepBatchExecutionRequest'
+      responses:
+        '200':
+          description: Sweep batch marked executed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/sweep-batches/{batchId}/external-handoff:
+    post:
+      tags: [Treasury]
+      summary: Record external execution handoff evidence for a sweep batch
+      operationId: recordTreasuryExternalHandoff
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryPartnerHandoffRequest'
+      responses:
+        '200':
+          description: External execution handoff recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryPartnerHandoffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/sweep-batches/{batchId}/partner-handoff:
+    post:
+      deprecated: true
+      tags: [Treasury]
+      summary: Legacy-compatible alias for recording external execution handoff evidence
+      description: >
+        Compatibility path retained for existing clients. The treasury model is external-execution
+        handoff evidence, not a provider-owned treasury workflow.
+      operationId: recordTreasuryPartnerHandoffLegacy
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryPartnerHandoffRequest'
+      responses:
+        '200':
+          description: External execution handoff recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryPartnerHandoffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/sweep-batches/{batchId}/close:
+    post:
+      tags: [Treasury]
+      summary: Close sweep batch after realization evidence is complete
+      operationId: closeTreasurySweepBatch
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryWorkflowAuditOnlyRequest'
+      responses:
+        '200':
+          description: Sweep batch closed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /treasury/entries/accounting:
+    get:
+      tags: [Treasury]
+      summary: List treasury accounting projections across fee ledger entries
+      operationId: listTreasuryEntryAccounting
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: accountingState
+          in: query
+          schema:
+            $ref: '#/components/schemas/TreasuryAccountingState'
+        - name: accountingPeriodId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: sweepBatchId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: tradeId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Treasury accounting projections for fee ledger entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryEntryAccountingListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/entries/{entryId}/accounting:
+    get:
+      tags: [Treasury]
+      summary: Get treasury accounting projection for a ledger entry
+      operationId: getTreasuryEntryAccounting
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/EntryId'
+      responses:
+        '200':
+          description: Current accounting projection for the treasury ledger entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryEntryAccountingResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /treasury/entries/{entryId}/realizations:
+    post:
+      tags: [Treasury]
+      summary: Record treasury revenue realization for a ledger entry
+      operationId: createTreasuryEntryRealization
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/EntryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryEntryRealizationRequest'
+      responses:
+        '201':
+          description: Revenue realization recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryRevenueRealizationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
   /governance/pause:
     post:
       tags: [Governance]
@@ -2329,6 +2873,27 @@ components:
       schema:
         type: string
       description: Cotsel trade identifier used across chain events, indexer evidence, and operator workflows.
+    AccountingPeriodId:
+      name: periodId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    BatchId:
+      name: batchId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    EntryId:
+      name: entryId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
   responses:
     BadRequestError:
       description: Request validation failed.
@@ -4801,6 +5366,663 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/TreasuryActionListPayload'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryAccountingPeriodStatus:
+      type: string
+      enum: [OPEN, PENDING_CLOSE, CLOSED]
+    TreasurySweepBatchStatus:
+      type: string
+      enum: [DRAFT, PENDING_APPROVAL, APPROVED, EXECUTED, HANDED_OFF, CLOSED, VOID]
+    TreasurySweepBatchAllocationStatus:
+      type: string
+      enum: [ALLOCATED, RELEASED]
+    TreasuryPartnerHandoffStatus:
+      type: string
+      enum: [CREATED, SUBMITTED, ACKNOWLEDGED, COMPLETED, FAILED]
+    TreasuryAccountingState:
+      type: string
+      enum: [HELD, ALLOCATED_TO_SWEEP, SWEPT, HANDED_OFF, REALIZED, EXCEPTION]
+    TreasuryRevenueRealizationStatus:
+      type: string
+      enum: [REALIZED, REVERSED]
+    TreasuryWorkflowAuditInput:
+      type: object
+      required: [reason, ticketRef]
+      properties:
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 2000
+        ticketRef:
+          type: string
+          minLength: 2
+          maxLength: 128
+        metadata:
+          type: object
+          additionalProperties: true
+    TreasuryWorkflowAuditOnlyRequest:
+      type: object
+      required: [audit]
+      properties:
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasuryAccountingPeriod:
+      type: object
+      required:
+        [id, period_key, starts_at, ends_at, status, created_by, created_at, updated_at, metadata]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        period_key:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/TreasuryAccountingPeriodStatus'
+        created_by:
+          type: string
+        pending_close_at:
+          type: string
+          format: date-time
+          nullable: true
+        close_reason:
+          type: string
+          nullable: true
+        closed_by:
+          type: string
+          nullable: true
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TreasuryAccountingPeriodListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryAccountingPeriod'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryAccountingPeriodResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasuryAccountingPeriod'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryCreateAccountingPeriodRequest:
+      type: object
+      required: [periodKey, startsAt, endsAt, audit]
+      properties:
+        periodKey:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasurySweepBatch:
+      type: object
+      required:
+        [
+          id,
+          batch_key,
+          accounting_period_id,
+          accounting_period_key,
+          accounting_period_status,
+          asset_symbol,
+          status,
+          expected_total_raw,
+          created_by,
+          created_at,
+          updated_at,
+          metadata,
+        ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        batch_key:
+          type: string
+        accounting_period_id:
+          type: integer
+          minimum: 1
+        accounting_period_key:
+          type: string
+        accounting_period_status:
+          $ref: '#/components/schemas/TreasuryAccountingPeriodStatus'
+        asset_symbol:
+          type: string
+        status:
+          $ref: '#/components/schemas/TreasurySweepBatchStatus'
+        expected_total_raw:
+          type: string
+        payout_receiver_address:
+          type: string
+          nullable: true
+        approval_requested_at:
+          type: string
+          format: date-time
+          nullable: true
+        approval_requested_by:
+          type: string
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_by:
+          type: string
+          nullable: true
+        matched_sweep_tx_hash:
+          type: string
+          nullable: true
+        matched_sweep_block_number:
+          type: string
+          nullable: true
+        matched_swept_at:
+          type: string
+          format: date-time
+          nullable: true
+        executed_by:
+          type: string
+          nullable: true
+        created_by:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TreasurySweepBatchListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasurySweepBatch'
+        timestamp:
+          type: string
+          format: date-time
+    TreasurySweepBatchResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasurySweepBatch'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryCreateSweepBatchRequest:
+      type: object
+      required: [batchKey, accountingPeriodId, assetSymbol, expectedTotalRaw, audit]
+      properties:
+        batchKey:
+          type: string
+        accountingPeriodId:
+          type: integer
+          minimum: 1
+        assetSymbol:
+          type: string
+        expectedTotalRaw:
+          type: string
+        payoutReceiverAddress:
+          type: string
+          nullable: true
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasurySweepBatchEntry:
+      type: object
+      required:
+        [
+          id,
+          sweep_batch_id,
+          ledger_entry_id,
+          allocation_status,
+          entry_amount_raw,
+          allocated_by,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        sweep_batch_id:
+          type: integer
+          minimum: 1
+        ledger_entry_id:
+          type: integer
+          minimum: 1
+        allocation_status:
+          $ref: '#/components/schemas/TreasurySweepBatchAllocationStatus'
+        entry_amount_raw:
+          type: string
+        allocated_by:
+          type: string
+        released_by:
+          type: string
+          nullable: true
+        release_note:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TreasurySweepBatchEntryResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasurySweepBatchEntry'
+        timestamp:
+          type: string
+          format: date-time
+    TreasurySweepBatchEntryAllocationRequest:
+      type: object
+      required: [ledgerEntryId, audit]
+      properties:
+        ledgerEntryId:
+          type: integer
+          minimum: 1
+        entryAmountRaw:
+          type: string
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasurySweepBatchExecutionRequest:
+      type: object
+      required: [matchedSweepTxHash, audit]
+      properties:
+        matchedSweepTxHash:
+          type: string
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasuryPartnerHandoff:
+      type: object
+      required:
+        [
+          id,
+          sweep_batch_id,
+          partner_name,
+          partner_reference,
+          handoff_status,
+          latest_payload_hash,
+          metadata,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        sweep_batch_id:
+          type: integer
+          minimum: 1
+        partner_name:
+          type: string
+        partner_reference:
+          type: string
+        handoff_status:
+          $ref: '#/components/schemas/TreasuryPartnerHandoffStatus'
+        latest_payload_hash:
+          type: string
+        evidence_reference:
+          type: string
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        acknowledged_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        failed_at:
+          type: string
+          format: date-time
+          nullable: true
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TreasuryPartnerHandoffRequest:
+      description: >
+        Compatibility-named request schema for recording external execution handoff evidence.
+        Field names remain partner-prefixed for stable client compatibility.
+      type: object
+      required: [partnerName, partnerReference, handoffStatus, audit]
+      properties:
+        partnerName:
+          type: string
+          description: Compatibility field for the external execution counterparty identifier.
+        partnerReference:
+          type: string
+          description: Compatibility field for the external execution reference supplied by the counterparty.
+        handoffStatus:
+          $ref: '#/components/schemas/TreasuryPartnerHandoffStatus'
+        evidenceReference:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasuryPartnerHandoffResponse:
+      description: >
+        Compatibility-named response schema for external execution handoff evidence.
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasuryPartnerHandoff'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryLedgerEntryAccountingProjection:
+      type: object
+      required:
+        [
+          ledger_entry_id,
+          trade_id,
+          component_type,
+          amount_raw,
+          earned_at,
+          accounting_state,
+          accounting_state_reason,
+        ]
+      properties:
+        ledger_entry_id:
+          type: integer
+          minimum: 1
+        trade_id:
+          type: string
+        component_type:
+          type: string
+        amount_raw:
+          type: string
+        allocated_amount_raw:
+          type: string
+          nullable: true
+        earned_at:
+          type: string
+          format: date-time
+        payout_state:
+          type: string
+          nullable: true
+        accounting_period_id:
+          type: integer
+          nullable: true
+        accounting_period_key:
+          type: string
+          nullable: true
+        accounting_period_status:
+          oneOf:
+            - $ref: '#/components/schemas/TreasuryAccountingPeriodStatus'
+            - type: 'null'
+        sweep_batch_id:
+          type: integer
+          nullable: true
+        sweep_batch_status:
+          oneOf:
+            - $ref: '#/components/schemas/TreasurySweepBatchStatus'
+            - type: 'null'
+        allocation_status:
+          oneOf:
+            - $ref: '#/components/schemas/TreasurySweepBatchAllocationStatus'
+            - type: 'null'
+        matched_sweep_tx_hash:
+          type: string
+          nullable: true
+        matched_sweep_block_number:
+          type: integer
+          nullable: true
+        matched_swept_at:
+          type: string
+          format: date-time
+          nullable: true
+        matched_treasury_identity:
+          type: string
+          nullable: true
+        matched_payout_receiver:
+          type: string
+          nullable: true
+        matched_claim_amount_raw:
+          type: string
+          nullable: true
+        partner_handoff_id:
+          type: integer
+          nullable: true
+        partner_name:
+          type: string
+          nullable: true
+        partner_reference:
+          type: string
+          nullable: true
+        partner_handoff_status:
+          oneOf:
+            - $ref: '#/components/schemas/TreasuryPartnerHandoffStatus'
+            - type: 'null'
+        partner_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        latest_fiat_deposit_state:
+          type: string
+          nullable: true
+        latest_bank_payout_state:
+          type: string
+          nullable: true
+        revenue_realization_status:
+          oneOf:
+            - $ref: '#/components/schemas/TreasuryRevenueRealizationStatus'
+            - type: 'null'
+        realized_at:
+          type: string
+          format: date-time
+          nullable: true
+        accounting_state:
+          $ref: '#/components/schemas/TreasuryAccountingState'
+        accounting_state_reason:
+          type: string
+    TreasurySweepBatchDetail:
+      type: object
+      required: [batch, entries, partnerHandoff, totals]
+      properties:
+        batch:
+          $ref: '#/components/schemas/TreasurySweepBatch'
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryLedgerEntryAccountingProjection'
+        partnerHandoff:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TreasuryPartnerHandoff'
+        totals:
+          type: object
+          required: [allocatedAmountRaw, entryCount]
+          properties:
+            allocatedAmountRaw:
+              type: string
+            entryCount:
+              type: integer
+              minimum: 0
+    TreasurySweepBatchDetailResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasurySweepBatchDetail'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryEntryAccountingResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasuryLedgerEntryAccountingProjection'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryEntryAccountingListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryLedgerEntryAccountingProjection'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryEntryRealizationRequest:
+      type: object
+      required: [accountingPeriodId, audit]
+      properties:
+        accountingPeriodId:
+          type: integer
+          minimum: 1
+        sweepBatchId:
+          type: integer
+          minimum: 1
+          nullable: true
+        partnerHandoffId:
+          type: integer
+          minimum: 1
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasuryRevenueRealization:
+      type: object
+      required:
+        [
+          id,
+          ledger_entry_id,
+          accounting_period_id,
+          realization_status,
+          realized_at,
+          recognized_by,
+          metadata,
+          created_at,
+        ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        ledger_entry_id:
+          type: integer
+          minimum: 1
+        accounting_period_id:
+          type: integer
+          minimum: 1
+        sweep_batch_id:
+          type: integer
+          nullable: true
+        partner_handoff_id:
+          type: integer
+          nullable: true
+        realization_status:
+          $ref: '#/components/schemas/TreasuryRevenueRealizationStatus'
+        realized_at:
+          type: string
+          format: date-time
+        recognized_by:
+          type: string
+        note:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+    TreasuryRevenueRealizationResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasuryRevenueRealization'
         timestamp:
           type: string
           format: date-time

@@ -10,7 +10,8 @@ Bridge is an execution adapter here. `Cotsel` remains the treasury truth.
 
 Confirm all of these before creating a Bridge handoff:
 
-- the treasury entry is in `READY_FOR_PARTNER_SUBMISSION`
+- the treasury entry is already allocated into a governed sweep batch
+- the sweep batch is in `EXECUTED` state and ready for external handoff
 - governance and payout-receiver approvals are already satisfied
 - the sweep batch or treasury action is already canonical inside `Cotsel`
 
@@ -20,37 +21,39 @@ Do not use the Bridge handoff route to manufacture a treasury action that does n
 
 Creating a Bridge handoff records:
 
-- partner code
+- partner name
 - handoff reference
-- status
-- transfer, drain, and payout references where available
-- actor
-- initiated timestamp
+- handoff status
+- evidence reference where available
+- batch-linked metadata
 
-If the entry is still `READY_FOR_PARTNER_SUBMISSION`, the handoff route advances it to `AWAITING_PARTNER_UPDATE`.
+Use the canonical treasury route:
+
+- `POST /api/treasury/v1/internal/sweep-batches/:batchId/external-handoff`
+- legacy alias: `POST /api/treasury/v1/internal/sweep-batches/:batchId/partner-handoff`
 
 ## Evidence handling
 
-Bridge evidence is appended through the treasury evidence path, not by mutating payout state directly.
+Bridge execution evidence is recorded through the canonical external handoff record plus bank
+confirmation and deposit evidence, not by mutating payout state directly.
 
 Evidence may include:
 
-- provider event ID
-- event type
-- transfer or payout reference
-- drain reference
-- destination external account reference
-- liquidation address reference
+- handoff status updates from the external counterparty
+- partner reference
+- evidence reference
 - bank reference and bank state
+- deposit/provider references recorded through treasury deposit evidence
 
-If confirmed bank evidence is attached while the treasury entry is `AWAITING_PARTNER_UPDATE`, the treasury path auto-appends `PARTNER_REPORTED_COMPLETED`.
+If confirmed bank evidence is attached while the treasury entry is `AWAITING_EXTERNAL_CONFIRMATION`,
+the treasury path auto-appends `EXTERNAL_EXECUTION_CONFIRMED`.
 
 ## Replay and conflict behavior
 
 Use these rules:
 
-- same handoff payload for the same ledger entry: idempotent replay
-- same evidence payload for the same provider event: idempotent replay
+- same external handoff payload for the same sweep batch: idempotent replay
+- same evidence payload for the same provider or bank event key: idempotent replay
 - conflicting payload for the same handoff or evidence key: reject and investigate
 
 Do not override conflicting Bridge evidence in place. That would corrupt treasury auditability.
@@ -60,8 +63,8 @@ Do not override conflicting Bridge evidence in place. That would corrupt treasur
 When treasury Bridge cash-out looks wrong, inspect:
 
 1. treasury payout state history
-2. treasury partner handoff record
-3. treasury partner handoff evidence stream
+2. sweep batch external handoff record
+3. deposit and bank confirmation evidence
 4. bank confirmation record
 5. export eligibility result
 

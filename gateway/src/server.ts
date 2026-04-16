@@ -46,6 +46,7 @@ import { EvidenceReadService } from './core/evidenceReadService';
 import { OperationsSummaryService } from './core/operationsSummaryService';
 import { OverviewService } from './core/overviewService';
 import { TreasuryReadService } from './core/treasuryReadService';
+import { TreasuryWorkflowService } from './core/treasuryWorkflowService';
 import { ReconciliationReadService } from './core/reconciliationReadService';
 import { RicardianClient } from './core/ricardianClient';
 import { createDownstreamServiceRegistry } from './core/serviceRegistry';
@@ -197,6 +198,7 @@ const downstreamServiceRegistry = createDownstreamServiceRegistry([
   },
 ]);
 const orchestrator = new ServiceOrchestrator(downstreamServiceRegistry);
+const treasuryWorkflowService = new TreasuryWorkflowService(orchestrator, auditLogStore);
 const indexerClient = new IndexerGraphqlClient(
   config.indexerGraphqlUrl,
   config.indexerRequestTimeoutMs,
@@ -428,6 +430,7 @@ async function bootstrap(): Promise<void> {
       authSessionClient,
       config,
       treasuryReadService,
+      treasuryWorkflowService,
     }),
   );
   extraRouter.use(

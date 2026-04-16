@@ -80,7 +80,7 @@ describe('treasury partner handoff persistence (postgres)', () => {
 
     await queries.appendPayoutState({
       ledgerEntryId: entry.id,
-      state: 'READY_FOR_PARTNER_SUBMISSION',
+      state: 'READY_FOR_EXTERNAL_HANDOFF',
       actor: 'postgres-test',
       note: 'Eligible for Bridge handoff proof',
     });

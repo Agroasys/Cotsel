@@ -8,7 +8,7 @@ Provide an operator-safe, step-by-step walkthrough of Agroasys hybrid settlement
 
 - `Operator`: runs profile checks and captures evidence.
 - `On-call Engineer`: resolves runtime failures and decides escalation.
-- `Treasury Operator`: validates stage-1 treasury ledger readiness.
+- `Treasury Operator`: validates stage-1 treasury execution-evidence readiness.
 
 ## When To Use
 
@@ -116,7 +116,7 @@ Expected result:
 
 - Trade status transitions to `IN_TRANSIT`.
 - `FundsReleasedStage1` and `PlatformFeesPaidStage1` events are indexed.
-- Treasury ingest path can materialize corresponding ledger entries.
+- Treasury ingest path can materialize corresponding execution-evidence rows and payout-eligibility state.
 
 Verification sample:
 

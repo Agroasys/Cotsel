@@ -166,7 +166,7 @@ Bank confirmation source of truth:
 - `treasury/src/database/queries.ts`
 - `docs/runbooks/treasury-to-fiat-sop.md#bank-payout-confirmation-contract`
 
-Reconciliation report rows expose latest bank confirmation evidence per treasury ledger entry.
+Reconciliation report rows expose latest bank confirmation evidence per treasury execution-evidence entry.
 
 Deterministic bank divergence classes visible in reconciliation output:
 
@@ -175,8 +175,8 @@ Deterministic bank divergence classes visible in reconciliation output:
 
 Operator rules:
 
-- `bankPayoutState="CONFIRMED"` with treasury `payoutState != "PARTNER_REPORTED_COMPLETED"` is a divergence and must be remediated before closeout.
-- `bankPayoutState="PENDING"` with treasury `payoutState="PARTNER_REPORTED_COMPLETED"` is a divergence and must be treated as missing bank evidence.
+- `bankPayoutState="CONFIRMED"` with treasury `payoutState != "EXTERNAL_EXECUTION_CONFIRMED"` is a divergence and must be remediated before closeout.
+- `bankPayoutState="PENDING"` with treasury `payoutState="EXTERNAL_EXECUTION_CONFIRMED"` is a divergence and must be treated as missing bank evidence.
 - `bankPayoutState="REJECTED"` is always a payout exception and must be linked to the bank failure code or incident evidence.
 
 ## Migration: Dual-Escrow Reconciliation
@@ -190,7 +190,7 @@ Escrow contracts are not upgraded in place. During migration:
 Migration is complete only when:
 
 - legacy escrows have zero outstanding treasury claimables
-- expected treasury payout events from legacy escrows are fully matched to treasury ledger entries
+- expected treasury payout events from legacy escrows are fully matched to treasury execution-evidence entries
 - no unresolved payout receiver rotation incidents remain
 
 ## Retry/Redrive State Machine
@@ -259,7 +259,7 @@ CI artifact name:
   - mismatch reasons include `AMOUNT_MISMATCH`, `PARTICIPANT_MISMATCH`, or `HASH_MISMATCH`
   - mismatch reasons include `PARTIAL_FUNDING`, `REVERSED_FUNDING`, `CURRENCY_MISMATCH`, or `STALE_PENDING_DEPOSIT`
   - mismatch reasons include `BANK_REJECTED` or `TREASURY_BANK_STATE_DIVERGENCE`
-  - payout state is `AWAITING_PARTNER_UPDATE` for longer than the agreed treasury operations window
+  - payout state is `AWAITING_EXTERNAL_CONFIRMATION` for longer than the agreed treasury operations window
 - Escalation runbooks:
   - `docs/runbooks/gateway-dead-letter-workflow.md`
   - `docs/runbooks/oracle-redrive.md`

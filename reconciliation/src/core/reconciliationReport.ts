@@ -6,6 +6,20 @@ export interface ReconciliationReportInputRow {
   tradeId: string;
   txHash: string | null;
   payoutState: string | null;
+  sourceAmountRaw?: string | null;
+  allocatedAmountRaw?: string | null;
+  accountingState: string | null;
+  accountingStateReason: string | null;
+  accountingPeriodKey: string | null;
+  accountingPeriodStatus: string | null;
+  sweepBatchId: number | null;
+  sweepBatchStatus: string | null;
+  matchedSweepTxHash: string | null;
+  matchedSweptAt: Date | null;
+  partnerName: string | null;
+  partnerReference: string | null;
+  partnerHandoffStatus: string | null;
+  realizedAt: Date | null;
   rampReference: string | null;
   fiatDepositState: string | null;
   fiatDepositFailureClass: string | null;
@@ -22,6 +36,18 @@ export interface ReconciliationReportRow {
   tradeId: string;
   txHash: string | null;
   payoutState: string | null;
+  accountingState: string | null;
+  accountingStateReason: string | null;
+  accountingPeriodKey: string | null;
+  accountingPeriodStatus: string | null;
+  sweepBatchId: number | null;
+  sweepBatchStatus: string | null;
+  matchedSweepTxHash: string | null;
+  matchedSweptAt: string | null;
+  partnerName: string | null;
+  partnerReference: string | null;
+  partnerHandoffStatus: string | null;
+  realizedAt: string | null;
   rampReference: string | null;
   fiatDepositState: string | null;
   fiatDepositFailureReason: string | null;
@@ -51,7 +77,7 @@ export interface ReconciliationReportBuildOptions {
   stalePendingAfterHours?: number;
 }
 
-const TERMINAL_PARTNER_COMPLETION_STATE = 'PARTNER_REPORTED_COMPLETED';
+const TERMINAL_EXTERNAL_EXECUTION_STATE = 'EXTERNAL_EXECUTION_CONFIRMED';
 
 function compareNullableStrings(a: string | null, b: string | null): number {
   if (a === b) {
@@ -111,13 +137,35 @@ function deriveMismatchCodes(
 
   if (
     row.bankPayoutState === 'CONFIRMED' &&
-    row.payoutState !== TERMINAL_PARTNER_COMPLETION_STATE
+    row.payoutState !== TERMINAL_EXTERNAL_EXECUTION_STATE
   ) {
     mismatchCodes.push('TREASURY_BANK_STATE_DIVERGENCE');
   }
 
-  if (row.bankPayoutState === 'PENDING' && row.payoutState === TERMINAL_PARTNER_COMPLETION_STATE) {
+  if (row.bankPayoutState === 'PENDING' && row.payoutState === TERMINAL_EXTERNAL_EXECUTION_STATE) {
     mismatchCodes.push('TREASURY_BANK_STATE_DIVERGENCE');
+  }
+
+  if (row.sweepBatchStatus === 'EXECUTED' && !row.matchedSweepTxHash) {
+    mismatchCodes.push('SWEEP_TX_UNMATCHED');
+  }
+
+  if (row.sweepBatchStatus === 'HANDED_OFF' && !row.partnerReference) {
+    mismatchCodes.push('PARTNER_HANDOFF_MISSING');
+  }
+
+  if (row.realizedAt && row.partnerHandoffStatus !== 'COMPLETED') {
+    mismatchCodes.push('REALIZATION_WITHOUT_CONFIRMATION');
+  }
+
+  if (
+    row.allocatedAmountRaw !== undefined &&
+    row.allocatedAmountRaw !== null &&
+    row.sourceAmountRaw !== undefined &&
+    row.sourceAmountRaw !== null &&
+    row.allocatedAmountRaw !== row.sourceAmountRaw
+  ) {
+    mismatchCodes.push('ALLOCATED_AMOUNT_DIFFERS_FROM_SOURCE');
   }
 
   return Array.from(new Set(mismatchCodes)).sort((a, b) => a.localeCompare(b));
@@ -140,6 +188,18 @@ export function buildReconciliationReportRows(
       tradeId: row.tradeId,
       txHash: row.txHash,
       payoutState: row.payoutState,
+      accountingState: row.accountingState,
+      accountingStateReason: row.accountingStateReason,
+      accountingPeriodKey: row.accountingPeriodKey,
+      accountingPeriodStatus: row.accountingPeriodStatus,
+      sweepBatchId: row.sweepBatchId,
+      sweepBatchStatus: row.sweepBatchStatus,
+      matchedSweepTxHash: row.matchedSweepTxHash,
+      matchedSweptAt: row.matchedSweptAt ? row.matchedSweptAt.toISOString() : null,
+      partnerName: row.partnerName,
+      partnerReference: row.partnerReference,
+      partnerHandoffStatus: row.partnerHandoffStatus,
+      realizedAt: row.realizedAt ? row.realizedAt.toISOString() : null,
       rampReference: row.rampReference,
       fiatDepositState: row.fiatDepositState,
       fiatDepositFailureReason: row.fiatDepositFailureClass,

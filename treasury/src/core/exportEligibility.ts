@@ -10,9 +10,9 @@ import { ReconciliationGateService, type TradeReconciliationGate } from './recon
 import { getLatestBankPayoutConfirmation } from '../database/queries';
 
 const EXPORTABLE_STATES: ReadonlySet<PayoutState> = new Set([
-  'READY_FOR_PARTNER_SUBMISSION',
-  'AWAITING_PARTNER_UPDATE',
-  'PARTNER_REPORTED_COMPLETED',
+  'READY_FOR_EXTERNAL_HANDOFF',
+  'AWAITING_EXTERNAL_CONFIRMATION',
+  'EXTERNAL_EXECUTION_CONFIRMED',
 ]);
 
 interface SettlementHeadProvider {
@@ -55,10 +55,10 @@ function buildBlockedReasons(input: {
   }
 
   if (
-    input.latestState === 'PARTNER_REPORTED_COMPLETED' &&
+    input.latestState === 'EXTERNAL_EXECUTION_CONFIRMED' &&
     input.bankConfirmationState !== 'CONFIRMED'
   ) {
-    reasons.push('Confirmed partner payout evidence is required before completion export.');
+    reasons.push('Confirmed external execution evidence is required before completion export.');
   }
 
   return Array.from(new Set(reasons));
@@ -141,7 +141,7 @@ export class TreasuryEligibilityService {
     for (const entry of entries) {
       const confirmation = await this.getConfirmationState(entry.block_number);
       const latestBankConfirmation =
-        entry.latest_state === 'PARTNER_REPORTED_COMPLETED'
+        entry.latest_state === 'EXTERNAL_EXECUTION_CONFIRMED'
           ? await this.bankConfirmationReader.getLatestConfirmation(entry.id)
           : null;
       const reconciliationGate = reconciliationByTradeId.get(entry.trade_id) ?? {
@@ -149,6 +149,9 @@ export class TreasuryEligibilityService {
         status: 'UNKNOWN',
         runKey: null,
         driftCount: 0,
+        freshness: 'MISSING' as const,
+        completedAt: null,
+        staleRunningRunCount: 0,
         blockedReasons: ['Reconciliation status could not be determined'],
       };
       const blockedReasons = buildBlockedReasons({
@@ -172,6 +175,9 @@ export class TreasuryEligibilityService {
         finalizedBlockNumber: confirmation.state?.finalizedBlockNumber ?? null,
         reconciliationStatus: reconciliationGate.status,
         reconciliationRunKey: reconciliationGate.runKey,
+        reconciliationFreshness: reconciliationGate.freshness,
+        reconciliationCompletedAt: reconciliationGate.completedAt,
+        staleRunningRunCount: reconciliationGate.staleRunningRunCount,
         eligibleForPayout,
         eligibleForExport,
         blockedReasons,
