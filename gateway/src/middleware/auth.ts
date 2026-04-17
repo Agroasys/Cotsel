@@ -8,11 +8,26 @@ import { AuthSession, AuthSessionClient } from '../core/authSessionClient';
 import { GatewayError } from '../errors';
 
 export type GatewayRole = 'operator:read' | 'operator:write';
+export type TreasuryCapability =
+  | 'treasury:read'
+  | 'treasury:prepare'
+  | 'treasury:approve'
+  | 'treasury:execute_match'
+  | 'treasury:close';
+
+const TREASURY_CAPABILITIES: TreasuryCapability[] = [
+  'treasury:read',
+  'treasury:prepare',
+  'treasury:approve',
+  'treasury:execute_match',
+  'treasury:close',
+];
 
 export interface GatewayPrincipal {
   sessionReference: string;
   session: AuthSession;
   gatewayRoles: GatewayRole[];
+  treasuryCapabilities: TreasuryCapability[];
   writeEnabled: boolean;
 }
 
@@ -76,6 +91,24 @@ function mapGatewayRoles(session: AuthSession): GatewayRole[] {
   return [];
 }
 
+export function resolveTreasuryCapabilities(session: AuthSession): TreasuryCapability[] {
+  if (session.role !== 'admin') {
+    return [];
+  }
+
+  if (Array.isArray(session.capabilities)) {
+    return [
+      ...new Set(
+        session.capabilities.filter((capability): capability is TreasuryCapability =>
+          TREASURY_CAPABILITIES.includes(capability as TreasuryCapability),
+        ),
+      ),
+    ];
+  }
+
+  return [...TREASURY_CAPABILITIES];
+}
+
 export function matchesAllowlist(session: AuthSession, allowlist: string[]): boolean {
   if (allowlist.length === 0) {
     return false;
@@ -113,6 +146,7 @@ export function createAuthenticationMiddleware(client: AuthSessionClient, config
       sessionReference: buildSessionReference(token),
       session,
       gatewayRoles: mapGatewayRoles(session),
+      treasuryCapabilities: resolveTreasuryCapabilities(session),
       writeEnabled: config.enableMutations && matchesAllowlist(session, config.writeAllowlist),
     };
 
@@ -124,6 +158,23 @@ export function requireGatewayRole(role: GatewayRole) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.gatewayPrincipal?.gatewayRoles.includes(role)) {
       next(new GatewayError(403, 'FORBIDDEN', `Gateway role '${role}' is required`));
+      return;
+    }
+
+    next();
+  };
+}
+
+export function requireTreasuryCapability(capability: TreasuryCapability) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    const principal = req.gatewayPrincipal;
+    if (!principal) {
+      next(new GatewayError(401, 'AUTH_REQUIRED', 'Authentication is required'));
+      return;
+    }
+
+    if (!principal.treasuryCapabilities.includes(capability)) {
+      next(new GatewayError(403, 'FORBIDDEN', `Treasury capability '${capability}' is required`));
       return;
     }
 

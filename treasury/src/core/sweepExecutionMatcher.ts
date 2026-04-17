@@ -2,6 +2,7 @@ import { config } from '../config';
 import {
   getSweepBatchDetail,
   getTreasuryClaimEventByBatchId,
+  getTreasuryClaimEventByTxHash,
   updateSweepBatchStatus,
   upsertTreasuryClaimEvent,
 } from '../database/queries';
@@ -41,8 +42,20 @@ export class SweepExecutionMatcherService {
       return detail.batch;
     }
 
-    const observedClaimEvent =
-      await this.indexerClient.fetchTreasuryClaimEventByTxHash(normalizedTxHash);
+    const persistedClaimEvent = await getTreasuryClaimEventByTxHash(normalizedTxHash);
+    const observedClaimEvent = persistedClaimEvent
+      ? {
+          id: persistedClaimEvent.source_event_id,
+          eventName: 'TreasuryClaimed' as const,
+          txHash: persistedClaimEvent.tx_hash,
+          blockNumber: persistedClaimEvent.block_number,
+          timestamp: persistedClaimEvent.observed_at,
+          claimAmount: persistedClaimEvent.amount_raw,
+          treasuryIdentity: persistedClaimEvent.treasury_identity,
+          payoutReceiver: persistedClaimEvent.payout_receiver,
+          triggeredBy: persistedClaimEvent.triggered_by,
+        }
+      : await this.indexerClient.fetchTreasuryClaimEventByTxHash(normalizedTxHash);
     if (!observedClaimEvent) {
       throw new Error('No authoritative TreasuryClaimed event was found for the supplied tx hash');
     }

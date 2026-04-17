@@ -1,11 +1,13 @@
 const mockGetIngestionOffset = jest.fn();
 const mockSetIngestionOffset = jest.fn();
 const mockUpsertLedgerEntryWithInitialState = jest.fn();
+const mockUpsertTreasuryClaimEvent = jest.fn();
 
 jest.mock('../src/database/queries', () => ({
   getIngestionOffset: mockGetIngestionOffset,
   setIngestionOffset: mockSetIngestionOffset,
   upsertLedgerEntryWithInitialState: mockUpsertLedgerEntryWithInitialState,
+  upsertTreasuryClaimEvent: mockUpsertTreasuryClaimEvent,
 }));
 
 process.env.PORT = process.env.PORT || '3001';
@@ -63,11 +65,18 @@ describe('TreasuryIngestionService', () => {
       }),
     ];
 
-    let persistedOffset = 0;
-    mockGetIngestionOffset.mockImplementation(async () => persistedOffset);
-    mockSetIngestionOffset.mockImplementation(async (nextOffset: number) => {
-      persistedOffset = nextOffset;
-    });
+    const persistedOffsets = new Map<string, number>([
+      ['trade_events', 0],
+      ['claim_events', 0],
+    ]);
+    mockGetIngestionOffset.mockImplementation(
+      async (cursor: string) => persistedOffsets.get(cursor) ?? 0,
+    );
+    mockSetIngestionOffset.mockImplementation(
+      async (nextOffset: number, cursor = 'trade_events') => {
+        persistedOffsets.set(cursor, nextOffset);
+      },
+    );
     mockUpsertLedgerEntryWithInitialState.mockResolvedValue({
       entry: { id: 1 },
       initialStateCreated: true,
@@ -87,8 +96,10 @@ describe('TreasuryIngestionService', () => {
 
     expect(firstRun).toEqual({ fetched: 3, inserted: 3 });
     expect(fetchTreasuryEvents.mock.calls[0][1]).toBe(0);
-    expect(mockSetIngestionOffset).toHaveBeenLastCalledWith(3);
-    expect(persistedOffset).toBe(3);
+    expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(1, 3, 'trade_events');
+    expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(2, 0, 'claim_events');
+    expect(persistedOffsets.get('trade_events')).toBe(3);
+    expect(persistedOffsets.get('claim_events')).toBe(0);
 
     fetchTreasuryEvents.mockClear();
     mockUpsertLedgerEntryWithInitialState.mockClear();
@@ -136,7 +147,8 @@ describe('TreasuryIngestionService', () => {
     const result = await service.ingestOnce();
 
     expect(result).toEqual({ fetched: 2, inserted: 1 });
-    expect(mockSetIngestionOffset).toHaveBeenCalledWith(2);
+    expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(1, 2, 'trade_events');
+    expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(2, 0, 'claim_events');
   });
 
   it('skips entries when txHash is unavailable and does not attempt DB upsert', async () => {
@@ -168,7 +180,8 @@ describe('TreasuryIngestionService', () => {
 
     expect(result).toEqual({ fetched: 1, inserted: 0 });
     expect(mockUpsertLedgerEntryWithInitialState).not.toHaveBeenCalled();
-    expect(mockSetIngestionOffset).toHaveBeenCalledWith(1);
+    expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(1, 1, 'trade_events');
+    expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(2, 0, 'claim_events');
   });
 
   it('ignores non-treasury events so principal never enters treasury ingestion', async () => {
@@ -198,7 +211,8 @@ describe('TreasuryIngestionService', () => {
 
     expect(result).toEqual({ fetched: 1, inserted: 0 });
     expect(mockUpsertLedgerEntryWithInitialState).not.toHaveBeenCalled();
-    expect(mockSetIngestionOffset).toHaveBeenCalledWith(1);
+    expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(1, 1, 'trade_events');
+    expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(2, 0, 'claim_events');
   });
 
   it('does not double-count replayed treasury events with the same canonical event id', async () => {
@@ -245,5 +259,61 @@ describe('TreasuryIngestionService', () => {
       2,
       expect.objectContaining({ entryKey: 'evt-replay:platform_fee' }),
     );
+  });
+
+  it('persists treasury claim events to a dedicated evidence timeline cursor', async () => {
+    const service = new TreasuryIngestionService();
+    const fetchTreasuryEvents = jest.fn().mockResolvedValue([]);
+    const fetchTreasuryClaimEvents = jest
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 'claim-1',
+          txHash: '0xclaim-1',
+          blockNumber: 44,
+          timestamp: new Date('2026-01-01T01:00:00.000Z'),
+          claimAmount: '150',
+          treasuryIdentity: '0xtreasury',
+          payoutReceiver: '0xpayout',
+          triggeredBy: '0xoperator',
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    mockGetIngestionOffset.mockImplementation(async (cursor: string) =>
+      cursor === 'claim_events' ? 0 : 0,
+    );
+    mockSetIngestionOffset.mockResolvedValue(undefined);
+    mockUpsertTreasuryClaimEvent.mockResolvedValue({
+      id: 1,
+      matched_sweep_batch_id: null,
+      tx_hash: '0xclaim-1',
+    });
+
+    (
+      service as unknown as {
+        indexerClient: {
+          fetchTreasuryEvents: typeof fetchTreasuryEvents;
+          fetchTreasuryClaimEvents: typeof fetchTreasuryClaimEvents;
+        };
+      }
+    ).indexerClient = {
+      fetchTreasuryEvents,
+      fetchTreasuryClaimEvents,
+    };
+
+    const result = await service.ingestOnce();
+
+    expect(result).toEqual({ fetched: 1, inserted: 0 });
+    expect(mockUpsertTreasuryClaimEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceEventId: 'claim-1',
+        matchedSweepBatchId: null,
+        txHash: '0xclaim-1',
+        amountRaw: '150',
+      }),
+    );
+    expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(1, 0, 'trade_events');
+    expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(2, 1, 'claim_events');
   });
 });

@@ -237,6 +237,89 @@ const entryAccountingFixture = {
 
 const entryAccountingListFixture = [entryAccountingFixture];
 
+const rollforwardFixture = {
+  period: accountingPeriodsFixture[0],
+  generated_at: '2026-03-31T23:59:59.000Z',
+  opening_held_raw: '0',
+  new_accruals_raw: '125000000',
+  allocated_to_batches_raw: '125000000',
+  swept_onchain_raw: '125000000',
+  handed_off_raw: '0',
+  realized_raw: '0',
+  ending_held_raw: '0',
+  unresolved_exception_raw: '0',
+  blocking_issue_count: 0,
+  warning_issue_count: 0,
+  blocking_issues: [],
+  warning_issues: [],
+};
+
+const closePacketFixture = {
+  period: accountingPeriodsFixture[0],
+  generated_at: '2026-03-31T23:59:59.000Z',
+  ready_for_close: true,
+  rollforward: rollforwardFixture,
+  reconciliation: {
+    status: 'CLEAR',
+    freshness: 'FRESH',
+    latest_completed_run_key: 'run-2026-q1',
+    latest_completed_run_at: '2026-03-31T23:00:00.000Z',
+    stale_running_run_count: 0,
+    blocked_reasons: [],
+  },
+  batches: [
+    {
+      batch: sweepBatchFixture.batch,
+      claim_event: {
+        id: 91,
+        source_event_id: 'claim-91',
+        matched_sweep_batch_id: 11,
+        tx_hash: '0xsweep-1',
+        block_number: 101,
+        observed_at: '2026-03-31T12:00:00.000Z',
+        treasury_identity: '0xtreasury',
+        payout_receiver: '0x0000000000000000000000000000000000000033',
+        amount_raw: '125000000',
+        triggered_by: '0xexecutor',
+        created_at: '2026-03-31T12:00:00.000Z',
+      },
+      partner_handoff: null,
+      totals: {
+        expected_total_raw: '125000000',
+        allocated_total_raw: '125000000',
+        entry_count: 1,
+      },
+      entries: [
+        {
+          ledger_entry_id: 501,
+          trade_id: 'trade-501',
+          component_type: 'PLATFORM_FEE',
+          source_amount_raw: '125000000',
+          allocated_amount_raw: '125000000',
+          earned_at: '2026-03-31T10:00:00.000Z',
+          accounting_state: 'SWEPT',
+          accounting_state_reason: 'Matched on-chain treasury claim recorded',
+          matched_sweep_tx_hash: '0xsweep-1',
+          matched_swept_at: '2026-03-31T12:00:00.000Z',
+          partner_reference: null,
+          partner_handoff_status: null,
+          latest_bank_reference: null,
+          latest_bank_payout_state: 'CONFIRMED',
+          latest_bank_confirmed_at: '2026-03-31T13:00:00.000Z',
+          revenue_realization_status: null,
+          realized_at: null,
+        },
+      ],
+      blocking_issues: [],
+      warning_issues: [],
+    },
+  ],
+  blocking_issues: [],
+  warning_issues: [],
+};
+
+const batchTraceFixture = closePacketFixture.batches[0];
+
 async function startServer(
   role: 'admin' | 'buyer' | null,
   options?: {
@@ -276,6 +359,9 @@ async function startServer(
     listEntryAccounting: jest.fn().mockResolvedValue(entryAccountingListFixture),
     getSweepBatch: jest.fn().mockResolvedValue(sweepBatchFixture),
     getEntryAccounting: jest.fn().mockResolvedValue(entryAccountingFixture),
+    getAccountingPeriodRollforward: jest.fn().mockResolvedValue(rollforwardFixture),
+    getAccountingPeriodClosePacket: jest.fn().mockResolvedValue(closePacketFixture),
+    getSweepBatchTrace: jest.fn().mockResolvedValue(batchTraceFixture),
     createAccountingPeriod: jest.fn().mockResolvedValue(accountingPeriodsFixture[0]),
     requestAccountingPeriodClose: jest.fn().mockResolvedValue({
       ...accountingPeriodsFixture[0],
@@ -382,8 +468,15 @@ describe('gateway treasury routes contract', () => {
     expect(hasOperation(spec, 'get', '/treasury')).toBe(true);
     expect(hasOperation(spec, 'get', '/treasury/actions')).toBe(true);
     expect(hasOperation(spec, 'get', '/treasury/accounting-periods')).toBe(true);
+    expect(hasOperation(spec, 'get', '/treasury/accounting-periods/{periodId}/rollforward')).toBe(
+      true,
+    );
+    expect(hasOperation(spec, 'get', '/treasury/accounting-periods/{periodId}/close-packet')).toBe(
+      true,
+    );
     expect(hasOperation(spec, 'get', '/treasury/sweep-batches')).toBe(true);
     expect(hasOperation(spec, 'get', '/treasury/sweep-batches/{batchId}')).toBe(true);
+    expect(hasOperation(spec, 'get', '/treasury/sweep-batches/{batchId}/trace')).toBe(true);
     expect(hasOperation(spec, 'get', '/treasury/entries/accounting')).toBe(true);
     expect(hasOperation(spec, 'get', '/treasury/entries/{entryId}/accounting')).toBe(true);
     expect(hasOperation(spec, 'post', '/treasury/accounting-periods')).toBe(true);
@@ -447,6 +540,20 @@ describe('gateway treasury routes contract', () => {
     expect(periodsResponse.status).toBe(200);
     expect(validateAccountingPeriods(periodsPayload)).toBe(true);
 
+    const rollforwardResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury/accounting-periods/7/rollforward',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    expect(rollforwardResponse.status).toBe(200);
+
+    const closePacketResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury/accounting-periods/7/close-packet',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    expect(closePacketResponse.status).toBe(200);
+
     const batchResponse = await sendInProcessRequest(app, {
       method: 'GET',
       path: '/api/dashboard-gateway/v1/treasury/sweep-batches/11',
@@ -455,6 +562,13 @@ describe('gateway treasury routes contract', () => {
     const batchPayload = batchResponse.json<{ data: unknown }>();
     expect(batchResponse.status).toBe(200);
     expect(validateSweepBatch(batchPayload)).toBe(true);
+
+    const batchTraceResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/treasury/sweep-batches/11/trace',
+      headers: { authorization: 'Bearer sess-admin' },
+    });
+    expect(batchTraceResponse.status).toBe(200);
 
     const entryListResponse = await sendInProcessRequest(app, {
       method: 'GET',
@@ -500,6 +614,7 @@ describe('gateway treasury routes contract', () => {
         audit: {
           reason: 'Open next revenue close period',
           ticketRef: 'FIN-200',
+          evidenceReferences: ['evidence://ticket/FIN-200'],
           metadata: { source: 'contract-test' },
         },
       }),
@@ -557,6 +672,83 @@ describe('gateway treasury routes contract', () => {
     });
 
     expect(response.status).toBe(409);
+  });
+
+  test('treasury capability gates can narrow sensitive routes without changing session posture', async () => {
+    const app = await startServer('admin', {
+      config: {
+        enableMutations: true,
+        writeAllowlist: ['uid-admin'],
+      },
+      session: {
+        capabilities: ['treasury:read', 'treasury:prepare'],
+      },
+    });
+
+    const approveResponse = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/treasury/sweep-batches/11/approve',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        audit: {
+          reason: 'Approve close-ready sweep batch',
+          ticketRef: 'FIN-203',
+        },
+      }),
+    });
+
+    expect(approveResponse.status).toBe(403);
+    expect(approveResponse.json<{ error: { code: string; message: string } }>()).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'FORBIDDEN',
+        }),
+      }),
+    );
+  });
+
+  test('explicit empty treasury capability sets do not fall back to full treasury scope', async () => {
+    const app = await startServer('admin', {
+      config: {
+        enableMutations: true,
+        writeAllowlist: ['uid-admin'],
+      },
+      session: {
+        capabilities: [],
+      },
+    });
+
+    const response = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/treasury/sweep-batches',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        batchKey: '2026-Q2',
+        accountingPeriodId: 7,
+        assetSymbol: 'USDC',
+        expectedTotalRaw: '125000000',
+        audit: {
+          reason: 'Prepare sweep batch',
+          ticketRef: 'FIN-300',
+        },
+      }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.json<{ error: { code: string; message: string } }>()).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'FORBIDDEN',
+          message: expect.stringContaining('Treasury capability'),
+        }),
+      }),
+    );
   });
 
   test('canonical external handoff route and legacy alias both remain available', async () => {

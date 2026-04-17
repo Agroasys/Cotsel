@@ -59,6 +59,12 @@ describe('treasury rate-limit wiring', () => {
       async listAccountingPeriods(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
+      async getAccountingPeriodRollforward(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async getAccountingPeriodClosePacket(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
       async createAccountingPeriod(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
@@ -75,6 +81,9 @@ describe('treasury rate-limit wiring', () => {
         res.status(200).json({ success: true });
       },
       async getSweepBatch(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async getSweepBatchTrace(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
       async addSweepBatchEntry(_req: express.Request, res: express.Response) {

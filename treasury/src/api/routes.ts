@@ -74,6 +74,16 @@ export function createRouter(
     controller.listAccountingPeriods.bind(controller),
   );
   router.get(
+    '/accounting-periods/:periodId/rollforward',
+    ...protectedMiddlewares,
+    controller.getAccountingPeriodRollforward.bind(controller),
+  );
+  router.get(
+    '/accounting-periods/:periodId/close-packet',
+    ...protectedMiddlewares,
+    controller.getAccountingPeriodClosePacket.bind(controller),
+  );
+  router.get(
     '/sweep-batches',
     ...protectedMiddlewares,
     controller.listSweepBatches.bind(controller),
@@ -82,6 +92,11 @@ export function createRouter(
     '/sweep-batches/:batchId',
     ...protectedMiddlewares,
     controller.getSweepBatch.bind(controller),
+  );
+  router.get(
+    '/sweep-batches/:batchId/trace',
+    ...protectedMiddlewares,
+    controller.getSweepBatchTrace.bind(controller),
   );
   router.get('/export', ...protectedMiddlewares, controller.exportEntries.bind(controller));
   router.post(

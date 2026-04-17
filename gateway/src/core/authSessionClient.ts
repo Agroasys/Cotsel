@@ -12,6 +12,7 @@ export interface AuthSession {
   accountId?: string;
   walletAddress: string | null;
   role: AuthServiceRole;
+  capabilities?: string[];
   issuedAt: number;
   expiresAt: number;
   email?: string | null;

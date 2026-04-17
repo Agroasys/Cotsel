@@ -60,6 +60,12 @@ describe('treasury router auth scope', () => {
       listAccountingPeriods: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
       },
+      getAccountingPeriodRollforward: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
+      getAccountingPeriodClosePacket: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
       createAccountingPeriod: (_req: Request, res: Response) => {
         res.status(201).json({ success: true, data: { created: true } });
       },
@@ -76,6 +82,9 @@ describe('treasury router auth scope', () => {
         res.status(201).json({ success: true, data: { created: true } });
       },
       getSweepBatch: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
+      getSweepBatchTrace: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: null });
       },
       addSweepBatchEntry: (_req: Request, res: Response) => {

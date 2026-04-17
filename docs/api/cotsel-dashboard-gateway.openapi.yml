@@ -1085,6 +1085,69 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '409':
           $ref: '#/components/responses/ConflictError'
+  /treasury/accounting-periods/{periodId}/rollforward:
+    get:
+      tags: [Treasury]
+      summary: Get treasury accounting period rollforward
+      description: |
+        Returns the deterministic treasury rollforward for a single accounting period using
+        persisted treasury evidence, matched on-chain claim evidence, and reconciliation truth.
+      operationId: getTreasuryAccountingPeriodRollforward
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/AccountingPeriodId'
+      responses:
+        '200':
+          description: Treasury accounting period rollforward.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryPeriodRollforwardResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /treasury/accounting-periods/{periodId}/close-packet:
+    get:
+      tags: [Treasury]
+      summary: Get treasury accounting period close packet
+      description: |
+        Returns the finance close packet for a treasury accounting period, including rollforward,
+        batch trace evidence, reconciliation summary, and blocking vs warning close issues.
+      operationId: getTreasuryAccountingPeriodClosePacket
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/AccountingPeriodId'
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, markdown]
+            default: json
+      responses:
+        '200':
+          description: Treasury accounting period close packet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryAccountingPeriodClosePacketResponse'
+            text/markdown:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
   /treasury/accounting-periods/{periodId}/close:
     post:
       tags: [Treasury]
@@ -1202,6 +1265,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TreasurySweepBatchDetailResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /treasury/sweep-batches/{batchId}/trace:
+    get:
+      tags: [Treasury]
+      summary: Get treasury sweep batch trace
+      description: |
+        Returns the full batch trace from ledger entries through matched on-chain treasury claim
+        evidence and external execution handoff evidence.
+      operationId: getTreasurySweepBatchTrace
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      responses:
+        '200':
+          description: Treasury sweep batch trace report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryBatchTraceReportResponse'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -5399,6 +5487,13 @@ components:
           type: string
           minLength: 2
           maxLength: 128
+        evidenceReferences:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 3
+            maxLength: 500
         metadata:
           type: object
           additionalProperties: true
@@ -5920,6 +6015,334 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/TreasurySweepBatchDetail'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryCloseIssue:
+      type: object
+      required: [code, severity, owner, message]
+      properties:
+        code:
+          type: string
+        severity:
+          type: string
+          enum: [BLOCKING, WARNING]
+        owner:
+          type: string
+          enum: [TREASURY, FINANCE, RECONCILIATION, OPS]
+        message:
+          type: string
+        trade_id:
+          type: string
+          nullable: true
+        sweep_batch_id:
+          type: integer
+          nullable: true
+        ledger_entry_id:
+          type: integer
+          nullable: true
+        details:
+          type: object
+          additionalProperties: true
+    TreasuryPeriodRollforward:
+      type: object
+      required:
+        [
+          period,
+          generated_at,
+          opening_held_raw,
+          new_accruals_raw,
+          allocated_to_batches_raw,
+          swept_onchain_raw,
+          handed_off_raw,
+          realized_raw,
+          ending_held_raw,
+          unresolved_exception_raw,
+          blocking_issue_count,
+          warning_issue_count,
+          blocking_issues,
+          warning_issues,
+        ]
+      properties:
+        period:
+          $ref: '#/components/schemas/TreasuryAccountingPeriod'
+        generated_at:
+          type: string
+          format: date-time
+        opening_held_raw:
+          type: string
+        new_accruals_raw:
+          type: string
+        allocated_to_batches_raw:
+          type: string
+        swept_onchain_raw:
+          type: string
+        handed_off_raw:
+          type: string
+        realized_raw:
+          type: string
+        ending_held_raw:
+          type: string
+        unresolved_exception_raw:
+          type: string
+        blocking_issue_count:
+          type: integer
+          minimum: 0
+        warning_issue_count:
+          type: integer
+          minimum: 0
+        blocking_issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryCloseIssue'
+        warning_issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryCloseIssue'
+    TreasuryPeriodRollforwardResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasuryPeriodRollforward'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryClaimEvent:
+      type: object
+      required:
+        [
+          id,
+          source_event_id,
+          tx_hash,
+          block_number,
+          observed_at,
+          treasury_identity,
+          payout_receiver,
+          amount_raw,
+          created_at,
+        ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        source_event_id:
+          type: string
+        matched_sweep_batch_id:
+          type: integer
+          nullable: true
+        tx_hash:
+          type: string
+        block_number:
+          type: integer
+          minimum: 0
+        observed_at:
+          type: string
+          format: date-time
+        treasury_identity:
+          type: string
+        payout_receiver:
+          type: string
+        amount_raw:
+          type: string
+        triggered_by:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    TreasuryBatchTraceEntry:
+      type: object
+      required:
+        [
+          ledger_entry_id,
+          trade_id,
+          component_type,
+          source_amount_raw,
+          earned_at,
+          accounting_state,
+          accounting_state_reason,
+        ]
+      properties:
+        ledger_entry_id:
+          type: integer
+          minimum: 1
+        trade_id:
+          type: string
+        component_type:
+          type: string
+        source_amount_raw:
+          type: string
+        allocated_amount_raw:
+          type: string
+          nullable: true
+        earned_at:
+          type: string
+          format: date-time
+        accounting_state:
+          $ref: '#/components/schemas/TreasuryAccountingState'
+        accounting_state_reason:
+          type: string
+        matched_sweep_tx_hash:
+          type: string
+          nullable: true
+        matched_swept_at:
+          type: string
+          format: date-time
+          nullable: true
+        partner_reference:
+          type: string
+          nullable: true
+        partner_handoff_status:
+          oneOf:
+            - $ref: '#/components/schemas/TreasuryPartnerHandoffStatus'
+            - type: 'null'
+        latest_bank_reference:
+          type: string
+          nullable: true
+        latest_bank_payout_state:
+          type: string
+          nullable: true
+        latest_bank_confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        revenue_realization_status:
+          oneOf:
+            - $ref: '#/components/schemas/TreasuryRevenueRealizationStatus'
+            - type: 'null'
+        realized_at:
+          type: string
+          format: date-time
+          nullable: true
+    TreasuryBatchTraceReport:
+      type: object
+      required:
+        [batch, claim_event, partner_handoff, totals, entries, blocking_issues, warning_issues]
+      properties:
+        batch:
+          $ref: '#/components/schemas/TreasurySweepBatch'
+        claim_event:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TreasuryClaimEvent'
+        partner_handoff:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TreasuryPartnerHandoff'
+        totals:
+          type: object
+          required: [expected_total_raw, allocated_total_raw, entry_count]
+          properties:
+            expected_total_raw:
+              type: string
+            allocated_total_raw:
+              type: string
+            entry_count:
+              type: integer
+              minimum: 0
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryBatchTraceEntry'
+        blocking_issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryCloseIssue'
+        warning_issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryCloseIssue'
+    TreasuryBatchTraceReportResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasuryBatchTraceReport'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryAccountingPeriodClosePacket:
+      type: object
+      required:
+        [
+          period,
+          generated_at,
+          ready_for_close,
+          rollforward,
+          reconciliation,
+          batches,
+          blocking_issues,
+          warning_issues,
+        ]
+      properties:
+        period:
+          $ref: '#/components/schemas/TreasuryAccountingPeriod'
+        generated_at:
+          type: string
+          format: date-time
+        ready_for_close:
+          type: boolean
+        rollforward:
+          $ref: '#/components/schemas/TreasuryPeriodRollforward'
+        reconciliation:
+          type: object
+          required:
+            [
+              status,
+              freshness,
+              latest_completed_run_key,
+              latest_completed_run_at,
+              stale_running_run_count,
+              blocked_reasons,
+            ]
+          properties:
+            status:
+              type: string
+            freshness:
+              type: string
+              enum: [FRESH, STALE, MISSING]
+            latest_completed_run_key:
+              type: string
+              nullable: true
+            latest_completed_run_at:
+              type: string
+              format: date-time
+              nullable: true
+            stale_running_run_count:
+              type: integer
+              minimum: 0
+            blocked_reasons:
+              type: array
+              items:
+                type: string
+        batches:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryBatchTraceReport'
+        blocking_issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryCloseIssue'
+        warning_issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryCloseIssue'
+    TreasuryAccountingPeriodClosePacketResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasuryAccountingPeriodClosePacket'
         timestamp:
           type: string
           format: date-time

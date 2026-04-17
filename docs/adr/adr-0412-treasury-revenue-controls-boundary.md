@@ -31,6 +31,7 @@ This ADR freezes the ownership model and state semantics before broader treasury
 - **Gateway truth**: approval and privileged action truth
   - who prepared, approved, signed, confirmed, or closed an action
   - ticket references, reasons, evidence links, and audit lineage
+  - treasury capability enforcement for read, prepare, approve, execute-match, and close actions
 - **Reconciliation truth**: tie-out and exception truth
   - whether persisted treasury, gateway, and chain records reconcile
   - whether close can proceed
@@ -140,6 +141,9 @@ Compatibility note:
 - A sweep batch closer must be different from the approver and executor.
 - Treasury service must not directly trigger privileged chain execution.
 - Gateway remains the privileged execution and approval boundary.
+- Gateway treasury workflow should express distinct capability checks for read, prepare, approve,
+  execute-match, and close actions even when the upstream auth service still falls back to an
+  admin-wide treasury capability set.
 - Reconciliation gates accounting-period close. Revenue realization still requires treasury evidence gates, but it is not separately reconciliation-gated in the current implementation.
 
 ## Forbidden truth duplication

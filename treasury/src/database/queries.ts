@@ -613,6 +613,19 @@ export async function getTreasuryClaimEventByBatchId(
   return result.rows[0] || null;
 }
 
+export async function getTreasuryClaimEventByTxHash(
+  txHash: string,
+): Promise<TreasuryClaimEvent | null> {
+  const result = await pool.query<TreasuryClaimEvent>(
+    `SELECT *
+     FROM treasury_claim_events
+     WHERE tx_hash = $1`,
+    [txHash],
+  );
+
+  return result.rows[0] || null;
+}
+
 export async function getSweepBatchDetail(batchId: number): Promise<SweepBatchDetail | null> {
   const batchResult = await pool.query<SweepBatchWithPeriod>(
     `SELECT
@@ -850,7 +863,7 @@ export async function listSweepBatchEntries(batchId: number): Promise<SweepBatch
 
 export async function upsertTreasuryClaimEvent(data: {
   sourceEventId: string;
-  matchedSweepBatchId: number;
+  matchedSweepBatchId?: number | null;
   txHash: string;
   blockNumber: number;
   observedAt: Date;
@@ -873,45 +886,68 @@ export async function upsertTreasuryClaimEvent(data: {
     );
 
     const existing = existingByTx.rows[0];
-    if (existing && existing.matched_sweep_batch_id !== data.matchedSweepBatchId) {
+    if (
+      existing &&
+      existing.matched_sweep_batch_id !== null &&
+      data.matchedSweepBatchId !== undefined &&
+      data.matchedSweepBatchId !== null &&
+      existing.matched_sweep_batch_id !== data.matchedSweepBatchId
+    ) {
       throw new Error('Treasury claim event is already matched to a different sweep batch');
     }
 
-    const result = await client.query<TreasuryClaimEvent>(
-      `INSERT INTO treasury_claim_events (
-          source_event_id,
-          matched_sweep_batch_id,
-          tx_hash,
-          block_number,
-          observed_at,
-          treasury_identity,
-          payout_receiver,
-          amount_raw,
-          triggered_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        ON CONFLICT (matched_sweep_batch_id)
-        DO UPDATE SET
-          source_event_id = EXCLUDED.source_event_id,
-          tx_hash = EXCLUDED.tx_hash,
-          block_number = EXCLUDED.block_number,
-          observed_at = EXCLUDED.observed_at,
-          treasury_identity = EXCLUDED.treasury_identity,
-          payout_receiver = EXCLUDED.payout_receiver,
-          amount_raw = EXCLUDED.amount_raw,
-          triggered_by = EXCLUDED.triggered_by
-        RETURNING *`,
-      [
-        data.sourceEventId,
-        data.matchedSweepBatchId,
-        data.txHash,
-        data.blockNumber,
-        data.observedAt,
-        data.treasuryIdentity,
-        data.payoutReceiver,
-        data.amountRaw,
-        data.triggeredBy ?? null,
-      ],
-    );
+    const result = existing
+      ? await client.query<TreasuryClaimEvent>(
+          `UPDATE treasury_claim_events
+           SET source_event_id = $2,
+               matched_sweep_batch_id = COALESCE($3, matched_sweep_batch_id),
+               tx_hash = $4,
+               block_number = $5,
+               observed_at = $6,
+               treasury_identity = $7,
+               payout_receiver = $8,
+               amount_raw = $9,
+               triggered_by = $10
+           WHERE id = $1
+           RETURNING *`,
+          [
+            existing.id,
+            data.sourceEventId,
+            data.matchedSweepBatchId ?? null,
+            data.txHash,
+            data.blockNumber,
+            data.observedAt,
+            data.treasuryIdentity,
+            data.payoutReceiver,
+            data.amountRaw,
+            data.triggeredBy ?? null,
+          ],
+        )
+      : await client.query<TreasuryClaimEvent>(
+          `INSERT INTO treasury_claim_events (
+              source_event_id,
+              matched_sweep_batch_id,
+              tx_hash,
+              block_number,
+              observed_at,
+              treasury_identity,
+              payout_receiver,
+              amount_raw,
+              triggered_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING *`,
+          [
+            data.sourceEventId,
+            data.matchedSweepBatchId ?? null,
+            data.txHash,
+            data.blockNumber,
+            data.observedAt,
+            data.treasuryIdentity,
+            data.payoutReceiver,
+            data.amountRaw,
+            data.triggeredBy ?? null,
+          ],
+        );
 
     await client.query('COMMIT');
     return result.rows[0];
@@ -1121,6 +1157,7 @@ export async function getLedgerEntryAccountingFacts(
         e.component_type,
         e.amount_raw,
         alloc.entry_amount_raw AS allocated_amount_raw,
+        alloc.created_at AS allocated_at,
         e.source_timestamp AS earned_at,
         payout.state AS payout_state,
         period.id AS accounting_period_id,
@@ -1139,9 +1176,19 @@ export async function getLedgerEntryAccountingFacts(
         handoff.partner_name,
         handoff.partner_reference,
         handoff.handoff_status AS partner_handoff_status,
+        handoff.submitted_at AS partner_submitted_at,
+        handoff.acknowledged_at AS partner_acknowledged_at,
         handoff.completed_at AS partner_completed_at,
+        handoff.failed_at AS partner_failed_at,
+        handoff.verified_at AS partner_verified_at,
+        deposit.ramp_reference AS latest_fiat_deposit_ramp_reference,
         deposit.deposit_state AS latest_fiat_deposit_state,
+        deposit.failure_class AS latest_fiat_deposit_failure_class,
+        deposit.observed_at AS latest_fiat_deposit_observed_at,
+        bank.bank_reference AS latest_bank_reference,
         bank.bank_state AS latest_bank_payout_state,
+        bank.failure_code AS latest_bank_failure_code,
+        bank.confirmed_at AS latest_bank_confirmed_at,
         realization.realization_status AS revenue_realization_status,
         realization.realized_at
       FROM treasury_ledger_entries e
@@ -1172,14 +1219,14 @@ export async function getLedgerEntryAccountingFacts(
         LIMIT 1
       ) realization ON TRUE
       LEFT JOIN LATERAL (
-        SELECT d.deposit_state
+        SELECT d.ramp_reference, d.deposit_state, d.failure_class, d.observed_at
         FROM fiat_deposit_references d
         WHERE d.ledger_entry_id = e.id
         ORDER BY d.observed_at DESC, d.id DESC
         LIMIT 1
       ) deposit ON TRUE
       LEFT JOIN LATERAL (
-        SELECT b.bank_state
+        SELECT b.bank_reference, b.bank_state, b.failure_code, b.confirmed_at
         FROM bank_payout_confirmations b
         WHERE b.ledger_entry_id = e.id
         ORDER BY b.confirmed_at DESC, b.id DESC
@@ -1228,6 +1275,7 @@ export async function listLedgerEntryAccountingProjections(filters?: {
         e.component_type,
         e.amount_raw,
         alloc.entry_amount_raw AS allocated_amount_raw,
+        alloc.created_at AS allocated_at,
         e.source_timestamp AS earned_at,
         payout.state AS payout_state,
         period.id AS accounting_period_id,
@@ -1246,9 +1294,19 @@ export async function listLedgerEntryAccountingProjections(filters?: {
         handoff.partner_name,
         handoff.partner_reference,
         handoff.handoff_status AS partner_handoff_status,
+        handoff.submitted_at AS partner_submitted_at,
+        handoff.acknowledged_at AS partner_acknowledged_at,
         handoff.completed_at AS partner_completed_at,
+        handoff.failed_at AS partner_failed_at,
+        handoff.verified_at AS partner_verified_at,
+        deposit.ramp_reference AS latest_fiat_deposit_ramp_reference,
         deposit.deposit_state AS latest_fiat_deposit_state,
+        deposit.failure_class AS latest_fiat_deposit_failure_class,
+        deposit.observed_at AS latest_fiat_deposit_observed_at,
+        bank.bank_reference AS latest_bank_reference,
         bank.bank_state AS latest_bank_payout_state,
+        bank.failure_code AS latest_bank_failure_code,
+        bank.confirmed_at AS latest_bank_confirmed_at,
         realization.realization_status AS revenue_realization_status,
         realization.realized_at
       FROM treasury_ledger_entries e
@@ -1279,14 +1337,14 @@ export async function listLedgerEntryAccountingProjections(filters?: {
         LIMIT 1
       ) realization ON TRUE
       LEFT JOIN LATERAL (
-        SELECT d.deposit_state
+        SELECT d.ramp_reference, d.deposit_state, d.failure_class, d.observed_at
         FROM fiat_deposit_references d
         WHERE d.ledger_entry_id = e.id
         ORDER BY d.observed_at DESC, d.id DESC
         LIMIT 1
       ) deposit ON TRUE
       LEFT JOIN LATERAL (
-        SELECT b.bank_state
+        SELECT b.bank_reference, b.bank_state, b.failure_code, b.confirmed_at
         FROM bank_payout_confirmations b
         WHERE b.ledger_entry_id = e.id
         ORDER BY b.confirmed_at DESC, b.id DESC

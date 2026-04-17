@@ -269,6 +269,13 @@ function restorePrincipal(snapshot: FailedOperationPrincipalSnapshot): GatewayPr
       ...(snapshot.actorUserId ? { email: `${snapshot.actorUserId}@replay.invalid` } : {}),
     },
     gatewayRoles: ['operator:read', 'operator:write'],
+    treasuryCapabilities: [
+      'treasury:read',
+      'treasury:prepare',
+      'treasury:approve',
+      'treasury:execute_match',
+      'treasury:close',
+    ],
     writeEnabled: true,
   };
 }

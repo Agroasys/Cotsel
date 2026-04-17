@@ -19,6 +19,13 @@ function buildPrincipal(): GatewayPrincipal {
   return {
     sessionReference: 'sha256:sess-admin',
     gatewayRoles: ['operator:read', 'operator:write'],
+    treasuryCapabilities: [
+      'treasury:read',
+      'treasury:prepare',
+      'treasury:approve',
+      'treasury:execute_match',
+      'treasury:close',
+    ],
     writeEnabled: true,
     session: {
       userId: 'uid-admin',
