@@ -25,7 +25,10 @@ import {
   upsertTreasuryPartnerHandoff,
 } from '../src/database/queries';
 
-function createHandoffPayloadHash(overrides: Partial<TreasuryPartnerHandoffPayloadHashInput> = {}) {
+function createHandoffPayloadHash(
+  initiatedAtValue: Date,
+  overrides: Partial<TreasuryPartnerHandoffPayloadHashInput> = {},
+) {
   return createTreasuryPartnerHandoffPayloadHash({
     ledgerEntryId: 11,
     partnerCode: 'bridge',
@@ -43,13 +46,14 @@ function createHandoffPayloadHash(overrides: Partial<TreasuryPartnerHandoffPaylo
     actor: 'Treasury Operator',
     note: null,
     failureCode: null,
-    initiatedAt,
+    initiatedAt: initiatedAtValue,
     metadata: {},
     ...overrides,
   });
 }
 
 function createEvidencePayloadHash(
+  observedAtValue: Date,
   overrides: Partial<TreasuryPartnerHandoffEvidencePayloadHashInput> = {},
 ) {
   return createTreasuryPartnerHandoffEvidencePayloadHash({
@@ -67,7 +71,7 @@ function createEvidencePayloadHash(
     bankState: 'CONFIRMED',
     evidenceReference: 'evidence-11',
     failureCode: null,
-    observedAt,
+    observedAt: observedAtValue,
     metadata: {},
     ...overrides,
   });
@@ -85,7 +89,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('writes a new treasury partner handoff inside one transaction', async () => {
-    const latestEventPayloadHash = createHandoffPayloadHash();
+    const latestEventPayloadHash = createHandoffPayloadHash(initiatedAt);
 
     mockClientQuery
       .mockResolvedValueOnce({})
@@ -186,7 +190,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('treats an identical treasury partner handoff payload as idempotent replay', async () => {
-    const payloadHash = createHandoffPayloadHash();
+    const payloadHash = createHandoffPayloadHash(initiatedAt);
 
     mockClientQuery
       .mockResolvedValueOnce({})
@@ -223,7 +227,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('rejects conflicting treasury partner handoff payloads for the same ledger entry', async () => {
-    const existingPayloadHash = createHandoffPayloadHash();
+    const existingPayloadHash = createHandoffPayloadHash(initiatedAt);
 
     mockClientQuery
       .mockResolvedValueOnce({})
@@ -258,7 +262,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('treats identical treasury partner evidence as idempotent replay', async () => {
-    const payloadHash = createEvidencePayloadHash();
+    const payloadHash = createEvidencePayloadHash(observedAt);
 
     mockClientQuery
       .mockResolvedValueOnce({})
@@ -306,7 +310,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('rejects conflicting treasury partner evidence', async () => {
-    const existingPayloadHash = createEvidencePayloadHash();
+    const existingPayloadHash = createEvidencePayloadHash(observedAt);
 
     mockClientQuery
       .mockResolvedValueOnce({})
