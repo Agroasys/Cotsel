@@ -48,8 +48,17 @@ describe('treasury router auth scope', () => {
       getEntryAccounting: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: null });
       },
+      getTreasuryPartnerHandoff: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
       appendState: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { updated: true } });
+      },
+      upsertTreasuryPartnerHandoff: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { stored: true } });
+      },
+      appendTreasuryPartnerHandoffEvidence: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { stored: true } });
       },
       createEntryRealization: (_req: Request, res: Response) => {
         res.status(201).json({ success: true, data: { realized: true } });
@@ -249,6 +258,65 @@ describe('treasury router auth scope', () => {
           partnerName: 'licensed-counterparty',
           partnerReference: 'handoff-1',
           handoffStatus: 'ACKNOWLEDGED',
+        }),
+      },
+    );
+    expect(allowed.status).toBe(200);
+  });
+
+  test('entry partner handoff evidence mutation requires the same internal auth boundary as other treasury writes', async () => {
+    const unauthenticated = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/entries/11/partner-handoff/evidence`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          partnerCode: 'bridge',
+          providerEventId: 'evt-1',
+          eventType: 'transfer.updated',
+          partnerStatus: 'COMPLETED',
+          observedAt: '2026-04-17T09:10:00.000Z',
+        }),
+      },
+    );
+    expect(unauthenticated.status).toBe(401);
+
+    const forbidden = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/entries/11/partner-handoff/evidence`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-test-auth': 'ok',
+        },
+        body: JSON.stringify({
+          partnerCode: 'bridge',
+          providerEventId: 'evt-1',
+          eventType: 'transfer.updated',
+          partnerStatus: 'COMPLETED',
+          observedAt: '2026-04-17T09:10:00.000Z',
+        }),
+      },
+    );
+    expect(forbidden.status).toBe(403);
+
+    const allowed = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/entries/11/partner-handoff/evidence`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-test-auth': 'ok',
+          'x-test-mutation-auth': 'ok',
+        },
+        body: JSON.stringify({
+          partnerCode: 'bridge',
+          providerEventId: 'evt-1',
+          eventType: 'transfer.updated',
+          partnerStatus: 'COMPLETED',
+          observedAt: '2026-04-17T09:10:00.000Z',
         }),
       },
     );

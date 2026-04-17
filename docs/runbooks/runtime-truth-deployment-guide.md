@@ -213,8 +213,8 @@ Do not claim a production-candidate rehearsal from repo-local proof alone.
 
 Do not claim these as complete production truth from this runbook alone:
 
-- treasury/off-ramp backlog completion
-- external banking/off-ramp partner readiness
+- full treasury/off-ramp backlog completion
+- external banking/off-ramp partner readiness beyond the implemented treasury external-handoff and evidence capture surfaces
 - final Base mainnet launch approval
 - external deployment platform setup outside this repo
 

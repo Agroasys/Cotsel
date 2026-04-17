@@ -32,6 +32,12 @@ Use the canonical treasury route:
 - `POST /api/treasury/v1/internal/sweep-batches/:batchId/external-handoff`
 - legacy alias: `POST /api/treasury/v1/internal/sweep-batches/:batchId/partner-handoff`
 
+For ledger-entry Bridge execution traceability, treasury also exposes:
+
+- `POST /api/treasury/v1/internal/entries/:entryId/partner-handoff`
+- `GET /api/treasury/v1/entries/:entryId/partner-handoff`
+- `POST /api/treasury/v1/internal/entries/:entryId/partner-handoff/evidence`
+
 ## Evidence handling
 
 Bridge execution evidence is recorded through the canonical external handoff record plus bank
@@ -41,6 +47,7 @@ Evidence may include:
 
 - handoff status updates from the external counterparty
 - partner reference
+- provider event ids
 - evidence reference
 - bank reference and bank state
 - deposit/provider references recorded through treasury deposit evidence

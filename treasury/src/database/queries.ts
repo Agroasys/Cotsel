@@ -1751,6 +1751,20 @@ export async function getTreasuryPartnerHandoffByLedgerEntryId(
   return result.rows[0] || null;
 }
 
+export async function listTreasuryPartnerHandoffEventsByLedgerEntryId(
+  ledgerEntryId: number,
+): Promise<TreasuryPartnerHandoffEvent[]> {
+  const result = await pool.query<TreasuryPartnerHandoffEvent>(
+    `SELECT *
+     FROM treasury_partner_handoff_events
+     WHERE ledger_entry_id = $1
+     ORDER BY observed_at ASC, id ASC`,
+    [ledgerEntryId],
+  );
+
+  return result.rows;
+}
+
 export async function upsertTreasuryPartnerHandoff(data: TreasuryPartnerHandoffInput): Promise<{
   handoff: TreasuryPartnerHandoff;
   created: boolean;

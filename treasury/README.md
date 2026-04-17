@@ -38,6 +38,7 @@ Public read/reporting routes:
 - `GET /api/treasury/v1/sweep-batches`
 - `GET /api/treasury/v1/sweep-batches/:batchId`
 - `GET /api/treasury/v1/sweep-batches/:batchId/trace`
+- `GET /api/treasury/v1/entries/:entryId/partner-handoff`
 - `GET /api/treasury/v1/export?format=json|csv`
 - `GET /api/treasury/v1/reconciliation/control-summary`
 - `GET /api/treasury/v1/health`
@@ -47,6 +48,8 @@ Internal mutation routes for gateway/service callers:
 
 - `POST /api/treasury/v1/internal/ingest`
 - `POST /api/treasury/v1/internal/entries/:entryId/state`
+- `POST /api/treasury/v1/internal/entries/:entryId/partner-handoff`
+- `POST /api/treasury/v1/internal/entries/:entryId/partner-handoff/evidence`
 - `POST /api/treasury/v1/internal/entries/:entryId/realizations`
 - `POST /api/treasury/v1/internal/entries/:entryId/bank-confirmation`
 - `POST /api/treasury/v1/internal/accounting-periods`
@@ -119,6 +122,8 @@ This service now models treasury close as persisted evidence, not spreadsheet-on
 
 Canonical revenue-controls objects:
 
+- `treasury_partner_handoffs`
+- `treasury_partner_handoff_events`
 - `accounting_periods`
 - `sweep_batches`
 - `sweep_batch_entries`
@@ -129,6 +134,8 @@ Compatibility note:
 
 - `partner_handoffs` and related `partner_*` fields are retained as stable persistence names
 - canonical semantics are external execution handoff evidence against a replaceable counterparty
+- `treasury_partner_handoffs` and `treasury_partner_handoff_events` provide the ledger-entry
+  Bridge execution trace and replay-safe evidence timeline for external cash-out events
 
 Gateway capability note:
 

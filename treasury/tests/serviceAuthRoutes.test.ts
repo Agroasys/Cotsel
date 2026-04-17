@@ -105,8 +105,17 @@ describe('treasury service-authenticated routes', () => {
       getEntryAccounting: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: null });
       },
+      getTreasuryPartnerHandoff: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
       appendState: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { updated: true } });
+      },
+      upsertTreasuryPartnerHandoff: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'entry-partner-handoff' });
+      },
+      appendTreasuryPartnerHandoffEvidence: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, route: 'entry-partner-handoff-evidence' });
       },
       createEntryRealization: (_req: Request, res: Response) => {
         res.status(201).json({ success: true, route: 'realization' });
@@ -378,6 +387,77 @@ describe('treasury service-authenticated routes', () => {
       }),
     );
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-bank-confirmation-nonce', 600);
+  });
+
+  test('valid signed treasury partner handoff request reaches the entry route once', async () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        partnerCode: 'bridge',
+        handoffReference: 'bridge-ledger-handoff-1',
+        partnerStatus: 'SUBMITTED',
+        actor: 'Treasury Operator',
+        initiatedAt: '2026-04-17T09:00:00.000Z',
+      }),
+    );
+    const signed = createSignedRequestParts({
+      path: '/api/treasury/v1/internal/entries/11/partner-handoff',
+      body,
+      nonce: 'treasury-entry-partner-handoff-nonce',
+    });
+
+    const response = await fetch(`${baseUrl}/api/treasury/v1/internal/entries/11/partner-handoff`, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.bodyText,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        route: 'entry-partner-handoff',
+      }),
+    );
+    expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-entry-partner-handoff-nonce', 600);
+  });
+
+  test('valid signed treasury partner handoff evidence request reaches the entry evidence route once', async () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        partnerCode: 'bridge',
+        providerEventId: 'bridge-event-1',
+        eventType: 'transfer.updated',
+        partnerStatus: 'COMPLETED',
+        observedAt: '2026-04-17T09:10:00.000Z',
+      }),
+    );
+    const signed = createSignedRequestParts({
+      path: '/api/treasury/v1/internal/entries/11/partner-handoff/evidence',
+      body,
+      nonce: 'treasury-entry-partner-handoff-evidence-nonce',
+    });
+
+    const response = await fetch(
+      `${baseUrl}/api/treasury/v1/internal/entries/11/partner-handoff/evidence`,
+      {
+        method: 'POST',
+        headers: signed.headers,
+        body: signed.bodyText,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        route: 'entry-partner-handoff-evidence',
+      }),
+    );
+    expect(consumeNonce).toHaveBeenCalledWith(
+      'svc-a',
+      'treasury-entry-partner-handoff-evidence-nonce',
+      600,
+    );
   });
 
   test('valid signed external handoff request reaches the canonical internal route once', async () => {
