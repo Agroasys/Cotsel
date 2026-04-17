@@ -21,8 +21,9 @@ import {
   upsertTreasuryPartnerHandoff,
 } from '../src/database/queries';
 
-const initiatedAt = new Date('2026-04-16T08:00:00.000Z');
-const observedAt = new Date('2026-04-16T08:15:00.000Z');
+const baseNow = new Date();
+const initiatedAt = new Date(baseNow.getTime());
+const observedAt = new Date(baseNow.getTime() + 15 * 60 * 1000);
 
 function buildHandoffPayloadHash(overrides: Partial<TreasuryPartnerHandoffPayloadHashInput> = {}) {
   return createTreasuryPartnerHandoffPayloadHash({
@@ -233,7 +234,7 @@ describe('treasury partner handoff queries', () => {
     ).rejects.toBeInstanceOf(BankPayoutConflictError);
   });
 
-  it('treats identical treasury partner evidence as idempotent replay and rejects conflicting evidence', async () => {
+  it('treats identical treasury partner evidence as idempotent replay', async () => {
     const payloadHash = buildEvidencePayloadHash();
 
     mockClientQuery
@@ -274,13 +275,11 @@ describe('treasury partner handoff queries', () => {
 
     expect(replay.created).toBe(false);
     expect(replay.idempotentReplay).toBe(true);
+  });
 
-    jest.clearAllMocks();
-    mockPoolConnect.mockResolvedValue({
-      query: mockClientQuery,
-      release: mockClientRelease,
-    });
+  it('rejects conflicting treasury partner evidence', async () => {
     const existingPayloadHash = buildEvidencePayloadHash();
+
     mockClientQuery
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
