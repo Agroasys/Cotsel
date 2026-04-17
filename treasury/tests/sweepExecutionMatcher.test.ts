@@ -10,6 +10,7 @@ process.env.INDEXER_GRAPHQL_URL =
 jest.mock('../src/database/queries', () => ({
   getSweepBatchDetail: jest.fn(),
   getTreasuryClaimEventByBatchId: jest.fn(),
+  getTreasuryClaimEventByTxHash: jest.fn(),
   updateSweepBatchStatus: jest.fn(),
   upsertTreasuryClaimEvent: jest.fn(),
 }));
@@ -59,6 +60,7 @@ describe('SweepExecutionMatcherService', () => {
   it('matches execution only from authoritative TreasuryClaimed evidence', async () => {
     jest.mocked(queries.getSweepBatchDetail).mockResolvedValue(batchDetailFixture as never);
     jest.mocked(queries.getTreasuryClaimEventByBatchId).mockResolvedValue(null);
+    jest.mocked(queries.getTreasuryClaimEventByTxHash).mockResolvedValue(null);
     jest.mocked(queries.upsertTreasuryClaimEvent).mockResolvedValue({
       id: 90,
       source_event_id: 'event-90',
@@ -117,6 +119,7 @@ describe('SweepExecutionMatcherService', () => {
   it('rejects unmatched tx hashes with no chain evidence', async () => {
     jest.mocked(queries.getSweepBatchDetail).mockResolvedValue(batchDetailFixture as never);
     jest.mocked(queries.getTreasuryClaimEventByBatchId).mockResolvedValue(null);
+    jest.mocked(queries.getTreasuryClaimEventByTxHash).mockResolvedValue(null);
 
     const matcher = new SweepExecutionMatcherService({
       indexerClient: {
@@ -136,6 +139,7 @@ describe('SweepExecutionMatcherService', () => {
   it('rejects claim events whose amount does not match the allocated batch total', async () => {
     jest.mocked(queries.getSweepBatchDetail).mockResolvedValue(batchDetailFixture as never);
     jest.mocked(queries.getTreasuryClaimEventByBatchId).mockResolvedValue(null);
+    jest.mocked(queries.getTreasuryClaimEventByTxHash).mockResolvedValue(null);
 
     const matcher = new SweepExecutionMatcherService({
       indexerClient: {
@@ -165,6 +169,7 @@ describe('SweepExecutionMatcherService', () => {
   it('rejects claim events whose destination does not match the batch payout receiver', async () => {
     jest.mocked(queries.getSweepBatchDetail).mockResolvedValue(batchDetailFixture as never);
     jest.mocked(queries.getTreasuryClaimEventByBatchId).mockResolvedValue(null);
+    jest.mocked(queries.getTreasuryClaimEventByTxHash).mockResolvedValue(null);
 
     const matcher = new SweepExecutionMatcherService({
       indexerClient: {
@@ -208,6 +213,7 @@ describe('SweepExecutionMatcherService', () => {
       triggered_by: '0xsigner',
       created_at: new Date('2026-04-15T11:00:00.000Z'),
     });
+    jest.mocked(queries.getTreasuryClaimEventByTxHash).mockResolvedValue(null);
 
     const matcher = new SweepExecutionMatcherService({
       indexerClient: {
@@ -222,5 +228,60 @@ describe('SweepExecutionMatcherService', () => {
         actor: 'executor-3',
       }),
     ).rejects.toThrow('Sweep batch is already matched to a different treasury claim tx');
+  });
+
+  it('reuses already ingested unmatched claim evidence before calling the indexer', async () => {
+    jest.mocked(queries.getSweepBatchDetail).mockResolvedValue(batchDetailFixture as never);
+    jest.mocked(queries.getTreasuryClaimEventByBatchId).mockResolvedValue(null);
+    jest.mocked(queries.getTreasuryClaimEventByTxHash).mockResolvedValue({
+      id: 90,
+      source_event_id: 'event-90',
+      matched_sweep_batch_id: null,
+      tx_hash: '0xclaim',
+      block_number: 101,
+      observed_at: new Date('2026-04-15T11:00:00.000Z'),
+      treasury_identity: '0xtreasury',
+      payout_receiver: '0xpayout',
+      amount_raw: '125000000',
+      triggered_by: '0xsigner',
+      created_at: new Date('2026-04-15T11:00:00.000Z'),
+    });
+    jest.mocked(queries.upsertTreasuryClaimEvent).mockResolvedValue({
+      id: 90,
+      source_event_id: 'event-90',
+      matched_sweep_batch_id: 11,
+      tx_hash: '0xclaim',
+      block_number: 101,
+      observed_at: new Date('2026-04-15T11:00:00.000Z'),
+      treasury_identity: '0xtreasury',
+      payout_receiver: '0xpayout',
+      amount_raw: '125000000',
+      triggered_by: '0xsigner',
+      created_at: new Date('2026-04-15T11:00:00.000Z'),
+    });
+    jest.mocked(queries.updateSweepBatchStatus).mockResolvedValue({
+      ...batchDetailFixture.batch,
+      status: 'EXECUTED',
+      matched_sweep_tx_hash: '0xclaim',
+      matched_sweep_block_number: '101',
+      matched_swept_at: new Date('2026-04-15T11:00:00.000Z'),
+      executed_by: 'executor-3',
+    } as never);
+
+    const fetchTreasuryClaimEventByTxHash = jest.fn();
+    const matcher = new SweepExecutionMatcherService({
+      indexerClient: {
+        fetchTreasuryClaimEventByTxHash,
+      },
+    });
+
+    const result = await matcher.matchApprovedBatch({
+      batchId: 11,
+      txHash: '0xclaim',
+      actor: 'executor-3',
+    });
+
+    expect(result.status).toBe('EXECUTED');
+    expect(fetchTreasuryClaimEventByTxHash).not.toHaveBeenCalled();
   });
 });

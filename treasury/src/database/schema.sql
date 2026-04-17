@@ -245,7 +245,7 @@ CREATE TABLE IF NOT EXISTS revenue_realizations (
 CREATE TABLE IF NOT EXISTS treasury_claim_events (
     id SERIAL PRIMARY KEY,
     source_event_id VARCHAR(255) NOT NULL UNIQUE,
-    matched_sweep_batch_id INT NOT NULL UNIQUE REFERENCES sweep_batches(id) ON DELETE CASCADE,
+    matched_sweep_batch_id INT UNIQUE REFERENCES sweep_batches(id) ON DELETE CASCADE,
     tx_hash VARCHAR(66) NOT NULL UNIQUE,
     block_number INT NOT NULL,
     observed_at TIMESTAMP NOT NULL,
@@ -259,8 +259,15 @@ CREATE TABLE IF NOT EXISTS treasury_claim_events (
 ALTER TABLE sweep_batches
     ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP,
     ADD COLUMN IF NOT EXISTS closed_by VARCHAR(255);
+
+ALTER TABLE treasury_claim_events
+    ALTER COLUMN matched_sweep_batch_id DROP NOT NULL;
 INSERT INTO treasury_ingestion_state (cursor_name, next_offset)
 VALUES ('trade_events', 0)
+ON CONFLICT (cursor_name) DO NOTHING;
+
+INSERT INTO treasury_ingestion_state (cursor_name, next_offset)
+VALUES ('claim_events', 0)
 ON CONFLICT (cursor_name) DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_treasury_ledger_trade_id ON treasury_ledger_entries(trade_id);

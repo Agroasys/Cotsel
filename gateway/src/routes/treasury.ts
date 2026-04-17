@@ -19,6 +19,7 @@ import {
   createAuthenticationMiddleware,
   requireGatewayRole,
   requireMutationWriteAccess,
+  requireTreasuryCapability,
   requireWalletBoundSession,
 } from '../middleware/auth';
 import { successResponse } from '../responses';
@@ -35,6 +36,7 @@ interface TreasuryAuditPayload {
   audit?: {
     reason?: string;
     ticketRef?: string;
+    evidenceReferences?: string[];
     metadata?: Record<string, unknown>;
   };
 }
@@ -190,6 +192,9 @@ function parseAudit(raw: unknown): TreasuryWorkflowAuditInput {
   const record = parseObject(raw, 'audit');
   const reason = typeof record.reason === 'string' ? record.reason.trim() : '';
   const ticketRef = typeof record.ticketRef === 'string' ? record.ticketRef.trim() : '';
+  const evidenceReferences = Array.isArray(record.evidenceReferences)
+    ? record.evidenceReferences
+    : undefined;
 
   if (reason.length < 8 || reason.length > 2000) {
     throw new GatewayError(
@@ -207,9 +212,34 @@ function parseAudit(raw: unknown): TreasuryWorkflowAuditInput {
     );
   }
 
+  if (evidenceReferences) {
+    if (evidenceReferences.length > 20) {
+      throw new GatewayError(
+        400,
+        'VALIDATION_ERROR',
+        'audit.evidenceReferences must contain at most 20 items',
+      );
+    }
+
+    evidenceReferences.forEach((reference, index) => {
+      if (
+        typeof reference !== 'string' ||
+        reference.trim().length < 3 ||
+        reference.trim().length > 500
+      ) {
+        throw new GatewayError(
+          400,
+          'VALIDATION_ERROR',
+          `audit.evidenceReferences[${index}] must be between 3 and 500 characters`,
+        );
+      }
+    });
+  }
+
   return {
     reason,
     ticketRef,
+    evidenceReferences: evidenceReferences?.map((reference) => reference.trim()),
     metadata: parseOptionalRecord(record.metadata, 'audit.metadata'),
   };
 }
@@ -219,6 +249,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
 
   router.use(authenticate, requireGatewayRole('operator:read'));
+  router.use('/treasury', requireTreasuryCapability('treasury:read'));
 
   router.get('/treasury', async (_req, res, next) => {
     try {
@@ -270,6 +301,45 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
     }
   });
 
+  router.get('/treasury/accounting-periods/:periodId/rollforward', async (req, res, next) => {
+    try {
+      const result = await options.treasuryWorkflowService.getAccountingPeriodRollforward(
+        parsePositiveInt(req.params.periodId, 'periodId'),
+        req.requestContext,
+      );
+
+      res.status(200).json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/treasury/accounting-periods/:periodId/close-packet', async (req, res, next) => {
+    try {
+      const format =
+        typeof req.query.format === 'string' && req.query.format.trim() === 'markdown'
+          ? 'markdown'
+          : 'json';
+      const result = await options.treasuryWorkflowService.getAccountingPeriodClosePacket(
+        parsePositiveInt(req.params.periodId, 'periodId'),
+        {
+          format,
+          requestContext: req.requestContext,
+        },
+      );
+
+      if (format === 'markdown') {
+        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+        res.status(200).send(result);
+        return;
+      }
+
+      res.status(200).json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get('/treasury/sweep-batches', async (req, res, next) => {
     try {
       const result = await options.treasuryWorkflowService.listSweepBatches({
@@ -295,6 +365,19 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
   router.get('/treasury/sweep-batches/:batchId', async (req, res, next) => {
     try {
       const result = await options.treasuryWorkflowService.getSweepBatch(
+        parsePositiveInt(req.params.batchId, 'batchId'),
+        req.requestContext,
+      );
+
+      res.status(200).json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/treasury/sweep-batches/:batchId/trace', async (req, res, next) => {
+    try {
+      const result = await options.treasuryWorkflowService.getSweepBatchTrace(
         parsePositiveInt(req.params.batchId, 'batchId'),
         req.requestContext,
       );
@@ -349,6 +432,19 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
   });
 
   const requireTreasuryWrite = requireMutationWriteAccess();
+  const requireTreasuryPrepare = [
+    requireTreasuryWrite,
+    requireTreasuryCapability('treasury:prepare'),
+  ];
+  const requireTreasuryApprove = [
+    requireTreasuryWrite,
+    requireTreasuryCapability('treasury:approve'),
+  ];
+  const requireTreasuryExecuteMatch = [
+    requireTreasuryWrite,
+    requireTreasuryCapability('treasury:execute_match'),
+  ];
+  const requireTreasuryClose = [requireTreasuryWrite, requireTreasuryCapability('treasury:close')];
   const assertWalletBoundTreasurySigner = (req: Request, actionDescription: string) => {
     if (!req.gatewayPrincipal) {
       throw new GatewayError(401, 'AUTH_REQUIRED', 'Authentication is required');
@@ -357,7 +453,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
     requireWalletBoundSession(req.gatewayPrincipal, actionDescription);
   };
 
-  router.post('/treasury/accounting-periods', requireTreasuryWrite, async (req, res, next) => {
+  router.post('/treasury/accounting-periods', ...requireTreasuryPrepare, async (req, res, next) => {
     try {
       const body = parseObject(req.body, 'body') as TreasuryAuditPayload & Record<string, unknown>;
       const result = await options.treasuryWorkflowService.createAccountingPeriod(
@@ -383,7 +479,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
 
   router.post(
     '/treasury/accounting-periods/:periodId/request-close',
-    requireTreasuryWrite,
+    ...requireTreasuryPrepare,
     async (req, res, next) => {
       try {
         const body = parseObject(req.body, 'body') as TreasuryAuditPayload &
@@ -408,7 +504,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
 
   router.post(
     '/treasury/accounting-periods/:periodId/close',
-    requireTreasuryWrite,
+    ...requireTreasuryClose,
     async (req, res, next) => {
       try {
         const body = parseObject(req.body, 'body') as TreasuryAuditPayload &
@@ -431,7 +527,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
     },
   );
 
-  router.post('/treasury/sweep-batches', requireTreasuryWrite, async (req, res, next) => {
+  router.post('/treasury/sweep-batches', ...requireTreasuryPrepare, async (req, res, next) => {
     try {
       const body = parseObject(req.body, 'body') as TreasuryAuditPayload & Record<string, unknown>;
       const result = await options.treasuryWorkflowService.createSweepBatch(
@@ -462,7 +558,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
 
   router.post(
     '/treasury/sweep-batches/:batchId/entries',
-    requireTreasuryWrite,
+    ...requireTreasuryPrepare,
     async (req, res, next) => {
       try {
         const body = parseObject(req.body, 'body') as TreasuryAuditPayload &
@@ -491,7 +587,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
 
   router.post(
     '/treasury/sweep-batches/:batchId/request-approval',
-    requireTreasuryWrite,
+    ...requireTreasuryPrepare,
     async (req, res, next) => {
       try {
         const body = parseObject(req.body, 'body') as TreasuryAuditPayload &
@@ -516,7 +612,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
 
   router.post(
     '/treasury/sweep-batches/:batchId/approve',
-    requireTreasuryWrite,
+    ...requireTreasuryApprove,
     async (req, res, next) => {
       try {
         assertWalletBoundTreasurySigner(req, 'Approving treasury sweep batch');
@@ -542,7 +638,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
 
   router.post(
     '/treasury/sweep-batches/:batchId/match-execution',
-    requireTreasuryWrite,
+    ...requireTreasuryExecuteMatch,
     async (req, res, next) => {
       try {
         assertWalletBoundTreasurySigner(req, 'Matching treasury sweep execution evidence');
@@ -598,19 +694,19 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
 
   router.post(
     '/treasury/sweep-batches/:batchId/external-handoff',
-    requireTreasuryWrite,
+    ...requireTreasuryExecuteMatch,
     recordExternalHandoff,
   );
 
   router.post(
     '/treasury/sweep-batches/:batchId/partner-handoff',
-    requireTreasuryWrite,
+    ...requireTreasuryExecuteMatch,
     recordExternalHandoff,
   );
 
   router.post(
     '/treasury/sweep-batches/:batchId/close',
-    requireTreasuryWrite,
+    ...requireTreasuryClose,
     async (req, res, next) => {
       try {
         assertWalletBoundTreasurySigner(req, 'Closing treasury sweep batch');
@@ -636,7 +732,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
 
   router.post(
     '/treasury/entries/:entryId/realizations',
-    requireTreasuryWrite,
+    ...requireTreasuryClose,
     async (req, res, next) => {
       try {
         const body = parseObject(req.body, 'body') as TreasuryAuditPayload &

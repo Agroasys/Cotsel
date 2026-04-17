@@ -172,4 +172,72 @@ export class IndexerClient {
       triggeredBy: event.triggeredBy ? event.triggeredBy.toLowerCase() : null,
     };
   }
+
+  async fetchTreasuryClaimEvents(
+    limit: number,
+    offset: number,
+  ): Promise<IndexerTreasuryClaimEvent[]> {
+    const query = `
+      query TreasuryClaimEvents($limit: Int!, $offset: Int!) {
+        systemEvents(
+          where: { eventName_eq: "TreasuryClaimed" }
+          orderBy: blockNumber_ASC
+          limit: $limit
+          offset: $offset
+        ) {
+          id
+          eventName
+          txHash
+          blockNumber
+          timestamp
+          claimAmount
+          treasuryIdentity
+          payoutReceiver
+          triggeredBy
+        }
+      }
+    `;
+
+    const response = await fetchWithTimeout(
+      this.graphqlUrl,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          variables: { limit, offset },
+        }),
+      },
+      config.indexerGraphqlRequestTimeoutMs,
+    );
+
+    if (!response.ok) {
+      throw new Error(`Indexer GraphQL request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const body = (await response.json()) as GraphQlResponse;
+
+    if (body.errors?.length) {
+      throw new Error(
+        `Indexer GraphQL errors: ${body.errors.map((item) => item.message).join('; ')}`,
+      );
+    }
+
+    const events = body.data?.systemEvents || [];
+    return events
+      .filter((event) => event.claimAmount && event.treasuryIdentity && event.payoutReceiver)
+      .map((event) => ({
+        id: event.id,
+        eventName: event.eventName,
+        txHash: event.txHash,
+        blockNumber: Number(event.blockNumber),
+        timestamp: new Date(event.timestamp),
+        claimAmount: event.claimAmount as string,
+        treasuryIdentity: (event.treasuryIdentity as string).toLowerCase(),
+        payoutReceiver: (event.payoutReceiver as string).toLowerCase(),
+        triggeredBy: event.triggeredBy ? event.triggeredBy.toLowerCase() : null,
+      }));
+  }
 }

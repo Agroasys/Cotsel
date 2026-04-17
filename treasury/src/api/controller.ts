@@ -18,6 +18,11 @@ import { TreasuryEligibilityService } from '../core/exportEligibility';
 import { TreasuryIngestionService } from '../core/ingestion';
 import { ReconciliationGateService } from '../core/reconciliationGate';
 import { SweepExecutionMatcherService } from '../core/sweepExecutionMatcher';
+import {
+  loadTreasuryAccountingPeriodClosePacket,
+  loadTreasuryBatchTraceReport,
+  renderTreasuryAccountingPeriodClosePacketMarkdown,
+} from '../core/closeReporting';
 import { assertFiatDepositState, FiatDepositConflictError } from '../core/fiatDeposit';
 import { assertValidTransition } from '../core/payout';
 import {
@@ -60,6 +65,7 @@ const PAYOUT_STATES: PayoutState[] = [
 ];
 
 const EXPORT_FORMATS = ['json', 'csv'] as const;
+const CLOSE_PACKET_FORMATS = ['json', 'markdown'] as const;
 const ACCOUNTING_PERIOD_STATUSES: AccountingPeriodStatus[] = ['OPEN', 'PENDING_CLOSE', 'CLOSED'];
 const SWEEP_BATCH_STATUSES: SweepBatchStatus[] = [
   'DRAFT',
@@ -452,6 +458,48 @@ export class TreasuryController {
     }
   }
 
+  async getAccountingPeriodRollforward(
+    req: Request<{ periodId: string }>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const periodId = parsePeriodId(req.params.periodId);
+      const packet = await loadTreasuryAccountingPeriodClosePacket(
+        periodId,
+        this.reconciliationGate,
+      );
+      res.status(200).json(success(packet.rollforward));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to build accounting period rollforward');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async getAccountingPeriodClosePacket(
+    req: Request<{ periodId: string }>,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const periodId = parsePeriodId(req.params.periodId);
+      const format = optionalEnum(req.query.format, CLOSE_PACKET_FORMATS, 'format') ?? 'json';
+      const packet = await loadTreasuryAccountingPeriodClosePacket(
+        periodId,
+        this.reconciliationGate,
+      );
+
+      if (format === 'markdown') {
+        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+        res.status(200).send(renderTreasuryAccountingPeriodClosePacketMarkdown(packet));
+        return;
+      }
+
+      res.status(200).json(success(packet));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to build accounting period close packet');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
   async listEntryAccounting(req: Request, res: Response): Promise<void> {
     try {
       const accountingState = optionalEnum(
@@ -537,54 +585,21 @@ export class TreasuryController {
     try {
       const periodId = parsePeriodId(req.params.periodId);
       const body = requireObject<UpdateAccountingPeriodStatusBody>(req.body, 'body');
-      const batches = [];
-      const pageSize = 500;
-      for (let offset = 0; ; offset += pageSize) {
-        const page = await listSweepBatches({
-          accountingPeriodId: periodId,
-          limit: pageSize,
-          offset,
-        });
-        batches.push(...page);
-        if (page.length < pageSize) {
-          break;
-        }
-      }
-      const openBatches = batches.filter((batch) => !['CLOSED', 'VOID'].includes(batch.status));
-      if (openBatches.length > 0) {
+      const closePacket = await loadTreasuryAccountingPeriodClosePacket(
+        periodId,
+        this.reconciliationGate,
+      );
+
+      if (!closePacket.ready_for_close) {
         throw new HttpError(
           409,
           'CloseBlocked',
-          'Accounting period cannot close while sweep batches remain open',
+          'Accounting period cannot close while blocking treasury close issues remain',
           {
-            openBatchIds: openBatches.map((batch) => batch.id),
+            blockingIssues: closePacket.blocking_issues,
+            reconciliation: closePacket.reconciliation,
           },
         );
-      }
-
-      const detailEntries = await Promise.all(
-        batches.map(async (batch) => {
-          const detail = await getSweepBatchDetail(batch.id);
-          return detail?.entries ?? [];
-        }),
-      );
-      const tradeIds = Array.from(
-        new Set(detailEntries.flatMap((entries) => entries.map((entry) => entry.trade_id))),
-      );
-      if (tradeIds.length > 0) {
-        const summary = await this.reconciliationGate.summarizeTrades(tradeIds);
-        if (summary.status !== 'CLEAR') {
-          throw new HttpError(
-            409,
-            'CloseBlocked',
-            'Accounting period cannot close while reconciliation is not clear for batch trades',
-            {
-              reconciliationStatus: summary.status,
-              blockedReasons: summary.blockedReasons,
-              tradeIds,
-            },
-          );
-        }
       }
 
       const period = await updateAccountingPeriodStatus({
@@ -660,6 +675,17 @@ export class TreasuryController {
       res.status(200).json(success(detail));
     } catch (error: unknown) {
       const response = mapValidationError(error, 'Failed to read sweep batch');
+      res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  async getSweepBatchTrace(req: Request<{ batchId: string }>, res: Response): Promise<void> {
+    try {
+      const batchId = parseBatchId(req.params.batchId);
+      const trace = await loadTreasuryBatchTraceReport(batchId);
+      res.status(200).json(success(trace));
+    } catch (error: unknown) {
+      const response = mapValidationError(error, 'Failed to build sweep batch trace');
       res.status(response.statusCode).json(response.body);
     }
   }

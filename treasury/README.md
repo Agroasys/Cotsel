@@ -1,7 +1,7 @@
 # Treasury Settlement Evidence v0
 
-Append-only settlement-evidence and payout-eligibility view for treasury-relevant
-events.
+Append-only settlement-evidence, treasury close, and revenue-controls service for
+treasury-relevant events.
 
 This service is not the customer accounting ledger. Agroasys Aurora/Postgres
 plus the Agroasys shadow ledger remain canonical for balances, reporting, and
@@ -19,6 +19,7 @@ Canonical boundary:
 - Stores accounting periods, sweep batches, external execution handoff records (`partner_handoffs`, compatibility schema name), and revenue realization records
 - Exposes read/query/export endpoints for reconciliation and payout-eligibility review
 - Exposes treasury revenue-controls read endpoints for operator/reporting surfaces
+- Exposes deterministic accounting-period rollforward, close-packet, and sweep-batch trace outputs
 - Exposes internal-only mutation endpoints for gateway-owned finance workflow, sweep matching, handoff, and realization evidence
 - Blocks payout/export when reconciliation is missing, stale, drifted, or out of scope
 - Blocks accounting-period close when tracked sweep-batch trades are not reconciliation-clear
@@ -32,8 +33,11 @@ Public read/reporting routes:
 - `GET /api/treasury/v1/entries/accounting`
 - `GET /api/treasury/v1/entries/:entryId/accounting`
 - `GET /api/treasury/v1/accounting-periods`
+- `GET /api/treasury/v1/accounting-periods/:periodId/rollforward`
+- `GET /api/treasury/v1/accounting-periods/:periodId/close-packet?format=json|markdown`
 - `GET /api/treasury/v1/sweep-batches`
 - `GET /api/treasury/v1/sweep-batches/:batchId`
+- `GET /api/treasury/v1/sweep-batches/:batchId/trace`
 - `GET /api/treasury/v1/export?format=json|csv`
 - `GET /api/treasury/v1/reconciliation/control-summary`
 - `GET /api/treasury/v1/health`
@@ -125,6 +129,13 @@ Compatibility note:
 
 - `partner_handoffs` and related `partner_*` fields are retained as stable persistence names
 - canonical semantics are external execution handoff evidence against a replaceable counterparty
+
+Gateway capability note:
+
+- gateway treasury routes are capability-gated as `treasury:read`, `treasury:prepare`,
+  `treasury:approve`, `treasury:execute_match`, and `treasury:close`
+- when the upstream auth session does not yet provide explicit treasury capabilities, the current
+  admin fallback grants the full treasury capability set
 
 Visible accounting state is computed from persisted facts:
 

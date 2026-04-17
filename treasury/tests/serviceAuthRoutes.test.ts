@@ -117,6 +117,12 @@ describe('treasury service-authenticated routes', () => {
       listAccountingPeriods: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
       },
+      getAccountingPeriodRollforward: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
+      getAccountingPeriodClosePacket: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
       createAccountingPeriod: (_req: Request, res: Response) => {
         res.status(201).json({ success: true, route: 'periods' });
       },
@@ -133,6 +139,9 @@ describe('treasury service-authenticated routes', () => {
         res.status(201).json({ success: true, route: 'batch-create' });
       },
       getSweepBatch: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
+      getSweepBatchTrace: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: null });
       },
       addSweepBatchEntry: (_req: Request, res: Response) => {

@@ -72,6 +72,13 @@ Operator checks:
 - entry is not already allocated to another active batch
 - no unresolved exception state is present
 
+Review the period rollforward before batching or close:
+
+```bash
+curl -fsS "http://127.0.0.1:${GATEWAY_PORT:-3001}/api/dashboard-gateway/v1/treasury/accounting-periods/7/rollforward" \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
 ### 3. Create and populate the sweep batch
 
 Create draft batch:
@@ -124,6 +131,13 @@ Do not approve if:
 - allocated total differs from expected total
 - payout receiver is not the governed active receiver
 - reconciliation for included trades is stale, missing, or blocked
+
+Review the batch trace before approval or close:
+
+```bash
+curl -fsS "http://127.0.0.1:${GATEWAY_PORT:-3001}/api/dashboard-gateway/v1/treasury/sweep-batches/11/trace" \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
 
 ### 5. Match the on-chain treasury claim
 
@@ -195,6 +209,20 @@ Realization preconditions:
 
 ### 8. Close the batch and the period
 
+Review the close packet before period close:
+
+```bash
+curl -fsS "http://127.0.0.1:${GATEWAY_PORT:-3001}/api/dashboard-gateway/v1/treasury/accounting-periods/7/close-packet" \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
+Human-reviewable markdown export is also available:
+
+```bash
+curl -fsS "http://127.0.0.1:${GATEWAY_PORT:-3001}/api/dashboard-gateway/v1/treasury/accounting-periods/7/close-packet?format=markdown" \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
 Close batch only after all linked entries are `REALIZED`:
 
 ```bash
@@ -223,12 +251,20 @@ Period close is blocked when:
 - sweep batches in the period remain open
 - reconciliation is not clear for the trades covered by closed batches
 
+Gateway capability note:
+
+- `treasury:prepare` is required to create periods/batches, allocate entries, and request close
+- `treasury:approve` is required to approve a sweep batch
+- `treasury:execute_match` is required to match on-chain claim evidence and record external handoff
+- `treasury:close` is required to close batches, record realization, and close the accounting period
+
 ## Required Evidence Packet
 
 For every batch/period close, attach:
 
 - gateway audit trail
-- sweep batch detail export
+- period rollforward and close packet export
+- sweep batch trace export
 - reconciliation report rows for included trades
 - on-chain treasury claim reference
 - external execution handoff reference

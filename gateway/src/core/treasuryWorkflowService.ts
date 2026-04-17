@@ -5,7 +5,7 @@ import type { AuditLogStore } from './auditLogStore';
 import type { AuthSession } from './authSessionClient';
 import { GatewayError } from '../errors';
 import type { RequestContext } from '../middleware/requestContext';
-import { resolveGatewayActorKey } from '../middleware/auth';
+import { resolveGatewayActorKey, resolveTreasuryCapabilities } from '../middleware/auth';
 import type { DownstreamServiceOrchestrator } from './serviceOrchestrator';
 
 interface TreasuryEnvelope<T> {
@@ -21,6 +21,7 @@ interface TreasuryEnvelope<T> {
 export interface TreasuryWorkflowAuditInput {
   reason: string;
   ticketRef: string;
+  evidenceReferences?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -53,6 +54,21 @@ export interface TreasuryWorkflowReader {
   ): Promise<unknown>;
   getEntryAccounting(
     entryId: number,
+    requestContext?: Pick<RequestContext, 'requestId' | 'correlationId'>,
+  ): Promise<unknown>;
+  getAccountingPeriodRollforward(
+    periodId: number,
+    requestContext?: Pick<RequestContext, 'requestId' | 'correlationId'>,
+  ): Promise<unknown>;
+  getAccountingPeriodClosePacket(
+    periodId: number,
+    query: {
+      format?: 'json' | 'markdown';
+      requestContext?: Pick<RequestContext, 'requestId' | 'correlationId'>;
+    },
+  ): Promise<unknown>;
+  getSweepBatchTrace(
+    batchId: number,
     requestContext?: Pick<RequestContext, 'requestId' | 'correlationId'>,
   ): Promise<unknown>;
 }
@@ -302,6 +318,75 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
     return parseTreasuryResponse(response, 'Failed to read treasury entry accounting state');
   }
 
+  async getAccountingPeriodRollforward(
+    periodId: number,
+    requestContext?: Pick<RequestContext, 'requestId' | 'correlationId'>,
+  ): Promise<unknown> {
+    const response = await this.orchestrator.fetch('treasury', {
+      method: 'GET',
+      path: `/api/treasury/v1/accounting-periods/${periodId}/rollforward`,
+      readOnly: true,
+      authenticated: true,
+      requestContext,
+      operation: 'treasury:getAccountingPeriodRollforward',
+    });
+
+    return parseTreasuryResponse(
+      response,
+      'Failed to build treasury accounting period rollforward',
+    );
+  }
+
+  async getAccountingPeriodClosePacket(
+    periodId: number,
+    query: {
+      format?: 'json' | 'markdown';
+      requestContext?: Pick<RequestContext, 'requestId' | 'correlationId'>;
+    },
+  ): Promise<unknown> {
+    const { requestContext, ...queryParams } = query;
+    const response = await this.orchestrator.fetch('treasury', {
+      method: 'GET',
+      path: `/api/treasury/v1/accounting-periods/${periodId}/close-packet`,
+      query: queryParams,
+      readOnly: true,
+      authenticated: true,
+      requestContext,
+      operation: 'treasury:getAccountingPeriodClosePacket',
+    });
+
+    if (query.format === 'markdown') {
+      if (response.status >= 400) {
+        await parseTreasuryResponse(
+          response,
+          'Failed to build treasury accounting period close packet',
+        );
+      }
+      return response.text();
+    }
+
+    return parseTreasuryResponse(
+      response,
+      'Failed to build treasury accounting period close packet',
+    );
+  }
+
+  async getSweepBatchTrace(
+    batchId: number,
+    requestContext?: Pick<RequestContext, 'requestId' | 'correlationId'>,
+  ): Promise<unknown> {
+    const response = await this.orchestrator.fetch('treasury', {
+      method: 'GET',
+      path: `/api/treasury/v1/sweep-batches/${batchId}/trace`,
+      readOnly: true,
+      authenticated: true,
+      requestContext,
+      operation: 'treasury:getSweepBatchTrace',
+    });
+
+    return parseTreasuryResponse(response, 'Failed to build treasury sweep batch trace');
+  }
+
   async createAccountingPeriod(
     input: {
       periodKey: string;
@@ -507,13 +592,19 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
   }
 
   private buildTreasuryMetadata(context: TreasuryWorkflowMutationContext): Record<string, unknown> {
+    const effectiveTreasuryCapabilities = resolveTreasuryCapabilities(context.session);
     return {
       gatewayActorKey: resolveGatewayActorKey(context.session),
       gatewayUserId: context.session.userId,
       gatewayWalletAddress: context.session.walletAddress,
       gatewayRole: context.session.role,
+      gatewayTreasuryCapabilitiesRaw: context.session.capabilities ?? null,
+      gatewayTreasuryCapabilitiesEffective: effectiveTreasuryCapabilities,
+      requestId: context.requestContext?.requestId ?? null,
+      correlationId: context.requestContext?.correlationId ?? null,
       auditReason: context.audit.reason,
       auditTicketRef: context.audit.ticketRef,
+      auditEvidenceReferences: context.audit.evidenceReferences ?? [],
       ...(context.audit.metadata ?? {}),
     };
   }
@@ -555,6 +646,8 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
           treasuryPath: path,
           ticketRef: context.audit.ticketRef,
           reason: context.audit.reason,
+          evidenceReferences: context.audit.evidenceReferences ?? [],
+          correlationId: context.requestContext?.correlationId ?? null,
           result: data,
         },
         'Failed to build treasury audit payload',

@@ -161,7 +161,7 @@ export interface RevenueRealization {
 export interface TreasuryClaimEvent {
   id: number;
   source_event_id: string;
-  matched_sweep_batch_id: number;
+  matched_sweep_batch_id: number | null;
   tx_hash: string;
   block_number: number;
   observed_at: Date;
@@ -202,6 +202,7 @@ export interface LedgerEntryAccountingFacts {
   component_type: TreasuryComponent;
   amount_raw: string;
   allocated_amount_raw: string | null;
+  allocated_at?: Date | null;
   earned_at: Date;
   payout_state: PayoutState | null;
   accounting_period_id: number | null;
@@ -220,9 +221,19 @@ export interface LedgerEntryAccountingFacts {
   partner_name: string | null;
   partner_reference: string | null;
   partner_handoff_status: PartnerHandoffStatus | null;
+  partner_submitted_at?: Date | null;
+  partner_acknowledged_at?: Date | null;
   partner_completed_at: Date | null;
+  partner_failed_at?: Date | null;
+  partner_verified_at?: Date | null;
+  latest_fiat_deposit_ramp_reference?: string | null;
   latest_fiat_deposit_state: FiatDepositState | null;
+  latest_fiat_deposit_failure_class?: FiatDepositFailureClass | null;
+  latest_fiat_deposit_observed_at?: Date | null;
+  latest_bank_reference?: string | null;
   latest_bank_payout_state: BankPayoutState | null;
+  latest_bank_failure_code?: string | null;
+  latest_bank_confirmed_at?: Date | null;
   revenue_realization_status: RevenueRealizationStatus | null;
   realized_at: Date | null;
 }
@@ -275,6 +286,89 @@ export interface FiatDepositReference {
   metadata: Record<string, unknown>;
   created_at: Date;
   updated_at: Date;
+}
+
+export type TreasuryCloseIssueSeverity = 'BLOCKING' | 'WARNING';
+export type TreasuryCloseIssueOwner = 'TREASURY' | 'FINANCE' | 'RECONCILIATION' | 'OPS';
+
+export interface TreasuryCloseIssue {
+  code: string;
+  severity: TreasuryCloseIssueSeverity;
+  owner: TreasuryCloseIssueOwner;
+  message: string;
+  trade_id: string | null;
+  sweep_batch_id: number | null;
+  ledger_entry_id: number | null;
+  details: Record<string, unknown>;
+}
+
+export interface TreasuryPeriodRollforwardReport {
+  period: AccountingPeriod;
+  generated_at: string;
+  opening_held_raw: string;
+  new_accruals_raw: string;
+  allocated_to_batches_raw: string;
+  swept_onchain_raw: string;
+  handed_off_raw: string;
+  realized_raw: string;
+  ending_held_raw: string;
+  unresolved_exception_raw: string;
+  blocking_issue_count: number;
+  warning_issue_count: number;
+  blocking_issues: TreasuryCloseIssue[];
+  warning_issues: TreasuryCloseIssue[];
+}
+
+export interface TreasuryBatchTraceEntry {
+  ledger_entry_id: number;
+  trade_id: string;
+  component_type: TreasuryComponent;
+  source_amount_raw: string;
+  allocated_amount_raw: string | null;
+  earned_at: string;
+  accounting_state: TreasuryAccountingState;
+  accounting_state_reason: string;
+  matched_sweep_tx_hash: string | null;
+  matched_swept_at: string | null;
+  partner_reference: string | null;
+  partner_handoff_status: PartnerHandoffStatus | null;
+  latest_bank_reference: string | null;
+  latest_bank_payout_state: BankPayoutState | null;
+  latest_bank_confirmed_at: string | null;
+  revenue_realization_status: RevenueRealizationStatus | null;
+  realized_at: string | null;
+}
+
+export interface TreasuryBatchTraceReport {
+  batch: SweepBatchWithPeriod;
+  claim_event: TreasuryClaimEvent | null;
+  partner_handoff: PartnerHandoff | null;
+  totals: {
+    expected_total_raw: string;
+    allocated_total_raw: string;
+    entry_count: number;
+  };
+  entries: TreasuryBatchTraceEntry[];
+  blocking_issues: TreasuryCloseIssue[];
+  warning_issues: TreasuryCloseIssue[];
+}
+
+export interface TreasuryAccountingPeriodClosePacket {
+  period: AccountingPeriod;
+  generated_at: string;
+  ready_for_close: boolean;
+  rollforward: TreasuryPeriodRollforwardReport;
+  reconciliation: {
+    status: 'CLEAR' | 'BLOCKED' | 'STALE' | 'MISSING' | 'UNKNOWN';
+    freshness: 'FRESH' | 'STALE' | 'MISSING';
+    latest_completed_run_key: string | null;
+    latest_completed_run_at: string | null;
+    stale_running_run_count: number;
+    blocked_reasons: string[];
+  };
+  batches: TreasuryBatchTraceReport[];
+  blocking_issues: TreasuryCloseIssue[];
+  warning_issues: TreasuryCloseIssue[];
 }
 
 export interface FiatDepositEvent {
