@@ -117,6 +117,27 @@ describe('treasury partner handoff queries', () => {
 
     expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN');
     expect(mockClientQuery.mock.calls[3][0]).toContain('INSERT INTO treasury_partner_handoffs');
+    expect(mockClientQuery.mock.calls[3][1]).toEqual([
+      11,
+      'bridge',
+      'bridge-handoff-11',
+      'SUBMITTED',
+      'payout-11',
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      'Treasury Operator',
+      null,
+      null,
+      latestEventPayloadHash,
+      JSON.stringify({}),
+      initiatedAt,
+    ]);
     expect(mockClientQuery).toHaveBeenNthCalledWith(5, 'COMMIT');
     expect(mockClientQuery).not.toHaveBeenCalledWith('ROLLBACK');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
@@ -275,6 +296,7 @@ describe('treasury partner handoff queries', () => {
 
     expect(replay.created).toBe(false);
     expect(replay.idempotentReplay).toBe(true);
+    expect(replay.event.id).toBe(61);
     expect(replay.handoff.id).toBe(41);
     expect(replay.handoff.ledger_entry_id).toBe(11);
     expect(replay.handoff.partner_code).toBe('bridge');
@@ -297,8 +319,8 @@ describe('treasury partner handoff queries', () => {
       })
       .mockResolvedValueOnce({});
 
-    await expect(
-      appendTreasuryPartnerHandoffEvidence({
+    try {
+      await appendTreasuryPartnerHandoffEvidence({
         ledgerEntryId: 11,
         partnerCode: 'bridge',
         providerEventId: 'evt-11',
@@ -309,8 +331,12 @@ describe('treasury partner handoff queries', () => {
         bankState: 'REJECTED',
         evidenceReference: 'evidence-11',
         observedAt,
-      }),
-    ).rejects.toBeInstanceOf(BankPayoutConflictError);
+      });
+      throw new Error('Expected appendTreasuryPartnerHandoffEvidence to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(BankPayoutConflictError);
+      expect((error as Error).message).toMatch(/conflicting payload/i);
+    }
     expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
     expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
