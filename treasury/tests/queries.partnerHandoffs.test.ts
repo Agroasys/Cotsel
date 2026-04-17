@@ -275,6 +275,10 @@ describe('treasury partner handoff queries', () => {
 
     expect(replay.created).toBe(false);
     expect(replay.idempotentReplay).toBe(true);
+    expect(replay.handoff.id).toBe(41);
+    expect(replay.handoff.ledger_entry_id).toBe(11);
+    expect(replay.handoff.partner_code).toBe('bridge');
+    expect(replay.handoff.handoff_reference).toBe('bridge-handoff-11');
   });
 
   it('rejects conflicting treasury partner evidence', async () => {
@@ -307,5 +311,8 @@ describe('treasury partner handoff queries', () => {
         observedAt,
       }),
     ).rejects.toBeInstanceOf(BankPayoutConflictError);
+    expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
+    expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
+    expect(mockClientRelease).toHaveBeenCalledTimes(1);
   });
 });
