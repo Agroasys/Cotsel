@@ -1,6 +1,10 @@
 const mockClientQuery = jest.fn();
 const mockClientRelease = jest.fn();
 const mockPoolConnect = jest.fn();
+const baseNow = new Date('2024-01-01T00:00:00.000Z');
+
+let initiatedAt: Date;
+let observedAt: Date;
 
 jest.mock('../src/database/connection', () => ({
   pool: {
@@ -21,11 +25,7 @@ import {
   upsertTreasuryPartnerHandoff,
 } from '../src/database/queries';
 
-const baseNow = new Date();
-const initiatedAt = new Date(baseNow.getTime());
-const observedAt = new Date(baseNow.getTime() + 15 * 60 * 1000);
-
-function buildHandoffPayloadHash(overrides: Partial<TreasuryPartnerHandoffPayloadHashInput> = {}) {
+function createHandoffPayloadHash(overrides: Partial<TreasuryPartnerHandoffPayloadHashInput> = {}) {
   return createTreasuryPartnerHandoffPayloadHash({
     ledgerEntryId: 11,
     partnerCode: 'bridge',
@@ -49,7 +49,7 @@ function buildHandoffPayloadHash(overrides: Partial<TreasuryPartnerHandoffPayloa
   });
 }
 
-function buildEvidencePayloadHash(
+function createEvidencePayloadHash(
   overrides: Partial<TreasuryPartnerHandoffEvidencePayloadHashInput> = {},
 ) {
   return createTreasuryPartnerHandoffEvidencePayloadHash({
@@ -76,6 +76,8 @@ function buildEvidencePayloadHash(
 describe('treasury partner handoff queries', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    initiatedAt = new Date(baseNow.getTime());
+    observedAt = new Date(baseNow.getTime() + 15 * 60 * 1000);
     mockPoolConnect.mockResolvedValue({
       query: mockClientQuery,
       release: mockClientRelease,
@@ -83,7 +85,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('writes a new treasury partner handoff inside one transaction', async () => {
-    const latestEventPayloadHash = buildHandoffPayloadHash();
+    const latestEventPayloadHash = createHandoffPayloadHash();
 
     mockClientQuery
       .mockResolvedValueOnce({})
@@ -184,7 +186,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('treats an identical treasury partner handoff payload as idempotent replay', async () => {
-    const payloadHash = buildHandoffPayloadHash();
+    const payloadHash = createHandoffPayloadHash();
 
     mockClientQuery
       .mockResolvedValueOnce({})
@@ -221,7 +223,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('rejects conflicting treasury partner handoff payloads for the same ledger entry', async () => {
-    const existingPayloadHash = buildHandoffPayloadHash();
+    const existingPayloadHash = createHandoffPayloadHash();
 
     mockClientQuery
       .mockResolvedValueOnce({})
@@ -256,7 +258,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('treats identical treasury partner evidence as idempotent replay', async () => {
-    const payloadHash = buildEvidencePayloadHash();
+    const payloadHash = createEvidencePayloadHash();
 
     mockClientQuery
       .mockResolvedValueOnce({})
@@ -304,7 +306,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('rejects conflicting treasury partner evidence', async () => {
-    const existingPayloadHash = buildEvidencePayloadHash();
+    const existingPayloadHash = createEvidencePayloadHash();
 
     mockClientQuery
       .mockResolvedValueOnce({})
