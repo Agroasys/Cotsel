@@ -319,24 +319,22 @@ describe('treasury partner handoff queries', () => {
       })
       .mockResolvedValueOnce({});
 
-    try {
-      await appendTreasuryPartnerHandoffEvidence({
-        ledgerEntryId: 11,
-        partnerCode: 'bridge',
-        providerEventId: 'evt-11',
-        eventType: 'transfer.updated',
-        partnerStatus: 'FAILED',
-        payoutReference: 'payout-11',
-        bankReference: 'bank-11',
-        bankState: 'REJECTED',
-        evidenceReference: 'evidence-11',
-        observedAt,
-      });
-      throw new Error('Expected appendTreasuryPartnerHandoffEvidence to throw');
-    } catch (error) {
-      expect(error).toBeInstanceOf(BankPayoutConflictError);
-      expect((error as Error).message).toMatch(/conflicting payload/i);
-    }
+    const resultPromise = appendTreasuryPartnerHandoffEvidence({
+      ledgerEntryId: 11,
+      partnerCode: 'bridge',
+      providerEventId: 'evt-11',
+      eventType: 'transfer.updated',
+      partnerStatus: 'FAILED',
+      payoutReference: 'payout-11',
+      bankReference: 'bank-11',
+      bankState: 'REJECTED',
+      evidenceReference: 'evidence-11',
+      observedAt,
+    });
+
+    await expect(resultPromise).rejects.toBeInstanceOf(BankPayoutConflictError);
+    await expect(resultPromise).rejects.toThrow(/conflicting payload/i);
+
     expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
     expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
