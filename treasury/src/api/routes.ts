@@ -69,6 +69,11 @@ export function createRouter(
     controller.getEntryAccounting.bind(controller),
   );
   router.get(
+    '/entries/:entryId/partner-handoff',
+    ...protectedMiddlewares,
+    controller.getTreasuryPartnerHandoff.bind(controller),
+  );
+  router.get(
     '/accounting-periods',
     ...protectedMiddlewares,
     controller.listAccountingPeriods.bind(controller),
@@ -113,6 +118,16 @@ export function createRouter(
     '/internal/entries/:entryId/realizations',
     ...internalMutationMiddlewares,
     controller.createEntryRealization.bind(controller),
+  );
+  router.post(
+    '/internal/entries/:entryId/partner-handoff',
+    ...internalMutationMiddlewares,
+    controller.upsertTreasuryPartnerHandoff.bind(controller),
+  );
+  router.post(
+    '/internal/entries/:entryId/partner-handoff/evidence',
+    ...internalMutationMiddlewares,
+    controller.appendTreasuryPartnerHandoffEvidence.bind(controller),
   );
   router.post(
     '/internal/entries/:entryId/bank-confirmation',

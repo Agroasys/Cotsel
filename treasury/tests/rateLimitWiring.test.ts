@@ -47,7 +47,16 @@ describe('treasury rate-limit wiring', () => {
       async getEntryAccounting(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
+      async getTreasuryPartnerHandoff(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
       async appendState(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async upsertTreasuryPartnerHandoff(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
+      async appendTreasuryPartnerHandoffEvidence(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
       async createEntryRealization(_req: express.Request, res: express.Response) {
