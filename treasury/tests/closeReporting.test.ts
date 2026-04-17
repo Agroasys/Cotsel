@@ -466,4 +466,23 @@ describe('treasury close reporting', () => {
       'ALLOCATED_AMOUNT_DIFFERS_FROM_SOURCE',
     );
   });
+
+  test('close packet treats empty trade coverage as reconciliation-clear for no-activity periods', async () => {
+    jest.mocked(queries.getAccountingPeriodById).mockResolvedValue(makePeriod());
+    jest.mocked(queries.listLedgerEntryAccountingProjections).mockResolvedValue([]);
+    jest.mocked(queries.listSweepBatches).mockResolvedValue([]);
+
+    const reconciliationGate = {
+      assessTrades: jest.fn(),
+      summarizeTrades: jest.fn(),
+    };
+
+    const packet = await loadTreasuryAccountingPeriodClosePacket(7, reconciliationGate as never);
+
+    expect(packet.ready_for_close).toBe(true);
+    expect(packet.reconciliation.status).toBe('CLEAR');
+    expect(packet.reconciliation.freshness).toBe('FRESH');
+    expect(reconciliationGate.assessTrades).not.toHaveBeenCalled();
+    expect(reconciliationGate.summarizeTrades).not.toHaveBeenCalled();
+  });
 });

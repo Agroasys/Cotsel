@@ -63,6 +63,13 @@ function buildPrincipal(
 
   return {
     gatewayRoles: ['operator:read', 'operator:write'],
+    treasuryCapabilities: [
+      'treasury:read',
+      'treasury:prepare',
+      'treasury:approve',
+      'treasury:execute_match',
+      'treasury:close',
+    ],
     sessionReference: 'sess-247',
     writeEnabled: true,
     session,

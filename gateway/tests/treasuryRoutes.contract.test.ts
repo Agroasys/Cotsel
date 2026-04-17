@@ -710,6 +710,47 @@ describe('gateway treasury routes contract', () => {
     );
   });
 
+  test('explicit empty treasury capability sets do not fall back to full treasury scope', async () => {
+    const app = await startServer('admin', {
+      config: {
+        enableMutations: true,
+        writeAllowlist: ['uid-admin'],
+      },
+      session: {
+        capabilities: [],
+      },
+    });
+
+    const response = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/treasury/sweep-batches',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        batchKey: '2026-Q2',
+        accountingPeriodId: 7,
+        assetSymbol: 'USDC',
+        expectedTotalRaw: '125000000',
+        audit: {
+          reason: 'Prepare sweep batch',
+          ticketRef: 'FIN-300',
+        },
+      }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.json<{ error: { code: string; message: string } }>()).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'FORBIDDEN',
+          message: expect.stringContaining('Treasury capability'),
+        }),
+      }),
+    );
+  });
+
   test('canonical external handoff route and legacy alias both remain available', async () => {
     const recordPartnerHandoff = jest.fn().mockResolvedValue({
       id: 33,

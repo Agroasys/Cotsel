@@ -72,6 +72,16 @@ async function startServer() {
           expiresAt: 1_744_246_800,
         },
         gatewayRoles: actor === 'buyer' ? [] : ['operator:read', 'operator:write'],
+        treasuryCapabilities:
+          actor === 'buyer'
+            ? []
+            : [
+                'treasury:read',
+                'treasury:prepare',
+                'treasury:approve',
+                'treasury:execute_match',
+                'treasury:close',
+              ],
         writeEnabled: actor !== 'buyer',
       };
       req.gatewayPrincipal = gatewayPrincipal;

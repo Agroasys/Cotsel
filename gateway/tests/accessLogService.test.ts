@@ -26,6 +26,13 @@ function buildPrincipal(
     sessionReference: 'sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd',
     session,
     gatewayRoles: ['operator:read', 'operator:write'],
+    treasuryCapabilities: [
+      'treasury:read',
+      'treasury:prepare',
+      'treasury:approve',
+      'treasury:execute_match',
+      'treasury:close',
+    ],
     writeEnabled: true,
   };
 }

@@ -405,10 +405,29 @@ export async function loadTreasuryAccountingPeriodClosePacket(
     new Set(batchReports.flatMap((batch) => batch.entries.map((entry) => entry.trade_id))),
   ).sort((a, b) => a.localeCompare(b));
 
-  const [reconciliationAssessments, reconciliationSummary] = await Promise.all([
-    reconciliationGate.assessTrades(tradeIds),
-    reconciliationGate.summarizeTrades(tradeIds),
-  ]);
+  const [reconciliationAssessments, reconciliationSummary] =
+    tradeIds.length === 0
+      ? [
+          new Map<string, TradeReconciliationGate>(),
+          {
+            status: 'CLEAR' as const,
+            freshness: 'FRESH' as const,
+            latestCompletedRunKey: null,
+            latestCompletedRunAt: null,
+            latestCompletedRunAgeSeconds: null,
+            staleRunningRunCount: 0,
+            trackedTradeCount: 0,
+            clearTradeCount: 0,
+            blockedTradeCount: 0,
+            unknownTradeCount: 0,
+            driftBlockedTradeCount: 0,
+            blockedReasons: [],
+          },
+        ]
+      : await Promise.all([
+          reconciliationGate.assessTrades(tradeIds),
+          reconciliationGate.summarizeTrades(tradeIds),
+        ]);
 
   const rollforward = buildTreasuryPeriodRollforwardReport({
     period,

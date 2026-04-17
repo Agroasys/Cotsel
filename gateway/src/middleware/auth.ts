@@ -96,14 +96,14 @@ export function resolveTreasuryCapabilities(session: AuthSession): TreasuryCapab
     return [];
   }
 
-  const declaredCapabilities = Array.isArray(session.capabilities)
-    ? session.capabilities.filter((capability): capability is TreasuryCapability =>
-        TREASURY_CAPABILITIES.includes(capability as TreasuryCapability),
-      )
-    : [];
-
-  if (declaredCapabilities.length > 0) {
-    return [...new Set(declaredCapabilities)];
+  if (Array.isArray(session.capabilities)) {
+    return [
+      ...new Set(
+        session.capabilities.filter((capability): capability is TreasuryCapability =>
+          TREASURY_CAPABILITIES.includes(capability as TreasuryCapability),
+        ),
+      ),
+    ];
   }
 
   return [...TREASURY_CAPABILITIES];
