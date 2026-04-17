@@ -322,10 +322,11 @@ async function startServer(options: StartServerOptions = {}) {
   };
 }
 
-async function readStoredAction(store: GovernanceActionStore, actionId: string) {
+async function readStoredAction(store: GovernanceActionStore, actionId: string, context?: string) {
   const action = await store.get(actionId);
   if (!action) {
-    throw new Error(`Expected stored governance action ${actionId}`);
+    const contextSuffix = context ? ` (context: ${context})` : '';
+    throw new Error(`Expected stored governance action ${actionId}${contextSuffix}`);
   }
 
   return action;
@@ -455,6 +456,7 @@ describe('gateway governance mutation routes contract', () => {
       sessionFixtures: {
         'sess-admin-no-wallet': {
           userId: 'uid-admin',
+          accountId: 'acct-admin',
           walletAddress: '',
           role: 'admin',
           email: 'admin@agroasys.io',
@@ -638,7 +640,11 @@ describe('gateway governance mutation routes contract', () => {
       expect(confirmPayload.data.monitoringState).toBe('pending_verification');
       expect(confirmPayload.data.signerWallet).toBeNull();
 
-      const storedAction = await readStoredAction(governanceActionStore, prepared.data.actionId);
+      const storedAction = await readStoredAction(
+        governanceActionStore,
+        prepared.data.actionId,
+        'pending governance broadcast confirmation',
+      );
       expect(storedAction.status).toBe('broadcast_pending_verification');
       expect(storedAction.txHash).toBe(pendingTxHash);
       expect(storedAction.verificationState).toBe('pending');
@@ -710,7 +716,11 @@ describe('gateway governance mutation routes contract', () => {
       expect(confirmPayload.data.signerWallet).toBe(prepared.data.signing.signerWallet);
       expect(confirmPayload.data.blockNumber).toBe(88);
 
-      const storedAction = await readStoredAction(governanceActionStore, prepared.data.actionId);
+      const storedAction = await readStoredAction(
+        governanceActionStore,
+        prepared.data.actionId,
+        'verified governance broadcast confirmation',
+      );
       expect(storedAction.status).toBe('broadcast');
       expect(storedAction.finalSignerWallet).toBe(prepared.data.signing.signerWallet);
       expect(storedAction.audit.finalSignerWallet).toBe(prepared.data.signing.signerWallet);
@@ -1109,7 +1119,11 @@ describe('gateway governance mutation routes contract', () => {
         expect(typeof payload.data.intentKey).toBe('string');
         expect(payload.data.expiresAt).toMatch(/Z$/);
 
-        const storedAction = await readStoredAction(governanceActionStore, payload.data.actionId);
+        const storedAction = await readStoredAction(
+          governanceActionStore,
+          payload.data.actionId,
+          `${expectedMethod} queued mutation at ${path}`,
+        );
         expect(storedAction.category).toBe(expectedCategory);
         expect(storedAction.contractMethod).toBe(expectedMethod);
         expect(storedAction.intentKey).toBe(payload.data.intentKey);

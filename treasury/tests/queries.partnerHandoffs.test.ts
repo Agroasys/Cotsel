@@ -2,8 +2,6 @@ const mockClientQuery = jest.fn();
 const mockClientRelease = jest.fn();
 const mockPoolConnect = jest.fn();
 
-import { createHash } from 'crypto';
-
 jest.mock('../src/database/connection', () => ({
   pool: {
     connect: mockPoolConnect,
@@ -13,9 +11,66 @@ jest.mock('../src/database/connection', () => ({
 
 import { BankPayoutConflictError } from '../src/core/bankPayout';
 import {
+  createTreasuryPartnerHandoffEvidencePayloadHash,
+  createTreasuryPartnerHandoffPayloadHash,
+  type TreasuryPartnerHandoffEvidencePayloadHashInput,
+  type TreasuryPartnerHandoffPayloadHashInput,
+} from '../src/core/treasuryPartnerHandoff';
+import {
   appendTreasuryPartnerHandoffEvidence,
   upsertTreasuryPartnerHandoff,
 } from '../src/database/queries';
+
+const initiatedAt = new Date('2026-04-16T08:00:00.000Z');
+const observedAt = new Date('2026-04-16T08:15:00.000Z');
+
+function buildHandoffPayloadHash(overrides: Partial<TreasuryPartnerHandoffPayloadHashInput> = {}) {
+  return createTreasuryPartnerHandoffPayloadHash({
+    ledgerEntryId: 11,
+    partnerCode: 'bridge',
+    handoffReference: 'bridge-handoff-11',
+    partnerStatus: 'SUBMITTED',
+    payoutReference: 'payout-11',
+    transferReference: null,
+    drainReference: null,
+    destinationExternalAccountId: null,
+    liquidationAddressId: null,
+    sourceAmount: null,
+    sourceCurrency: null,
+    destinationAmount: null,
+    destinationCurrency: null,
+    actor: 'Treasury Operator',
+    note: null,
+    failureCode: null,
+    initiatedAt,
+    metadata: {},
+    ...overrides,
+  });
+}
+
+function buildEvidencePayloadHash(
+  overrides: Partial<TreasuryPartnerHandoffEvidencePayloadHashInput> = {},
+) {
+  return createTreasuryPartnerHandoffEvidencePayloadHash({
+    ledgerEntryId: 11,
+    partnerCode: 'bridge',
+    providerEventId: 'evt-11',
+    eventType: 'transfer.updated',
+    partnerStatus: 'COMPLETED',
+    payoutReference: 'payout-11',
+    transferReference: null,
+    drainReference: null,
+    destinationExternalAccountId: null,
+    liquidationAddressId: null,
+    bankReference: 'bank-11',
+    bankState: 'CONFIRMED',
+    evidenceReference: 'evidence-11',
+    failureCode: null,
+    observedAt,
+    metadata: {},
+    ...overrides,
+  });
+}
 
 describe('treasury partner handoff queries', () => {
   beforeEach(() => {
@@ -27,6 +82,8 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('writes a new treasury partner handoff inside one transaction', async () => {
+    const latestEventPayloadHash = buildHandoffPayloadHash();
+
     mockClientQuery
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
@@ -41,7 +98,7 @@ describe('treasury partner handoff queries', () => {
             partner_code: 'bridge',
             handoff_reference: 'bridge-handoff-11',
             partner_status: 'SUBMITTED',
-            latest_event_payload_hash: 'hash-1',
+            latest_event_payload_hash: latestEventPayloadHash,
           },
         ],
       })
@@ -54,42 +111,58 @@ describe('treasury partner handoff queries', () => {
       partnerStatus: 'SUBMITTED',
       payoutReference: 'payout-11',
       actor: 'Treasury Operator',
-      initiatedAt: new Date('2026-04-16T08:00:00.000Z'),
+      initiatedAt,
     });
 
     expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN');
     expect(mockClientQuery.mock.calls[3][0]).toContain('INSERT INTO treasury_partner_handoffs');
     expect(mockClientQuery).toHaveBeenNthCalledWith(5, 'COMMIT');
+    expect(mockClientQuery).not.toHaveBeenCalledWith('ROLLBACK');
+    expect(mockClientRelease).toHaveBeenCalledTimes(1);
+    expect(mockClientRelease.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mockClientQuery.mock.invocationCallOrder[4],
+    );
     expect(result.created).toBe(true);
     expect(result.idempotentReplay).toBe(false);
     expect(result.handoff.id).toBe(41);
   });
 
+  it('rolls back and releases when a treasury partner handoff insert fails', async () => {
+    const insertError = new Error('insert failed');
+
+    mockClientQuery
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [{ id: 11, trade_id: 'trade-1' }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockRejectedValueOnce(insertError)
+      .mockResolvedValueOnce({});
+
+    await expect(
+      upsertTreasuryPartnerHandoff({
+        ledgerEntryId: 11,
+        partnerCode: 'bridge',
+        handoffReference: 'bridge-handoff-11',
+        partnerStatus: 'SUBMITTED',
+        payoutReference: 'payout-11',
+        actor: 'Treasury Operator',
+        initiatedAt,
+      }),
+    ).rejects.toThrow(insertError);
+
+    expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN');
+    expect(mockClientQuery.mock.calls[3][0]).toContain('INSERT INTO treasury_partner_handoffs');
+    expect(mockClientQuery).toHaveBeenNthCalledWith(5, 'ROLLBACK');
+    expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
+    expect(mockClientRelease).toHaveBeenCalledTimes(1);
+    expect(mockClientRelease.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mockClientQuery.mock.invocationCallOrder[4],
+    );
+  });
+
   it('treats an identical treasury partner handoff payload as idempotent replay', async () => {
-    const payloadHash = createHash('sha256')
-      .update(
-        JSON.stringify({
-          ledgerEntryId: 11,
-          partnerCode: 'bridge',
-          handoffReference: 'bridge-handoff-11',
-          partnerStatus: 'SUBMITTED',
-          payoutReference: 'payout-11',
-          transferReference: null,
-          drainReference: null,
-          destinationExternalAccountId: null,
-          liquidationAddressId: null,
-          sourceAmount: null,
-          sourceCurrency: null,
-          destinationAmount: null,
-          destinationCurrency: null,
-          actor: 'Treasury Operator',
-          note: null,
-          failureCode: null,
-          initiatedAt: new Date('2026-04-16T08:00:00.000Z'),
-          metadata: {},
-        }),
-      )
-      .digest('hex');
+    const payloadHash = buildHandoffPayloadHash();
 
     mockClientQuery
       .mockResolvedValueOnce({})
@@ -117,7 +190,7 @@ describe('treasury partner handoff queries', () => {
       partnerStatus: 'SUBMITTED',
       payoutReference: 'payout-11',
       actor: 'Treasury Operator',
-      initiatedAt: new Date('2026-04-16T08:00:00.000Z'),
+      initiatedAt,
     });
 
     expect(result.created).toBe(false);
@@ -126,6 +199,8 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('rejects conflicting treasury partner handoff payloads for the same ledger entry', async () => {
+    const existingPayloadHash = buildHandoffPayloadHash();
+
     mockClientQuery
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
@@ -139,7 +214,7 @@ describe('treasury partner handoff queries', () => {
             partner_code: 'bridge',
             handoff_reference: 'bridge-handoff-11',
             partner_status: 'SUBMITTED',
-            latest_event_payload_hash: 'different-hash',
+            latest_event_payload_hash: existingPayloadHash,
           },
         ],
       })
@@ -153,34 +228,13 @@ describe('treasury partner handoff queries', () => {
         partnerStatus: 'FAILED',
         payoutReference: 'payout-11',
         actor: 'Treasury Operator',
-        initiatedAt: new Date('2026-04-16T08:00:00.000Z'),
+        initiatedAt,
       }),
     ).rejects.toBeInstanceOf(BankPayoutConflictError);
   });
 
   it('treats identical treasury partner evidence as idempotent replay and rejects conflicting evidence', async () => {
-    const payloadHash = createHash('sha256')
-      .update(
-        JSON.stringify({
-          ledgerEntryId: 11,
-          partnerCode: 'bridge',
-          providerEventId: 'evt-11',
-          eventType: 'transfer.updated',
-          partnerStatus: 'COMPLETED',
-          payoutReference: 'payout-11',
-          transferReference: null,
-          drainReference: null,
-          destinationExternalAccountId: null,
-          liquidationAddressId: null,
-          bankReference: 'bank-11',
-          bankState: 'CONFIRMED',
-          evidenceReference: 'evidence-11',
-          failureCode: null,
-          observedAt: new Date('2026-04-16T08:15:00.000Z'),
-          metadata: {},
-        }),
-      )
-      .digest('hex');
+    const payloadHash = buildEvidencePayloadHash();
 
     mockClientQuery
       .mockResolvedValueOnce({})
@@ -215,7 +269,7 @@ describe('treasury partner handoff queries', () => {
       bankReference: 'bank-11',
       bankState: 'CONFIRMED',
       evidenceReference: 'evidence-11',
-      observedAt: new Date('2026-04-16T08:15:00.000Z'),
+      observedAt,
     });
 
     expect(replay.created).toBe(false);
@@ -226,6 +280,7 @@ describe('treasury partner handoff queries', () => {
       query: mockClientQuery,
       release: mockClientRelease,
     });
+    const existingPayloadHash = buildEvidencePayloadHash();
     mockClientQuery
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
@@ -233,7 +288,7 @@ describe('treasury partner handoff queries', () => {
           {
             id: 61,
             partner_handoff_id: 41,
-            payload_hash: 'different-hash',
+            payload_hash: existingPayloadHash,
           },
         ],
       })
@@ -250,7 +305,7 @@ describe('treasury partner handoff queries', () => {
         bankReference: 'bank-11',
         bankState: 'REJECTED',
         evidenceReference: 'evidence-11',
-        observedAt: new Date('2026-04-16T08:15:00.000Z'),
+        observedAt,
       }),
     ).rejects.toBeInstanceOf(BankPayoutConflictError);
   });

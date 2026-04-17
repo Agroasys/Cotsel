@@ -51,16 +51,16 @@ import {
   normalizeFiatDepositInput,
 } from '../core/fiatDeposit';
 import { sumAllocatedEntryAmountRaw } from '../core/sweepBatchAmounts';
+import {
+  createTreasuryPartnerHandoffEvidencePayloadHash,
+  createTreasuryPartnerHandoffPayloadHash,
+} from '../core/treasuryPartnerHandoff';
 
 const INGESTION_CURSOR_NAME = 'trade_events';
 const serviceAuthNonceStore = createPostgresNonceStore({
   tableName: 'treasury_auth_nonces',
   query: (sql, params) => pool.query(sql, params),
 });
-
-function createPayloadHash(input: Record<string, unknown>): string {
-  return createHash('sha256').update(JSON.stringify(input)).digest('hex');
-}
 
 function createPartnerHandoffPayloadHash(input: {
   sweepBatchId: number;
@@ -1776,7 +1776,7 @@ export async function upsertTreasuryPartnerHandoff(data: TreasuryPartnerHandoffI
     initiatedAt: data.initiatedAt,
     metadata: data.metadata ?? {},
   };
-  const payloadHash = createPayloadHash(normalized);
+  const payloadHash = createTreasuryPartnerHandoffPayloadHash(normalized);
   const client = await pool.connect();
 
   try {
@@ -1902,7 +1902,7 @@ export async function appendTreasuryPartnerHandoffEvidence(
     observedAt: data.observedAt,
     metadata: data.metadata ?? {},
   };
-  const payloadHash = createPayloadHash(normalized);
+  const payloadHash = createTreasuryPartnerHandoffEvidencePayloadHash(normalized);
   const client = await pool.connect();
 
   try {

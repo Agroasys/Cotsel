@@ -41,8 +41,8 @@ function parseArgs(argv) {
     repo: process.env.GITHUB_REPOSITORY || 'Agroasys/Cotsel',
   };
 
-  for (let index = 2; index < argv.length; index += 1) {
-    const arg = argv[index];
+  for (let argIndex = 2; argIndex < argv.length; argIndex += 1) {
+    const arg = argv[argIndex];
     if (arg === '--offline') {
       args.offline = true;
       continue;
@@ -51,27 +51,27 @@ function parseArgs(argv) {
       args.matrix = arg.slice('--matrix='.length);
       continue;
     }
-    if (arg === '--matrix' && argv[index + 1]) {
-      args.matrix = argv[index + 1];
-      index += 1;
+    if (arg === '--matrix' && argv[argIndex + 1]) {
+      args.matrix = argv[argIndex + 1];
+      argIndex += 1;
       continue;
     }
     if (arg.startsWith('--out=')) {
       args.out = arg.slice('--out='.length);
       continue;
     }
-    if (arg === '--out' && argv[index + 1]) {
-      args.out = argv[index + 1];
-      index += 1;
+    if (arg === '--out' && argv[argIndex + 1]) {
+      args.out = argv[argIndex + 1];
+      argIndex += 1;
       continue;
     }
     if (arg.startsWith('--repo=')) {
       args.repo = arg.slice('--repo='.length);
       continue;
     }
-    if (arg === '--repo' && argv[index + 1]) {
-      args.repo = argv[index + 1];
-      index += 1;
+    if (arg === '--repo' && argv[argIndex + 1]) {
+      args.repo = argv[argIndex + 1];
+      argIndex += 1;
       continue;
     }
     throw new Error(`unknown argument: ${arg}`);
@@ -107,9 +107,9 @@ function parseComponentTable(markdown) {
   }
 
   let tableStart = -1;
-  for (let index = mappingIndex + 1; index < lines.length; index += 1) {
-    if (lines[index].trim().startsWith('|')) {
-      tableStart = index;
+  for (let lineIndex = mappingIndex + 1; lineIndex < lines.length; lineIndex += 1) {
+    if (lines[lineIndex].trim().startsWith('|')) {
+      tableStart = lineIndex;
       break;
     }
   }
@@ -124,8 +124,8 @@ function parseComponentTable(markdown) {
   }
 
   const rows = [];
-  for (let index = tableStart + 2; index < lines.length; index += 1) {
-    const line = lines[index];
+  for (let lineIndex = tableStart + 2; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
     if (!line.trim().startsWith('|')) {
       break;
     }
@@ -134,13 +134,13 @@ function parseComponentTable(markdown) {
       continue;
     }
     if (values.length !== header.length) {
-      throw new Error(`table row width mismatch at line ${index + 1}`);
+      throw new Error(`table row width mismatch at line ${lineIndex + 1}`);
     }
     const row = {};
-    for (let column = 0; column < header.length; column += 1) {
-      row[header[column]] = values[column];
+    for (let columnIndex = 0; columnIndex < header.length; columnIndex += 1) {
+      row[header[columnIndex]] = values[columnIndex];
     }
-    row._line = index + 1;
+    row._line = lineIndex + 1;
     rows.push(row);
   }
 
@@ -183,14 +183,22 @@ function getToken() {
 }
 
 async function fetchIssue(repo, issueNumber, token) {
-  const response = await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': 'agroasys-arch-roadmap-consistency-check',
-    },
-  });
+  let response;
+  try {
+    response = await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'agroasys-arch-roadmap-consistency-check',
+      },
+    });
+  } catch (error) {
+    const message = error && typeof error.message === 'string' ? error.message : String(error);
+    throw new Error(`github issue fetch failed (#${issueNumber}): network error: ${message}`, {
+      cause: error,
+    });
+  }
 
   if (!response.ok) {
     const body = await response.text();

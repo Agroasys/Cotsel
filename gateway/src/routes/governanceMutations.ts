@@ -358,7 +358,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       })(),
       async () => {
         const { principal, requestContext, idempotencyKey } = getMutationContext(req);
-        requireWalletBoundSession(principal, 'Treasury payout approval checks');
+        requireWalletBoundSession(principal, 'Unpause proposal cancellation checks');
         const audit = validateGovernanceAuditInput(req.body);
         const proposal = await options.governanceReader.getUnpauseProposalState();
         if (!proposal.hasActiveProposal) {
@@ -683,7 +683,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
         })(),
         async () => {
           const { principal, requestContext, idempotencyKey } = getMutationContext(req);
-          requireWalletBoundSession(principal, 'Oracle update approval checks');
+          requireWalletBoundSession(principal, 'Treasury payout receiver proposal execution');
           const audit = validateGovernanceAuditInput(req.body);
           const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
           const proposal =
