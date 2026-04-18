@@ -4,6 +4,7 @@
 import { BuyerSDK } from '../src/modules/buyerSDK';
 import type { ethers } from 'ethers';
 import { Interface } from 'ethers';
+import { IERC20__factory } from '../src/types/typechain-types/factories/@openzeppelin/contracts/token/ERC20/IERC20__factory';
 import { TEST_CONFIG, assertRequiredEnv, getBuyerSigner, hasRequiredEnv } from './setup';
 
 const describeIntegration = hasRequiredEnv ? describe : describe.skip;
@@ -34,6 +35,7 @@ type MockContractWithSigner = {
 type BuyerSignerLike = Pick<ethers.Signer, 'getAddress' | 'signMessage' | 'provider'>;
 type BuyerSdkContract = BuyerSDK['contract'];
 type BuyerContractConnector = Pick<BuyerSdkContract, 'connect' | 'interface'>;
+type BuyerWriteInvocation = (sdk: BuyerSDK, signer: ethers.Signer) => Promise<unknown>;
 
 function makeBuyerSigner(address = '0x2222222222222222222222222222222222222222'): {
   signer: ethers.Signer;
@@ -86,6 +88,16 @@ function mockSuccessCall(mock: jest.Mock) {
   return tx;
 }
 
+const networkMismatchCases: Array<[string, BuyerWriteInvocation]> = [
+  ['openDispute', (sdk, signer) => sdk.openDispute(10n, signer)],
+  [
+    'cancelLockedTradeAfterTimeout',
+    (sdk, signer) => sdk.cancelLockedTradeAfterTimeout(11n, signer),
+  ],
+  ['refundInTransitAfterTimeout', (sdk, signer) => sdk.refundInTransitAfterTimeout(12n, signer)],
+  ['claim', (sdk, signer) => sdk.claim(signer)],
+];
+
 describe('BuyerSDK unit', () => {
   afterEach(() => {
     jest.restoreAllMocks();
@@ -110,6 +122,16 @@ describe('BuyerSDK unit', () => {
         signer,
       ),
     ).rejects.toThrow('wrong network');
+  });
+
+  test('approveUSDC should reject signer network mismatches', async () => {
+    const { sdk } = makeSdkUnit();
+    const { signer, provider } = makeBuyerSigner();
+    const connectSpy = jest.spyOn(IERC20__factory, 'connect');
+    provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
+
+    await expect(sdk.approveUSDC(1000000n, signer)).rejects.toThrow('wrong network');
+    expect(connectSpy).not.toHaveBeenCalled();
   });
 
   test('createTrade should surface tradeId from TradeLocked receipt logs', async () => {
@@ -212,6 +234,17 @@ describe('BuyerSDK unit', () => {
     expect(tx.wait).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
   });
+
+  for (const [name, invoke] of networkMismatchCases) {
+    test(`${name} should reject signer network mismatches`, async () => {
+      const { sdk, connect } = makeSdkUnit();
+      const { signer, provider } = makeBuyerSigner();
+      provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
+
+      await expect(invoke(sdk, signer)).rejects.toThrow('wrong network');
+      expect(connect).not.toHaveBeenCalled();
+    });
+  }
 });
 
 describeIntegration('BuyerSDK integration smoke', () => {

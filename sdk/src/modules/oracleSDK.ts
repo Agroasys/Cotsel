@@ -9,6 +9,8 @@ import { Trade, TradeStatus } from '../types/trade';
 
 export class OracleSDK extends Client {
   private async verifyOracle(oracleSigner: ethers.Signer): Promise<void> {
+    await this.assertSignerCompatibility(oracleSigner, 'Oracle signer');
+
     const oracleAddress = await oracleSigner.getAddress();
     const authorizedOracle = await this.getOracleAddress();
 
@@ -80,6 +82,8 @@ export class OracleSDK extends Client {
     tradeId: string | bigint,
     signer: ethers.Signer,
   ): Promise<OracleResult> {
+    await this.assertSignerCompatibility(signer);
+
     try {
       const contractWithSigner = this.contract.connect(signer);
       const tx = await contractWithSigner.finalizeAfterDisputeWindow(tradeId);

@@ -19,6 +19,26 @@ export class Client {
     this.contract = AgroasysEscrow__factory.connect(config.escrowAddress, this.provider);
   }
 
+  protected async assertSignerCompatibility(
+    signer: ethers.Signer,
+    signerLabel = 'Signer',
+  ): Promise<void> {
+    if (!signer.provider) {
+      throw new ContractError(`${signerLabel} is missing a connected provider`);
+    }
+
+    const signerNetwork = await signer.provider.getNetwork();
+    if (signerNetwork.chainId !== BigInt(this.config.chainId)) {
+      throw new ContractError(
+        `${signerLabel} is connected to the wrong network for this settlement target`,
+        {
+          expectedChainId: this.config.chainId,
+          actualChainId: signerNetwork.chainId.toString(),
+        },
+      );
+    }
+  }
+
   async getBuyerNonce(buyerAddress: string): Promise<bigint> {
     try {
       return await this.contract.getBuyerNonce(buyerAddress);
@@ -122,6 +142,8 @@ export class Client {
   }
 
   async claim(signer: ethers.Signer): Promise<{ txHash: string; blockNumber: number }> {
+    await this.assertSignerCompatibility(signer);
+
     try {
       const contractWithSigner = this.contract.connect(signer);
       const tx = await contractWithSigner.claim();

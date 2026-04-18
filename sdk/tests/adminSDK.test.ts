@@ -52,13 +52,17 @@ type MockContractWithSigner = {
   cancelExpiredTreasuryPayoutAddressUpdateProposal: jest.Mock;
 };
 
-type SignerLike = Pick<ethers.Signer, 'getAddress'>;
+type SignerLike = Pick<ethers.Signer, 'getAddress' | 'provider'>;
 type AdminSdkContract = AdminSDK['contract'];
 type ContractConnector = Pick<AdminSdkContract, 'connect' | 'interface'>;
 
 function makeSigner(address = '0x1111111111111111111111111111111111111111'): ethers.Signer {
+  const provider = {
+    getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
+  };
   const signer: SignerLike = {
     getAddress: jest.fn().mockResolvedValue(address),
+    provider: provider as unknown as ethers.Signer['provider'],
   };
   return signer as unknown as ethers.Signer;
 }
@@ -128,6 +132,18 @@ describe('AdminSDK unit', () => {
     expect(contractWithSigner.pause).toHaveBeenCalledTimes(1);
     expect(tx.wait).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
+  });
+
+  test('pause should reject signer network mismatches before admin verification', async () => {
+    const { sdk, connect } = makeSdkUnit(true);
+    const signer = makeSigner() as ethers.Signer & {
+      provider: { getNetwork: jest.Mock };
+    };
+    signer.provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
+
+    await expect(sdk.pause(signer)).rejects.toThrow('wrong network');
+    expect(sdk.isAdmin).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
   });
 
   test('unpause flow methods should call matching contract methods', async () => {
@@ -244,6 +260,19 @@ describe('AdminSDK unit', () => {
     expect(sdk.isAdmin).not.toHaveBeenCalled();
   });
 
+  test('treasury sweep should reject signer network mismatches', async () => {
+    const { sdk, contractWithSigner, connect } = makeSdkUnit(false);
+    const signer = makeSigner() as ethers.Signer & {
+      provider: { getNetwork: jest.Mock };
+    };
+    signer.provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
+
+    await expect(sdk.claimTreasury(signer)).rejects.toThrow('wrong network');
+    expect(contractWithSigner.claimTreasury).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+    expect(sdk.isAdmin).not.toHaveBeenCalled();
+  });
+
   test('treasury payout receiver governance methods should call matching contract methods', async () => {
     const { sdk, contractWithSigner } = makeSdkUnit(true);
     const signer = makeSigner();
@@ -310,6 +339,62 @@ describe('AdminSDK unit', () => {
       txHash: RECEIPT.hash,
       blockNumber: RECEIPT.blockNumber,
       proposalId: 9n,
+    });
+  });
+
+  test('proposeDisputeSolution returns proposal id when receipt contains DisputeSolutionProposed', async () => {
+    const { sdk, contractWithSigner, parseLog } = makeSdkUnit(true);
+    const signer = makeSigner();
+    const tx = mockSuccessCall(contractWithSigner.proposeDisputeSolution);
+    tx.wait.mockResolvedValue({
+      ...RECEIPT,
+      logs: [
+        {
+          topics: ['0x1'],
+          data: '0x2',
+        },
+      ],
+    });
+    parseLog.mockReturnValue({
+      name: 'DisputeSolutionProposed',
+      args: {
+        proposalId: 12n,
+      },
+    });
+
+    await expect(sdk.proposeDisputeSolution(1n, DisputeStatus.REFUND, signer)).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+      proposalId: 12n,
+    });
+  });
+
+  test('proposeAddAdmin returns proposal id when receipt contains AdminAddProposed', async () => {
+    const { sdk, contractWithSigner, parseLog } = makeSdkUnit(true);
+    const signer = makeSigner();
+    const tx = mockSuccessCall(contractWithSigner.proposeAddAdmin);
+    tx.wait.mockResolvedValue({
+      ...RECEIPT,
+      logs: [
+        {
+          topics: ['0x1'],
+          data: '0x2',
+        },
+      ],
+    });
+    parseLog.mockReturnValue({
+      name: 'AdminAddProposed',
+      args: {
+        proposalId: 14n,
+      },
+    });
+
+    await expect(
+      sdk.proposeAddAdmin('0x2222222222222222222222222222222222222222', signer),
+    ).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+      proposalId: 14n,
     });
   });
 
