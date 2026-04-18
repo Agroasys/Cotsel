@@ -20,3 +20,7 @@ export interface DisputeResult {
   txHash: string;
   blockNumber: number;
 }
+
+export interface DisputeProposalResult extends DisputeResult {
+  proposalId?: bigint;
+}

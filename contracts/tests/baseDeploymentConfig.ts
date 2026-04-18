@@ -50,6 +50,16 @@ describe('Base deployment config', function () {
     ).to.throw(/must not exceed the number of admin addresses/);
   });
 
+  it('rejects single-admin deployment matrices because governance requires two admins', async function () {
+    expect(() =>
+      loadBaseDeploymentConfig('base-sepolia', 84532, {
+        ...validEnv,
+        DEPLOY_ADMINS: '0x20e7E6fC0905E17De2D28E926Ad56324a6844a1D',
+        DEPLOY_REQUIRED_APPROVALS: '1',
+      }),
+    ).to.throw(/must contain at least two admin addresses/);
+  });
+
   it('rejects chain id mismatches for the selected Base network', async function () {
     expect(() => loadBaseDeploymentConfig('base-sepolia', 8453, validEnv)).to.throw(
       /requires chainId=84532, received 8453/,

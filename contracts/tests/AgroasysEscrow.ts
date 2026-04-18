@@ -236,6 +236,16 @@ describe('AgroasysEscrow', function () {
           oracle.address,
           treasury.address,
           [admin1.address],
+          1,
+        ),
+      ).to.be.revertedWith('at least 2 admins required');
+
+      await expect(
+        EscrowFactory.deploy(
+          await usdc.getAddress(),
+          oracle.address,
+          treasury.address,
+          [admin1.address, admin2.address],
           3,
         ),
       ).to.be.revertedWith('not enough admins');
@@ -261,6 +271,32 @@ describe('AgroasysEscrow', function () {
         escrow,
         'FundsReleasedStage1',
       );
+    });
+
+    it('Should emit the effective governance quorum during unpause for low-quorum dispute configs', async function () {
+      const EscrowFactory = await ethers.getContractFactory('AgroasysEscrow');
+      const lowQuorumEscrow = await EscrowFactory.deploy(
+        await usdc.getAddress(),
+        oracle.address,
+        treasury.address,
+        [admin1.address, admin2.address],
+        1,
+      );
+      await lowQuorumEscrow.waitForDeployment();
+
+      await expect(lowQuorumEscrow.connect(admin1).pause())
+        .to.emit(lowQuorumEscrow, 'Paused')
+        .withArgs(admin1.address);
+
+      await expect(lowQuorumEscrow.connect(admin1).proposeUnpause())
+        .to.emit(lowQuorumEscrow, 'UnpauseApproved')
+        .withArgs(admin1.address, 1, 2);
+
+      await expect(lowQuorumEscrow.connect(admin2).approveUnpause())
+        .to.emit(lowQuorumEscrow, 'UnpauseApproved')
+        .withArgs(admin2.address, 2, 2)
+        .and.to.emit(lowQuorumEscrow, 'Unpaused')
+        .withArgs(admin2.address);
     });
 
     it('Should allow claims while globally paused when claim freeze is not active', async function () {

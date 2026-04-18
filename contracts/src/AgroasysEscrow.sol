@@ -388,6 +388,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(_oracleAddress != address(0), "invalid oracle");
         require(_treasuryAddress != address(0), "invalid treasury");
         require(_requiredApprovals > 0, "required approvals must be > 0");
+        require(_admins.length >= 2, "at least 2 admins required");
         require(_admins.length >= _requiredApprovals, "not enough admins");
 
         usdcToken = IERC20(_usdcToken);
@@ -488,7 +489,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         hasActiveUnpauseProposal = true;
 
         emit UnpauseProposed(msg.sender);
-        emit UnpauseApproved(msg.sender, 1, requiredApprovals);
+        emit UnpauseApproved(msg.sender, 1, governanceApprovals());
 
         return true;
     }
@@ -505,7 +506,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         unpauseHasApproved[msg.sender] = true;
         unpauseProposal.approvalCount++;
 
-        emit UnpauseApproved(msg.sender, unpauseProposal.approvalCount, requiredApprovals);
+        emit UnpauseApproved(msg.sender, unpauseProposal.approvalCount, governanceApprovals());
 
         if (unpauseProposal.approvalCount >= governanceApprovals()) {
             _executeUnpause();

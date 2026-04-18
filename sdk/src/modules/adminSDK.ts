@@ -3,7 +3,7 @@
  */
 import { Client } from '../client';
 import { ethers } from 'ethers';
-import { DisputeStatus, DisputeResult } from '../types/dispute';
+import { DisputeStatus, DisputeProposalResult, DisputeResult } from '../types/dispute';
 import { GovernanceProposalResult, GovernanceResult } from '../types/governance';
 import {
   AuthorizationError,
@@ -15,6 +15,8 @@ import { validateAddress } from '../utils/validation';
 
 export class AdminSDK extends Client {
   private async verifyAdmin(adminSigner: ethers.Signer): Promise<void> {
+    await this.assertSignerCompatibility(adminSigner, 'Admin signer');
+
     const adminAddress = await adminSigner.getAddress();
     const isAdmin = await this.isAdmin(adminAddress);
 
@@ -226,6 +228,8 @@ export class AdminSDK extends Client {
   }
 
   async claimTreasury(triggerSigner: ethers.Signer): Promise<GovernanceResult> {
+    await this.assertSignerCompatibility(triggerSigner);
+
     try {
       const contractWithSigner = this.contract.connect(triggerSigner);
       const tx = await contractWithSigner.claimTreasury();
@@ -371,7 +375,7 @@ export class AdminSDK extends Client {
     tradeId: string | bigint,
     disputeStatus: DisputeStatus,
     adminSigner: ethers.Signer,
-  ): Promise<DisputeResult> {
+  ): Promise<DisputeProposalResult> {
     await this.verifyAdmin(adminSigner);
 
     if (disputeStatus !== DisputeStatus.REFUND && disputeStatus !== DisputeStatus.RESOLVE) {
@@ -390,6 +394,7 @@ export class AdminSDK extends Client {
       return {
         txHash: receipt.hash,
         blockNumber: receipt.blockNumber,
+        proposalId: this.extractProposalIdFromReceipt(receipt, 'DisputeSolutionProposed'),
       };
     } catch (error: unknown) {
       const message = getErrorMessage(error);
@@ -575,7 +580,10 @@ export class AdminSDK extends Client {
 
   // #################### ADMIN GOVERNANCE ####################
 
-  async proposeAddAdmin(newAdmin: string, adminSigner: ethers.Signer): Promise<GovernanceResult> {
+  async proposeAddAdmin(
+    newAdmin: string,
+    adminSigner: ethers.Signer,
+  ): Promise<GovernanceProposalResult> {
     await this.verifyAdmin(adminSigner);
     validateAddress(newAdmin, 'newAdmin');
 
@@ -591,6 +599,7 @@ export class AdminSDK extends Client {
       return {
         txHash: receipt.hash,
         blockNumber: receipt.blockNumber,
+        proposalId: this.extractProposalIdFromReceipt(receipt, 'AdminAddProposed'),
       };
     } catch (error: unknown) {
       const message = getErrorMessage(error);

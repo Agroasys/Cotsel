@@ -10,23 +10,6 @@ import { ContractError, getErrorMessage } from '../types/errors';
 import { IERC20__factory } from '../types/typechain-types/factories/@openzeppelin/contracts/token/ERC20/IERC20__factory';
 
 export class BuyerSDK extends Client {
-  private async assertSignerCompatibility(buyerSigner: ethers.Signer): Promise<void> {
-    if (!buyerSigner.provider) {
-      throw new ContractError('Buyer signer is missing a connected provider');
-    }
-
-    const signerNetwork = await buyerSigner.provider.getNetwork();
-    if (signerNetwork.chainId !== BigInt(this.config.chainId)) {
-      throw new ContractError(
-        'Buyer signer is connected to the wrong network for this settlement target',
-        {
-          expectedChainId: this.config.chainId,
-          actualChainId: signerNetwork.chainId.toString(),
-        },
-      );
-    }
-  }
-
   private extractTradeIdFromReceipt(receipt: ethers.TransactionReceipt): string | undefined {
     for (const log of receipt.logs) {
       if (log.address.toLowerCase() !== this.config.escrowAddress.toLowerCase()) {
@@ -52,6 +35,8 @@ export class BuyerSDK extends Client {
   }
 
   async approveUSDC(amount: bigint, buyerSigner: ethers.Signer): Promise<TradeResult> {
+    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
+
     try {
       const usdcContract = IERC20__factory.connect(this.config.usdcAddress, buyerSigner);
 
@@ -129,7 +114,7 @@ export class BuyerSDK extends Client {
   async createTrade(payload: BuyerLockPayload, buyerSigner: ethers.Signer): Promise<TradeResult> {
     validateTradeParameters(payload);
     const params = payload;
-    await this.assertSignerCompatibility(buyerSigner);
+    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
 
     const buyerAddress = await buyerSigner.getAddress();
 
@@ -198,6 +183,8 @@ export class BuyerSDK extends Client {
   }
 
   async openDispute(tradeId: string | bigint, buyerSigner: ethers.Signer): Promise<TradeResult> {
+    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
+
     try {
       const contractWithSigner = this.contract.connect(buyerSigner);
       const tx = await contractWithSigner.openDispute(tradeId);
@@ -224,6 +211,8 @@ export class BuyerSDK extends Client {
     tradeId: string | bigint,
     buyerSigner: ethers.Signer,
   ): Promise<TradeResult> {
+    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
+
     try {
       const contractWithSigner = this.contract.connect(buyerSigner);
       const tx = await contractWithSigner.cancelLockedTradeAfterTimeout(tradeId);
@@ -250,6 +239,8 @@ export class BuyerSDK extends Client {
     tradeId: string | bigint,
     buyerSigner: ethers.Signer,
   ): Promise<TradeResult> {
+    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
+
     try {
       const contractWithSigner = this.contract.connect(buyerSigner);
       const tx = await contractWithSigner.refundInTransitAfterTimeout(tradeId);
