@@ -19,6 +19,24 @@ ALTER TABLE user_profiles
 ALTER TABLE user_profiles
     ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS break_glass_role TEXT CHECK (break_glass_role IS NULL OR break_glass_role = 'admin');
+ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS break_glass_expires_at TIMESTAMPTZ;
+ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS break_glass_granted_at TIMESTAMPTZ;
+ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS break_glass_granted_by TEXT;
+ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS break_glass_reason TEXT;
+ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS break_glass_revoked_at TIMESTAMPTZ;
+ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS break_glass_revoked_by TEXT;
+ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS break_glass_reviewed_at TIMESTAMPTZ;
+ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS break_glass_reviewed_by TEXT;
+ALTER TABLE user_profiles
     ALTER COLUMN wallet_address DROP NOT NULL;
 UPDATE user_profiles
 SET account_id = id::text
@@ -58,6 +76,36 @@ CREATE TABLE IF NOT EXISTS trusted_session_exchange_nonces (
     PRIMARY KEY (api_key, nonce)
 );
 
+CREATE TABLE IF NOT EXISTS auth_admin_control_nonces (
+    api_key    TEXT NOT NULL,
+    nonce      TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (api_key, nonce)
+);
+
+CREATE TABLE IF NOT EXISTS auth_admin_audit_events (
+    id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id             TEXT NOT NULL,
+    target_user_id          UUID,
+    action                 TEXT NOT NULL CHECK (action IN (
+        'profile_provisioned',
+        'profile_role_updated',
+        'profile_deactivated',
+        'break_glass_granted',
+        'break_glass_revoked',
+        'break_glass_expired',
+        'break_glass_reviewed'
+    )),
+    actor_type             TEXT NOT NULL CHECK (actor_type IN ('service_auth', 'system')),
+    actor_id               TEXT NOT NULL,
+    previous_role          TEXT,
+    new_role               TEXT,
+    reason                 TEXT NOT NULL,
+    break_glass_expires_at TIMESTAMPTZ,
+    metadata               JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE OR REPLACE FUNCTION current_app_service_name()
 RETURNS TEXT
 LANGUAGE sql
@@ -79,6 +127,8 @@ BEGIN
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE user_profiles TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE user_sessions TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE trusted_session_exchange_nonces TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE auth_admin_control_nonces TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT ON TABLE auth_admin_audit_events TO %I', runtime_user);
     END IF;
 END $$;
 
@@ -105,3 +155,27 @@ CREATE POLICY trusted_session_exchange_nonces_service_isolation ON trusted_sessi
     FOR ALL
     USING (current_app_service_name() = 'auth')
     WITH CHECK (current_app_service_name() = 'auth');
+
+ALTER TABLE auth_admin_control_nonces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_admin_control_nonces FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS auth_admin_control_nonces_service_isolation ON auth_admin_control_nonces;
+CREATE POLICY auth_admin_control_nonces_service_isolation ON auth_admin_control_nonces
+    FOR ALL
+    USING (current_app_service_name() = 'auth')
+    WITH CHECK (current_app_service_name() = 'auth');
+
+ALTER TABLE auth_admin_audit_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_admin_audit_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS auth_admin_audit_events_service_isolation ON auth_admin_audit_events;
+CREATE POLICY auth_admin_audit_events_service_isolation ON auth_admin_audit_events
+    FOR ALL
+    USING (current_app_service_name() = 'auth')
+    WITH CHECK (current_app_service_name() = 'auth');
+
+CREATE INDEX IF NOT EXISTS idx_auth_admin_audit_events_account_created
+    ON auth_admin_audit_events(account_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_admin_audit_events_action_created
+    ON auth_admin_audit_events(action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_break_glass_expiry
+    ON user_profiles(break_glass_expires_at)
+    WHERE break_glass_role = 'admin' AND break_glass_revoked_at IS NULL;

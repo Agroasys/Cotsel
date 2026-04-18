@@ -40,6 +40,23 @@ function buildApp(): Promise<{ app: express.Express; close: () => Promise<void> 
       res.status(200).json({ success: true });
     },
   };
+  const adminController = {
+    async provision(_req: Request, res: Response) {
+      res.status(200).json({ success: true });
+    },
+    async deactivate(_req: Request, res: Response) {
+      res.status(200).json({ success: true });
+    },
+    async grantBreakGlass(_req: Request, res: Response) {
+      res.status(200).json({ success: true });
+    },
+    async revokeBreakGlass(_req: Request, res: Response) {
+      res.status(200).json({ success: true });
+    },
+    async reviewBreakGlass(_req: Request, res: Response) {
+      res.status(200).json({ success: true });
+    },
+  };
   const legacyWalletController = {
     async getChallenge(_req: Request, res: Response) {
       res.status(200).json({ success: true });
@@ -74,6 +91,8 @@ function buildApp(): Promise<{ app: express.Express; close: () => Promise<void> 
         legacyWalletController: legacyWalletController as never,
         trustedSessionExchangeMiddleware: (_req: Request, _res: Response, next: NextFunction) =>
           next(),
+        adminController: adminController as never,
+        adminControlMiddleware: (_req: Request, _res: Response, next: NextFunction) => next(),
       }),
     );
 
@@ -126,6 +145,32 @@ describe('auth rate-limit wiring', () => {
             Authorization: 'Bearer session-1',
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({}),
+        });
+        expect(blocked.status).toBe(429);
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  test('admin-control routes use the privileged admin throttle', async () => {
+    const { app, close } = await buildApp();
+
+    try {
+      await withServer(app, async (baseUrl) => {
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          const response = await request(baseUrl, '/api/auth/v1/admin/profiles/provision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          expect(response.status).toBe(200);
+        }
+
+        const blocked = await request(baseUrl, '/api/auth/v1/admin/profiles/provision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         });
         expect(blocked.status).toBe(429);

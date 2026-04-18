@@ -66,6 +66,7 @@ export interface GatewayConfig {
   corsAllowNoOrigin: boolean;
   rateLimitEnabled: boolean;
   rateLimitRedisUrl?: string;
+  rateLimitFailOpen?: boolean;
   allowInsecureDownstreamAuth: boolean;
   commitSha: string;
   buildTime: string;
@@ -464,6 +465,7 @@ export function loadConfig(): GatewayConfig {
     corsAllowNoOrigin: envBool('GATEWAY_CORS_ALLOW_NO_ORIGIN', false),
     rateLimitEnabled: envBool('GATEWAY_RATE_LIMIT_ENABLED', true),
     rateLimitRedisUrl: process.env.GATEWAY_RATE_LIMIT_REDIS_URL?.trim() || undefined,
+    rateLimitFailOpen: envBool('GATEWAY_RATE_LIMIT_FAIL_OPEN', false),
     allowInsecureDownstreamAuth,
     commitSha: process.env.GATEWAY_COMMIT_SHA?.trim() || 'local-dev',
     buildTime,

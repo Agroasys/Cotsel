@@ -3,6 +3,7 @@
  */
 import { Router, Request, Response, NextFunction, RequestHandler } from 'express';
 import { LegacyWalletAuthController, SessionController } from './controller';
+import { AdminController } from './adminController';
 import { createSessionMiddleware } from '../middleware/middleware';
 import { SessionService } from '../core/sessionService';
 
@@ -18,6 +19,8 @@ export function createRouter(
   options?: {
     legacyWalletController?: LegacyWalletAuthController;
     trustedSessionExchangeMiddleware?: RequestHandler;
+    adminController?: AdminController;
+    adminControlMiddleware?: RequestHandler;
   },
 ): Router {
   const router = Router();
@@ -95,6 +98,86 @@ export function createRouter(
               ttlSeconds?: number;
             }
           >,
+          res,
+        ),
+      ),
+    );
+  }
+
+  if (options?.adminController && options.adminControlMiddleware) {
+    router.post(
+      '/admin/profiles/provision',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.provision(
+          req as Request<
+            Record<string, never>,
+            unknown,
+            {
+              accountId?: string;
+              role?: import('../types').UserRole;
+              orgId?: string | null;
+              email?: string | null;
+              walletAddress?: string | null;
+              reason?: string;
+            }
+          >,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/profiles/deactivate',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.deactivate(
+          req as Request<Record<string, never>, unknown, { accountId?: string; reason?: string }>,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/break-glass/grant',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.grantBreakGlass(
+          req as Request<
+            Record<string, never>,
+            unknown,
+            {
+              accountId?: string;
+              orgId?: string | null;
+              email?: string | null;
+              walletAddress?: string | null;
+              reason?: string;
+              ttlSeconds?: number;
+              baseRole?: Exclude<import('../types').UserRole, 'admin'>;
+            }
+          >,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/break-glass/revoke',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.revokeBreakGlass(
+          req as Request<Record<string, never>, unknown, { accountId?: string; reason?: string }>,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/break-glass/review',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.reviewBreakGlass(
+          req as Request<Record<string, never>, unknown, { accountId?: string; reason?: string }>,
           res,
         ),
       ),

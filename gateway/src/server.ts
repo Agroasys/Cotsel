@@ -376,6 +376,17 @@ async function bootstrap(): Promise<void> {
     keyPrefix: 'gateway',
     classifyRoute: gatewayRateLimitPolicy,
     logger: Logger,
+    failOpenOnStoreError: Boolean(config.rateLimitFailOpen),
+    onStoreError: (event) => {
+      Logger.warn('Gateway rate limiter degraded', {
+        eventType: event.failOpen
+          ? 'gateway.rate_limiter_fail_open'
+          : 'gateway.rate_limiter_fail_closed',
+        keyPrefix: event.keyPrefix,
+        method: event.method,
+        path: event.path,
+      });
+    },
   });
 
   const extraRouter = Router();

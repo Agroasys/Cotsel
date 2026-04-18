@@ -28,6 +28,12 @@ const TRUSTED_EXCHANGE_RATE_LIMIT: RouteRateLimitPolicy = {
   sustained: { limit: 180, windowSeconds: 300 },
 };
 
+const ADMIN_CONTROL_RATE_LIMIT: RouteRateLimitPolicy = {
+  name: 'admin_control',
+  burst: { limit: 10, windowSeconds: 60 },
+  sustained: { limit: 60, windowSeconds: 300 },
+};
+
 export function authRateLimitPolicy(req: Pick<Request, 'path'>): RouteRateLimitPolicy | null {
   const path = normalizeRoutePath(req.path);
 
@@ -45,6 +51,10 @@ export function authRateLimitPolicy(req: Pick<Request, 'path'>): RouteRateLimitP
 
   if (path === '/session/exchange/agroasys') {
     return TRUSTED_EXCHANGE_RATE_LIMIT;
+  }
+
+  if (path.startsWith('/admin/')) {
+    return ADMIN_CONTROL_RATE_LIMIT;
   }
 
   return null;

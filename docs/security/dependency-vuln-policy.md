@@ -6,8 +6,10 @@ Define short-term dependency vulnerability posture and remediation workflow with
 
 ## Current Baseline
 
-- Target: no **Critical** or **High** vulnerabilities in the monorepo dependency tree.
-- Moderate/Low findings are tracked and remediated in targeted, low-risk changes.
+- Release-blocking target: no **Critical** or **High** vulnerabilities in the
+  production dependency tree.
+- Moderate/Low production findings and dev-toolchain findings are tracked and
+  remediated in targeted, low-risk changes.
 - `npm ls --all` must remain healthy (no dependency graph breakage).
 
 ## Remediation Rules
@@ -31,6 +33,25 @@ This command is **non-enforcing** and reports:
 - `npm audit --omit=dev --json` summary
 - `npm audit --json` summary
 - `npm ls --all` exit status
+
+## Release-Blocking Gate
+
+Run:
+
+```bash
+npm run security:deps:gate
+```
+
+This command is enforcing. It fails when production dependency audit output
+contains High or Critical advisories, or when `npm ls --all` reports an invalid
+dependency graph. The release gate runs this command in
+`.github/workflows/release-gate.yml` under `ci/dependency-security`.
+
+Do not bypass this gate by masking advisories, forcing incompatible overrides,
+or pinning around a vulnerable package without a documented compatibility and
+reachability assessment. If a production advisory cannot be fixed immediately,
+the exception must be time-bound, owned, linked to the affected package path,
+and approved as release risk.
 
 ## Override Lifecycle
 

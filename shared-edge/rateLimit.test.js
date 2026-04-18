@@ -77,6 +77,7 @@ describe('shared edge rate limiter', () => {
   });
 
   test('returns 503 when the backing store fails', async () => {
+    const onStoreError = jest.fn();
     const limiter = await createHttpRateLimiter({
       enabled: true,
       nodeEnv: 'development',
@@ -92,6 +93,7 @@ describe('shared edge rate limiter', () => {
         },
         async close() {},
       },
+      onStoreError,
       nowSeconds: () => 1700000000,
     });
 
@@ -105,6 +107,50 @@ describe('shared edge rate limiter', () => {
       success: false,
       error: 'Rate limiting unavailable',
     });
+    expect(onStoreError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        failOpen: false,
+        keyPrefix: 'test',
+      }),
+    );
+
+    await limiter.close();
+  });
+
+  test('fails open only when explicitly configured', async () => {
+    const onStoreError = jest.fn();
+    const limiter = await createHttpRateLimiter({
+      enabled: true,
+      nodeEnv: 'development',
+      keyPrefix: 'test',
+      classifyRoute: () => ({
+        name: 'write',
+        burst: { limit: 1, windowSeconds: 10 },
+        sustained: { limit: 10, windowSeconds: 60 },
+      }),
+      store: {
+        async incrementAndGet() {
+          throw new Error('boom');
+        },
+        async close() {},
+      },
+      failOpenOnStoreError: true,
+      onStoreError,
+      nowSeconds: () => 1700000000,
+    });
+
+    const res = createMockResponse();
+    const next = jest.fn();
+    await limiter.middleware(createRequest('/mutation', 'POST'), res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(onStoreError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        failOpen: true,
+        keyPrefix: 'test',
+      }),
+    );
 
     await limiter.close();
   });

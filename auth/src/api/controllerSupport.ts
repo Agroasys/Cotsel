@@ -7,6 +7,7 @@ import { ApiErrorResponse, ApiSuccessResponse, UserRole } from '../types';
 
 export const CHALLENGE_TTL_SECONDS = 300;
 export const VALID_ROLES: UserRole[] = ['buyer', 'supplier', 'admin'];
+export const VALID_SELF_SERVE_ROLES: UserRole[] = ['buyer', 'supplier'];
 
 const WALLET_REGEX = /^0x[0-9a-f]{40}$/i;
 
@@ -28,6 +29,10 @@ export function parseOptionalSessionTtl(value: unknown): number | undefined {
 
 export function requireAuthRole(value: unknown): UserRole {
   return requireEnum(value, VALID_ROLES, 'role');
+}
+
+export function requireSelfServeRole(value: unknown): UserRole {
+  return requireEnum(value, VALID_SELF_SERVE_ROLES, 'role');
 }
 
 export function handleControllerError(

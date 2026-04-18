@@ -15,7 +15,7 @@ import {
   CHALLENGE_TTL_SECONDS,
   handleControllerError,
   parseOptionalSessionTtl,
-  requireAuthRole,
+  requireSelfServeRole,
 } from './controllerSupport';
 
 interface LoginBody {
@@ -71,7 +71,7 @@ export class LegacyWalletAuthController {
         'walletAddress',
       );
       signature = requireString(body.signature, 'signature');
-      role = requireAuthRole(body.role);
+      role = requireSelfServeRole(body.role);
       orgId = typeof body.orgId === 'string' && body.orgId.trim() ? body.orgId.trim() : undefined;
       ttlSeconds = parseOptionalSessionTtl(body.ttlSeconds);
     } catch (error) {
