@@ -114,6 +114,10 @@ function parseAdminList(env: NodeJS.ProcessEnv): string[] {
     throw new Error("DEPLOY_ADMINS must contain at least one admin address");
   }
 
+  if (admins.length < 2) {
+    throw new Error("DEPLOY_ADMINS must contain at least two admin addresses");
+  }
+
   const unique = new Set(admins);
   if (unique.size !== admins.length) {
     throw new Error("DEPLOY_ADMINS must not contain duplicate addresses");
