@@ -27,6 +27,7 @@ jobs:
       ricardian: ${{ steps.filter.outputs.ricardian }}
       treasury: ${{ steps.filter.outputs.treasury }}
       gateway: ${{ steps.filter.outputs.gateway }}
+      auth: ${{ steps.filter.outputs.auth }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -90,6 +91,88 @@ jobs:
               - 'docs/api/cotsel-dashboard-gateway.openapi.yml'
               - 'docs/runbooks/dashboard-api-gateway-boundary.md'
               - 'docs/runbooks/dashboard-gateway-operations.md'
+            auth:
+              - 'auth/**'
+              - 'shared-auth/**'
+              - 'shared-edge/**'
+              - 'docs/runbooks/auth-admin-provisioning.md'
+              - 'docs/runbooks/auth-break-glass.md'
+
+  dependency-security:
+    name: ci/dependency-security
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run dependency security gate
+        run: npm run security:deps:gate
+
+  auth:
+    name: ci/auth
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.auth == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run auth validation suite
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          mkdir -p ci-reports
+          report="ci-reports/auth-validation.txt"
+          fail=0
+
+          run_check() {
+            local label="$1"
+            shift
+            echo "[$label] command: $*" | tee -a "$report"
+            if "$@" 2>&1 | tee -a "$report"; then
+              echo "[$label] PASS" | tee -a "$report"
+            else
+              echo "[$label] FAIL" | tee -a "$report"
+              fail=1
+            fi
+            echo "" >> "$report"
+          }
+
+          run_check auth-lint npm run -w auth lint
+          run_check auth-tests npm run -w auth test
+          run_check auth-build npm run -w auth build
+
+          if [[ "$fail" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Upload auth validation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ci-report-auth-validation
+          path: ci-reports/auth-validation.txt
 
   repo-quality:
     name: ci/repo-quality
@@ -912,9 +995,12 @@ jobs:
     if: always()
     needs:
       - changes
+      - dependency-security
       - docs-profile-guard
       - env-profile-regression
       - staging-e2e-real-gate
+      - auth
+      - gateway
       - contracts
       - sdk
       - oracle
@@ -932,9 +1018,12 @@ jobs:
 
           declare -A results
           results["ci/changes"]="${{ needs.changes.result }}"
+          results["ci/dependency-security"]="${{ needs.dependency-security.result }}"
           results["ci/docs-profile-guard"]="${{ needs.docs-profile-guard.result }}"
           results["ci/env-profile-regression"]="${{ needs.env-profile-regression.result }}"
           results["ci/staging-e2e-real-gate"]="${{ needs.staging-e2e-real-gate.result }}"
+          results["ci/auth"]="${{ needs.auth.result }}"
+          results["ci/gateway"]="${{ needs.gateway.result }}"
           results["ci/contracts"]="${{ needs.contracts.result }}"
           results["ci/sdk"]="${{ needs.sdk.result }}"
           results["ci/oracle"]="${{ needs.oracle.result }}"

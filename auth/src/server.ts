@@ -17,10 +17,18 @@ import { runMigrations } from './database/migrations';
 import { createPostgresProfileStore } from './core/profileStore';
 import { createPostgresSessionStore } from './core/sessionStore';
 import { createSessionService } from './core/sessionService';
+import { createAdminService } from './core/adminService';
 import { createInMemoryChallengeStore } from './core/challengeStore';
 import { LegacyWalletAuthController, SessionController } from './api/controller';
+import { AdminController } from './api/adminController';
 import { createRouter } from './api/routes';
 import { authRateLimitPolicy } from './httpSecurity';
+import {
+  incrementRateLimitFailClosed,
+  incrementRateLimitFailOpen,
+  incrementServiceAuthDenied,
+  incrementServiceAuthNonceReplay,
+} from './metrics/counters';
 import { errorHandler } from './middleware/middleware';
 import { Logger } from './utils/logger';
 
@@ -30,6 +38,18 @@ function createServiceApiKeyLookup(rawKeys: string): (apiKey: string) => Service
   const keys = parseServiceApiKeys(rawKeys);
   const lookup = new Map<string, ServiceApiKey>(keys.map((key) => [key.id, key]));
   return (apiKey: string) => lookup.get(apiKey);
+}
+
+function createAllowedServiceApiKeyLookup(
+  rawKeys: string,
+  allowedApiKeyIds: string[],
+): (apiKey: string) => ServiceApiKey | undefined {
+  const allowed = new Set(allowedApiKeyIds);
+  const lookup = createServiceApiKeyLookup(rawKeys);
+  return (apiKey: string) => {
+    const key = lookup(apiKey);
+    return key && allowed.has(key.id) ? key : undefined;
+  };
 }
 
 async function initializeDatabase(): Promise<void> {
@@ -66,6 +86,10 @@ async function bootstrap(): Promise<void> {
     tableName: 'trusted_session_exchange_nonces',
     query: (sql, params) => pool.query(sql, params),
   });
+  const adminControlNonceStore = createPostgresNonceStore({
+    tableName: 'auth_admin_control_nonces',
+    query: (sql, params) => pool.query(sql, params),
+  });
   const trustedSessionExchangeMiddleware = config.trustedSessionExchangeEnabled
     ? createServiceAuthMiddleware({
         enabled: true,
@@ -75,6 +99,31 @@ async function bootstrap(): Promise<void> {
         consumeNonce: trustedSessionExchangeNonceStore.consume,
       })
     : undefined;
+  const adminControlMiddleware = config.adminControlEnabled
+    ? createServiceAuthMiddleware({
+        enabled: true,
+        maxSkewSeconds: config.adminControlMaxSkewSeconds,
+        nonceTtlSeconds: config.adminControlNonceTtlSeconds,
+        lookupApiKey: createAllowedServiceApiKeyLookup(
+          config.adminControlApiKeysJson,
+          config.adminControlAllowedApiKeyIds,
+        ),
+        consumeNonce: adminControlNonceStore.consume,
+        onAuthFailure: (reason) => {
+          incrementServiceAuthDenied();
+          Logger.warn('Admin control service-auth denied', {
+            eventType: 'auth.service_auth_denied',
+            reason,
+          });
+        },
+        onReplayReject: () => {
+          incrementServiceAuthNonceReplay();
+          Logger.warn('Admin control nonce replay rejected', {
+            eventType: 'auth.nonce_replay_attempted',
+          });
+        },
+      })
+    : undefined;
   const requestRateLimiter = await createHttpRateLimiter({
     enabled: config.rateLimitEnabled,
     redisUrl: config.rateLimitRedisUrl,
@@ -82,6 +131,20 @@ async function bootstrap(): Promise<void> {
     keyPrefix: 'auth',
     classifyRoute: authRateLimitPolicy,
     logger: Logger,
+    failOpenOnStoreError: config.rateLimitFailOpen,
+    onStoreError: (event) => {
+      if (event.failOpen) {
+        incrementRateLimitFailOpen();
+      } else {
+        incrementRateLimitFailClosed();
+      }
+      Logger.warn('Auth rate limiter degraded', {
+        eventType: event.failOpen ? 'auth.rate_limiter_fail_open' : 'auth.rate_limiter_fail_closed',
+        keyPrefix: event.keyPrefix,
+        method: event.method,
+        path: event.path,
+      });
+    },
   });
   requestRateLimiterClose = requestRateLimiter.close;
 
@@ -109,9 +172,14 @@ async function bootstrap(): Promise<void> {
     ? new LegacyWalletAuthController(sessionService, challengeStore, config.sessionTtlSeconds)
     : undefined;
   const sessionController = new SessionController(sessionService, config.sessionTtlSeconds);
+  const adminController = config.adminControlEnabled
+    ? new AdminController(createAdminService(profileStore, config.adminBreakGlassMaxTtlSeconds))
+    : undefined;
   const router = createRouter(sessionController, sessionService, {
     legacyWalletController,
     trustedSessionExchangeMiddleware,
+    adminController,
+    adminControlMiddleware,
   });
 
   app.use('/api/auth/v1', requestRateLimiter.middleware, router);

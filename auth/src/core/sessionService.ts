@@ -8,6 +8,7 @@ import {
   incrementSessionIssued,
   incrementSessionRefreshed,
   incrementSessionRevoked,
+  incrementAdminBreakGlassExpired,
 } from '../metrics/counters';
 import { Logger } from '../utils/logger';
 
@@ -62,11 +63,45 @@ export function createSessionService(
     if (!session) return null;
     if (session.revokedAt !== null) return null;
     if (session.expiresAt <= nowSeconds()) return null;
+    if (session.active === false) {
+      await sessions.revoke(sessionId);
+      incrementSessionRevoked();
+      Logger.warn('Session revoked because profile is inactive', {
+        sessionId,
+        userId: session.userId,
+      });
+      return null;
+    }
+    if (session.issuedRole && session.issuedRole !== session.role) {
+      if (session.issuedRole === 'admin' && session.role !== 'admin') {
+        const expired = await profiles.expireBreakGlass(session.accountId);
+        if (expired) {
+          incrementAdminBreakGlassExpired();
+          Logger.warn('Break-glass admin expired', {
+            eventType: 'auth.break_glass_expired',
+            accountId: session.accountId,
+            userId: session.userId,
+          });
+        }
+      }
+      await sessions.revoke(sessionId);
+      incrementSessionRevoked();
+      Logger.warn('Session revoked because effective authority changed', {
+        sessionId,
+        userId: session.userId,
+        issuedRole: session.issuedRole,
+        effectiveRole: session.role,
+      });
+      return null;
+    }
     return session;
   }
 
   return {
     async login(walletAddress, role, orgId, ttlSeconds = 3600) {
+      if (role === 'admin' || role === 'oracle') {
+        throw new Error('Privileged roles must be provisioned server-side');
+      }
       const normalized = walletAddress.toLowerCase();
       const profile = await profiles.upsert(normalized, role, orgId);
       if (!profile.active) {
@@ -77,7 +112,7 @@ export function createSessionService(
       Logger.info('Session issued', {
         userId: profile.id,
         walletAddress: profile.walletAddress,
-        role,
+        role: profile.role,
       });
       return result;
     },

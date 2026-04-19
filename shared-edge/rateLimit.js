@@ -66,7 +66,10 @@ class RedisRateLimitStore {
     this.redis = new Redis(redisUrl, {
       maxRetriesPerRequest: 1,
       enableReadyCheck: true,
+      enableOfflineQueue: false,
       lazyConnect: true,
+      connectTimeout: 500,
+      retryStrategy: () => null,
     });
     this.keyPrefix = keyPrefix;
   }
@@ -91,7 +94,7 @@ class RedisRateLimitStore {
   }
 
   async close() {
-    await this.redis.quit();
+    this.redis.disconnect(false);
   }
 }
 
@@ -264,7 +267,23 @@ async function createHttpRateLimiter(options) {
         method: req.method.toUpperCase(),
         path: req.path,
         error: error?.message || error,
+        degradedMode: options.failOpenOnStoreError ? 'fail_open' : 'fail_closed',
       });
+
+      if (typeof options.onStoreError === 'function') {
+        options.onStoreError({
+          keyPrefix: options.keyPrefix,
+          method: req.method.toUpperCase(),
+          path: req.path,
+          failOpen: Boolean(options.failOpenOnStoreError),
+          error,
+        });
+      }
+
+      if (options.failOpenOnStoreError) {
+        next();
+        return;
+      }
 
       res.status(503).json({
         success: false,

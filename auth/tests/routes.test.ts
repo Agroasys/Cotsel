@@ -12,14 +12,14 @@ type RouterLayer = {
 function listRoutes(router: ReturnType<typeof createRouter>): string[] {
   const layers = (router as typeof router & { stack: RouterLayer[] }).stack;
   return layers
-    .filter((layer): layer is RouterLayer & { route: NonNullable<RouterLayer['route']> } =>
-      Boolean(layer.route),
-    )
-    .flatMap((layer) =>
-      Object.keys(layer.route.methods).map(
-        (method) => `${method.toUpperCase()} ${layer.route.path}`,
-      ),
-    );
+    .filter((layer) => Boolean(layer.route))
+    .flatMap((layer) => {
+      const route = layer.route! as unknown as {
+        path: string;
+        methods: Record<string, boolean>;
+      };
+      return Object.keys(route.methods).map((method) => `${method.toUpperCase()} ${route.path}`);
+    });
 }
 
 function createSessionController(): SessionController {

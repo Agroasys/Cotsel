@@ -3,6 +3,15 @@
  */
 
 export type UserRole = 'buyer' | 'supplier' | 'admin' | 'oracle';
+export type AdminActorType = 'service_auth' | 'system';
+export type AdminAuditAction =
+  | 'profile_provisioned'
+  | 'profile_role_updated'
+  | 'profile_deactivated'
+  | 'break_glass_granted'
+  | 'break_glass_revoked'
+  | 'break_glass_expired'
+  | 'break_glass_reviewed';
 
 export interface UserProfile {
   id: string;
@@ -10,10 +19,20 @@ export interface UserProfile {
   walletAddress: string | null;
   email: string | null;
   role: UserRole;
+  baseRole: UserRole;
   orgId: string | null;
   createdAt: Date;
   updatedAt: Date;
   active: boolean;
+  breakGlassRole: 'admin' | null;
+  breakGlassExpiresAt: Date | null;
+  breakGlassGrantedAt: Date | null;
+  breakGlassGrantedBy: string | null;
+  breakGlassReason: string | null;
+  breakGlassRevokedAt: Date | null;
+  breakGlassRevokedBy: string | null;
+  breakGlassReviewedAt: Date | null;
+  breakGlassReviewedBy: string | null;
 }
 
 export interface UserSession {
@@ -23,6 +42,8 @@ export interface UserSession {
   walletAddress: string | null;
   email: string | null;
   role: UserRole;
+  issuedRole?: UserRole;
+  active?: boolean;
   issuedAt: number;
   expiresAt: number;
   revokedAt: number | null;
@@ -49,10 +70,17 @@ export interface AuthConfig {
   corsAllowNoOrigin: boolean;
   rateLimitEnabled: boolean;
   rateLimitRedisUrl?: string;
+  rateLimitFailOpen: boolean;
   trustedSessionExchangeEnabled: boolean;
   trustedSessionExchangeApiKeysJson: string;
   trustedSessionExchangeMaxSkewSeconds: number;
   trustedSessionExchangeNonceTtlSeconds: number;
+  adminControlEnabled: boolean;
+  adminControlApiKeysJson: string;
+  adminControlAllowedApiKeyIds: string[];
+  adminControlMaxSkewSeconds: number;
+  adminControlNonceTtlSeconds: number;
+  adminBreakGlassMaxTtlSeconds: number;
 }
 
 export interface TrustedSessionIdentity {
@@ -61,6 +89,11 @@ export interface TrustedSessionIdentity {
   orgId?: string | null;
   email?: string | null;
   walletAddress?: string | null;
+}
+
+export interface AdminActor {
+  type: AdminActorType;
+  id: string;
 }
 
 export interface ApiSuccessResponse<T = unknown> {

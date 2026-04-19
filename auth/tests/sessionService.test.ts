@@ -4,7 +4,7 @@
 import { createSessionService } from '../src/core/sessionService';
 import { ProfileStore } from '../src/core/profileStore';
 import { SessionStore } from '../src/core/sessionStore';
-import { UserProfile, UserSession, SessionIssueResult } from '../src/types';
+import { UserProfile, UserRole, UserSession, SessionIssueResult } from '../src/types';
 
 //  Helpers
 
@@ -15,8 +15,18 @@ function makeProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     walletAddress: '0xdeadbeef',
     email: 'admin@example.com',
     role: 'buyer',
+    baseRole: 'buyer',
     orgId: null,
     active: true,
+    breakGlassRole: null,
+    breakGlassExpiresAt: null,
+    breakGlassGrantedAt: null,
+    breakGlassGrantedBy: null,
+    breakGlassReason: null,
+    breakGlassRevokedAt: null,
+    breakGlassRevokedBy: null,
+    breakGlassReviewedAt: null,
+    breakGlassReviewedBy: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -35,6 +45,8 @@ function makeActiveSession(overrides: Partial<UserSession> = {}): UserSession {
     walletAddress: '0xdeadbeef',
     email: 'admin@example.com',
     role: 'buyer',
+    issuedRole: 'buyer',
+    active: true,
     issuedAt: nowSeconds(),
     expiresAt: nowSeconds() + 3600,
     revokedAt: null,
@@ -56,6 +68,8 @@ function makeStores(profile: UserProfile) {
         walletAddress: p.walletAddress,
         email: p.email,
         role: p.role,
+        issuedRole: p.role,
+        active: p.active,
         issuedAt: now,
         expiresAt: now + ttl,
         revokedAt: null,
@@ -78,6 +92,7 @@ function makeStores(profile: UserProfile) {
       ...profile,
       accountId: identity.accountId,
       role: identity.role,
+      baseRole: identity.role,
       walletAddress: identity.walletAddress ?? null,
       email: identity.email ?? null,
       orgId: identity.orgId ?? null,
@@ -86,6 +101,12 @@ function makeStores(profile: UserProfile) {
     findByAccountId: jest.fn(async (_accountId: string): Promise<UserProfile | null> => profile),
     findById: jest.fn(async (_id: string): Promise<UserProfile | null> => profile),
     deactivate: jest.fn(async (_id: string): Promise<void> => undefined),
+    provision: jest.fn(async (): Promise<UserProfile> => profile),
+    grantBreakGlass: jest.fn(async (): Promise<UserProfile> => profile),
+    revokeBreakGlass: jest.fn(async (): Promise<UserProfile | null> => profile),
+    expireBreakGlass: jest.fn(async (): Promise<UserProfile | null> => profile),
+    reviewBreakGlass: jest.fn(async (): Promise<UserProfile> => profile),
+    deactivateWithAudit: jest.fn(async (): Promise<UserProfile> => profile),
   } satisfies ProfileStore;
 
   return { sessionStore, profileStore, sessionDb };
@@ -123,6 +144,21 @@ describe('sessionService.login', () => {
     await expect(svc.login('0xdeadbeef', 'buyer')).rejects.toThrow('deactivated');
     expect(sessionStore.issue).not.toHaveBeenCalled();
   });
+
+  test.each(['admin', 'oracle'] as UserRole[])(
+    'rejects self-serve login for privileged %s role',
+    async (role) => {
+      const profile = makeProfile();
+      const { sessionStore, profileStore } = makeStores(profile);
+      const svc = createSessionService(sessionStore, profileStore);
+
+      await expect(svc.login('0xdeadbeef', role)).rejects.toThrow(
+        'Privileged roles must be provisioned server-side',
+      );
+      expect(profileStore.upsert).not.toHaveBeenCalled();
+      expect(sessionStore.issue).not.toHaveBeenCalled();
+    },
+  );
 
   test('respects custom ttlSeconds', async () => {
     const profile = makeProfile();

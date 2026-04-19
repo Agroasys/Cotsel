@@ -32,6 +32,14 @@ export interface HttpRateLimiterOptions {
   resolveCallerContext?: (req: Request) => CallerContext;
   logger?: RateLimiterLogger;
   nowSeconds?: () => number;
+  failOpenOnStoreError?: boolean;
+  onStoreError?: (event: {
+    keyPrefix: string;
+    method: string;
+    path: string;
+    failOpen: boolean;
+    error: unknown;
+  }) => void;
   store?: {
     incrementAndGet(
       key: string,
