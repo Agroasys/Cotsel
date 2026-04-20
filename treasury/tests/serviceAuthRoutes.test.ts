@@ -15,6 +15,17 @@ type ServiceAuthRequest = Request & {
   };
 };
 
+function createMutationAuthMiddleware(allowedApiKeyId: string) {
+  return (req: ServiceAuthRequest, res: Response, next: () => void) => {
+    if (req.serviceAuth?.apiKeyId === allowedApiKeyId) {
+      next();
+      return;
+    }
+
+    res.status(403).json({ success: false, error: 'Internal mutation caller required' });
+  };
+}
+
 function createSignedRequestParts(options?: {
   method?: string;
   path?: string;
@@ -64,10 +75,17 @@ describe('treasury service-authenticated routes', () => {
   let consumeNonce: jest.MockedFunction<
     (apiKey: string, nonce: string, ttlSeconds: number) => Promise<boolean>
   >;
+  let ingestHandler: jest.Mock;
+  let upsertDepositHandler: jest.Mock;
+  let upsertBankConfirmationHandler: jest.Mock;
+  let upsertTreasuryPartnerHandoffHandler: jest.Mock;
+  let appendTreasuryPartnerHandoffEvidenceHandler: jest.Mock;
+  let recordPartnerHandoffHandler: jest.Mock;
+  const allowedMutationCallerApiKeyId = 'svc-a';
 
   const lookupApiKey = (apiKey: string) => {
-    if (apiKey === 'svc-a') {
-      return { id: 'svc-a', secret: 'secret-a', active: true };
+    if (apiKey === allowedMutationCallerApiKeyId) {
+      return { id: allowedMutationCallerApiKeyId, secret: 'secret-a', active: true };
     }
 
     return undefined;
@@ -83,19 +101,28 @@ describe('treasury service-authenticated routes', () => {
       consumeNonce,
       nowSeconds: () => 1700000000,
     });
-    const mutationAuthMiddleware = (req: ServiceAuthRequest, res: Response, next: () => void) => {
-      if (req.serviceAuth?.apiKeyId === 'svc-a') {
-        next();
-        return;
-      }
-
-      res.status(403).json({ success: false, error: 'Internal mutation caller required' });
-    };
+    const mutationAuthMiddleware = createMutationAuthMiddleware(allowedMutationCallerApiKeyId);
+    ingestHandler = jest.fn((_req: Request, res: Response) => {
+      res.status(200).json({ success: true, route: 'ingest' });
+    });
+    upsertTreasuryPartnerHandoffHandler = jest.fn((_req: Request, res: Response) => {
+      res.status(200).json({ success: true, route: 'entry-partner-handoff' });
+    });
+    appendTreasuryPartnerHandoffEvidenceHandler = jest.fn((_req: Request, res: Response) => {
+      res.status(200).json({ success: true, route: 'entry-partner-handoff-evidence' });
+    });
+    upsertBankConfirmationHandler = jest.fn((_req: Request, res: Response) => {
+      res.status(200).json({ success: true, route: 'bank-confirmation' });
+    });
+    recordPartnerHandoffHandler = jest.fn((_req: Request, res: Response) => {
+      res.status(200).json({ success: true, route: 'external-handoff' });
+    });
+    upsertDepositHandler = jest.fn((_req: Request, res: Response) => {
+      res.status(200).json({ success: true, route: 'deposits' });
+    });
 
     const controller = {
-      ingest: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'ingest' });
-      },
+      ingest: ingestHandler,
       listEntries: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
       },
@@ -111,18 +138,12 @@ describe('treasury service-authenticated routes', () => {
       appendState: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { updated: true } });
       },
-      upsertTreasuryPartnerHandoff: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'entry-partner-handoff' });
-      },
-      appendTreasuryPartnerHandoffEvidence: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'entry-partner-handoff-evidence' });
-      },
+      upsertTreasuryPartnerHandoff: upsertTreasuryPartnerHandoffHandler,
+      appendTreasuryPartnerHandoffEvidence: appendTreasuryPartnerHandoffEvidenceHandler,
       createEntryRealization: (_req: Request, res: Response) => {
         res.status(201).json({ success: true, route: 'realization' });
       },
-      upsertBankConfirmation: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'bank-confirmation' });
-      },
+      upsertBankConfirmation: upsertBankConfirmationHandler,
       listAccountingPeriods: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: [] });
       },
@@ -165,15 +186,11 @@ describe('treasury service-authenticated routes', () => {
       markSweepBatchExecuted: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, route: 'batch-match-execution' });
       },
-      recordPartnerHandoff: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'external-handoff' });
-      },
+      recordPartnerHandoff: recordPartnerHandoffHandler,
       closeSweepBatch: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, route: 'batch-close' });
       },
-      upsertDeposit: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'deposits' });
-      },
+      upsertDeposit: upsertDepositHandler,
       getReconciliationControlSummary: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: null });
       },
@@ -226,6 +243,7 @@ describe('treasury service-authenticated routes', () => {
       }),
     );
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-route-nonce', 600);
+    expect(ingestHandler).toHaveBeenCalledTimes(1);
   });
 
   test('replayed ingest request is rejected before controller runs', async () => {
@@ -252,6 +270,7 @@ describe('treasury service-authenticated routes', () => {
         error: 'Replay detected for nonce',
       }),
     );
+    expect(ingestHandler).toHaveBeenCalledTimes(1);
   });
 
   test('invalid signature is rejected at the route boundary', async () => {
@@ -352,6 +371,7 @@ describe('treasury service-authenticated routes', () => {
       }),
     );
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-deposit-route-nonce', 600);
+    expect(upsertDepositHandler).toHaveBeenCalledTimes(1);
   });
 
   test('valid signed bank confirmation request reaches the route once', async () => {
@@ -387,6 +407,7 @@ describe('treasury service-authenticated routes', () => {
       }),
     );
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-bank-confirmation-nonce', 600);
+    expect(upsertBankConfirmationHandler).toHaveBeenCalledTimes(1);
   });
 
   test('valid signed treasury partner handoff request reaches the partner-handoff route once', async () => {
@@ -419,6 +440,7 @@ describe('treasury service-authenticated routes', () => {
       }),
     );
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-entry-partner-handoff-nonce', 600);
+    expect(upsertTreasuryPartnerHandoffHandler).toHaveBeenCalledTimes(1);
   });
 
   test('valid signed treasury partner handoff evidence request reaches the partner-handoff evidence route once', async () => {
@@ -458,6 +480,7 @@ describe('treasury service-authenticated routes', () => {
       'treasury-entry-partner-handoff-evidence-nonce',
       600,
     );
+    expect(appendTreasuryPartnerHandoffEvidenceHandler).toHaveBeenCalledTimes(1);
   });
 
   test('valid signed external handoff request reaches the sweep-batch external-handoff route once', async () => {
@@ -491,6 +514,7 @@ describe('treasury service-authenticated routes', () => {
       }),
     );
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-external-handoff-nonce', 600);
+    expect(recordPartnerHandoffHandler).toHaveBeenCalledTimes(1);
   });
 
   test('legacy partner-handoff alias remains wired to the same internal controller', async () => {
@@ -534,5 +558,6 @@ describe('treasury service-authenticated routes', () => {
       600,
     );
     expect(response.headers.has('deprecation') || response.headers.has('sunset')).toBe(true);
+    expect(recordPartnerHandoffHandler).toHaveBeenCalledTimes(1);
   });
 });
