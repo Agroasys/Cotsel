@@ -1,11 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createServicePool } from '@agroasys/shared-db';
 import { Pool } from 'pg';
 import { projectTreasuryAccountingState } from '@agroasys/sdk';
 import {
   buildReconciliationReport,
   type ReconciliationReportInputRow,
 } from './core/reconciliationReport';
+
+const RECONCILIATION_SERVICE_NAME = 'reconciliation';
+const TREASURY_SERVICE_NAME = 'treasury';
 
 interface CliArgs {
   runKey?: string;
@@ -297,13 +301,18 @@ async function main(): Promise<void> {
   const reconciliationDbName = requiredEnv('DB_NAME');
   const treasuryDbName = optionalEnv('TREASURY_DB_NAME');
 
-  const reconciliationPool = new Pool({
+  const reconciliationPool = createServicePool({
+    serviceName: RECONCILIATION_SERVICE_NAME,
+    connectionRole: 'runtime',
+    runtimeDbUser: dbUser,
     host: dbHost,
     port: dbPort,
+    database: reconciliationDbName,
     user: dbUser,
     password: dbPassword,
-    database: reconciliationDbName,
     max: 2,
+    idleTimeoutMillis: 5000,
+    connectionTimeoutMillis: 5000,
   });
 
   let treasuryPool: Pool | null = null;
@@ -324,13 +333,23 @@ async function main(): Promise<void> {
 
     let treasuryRows: TreasuryLedgerStateRow[] = [];
     if (treasuryDbName) {
-      treasuryPool = new Pool({
-        host: optionalEnv('TREASURY_DB_HOST') || dbHost,
-        port: numberEnv('TREASURY_DB_PORT', dbPort),
-        user: optionalEnv('TREASURY_DB_USER') || dbUser,
-        password: optionalEnv('TREASURY_DB_PASSWORD') || dbPassword,
+      const treasuryDbHost = optionalEnv('TREASURY_DB_HOST') || dbHost;
+      const treasuryDbPort = numberEnv('TREASURY_DB_PORT', dbPort);
+      const treasuryDbUser = optionalEnv('TREASURY_DB_USER') || dbUser;
+      const treasuryDbPassword = optionalEnv('TREASURY_DB_PASSWORD') || dbPassword;
+
+      treasuryPool = createServicePool({
+        serviceName: TREASURY_SERVICE_NAME,
+        connectionRole: 'runtime',
+        runtimeDbUser: treasuryDbUser,
+        host: treasuryDbHost,
+        port: treasuryDbPort,
         database: treasuryDbName,
+        user: treasuryDbUser,
+        password: treasuryDbPassword,
         max: 2,
+        idleTimeoutMillis: 5000,
+        connectionTimeoutMillis: 5000,
       });
       treasuryRows = await fetchTreasuryLedgerStates(treasuryPool, scopeTradeIds);
     }
