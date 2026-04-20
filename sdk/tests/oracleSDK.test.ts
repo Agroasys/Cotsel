@@ -4,9 +4,33 @@
 import { OracleSDK } from '../src/modules/oracleSDK';
 import type { ethers } from 'ethers';
 import { AuthorizationError } from '../src/types/errors';
-import { TEST_CONFIG, assertRequiredEnv, getOracleSigner, hasRequiredEnv } from './setup';
+import {
+  TEST_CONFIG,
+  assertRequiredEnv,
+  getOptionalEnv,
+  getOracleSigner,
+  hasRequiredEnv,
+} from './setup';
 
 const describeIntegration = hasRequiredEnv ? describe : describe.skip;
+const ORACLE_MUTATION_TRADE_ID = (() => {
+  const rawTradeId = getOptionalEnv('TEST_TRADE_ID');
+  if (!rawTradeId) {
+    return undefined;
+  }
+
+  try {
+    const tradeId = BigInt(rawTradeId);
+    if (tradeId < 0n) {
+      throw new Error('must be zero or greater');
+    }
+    return tradeId;
+  } catch {
+    throw new Error(`Invalid TEST_TRADE_ID "${rawTradeId}". Expected a non-negative integer.`);
+  }
+})();
+const describeOracleMutationIntegration =
+  hasRequiredEnv && ORACLE_MUTATION_TRADE_ID !== undefined ? describe : describe.skip;
 const UNIT_CONFIG = {
   rpc: 'http://127.0.0.1:8545',
   chainId: 31337,
@@ -133,7 +157,22 @@ describe('OracleSDK unit', () => {
 
 describeIntegration('OracleSDK', () => {
   let oracleSDK: OracleSDK;
+
+  beforeAll(() => {
+    assertRequiredEnv();
+    oracleSDK = new OracleSDK(TEST_CONFIG);
+  });
+
+  test('should get oracle address', async () => {
+    const oracleAddress = await oracleSDK.getOracleAddress();
+    console.log(`oracle address: ${oracleAddress}`);
+  });
+});
+
+describeOracleMutationIntegration('OracleSDK mutation integration', () => {
+  let oracleSDK: OracleSDK;
   let oracleSigner: ethers.Signer;
+  const tradeId = ORACLE_MUTATION_TRADE_ID as bigint;
 
   beforeAll(() => {
     assertRequiredEnv();
@@ -141,22 +180,14 @@ describeIntegration('OracleSDK', () => {
     oracleSigner = getOracleSigner();
   });
 
-  test('should get oracle address', async () => {
-    const oracleAddress = await oracleSDK.getOracleAddress();
-    console.log(`oracle address: ${oracleAddress}`);
-  });
-
-  test.skip('should release stage 1 funds', async () => {
-    const tradeId = 2n; // replace
-
+  test('should release stage 1 funds', async () => {
     const txHash = await oracleSDK.releaseFundsStage1(tradeId, oracleSigner);
 
+    expect(txHash.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
     console.log(`stage 1 released: ${txHash.txHash}`);
   });
 
-  test.skip('should confirm arrival', async () => {
-    const tradeId = 2n; // replace
-
+  test('should confirm arrival', async () => {
     const txHash = await oracleSDK.confirmArrival(tradeId, oracleSigner);
 
     expect(txHash.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
@@ -164,9 +195,7 @@ describeIntegration('OracleSDK', () => {
     console.log(`arrival confirmed: ${txHash.txHash}`);
   });
 
-  test.skip('should finalize after dispute window', async () => {
-    const tradeId = 2n; // replace
-
+  test('should finalize after dispute window', async () => {
     const txHash = await oracleSDK.finalizeAfterDisputeWindow(tradeId, oracleSigner);
 
     expect(txHash.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);

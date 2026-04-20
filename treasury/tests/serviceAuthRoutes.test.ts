@@ -389,7 +389,7 @@ describe('treasury service-authenticated routes', () => {
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-bank-confirmation-nonce', 600);
   });
 
-  test('valid signed treasury partner handoff request reaches the entry route once', async () => {
+  test('valid signed treasury partner handoff request reaches the partner-handoff route once', async () => {
     const body = Buffer.from(
       JSON.stringify({
         partnerCode: 'bridge',
@@ -421,7 +421,7 @@ describe('treasury service-authenticated routes', () => {
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-entry-partner-handoff-nonce', 600);
   });
 
-  test('valid signed treasury partner handoff evidence request reaches the entry evidence route once', async () => {
+  test('valid signed treasury partner handoff evidence request reaches the partner-handoff evidence route once', async () => {
     const body = Buffer.from(
       JSON.stringify({
         partnerCode: 'bridge',
@@ -460,7 +460,7 @@ describe('treasury service-authenticated routes', () => {
     );
   });
 
-  test('valid signed external handoff request reaches the canonical internal route once', async () => {
+  test('valid signed external handoff request reaches the sweep-batch external-handoff route once', async () => {
     const body = Buffer.from(
       JSON.stringify({
         partnerName: 'licensed-counterparty',
@@ -494,6 +494,11 @@ describe('treasury service-authenticated routes', () => {
   });
 
   test('legacy partner-handoff alias remains wired to the same internal controller', async () => {
+    // Legacy alias coverage:
+    // `/partner-handoff` is retained for backwards compatibility and is expected
+    // to route to the canonical `external-handoff` controller during migration.
+    // When deprecation signalling is enabled by the route layer, this test should
+    // continue to assert it (for example via `Deprecation`/`Sunset` headers).
     const body = Buffer.from(
       JSON.stringify({
         partnerName: 'licensed-counterparty',
