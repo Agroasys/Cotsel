@@ -1,10 +1,10 @@
 # Cotsel: Commercial Trade Settlement Layer
 
-A non-custodial, evidence-driven settlement layer for cross-border trade workflows.
+A programmable, non-custodial settlement and controls layer for commercial transactions.
 
-Cotsel is a modular settlement infrastructure for milestone-gated escrow and conditional release. It is designed for B2B trade workflows that require stablecoin escrow settlement, Ricardian agreement anchoring, and audit-grade traceability without introducing a custodial operator.
+Cotsel is a programmable settlement and controls infrastructure for commercial transactions, designed to support milestone-based escrow, conditional fund release, treasury fee accrual, governed sweeping, and audit-grade evidence across the settlement lifecycle. It provides a common execution and control layer where settlement rules, agreement references, operational approvals, and reconciliation records can be coordinated with high certainty and traceability, while preserving a non-custodial posture and avoiding direct ownership of regulated fiat execution.
 
-Cotsel was initially developed to support the Agroasys platform, but it is open-source and integration-friendly. It is designed for reuse by marketplaces, trade platforms, and enterprise workflows that need deterministic settlement controls, evidence-linked execution, and reconciliation-ready operational visibility.
+Cotsel was initially developed to support the Agroasys platform, but it is open-source and integration-friendly, and is designed for reuse across marketplaces, trade platforms, and enterprise transaction workflows that require deterministic settlement controls, evidence-linked execution, and reconciliation-ready operational visibility.
 
 ## At a Glance
 
