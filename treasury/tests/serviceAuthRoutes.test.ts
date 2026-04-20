@@ -533,5 +533,6 @@ describe('treasury service-authenticated routes', () => {
       'treasury-legacy-partner-handoff-nonce',
       600,
     );
+    expect(response.headers.has('deprecation') || response.headers.has('sunset')).toBe(true);
   });
 });
