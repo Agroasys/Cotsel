@@ -5,6 +5,9 @@ COPY package*.json .npmrc ./
 COPY auth/package.json auth/package.json
 COPY sdk/package.json sdk/package.json
 COPY shared-auth/package.json shared-auth/package.json
+COPY shared-db/package.json shared-db/package.json
+COPY shared-edge/package.json shared-edge/package.json
+COPY shared-http/package.json shared-http/package.json
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
@@ -13,7 +16,11 @@ RUN apt-get update \
 RUN npm ci --ignore-scripts
 
 COPY auth auth
+COPY sdk sdk
 COPY shared-auth shared-auth
+COPY shared-db shared-db
+COPY shared-edge shared-edge
+COPY shared-http shared-http
 
 RUN npm run -w auth build
 
@@ -24,6 +31,9 @@ WORKDIR /app
 COPY package*.json .npmrc ./
 COPY auth/package.json auth/package.json
 COPY shared-auth/package.json shared-auth/package.json
+COPY shared-db/package.json shared-db/package.json
+COPY shared-edge/package.json shared-edge/package.json
+COPY shared-http/package.json shared-http/package.json
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
@@ -31,11 +41,17 @@ RUN apt-get update \
 
 RUN npm ci --omit=dev --ignore-scripts \
   --workspace @agroasys/shared-auth \
+  --workspace @agroasys/shared-db \
+  --workspace @agroasys/shared-edge \
+  --workspace @agroasys/shared-http \
   --workspace auth \
   --include-workspace-root=false \
   && npm cache clean --force
 
 COPY --from=builder /app/shared-auth /app/shared-auth
+COPY --from=builder /app/shared-db /app/shared-db
+COPY --from=builder /app/shared-edge /app/shared-edge
+COPY --from=builder /app/shared-http /app/shared-http
 COPY --from=builder /app/auth/dist /app/auth/dist
 COPY --from=builder /app/auth/src/database/schema.sql /app/auth/src/database/schema.sql
 
