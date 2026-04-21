@@ -203,6 +203,23 @@ if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e" || "$PROFILE" == 
     echo "RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL is required when RECONCILIATION_NOTIFICATIONS_ENABLED=true" >&2
     exit 1
   fi
+
+  rate_limit_service_prefixes=(AUTH RICARDIAN TREASURY ORACLE GATEWAY)
+  for service_prefix in "${rate_limit_service_prefixes[@]}"; do
+    enabled_key="${service_prefix}_RATE_LIMIT_ENABLED"
+    redis_key="${service_prefix}_RATE_LIMIT_REDIS_URL"
+    enabled_value="${!enabled_key:-}"
+
+    if [[ "$enabled_value" != "true" && "$enabled_value" != "false" ]]; then
+      echo "${enabled_key} must be true or false" >&2
+      exit 1
+    fi
+
+    if [[ "$enabled_value" == "true" && -z "${!redis_key:-}" ]]; then
+      echo "${redis_key} is required when ${enabled_key}=true" >&2
+      exit 1
+    fi
+  done
 fi
 
 optional_numeric_keys=(

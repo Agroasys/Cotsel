@@ -446,6 +446,8 @@ services:
       NONCE_STORE: '${TREASURY_NONCE_STORE:-inmemory}'
       REDIS_URL: '${TREASURY_NONCE_REDIS_URL:-}'
       NONCE_TTL_SECONDS: '${TREASURY_NONCE_TTL_SECONDS:-${TREASURY_AUTH_NONCE_TTL_SECONDS}}'
+      RATE_LIMIT_ENABLED: '${TREASURY_RATE_LIMIT_ENABLED}'
+      RATE_LIMIT_REDIS_URL: '${TREASURY_RATE_LIMIT_REDIS_URL}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
@@ -455,6 +457,8 @@ services:
       indexer-graphql:
         condition: service_healthy
         required: false
+      redis:
+        condition: service_healthy
     ports:
       - '${TREASURY_PORT:-3200}:${TREASURY_PORT:-3200}'
     healthcheck:
@@ -499,6 +503,8 @@ services:
       INDEXER_GRAPHQL_URL: '${ORACLE_INDEXER_GRAPHQL_URL}'
       RETRY_ATTEMPTS: '${ORACLE_RETRY_ATTEMPTS}'
       RETRY_DELAY: '${ORACLE_RETRY_DELAY}'
+      ORACLE_RATE_LIMIT_ENABLED: '${ORACLE_RATE_LIMIT_ENABLED}'
+      ORACLE_RATE_LIMIT_REDIS_URL: '${ORACLE_RATE_LIMIT_REDIS_URL}'
       NOTIFICATIONS_ENABLED: '${ORACLE_NOTIFICATIONS_ENABLED}'
       NOTIFICATIONS_WEBHOOK_URL: '${ORACLE_NOTIFICATIONS_WEBHOOK_URL}'
       NOTIFICATIONS_COOLDOWN_MS: '${ORACLE_NOTIFICATIONS_COOLDOWN_MS}'
@@ -513,6 +519,8 @@ services:
       indexer-graphql:
         condition: service_healthy
         required: false
+      redis:
+        condition: service_healthy
     ports:
       - '${ORACLE_PORT:-3001}:${ORACLE_PORT:-3001}'
     healthcheck:
@@ -543,7 +551,11 @@ services:
       DB_HOST: postgres
       DB_PORT: '5432'
       DB_NAME: '${RECONCILIATION_DB_NAME}'
+      TREASURY_DB_HOST: postgres
+      TREASURY_DB_PORT: '5432'
       TREASURY_DB_NAME: '${TREASURY_DB_NAME}'
+      TREASURY_DB_USER: '${TREASURY_DB_RUNTIME_USER}'
+      TREASURY_DB_PASSWORD: '${TREASURY_DB_RUNTIME_PASSWORD}'
       INDEXER_DB_NAME: '${INDEXER_DB_NAME}'
       DB_USER: '${RECONCILIATION_DB_RUNTIME_USER}'
       DB_PASSWORD: '${RECONCILIATION_DB_RUNTIME_PASSWORD}'

@@ -2,9 +2,15 @@ FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
 COPY package*.json .npmrc ./
+COPY shared-db/package.json shared-db/package.json
+COPY shared-edge/package.json shared-edge/package.json
+COPY shared-http/package.json shared-http/package.json
 COPY sdk sdk
 COPY notifications notifications
 COPY oracle oracle
+COPY shared-db shared-db
+COPY shared-edge shared-edge
+COPY shared-http shared-http
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
@@ -24,6 +30,9 @@ COPY package*.json .npmrc ./
 COPY oracle/package.json oracle/package.json
 COPY sdk/package.json sdk/package.json
 COPY notifications/package.json notifications/package.json
+COPY shared-db/package.json shared-db/package.json
+COPY shared-edge/package.json shared-edge/package.json
+COPY shared-http/package.json shared-http/package.json
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
@@ -34,12 +43,18 @@ RUN npm pkg delete scripts.prepare --workspace @agroasys/notifications || true
 RUN npm ci --omit=dev --ignore-scripts \
   --workspace @agroasys/notifications \
   --workspace @agroasys/sdk \
+  --workspace @agroasys/shared-db \
+  --workspace @agroasys/shared-edge \
+  --workspace @agroasys/shared-http \
   --workspace oracle \
   --include-workspace-root=false \
   && npm cache clean --force
 
 COPY --from=builder /app/notifications/dist /app/notifications/dist
 COPY --from=builder /app/sdk/dist /app/sdk/dist
+COPY --from=builder /app/shared-db /app/shared-db
+COPY --from=builder /app/shared-edge /app/shared-edge
+COPY --from=builder /app/shared-http /app/shared-http
 COPY --from=builder /app/oracle/dist /app/oracle/dist
 COPY --from=builder /app/oracle/src/database/schema.sql /app/oracle/src/database/schema.sql
 
