@@ -10,7 +10,8 @@ trap 'rm -rf "$tmp_dir"' EXIT
 cp "$ROOT_DIR/.env.example" "$tmp_dir/.env"
 cp "$ROOT_DIR/.env.staging-e2e-real.example" "$tmp_dir/.env.staging-e2e-real"
 
-sed -i '/^ORACLE_RATE_LIMIT_REDIS_URL=/d' "$tmp_dir/.env"
+sed -i.bak '/^ORACLE_RATE_LIMIT_REDIS_URL=/d' "$tmp_dir/.env"
+rm -f "$tmp_dir/.env.bak"
 
 if (
   cd "$tmp_dir" &&
