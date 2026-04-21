@@ -19,6 +19,7 @@ function buildPrincipal(): GatewayPrincipal {
   return {
     sessionReference: 'sha256:sess-admin',
     gatewayRoles: ['operator:read', 'operator:write'],
+    operatorActionCapabilities: ['compliance:write'],
     treasuryCapabilities: [
       'treasury:read',
       'treasury:prepare',
@@ -32,6 +33,8 @@ function buildPrincipal(): GatewayPrincipal {
       walletAddress: '0x00000000000000000000000000000000000000aa',
       role: 'admin',
       email: 'admin@agroasys.io',
+      capabilities: ['compliance:write'],
+      signerAuthorizations: [],
       issuedAt: Date.now() - 1_000,
       expiresAt: Date.now() + 60_000,
     },
