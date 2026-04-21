@@ -18,7 +18,7 @@ info:
     - Auth uses existing auth-service Bearer sessions.
     - Gateway role mapping is derived from current auth role `admin`, which maps to `operator:read` and `operator:write`.
     - All mutation endpoints additionally require `GATEWAY_ENABLE_MUTATIONS=true` and membership in `GATEWAY_WRITE_ALLOWLIST`.
-    - Governance mutations use a two-endpoint direct-sign model (ADR-0411): (1) `POST /governance/<action>/prepare` validates the session and pre-flight state, records audit intent, and returns the canonical backend-authored signing payload (`chainId`, `contractAddress`, `contractMethod`, `args`, `txRequest`, `signerWallet`, `preparedPayloadHash`); (2) `POST /governance/actions/:actionId/confirm` accepts the broadcast `txHash`, verifies it against the prepared payload when observable, and records either `broadcast` or `broadcast_pending_verification` status with monitoring state. The admin wallet signs and broadcasts between these two calls. Legacy `POST /governance/<action>` queue endpoints remain for executor-backed service roles only.
+    - Governance mutations use a two-endpoint direct-sign model (ADR-0411): (1) `POST /governance/<action>/prepare` validates the session, explicit signer wallet, and pre-flight state, records audit intent, and returns the canonical backend-authored signing payload (`chainId`, `contractAddress`, `contractMethod`, `args`, `txRequest`, `signerWallet`, `preparedPayloadHash`); (2) `POST /governance/actions/:actionId/confirm` accepts the broadcast `txHash` plus the same approved signer wallet, verifies the transaction against the prepared payload when observable, and records either `broadcast` or `broadcast_pending_verification` status with monitoring state. The approved operator signer wallet signs and broadcasts between these two calls. Legacy human queue-style `POST /governance/<action>` routes are retained only as retired compatibility surfaces and fail closed with `409 direct_sign_required`.
 servers:
   - url: http://127.0.0.1:3600/api/dashboard-gateway/v1
     description: Local contract-first gateway base URL.
@@ -154,8 +154,6 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
     get:
       tags: [Access Logs]
       summary: List operator access log entries
@@ -1053,12 +1051,13 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/accounting-periods/{periodId}/request-close:
     post:
       tags: [Treasury]
       summary: Request accounting period close
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_close`
+        operator signer binding in the active gateway environment.
       operationId: requestTreasuryAccountingPeriodClose
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1069,7 +1068,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TreasuryWorkflowAuditOnlyRequest'
+              $ref: '#/components/schemas/TreasurySignerAuditOnlyRequest'
       responses:
         '200':
           description: Accounting period moved to pending close.
@@ -1083,8 +1082,6 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/accounting-periods/{periodId}/rollforward:
     get:
       tags: [Treasury]
@@ -1152,6 +1149,9 @@ paths:
     post:
       tags: [Treasury]
       summary: Close accounting period
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_close`
+        operator signer binding in the active gateway environment.
       operationId: closeTreasuryAccountingPeriod
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1162,7 +1162,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TreasuryWorkflowAuditOnlyRequest'
+              $ref: '#/components/schemas/TreasurySignerAuditOnlyRequest'
       responses:
         '200':
           description: Accounting period closed.
@@ -1176,8 +1176,6 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/sweep-batches:
     get:
       tags: [Treasury]
@@ -1247,8 +1245,6 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/sweep-batches/{batchId}:
     get:
       tags: [Treasury]
@@ -1324,12 +1320,13 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/sweep-batches/{batchId}/request-approval:
     post:
       tags: [Treasury]
       summary: Request sweep batch approval
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_approve`
+        operator signer binding in the active gateway environment.
       operationId: requestTreasurySweepBatchApproval
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1340,7 +1337,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TreasuryWorkflowAuditOnlyRequest'
+              $ref: '#/components/schemas/TreasurySignerAuditOnlyRequest'
       responses:
         '200':
           description: Sweep batch moved to pending approval.
@@ -1354,12 +1351,13 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/sweep-batches/{batchId}/approve:
     post:
       tags: [Treasury]
       summary: Approve sweep batch
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_approve`
+        operator signer binding in the active gateway environment.
       operationId: approveTreasurySweepBatch
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1370,7 +1368,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TreasuryWorkflowAuditOnlyRequest'
+              $ref: '#/components/schemas/TreasurySignerAuditOnlyRequest'
       responses:
         '200':
           description: Sweep batch approved.
@@ -1384,8 +1382,6 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/sweep-batches/{batchId}/match-execution:
     post:
       tags: [Treasury]
@@ -1394,6 +1390,8 @@ paths:
         Matches an approved treasury sweep batch to indexed `TreasuryClaimed` evidence using the
         provided transaction hash. The batch only transitions to `EXECUTED` when the indexed claim
         evidence matches the expected payout receiver and allocated amount for the batch.
+        Requires an approved `treasury_execute` operator signer binding in the active gateway
+        environment.
       operationId: matchTreasurySweepBatchExecution
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1404,7 +1402,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TreasurySweepBatchExecutionRequest'
+              $ref: '#/components/schemas/TreasurySweepBatchExecutionSignerRequest'
       responses:
         '200':
           description: Sweep batch marked executed.
@@ -1418,12 +1416,13 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/sweep-batches/{batchId}/external-handoff:
     post:
       tags: [Treasury]
       summary: Record external execution handoff evidence for a sweep batch
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_execute`
+        operator signer binding in the active gateway environment.
       operationId: recordTreasuryExternalHandoff
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1434,7 +1433,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TreasuryPartnerHandoffRequest'
+              $ref: '#/components/schemas/TreasuryPartnerHandoffSignerRequest'
       responses:
         '200':
           description: External execution handoff recorded.
@@ -1448,8 +1447,6 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/sweep-batches/{batchId}/partner-handoff:
     post:
       deprecated: true
@@ -1457,7 +1454,9 @@ paths:
       summary: Legacy-compatible alias for recording external execution handoff evidence
       description: >
         Compatibility path retained for existing clients. The treasury model is external-execution
-        handoff evidence, not a provider-owned treasury workflow.
+        handoff evidence, not a provider-owned treasury workflow. This route remains signer-required
+        and uses the same `treasury_execute` authorization policy as the canonical external-handoff
+        endpoint.
       operationId: recordTreasuryPartnerHandoffLegacy
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1468,7 +1467,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TreasuryPartnerHandoffRequest'
+              $ref: '#/components/schemas/TreasuryPartnerHandoffSignerRequest'
       responses:
         '200':
           description: External execution handoff recorded.
@@ -1482,12 +1481,13 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/sweep-batches/{batchId}/close:
     post:
       tags: [Treasury]
       summary: Close sweep batch after realization evidence is complete
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_close`
+        operator signer binding in the active gateway environment.
       operationId: closeTreasurySweepBatch
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1498,7 +1498,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TreasuryWorkflowAuditOnlyRequest'
+              $ref: '#/components/schemas/TreasurySignerAuditOnlyRequest'
       responses:
         '200':
           description: Sweep batch closed.
@@ -1512,8 +1512,6 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /treasury/entries/accounting:
     get:
       tags: [Treasury]
@@ -1592,6 +1590,9 @@ paths:
     post:
       tags: [Treasury]
       summary: Record treasury revenue realization for a ledger entry
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_close`
+        operator signer binding in the active gateway environment.
       operationId: createTreasuryEntryRealization
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1602,7 +1603,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TreasuryEntryRealizationRequest'
+              $ref: '#/components/schemas/TreasuryEntryRealizationSignerRequest'
       responses:
         '201':
           description: Revenue realization recorded.
@@ -1616,14 +1617,15 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/pause:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Pause protocol mutations
       description: |
-        Maps to on-chain `pause()` through the AdminSDK.
+        Retired human governance queue route. Human operators must use
+        `POST /governance/pause/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: pauseProtocol
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1636,26 +1638,27 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Governance action accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/unpause/proposal:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Create the active unpause proposal
       description: |
-        Maps to on-chain `proposeUnpause()`. The contract supports a single active unpause proposal rather than a proposal-id keyed collection.
+        Retired human governance queue route. Human operators must use
+        `POST /governance/unpause/proposal/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: proposeUnpause
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1668,25 +1671,27 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Proposal accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/unpause/proposal/approve:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Approve the active unpause proposal
-      description: Maps to on-chain `approveUnpause()`.
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/unpause/proposal/approve/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: approveUnpause
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1699,25 +1704,27 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Approval accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/unpause/proposal/cancel:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Cancel the active unpause proposal
-      description: Maps to on-chain `cancelUnpauseProposal()`.
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/unpause/proposal/cancel/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: cancelUnpauseProposal
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1730,25 +1737,27 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Cancellation accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/claims/pause:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Pause claim withdrawals
-      description: Maps to on-chain `pauseClaims()`.
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/claims/pause/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: pauseClaims
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1761,25 +1770,27 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Claim pause accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/claims/unpause:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Unpause claim withdrawals
-      description: Maps to on-chain `unpauseClaims()`.
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/claims/unpause/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: unpauseClaims
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1792,28 +1803,27 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Claim unpause accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/treasury/sweep:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Trigger treasury sweep
       description: |
-        Maps to on-chain `claimTreasury()`.
-
-        The contract allows any caller to trigger `claimTreasury()` as long as claim withdrawals are not paused. The gateway is expected to restrict this endpoint to authorized operator roles.
+        Retired human governance queue route. Human operators must use
+        `POST /governance/treasury/sweep/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: claimTreasury
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1826,25 +1836,27 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Treasury sweep accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/treasury/payout-receiver/proposals:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Propose treasury payout receiver rotation
-      description: Maps to on-chain `proposeTreasuryPayoutAddressUpdate(address)`.
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/treasury/payout-receiver/proposals/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: proposeTreasuryPayoutReceiverUpdate
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1857,24 +1869,27 @@ paths:
             schema:
               $ref: '#/components/schemas/TreasuryPayoutReceiverProposalRequest'
       responses:
-        '202':
-          description: Proposal accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/treasury/payout-receiver/proposals/{proposalId}/approve:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Approve treasury payout receiver rotation
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/treasury/payout-receiver/proposals/{proposalId}/approve/prepare`
+        followed by `POST /governance/actions/{actionId}/confirm`.
       operationId: approveTreasuryPayoutReceiverUpdate
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1888,12 +1903,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Approval accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
@@ -1902,12 +1917,15 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/treasury/payout-receiver/proposals/{proposalId}/execute:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Execute treasury payout receiver rotation
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/treasury/payout-receiver/proposals/{proposalId}/execute/prepare`
+        followed by `POST /governance/actions/{actionId}/confirm`.
       operationId: executeTreasuryPayoutReceiverUpdate
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1921,12 +1939,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Execution accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
@@ -1935,12 +1953,15 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/treasury/payout-receiver/proposals/{proposalId}/cancel-expired:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Cancel expired treasury payout receiver proposal
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/treasury/payout-receiver/proposals/{proposalId}/cancel-expired/prepare`
+        followed by `POST /governance/actions/{actionId}/confirm`.
       operationId: cancelExpiredTreasuryPayoutReceiverUpdate
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1954,12 +1975,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Cancellation accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
@@ -1968,13 +1989,15 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/oracle/disable-emergency:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Emergency disable oracle and pause protocol
-      description: Maps to on-chain `disableOracleEmergency()`.
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/oracle/disable-emergency/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: disableOracleEmergency
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -1987,27 +2010,27 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Emergency disable accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/oracle/proposals:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Propose oracle address update
       description: |
-        Maps to on-chain `proposeOracleUpdate(address)`.
-        This is the supported recovery path after `disableOracleEmergency()`; there is no direct `enableOracle()` call in the current contract.
+        Retired human governance queue route. Human operators must use
+        `POST /governance/oracle/proposals/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: proposeOracleUpdate
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -2020,24 +2043,27 @@ paths:
             schema:
               $ref: '#/components/schemas/OracleUpdateProposalRequest'
       responses:
-        '202':
-          description: Proposal accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/oracle/proposals/{proposalId}/approve:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Approve oracle update proposal
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/oracle/proposals/{proposalId}/approve/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: approveOracleUpdate
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -2051,12 +2077,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Approval accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
@@ -2065,12 +2091,15 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/oracle/proposals/{proposalId}/execute:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Execute oracle update proposal
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/oracle/proposals/{proposalId}/execute/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: executeOracleUpdate
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -2084,12 +2113,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Execution accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
@@ -2098,12 +2127,15 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/oracle/proposals/{proposalId}/cancel-expired:
     post:
+      deprecated: true
       tags: [Governance]
       summary: Cancel expired oracle update proposal
+      description: >
+        Retired human governance queue route. Human operators must use
+        `POST /governance/oracle/proposals/{proposalId}/cancel-expired/prepare` followed by
+        `POST /governance/actions/{actionId}/confirm`.
       operationId: cancelExpiredOracleUpdateProposal
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -2117,12 +2149,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernanceMutationRequest'
       responses:
-        '202':
-          description: Cancellation accepted.
+        '409':
+          description: Human governance queue route is retired; direct-sign prepare/confirm is required.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GovernanceActionAcceptedResponse'
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
@@ -2131,8 +2163,6 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
   /governance/pause/prepare:
     post:
       tags: [Governance]
@@ -2147,7 +2177,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2177,7 +2207,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2207,7 +2237,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2237,7 +2267,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2267,7 +2297,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2297,7 +2327,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2327,7 +2357,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2357,7 +2387,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TreasuryPayoutReceiverProposalRequest'
+              $ref: '#/components/schemas/TreasuryPayoutReceiverProposalSignerRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2388,7 +2418,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2421,7 +2451,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2454,7 +2484,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2486,7 +2516,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2516,7 +2546,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OracleUpdateProposalRequest'
+              $ref: '#/components/schemas/OracleUpdateProposalSignerRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2547,7 +2577,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2580,7 +2610,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -2613,7 +2643,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GovernanceMutationRequest'
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
       responses:
         '200':
           description: Canonical direct-sign payload prepared.
@@ -6455,6 +6485,35 @@ components:
       properties:
         audit:
           $ref: '#/components/schemas/MutationAuditInput'
+    GovernanceDirectSignPrepareRequest:
+      type: object
+      required: [signerWallet, audit]
+      properties:
+        signerWallet:
+          type: string
+        audit:
+          $ref: '#/components/schemas/MutationAuditInput'
+    TreasuryPayoutReceiverProposalSignerRequest:
+      type: object
+      required: [signerWallet, newPayoutReceiver, audit]
+      properties:
+        signerWallet:
+          type: string
+        newPayoutReceiver:
+          type: string
+          description: Proposed new payout receiver address.
+        audit:
+          $ref: '#/components/schemas/MutationAuditInput'
+    OracleUpdateProposalSignerRequest:
+      type: object
+      required: [signerWallet, newOracleAddress, audit]
+      properties:
+        signerWallet:
+          type: string
+        newOracleAddress:
+          type: string
+        audit:
+          $ref: '#/components/schemas/MutationAuditInput'
     GovernancePreparedTransactionRequest:
       type: object
       required: [chainId, to, data, value]
@@ -6536,13 +6595,78 @@ components:
           format: date-time
     GovernanceBroadcastConfirmRequest:
       type: object
-      required: [txHash]
+      required: [txHash, signerWallet]
       properties:
         txHash:
           type: string
         signerWallet:
           type: string
+    TreasurySignerAuditOnlyRequest:
+      type: object
+      required: [signerWallet, audit]
+      properties:
+        signerWallet:
+          type: string
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasurySweepBatchExecutionSignerRequest:
+      type: object
+      required: [signerWallet, matchedSweepTxHash, audit]
+      properties:
+        signerWallet:
+          type: string
+        matchedSweepTxHash:
+          type: string
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasuryPartnerHandoffSignerRequest:
+      description: >
+        Compatibility-named request schema for recording external execution handoff evidence on
+        signer-required routes. Field names remain partner-prefixed for stable client
+        compatibility.
+      type: object
+      required: [signerWallet, partnerName, partnerReference, handoffStatus, audit]
+      properties:
+        signerWallet:
+          type: string
+        partnerName:
+          type: string
+          description: Compatibility field for the external execution counterparty identifier.
+        partnerReference:
+          type: string
+          description: Compatibility field for the external execution reference supplied by the counterparty.
+        handoffStatus:
+          $ref: '#/components/schemas/TreasuryPartnerHandoffStatus'
+        evidenceReference:
+          type: string
           nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasuryEntryRealizationSignerRequest:
+      type: object
+      required: [signerWallet, accountingPeriodId, audit]
+      properties:
+        signerWallet:
+          type: string
+        accountingPeriodId:
+          type: integer
+          minimum: 1
+        sweepBatchId:
+          type: integer
+          minimum: 1
+          nullable: true
+        partnerHandoffId:
+          type: integer
+          minimum: 1
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
     GovernanceBroadcastConfirmedResponse:
       type: object
       required: [success, data, timestamp]

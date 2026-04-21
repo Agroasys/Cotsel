@@ -35,7 +35,7 @@ Gateway responsibilities:
 - authenticate and authorize operator actions
 - persist audit metadata for every mutation
 - prepare canonical direct-sign governance payloads for human privileged actions
-- confirm and monitor direct-sign governance broadcasts after the admin wallet signs
+- confirm and monitor direct-sign governance broadcasts after the approved operator signer wallet signs
 - route executor-backed governance only for delegated/service/system actions that intentionally retain that flow
 - assemble read models from chain, indexer, treasury, ricardian, and future compliance storage
 - enforce idempotency, request tracing, and stable error shapes
@@ -127,6 +127,7 @@ This dashboard boundary inherits the generic gateway auth/orchestration contract
 - dashboard clients authenticate with an auth-service bearer session
 - only auth role `admin` maps to gateway roles `operator:read` and `operator:write`
 - mutations still require `GATEWAY_ENABLE_MUTATIONS=true` and caller membership in `GATEWAY_WRITE_ALLOWLIST`
+- signer-required privileged actions require a second backend decision: the submitted `signerWallet` must match an approved operator signer binding for the action class and active environment
 - dashboard bearer sessions must never be forwarded downstream as service-to-service auth
 
 ## Verification model for operators
@@ -148,9 +149,10 @@ Every gateway action must be verifiable through one or more of:
   - verify transaction hash
   - verify `Paused`, `ClaimsPaused`, or `ClaimsUnpaused` event
 - Governance mutation execution model:
-  - human privileged governance uses `prepare` -> wallet sign/broadcast -> `confirm`
+  - human privileged governance uses `prepare` -> approved signer wallet sign/broadcast -> `confirm`
   - verify resulting action transition, audit entries, verification state, monitoring state, and tx hash
   - direct-sign lifecycle must reflect backend-observed truth such as `prepared`, `broadcast_pending_verification`, `broadcast`, `pending_confirmation`, `confirmed`, `finalized`, `reverted`, or `stale`
+  - legacy human queue routes are retired and fail closed with `409 direct_sign_required`
   - executor-backed execution remains valid only for delegated/service roles that intentionally use the executor path
 - Oracle recovery:
   - verify `OracleDisabledEmergency`, `OracleUpdateProposed`, `OracleUpdateApproved`, `OracleUpdated`
@@ -207,6 +209,7 @@ Dashboard-specific implication:
   - `idempotency_keys`
   - `audit_log`
 - Human governance execution uses the direct-sign prepare/confirm model and the gateway does not hold the signer key.
+- Human governance signer authority is distinct from session authority; an admin session alone is not enough.
 - Executor-backed queued execution remains a service-role path only and is not the default human governance model.
 - Governance status and proposal reads use direct chain reads because the current generic SDK client does not expose the full read surface.
 - Compliance decisions are append-only and resume is permitted only when policy conditions are satisfied by the latest effective `ALLOW` decision.

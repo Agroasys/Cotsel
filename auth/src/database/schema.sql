@@ -106,6 +106,80 @@ CREATE TABLE IF NOT EXISTS auth_admin_audit_events (
     created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE auth_admin_audit_events
+    DROP CONSTRAINT IF EXISTS auth_admin_audit_events_action_check;
+ALTER TABLE auth_admin_audit_events
+    ADD CONSTRAINT auth_admin_audit_events_action_check CHECK (action IN (
+        'profile_provisioned',
+        'profile_role_updated',
+        'profile_deactivated',
+        'break_glass_granted',
+        'break_glass_revoked',
+        'break_glass_expired',
+        'break_glass_reviewed',
+        'operator_capabilities_updated',
+        'signer_binding_provisioned',
+        'signer_binding_revoked'
+    ));
+
+CREATE TABLE IF NOT EXISTS operator_capability_bindings (
+    account_id    TEXT NOT NULL REFERENCES user_profiles(account_id) ON DELETE CASCADE,
+    capability    TEXT NOT NULL CHECK (capability IN (
+        'governance:write',
+        'compliance:write',
+        'treasury:read',
+        'treasury:prepare',
+        'treasury:approve',
+        'treasury:execute_match',
+        'treasury:close'
+    )),
+    granted_by    TEXT NOT NULL,
+    grant_reason  TEXT NOT NULL,
+    ticket_ref    TEXT,
+    metadata      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (account_id, capability)
+);
+
+CREATE INDEX IF NOT EXISTS idx_operator_capability_bindings_account
+    ON operator_capability_bindings(account_id);
+
+CREATE TABLE IF NOT EXISTS operator_signer_bindings (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id         TEXT NOT NULL REFERENCES user_profiles(account_id) ON DELETE CASCADE,
+    wallet_address     TEXT NOT NULL,
+    action_class       TEXT NOT NULL CHECK (action_class IN (
+        'governance',
+        'treasury_approve',
+        'treasury_execute',
+        'treasury_close',
+        'compliance_sensitive',
+        'emergency_admin'
+    )),
+    environment        TEXT NOT NULL,
+    active             BOOLEAN NOT NULL DEFAULT TRUE,
+    provisioned_by     TEXT NOT NULL,
+    provision_reason   TEXT NOT NULL,
+    provision_ticket_ref TEXT,
+    notes              TEXT,
+    metadata           JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    revoked_at         TIMESTAMPTZ,
+    revoked_by         TEXT,
+    revoked_reason     TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_operator_signer_bindings_active_unique
+    ON operator_signer_bindings(account_id, wallet_address, action_class, environment)
+    WHERE active = TRUE AND revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_operator_signer_bindings_account
+    ON operator_signer_bindings(account_id);
+CREATE INDEX IF NOT EXISTS idx_operator_signer_bindings_wallet_env
+    ON operator_signer_bindings(wallet_address, environment)
+    WHERE active = TRUE AND revoked_at IS NULL;
+
 CREATE OR REPLACE FUNCTION current_app_service_name()
 RETURNS TEXT
 LANGUAGE sql
@@ -129,6 +203,8 @@ BEGIN
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE trusted_session_exchange_nonces TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE auth_admin_control_nonces TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT ON TABLE auth_admin_audit_events TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE operator_capability_bindings TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE operator_signer_bindings TO %I', runtime_user);
     END IF;
 END $$;
 
@@ -168,6 +244,22 @@ ALTER TABLE auth_admin_audit_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_admin_audit_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS auth_admin_audit_events_service_isolation ON auth_admin_audit_events;
 CREATE POLICY auth_admin_audit_events_service_isolation ON auth_admin_audit_events
+    FOR ALL
+    USING (current_app_service_name() = 'auth')
+    WITH CHECK (current_app_service_name() = 'auth');
+
+ALTER TABLE operator_capability_bindings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operator_capability_bindings FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS operator_capability_bindings_service_isolation ON operator_capability_bindings;
+CREATE POLICY operator_capability_bindings_service_isolation ON operator_capability_bindings
+    FOR ALL
+    USING (current_app_service_name() = 'auth')
+    WITH CHECK (current_app_service_name() = 'auth');
+
+ALTER TABLE operator_signer_bindings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operator_signer_bindings FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS operator_signer_bindings_service_isolation ON operator_signer_bindings;
+CREATE POLICY operator_signer_bindings_service_isolation ON operator_signer_bindings
     FOR ALL
     USING (current_app_service_name() = 'auth')
     WITH CHECK (current_app_service_name() = 'auth');

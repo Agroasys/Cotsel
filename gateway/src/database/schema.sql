@@ -240,6 +240,9 @@ ALTER TABLE evidence_bundles
 ALTER TABLE governance_actions
     DROP COLUMN IF EXISTS extrinsic_hash;
 
+ALTER TABLE governance_actions
+    ALTER COLUMN actor_wallet DROP NOT NULL;
+
 CREATE TABLE IF NOT EXISTS service_auth_nonces (
     api_key TEXT NOT NULL,
     nonce TEXT NOT NULL,

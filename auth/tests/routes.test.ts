@@ -1,6 +1,7 @@
 import { SessionService } from '../src/core/sessionService';
 import { LegacyWalletAuthController, SessionController } from '../src/api/controller';
 import { createRouter } from '../src/api/routes';
+import { AdminController } from '../src/api/adminController';
 
 type RouterLayer = {
   route?: {
@@ -38,6 +39,18 @@ function createLegacyWalletController(): LegacyWalletAuthController {
   } as unknown as LegacyWalletAuthController;
 }
 
+function createAdminController(): AdminController {
+  return {
+    provision: jest.fn(),
+    deactivate: jest.fn(),
+    provisionSigner: jest.fn(),
+    revokeSigner: jest.fn(),
+    grantBreakGlass: jest.fn(),
+    revokeBreakGlass: jest.fn(),
+    reviewBreakGlass: jest.fn(),
+  } as unknown as AdminController;
+}
+
 describe('auth router', () => {
   const sessionService = {
     resolve: jest.fn(),
@@ -57,5 +70,15 @@ describe('auth router', () => {
 
     expect(listRoutes(router)).toContain('GET /challenge');
     expect(listRoutes(router)).toContain('POST /login');
+  });
+
+  test('mounts admin signer routes when admin controls are enabled', () => {
+    const router = createRouter(createSessionController(), sessionService, {
+      adminController: createAdminController(),
+      adminControlMiddleware: jest.fn(),
+    });
+
+    expect(listRoutes(router)).toContain('POST /admin/signers/provision');
+    expect(listRoutes(router)).toContain('POST /admin/signers/revoke');
   });
 });

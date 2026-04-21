@@ -119,6 +119,8 @@ export function createRouter(
               orgId?: string | null;
               email?: string | null;
               walletAddress?: string | null;
+              capabilities?: import('../types').OperatorCapability[];
+              capabilityTicketRef?: string | null;
               reason?: string;
             }
           >,
@@ -133,6 +135,50 @@ export function createRouter(
       asyncHandler((req, res) =>
         options.adminController!.deactivate(
           req as Request<Record<string, never>, unknown, { accountId?: string; reason?: string }>,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/signers/provision',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.provisionSigner(
+          req as Request<
+            Record<string, never>,
+            unknown,
+            {
+              accountId?: string;
+              walletAddress?: string | null;
+              actionClass?: import('../types').OperatorSignerActionClass;
+              environment?: string;
+              ticketRef?: string | null;
+              notes?: string | null;
+              reason?: string;
+            }
+          >,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/signers/revoke',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.revokeSigner(
+          req as Request<
+            Record<string, never>,
+            unknown,
+            {
+              accountId?: string;
+              walletAddress?: string | null;
+              actionClass?: import('../types').OperatorSignerActionClass;
+              environment?: string;
+              reason?: string;
+            }
+          >,
           res,
         ),
       ),

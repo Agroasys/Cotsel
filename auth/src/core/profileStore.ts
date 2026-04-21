@@ -2,7 +2,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool } from 'pg';
-import { AdminActor, TrustedSessionIdentity, UserProfile, UserRole } from '../types';
+import {
+  AdminActor,
+  OperatorCapability,
+  TrustedSessionIdentity,
+  UserProfile,
+  UserRole,
+} from '../types';
 import {
   upsertProfile,
   upsertTrustedProfile,
@@ -30,6 +36,8 @@ export interface ProfileStore {
     orgId?: string | null;
     email?: string | null;
     walletAddress?: string | null;
+    capabilities?: OperatorCapability[];
+    capabilityTicketRef?: string | null;
     actor: AdminActor;
     reason: string;
   }): Promise<UserProfile>;
@@ -86,6 +94,8 @@ export function createPostgresProfileStore(pool: Pool): ProfileStore {
         orgId: input.orgId ?? null,
         email: input.email?.trim().toLowerCase() ?? null,
         walletAddress: input.walletAddress?.toLowerCase() ?? null,
+        capabilities: input.capabilities,
+        capabilityTicketRef: input.capabilityTicketRef ?? null,
         actor: input.actor,
         reason: input.reason,
       });

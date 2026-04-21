@@ -36,9 +36,12 @@ describe('TreasuryWorkflowService', () => {
         route: '/api/dashboard-gateway/v1/treasury/sweep-batches',
         method: 'POST',
         session: {
+          accountId: 'acct-admin',
           userId: 'uid-admin',
           walletAddress: '0x00000000000000000000000000000000000000aa',
           role: 'admin',
+          capabilities: [],
+          signerAuthorizations: [],
           issuedAt: 1,
           expiresAt: 2,
         },
@@ -60,14 +63,9 @@ describe('TreasuryWorkflowService', () => {
     expect((orchestrator.fetch as jest.Mock).mock.calls[0][1].body).toEqual(
       expect.objectContaining({
         metadata: expect.objectContaining({
-          gatewayTreasuryCapabilitiesRaw: null,
-          gatewayTreasuryCapabilitiesEffective: [
-            'treasury:read',
-            'treasury:prepare',
-            'treasury:approve',
-            'treasury:execute_match',
-            'treasury:close',
-          ],
+          gatewayTreasuryCapabilitiesRaw: [],
+          gatewayTreasuryCapabilitiesEffective: [],
+          signerPolicyResult: 'not_required',
         }),
       }),
     );

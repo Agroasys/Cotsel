@@ -17,10 +17,11 @@ import {
 import { GatewayError } from '../errors';
 import {
   createAuthenticationMiddleware,
+  requireAuthorizedSignerBinding,
   requireGatewayRole,
   requireMutationWriteAccess,
+  requireSignerWalletAddress,
   requireTreasuryCapability,
-  requireWalletBoundSession,
 } from '../middleware/auth';
 import { successResponse } from '../responses';
 import { decodeGovernanceActionCursor } from '../core/governanceStore';
@@ -445,12 +446,28 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
     requireTreasuryCapability('treasury:execute_match'),
   ];
   const requireTreasuryClose = [requireTreasuryWrite, requireTreasuryCapability('treasury:close')];
-  const assertWalletBoundTreasurySigner = (req: Request, actionDescription: string) => {
+  const assertAuthorizedTreasurySigner = (
+    req: Request,
+    actionClass: 'treasury_approve' | 'treasury_execute' | 'treasury_close',
+    actionDescription: string,
+  ) => {
     if (!req.gatewayPrincipal) {
       throw new GatewayError(401, 'AUTH_REQUIRED', 'Authentication is required');
     }
 
-    requireWalletBoundSession(req.gatewayPrincipal, actionDescription);
+    const signerWallet = requireSignerWalletAddress(
+      typeof (req.body as Record<string, unknown> | undefined)?.signerWallet === 'string'
+        ? ((req.body as Record<string, unknown>).signerWallet as string)
+        : null,
+    );
+
+    return requireAuthorizedSignerBinding(
+      req.gatewayPrincipal,
+      options.config,
+      actionClass,
+      signerWallet,
+      actionDescription,
+    );
   };
 
   router.post('/treasury/accounting-periods', ...requireTreasuryPrepare, async (req, res, next) => {
@@ -467,6 +484,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
           route: req.originalUrl || req.path,
           method: req.method,
           session: req.gatewayPrincipal!.session,
+          signerPolicy: { required: false, result: 'not_required' },
           audit: parseAudit(body.audit),
         },
       );
@@ -491,6 +509,16 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             route: req.originalUrl || req.path,
             method: req.method,
             session: req.gatewayPrincipal!.session,
+            signerPolicy: {
+              required: true,
+              result: 'authorized',
+              actionClass: 'treasury_close',
+              binding: assertAuthorizedTreasurySigner(
+                req,
+                'treasury_close',
+                'Requesting treasury accounting period close',
+              ),
+            },
             audit: parseAudit(body.audit),
           },
         );
@@ -516,6 +544,16 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             route: req.originalUrl || req.path,
             method: req.method,
             session: req.gatewayPrincipal!.session,
+            signerPolicy: {
+              required: true,
+              result: 'authorized',
+              actionClass: 'treasury_close',
+              binding: assertAuthorizedTreasurySigner(
+                req,
+                'treasury_close',
+                'Closing treasury accounting period',
+              ),
+            },
             audit: parseAudit(body.audit),
           },
         );
@@ -546,6 +584,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
           route: req.originalUrl || req.path,
           method: req.method,
           session: req.gatewayPrincipal!.session,
+          signerPolicy: { required: false, result: 'not_required' },
           audit: parseAudit(body.audit),
         },
       );
@@ -574,6 +613,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             route: req.originalUrl || req.path,
             method: req.method,
             session: req.gatewayPrincipal!.session,
+            signerPolicy: { required: false, result: 'not_required' },
             audit: parseAudit(body.audit),
           },
         );
@@ -599,6 +639,16 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             route: req.originalUrl || req.path,
             method: req.method,
             session: req.gatewayPrincipal!.session,
+            signerPolicy: {
+              required: true,
+              result: 'authorized',
+              actionClass: 'treasury_approve',
+              binding: assertAuthorizedTreasurySigner(
+                req,
+                'treasury_approve',
+                'Requesting treasury sweep batch approval',
+              ),
+            },
             audit: parseAudit(body.audit),
           },
         );
@@ -615,7 +665,6 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
     ...requireTreasuryApprove,
     async (req, res, next) => {
       try {
-        assertWalletBoundTreasurySigner(req, 'Approving treasury sweep batch');
         const body = parseObject(req.body, 'body') as TreasuryAuditPayload &
           Record<string, unknown>;
         const result = await options.treasuryWorkflowService.approveSweepBatch(
@@ -625,6 +674,16 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             route: req.originalUrl || req.path,
             method: req.method,
             session: req.gatewayPrincipal!.session,
+            signerPolicy: {
+              required: true,
+              result: 'authorized',
+              actionClass: 'treasury_approve',
+              binding: assertAuthorizedTreasurySigner(
+                req,
+                'treasury_approve',
+                'Approving treasury sweep batch',
+              ),
+            },
             audit: parseAudit(body.audit),
           },
         );
@@ -641,7 +700,6 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
     ...requireTreasuryExecuteMatch,
     async (req, res, next) => {
       try {
-        assertWalletBoundTreasurySigner(req, 'Matching treasury sweep execution evidence');
         const body = parseObject(req.body, 'body') as TreasuryAuditPayload &
           Record<string, unknown>;
         const result = await options.treasuryWorkflowService.markSweepBatchExecuted(
@@ -654,6 +712,16 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             route: req.originalUrl || req.path,
             method: req.method,
             session: req.gatewayPrincipal!.session,
+            signerPolicy: {
+              required: true,
+              result: 'authorized',
+              actionClass: 'treasury_execute',
+              binding: assertAuthorizedTreasurySigner(
+                req,
+                'treasury_execute',
+                'Matching treasury sweep execution evidence',
+              ),
+            },
             audit: parseAudit(body.audit),
           },
         );
@@ -682,6 +750,16 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
           route: req.originalUrl || req.path,
           method: req.method,
           session: req.gatewayPrincipal!.session,
+          signerPolicy: {
+            required: true,
+            result: 'authorized',
+            actionClass: 'treasury_execute',
+            binding: assertAuthorizedTreasurySigner(
+              req,
+              'treasury_execute',
+              'Recording treasury external handoff evidence',
+            ),
+          },
           audit: parseAudit(body.audit),
         },
       );
@@ -709,7 +787,6 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
     ...requireTreasuryClose,
     async (req, res, next) => {
       try {
-        assertWalletBoundTreasurySigner(req, 'Closing treasury sweep batch');
         const body = parseObject(req.body, 'body') as TreasuryAuditPayload &
           Record<string, unknown>;
         const result = await options.treasuryWorkflowService.closeSweepBatch(
@@ -719,6 +796,16 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             route: req.originalUrl || req.path,
             method: req.method,
             session: req.gatewayPrincipal!.session,
+            signerPolicy: {
+              required: true,
+              result: 'authorized',
+              actionClass: 'treasury_close',
+              binding: assertAuthorizedTreasurySigner(
+                req,
+                'treasury_close',
+                'Closing treasury sweep batch',
+              ),
+            },
             audit: parseAudit(body.audit),
           },
         );
@@ -756,6 +843,16 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             route: req.originalUrl || req.path,
             method: req.method,
             session: req.gatewayPrincipal!.session,
+            signerPolicy: {
+              required: true,
+              result: 'authorized',
+              actionClass: 'treasury_close',
+              binding: assertAuthorizedTreasurySigner(
+                req,
+                'treasury_close',
+                'Creating treasury revenue realization',
+              ),
+            },
             audit: parseAudit(body.audit),
           },
         );

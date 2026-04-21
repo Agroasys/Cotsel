@@ -165,6 +165,7 @@ function buildUnpauseProposal(overrides: Partial<UnpauseProposalState> = {}): Un
 
 function buildAuditBody(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
+    signerWallet: '0x00000000000000000000000000000000000000aa',
     ...extra,
     audit: {
       reason: 'Enterprise control action required for controlled governance execution.',
@@ -180,7 +181,6 @@ interface StartServerOptions {
   writeAllowlist?: string[];
   sessionFixtures?: Record<string, AuthSession | null>;
   configureReader?: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => void;
-  failQueueAction?: boolean;
   transactionVerifier?: GovernanceTransactionVerifier;
 }
 
@@ -211,6 +211,19 @@ async function startServer(options: StartServerOptions = {}) {
       walletAddress: '0x00000000000000000000000000000000000000aa',
       role: 'admin',
       email: 'admin@agroasys.io',
+      capabilities: ['governance:write'],
+      signerAuthorizations: [
+        {
+          bindingId: 'binding-governance-admin',
+          walletAddress: '0x00000000000000000000000000000000000000aa',
+          actionClass: 'governance',
+          environment: 'test',
+          approvedAt: '2026-03-07T00:00:00.000Z',
+          approvedBy: 'ops-admin-control',
+          ticketRef: 'SEC-300',
+          notes: null,
+        },
+      ],
       issuedAt: Date.now(),
       expiresAt: Date.now() + 60_000,
     },
@@ -220,6 +233,19 @@ async function startServer(options: StartServerOptions = {}) {
       walletAddress: '0x00000000000000000000000000000000000000ac',
       role: 'admin',
       email: 'admin2@agroasys.io',
+      capabilities: ['governance:write'],
+      signerAuthorizations: [
+        {
+          bindingId: 'binding-governance-admin-2',
+          walletAddress: '0x00000000000000000000000000000000000000ac',
+          actionClass: 'governance',
+          environment: 'test',
+          approvedAt: '2026-03-07T00:00:00.000Z',
+          approvedBy: 'ops-admin-control',
+          ticketRef: 'SEC-301',
+          notes: null,
+        },
+      ],
       issuedAt: Date.now(),
       expiresAt: Date.now() + 60_000,
     },
@@ -229,6 +255,8 @@ async function startServer(options: StartServerOptions = {}) {
       walletAddress: '0x00000000000000000000000000000000000000bb',
       role: 'buyer',
       email: 'buyer@agroasys.io',
+      capabilities: [],
+      signerAuthorizations: [],
       issuedAt: Date.now(),
       expiresAt: Date.now() + 60_000,
     },
@@ -276,12 +304,6 @@ async function startServer(options: StartServerOptions = {}) {
     failedOperationStore,
     auditLogStore,
   );
-
-  if (options.failQueueAction) {
-    jest
-      .spyOn(mutationService, 'queueAction')
-      .mockRejectedValue(new Error('governance queue unavailable'));
-  }
 
   const router = Router();
   router.use(
@@ -346,10 +368,6 @@ function buildTradeReadService(): TradeReadReader {
 
 describe('gateway governance mutation routes contract', () => {
   const spec = loadOpenApiSpec();
-  const validateAccepted = createSchemaValidator(
-    spec,
-    '#/components/schemas/GovernanceActionAcceptedResponse',
-  );
   const validatePrepared = createSchemaValidator(
     spec,
     '#/components/schemas/GovernanceActionPreparedResponse',
@@ -451,7 +469,7 @@ describe('gateway governance mutation routes contract', () => {
     }
   });
 
-  test('direct-sign prepare routes require a wallet-bound session', async () => {
+  test('direct-sign prepare routes accept a walletless session when an approved signer wallet is supplied explicitly', async () => {
     const { server, baseUrl } = await startServer({
       sessionFixtures: {
         'sess-admin-no-wallet': {
@@ -460,6 +478,19 @@ describe('gateway governance mutation routes contract', () => {
           walletAddress: '',
           role: 'admin',
           email: 'admin@agroasys.io',
+          capabilities: ['governance:write'],
+          signerAuthorizations: [
+            {
+              bindingId: 'binding-governance-admin',
+              walletAddress: '0x00000000000000000000000000000000000000aa',
+              actionClass: 'governance',
+              environment: 'test',
+              approvedAt: '2026-03-07T00:00:00.000Z',
+              approvedBy: 'ops-admin-control',
+              ticketRef: 'SEC-300',
+              notes: null,
+            },
+          ],
           issuedAt: Date.now(),
           expiresAt: Date.now() + 60_000,
         },
@@ -481,9 +512,51 @@ describe('gateway governance mutation routes contract', () => {
       });
       const payload = await response.json();
 
-      expect(response.status).toBe(409);
+      expect(response.status).toBe(200);
+      expect(validatePrepared(payload)).toBe(true);
+      expect(payload.data.signing.signerWallet).toBe(
+        getAddress('0x00000000000000000000000000000000000000aa'),
+      );
+    } finally {
+      server.close();
+    }
+  });
+
+  test('direct-sign prepare routes reject admin sessions whose wallet is not an approved governance signer', async () => {
+    const { server, baseUrl } = await startServer({
+      sessionFixtures: {
+        'sess-admin-no-binding': {
+          accountId: 'acct-admin',
+          userId: 'uid-admin',
+          walletAddress: '0x00000000000000000000000000000000000000aa',
+          role: 'admin',
+          email: 'admin@agroasys.io',
+          capabilities: ['governance:write'],
+          signerAuthorizations: [],
+          issuedAt: Date.now(),
+          expiresAt: Date.now() + 60_000,
+        },
+      },
+      configureReader(reader) {
+        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
+      },
+    });
+
+    try {
+      const response = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin-no-binding',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-pause-prepare-no-binding',
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(403);
       expect(validateError(payload)).toBe(true);
-      expect(payload.error.code).toBe('WALLET_SIGNER_REQUIRED');
+      expect(payload.error.code).toBe('SIGNER_NOT_AUTHORIZED');
     } finally {
       server.close();
     }
@@ -731,46 +804,29 @@ describe('gateway governance mutation routes contract', () => {
     }
   });
 
-  test('infrastructure failures dead-letter governance queue mutations and preserve logical idempotency', async () => {
-    const { server, baseUrl, failedOperationStore } = await startServer({
-      failQueueAction: true,
-    });
+  test('legacy human governance queue routes fail closed and direct operators to prepare/confirm', async () => {
+    const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer();
 
     try {
-      const firstResponse = await fetch(`${baseUrl}/governance/pause`, {
+      const response = await fetch(`${baseUrl}/governance/pause`, {
         method: 'POST',
         headers: {
           Authorization: 'Bearer sess-admin',
           'Content-Type': 'application/json',
-          'Idempotency-Key': 'idem-governance-dead-letter',
+          'Idempotency-Key': 'idem-governance-retired-route',
         },
         body: JSON.stringify(buildAuditBody()),
       });
-      const firstPayload = await firstResponse.json();
-      expect(firstResponse.status).toBe(503);
-      expect(validateError(firstPayload)).toBe(true);
-      expect(firstPayload.error.details.failedOperationId).toBeTruthy();
+      const payload = await response.json();
 
-      const secondResponse = await fetch(`${baseUrl}/governance/pause`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'Content-Type': 'application/json',
-          'Idempotency-Key': 'idem-governance-dead-letter',
-        },
-        body: JSON.stringify(buildAuditBody()),
-      });
-      expect(secondResponse.status).toBe(503);
+      expect(response.status).toBe(409);
+      expect(validateError(payload)).toBe(true);
+      expect(payload.error.code).toBe('CONFLICT');
+      expect(payload.error.details.reason).toBe('direct_sign_required');
 
-      const failedOperations = await failedOperationStore.list();
-      expect(failedOperations).toHaveLength(1);
-      expect(failedOperations[0]).toMatchObject({
-        operationType: 'governance.queue_action',
-        failureState: 'open',
-        replayEligible: true,
-        retryCount: 2,
-        idempotencyKey: 'idem-governance-dead-letter',
-      });
+      const stored = await governanceActionStore.list({ limit: 10 });
+      expect(stored.items).toHaveLength(0);
+      expect(auditLogStore.entries).toHaveLength(0);
     } finally {
       server.close();
     }
@@ -797,10 +853,24 @@ describe('gateway governance mutation routes contract', () => {
 
     const authSessionClient: AuthSessionClient = {
       resolveSession: jest.fn().mockResolvedValue({
+        accountId: 'acct-admin',
         userId: 'uid-admin',
         walletAddress: '0x00000000000000000000000000000000000000aa',
         role: 'admin',
         email: 'admin@agroasys.io',
+        capabilities: ['governance:write'],
+        signerAuthorizations: [
+          {
+            bindingId: 'binding-governance-admin',
+            walletAddress: '0x00000000000000000000000000000000000000aa',
+            actionClass: 'governance',
+            environment: 'test',
+            approvedAt: '2026-03-07T00:00:00.000Z',
+            approvedBy: 'ops-admin-control',
+            ticketRef: 'SEC-300',
+            notes: null,
+          },
+        ],
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
       }),
@@ -869,541 +939,128 @@ describe('gateway governance mutation routes contract', () => {
   });
 
   test.each([
-    {
-      name: 'pause protocol',
-      path: '/governance/pause',
-      body: buildAuditBody(),
-      expectedCategory: 'pause',
-      expectedMethod: 'pause',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
-      },
-    },
-    {
-      name: 'propose unpause',
-      path: '/governance/unpause/proposal',
-      body: buildAuditBody(),
-      expectedCategory: 'unpause',
-      expectedMethod: 'proposeUnpause',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(
-          buildStatusSnapshot({ paused: true, oracleActive: true }),
-        );
-      },
-    },
-    {
-      name: 'approve unpause',
-      path: '/governance/unpause/proposal/approve',
-      body: buildAuditBody(),
-      expectedCategory: 'unpause',
-      expectedMethod: 'approveUnpause',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getUnpauseProposalState.mockResolvedValue(
-          buildUnpauseProposal({ hasActiveProposal: true, approvalCount: 1 }),
-        );
-        reader.hasApprovedUnpause.mockResolvedValue(false);
-      },
-    },
-    {
-      name: 'cancel unpause',
-      path: '/governance/unpause/proposal/cancel',
-      body: buildAuditBody(),
-      expectedCategory: 'unpause',
-      expectedMethod: 'cancelUnpauseProposal',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getUnpauseProposalState.mockResolvedValue(
-          buildUnpauseProposal({ hasActiveProposal: true }),
-        );
-      },
-    },
-    {
-      name: 'pause claims',
-      path: '/governance/claims/pause',
-      body: buildAuditBody(),
-      expectedCategory: 'claims_pause',
-      expectedMethod: 'pauseClaims',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ claimsPaused: false }));
-      },
-    },
-    {
-      name: 'unpause claims',
-      path: '/governance/claims/unpause',
-      body: buildAuditBody(),
-      expectedCategory: 'claims_unpause',
-      expectedMethod: 'unpauseClaims',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ claimsPaused: true }));
-      },
-    },
-    {
-      name: 'queue treasury sweep',
-      path: '/governance/treasury/sweep',
-      body: buildAuditBody(),
-      expectedCategory: 'treasury_sweep',
-      expectedMethod: 'claimTreasury',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ claimsPaused: false }));
-        reader.getTreasuryClaimableBalance.mockResolvedValue(25n);
-      },
-    },
-    {
-      name: 'propose treasury payout receiver update',
-      path: '/governance/treasury/payout-receiver/proposals',
-      body: buildAuditBody({ newPayoutReceiver: '0x0000000000000000000000000000000000000099' }),
-      expectedCategory: 'treasury_payout_receiver_update',
-      expectedMethod: 'proposeTreasuryPayoutAddressUpdate',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(
-          buildStatusSnapshot({
-            treasuryPayoutAddress: '0x0000000000000000000000000000000000000033',
-          }),
-        );
-      },
-    },
-    {
-      name: 'approve treasury payout receiver proposal',
-      path: '/governance/treasury/payout-receiver/proposals/7/approve',
-      body: buildAuditBody(),
-      expectedCategory: 'treasury_payout_receiver_update',
-      expectedMethod: 'approveTreasuryPayoutAddressUpdate',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getTreasuryPayoutReceiverProposalState.mockResolvedValue(
-          buildProposalState({
-            proposalId: 7,
-            approvalCount: 1,
-            expired: false,
-            cancelled: false,
-            executed: false,
-          }),
-        );
-        reader.hasApprovedTreasuryPayoutReceiverProposal.mockResolvedValue(false);
-      },
-    },
-    {
-      name: 'execute treasury payout receiver proposal',
-      path: '/governance/treasury/payout-receiver/proposals/7/execute',
-      body: buildAuditBody(),
-      expectedCategory: 'treasury_payout_receiver_update',
-      expectedMethod: 'executeTreasuryPayoutAddressUpdate',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(
-          buildStatusSnapshot({ governanceApprovalsRequired: 2 }),
-        );
-        reader.getTreasuryPayoutReceiverProposalState.mockResolvedValue(
-          buildProposalState({
-            proposalId: 7,
-            approvalCount: 2,
-            etaSeconds: Math.floor(Date.now() / 1000) - 5,
-          }),
-        );
-      },
-    },
-    {
-      name: 'cancel expired treasury payout receiver proposal',
-      path: '/governance/treasury/payout-receiver/proposals/7/cancel-expired',
-      body: buildAuditBody(),
-      expectedCategory: 'treasury_payout_receiver_update',
-      expectedMethod: 'cancelExpiredTreasuryPayoutAddressUpdateProposal',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getTreasuryPayoutReceiverProposalState.mockResolvedValue(
-          buildProposalState({
-            proposalId: 7,
-            expired: true,
-          }),
-        );
-      },
-    },
-    {
-      name: 'disable oracle emergency',
-      path: '/governance/oracle/disable-emergency',
-      body: buildAuditBody(),
-      expectedCategory: 'oracle_disable_emergency',
-      expectedMethod: 'disableOracleEmergency',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ oracleActive: true }));
-      },
-    },
-    {
-      name: 'propose oracle update',
-      path: '/governance/oracle/proposals',
-      body: buildAuditBody({ newOracleAddress: '0x00000000000000000000000000000000000000f1' }),
-      expectedCategory: 'oracle_update',
-      expectedMethod: 'proposeOracleUpdate',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(
-          buildStatusSnapshot({
-            oracleAddress: '0x0000000000000000000000000000000000000011',
-          }),
-        );
-      },
-    },
-    {
-      name: 'approve oracle proposal',
-      path: '/governance/oracle/proposals/7/approve',
-      body: buildAuditBody(),
-      expectedCategory: 'oracle_update',
-      expectedMethod: 'approveOracleUpdate',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getOracleProposalState.mockResolvedValue(
-          buildProposalState({
-            proposalId: 7,
-            approvalCount: 1,
-            expired: false,
-            cancelled: false,
-            executed: false,
-          }),
-        );
-        reader.hasApprovedOracleProposal.mockResolvedValue(false);
-      },
-    },
-    {
-      name: 'execute oracle proposal',
-      path: '/governance/oracle/proposals/7/execute',
-      body: buildAuditBody(),
-      expectedCategory: 'oracle_update',
-      expectedMethod: 'executeOracleUpdate',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getGovernanceStatus.mockResolvedValue(
-          buildStatusSnapshot({ governanceApprovalsRequired: 2 }),
-        );
-        reader.getOracleProposalState.mockResolvedValue(
-          buildProposalState({
-            proposalId: 7,
-            approvalCount: 2,
-            etaSeconds: Math.floor(Date.now() / 1000) - 5,
-          }),
-        );
-      },
-    },
-    {
-      name: 'cancel expired oracle proposal',
-      path: '/governance/oracle/proposals/7/cancel-expired',
-      body: buildAuditBody(),
-      expectedCategory: 'oracle_update',
-      expectedMethod: 'cancelExpiredOracleUpdateProposal',
-      configureReader: (reader: jest.Mocked<GovernanceMutationPreflightReader>) => {
-        reader.getOracleProposalState.mockResolvedValue(
-          buildProposalState({
-            proposalId: 7,
-            expired: true,
-          }),
-        );
-      },
-    },
-  ])(
-    'POST $path accepts and persists $name',
-    async ({ path, body, expectedCategory, expectedMethod, configureReader }) => {
-      const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({
-        configureReader,
-      });
-
-      try {
-        const response = await fetch(`${baseUrl}${path}`, {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer sess-admin',
-            'content-type': 'application/json',
-            'Idempotency-Key': `idem-${expectedMethod}`,
-            'x-request-id': `req-${expectedMethod}`,
-          },
-          body: JSON.stringify(body),
-        });
-        const payload = await response.json();
-
-        expect(response.status).toBe(202);
-        expect(response.headers.get('x-request-id')).toBe(`req-${expectedMethod}`);
-        expect(validateAccepted(payload)).toBe(true);
-        expect(payload.data.category).toBe(expectedCategory);
-        expect(payload.data.status).toBe('requested');
-        expect(typeof payload.data.intentKey).toBe('string');
-        expect(payload.data.expiresAt).toMatch(/Z$/);
-
-        const storedAction = await readStoredAction(
-          governanceActionStore,
-          payload.data.actionId,
-          `${expectedMethod} queued mutation at ${path}`,
-        );
-        expect(storedAction.category).toBe(expectedCategory);
-        expect(storedAction.contractMethod).toBe(expectedMethod);
-        expect(storedAction.intentKey).toBe(payload.data.intentKey);
-        expect(storedAction.idempotencyKey).toBe(`idem-${expectedMethod}`);
-        expect(storedAction.actorId).toBe('account:acct-admin');
-        expect(storedAction.endpoint).toBe(`/api/dashboard-gateway/v1${path}`);
-        expect(storedAction.intentHash).toMatch(/^[a-f0-9]{64}$/);
-        expect(storedAction.expiresAt).toBe(payload.data.expiresAt);
-        expect(storedAction.requestId).toBe(`req-${expectedMethod}`);
-        expect(storedAction.audit.actorSessionId).toMatch(/^sha256:[a-f0-9]{64}$/);
-        expect(storedAction.audit.actorSessionId).not.toBe('sess-admin');
-        expect(auditLogStore.entries[0]).toMatchObject({
-          actionId: payload.data.actionId,
-          idempotencyKey: `idem-${expectedMethod}`,
-          actorId: 'account:acct-admin',
-        });
-      } finally {
-        server.close();
-      }
-    },
-  );
-
-  test('mutation routes replay accepted responses for duplicate idempotency keys', async () => {
-    const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({
-      configureReader(reader) {
-        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
-      },
-    });
+    '/governance/pause',
+    '/governance/unpause/proposal',
+    '/governance/unpause/proposal/approve',
+    '/governance/unpause/proposal/cancel',
+    '/governance/claims/pause',
+    '/governance/claims/unpause',
+    '/governance/treasury/sweep',
+    '/governance/treasury/payout-receiver/proposals',
+    '/governance/treasury/payout-receiver/proposals/7/approve',
+    '/governance/treasury/payout-receiver/proposals/7/execute',
+    '/governance/treasury/payout-receiver/proposals/7/cancel-expired',
+    '/governance/oracle/disable-emergency',
+    '/governance/oracle/proposals',
+    '/governance/oracle/proposals/7/approve',
+    '/governance/oracle/proposals/7/execute',
+    '/governance/oracle/proposals/7/cancel-expired',
+  ])('legacy human governance route %s is retired', async (path) => {
+    const { server, baseUrl, governanceActionStore } = await startServer();
 
     try {
-      const headers = {
-        Authorization: 'Bearer sess-admin',
-        'content-type': 'application/json',
-        'Idempotency-Key': 'idem-pause',
-      };
-      const body = JSON.stringify(buildAuditBody());
+      const response = await fetch(`${baseUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'content-type': 'application/json',
+          'Idempotency-Key': `idem-retired-${encodeURIComponent(path)}`,
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      const payload = await response.json();
 
-      const first = await fetch(`${baseUrl}/governance/pause`, { method: 'POST', headers, body });
-      const firstPayload = await first.json();
-
-      const second = await fetch(`${baseUrl}/governance/pause`, { method: 'POST', headers, body });
-      const secondPayload = await second.json();
-
-      expect(first.status).toBe(202);
-      expect(second.status).toBe(202);
-      expect(second.headers.get('x-idempotent-replay')).toBe('true');
-      expect(firstPayload).toEqual(secondPayload);
+      expect(response.status).toBe(409);
+      expect(validateError(payload)).toBe(true);
+      expect(payload.error.details.reason).toBe('direct_sign_required');
 
       const stored = await governanceActionStore.list({ limit: 10 });
-      expect(stored.items).toHaveLength(1);
-      expect(auditLogStore.entries).toHaveLength(1);
+      expect(stored.items).toHaveLength(0);
     } finally {
       server.close();
     }
   });
 
-  test('mutation routes scope idempotency by actor and reject client-supplied action ids', async () => {
+  test('direct-sign prepare intent separates different approved signer wallets for the same operator session', async () => {
     const { server, baseUrl, governanceActionStore } = await startServer({
-      writeAllowlist: ['uid-admin', 'uid-admin-2'],
-      configureReader(reader) {
-        reader.getOracleProposalState.mockResolvedValue(
-          buildProposalState({
-            proposalId: 7,
-            approvalCount: 1,
-            expired: false,
-            cancelled: false,
-            executed: false,
-          }),
-        );
-        reader.hasApprovedOracleProposal.mockResolvedValue(false);
-      },
-    });
-
-    try {
-      const body = JSON.stringify(buildAuditBody());
-
-      const first = await fetch(`${baseUrl}/governance/oracle/proposals/7/approve`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
-          'Idempotency-Key': 'idem-shared-approval',
-        },
-        body,
-      });
-      const firstPayload = await first.json();
-
-      const second = await fetch(`${baseUrl}/governance/oracle/proposals/7/approve`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin-2',
-          'content-type': 'application/json',
-          'Idempotency-Key': 'idem-shared-approval',
-        },
-        body,
-      });
-      const secondPayload = await second.json();
-
-      const invalid = await fetch(`${baseUrl}/governance/pause`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
-          'Idempotency-Key': 'idem-invalid-action-id',
-        },
-        body: JSON.stringify(buildAuditBody({ actionId: 'client-controlled-action' })),
-      });
-      const invalidPayload = await invalid.json();
-
-      expect(first.status).toBe(202);
-      expect(second.status).toBe(202);
-      expect(firstPayload.data.actionId).not.toBe(secondPayload.data.actionId);
-      expect(invalid.status).toBe(400);
-      expect(validateError(invalidPayload)).toBe(true);
-      expect(invalidPayload.error.message).toContain('actionId is server-generated');
-
-      const stored = await governanceActionStore.list({ limit: 10 });
-      expect(stored.items).toHaveLength(2);
-    } finally {
-      server.close();
-    }
-  });
-
-  test('semantic dedupe returns the same queued action for duplicate intent with different idempotency keys', async () => {
-    const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({
       configureReader(reader) {
         reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
       },
-    });
-
-    try {
-      const body = JSON.stringify(buildAuditBody());
-
-      const first = await fetch(`${baseUrl}/governance/pause`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
-          'Idempotency-Key': 'idem-pause-1',
-          'x-request-id': 'req-pause-1',
+      sessionFixtures: {
+        'sess-admin-multi-signer': {
+          accountId: 'acct-admin',
+          userId: 'uid-admin',
+          walletAddress: null,
+          role: 'admin',
+          email: 'admin@agroasys.io',
+          capabilities: ['governance:write'],
+          signerAuthorizations: [
+            {
+              bindingId: 'binding-governance-admin-1',
+              walletAddress: '0x00000000000000000000000000000000000000aa',
+              actionClass: 'governance',
+              environment: 'test',
+              approvedAt: '2026-03-07T00:00:00.000Z',
+              approvedBy: 'ops-admin-control',
+              ticketRef: 'SEC-300',
+              notes: null,
+            },
+            {
+              bindingId: 'binding-governance-admin-2',
+              walletAddress: '0x00000000000000000000000000000000000000ac',
+              actionClass: 'governance',
+              environment: 'test',
+              approvedAt: '2026-03-07T00:00:00.000Z',
+              approvedBy: 'ops-admin-control',
+              ticketRef: 'SEC-301',
+              notes: null,
+            },
+          ],
+          issuedAt: Date.now(),
+          expiresAt: Date.now() + 60_000,
         },
-        body,
-      });
-      const firstPayload = await first.json();
-
-      const second = await fetch(`${baseUrl}/governance/pause`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
-          'Idempotency-Key': 'idem-pause-2',
-          'x-request-id': 'req-pause-2',
-        },
-        body,
-      });
-      const secondPayload = await second.json();
-
-      expect(first.status).toBe(202);
-      expect(second.status).toBe(202);
-      expect(firstPayload.data.actionId).toBe(secondPayload.data.actionId);
-      expect(firstPayload.data.intentKey).toBe(secondPayload.data.intentKey);
-      const stored = await governanceActionStore.list({ limit: 10 });
-      expect(stored.items).toHaveLength(1);
-      expect(auditLogStore.entries.map((entry) => entry.eventType)).toEqual([
-        'governance.action.queued',
-        'governance.action.duplicate_reused',
-      ]);
-    } finally {
-      server.close();
-    }
-  });
-
-  test('approval actions keep separate queued intents for different admin wallets', async () => {
-    const { server, baseUrl, governanceActionStore, auditLogStore } = await startServer({
-      writeAllowlist: ['uid-admin', 'uid-admin-2'],
-      configureReader(reader) {
-        reader.getOracleProposalState.mockResolvedValue(
-          buildProposalState({
-            proposalId: 7,
-            approvalCount: 1,
-            expired: false,
-            cancelled: false,
-            executed: false,
-          }),
-        );
-        reader.hasApprovedOracleProposal.mockResolvedValue(false);
       },
     });
 
     try {
-      const body = JSON.stringify(buildAuditBody());
-
-      const first = await fetch(`${baseUrl}/governance/oracle/proposals/7/approve`, {
+      const firstResponse = await fetch(`${baseUrl}/governance/pause/prepare`, {
         method: 'POST',
         headers: {
-          Authorization: 'Bearer sess-admin',
+          Authorization: 'Bearer sess-admin-multi-signer',
           'content-type': 'application/json',
-          'Idempotency-Key': 'idem-approve-oracle-1',
+          'Idempotency-Key': 'idem-pause-signer-aa',
         },
-        body,
+        body: JSON.stringify(
+          buildAuditBody({ signerWallet: '0x00000000000000000000000000000000000000aa' }),
+        ),
       });
-      const firstPayload = await first.json();
+      const firstPayload = await firstResponse.json();
 
-      const second = await fetch(`${baseUrl}/governance/oracle/proposals/7/approve`, {
+      const secondResponse = await fetch(`${baseUrl}/governance/pause/prepare`, {
         method: 'POST',
         headers: {
-          Authorization: 'Bearer sess-admin-2',
+          Authorization: 'Bearer sess-admin-multi-signer',
           'content-type': 'application/json',
-          'Idempotency-Key': 'idem-approve-oracle-2',
+          'Idempotency-Key': 'idem-pause-signer-ac',
         },
-        body,
+        body: JSON.stringify(
+          buildAuditBody({ signerWallet: '0x00000000000000000000000000000000000000ac' }),
+        ),
       });
-      const secondPayload = await second.json();
+      const secondPayload = await secondResponse.json();
 
-      expect(first.status).toBe(202);
-      expect(second.status).toBe(202);
-      expect(firstPayload.data.actionId).not.toBe(secondPayload.data.actionId);
+      expect(firstResponse.status).toBe(200);
+      expect(secondResponse.status).toBe(200);
       expect(firstPayload.data.intentKey).not.toBe(secondPayload.data.intentKey);
 
       const stored = await governanceActionStore.list({ limit: 10 });
       expect(stored.items).toHaveLength(2);
-      expect(stored.items.map((action) => action.audit.actorWallet)).toEqual(
+      expect(stored.items.map((action) => action.signing?.signerWallet)).toEqual(
         expect.arrayContaining([
-          '0x00000000000000000000000000000000000000aa',
-          '0x00000000000000000000000000000000000000ac',
+          getAddress('0x00000000000000000000000000000000000000aa'),
+          getAddress('0x00000000000000000000000000000000000000ac'),
         ]),
       );
-      expect(auditLogStore.entries.map((entry) => entry.eventType)).toEqual([
-        'governance.action.queued',
-        'governance.action.queued',
-      ]);
-    } finally {
-      server.close();
-    }
-  });
-
-  test('different governance parameters produce different intent keys', async () => {
-    const { server, baseUrl, governanceActionStore } = await startServer({
-      configureReader(reader) {
-        reader.getGovernanceStatus.mockResolvedValue(
-          buildStatusSnapshot({
-            oracleAddress: '0x0000000000000000000000000000000000000011',
-          }),
-        );
-      },
-    });
-
-    try {
-      const first = await fetch(`${baseUrl}/governance/oracle/proposals`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
-          'Idempotency-Key': 'idem-oracle-1',
-        },
-        body: JSON.stringify(
-          buildAuditBody({ newOracleAddress: '0x00000000000000000000000000000000000000f1' }),
-        ),
-      });
-      const firstPayload = await first.json();
-
-      const second = await fetch(`${baseUrl}/governance/oracle/proposals`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer sess-admin',
-          'content-type': 'application/json',
-          'Idempotency-Key': 'idem-oracle-2',
-        },
-        body: JSON.stringify(
-          buildAuditBody({ newOracleAddress: '0x00000000000000000000000000000000000000f2' }),
-        ),
-      });
-      const secondPayload = await second.json();
-
-      expect(first.status).toBe(202);
-      expect(second.status).toBe(202);
-      expect(firstPayload.data.intentKey).not.toBe(secondPayload.data.intentKey);
-
-      const stored = await governanceActionStore.list({ limit: 10 });
-      expect(stored.items).toHaveLength(2);
     } finally {
       server.close();
     }
@@ -1499,7 +1156,7 @@ describe('gateway governance mutation routes contract', () => {
     });
 
     try {
-      const invalidResponse = await fetch(`${invalidServer.baseUrl}/governance/pause`, {
+      const invalidResponse = await fetch(`${invalidServer.baseUrl}/governance/pause/prepare`, {
         method: 'POST',
         headers: {
           Authorization: 'Bearer sess-admin',
@@ -1513,7 +1170,7 @@ describe('gateway governance mutation routes contract', () => {
       expect(validateError(invalidPayload)).toBe(true);
       expect(invalidPayload.error.code).toBe('VALIDATION_ERROR');
 
-      const conflictResponse = await fetch(`${conflictServer.baseUrl}/governance/pause`, {
+      const conflictResponse = await fetch(`${conflictServer.baseUrl}/governance/pause/prepare`, {
         method: 'POST',
         headers: {
           Authorization: 'Bearer sess-admin',
@@ -1528,7 +1185,7 @@ describe('gateway governance mutation routes contract', () => {
       expect(conflictPayload.error.code).toBe('CONFLICT');
 
       const missingResponse = await fetch(
-        `${conflictServer.baseUrl}/governance/oracle/proposals/99/approve`,
+        `${conflictServer.baseUrl}/governance/oracle/proposals/99/approve/prepare`,
         {
           method: 'POST',
           headers: {

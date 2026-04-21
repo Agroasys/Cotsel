@@ -26,6 +26,8 @@ function makeSession(overrides: Partial<UserSession> = {}): UserSession {
     walletAddress: '0xdeadbeef',
     email: 'buyer@example.com',
     role: 'buyer',
+    capabilities: [],
+    signerAuthorizations: [],
     issuedAt: nowSeconds(),
     expiresAt: nowSeconds() + 3600,
     revokedAt: null,

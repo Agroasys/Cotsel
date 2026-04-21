@@ -18,6 +18,7 @@ import { createPostgresProfileStore } from './core/profileStore';
 import { createPostgresSessionStore } from './core/sessionStore';
 import { createSessionService } from './core/sessionService';
 import { createAdminService } from './core/adminService';
+import { createPostgresOperatorAuthorityStore } from './core/operatorAuthorityStore';
 import { createInMemoryChallengeStore } from './core/challengeStore';
 import { LegacyWalletAuthController, SessionController } from './api/controller';
 import { AdminController } from './api/adminController';
@@ -79,6 +80,7 @@ async function bootstrap(): Promise<void> {
 
   //  Stores & service
   const profileStore = createPostgresProfileStore(pool);
+  const operatorAuthorityStore = createPostgresOperatorAuthorityStore(pool);
   const sessionStore = createPostgresSessionStore(pool);
   const sessionService = createSessionService(sessionStore, profileStore);
   const challengeStore = createInMemoryChallengeStore();
@@ -173,7 +175,13 @@ async function bootstrap(): Promise<void> {
     : undefined;
   const sessionController = new SessionController(sessionService, config.sessionTtlSeconds);
   const adminController = config.adminControlEnabled
-    ? new AdminController(createAdminService(profileStore, config.adminBreakGlassMaxTtlSeconds))
+    ? new AdminController(
+        createAdminService(
+          profileStore,
+          operatorAuthorityStore,
+          config.adminBreakGlassMaxTtlSeconds,
+        ),
+      )
     : undefined;
   const router = createRouter(sessionController, sessionService, {
     legacyWalletController,

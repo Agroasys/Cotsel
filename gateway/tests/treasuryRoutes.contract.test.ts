@@ -336,9 +336,55 @@ async function startServer(
       }
 
       return {
+        accountId: `acct-${role}`,
         userId: `uid-${role}`,
         walletAddress: '0x00000000000000000000000000000000000000aa',
         role,
+        capabilities:
+          role === 'admin'
+            ? [
+                'treasury:read',
+                'treasury:prepare',
+                'treasury:approve',
+                'treasury:execute_match',
+                'treasury:close',
+              ]
+            : [],
+        signerAuthorizations:
+          role === 'admin'
+            ? [
+                {
+                  bindingId: 'binding-treasury-approve',
+                  walletAddress: '0x00000000000000000000000000000000000000aa',
+                  actionClass: 'treasury_approve',
+                  environment: 'test',
+                  approvedAt: '2026-03-14T00:00:00.000Z',
+                  approvedBy: 'ops-admin-control',
+                  ticketRef: 'FIN-900',
+                  notes: null,
+                },
+                {
+                  bindingId: 'binding-treasury-execute',
+                  walletAddress: '0x00000000000000000000000000000000000000aa',
+                  actionClass: 'treasury_execute',
+                  environment: 'test',
+                  approvedAt: '2026-03-14T00:00:00.000Z',
+                  approvedBy: 'ops-admin-control',
+                  ticketRef: 'FIN-901',
+                  notes: null,
+                },
+                {
+                  bindingId: 'binding-treasury-close',
+                  walletAddress: '0x00000000000000000000000000000000000000aa',
+                  actionClass: 'treasury_close',
+                  environment: 'test',
+                  approvedAt: '2026-03-14T00:00:00.000Z',
+                  approvedBy: 'ops-admin-control',
+                  ticketRef: 'FIN-902',
+                  notes: null,
+                },
+              ]
+            : [],
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60000,
         ...(options?.session ?? {}),
@@ -644,11 +690,19 @@ describe('gateway treasury routes contract', () => {
     expect(blockedResponse.status).toBe(403);
   });
 
-  test('critical treasury execution matching requires a wallet-bound admin session', async () => {
+  test('signer-required treasury actions accept a walletless session when an approved signer wallet is supplied explicitly', async () => {
+    const markSweepBatchExecuted = jest.fn().mockResolvedValue({
+      id: 11,
+      status: 'EXECUTED',
+      matched_sweep_tx_hash: '0xclaim',
+    });
     const app = await startServer('admin', {
       config: {
         enableMutations: true,
         writeAllowlist: ['uid-admin'],
+      },
+      treasuryWorkflow: {
+        markSweepBatchExecuted,
       },
       session: {
         walletAddress: null,
@@ -663,6 +717,7 @@ describe('gateway treasury routes contract', () => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
+        signerWallet: '0x00000000000000000000000000000000000000aa',
         matchedSweepTxHash: '0xclaim',
         audit: {
           reason: 'Match chain-observed treasury claim evidence',
@@ -671,7 +726,107 @@ describe('gateway treasury routes contract', () => {
       }),
     });
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(200);
+    expect(markSweepBatchExecuted).toHaveBeenCalledTimes(1);
+  });
+
+  test('close-sensitive treasury actions require an approved treasury_close signer binding', async () => {
+    const app = await startServer('admin', {
+      config: {
+        enableMutations: true,
+        writeAllowlist: ['uid-admin'],
+      },
+      session: {
+        signerAuthorizations: [
+          {
+            bindingId: 'binding-treasury-approve-only',
+            walletAddress: '0x00000000000000000000000000000000000000aa',
+            actionClass: 'treasury_approve',
+            environment: 'test',
+            approvedAt: '2026-03-14T00:00:00.000Z',
+            approvedBy: 'ops-admin-control',
+            ticketRef: 'FIN-999',
+            notes: null,
+          },
+        ],
+      },
+    });
+
+    const response = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/treasury/accounting-periods/7/request-close',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        signerWallet: '0x00000000000000000000000000000000000000aa',
+        audit: {
+          reason: 'Request accounting period close after reconciliation clears',
+          ticketRef: 'FIN-204',
+        },
+      }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.json<{ error: { code: string } }>()).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'SIGNER_NOT_AUTHORIZED',
+        }),
+      }),
+    );
+  });
+
+  test('execution-sensitive treasury handoff routes reject wallets without treasury_execute signer approval', async () => {
+    const app = await startServer('admin', {
+      config: {
+        enableMutations: true,
+        writeAllowlist: ['uid-admin'],
+      },
+      session: {
+        signerAuthorizations: [
+          {
+            bindingId: 'binding-treasury-close-only',
+            walletAddress: '0x00000000000000000000000000000000000000aa',
+            actionClass: 'treasury_close',
+            environment: 'test',
+            approvedAt: '2026-03-14T00:00:00.000Z',
+            approvedBy: 'ops-admin-control',
+            ticketRef: 'FIN-998',
+            notes: null,
+          },
+        ],
+      },
+    });
+
+    const response = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/treasury/sweep-batches/11/external-handoff',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        signerWallet: '0x00000000000000000000000000000000000000aa',
+        partnerName: 'licensed-counterparty',
+        partnerReference: 'handoff-2',
+        handoffStatus: 'ACKNOWLEDGED',
+        audit: {
+          reason: 'Record treasury partner handoff after execution evidence review',
+          ticketRef: 'FIN-205',
+        },
+      }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.json<{ error: { code: string } }>()).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'SIGNER_NOT_AUTHORIZED',
+        }),
+      }),
+    );
   });
 
   test('treasury capability gates can narrow sensitive routes without changing session posture', async () => {
@@ -693,6 +848,7 @@ describe('gateway treasury routes contract', () => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
+        signerWallet: '0x00000000000000000000000000000000000000aa',
         audit: {
           reason: 'Approve close-ready sweep batch',
           ticketRef: 'FIN-203',
@@ -770,6 +926,7 @@ describe('gateway treasury routes contract', () => {
     });
 
     const requestBody = JSON.stringify({
+      signerWallet: '0x00000000000000000000000000000000000000aa',
       partnerName: 'licensed-counterparty',
       partnerReference: 'handoff-1',
       handoffStatus: 'ACKNOWLEDGED',

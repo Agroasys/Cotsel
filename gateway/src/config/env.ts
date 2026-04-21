@@ -30,6 +30,7 @@ export interface GatewayConfig {
   settlementRuntimeKey?: SettlementRuntimeKey;
   networkName?: string;
   explorerBaseUrl?: string | null;
+  operatorSignerEnvironment?: string;
   enableMutations: boolean;
   writeAllowlist: string[];
   governanceQueueTtlSeconds: number;
@@ -210,6 +211,8 @@ export function loadConfig(): GatewayConfig {
   const dbMigrationUser = process.env.DB_MIGRATION_USER?.trim() || undefined;
   const dbMigrationPassword = process.env.DB_MIGRATION_PASSWORD?.trim() || undefined;
   const nodeEnv = process.env.NODE_ENV || 'development';
+  const operatorSignerEnvironment =
+    process.env.GATEWAY_OPERATOR_SIGNER_ENVIRONMENT?.trim() || nodeEnv;
   const allowInsecureDownstreamAuth = envBool(
     'GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH',
     nodeEnv !== 'production',
@@ -414,6 +417,7 @@ export function loadConfig(): GatewayConfig {
     settlementRuntimeKey: runtime.runtimeKey,
     networkName: runtime.networkName,
     explorerBaseUrl: runtime.explorerBaseUrl,
+    operatorSignerEnvironment,
     enableMutations,
     writeAllowlist,
     governanceQueueTtlSeconds: envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400),

@@ -14,6 +14,7 @@ import {
 } from '@agroasys/shared-auth/serviceAuth';
 import { createPostgresNonceStore } from '@agroasys/shared-auth/nonceStore';
 import { createAdminService } from '../src/core/adminService';
+import { createPostgresOperatorAuthorityStore } from '../src/core/operatorAuthorityStore';
 import { createPostgresProfileStore } from '../src/core/profileStore';
 import { createPostgresSessionStore } from '../src/core/sessionStore';
 import { createSessionService } from '../src/core/sessionService';
@@ -157,6 +158,7 @@ function signedHeaders(input: {
 
 async function startAdminApp(pool: Pool) {
   const profiles = createPostgresProfileStore(pool);
+  const authority = createPostgresOperatorAuthorityStore(pool);
   const sessions = createPostgresSessionStore(pool);
   const sessionService = createSessionService(sessions, profiles);
   const nonceStore = createPostgresNonceStore({
@@ -172,7 +174,7 @@ async function startAdminApp(pool: Pool) {
     consumeNonce: nonceStore.consume,
   });
   const router = createRouter(new SessionController(sessionService), sessionService, {
-    adminController: new AdminController(createAdminService(profiles, 3600)),
+    adminController: new AdminController(createAdminService(profiles, authority, 3600)),
     adminControlMiddleware: adminMiddleware,
   });
   const app = express();
@@ -475,5 +477,175 @@ describe('admin controls persistence integration', () => {
       });
     },
     120000,
+  );
+
+  integrationTest(
+    'trusted admin session exchange does not auto-grant operator capabilities or signer authority',
+    async () => {
+      await withPostgres(async (pool) => {
+        const app = await startAdminApp(pool);
+        try {
+          const session = await app.sessionService.issueTrustedSession({
+            accountId: 'agroasys-user:trusted-admin-only',
+            role: 'admin',
+            email: 'trusted-admin-only@example.com',
+            walletAddress: '0x00000000000000000000000000000000000000bb',
+          });
+
+          const resolved = await app.sessionService.resolve(session.sessionId);
+          expect(resolved?.role).toBe('admin');
+          expect(resolved?.capabilities).toEqual([]);
+          expect(resolved?.signerAuthorizations).toEqual([]);
+        } finally {
+          await app.close();
+        }
+      });
+    },
+    120000,
+  );
+
+  integrationTest(
+    'signer binding provisioning and revocation flow into resolved session truth',
+    async () => {
+      await withPostgres(async (pool) => {
+        const app = await startAdminApp(pool);
+        try {
+          const provisionPath = '/api/auth/v1/admin/profiles/provision';
+          const provisionBody = JSON.stringify({
+            accountId: 'agroasys-user:signer-1',
+            role: 'admin',
+            email: 'signer@example.com',
+            reason: 'SEC-1100 durable admin provisioning for signer binding proof',
+          });
+          const provision = await fetch(`${app.baseUrl}${provisionPath}`, {
+            method: 'POST',
+            headers: signedHeaders({
+              method: 'POST',
+              path: provisionPath,
+              body: provisionBody,
+              nonce: 'nonce-signer-provision-profile',
+            }),
+            body: provisionBody,
+          });
+          expect(provision.status).toBe(201);
+
+          const signerProvisionPath = '/api/auth/v1/admin/signers/provision';
+          const signerProvisionBody = JSON.stringify({
+            accountId: 'agroasys-user:signer-1',
+            walletAddress: '0x00000000000000000000000000000000000000aa',
+            actionClass: 'governance',
+            environment: 'staging-e2e-real',
+            ticketRef: 'SEC-1101',
+            reason: 'SEC-1101 approve governance signer for staging proof',
+          });
+          const signerProvision = await fetch(`${app.baseUrl}${signerProvisionPath}`, {
+            method: 'POST',
+            headers: signedHeaders({
+              method: 'POST',
+              path: signerProvisionPath,
+              body: signerProvisionBody,
+              nonce: 'nonce-signer-provision-binding',
+            }),
+            body: signerProvisionBody,
+          });
+          expect(signerProvision.status).toBe(201);
+
+          const session = await app.sessionService.issueTrustedSession({
+            accountId: 'agroasys-user:signer-1',
+            role: 'admin',
+            email: 'signer@example.com',
+            walletAddress: '0x00000000000000000000000000000000000000aa',
+          });
+          const resolved = await app.sessionService.resolve(session.sessionId);
+          expect(resolved?.capabilities).toContain('governance:write');
+          expect(resolved?.signerAuthorizations).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                walletAddress: '0x00000000000000000000000000000000000000aa',
+                actionClass: 'governance',
+                environment: 'staging-e2e-real',
+              }),
+            ]),
+          );
+
+          const signerRevokePath = '/api/auth/v1/admin/signers/revoke';
+          const signerRevokeBody = JSON.stringify({
+            accountId: 'agroasys-user:signer-1',
+            walletAddress: '0x00000000000000000000000000000000000000aa',
+            actionClass: 'governance',
+            environment: 'staging-e2e-real',
+            reason: 'SEC-1102 revoke governance signer after proof',
+          });
+          const signerRevoke = await fetch(`${app.baseUrl}${signerRevokePath}`, {
+            method: 'POST',
+            headers: signedHeaders({
+              method: 'POST',
+              path: signerRevokePath,
+              body: signerRevokeBody,
+              nonce: 'nonce-signer-revoke-binding',
+            }),
+            body: signerRevokeBody,
+          });
+          expect(signerRevoke.status).toBe(200);
+
+          const resolvedAfterRevoke = await app.sessionService.resolve(session.sessionId);
+          expect(resolvedAfterRevoke?.signerAuthorizations).toEqual([]);
+        } finally {
+          await app.close();
+        }
+      });
+    },
+  );
+
+  integrationTest(
+    'signer bindings cannot be provisioned for non-durable-admin profiles',
+    async () => {
+      await withPostgres(async (pool) => {
+        const app = await startAdminApp(pool);
+        try {
+          const provisionPath = '/api/auth/v1/admin/profiles/provision';
+          const provisionBody = JSON.stringify({
+            accountId: 'agroasys-user:buyer-1',
+            role: 'buyer',
+            email: 'buyer1@example.com',
+            reason: 'SEC-1200 create non-admin profile before signer rejection proof',
+          });
+          const provision = await fetch(`${app.baseUrl}${provisionPath}`, {
+            method: 'POST',
+            headers: signedHeaders({
+              method: 'POST',
+              path: provisionPath,
+              body: provisionBody,
+              nonce: 'nonce-non-admin-profile-provision',
+            }),
+            body: provisionBody,
+          });
+          expect(provision.status).toBe(201);
+
+          const signerProvisionPath = '/api/auth/v1/admin/signers/provision';
+          const signerProvisionBody = JSON.stringify({
+            accountId: 'agroasys-user:buyer-1',
+            walletAddress: '0x00000000000000000000000000000000000000bb',
+            actionClass: 'governance',
+            environment: 'staging-e2e-real',
+            ticketRef: 'SEC-1201',
+            reason: 'SEC-1201 should reject signer binding for non-admin profile',
+          });
+          const signerProvision = await fetch(`${app.baseUrl}${signerProvisionPath}`, {
+            method: 'POST',
+            headers: signedHeaders({
+              method: 'POST',
+              path: signerProvisionPath,
+              body: signerProvisionBody,
+              nonce: 'nonce-non-admin-signer-provision',
+            }),
+            body: signerProvisionBody,
+          });
+          expect(signerProvision.status).toBe(400);
+        } finally {
+          await app.close();
+        }
+      });
+    },
   );
 });

@@ -113,11 +113,14 @@ export interface GovernanceActionAuditRecord {
   ticketRef: string;
   actorSessionId: string;
   actorAccountId?: string | null;
-  actorWallet: string;
+  actorWallet: string | null;
   actorRole: string;
   createdAt: string;
   requestedBy: string;
   approvedBy?: string[];
+  signerBindingId?: string | null;
+  signerActionClass?: string | null;
+  signerEnvironment?: string | null;
   finalSignerWallet?: string | null;
   finalSignerVerifiedAt?: string | null;
 }
@@ -211,7 +214,7 @@ interface GovernanceActionRow {
   evidenceLinks: EvidenceLink[];
   ticketRef: string;
   actorSessionId: string;
-  actorWallet: string;
+  actorWallet: string | null;
   actorRole: string;
   requestedBy: string;
   approvedBy: string[] | null;
@@ -258,11 +261,7 @@ export function buildGovernanceIntentKey(input: {
     normalizeIntentFragment(input.targetAddress),
     normalizeIntentFragment(input.tradeId),
     normalizeIntentFragment(input.chainId),
-    normalizeIntentFragment(
-      isApprovalGovernanceContractMethod(input.contractMethod)
-        ? (input.approverWallet ?? null)
-        : null,
-    ),
+    normalizeIntentFragment(input.approverWallet ?? null),
   ].join('|');
 }
 

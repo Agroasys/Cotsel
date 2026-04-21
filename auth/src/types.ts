@@ -4,6 +4,25 @@
 
 export type UserRole = 'buyer' | 'supplier' | 'admin' | 'oracle';
 export type AdminActorType = 'service_auth' | 'system';
+export const OPERATOR_CAPABILITIES = [
+  'governance:write',
+  'compliance:write',
+  'treasury:read',
+  'treasury:prepare',
+  'treasury:approve',
+  'treasury:execute_match',
+  'treasury:close',
+] as const;
+export type OperatorCapability = (typeof OPERATOR_CAPABILITIES)[number];
+export const OPERATOR_SIGNER_ACTION_CLASSES = [
+  'governance',
+  'treasury_approve',
+  'treasury_execute',
+  'treasury_close',
+  'compliance_sensitive',
+  'emergency_admin',
+] as const;
+export type OperatorSignerActionClass = (typeof OPERATOR_SIGNER_ACTION_CLASSES)[number];
 export type AdminAuditAction =
   | 'profile_provisioned'
   | 'profile_role_updated'
@@ -11,7 +30,10 @@ export type AdminAuditAction =
   | 'break_glass_granted'
   | 'break_glass_revoked'
   | 'break_glass_expired'
-  | 'break_glass_reviewed';
+  | 'break_glass_reviewed'
+  | 'operator_capabilities_updated'
+  | 'signer_binding_provisioned'
+  | 'signer_binding_revoked';
 
 export interface UserProfile {
   id: string;
@@ -42,11 +64,24 @@ export interface UserSession {
   walletAddress: string | null;
   email: string | null;
   role: UserRole;
+  capabilities: OperatorCapability[];
+  signerAuthorizations: OperatorSignerAuthorization[];
   issuedRole?: UserRole;
   active?: boolean;
   issuedAt: number;
   expiresAt: number;
   revokedAt: number | null;
+}
+
+export interface OperatorSignerAuthorization {
+  bindingId: string;
+  walletAddress: string;
+  actionClass: OperatorSignerActionClass;
+  environment: string;
+  approvedAt: string;
+  approvedBy: string;
+  ticketRef: string | null;
+  notes: string | null;
 }
 
 export interface SessionIssueResult {
