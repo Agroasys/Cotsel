@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createInMemoryAuditLogStore } from '../src/core/auditLogStore';
-import type { OperatorCapability } from '../src/core/authSessionClient';
+import type { OperatorCapability, SignerAuthorization } from '../src/core/authSessionClient';
 import { TreasuryWorkflowService } from '../src/core/treasuryWorkflowService';
 import type { DownstreamServiceOrchestrator } from '../src/core/serviceOrchestrator';
 import { GatewayError } from '../src/errors';
@@ -229,6 +229,70 @@ describe('TreasuryWorkflowService', () => {
     );
     expect(downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective).not.toContain(
       'governance:write',
+    );
+    const prepareCapabilities = downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective.filter(
+      (capability: OperatorCapability) => capability === 'treasury:prepare',
+    );
+    expect(prepareCapabilities).toHaveLength(1);
+  });
+
+  test('records authorized signer policy metadata when signer authorization is present', async () => {
+    const orchestrator: DownstreamServiceOrchestrator = {
+      fetch: jest.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true, data: { id: 13, status: 'APPROVED' } }), {
+          status: 201,
+          headers: {
+            'content-type': 'application/json',
+          },
+        }),
+      ),
+      probeHealth: jest.fn(),
+    };
+    const auditLogStore = createInMemoryAuditLogStore();
+    const service = new TreasuryWorkflowService(orchestrator, auditLogStore);
+    const signerBinding: SignerAuthorization = {
+      bindingId: 'binding-1',
+      walletAddress: '0x00000000000000000000000000000000000000aa',
+      actionClass: 'treasury_approve',
+      environment: 'production',
+      approvedAt: '2026-04-22T10:00:00.000Z',
+      approvedBy: 'uid-owner',
+      ticketRef: 'FIN-203',
+      notes: 'Treasury signer approved',
+    };
+
+    await service.createSweepBatch(
+      buildCreateSweepBatchInput(),
+      buildCreateSweepBatchContext({
+        session: {
+          accountId: 'acct-admin',
+          userId: 'uid-admin',
+          walletAddress: '0x00000000000000000000000000000000000000aa',
+          role: 'admin',
+          capabilities: ['treasury:prepare'],
+          signerAuthorizations: [signerBinding],
+          issuedAt: 1,
+          expiresAt: 2,
+        },
+        signerPolicy: {
+          required: true,
+          result: 'authorized',
+          actionClass: 'treasury_approve',
+          binding: signerBinding,
+        },
+      }),
+    );
+
+    const downstreamBody = (orchestrator.fetch as jest.Mock).mock.calls[0][1].body;
+    expect(downstreamBody.metadata).toEqual(
+      expect.objectContaining({
+        signerPolicyRequired: true,
+        signerPolicyResult: 'authorized',
+        signerPolicyActionClass: 'treasury_approve',
+        signerBindingId: 'binding-1',
+        signerBindingEnvironment: 'production',
+        signerBindingWallet: '0x00000000000000000000000000000000000000aa',
+      }),
     );
   });
 });
