@@ -6,8 +6,8 @@ Lock the implementation target for operator signer authority across `Cotsel` and
 
 This note is not a replacement for:
 
-- [`docs/adr/adr-0411-human-governance-direct-wallet-signing.md`](/Users/astonsteven/Cotsel/docs/adr/adr-0411-human-governance-direct-wallet-signing.md)
-- [`docs/adr/adr-0412-treasury-revenue-controls-boundary.md`](/Users/astonsteven/Cotsel/docs/adr/adr-0412-treasury-revenue-controls-boundary.md)
+- [`docs/adr/adr-0411-human-governance-direct-wallet-signing.md`](../adr/adr-0411-human-governance-direct-wallet-signing.md)
+- [`docs/adr/adr-0412-treasury-revenue-controls-boundary.md`](../adr/adr-0412-treasury-revenue-controls-boundary.md)
 
 It exists to freeze the historical baseline, the implemented Batch 1-5 runtime truth in `Cotsel`, and the remaining end-state for the operator signer hardening program.
 
