@@ -60,7 +60,8 @@ describe('TreasuryWorkflowService', () => {
     const auditLogStore = createInMemoryAuditLogStore();
     const service = new TreasuryWorkflowService(orchestrator, auditLogStore);
 
-    await service.createSweepBatch(buildCreateSweepBatchInput(), buildCreateSweepBatchContext());
+    const input = buildCreateSweepBatchInput();
+    await service.createSweepBatch(input, buildCreateSweepBatchContext());
 
     expect(auditLogStore.entries).toHaveLength(1);
     expect(auditLogStore.entries[0].metadata).toEqual(
@@ -75,7 +76,17 @@ describe('TreasuryWorkflowService', () => {
     );
     expect((orchestrator.fetch as jest.Mock).mock.calls[0][1].body).toEqual(
       expect.objectContaining({
+        ...input,
+        createdBy: 'uid-admin|0x00000000000000000000000000000000000000aa',
         metadata: expect.objectContaining({
+          gatewayActorKey: 'account:acct-admin',
+          gatewayUserId: 'uid-admin',
+          gatewayWalletAddress: '0x00000000000000000000000000000000000000aa',
+          gatewayRole: 'admin',
+          requestId: 'req-1',
+          correlationId: 'corr-1',
+          auditReason: 'Prepare treasury fee sweep batch',
+          auditTicketRef: 'FIN-201',
           gatewayTreasuryCapabilitiesRaw: [],
           gatewayTreasuryCapabilitiesEffective: [],
           signerPolicyResult: 'not_required',
@@ -191,6 +202,10 @@ describe('TreasuryWorkflowService', () => {
       'treasury:prepare',
       'treasury:read',
       'governance:write',
+      'payments:read' as OperatorCapability,
+      'treasury' as OperatorCapability,
+      ' treasury:prepare' as OperatorCapability,
+      'treasury :read' as OperatorCapability,
     ];
 
     await service.createSweepBatch(
@@ -226,6 +241,11 @@ describe('TreasuryWorkflowService', () => {
     expect(auditLogStore.entries).toHaveLength(1);
     expect(downstreamBody).toEqual(
       expect.objectContaining({
+        batchKey: 'batch-q2-002',
+        accountingPeriodId: 8,
+        assetSymbol: 'USDC',
+        expectedTotalRaw: '250000000',
+        createdBy: 'uid-admin|0x00000000000000000000000000000000000000bb',
         metadata: expect.objectContaining({
           gatewayTreasuryCapabilitiesRaw: [...capabilities],
           gatewayTreasuryCapabilitiesEffective: ['treasury:prepare', 'treasury:read'],
@@ -238,6 +258,10 @@ describe('TreasuryWorkflowService', () => {
       effectiveCapabilities.every((capability: string) => capability.startsWith('treasury:')),
     ).toBe(true);
     expect(effectiveCapabilities).not.toContain('governance:write');
+    expect(effectiveCapabilities).not.toContain('payments:read');
+    expect(effectiveCapabilities).not.toContain('treasury');
+    expect(effectiveCapabilities).not.toContain(' treasury:prepare');
+    expect(effectiveCapabilities).not.toContain('treasury :read');
     expect(auditLogStore.entries[0].metadata).toEqual(
       expect.objectContaining({
         gatewayTreasuryCapabilitiesRaw: [...capabilities],
