@@ -216,13 +216,17 @@ describe('TreasuryWorkflowService', () => {
       }),
     );
 
-    expect((orchestrator.fetch as jest.Mock).mock.calls[0][1].body).toEqual(
+    const downstreamBody = (orchestrator.fetch as jest.Mock).mock.calls[0][1].body;
+    expect(downstreamBody).toEqual(
       expect.objectContaining({
         metadata: expect.objectContaining({
           gatewayTreasuryCapabilitiesRaw: [...capabilities],
           gatewayTreasuryCapabilitiesEffective: ['treasury:prepare', 'treasury:read'],
         }),
       }),
+    );
+    expect(downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective).not.toContain(
+      'governance:write',
     );
   });
 });
