@@ -221,6 +221,13 @@ async function parseTreasuryResponse<T>(response: Response, fallbackMessage: str
     throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', fallbackMessage, { upstream: 'treasury' });
   }
 
+  if (!Object.prototype.hasOwnProperty.call(payload, 'data')) {
+    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', fallbackMessage, {
+      upstream: 'treasury',
+      reason: 'invalid_payload',
+    });
+  }
+
   return payload.data as T;
 }
 
