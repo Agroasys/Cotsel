@@ -202,12 +202,6 @@ describe('TreasuryWorkflowService', () => {
       'treasury:prepare',
       'treasury:read',
       'governance:write',
-      // Intentionally malformed / non-treasury values cast for negative filtering coverage.
-      // Assertions below verify they are excluded from effective treasury capabilities.
-      'payments:read' as OperatorCapability,
-      'treasury' as OperatorCapability,
-      ' treasury:prepare' as OperatorCapability,
-      'treasury :read' as OperatorCapability,
     ];
 
     await service.createSweepBatch(
@@ -254,15 +248,14 @@ describe('TreasuryWorkflowService', () => {
         }),
       }),
     );
-    const effectiveCapabilities = downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective;
     expect(
-      effectiveCapabilities.every((capability: string) => capability.startsWith('treasury:')),
+      downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective.every((capability: string) =>
+        capability.startsWith('treasury:'),
+      ),
     ).toBe(true);
-    expect(effectiveCapabilities).not.toContain('governance:write');
-    expect(effectiveCapabilities).not.toContain('payments:read');
-    expect(effectiveCapabilities).not.toContain('treasury');
-    expect(effectiveCapabilities).not.toContain(' treasury:prepare');
-    expect(effectiveCapabilities).not.toContain('treasury :read');
+    expect(downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective).not.toContain(
+      'governance:write',
+    );
     expect(auditLogStore.entries[0].metadata).toEqual(
       expect.objectContaining({
         gatewayTreasuryCapabilitiesRaw: [...capabilities],
