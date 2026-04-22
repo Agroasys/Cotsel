@@ -68,6 +68,9 @@ describe('TreasuryWorkflowService', () => {
         treasuryPath: '/api/treasury/v1/internal/sweep-batches',
         ticketRef: 'FIN-201',
         reason: 'Prepare treasury fee sweep batch',
+        gatewayTreasuryCapabilitiesRaw: [],
+        gatewayTreasuryCapabilitiesEffective: [],
+        signerPolicyResult: 'not_required',
       }),
     );
     expect((orchestrator.fetch as jest.Mock).mock.calls[0][1].body).toEqual(
@@ -220,6 +223,7 @@ describe('TreasuryWorkflowService', () => {
     );
 
     const downstreamBody = (orchestrator.fetch as jest.Mock).mock.calls[0][1].body;
+    expect(auditLogStore.entries).toHaveLength(1);
     expect(downstreamBody).toEqual(
       expect.objectContaining({
         metadata: expect.objectContaining({
@@ -234,6 +238,13 @@ describe('TreasuryWorkflowService', () => {
       effectiveCapabilities.every((capability: string) => capability.startsWith('treasury:')),
     ).toBe(true);
     expect(effectiveCapabilities).not.toContain('governance:write');
+    expect(auditLogStore.entries[0].metadata).toEqual(
+      expect.objectContaining({
+        gatewayTreasuryCapabilitiesRaw: [...capabilities],
+        gatewayTreasuryCapabilitiesEffective: ['treasury:prepare', 'treasury:read'],
+        signerPolicyResult: 'not_required',
+      }),
+    );
   });
 
   test('records authorized signer policy metadata when signer authorization is present', async () => {
@@ -285,6 +296,17 @@ describe('TreasuryWorkflowService', () => {
 
     const downstreamBody = (orchestrator.fetch as jest.Mock).mock.calls[0][1].body;
     expect(downstreamBody.metadata).toEqual(
+      expect.objectContaining({
+        signerPolicyRequired: true,
+        signerPolicyResult: 'authorized',
+        signerPolicyActionClass: 'treasury_approve',
+        signerBindingId: 'binding-1',
+        signerBindingEnvironment: 'production',
+        signerBindingWallet: '0x00000000000000000000000000000000000000aa',
+      }),
+    );
+    expect(auditLogStore.entries).toHaveLength(1);
+    expect(auditLogStore.entries[0].metadata).toEqual(
       expect.objectContaining({
         signerPolicyRequired: true,
         signerPolicyResult: 'authorized',

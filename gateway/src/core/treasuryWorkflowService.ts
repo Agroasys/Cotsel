@@ -654,6 +654,7 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
       response,
       `Failed treasury operation ${eventType}`,
     );
+    const complianceMetadata = this.buildTreasuryMetadata(context);
 
     await this.auditLogStore.append({
       eventType,
@@ -673,6 +674,15 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
           reason: context.audit.reason,
           evidenceReferences: context.audit.evidenceReferences ?? [],
           correlationId: context.requestContext?.correlationId ?? null,
+          gatewayTreasuryCapabilitiesRaw: complianceMetadata.gatewayTreasuryCapabilitiesRaw,
+          gatewayTreasuryCapabilitiesEffective:
+            complianceMetadata.gatewayTreasuryCapabilitiesEffective,
+          signerPolicyRequired: complianceMetadata.signerPolicyRequired,
+          signerPolicyResult: complianceMetadata.signerPolicyResult,
+          signerPolicyActionClass: complianceMetadata.signerPolicyActionClass,
+          signerBindingId: complianceMetadata.signerBindingId,
+          signerBindingEnvironment: complianceMetadata.signerBindingEnvironment,
+          signerBindingWallet: complianceMetadata.signerBindingWallet,
           signerPolicy: context.signerPolicy ?? { required: false, result: 'not_required' },
           result: data,
         },
