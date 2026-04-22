@@ -3,8 +3,14 @@
  */
 import { createHash } from 'crypto';
 import type { NextFunction, Request, Response } from 'express';
+import { getAddress, isAddress } from 'ethers';
 import { GatewayConfig } from '../config/env';
-import { AuthSession, AuthSessionClient } from '../core/authSessionClient';
+import {
+  AuthSession,
+  AuthSessionClient,
+  SignerActionClass,
+  SignerAuthorization,
+} from '../core/authSessionClient';
 import { GatewayError } from '../errors';
 
 export type GatewayRole = 'operator:read' | 'operator:write';
@@ -14,19 +20,25 @@ export type TreasuryCapability =
   | 'treasury:approve'
   | 'treasury:execute_match'
   | 'treasury:close';
+export type OperatorActionCapability = 'governance:write' | 'compliance:write';
 
-const TREASURY_CAPABILITIES: TreasuryCapability[] = [
+const TREASURY_CAPABILITIES: readonly TreasuryCapability[] = [
   'treasury:read',
   'treasury:prepare',
   'treasury:approve',
   'treasury:execute_match',
   'treasury:close',
 ];
+const OPERATOR_ACTION_CAPABILITIES: readonly OperatorActionCapability[] = [
+  'governance:write',
+  'compliance:write',
+];
 
 export interface GatewayPrincipal {
   sessionReference: string;
   session: AuthSession;
   gatewayRoles: GatewayRole[];
+  operatorActionCapabilities: OperatorActionCapability[];
   treasuryCapabilities: TreasuryCapability[];
   writeEnabled: boolean;
 }
@@ -73,6 +85,22 @@ export function requireWalletBoundSession(
   return walletAddress;
 }
 
+export function requireSignerWalletAddress(
+  raw: string | null | undefined,
+  field = 'signerWallet',
+): string {
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} is required`);
+  }
+
+  const candidate = raw.trim();
+  if (!isAddress(candidate)) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be a valid address`);
+  }
+
+  return getAddress(candidate);
+}
+
 function getBearerToken(req: Request): string | null {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
@@ -96,17 +124,55 @@ export function resolveTreasuryCapabilities(session: AuthSession): TreasuryCapab
     return [];
   }
 
-  if (Array.isArray(session.capabilities)) {
-    return [
-      ...new Set(
-        session.capabilities.filter((capability): capability is TreasuryCapability =>
-          TREASURY_CAPABILITIES.includes(capability as TreasuryCapability),
-        ),
-      ),
-    ];
+  if (!Array.isArray(session.capabilities)) {
+    return [];
   }
 
-  return [...TREASURY_CAPABILITIES];
+  return [
+    ...new Set(
+      session.capabilities.filter((capability): capability is TreasuryCapability =>
+        TREASURY_CAPABILITIES.includes(capability as TreasuryCapability),
+      ),
+    ),
+  ];
+}
+
+export function resolveOperatorActionCapabilities(
+  session: AuthSession,
+): OperatorActionCapability[] {
+  if (session.role !== 'admin' || !Array.isArray(session.capabilities)) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      session.capabilities.filter((capability): capability is OperatorActionCapability =>
+        OPERATOR_ACTION_CAPABILITIES.includes(capability as OperatorActionCapability),
+      ),
+    ),
+  ];
+}
+
+function normalizeSignerAuthorizations(session: AuthSession): SignerAuthorization[] {
+  if (!Array.isArray(session.signerAuthorizations)) {
+    return [];
+  }
+
+  return session.signerAuthorizations
+    .filter((binding): binding is SignerAuthorization =>
+      Boolean(
+        binding &&
+        typeof binding.bindingId === 'string' &&
+        typeof binding.walletAddress === 'string' &&
+        isAddress(binding.walletAddress) &&
+        typeof binding.actionClass === 'string' &&
+        typeof binding.environment === 'string',
+      ),
+    )
+    .map((binding) => ({
+      ...binding,
+      walletAddress: getAddress(binding.walletAddress.trim()),
+    }));
 }
 
 export function matchesAllowlist(session: AuthSession, allowlist: string[]): boolean {
@@ -144,8 +210,12 @@ export function createAuthenticationMiddleware(client: AuthSessionClient, config
 
     req.gatewayPrincipal = {
       sessionReference: buildSessionReference(token),
-      session,
+      session: {
+        ...session,
+        signerAuthorizations: normalizeSignerAuthorizations(session),
+      },
       gatewayRoles: mapGatewayRoles(session),
+      operatorActionCapabilities: resolveOperatorActionCapabilities(session),
       treasuryCapabilities: resolveTreasuryCapabilities(session),
       writeEnabled: config.enableMutations && matchesAllowlist(session, config.writeAllowlist),
     };
@@ -182,6 +252,23 @@ export function requireTreasuryCapability(capability: TreasuryCapability) {
   };
 }
 
+export function requireOperatorActionCapability(capability: OperatorActionCapability) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    const principal = req.gatewayPrincipal;
+    if (!principal) {
+      next(new GatewayError(401, 'AUTH_REQUIRED', 'Authentication is required'));
+      return;
+    }
+
+    if (!principal.operatorActionCapabilities.includes(capability)) {
+      next(new GatewayError(403, 'FORBIDDEN', `Operator capability '${capability}' is required`));
+      return;
+    }
+
+    next();
+  };
+}
+
 export function requireMutationWriteAccess() {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const principal = req.gatewayPrincipal;
@@ -211,4 +298,37 @@ export function requireMutationWriteAccess() {
 
     next();
   };
+}
+
+export function requireAuthorizedSignerBinding(
+  principal: GatewayPrincipal,
+  config: GatewayConfig,
+  actionClass: SignerActionClass,
+  signerWallet: string,
+  actionDescription: string,
+): SignerAuthorization {
+  const walletAddress = requireSignerWalletAddress(signerWallet);
+  const signerEnvironment = config.operatorSignerEnvironment ?? config.nodeEnv;
+  const binding = (principal.session.signerAuthorizations ?? []).find(
+    (authorization) =>
+      authorization.walletAddress === walletAddress &&
+      authorization.actionClass === actionClass &&
+      authorization.environment === signerEnvironment,
+  );
+
+  if (!binding) {
+    throw new GatewayError(
+      403,
+      'SIGNER_NOT_AUTHORIZED',
+      `${actionDescription} requires an approved signer wallet binding for ${actionClass} in ${signerEnvironment}`,
+      {
+        reason: 'signer_not_authorized',
+        signerWallet: walletAddress,
+        actionClass,
+        environment: signerEnvironment,
+      },
+    );
+  }
+
+  return binding;
 }

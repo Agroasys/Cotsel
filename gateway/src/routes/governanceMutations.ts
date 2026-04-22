@@ -15,11 +15,15 @@ import type {
   GovernanceActionPrepared,
   GovernanceBroadcastConfirmed,
 } from '../core/governanceMutationService';
+import type { SignerAuthorization } from '../core/authSessionClient';
 import { GovernanceMutationPreflightReader } from '../core/governanceStatusService';
 import { IdempotencyStore } from '../core/idempotencyStore';
 import {
   createAuthenticationMiddleware,
+  requireAuthorizedSignerBinding,
   requireMutationWriteAccess,
+  requireOperatorActionCapability,
+  requireSignerWalletAddress,
   requireWalletBoundSession,
   resolveGatewayActorKey,
 } from '../middleware/auth';
@@ -48,10 +52,6 @@ interface MutationContext {
   idempotencyKey: string;
 }
 
-interface DirectSignMutationContext extends MutationContext {
-  signerWallet: string;
-}
-
 type MutationRequest = Request<Record<string, string | string[]>, unknown, Record<string, unknown>>;
 
 function nowSeconds(): number {
@@ -78,15 +78,50 @@ function getMutationContext(req: MutationRequest): MutationContext {
   };
 }
 
-function getDirectSignMutationContext(
+function getAuthorizedGovernanceSigner(
   req: MutationRequest,
+  config: GatewayConfig,
   actionDescription: string,
-): DirectSignMutationContext {
-  const context = getMutationContext(req);
-  return {
-    ...context,
-    signerWallet: requireWalletBoundSession(context.principal, actionDescription),
-  };
+): { signerWallet: string; signerBinding: SignerAuthorization } {
+  if (!req.gatewayPrincipal) {
+    throw new GatewayError(401, 'AUTH_REQUIRED', 'Authentication is required');
+  }
+
+  const signerWallet = requireSignerWalletAddress(
+    typeof req.body?.signerWallet === 'string' ? req.body.signerWallet : null,
+  );
+  const signerBinding = requireAuthorizedSignerBinding(
+    req.gatewayPrincipal,
+    config,
+    'governance',
+    signerWallet,
+    actionDescription,
+  );
+
+  return { signerWallet, signerBinding };
+}
+
+function isAllowedHumanGovernanceMutationPath(path: string): boolean {
+  return path.endsWith('/prepare') || /^\/actions\/[^/]+\/confirm$/.test(path);
+}
+
+function requireDirectSignGovernancePath(req: Request, _res: Response, next: NextFunction): void {
+  if (req.method === 'POST' && !isAllowedHumanGovernanceMutationPath(req.path)) {
+    next(
+      new GatewayError(
+        409,
+        'CONFLICT',
+        'Human governance queue routes are retired; use the corresponding /prepare endpoint and then /governance/actions/:actionId/confirm',
+        {
+          reason: 'direct_sign_required',
+          route: req.path,
+        },
+      ),
+    );
+    return;
+  }
+
+  next();
 }
 
 function getPathParam(value: string | string[] | undefined, field: string): string | undefined {
@@ -101,13 +136,19 @@ async function prepareAndRespond(
   req: MutationRequest,
   res: Response,
   next: NextFunction,
-  actionFactory: () => Promise<GovernanceActionPrepared>,
+  config: GatewayConfig,
+  actionFactory: (
+    signerWallet: string,
+    signerBinding: SignerAuthorization,
+  ) => Promise<GovernanceActionPrepared>,
 ): Promise<void> {
   try {
-    if (req.gatewayPrincipal) {
-      requireWalletBoundSession(req.gatewayPrincipal, 'Preparing privileged governance approval');
-    }
-    const prepared = await actionFactory();
+    const { signerWallet, signerBinding } = getAuthorizedGovernanceSigner(
+      req,
+      config,
+      'Preparing privileged governance approval',
+    );
+    const prepared = await actionFactory(signerWallet, signerBinding);
     res.status(200).json(successResponse(prepared));
   } catch (error) {
     next(error);
@@ -118,13 +159,19 @@ async function confirmAndRespond(
   req: MutationRequest,
   res: Response,
   next: NextFunction,
-  actionFactory: () => Promise<GovernanceBroadcastConfirmed>,
+  config: GatewayConfig,
+  actionFactory: (
+    signerWallet: string,
+    signerBinding: SignerAuthorization,
+  ) => Promise<GovernanceBroadcastConfirmed>,
 ): Promise<void> {
   try {
-    if (req.gatewayPrincipal) {
-      requireWalletBoundSession(req.gatewayPrincipal, 'Confirming privileged governance broadcast');
-    }
-    const confirmed = await actionFactory();
+    const { signerWallet, signerBinding } = getAuthorizedGovernanceSigner(
+      req,
+      config,
+      'Confirming privileged governance broadcast',
+    );
+    const confirmed = await actionFactory(signerWallet, signerBinding);
     res.status(200).json(successResponse(confirmed));
   } catch (error) {
     next(error);
@@ -183,7 +230,13 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
   const idempotency = createIdempotencyMiddleware(options.idempotencyStore);
 
-  router.use('/governance', authenticate, requireMutationWriteAccess());
+  router.use(
+    '/governance',
+    authenticate,
+    requireMutationWriteAccess(),
+    requireOperatorActionCapability('governance:write'),
+    requireDirectSignGovernancePath,
+  );
 
   router.post('/governance/pause', idempotency, (req, res, next) =>
     queueAndRespond(
@@ -1106,7 +1159,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
   // The admin signs and broadcasts independently, then calls /confirm.
 
   router.post('/governance/pause/prepare', idempotency, (req, res, next) =>
-    prepareAndRespond(req, res, next, async () => {
+    prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
       const { principal, requestContext, idempotencyKey } = getMutationContext(req);
       const audit = validateGovernanceAuditInput(req.body);
       const status = await options.governanceReader.getGovernanceStatus();
@@ -1120,14 +1173,16 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
         routePath: req.originalUrl || req.path,
         audit,
         principal,
+        signerWallet,
         requestContext,
+        signerBinding,
         idempotencyKey,
       });
     }),
   );
 
   router.post('/governance/unpause/proposal/prepare', idempotency, (req, res, next) =>
-    prepareAndRespond(req, res, next, async () => {
+    prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
       const { principal, requestContext, idempotencyKey } = getMutationContext(req);
       const audit = validateGovernanceAuditInput(req.body);
       const status = await options.governanceReader.getGovernanceStatus();
@@ -1152,16 +1207,17 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
         routePath: req.originalUrl || req.path,
         audit,
         principal,
+        signerWallet,
         requestContext,
+        signerBinding,
         idempotencyKey,
       });
     }),
   );
 
   router.post('/governance/unpause/proposal/approve/prepare', idempotency, (req, res, next) =>
-    prepareAndRespond(req, res, next, async () => {
-      const { principal, requestContext, idempotencyKey, signerWallet } =
-        getDirectSignMutationContext(req, 'Preparing unpause approval');
+    prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
+      const { principal, requestContext, idempotencyKey } = getMutationContext(req);
       const audit = validateGovernanceAuditInput(req.body);
       const proposal = await options.governanceReader.getUnpauseProposalState();
       if (!proposal.hasActiveProposal) {
@@ -1186,14 +1242,16 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
         routePath: req.originalUrl || req.path,
         audit,
         principal,
+        signerWallet,
         requestContext,
+        signerBinding,
         idempotencyKey,
       });
     }),
   );
 
   router.post('/governance/unpause/proposal/cancel/prepare', idempotency, (req, res, next) =>
-    prepareAndRespond(req, res, next, async () => {
+    prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
       const { principal, requestContext, idempotencyKey } = getMutationContext(req);
       const audit = validateGovernanceAuditInput(req.body);
       const proposal = await options.governanceReader.getUnpauseProposalState();
@@ -1211,14 +1269,16 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
         routePath: req.originalUrl || req.path,
         audit,
         principal,
+        signerWallet,
         requestContext,
+        signerBinding,
         idempotencyKey,
       });
     }),
   );
 
   router.post('/governance/claims/pause/prepare', idempotency, (req, res, next) =>
-    prepareAndRespond(req, res, next, async () => {
+    prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
       const { principal, requestContext, idempotencyKey } = getMutationContext(req);
       const audit = validateGovernanceAuditInput(req.body);
       const status = await options.governanceReader.getGovernanceStatus();
@@ -1232,14 +1292,16 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
         routePath: req.originalUrl || req.path,
         audit,
         principal,
+        signerWallet,
         requestContext,
+        signerBinding,
         idempotencyKey,
       });
     }),
   );
 
   router.post('/governance/claims/unpause/prepare', idempotency, (req, res, next) =>
-    prepareAndRespond(req, res, next, async () => {
+    prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
       const { principal, requestContext, idempotencyKey } = getMutationContext(req);
       const audit = validateGovernanceAuditInput(req.body);
       const status = await options.governanceReader.getGovernanceStatus();
@@ -1253,14 +1315,16 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
         routePath: req.originalUrl || req.path,
         audit,
         principal,
+        signerWallet,
         requestContext,
+        signerBinding,
         idempotencyKey,
       });
     }),
   );
 
   router.post('/governance/treasury/sweep/prepare', idempotency, (req, res, next) =>
-    prepareAndRespond(req, res, next, async () => {
+    prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
       const { principal, requestContext, idempotencyKey } = getMutationContext(req);
       const audit = validateGovernanceAuditInput(req.body);
       const status = await options.governanceReader.getGovernanceStatus();
@@ -1283,7 +1347,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
         routePath: req.originalUrl || req.path,
         audit,
         principal,
+        signerWallet,
         requestContext,
+        signerBinding,
         idempotencyKey,
       });
     }),
@@ -1293,7 +1359,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     '/governance/treasury/payout-receiver/proposals/prepare',
     idempotency,
     (req, res, next) =>
-      prepareAndRespond(req, res, next, async () => {
+      prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
         const { principal, requestContext, idempotencyKey } = getMutationContext(req);
         const audit = validateGovernanceAuditInput(req.body);
         const status = await options.governanceReader.getGovernanceStatus();
@@ -1315,7 +1381,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
           routePath: req.originalUrl || req.path,
           audit,
           principal,
+          signerWallet,
           requestContext,
+          signerBinding,
           idempotencyKey,
           targetAddress: newPayoutReceiver,
         });
@@ -1326,9 +1394,8 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     '/governance/treasury/payout-receiver/proposals/:proposalId/approve/prepare',
     idempotency,
     (req, res, next) =>
-      prepareAndRespond(req, res, next, async () => {
-        const { principal, requestContext, idempotencyKey, signerWallet } =
-          getDirectSignMutationContext(req, 'Preparing treasury payout receiver approval');
+      prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
+        const { principal, requestContext, idempotencyKey } = getMutationContext(req);
         const audit = validateGovernanceAuditInput(req.body);
         const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
         const proposal =
@@ -1367,7 +1434,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
           routePath: req.originalUrl || req.path,
           audit,
           principal,
+          signerWallet,
           requestContext,
+          signerBinding,
           idempotencyKey,
           proposalId,
           targetAddress: proposal.targetAddress,
@@ -1379,7 +1448,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     '/governance/treasury/payout-receiver/proposals/:proposalId/execute/prepare',
     idempotency,
     (req, res, next) =>
-      prepareAndRespond(req, res, next, async () => {
+      prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
         const { principal, requestContext, idempotencyKey } = getMutationContext(req);
         const audit = validateGovernanceAuditInput(req.body);
         const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
@@ -1423,7 +1492,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
           routePath: req.originalUrl || req.path,
           audit,
           principal,
+          signerWallet,
           requestContext,
+          signerBinding,
           idempotencyKey,
           proposalId,
           targetAddress: proposal.targetAddress,
@@ -1435,7 +1506,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     '/governance/treasury/payout-receiver/proposals/:proposalId/cancel-expired/prepare',
     idempotency,
     (req, res, next) =>
-      prepareAndRespond(req, res, next, async () => {
+      prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
         const { principal, requestContext, idempotencyKey } = getMutationContext(req);
         const audit = validateGovernanceAuditInput(req.body);
         const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
@@ -1461,7 +1532,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
           routePath: req.originalUrl || req.path,
           audit,
           principal,
+          signerWallet,
           requestContext,
+          signerBinding,
           idempotencyKey,
           proposalId,
           targetAddress: proposal.targetAddress,
@@ -1470,7 +1543,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
   );
 
   router.post('/governance/oracle/disable-emergency/prepare', idempotency, (req, res, next) =>
-    prepareAndRespond(req, res, next, async () => {
+    prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
       const { principal, requestContext, idempotencyKey } = getMutationContext(req);
       const audit = validateGovernanceAuditInput(req.body);
       const status = await options.governanceReader.getGovernanceStatus();
@@ -1484,7 +1557,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
         routePath: req.originalUrl || req.path,
         audit,
         principal,
+        signerWallet,
         requestContext,
+        signerBinding,
         idempotencyKey,
         targetAddress: status.oracleAddress,
       });
@@ -1492,7 +1567,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
   );
 
   router.post('/governance/oracle/proposals/prepare', idempotency, (req, res, next) =>
-    prepareAndRespond(req, res, next, async () => {
+    prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
       const { principal, requestContext, idempotencyKey } = getMutationContext(req);
       const audit = validateGovernanceAuditInput(req.body);
       const status = await options.governanceReader.getGovernanceStatus();
@@ -1514,7 +1589,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
         routePath: req.originalUrl || req.path,
         audit,
         principal,
+        signerWallet,
         requestContext,
+        signerBinding,
         idempotencyKey,
         targetAddress: newOracleAddress,
       });
@@ -1525,9 +1602,8 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     '/governance/oracle/proposals/:proposalId/approve/prepare',
     idempotency,
     (req, res, next) =>
-      prepareAndRespond(req, res, next, async () => {
-        const { principal, requestContext, idempotencyKey, signerWallet } =
-          getDirectSignMutationContext(req, 'Preparing oracle proposal approval');
+      prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
+        const { principal, requestContext, idempotencyKey } = getMutationContext(req);
         const audit = validateGovernanceAuditInput(req.body);
         const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
         const proposal = await options.governanceReader.getOracleProposalState(proposalId);
@@ -1560,7 +1636,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
           routePath: req.originalUrl || req.path,
           audit,
           principal,
+          signerWallet,
           requestContext,
+          signerBinding,
           idempotencyKey,
           proposalId,
           targetAddress: proposal.targetAddress,
@@ -1572,7 +1650,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     '/governance/oracle/proposals/:proposalId/execute/prepare',
     idempotency,
     (req, res, next) =>
-      prepareAndRespond(req, res, next, async () => {
+      prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
         const { principal, requestContext, idempotencyKey } = getMutationContext(req);
         const audit = validateGovernanceAuditInput(req.body);
         const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
@@ -1612,7 +1690,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
           routePath: req.originalUrl || req.path,
           audit,
           principal,
+          signerWallet,
           requestContext,
+          signerBinding,
           idempotencyKey,
           proposalId,
           targetAddress: proposal.targetAddress,
@@ -1624,7 +1704,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
     '/governance/oracle/proposals/:proposalId/cancel-expired/prepare',
     idempotency,
     (req, res, next) =>
-      prepareAndRespond(req, res, next, async () => {
+      prepareAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
         const { principal, requestContext, idempotencyKey } = getMutationContext(req);
         const audit = validateGovernanceAuditInput(req.body);
         const proposalId = validateProposalId(getPathParam(req.params.proposalId, 'proposalId'));
@@ -1649,7 +1729,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
           routePath: req.originalUrl || req.path,
           audit,
           principal,
+          signerWallet,
           requestContext,
+          signerBinding,
           idempotencyKey,
           proposalId,
           targetAddress: proposal.targetAddress,
@@ -1663,7 +1745,7 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
   // lifecycle, and records the final signer evidence for backend reconciliation.
 
   router.post('/governance/actions/:actionId/confirm', (req, res, next) =>
-    confirmAndRespond(req, res, next, async () => {
+    confirmAndRespond(req, res, next, options.config, async (signerWallet, signerBinding) => {
       if (!req.gatewayPrincipal) {
         throw new GatewayError(401, 'AUTH_REQUIRED', 'Authentication is required');
       }
@@ -1684,8 +1766,9 @@ export function createGovernanceMutationRouter(options: GovernanceMutationRouter
       return options.mutationService.confirmBroadcast({
         actionId,
         txHash: body.txHash,
-        signerWallet: typeof body.signerWallet === 'string' ? body.signerWallet : null,
+        signerWallet,
         principal: req.gatewayPrincipal,
+        signerBinding,
         requestContext: req.requestContext,
       });
     }),

@@ -4,12 +4,17 @@
 import type { NextFunction, Request, Response } from 'express';
 import {
   createAuthenticationMiddleware,
+  requireAuthorizedSignerBinding,
   requireGatewayRole,
   requireMutationWriteAccess,
   resolveGatewayActorKey,
 } from '../src/middleware/auth';
 import type { GatewayConfig } from '../src/config/env';
-import type { AuthSessionClient } from '../src/core/authSessionClient';
+import type {
+  AuthSession,
+  AuthSessionClient,
+  SignerAuthorization,
+} from '../src/core/authSessionClient';
 
 const baseConfig: GatewayConfig = {
   port: 3600,
@@ -53,16 +58,45 @@ function mockRes() {
   return {} as Response;
 }
 
+function buildSession(overrides: Partial<AuthSession> = {}): AuthSession {
+  return {
+    accountId: 'acct-admin',
+    userId: 'uid-admin',
+    walletAddress: '0x00000000000000000000000000000000000000aa',
+    role: 'admin',
+    capabilities: [],
+    signerAuthorizations: [],
+    email: 'admin@agroasys.io',
+    issuedAt: 1,
+    expiresAt: 2,
+    ...overrides,
+  };
+}
+
+function buildSignerAuthorization(
+  overrides: Partial<SignerAuthorization> = {},
+): SignerAuthorization {
+  return {
+    bindingId: 'binding-1',
+    walletAddress: '0x00000000000000000000000000000000000000aa',
+    actionClass: 'governance',
+    environment: 'test',
+    approvedAt: '2026-04-21T00:00:00.000Z',
+    approvedBy: 'ops-admin-control',
+    ticketRef: 'SEC-100',
+    notes: null,
+    ...overrides,
+  };
+}
+
 describe('gateway auth middleware', () => {
   test('resolveGatewayActorKey prefers account identity over wallet identity', () => {
     expect(
       resolveGatewayActorKey({
+        ...buildSession(),
         accountId: 'acct-admin',
         userId: 'uid-admin',
         walletAddress: '0xabc',
-        role: 'admin',
-        issuedAt: 1,
-        expiresAt: 2,
       }),
     ).toBe('account:acct-admin');
   });
@@ -70,11 +104,10 @@ describe('gateway auth middleware', () => {
   test('resolveGatewayActorKey falls back to user identity before wallet identity', () => {
     expect(
       resolveGatewayActorKey({
+        ...buildSession(),
+        accountId: undefined,
         userId: 'uid-admin',
         walletAddress: '0xABC',
-        role: 'admin',
-        issuedAt: 1,
-        expiresAt: 2,
       }),
     ).toBe('user:uid-admin');
   });
@@ -82,11 +115,10 @@ describe('gateway auth middleware', () => {
   test('resolveGatewayActorKey falls back to wallet identity only when accountId and userId are absent', () => {
     expect(
       resolveGatewayActorKey({
+        ...buildSession(),
+        accountId: undefined,
         userId: '   ',
         walletAddress: '0xABC',
-        role: 'admin',
-        issuedAt: 1,
-        expiresAt: 2,
       }),
     ).toBe('wallet:0xabc');
   });
@@ -94,11 +126,10 @@ describe('gateway auth middleware', () => {
   test('resolveGatewayActorKey throws when every supported identifier is missing', () => {
     expect(() =>
       resolveGatewayActorKey({
+        ...buildSession(),
+        accountId: undefined,
         userId: '   ',
         walletAddress: null,
-        role: 'admin',
-        issuedAt: 1,
-        expiresAt: 2,
       }),
     ).toThrow('Authenticated session is missing every supported actor identifier');
   });
@@ -125,12 +156,8 @@ describe('gateway auth middleware', () => {
   test('maps admin session to gateway write role and allowlist', async () => {
     const client: AuthSessionClient = {
       resolveSession: jest.fn().mockResolvedValue({
-        accountId: 'acct-admin',
-        userId: 'uid-admin',
+        ...buildSession(),
         walletAddress: '0xabc',
-        role: 'admin',
-        issuedAt: 1,
-        expiresAt: 2,
       }),
       checkReadiness: jest.fn(),
     };
@@ -153,12 +180,8 @@ describe('gateway auth middleware', () => {
   test('disables write access when allowlist is empty', async () => {
     const client: AuthSessionClient = {
       resolveSession: jest.fn().mockResolvedValue({
-        accountId: 'acct-admin',
-        userId: 'uid-admin',
+        ...buildSession(),
         walletAddress: '0xabc',
-        role: 'admin',
-        issuedAt: 1,
-        expiresAt: 2,
       }),
       checkReadiness: jest.fn(),
     };
@@ -180,12 +203,8 @@ describe('gateway auth middleware', () => {
   test('matches allowlist entries by accountId when present', async () => {
     const client: AuthSessionClient = {
       resolveSession: jest.fn().mockResolvedValue({
-        accountId: 'acct-admin',
-        userId: 'uid-admin',
+        ...buildSession(),
         walletAddress: '0xabc',
-        role: 'admin',
-        issuedAt: 1,
-        expiresAt: 2,
       }),
       checkReadiness: jest.fn(),
     };
@@ -215,10 +234,14 @@ describe('gateway role guards', () => {
           userId: 'uid-1',
           walletAddress: '0xabc',
           role: 'buyer',
+          capabilities: [],
+          signerAuthorizations: [],
           issuedAt: 1,
           expiresAt: 2,
         },
         gatewayRoles: ['operator:read'],
+        operatorActionCapabilities: [],
+        treasuryCapabilities: [],
         writeEnabled: false,
       },
     } as unknown as Request;
@@ -240,10 +263,14 @@ describe('gateway role guards', () => {
           userId: 'uid-1',
           walletAddress: '0xabc',
           role: 'admin',
+          capabilities: ['governance:write'],
+          signerAuthorizations: [],
           issuedAt: 1,
           expiresAt: 2,
         },
         gatewayRoles: ['operator:read', 'operator:write'],
+        operatorActionCapabilities: ['governance:write'],
+        treasuryCapabilities: ['treasury:read'],
         writeEnabled: false,
       },
     } as unknown as Request;
@@ -265,10 +292,14 @@ describe('gateway role guards', () => {
           userId: 'uid-1',
           walletAddress: '0xabc',
           role: 'admin',
+          capabilities: ['governance:write'],
+          signerAuthorizations: [],
           issuedAt: 1,
           expiresAt: 2,
         },
         gatewayRoles: ['operator:read', 'operator:write'],
+        operatorActionCapabilities: ['governance:write'],
+        treasuryCapabilities: ['treasury:read'],
         writeEnabled: true,
       },
     } as unknown as Request;
@@ -277,5 +308,82 @@ describe('gateway role guards', () => {
     middleware(req, mockRes(), next);
 
     expect(next).toHaveBeenCalledWith();
+  });
+});
+
+describe('signer authorization enforcement', () => {
+  test('matches explicit signer wallet against a normalized binding in the active environment', () => {
+    const binding = requireAuthorizedSignerBinding(
+      {
+        sessionReference: 'sha256:test',
+        session: buildSession({
+          signerAuthorizations: [
+            buildSignerAuthorization({
+              walletAddress: '0x00000000000000000000000000000000000000AA',
+            }),
+          ],
+        }),
+        gatewayRoles: ['operator:read', 'operator:write'],
+        operatorActionCapabilities: ['governance:write'],
+        treasuryCapabilities: [],
+        writeEnabled: true,
+      },
+      baseConfig,
+      'governance',
+      '0x00000000000000000000000000000000000000AA',
+      'Preparing privileged governance approval',
+    );
+
+    expect(binding.walletAddress).toBe('0x00000000000000000000000000000000000000AA');
+  });
+
+  test('rejects signer bindings scoped to the wrong environment', () => {
+    expect(() =>
+      requireAuthorizedSignerBinding(
+        {
+          sessionReference: 'sha256:test',
+          session: buildSession({
+            signerAuthorizations: [
+              buildSignerAuthorization({
+                environment: 'staging-e2e-real',
+              }),
+            ],
+          }),
+          gatewayRoles: ['operator:read', 'operator:write'],
+          operatorActionCapabilities: ['governance:write'],
+          treasuryCapabilities: [],
+          writeEnabled: true,
+        },
+        baseConfig,
+        'governance',
+        '0x00000000000000000000000000000000000000AA',
+        'Preparing privileged governance approval',
+      ),
+    ).toThrow('requires an approved signer wallet binding for governance in test');
+  });
+
+  test('rejects signer bindings scoped to the wrong action class', () => {
+    expect(() =>
+      requireAuthorizedSignerBinding(
+        {
+          sessionReference: 'sha256:test',
+          session: buildSession({
+            signerAuthorizations: [
+              buildSignerAuthorization({
+                actionClass: 'treasury_close',
+              }),
+            ],
+          }),
+          gatewayRoles: ['operator:read', 'operator:write'],
+          operatorActionCapabilities: ['governance:write'],
+          treasuryCapabilities: [],
+          writeEnabled: true,
+        },
+        baseConfig,
+        'governance',
+        '0x00000000000000000000000000000000000000AA',
+        'Preparing privileged governance approval',
+      ),
+    ).toThrow('requires an approved signer wallet binding for governance in test');
   });
 });

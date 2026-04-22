@@ -56,6 +56,8 @@ function buildPrincipal(
     userId: 'uid-admin',
     walletAddress: '0x00000000000000000000000000000000000000aa',
     role: 'admin',
+    capabilities: [],
+    signerAuthorizations: [],
     issuedAt: Date.now(),
     expiresAt: Date.now() + 60_000,
     ...overrides,
@@ -63,6 +65,7 @@ function buildPrincipal(
 
   return {
     gatewayRoles: ['operator:read', 'operator:write'],
+    operatorActionCapabilities: [],
     treasuryCapabilities: [
       'treasury:read',
       'treasury:prepare',

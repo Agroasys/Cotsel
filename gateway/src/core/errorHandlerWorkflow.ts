@@ -3,8 +3,9 @@
  */
 import { GatewayError } from '../errors';
 import { resolveGatewayActorKey, type GatewayPrincipal } from '../middleware/auth';
+import type { GatewayRole, OperatorActionCapability, TreasuryCapability } from '../middleware/auth';
 import type { RequestContext } from '../middleware/requestContext';
-import type { AuthServiceRole } from './authSessionClient';
+import type { AuthServiceRole, OperatorCapability, SignerAuthorization } from './authSessionClient';
 import type { AuditLogStore } from './auditLogStore';
 import { ComplianceService } from './complianceService';
 import { createGatewayErrorEnvelope } from './errorEnvelope';
@@ -24,10 +25,18 @@ export type ReplayableOperationType =
 
 export interface FailedOperationPrincipalSnapshot {
   actorId: string;
+  actorAccountId: string | null;
   actorUserId: string | null;
   actorWalletAddress: string | null;
+  actorEmail: string | null;
   actorRole: AuthServiceRole;
   sessionReference: string;
+  capabilities: OperatorCapability[];
+  signerAuthorizations: SignerAuthorization[];
+  gatewayRoles: GatewayRole[];
+  operatorActionCapabilities: OperatorActionCapability[];
+  treasuryCapabilities: TreasuryCapability[];
+  writeEnabled: boolean;
 }
 
 export interface GovernanceReplaySpec {
@@ -95,13 +104,21 @@ function toPrincipalSnapshot(
     return undefined;
   }
 
-  if ('gatewayRoles' in principal) {
+  if ('session' in principal) {
     return {
       actorId: resolveGatewayActorKey(principal.session),
+      actorAccountId: principal.session.accountId ?? null,
       actorUserId: principal.session.userId,
       actorWalletAddress: principal.session.walletAddress,
+      actorEmail: principal.session.email ?? null,
       actorRole: principal.session.role,
       sessionReference: principal.sessionReference,
+      capabilities: [...principal.session.capabilities],
+      signerAuthorizations: [...principal.session.signerAuthorizations],
+      gatewayRoles: [...principal.gatewayRoles],
+      operatorActionCapabilities: [...principal.operatorActionCapabilities],
+      treasuryCapabilities: [...principal.treasuryCapabilities],
+      writeEnabled: principal.writeEnabled,
     };
   }
 
@@ -149,6 +166,7 @@ export class GatewayErrorHandlerWorkflow {
       failedAt: new Date().toISOString(),
       metadata: {
         replaySpec: input.replaySpec,
+        ...(principal ? { principalSnapshot: principal } : {}),
       },
     });
 
@@ -261,22 +279,20 @@ function restorePrincipal(snapshot: FailedOperationPrincipalSnapshot): GatewayPr
   return {
     sessionReference: snapshot.sessionReference,
     session: {
+      ...(snapshot.actorAccountId ? { accountId: snapshot.actorAccountId } : {}),
       userId: snapshot.actorUserId ?? '',
       walletAddress: snapshot.actorWalletAddress,
       role: snapshot.actorRole,
+      capabilities: snapshot.capabilities,
+      signerAuthorizations: snapshot.signerAuthorizations,
       issuedAt: Date.now(),
       expiresAt: Date.now() + 60_000,
-      ...(snapshot.actorUserId ? { email: `${snapshot.actorUserId}@replay.invalid` } : {}),
+      email: snapshot.actorEmail,
     },
-    gatewayRoles: ['operator:read', 'operator:write'],
-    treasuryCapabilities: [
-      'treasury:read',
-      'treasury:prepare',
-      'treasury:approve',
-      'treasury:execute_match',
-      'treasury:close',
-    ],
-    writeEnabled: true,
+    gatewayRoles: snapshot.gatewayRoles,
+    operatorActionCapabilities: snapshot.operatorActionCapabilities,
+    treasuryCapabilities: snapshot.treasuryCapabilities,
+    writeEnabled: snapshot.writeEnabled,
   };
 }
 
@@ -306,16 +322,28 @@ export class GatewayFailedOperationReplayer {
     const replayedAt = new Date().toISOString();
 
     try {
+      const principalSnapshot = (record.metadata.principalSnapshot as
+        | FailedOperationPrincipalSnapshot
+        | undefined) ?? {
+        actorId: record.actorId || 'user:replay',
+        actorAccountId: null,
+        actorUserId: record.actorUserId,
+        actorWalletAddress:
+          record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
+        actorEmail: null,
+        actorRole: (record.actorRole as AuthServiceRole | null) ?? 'admin',
+        sessionReference: record.sessionReference || `replay:${failedOperationId}`,
+        capabilities: [],
+        signerAuthorizations: [],
+        gatewayRoles: [],
+        operatorActionCapabilities: [],
+        treasuryCapabilities: [],
+        writeEnabled: false,
+      };
+
       switch (replaySpec.type) {
         case 'governance.queue_action': {
-          const principal = restorePrincipal({
-            actorId: record.actorId || 'user:replay',
-            actorUserId: record.actorUserId,
-            actorWalletAddress:
-              record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
-            actorRole: (record.actorRole as AuthServiceRole | null) ?? 'admin',
-            sessionReference: record.sessionReference || `replay:${failedOperationId}`,
-          });
+          const principal = restorePrincipal(principalSnapshot);
           await this.governanceMutationService.queueAction({
             category: replaySpec.category,
             contractMethod: replaySpec.contractMethod,
@@ -335,14 +363,7 @@ export class GatewayFailedOperationReplayer {
           break;
         }
         case 'compliance.create_decision': {
-          const principal = restorePrincipal({
-            actorId: record.actorId || 'user:replay',
-            actorUserId: record.actorUserId,
-            actorWalletAddress:
-              record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
-            actorRole: (record.actorRole as AuthServiceRole | null) ?? 'admin',
-            sessionReference: record.sessionReference || `replay:${failedOperationId}`,
-          });
+          const principal = restorePrincipal(principalSnapshot);
           await this.complianceService.createDecision({
             ...replaySpec.payload,
             principal,
@@ -357,14 +378,7 @@ export class GatewayFailedOperationReplayer {
           break;
         }
         case 'compliance.block_oracle_progression': {
-          const principal = restorePrincipal({
-            actorId: record.actorId || 'user:replay',
-            actorUserId: record.actorUserId,
-            actorWalletAddress:
-              record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
-            actorRole: (record.actorRole as AuthServiceRole | null) ?? 'admin',
-            sessionReference: record.sessionReference || `replay:${failedOperationId}`,
-          });
+          const principal = restorePrincipal(principalSnapshot);
           await this.complianceService.blockOracleProgression({
             ...replaySpec.payload,
             principal,
@@ -379,14 +393,7 @@ export class GatewayFailedOperationReplayer {
           break;
         }
         case 'compliance.resume_oracle_progression': {
-          const principal = restorePrincipal({
-            actorId: record.actorId || 'user:replay',
-            actorUserId: record.actorUserId,
-            actorWalletAddress:
-              record.actorWalletAddress || '0x0000000000000000000000000000000000000000',
-            actorRole: (record.actorRole as AuthServiceRole | null) ?? 'admin',
-            sessionReference: record.sessionReference || `replay:${failedOperationId}`,
-          });
+          const principal = restorePrincipal(principalSnapshot);
           await this.complianceService.resumeOracleProgression({
             ...replaySpec.payload,
             principal,

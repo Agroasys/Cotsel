@@ -24,6 +24,10 @@ the signed `POST /session/exchange/agroasys` route.
 No browser client, dashboard client, or caller-supplied login role is
 authoritative for durable admin access.
 
+Durable admin provisioning is not the same thing as privileged signer
+authorization. Admin profile state controls session authority. Approved signer
+wallet bindings are a second control plane and must be provisioned separately.
+
 ## Required Configuration
 
 The auth service must be started with:
@@ -112,6 +116,42 @@ change.
 Durable admin grant events emit `auth.durable_admin_provisioned`. Durable admin
 revocation or deactivation emits `auth.durable_admin_revoked`. Both events must
 be reconciled against `auth_admin_audit_events` during access review.
+
+## Operator Signer Binding Provisioning
+
+Endpoint:
+
+```text
+POST /api/auth/v1/admin/signers/provision
+```
+
+Body:
+
+```json
+{
+  "accountId": "agroasys-user:123",
+  "walletAddress": "0x00000000000000000000000000000000000000aa",
+  "actionClass": "governance",
+  "environment": "staging-e2e-real",
+  "ticketRef": "SEC-2200",
+  "reason": "SEC-2200 approve governance signer for staging validation"
+}
+```
+
+Rules:
+
+- signer bindings may be provisioned only for active durable admin profiles
+- signer bindings are action-class scoped and environment scoped
+- signer bindings do not change session role or gateway write allowlist state
+- a connected wallet is not authoritative unless a matching signer binding exists
+
+Revoke signer bindings with:
+
+```text
+POST /api/auth/v1/admin/signers/revoke
+```
+
+Durable admin review must confirm both role state and active signer bindings.
 
 ## Deactivation
 

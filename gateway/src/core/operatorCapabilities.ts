@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { AuthServiceRole } from './authSessionClient';
+import type { AuthServiceRole, OperatorCapability } from './authSessionClient';
 import type { GatewayConfig } from '../config/env';
 import { type GatewayPrincipal, type GatewayRole, matchesAllowlist } from '../middleware/auth';
 
@@ -16,6 +16,11 @@ export interface OperatorRouteCapabilities {
 export interface OperatorActionCapabilities {
   governanceWrite: boolean;
   complianceWrite: boolean;
+  treasuryRead: boolean;
+  treasuryPrepare: boolean;
+  treasuryApprove: boolean;
+  treasuryExecuteMatch: boolean;
+  treasuryClose: boolean;
 }
 
 export interface OperatorWriteAccess {
@@ -30,6 +35,7 @@ export interface OperatorCapabilitySubject {
   walletAddress: string | null;
   authRole: AuthServiceRole;
   gatewayRoles: GatewayRole[];
+  capabilities: OperatorCapability[];
 }
 
 export interface OperatorCapabilitySnapshot {
@@ -55,6 +61,7 @@ export function buildOperatorCapabilitySnapshot(
       walletAddress: principal.session.walletAddress,
       authRole: principal.session.role,
       gatewayRoles: principal.gatewayRoles,
+      capabilities: principal.session.capabilities ?? [],
     },
     routes: {
       overviewRead: canReadOperatorRoutes,
@@ -64,8 +71,22 @@ export function buildOperatorCapabilitySnapshot(
       complianceRead: canReadOperatorRoutes,
     },
     actions: {
-      governanceWrite: canWriteOperatorActions,
-      complianceWrite: canWriteOperatorActions,
+      governanceWrite:
+        canWriteOperatorActions &&
+        principal.operatorActionCapabilities.includes('governance:write'),
+      complianceWrite:
+        canWriteOperatorActions &&
+        principal.operatorActionCapabilities.includes('compliance:write'),
+      treasuryRead: principal.treasuryCapabilities.includes('treasury:read'),
+      treasuryPrepare:
+        canWriteOperatorActions && principal.treasuryCapabilities.includes('treasury:prepare'),
+      treasuryApprove:
+        canWriteOperatorActions && principal.treasuryCapabilities.includes('treasury:approve'),
+      treasuryExecuteMatch:
+        canWriteOperatorActions &&
+        principal.treasuryCapabilities.includes('treasury:execute_match'),
+      treasuryClose:
+        canWriteOperatorActions && principal.treasuryCapabilities.includes('treasury:close'),
     },
     writeAccess: {
       mutationsConfigured: config.enableMutations,

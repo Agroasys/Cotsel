@@ -147,7 +147,7 @@ settlement behavior after the rate-limit failure-mode wiring change.
 Required validation commands for this closeout:
 
 ```bash
-export PATH="/Users/astonsteven/.nvm/versions/node/v20.20.2/bin:$PATH"
+nvm use 20.20.2
 node --version
 npm --version
 npm ci

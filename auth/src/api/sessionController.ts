@@ -129,6 +129,8 @@ export class SessionController {
         walletAddress: session.walletAddress,
         email: session.email,
         role: session.role,
+        capabilities: session.capabilities,
+        signerAuthorizations: session.signerAuthorizations,
         issuedAt: session.issuedAt,
         expiresAt: session.expiresAt,
       }),

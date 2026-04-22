@@ -238,7 +238,7 @@ export interface ApprovalWorkflowRequestMetadata {
   correlationId: string | null;
   requestedAt: string;
   requestedBy: string;
-  actorWallet: string;
+  actorWallet: string | null;
   actorRole: string;
   reason: string;
   ticketRef: string;
@@ -252,7 +252,7 @@ export interface ApprovalWorkflowReviewEvent {
   status: GovernanceActionStatus;
   reviewedAt: string;
   reviewedBy: string;
-  actorWallet: string;
+  actorWallet: string | null;
   actorRole: string;
   requestId: string;
   correlationId: string | null;

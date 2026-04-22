@@ -17,6 +17,8 @@ function buildPrincipal(
     walletAddress: '0x00000000000000000000000000000000000000aa',
     role: 'admin',
     email: 'admin@agroasys.io',
+    capabilities: [],
+    signerAuthorizations: [],
     issuedAt: 1,
     expiresAt: 2,
     ...overrides,
@@ -26,6 +28,7 @@ function buildPrincipal(
     sessionReference: 'sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd',
     session,
     gatewayRoles: ['operator:read', 'operator:write'],
+    operatorActionCapabilities: [],
     treasuryCapabilities: [
       'treasury:read',
       'treasury:prepare',

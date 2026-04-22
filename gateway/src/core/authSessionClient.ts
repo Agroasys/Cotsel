@@ -6,13 +6,40 @@ import { GatewayError } from '../errors';
 import { Logger } from '../logging/logger';
 
 export type AuthServiceRole = 'buyer' | 'supplier' | 'admin' | 'oracle';
+export type OperatorCapability =
+  | 'governance:write'
+  | 'compliance:write'
+  | 'treasury:read'
+  | 'treasury:prepare'
+  | 'treasury:approve'
+  | 'treasury:execute_match'
+  | 'treasury:close';
+export type SignerActionClass =
+  | 'governance'
+  | 'treasury_approve'
+  | 'treasury_execute'
+  | 'treasury_close'
+  | 'compliance_sensitive'
+  | 'emergency_admin';
+
+export interface SignerAuthorization {
+  bindingId: string;
+  walletAddress: string;
+  actionClass: SignerActionClass;
+  environment: string;
+  approvedAt: string;
+  approvedBy: string;
+  ticketRef: string | null;
+  notes: string | null;
+}
 
 export interface AuthSession {
   userId: string;
   accountId?: string;
   walletAddress: string | null;
   role: AuthServiceRole;
-  capabilities?: string[];
+  capabilities: OperatorCapability[];
+  signerAuthorizations: SignerAuthorization[];
   issuedAt: number;
   expiresAt: number;
   email?: string | null;

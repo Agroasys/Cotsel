@@ -16,6 +16,7 @@ import {
   createAuthenticationMiddleware,
   requireGatewayRole,
   requireMutationWriteAccess,
+  requireOperatorActionCapability,
   resolveGatewayActorKey,
   type GatewayPrincipal,
 } from '../middleware/auth';
@@ -270,6 +271,7 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
   router.post(
     '/compliance/decisions',
     requireMutationWriteAccess(),
+    requireOperatorActionCapability('compliance:write'),
     idempotency,
     (req, res, next) =>
       handleMutation(
@@ -308,6 +310,7 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
   router.post(
     '/compliance/trades/:tradeId/block-oracle-progression',
     requireMutationWriteAccess(),
+    requireOperatorActionCapability('compliance:write'),
     idempotency,
     (req, res, next) =>
       handleMutation(
@@ -350,6 +353,7 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
   router.post(
     '/compliance/trades/:tradeId/resume-oracle-progression',
     requireMutationWriteAccess(),
+    requireOperatorActionCapability('compliance:write'),
     idempotency,
     (req, res, next) =>
       handleMutation(

@@ -2,12 +2,28 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool, PoolClient } from 'pg';
-import { AdminActor, AdminAuditAction, UserProfile, UserSession, UserRole } from '../types';
+import {
+  AdminActor,
+  AdminAuditAction,
+  OPERATOR_CAPABILITIES,
+  OPERATOR_SIGNER_ACTION_CLASSES,
+  OperatorCapability,
+  OperatorSignerActionClass,
+  OperatorSignerAuthorization,
+  UserProfile,
+  UserSession,
+  UserRole,
+} from '../types';
 
-type SessionRow = Omit<UserSession, 'issuedAt' | 'expiresAt' | 'revokedAt'> & {
+type SessionRow = Omit<
+  UserSession,
+  'issuedAt' | 'expiresAt' | 'revokedAt' | 'capabilities' | 'signerAuthorizations'
+> & {
   issuedAt: number | string;
   expiresAt: number | string;
   revokedAt: number | string | null;
+  capabilities: OperatorCapability[] | null;
+  signerAuthorizations: OperatorSignerAuthorization[] | null;
 };
 
 const USER_PROFILE_FIELDS = `
@@ -41,6 +57,8 @@ const USER_PROFILE_FIELDS = `
 
 const LEGACY_ACCOUNT_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const OPERATOR_CAPABILITY_SET = new Set<string>(OPERATOR_CAPABILITIES);
+const OPERATOR_SIGNER_ACTION_CLASS_SET = new Set<string>(OPERATOR_SIGNER_ACTION_CLASSES);
 
 function parseSessionEpoch(
   value: number | string,
@@ -60,9 +78,43 @@ function parseSessionEpoch(
   throw new Error(`Invalid ${field} session timestamp returned from database`);
 }
 
+function normalizeCapabilityList(
+  value: OperatorCapability[] | null | undefined,
+): OperatorCapability[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((capability): capability is OperatorCapability =>
+    OPERATOR_CAPABILITY_SET.has(capability),
+  );
+}
+
+function normalizeSignerAuthorizations(
+  value: OperatorSignerAuthorization[] | null | undefined,
+): OperatorSignerAuthorization[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((binding): binding is OperatorSignerAuthorization =>
+    Boolean(
+      binding &&
+      typeof binding.bindingId === 'string' &&
+      typeof binding.walletAddress === 'string' &&
+      typeof binding.environment === 'string' &&
+      typeof binding.approvedAt === 'string' &&
+      typeof binding.approvedBy === 'string' &&
+      OPERATOR_SIGNER_ACTION_CLASS_SET.has(binding.actionClass),
+    ),
+  );
+}
+
 export function normalizeSessionRow(row: SessionRow): UserSession {
   return {
     ...row,
+    capabilities: normalizeCapabilityList(row.capabilities),
+    signerAuthorizations: normalizeSignerAuthorizations(row.signerAuthorizations),
     issuedAt: parseSessionEpoch(row.issuedAt, 'issuedAt'),
     expiresAt: parseSessionEpoch(row.expiresAt, 'expiresAt'),
     revokedAt: row.revokedAt === null ? null : parseSessionEpoch(row.revokedAt, 'revokedAt'),
@@ -210,6 +262,332 @@ async function revokeActiveSessionsForUser(
   return result.rowCount ?? 0;
 }
 
+function defaultAdminCapabilities(): OperatorCapability[] {
+  return [...OPERATOR_CAPABILITIES];
+}
+
+function normalizeCapabilityInput(capabilities: readonly string[]): OperatorCapability[] {
+  const invalid = capabilities.filter((capability) => !OPERATOR_CAPABILITY_SET.has(capability));
+  if (invalid.length > 0) {
+    throw new Error(`Unsupported operator capability values: ${invalid.join(', ')}`);
+  }
+
+  return [...new Set(capabilities)] as OperatorCapability[];
+}
+
+export async function listOperatorCapabilitiesByAccountId(
+  pool: Pool | PoolClient,
+  accountId: string,
+): Promise<OperatorCapability[]> {
+  const result = await pool.query<{ capability: OperatorCapability }>(
+    `SELECT capability
+     FROM operator_capability_bindings
+     WHERE account_id = $1
+     ORDER BY capability ASC`,
+    [accountId],
+  );
+  return normalizeCapabilityInput(result.rows.map((row) => row.capability));
+}
+
+export async function replaceOperatorCapabilitiesWithAudit(
+  pool: Pool,
+  input: {
+    accountId: string;
+    capabilities: readonly OperatorCapability[];
+    actor: AdminActor;
+    reason: string;
+    ticketRef?: string | null;
+  },
+): Promise<OperatorCapability[]> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const profile = await queryProfileByAccountIdForUpdate(client, input.accountId);
+    if (!profile) {
+      throw new Error('Profile not found');
+    }
+
+    const capabilities = normalizeCapabilityInput(input.capabilities);
+    await client.query(`DELETE FROM operator_capability_bindings WHERE account_id = $1`, [
+      input.accountId,
+    ]);
+
+    for (const capability of capabilities) {
+      await client.query(
+        `INSERT INTO operator_capability_bindings (
+           account_id,
+           capability,
+           granted_by,
+           grant_reason,
+           ticket_ref,
+           metadata
+         ) VALUES ($1, $2, $3, $4, $5, '{}'::jsonb)`,
+        [input.accountId, capability, input.actor.id, input.reason, input.ticketRef ?? null],
+      );
+    }
+
+    await recordAdminAuditEvent(client, {
+      accountId: input.accountId,
+      targetUserId: profile.id,
+      action: 'operator_capabilities_updated',
+      actor: input.actor,
+      previousRole: profile.role,
+      newRole: profile.role,
+      reason: input.reason,
+      metadata: {
+        capabilities,
+        ticketRef: input.ticketRef ?? null,
+      },
+    });
+
+    await client.query('COMMIT');
+    return capabilities;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function provisionOperatorSignerBinding(
+  pool: Pool,
+  input: {
+    accountId: string;
+    walletAddress: string;
+    actionClass: OperatorSignerActionClass;
+    environment: string;
+    actor: AdminActor;
+    reason: string;
+    ticketRef?: string | null;
+    notes?: string | null;
+  },
+): Promise<OperatorSignerAuthorization> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const profile = await queryProfileByAccountIdForUpdate(client, input.accountId);
+    if (!profile) {
+      throw new Error('Profile not found');
+    }
+    if (!profile.active) {
+      throw new Error('Signer bindings can only be provisioned for active profiles');
+    }
+    if (profile.baseRole !== 'admin') {
+      throw new Error('Signer bindings require a durable admin profile');
+    }
+
+    const existing = await client.query<{
+      id: string;
+      createdAt: Date;
+      provisionedBy: string;
+      provisionTicketRef: string | null;
+      notes: string | null;
+    }>(
+      `SELECT id,
+              created_at AS "createdAt",
+              provisioned_by AS "provisionedBy",
+              provision_ticket_ref AS "provisionTicketRef",
+              notes
+       FROM operator_signer_bindings
+       WHERE account_id = $1
+         AND wallet_address = $2
+         AND action_class = $3
+         AND environment = $4
+         AND active = TRUE
+         AND revoked_at IS NULL`,
+      [input.accountId, input.walletAddress, input.actionClass, input.environment],
+    );
+
+    if (existing.rows[0]) {
+      await client.query('COMMIT');
+      return {
+        bindingId: existing.rows[0].id,
+        walletAddress: input.walletAddress,
+        actionClass: input.actionClass,
+        environment: input.environment,
+        approvedAt: existing.rows[0].createdAt.toISOString(),
+        approvedBy: existing.rows[0].provisionedBy,
+        ticketRef: existing.rows[0].provisionTicketRef,
+        notes: existing.rows[0].notes,
+      };
+    }
+
+    const inserted = await client.query<{
+      id: string;
+      createdAt: Date;
+      provisionedBy: string;
+      provisionTicketRef: string | null;
+      notes: string | null;
+    }>(
+      `INSERT INTO operator_signer_bindings (
+         account_id,
+         wallet_address,
+         action_class,
+         environment,
+         active,
+         provisioned_by,
+         provision_reason,
+         provision_ticket_ref,
+         notes,
+         metadata
+       )
+       VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7, $8, '{}'::jsonb)
+       RETURNING id,
+                 created_at AS "createdAt",
+                 provisioned_by AS "provisionedBy",
+                 provision_ticket_ref AS "provisionTicketRef",
+                 notes`,
+      [
+        input.accountId,
+        input.walletAddress,
+        input.actionClass,
+        input.environment,
+        input.actor.id,
+        input.reason,
+        input.ticketRef ?? null,
+        input.notes ?? null,
+      ],
+    );
+
+    await recordAdminAuditEvent(client, {
+      accountId: input.accountId,
+      targetUserId: profile.id,
+      action: 'signer_binding_provisioned',
+      actor: input.actor,
+      previousRole: profile.role,
+      newRole: profile.role,
+      reason: input.reason,
+      metadata: {
+        walletAddress: input.walletAddress,
+        actionClass: input.actionClass,
+        environment: input.environment,
+        ticketRef: input.ticketRef ?? null,
+        notes: input.notes ?? null,
+      },
+    });
+
+    await client.query('COMMIT');
+    return {
+      bindingId: inserted.rows[0].id,
+      walletAddress: input.walletAddress,
+      actionClass: input.actionClass,
+      environment: input.environment,
+      approvedAt: inserted.rows[0].createdAt.toISOString(),
+      approvedBy: inserted.rows[0].provisionedBy,
+      ticketRef: inserted.rows[0].provisionTicketRef,
+      notes: inserted.rows[0].notes,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function revokeOperatorSignerBinding(
+  pool: Pool,
+  input: {
+    accountId: string;
+    walletAddress: string;
+    actionClass: OperatorSignerActionClass;
+    environment: string;
+    actor: AdminActor;
+    reason: string;
+  },
+): Promise<OperatorSignerAuthorization | null> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const profile = await queryProfileByAccountIdForUpdate(client, input.accountId);
+    if (!profile) {
+      throw new Error('Profile not found');
+    }
+
+    const existing = await client.query<{
+      id: string;
+      createdAt: Date;
+      provisionedBy: string;
+      provisionTicketRef: string | null;
+      notes: string | null;
+    }>(
+      `SELECT id,
+              created_at AS "createdAt",
+              provisioned_by AS "provisionedBy",
+              provision_ticket_ref AS "provisionTicketRef",
+              notes
+       FROM operator_signer_bindings
+       WHERE account_id = $1
+         AND wallet_address = $2
+         AND action_class = $3
+         AND environment = $4
+         AND active = TRUE
+         AND revoked_at IS NULL
+       FOR UPDATE`,
+      [input.accountId, input.walletAddress, input.actionClass, input.environment],
+    );
+
+    if (!existing.rows[0]) {
+      await client.query('COMMIT');
+      return null;
+    }
+
+    await client.query(
+      `UPDATE operator_signer_bindings
+       SET active = FALSE,
+           revoked_at = NOW(),
+           revoked_by = $5,
+           revoked_reason = $6,
+           updated_at = NOW()
+       WHERE id = $1
+         AND account_id = $2
+         AND wallet_address = $3
+         AND action_class = $4`,
+      [
+        existing.rows[0].id,
+        input.accountId,
+        input.walletAddress,
+        input.actionClass,
+        input.actor.id,
+        input.reason,
+      ],
+    );
+
+    await recordAdminAuditEvent(client, {
+      accountId: input.accountId,
+      targetUserId: profile.id,
+      action: 'signer_binding_revoked',
+      actor: input.actor,
+      previousRole: profile.role,
+      newRole: profile.role,
+      reason: input.reason,
+      metadata: {
+        walletAddress: input.walletAddress,
+        actionClass: input.actionClass,
+        environment: input.environment,
+      },
+    });
+
+    await client.query('COMMIT');
+    return {
+      bindingId: existing.rows[0].id,
+      walletAddress: input.walletAddress,
+      actionClass: input.actionClass,
+      environment: input.environment,
+      approvedAt: existing.rows[0].createdAt.toISOString(),
+      approvedBy: existing.rows[0].provisionedBy,
+      ticketRef: existing.rows[0].provisionTicketRef,
+      notes: existing.rows[0].notes,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 //  Profile queries
 
 export async function upsertProfile(
@@ -347,6 +725,8 @@ export async function provisionProfileWithAudit(
     orgId: string | null;
     email: string | null;
     walletAddress: string | null;
+    capabilities?: readonly OperatorCapability[];
+    capabilityTicketRef?: string | null;
     actor: AdminActor;
     reason: string;
   },
@@ -396,6 +776,54 @@ export async function provisionProfileWithAudit(
 
     const revokedSessions = previous ? await revokeActiveSessionsForUser(client, updated.id) : 0;
 
+    if (input.role === 'admin') {
+      const capabilities = normalizeCapabilityInput(
+        input.capabilities ?? defaultAdminCapabilities(),
+      );
+      await client.query(`DELETE FROM operator_capability_bindings WHERE account_id = $1`, [
+        input.accountId,
+      ]);
+      for (const capability of capabilities) {
+        await client.query(
+          `INSERT INTO operator_capability_bindings (
+             account_id,
+             capability,
+             granted_by,
+             grant_reason,
+             ticket_ref,
+             metadata
+           ) VALUES ($1, $2, $3, $4, $5, '{}'::jsonb)`,
+          [
+            input.accountId,
+            capability,
+            input.actor.id,
+            input.reason,
+            input.capabilityTicketRef ?? null,
+          ],
+        );
+      }
+    } else {
+      await client.query(`DELETE FROM operator_capability_bindings WHERE account_id = $1`, [
+        input.accountId,
+      ]);
+      await client.query(
+        `UPDATE operator_signer_bindings
+         SET active = FALSE,
+             revoked_at = NOW(),
+             revoked_by = $2,
+             revoked_reason = $3,
+             updated_at = NOW()
+         WHERE account_id = $1
+           AND active = TRUE
+           AND revoked_at IS NULL`,
+        [
+          input.accountId,
+          input.actor.id,
+          'Signer bindings revoked because profile is no longer admin',
+        ],
+      );
+    }
+
     await recordAdminAuditEvent(client, {
       accountId: input.accountId,
       targetUserId: updated.id,
@@ -408,6 +836,10 @@ export async function provisionProfileWithAudit(
         previousActive: previous?.active ?? null,
         revokedSessions,
         orgId: updated.orgId,
+        capabilities:
+          input.role === 'admin'
+            ? normalizeCapabilityInput(input.capabilities ?? defaultAdminCapabilities())
+            : [],
       },
     });
 
@@ -706,6 +1138,36 @@ export async function findSessionById(pool: Pool, sessionId: string): Promise<Us
               THEN 'admin'
               ELSE user_profiles.role
             END AS role,
+            COALESCE(
+              (
+                SELECT json_agg(capability ORDER BY capability)
+                FROM operator_capability_bindings
+                WHERE account_id = user_profiles.account_id
+              ),
+              '[]'::json
+            ) AS capabilities,
+            COALESCE(
+              (
+                SELECT json_agg(
+                  json_build_object(
+                    'bindingId', id::text,
+                    'walletAddress', wallet_address,
+                    'actionClass', action_class,
+                    'environment', environment,
+                    'approvedAt', created_at,
+                    'approvedBy', provisioned_by,
+                    'ticketRef', provision_ticket_ref,
+                    'notes', notes
+                  )
+                  ORDER BY created_at ASC, wallet_address ASC, action_class ASC, environment ASC
+                )
+                FROM operator_signer_bindings
+                WHERE account_id = user_profiles.account_id
+                  AND active = TRUE
+                  AND revoked_at IS NULL
+              ),
+              '[]'::json
+            ) AS "signerAuthorizations",
             user_sessions.role AS "issuedRole",
             user_profiles.active AS active,
             issued_at AS "issuedAt", expires_at AS "expiresAt",

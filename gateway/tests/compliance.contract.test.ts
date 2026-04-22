@@ -159,6 +159,8 @@ async function startServer(options: StartServerOptions = {}) {
               ? 'admin2@agroasys.io'
               : 'admin@agroasys.io'
             : 'buyer@agroasys.io',
+        capabilities: role === 'admin' ? ['compliance:write'] : [],
+        signerAuthorizations: [],
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
       };

@@ -67,6 +67,11 @@ or revocation, the effective role returns to the durable base role.
 Granting break-glass revokes active sessions for the target profile. The
 operator must obtain a fresh Cotsel session after the grant.
 
+Break-glass does not automatically provision privileged signer authority.
+Signer-required gateway actions still require an approved signer wallet binding
+for the relevant action class and environment unless a separate policy
+explicitly grants that authority.
+
 ## Expiry
 
 Break-glass expires at `break_glass_expires_at`. Expired elevation is not
@@ -119,6 +124,7 @@ The reviewer must confirm:
 - the TTL was appropriate
 - access was revoked or expired
 - no durable admin role was created accidentally
+- no signer-required privileged action bypassed the approved signer-binding policy
 - privileged actions during the window match the incident scope
 - the audit trail exists in `auth_admin_audit_events`
 

@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'crypto';
 import { AbstractProvider, getAddress, Interface, isAddress, ZeroAddress } from 'ethers';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import { GatewayConfig } from '../config/env';
+import type { SignerAuthorization } from './authSessionClient';
 import { AuditLogEntry } from './auditLogStore';
 import {
   buildGovernanceIntentKey,
@@ -109,6 +110,8 @@ export interface PrepareGovernanceActionInput {
   tradeId?: string | null;
   audit: GovernanceMutationAuditInput;
   principal: GatewayPrincipal;
+  signerWallet: string;
+  signerBinding?: SignerAuthorization;
   requestContext: RequestContext;
   idempotencyKey: string;
 }
@@ -116,8 +119,9 @@ export interface PrepareGovernanceActionInput {
 export interface ConfirmGovernanceBroadcastInput {
   actionId: string;
   txHash: string;
-  signerWallet?: string | null;
+  signerWallet: string;
   principal: GatewayPrincipal;
+  signerBinding?: SignerAuthorization;
   requestContext: RequestContext;
 }
 
@@ -309,18 +313,21 @@ function buildAuditRecord(
   audit: GovernanceMutationAuditInput,
   principal: GatewayPrincipal,
   acceptedAt: string,
+  signerBinding?: SignerAuthorization,
 ): GovernanceActionAuditRecord {
-  const actorWallet = requireWalletBoundSession(principal, 'Governance mutation preparation');
   return {
     reason: audit.reason,
     evidenceLinks: audit.evidenceLinks,
     ticketRef: audit.ticketRef,
     actorSessionId: principal.sessionReference,
     ...(principal.session.accountId ? { actorAccountId: principal.session.accountId } : {}),
-    actorWallet,
+    actorWallet: normalizeAddressOrNull(principal.session.walletAddress),
     actorRole: principal.session.role,
     createdAt: acceptedAt,
     requestedBy: principal.session.userId,
+    signerBindingId: signerBinding?.bindingId ?? null,
+    signerActionClass: signerBinding?.actionClass ?? null,
+    signerEnvironment: signerBinding?.environment ?? null,
   };
 }
 
@@ -682,9 +689,7 @@ export class GovernanceMutationService {
   }
 
   async prepareAction(input: PrepareGovernanceActionInput): Promise<GovernanceActionPrepared> {
-    const signerWallet = normalizeSignerWallet(
-      requireWalletBoundSession(input.principal, 'Preparing privileged governance approval'),
-    );
+    const signerWallet = normalizeSignerWallet(input.signerWallet);
     const preparedAt = new Date().toISOString();
     const expiresAt = new Date(
       Date.parse(preparedAt) + this.config.governanceQueueTtlSeconds * 1000,
@@ -742,7 +747,7 @@ export class GovernanceMutationService {
       verificationError: null,
       verifiedAt: null,
       monitoringState: 'not_started',
-      audit: buildAuditRecord(input.audit, input.principal, preparedAt),
+      audit: buildAuditRecord(input.audit, input.principal, preparedAt, input.signerBinding),
     };
 
     const auditEntry: AuditLogEntry = {
@@ -755,7 +760,7 @@ export class GovernanceMutationService {
       idempotencyKey: input.idempotencyKey,
       actorId,
       actorUserId: input.principal.session.userId,
-      actorWalletAddress: input.principal.session.walletAddress,
+      actorWalletAddress: normalizeAddressOrNull(input.principal.session.walletAddress),
       actorRole: input.principal.session.role,
       status: 'prepared',
       metadata: {
@@ -782,7 +787,7 @@ export class GovernanceMutationService {
       idempotencyKey: input.idempotencyKey,
       actorId,
       actorUserId: input.principal.session.userId,
-      actorWalletAddress: input.principal.session.walletAddress,
+      actorWalletAddress: normalizeAddressOrNull(input.principal.session.walletAddress),
       actorRole: input.principal.session.role,
       status: existing.status,
       metadata: {
@@ -950,9 +955,7 @@ export class GovernanceMutationService {
       );
     }
 
-    const confirmingWallet = normalizeSignerWallet(
-      requireWalletBoundSession(input.principal, 'Confirming privileged governance broadcast'),
-    );
+    const confirmingWallet = normalizeSignerWallet(input.signerWallet);
     const assertedSignerWallet = normalizeConfirmedSignerWallet(input.signerWallet);
 
     const existing = await this.actionStore.get(input.actionId);
@@ -1081,7 +1084,7 @@ export class GovernanceMutationService {
       actionId: input.actionId,
       actorId,
       actorUserId: input.principal.session.userId,
-      actorWalletAddress: input.principal.session.walletAddress,
+      actorWalletAddress: normalizeAddressOrNull(input.principal.session.walletAddress),
       actorRole: input.principal.session.role,
       status: updatedAction.status,
       metadata: {

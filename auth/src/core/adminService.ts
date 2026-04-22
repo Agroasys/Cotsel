@@ -1,8 +1,16 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { AdminActor, UserProfile, UserRole } from '../types';
+import {
+  AdminActor,
+  OperatorCapability,
+  OperatorSignerActionClass,
+  OperatorSignerAuthorization,
+  UserProfile,
+  UserRole,
+} from '../types';
 import { ProfileStore } from './profileStore';
+import { OperatorAuthorityStore } from './operatorAuthorityStore';
 import {
   incrementAdminBreakGlassGranted,
   incrementAdminBreakGlassRevoked,
@@ -17,6 +25,8 @@ interface ProvisionProfileInput {
   orgId?: string | null;
   email?: string | null;
   walletAddress?: string | null;
+  capabilities?: OperatorCapability[];
+  capabilityTicketRef?: string | null;
   actor: AdminActor;
   reason: string;
 }
@@ -38,12 +48,25 @@ interface AccountActionInput {
   reason: string;
 }
 
+interface SignerBindingInput {
+  accountId: string;
+  walletAddress: string;
+  actionClass: OperatorSignerActionClass;
+  environment: string;
+  actor: AdminActor;
+  reason: string;
+  ticketRef?: string | null;
+  notes?: string | null;
+}
+
 export interface AdminService {
   provisionProfile(input: ProvisionProfileInput): Promise<UserProfile>;
   grantBreakGlass(input: GrantBreakGlassInput): Promise<UserProfile>;
   revokeBreakGlass(input: AccountActionInput): Promise<UserProfile | null>;
   reviewBreakGlass(input: AccountActionInput): Promise<UserProfile>;
   deactivateProfile(input: AccountActionInput): Promise<UserProfile>;
+  provisionSigner(input: SignerBindingInput): Promise<OperatorSignerAuthorization>;
+  revokeSigner(input: SignerBindingInput): Promise<OperatorSignerAuthorization | null>;
 }
 
 function normalizeReason(reason: string): string {
@@ -59,6 +82,7 @@ function normalizeReason(reason: string): string {
 
 export function createAdminService(
   profiles: ProfileStore,
+  authority: OperatorAuthorityStore,
   maxBreakGlassTtlSeconds: number,
 ): AdminService {
   return {
@@ -154,6 +178,40 @@ export function createAdminService(
         accountId: input.accountId,
       });
       return profile;
+    },
+
+    async provisionSigner(input) {
+      const environment = input.environment.trim();
+      if (!environment) {
+        throw new Error('environment is required');
+      }
+
+      return authority.provisionSigner({
+        accountId: input.accountId,
+        walletAddress: input.walletAddress,
+        actionClass: input.actionClass,
+        environment,
+        actor: input.actor,
+        reason: normalizeReason(input.reason),
+        ticketRef: input.ticketRef ?? null,
+        notes: input.notes?.trim() || null,
+      });
+    },
+
+    async revokeSigner(input) {
+      const environment = input.environment.trim();
+      if (!environment) {
+        throw new Error('environment is required');
+      }
+
+      return authority.revokeSigner({
+        accountId: input.accountId,
+        walletAddress: input.walletAddress,
+        actionClass: input.actionClass,
+        environment,
+        actor: input.actor,
+        reason: normalizeReason(input.reason),
+      });
     },
   };
 }

@@ -70,6 +70,19 @@ async function startServer(
         userId: `uid-${role}`,
         walletAddress: '0x00000000000000000000000000000000000000aa',
         role,
+        capabilities:
+          role === 'admin'
+            ? [
+                'governance:write',
+                'compliance:write',
+                'treasury:read',
+                'treasury:prepare',
+                'treasury:approve',
+                'treasury:execute_match',
+                'treasury:close',
+              ]
+            : [],
+        signerAuthorizations: [],
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
         ...sessionOverrides,
@@ -130,10 +143,24 @@ describe('gateway capabilities route contract', () => {
       expect(payload.data.subject.accountId).toBe('acct-admin');
       expect(payload.data.subject.authRole).toBe('admin');
       expect(payload.data.subject.gatewayRoles).toEqual(['operator:read', 'operator:write']);
+      expect(payload.data.subject.capabilities).toEqual([
+        'governance:write',
+        'compliance:write',
+        'treasury:read',
+        'treasury:prepare',
+        'treasury:approve',
+        'treasury:execute_match',
+        'treasury:close',
+      ]);
       expect(payload.data.routes.overviewRead).toBe(true);
       expect(payload.data.routes.governanceRead).toBe(true);
       expect(payload.data.actions.governanceWrite).toBe(true);
       expect(payload.data.actions.complianceWrite).toBe(true);
+      expect(payload.data.actions.treasuryRead).toBe(true);
+      expect(payload.data.actions.treasuryPrepare).toBe(true);
+      expect(payload.data.actions.treasuryApprove).toBe(true);
+      expect(payload.data.actions.treasuryExecuteMatch).toBe(true);
+      expect(payload.data.actions.treasuryClose).toBe(true);
       expect(payload.data.writeAccess).toEqual({
         mutationsConfigured: true,
         allowlisted: true,
@@ -158,9 +185,11 @@ describe('gateway capabilities route contract', () => {
       expect(payload.data.subject.accountId).toBe('acct-buyer');
       expect(payload.data.subject.authRole).toBe('buyer');
       expect(payload.data.subject.gatewayRoles).toEqual([]);
+      expect(payload.data.subject.capabilities).toEqual([]);
       expect(payload.data.routes.operationsRead).toBe(false);
       expect(payload.data.actions.governanceWrite).toBe(false);
       expect(payload.data.actions.complianceWrite).toBe(false);
+      expect(payload.data.actions.treasuryRead).toBe(false);
       expect(payload.data.writeAccess).toEqual({
         mutationsConfigured: true,
         allowlisted: false,
@@ -187,6 +216,7 @@ describe('gateway capabilities route contract', () => {
       expect(validateCapabilities(payload)).toBe(true);
       expect(payload.data.actions.governanceWrite).toBe(false);
       expect(payload.data.actions.complianceWrite).toBe(false);
+      expect(payload.data.actions.treasuryPrepare).toBe(false);
       expect(payload.data.writeAccess).toEqual({
         mutationsConfigured: false,
         allowlisted: true,

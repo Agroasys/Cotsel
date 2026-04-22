@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { AuditLogStore } from './auditLogStore';
-import type { AuthSession } from './authSessionClient';
+import type { AuthSession, SignerActionClass, SignerAuthorization } from './authSessionClient';
 import { GatewayError } from '../errors';
 import type { RequestContext } from '../middleware/requestContext';
 import { resolveGatewayActorKey, resolveTreasuryCapabilities } from '../middleware/auth';
@@ -78,8 +78,16 @@ export type TreasuryWorkflowMutationContext = {
   route: string;
   method: string;
   session: AuthSession;
+  signerPolicy?: TreasurySignerPolicyContext;
   audit: TreasuryWorkflowAuditInput;
 };
+
+export interface TreasurySignerPolicyContext {
+  required: boolean;
+  result: 'authorized' | 'not_required';
+  actionClass?: SignerActionClass;
+  binding?: SignerAuthorization;
+}
 
 export interface TreasuryWorkflowClient extends TreasuryWorkflowReader {
   createAccountingPeriod(
@@ -593,6 +601,10 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
 
   private buildTreasuryMetadata(context: TreasuryWorkflowMutationContext): Record<string, unknown> {
     const effectiveTreasuryCapabilities = resolveTreasuryCapabilities(context.session);
+    const signerPolicy = context.signerPolicy ?? {
+      required: false,
+      result: 'not_required' as const,
+    };
     return {
       gatewayActorKey: resolveGatewayActorKey(context.session),
       gatewayUserId: context.session.userId,
@@ -602,6 +614,12 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
       gatewayTreasuryCapabilitiesEffective: effectiveTreasuryCapabilities,
       requestId: context.requestContext?.requestId ?? null,
       correlationId: context.requestContext?.correlationId ?? null,
+      signerPolicyRequired: signerPolicy.required,
+      signerPolicyResult: signerPolicy.result,
+      signerPolicyActionClass: signerPolicy.actionClass ?? null,
+      signerBindingId: signerPolicy.binding?.bindingId ?? null,
+      signerBindingEnvironment: signerPolicy.binding?.environment ?? null,
+      signerBindingWallet: signerPolicy.binding?.walletAddress ?? null,
       auditReason: context.audit.reason,
       auditTicketRef: context.audit.ticketRef,
       auditEvidenceReferences: context.audit.evidenceReferences ?? [],
@@ -648,6 +666,7 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
           reason: context.audit.reason,
           evidenceReferences: context.audit.evidenceReferences ?? [],
           correlationId: context.requestContext?.correlationId ?? null,
+          signerPolicy: context.signerPolicy ?? { required: false, result: 'not_required' },
           result: data,
         },
         'Failed to build treasury audit payload',

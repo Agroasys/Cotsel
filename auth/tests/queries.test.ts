@@ -2,7 +2,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool, PoolClient } from 'pg';
-import { normalizeSessionRow, upsertTrustedProfile } from '../src/database/queries';
+import {
+  normalizeSessionRow,
+  provisionOperatorSignerBinding,
+  upsertTrustedProfile,
+} from '../src/database/queries';
 import { UserProfile } from '../src/types';
 
 function buildProfile(overrides: Partial<UserProfile> = {}): UserProfile {
@@ -48,6 +52,8 @@ describe('normalizeSessionRow', () => {
       walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
       email: 'ops@example.com',
       role: 'admin',
+      capabilities: null,
+      signerAuthorizations: null,
       issuedAt: '1772916944',
       expiresAt: '1772920544',
       revokedAt: null,
@@ -69,6 +75,8 @@ describe('normalizeSessionRow', () => {
         walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
         email: null,
         role: 'admin',
+        capabilities: null,
+        signerAuthorizations: null,
         issuedAt: 'not-a-number',
         expiresAt: '1772920544',
         revokedAt: null,
@@ -184,5 +192,84 @@ describe('upsertTrustedProfile', () => {
     ).rejects.toThrow('walletAddress is already linked to a different account');
 
     expect(query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+});
+
+describe('provisionOperatorSignerBinding', () => {
+  test('rejects signer bindings for non-durable-admin profiles before any binding write occurs', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [buildProfile({ role: 'buyer', baseRole: 'buyer' })],
+      })
+      .mockResolvedValueOnce({});
+    const pool = buildMockPool(query);
+
+    await expect(
+      provisionOperatorSignerBinding(pool, {
+        accountId: 'acct-1',
+        walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+        actionClass: 'governance',
+        environment: 'staging-e2e-real',
+        actor: { type: 'service_auth', id: 'ops-admin-control' },
+        reason: 'SEC-1201 reject signer binding for non-admin profile',
+        ticketRef: 'SEC-1201',
+      }),
+    ).rejects.toThrow('Signer bindings require a durable admin profile');
+
+    expect(query).toHaveBeenNthCalledWith(1, 'BEGIN');
+    expect(query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+
+  test('returns the existing active binding deterministically without creating a duplicate row', async () => {
+    const existingCreatedAt = new Date('2026-04-21T00:00:00.000Z');
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [buildProfile()],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'binding-1',
+            createdAt: existingCreatedAt,
+            provisionedBy: 'ops-admin-control',
+            provisionTicketRef: 'SEC-100',
+            notes: 'approved signer binding',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({});
+    const pool = buildMockPool(query);
+
+    const binding = await provisionOperatorSignerBinding(pool, {
+      accountId: 'acct-1',
+      walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+      actionClass: 'governance',
+      environment: 'staging-e2e-real',
+      actor: { type: 'service_auth', id: 'ops-admin-control' },
+      reason: 'SEC-100 provision governance signer',
+      ticketRef: 'SEC-100',
+      notes: 'approved signer binding',
+    });
+
+    expect(binding).toEqual({
+      bindingId: 'binding-1',
+      walletAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+      actionClass: 'governance',
+      environment: 'staging-e2e-real',
+      approvedAt: existingCreatedAt.toISOString(),
+      approvedBy: 'ops-admin-control',
+      ticketRef: 'SEC-100',
+      notes: 'approved signer binding',
+    });
+    expect(query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('FROM operator_signer_bindings'),
+      ['acct-1', '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'governance', 'staging-e2e-real'],
+    );
+    expect(query).toHaveBeenLastCalledWith('COMMIT');
   });
 });
