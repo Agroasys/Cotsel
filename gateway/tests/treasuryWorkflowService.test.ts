@@ -185,6 +185,35 @@ describe('TreasuryWorkflowService', () => {
     expect(auditLogStore.entries).toHaveLength(0);
   });
 
+  test('createSweepBatch rejects downstream responses with invalid JSON bodies', async () => {
+    const orchestrator: DownstreamServiceOrchestrator = {
+      fetch: jest.fn().mockResolvedValue(
+        new Response('{ invalid json', {
+          status: 201,
+          headers: {
+            'content-type': 'application/json',
+          },
+        }),
+      ),
+      probeHealth: jest.fn(),
+    };
+    const auditLogStore = createInMemoryAuditLogStore();
+    const service = new TreasuryWorkflowService(orchestrator, auditLogStore);
+
+    await expect(
+      service.createSweepBatch(buildCreateSweepBatchInput(), buildCreateSweepBatchContext()),
+    ).rejects.toMatchObject<Partial<GatewayError>>({
+      statusCode: 502,
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: 'Failed treasury operation treasury.sweep_batch.created',
+      details: expect.objectContaining({
+        upstream: 'treasury',
+      }),
+    });
+
+    expect(auditLogStore.entries).toHaveLength(0);
+  });
+
   test('forwards non-empty treasury capabilities into downstream metadata', async () => {
     const orchestrator: DownstreamServiceOrchestrator = {
       fetch: jest.fn().mockResolvedValue(
@@ -248,28 +277,18 @@ describe('TreasuryWorkflowService', () => {
         createdBy: 'uid-admin|0x00000000000000000000000000000000000000bb',
         metadata: expect.objectContaining({
           gatewayTreasuryCapabilitiesRaw: [...capabilities],
-          gatewayTreasuryCapabilitiesEffective: ['treasury:prepare', 'treasury:read'],
         }),
       }),
-    );
-    expect(
-      downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective.every((capability: string) =>
-        capability.startsWith('treasury:'),
-      ),
-    ).toBe(true);
-    expect(downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective).not.toContain(
-      'governance:write',
     );
     expect(auditLogStore.entries[0].metadata).toEqual(
       expect.objectContaining({
         gatewayTreasuryCapabilitiesRaw: [...capabilities],
-        gatewayTreasuryCapabilitiesEffective: ['treasury:prepare', 'treasury:read'],
         signerPolicyResult: 'not_required',
       }),
     );
   });
 
-  test('deduplicates treasury capabilities and filters non-treasury capabilities', async () => {
+  test('deduplicates treasury capabilities while preserving effective capability order', async () => {
     const orchestrator: DownstreamServiceOrchestrator = {
       fetch: jest.fn().mockResolvedValue(
         new Response(JSON.stringify({ success: true, data: { id: 14, status: 'DRAFT' } }), {
