@@ -557,7 +557,8 @@ describe('treasury service-authenticated routes', () => {
       'treasury-legacy-partner-handoff-nonce',
       600,
     );
-    expect(response.headers.has('deprecation') || response.headers.has('sunset')).toBe(true);
+    expect(response.headers.get('deprecation')).toBe('true');
+    expect(response.headers.get('sunset')).toBe('Thu, 31 Dec 2026 23:59:59 GMT');
     expect(recordPartnerHandoffHandler).toHaveBeenCalledTimes(1);
   });
 });
