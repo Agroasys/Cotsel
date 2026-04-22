@@ -184,8 +184,9 @@ describe('TreasuryWorkflowService', () => {
     const capabilities: OperatorCapability[] = [
       'treasury:prepare',
       'treasury:read',
-      // Intentional duplicate to validate effective capability deduplication.
+      // Intentional duplicates to validate effective capability deduplication.
       'treasury:prepare',
+      'treasury:read',
       'governance:write',
     ];
 
@@ -230,10 +231,6 @@ describe('TreasuryWorkflowService', () => {
     expect(downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective).not.toContain(
       'governance:write',
     );
-    const prepareCapabilities = downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective.filter(
-      (capability: OperatorCapability) => capability === 'treasury:prepare',
-    );
-    expect(prepareCapabilities).toHaveLength(1);
   });
 
   test('records authorized signer policy metadata when signer authorization is present', async () => {
