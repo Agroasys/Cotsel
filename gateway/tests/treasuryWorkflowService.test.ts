@@ -228,9 +228,12 @@ describe('TreasuryWorkflowService', () => {
         }),
       }),
     );
-    expect(downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective).not.toContain(
-      'governance:write',
-    );
+    const effectiveCapabilities = downstreamBody.metadata.gatewayTreasuryCapabilitiesEffective;
+    expect(effectiveCapabilities).toEqual(['treasury:prepare', 'treasury:read']);
+    expect(
+      effectiveCapabilities.every((capability: string) => capability.startsWith('treasury:')),
+    ).toBe(true);
+    expect(effectiveCapabilities).not.toContain('governance:write');
   });
 
   test('records authorized signer policy metadata when signer authorization is present', async () => {
