@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createInMemoryAuditLogStore } from '../src/core/auditLogStore';
+import type { OperatorCapability } from '../src/core/authSessionClient';
 import { TreasuryWorkflowService } from '../src/core/treasuryWorkflowService';
 import type { DownstreamServiceOrchestrator } from '../src/core/serviceOrchestrator';
 import { GatewayError } from '../src/errors';
@@ -180,13 +181,13 @@ describe('TreasuryWorkflowService', () => {
     const auditLogStore = createInMemoryAuditLogStore();
     const service = new TreasuryWorkflowService(orchestrator, auditLogStore);
 
-    const capabilities = [
+    const capabilities: OperatorCapability[] = [
       'treasury:prepare',
       'treasury:read',
       // Intentional duplicate to validate effective capability deduplication.
       'treasury:prepare',
       'governance:write',
-    ] as const;
+    ];
 
     await service.createSweepBatch(
       {
