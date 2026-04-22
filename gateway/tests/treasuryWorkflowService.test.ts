@@ -183,6 +183,7 @@ describe('TreasuryWorkflowService', () => {
     const capabilities = [
       'treasury:prepare',
       'treasury:read',
+      // Intentional duplicate to validate effective capability deduplication.
       'treasury:prepare',
       'governance:write',
     ] as const;
