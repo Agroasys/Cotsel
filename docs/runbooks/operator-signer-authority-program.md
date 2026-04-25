@@ -32,6 +32,7 @@ Relevant runtime surfaces:
 
 - `auth /session` now emits both operator capabilities and approved signer bindings.
 - `gateway` does not broaden missing capability data into full operator power.
+- Durable admin profile provisioning does not silently grant every operator capability. Operator capabilities must be explicitly provisioned through admin-control.
 - Signer authority is explicitly resolved from backend-managed signer bindings by:
   - operator account
   - wallet address
@@ -46,12 +47,94 @@ Relevant runtime surfaces:
 - `gateway/src/core/authSessionClient.ts`
 - `gateway/src/middleware/auth.ts`
 
+### 2.1 Cotsel#489 staging provisioning flow
+
+Use admin-control routes for staging rehearsal provisioning. Manual SQL was used once to unblock the first staging diagnosis, but it is not the production process and must not be repeated as the normal path.
+
+Required admin-control calls:
+
+1. `POST /admin/profiles/provision`
+   - `accountId`: rehearsal operator account, for example `demo-admin-001`
+   - `role`: `admin`
+   - `walletAddress`: `0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a`
+   - `capabilities`: include only the explicit capabilities needed, for #489 at least `governance:write` and `compliance:write`
+   - `capabilityTicketRef`: `COTSEL-489`
+2. `POST /admin/signers/provision`
+   - `accountId`: same rehearsal operator account
+   - `walletAddress`: `0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a`
+   - `actionClass`: `governance`
+   - `environment`: `production` for the current staging gateway signer policy
+   - `ticketRef`: `COTSEL-489`
+
+The signer binding table columns used by the current schema are `account_id`, `wallet_address`, `action_class`, `environment`, `active`, `provisioned_by`, `provision_reason`, `provision_ticket_ref`, `notes`, `metadata`, `created_at`, `updated_at`, `revoked_at`, `revoked_by`, and `revoked_reason`. Code and tests must align to those names; do not guess alternate names such as `signer_wallet`, `signer_address`, `granted_by`, `reason`, or `is_active`.
+
+### 2.2 Final #489 staging command
+
+Run the full prepare-only readiness proof with:
+
+```bash
+npm run dashboard:cotsel-489:staging
+```
+
+Required non-public environment values:
+
+- `AUTH_ADMIN_CONTROL_API_KEYS_JSON`: active admin-control service-auth key JSON.
+- `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON`: active trusted session exchange key JSON.
+- `COTSEL_489_AUTH_DATABASE_URL`: auth database URL used only to verify schema/profile truth.
+- `COTSEL_489_GATEWAY_DATABASE_URL`: gateway database URL used only to verify `prepared_signing_payload` persistence.
+
+Optional overrides:
+
+- `COTSEL_489_AUTH_BASE_URL`, default `https://cotsel.sys.agroasys.com/api/auth/v1`
+- `COTSEL_489_GATEWAY_BASE_URL`, default `https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1`
+- `COTSEL_489_ACCOUNT_ID`, default `demo-admin-001`
+- `COTSEL_489_WALLET_ADDRESS`, default `0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a`
+- `COTSEL_489_SIGNER_ENVIRONMENT`, default `production`
+
+The script proves, in order:
+
+- auth schema has `operator_capability_bindings` and `operator_signer_bindings`
+- admin-control provisioning grants only explicit capabilities
+- admin-control signer provisioning creates the governance signer binding
+- trusted session exchange returns a fresh operator session
+- gateway `/auth/capabilities` reports `governance:write` and `actions.governanceWrite: true`
+- gateway `/governance/pause/prepare` returns a prepared pause signing payload for Base Sepolia chain `84532`
+- gateway database persisted `prepared_signing_payload` for the prepared action
+
+It does not broadcast or execute pause.
+
+### 2.3 Dashboard operator session script base URL
+
+For legacy wallet-login smoke checks only, `scripts/dashboard-operator-session.mjs` now supports both auth base styles:
+
+- direct auth container base: `DASHBOARD_SMOKE_AUTH_BASE_URL=http://127.0.0.1:3005`
+- routed public auth base: `DASHBOARD_SMOKE_AUTH_BASE_URL=https://cotsel.sys.agroasys.com/api/auth/v1`
+
+If `/challenge` returns `404`, the script tries the alternate direct/routed path and reports every attempted challenge URL with status and a safe response-body preview. It writes the session artifact only after challenge, login, and `/session` validation succeed, so a failed login does not overwrite a previously valid `COTSEL_SESSION_ID` artifact with empty output.
+
+### 2.4 Failure meanings
+
+- `FORBIDDEN Operator capability 'governance:write' is required`: the session may be admin, but backend capability truth does not grant governance write authority.
+- `SIGNER_NOT_AUTHORIZED`: the session has the governance capability, but the requested signer wallet is not actively approved for action class `governance` in the gateway signer environment.
+- `disabled_or_not_allowlisted`: the session has capability truth, but gateway mutation enablement or write allowlist posture blocks writes before action-specific signer policy.
+
 ### 3. Governance direct-sign requires an approved governance signer wallet
 
 - Human governance uses `prepare -> wallet sign/broadcast -> confirm -> verify/monitor`.
 - Governance prepare and confirm both require an approved signer binding for action class `governance`.
 - Human queue-style governance POST routes are retired and fail closed.
 - Prepared governance payloads are bound to the expected signer wallet, and confirm verifies the same signer wallet against the observed chain transaction.
+- A successful prepare-only staging response has this proof shape:
+  - `success: true`
+  - `data.status: prepared`
+  - `data.category: pause`
+  - `data.signing.chainId: 84532`
+  - `data.signing.contractAddress: 0x37F5d97fd9D227dd39391ACfC3C77FDF7c7F742A`
+  - `data.signing.contractMethod: pause`
+  - `data.signing.txRequest.data: 0x8456cb59`
+  - `data.signing.signerWallet: 0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a`
+  - `data.signing.preparedPayloadHash`: non-empty hash
+  - no broadcast or execution step
 
 Relevant runtime surfaces:
 

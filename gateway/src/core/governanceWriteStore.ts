@@ -128,17 +128,29 @@ function governanceActionValueExpression(
   return column.jsonb ? `${placeholder}::jsonb` : placeholder;
 }
 
+export function validateGovernanceActionInsertShape(input: {
+  columnCount: number;
+  parameterCount: number;
+  generatedValueCount: number;
+}): void {
+  if (input.parameterCount !== input.columnCount) {
+    throw new Error(
+      `Governance action insert column/value mismatch: ${input.columnCount} columns, ${input.parameterCount} values`,
+    );
+  }
+
+  if (input.generatedValueCount !== input.parameterCount + 1) {
+    throw new Error(
+      `Governance action insert generated value mismatch: ${input.parameterCount + 1} values expected, ${input.generatedValueCount} generated`,
+    );
+  }
+}
+
 async function upsertGovernanceAction(
   client: PoolClient,
   action: GovernanceActionRecord,
 ): Promise<void> {
   const params = governanceActionParams(action);
-  if (params.length !== GOVERNANCE_ACTION_INSERT_COLUMNS.length) {
-    throw new Error(
-      `Governance action insert column/value mismatch: ${GOVERNANCE_ACTION_INSERT_COLUMNS.length} columns, ${params.length} values`,
-    );
-  }
-
   const insertColumns = [
     ...GOVERNANCE_ACTION_INSERT_COLUMNS.map((column) => column.name),
     'updated_at',
@@ -148,11 +160,11 @@ async function upsertGovernanceAction(
     'NOW()',
   ];
 
-  if (insertValues.length !== params.length + 1) {
-    throw new Error(
-      `Governance action insert generated value mismatch: ${params.length + 1} values expected, ${insertValues.length} generated`,
-    );
-  }
+  validateGovernanceActionInsertShape({
+    columnCount: GOVERNANCE_ACTION_INSERT_COLUMNS.length,
+    parameterCount: params.length,
+    generatedValueCount: insertValues.length,
+  });
 
   await client.query(
     `INSERT INTO governance_actions (

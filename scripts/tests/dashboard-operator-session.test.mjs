@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   assertExpectedSession,
+  buildAuthEndpointCandidates,
   DEFAULT_TIMEOUT_MS,
   maskSessionId,
   normalizeTimeoutMs,
@@ -14,6 +15,28 @@ test('normalizeTimeoutMs falls back for invalid timeout values', () => {
   assert.equal(normalizeTimeoutMs('-1', DEFAULT_TIMEOUT_MS), DEFAULT_TIMEOUT_MS);
   assert.equal(normalizeTimeoutMs('NaN', DEFAULT_TIMEOUT_MS), DEFAULT_TIMEOUT_MS);
   assert.equal(normalizeTimeoutMs('1500', DEFAULT_TIMEOUT_MS), 1500);
+});
+
+test('buildAuthEndpointCandidates supports direct and routed auth bases', () => {
+  assert.deepEqual(
+    buildAuthEndpointCandidates('http://127.0.0.1:3005', 'challenge', {
+      wallet: '0xabc',
+    }).map((url) => url.toString()),
+    [
+      'http://127.0.0.1:3005/challenge?wallet=0xabc',
+      'http://127.0.0.1:3005/api/auth/v1/challenge?wallet=0xabc',
+    ],
+  );
+
+  assert.deepEqual(
+    buildAuthEndpointCandidates('https://cotsel.sys.agroasys.com/api/auth/v1', 'challenge', {
+      wallet: '0xabc',
+    }).map((url) => url.toString()),
+    [
+      'https://cotsel.sys.agroasys.com/api/auth/v1/challenge?wallet=0xabc',
+      'https://cotsel.sys.agroasys.com/challenge?wallet=0xabc',
+    ],
+  );
 });
 
 test('assertExpectedSession requires the requested wallet and role', () => {

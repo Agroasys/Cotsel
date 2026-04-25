@@ -3,6 +3,7 @@ import process from 'node:process';
 import { Wallet } from 'ethers';
 import {
   assertExpectedSession,
+  buildAuthEndpointCandidates,
   DEFAULT_SESSION_OUTPUT_FILE,
   DEFAULT_TIMEOUT_MS,
   maskSessionId,
@@ -33,20 +34,15 @@ function requiredEnv(name) {
   return value.trim();
 }
 
-function buildUrl(baseUrl, pathname, query = {}) {
-  const base = new URL(baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
-  const url = new URL(pathname.replace(/^\//u, ''), base);
-
-  for (const [key, value] of Object.entries(query)) {
-    if (typeof value === 'string' && value.length > 0) {
-      url.searchParams.set(key, value);
-    }
+function safeBodyPreview(payload) {
+  if (payload === null || payload === undefined) {
+    return 'null';
   }
-
-  return url;
+  const serialized = JSON.stringify(payload);
+  return serialized.length <= 500 ? serialized : `${serialized.slice(0, 500)}...`;
 }
 
-async function fetchJson(url, options = {}) {
+async function fetchJsonResponse(url, options = {}) {
   const controller = new AbortController();
   const timeoutMs = normalizeTimeoutMs(
     optionalEnv('DASHBOARD_SMOKE_REQUEST_TIMEOUT_MS', String(DEFAULT_TIMEOUT_MS)),
@@ -65,10 +61,11 @@ async function fetchJson(url, options = {}) {
     });
 
     const payload = await response.json().catch(() => null);
-    if (!response.ok) {
-      fail(`${url} returned HTTP ${response.status}: ${JSON.stringify(payload)}`);
-    }
-    return payload;
+    return {
+      ok: response.ok,
+      status: response.status,
+      payload,
+    };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       fail(`${url} timed out after ${timeoutMs}ms`);
@@ -77,6 +74,41 @@ async function fetchJson(url, options = {}) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchJson(url, options = {}) {
+  const result = await fetchJsonResponse(url, options);
+  if (!result.ok) {
+    fail(`${url} returned HTTP ${result.status}: ${safeBodyPreview(result.payload)}`);
+  }
+  return result.payload;
+}
+
+async function fetchChallenge(authBaseUrl, walletAddress) {
+  const attempts = [];
+  for (const url of buildAuthEndpointCandidates(authBaseUrl, 'challenge', {
+    wallet: walletAddress,
+  })) {
+    const result = await fetchJsonResponse(url.toString());
+    attempts.push({
+      url: url.toString(),
+      status: result.status,
+      body: safeBodyPreview(result.payload),
+    });
+    if (result.ok) {
+      return {
+        authBaseUrl: new URL('.', url).toString().replace(/\/$/u, ''),
+        payload: result.payload,
+      };
+    }
+    if (result.status !== 404) {
+      fail(`${url} returned HTTP ${result.status}: ${safeBodyPreview(result.payload)}`);
+    }
+  }
+
+  fail(
+    `auth challenge route returned 404 for all candidate base paths: ${JSON.stringify(attempts, null, 2)}`,
+  );
 }
 
 async function main() {
@@ -92,9 +124,9 @@ async function main() {
   const wallet = new Wallet(privateKey);
   const walletAddress = wallet.address;
 
-  const challengeEnvelope = await fetchJson(
-    buildUrl(authBaseUrl, 'challenge', { wallet: walletAddress }).toString(),
-  );
+  const challengeAttempt = await fetchChallenge(authBaseUrl, walletAddress);
+  const resolvedAuthBaseUrl = challengeAttempt.authBaseUrl;
+  const challengeEnvelope = challengeAttempt.payload;
   const challenge = challengeEnvelope?.data;
   if (!challenge?.message) {
     fail(`auth challenge payload missing message: ${JSON.stringify(challengeEnvelope)}`);
@@ -102,25 +134,31 @@ async function main() {
 
   const signature = await wallet.signMessage(challenge.message);
 
-  const loginEnvelope = await fetchJson(buildUrl(authBaseUrl, 'login').toString(), {
-    method: 'POST',
-    body: JSON.stringify({
-      walletAddress,
-      signature,
-      role,
-      ...(orgId ? { orgId } : {}),
-    }),
-  });
+  const loginEnvelope = await fetchJson(
+    buildAuthEndpointCandidates(resolvedAuthBaseUrl, 'login')[0].toString(),
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        walletAddress,
+        signature,
+        role,
+        ...(orgId ? { orgId } : {}),
+      }),
+    },
+  );
   const login = loginEnvelope?.data;
   if (!login?.sessionId) {
     fail(`auth login payload missing sessionId: ${JSON.stringify(loginEnvelope)}`);
   }
 
-  const sessionEnvelope = await fetchJson(buildUrl(authBaseUrl, 'session').toString(), {
-    headers: {
-      Authorization: `Bearer ${login.sessionId}`,
+  const sessionEnvelope = await fetchJson(
+    buildAuthEndpointCandidates(resolvedAuthBaseUrl, 'session')[0].toString(),
+    {
+      headers: {
+        Authorization: `Bearer ${login.sessionId}`,
+      },
     },
-  });
+  );
   const session = sessionEnvelope?.data;
   try {
     assertExpectedSession({ session, walletAddress, role });
@@ -133,7 +171,7 @@ async function main() {
   writeSessionArtifact({
     outputPath,
     artifact: {
-      authBaseUrl,
+      authBaseUrl: resolvedAuthBaseUrl,
       walletAddress,
       sessionId: login.sessionId,
       expiresAt: login.expiresAt,
@@ -144,7 +182,7 @@ async function main() {
   process.stdout.write(
     `${JSON.stringify(
       {
-        authBaseUrl,
+        authBaseUrl: resolvedAuthBaseUrl,
         walletAddress,
         sessionFile: outputPath,
         sessionIdPreview: maskSessionId(login.sessionId),

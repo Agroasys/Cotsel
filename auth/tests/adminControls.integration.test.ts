@@ -260,6 +260,11 @@ describe('admin controls persistence integration', () => {
             ['agroasys-user:admin-1'],
           );
           expect(provisioned.rows[0]).toMatchObject({ role: 'admin', active: true });
+          const implicitCapabilities = await pool.query(
+            `SELECT capability FROM operator_capability_bindings WHERE account_id = $1`,
+            ['agroasys-user:admin-1'],
+          );
+          expect(implicitCapabilities.rows).toEqual([]);
 
           const session = await app.sessionService.issueTrustedSession({
             accountId: 'agroasys-user:admin-1',
@@ -515,6 +520,8 @@ describe('admin controls persistence integration', () => {
             accountId: 'agroasys-user:signer-1',
             role: 'admin',
             email: 'signer@example.com',
+            capabilities: ['governance:write', 'compliance:write'],
+            capabilityTicketRef: 'SEC-1100',
             reason: 'SEC-1100 durable admin provisioning for signer binding proof',
           });
           const provision = await fetch(`${app.baseUrl}${provisionPath}`, {
@@ -528,6 +535,19 @@ describe('admin controls persistence integration', () => {
             body: provisionBody,
           });
           expect(provision.status).toBe(201);
+
+          const preSignerSession = await app.sessionService.issueTrustedSession({
+            accountId: 'agroasys-user:signer-1',
+            role: 'admin',
+            email: 'signer@example.com',
+            walletAddress: '0x00000000000000000000000000000000000000aa',
+          });
+          const resolvedBeforeSigner = await app.sessionService.resolve(preSignerSession.sessionId);
+          expect(resolvedBeforeSigner?.capabilities).toEqual([
+            'compliance:write',
+            'governance:write',
+          ]);
+          expect(resolvedBeforeSigner?.signerAuthorizations).toEqual([]);
 
           const signerProvisionPath = '/api/auth/v1/admin/signers/provision';
           const signerProvisionBody = JSON.stringify({
@@ -558,6 +578,7 @@ describe('admin controls persistence integration', () => {
           });
           const resolved = await app.sessionService.resolve(session.sessionId);
           expect(resolved?.capabilities).toContain('governance:write');
+          expect(resolved?.capabilities).toContain('compliance:write');
           expect(resolved?.signerAuthorizations).toEqual(
             expect.arrayContaining([
               expect.objectContaining({

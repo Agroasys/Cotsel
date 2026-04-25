@@ -586,6 +586,60 @@ describe('gateway governance mutation routes contract', () => {
     }
   });
 
+  test('direct-sign prepare routes reject admin sessions without explicit governance capability', async () => {
+    const { server, baseUrl, governanceActionStore } = await startServer({
+      sessionFixtures: {
+        'sess-admin-no-governance-capability': {
+          accountId: 'acct-admin-no-governance-capability',
+          userId: 'uid-admin',
+          walletAddress: '0x00000000000000000000000000000000000000aa',
+          role: 'admin',
+          email: 'admin@agroasys.io',
+          capabilities: [],
+          signerAuthorizations: [
+            {
+              bindingId: 'binding-governance-admin',
+              walletAddress: '0x00000000000000000000000000000000000000aa',
+              actionClass: 'governance',
+              environment: 'test',
+              approvedAt: '2026-03-07T00:00:00.000Z',
+              approvedBy: 'ops-admin-control',
+              ticketRef: 'SEC-300',
+              notes: null,
+            },
+          ],
+          issuedAt: Date.now(),
+          expiresAt: Date.now() + 60_000,
+        },
+      },
+      configureReader(reader) {
+        reader.getGovernanceStatus.mockResolvedValue(buildStatusSnapshot({ paused: false }));
+      },
+    });
+
+    try {
+      const response = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin-no-governance-capability',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-no-governance-capability',
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(validateError(payload)).toBe(true);
+      expect(payload.error.code).toBe('FORBIDDEN');
+      expect(payload.error.message).toBe("Operator capability 'governance:write' is required");
+      const stored = await governanceActionStore.list({ limit: 10 });
+      expect(stored.items).toHaveLength(0);
+    } finally {
+      server.close();
+    }
+  });
+
   test('prepare routes reuse the same open direct-sign action for the same governance intent', async () => {
     const { server, baseUrl, governanceActionStore } = await startServer({
       configureReader(reader) {

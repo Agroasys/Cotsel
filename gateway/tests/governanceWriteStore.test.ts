@@ -8,7 +8,10 @@ import {
   GovernanceActionRecord,
   GovernanceActionStore,
 } from '../src/core/governanceStore';
-import { createPostgresGovernanceWriteStore } from '../src/core/governanceWriteStore';
+import {
+  createPostgresGovernanceWriteStore,
+  validateGovernanceActionInsertShape,
+} from '../src/core/governanceWriteStore';
 
 function buildAction(overrides: Partial<GovernanceActionRecord> = {}): GovernanceActionRecord {
   return {
@@ -367,6 +370,21 @@ describe('createPostgresGovernanceWriteStore', () => {
     expect(values[columns.indexOf('evidence_links')]).toBe('$21::jsonb');
     expect(values[columns.indexOf('approved_by')]).toBe('$27::jsonb');
     expect(values[columns.indexOf('prepared_signing_payload')]).toBe('$34::jsonb');
+    expect(sql).toContain('prepared_signing_payload = EXCLUDED.prepared_signing_payload');
+    expect(params[columns.indexOf('prepared_signing_payload')]).toEqual(
+      JSON.stringify(directSignAction.signing),
+    );
+    expect(result.action.signing).toEqual(directSignAction.signing);
     expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects governance action insert column/value count drift before PostgreSQL', () => {
+    expect(() =>
+      validateGovernanceActionInsertShape({
+        columnCount: 39,
+        parameterCount: 43,
+        generatedValueCount: 44,
+      }),
+    ).toThrow('Governance action insert column/value mismatch');
   });
 });

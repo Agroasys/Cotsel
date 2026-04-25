@@ -262,10 +262,6 @@ async function revokeActiveSessionsForUser(
   return result.rowCount ?? 0;
 }
 
-function defaultAdminCapabilities(): OperatorCapability[] {
-  return [...OPERATOR_CAPABILITIES];
-}
-
 function normalizeCapabilityInput(capabilities: readonly string[]): OperatorCapability[] {
   const invalid = capabilities.filter((capability) => !OPERATOR_CAPABILITY_SET.has(capability));
   if (invalid.length > 0) {
@@ -777,9 +773,7 @@ export async function provisionProfileWithAudit(
     const revokedSessions = previous ? await revokeActiveSessionsForUser(client, updated.id) : 0;
 
     if (input.role === 'admin') {
-      const capabilities = normalizeCapabilityInput(
-        input.capabilities ?? defaultAdminCapabilities(),
-      );
+      const capabilities = normalizeCapabilityInput(input.capabilities ?? []);
       await client.query(`DELETE FROM operator_capability_bindings WHERE account_id = $1`, [
         input.accountId,
       ]);
@@ -837,9 +831,7 @@ export async function provisionProfileWithAudit(
         revokedSessions,
         orgId: updated.orgId,
         capabilities:
-          input.role === 'admin'
-            ? normalizeCapabilityInput(input.capabilities ?? defaultAdminCapabilities())
-            : [],
+          input.role === 'admin' ? normalizeCapabilityInput(input.capabilities ?? []) : [],
       },
     });
 

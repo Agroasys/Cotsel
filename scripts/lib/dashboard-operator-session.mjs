@@ -12,6 +12,36 @@ export function normalizeTimeoutMs(rawValue, fallback = DEFAULT_TIMEOUT_MS) {
   return Math.trunc(numericValue);
 }
 
+export function buildAuthEndpointCandidates(baseUrl, pathname, query = {}) {
+  const base = new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  const cleanPathname = pathname.replace(/^\/+/u, "");
+  const candidates = [];
+
+  function pushCandidate(candidateBase, candidatePathname) {
+    const url = new URL(candidatePathname, candidateBase);
+    for (const [key, value] of Object.entries(query)) {
+      if (typeof value === "string" && value.length > 0) {
+        url.searchParams.set(key, value);
+      }
+    }
+    if (!candidates.some((candidate) => candidate.toString() === url.toString())) {
+      candidates.push(url);
+    }
+  }
+
+  pushCandidate(base, cleanPathname);
+
+  if (base.pathname.replace(/\/+$/u, "") === "/api/auth/v1") {
+    const directBase = new URL(base.toString());
+    directBase.pathname = "/";
+    pushCandidate(directBase, cleanPathname);
+  } else {
+    pushCandidate(base, `api/auth/v1/${cleanPathname}`);
+  }
+
+  return candidates;
+}
+
 export function assertExpectedSession({ session, walletAddress, role }) {
   if (!session?.walletAddress || !session?.role) {
     throw new Error("auth session payload missing required fields");
