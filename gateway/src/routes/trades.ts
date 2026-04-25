@@ -65,11 +65,14 @@ export function createTradeRouter(options: TradeRouterOptions): Router {
 
   router.get('/trades', async (req, res, next) => {
     try {
-      const records = await options.tradeReadService.listTrades(
+      const snapshot = await options.tradeReadService.listTradesSnapshot(
         parseLimit(req.query.limit),
         parseOffset(req.query.offset),
       );
-      res.status(200).json(successResponse(records));
+      res.status(200).json({
+        ...successResponse(snapshot.items),
+        freshness: snapshot.freshness,
+      });
     } catch (error) {
       next(error);
     }
@@ -82,12 +85,15 @@ export function createTradeRouter(options: TradeRouterOptions): Router {
         throw new GatewayError(400, 'VALIDATION_ERROR', 'Path parameter tradeId is required');
       }
 
-      const record = await options.tradeReadService.getTrade(tradeId);
-      if (!record) {
+      const snapshot = await options.tradeReadService.getTradeSnapshot(tradeId);
+      if (!snapshot.item) {
         throw new GatewayError(404, 'NOT_FOUND', 'Trade not found', { tradeId });
       }
 
-      res.status(200).json(successResponse(record));
+      res.status(200).json({
+        ...successResponse(snapshot.item),
+        freshness: snapshot.freshness,
+      });
     } catch (error) {
       next(error);
     }

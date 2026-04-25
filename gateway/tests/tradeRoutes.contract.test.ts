@@ -9,7 +9,11 @@ import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createTradeRouter } from '../src/routes/trades';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
-import type { TradeReadReader, DashboardTradeRecord } from '../src/core/tradeReadService';
+import type {
+  TradeReadReader,
+  DashboardTradeRecord,
+  DashboardTradeReadFreshness,
+} from '../src/core/tradeReadService';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -95,6 +99,16 @@ const tradeFixture: DashboardTradeRecord = {
   ],
 };
 
+const freshnessFixture: DashboardTradeReadFreshness = {
+  source: 'indexer_graphql',
+  state: 'current',
+  queriedAt: '2026-03-07T10:05:00.000Z',
+  sourceFreshAt: '2026-03-07T10:04:30.000Z',
+  available: true,
+  lastProcessedBlock: '42042',
+  lastTradeEventAt: '2026-03-07T10:00:00.000Z',
+};
+
 async function startServer(role: 'admin' | 'buyer' | null) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
@@ -115,6 +129,14 @@ async function startServer(role: 'admin' | 'buyer' | null) {
 
   const tradeReadService: TradeReadReader = {
     checkReadiness: jest.fn(),
+    listTradesSnapshot: jest.fn().mockResolvedValue({
+      items: [tradeFixture],
+      freshness: freshnessFixture,
+    }),
+    getTradeSnapshot: jest.fn().mockImplementation(async (tradeId: string) => ({
+      item: tradeId === tradeFixture.id ? tradeFixture : null,
+      freshness: freshnessFixture,
+    })),
     listTrades: jest.fn().mockResolvedValue([tradeFixture]),
     getTrade: jest
       .fn()
@@ -172,6 +194,7 @@ describe('gateway trade routes contract', () => {
       expect(response.headers.get('x-request-id')).toBe('req-trades');
       expect(validateList(payload)).toBe(true);
       expect(payload.data[0].id).toBe(tradeFixture.id);
+      expect(payload.freshness).toEqual(freshnessFixture);
     } finally {
       server.close();
     }
@@ -189,6 +212,7 @@ describe('gateway trade routes contract', () => {
       expect(detailResponse.status).toBe(200);
       expect(validateDetail(detailPayload)).toBe(true);
       expect(detailPayload.data.timeline).toHaveLength(1);
+      expect(detailPayload.freshness).toEqual(freshnessFixture);
 
       const missingResponse = await fetch(`${baseUrl}/trades/unknown`, {
         headers: { Authorization: 'Bearer sess-admin' },

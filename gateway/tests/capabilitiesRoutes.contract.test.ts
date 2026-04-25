@@ -8,11 +8,15 @@ import type { GatewayConfig } from '../src/config/env';
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createCapabilitiesRouter } from '../src/routes/capabilities';
+import { buildOperatorCapabilitySnapshot } from '../src/core/operatorCapabilities';
+import { createOperationsRouter } from '../src/routes/operations';
 import type {
   AuthSession,
   AuthSessionClient,
   AuthServiceRole,
 } from '../src/core/authSessionClient';
+import type { OperationsSummaryReader } from '../src/core/operationsSummaryService';
+import type { GatewayPrincipal } from '../src/middleware/auth';
 
 const baseConfig: GatewayConfig = {
   port: 3600,
@@ -117,6 +121,18 @@ async function startServer(
   };
 }
 
+function routerHasGetRoute(router: Router, path: string): boolean {
+  const stack = (
+    router as unknown as {
+      stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean> } }>;
+    }
+  ).stack;
+
+  return Boolean(
+    stack?.some((layer) => layer.route?.path === path && layer.route.methods?.get === true),
+  );
+}
+
 describe('gateway capabilities route contract', () => {
   const spec = loadOpenApiSpec();
   const validateCapabilities = createSchemaValidator(
@@ -126,6 +142,43 @@ describe('gateway capabilities route contract', () => {
 
   test('OpenAPI spec exposes capabilities endpoint', () => {
     expect(hasOperation(spec, 'get', '/auth/capabilities')).toBe(true);
+  });
+
+  test('operationsRead capability matches the mounted /operations route contract', () => {
+    const operationsSummaryService: OperationsSummaryReader = {
+      getOperationsSummary: jest.fn(),
+    };
+    const authSessionClient: AuthSessionClient = {
+      resolveSession: jest.fn(),
+      checkReadiness: jest.fn(),
+    };
+    const operationsRouter = createOperationsRouter({
+      authSessionClient,
+      config: baseConfig,
+      operationsSummaryService,
+    });
+    const principal: GatewayPrincipal = {
+      sessionReference: 'sha256:test',
+      session: {
+        accountId: 'acct-admin',
+        userId: 'uid-admin',
+        walletAddress: '0x00000000000000000000000000000000000000aa',
+        role: 'admin',
+        capabilities: [],
+        signerAuthorizations: [],
+        issuedAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+      },
+      gatewayRoles: ['operator:read', 'operator:write'],
+      operatorActionCapabilities: [],
+      treasuryCapabilities: [],
+      writeEnabled: true,
+    };
+    const snapshot = buildOperatorCapabilitySnapshot(principal, baseConfig);
+
+    expect(snapshot.routes.operationsRead).toBe(true);
+    expect(hasOperation(spec, 'get', '/operations')).toBe(true);
+    expect(routerHasGetRoute(operationsRouter, '/operations')).toBe(true);
   });
 
   test('GET /auth/capabilities returns schema-valid admin capability snapshot', async () => {

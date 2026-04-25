@@ -5,7 +5,25 @@ import { GatewayError } from '../errors';
 import { executeHttpRequestWithPolicy } from './serviceOrchestrator';
 import type { DownstreamServiceContract } from './serviceRegistry';
 
-const STALE_THRESHOLD_MS = 5 * 60 * 1_000;
+export const INDEXER_STALE_THRESHOLD_MS = 5 * 60 * 1_000;
+export type IndexerFreshnessState = 'current' | 'stale' | 'unavailable';
+
+export function deriveIndexerFreshnessState(
+  lastIndexedAt: string | null,
+  nowMs: number = Date.now(),
+  staleThresholdMs: number = INDEXER_STALE_THRESHOLD_MS,
+): IndexerFreshnessState {
+  if (!lastIndexedAt) {
+    return 'unavailable';
+  }
+
+  const parsedAt = Date.parse(lastIndexedAt);
+  if (Number.isNaN(parsedAt)) {
+    return 'unavailable';
+  }
+
+  return nowMs - parsedAt > staleThresholdMs ? 'stale' : 'current';
+}
 
 const indexerHealthQuery = `
   query IndexerHealth {
@@ -96,7 +114,7 @@ export class IndexerGraphqlClient {
     return payload;
   }
 
-  async checkHealth(staleThresholdMs = STALE_THRESHOLD_MS): Promise<void> {
+  async checkHealth(staleThresholdMs = INDEXER_STALE_THRESHOLD_MS): Promise<void> {
     const payload = await this.query<IndexerHealthData>('IndexerHealth', indexerHealthQuery);
     const snapshot = payload.data?.overviewSnapshotById;
 

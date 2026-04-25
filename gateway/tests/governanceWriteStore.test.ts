@@ -92,6 +92,29 @@ function createPoolMocks() {
   return { pool, connect, query, release };
 }
 
+function splitSqlList(fragment: string): string[] {
+  return fragment
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function extractGovernanceActionInsertShape(sql: string): {
+  columns: string[];
+  values: string[];
+} {
+  const columnMatch = sql.match(/INSERT INTO governance_actions\s*\(([\s\S]*?)\)\s*VALUES/i);
+  const valueMatch = sql.match(/VALUES\s*\(([\s\S]*?)\)\s*ON CONFLICT/i);
+  if (!columnMatch || !valueMatch) {
+    throw new Error(`Failed to parse governance action upsert SQL: ${sql}`);
+  }
+
+  return {
+    columns: splitSqlList(columnMatch[1]),
+    values: splitSqlList(valueMatch[1]),
+  };
+}
+
 describe('createPostgresGovernanceWriteStore', () => {
   test('rolls back queued action persistence when audit insert fails', async () => {
     const readStore = createReadStore();
@@ -204,6 +227,146 @@ describe('createPostgresGovernanceWriteStore', () => {
         ([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO governance_actions'),
       ),
     ).toBe(false);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  test('persists a direct-sign prepared action with aligned governance_actions insert columns and values', async () => {
+    const directSignAction = buildAction({
+      actionId: 'action-direct-sign-1',
+      status: 'prepared',
+      flowType: 'direct_sign',
+      finalSignerWallet: '0x00000000000000000000000000000000000000aa',
+      verificationState: 'not_started',
+      monitoringState: 'not_started',
+      signing: {
+        chainId: 31337,
+        contractAddress: '0x0000000000000000000000000000000000000000',
+        contractMethod: 'pause',
+        args: [],
+        signerWallet: '0x00000000000000000000000000000000000000aa',
+        txRequest: {
+          chainId: 31337,
+          to: '0x0000000000000000000000000000000000000000',
+          data: '0x8456cb59',
+          value: '0',
+        },
+        preparedPayloadHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      },
+      audit: {
+        ...buildAction().audit,
+        actorAccountId: 'acct-admin',
+        finalSignerWallet: '0x00000000000000000000000000000000000000aa',
+        signerActionClass: 'governance',
+        signerBindingId: 'binding-governance-admin',
+        signerEnvironment: 'test',
+      },
+    });
+    const readStore = createReadStore();
+    (readStore.get as jest.Mock).mockResolvedValueOnce(directSignAction);
+
+    const { pool, query, release } = createPoolMocks();
+    query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({}) // advisory lock
+      .mockResolvedValueOnce({ rows: [] }) // existing action lookup
+      .mockResolvedValueOnce({}) // governance upsert
+      .mockResolvedValueOnce({}) // audit insert
+      .mockResolvedValueOnce({}); // COMMIT
+
+    const writeStore = createPostgresGovernanceWriteStore(pool, readStore);
+    const result = await writeStore.saveDirectSignActionWithIntentDedupe(
+      directSignAction,
+      buildAuditEntry({
+        eventType: 'governance.action.prepared',
+        route: '/api/dashboard-gateway/v1/governance/pause/prepare',
+        status: 'prepared',
+        metadata: {
+          actionId: directSignAction.actionId,
+          signerWallet: directSignAction.finalSignerWallet,
+        },
+      }),
+      () =>
+        buildAuditEntry({
+          eventType: 'governance.action.prepare_duplicate_reused',
+          status: 'prepared',
+          metadata: {
+            actionId: directSignAction.actionId,
+          },
+        }),
+      '2026-03-07T10:00:00.000Z',
+    );
+
+    expect(result.created).toBe(true);
+    expect(result.action).toBe(directSignAction);
+
+    const insertCall = query.mock.calls.find(
+      ([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO governance_actions'),
+    );
+    expect(insertCall).toBeDefined();
+
+    const [sql, params] = insertCall as [string, unknown[]];
+    const { columns, values } = extractGovernanceActionInsertShape(sql);
+    expect(values).toHaveLength(columns.length);
+    expect(columns).toHaveLength(params.length + 1);
+    expect(columns[columns.length - 1]).toBe('updated_at');
+    expect(values[values.length - 1]).toBe('NOW()');
+
+    expect(columns.slice(0, -1)).toEqual([
+      'action_id',
+      'intent_key',
+      'intent_hash',
+      'proposal_id',
+      'category',
+      'status',
+      'flow_type',
+      'contract_method',
+      'tx_hash',
+      'block_number',
+      'trade_id',
+      'chain_id',
+      'target_address',
+      'broadcast_at',
+      'request_id',
+      'correlation_id',
+      'idempotency_key',
+      'actor_id',
+      'endpoint',
+      'reason',
+      'evidence_links',
+      'ticket_ref',
+      'actor_session_id',
+      'actor_wallet',
+      'actor_role',
+      'requested_by',
+      'approved_by',
+      'actor_account_id',
+      'final_signer_wallet',
+      'verification_state',
+      'verification_error',
+      'verified_at',
+      'monitoring_state',
+      'prepared_signing_payload',
+      'error_code',
+      'error_message',
+      'created_at',
+      'expires_at',
+      'executed_at',
+    ]);
+
+    columns.slice(0, -1).forEach((column, index) => {
+      const expectedPlaceholder = `$${index + 1}`;
+      const valueExpression = values[index];
+      expect(
+        valueExpression === expectedPlaceholder ||
+          valueExpression === `${expectedPlaceholder}::jsonb`,
+      ).toBe(true);
+      if (['evidence_links', 'approved_by', 'prepared_signing_payload'].includes(column)) {
+        expect(valueExpression).toBe(`${expectedPlaceholder}::jsonb`);
+      }
+    });
+    expect(values[columns.indexOf('evidence_links')]).toBe('$21::jsonb');
+    expect(values[columns.indexOf('approved_by')]).toBe('$27::jsonb');
+    expect(values[columns.indexOf('prepared_signing_payload')]).toBe('$34::jsonb');
     expect(release).toHaveBeenCalledTimes(1);
   });
 });

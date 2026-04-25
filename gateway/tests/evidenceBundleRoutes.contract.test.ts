@@ -94,6 +94,30 @@ const trade: DashboardTradeRecord = {
 function buildTradeReader(): TradeReadReader {
   return {
     checkReadiness: jest.fn(),
+    listTradesSnapshot: jest.fn().mockResolvedValue({
+      items: [trade],
+      freshness: {
+        source: 'indexer_graphql',
+        state: 'current',
+        queriedAt: '2026-03-14T10:10:00.000Z',
+        sourceFreshAt: '2026-03-14T10:09:00.000Z',
+        available: true,
+        lastProcessedBlock: '42042',
+        lastTradeEventAt: '2026-03-14T10:00:00.000Z',
+      },
+    }),
+    getTradeSnapshot: jest.fn().mockResolvedValue({
+      item: trade,
+      freshness: {
+        source: 'indexer_graphql',
+        state: 'current',
+        queriedAt: '2026-03-14T10:10:00.000Z',
+        sourceFreshAt: '2026-03-14T10:09:00.000Z',
+        available: true,
+        lastProcessedBlock: '42042',
+        lastTradeEventAt: '2026-03-14T10:00:00.000Z',
+      },
+    }),
     listTrades: jest.fn().mockResolvedValue([trade]),
     getTrade: jest.fn().mockResolvedValue(trade),
   };

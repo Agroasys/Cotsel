@@ -61,6 +61,7 @@ describe('overview service', () => {
     expect(snapshot.kpis.trades.byStatus.disputed).toBe(1);
     expect(snapshot.kpis.trades.byStatus.cancelled).toBe(1);
     expect(snapshot.feedFreshness.trades.queriedAt).toBe('2026-03-09T00:01:00.000Z');
+    expect(snapshot.feedFreshness.trades.state).toBe('current');
     expect(snapshot.feedFreshness.trades.freshAt).toBe('2026-03-09T00:00:00.000Z');
     expect(snapshot.feedFreshness.trades.lastIndexedAt).toBe('2026-03-09T00:00:00.000Z');
     expect(snapshot.feedFreshness.trades.lastProcessedBlock).toBe('42000');
@@ -92,6 +93,7 @@ describe('overview service', () => {
 
     expect(snapshot.feedFreshness.trades).toEqual({
       source: 'indexer_graphql',
+      state: 'unavailable',
       queriedAt: null,
       freshAt: null,
       available: false,
@@ -101,12 +103,14 @@ describe('overview service', () => {
     });
     expect(snapshot.feedFreshness.governance).toEqual({
       source: 'chain_rpc',
+      state: 'unavailable',
       queriedAt: null,
       freshAt: null,
       available: false,
     });
     expect(snapshot.feedFreshness.compliance).toEqual({
       source: 'gateway_ledger',
+      state: 'unavailable',
       queriedAt: null,
       freshAt: null,
       available: false,
@@ -158,6 +162,7 @@ describe('overview service', () => {
     });
     expect(snapshot.feedFreshness.trades).toEqual({
       source: 'indexer_graphql',
+      state: 'unavailable',
       queriedAt: null,
       freshAt: null,
       available: false,

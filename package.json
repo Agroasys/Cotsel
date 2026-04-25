@@ -55,6 +55,7 @@
     "format:check:full": "prettier --check .",
     "prepare": "husky && npm run build",
     "dashboard:parity:session": "node scripts/dashboard-operator-session.mjs",
+    "dashboard:trusted-session": "node scripts/trusted-dashboard-session.mjs",
     "dashboard:parity:preflight": "node scripts/dashboard-local-parity-preflight.mjs",
     "dashboard:parity:gate": "npm run dashboard:parity:preflight",
     "dashboard:parity:ci": "bash scripts/dashboard-live-parity-gate.sh",

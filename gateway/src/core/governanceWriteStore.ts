@@ -73,57 +73,92 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
   ];
 }
 
+interface GovernanceActionInsertColumn {
+  name: string;
+  jsonb?: boolean;
+}
+
+const GOVERNANCE_ACTION_INSERT_COLUMNS: readonly GovernanceActionInsertColumn[] = [
+  { name: 'action_id' },
+  { name: 'intent_key' },
+  { name: 'intent_hash' },
+  { name: 'proposal_id' },
+  { name: 'category' },
+  { name: 'status' },
+  { name: 'flow_type' },
+  { name: 'contract_method' },
+  { name: 'tx_hash' },
+  { name: 'block_number' },
+  { name: 'trade_id' },
+  { name: 'chain_id' },
+  { name: 'target_address' },
+  { name: 'broadcast_at' },
+  { name: 'request_id' },
+  { name: 'correlation_id' },
+  { name: 'idempotency_key' },
+  { name: 'actor_id' },
+  { name: 'endpoint' },
+  { name: 'reason' },
+  { name: 'evidence_links', jsonb: true },
+  { name: 'ticket_ref' },
+  { name: 'actor_session_id' },
+  { name: 'actor_wallet' },
+  { name: 'actor_role' },
+  { name: 'requested_by' },
+  { name: 'approved_by', jsonb: true },
+  { name: 'actor_account_id' },
+  { name: 'final_signer_wallet' },
+  { name: 'verification_state' },
+  { name: 'verification_error' },
+  { name: 'verified_at' },
+  { name: 'monitoring_state' },
+  { name: 'prepared_signing_payload', jsonb: true },
+  { name: 'error_code' },
+  { name: 'error_message' },
+  { name: 'created_at' },
+  { name: 'expires_at' },
+  { name: 'executed_at' },
+] as const;
+
+function governanceActionValueExpression(
+  column: GovernanceActionInsertColumn,
+  index: number,
+): string {
+  const placeholder = `$${index + 1}`;
+  return column.jsonb ? `${placeholder}::jsonb` : placeholder;
+}
+
 async function upsertGovernanceAction(
   client: PoolClient,
   action: GovernanceActionRecord,
 ): Promise<void> {
+  const params = governanceActionParams(action);
+  if (params.length !== GOVERNANCE_ACTION_INSERT_COLUMNS.length) {
+    throw new Error(
+      `Governance action insert column/value mismatch: ${GOVERNANCE_ACTION_INSERT_COLUMNS.length} columns, ${params.length} values`,
+    );
+  }
+
+  const insertColumns = [
+    ...GOVERNANCE_ACTION_INSERT_COLUMNS.map((column) => column.name),
+    'updated_at',
+  ].join(',\n      ');
+  const insertValues = [
+    ...GOVERNANCE_ACTION_INSERT_COLUMNS.map(governanceActionValueExpression),
+    'NOW()',
+  ];
+
+  if (insertValues.length !== params.length + 1) {
+    throw new Error(
+      `Governance action insert generated value mismatch: ${params.length + 1} values expected, ${insertValues.length} generated`,
+    );
+  }
+
   await client.query(
     `INSERT INTO governance_actions (
-      action_id,
-      intent_key,
-      intent_hash,
-      proposal_id,
-      category,
-      status,
-      flow_type,
-      contract_method,
-      tx_hash,
-      block_number,
-      trade_id,
-      chain_id,
-      target_address,
-      broadcast_at,
-      request_id,
-      correlation_id,
-      idempotency_key,
-      actor_id,
-      endpoint,
-      reason,
-      evidence_links,
-      ticket_ref,
-      actor_session_id,
-      actor_wallet,
-      actor_role,
-      requested_by,
-      approved_by,
-      actor_account_id,
-      final_signer_wallet,
-      verification_state,
-      verification_error,
-      verified_at,
-      monitoring_state,
-      prepared_signing_payload,
-      error_code,
-      error_message,
-      created_at,
-      expires_at,
-      executed_at,
-      updated_at
+      ${insertColumns}
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-      $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb,
-      $23, $24, $25, $26, $27, $28::jsonb, $29, $30, $31, $32, $33, $34::jsonb,
-      $35, $36, $37, $38, $39, NOW()
+      ${insertValues.join(',\n      ')}
     )
     ON CONFLICT (action_id) DO UPDATE SET
       intent_key = EXCLUDED.intent_key,
@@ -165,7 +200,7 @@ async function upsertGovernanceAction(
       expires_at = EXCLUDED.expires_at,
       executed_at = EXCLUDED.executed_at,
       updated_at = NOW()`,
-    governanceActionParams(action),
+    params,
   );
 }
 

@@ -90,10 +90,28 @@ const governanceFixture: GovernanceActionRecord[] = [
   },
 ];
 
+const tradeFreshnessFixture = {
+  source: 'indexer_graphql' as const,
+  state: 'current' as const,
+  queriedAt: '2026-03-14T10:10:00.000Z',
+  sourceFreshAt: '2026-03-14T10:09:00.000Z',
+  available: true,
+  lastProcessedBlock: '42042',
+  lastTradeEventAt: '2026-03-14T10:00:00.000Z',
+};
+
 describe('evidence read service', () => {
   test('returns a verified ricardian payload when the document and settlement hashes match', async () => {
     const tradeReadService: TradeReadReader = {
       checkReadiness: jest.fn(),
+      listTradesSnapshot: jest.fn().mockResolvedValue({
+        items: [tradeFixture],
+        freshness: tradeFreshnessFixture,
+      }),
+      getTradeSnapshot: jest.fn().mockResolvedValue({
+        item: tradeFixture,
+        freshness: tradeFreshnessFixture,
+      }),
       listTrades: jest.fn(),
       getTrade: jest.fn().mockResolvedValue(tradeFixture),
     };
@@ -188,6 +206,14 @@ describe('evidence read service', () => {
   test('returns grouped evidence records for a trade', async () => {
     const tradeReadService: TradeReadReader = {
       checkReadiness: jest.fn(),
+      listTradesSnapshot: jest.fn().mockResolvedValue({
+        items: [tradeFixture],
+        freshness: tradeFreshnessFixture,
+      }),
+      getTradeSnapshot: jest.fn().mockResolvedValue({
+        item: tradeFixture,
+        freshness: tradeFreshnessFixture,
+      }),
       listTrades: jest.fn(),
       getTrade: jest.fn().mockResolvedValue(tradeFixture),
     };
@@ -254,6 +280,14 @@ describe('evidence read service', () => {
   test('degrades ricardian verification when the settlement handoff lookup fails', async () => {
     const tradeReadService: TradeReadReader = {
       checkReadiness: jest.fn(),
+      listTradesSnapshot: jest.fn().mockResolvedValue({
+        items: [tradeFixture],
+        freshness: tradeFreshnessFixture,
+      }),
+      getTradeSnapshot: jest.fn().mockResolvedValue({
+        item: tradeFixture,
+        freshness: tradeFreshnessFixture,
+      }),
       listTrades: jest.fn(),
       getTrade: jest.fn().mockResolvedValue(tradeFixture),
     };
@@ -300,6 +334,14 @@ describe('evidence read service', () => {
   test('does not report a synthetic ricardian mismatch when the upstream document service is unavailable', async () => {
     const tradeReadService: TradeReadReader = {
       checkReadiness: jest.fn(),
+      listTradesSnapshot: jest.fn().mockResolvedValue({
+        items: [tradeFixture],
+        freshness: tradeFreshnessFixture,
+      }),
+      getTradeSnapshot: jest.fn().mockResolvedValue({
+        item: tradeFixture,
+        freshness: tradeFreshnessFixture,
+      }),
       listTrades: jest.fn(),
       getTrade: jest.fn().mockResolvedValue(tradeFixture),
     };
@@ -363,6 +405,14 @@ describe('evidence read service', () => {
   test('preserves successful evidence reads when one source degrades', async () => {
     const tradeReadService: TradeReadReader = {
       checkReadiness: jest.fn(),
+      listTradesSnapshot: jest.fn().mockResolvedValue({
+        items: [tradeFixture],
+        freshness: tradeFreshnessFixture,
+      }),
+      getTradeSnapshot: jest.fn().mockResolvedValue({
+        item: tradeFixture,
+        freshness: tradeFreshnessFixture,
+      }),
       listTrades: jest.fn(),
       getTrade: jest.fn().mockResolvedValue(tradeFixture),
     };

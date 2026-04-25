@@ -209,19 +209,27 @@ describe('gateway operations summary route contract', () => {
     '#/components/schemas/OperationsSummaryResponse',
   );
 
-  test('OpenAPI spec exposes operations summary endpoint', () => {
+  test('OpenAPI spec exposes operations read endpoints', () => {
+    expect(hasOperation(spec, 'get', '/operations')).toBe(true);
     expect(hasOperation(spec, 'get', '/operations/summary')).toBe(true);
   });
 
-  test('GET /operations/summary returns schema-valid snapshot', async () => {
+  test('GET /operations and /operations/summary return schema-valid snapshots', async () => {
     const { server, baseUrl } = await startServer('admin');
 
     try {
+      const aliasResponse = await fetch(`${baseUrl}/operations`, {
+        headers: { Authorization: 'Bearer sess-admin', 'x-request-id': 'req-ops-alias' },
+      });
+      const aliasPayload = await aliasResponse.json();
       const response = await fetch(`${baseUrl}/operations/summary`, {
         headers: { Authorization: 'Bearer sess-admin', 'x-request-id': 'req-ops-summary' },
       });
       const payload = await response.json();
 
+      expect(aliasResponse.status).toBe(200);
+      expect(aliasResponse.headers.get('x-request-id')).toBe('req-ops-alias');
+      expect(validateOperationsSummary(aliasPayload)).toBe(true);
       expect(response.status).toBe(200);
       expect(response.headers.get('x-request-id')).toBe('req-ops-summary');
       expect(validateOperationsSummary(payload)).toBe(true);

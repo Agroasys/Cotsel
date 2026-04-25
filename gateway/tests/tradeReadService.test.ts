@@ -10,13 +10,20 @@ const evidenceLinks: EvidenceLink[] = [{ kind: 'ticket', uri: 'https://tickets/a
 
 describe('trade read service', () => {
   const originalFetch = global.fetch;
+  const overviewSnapshot = {
+    lastIndexedAt: '2026-03-07T10:10:00.000Z',
+    lastProcessedBlock: '42042',
+    lastTradeEventAt: '2026-03-07T10:00:00.000Z',
+  };
 
   afterEach(() => {
+    jest.useRealTimers();
     global.fetch = originalFetch;
     jest.restoreAllMocks();
   });
 
   test('maps indexer trades into dashboard trade records and compliance status', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-03-07T10:12:00.000Z'));
     const complianceStore = createInMemoryComplianceStore([
       {
         decisionId: 'cmp-1',
@@ -50,6 +57,7 @@ describe('trade read service', () => {
       ok: true,
       json: async () => ({
         data: {
+          overviewSnapshotById: overviewSnapshot,
           trades: [
             {
               tradeId: 'TRD-9001',
@@ -120,9 +128,19 @@ describe('trade read service', () => {
       complianceStore,
       settlementStore,
     );
-    const records = await service.listTrades();
+    const snapshot = await service.listTradesSnapshot();
+    const records = snapshot.items;
 
     expect(records).toHaveLength(1);
+    expect(snapshot.freshness).toEqual({
+      source: 'indexer_graphql',
+      state: 'current',
+      queriedAt: expect.any(String),
+      sourceFreshAt: '2026-03-07T10:10:00.000Z',
+      available: true,
+      lastProcessedBlock: '42042',
+      lastTradeEventAt: '2026-03-07T10:00:00.000Z',
+    });
     expect(records[0]).toEqual({
       id: 'TRD-9001',
       buyer: 'buyer@demo',
@@ -181,10 +199,16 @@ describe('trade read service', () => {
     const complianceStore = createInMemoryComplianceStore([]);
     global.fetch = jest
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { trades: [] } }) } as Response)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ errors: [{ message: 'boom' }] }),
+        json: async () => ({ data: { overviewSnapshotById: overviewSnapshot, trades: [] } }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: { overviewSnapshotById: overviewSnapshot, trades: [] },
+          errors: [{ message: 'boom' }],
+        }),
       } as Response);
 
     const service = new TradeReadService('http://127.0.0.1:4350/graphql', 5000, complianceStore);
@@ -200,7 +224,12 @@ describe('trade read service', () => {
     const complianceStore = createInMemoryComplianceStore([]);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ data: { trades: { tradeId: 'TRD-9001' } } }),
+      json: async () => ({
+        data: {
+          overviewSnapshotById: overviewSnapshot,
+          trades: { tradeId: 'TRD-9001' },
+        },
+      }),
     } as Response);
 
     const service = new TradeReadService('http://127.0.0.1:4350/graphql', 5000, complianceStore);
@@ -218,6 +247,7 @@ describe('trade read service', () => {
       ok: true,
       json: async () => ({
         data: {
+          overviewSnapshotById: overviewSnapshot,
           trades: [
             {
               tradeId: 'TRD-9002',
@@ -256,7 +286,12 @@ describe('trade read service', () => {
     const complianceStore = createInMemoryComplianceStore([]);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ data: { trades: { tradeId: 'TRD-9003' } } }),
+      json: async () => ({
+        data: {
+          overviewSnapshotById: overviewSnapshot,
+          trades: { tradeId: 'TRD-9003' },
+        },
+      }),
     } as Response);
 
     const service = new TradeReadService('http://127.0.0.1:4350/graphql', 5000, complianceStore);

@@ -450,6 +450,31 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
+  /operations:
+    get:
+      tags: [Operations]
+      summary: Service health and incident summary snapshot
+      description: |
+        Canonical alias for `/operations/summary`.
+
+        This route exists so operator-facing capabilities and dashboard route checks can use a
+        stable `/operations` surface while preserving the same deterministic operations snapshot
+        contract.
+      operationId: getOperations
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Operations snapshot with service health and incident summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsSummaryResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /trades:
     get:
       tags: [Trades]
@@ -460,7 +485,11 @@ paths:
         - indexed trade-event history for timeline rendering
         - current gateway compliance ledger status, when available
 
-        Amounts are normalized to display-scale USDC values for dashboard rendering.
+        Amounts are normalized to display-scale USDC values for dashboard rendering. The response
+        also includes indexer freshness metadata so clients can distinguish:
+        - healthy historical reads with current indexer parity
+        - historical reads from a stale indexer watermark
+        - upstream unavailability
       operationId: listTrades
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -495,6 +524,9 @@ paths:
     get:
       tags: [Trades]
       summary: Get trade detail by trade id
+      description: |
+        Returns the same trade freshness metadata as the list route so clients can surface indexer
+        parity and stale-watermark state on detail views.
       operationId: getTrade
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -3206,12 +3238,16 @@ components:
           format: date-time
     OverviewFeedStatus:
       type: object
-      required: [source, queriedAt, freshAt, available]
+      required: [source, state, queriedAt, freshAt, available]
       properties:
         source:
           type: string
           enum: [indexer_graphql, chain_rpc, gateway_ledger]
           description: Identifies which backend feed provided (or attempted to provide) this data.
+        state:
+          type: string
+          enum: [current, stale, unavailable]
+          description: Feed freshness posture derived from the source watermark and gateway availability.
         queriedAt:
           anyOf:
             - type: string
@@ -4628,19 +4664,21 @@ components:
           format: date-time
     TradeResponse:
       type: object
-      required: [success, data, timestamp]
+      required: [success, data, freshness, timestamp]
       properties:
         success:
           type: boolean
           const: true
         data:
           $ref: '#/components/schemas/Trade'
+        freshness:
+          $ref: '#/components/schemas/TradeReadFreshness'
         timestamp:
           type: string
           format: date-time
     TradeListResponse:
       type: object
-      required: [success, data, timestamp]
+      required: [success, data, freshness, timestamp]
       properties:
         success:
           type: boolean
@@ -4649,9 +4687,43 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Trade'
+        freshness:
+          $ref: '#/components/schemas/TradeReadFreshness'
         timestamp:
           type: string
           format: date-time
+    TradeReadFreshness:
+      allOf:
+        - $ref: '#/components/schemas/GatewayReadFreshness'
+        - type: object
+          required:
+            [
+              source,
+              state,
+              queriedAt,
+              sourceFreshAt,
+              available,
+              lastProcessedBlock,
+              lastTradeEventAt,
+            ]
+          properties:
+            source:
+              type: string
+              enum: [indexer_graphql]
+            state:
+              type: string
+              enum: [current, stale, unavailable]
+            lastProcessedBlock:
+              anyOf:
+                - type: string
+                - type: 'null'
+              description: Last indexer block watermark used to assemble the trade snapshot.
+            lastTradeEventAt:
+              anyOf:
+                - type: string
+                  format: date-time
+                - type: 'null'
+              description: Timestamp of the most recent trade event reflected in the snapshot.
     GatewayReadFreshness:
       type: object
       required: [source, sourceFreshAt, queriedAt, available]

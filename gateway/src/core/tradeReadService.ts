@@ -3,7 +3,11 @@
  */
 import { formatUnits } from 'ethers';
 import { ComplianceStore } from './complianceStore';
-import { IndexerGraphqlClient } from './indexerGraphqlClient';
+import {
+  deriveIndexerFreshnessState,
+  IndexerFreshnessState,
+  IndexerGraphqlClient,
+} from './indexerGraphqlClient';
 import { GatewayError } from '../errors';
 import { buildSettlementTransactionReference } from './transactionReference';
 import type {
@@ -42,6 +46,26 @@ export interface DashboardTradeRecord {
   timeline: DashboardTradeEventRecord[];
   complianceStatus: DashboardComplianceStatus;
   settlement: DashboardTradeSettlementRecord | null;
+}
+
+export interface DashboardTradeReadFreshness {
+  source: 'indexer_graphql';
+  state: IndexerFreshnessState;
+  queriedAt: string;
+  sourceFreshAt: string | null;
+  available: boolean;
+  lastProcessedBlock: string | null;
+  lastTradeEventAt: string | null;
+}
+
+export interface DashboardTradeListSnapshot {
+  items: DashboardTradeRecord[];
+  freshness: DashboardTradeReadFreshness;
+}
+
+export interface DashboardTradeDetailSnapshot {
+  item: DashboardTradeRecord | null;
+  freshness: DashboardTradeReadFreshness;
 }
 
 export interface DashboardTradeSettlementRecord {
@@ -106,8 +130,15 @@ interface TradeEventGraphQlRecord {
 interface TradesGraphQlResponse {
   data?: {
     trades?: TradeGraphQlRecord[];
+    overviewSnapshotById?: IndexerOverviewSnapshot | null;
   };
   errors?: Array<{ message: string }>;
+}
+
+interface IndexerOverviewSnapshot {
+  lastIndexedAt: string;
+  lastProcessedBlock: string;
+  lastTradeEventAt: string | null;
 }
 
 export interface TradeSettlementReadStore {
@@ -351,8 +382,59 @@ function readTradesArray(payload: TradesGraphQlResponse): TradeGraphQlRecord[] {
   return payload.data.trades;
 }
 
+function readOverviewSnapshot(payload: TradesGraphQlResponse): IndexerOverviewSnapshot {
+  const snapshot = payload.data?.overviewSnapshotById;
+  if (!snapshot) {
+    throw new GatewayError(
+      502,
+      'UPSTREAM_UNAVAILABLE',
+      'Indexer returned no overview snapshot for trade freshness',
+    );
+  }
+
+  if (
+    typeof snapshot.lastIndexedAt !== 'string' ||
+    !/^\d+$/.test(snapshot.lastProcessedBlock) ||
+    (snapshot.lastTradeEventAt !== null && typeof snapshot.lastTradeEventAt !== 'string')
+  ) {
+    throw new GatewayError(
+      502,
+      'UPSTREAM_UNAVAILABLE',
+      'Indexer returned an invalid overview snapshot for trade freshness',
+    );
+  }
+
+  return snapshot;
+}
+
+function mapTradeFreshness(
+  snapshot: IndexerOverviewSnapshot,
+  queriedAt: string,
+): DashboardTradeReadFreshness {
+  const sourceFreshAt = assertIsoTimestamp(
+    snapshot.lastIndexedAt,
+    'overviewSnapshot.lastIndexedAt',
+  );
+  return {
+    source: 'indexer_graphql',
+    state: deriveIndexerFreshnessState(sourceFreshAt, Date.parse(queriedAt)),
+    queriedAt,
+    sourceFreshAt,
+    available: true,
+    lastProcessedBlock: snapshot.lastProcessedBlock,
+    lastTradeEventAt: snapshot.lastTradeEventAt
+      ? assertIsoTimestamp(snapshot.lastTradeEventAt, 'overviewSnapshot.lastTradeEventAt')
+      : null,
+  };
+}
+
 const listTradesQuery = `
   query DashboardTrades($limit: Int!, $offset: Int!) {
+    overviewSnapshotById(id: "singleton") {
+      lastIndexedAt
+      lastProcessedBlock
+      lastTradeEventAt
+    }
     trades(orderBy: createdAt_DESC, limit: $limit, offset: $offset) {
       tradeId
       buyer
@@ -391,6 +473,11 @@ const listTradesQuery = `
 
 const tradeDetailQuery = `
   query DashboardTradeDetail($tradeId: String!) {
+    overviewSnapshotById(id: "singleton") {
+      lastIndexedAt
+      lastProcessedBlock
+      lastTradeEventAt
+    }
     trades(where: { tradeId_eq: $tradeId }, limit: 1) {
       tradeId
       buyer
@@ -429,7 +516,9 @@ const tradeDetailQuery = `
 
 export interface TradeReadReader {
   checkReadiness(): Promise<void>;
+  listTradesSnapshot(limit?: number, offset?: number): Promise<DashboardTradeListSnapshot>;
   listTrades(limit?: number, offset?: number): Promise<DashboardTradeRecord[]>;
+  getTradeSnapshot(tradeId: string): Promise<DashboardTradeDetailSnapshot>;
   getTrade(tradeId: string): Promise<DashboardTradeRecord | null>;
 }
 
@@ -482,34 +571,53 @@ export class TradeReadService implements TradeReadReader {
     readTradesArray(response);
   }
 
-  async listTrades(limit = 100, offset = 0): Promise<DashboardTradeRecord[]> {
+  async listTradesSnapshot(limit = 100, offset = 0): Promise<DashboardTradeListSnapshot> {
     const response = await this.executeQuery('DashboardTrades', listTradesQuery, { limit, offset });
     const trades = readTradesArray(response);
+    const freshness = mapTradeFreshness(readOverviewSnapshot(response), new Date().toISOString());
     const settlementProjectionMap = this.settlementReadStore
       ? await this.settlementReadStore.getTradeSettlementProjectionMap(
           trades.map((trade) => trade.tradeId),
         )
       : new Map<string, TradeSettlementProjection>();
 
-    return Promise.all(
-      trades.map((trade) =>
-        this.mapTradeRecord(trade, settlementProjectionMap.get(trade.tradeId) ?? null),
+    return {
+      items: await Promise.all(
+        trades.map((trade) =>
+          this.mapTradeRecord(trade, settlementProjectionMap.get(trade.tradeId) ?? null),
+        ),
       ),
-    );
+      freshness,
+    };
   }
 
-  async getTrade(tradeId: string): Promise<DashboardTradeRecord | null> {
+  async listTrades(limit = 100, offset = 0): Promise<DashboardTradeRecord[]> {
+    return (await this.listTradesSnapshot(limit, offset)).items;
+  }
+
+  async getTradeSnapshot(tradeId: string): Promise<DashboardTradeDetailSnapshot> {
     const response = await this.executeQuery('DashboardTradeDetail', tradeDetailQuery, { tradeId });
+    const freshness = mapTradeFreshness(readOverviewSnapshot(response), new Date().toISOString());
     const trade = readTradesArray(response)[0];
     if (!trade) {
-      return null;
+      return {
+        item: null,
+        freshness,
+      };
     }
 
     const settlementProjectionMap = this.settlementReadStore
       ? await this.settlementReadStore.getTradeSettlementProjectionMap([trade.tradeId])
       : new Map<string, TradeSettlementProjection>();
 
-    return this.mapTradeRecord(trade, settlementProjectionMap.get(trade.tradeId) ?? null);
+    return {
+      item: await this.mapTradeRecord(trade, settlementProjectionMap.get(trade.tradeId) ?? null),
+      freshness,
+    };
+  }
+
+  async getTrade(tradeId: string): Promise<DashboardTradeRecord | null> {
+    return (await this.getTradeSnapshot(tradeId)).item;
   }
 
   private async mapTradeRecord(

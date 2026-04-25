@@ -3,7 +3,11 @@
  */
 import { ComplianceStore } from './complianceStore';
 import { EscrowGovernanceReader } from './governanceStatusService';
-import { IndexerGraphqlClient } from './indexerGraphqlClient';
+import {
+  deriveIndexerFreshnessState,
+  IndexerFreshnessState,
+  IndexerGraphqlClient,
+} from './indexerGraphqlClient';
 import { GatewayError } from '../errors';
 
 export interface OverviewTradeKpis {
@@ -20,6 +24,7 @@ export interface OverviewTradeKpis {
 
 export interface OverviewFeedStatus {
   source: string;
+  state: IndexerFreshnessState;
   queriedAt: string | null;
   freshAt: string | null;
   available: boolean;
@@ -167,6 +172,7 @@ export class OverviewService implements OverviewReader {
 
   async getOverview(): Promise<OverviewSnapshot> {
     const now = new Date().toISOString();
+    const nowMs = Date.parse(now);
 
     const [snapshotResult, governanceResult, complianceResult] = await Promise.allSettled([
       this.fetchIndexerSnapshot(),
@@ -207,6 +213,7 @@ export class OverviewService implements OverviewReader {
       snapshotAvailable && indexerSnapshot
         ? {
             source: 'indexer_graphql',
+            state: deriveIndexerFreshnessState(indexerSnapshot.lastIndexedAt, nowMs),
             queriedAt: now,
             freshAt: indexerSnapshot.lastIndexedAt,
             available: true,
@@ -216,6 +223,7 @@ export class OverviewService implements OverviewReader {
           }
         : {
             source: 'indexer_graphql',
+            state: 'unavailable',
             queriedAt: null,
             freshAt: null,
             available: false,
@@ -234,12 +242,14 @@ export class OverviewService implements OverviewReader {
         trades: tradesFeedFreshness,
         governance: {
           source: 'chain_rpc',
+          state: governanceAvailable ? 'current' : 'unavailable',
           queriedAt: governanceAvailable ? now : null,
           freshAt: governanceAvailable ? now : null,
           available: governanceAvailable,
         },
         compliance: {
           source: 'gateway_ledger',
+          state: complianceAvailable ? 'current' : 'unavailable',
           queriedAt: complianceAvailable ? now : null,
           freshAt: complianceAvailable ? now : null,
           available: complianceAvailable,

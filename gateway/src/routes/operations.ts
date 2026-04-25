@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Router } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import { GatewayConfig } from '../config/env';
 import { AuthSessionClient } from '../core/authSessionClient';
 import { OperationsSummaryReader } from '../core/operationsSummaryService';
@@ -20,14 +20,17 @@ export function createOperationsRouter(options: OperationsRouterOptions): Router
 
   router.use(authenticate, requireGatewayRole('operator:read'));
 
-  router.get('/operations/summary', async (_req, res, next) => {
+  const respondWithOperationsSummary = async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const snapshot = await options.operationsSummaryService.getOperationsSummary();
       res.status(200).json(successResponse(snapshot));
     } catch (error) {
       next(error);
     }
-  });
+  };
+
+  router.get('/operations', respondWithOperationsSummary);
+  router.get('/operations/summary', respondWithOperationsSummary);
 
   return router;
 }

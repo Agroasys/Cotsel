@@ -65,6 +65,7 @@ const overviewFixture: OverviewSnapshot = {
   feedFreshness: {
     trades: {
       source: 'indexer_graphql',
+      state: 'current',
       queriedAt: '2026-03-09T00:00:05.000Z',
       freshAt: '2026-03-09T00:00:00.000Z',
       available: true,
@@ -74,12 +75,14 @@ const overviewFixture: OverviewSnapshot = {
     },
     governance: {
       source: 'chain_rpc',
+      state: 'current',
       queriedAt: '2026-03-09T00:00:00.000Z',
       freshAt: '2026-03-09T00:00:00.000Z',
       available: true,
     },
     compliance: {
       source: 'gateway_ledger',
+      state: 'current',
       queriedAt: '2026-03-09T00:00:00.000Z',
       freshAt: '2026-03-09T00:00:00.000Z',
       available: true,
@@ -99,6 +102,7 @@ const degradedFixture: OverviewSnapshot = {
   feedFreshness: {
     trades: {
       source: 'indexer_graphql',
+      state: 'unavailable',
       queriedAt: null,
       freshAt: null,
       available: false,
@@ -106,8 +110,20 @@ const degradedFixture: OverviewSnapshot = {
       lastProcessedBlock: null,
       lastTradeEventAt: null,
     },
-    governance: { source: 'chain_rpc', queriedAt: null, freshAt: null, available: false },
-    compliance: { source: 'gateway_ledger', queriedAt: null, freshAt: null, available: false },
+    governance: {
+      source: 'chain_rpc',
+      state: 'unavailable',
+      queriedAt: null,
+      freshAt: null,
+      available: false,
+    },
+    compliance: {
+      source: 'gateway_ledger',
+      state: 'unavailable',
+      queriedAt: null,
+      freshAt: null,
+      available: false,
+    },
   },
 };
 
@@ -188,6 +204,7 @@ describe('gateway overview route contract', () => {
       expect(payload.data.posture.paused).toBe(false);
       expect(payload.data.posture.oracleActive).toBe(true);
       expect(payload.data.feedFreshness.trades.available).toBe(true);
+      expect(payload.data.feedFreshness.trades.state).toBe('current');
       expect(payload.data.feedFreshness.trades.freshAt).toBe('2026-03-09T00:00:00.000Z');
       expect(payload.data.feedFreshness.trades.queriedAt).toBe('2026-03-09T00:00:05.000Z');
       expect(payload.data.feedFreshness.trades.lastIndexedAt).toBe('2026-03-09T00:00:00.000Z');
