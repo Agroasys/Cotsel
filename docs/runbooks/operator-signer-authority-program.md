@@ -68,42 +68,7 @@ Required admin-control calls:
 
 The signer binding table columns used by the current schema are `account_id`, `wallet_address`, `action_class`, `environment`, `active`, `provisioned_by`, `provision_reason`, `provision_ticket_ref`, `notes`, `metadata`, `created_at`, `updated_at`, `revoked_at`, `revoked_by`, and `revoked_reason`. Code and tests must align to those names; do not guess alternate names such as `signer_wallet`, `signer_address`, `granted_by`, `reason`, or `is_active`.
 
-### 2.2 Final #489 staging command
-
-Run the full prepare-only readiness proof with:
-
-```bash
-npm run dashboard:cotsel-489:staging
-```
-
-Required non-public environment values:
-
-- `AUTH_ADMIN_CONTROL_API_KEYS_JSON`: active admin-control service-auth key JSON.
-- `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON`: active trusted session exchange key JSON.
-- `COTSEL_489_AUTH_DATABASE_URL`: auth database URL used only to verify schema/profile truth.
-- `COTSEL_489_GATEWAY_DATABASE_URL`: gateway database URL used only to verify `prepared_signing_payload` persistence.
-
-Optional overrides:
-
-- `COTSEL_489_AUTH_BASE_URL`, default `https://cotsel.sys.agroasys.com/api/auth/v1`
-- `COTSEL_489_GATEWAY_BASE_URL`, default `https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1`
-- `COTSEL_489_ACCOUNT_ID`, default `demo-admin-001`
-- `COTSEL_489_WALLET_ADDRESS`, default `0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a`
-- `COTSEL_489_SIGNER_ENVIRONMENT`, default `production`
-
-The script proves, in order:
-
-- auth schema has `operator_capability_bindings` and `operator_signer_bindings`
-- admin-control provisioning grants only explicit capabilities
-- admin-control signer provisioning creates the governance signer binding
-- trusted session exchange returns a fresh operator session
-- gateway `/auth/capabilities` reports `governance:write` and `actions.governanceWrite: true`
-- gateway `/governance/pause/prepare` returns a prepared pause signing payload for Base Sepolia chain `84532`
-- gateway database persisted `prepared_signing_payload` for the prepared action
-
-It does not broadcast or execute pause.
-
-### 2.3 Dashboard operator session script base URL
+### 2.2 Dashboard operator session script base URL
 
 For legacy wallet-login smoke checks only, `scripts/dashboard-operator-session.mjs` now supports both auth base styles:
 
