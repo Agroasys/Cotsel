@@ -191,6 +191,7 @@ services:
 
   indexer-pipeline:
     profiles: ['staging-e2e', 'staging-e2e-real']
+    restart: unless-stopped
     build:
       context: .
       dockerfile: indexer/Dockerfile
