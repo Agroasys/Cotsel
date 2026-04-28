@@ -6,26 +6,26 @@ SCRIPT="$ROOT_DIR/scripts/staging-e2e-real-gate.sh"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
+workspace_dir="$tmp_dir/workspace"
+bin_dir="$tmp_dir/bin"
 
-cat > "$tmp_dir/docker" <<'EOF'
+mkdir -p "$workspace_dir/scripts" "$bin_dir"
+cp "$ROOT_DIR/.env.example" "$workspace_dir/.env"
+cp "$ROOT_DIR/.env.staging-e2e-real.example" "$workspace_dir/.env.staging-e2e-real"
+
+cat > "$workspace_dir/scripts/docker-services.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${1:-}" != "compose" ]]; then
-  echo "unexpected docker invocation: $*" >&2
+if [[ "${1:-}" != "config" || "${2:-}" != "staging-e2e-real" ]]; then
+  echo "unexpected docker-services invocation: $*" >&2
   exit 1
 fi
 
-if [[ "$*" == *" config"* ]]; then
-  echo "INDEXER_START_BLOCK: ${INDEXER_START_BLOCK:-unset}"
-  exit 0
-fi
-
-echo "unexpected docker compose action: $*" >&2
-exit 1
+echo "INDEXER_START_BLOCK: ${INDEXER_START_BLOCK:-unset}"
 EOF
 
-cat > "$tmp_dir/curl" <<'EOF'
+cat > "$bin_dir/curl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -37,11 +37,11 @@ fi
 echo '{}'
 EOF
 
-chmod +x "$tmp_dir/docker" "$tmp_dir/curl"
+chmod +x "$workspace_dir/scripts/docker-services.sh" "$bin_dir/curl"
 
 output="$(
-  cd "$ROOT_DIR"
-  PATH="$tmp_dir:$PATH" \
+  cd "$workspace_dir"
+  PATH="$bin_dir:$PATH" \
     STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true \
     STAGING_E2E_REAL_DYNAMIC_START_BLOCK=true \
     STAGING_E2E_REAL_START_BLOCK_BACKOFF=250 \

@@ -58,6 +58,27 @@ try {
   assert.match(result.stderr, /shared-risk\/index\.js/);
   assert.match(result.stderr, /@agroasys\/oracle/);
 
+  fs.writeFileSync(
+    path.join(tmpRoot, 'shared-risk/dynamic.js'),
+    "'use strict';\nawait import('@agroasys/gateway');\n",
+  );
+  result = runGuard(tmpRoot);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /shared-risk\/dynamic\.js/);
+  assert.match(result.stderr, /@agroasys\/gateway/);
+
+  fs.rmSync(path.join(tmpRoot, 'shared-risk/index.js'));
+  fs.rmSync(path.join(tmpRoot, 'shared-risk/dynamic.js'));
+  fs.mkdirSync(path.join(tmpRoot, 'shared-risk/nested/a'), { recursive: true });
+  fs.writeFileSync(
+    path.join(tmpRoot, 'shared-risk/nested/a/deep.js'),
+    "'use strict';\nmodule.exports = require('../../../gateway');\n",
+  );
+  result = runGuard(tmpRoot);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /shared-risk\/nested\/a\/deep\.js/);
+  assert.match(result.stderr, /\.\.\/\.\.\/\.\.\/gateway/);
+
   console.log('shared package boundary guard test: pass');
 } finally {
   fs.rmSync(tmpRoot, { recursive: true, force: true });

@@ -52,6 +52,7 @@ function extractModuleSpecifiers(source) {
   const specifiers = [];
   const patterns = [
     /\bimport\s+(?:type\s+)?(?:[^'"]+\s+from\s+)?['"]([^'"]+)['"]/g,
+    /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g,
     /\bexport\s+(?:type\s+)?(?:[^'"]+\s+from\s+)?['"]([^'"]+)['"]/g,
     /\brequire\(\s*['"]([^'"]+)['"]\s*\)/g,
   ];
@@ -68,6 +69,10 @@ function extractModuleSpecifiers(source) {
 }
 
 function isForbiddenServiceImport(specifier) {
+  const relativeSegments = specifier.startsWith('../')
+    ? specifier.split('/').filter((segment) => segment.length > 0)
+    : [];
+
   for (const workspaceName of forbiddenWorkspaceNames) {
     if (specifier === workspaceName || specifier.startsWith(`${workspaceName}/`)) {
       return true;
@@ -80,12 +85,7 @@ function isForbiddenServiceImport(specifier) {
       return true;
     }
 
-    if (
-      specifier.startsWith('../') &&
-      (specifier.includes(`/${workspaceName}/`) ||
-        specifier === `../${workspaceName}` ||
-        specifier.startsWith(`../${workspaceName}/`))
-    ) {
+    if (relativeSegments.includes(workspaceName)) {
       return true;
     }
   }
