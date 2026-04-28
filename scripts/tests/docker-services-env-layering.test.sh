@@ -37,7 +37,7 @@ chmod +x "$tmp_dir/docker"
 
 output_profile_wins="$(
   cd "$tmp_dir"
-  PATH="$tmp_dir:$PATH" "$SCRIPT" config staging-e2e-real
+  PATH="$tmp_dir:$PATH" DOCKER_SERVICES_SKIP_ENV_PRECHECK=true "$SCRIPT" config staging-e2e-real
 )"
 
 if ! grep -q 'INDEXER_START_BLOCK: 222' <<<"$output_profile_wins"; then
@@ -48,7 +48,7 @@ fi
 
 output_external_wins="$(
   cd "$tmp_dir"
-  PATH="$tmp_dir:$PATH" INDEXER_START_BLOCK=333 "$SCRIPT" config staging-e2e-real
+  PATH="$tmp_dir:$PATH" DOCKER_SERVICES_SKIP_ENV_PRECHECK=true INDEXER_START_BLOCK=333 "$SCRIPT" config staging-e2e-real
 )"
 
 if ! grep -q 'INDEXER_START_BLOCK: 333' <<<"$output_external_wins"; then

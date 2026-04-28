@@ -125,6 +125,7 @@ local_log="$tmp_dir/local.log"
 (
   cd "$ROOT_DIR"
   PATH="$tmp_dir:$PATH" \
+    DOCKER_SERVICES_SKIP_ENV_PRECHECK=true \
     DOCKER_MOCK_STATE_DIR="$state_dir" \
     DOCKER_MOCK_LOG_FILE="$local_log" \
     DOCKER_SERVICES_WAIT_TIMEOUT_SECONDS=5 \
@@ -150,6 +151,7 @@ infra_log="$tmp_dir/infra.log"
 (
   cd "$ROOT_DIR"
   PATH="$tmp_dir:$PATH" \
+    DOCKER_SERVICES_SKIP_ENV_PRECHECK=true \
     DOCKER_MOCK_STATE_DIR="$state_dir" \
     DOCKER_MOCK_LOG_FILE="$infra_log" \
     DOCKER_SERVICES_WAIT_TIMEOUT_SECONDS=5 \

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 COMPOSE_FILE="docker-compose.services.yml"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ACTION="${1:-}"
 PROFILE="${2:-}"
 SERVICE="${3:-}"
@@ -31,6 +32,16 @@ case "$PROFILE" in
 esac
 
 case "$ACTION" in
+  build|up|down|logs|ps|health|config)
+    ;;
+  *)
+    echo "Unknown action: $ACTION" >&2
+    usage
+    exit 1
+    ;;
+esac
+
+case "$ACTION" in
   build|logs)
     ;;
   health|up|down|ps|config)
@@ -43,6 +54,22 @@ case "$ACTION" in
   *)
     ;;
 esac
+
+run_env_preflight() {
+  if [[ "${DOCKER_SERVICES_SKIP_ENV_PRECHECK:-false}" == "true" ]]; then
+    return 0
+  fi
+
+  case "$ACTION" in
+    build|up|health|config)
+      "$SCRIPT_DIR/validate-env.sh" "$PROFILE"
+      ;;
+    *)
+      ;;
+  esac
+}
+
+run_env_preflight
 
 load_env_file() {
   local file="$1"
@@ -369,7 +396,7 @@ case "$ACTION" in
     fi
 
     if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e-real" ]]; then
-      scripts/notifications-wiring-health.sh "$PROFILE"
+      "$SCRIPT_DIR/notifications-wiring-health.sh" "$PROFILE"
     fi
 
     if [[ "$PROFILE" != "infra" ]]; then

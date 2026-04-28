@@ -116,6 +116,38 @@ Stop and escalate immediately when any of the following happens:
 - Conflicting truth sources (indexer/reconciliation/on-chain disagreement that cannot be resolved in one pass).
 - Any signal of duplicate action risk for one `actionKey`.
 
+## Redrive Acceptance Checklist
+
+Before a manual re-drive is submitted, the operator must attach an evidence
+packet with:
+
+- Current trigger row for the affected `actionKey`, including `status`,
+  `attempt_count`, `last_error`, `request_id`, and timestamps.
+- Oracle health and readiness output.
+- Indexer GraphQL readiness output and latest indexed block/freshness evidence.
+- Reconciliation diagnostics for the affected `tradeId`.
+- On-chain trade state proving the action has not already completed.
+- Incident/change ticket reference approving the manual redrive attempt.
+- Named operator and on-call engineer decision: `redrive`, `monitor`, or
+  `pause automation`.
+
+Only one controlled redrive is allowed per incident decision. If that attempt
+again reaches `EXHAUSTED_NEEDS_REDRIVE`, stop and escalate to the Service Owner
+before any additional execution attempt.
+
+## Alert Thresholds
+
+These thresholds define when oracle retry/redrive behavior becomes an operations
+event rather than normal bounded retry noise:
+
+| Signal                                                                  | Severity | Required action                                                                 |
+| ----------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------- |
+| Any duplicate-action risk for the same `actionKey`                      | SEV-1    | Pause redrive, preserve evidence, page Incident Commander and Service Owner     |
+| One trigger reaches `EXHAUSTED_NEEDS_REDRIVE` for a production trade    | SEV-2    | Open incident/change ticket and complete the redrive acceptance checklist       |
+| Two or more triggers exhaust in a 30-minute window                      | SEV-2    | Pause automation class until oracle, RPC, indexer, and reconciliation are clear |
+| `TERMINAL_FAILURE` caused by business/contract pre-condition mismatch   | SEV-2    | Do not redrive; route through service owner and product/business owner          |
+| Health/readiness failure without exhausted triggers for less than 5 min | SEV-3    | Continue monitoring and attach diagnostics if it recurs                         |
+
 ## Preconditions
 
 - Oracle service is running and reachable.

@@ -29,7 +29,7 @@ chmod +x "$tmp_dir/docker"
 
 output="$(
   cd "$ROOT_DIR"
-  PATH="$tmp_dir:$PATH" INDEXER_START_BLOCK=123 "$SCRIPT" config staging-e2e-real
+  PATH="$tmp_dir:$PATH" DOCKER_SERVICES_SKIP_ENV_PRECHECK=true INDEXER_START_BLOCK=123 "$SCRIPT" config staging-e2e-real
 )"
 
 if ! grep -q 'INDEXER_START_BLOCK: 123' <<<"$output"; then

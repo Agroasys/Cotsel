@@ -185,6 +185,32 @@ describe('TreasuryWorkflowService', () => {
     expect(auditLogStore.entries).toHaveLength(0);
   });
 
+  test('createSweepBatch rejects downstream success data that is not a record', async () => {
+    const orchestrator: DownstreamServiceOrchestrator = {
+      fetch: jest.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true, data: ['not-a-record'] }), {
+          status: 201,
+          headers: {
+            'content-type': 'application/json',
+          },
+        }),
+      ),
+      probeHealth: jest.fn(),
+    };
+    const auditLogStore = createInMemoryAuditLogStore();
+    const service = new TreasuryWorkflowService(orchestrator, auditLogStore);
+
+    await expect(
+      service.createSweepBatch(buildCreateSweepBatchInput(), buildCreateSweepBatchContext()),
+    ).rejects.toMatchObject<Partial<GatewayError>>({
+      statusCode: 502,
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: 'Treasury operation treasury.sweep_batch.created returned an invalid data payload',
+    });
+
+    expect(auditLogStore.entries).toHaveLength(0);
+  });
+
   test('createSweepBatch rejects downstream responses with invalid JSON bodies', async () => {
     const orchestrator: DownstreamServiceOrchestrator = {
       fetch: jest.fn().mockResolvedValue(

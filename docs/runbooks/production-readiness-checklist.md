@@ -29,6 +29,7 @@ Purpose:
 
 - Security findings must map to tracked issues with owner, severity, and due date.
 - Release gate includes explicit verification that blocker findings are resolved or waived by policy owner.
+- Production-sensitive action evidence requirements are indexed in `docs/runbooks/production-sensitive-action-evidence.md`.
 
 ### Compliance boundary governance (KYB/KYT/Sanctions)
 
@@ -153,4 +154,5 @@ Purpose:
   - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
   - `docs/runbooks/gateway-governance-signer-custody.md`
   - `docs/runbooks/oracle-redrive.md`
+  - `docs/runbooks/production-sensitive-action-evidence.md`
   - `docs/incidents/first-15-minutes-checklist.md`

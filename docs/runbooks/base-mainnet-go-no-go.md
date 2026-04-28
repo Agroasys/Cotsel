@@ -44,6 +44,7 @@ Control-surface note:
 - Gateway operational boundary: `docs/runbooks/dashboard-gateway-operations.md`
 - Reconciliation evidence generation: `docs/runbooks/reconciliation.md`
 - Emergency containment path: `docs/runbooks/emergency-disable-unpause.md`
+- Production-sensitive action evidence index: `docs/runbooks/production-sensitive-action-evidence.md`
 
 Base network references:
 

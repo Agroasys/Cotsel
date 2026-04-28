@@ -59,6 +59,11 @@ cp .env.staging-e2e.example .env.staging-e2e
 cp .env.staging-e2e-real.example .env.staging-e2e-real
 ```
 
+`scripts/docker-services.sh build|up|health|config <profile>` runs
+`scripts/validate-env.sh <profile>` before Docker Compose. Missing env files or
+required keys fail before containers are built or Compose interpolation renders
+blank values.
+
 ## Local Dev
 
 ```bash

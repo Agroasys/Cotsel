@@ -63,7 +63,8 @@
     "pilot:rehearsal": "bash scripts/base-sepolia-pilot-validation.sh",
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs",
-    "security:deps:gate": "node scripts/security-deps-gate.mjs"
+    "security:deps:gate": "node scripts/security-deps-gate.mjs",
+    "shared:boundary:guard": "node scripts/shared-package-boundary-guard.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

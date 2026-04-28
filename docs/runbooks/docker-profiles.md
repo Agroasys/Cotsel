@@ -22,6 +22,12 @@ cp .env.staging-e2e.example .env.staging-e2e
 cp .env.staging-e2e-real.example .env.staging-e2e-real
 ```
 
+`scripts/docker-services.sh build|up|health|config <profile>` now runs
+`scripts/validate-env.sh <profile>` before invoking Docker Compose. If `.env` or
+the profile env file is missing, startup fails before Compose renders blank
+interpolated values. Set `DOCKER_SERVICES_SKIP_ENV_PRECHECK=true` only for
+script tests that intentionally exercise env layering in isolation.
+
 ## Commands
 
 ```bash
