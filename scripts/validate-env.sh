@@ -59,11 +59,13 @@ restore_external_environment_overrides() {
 
 if [[ ! -f ".env" ]]; then
   echo "Missing required base env file: .env" >&2
+  echo "Create it from the checked-in template: cp .env.example .env" >&2
   exit 1
 fi
 
 if [[ "$PROFILE" != "infra" && ! -f "$PROFILE_FILE" ]]; then
   echo "Missing required profile env file: $PROFILE_FILE" >&2
+  echo "Create it from the checked-in template: cp ${PROFILE_FILE}.example ${PROFILE_FILE}" >&2
   exit 1
 fi
 
@@ -180,6 +182,7 @@ if [[ "${#missing_groups[@]}" -gt 0 ]]; then
   for group in "${missing_groups[@]}"; do
     echo "  - ${group//|/ or }" >&2
   done
+  echo "Review .env and ${PROFILE_FILE}; external environment variables may override file values." >&2
   exit 1
 fi
 

@@ -654,6 +654,10 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
       response,
       `Failed treasury operation ${eventType}`,
     );
+    const dataRecord = assertRecord(
+      data,
+      `Treasury operation ${eventType} returned an invalid data payload`,
+    );
     const complianceMetadata = this.buildTreasuryMetadata(context);
 
     await this.auditLogStore.append({
@@ -684,12 +688,12 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
           signerBindingEnvironment: complianceMetadata.signerBindingEnvironment,
           signerBindingWallet: complianceMetadata.signerBindingWallet,
           signerPolicy: context.signerPolicy ?? { required: false, result: 'not_required' },
-          result: data,
+          result: dataRecord,
         },
         'Failed to build treasury audit payload',
       ),
     });
 
-    return data;
+    return dataRecord;
   }
 }

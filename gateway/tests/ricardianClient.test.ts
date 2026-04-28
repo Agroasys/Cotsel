@@ -24,4 +24,28 @@ describe('ricardian client', () => {
       code: 'NOT_FOUND',
     });
   });
+
+  test('fails closed when upstream success payload is missing required document fields', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: jest.fn().mockResolvedValue(
+        JSON.stringify({
+          success: true,
+          data: {
+            hash: '0xabc',
+            documentRef: 'doc-1',
+          },
+        }),
+      ),
+    });
+
+    const client = new RicardianClient('https://ricardian.example/api/v1', 5000);
+
+    await expect(client.getDocument('0xabc')).rejects.toMatchObject({
+      statusCode: 502,
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: 'Ricardian service returned an invalid payload',
+    });
+  });
 });
