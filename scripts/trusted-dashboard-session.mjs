@@ -19,7 +19,7 @@ const {
   signServiceAuthCanonicalString,
 } = require('../shared-auth/src/serviceAuth.js');
 
-const TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agroasys';
+const DEFAULT_TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agroasys';
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agroasys.com/api/auth/v1';
 const DEFAULT_PROFILE_FILE = '.env.staging-e2e-real';
@@ -28,6 +28,14 @@ const TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH = 120;
 function fail(message) {
   console.error(`ERROR: ${message}`);
   process.exit(1);
+}
+
+function resolveTrustedSessionExchangePath(args, runtimeEnv) {
+  return (
+    args['exchange-path'] ??
+    runtimeEnv.TRUSTED_SESSION_EXCHANGE_PATH ??
+    DEFAULT_TRUSTED_SESSION_EXCHANGE_PATH
+  );
 }
 
 function parseArgs(argv) {
@@ -75,20 +83,16 @@ function loadEnvFile(filePath) {
       continue;
     }
 
-    const match = line.match(/^([A-Za-z0-9_]+)=\s*(.*)$/u);
+    const match = line.match(
+      /^([A-Za-z0-9_]+)=\s*(?:"([^"\r\n]*)"|'([^'\r\n]*)'|([^#\r\n]*))\s*$/u,
+    );
     if (!match) {
       continue;
     }
 
     const key = match[1];
-    const valueWithTrailingWhitespace = match[2];
-    let value = valueWithTrailingWhitespace.replace(/\s+$/u, '');
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
+    const valueWithTrailingWhitespace = match[2] ?? match[3] ?? match[4] ?? '';
+    const value = valueWithTrailingWhitespace.replace(/\s+$/u, '');
     values[key] = value;
   }
 
@@ -104,7 +108,11 @@ function loadRuntimeEnv(profileFile) {
 }
 
 function buildUrl(baseUrl, pathname) {
-  return new URL(pathname, baseUrl).toString();
+  const url = new URL(pathname, baseUrl);
+  return {
+    href: url.toString(),
+    pathname: url.pathname,
+  };
 }
 
 function parseTrustedSessionApiKeys(rawValue) {
@@ -143,10 +151,21 @@ function pickTrustedSessionKey(keys, preferredId) {
 }
 
 function createRedactedPreview(value, maxLength = 200) {
+  const sensitiveKeyPattern =
+    '(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:id)?)';
   const redacted = value
     .replace(
-      /("?(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:id)?)"?\s*[:=]\s*")([^"]*)(")/gi,
+      new RegExp(`(["']?${sensitiveKeyPattern}["']?\\s*[:=]\\s*["']?)([^\\s"',;}&]+)(["']?)`, 'gi'),
       '$1[REDACTED]$3',
+    )
+    .replace(new RegExp(`([?&]${sensitiveKeyPattern}=)([^&#\\s]+)`, 'gi'), '$1[REDACTED]')
+    .replace(/\b(authorization\s*:\s*)([A-Za-z][A-Za-z0-9_-]*\s+[^\s,;]+)/gi, '$1[REDACTED_AUTH]')
+    .replace(
+      new RegExp(
+        `(\\b(?:cookie|set-cookie)\\s*:\\s*[^\\n]*?\\b${sensitiveKeyPattern}=)([^;\\s]+)`,
+        'gi',
+      ),
+      '$1[REDACTED]',
     )
     .replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9\-._~+/]+=*/gi, '[REDACTED_AUTH]');
   return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}…(truncated)` : redacted;
@@ -206,6 +225,7 @@ async function main() {
   const timeoutMs = normalizeTimeoutMs(
     args['timeout-ms'] ?? runtimeEnv.DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS,
   );
+  const trustedSessionExchangePath = resolveTrustedSessionExchangePath(args, runtimeEnv);
   const authBaseUrl =
     args['auth-base-url'] ??
     runtimeEnv.DASHBOARD_TRUSTED_SESSION_AUTH_BASE_URL ??
@@ -257,12 +277,10 @@ async function main() {
   const timestampSecondsStr = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomBytes(16).toString('hex');
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
-  const requestPath = TRUSTED_SESSION_EXCHANGE_PATH;
-  const requestUrl = buildUrl(authBaseUrl, requestPath);
-  const requestUrlPathname = new URL(requestUrl).pathname;
+  const requestUrl = buildUrl(authBaseUrl, trustedSessionExchangePath);
   const canonicalString = buildServiceAuthCanonicalString({
     method: 'POST',
-    path: requestUrlPathname,
+    path: requestUrl.pathname,
     query: '',
     bodySha256,
     timestamp: timestampSecondsStr,
@@ -270,7 +288,7 @@ async function main() {
   });
   const signature = signServiceAuthCanonicalString(trustedSessionKey.secret, canonicalString);
 
-  const exchangeEnvelope = await fetchJson(requestUrl, {
+  const exchangeEnvelope = await fetchJson(requestUrl.href, {
     body: requestBody,
     timeoutMs,
     headers: {
