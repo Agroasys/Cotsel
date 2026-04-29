@@ -42,7 +42,7 @@ function parseArgs(argv) {
   const parsed = {};
 
   if (argv.length % 2 !== 0) {
-    fail('arguments must be provided as --key value pairs');
+    fail(`arguments must be provided as --key value pairs (received ${argv.length} arguments)`);
   }
 
   for (let argIndex = 0; argIndex < argv.length; argIndex += 2) {
@@ -83,6 +83,13 @@ function loadEnvFile(filePath) {
       continue;
     }
 
+    // Parse dotenv-style KEY=VALUE entries.
+    // Capture groups:
+    //   1) variable name (letters, digits, underscore),
+    //   2) double-quoted value (no embedded quotes/newlines),
+    //   3) single-quoted value (no embedded quotes/newlines),
+    //   4) unquoted value (up to inline comment/end of line).
+    // Optional whitespace is allowed around the value and before line end.
     const match = line.match(
       /^([A-Za-z0-9_]+)=\s*(?:"([^"\r\n]*)"|'([^'\r\n]*)'|([^#\r\n]*))\s*$/u,
     );
@@ -154,12 +161,16 @@ function createRedactedPreview(value, maxLength = 200) {
   const sensitiveKeyPattern =
     '(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:id)?)';
   const redacted = value
+    // Redact object/JSON-style sensitive key-value pairs (e.g. "token":"abc", secret=xyz).
     .replace(
       new RegExp(`(["']?${sensitiveKeyPattern}["']?\\s*[:=]\\s*["']?)([^\\s"',;}&]+)(["']?)`, 'gi'),
       '$1[REDACTED]$3',
     )
+    // Redact sensitive query parameters in URLs (e.g. ?api_key=..., &token=...).
     .replace(new RegExp(`([?&]${sensitiveKeyPattern}=)([^&#\\s]+)`, 'gi'), '$1[REDACTED]')
+    // Redact Authorization header credentials (e.g. Authorization: Bearer ...).
     .replace(/\b(authorization\s*:\s*)([A-Za-z][A-Za-z0-9_-]*\s+[^\s,;]+)/gi, '$1[REDACTED_AUTH]')
+    // Redact sensitive cookie values in Cookie/Set-Cookie headers.
     .replace(
       new RegExp(
         `(\\b(?:cookie|set-cookie)\\s*:\\s*[^\\n]*?\\b${sensitiveKeyPattern}=)([^;\\s]+)`,
@@ -167,6 +178,7 @@ function createRedactedPreview(value, maxLength = 200) {
       ),
       '$1[REDACTED]',
     )
+    // Redact inline Basic/Bearer auth tokens appearing in free-form text.
     .replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9\-._~+/]+=*/gi, '[REDACTED_AUTH]');
   return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}…(truncated)` : redacted;
 }
@@ -190,23 +202,30 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
     });
 
     const rawBody = await response.text();
-    let payload = null;
-    let jsonParseError = null;
-    if (rawBody.length > 0) {
-      try {
-        payload = JSON.parse(rawBody);
-      } catch (error) {
-        jsonParseError = error;
+    if (rawBody.length === 0) {
+      if (!response.ok) {
+        fail(`${url} returned HTTP ${response.status}: ${createRedactedPreview('')}`);
       }
-    }
-    if (!response.ok) {
-      const responseDetails = jsonParseError
-        ? `response body is not valid JSON (${jsonParseError instanceof Error ? jsonParseError.message : String(jsonParseError)}); bodyLength=${rawBody.length}; preview=${createRedactedPreview(rawBody)}`
-        : createRedactedPreview(JSON.stringify(payload));
-      fail(`${url} returned HTTP ${response.status}: ${responseDetails}`);
+      return null;
     }
 
-    return payload;
+    try {
+      const payload = JSON.parse(rawBody);
+      if (!response.ok) {
+        fail(
+          `${url} returned HTTP ${response.status}: ${createRedactedPreview(JSON.stringify(payload))}`,
+        );
+      }
+      return payload;
+    } catch (error) {
+      const parseErrorDetails = error instanceof Error ? error.message : String(error);
+      if (!response.ok) {
+        fail(
+          `${url} returned HTTP ${response.status}: response body is not valid JSON (${parseErrorDetails}); bodyLength=${rawBody.length}; preview=${createRedactedPreview(rawBody)}`,
+        );
+      }
+      fail(`${url} returned invalid JSON: ${parseErrorDetails}`);
+    }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       fail(`${url} timed out after ${timeoutMs}ms`);
@@ -275,6 +294,8 @@ async function main() {
   }
   const requestBody = JSON.stringify(requestPayload);
   const timestampSecondsStr = String(Math.floor(Date.now() / 1000));
+  // 16 random bytes (128-bit nonce) is an intentional security baseline for request uniqueness;
+  // this provides sufficient entropy to make nonce collisions/replay impractical for signed requests.
   const nonce = crypto.randomBytes(16).toString('hex');
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
   const requestUrl = buildUrl(authBaseUrl, trustedSessionExchangePath);
