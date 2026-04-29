@@ -133,7 +133,9 @@ function buildUrl(baseUrl, pathname) {
 
 function parseTrustedSessionApiKeys(rawValue) {
   if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
-    return [];
+    fail(
+      'Missing required TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON. Set this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}].',
+    );
   }
 
   try {
@@ -166,7 +168,16 @@ function pickTrustedSessionKey(keys, preferredId) {
 }
 
 /**
- * Redacts sensitive credentials/secrets from an input string and returns a safe preview.
+ * Produces a safe preview string for logs and error messages by redacting sensitive material.
+ *
+ * This helper is intended for sanitizing untrusted/free-form text before any console output,
+ * thrown error detail, or diagnostic message. It performs best-effort pattern-based redaction
+ * for common secret-bearing content, including:
+ * - token/secret/password/API-key/session-id style key/value pairs,
+ * - sensitive URL query parameter values,
+ * - Authorization header credentials,
+ * - cookie/set-cookie sensitive values,
+ * - inline Bearer/Basic auth credentials in free-form text.
  *
  * @param {string} value - The string to sanitize and redact before logging or display.
  * @param {number} [maxLength=200] - Maximum length of the returned preview before truncation.
@@ -205,14 +216,16 @@ function createRedactedPreview(value, maxLength = 200) {
  * Perform a POST request expecting a JSON response, with timeout-based abort support.
  *
  * @param {string} url - Absolute URL to send the request to.
- * @param {{ body?: string, headers?: Record<string, string>, timeoutMs: number }} options
+ * @param {{ body?: string, headers?: Record<string, string>, timeoutMs: number, operation?: string }} options
  *   Request options.
  * @param {string} [options.body] - Serialized request body (typically JSON string).
  * @param {Record<string, string>} [options.headers] - Additional request headers.
  * @param {number} options.timeoutMs - Timeout in milliseconds before aborting the request.
+ * @param {string} [options.operation] - Logical operation being performed for clearer error messages.
  * @returns {Promise<object|null>} Parsed JSON response payload, or null when the response has no JSON body.
  */
-async function fetchJson(url, { body, headers, timeoutMs }) {
+async function fetchJson(url, { body, headers, timeoutMs, operation }) {
+  const operationLabel = operation ?? 'trusted session exchange request';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort();
@@ -229,12 +242,13 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
       body,
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
 
     const rawBody = await response.text();
     if (rawBody.length === 0) {
       if (!response.ok) {
-        fail(`${url} returned HTTP ${response.status} with empty response body`);
+        fail(
+          `${operationLabel} (${url}) returned HTTP ${response.status} with empty response body`,
+        );
       }
       return null;
     }
@@ -243,7 +257,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
       const payload = JSON.parse(rawBody);
       if (!response.ok) {
         fail(
-          `${url} returned HTTP ${response.status}: ${createRedactedPreview(JSON.stringify(payload))}`,
+          `${operationLabel} (${url}) returned HTTP ${response.status}: ${createRedactedPreview(JSON.stringify(payload))}`,
         );
       }
       return payload;
@@ -251,17 +265,19 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
       const parseErrorDetails = error instanceof Error ? error.message : String(error);
       if (!response.ok) {
         fail(
-          `${url} returned HTTP ${response.status}: response body is not valid JSON (${parseErrorDetails}); bodyLength=${rawBody.length}; preview=${createRedactedPreview(rawBody)}`,
+          `${operationLabel} (${url}) returned HTTP ${response.status}: response body is not valid JSON (${parseErrorDetails}); bodyLength=${rawBody.length}; preview=${createRedactedPreview(rawBody)}`,
         );
       }
-      fail(`${url} returned invalid JSON: ${parseErrorDetails}`);
+      fail(`${operationLabel} (${url}) returned invalid JSON: ${parseErrorDetails}`);
     }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      fail(`${url} timed out after ${timeoutMs}ms`);
+      fail(`${operationLabel} (${url}) timed out after ${timeoutMs}ms`);
     }
 
-    fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
+    fail(
+      `${operationLabel} (${url}) request failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   } finally {
     clearTimeout(timeoutId);
   }
@@ -342,6 +358,7 @@ async function main() {
   const exchangeEnvelope = await fetchJson(requestUrl.href, {
     body: requestBody,
     timeoutMs,
+    operation: 'trusted session exchange request',
     headers: {
       'X-Api-Key': trustedSessionKey.id,
       'X-Timestamp': timestampSecondsStr,
