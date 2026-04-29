@@ -19,7 +19,18 @@ const {
   signServiceAuthCanonicalString,
 } = require('../shared-auth/src/serviceAuth.js');
 
-const SENSITIVE_KEY_PATTERN =
+// Parse dotenv-style KEY=VALUE entries.
+// Capture groups:
+//   1) variable name (letters, digits, underscore),
+//   2) double-quoted value (supports escaped characters like \" and \\),
+//   3) single-quoted value (supports escaped characters like \' and \\),
+//   4) unquoted value (up to inline comment/end of line).
+// Optional whitespace is allowed around the value and before line end.
+const DOTENV_ENTRY_REGEX =
+  /^([A-Za-z0-9_]+)=\s*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|([^#\r\n]*))\s*$/u;
+
+// Partial regex source intended for composition in RegExp constructors.
+const SENSITIVE_KEY_PATTERN_SOURCE =
   '(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:id)?)';
 // 16 random bytes = 128-bit nonce baseline for signed request uniqueness.
 const NONCE_BYTES = 16;
@@ -88,16 +99,7 @@ function loadEnvFile(filePath) {
       continue;
     }
 
-    // Parse dotenv-style KEY=VALUE entries.
-    // Capture groups:
-    //   1) variable name (letters, digits, underscore),
-    //   2) double-quoted value (supports escaped characters like \" and \\),
-    //   3) single-quoted value (supports escaped characters like \' and \\),
-    //   4) unquoted value (up to inline comment/end of line).
-    // Optional whitespace is allowed around the value and before line end.
-    const match = line.match(
-      /^([A-Za-z0-9_]+)=\s*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|([^#\r\n]*))\s*$/u,
-    );
+    const match = line.match(DOTENV_ENTRY_REGEX);
     if (!match) {
       continue;
     }
@@ -184,25 +186,29 @@ function pickTrustedSessionKey(keys, preferredId) {
  * @returns {string} The redacted preview string, truncated with an ellipsis marker when it exceeds `maxLength`.
  */
 function createRedactedPreview(value, maxLength = 200) {
-  const safeValue =
-    typeof value === 'string' ? value : value === null || value === undefined ? '' : String(value);
+  let safeValue = '';
+  if (typeof value === 'string') {
+    safeValue = value;
+  } else if (value !== null && value !== undefined) {
+    safeValue = String(value);
+  }
   const redacted = safeValue
     // Redact object/JSON-style sensitive key-value pairs (e.g. "token":"abc", secret=xyz).
     .replace(
       new RegExp(
-        `(["']?${SENSITIVE_KEY_PATTERN}["']?\\s*[:=]\\s*["']?)([^\\s"',;}&]+)(["']?)`,
+        `(["']?${SENSITIVE_KEY_PATTERN_SOURCE}["']?\\s*[:=]\\s*["']?)([^\\s"',;}&]+)(["']?)`,
         'gi',
       ),
       '$1[REDACTED]$3',
     )
     // Redact sensitive query parameters in URLs (e.g. ?api_key=..., &token=...).
-    .replace(new RegExp(`([?&]${SENSITIVE_KEY_PATTERN}=)([^&#\\s]+)`, 'gi'), '$1[REDACTED]')
+    .replace(new RegExp(`([?&]${SENSITIVE_KEY_PATTERN_SOURCE}=)([^&#\\s]+)`, 'gi'), '$1[REDACTED]')
     // Redact Authorization header credentials (e.g. Authorization: Bearer ...).
     .replace(/\b(authorization\s*:\s*)([A-Za-z][A-Za-z0-9_-]*\s+[^\s,;]+)/gi, '$1[REDACTED_AUTH]')
     // Redact sensitive cookie values in Cookie/Set-Cookie headers.
     .replace(
       new RegExp(
-        `(\\b(?:cookie|set-cookie)\\s*:\\s*[^\\n]*?\\b${SENSITIVE_KEY_PATTERN}=)([^;\\s]+)`,
+        `(\\b(?:cookie|set-cookie)\\s*:\\s*[^\\n]*?\\b${SENSITIVE_KEY_PATTERN_SOURCE}=)([^;\\s]+)`,
         'gi',
       ),
       '$1[REDACTED]',
@@ -219,14 +225,15 @@ function createRedactedPreview(value, maxLength = 200) {
  */
 
 /**
- * Sends a JSON POST request and parses the response body when present.
+ * Executes a POST request and parses a JSON response.
  *
- * Returns parsed JSON for successful responses with a non-empty body.
- * Returns `null` only when the response is successful (`response.ok`) and the
- * response body is empty.
+ * Return semantics:
+ * - Returns parsed JSON for non-empty response bodies.
+ * - Returns `null` only when the response is successful (`response.ok`) and the body is empty.
+ * - Treats empty response bodies on non-success statuses as errors.
  *
- * For non-success responses (including empty-body responses), invalid JSON, or
- * transport/timeout failures, this function terminates via `fail(...)`.
+ * Note: an empty response body is distinct from valid JSON payloads such as `{}`, `[]`,
+ * or the JSON literal `null` (body text `"null"`), which are all parsed and returned.
  *
  * @param {string} url - Absolute URL to send the request to.
  * @param {{ body?: string, headers?: Record<string, string>, timeoutMs: number, operation?: string }} options
@@ -237,7 +244,7 @@ function createRedactedPreview(value, maxLength = 200) {
  * @param {string} [options.operation] - Logical operation being performed for clearer error messages.
  * @returns {Promise<JsonValue|null>} Parsed JSON response payload, or null when a successful response has an empty body.
  */
-async function fetchJson(url, { body, headers = {}, timeoutMs, operation } = {}) {
+async function fetchJson(url, { body, headers = {}, timeoutMs, operation }) {
   const operationLabel = operation ?? 'trusted session exchange request';
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     fail(`${operationLabel} requires a positive finite timeoutMs value`);
