@@ -43,7 +43,7 @@ function parseArgs(argv) {
 
   if (argv.length % 2 !== 0) {
     fail(
-      `arguments must be provided as --key value pairs (for example: --account-id 123 --role admin) (received ${argv.length} arguments)`,
+      `command arguments must be provided as --key value pairs (for example: --account-id 123 --role admin) (received ${argv.length} command argument(s))`,
     );
   }
 
@@ -88,20 +88,27 @@ function loadEnvFile(filePath) {
     // Parse dotenv-style KEY=VALUE entries.
     // Capture groups:
     //   1) variable name (letters, digits, underscore),
-    //   2) double-quoted value (no embedded quotes/newlines),
-    //   3) single-quoted value (no embedded quotes/newlines),
+    //   2) double-quoted value (supports escaped characters like \" and \\),
+    //   3) single-quoted value (supports escaped characters like \' and \\),
     //   4) unquoted value (up to inline comment/end of line).
     // Optional whitespace is allowed around the value and before line end.
     const match = line.match(
-      /^([A-Za-z0-9_]+)=\s*(?:"([^"\r\n]*)"|'([^'\r\n]*)'|([^#\r\n]*))\s*$/u,
+      /^([A-Za-z0-9_]+)=\s*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|([^#\r\n]*))\s*$/u,
     );
     if (!match) {
       continue;
     }
 
     const key = match[1];
-    const valueWithTrailingWhitespace = match[2] ?? match[3] ?? match[4] ?? '';
-    const value = valueWithTrailingWhitespace.replace(/\s+$/u, '');
+    let value;
+    if (match[2] !== null && match[2] !== undefined) {
+      value = match[2].replace(/\\(.)/gu, '$1');
+    } else if (match[3] !== null && match[3] !== undefined) {
+      value = match[3].replace(/\\(.)/gu, '$1');
+    } else {
+      const valueWithTrailingWhitespace = match[4] ?? '';
+      value = valueWithTrailingWhitespace.replace(/\s+$/u, '');
+    }
     values[key] = value;
   }
 
@@ -160,22 +167,25 @@ function pickTrustedSessionKey(keys, preferredId) {
 }
 
 function createRedactedPreview(value, maxLength = 200) {
-  const sensitiveKeyPattern =
+  const sensitiveKeyPatternFragment =
     '(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:id)?)';
   const redacted = value
     // Redact object/JSON-style sensitive key-value pairs (e.g. "token":"abc", secret=xyz).
     .replace(
-      new RegExp(`(["']?${sensitiveKeyPattern}["']?\\s*[:=]\\s*["']?)([^\\s"',;}&]+)(["']?)`, 'gi'),
+      new RegExp(
+        `(["']?${sensitiveKeyPatternFragment}["']?\\s*[:=]\\s*["']?)([^\\s"',;}&]+)(["']?)`,
+        'gi',
+      ),
       '$1[REDACTED]$3',
     )
     // Redact sensitive query parameters in URLs (e.g. ?api_key=..., &token=...).
-    .replace(new RegExp(`([?&]${sensitiveKeyPattern}=)([^&#\\s]+)`, 'gi'), '$1[REDACTED]')
+    .replace(new RegExp(`([?&]${sensitiveKeyPatternFragment}=)([^&#\\s]+)`, 'gi'), '$1[REDACTED]')
     // Redact Authorization header credentials (e.g. Authorization: Bearer ...).
     .replace(/\b(authorization\s*:\s*)([A-Za-z][A-Za-z0-9_-]*\s+[^\s,;]+)/gi, '$1[REDACTED_AUTH]')
     // Redact sensitive cookie values in Cookie/Set-Cookie headers.
     .replace(
       new RegExp(
-        `(\\b(?:cookie|set-cookie)\\s*:\\s*[^\\n]*?\\b${sensitiveKeyPattern}=)([^;\\s]+)`,
+        `(\\b(?:cookie|set-cookie)\\s*:\\s*[^\\n]*?\\b${sensitiveKeyPatternFragment}=)([^;\\s]+)`,
         'gi',
       ),
       '$1[REDACTED]',
@@ -202,6 +212,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
       body,
       signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     const rawBody = await response.text();
     if (rawBody.length === 0) {
@@ -298,7 +309,7 @@ async function main() {
   const timestampSecondsStr = String(Math.floor(Date.now() / 1000));
   // 16 random bytes (128-bit nonce) is an intentional security baseline for request uniqueness;
   // this provides sufficient entropy to make nonce collisions/replay impractical for signed requests.
-  const nonce = crypto.randomBytes(16).toString('hex');
+  const nonce = crypto.randomBytes(16).toString('hex'); // 16 bytes = 128-bit nonce baseline for strong uniqueness/replay resistance.
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
   const requestUrl = buildUrl(authBaseUrl, trustedSessionExchangePath);
   const canonicalString = buildServiceAuthCanonicalString({
