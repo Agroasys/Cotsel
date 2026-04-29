@@ -30,7 +30,7 @@ Relevant runtime surfaces:
 
 ### 2. Operator capabilities and signer bindings are backend-managed session truth
 
-- `auth /session` now emits both operator capabilities and approved signer bindings.
+- `auth/session` now emits both operator capabilities and approved signer bindings.
 - `gateway` does not broaden missing capability data into full operator power.
 - Durable admin profile provisioning does not silently grant every operator capability. Operator capabilities must be explicitly provisioned through admin-control.
 - Signer authority is explicitly resolved from backend-managed signer bindings by:

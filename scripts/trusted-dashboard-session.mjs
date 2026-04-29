@@ -30,7 +30,7 @@ function fail(message) {
 function parseArgs(argv) {
   const parsed = {};
 
-  for (let index = 0; index < argv.length; index += 1) {
+  for (let index = 0; index < argv.length; index += 2) {
     const token = argv[index];
     if (!token.startsWith('--')) {
       fail(`unexpected argument: ${token}`);
@@ -43,7 +43,6 @@ function parseArgs(argv) {
     }
 
     parsed[key] = value;
-    index += 1;
   }
 
   return parsed;
@@ -101,8 +100,10 @@ function parseTrustedSessionApiKeys(rawValue) {
     const parsed = JSON.parse(rawValue);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
+    const normalized = rawValue.replace(/\s+/gu, ' ').trim();
+    const preview = normalized.slice(0, 120).replace(/[A-Za-z0-9]/gu, '*');
     fail(
-      'TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]',
+      `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Check this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]. Received length=${rawValue.length}, redacted preview="${preview}${normalized.length > 120 ? '…' : ''}".`,
     );
   }
 }
@@ -117,7 +118,12 @@ function pickTrustedSessionKey(keys, preferredId) {
 
 async function fetchJson(url, { body, headers, timeoutMs }) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let completed = false;
+  const timeout = setTimeout(() => {
+    if (!completed) {
+      controller.abort();
+    }
+  }, timeoutMs);
 
   try {
     const response = await fetch(url, {
@@ -131,9 +137,23 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
       signal: controller.signal,
     });
 
-    const payload = await response.json().catch(() => null);
+    const rawBody = await response.text();
+    let payload = null;
+    let jsonParseError = null;
+    if (rawBody.length > 0) {
+      try {
+        payload = JSON.parse(rawBody);
+      } catch (error) {
+        jsonParseError = error;
+      }
+    }
     if (!response.ok) {
-      fail(`${url} returned HTTP ${response.status}: ${JSON.stringify(payload)}`);
+      const truncatedRawBody =
+        rawBody.length > 500 ? `${rawBody.slice(0, 500)}…(truncated)` : rawBody;
+      const responseDetails = jsonParseError
+        ? `response body is not valid JSON (${jsonParseError instanceof Error ? jsonParseError.message : String(jsonParseError)}): ${truncatedRawBody}`
+        : JSON.stringify(payload);
+      fail(`${url} returned HTTP ${response.status}: ${responseDetails}`);
     }
 
     return payload;
@@ -144,6 +164,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
 
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
+    completed = true;
     clearTimeout(timeout);
   }
 }

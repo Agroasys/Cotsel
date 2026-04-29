@@ -15,6 +15,8 @@ test('normalizeTimeoutMs falls back for invalid timeout values', () => {
   assert.equal(normalizeTimeoutMs('-1', DEFAULT_TIMEOUT_MS), DEFAULT_TIMEOUT_MS);
   assert.equal(normalizeTimeoutMs('NaN', DEFAULT_TIMEOUT_MS), DEFAULT_TIMEOUT_MS);
   assert.equal(normalizeTimeoutMs('1500', DEFAULT_TIMEOUT_MS), 1500);
+  assert.equal(normalizeTimeoutMs('2000', DEFAULT_TIMEOUT_MS), 2000);
+  assert.equal(normalizeTimeoutMs('10000', DEFAULT_TIMEOUT_MS), 10000);
 });
 
 test('buildAuthEndpointCandidates supports direct and routed auth bases', () => {
@@ -35,6 +37,30 @@ test('buildAuthEndpointCandidates supports direct and routed auth bases', () => 
     [
       'https://cotsel.sys.agroasys.com/api/auth/v1/challenge?wallet=0xabc',
       'https://cotsel.sys.agroasys.com/challenge?wallet=0xabc',
+    ],
+  );
+
+  assert.deepEqual(
+    buildAuthEndpointCandidates('http://127.0.0.1:3005', 'challenge', {
+      wallet: '',
+    }).map((url) => url.toString()),
+    ['http://127.0.0.1:3005/challenge', 'http://127.0.0.1:3005/api/auth/v1/challenge'],
+  );
+
+  assert.deepEqual(
+    buildAuthEndpointCandidates('http://127.0.0.1:3005', 'challenge', {
+      wallet: null,
+    }).map((url) => url.toString()),
+    ['http://127.0.0.1:3005/challenge', 'http://127.0.0.1:3005/api/auth/v1/challenge'],
+  );
+
+  assert.deepEqual(
+    buildAuthEndpointCandidates('http://127.0.0.1:3005', 'challenge', {
+      wallet: 'a+b c&d?e',
+    }).map((url) => url.toString()),
+    [
+      'http://127.0.0.1:3005/challenge?wallet=a%2Bb+c%26d%3Fe',
+      'http://127.0.0.1:3005/api/auth/v1/challenge?wallet=a%2Bb+c%26d%3Fe',
     ],
   );
 });
@@ -76,11 +102,37 @@ test('assertExpectedSession requires the requested wallet and role', () => {
       }),
     /role mismatch/,
   );
+
+  assert.throws(
+    () =>
+      assertExpectedSession({
+        walletAddress: '0x21f8a65897e4863811b7759F8EaE84650F8E031F',
+        role: 'admin',
+        session: {
+          role: 'admin',
+        },
+      }),
+    /missing required fields/,
+  );
+
+  assert.throws(
+    () =>
+      assertExpectedSession({
+        walletAddress: '0x21f8a65897e4863811b7759F8EaE84650F8E031F',
+        role: 'admin',
+        session: {
+          walletAddress: '0x21f8a65897e4863811b7759f8eae84650f8e031f',
+        },
+      }),
+    /missing required fields/,
+  );
 });
 
 test('maskSessionId redacts long bearer tokens', () => {
   assert.equal(maskSessionId(''), 'missing');
   assert.equal(maskSessionId('shorttoken'), 'shorttoken');
+  assert.equal(maskSessionId('123456789012'), '123456789012');
+  assert.equal(maskSessionId('1234567890123'), '12345678...0123');
   assert.equal(
     maskSessionId('c8911aac37ebe24cd433f73eeddec0a5afb5427bb19db0b3a746e8ef943c0252'),
     'c8911aac...0252',
