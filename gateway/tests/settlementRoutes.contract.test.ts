@@ -73,6 +73,9 @@ async function startServer(overrides: Partial<GatewayConfig> = {}) {
       ),
     }),
   );
+  router.get('/after-settlement', (_req, res) => {
+    res.status(200).json({ success: true });
+  });
 
   const app = createApp(runtimeConfig, {
     version: '0.1.0',
@@ -159,6 +162,20 @@ describe('gateway settlement routes contract', () => {
       expect(response.status).toBe(403);
       expect(payload.error.code).toBe('FORBIDDEN');
       expect(payload.error.details.reason).toBe('settlement_ingress_disabled');
+    } finally {
+      server.close();
+    }
+  });
+
+  test('settlement ingress disabled does not block later non-settlement routes', async () => {
+    const { server, baseUrl } = await startServer({ settlementIngressEnabled: false });
+
+    try {
+      const response = await fetch(`${baseUrl}/after-settlement`);
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload.success).toBe(true);
     } finally {
       server.close();
     }
