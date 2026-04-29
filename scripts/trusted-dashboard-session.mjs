@@ -184,7 +184,9 @@ function pickTrustedSessionKey(keys, preferredId) {
  * @returns {string} The redacted preview string, truncated with an ellipsis marker when it exceeds `maxLength`.
  */
 function createRedactedPreview(value, maxLength = 200) {
-  const redacted = value
+  const safeValue =
+    typeof value === 'string' ? value : value === null || value === undefined ? '' : String(value);
+  const redacted = safeValue
     // Redact object/JSON-style sensitive key-value pairs (e.g. "token":"abc", secret=xyz).
     .replace(
       new RegExp(
@@ -211,6 +213,12 @@ function createRedactedPreview(value, maxLength = 200) {
 }
 
 /**
+ * @typedef {string | number | boolean | null | JsonObject | JsonArray} JsonValue
+ * @typedef {{ [key: string]: JsonValue }} JsonObject
+ * @typedef {JsonValue[]} JsonArray
+ */
+
+/**
  * Sends a JSON POST request and parses the response body when present.
  *
  * Returns parsed JSON for successful responses with a non-empty body.
@@ -227,9 +235,9 @@ function createRedactedPreview(value, maxLength = 200) {
  * @param {Record<string, string>} [options.headers] - Additional request headers.
  * @param {number} options.timeoutMs - Timeout in milliseconds before aborting the request.
  * @param {string} [options.operation] - Logical operation being performed for clearer error messages.
- * @returns {Promise<object|null>} Parsed JSON response payload, or null when a successful response has an empty body.
+ * @returns {Promise<JsonValue|null>} Parsed JSON response payload, or null when a successful response has an empty body.
  */
-async function fetchJson(url, { body, headers, timeoutMs, operation }) {
+async function fetchJson(url, { body, headers = {}, timeoutMs, operation } = {}) {
   const operationLabel = operation ?? 'trusted session exchange request';
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     fail(`${operationLabel} requires a positive finite timeoutMs value`);
@@ -391,11 +399,29 @@ async function main() {
     },
   });
 
-  const result = exchangeEnvelope?.data;
-  if (!result?.sessionId) {
+  if (exchangeEnvelope === null) {
+    fail('trusted session exchange returned no envelope');
+  }
+  if (typeof exchangeEnvelope !== 'object' || Array.isArray(exchangeEnvelope)) {
+    fail(
+      `trusted session exchange returned non-object envelope: ${createRedactedPreview(
+        JSON.stringify(exchangeEnvelope),
+      )}`,
+    );
+  }
+
+  const result = exchangeEnvelope.data;
+  if (typeof result !== 'object' || result === null || Array.isArray(result)) {
+    fail(
+      `trusted session exchange payload missing data: ${createRedactedPreview(
+        JSON.stringify(exchangeEnvelope),
+      )}`,
+    );
+  }
+  if (typeof result.sessionId !== 'string' || result.sessionId.length === 0) {
     fail(
       `trusted session exchange payload missing sessionId: ${createRedactedPreview(
-        JSON.stringify(exchangeEnvelope),
+        JSON.stringify(result),
       )}`,
     );
   }
