@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_SESSION_OUTPUT_FILE,
   DEFAULT_TIMEOUT_MS,
@@ -18,7 +19,7 @@ const {
   signServiceAuthCanonicalString,
 } = require('../shared-auth/src/serviceAuth.js');
 
-const ROOT_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agroasys.com/api/auth/v1';
 const DEFAULT_PROFILE_FILE = '.env.staging-e2e-real';
 const TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH = 120;
@@ -30,6 +31,10 @@ function fail(message) {
 
 function parseArgs(argv) {
   const parsed = {};
+
+  if (argv.length % 2 !== 0) {
+    fail('arguments must be provided as --key value pairs');
+  }
 
   for (let index = 0; index < argv.length; index += 2) {
     const token = argv[index];
@@ -134,9 +139,7 @@ function redactSensitivePreview(value, maxLength = 200) {
 
 async function fetchJson(url, { body, headers, timeoutMs }) {
   const controller = new AbortController();
-  let timedOut = false;
   const timeout = setTimeout(() => {
-    timedOut = true;
     controller.abort();
   }, timeoutMs);
 
@@ -173,11 +176,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
     return payload;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      if (timedOut) {
-        fail(`${url} timed out after ${timeoutMs}ms`);
-      } else {
-        fail(`${url} request was aborted before completion`);
-      }
+      fail(`${url} timed out after ${timeoutMs}ms`);
     }
 
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
