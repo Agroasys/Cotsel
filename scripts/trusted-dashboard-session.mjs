@@ -21,6 +21,7 @@ const {
 const ROOT_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agroasys.com/api/auth/v1';
 const DEFAULT_PROFILE_FILE = '.env.staging-e2e-real';
+const TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH = 120;
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -37,6 +38,9 @@ function parseArgs(argv) {
     }
 
     const key = token.slice(2);
+    if (index + 1 >= argv.length) {
+      fail(`missing value for --${key}`);
+    }
     const value = argv[index + 1];
     if (!value || value.startsWith('--')) {
       fail(`missing value for --${key}`);
@@ -56,7 +60,7 @@ function loadEnvFile(filePath) {
   const values = {};
   const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/u);
   for (const line of lines) {
-    if (!line || /^\s*#/u.test(line)) {
+    if (line.trim().length === 0 || /^\s*#/u.test(line)) {
       continue;
     }
 
@@ -101,9 +105,11 @@ function parseTrustedSessionApiKeys(rawValue) {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     const normalized = rawValue.replace(/\s+/gu, ' ').trim();
-    const preview = normalized.slice(0, 120).replace(/[^\s]/gu, '*');
+    const preview = normalized
+      .slice(0, TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH)
+      .replace(/[^\s]/gu, '*');
     fail(
-      `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Check this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]. Received length=${rawValue.length}, redacted preview="${preview}${normalized.length > 120 ? '…' : ''}".`,
+      `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Check this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]. Received length=${rawValue.length}, redacted preview="${preview}${normalized.length > TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH ? '…' : ''}".`,
     );
   }
 }
@@ -169,8 +175,9 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
     if (error instanceof Error && error.name === 'AbortError') {
       if (timedOut) {
         fail(`${url} timed out after ${timeoutMs}ms`);
+      } else {
+        fail(`${url} request was aborted before completion`);
       }
-      fail(`${url} request was aborted before completion`);
     }
 
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
