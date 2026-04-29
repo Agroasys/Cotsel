@@ -19,11 +19,12 @@ const {
   signServiceAuthCanonicalString,
 } = require('../shared-auth/src/serviceAuth.js');
 
+// 16 random bytes = 128-bit nonce baseline for signed request uniqueness.
+const NONCE_BYTES = 16;
 const DEFAULT_TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agrosys';
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agrosys.com/api/auth/v1';
 const DEFAULT_PROFILE_FILE = '.env.staging-e2e-real';
-const TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH = 120;
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -142,11 +143,9 @@ function parseTrustedSessionApiKeys(rawValue) {
     const parsed = JSON.parse(rawValue);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
-    const preview = '*'.repeat(
-      Math.min(rawValue.length, TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH),
-    );
+    const preview = '[REDACTED]';
     fail(
-      `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Check this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]. Received length=${rawValue.length}, redacted preview="${preview}${rawValue.length > TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH ? '…' : ''}".`,
+      `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Check this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]. Redacted preview="${preview}".`,
     );
   }
 }
@@ -226,6 +225,9 @@ function createRedactedPreview(value, maxLength = 200) {
  */
 async function fetchJson(url, { body, headers, timeoutMs, operation }) {
   const operationLabel = operation ?? 'trusted session exchange request';
+  if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    fail(`${operationLabel} requires a positive finite timeoutMs value`);
+  }
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort();
@@ -275,9 +277,8 @@ async function fetchJson(url, { body, headers, timeoutMs, operation }) {
       fail(`${operationLabel} (${url}) timed out after ${timeoutMs}ms`);
     }
 
-    fail(
-      `${operationLabel} (${url}) request failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    const errorDetails = error instanceof Error ? error.message : String(error);
+    fail(`${operationLabel} (${url}) request failed: ${createRedactedPreview(errorDetails)}`);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -342,7 +343,7 @@ async function main() {
   const timestampSecondsStr = String(Math.floor(Date.now() / 1000));
   // 16 random bytes (128-bit nonce) is an intentional security baseline for request uniqueness;
   // this provides sufficient entropy to make nonce collisions/replay impractical for signed requests.
-  const nonce = crypto.randomBytes(16).toString('hex');
+  const nonce = crypto.randomBytes(NONCE_BYTES).toString('hex');
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
   const requestUrl = buildUrl(authBaseUrl, trustedSessionExchangePath);
   const canonicalString = buildServiceAuthCanonicalString({
