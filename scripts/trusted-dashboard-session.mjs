@@ -19,9 +19,9 @@ const {
   signServiceAuthCanonicalString,
 } = require('../shared-auth/src/serviceAuth.js');
 
-const DEFAULT_TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agroasys';
+const DEFAULT_TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agrosys';
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agroasys.com/api/auth/v1';
+const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agrosys.com/api/auth/v1';
 const DEFAULT_PROFILE_FILE = '.env.staging-e2e-real';
 const TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH = 120;
 
@@ -173,7 +173,7 @@ function createRedactedPreview(value, maxLength = 200) {
 
 async function fetchJson(url, { body, headers, timeoutMs }) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => {
+  const timeoutId = setTimeout(() => {
     controller.abort();
   }, timeoutMs);
 
@@ -214,7 +214,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
 
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(timeoutId);
   }
 }
 
@@ -301,7 +301,11 @@ async function main() {
 
   const result = exchangeEnvelope?.data;
   if (!result?.sessionId) {
-    fail(`trusted session exchange payload missing sessionId: ${JSON.stringify(exchangeEnvelope)}`);
+    fail(
+      `trusted session exchange payload missing sessionId: ${createRedactedPreview(
+        JSON.stringify(exchangeEnvelope),
+      )}`,
+    );
   }
 
   writeSessionArtifact({
