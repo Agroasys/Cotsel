@@ -165,6 +165,13 @@ function pickTrustedSessionKey(keys, preferredId) {
   return keys.find((key) => isValidActiveKey(key)) ?? null;
 }
 
+/**
+ * Redacts sensitive credentials/secrets from an input string and returns a safe preview.
+ *
+ * @param {string} value - The string to sanitize and redact before logging or display.
+ * @param {number} [maxLength=200] - Maximum length of the returned preview before truncation.
+ * @returns {string} The redacted preview string, truncated with an ellipsis marker when it exceeds `maxLength`.
+ */
 function createRedactedPreview(value, maxLength = 200) {
   const sensitiveKeyPatternFragment =
     '(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:id)?)';
@@ -194,6 +201,17 @@ function createRedactedPreview(value, maxLength = 200) {
   return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}…(truncated)` : redacted;
 }
 
+/**
+ * Perform a POST request expecting a JSON response, with timeout-based abort support.
+ *
+ * @param {string} url - Absolute URL to send the request to.
+ * @param {{ body?: string, headers?: Record<string, string>, timeoutMs: number }} options
+ *   Request options.
+ * @param {string} [options.body] - Serialized request body (typically JSON string).
+ * @param {Record<string, string>} [options.headers] - Additional request headers.
+ * @param {number} options.timeoutMs - Timeout in milliseconds before aborting the request.
+ * @returns {Promise<object|null>} Parsed JSON response payload, or null when the response has no JSON body.
+ */
 async function fetchJson(url, { body, headers, timeoutMs }) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
@@ -308,7 +326,7 @@ async function main() {
   const timestampSecondsStr = String(Math.floor(Date.now() / 1000));
   // 16 random bytes (128-bit nonce) is an intentional security baseline for request uniqueness;
   // this provides sufficient entropy to make nonce collisions/replay impractical for signed requests.
-  const nonce = crypto.randomBytes(16).toString('hex'); // 128-bit (16-byte) cryptographic nonce for request uniqueness/replay resistance.
+  const nonce = crypto.randomBytes(16).toString('hex');
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
   const requestUrl = buildUrl(authBaseUrl, trustedSessionExchangePath);
   const canonicalString = buildServiceAuthCanonicalString({
