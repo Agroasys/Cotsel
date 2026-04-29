@@ -185,7 +185,6 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       fail(`${url} timed out after ${timeoutMs}ms`);
-      return;
     }
 
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
