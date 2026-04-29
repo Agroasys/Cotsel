@@ -101,7 +101,9 @@ function parseTrustedSessionApiKeys(rawValue) {
     const parsed = JSON.parse(rawValue);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
-    fail('TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON');
+    fail(
+      'TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]',
+    );
   }
 }
 
@@ -183,7 +185,7 @@ async function main() {
 
   if (!trustedSessionKey) {
     fail(
-      'No active trusted session exchange API key is available. Provide TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON or DASHBOARD_TRUSTED_SESSION_API_KEY_ID.',
+      'No active trusted session exchange API key is available. Ensure TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON contains at least one active key. Optionally set DASHBOARD_TRUSTED_SESSION_API_KEY_ID to select a preferred key.',
     );
   }
 
