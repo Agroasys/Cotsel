@@ -136,6 +136,10 @@ function buildUrl(baseUrl, pathname) {
   };
 }
 
+function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function parseTrustedSessionApiKeys(rawValue) {
   if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
     fail(
@@ -145,7 +149,12 @@ function parseTrustedSessionApiKeys(rawValue) {
 
   try {
     const parsed = JSON.parse(rawValue);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) {
+      fail(
+        'TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON must be a JSON array. Check this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]. Redacted preview="[REDACTED]".',
+      );
+    }
+    return parsed;
   } catch {
     fail(
       'TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Check this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]. Redacted preview="[REDACTED]".',
@@ -154,17 +163,57 @@ function parseTrustedSessionApiKeys(rawValue) {
 }
 
 function pickTrustedSessionKey(keys, preferredId) {
-  const isValidActiveKey = (key) =>
-    key &&
-    typeof key.id === 'string' &&
-    key.id.length > 0 &&
-    typeof key.secret === 'string' &&
-    key.secret.length > 0 &&
-    key.active === true;
-  const activeKeys = keys.filter((key) => isValidActiveKey(key));
+  const activeKeys = [];
+  const skipped = [];
+
+  for (const key of keys) {
+    const reasons = [];
+    if (!isPlainObject(key)) {
+      reasons.push('entry is not an object');
+    } else {
+      if (typeof key.id !== 'string' || key.id.length === 0) {
+        reasons.push('missing/invalid id');
+      }
+      if (typeof key.secret !== 'string' || key.secret.length === 0) {
+        reasons.push('missing/invalid secret');
+      }
+      if (key.active !== true) {
+        reasons.push('active must be boolean true');
+      }
+    }
+
+    if (reasons.length === 0) {
+      activeKeys.push(key);
+    } else {
+      skipped.push({
+        id:
+          isPlainObject(key) && typeof key.id === 'string' && key.id.length > 0
+            ? key.id
+            : '<unknown>',
+        reasons,
+      });
+    }
+  }
+
+  if (skipped.length > 0) {
+    console.warn(
+      `[trusted-dashboard-session] Ignored ${skipped.length} TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON entr${skipped.length === 1 ? 'y' : 'ies'} during validation.`,
+    );
+    for (const item of skipped) {
+      console.warn(
+        `[trusted-dashboard-session] Ignored key id="${item.id}": ${item.reasons.join(', ')}.`,
+      );
+    }
+  }
 
   if (preferredId) {
-    return activeKeys.find((key) => key.id === preferredId) ?? null;
+    const preferred = activeKeys.find((key) => key.id === preferredId) ?? null;
+    if (!preferred) {
+      console.warn(
+        `[trusted-dashboard-session] Preferred TRUSTED_SESSION_EXCHANGE_API_KEY_ID "${preferredId}" was not found among active valid keys.`,
+      );
+    }
+    return preferred;
   }
 
   return activeKeys[0] ?? null;
@@ -255,8 +304,13 @@ async function fetchJson(url, options) {
     fail(`${operationLabel} requires a positive finite timeoutMs value`);
   }
   const controller = new AbortController();
+  let didTimeout = false;
+  let isSettled = false;
   const timeoutId = setTimeout(() => {
-    controller.abort();
+    didTimeout = true;
+    if (!isSettled) {
+      controller.abort();
+    }
   }, timeoutMs);
 
   try {
@@ -270,6 +324,7 @@ async function fetchJson(url, options) {
       body,
       signal: controller.signal,
     });
+    isSettled = true;
 
     const rawBody = await response.text();
     if (rawBody.length === 0) {
@@ -300,12 +355,16 @@ async function fetchJson(url, options) {
     }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      fail(`${operationLabel} (${url}) timed out after ${timeoutMs}ms`);
+      if (didTimeout) {
+        fail(`${operationLabel} (${url}) timed out after ${timeoutMs}ms`);
+      }
+      fail(`${operationLabel} (${url}) request was aborted`);
     }
 
     const errorDetails = error instanceof Error ? error.message : String(error);
     fail(`${operationLabel} (${url}) request failed: ${createRedactedPreview(errorDetails)}`);
   } finally {
+    isSettled = true;
     clearTimeout(timeoutId);
   }
 }
@@ -411,11 +470,7 @@ async function main() {
     },
   });
 
-  if (
-    typeof exchangeEnvelope !== 'object' ||
-    exchangeEnvelope === null ||
-    Array.isArray(exchangeEnvelope)
-  ) {
+  if (!isPlainObject(exchangeEnvelope)) {
     if (exchangeEnvelope === null) {
       fail('trusted session exchange returned no envelope');
     }
@@ -427,7 +482,7 @@ async function main() {
   }
 
   const result = exchangeEnvelope.data;
-  if (typeof result !== 'object' || result === null || Array.isArray(result)) {
+  if (!isPlainObject(result)) {
     fail(
       `trusted session exchange payload missing data: ${createRedactedPreview(
         JSON.stringify(exchangeEnvelope),
