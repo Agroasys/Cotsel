@@ -42,7 +42,9 @@ function parseArgs(argv) {
   const parsed = {};
 
   if (argv.length % 2 !== 0) {
-    fail(`arguments must be provided as --key value pairs (received ${argv.length} arguments)`);
+    fail(
+      `arguments must be provided as --key value pairs (for example: --account-id 123 --role admin) (received ${argv.length} arguments)`,
+    );
   }
 
   for (let argIndex = 0; argIndex < argv.length; argIndex += 2) {
@@ -204,7 +206,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
     const rawBody = await response.text();
     if (rawBody.length === 0) {
       if (!response.ok) {
-        fail(`${url} returned HTTP ${response.status}: ${createRedactedPreview('')}`);
+        fail(`${url} returned HTTP ${response.status} with empty response body`);
       }
       return null;
     }
