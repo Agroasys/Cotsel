@@ -32,10 +32,6 @@ function fail(message) {
 function parseArgs(argv) {
   const parsed = {};
 
-  if (argv.length % 2 !== 0) {
-    fail('arguments must be provided as --key value pairs');
-  }
-
   for (let argIndex = 0; argIndex < argv.length; argIndex += 2) {
     const token = argv[argIndex];
     if (!token.startsWith('--')) {
@@ -120,11 +116,19 @@ function parseTrustedSessionApiKeys(rawValue) {
 }
 
 function pickTrustedSessionKey(keys, preferredId) {
+  const isValidActiveKey = (key) =>
+    key &&
+    typeof key.id === 'string' &&
+    key.id.length > 0 &&
+    typeof key.secret === 'string' &&
+    key.secret.length > 0 &&
+    key.active === true;
+
   if (preferredId) {
-    return keys.find((key) => key && key.id === preferredId && key.active === true) ?? null;
+    return keys.find((key) => isValidActiveKey(key) && key.id === preferredId) ?? null;
   }
 
-  return keys.find((key) => key && key.active === true) ?? null;
+  return keys.find((key) => isValidActiveKey(key)) ?? null;
 }
 
 function redactSensitivePreview(value, maxLength = 200) {
@@ -229,13 +233,13 @@ async function main() {
     accountId,
     role,
   };
-  if (orgId !== null && orgId !== undefined) {
+  if (orgId !== null) {
     requestPayload.orgId = orgId;
   }
-  if (email !== null && email !== undefined) {
+  if (email !== null) {
     requestPayload.email = email;
   }
-  if (walletAddress !== null && walletAddress !== undefined) {
+  if (walletAddress !== null) {
     requestPayload.walletAddress = walletAddress;
   }
   const requestBody = JSON.stringify(requestPayload);
