@@ -176,6 +176,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       fail(`${url} timed out after ${timeoutMs}ms`);
+      return;
     }
 
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -225,13 +226,16 @@ async function main() {
     );
   }
 
-  const requestBody = JSON.stringify({
+  const requestPayload = {
     accountId,
     role,
-    orgId,
-    email,
-    walletAddress,
-  });
+  };
+  if (orgId !== null && orgId !== undefined) requestPayload.orgId = orgId;
+  if (email !== null && email !== undefined) requestPayload.email = email;
+  if (walletAddress !== null && walletAddress !== undefined) {
+    requestPayload.walletAddress = walletAddress;
+  }
+  const requestBody = JSON.stringify(requestPayload);
   const timestamp = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomBytes(16).toString('hex');
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
