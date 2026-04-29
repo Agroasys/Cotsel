@@ -139,7 +139,7 @@ function pickTrustedSessionKey(keys, preferredId) {
   return keys.find((key) => isValidActiveKey(key)) ?? null;
 }
 
-function redactSensitivePreview(value, maxLength = 200) {
+function createRedactedPreview(value, maxLength = 200) {
   const redacted = value
     .replace(
       /("?(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:id)?)"?\s*[:=]\s*")([^"]*)(")/gi,
@@ -179,8 +179,8 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
     }
     if (!response.ok) {
       const responseDetails = jsonParseError
-        ? `response body is not valid JSON (${jsonParseError instanceof Error ? jsonParseError.message : String(jsonParseError)}); bodyLength=${rawBody.length}; preview=${redactSensitivePreview(rawBody)}`
-        : redactSensitivePreview(JSON.stringify(payload));
+        ? `response body is not valid JSON (${jsonParseError instanceof Error ? jsonParseError.message : String(jsonParseError)}); bodyLength=${rawBody.length}; preview=${createRedactedPreview(rawBody)}`
+        : createRedactedPreview(JSON.stringify(payload));
       fail(`${url} returned HTTP ${response.status}: ${responseDetails}`);
     }
 
@@ -188,7 +188,6 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       fail(`${url} timed out after ${timeoutMs}ms`);
-      return;
     }
 
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
