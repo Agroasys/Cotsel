@@ -19,6 +19,7 @@ const {
   signServiceAuthCanonicalString,
 } = require('../shared-auth/src/serviceAuth.js');
 
+const TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agroasys';
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agroasys.com/api/auth/v1';
 const DEFAULT_PROFILE_FILE = '.env.staging-e2e-real';
@@ -79,14 +80,16 @@ function loadEnvFile(filePath) {
       continue;
     }
 
-    let value = match[2].replace(/\s+$/u, '');
+    const key = match[1];
+    const valueWithTrailingWhitespace = match[2];
+    let value = valueWithTrailingWhitespace.replace(/\s+$/u, '');
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))
     ) {
       value = value.slice(1, -1);
     }
-    values[match[1]] = value;
+    values[key] = value;
   }
 
   return values;
@@ -254,7 +257,7 @@ async function main() {
   const timestampSecondsStr = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomBytes(16).toString('hex');
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
-  const requestPath = 'session/exchange/agroasys';
+  const requestPath = TRUSTED_SESSION_EXCHANGE_PATH;
   const requestUrl = buildUrl(authBaseUrl, requestPath);
   const requestUrlPathname = new URL(requestUrl).pathname;
   const canonicalString = buildServiceAuthCanonicalString({
