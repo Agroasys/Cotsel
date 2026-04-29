@@ -340,10 +340,19 @@ async function main() {
     requestPayload.walletAddress = walletAddress;
   }
   const requestBody = JSON.stringify(requestPayload);
+  if (typeof requestBody !== 'string' || requestBody.trim().length === 0) {
+    fail('Trusted session exchange request body must be a non-empty JSON string.');
+  }
   const timestampSecondsStr = String(Math.floor(Date.now() / 1000));
   // 16 random bytes (128-bit nonce) is an intentional security baseline for request uniqueness;
   // this provides sufficient entropy to make nonce collisions/replay impractical for signed requests.
-  const nonce = crypto.randomBytes(NONCE_BYTES).toString('hex');
+  let nonce;
+  try {
+    nonce = crypto.randomBytes(NONCE_BYTES).toString('hex');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    fail(`Failed to generate cryptographic nonce for trusted session exchange: ${message}`);
+  }
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
   const requestUrl = buildUrl(authBaseUrl, trustedSessionExchangePath);
   const canonicalString = buildServiceAuthCanonicalString({
@@ -356,17 +365,26 @@ async function main() {
   });
   const signature = signServiceAuthCanonicalString(trustedSessionKey.secret, canonicalString);
 
-  const exchangeEnvelope = await fetchJson(requestUrl.href, {
-    body: requestBody,
-    timeoutMs,
-    operation: 'trusted session exchange request',
-    headers: {
-      'X-Api-Key': trustedSessionKey.id,
-      'X-Timestamp': timestampSecondsStr,
-      'X-Nonce': nonce,
-      'X-Signature': signature,
-    },
-  });
+  let exchangeEnvelope;
+  try {
+    exchangeEnvelope = await fetchJson(requestUrl.href, {
+      body: requestBody,
+      timeoutMs,
+      operation: 'trusted session exchange request',
+      headers: {
+        'X-Api-Key': trustedSessionKey.id,
+        'X-Timestamp': timestampSecondsStr,
+        'X-Nonce': nonce,
+        'X-Signature': signature,
+      },
+    });
+  } catch (error) {
+    fail(
+      `trusted session exchange request failed: ${
+        error instanceof Error ? error.message : String(error)
+      }. If authentication is rejected due to timestamp validation, ensure this machine clock is correct and synchronized (for example via NTP).`,
+    );
+  }
 
   const result = exchangeEnvelope?.data;
   if (!result?.sessionId) {
