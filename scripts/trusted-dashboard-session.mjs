@@ -101,9 +101,9 @@ function loadEnvFile(filePath) {
 
     const key = match[1];
     let value;
-    if (match[2] !== null && match[2] !== undefined) {
+    if (match[2] !== undefined) {
       value = match[2].replace(/\\(.)/gu, '$1');
-    } else if (match[3] !== null && match[3] !== undefined) {
+    } else if (match[3] !== undefined) {
       value = match[3].replace(/\\(.)/gu, '$1');
     } else {
       const valueWithTrailingWhitespace = match[4] ?? '';
@@ -140,12 +140,11 @@ function parseTrustedSessionApiKeys(rawValue) {
     const parsed = JSON.parse(rawValue);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
-    const normalized = rawValue.replace(/\s+/gu, ' ').trim();
-    const preview = normalized
-      .slice(0, TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH)
-      .replace(/[^\s]/gu, '*');
+    const preview = '*'.repeat(
+      Math.min(rawValue.length, TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH),
+    );
     fail(
-      `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Check this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]. Received length=${rawValue.length}, redacted preview="${preview}${normalized.length > TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH ? '…' : ''}".`,
+      `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Check this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]. Received length=${rawValue.length}, redacted preview="${preview}${rawValue.length > TRUSTED_SESSION_API_KEYS_PREVIEW_MAX_LENGTH ? '…' : ''}".`,
     );
   }
 }
@@ -309,7 +308,7 @@ async function main() {
   const timestampSecondsStr = String(Math.floor(Date.now() / 1000));
   // 16 random bytes (128-bit nonce) is an intentional security baseline for request uniqueness;
   // this provides sufficient entropy to make nonce collisions/replay impractical for signed requests.
-  const nonce = crypto.randomBytes(16).toString('hex'); // 16 bytes = 128-bit nonce baseline for strong uniqueness/replay resistance.
+  const nonce = crypto.randomBytes(16).toString('hex');
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
   const requestUrl = buildUrl(authBaseUrl, trustedSessionExchangePath);
   const canonicalString = buildServiceAuthCanonicalString({
