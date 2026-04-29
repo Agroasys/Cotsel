@@ -54,12 +54,17 @@ function parseArgs(argv) {
 }
 
 function loadEnvFile(filePath) {
-  if (!fs.existsSync(filePath)) {
-    return {};
+  const values = {};
+  let lines;
+  try {
+    lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/u);
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return {};
+    }
+    throw error;
   }
 
-  const values = {};
-  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/u);
   for (const line of lines) {
     if (line.trim().length === 0 || /^\s*#/u.test(line)) {
       continue;
@@ -180,6 +185,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       fail(`${url} timed out after ${timeoutMs}ms`);
+      return;
     }
 
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -243,7 +249,7 @@ async function main() {
     requestPayload.walletAddress = walletAddress;
   }
   const requestBody = JSON.stringify(requestPayload);
-  const timestamp = String(Math.floor(Date.now() / 1000));
+  const timestampSeconds = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomBytes(16).toString('hex');
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
   const requestPath = '/session/exchange/agroasys';
@@ -254,7 +260,7 @@ async function main() {
     path: requestUrlPathname,
     query: '',
     bodySha256,
-    timestamp,
+    timestamp: timestampSeconds,
     nonce,
   });
   const signature = signServiceAuthCanonicalString(trustedSessionKey.secret, canonicalString);
@@ -264,7 +270,7 @@ async function main() {
     timeoutMs,
     headers: {
       'X-Api-Key': trustedSessionKey.id,
-      'X-Timestamp': timestamp,
+      'X-Timestamp': timestampSeconds,
       'X-Nonce': nonce,
       'X-Signature': signature,
     },
