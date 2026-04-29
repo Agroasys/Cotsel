@@ -36,17 +36,17 @@ function parseArgs(argv) {
     fail('arguments must be provided as --key value pairs');
   }
 
-  for (let index = 0; index < argv.length; index += 2) {
-    const token = argv[index];
+  for (let argIndex = 0; argIndex < argv.length; argIndex += 2) {
+    const token = argv[argIndex];
     if (!token.startsWith('--')) {
       fail(`unexpected argument: ${token}`);
     }
 
     const key = token.slice(2);
-    if (index + 1 >= argv.length) {
+    if (argIndex + 1 >= argv.length) {
       fail(`missing value for --${key}`);
     }
-    const value = argv[index + 1];
+    const value = argv[argIndex + 1];
     if (!value || value.startsWith('--')) {
       fail(`missing value for --${key}`);
     }
@@ -69,12 +69,12 @@ function loadEnvFile(filePath) {
       continue;
     }
 
-    const match = line.match(/^([A-Za-z0-9_]+)=(.*)$/u);
+    const match = line.match(/^([A-Za-z0-9_]+)=\s*(.*)$/u);
     if (!match) {
       continue;
     }
 
-    let value = match[2];
+    let value = match[2].replace(/\s+$/u, '');
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))
@@ -154,7 +154,6 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
       body,
       signal: controller.signal,
     });
-    clearTimeout(timeout);
 
     const rawBody = await response.text();
     let payload = null;
@@ -168,7 +167,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
     }
     if (!response.ok) {
       const responseDetails = jsonParseError
-        ? `response body is not valid JSON (${jsonParseError instanceof Error ? jsonParseError.message : String(jsonParseError)}); bodyLength=${rawBody.length}`
+        ? `response body is not valid JSON (${jsonParseError instanceof Error ? jsonParseError.message : String(jsonParseError)}); bodyLength=${rawBody.length}; preview=${redactSensitivePreview(rawBody)}`
         : redactSensitivePreview(JSON.stringify(payload));
       fail(`${url} returned HTTP ${response.status}: ${responseDetails}`);
     }
