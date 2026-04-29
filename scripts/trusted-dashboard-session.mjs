@@ -94,13 +94,16 @@ function loadEnvFile(filePath) {
     throw error;
   }
 
-  for (const line of lines) {
+  for (const [lineIndex, line] of lines.entries()) {
     if (line.trim().length === 0 || /^\s*#/u.test(line)) {
       continue;
     }
 
     const match = line.match(DOTENV_ENTRY_REGEX);
     if (!match) {
+      console.warn(
+        `[trusted-dashboard-session] Ignoring malformed .env entry in ${filePath}:${lineIndex + 1}: ${createRedactedPreview(line, 120)}`,
+      );
       continue;
     }
 
@@ -304,11 +307,10 @@ async function fetchJson(url, options) {
     fail(`${operationLabel} requires a positive finite timeoutMs value`);
   }
   const controller = new AbortController();
-  let didTimeout = false;
-  let isSettled = false;
+  let requestState = 'pending';
   const timeoutId = setTimeout(() => {
-    didTimeout = true;
-    if (!isSettled) {
+    if (requestState === 'pending') {
+      requestState = 'timed_out';
       controller.abort();
     }
   }, timeoutMs);
@@ -324,7 +326,8 @@ async function fetchJson(url, options) {
       body,
       signal: controller.signal,
     });
-    isSettled = true;
+    requestState = 'settled';
+    clearTimeout(timeoutId);
 
     const rawBody = await response.text();
     if (rawBody.length === 0) {
@@ -355,7 +358,7 @@ async function fetchJson(url, options) {
     }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      if (didTimeout) {
+      if (requestState === 'timed_out') {
         fail(`${operationLabel} (${url}) timed out after ${timeoutMs}ms`);
       }
       fail(`${operationLabel} (${url}) request was aborted`);
@@ -364,7 +367,6 @@ async function fetchJson(url, options) {
     const errorDetails = error instanceof Error ? error.message : String(error);
     fail(`${operationLabel} (${url}) request failed: ${createRedactedPreview(errorDetails)}`);
   } finally {
-    isSettled = true;
     clearTimeout(timeoutId);
   }
 }
