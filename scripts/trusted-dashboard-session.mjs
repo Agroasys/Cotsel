@@ -246,7 +246,10 @@ function createRedactedPreview(value, maxLength = 200) {
  * @returns {Promise<JsonValue|null>} Parsed JSON response payload, or null when a successful response has an empty body.
  */
 async function fetchJson(url, options) {
-  const { body, headers = {}, timeoutMs, operation } = options ?? {};
+  if (options === null || options === undefined || typeof options !== 'object') {
+    fail('trusted session exchange request requires an options object');
+  }
+  const { body, headers = {}, timeoutMs, operation } = options;
   const operationLabel = operation ?? 'trusted session exchange request';
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     fail(`${operationLabel} requires a positive finite timeoutMs value`);
@@ -408,14 +411,14 @@ async function main() {
     },
   });
 
-  if (exchangeEnvelope === null) {
-    fail('trusted session exchange returned no envelope');
-  }
   if (
     typeof exchangeEnvelope !== 'object' ||
     exchangeEnvelope === null ||
     Array.isArray(exchangeEnvelope)
   ) {
+    if (exchangeEnvelope === null) {
+      fail('trusted session exchange returned no envelope');
+    }
     fail(
       `trusted session exchange returned non-object envelope: ${createRedactedPreview(
         JSON.stringify(exchangeEnvelope),
