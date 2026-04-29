@@ -31,7 +31,7 @@ const DOTENV_ENTRY_REGEX =
 
 // Partial regex source intended for composition in RegExp constructors.
 const SENSITIVE_KEY_PATTERN_SOURCE =
-  '(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:id)?)';
+  '(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:[_-]?id)?)';
 // 16 random bytes = 128-bit nonce baseline for signed request uniqueness.
 const NONCE_BYTES = 16;
 const DEFAULT_TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agrosys';
@@ -161,12 +161,13 @@ function pickTrustedSessionKey(keys, preferredId) {
     typeof key.secret === 'string' &&
     key.secret.length > 0 &&
     key.active === true;
+  const activeKeys = keys.filter((key) => isValidActiveKey(key));
 
   if (preferredId) {
-    return keys.find((key) => isValidActiveKey(key) && key.id === preferredId) ?? null;
+    return activeKeys.find((key) => key.id === preferredId) ?? null;
   }
 
-  return keys.find((key) => isValidActiveKey(key)) ?? null;
+  return activeKeys[0] ?? null;
 }
 
 /**
@@ -244,7 +245,8 @@ function createRedactedPreview(value, maxLength = 200) {
  * @param {string} [options.operation] - Logical operation being performed for clearer error messages.
  * @returns {Promise<JsonValue|null>} Parsed JSON response payload, or null when a successful response has an empty body.
  */
-async function fetchJson(url, { body, headers = {}, timeoutMs, operation }) {
+async function fetchJson(url, options) {
+  const { body, headers = {}, timeoutMs, operation } = options ?? {};
   const operationLabel = operation ?? 'trusted session exchange request';
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     fail(`${operationLabel} requires a positive finite timeoutMs value`);
@@ -409,7 +411,11 @@ async function main() {
   if (exchangeEnvelope === null) {
     fail('trusted session exchange returned no envelope');
   }
-  if (typeof exchangeEnvelope !== 'object' || Array.isArray(exchangeEnvelope)) {
+  if (
+    typeof exchangeEnvelope !== 'object' ||
+    exchangeEnvelope === null ||
+    Array.isArray(exchangeEnvelope)
+  ) {
     fail(
       `trusted session exchange returned non-object envelope: ${createRedactedPreview(
         JSON.stringify(exchangeEnvelope),
