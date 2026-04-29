@@ -32,6 +32,10 @@ function fail(message) {
 function parseArgs(argv) {
   const parsed = {};
 
+  if (argv.length % 2 !== 0) {
+    fail('arguments must be provided as --key value pairs');
+  }
+
   for (let argIndex = 0; argIndex < argv.length; argIndex += 2) {
     const token = argv[argIndex];
     if (!token.startsWith('--')) {
@@ -97,8 +101,7 @@ function loadRuntimeEnv(profileFile) {
 }
 
 function buildUrl(baseUrl, pathname) {
-  const base = new URL(baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
-  return new URL(pathname.replace(/^\//u, ''), base).toString();
+  return new URL(pathname, baseUrl).toString();
 }
 
 function parseTrustedSessionApiKeys(rawValue) {
@@ -185,6 +188,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       fail(`${url} timed out after ${timeoutMs}ms`);
+      return;
     }
 
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -248,10 +252,10 @@ async function main() {
     requestPayload.walletAddress = walletAddress;
   }
   const requestBody = JSON.stringify(requestPayload);
-  const timestampSeconds = String(Math.floor(Date.now() / 1000));
+  const timestampSecondsStr = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomBytes(16).toString('hex');
   const bodySha256 = crypto.createHash('sha256').update(requestBody).digest('hex');
-  const requestPath = '/session/exchange/agroasys';
+  const requestPath = 'session/exchange/agroasys';
   const requestUrl = buildUrl(authBaseUrl, requestPath);
   const requestUrlPathname = new URL(requestUrl).pathname;
   const canonicalString = buildServiceAuthCanonicalString({
@@ -259,7 +263,7 @@ async function main() {
     path: requestUrlPathname,
     query: '',
     bodySha256,
-    timestamp: timestampSeconds,
+    timestamp: timestampSecondsStr,
     nonce,
   });
   const signature = signServiceAuthCanonicalString(trustedSessionKey.secret, canonicalString);
@@ -269,7 +273,7 @@ async function main() {
     timeoutMs,
     headers: {
       'X-Api-Key': trustedSessionKey.id,
-      'X-Timestamp': timestampSeconds,
+      'X-Timestamp': timestampSecondsStr,
       'X-Nonce': nonce,
       'X-Signature': signature,
     },
