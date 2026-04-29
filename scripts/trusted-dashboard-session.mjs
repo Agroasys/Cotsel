@@ -26,7 +26,7 @@ const NONCE_BYTES = 16;
 const DEFAULT_TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agrosys';
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agrosys.com/api/auth/v1';
-const DEFAULT_PROFILE_FILE = '.env.staging-e2e-real';
+const DEFAULT_PROFILE_FILE = '.env.staging-e2e-integration';
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -211,7 +211,14 @@ function createRedactedPreview(value, maxLength = 200) {
 }
 
 /**
- * Perform a POST request expecting a JSON response, with timeout-based abort support.
+ * Sends a JSON POST request and parses the response body when present.
+ *
+ * Returns parsed JSON for successful responses with a non-empty body.
+ * Returns `null` only when the response is successful (`response.ok`) and the
+ * response body is empty.
+ *
+ * For non-success responses (including empty-body responses), invalid JSON, or
+ * transport/timeout failures, this function terminates via `fail(...)`.
  *
  * @param {string} url - Absolute URL to send the request to.
  * @param {{ body?: string, headers?: Record<string, string>, timeoutMs: number, operation?: string }} options
@@ -220,7 +227,7 @@ function createRedactedPreview(value, maxLength = 200) {
  * @param {Record<string, string>} [options.headers] - Additional request headers.
  * @param {number} options.timeoutMs - Timeout in milliseconds before aborting the request.
  * @param {string} [options.operation] - Logical operation being performed for clearer error messages.
- * @returns {Promise<object|null>} Parsed JSON response payload, or null when the response has no JSON body.
+ * @returns {Promise<object|null>} Parsed JSON response payload, or null when a successful response has an empty body.
  */
 async function fetchJson(url, { body, headers, timeoutMs, operation }) {
   const operationLabel = operation ?? 'trusted session exchange request';
@@ -287,9 +294,25 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const profileFile = args['profile-file'] ?? DEFAULT_PROFILE_FILE;
   const runtimeEnv = loadRuntimeEnv(profileFile);
-  const timeoutMs = normalizeTimeoutMs(
-    args['timeout-ms'] ?? runtimeEnv.DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS,
-  );
+  let timeoutSource = 'default value';
+  let rawTimeoutMs = DEFAULT_TIMEOUT_MS;
+  if (args['timeout-ms'] !== null && args['timeout-ms'] !== undefined) {
+    timeoutSource = '--timeout-ms';
+    rawTimeoutMs = args['timeout-ms'];
+  } else if (
+    runtimeEnv.DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS !== null &&
+    runtimeEnv.DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS !== undefined
+  ) {
+    timeoutSource = 'DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS';
+    rawTimeoutMs = runtimeEnv.DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS;
+  }
+  let timeoutMs;
+  try {
+    timeoutMs = normalizeTimeoutMs(rawTimeoutMs);
+  } catch (error) {
+    const errorDetails = error instanceof Error ? error.message : String(error);
+    fail(`Invalid timeout value from ${timeoutSource}: ${String(rawTimeoutMs)} (${errorDetails})`);
+  }
   const trustedSessionExchangePath = resolveTrustedSessionExchangePath(args, runtimeEnv);
   const authBaseUrl =
     args['auth-base-url'] ??
@@ -340,8 +363,6 @@ async function main() {
   }
   const requestBody = JSON.stringify(requestPayload);
   const timestampSecondsStr = String(Math.floor(Date.now() / 1000));
-  // 16 random bytes (128-bit nonce) is an intentional security baseline for request uniqueness;
-  // this provides sufficient entropy to make nonce collisions/replay impractical for signed requests.
   let nonce;
   try {
     nonce = crypto.randomBytes(NONCE_BYTES).toString('hex');
