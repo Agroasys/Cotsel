@@ -101,7 +101,7 @@ function parseTrustedSessionApiKeys(rawValue) {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     const normalized = rawValue.replace(/\s+/gu, ' ').trim();
-    const preview = normalized.slice(0, 120).replace(/[A-Za-z0-9]/gu, '*');
+    const preview = normalized.slice(0, 120).replace(/[^\s]/gu, '*');
     fail(
       `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is not valid JSON. Check this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}]. Received length=${rawValue.length}, redacted preview="${preview}${normalized.length > 120 ? '…' : ''}".`,
     );
@@ -116,13 +116,22 @@ function pickTrustedSessionKey(keys, preferredId) {
   return keys.find((key) => key && key.active === true) ?? null;
 }
 
+function redactSensitivePreview(value, maxLength = 200) {
+  const redacted = value
+    .replace(
+      /("?(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:id)?)"?\s*[:=]\s*")([^"]*)(")/gi,
+      '$1[REDACTED]$3',
+    )
+    .replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9\-._~+/]+=*/gi, '[REDACTED_AUTH]');
+  return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}…(truncated)` : redacted;
+}
+
 async function fetchJson(url, { body, headers, timeoutMs }) {
   const controller = new AbortController();
-  let completed = false;
+  let timedOut = false;
   const timeout = setTimeout(() => {
-    if (!completed) {
-      controller.abort();
-    }
+    timedOut = true;
+    controller.abort();
   }, timeoutMs);
 
   try {
@@ -136,6 +145,7 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
       body,
       signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     const rawBody = await response.text();
     let payload = null;
@@ -148,23 +158,23 @@ async function fetchJson(url, { body, headers, timeoutMs }) {
       }
     }
     if (!response.ok) {
-      const truncatedRawBody =
-        rawBody.length > 500 ? `${rawBody.slice(0, 500)}…(truncated)` : rawBody;
       const responseDetails = jsonParseError
-        ? `response body is not valid JSON (${jsonParseError instanceof Error ? jsonParseError.message : String(jsonParseError)}): ${truncatedRawBody}`
-        : JSON.stringify(payload);
+        ? `response body is not valid JSON (${jsonParseError instanceof Error ? jsonParseError.message : String(jsonParseError)}); bodyLength=${rawBody.length}`
+        : redactSensitivePreview(JSON.stringify(payload));
       fail(`${url} returned HTTP ${response.status}: ${responseDetails}`);
     }
 
     return payload;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      fail(`${url} timed out after ${timeoutMs}ms`);
+      if (timedOut) {
+        fail(`${url} timed out after ${timeoutMs}ms`);
+      }
+      fail(`${url} request was aborted before completion`);
     }
 
     fail(`${url} request failed: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
-    completed = true;
     clearTimeout(timeout);
   }
 }
