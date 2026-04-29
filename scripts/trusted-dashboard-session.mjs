@@ -296,13 +296,10 @@ async function main() {
   const runtimeEnv = loadRuntimeEnv(profileFile);
   let timeoutSource = 'default value';
   let rawTimeoutMs = DEFAULT_TIMEOUT_MS;
-  if (args['timeout-ms'] !== null && args['timeout-ms'] !== undefined) {
+  if (args['timeout-ms'] !== undefined) {
     timeoutSource = '--timeout-ms';
     rawTimeoutMs = args['timeout-ms'];
-  } else if (
-    runtimeEnv.DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS !== null &&
-    runtimeEnv.DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS !== undefined
-  ) {
+  } else if (runtimeEnv.DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS !== undefined) {
     timeoutSource = 'DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS';
     rawTimeoutMs = runtimeEnv.DASHBOARD_TRUSTED_SESSION_TIMEOUT_MS;
   }
