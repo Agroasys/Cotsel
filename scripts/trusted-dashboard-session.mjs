@@ -34,10 +34,10 @@ const SENSITIVE_KEY_PATTERN_SOURCE =
   '(?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization|session(?:[_-]?id)?)';
 // 16 random bytes = 128-bit nonce baseline for signed request uniqueness.
 const NONCE_BYTES = 16;
-const DEFAULT_TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agrosys';
+const DEFAULT_TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agroasys';
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agrosys.com/api/auth/v1';
-const DEFAULT_PROFILE_FILE = '.env.staging-e2e-integration';
+const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agroasys.com/api/auth/v1';
+const DEFAULT_PROFILE_FILE = '.env.staging-e2e-real';
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -132,7 +132,8 @@ function loadRuntimeEnv(profileFile) {
 }
 
 function buildUrl(baseUrl, pathname) {
-  const url = new URL(pathname, baseUrl);
+  const base = new URL(baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+  const url = new URL(pathname.replace(/^\/+/u, ''), base);
   return {
     href: url.toString(),
     pathname: url.pathname,
