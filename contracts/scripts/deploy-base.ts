@@ -42,6 +42,95 @@ function getConfiguredCompilerVersion(): string | null {
   return null;
 }
 
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+
+  return parsed;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForDeployedBytecode(contractAddress: string): Promise<string> {
+  const attempts = parsePositiveIntEnv('DEPLOY_BYTECODE_WAIT_ATTEMPTS', 12);
+  const delayMs = parsePositiveIntEnv('DEPLOY_BYTECODE_WAIT_DELAY_MS', 5000);
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const bytecode = await ethers.provider.getCode(contractAddress);
+    if (bytecode !== '0x') {
+      return bytecode;
+    }
+
+    if (attempt < attempts) {
+      console.log(
+        `Bytecode not visible yet at ${contractAddress}; retrying in ${delayMs}ms (${attempt}/${attempts})`,
+      );
+      await sleep(delayMs);
+    }
+  }
+
+  throw new Error(
+    `No deployed bytecode found at ${contractAddress} after ${attempts} attempts. Check the deployment transaction receipt before retrying verification.`,
+  );
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isAlreadyVerified(message: string): boolean {
+  return /already verified/i.test(message);
+}
+
+function isTransientBytecodeVisibilityError(message: string): boolean {
+  return /DeployedBytecodeNotFoundError|has no bytecode|bytecode.*not.*found/i.test(message);
+}
+
+async function verifyWithRetries(
+  contractAddress: string,
+  constructorArguments: readonly unknown[],
+): Promise<'verified' | 'already-verified'> {
+  const attempts = parsePositiveIntEnv('DEPLOY_VERIFY_ATTEMPTS', 6);
+  const delayMs = parsePositiveIntEnv('DEPLOY_VERIFY_RETRY_DELAY_MS', 10000);
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await hre.run('verify:verify', {
+        address: contractAddress,
+        constructorArguments,
+      });
+
+      return 'verified';
+    } catch (error) {
+      const message = getErrorMessage(error);
+      if (isAlreadyVerified(message)) {
+        return 'already-verified';
+      }
+
+      if (isTransientBytecodeVisibilityError(message) && attempt < attempts) {
+        console.log(
+          `Verification could not see deployed bytecode yet; retrying in ${delayMs}ms (${attempt}/${attempts})`,
+        );
+        await sleep(delayMs);
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error('Verification retries exhausted unexpectedly');
+}
+
 async function main(): Promise<void> {
   const chainId = hre.network.config.chainId ?? null;
   const config = loadBaseDeploymentConfig(hre.network.name, chainId);
@@ -93,26 +182,13 @@ async function main(): Promise<void> {
   await contract.waitForDeployment();
 
   const contractAddress = await contract.getAddress();
-  const deployedBytecode = await ethers.provider.getCode(contractAddress);
+  const deployedBytecode = await waitForDeployedBytecode(contractAddress);
   const explorerAddressUrl = `${config.target.explorerBaseUrl}${contractAddress}`;
   const verificationUrl = `${explorerAddressUrl}#code`;
 
   let verificationStatus: 'skipped' | 'verified' | 'already-verified' = 'skipped';
   if (config.verify) {
-    try {
-      await hre.run('verify:verify', {
-        address: contractAddress,
-        constructorArguments: deployArgs,
-      });
-      verificationStatus = 'verified';
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/already verified/i.test(message)) {
-        verificationStatus = 'already-verified';
-      } else {
-        throw error;
-      }
-    }
+    verificationStatus = await verifyWithRetries(contractAddress, deployArgs);
   }
 
   const bundle = {
