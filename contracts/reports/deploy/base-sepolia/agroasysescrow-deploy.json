@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-03-31T08:04:58.477Z",
-  "commitSha": "38cce29ff916148c101d646a307c742d2fb51749",
+  "generatedAt": "2026-05-04T20:19:09.509Z",
+  "commitSha": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
   "network": {
     "hardhatName": "base-sepolia",
     "runtimeKey": "base-sepolia",
@@ -9,30 +9,29 @@
   },
   "contract": {
     "name": "AgroasysEscrow",
-    "address": "0x37F5d97fd9D227dd39391ACfC3C77FDF7c7F742A",
-    "deploymentTxHash": "0x17cb3f2d8922f54511822bd1d95f4f86da46ceb1def3e17fb49f70f6c6c09723",
-    "explorerAddressUrl": "https://sepolia.basescan.org/address/0x37F5d97fd9D227dd39391ACfC3C77FDF7c7F742A",
+    "address": "0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
+    "deploymentTxHash": "0x49dbe6d714c9b19901256e55c4407ec4722d55ea9110c1f0866f424e40b55b5d",
+    "explorerAddressUrl": "https://sepolia.basescan.org/address/0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
     "constructorArguments": {
       "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
       "oracleAddress": "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
       "treasuryAddress": "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
       "admins": [
-        "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a"
+        "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
+        "0x20e7E6fC0905E17De2D28E926Ad56324a6844a1D"
       ],
-      "requiredApprovals": 1
+      "requiredApprovals": 2
     }
   },
   "verification": {
     "requested": true,
     "status": "verified",
-    "verificationUrl": "https://sepolia.basescan.org/address/0x37F5d97fd9D227dd39391ACfC3C77FDF7c7F742A#code",
-    "verificationGuid": "ygwr8uucsrvjbnrkhpw9x6cgb7ysk4iwjyxslya7qhbh5qqs7n",
-    "verificationMode": "similar-match"
+    "verificationUrl": "https://sepolia.basescan.org/address/0x54391ad22880B845021D49e79bA7E47bA8CcDDA7#code"
   },
   "artifact": {
     "compilerVersion": "0.8.34",
     "abiSha256": "a9d62d6adf98963f5d010f8636261fdb826408b188dd00f82f0b59afbcc1ff3b",
-    "bytecodeSha256": "e5f5139755c77211ba40b6b830e7356910d1f3e7fec7f69eb1ff6f4986054873",
-    "deployedBytecodeSha256": "ac3fac6533f7e194e3d91d91845976b244e9e13a1e2984a0e20b26d33189b569"
+    "bytecodeSha256": "066a90e3edf81fe8529c44924be8185da0b36fff972b1fa417848b863123d75a",
+    "deployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a"
   }
 }
