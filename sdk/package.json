@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "ethers": "^6.4.0",
-    "@web3auth/modal": "^10.15.0",
+    "@web3auth/modal": "^10.16.0",
     "ox": "^0.14.20"
   },
   "devDependencies": {
