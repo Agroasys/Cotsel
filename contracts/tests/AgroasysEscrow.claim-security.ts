@@ -176,9 +176,9 @@ describe('AgroasysEscrow - Claim Security', function () {
     expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
 
     const treasuryBefore = await usdc.balanceOf(treasury.address);
-    await expect(escrow.connect(buyer).claimTreasury())
+    await expect(escrow.connect(treasury).claimTreasury())
       .to.emit(escrow, 'TreasuryClaimed')
-      .withArgs(treasury.address, treasury.address, treasuryClaimable, buyer.address);
+      .withArgs(treasury.address, treasury.address, treasuryClaimable, treasury.address);
     expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore + treasuryClaimable);
 
     expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
@@ -202,7 +202,7 @@ describe('AgroasysEscrow - Claim Security', function () {
     await usdc.setHookEnabled(await receiver.getAddress(), true);
     await receiver.configure(false, true);
 
-    await expect(escrow.connect(buyer).claimTreasury()).to.be.revertedWith('hook revert');
+    await expect(escrow.connect(treasury).claimTreasury()).to.be.revertedWith('hook revert');
     expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
 
     // treasury cannot bypass the rotated payout address via claim()
@@ -214,9 +214,9 @@ describe('AgroasysEscrow - Claim Security', function () {
     await usdc.setHookEnabled(await receiver.getAddress(), false);
     const receiverBefore = await usdc.balanceOf(await receiver.getAddress());
     const treasuryWalletBefore = await usdc.balanceOf(treasury.address);
-    await expect(escrow.connect(buyer).claimTreasury())
+    await expect(escrow.connect(treasury).claimTreasury())
       .to.emit(escrow, 'TreasuryClaimed')
-      .withArgs(treasury.address, await receiver.getAddress(), treasuryClaimable, buyer.address);
+      .withArgs(treasury.address, await receiver.getAddress(), treasuryClaimable, treasury.address);
     expect(await usdc.balanceOf(await receiver.getAddress())).to.equal(
       receiverBefore + treasuryClaimable,
     );

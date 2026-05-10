@@ -698,6 +698,7 @@ contract FuzzTest is Test {
 
         // claimTreasury() routes funds to newReceiver, not treasury
         uint256 receiverBefore = usdc.balanceOf(newReceiver);
+        vm.prank(treasury);
         escrow.claimTreasury();
         assertEq(usdc.balanceOf(newReceiver), receiverBefore + accrued, "funds should land at rotated receiver");
         assertEq(usdc.balanceOf(treasury), 0, "treasury wallet should receive nothing");

@@ -30,6 +30,7 @@ This runbook describes the escrow payout model after issue `#142` migration from
   - treasury fee accrual accounting (`claimableUsdc[treasuryAddress]`)
 - `treasuryPayoutAddress` is the rotatable payout destination for treasury withdrawals.
 - `claimTreasury()` is destination-locked:
+  - callable only by `treasuryAddress` or an admin
   - no destination parameter
   - sweeps only `claimableUsdc[treasuryAddress]`
   - transfers only to current `treasuryPayoutAddress`
@@ -37,7 +38,7 @@ This runbook describes the escrow payout model after issue `#142` migration from
 
 Operational consequence:
 
-- treasury signing key usage is no longer required for routine sweeps.
+- routine sweeps must be triggered by the treasury identity or an admin signer.
 - rotating payout destination does not change treasury identity and does not require signature-preimage changes.
 
 ## Safety Guarantees
