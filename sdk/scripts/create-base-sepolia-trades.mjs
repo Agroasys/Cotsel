@@ -79,6 +79,20 @@ function requireValue(args, argName, envNames) {
   return value;
 }
 
+function requireEnvValue(args, argName, envName) {
+  if (Object.prototype.hasOwnProperty.call(args, argName)) {
+    throw new Error(
+      `Do not pass --${argName}. Set ${envName} in the environment so the key is not exposed through shell history or process listings.`,
+    );
+  }
+
+  const value = process.env[envName]?.trim();
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${envName}`);
+  }
+  return value;
+}
+
 function parsePositiveInt(name, raw, fallback) {
   const value = raw ?? String(fallback);
   const parsed = Number.parseInt(value, 10);
@@ -189,7 +203,7 @@ const supplier = parseAddress(
   'supplier address',
   requireValue(args, 'supplier-address', ['SUPPLIER_ADDRESS']),
 );
-const buyerPrivateKey = requireValue(args, 'buyer-private-key', ['BUYER_PRIVATE_KEY']);
+const buyerPrivateKey = requireEnvValue(args, 'buyer-private-key', 'BUYER_PRIVATE_KEY');
 const expectedBuyerAddress = readValue(args, 'buyer-address', ['BUYER_ADDRESS']);
 const amountInput =
   readValue(args, 'amount-usdc', ['TRADE_AMOUNT_USDC']) ??

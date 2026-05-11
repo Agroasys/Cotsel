@@ -29,12 +29,14 @@ This runbook describes the escrow payout model after issue `#142` migration from
   - trade signature preimage verification
   - treasury fee accrual accounting (`claimableUsdc[treasuryAddress]`)
 - `treasuryPayoutAddress` is the rotatable payout destination for treasury withdrawals.
-- `claimTreasury()` is destination-locked:
+- On deployments built from this contract version, `claimTreasury()` is destination-locked:
   - callable only by `treasuryAddress` or an admin
   - no destination parameter
   - sweeps only `claimableUsdc[treasuryAddress]`
   - transfers only to current `treasuryPayoutAddress`
   - emits `TreasuryClaimed(treasuryIdentity, payoutReceiver, amount, triggeredBy)`
+- Existing non-upgradeable escrow addresses keep the behavior they were deployed with until services
+  and dashboards are pointed at a newly deployed escrow version.
 
 Operational consequence:
 
