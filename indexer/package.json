@@ -12,7 +12,7 @@
     "test": "npm run build && node --test ./tests/*.test.mjs"
   },
   "dependencies": {
-    "@subsquid/evm-processor": "^1.29.1",
+    "@subsquid/evm-processor": "^1.30.0",
     "@subsquid/evm-typegen": "^4.6.0",
     "@subsquid/graphql-server": "^4.12.0",
     "@subsquid/typeorm-migration": "^1.3.1",
@@ -20,7 +20,7 @@
     "dotenv": "^17.4.2",
     "ethers": "^6.16.0",
     "pg": "8.20.0",
-    "typeorm": "^0.3.20"
+    "typeorm": "^0.3.29"
   },
   "devDependencies": {
     "@subsquid/typeorm-codegen": "^2.1.0",
