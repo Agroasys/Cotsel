@@ -69,6 +69,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "governanceApprovals"
       | "governanceTimelock"
       | "hasActiveUnpauseProposal"
+      | "hasPendingTreasuryPayoutAddressUpdateProposal"
       | "inTransitSince"
       | "isAdmin"
       | "nonces"
@@ -328,6 +329,10 @@ export interface AgroasysEscrowInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "hasActiveUnpauseProposal",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "hasPendingTreasuryPayoutAddressUpdateProposal",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -635,6 +640,10 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "hasActiveUnpauseProposal",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "hasPendingTreasuryPayoutAddressUpdateProposal",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -1763,6 +1772,12 @@ export interface AgroasysEscrow extends BaseContract {
 
   hasActiveUnpauseProposal: TypedContractMethod<[], [boolean], "view">;
 
+  hasPendingTreasuryPayoutAddressUpdateProposal: TypedContractMethod<
+    [],
+    [boolean],
+    "view"
+  >;
+
   inTransitSince: TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
 
   isAdmin: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
@@ -2154,6 +2169,9 @@ export interface AgroasysEscrow extends BaseContract {
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "hasActiveUnpauseProposal"
+  ): TypedContractMethod<[], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "hasPendingTreasuryPayoutAddressUpdateProposal"
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
     nameOrSignature: "inTransitSince"

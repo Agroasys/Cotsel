@@ -415,6 +415,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         _;
     }
 
+    modifier onlyTreasuryOrAdmin() {
+        require(msg.sender == treasuryAddress || isAdmin[msg.sender], "only treasury or admin");
+        _;
+    }
+
     modifier onlyOracle() {
         require(msg.sender == oracleAddress, "only oracle");
         _;
@@ -713,10 +718,10 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Permissionless treasury sweep that is destination-locked to treasuryPayoutAddress.
-     * @dev Uses treasuryAddress as immutable accounting identity; caller cannot redirect funds.
+     * @notice Treasury sweep that is destination-locked to treasuryPayoutAddress.
+     * @dev Uses treasuryAddress as immutable accounting identity; only treasury/admin callers can trigger it.
      */
-    function claimTreasury() external whenClaimsNotPaused nonReentrant {
+    function claimTreasury() external onlyTreasuryOrAdmin whenClaimsNotPaused nonReentrant {
         uint256 amount = claimableUsdc[treasuryAddress];
         require(amount > 0, "nothing treasury claimable");
 

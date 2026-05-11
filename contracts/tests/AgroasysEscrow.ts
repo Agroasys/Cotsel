@@ -745,9 +745,9 @@ describe('AgroasysEscrow', function () {
       );
       const treasuryClaimable = await escrow.claimableUsdc(treasury.address);
       const treasuryBefore = await usdc.balanceOf(treasury.address);
-      await expect(escrow.connect(buyer).claimTreasury())
+      await expect(escrow.connect(treasury).claimTreasury())
         .to.emit(escrow, 'TreasuryClaimed')
-        .withArgs(treasury.address, treasury.address, treasuryClaimable, buyer.address);
+        .withArgs(treasury.address, treasury.address, treasuryClaimable, treasury.address);
       expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore + treasuryClaimable);
       expect(await escrow.claimableUsdc(treasury.address)).to.equal(0);
       expect(await escrow.totalClaimableUsdc()).to.equal(0);
@@ -763,7 +763,7 @@ describe('AgroasysEscrow', function () {
   });
 
   describe('Treasury Sweep', function () {
-    it('Should allow permissionless destination-locked treasury sweep', async function () {
+    it('Should allow treasury/admin destination-locked treasury sweep', async function () {
       const { tradeId, logisticsAmount, platformFeesAmount, supplierFirstTranche } =
         await createDefaultTrade(ethers.id('treasury-sweep-destination-locked'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
@@ -771,16 +771,16 @@ describe('AgroasysEscrow', function () {
       await rotateTreasuryPayoutReceiver(admin3.address);
 
       const expectedTreasuryClaimable = logisticsAmount + platformFeesAmount;
-      const callerBefore = await usdc.balanceOf(buyer.address);
+      const callerBefore = await usdc.balanceOf(admin1.address);
       const receiverBefore = await usdc.balanceOf(admin3.address);
       const supplierClaimableBefore = await escrow.claimableUsdc(supplier.address);
       const buyerClaimableBefore = await escrow.claimableUsdc(buyer.address);
 
-      await expect(escrow.connect(buyer).claimTreasury())
+      await expect(escrow.connect(admin1).claimTreasury())
         .to.emit(escrow, 'TreasuryClaimed')
-        .withArgs(treasury.address, admin3.address, expectedTreasuryClaimable, buyer.address);
+        .withArgs(treasury.address, admin3.address, expectedTreasuryClaimable, admin1.address);
 
-      expect(await usdc.balanceOf(buyer.address)).to.equal(callerBefore);
+      expect(await usdc.balanceOf(admin1.address)).to.equal(callerBefore);
       expect(await usdc.balanceOf(admin3.address)).to.equal(
         receiverBefore + expectedTreasuryClaimable,
       );
@@ -790,8 +790,17 @@ describe('AgroasysEscrow', function () {
       expect(await escrow.claimableUsdc(buyer.address)).to.equal(buyerClaimableBefore);
     });
 
-    it('Should reject treasury sweep when no treasury claimable exists', async function () {
+    it('Should reject treasury sweep from non treasury/admin callers', async function () {
+      const { tradeId } = await createDefaultTrade(ethers.id('treasury-sweep-access-control'));
+      await escrow.connect(oracle).releaseFundsStage1(tradeId);
+
       await expect(escrow.connect(buyer).claimTreasury()).to.be.revertedWith(
+        'only treasury or admin',
+      );
+    });
+
+    it('Should reject treasury sweep when no treasury claimable exists', async function () {
+      await expect(escrow.connect(treasury).claimTreasury()).to.be.revertedWith(
         'nothing treasury claimable',
       );
     });
@@ -803,13 +812,13 @@ describe('AgroasysEscrow', function () {
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
       await escrow.connect(admin1).pause();
-      await expect(escrow.connect(buyer).claimTreasury())
+      await expect(escrow.connect(treasury).claimTreasury())
         .to.emit(escrow, 'TreasuryClaimed')
         .withArgs(
           treasury.address,
           treasury.address,
           logisticsAmount + platformFeesAmount,
-          buyer.address,
+          treasury.address,
         );
     });
 
@@ -818,7 +827,7 @@ describe('AgroasysEscrow', function () {
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
       await escrow.connect(admin1).pauseClaims();
-      await expect(escrow.connect(buyer).claimTreasury()).to.be.revertedWith('claims paused');
+      await expect(escrow.connect(treasury).claimTreasury()).to.be.revertedWith('claims paused');
     });
   });
 

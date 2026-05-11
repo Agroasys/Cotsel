@@ -26,6 +26,8 @@ export type { ECDSA } from "./@openzeppelin/contracts/utils/cryptography/ECDSA";
 export { ECDSA__factory } from "./factories/@openzeppelin/contracts/utils/cryptography/ECDSA__factory";
 export type { IERC165 } from "./@openzeppelin/contracts/utils/introspection/IERC165";
 export { IERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/IERC165__factory";
+export type { Pausable } from "./@openzeppelin/contracts/utils/Pausable";
+export { Pausable__factory } from "./factories/@openzeppelin/contracts/utils/Pausable__factory";
 export type { ReentrancyGuard } from "./@openzeppelin/contracts/utils/ReentrancyGuard";
 export { ReentrancyGuard__factory } from "./factories/@openzeppelin/contracts/utils/ReentrancyGuard__factory";
 export type { AgroasysEscrow } from "./src/AgroasysEscrow";
