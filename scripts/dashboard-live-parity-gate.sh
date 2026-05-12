@@ -90,14 +90,14 @@ health_local_dev() {
 mint_dashboard_session() {
   (
     cd "$ROOT_DIR"
-    npm run dashboard:parity:session
+    pnpm run dashboard:parity:session
   )
 }
 
 run_dashboard_parity_gate() {
   (
     cd "$ROOT_DIR"
-    npm run dashboard:parity:gate
+    pnpm run dashboard:parity:gate
   )
 }
 
@@ -280,15 +280,15 @@ deploy_escrow_contract() {
 prepare_dash_repo() {
   (
     cd "$DASHBOARD_REPO_DIR"
-    npm ci
-    npx playwright install --with-deps chromium
+    pnpm install --frozen-lockfile
+    pnpm exec playwright install --with-deps chromium
   )
 }
 
 run_dash_live_suite() {
   (
     cd "$DASHBOARD_REPO_DIR"
-    npm run test:e2e:live
+    pnpm run test:e2e:live
   )
 }
 

@@ -605,7 +605,7 @@ else
   fi
 fi
 
-if ! run_step notifications-build notifications_build_status NOTIFICATIONS_BUILD_FAILED npm run -w notifications build; then
+if ! run_step notifications-build notifications_build_status NOTIFICATIONS_BUILD_FAILED pnpm --filter ./notifications run build; then
   FINISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   write_blockers
   write_summary

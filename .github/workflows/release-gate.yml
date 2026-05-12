@@ -58,7 +58,7 @@ jobs:
           filters: |
             shared:
               - 'package.json'
-              - 'package-lock.json'
+              - 'pnpm-lock.yaml'
               - 'eslint.config.mjs'
               - '.prettierrc.json'
               - '.prettierignore'
@@ -111,13 +111,15 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run dependency security gate
-        run: npm run security:deps:gate
+        run: pnpm run security:deps:gate
 
   auth:
     name: ci/auth
@@ -132,10 +134,12 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run auth validation suite
         shell: bash
@@ -159,9 +163,9 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check auth-lint npm run -w auth lint
-          run_check auth-tests npm run -w auth test
-          run_check auth-build npm run -w auth build
+          run_check auth-lint pnpm --filter ./auth run lint
+          run_check auth-tests pnpm --filter ./auth run test
+          run_check auth-build pnpm --filter ./auth run build
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -187,10 +191,12 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run repo-quality baseline
         shell: bash
@@ -214,9 +220,9 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check repo-lint npm run lint
-          run_check repo-format-check npm run format:check:full
-          run_check repo-typecheck npm run typecheck
+          run_check repo-lint pnpm run lint
+          run_check repo-format-check pnpm run format:check:full
+          run_check repo-typecheck pnpm run typecheck
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -242,10 +248,12 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run gateway validation suite
         shell: bash
@@ -269,9 +277,9 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check gateway-lint npm run -w gateway lint
-          run_check gateway-openapi-and-unit-tests npm run -w gateway test
-          run_check gateway-build npm run -w gateway build
+          run_check gateway-lint pnpm --filter ./gateway run lint
+          run_check gateway-openapi-and-unit-tests pnpm --filter ./gateway run test
+          run_check gateway-build pnpm --filter ./gateway run build
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -295,7 +303,6 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
 
       - name: Run docs/profile boundary guards
         shell: bash
@@ -430,13 +437,15 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build notifications workspace
-        run: npm run -w notifications build
+        run: pnpm --filter ./notifications run build
 
       - name: Prepare CI gate env files
         run: |
@@ -524,10 +533,12 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run workspace checks
         shell: bash
@@ -550,10 +561,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "npm run -w ${WORKSPACE} lint --if-present"
-          run_check typecheck "npm run -w ${WORKSPACE} typecheck --if-present"
-          run_check test "npm run -w ${WORKSPACE} test --if-present"
-          run_check build "npm run -w ${WORKSPACE} build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
+          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
+          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -581,10 +592,12 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run workspace checks
         shell: bash
@@ -607,10 +620,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "npm run -w ${WORKSPACE} lint --if-present"
-          run_check typecheck "npm run -w ${WORKSPACE} typecheck --if-present"
-          run_check test "npm run -w ${WORKSPACE} test --if-present"
-          run_check build "npm run -w ${WORKSPACE} build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
+          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
+          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -638,15 +651,17 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build shared runtime dependencies
         run: |
-          npm run -w sdk build
-          npm run -w notifications build
+          pnpm --filter ./sdk run build
+          pnpm --filter ./notifications run build
 
       - name: Run workspace checks
         shell: bash
@@ -669,10 +684,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "npm run -w ${WORKSPACE} lint --if-present"
-          run_check typecheck "npm run -w ${WORKSPACE} typecheck --if-present"
-          run_check test "npm run -w ${WORKSPACE} test --if-present"
-          run_check build "npm run -w ${WORKSPACE} build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
+          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
+          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -700,10 +715,12 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run workspace checks
         shell: bash
@@ -726,10 +743,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "npm run -w ${WORKSPACE} lint --if-present"
-          run_check typecheck "npm run -w ${WORKSPACE} typecheck --if-present"
-          run_check test "npm run -w ${WORKSPACE} test --if-present"
-          run_check build "npm run -w ${WORKSPACE} build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
+          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
+          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -757,10 +774,12 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run workspace checks
         shell: bash
@@ -783,10 +802,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "npm run -w ${WORKSPACE} lint --if-present"
-          run_check typecheck "npm run -w ${WORKSPACE} typecheck --if-present"
-          run_check test "npm run -w ${WORKSPACE} test --if-present"
-          run_check build "npm run -w ${WORKSPACE} build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
+          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
+          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -814,15 +833,17 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build shared runtime dependencies
         run: |
-          npm run -w sdk build
-          npm run -w notifications build
+          pnpm --filter ./sdk run build
+          pnpm --filter ./notifications run build
 
       - name: Run workspace checks
         shell: bash
@@ -845,10 +866,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "npm run -w ${WORKSPACE} lint --if-present"
-          run_check typecheck "npm run -w ${WORKSPACE} typecheck --if-present"
-          run_check test "npm run -w ${WORKSPACE} test --if-present"
-          run_check build "npm run -w ${WORKSPACE} build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
+          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
+          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -876,10 +897,12 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run workspace checks
         shell: bash
@@ -902,10 +925,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "npm run -w ${WORKSPACE} lint --if-present"
-          run_check typecheck "npm run -w ${WORKSPACE} typecheck --if-present"
-          run_check test "npm run -w ${WORKSPACE} test --if-present"
-          run_check build "npm run -w ${WORKSPACE} build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
+          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
+          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -947,10 +970,12 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '20'
-          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run workspace checks
         shell: bash
@@ -973,10 +998,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "npm run -w ${WORKSPACE} lint --if-present"
-          run_check typecheck "npm run -w ${WORKSPACE} typecheck --if-present"
-          run_check test "npm run -w ${WORKSPACE} test --if-present"
-          run_check build "npm run -w ${WORKSPACE} build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
+          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
+          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1

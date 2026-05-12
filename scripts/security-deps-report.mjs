@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 
-function runNpm(args) {
+function runPnpm(args) {
   try {
-    const stdout = execFileSync('npm', args, {
+    const stdout = execFileSync('pnpm', args, {
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -55,14 +55,14 @@ function main() {
   console.log('Security dependency visibility report (non-enforcing)');
   console.log(`Generated: ${new Date().toISOString()}`);
 
-  const auditProd = runNpm(['audit', '--omit=dev', '--json']);
-  const auditAll = runNpm(['audit', '--json']);
-  const lsAll = runNpm(['ls', '--all']);
+  const auditProd = runPnpm(['audit', '--prod', '--json']);
+  const auditAll = runPnpm(['audit', '--json']);
+  const lsAll = runPnpm(['list', '--depth', 'Infinity']);
 
-  printAuditSection('npm audit --omit=dev --json', auditProd);
-  printAuditSection('npm audit --json', auditAll);
+  printAuditSection('pnpm audit --prod --json', auditProd);
+  printAuditSection('pnpm audit --json', auditAll);
 
-  console.log('\nnpm ls --all');
+  console.log('\npnpm list --depth Infinity');
   console.log(`- exit: ${lsAll.exitCode}`);
   if (lsAll.exitCode !== 0) {
     const sample = (lsAll.stderr || lsAll.stdout).trim().split('\n').slice(-10);

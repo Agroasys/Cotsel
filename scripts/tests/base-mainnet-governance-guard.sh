@@ -56,7 +56,7 @@ required_refs=(
   "scripts/validate-env.sh staging-e2e-real"
   "scripts/staging-e2e-real-gate.sh"
   "scripts/notifications-gate.sh staging-e2e-real"
-  "npm run -w reconciliation reconcile:report"
+  "pnpm --filter ./reconciliation run reconcile:report"
 )
 
 for ref in "${required_refs[@]}"; do

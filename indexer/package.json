@@ -20,7 +20,7 @@
     "dotenv": "^17.4.2",
     "ethers": "^6.16.0",
     "pg": "8.20.0",
-    "typeorm": "^0.3.29"
+    "typeorm": "0.3.28"
   },
   "devDependencies": {
     "@subsquid/typeorm-codegen": "^2.1.0",

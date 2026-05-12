@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 
-function runNpm(args) {
+function runPnpm(args) {
   try {
-    const stdout = execFileSync('npm', args, {
+    const stdout = execFileSync('pnpm', args, {
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -38,17 +38,17 @@ function vulnerabilities(report) {
   );
 }
 
-const auditProd = runNpm(['audit', '--omit=dev', '--json']);
+const auditProd = runPnpm(['audit', '--prod', '--json']);
 const auditReport = parseAudit(auditProd.stdout);
 const summary = vulnerabilities(auditReport);
-const lsAll = runNpm(['ls', '--all']);
+const lsAll = runPnpm(['list', '--depth', 'Infinity']);
 
 console.log('Security dependency release gate');
 console.log(`Generated: ${new Date().toISOString()}`);
 console.log(
-  `npm audit --omit=dev: critical=${summary.critical} high=${summary.high} moderate=${summary.moderate} low=${summary.low} total=${summary.total}`,
+  `pnpm audit --prod: critical=${summary.critical} high=${summary.high} moderate=${summary.moderate} low=${summary.low} total=${summary.total}`,
 );
-console.log(`npm ls --all: exit=${lsAll.exitCode}`);
+console.log(`pnpm list --depth Infinity: exit=${lsAll.exitCode}`);
 
 let failed = false;
 if (summary.critical > 0 || summary.high > 0) {
@@ -58,7 +58,7 @@ if (summary.critical > 0 || summary.high > 0) {
 
 if (lsAll.exitCode !== 0) {
   const tail = (lsAll.stderr || lsAll.stdout).trim().split('\n').slice(-20).join('\n');
-  console.error('Release gate failed: npm dependency tree is invalid.');
+  console.error('Release gate failed: pnpm dependency tree is invalid.');
   if (tail) {
     console.error(tail);
   }
@@ -66,7 +66,7 @@ if (lsAll.exitCode !== 0) {
 }
 
 if (auditProd.exitCode !== 0 && !auditReport) {
-  console.error('Release gate failed: npm audit did not return parseable JSON.');
+  console.error('Release gate failed: pnpm audit did not return parseable JSON.');
   failed = true;
 }
 

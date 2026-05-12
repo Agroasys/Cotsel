@@ -119,7 +119,7 @@ async function main() {
   const notificationsModulePath = path.resolve('notifications', 'dist', 'index.js');
   if (!fs.existsSync(notificationsModulePath)) {
     throw new Error(
-      `Missing notifications build output (${notificationsModulePath}). Run: npm run -w notifications build`,
+      `Missing notifications build output (${notificationsModulePath}). Run: pnpm --filter ./notifications run build`,
     );
   }
 

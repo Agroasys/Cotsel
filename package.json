@@ -46,18 +46,18 @@
     "treasury"
   ],
   "scripts": {
-    "build": "npm run build -w sdk",
+    "build": "pnpm --filter @agroasys/sdk run build",
     "lint": "eslint --max-warnings=0 .",
     "lint:fix": "eslint --max-warnings=0 --fix .",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "pnpm -r --if-present run typecheck",
     "format": "prettier --write .",
-    "format:check": "bash -lc 'files=$(git diff --name-only --diff-filter=ACMR HEAD); if [ -z \"$files\" ]; then echo \"No changed files to check\"; else npx prettier --check --ignore-unknown $files; fi'",
+    "format:check": "bash -lc 'files=$(git diff --name-only --diff-filter=ACMR HEAD); if [ -z \"$files\" ]; then echo \"No changed files to check\"; else pnpm exec prettier --check --ignore-unknown $files; fi'",
     "format:check:full": "prettier --check .",
-    "prepare": "husky && npm run build",
+    "prepare": "husky && pnpm run build",
     "dashboard:parity:session": "node scripts/dashboard-operator-session.mjs",
     "dashboard:trusted-session": "node scripts/trusted-dashboard-session.mjs",
     "dashboard:parity:preflight": "node scripts/dashboard-local-parity-preflight.mjs",
-    "dashboard:parity:gate": "npm run dashboard:parity:preflight",
+    "dashboard:parity:gate": "pnpm run dashboard:parity:preflight",
     "dashboard:parity:ci": "bash scripts/dashboard-live-parity-gate.sh",
     "m3:continuity:ci": "bash scripts/m3-continuity-gate.sh",
     "pilot:rehearsal": "bash scripts/base-sepolia-pilot-validation.sh",
@@ -124,5 +124,6 @@
     "tiny-secp256k1": {
       "bn.js": "4.12.3"
     }
-  }
+  },
+  "packageManager": "pnpm@10.29.2"
 }

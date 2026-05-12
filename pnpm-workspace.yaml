@@ -1,0 +1,19 @@
+packages:
+  - auth
+  - contracts
+  - gateway
+  - indexer
+  - oracle
+  - sdk
+  - shared-http
+  - shared-edge
+  - shared-db
+  - shared-auth
+  - reconciliation
+  - notifications
+  - ricardian
+  - treasury
+
+linkWorkspacePackages: true
+preferWorkspacePackages: true
+minimumReleaseAge: 10080

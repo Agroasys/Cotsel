@@ -42,7 +42,7 @@ load_env_file "$PROFILE_FILE"
 scripts/notifications-wiring-health.sh "$PROFILE"
 
 if [[ ! -f "notifications/dist/index.js" ]]; then
-  echo "Missing notifications build output (notifications/dist/index.js). Run: npm run -w notifications build" >&2
+  echo "Missing notifications build output (notifications/dist/index.js). Run: pnpm --filter ./notifications run build" >&2
   exit 1
 fi
 

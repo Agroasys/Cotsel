@@ -24,13 +24,13 @@ EOF
   chmod +x "$file"
 }
 
-make_fake_npm() {
+make_fake_pnpm() {
   local file="$1"
   cat > "$file" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-printf 'cwd=%s cmd=npm %s\n' "$PWD" "$*" >> "${FAKE_LOG_FILE:?}"
+printf 'cwd=%s cmd=pnpm %s\n' "$PWD" "$*" >> "${FAKE_LOG_FILE:?}"
 
 if [[ "${1:-}" == "run" && "${2:-}" == "dashboard:parity:session" ]]; then
   cat > "${DASHBOARD_SMOKE_SESSION_OUTPUT_FILE:?}" <<JSON
@@ -46,9 +46,16 @@ if [[ "${1:-}" == "run" && "${2:-}" == "dashboard:parity:gate" ]]; then
   exit 0
 fi
 
-if [[ "${1:-}" == "ci" ]]; then
+if [[ "${1:-}" == "install" && "${2:-}" == "--frozen-lockfile" ]]; then
   if [[ "${FAKE_FAIL_STEP:-}" == "dash-repo-prepare" ]]; then
     exit 31
+  fi
+  exit 0
+fi
+
+if [[ "${1:-}" == "exec" && "${2:-}" == "playwright" && "${3:-}" == "install" ]]; then
+  if [[ "${FAKE_FAIL_STEP:-}" == "dash-repo-prepare" ]]; then
+    exit 33
   fi
   exit 0
 fi
@@ -60,7 +67,7 @@ if [[ "${1:-}" == "run" && "${2:-}" == "test:e2e:live" ]]; then
   exit 0
 fi
 
-echo "unexpected npm invocation: $*" >&2
+echo "unexpected pnpm invocation: $*" >&2
 exit 1
 EOF
   chmod +x "$file"
@@ -145,7 +152,7 @@ run_case() {
   mkdir -p "$tmp_dir/scripts" "$tmp_dir/contracts" "$tmp_dir/Cotsel-Dash" "$tmp_dir/mock-bin"
   cp "$SCRIPT" "$tmp_dir/scripts/dashboard-live-parity-gate.sh"
   make_fake_git "$tmp_dir/mock-bin/git"
-  make_fake_npm "$tmp_dir/mock-bin/npm"
+  make_fake_pnpm "$tmp_dir/mock-bin/pnpm"
   make_fake_npx "$tmp_dir/mock-bin/npx"
   make_fake_validate_env "$tmp_dir/scripts/validate-env.sh"
   make_fake_docker_services "$tmp_dir/scripts/docker-services.sh"

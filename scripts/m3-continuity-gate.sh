@@ -40,7 +40,7 @@ run_backend_continuity_contracts() {
 run_gateway_continuity_contracts() {
   (
     cd "$ROOT_DIR"
-    npm run -w gateway test -- \
+    pnpm --filter ./gateway run test -- \
       tradeReadService.test.ts \
       tradeRoutes.contract.test.ts \
       settlementRoutes.contract.test.ts
@@ -66,7 +66,7 @@ run_live_parity() {
     load_env_file ".env.local"
     LOCAL_DEV_INDEXER_FIXTURE_MODE="dashboard-parity" \
       DASHBOARD_LIVE_SUITE_REPO_DIR="$DASHBOARD_REPO_DIR" \
-      npm run dashboard:parity:ci
+      pnpm run dashboard:parity:ci
   )
 }
 
