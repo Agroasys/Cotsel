@@ -72,7 +72,7 @@ Before marking the legacy ingest retired:
 
 1. Query a representative trade from the gateway `GET /trades/{tradeId}` surface and confirm lifecycle timeline + tx references are present.
 2. Confirm indexer freshness via the overview snapshot and record `lastProcessedBlock` / `lastIndexedAt`.
-3. Run `npm run -w reconciliation reconcile:report -- --run-key=<runKey> --out reports/reconciliation/latest.json` and archive the report.
+3. Run `pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out reports/reconciliation/latest.json` and archive the report.
 4. Confirm treasury entries for a released trade are present via `GET /api/treasury/v1/entries` or treasury export.
 5. Record the retirement evidence bundle in the incident/operator audit template if this change is coupled to an environment cutover.
 

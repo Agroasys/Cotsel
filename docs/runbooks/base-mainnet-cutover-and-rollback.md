@@ -70,7 +70,7 @@ Execute these steps in order. If any step fails, stop and evaluate rollback trig
      scripts/docker-services.sh health staging-e2e-real
      scripts/staging-e2e-real-gate.sh
      scripts/notifications-gate.sh staging-e2e-real
-     npm run -w reconciliation reconcile:report -- --run-key=<runKey> --out reports/reconciliation/<file>.json
+     pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out reports/reconciliation/<file>.json
      ```
    - If any required check fails, stop and mark the window `NO-GO`.
 

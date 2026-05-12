@@ -501,6 +501,9 @@ importers:
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
+      '@types/node':
+        specifier: 25.6.0
+        version: 25.6.0
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2

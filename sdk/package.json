@@ -59,6 +59,7 @@
   "devDependencies": {
     "dotenv": "^17.4.2",
     "@types/jest": "^30.0.0",
+    "@types/node": "25.6.0",
     "jest": "^30.3.0",
     "ts-jest": "^29.4.9",
     "typescript": ">=6.0.2"

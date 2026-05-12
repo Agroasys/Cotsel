@@ -38,7 +38,7 @@ npm run -w reconciliation reconcile:daemon
 Generate deterministic reconciliation report from DB snapshot:
 
 ```bash
-npm run -w reconciliation reconcile:report -- --run-key=<runKey> --out reports/reconciliation/latest.json
+pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out reports/reconciliation/latest.json
 ```
 
 Notes:

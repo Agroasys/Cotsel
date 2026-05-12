@@ -87,7 +87,7 @@ The approval record must link all of the following:
 - `scripts/staging-e2e-real-gate.sh`
 - `scripts/notifications-gate.sh staging-e2e-real`
 - latest reconciliation report generated via:
-  - `npm run -w reconciliation reconcile:report -- --run-key=<runKey> --out reports/reconciliation/<file>.json`
+  - `pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out reports/reconciliation/<file>.json`
 
 3. Mainnet runtime truth
 
@@ -137,7 +137,7 @@ scripts/validate-env.sh staging-e2e-real
 scripts/docker-services.sh health staging-e2e-real
 scripts/staging-e2e-real-gate.sh
 scripts/notifications-gate.sh staging-e2e-real
-npm run -w reconciliation reconcile:report -- --run-key=<runKey> --out reports/reconciliation/<file>.json
+pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out reports/reconciliation/<file>.json
 ```
 
 Use these contract deployment commands only when mainnet contract deployment is part of the approved launch window:
