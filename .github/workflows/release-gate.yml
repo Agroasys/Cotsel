@@ -561,10 +561,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
-          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
-          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
-          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run --if-present lint"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run --if-present typecheck"
+          run_check test "pnpm --filter ./${WORKSPACE} run --if-present test"
+          run_check build "pnpm --filter ./${WORKSPACE} run --if-present build"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -620,10 +620,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
-          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
-          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
-          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run --if-present lint"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run --if-present typecheck"
+          run_check test "pnpm --filter ./${WORKSPACE} run --if-present test"
+          run_check build "pnpm --filter ./${WORKSPACE} run --if-present build"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -684,10 +684,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
-          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
-          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
-          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run --if-present lint"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run --if-present typecheck"
+          run_check test "pnpm --filter ./${WORKSPACE} run --if-present test"
+          run_check build "pnpm --filter ./${WORKSPACE} run --if-present build"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -743,10 +743,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
-          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
-          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
-          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run --if-present lint"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run --if-present typecheck"
+          run_check test "pnpm --filter ./${WORKSPACE} run --if-present test"
+          run_check build "pnpm --filter ./${WORKSPACE} run --if-present build"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -802,10 +802,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
-          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
-          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
-          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run --if-present lint"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run --if-present typecheck"
+          run_check test "pnpm --filter ./${WORKSPACE} run --if-present test"
+          run_check build "pnpm --filter ./${WORKSPACE} run --if-present build"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -866,10 +866,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
-          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
-          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
-          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run --if-present lint"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run --if-present typecheck"
+          run_check test "pnpm --filter ./${WORKSPACE} run --if-present test"
+          run_check build "pnpm --filter ./${WORKSPACE} run --if-present build"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -925,10 +925,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
-          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
-          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
-          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run --if-present lint"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run --if-present typecheck"
+          run_check test "pnpm --filter ./${WORKSPACE} run --if-present test"
+          run_check build "pnpm --filter ./${WORKSPACE} run --if-present build"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -998,10 +998,10 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check lint "pnpm --filter ./${WORKSPACE} run lint --if-present"
-          run_check typecheck "pnpm --filter ./${WORKSPACE} run typecheck --if-present"
-          run_check test "pnpm --filter ./${WORKSPACE} run test --if-present"
-          run_check build "pnpm --filter ./${WORKSPACE} run build --if-present"
+          run_check lint "pnpm --filter ./${WORKSPACE} run --if-present lint"
+          run_check typecheck "pnpm --filter ./${WORKSPACE} run --if-present typecheck"
+          run_check test "pnpm --filter ./${WORKSPACE} run --if-present test"
+          run_check build "pnpm --filter ./${WORKSPACE} run --if-present build"
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
