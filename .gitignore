@@ -9,7 +9,6 @@ env/*.env
 !.env.local.example
 !.env.staging-e2e.example
 !.env.staging-e2e-real.example
-reports/licenses
 reports/notifications/*.json
 reports/reconciliation/staging-e2e-real-report.json
 reports/base-sepolia-pilot-validation/*

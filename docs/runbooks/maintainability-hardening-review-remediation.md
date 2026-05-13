@@ -32,10 +32,11 @@ Too shallow before remediation:
 - Batch 7 did not address the oversized governance mutation router or the
   gateway settlement store mixing production Postgres persistence with the
   in-memory test adapter.
-- Issues `#494` through `#501` were labeled `status:done` while the branch was
-  still local and uncommitted. That label state overstated review readiness, so
-  the issues were moved back to `status:in-progress` until the branch is
-  committed or opened for review.
+- Issues `#494` through `#501` were initially labeled `status:done` while the
+  branch was still local and uncommitted. That label state overstated review
+  readiness, so the issues were moved back to `status:in-progress` until the
+  branch was reviewed and landed. After PR #503 merged, issues `#493` through
+  `#501` were closed as `status:done` with refreshed validation evidence.
 
 ## Structural Review Findings
 

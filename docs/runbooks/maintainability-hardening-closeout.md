@@ -34,9 +34,9 @@ Follow-up review and remediation are recorded in
 - No shared package was rewritten for aesthetics.
 - No SQL/indexer mega-refactor was attempted without a safer owner-reviewed
   slice.
-- No remote issue was left labeled as fully complete before branch review;
-  issues `#494` through `#501` are `status:in-progress` while this local branch
-  remains uncommitted.
+- No remote issue was left labeled as fully complete before review. During the
+  cleanup pass, issues `#493` through `#501` were closed as `status:done` only
+  after PR #503 landed on `main` and the validation evidence was refreshed.
 
 ## Remaining Non-Blocking Backlog
 

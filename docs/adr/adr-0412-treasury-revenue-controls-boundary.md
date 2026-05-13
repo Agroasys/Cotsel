@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-04-15
-- Related issue: TBD
+- Related issue: [#439](https://github.com/Agroasys/Cotsel/issues/439)
 
 ## Context
 
