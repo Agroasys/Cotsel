@@ -3,16 +3,8 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { failure } from '@agroasys/shared-http';
-import type { ServiceAuthContext } from '@agroasys/shared-auth/serviceAuth';
 import { ApiErrorResponse, UserSession } from '../types';
 import { Logger } from '../utils/logger';
-
-declare module 'express-serve-static-core' {
-  interface Request {
-    userSession?: UserSession;
-    serviceAuth?: ServiceAuthContext;
-  }
-}
 
 type ResolveFn = (sessionId: string) => Promise<UserSession | null>;
 
@@ -38,7 +30,7 @@ export function createSessionMiddleware(resolve: ResolveFn) {
       return;
     }
 
-    const session = await resolve(sessionId).catch((err) => {
+    const session = await resolve(sessionId).catch((err: unknown) => {
       Logger.error('Session resolution error', err);
       return null;
     });

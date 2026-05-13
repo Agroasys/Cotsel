@@ -367,7 +367,7 @@ describe('AuthController.getSession', () => {
     const cs = mockChallengeStore();
     const ctrl = new AuthController(mockSessionService(), cs);
     const session = makeSession();
-    const req = { userSession: session } as Request;
+    const req = { userSession: session } as unknown as Request;
     const res = mockRes();
 
     ctrl.getSession(req, res);
@@ -393,7 +393,7 @@ describe('AuthController.refresh', () => {
   test('returns new sessionId on success', async () => {
     const cs = mockChallengeStore();
     const ctrl = new AuthController(mockSessionService(), cs);
-    const req = { userSession: makeSession() } as Request;
+    const req = { userSession: makeSession() } as unknown as Request;
     const res = mockRes();
 
     await ctrl.refresh(req, res);
@@ -411,7 +411,7 @@ describe('AuthController.refresh', () => {
     svc.refresh.mockRejectedValue(new Error('Session invalid'));
     const cs = mockChallengeStore();
     const ctrl = new AuthController(svc, cs);
-    const req = { userSession: makeSession() } as Request;
+    const req = { userSession: makeSession() } as unknown as Request;
     const res = mockRes();
 
     await ctrl.refresh(req, res);
@@ -427,7 +427,7 @@ describe('AuthController.revoke', () => {
     const svc = mockSessionService();
     const cs = mockChallengeStore();
     const ctrl = new AuthController(svc, cs);
-    const req = { userSession: makeSession() } as Request;
+    const req = { userSession: makeSession() } as unknown as Request;
     const res = mockRes();
 
     await ctrl.revoke(req, res);

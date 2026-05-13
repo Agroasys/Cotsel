@@ -26,7 +26,7 @@ pool.on('connect', () => {
   Logger.info('New database connection established');
 });
 
-pool.on('error', (err) => {
+pool.on('error', (err: Error) => {
   Logger.error('Unexpected database error', err);
 });
 

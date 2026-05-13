@@ -6,14 +6,6 @@ import { Logger } from '../utils/logger';
 import { ErrorResponse } from '../types';
 import { deriveRequestNonce, verifyRequestSignature } from '../utils/crypto';
 
-declare module 'express-serve-static-core' {
-  interface Request {
-    apiKeyToken?: string;
-    hmacSignature?: string;
-    hmacNonce?: string;
-  }
-}
-
 function extractBearerToken(authHeader?: string): string | null {
   if (!authHeader) {
     return null;

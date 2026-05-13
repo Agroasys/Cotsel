@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import type { ParamsDictionary } from 'express-serve-static-core';
 import {
   HttpError,
   failure,
@@ -30,6 +29,7 @@ type TriggerRequestBody = {
 type RedriveRequestBody = TriggerRequestBody & {
   triggerType?: TriggerType;
 };
+type RouteParams = Record<string, string | string[]>;
 
 type TriggerExecutionResult = {
   idempotencyKey: string;
@@ -133,7 +133,7 @@ export class OracleController {
   constructor(private triggerManager: TriggerManager) {}
 
   async releaseStage1(
-    req: Request<ParamsDictionary, unknown, ReleaseStage1Request>,
+    req: Request<RouteParams, unknown, ReleaseStage1Request>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
@@ -153,7 +153,7 @@ export class OracleController {
   }
 
   async confirmArrival(
-    req: Request<ParamsDictionary, unknown, ConfirmArrivalRequest>,
+    req: Request<RouteParams, unknown, ConfirmArrivalRequest>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
@@ -173,7 +173,7 @@ export class OracleController {
   }
 
   async finalizeTrade(
-    req: Request<ParamsDictionary, unknown, FinalizeTradeRequest>,
+    req: Request<RouteParams, unknown, FinalizeTradeRequest>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
@@ -194,7 +194,7 @@ export class OracleController {
 
   async redriveTrigger(
     req: Request<
-      ParamsDictionary,
+      RouteParams,
       unknown,
       { tradeId: string; triggerType: TriggerType; requestId: string }
     >,
@@ -220,7 +220,7 @@ export class OracleController {
   }
 
   async approveTrigger(
-    req: Request<ParamsDictionary, unknown, ApprovalRequest>,
+    req: Request<RouteParams, unknown, ApprovalRequest>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {
@@ -235,7 +235,7 @@ export class OracleController {
   }
 
   async rejectTrigger(
-    req: Request<ParamsDictionary, unknown, RejectRequest>,
+    req: Request<RouteParams, unknown, RejectRequest>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
     try {

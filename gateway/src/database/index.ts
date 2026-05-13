@@ -32,7 +32,7 @@ export function createPool(config: GatewayConfig, mode: PoolMode = 'runtime'): P
     Logger.debug('New database connection established');
   });
 
-  pool.on('error', (error) => {
+  pool.on('error', (error: Error) => {
     Logger.error('Unexpected database error', error);
   });
 

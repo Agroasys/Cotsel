@@ -102,7 +102,7 @@ describe('createSessionMiddleware', () => {
 describe('requireRole', () => {
   test('calls next() when role matches', () => {
     const guard = requireRole('admin', 'buyer');
-    const req = { userSession: makeSession({ role: 'buyer' }) } as Request;
+    const req = { userSession: makeSession({ role: 'buyer' }) } as unknown as Request;
     const res = mockRes();
     const next: NextFunction = jest.fn();
 
@@ -113,7 +113,7 @@ describe('requireRole', () => {
 
   test('returns 403 when role does not match', () => {
     const guard = requireRole('admin');
-    const req = { userSession: makeSession({ role: 'buyer' }) } as Request;
+    const req = { userSession: makeSession({ role: 'buyer' }) } as unknown as Request;
     const res = mockRes();
     const next: NextFunction = jest.fn();
 

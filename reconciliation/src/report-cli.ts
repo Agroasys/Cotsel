@@ -338,7 +338,7 @@ async function main(): Promise<void> {
       const treasuryDbUser = optionalEnv('TREASURY_DB_USER') || dbUser;
       const treasuryDbPassword = optionalEnv('TREASURY_DB_PASSWORD') || dbPassword;
 
-      treasuryPool = createServicePool({
+      const activeTreasuryPool = createServicePool({
         serviceName: TREASURY_SERVICE_NAME,
         connectionRole: 'runtime',
         runtimeDbUser: treasuryDbUser,
@@ -351,7 +351,8 @@ async function main(): Promise<void> {
         idleTimeoutMillis: 5000,
         connectionTimeoutMillis: 5000,
       });
-      treasuryRows = await fetchTreasuryLedgerStates(treasuryPool, scopeTradeIds);
+      treasuryPool = activeTreasuryPool;
+      treasuryRows = await fetchTreasuryLedgerStates(activeTreasuryPool, scopeTradeIds);
     }
 
     const rows: ReconciliationReportInputRow[] = treasuryRows.map((row) => {

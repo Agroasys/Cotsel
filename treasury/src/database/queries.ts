@@ -326,7 +326,9 @@ export async function listDistinctLedgerTradeIds(): Promise<string[]> {
      ORDER BY trade_id ASC`,
   );
 
-  return result.rows.map((row) => row.trade_id.trim()).filter((tradeId) => tradeId.length > 0);
+  return result.rows
+    .map((row: { trade_id: string }) => row.trade_id.trim())
+    .filter((tradeId: string) => tradeId.length > 0);
 }
 
 export async function getLedgerEntryById(entryId: number): Promise<LedgerEntry | null> {
@@ -1362,7 +1364,9 @@ export async function listLedgerEntryAccountingProjections(filters?: {
        LIMIT ${limitParam} OFFSET ${offsetParam}`,
       unfilteredValues,
     );
-    return result.rows.map((row) => projectLedgerEntryAccountingState(row));
+    return result.rows.map((row: LedgerEntryAccountingFacts) =>
+      projectLedgerEntryAccountingState(row),
+    );
   }
 
   const projections: ReturnType<typeof projectLedgerEntryAccountingState>[] = [];
@@ -1384,8 +1388,10 @@ export async function listLedgerEntryAccountingProjections(filters?: {
     }
 
     const matchingProjections = result.rows
-      .map((row) => projectLedgerEntryAccountingState(row))
-      .filter((projection) => projection.accounting_state === filters.accountingState);
+      .map((row: LedgerEntryAccountingFacts) => projectLedgerEntryAccountingState(row))
+      .filter((projection: ReturnType<typeof projectLedgerEntryAccountingState>) => {
+        return projection.accounting_state === filters.accountingState;
+      });
 
     for (const projection of matchingProjections) {
       if (filteredOffset > 0) {
