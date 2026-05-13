@@ -17,7 +17,7 @@ Define the approved signer-custody boundary for gateway-governed protocol action
 This runbook applies to:
 
 - `gateway/src/executor/adminSdkGovernanceChainExecutor.ts`
-- `npm run -w gateway execute:governance-action -- <actionId>`
+- `pnpm --filter ./gateway run execute:governance-action -- <actionId>`
 - delegated/service execution (oracle attestation, automated maintenance) — remains executor-backed permanently
 
 This runbook does not change protocol quorum rules. It defines how the executor signer is sourced, approved, rotated, and used safely.
@@ -101,7 +101,7 @@ Execution steps:
 1. Verify the queued action details from the gateway API and confirm the signer address expected by the queued action.
 2. Verify the signer source matches the approved custody model for the environment and is not a buyer-facing AA/sponsorship path.
 3. Start a bounded executor session with only the env vars required for that action.
-4. Run `npm run -w gateway execute:governance-action -- <actionId>`.
+4. Run `pnpm --filter ./gateway run execute:governance-action -- <actionId>`.
 5. Capture resulting `txHash`, `blockNumber`, `requestId`, and audit log row.
 6. End the session and remove any temporary secret material from the shell/session context.
 

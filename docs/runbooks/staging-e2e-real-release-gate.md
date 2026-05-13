@@ -4,7 +4,7 @@
 
 Run a staging-grade release gate against the real indexer pipeline profile (`staging-e2e-real`) and validate reconciliation against indexed chain state.
 For pilot startup sequencing and go/no-go criteria, use `docs/runbooks/pilot-environment-onboarding.md`.
-For the controlled Base Sepolia validation itself, use `npm run pilot:rehearsal -- --window-id <window-id>` and store the resulting packet under `reports/base-sepolia-pilot-validation/`.
+For the controlled Base Sepolia validation itself, use `pnpm run pilot:rehearsal -- --window-id <window-id>` and store the resulting packet under `reports/base-sepolia-pilot-validation/`.
 For participant-facing pilot workflow guidance, use `docs/runbooks/non-custodial-pilot-user-guide.md`.
 For Base mainnet launch approval and production rollback control, use:
 
@@ -64,7 +64,7 @@ scripts/docker-services.sh down staging-e2e-real || true
 scripts/docker-services.sh up staging-e2e-real
 scripts/docker-services.sh health staging-e2e-real
 scripts/staging-e2e-real-gate.sh
-npm -w notifications run build
+pnpm --filter ./notifications run build
 scripts/notifications-gate.sh staging-e2e-real
 scripts/docker-services.sh logs staging-e2e-real reconciliation
 scripts/docker-services.sh logs staging-e2e-real indexer-graphql

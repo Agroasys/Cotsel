@@ -22,16 +22,16 @@ const workspaceNames = new Set([
   '@agroasys/shared-auth',
 ]);
 
-function runNpmLsJson() {
+function runPnpmListJson() {
   try {
-    return execFileSync('npm', ['-s', 'ls', '--all', '--json', '--long', '--omit=dev'], {
+    return execFileSync('pnpm', ['list', '--depth', 'Infinity', '--json', '--long', '--prod'], {
       cwd: repoRoot,
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (error) {
-    // npm ls can return non-zero while still emitting parseable JSON.
+    // pnpm list can return non-zero while still emitting parseable JSON.
     if (
       error &&
       typeof error === 'object' &&
@@ -42,6 +42,34 @@ function runNpmLsJson() {
     }
     throw error;
   }
+}
+
+function normalizeRepository(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && 'url' in value && typeof value.url === 'string') {
+    return value.url;
+  }
+  return null;
+}
+
+function childNodes(node) {
+  const dependencyKeys = [
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+    'unsavedDependencies',
+  ];
+
+  return dependencyKeys.flatMap((key) => {
+    const value = node?.[key];
+    if (!value || typeof value !== 'object') {
+      return [];
+    }
+
+    return Object.values(value);
+  });
 }
 
 function normalizeLicense(value) {
@@ -59,32 +87,41 @@ function normalizeLicense(value) {
   return 'UNKNOWN';
 }
 
-function collectPackages(tree) {
+function collectPackages(trees) {
   const seen = new Map();
 
   function visit(node) {
     if (!node || typeof node !== 'object') return;
 
     const { name, version } = node;
-    if (name && version && !name.startsWith(INTERNAL_PREFIX) && !workspaceNames.has(name)) {
+    if (
+      name &&
+      version &&
+      !name.startsWith(INTERNAL_PREFIX) &&
+      !workspaceNames.has(name) &&
+      !String(version).startsWith('link:')
+    ) {
       const key = `${name}@${version}`;
       if (!seen.has(key)) {
         seen.set(key, {
           name,
           version,
           license: normalizeLicense(node.license || node.licenses),
-          repository: node.repository?.url || null,
+          repository: normalizeRepository(node.repository),
         });
       }
     }
 
-    const deps = node.dependencies || {};
-    for (const child of Object.values(deps)) {
+    for (const child of childNodes(node)) {
       visit(child);
     }
   }
 
-  visit(tree);
+  const roots = Array.isArray(trees) ? trees : [trees];
+  for (const root of roots) {
+    visit(root);
+  }
+
   return [...seen.values()].sort(
     (a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version),
   );
@@ -115,7 +152,7 @@ function buildSummary(packages) {
 }
 
 function main() {
-  const raw = runNpmLsJson();
+  const raw = runPnpmListJson();
   const tree = JSON.parse(raw);
   const packages = collectPackages(tree);
 
@@ -123,7 +160,7 @@ function main() {
 
   const report = {
     generatedAt: new Date().toISOString(),
-    sourceCommand: 'npm ls --all --json --long --omit=dev',
+    sourceCommand: 'pnpm list --depth Infinity --json --long --prod',
     packageCount: packages.length,
     packages,
   };

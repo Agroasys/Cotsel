@@ -153,8 +153,8 @@ Expected:
 If rollback is required, revert the pull-over-push PR commit to restore prior direct-transfer behavior. Validate post-rollback with:
 
 ```bash
-npm run -w contracts compile
-npm -w contracts test
+pnpm --filter ./contracts run compile
+pnpm --filter ./contracts run test
 ```
 
 ## Foundry Test Gate
@@ -165,5 +165,5 @@ npm -w contracts test
 - Foundry coverage for pull-over-push behavior exists in:
   - `contracts/foundry/test/AgroasysEscrowFuzz.t.sol`
   - `contracts/foundry/test/AgroasysEscrowInvariant.t.sol`
-- Run Foundry with `npm run -w contracts test:foundry` (requires `forge` on `PATH`).
+- Run Foundry with `pnpm --filter ./contracts run test:foundry` (requires `forge` on `PATH`).
 - Keep Foundry migration/verification as a follow-up gate before promoting Foundry as a required merge check.

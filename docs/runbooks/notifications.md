@@ -75,7 +75,7 @@ Capture evidence when escalating:
 1. Revert to previous known-good notifications package commit.
 2. Restore prior template version mapping in `NOTIFICATION_TEMPLATE_VERSIONS`.
 3. Re-run notifications tests and the deterministic gate probe:
-   - `npm -w notifications run build`
+   - `pnpm --filter ./notifications run build`
    - `scripts/notifications-gate.sh staging-e2e-real`
 4. Confirm no secrets are logged and retry bounds are still enforced.
 
@@ -102,8 +102,8 @@ Capture evidence when escalating:
 ## Verification Commands
 
 ```bash
-npm -w notifications test --if-present
-npm -w notifications lint
-npm -w notifications run build
+pnpm --filter ./notifications run test --if-present
+pnpm --filter ./notifications run lint
+pnpm --filter ./notifications run build
 scripts/notifications-gate.sh staging-e2e-real
 ```

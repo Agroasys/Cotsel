@@ -26,13 +26,13 @@ Legacy chain-event ingest retirement source of truth:
 Run once:
 
 ```bash
-npm run -w reconciliation reconcile:once
+pnpm --filter ./reconciliation run reconcile:once
 ```
 
 Run daemon:
 
 ```bash
-npm run -w reconciliation reconcile:daemon
+pnpm --filter ./reconciliation run reconcile:daemon
 ```
 
 Generate deterministic reconciliation report from DB snapshot:

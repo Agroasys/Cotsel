@@ -35,14 +35,14 @@ ignored by Git.
 ## Verify Locally Before Deploy
 
 ```bash
-npm -w contracts run compile
-npm -w contracts test
+pnpm --filter ./contracts run compile
+pnpm --filter ./contracts run test
 ```
 
 If Foundry is installed:
 
 ```bash
-npm -w contracts run test:foundry
+pnpm --filter ./contracts run test:foundry
 ```
 
 ## Deploy And Verify
@@ -53,7 +53,7 @@ Run from the repository root:
 set -a
 . ./env/base-sepolia-deploy.env
 set +a
-npm -w contracts run deploy:base-sepolia
+pnpm --filter ./contracts run deploy:base-sepolia
 ```
 
 The deploy script:

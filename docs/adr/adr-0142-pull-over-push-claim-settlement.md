@@ -80,8 +80,8 @@ Adopt a pull-over-push settlement model:
 
 If rollback is required, revert implementation commits from the migration PR chain starting at #151 (and dependent policy/indexer/sdk follow-ups), then validate:
 
-- `npm run -w contracts compile`
-- `npm -w contracts test`
+- `pnpm --filter ./contracts run compile`
+- `pnpm --filter ./contracts run test`
 - relevant release-gate checks in CI
 
 This restores legacy direct-transfer payout behavior.

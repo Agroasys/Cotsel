@@ -144,7 +144,7 @@ Example local commands:
 
 ```bash
 nvm use 20
-npm ci
+pnpm install --frozen-lockfile
 scripts/docker-services.sh up local-dev
 scripts/docker-services.sh health local-dev
 export DASHBOARD_GATEWAY_LOCAL_BASE_URL="${DASHBOARD_GATEWAY_LOCAL_BASE_URL:-<local dashboard gateway base>}"
@@ -159,8 +159,8 @@ Parity-enabled local browser verification:
 
 - standard `local-dev` keeps the trade registry empty for fast iteration
 - set `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity` to expose the canonical seeded trade `TRD-LOCAL-9001`
-- use `npm run dashboard:parity:session` and `npm run dashboard:parity:gate` before running dashboard live local-contract verification
-- use `npm run dashboard:parity:ci` for the Cotsel-owned CI-adjacent orchestration path that also runs the Dash live suite
+- use `pnpm run dashboard:parity:session` and `pnpm run dashboard:parity:gate` before running dashboard live local-contract verification
+- use `pnpm run dashboard:parity:ci` for the Cotsel-owned CI-adjacent orchestration path that also runs the Dash live suite
 - treat `scripts/docker-services.sh health local-dev` as the broader whole-profile health check, not the dashboard parity gate
 - canonical steps and failure interpretation live in `docs/runbooks/dashboard-local-parity.md`
 
@@ -311,7 +311,7 @@ Executor-backed governance remains allowed only for delegated/service/system flo
 For those flows:
 
 ```bash
-npm run -w gateway execute:governance-action -- <actionId>
+pnpm --filter ./gateway run execute:governance-action -- <actionId>
 ```
 
 Use `docs/runbooks/gateway-governance-signer-custody.md` when that executor path is actually in scope.
@@ -336,9 +336,9 @@ curl -fsS -H "Authorization: Bearer <session>" \
 
 ## Verification checklist
 
-- `npm run -w gateway lint`
-- `npm run -w gateway test`
-- `npm run -w gateway build`
+- `pnpm --filter ./gateway run lint`
+- `pnpm --filter ./gateway run test`
+- `pnpm --filter ./gateway run build`
 - `scripts/docker-services.sh health <profile>`
 - `curl /healthz`
 - `curl /readyz`

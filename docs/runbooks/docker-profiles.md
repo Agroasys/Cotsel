@@ -59,7 +59,7 @@ scripts/docker-services.sh down staging-e2e-real
 - Non-infra profiles verify indexer GraphQL readiness.
 - Reconciliation healthcheck passes when DB is reachable.
 - `local-dev` and `staging-e2e-real` include notification wiring checks in `health`.
-- Dashboard live local-contract verification uses `npm run dashboard:parity:gate` as its narrower upstream readiness gate; that is related to, but distinct from, whole-profile `health local-dev`.
+- Dashboard live local-contract verification uses `pnpm run dashboard:parity:gate` as its narrower upstream readiness gate; that is related to, but distinct from, whole-profile `health local-dev`.
 
 ## Failure modes
 

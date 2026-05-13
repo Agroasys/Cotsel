@@ -143,8 +143,8 @@ pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out 
 Use these contract deployment commands only when mainnet contract deployment is part of the approved launch window:
 
 ```bash
-npm run -w contracts deploy:base-mainnet
-npm run -w contracts verify:base-mainnet
+pnpm --filter ./contracts run deploy:base-mainnet
+pnpm --filter ./contracts run verify:base-mainnet
 ```
 
 Operator rule:

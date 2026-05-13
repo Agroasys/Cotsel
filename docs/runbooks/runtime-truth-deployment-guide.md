@@ -149,8 +149,8 @@ scripts/docker-services.sh health local-dev
 Narrow dashboard parity path:
 
 ```bash
-npm run dashboard:parity:session
-npm run dashboard:parity:gate
+pnpm run dashboard:parity:session
+pnpm run dashboard:parity:gate
 ```
 
 ### Staging release profile
@@ -184,8 +184,8 @@ If promotion is executed outside this repo, the external deployment/change recor
 Baseline workspace validation:
 
 ```bash
-npm ci
-npm run lint
+pnpm install --frozen-lockfile
+pnpm run lint
 ```
 
 Release-gate-aligned validation paths:
@@ -195,7 +195,7 @@ Release-gate-aligned validation paths:
 - `scripts/staging-e2e-real-gate.sh`
 - `scripts/postgres-backup-restore-smoke.sh`
 - `scripts/notifications-gate.sh staging-e2e-real`
-- `npm run pilot:rehearsal -- --window-id <window-id> --config-only`
+- `pnpm run pilot:rehearsal -- --window-id <window-id> --config-only`
 
 ## Rehearsal truth
 

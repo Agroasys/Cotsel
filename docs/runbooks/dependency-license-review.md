@@ -9,10 +9,10 @@ Generate a deterministic snapshot of third-party production dependency licenses 
 From repository root:
 
 ```bash
-npm run licenses:report
+pnpm run licenses:report
 ```
 
-The report is generated from `npm ls --all --json --long --omit=dev`.
+The report is generated from `pnpm list --depth Infinity --json --long --prod`.
 
 ## Output Artifacts
 
@@ -23,7 +23,7 @@ The command writes two files:
 
 ## How to Review
 
-1. Confirm the report generated from a clean install (`npm ci`) on the branch under review.
+1. Confirm the report generated from a clean install (`pnpm install --frozen-lockfile`) on the branch under review.
 2. Review `third-party-licenses-summary.txt` for any newly introduced license families.
 3. Use `third-party-licenses.json` for package-level attribution details.
 4. Escalate unknown or policy-restricted licenses to legal/compliance before release.

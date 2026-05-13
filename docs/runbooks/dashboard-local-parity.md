@@ -53,7 +53,7 @@ scripts/docker-services.sh health local-dev
 Parity gate note:
 
 - `scripts/docker-services.sh health local-dev` validates the whole local profile and can fail for services outside the dashboard parity boundary.
-- `npm run dashboard:parity:preflight` and `npm run dashboard:parity:gate` are the authoritative upstream parity gate for dashboard live local-contract verification.
+- `pnpm run dashboard:parity:preflight` and `pnpm run dashboard:parity:gate` are the authoritative upstream parity gate for dashboard live local-contract verification.
 - parity gate failures now emit a stable machine-usable error code and non-zero exit for CI-adjacent automation; do not reinterpret the gate as whole-profile health.
 
 3. Deploy the local escrow contract if gateway readiness reports `chain-rpc unavailable`:
@@ -69,14 +69,14 @@ cd ..
 ```bash
 export DASHBOARD_SMOKE_PRIVATE_KEY="$(awk -F= '/^ORACLE_PRIVATE_KEY=/{print $2}' .env)"
 export DASHBOARD_SMOKE_SESSION_OUTPUT_FILE=/tmp/cotsel-dashboard-session.json
-npm run dashboard:parity:session
+pnpm run dashboard:parity:session
 ```
 
 5. Run the upstream parity preflight:
 
 ```bash
 export DASHBOARD_PARITY_SESSION_FILE=/tmp/cotsel-dashboard-session.json
-npm run dashboard:parity:preflight
+pnpm run dashboard:parity:preflight
 ```
 
 ## Expected preflight contract
@@ -101,7 +101,7 @@ Successful parity preflight proves:
 - gateway trade list returns a different first trade id
   - local parity data is stale or the fixture path is not the canonical parity dataset
 - auth session fails
-  - mint a fresh session artifact with `npm run dashboard:parity:session`
+  - mint a fresh session artifact with `pnpm run dashboard:parity:session`
 
 Stable parity gate failure classes:
 
@@ -126,7 +126,7 @@ Supported now:
 
 - manual local parity verification
 - pre-release local parity verification before running `Cotsel-Dash` live-contract Playwright coverage
-- CI-adjacent parity gating built around `npm run dashboard:parity:gate`, provided the job also mints a fresh admin session artifact and deploys the local escrow contract
+- CI-adjacent parity gating built around `pnpm run dashboard:parity:gate`, provided the job also mints a fresh admin session artifact and deploys the local escrow contract
 
 Not promoted yet:
 
@@ -136,7 +136,7 @@ Promotion criteria for CI-adjacent parity:
 
 1. automate local escrow deployment in a bounded job
 2. mint an admin session artifact in job scope
-3. run `npm run dashboard:parity:gate`
+3. run `pnpm run dashboard:parity:gate`
 4. then run `Cotsel-Dash` live local-contract browser verification
 
 ## CI-adjacent live parity automation
@@ -144,7 +144,7 @@ Promotion criteria for CI-adjacent parity:
 Canonical Cotsel-owned entrypoint:
 
 ```bash
-npm run dashboard:parity:ci
+pnpm run dashboard:parity:ci
 ```
 
 This orchestration path:
@@ -155,8 +155,8 @@ This orchestration path:
 - records broader `scripts/docker-services.sh health local-dev` as advisory whole-profile evidence
 - deploys the local escrow contract
 - mints a fresh dashboard session artifact
-- runs `npm run dashboard:parity:gate`
-- runs `Cotsel-Dash` `npm run test:e2e:live`
+- runs `pnpm run dashboard:parity:gate`
+- runs `Cotsel-Dash` `pnpm run test:e2e:live`
 - writes `reports/dashboard-parity/live-parity-gate.json`
 
 Status boundary:
@@ -174,7 +174,7 @@ GitHub Actions source of truth:
 Canonical M3 continuity entrypoint:
 
 ```bash
-npm run m3:continuity:ci
+pnpm run m3:continuity:ci
 ```
 
 This gate adds the upstream Agroasys settlement-handoff contract tests to the

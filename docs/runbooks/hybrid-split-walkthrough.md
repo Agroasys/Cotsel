@@ -136,7 +136,7 @@ If not:
 Validate that off-chain mirrors are consistent before any treasury payout action.
 
 ```bash
-npm run -w reconciliation reconcile:once
+pnpm --filter ./reconciliation run reconcile:once
 curl -fsS "http://127.0.0.1:${TREASURY_PORT:-3200}/api/treasury/v1/entries?limit=50&offset=0"
 ```
 
