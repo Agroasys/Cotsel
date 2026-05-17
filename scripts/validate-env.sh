@@ -57,24 +57,29 @@ restore_external_environment_overrides() {
   done
 }
 
-if [[ ! -f ".env" ]]; then
-  echo "Missing required base env file: .env" >&2
-  echo "Create it from the checked-in template: cp .env.example .env" >&2
-  exit 1
-fi
+if [[ -f ".env.runtime" ]]; then
+  load_env_file ".env.runtime"
+  restore_external_environment_overrides
+else
+  if [[ ! -f ".env" ]]; then
+    echo "Missing required base env file: .env" >&2
+    echo "Create it from the checked-in template: cp .env.example .env" >&2
+    exit 1
+  fi
 
-if [[ "$PROFILE" != "infra" && ! -f "$PROFILE_FILE" ]]; then
-  echo "Missing required profile env file: $PROFILE_FILE" >&2
-  echo "Create it from the checked-in template: cp ${PROFILE_FILE}.example ${PROFILE_FILE}" >&2
-  exit 1
-fi
+  if [[ "$PROFILE" != "infra" && ! -f "$PROFILE_FILE" ]]; then
+    echo "Missing required profile env file: $PROFILE_FILE" >&2
+    echo "Create it from the checked-in template: cp ${PROFILE_FILE}.example ${PROFILE_FILE}" >&2
+    exit 1
+  fi
 
-load_env_file ".env"
-restore_external_environment_overrides
-if [[ -f "$PROFILE_FILE" ]]; then
-  load_env_file "$PROFILE_FILE"
+  load_env_file ".env"
+  restore_external_environment_overrides
+  if [[ -f "$PROFILE_FILE" ]]; then
+    load_env_file "$PROFILE_FILE"
+  fi
+  restore_external_environment_overrides
 fi
-restore_external_environment_overrides
 
 required_groups=(
   # shared compose/database inputs

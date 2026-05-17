@@ -483,10 +483,15 @@ else:
     sys.stdout.write("0")'
 }
 
-load_env_file ".env"
-restore_external_environment_overrides
-load_env_file ".env.staging-e2e-real"
-restore_external_environment_overrides
+if [[ -f ".env.runtime" ]]; then
+  load_env_file ".env.runtime"
+  restore_external_environment_overrides
+else
+  load_env_file ".env"
+  restore_external_environment_overrides
+  load_env_file ".env.staging-e2e-real"
+  restore_external_environment_overrides
+fi
 
 INDEXER_GRAPHQL_DEFAULT_URL="http://127.0.0.1:${INDEXER_GRAPHQL_PORT:-4350}/graphql"
 INDEXER_GATEWAY_URL_HOST="${STAGING_E2E_REAL_GATE_INDEXER_GRAPHQL_URL:-$INDEXER_GRAPHQL_DEFAULT_URL}"

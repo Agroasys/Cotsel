@@ -3,6 +3,7 @@ node_modules
 .env.local
 .env.staging-e2e
 .env.staging-e2e-real
+.env.runtime
 env/*.env
 !env/*.env.example
 !.env.example
