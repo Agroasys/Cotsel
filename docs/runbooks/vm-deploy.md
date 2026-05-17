@@ -37,21 +37,21 @@ cp .env.runtime.example .env.runtime
 
 Open `.env.runtime` and fill in every value. Required fields include:
 
-| Field | Description |
-|---|---|
-| `POSTGRES_PASSWORD` | Postgres superuser password |
-| `ORACLE_PRIVATE_KEY` | Oracle attester wallet private key |
-| `ORACLE_RPC_URL` | Primary RPC endpoint (Base Sepolia) |
-| `RECONCILIATION_RPC_URL` | RPC endpoint for reconciliation |
-| `GATEWAY_RPC_URL` | RPC endpoint for gateway reads |
-| `INDEXER_RPC_ENDPOINT` | RPC endpoint for the indexer pipeline |
-| `ORACLE_ESCROW_ADDRESS` | Deployed `AgroasysEscrow` contract address |
-| `RECONCILIATION_ESCROW_ADDRESS` | Same address for reconciliation |
-| `GATEWAY_ESCROW_ADDRESS` | Same address for gateway |
-| `INDEXER_CONTRACT_ADDRESS` | Same address for the indexer |
-| `ORACLE_USDC_ADDRESS` | USDC token address on Base Sepolia |
-| `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON` | API keys for Agroasys → Cotsel session exchange |
-| `GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON` | API keys for inbound settlement service calls |
+| Field                                      | Description                                     |
+| ------------------------------------------ | ----------------------------------------------- |
+| `POSTGRES_PASSWORD`                        | Postgres superuser password                     |
+| `ORACLE_PRIVATE_KEY`                       | Oracle attester wallet private key              |
+| `ORACLE_RPC_URL`                           | Primary RPC endpoint (Base Sepolia)             |
+| `RECONCILIATION_RPC_URL`                   | RPC endpoint for reconciliation                 |
+| `GATEWAY_RPC_URL`                          | RPC endpoint for gateway reads                  |
+| `INDEXER_RPC_ENDPOINT`                     | RPC endpoint for the indexer pipeline           |
+| `ORACLE_ESCROW_ADDRESS`                    | Deployed `AgroasysEscrow` contract address      |
+| `RECONCILIATION_ESCROW_ADDRESS`            | Same address for reconciliation                 |
+| `GATEWAY_ESCROW_ADDRESS`                   | Same address for gateway                        |
+| `INDEXER_CONTRACT_ADDRESS`                 | Same address for the indexer                    |
+| `ORACLE_USDC_ADDRESS`                      | USDC token address on Base Sepolia              |
+| `TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON`   | API keys for Agroasys → Cotsel session exchange |
+| `GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON` | API keys for inbound settlement service calls   |
 
 All fields are documented inline in `.env.runtime.example`.
 
@@ -127,11 +127,11 @@ These commands read `.env.runtime` directly — no additional setup required.
 
 ## Re-deploying
 
-| Scenario | Command |
-|---|---|
-| Code change (pull + deploy) | `git pull && scripts/deploy.sh` |
-| Config change only (edit `.env.runtime`) | `scripts/deploy.sh --skip-build` |
-| Full teardown and fresh start | `scripts/docker-services.sh down staging-e2e-real && scripts/deploy.sh` |
+| Scenario                                 | Command                                                                 |
+| ---------------------------------------- | ----------------------------------------------------------------------- |
+| Code change (pull + deploy)              | `git pull && scripts/deploy.sh`                                         |
+| Config change only (edit `.env.runtime`) | `scripts/deploy.sh --skip-build`                                        |
+| Full teardown and fresh start            | `scripts/docker-services.sh down staging-e2e-real && scripts/deploy.sh` |
 
 ---
 
