@@ -1,54 +1,69 @@
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
-COPY package*.json .npmrc ./
+RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY auth/package.json auth/package.json
+COPY contracts/package.json contracts/package.json
+COPY gateway/package.json gateway/package.json
+COPY indexer/package.json indexer/package.json
+COPY notifications/package.json notifications/package.json
+COPY oracle/package.json oracle/package.json
+COPY reconciliation/package.json reconciliation/package.json
+COPY ricardian/package.json ricardian/package.json
+COPY sdk/package.json sdk/package.json
+COPY shared-auth/package.json shared-auth/package.json
 COPY shared-db/package.json shared-db/package.json
 COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
-COPY sdk sdk
-COPY notifications notifications
-COPY oracle oracle
-COPY shared-db shared-db
-COPY shared-edge shared-edge
-COPY shared-http shared-http
+COPY treasury/package.json treasury/package.json
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm ci
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
-RUN npm run -w @agroasys/sdk build \
-  && npm run -w @agroasys/notifications build \
-  && npm run -w oracle build
+COPY notifications notifications
+COPY oracle oracle
+COPY sdk sdk
+COPY shared-db shared-db
+COPY shared-edge shared-edge
+COPY shared-http shared-http
+
+RUN pnpm --filter @agroasys/sdk run build \
+  && pnpm --filter @agroasys/notifications run build \
+  && pnpm --filter oracle run build
 
 FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY package*.json .npmrc ./
-COPY oracle/package.json oracle/package.json
-COPY sdk/package.json sdk/package.json
+RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY auth/package.json auth/package.json
+COPY contracts/package.json contracts/package.json
+COPY gateway/package.json gateway/package.json
+COPY indexer/package.json indexer/package.json
 COPY notifications/package.json notifications/package.json
+COPY oracle/package.json oracle/package.json
+COPY reconciliation/package.json reconciliation/package.json
+COPY ricardian/package.json ricardian/package.json
+COPY sdk/package.json sdk/package.json
+COPY shared-auth/package.json shared-auth/package.json
 COPY shared-db/package.json shared-db/package.json
 COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
+COPY treasury/package.json treasury/package.json
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm pkg delete scripts.prepare --workspace @agroasys/notifications || true
-
-RUN npm ci --omit=dev --ignore-scripts \
-  --workspace @agroasys/notifications \
-  --workspace @agroasys/sdk \
-  --workspace @agroasys/shared-db \
-  --workspace @agroasys/shared-edge \
-  --workspace @agroasys/shared-http \
-  --workspace oracle \
-  --include-workspace-root=false \
-  && npm cache clean --force
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
+  && pnpm store prune
 
 COPY --from=builder /app/notifications/dist /app/notifications/dist
 COPY --from=builder /app/sdk/dist /app/sdk/dist
