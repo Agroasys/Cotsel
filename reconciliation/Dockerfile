@@ -1,42 +1,63 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-COPY package*.json .npmrc ./
+RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY auth/package.json auth/package.json
+COPY contracts/package.json contracts/package.json
+COPY gateway/package.json gateway/package.json
+COPY indexer/package.json indexer/package.json
+COPY notifications/package.json notifications/package.json
+COPY oracle/package.json oracle/package.json
+COPY reconciliation/package.json reconciliation/package.json
+COPY ricardian/package.json ricardian/package.json
+COPY sdk/package.json sdk/package.json
+COPY shared-auth/package.json shared-auth/package.json
 COPY shared-db/package.json shared-db/package.json
-COPY notifications notifications
-COPY sdk sdk
-COPY shared-db shared-db
-COPY reconciliation reconciliation
+COPY shared-edge/package.json shared-edge/package.json
+COPY shared-http/package.json shared-http/package.json
+COPY treasury/package.json treasury/package.json
 
 RUN apk add --no-cache python3 make g++
 
-RUN npm ci
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
-RUN npm run -w @agroasys/notifications build \
-  && npm run -w @agroasys/sdk build \
-  && npm run -w reconciliation build
+COPY notifications notifications
+COPY reconciliation reconciliation
+COPY sdk sdk
+COPY shared-db shared-db
+
+RUN pnpm --filter @agroasys/sdk run build \
+  && pnpm --filter @agroasys/notifications run build \
+  && pnpm --filter reconciliation run build
 
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY package*.json .npmrc ./
-COPY reconciliation/package.json reconciliation/package.json
-COPY sdk/package.json sdk/package.json
+RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY auth/package.json auth/package.json
+COPY contracts/package.json contracts/package.json
+COPY gateway/package.json gateway/package.json
+COPY indexer/package.json indexer/package.json
 COPY notifications/package.json notifications/package.json
+COPY oracle/package.json oracle/package.json
+COPY reconciliation/package.json reconciliation/package.json
+COPY ricardian/package.json ricardian/package.json
+COPY sdk/package.json sdk/package.json
+COPY shared-auth/package.json shared-auth/package.json
 COPY shared-db/package.json shared-db/package.json
+COPY shared-edge/package.json shared-edge/package.json
+COPY shared-http/package.json shared-http/package.json
+COPY treasury/package.json treasury/package.json
 
 RUN apk add --no-cache python3 make g++
 
-RUN npm pkg delete scripts.prepare --workspace @agroasys/notifications || true
-
-RUN npm ci --omit=dev --ignore-scripts \
-  --workspace @agroasys/notifications \
-  --workspace @agroasys/sdk \
-  --workspace @agroasys/shared-db \
-  --workspace reconciliation \
-  --include-workspace-root=false \
-  && npm cache clean --force
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
+  && pnpm store prune
 
 COPY --from=builder /app/notifications/dist /app/notifications/dist
 COPY --from=builder /app/sdk/dist /app/sdk/dist

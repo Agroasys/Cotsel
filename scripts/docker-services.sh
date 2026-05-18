@@ -96,14 +96,19 @@ restore_external_environment_overrides() {
   done
 }
 
-load_env_file ".env"
-restore_external_environment_overrides
-if [[ "$PROFILE" == "local-dev" ]]; then
-  load_env_file ".env.local"
+if [[ -f ".env.runtime" ]]; then
+  load_env_file ".env.runtime"
+  restore_external_environment_overrides
 else
-  load_env_file ".env.${PROFILE}"
+  load_env_file ".env"
+  restore_external_environment_overrides
+  if [[ "$PROFILE" == "local-dev" ]]; then
+    load_env_file ".env.local"
+  else
+    load_env_file ".env.${PROFILE}"
+  fi
+  restore_external_environment_overrides
 fi
-restore_external_environment_overrides
 
 run_compose() {
   docker compose -f "$COMPOSE_FILE" --profile "$PROFILE" "$@"
