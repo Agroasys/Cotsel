@@ -115,7 +115,7 @@ importers:
         version: 3.1.14
       ts-jest:
         specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0)(typescript@6.0.3)
+        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(typescript@6.0.3)
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@25.6.0)(typescript@6.0.3)
@@ -261,7 +261,7 @@ importers:
         version: 4.1.1
       ts-jest:
         specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0)(typescript@6.0.3)
+        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(typescript@6.0.3)
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@25.6.0)(typescript@6.0.3)
@@ -272,20 +272,20 @@ importers:
   indexer:
     dependencies:
       '@subsquid/evm-processor':
-        specifier: ^1.30.0
-        version: 1.30.0
+        specifier: ^1.30.1
+        version: 1.30.1
       '@subsquid/evm-typegen':
-        specifier: ^4.6.0
-        version: 4.6.0
+        specifier: ^5.0.0
+        version: 5.0.0
       '@subsquid/graphql-server':
         specifier: ^4.12.0
-        version: 4.12.0(@subsquid/big-decimal@1.0.0)(bufferutil@4.1.0)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(utf-8-validate@6.0.6)
+        version: 4.12.0(@subsquid/big-decimal@1.0.0)(bufferutil@4.1.0)(typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(utf-8-validate@6.0.6)
       '@subsquid/typeorm-migration':
         specifier: ^1.3.1
-        version: 1.3.1(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+        version: 1.3.1(typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       '@subsquid/typeorm-store':
-        specifier: ^1.9.0
-        version: 1.9.0(@subsquid/big-decimal@1.0.0)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+        specifier: ^1.9.1
+        version: 1.9.1(@subsquid/big-decimal@1.0.0)(typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -296,8 +296,8 @@ importers:
         specifier: 8.20.0
         version: 8.20.0
       typeorm:
-        specifier: 0.3.28
-        version: 0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+        specifier: 0.3.29
+        version: 0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
     devDependencies:
       '@subsquid/typeorm-codegen':
         specifier: ^2.1.0
@@ -386,7 +386,7 @@ importers:
         version: 3.1.14
       ts-jest:
         specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0)(typescript@6.0.3)
+        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(typescript@6.0.3)
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@25.6.0)(typescript@6.0.3)
@@ -481,7 +481,7 @@ importers:
         version: 30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
       ts-jest:
         specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0)(typescript@6.0.3)
+        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(typescript@6.0.3)
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@25.6.0)(typescript@6.0.3)
@@ -512,10 +512,10 @@ importers:
         version: 17.4.2
       jest:
         specifier: ^30.3.0
-        version: 30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+        version: 30.3.0(@types/node@25.6.0)
       ts-jest:
         specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0)(typescript@6.0.3)
+        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@25.6.0))(typescript@6.0.3)
       typescript:
         specifier: '>=6.0.2'
         version: 6.0.3
@@ -536,7 +536,7 @@ importers:
     devDependencies:
       jest:
         specifier: ^30.3.0
-        version: 30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+        version: 30.3.0(@types/node@25.6.0)
 
   shared-http: {}
 
@@ -596,7 +596,7 @@ importers:
         version: 30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
       ts-jest:
         specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0)(typescript@6.0.3)
+        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(typescript@6.0.3)
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@25.6.0)(typescript@6.0.3)
@@ -2538,28 +2538,28 @@ packages:
         integrity: sha512-/wyZEYC4Mlcm7jQWGhZnCvYpIosRmDSlNbv9SJBphE88aaFe8bOxl4sYwM/olzJgCn4Ir45nBsPU0ebF1+nXog==,
       }
 
-  '@subsquid/evm-abi@0.3.1':
+  '@subsquid/evm-abi@1.0.0':
     resolution:
       {
-        integrity: sha512-kWD8KjPBj4bR7u2Ct0xZmmVVkto0DKbSv9LQoh3fdGpS1UXbMg1jt4idupd970U8O7u3JJoTosgtApaXbKfoig==,
+        integrity: sha512-FEOkrhLeRcVpbjisN2Iw9BzPSLtTPpNlkB2B9pfnzCKzPdQcEhgPUYL58hEnXKISGqk+/JMipMzf0JEfnV4Leg==,
       }
 
-  '@subsquid/evm-codec@0.3.0':
+  '@subsquid/evm-codec@1.0.0':
     resolution:
       {
-        integrity: sha512-W6EIiC7MJN2oWdbgzpUSDop+UtROdFAlvsrzc10g3AnCAaK31nH59tkTjylRxgECewWFCFWZrwsVp+a+lwvXMA==,
+        integrity: sha512-3+FIqEnd8OkeHd03v99r7TIytUv8MIzka/Luz6fSEUA18YfZd5K0T+kq6Siy+UbU+jLslirSRSaKLt/bj5hDug==,
       }
 
-  '@subsquid/evm-processor@1.30.0':
+  '@subsquid/evm-processor@1.30.1':
     resolution:
       {
-        integrity: sha512-+UqOj95HMeOiavHHGBJIRauw1cRmmwQ4gtUSmuX52RJ+8x4h2b5xPQZmaN14bsIc7xq8oTgpkgrz6VNezE4S8g==,
+        integrity: sha512-7wOZaaw2lBVfSnhiDBDwUTf93jv7G6A6AdmqV4OWs9GWXLcQAdmL8PgcCFTKguMFvxgXsSx5y+uWs7llWDecLA==,
       }
 
-  '@subsquid/evm-typegen@4.6.0':
+  '@subsquid/evm-typegen@5.0.0':
     resolution:
       {
-        integrity: sha512-cEZRhiuUc/iL85exBmZaBJBjvdIbF1V7Dg51OtRblooLmGFXK3emE3CCNxpKGhObWUN7OytFE5kYEqRHFzYIRA==,
+        integrity: sha512-2jz9YoWvP5XSUWeCvEWlqPF+gFQ14O6hh0vECe5hmr+PcnC3n0FMd+qVKgix46LqHmEX13s0Vkyz+Akqbzd0xw==,
       }
     hasBin: true
 
@@ -2590,16 +2590,22 @@ packages:
       typeorm:
         optional: true
 
-  '@subsquid/http-client@1.8.0':
+  '@subsquid/http-client@1.8.1':
     resolution:
       {
-        integrity: sha512-HEwKjxBWoFdOT+BeC8j0aKCsNsNq8M4YO8peGlqAAYFw2Uhaztd5bWtygOhOYNrku9E8xm1mnH9p4ciKdyIK/Q==,
+        integrity: sha512-JDOqZ2DxhOfmZaoeo0+l3MOseTbbhVAz+3VkNBAhfOdenHTKHTYrywjC1AbqtzFZCswW7ErSFsEsIk+y5GsbGQ==,
       }
 
   '@subsquid/logger@1.5.0':
     resolution:
       {
         integrity: sha512-UQvMk7eUen83S11cukNpPXUmOYkSYWSV3wvA0wuJQqdMWxRxQrAwfFgPBN4DYlCSAMxzik1W2aN6+NyBrb9wmg==,
+      }
+
+  '@subsquid/logger@1.6.0':
+    resolution:
+      {
+        integrity: sha512-k33Cw1uO+Boha08arS8nhr0VHfT+bTWGe/hTZDeCDMoa2i0SUgkiDGDkgqTQof6y/N/kl30KzPvAAGqwJ6MJNw==,
       }
 
   '@subsquid/openreader@5.5.0':
@@ -2614,10 +2620,10 @@ packages:
       '@subsquid/big-decimal':
         optional: true
 
-  '@subsquid/rpc-client@4.14.0':
+  '@subsquid/rpc-client@4.15.0':
     resolution:
       {
-        integrity: sha512-YquFxFWc517A3G2peQYvSyK3ksmGYvlErOCMyREEGQTb9GwUl4DBaTi/+NO9ioy6Hk9Acg5hTeZzKxGnzqhBdQ==,
+        integrity: sha512-RwE0TNvX6fyUKk5DB4xXKlZgTLeENkYEHWeCIJH4GJylO4Os2GXYaytzr3NeZc8of7E49qz/HMFSxQvw//Hxyw==,
       }
 
   '@subsquid/typeorm-codegen@2.1.0':
@@ -2647,10 +2653,10 @@ packages:
     peerDependencies:
       typeorm: ^0.3.17
 
-  '@subsquid/typeorm-store@1.9.0':
+  '@subsquid/typeorm-store@1.9.1':
     resolution:
       {
-        integrity: sha512-KfVCGuRPw7y/X9f+yqlNUQJrxnfoI3wOV1TRDTe7mcl3UWUCoAExM0rrhsw8FPzVE7CYI2og9X14rX1swFKKSg==,
+        integrity: sha512-9zGNVCy5tJ+NVYxsnPQXjIk/f7fd+CDLzqplhrcgLJRxjWoA3ANvhCUiERmf/PJs0bHEl84yontARmUs0TGxxg==,
       }
     peerDependencies:
       '@subsquid/big-decimal': ^1.0.0
@@ -2694,10 +2700,10 @@ packages:
         integrity: sha512-GxpOIL36JXSo0KdOT7k6CsI4DY804rn/X7pTdfKhych0ReHaDghnwNyvgb7Njv9euEHWUt4MxXbfQ9YrbpPDng==,
       }
 
-  '@subsquid/util-internal-hex@1.2.2':
+  '@subsquid/util-internal-hex@1.2.3':
     resolution:
       {
-        integrity: sha512-E43HVqf23jP5hvtWF9GsiN8luANjnJ1daR2SVTwaIUAYU/uNjv1Bi6tHz2uexlflBhyxAgBDmHgunXZ45wQTIw==,
+        integrity: sha512-rGIQKHP+RpriJR56oL/AD43H/KX1EQwsvUy8nP6IHnk/vmaLyC2ECTp5n0jB7kq4NYK4C2VotP3lXHR0vWpa0A==,
       }
 
   '@subsquid/util-internal-http-server@2.0.1':
@@ -2761,13 +2767,13 @@ packages:
         integrity: sha512-VBnrKrkNcqbT3hMLrjpEPuwMAihFhW9oUmK53bccBCCXrUiATNUblQD2S4IWd9/UBO5Q33ohpbE9sAodDq2DXw==,
       }
 
-  '@subsquid/util-internal-validation@0.8.0':
+  '@subsquid/util-internal-validation@0.9.0':
     resolution:
       {
-        integrity: sha512-qrQ1L871pAtVy0LJ+JLTZk6x4QyHZqgMGCrlSJvXw3VZLBXDBDycTcKlZ96p5VcQRp6xFnYmVSPy9dl9SPXZHQ==,
+        integrity: sha512-S9j/o1gmKz4qTf0O8B9mpGV6Z+WhIe6xDLhKvpzJ7IaMqkDUHTu386Hx8IXyTJf/RY9ABunfGLI9q9uJln9wSA==,
       }
     peerDependencies:
-      '@subsquid/logger': ^1.4.0
+      '@subsquid/logger': ^1.6.0
     peerDependenciesMeta:
       '@subsquid/logger':
         optional: true
@@ -2776,6 +2782,12 @@ packages:
     resolution:
       {
         integrity: sha512-foNCjOmZaP8MKMa9sNe2GXTjFSDM9UqA0I0C0/ZvCxM1lCmG3mxZb70f8Wyi7TePXC/eV8eARbIqFyz0GjQmzA==,
+      }
+
+  '@subsquid/util-internal@3.3.0':
+    resolution:
+      {
+        integrity: sha512-WmMPHnqJcVIjM7BRNSd5uGYHVqlakr4fbyUIM2vQmfVx8V2ks+EWoreV0vsnSIyvDEqnoGJl8945xVhYkGkE3A==,
       }
 
   '@subsquid/util-naming@1.3.0':
@@ -7108,6 +7120,12 @@ packages:
         integrity: sha512-gF1cRrHhIzNfToc802P800N8PpXS+evLLXfsVpowqmAFR9uwbi89WvXg2QspOmXL8QL86J4T1EpFu+yUkwJY3Q==,
       }
 
+  js-sha3@0.9.3:
+    resolution:
+      {
+        integrity: sha512-BcJPCQeLg6WjEx3FE591wVAevlli8lxsxm9/FzV4HXkV49TmBH38Yvrpce6fjbADGMKFrBMGTqrVz3qPIZ88Gg==,
+      }
+
   js-tokens@4.0.0:
     resolution:
       {
@@ -7230,12 +7248,6 @@ packages:
         integrity: sha512-+KJGIyHgkGuIq3IEBNftfhW/LfWhXUIY6OmyVWjliu5KH1y0fw7VQ8YndE2O4qZdMSd9SqbnC8GOcZEy0Om7sA==,
       }
     engines: { node: '>=18' }
-
-  keccak256@1.0.6:
-    resolution:
-      {
-        integrity: sha512-8GLiM01PkdJVGUhR1e6M/AvWnSqYS0HaERI+K/QtStGDGlSTx2B1zTqZk4Zlqu5TxHJNTxWAdP9Y+WI50OApUw==,
-      }
 
   keccak@3.0.4:
     resolution:
@@ -7426,10 +7438,10 @@ packages:
         integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==,
       }
 
-  lru-cache@11.3.5:
+  lru-cache@11.3.6:
     resolution:
       {
-        integrity: sha512-NxVFwLAnrd9i7KUBxC4DrUhmgjzOs+1Qm50D3oF1/oL+r1NpZ4gA7xvG0/zJ8evR7zIKn4vLf7qTNduWFtCrRw==,
+        integrity: sha512-Gf/KoL3C/MlI7Bt0PGI9I+TeTC/I6r/csU58N4BSNc4lppLBeKsOdFYkK+dX0ABDUMJNfCHTyPpzwwO21Awd3A==,
       }
     engines: { node: 20 || >=22 }
 
@@ -9316,10 +9328,10 @@ packages:
       }
     engines: { node: '>=18' }
 
-  string-width@8.2.0:
+  string-width@8.2.1:
     resolution:
       {
-        integrity: sha512-6hJPQ8N0V0P3SNmP6h2J99RLuzrWz2gvT7VnK5tKvrNqJoyS9W4/Fb8mo31UiPvy00z7DQXkP2hnKBVav76thw==,
+        integrity: sha512-IIaP0g3iy9Cyy18w3M9YcaDudujEAVHKt3a3QJg1+sr/oX96TbaGUubG0hJyCjCBThFH+tFpcIyoUHUn1ogaLA==,
       }
     engines: { node: '>=20' }
 
@@ -9756,10 +9768,10 @@ packages:
         integrity: sha512-7uc1O8h1M1g0rArakJdf0uLRSSgFcYexrVoKo+bzJd32gd4gDy2L/Z+8/FjPnU9ydY3pEnVPtr9FyscYY60K1g==,
       }
 
-  typeorm@0.3.28:
+  typeorm@0.3.29:
     resolution:
       {
-        integrity: sha512-6GH7wXhtfq2D33ZuRXYwIsl/qM5685WZcODZb7noOOcRMteM9KF2x2ap3H0EBjnSV0VO4gNAfJT5Ukp0PkOlvg==,
+        integrity: sha512-wwPEX/df4l72gCmOsrs0otJZYLGA9lLQkUZCkukbsymEycV4zXv2KM7wU7v2r8L01TaCgY9ApSSqHQWBOUhEoQ==,
       }
     engines: { node: '>=16.13.0' }
     hasBin: true
@@ -12038,38 +12050,39 @@ snapshots:
     dependencies:
       big.js: 6.2.2
 
-  '@subsquid/evm-abi@0.3.1':
+  '@subsquid/evm-abi@1.0.0':
     dependencies:
-      '@subsquid/evm-codec': 0.3.0
-      keccak256: 1.0.6
+      '@subsquid/evm-codec': 1.0.0
+      '@subsquid/util-internal-hex': 1.2.3
+      js-sha3: 0.9.3
 
-  '@subsquid/evm-codec@0.3.0':
+  '@subsquid/evm-codec@1.0.0':
     dependencies:
-      '@subsquid/util-internal-hex': 1.2.2
+      '@subsquid/util-internal-hex': 1.2.3
 
-  '@subsquid/evm-processor@1.30.0':
+  '@subsquid/evm-processor@1.30.1':
     dependencies:
-      '@subsquid/http-client': 1.8.0
-      '@subsquid/logger': 1.5.0
-      '@subsquid/rpc-client': 4.14.0
-      '@subsquid/util-internal': 3.2.0
-      '@subsquid/util-internal-archive-client': 0.2.1(@subsquid/http-client@1.8.0)(@subsquid/logger@1.5.0)
-      '@subsquid/util-internal-hex': 1.2.2
-      '@subsquid/util-internal-ingest-tools': 1.1.5(@subsquid/util-internal-archive-client@0.2.1(@subsquid/http-client@1.8.0)(@subsquid/logger@1.5.0))
+      '@subsquid/http-client': 1.8.1
+      '@subsquid/logger': 1.6.0
+      '@subsquid/rpc-client': 4.15.0
+      '@subsquid/util-internal': 3.3.0
+      '@subsquid/util-internal-archive-client': 0.2.1(@subsquid/http-client@1.8.1)(@subsquid/logger@1.6.0)
+      '@subsquid/util-internal-hex': 1.2.3
+      '@subsquid/util-internal-ingest-tools': 1.1.5(@subsquid/util-internal-archive-client@0.2.1(@subsquid/http-client@1.8.1)(@subsquid/logger@1.6.0))
       '@subsquid/util-internal-processor-tools': 4.4.0
       '@subsquid/util-internal-range': 0.3.0
-      '@subsquid/util-internal-validation': 0.8.0(@subsquid/logger@1.5.0)
+      '@subsquid/util-internal-validation': 0.9.0(@subsquid/logger@1.6.0)
       '@subsquid/util-timeout': 2.3.2
     transitivePeerDependencies:
       - supports-color
 
-  '@subsquid/evm-typegen@4.6.0':
+  '@subsquid/evm-typegen@5.0.0':
     dependencies:
-      '@subsquid/evm-abi': 0.3.1
-      '@subsquid/evm-codec': 0.3.0
-      '@subsquid/http-client': 1.8.0
-      '@subsquid/logger': 1.5.0
-      '@subsquid/util-internal': 3.2.0
+      '@subsquid/evm-abi': 1.0.0
+      '@subsquid/evm-codec': 1.0.0
+      '@subsquid/http-client': 1.8.1
+      '@subsquid/logger': 1.6.0
+      '@subsquid/util-internal': 3.3.0
       '@subsquid/util-internal-code-printer': 1.2.2
       '@subsquid/util-internal-commander': 1.4.0(commander@11.1.0)
       commander: 11.1.0
@@ -12077,7 +12090,7 @@ snapshots:
 
   '@subsquid/graphiql-console@0.3.0': {}
 
-  '@subsquid/graphql-server@4.12.0(@subsquid/big-decimal@1.0.0)(bufferutil@4.1.0)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(utf-8-validate@6.0.6)':
+  '@subsquid/graphql-server@4.12.0(@subsquid/big-decimal@1.0.0)(bufferutil@4.1.0)(typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(utf-8-validate@6.0.6)':
     dependencies:
       '@apollo/utils.keyvadapter': 1.1.2
       '@apollo/utils.keyvaluecache': 1.0.2
@@ -12089,7 +12102,7 @@ snapshots:
       '@subsquid/apollo-server-express': 3.14.1(express@4.22.1)(graphql@15.10.1)
       '@subsquid/logger': 1.5.0
       '@subsquid/openreader': 5.5.0(@subsquid/big-decimal@1.0.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      '@subsquid/typeorm-config': 4.1.1(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+      '@subsquid/typeorm-config': 4.1.1(typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       '@subsquid/util-internal': 3.2.0
       '@subsquid/util-internal-commander': 1.4.0(commander@11.1.0)
       '@subsquid/util-internal-http-server': 2.0.1
@@ -12105,7 +12118,7 @@ snapshots:
       ws: 8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
       '@subsquid/big-decimal': 1.0.0
-      typeorm: 0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      typeorm: 0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
     transitivePeerDependencies:
       - bufferutil
       - encoding
@@ -12113,15 +12126,21 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@subsquid/http-client@1.8.0':
+  '@subsquid/http-client@1.8.1':
     dependencies:
-      '@subsquid/logger': 1.5.0
-      '@subsquid/util-internal': 3.2.0
+      '@subsquid/logger': 1.6.0
+      '@subsquid/util-internal': 3.3.0
       node-fetch: 3.3.2
 
   '@subsquid/logger@1.5.0':
     dependencies:
-      '@subsquid/util-internal-hex': 1.2.2
+      '@subsquid/util-internal-hex': 1.2.3
+      '@subsquid/util-internal-json': 1.2.3
+      supports-color: 8.1.1
+
+  '@subsquid/logger@1.6.0':
+    dependencies:
+      '@subsquid/util-internal-hex': 1.2.3
       '@subsquid/util-internal-json': 1.2.3
       supports-color: 8.1.1
 
@@ -12131,10 +12150,10 @@ snapshots:
       '@subsquid/apollo-server-core': 3.14.0(graphql@15.10.1)
       '@subsquid/apollo-server-express': 3.14.1(express@4.22.1)(graphql@15.10.1)
       '@subsquid/graphiql-console': 0.3.0
-      '@subsquid/logger': 1.5.0
-      '@subsquid/util-internal': 3.2.0
+      '@subsquid/logger': 1.6.0
+      '@subsquid/util-internal': 3.3.0
       '@subsquid/util-internal-commander': 1.4.0(commander@11.1.0)
-      '@subsquid/util-internal-hex': 1.2.2
+      '@subsquid/util-internal-hex': 1.2.3
       '@subsquid/util-internal-http-server': 2.0.1
       '@subsquid/util-naming': 1.3.0
       commander: 11.1.0
@@ -12155,11 +12174,11 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@subsquid/rpc-client@4.14.0':
+  '@subsquid/rpc-client@4.15.0':
     dependencies:
-      '@subsquid/http-client': 1.8.0
-      '@subsquid/logger': 1.5.0
-      '@subsquid/util-internal': 3.2.0
+      '@subsquid/http-client': 1.8.1
+      '@subsquid/logger': 1.6.0
+      '@subsquid/util-internal': 3.3.0
       '@subsquid/util-internal-binary-heap': 1.0.0
       '@subsquid/util-internal-counters': 1.3.2
       '@subsquid/util-internal-json-fix-unsafe-integers': 0.0.0
@@ -12182,38 +12201,38 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@subsquid/typeorm-config@4.1.1(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
+  '@subsquid/typeorm-config@4.1.1(typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
     dependencies:
-      '@subsquid/logger': 1.5.0
+      '@subsquid/logger': 1.6.0
       '@subsquid/util-internal-ts-node': 0.0.0
       '@subsquid/util-naming': 1.3.0
     optionalDependencies:
-      typeorm: 0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      typeorm: 0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
 
-  '@subsquid/typeorm-migration@1.3.1(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
+  '@subsquid/typeorm-migration@1.3.1(typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
     dependencies:
-      '@subsquid/typeorm-config': 4.1.1(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+      '@subsquid/typeorm-config': 4.1.1(typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       '@subsquid/util-internal': 3.2.0
       '@subsquid/util-internal-code-printer': 1.2.2
       '@subsquid/util-internal-ts-node': 0.0.0
       commander: 11.1.0
       dotenv: 16.6.1
-      typeorm: 0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      typeorm: 0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
 
-  '@subsquid/typeorm-store@1.9.0(@subsquid/big-decimal@1.0.0)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
+  '@subsquid/typeorm-store@1.9.1(@subsquid/big-decimal@1.0.0)(typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
     dependencies:
       '@subsquid/big-decimal': 1.0.0
-      '@subsquid/typeorm-config': 4.1.1(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
-      '@subsquid/util-internal': 3.2.0
-      typeorm: 0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      '@subsquid/typeorm-config': 4.1.1(typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+      '@subsquid/util-internal': 3.3.0
+      typeorm: 0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
 
-  '@subsquid/util-internal-archive-client@0.2.1(@subsquid/http-client@1.8.0)(@subsquid/logger@1.5.0)':
+  '@subsquid/util-internal-archive-client@0.2.1(@subsquid/http-client@1.8.1)(@subsquid/logger@1.6.0)':
     dependencies:
-      '@subsquid/http-client': 1.8.0
-      '@subsquid/util-internal': 3.2.0
+      '@subsquid/http-client': 1.8.1
+      '@subsquid/util-internal': 3.3.0
       '@subsquid/util-internal-range': 0.3.0
     optionalDependencies:
-      '@subsquid/logger': 1.5.0
+      '@subsquid/logger': 1.6.0
 
   '@subsquid/util-internal-binary-heap@1.0.0': {}
 
@@ -12225,31 +12244,31 @@ snapshots:
 
   '@subsquid/util-internal-counters@1.3.2': {}
 
-  '@subsquid/util-internal-hex@1.2.2': {}
+  '@subsquid/util-internal-hex@1.2.3': {}
 
   '@subsquid/util-internal-http-server@2.0.1':
     dependencies:
       '@subsquid/logger': 1.5.0
       stoppable: 1.1.0
 
-  '@subsquid/util-internal-ingest-tools@1.1.5(@subsquid/util-internal-archive-client@0.2.1(@subsquid/http-client@1.8.0)(@subsquid/logger@1.5.0))':
+  '@subsquid/util-internal-ingest-tools@1.1.5(@subsquid/util-internal-archive-client@0.2.1(@subsquid/http-client@1.8.1)(@subsquid/logger@1.6.0))':
     dependencies:
-      '@subsquid/logger': 1.5.0
-      '@subsquid/util-internal': 3.2.0
+      '@subsquid/logger': 1.6.0
+      '@subsquid/util-internal': 3.3.0
       '@subsquid/util-internal-range': 0.3.0
     optionalDependencies:
-      '@subsquid/util-internal-archive-client': 0.2.1(@subsquid/http-client@1.8.0)(@subsquid/logger@1.5.0)
+      '@subsquid/util-internal-archive-client': 0.2.1(@subsquid/http-client@1.8.1)(@subsquid/logger@1.6.0)
 
   '@subsquid/util-internal-json-fix-unsafe-integers@0.0.0': {}
 
   '@subsquid/util-internal-json@1.2.3':
     dependencies:
-      '@subsquid/util-internal-hex': 1.2.2
+      '@subsquid/util-internal-hex': 1.2.3
 
   '@subsquid/util-internal-processor-tools@4.4.0':
     dependencies:
-      '@subsquid/logger': 1.5.0
-      '@subsquid/util-internal': 3.2.0
+      '@subsquid/logger': 1.6.0
+      '@subsquid/util-internal': 3.3.0
       '@subsquid/util-internal-counters': 1.3.2
       '@subsquid/util-internal-prometheus-server': 1.3.0(prom-client@14.2.0)
       '@subsquid/util-internal-range': 0.3.0
@@ -12263,18 +12282,20 @@ snapshots:
 
   '@subsquid/util-internal-range@0.3.0':
     dependencies:
-      '@subsquid/util-internal': 3.2.0
+      '@subsquid/util-internal': 3.3.0
       '@subsquid/util-internal-binary-heap': 1.0.0
 
   '@subsquid/util-internal-squid-id@0.0.0': {}
 
   '@subsquid/util-internal-ts-node@0.0.0': {}
 
-  '@subsquid/util-internal-validation@0.8.0(@subsquid/logger@1.5.0)':
+  '@subsquid/util-internal-validation@0.9.0(@subsquid/logger@1.6.0)':
     optionalDependencies:
-      '@subsquid/logger': 1.5.0
+      '@subsquid/logger': 1.6.0
 
   '@subsquid/util-internal@3.2.0': {}
+
+  '@subsquid/util-internal@3.3.0': {}
 
   '@subsquid/util-naming@1.3.0':
     dependencies:
@@ -13878,7 +13899,7 @@ snapshots:
   cli-truncate@5.2.0:
     dependencies:
       slice-ansi: 8.0.0
-      string-width: 8.2.0
+      string-width: 8.2.1
 
   cliui@7.0.4:
     dependencies:
@@ -15366,6 +15387,25 @@ snapshots:
       - babel-plugin-macros
       - supports-color
 
+  jest-cli@30.3.0(@types/node@25.6.0):
+    dependencies:
+      '@jest/core': 30.3.0(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      '@jest/test-result': 30.3.0
+      '@jest/types': 30.3.0
+      chalk: 4.1.2
+      exit-x: 0.2.2
+      import-local: 3.2.0
+      jest-config: 30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      jest-util: 30.3.0
+      jest-validate: 30.3.0
+      yargs: 17.7.2
+    transitivePeerDependencies:
+      - '@types/node'
+      - babel-plugin-macros
+      - esbuild-register
+      - supports-color
+      - ts-node
+
   jest-cli@30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)):
     dependencies:
       '@jest/core': 30.3.0(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
@@ -15632,6 +15672,19 @@ snapshots:
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
+  jest@30.3.0(@types/node@25.6.0):
+    dependencies:
+      '@jest/core': 30.3.0(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      '@jest/types': 30.3.0
+      import-local: 3.2.0
+      jest-cli: 30.3.0(@types/node@25.6.0)
+    transitivePeerDependencies:
+      - '@types/node'
+      - babel-plugin-macros
+      - esbuild-register
+      - supports-color
+      - ts-node
+
   jest@30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)):
     dependencies:
       '@jest/core': 30.3.0(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
@@ -15648,6 +15701,8 @@ snapshots:
   js-cookie@3.0.1: {}
 
   js-sha3@0.8.0: {}
+
+  js-sha3@0.9.3: {}
 
   js-tokens@4.0.0: {}
 
@@ -15703,12 +15758,6 @@ snapshots:
   jsonschema@1.5.0: {}
 
   jwt-decode@4.0.0: {}
-
-  keccak256@1.0.6:
-    dependencies:
-      bn.js: 4.12.3
-      buffer: 6.0.3
-      keccak: 3.0.4
 
   keccak@3.0.4:
     dependencies:
@@ -15811,7 +15860,7 @@ snapshots:
 
   lru-cache@10.4.3: {}
 
-  lru-cache@11.3.5: {}
+  lru-cache@11.3.6: {}
 
   lru-cache@5.1.1:
     dependencies:
@@ -16966,7 +17015,7 @@ snapshots:
       get-east-asian-width: 1.5.0
       strip-ansi: 7.2.0
 
-  string-width@8.2.0:
+  string-width@8.2.1:
     dependencies:
       get-east-asian-width: 1.5.0
       strip-ansi: 7.2.0
@@ -17110,12 +17159,32 @@ snapshots:
     dependencies:
       typescript: 6.0.3
 
-  ts-jest@29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0)(typescript@6.0.3):
+  ts-jest@29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(typescript@6.0.3):
     dependencies:
       bs-logger: 0.2.6
       fast-json-stable-stringify: 2.1.0
       handlebars: 4.7.9
       jest: 30.3.0(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      json5: 2.2.3
+      lodash.memoize: 4.1.2
+      make-error: 1.3.6
+      semver: 7.7.4
+      type-fest: 4.41.0
+      typescript: 6.0.3
+      yargs-parser: 21.1.1
+    optionalDependencies:
+      '@babel/core': 7.29.0
+      '@jest/transform': 30.3.0
+      '@jest/types': 30.3.0
+      babel-jest: 30.3.0(@babel/core@7.29.0)
+      jest-util: 30.3.0
+
+  ts-jest@29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@25.6.0))(typescript@6.0.3):
+    dependencies:
+      bs-logger: 0.2.6
+      fast-json-stable-stringify: 2.1.0
+      handlebars: 4.7.9
+      jest: 30.3.0(@types/node@25.6.0)
       json5: 2.2.3
       lodash.memoize: 4.1.2
       make-error: 1.3.6
@@ -17221,7 +17290,7 @@ snapshots:
 
   typeforce@1.18.0: {}
 
-  typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)):
+  typeorm@0.3.29(ioredis@5.10.1)(pg@8.20.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)):
     dependencies:
       '@sqltools/formatter': 1.2.5
       ansis: 4.2.0
@@ -17324,7 +17393,7 @@ snapshots:
       chokidar: 5.0.0
       destr: 2.0.5
       h3: 1.15.11
-      lru-cache: 11.3.5
+      lru-cache: 11.3.6
       node-fetch-native: 1.6.7
       ofetch: 1.5.1
       ufo: 1.6.4
