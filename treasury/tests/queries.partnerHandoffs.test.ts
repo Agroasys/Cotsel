@@ -87,7 +87,11 @@ type ExecutedQueryCall = [sql: string, params?: unknown];
 function findExecutedQuery(sqlFragment: string): ExecutedQueryCall | undefined {
   return mockClientQuery.mock.calls.find(
     (call): call is ExecutedQueryCall =>
-      Array.isArray(call) && typeof call[0] === 'string' && call[0].includes(sqlFragment),
+      Array.isArray(call) &&
+      call.length >= 1 &&
+      call.length <= 2 &&
+      typeof call[0] === 'string' &&
+      call[0].includes(sqlFragment),
   );
 }
 
@@ -109,6 +113,10 @@ describe('treasury partner handoff queries', () => {
       query: mockClientQuery,
       release: mockClientRelease,
     });
+  });
+
+  it('throws when retrieving last query invocation order without any query invocations', () => {
+    expect(() => getLastQueryInvocationOrder()).toThrow('Expected at least one query invocation');
   });
 
   it('writes a new treasury partner handoff inside one transaction', async () => {
