@@ -2,6 +2,7 @@ const mockClientQuery = jest.fn();
 const mockClientRelease = jest.fn();
 const mockPoolConnect = jest.fn();
 const baseNow = new Date('2024-01-01T00:00:00.000Z');
+const OBSERVATION_DELAY_MS = 15 * 60 * 1000;
 
 let initiatedAt: Date;
 let observedAt: Date;
@@ -81,7 +82,7 @@ describe('treasury partner handoff queries', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     initiatedAt = new Date(baseNow.getTime());
-    observedAt = new Date(baseNow.getTime() + 15 * 60 * 1000);
+    observedAt = new Date(baseNow.getTime() + OBSERVATION_DELAY_MS);
     mockPoolConnect.mockResolvedValue({
       query: mockClientQuery,
       release: mockClientRelease,

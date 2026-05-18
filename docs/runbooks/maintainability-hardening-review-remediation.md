@@ -28,7 +28,9 @@ Too shallow before remediation:
   package dependency in `package.json`.
 - The shared-package guard was initially scoped to the current four
   `shared-*` package names, which meant a future `shared-*` package could bypass
-  the guard entirely.
+  the guard entirely. This was remediated later in this pass; see
+  `scripts/shared-package-boundary-guard.mjs` in the "Remediated now" section
+  below.
 - Batch 7 did not address the oversized governance mutation router or the
   gateway settlement store mixing production Postgres persistence with the
   in-memory test adapter.
@@ -91,7 +93,7 @@ normalizes invalid JSON to a gateway upstream error. Treasury mutations now
 require successful `data` payloads to be records before audit logging and
 returning them to callers.
 
-Known remaining limitation:
+Known Remaining Limitations:
 
 - The repo still does not have a broad cross-service fixture harness, by design.
   Coverage remains focused on gateway consumer behavior and service-local tests.
