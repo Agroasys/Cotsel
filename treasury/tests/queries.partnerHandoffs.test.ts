@@ -91,6 +91,17 @@ function findExecutedQuery(sqlFragment: string): ExecutedQueryCall | undefined {
   );
 }
 
+function getLastQueryInvocationOrder() {
+  const lastInvocationOrder =
+    mockClientQuery.mock.invocationCallOrder[mockClientQuery.mock.invocationCallOrder.length - 1];
+
+  if (lastInvocationOrder === undefined) {
+    throw new Error('Expected at least one query invocation');
+  }
+
+  return lastInvocationOrder;
+}
+
 describe('treasury partner handoff queries', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -163,7 +174,7 @@ describe('treasury partner handoff queries', () => {
     expect(mockClientQuery).not.toHaveBeenCalledWith('ROLLBACK');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
     expect(mockClientRelease.mock.invocationCallOrder[0]).toBeGreaterThan(
-      mockClientQuery.mock.invocationCallOrder[4],
+      getLastQueryInvocationOrder(),
     );
     expect(result.created).toBe(true);
     expect(result.idempotentReplay).toBe(false);
@@ -201,7 +212,7 @@ describe('treasury partner handoff queries', () => {
     expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
     expect(mockClientRelease.mock.invocationCallOrder[0]).toBeGreaterThan(
-      mockClientQuery.mock.invocationCallOrder[4],
+      getLastQueryInvocationOrder(),
     );
   });
 
