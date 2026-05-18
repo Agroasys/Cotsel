@@ -228,6 +228,8 @@ describe('treasury partner handoff queries', () => {
 
     expect(result.created).toBe(false);
     expect(result.idempotentReplay).toBe(true);
+    expect(mockClientQuery).toHaveBeenCalledWith('COMMIT');
+    expect(mockClientQuery).not.toHaveBeenCalledWith('ROLLBACK');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
   });
 
@@ -265,6 +267,10 @@ describe('treasury partner handoff queries', () => {
         initiatedAt,
       }),
     ).rejects.toBeInstanceOf(TreasuryPartnerHandoffConflictError);
+
+    expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
+    expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
+    expect(mockClientRelease).toHaveBeenCalledTimes(1);
   });
 
   it('treats identical treasury partner evidence as idempotent replay', async () => {
