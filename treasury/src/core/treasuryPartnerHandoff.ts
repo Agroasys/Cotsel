@@ -1,6 +1,15 @@
 import crypto from 'node:crypto';
 import type { BankPayoutState, TreasuryPartnerCode, TreasuryPartnerHandoffStatus } from '../types';
 
+export class TreasuryPartnerHandoffConflictError extends Error {
+  readonly code = 'TREASURY_PARTNER_HANDOFF_CONFLICT';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'TreasuryPartnerHandoffConflictError';
+  }
+}
+
 export interface TreasuryPartnerHandoffPayloadHashInput {
   ledgerEntryId: number;
   partnerCode: TreasuryPartnerCode;

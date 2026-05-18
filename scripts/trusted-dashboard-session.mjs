@@ -26,8 +26,12 @@ const {
 //   3) single-quoted value (supports escaped characters like \' and \\),
 //   4) unquoted value (up to inline comment/end of line).
 // Optional whitespace is allowed around the value and before line end.
-const DOTENV_ENTRY_REGEX =
-  /^([A-Za-z0-9_]+)=\s*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|([^#\r\n]*))\s*$/u;
+const DOTENV_VAR_NAME_PATTERN_SOURCE = '([A-Za-z0-9_]+)';
+const DOTENV_DOUBLE_QUOTED_VALUE_PATTERN_SOURCE = '"((?:\\\\.|[^"\\\\\\r\\n])*)"';
+const DOTENV_SINGLE_QUOTED_VALUE_PATTERN_SOURCE = "'((?:\\\\.|[^'\\\\\\r\\n])*)'";
+const DOTENV_UNQUOTED_VALUE_PATTERN_SOURCE = '([^#\\r\\n]*)';
+const DOTENV_ENTRY_PATTERN_SOURCE = `^${DOTENV_VAR_NAME_PATTERN_SOURCE}=\\s*(?:${DOTENV_DOUBLE_QUOTED_VALUE_PATTERN_SOURCE}|${DOTENV_SINGLE_QUOTED_VALUE_PATTERN_SOURCE}|${DOTENV_UNQUOTED_VALUE_PATTERN_SOURCE})\\s*$`;
+const DOTENV_ENTRY_REGEX = new RegExp(DOTENV_ENTRY_PATTERN_SOURCE, 'u');
 
 // Partial regex source intended for composition in RegExp constructors.
 const SENSITIVE_KEY_PATTERN_SOURCE =
@@ -145,6 +149,12 @@ function isPlainObject(value) {
 }
 
 function parseTrustedSessionApiKeys(rawValue) {
+  if (rawValue === undefined || rawValue === null) {
+    fail(
+      'Missing required TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON. Set this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}].',
+    );
+  }
+
   if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
     fail(
       'Missing required TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON. Set this environment variable in process.env or in your env files (.env and profile file). Expected a JSON array of API key objects, for example: [{"id":"key-id","secret":"key-secret","active":true}].',
@@ -299,7 +309,7 @@ function createRedactedPreview(value, maxLength = 200) {
  * @returns {Promise<JsonValue|null>} Parsed JSON response payload, or null when a successful response has an empty body.
  */
 async function fetchJson(url, options) {
-  if (options === null || options === undefined || typeof options !== 'object') {
+  if (typeof options !== 'object' || options === null) {
     fail('trusted session exchange request requires an options object');
   }
   const { body, headers = {}, timeoutMs, operation } = options;
@@ -344,7 +354,7 @@ async function fetchJson(url, options) {
       const payload = JSON.parse(rawBody);
       if (!response.ok) {
         fail(
-          `${operationLabel} (${url}) returned HTTP ${response.status}: ${createRedactedPreview(JSON.stringify(payload))}`,
+          `${operationLabel} (${url}) returned HTTP ${response.status}: ${createRedactedPreview(rawBody)}`,
         );
       }
       return payload;

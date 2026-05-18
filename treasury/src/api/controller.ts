@@ -50,6 +50,7 @@ import {
   upsertFiatDepositReference,
   upsertTreasuryPartnerHandoff,
 } from '../database/queries';
+import { TreasuryPartnerHandoffConflictError } from '../core/treasuryPartnerHandoff';
 import {
   AccountingPeriodStatus,
   BankPayoutState,
@@ -1113,7 +1114,10 @@ export class TreasuryController {
         }),
       );
     } catch (error: unknown) {
-      if (error instanceof BankPayoutConflictError) {
+      if (
+        error instanceof BankPayoutConflictError ||
+        error instanceof TreasuryPartnerHandoffConflictError
+      ) {
         res.status(409).json(buildFailure(409, 'Conflict', error.message, { code: error.code }));
         return;
       }
@@ -1178,7 +1182,10 @@ export class TreasuryController {
         }),
       );
     } catch (error: unknown) {
-      if (error instanceof BankPayoutConflictError) {
+      if (
+        error instanceof BankPayoutConflictError ||
+        error instanceof TreasuryPartnerHandoffConflictError
+      ) {
         res.status(409).json(buildFailure(409, 'Conflict', error.message, { code: error.code }));
         return;
       }

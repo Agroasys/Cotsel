@@ -1,10 +1,9 @@
 const mockClientQuery = jest.fn();
 const mockClientRelease = jest.fn();
 const mockPoolConnect = jest.fn();
-const baseNow = new Date('2024-01-01T00:00:00.000Z');
-
-let initiatedAt: Date;
-let observedAt: Date;
+// Intentionally fixed timestamp for deterministic, time-based test behavior.
+const FIXED_TEST_DATE = new Date('2024-01-01T00:00:00.000Z');
+const OBSERVATION_DELAY_MS = 15 * 60 * 1000;
 
 jest.mock('../src/database/connection', () => ({
   pool: {
@@ -13,10 +12,10 @@ jest.mock('../src/database/connection', () => ({
   },
 }));
 
-import { BankPayoutConflictError } from '../src/core/bankPayout';
 import {
   createTreasuryPartnerHandoffEvidencePayloadHash,
   createTreasuryPartnerHandoffPayloadHash,
+  TreasuryPartnerHandoffConflictError,
   type TreasuryPartnerHandoffEvidencePayloadHashInput,
   type TreasuryPartnerHandoffPayloadHashInput,
 } from '../src/core/treasuryPartnerHandoff';
@@ -77,11 +76,41 @@ function createEvidencePayloadHash(
   });
 }
 
+function createHandoffTimeline() {
+  const initiatedAt = new Date(FIXED_TEST_DATE);
+  const observedAt = new Date(FIXED_TEST_DATE.getTime() + OBSERVATION_DELAY_MS);
+  return { initiatedAt, observedAt };
+}
+
+type ExecutedQueryCall = [sql: string, params?: unknown];
+
+function findExecutedQuery(sqlFragment: string): ExecutedQueryCall | undefined {
+  return mockClientQuery.mock.calls.find(
+    (call): call is ExecutedQueryCall =>
+      Array.isArray(call) &&
+      (call.length === 1 || call.length === 2) &&
+      typeof call[0] === 'string' &&
+      call[0].includes(sqlFragment),
+  );
+}
+
+function expectReleaseCalledAfterLastQuery(queryMock: jest.Mock, releaseMock: jest.Mock) {
+  const queryInvocationCallOrder = queryMock.mock.invocationCallOrder;
+  const lastQueryInvocationOrder = queryInvocationCallOrder[queryInvocationCallOrder.length - 1];
+  if (lastQueryInvocationOrder === undefined) {
+    throw new Error('Expected at least one query invocation');
+  }
+  const releaseInvocationCallOrder = releaseMock.mock.invocationCallOrder;
+  const firstReleaseInvocationOrder = releaseInvocationCallOrder[0];
+  if (firstReleaseInvocationOrder === undefined) {
+    throw new Error('Expected release to be called at least once');
+  }
+  expect(firstReleaseInvocationOrder).toBeGreaterThan(lastQueryInvocationOrder);
+}
+
 describe('treasury partner handoff queries', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    initiatedAt = new Date(baseNow.getTime());
-    observedAt = new Date(baseNow.getTime() + 15 * 60 * 1000);
     mockPoolConnect.mockResolvedValue({
       query: mockClientQuery,
       release: mockClientRelease,
@@ -89,6 +118,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('writes a new treasury partner handoff inside one transaction', async () => {
+    const { initiatedAt } = createHandoffTimeline();
     const latestEventPayloadHash = createHandoffPayloadHash(initiatedAt);
 
     mockClientQuery
@@ -122,8 +152,10 @@ describe('treasury partner handoff queries', () => {
     });
 
     expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN');
-    expect(mockClientQuery.mock.calls[3][0]).toContain('INSERT INTO treasury_partner_handoffs');
-    expect(mockClientQuery.mock.calls[3][1]).toEqual([
+    const insertCall = findExecutedQuery('INSERT INTO treasury_partner_handoffs');
+    expect(insertCall).toBeDefined();
+    expect(insertCall?.[0]).toContain('INSERT INTO treasury_partner_handoffs');
+    expect(insertCall?.[1]).toEqual([
       11,
       'bridge',
       'bridge-handoff-11',
@@ -147,15 +179,14 @@ describe('treasury partner handoff queries', () => {
     expect(mockClientQuery).toHaveBeenNthCalledWith(5, 'COMMIT');
     expect(mockClientQuery).not.toHaveBeenCalledWith('ROLLBACK');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
-    expect(mockClientRelease.mock.invocationCallOrder[0]).toBeGreaterThan(
-      mockClientQuery.mock.invocationCallOrder[4],
-    );
+    expectReleaseCalledAfterLastQuery(mockClientQuery, mockClientRelease);
     expect(result.created).toBe(true);
     expect(result.idempotentReplay).toBe(false);
     expect(result.handoff.id).toBe(41);
   });
 
   it('rolls back and releases when a treasury partner handoff insert fails', async () => {
+    const { initiatedAt } = createHandoffTimeline();
     const insertError = new Error('insert failed');
 
     mockClientQuery
@@ -180,16 +211,15 @@ describe('treasury partner handoff queries', () => {
     ).rejects.toThrow(insertError);
 
     expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN');
-    expect(mockClientQuery.mock.calls[3][0]).toContain('INSERT INTO treasury_partner_handoffs');
+    expect(findExecutedQuery('INSERT INTO treasury_partner_handoffs')).toBeDefined();
     expect(mockClientQuery).toHaveBeenNthCalledWith(5, 'ROLLBACK');
     expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
-    expect(mockClientRelease.mock.invocationCallOrder[0]).toBeGreaterThan(
-      mockClientQuery.mock.invocationCallOrder[4],
-    );
+    expectReleaseCalledAfterLastQuery(mockClientQuery, mockClientRelease);
   });
 
   it('treats an identical treasury partner handoff payload as idempotent replay', async () => {
+    const { initiatedAt } = createHandoffTimeline();
     const payloadHash = createHandoffPayloadHash(initiatedAt);
 
     mockClientQuery
@@ -223,10 +253,13 @@ describe('treasury partner handoff queries', () => {
 
     expect(result.created).toBe(false);
     expect(result.idempotentReplay).toBe(true);
+    expect(mockClientQuery).toHaveBeenCalledWith('COMMIT');
+    expect(mockClientQuery).not.toHaveBeenCalledWith('ROLLBACK');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
   });
 
   it('rejects conflicting treasury partner handoff payloads for the same ledger entry', async () => {
+    const { initiatedAt } = createHandoffTimeline();
     const existingPayloadHash = createHandoffPayloadHash(initiatedAt);
 
     mockClientQuery
@@ -258,10 +291,15 @@ describe('treasury partner handoff queries', () => {
         actor: 'Treasury Operator',
         initiatedAt,
       }),
-    ).rejects.toBeInstanceOf(BankPayoutConflictError);
+    ).rejects.toBeInstanceOf(TreasuryPartnerHandoffConflictError);
+
+    expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
+    expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
+    expect(mockClientRelease).toHaveBeenCalledTimes(1);
   });
 
   it('treats identical treasury partner evidence as idempotent replay', async () => {
+    const { observedAt } = createHandoffTimeline();
     const payloadHash = createEvidencePayloadHash(observedAt);
 
     mockClientQuery
@@ -310,6 +348,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('rejects conflicting treasury partner evidence', async () => {
+    const { observedAt } = createHandoffTimeline();
     const existingPayloadHash = createEvidencePayloadHash(observedAt);
 
     mockClientQuery
@@ -338,7 +377,7 @@ describe('treasury partner handoff queries', () => {
       observedAt,
     });
 
-    await expect(resultPromise).rejects.toBeInstanceOf(BankPayoutConflictError);
+    await expect(resultPromise).rejects.toBeInstanceOf(TreasuryPartnerHandoffConflictError);
     await expect(resultPromise).rejects.toThrow(/conflicting payload/i);
 
     expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
