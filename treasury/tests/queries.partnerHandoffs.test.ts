@@ -86,8 +86,9 @@ type ExecutedQueryCall = [sql: string, params?: unknown];
 
 function findExecutedQuery(sqlFragment: string): ExecutedQueryCall | undefined {
   return mockClientQuery.mock.calls.find(
-    (call) => typeof call[0] === 'string' && call[0].includes(sqlFragment),
-  ) as ExecutedQueryCall | undefined;
+    (call): call is ExecutedQueryCall =>
+      Array.isArray(call) && typeof call[0] === 'string' && call[0].includes(sqlFragment),
+  );
 }
 
 describe('treasury partner handoff queries', () => {
