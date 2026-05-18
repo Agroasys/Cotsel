@@ -188,7 +188,7 @@ EOF
   echo "$tmp_dir|$exit_code"
 }
 
-success_result="$(run_case success local-dev-health dashboard-parity)"
+success_result="$(run_case success "" dashboard-parity)"
 success_dir="${success_result%|*}"
 success_exit="${success_result##*|}"
 if [[ "$success_exit" -ne 0 ]]; then
@@ -200,8 +200,8 @@ node - "$success_dir/reports/dashboard-parity/live-parity-gate.json" <<'NODE'
 const fs = require("node:fs");
 const report = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 if (report.ok !== true) throw new Error("expected report.ok true");
-if (report.summary.wholeProfileHealth.status !== "fail") throw new Error("expected advisory whole-profile health failure");
-if (report.summary.wholeProfileHealth.advisory !== true) throw new Error("expected advisory whole-profile health");
+if (report.summary.wholeProfileHealth.status !== "pass") throw new Error("expected whole-profile health pass");
+if (report.summary.wholeProfileHealth.advisory !== true) throw new Error("expected advisory whole-profile health flag");
 if (report.summary.dashboardParityGate !== "pass") throw new Error("expected parity gate pass");
 if (report.summary.dashLiveSuite !== "pass") throw new Error("expected dash live suite pass");
 NODE
@@ -224,7 +224,7 @@ if (report.blockingFailure.classification !== "dashboard_parity_gate_failed") {
 if (report.summary.dashLiveSuite !== "not_run") throw new Error("expected dash live suite not_run");
 NODE
 
-env_fail_result="$(run_case env-fail "" empty)"
+env_fail_result="$(run_case env-fail "" invalid-mode)"
 env_fail_dir="${env_fail_result%|*}"
 env_fail_exit="${env_fail_result##*|}"
 if [[ "$env_fail_exit" -eq 0 ]]; then

@@ -17,7 +17,7 @@ exclude_args=(
 )
 
 if rg --line-number -P '\bnpm ci\b' "${exclude_args[@]}" "${paths[@]}"; then
-  echo "Found deprecated npm install command in active docs." >&2
+  echo "Found deprecated npm ci command in active docs." >&2
   fail=1
 fi
 
