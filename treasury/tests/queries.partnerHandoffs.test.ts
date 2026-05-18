@@ -95,6 +95,15 @@ function findExecutedQuery(sqlFragment: string): ExecutedQueryCall | undefined {
   );
 }
 
+function expectReleaseCalledAfterLastQuery(queryMock: jest.Mock, releaseMock: jest.Mock) {
+  const queryInvocationCallOrder = queryMock.mock.invocationCallOrder;
+  const lastQueryInvocationOrder = queryInvocationCallOrder[queryInvocationCallOrder.length - 1];
+  if (lastQueryInvocationOrder === undefined) {
+    throw new Error('Expected at least one query invocation');
+  }
+  expect(releaseMock.mock.invocationCallOrder[0]).toBeGreaterThan(lastQueryInvocationOrder);
+}
+
 describe('treasury partner handoff queries', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -166,12 +175,7 @@ describe('treasury partner handoff queries', () => {
     expect(mockClientQuery).toHaveBeenNthCalledWith(5, 'COMMIT');
     expect(mockClientQuery).not.toHaveBeenCalledWith('ROLLBACK');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
-    const queryInvocationCallOrder = mockClientQuery.mock.invocationCallOrder;
-    const lastQueryInvocationOrder = queryInvocationCallOrder[queryInvocationCallOrder.length - 1];
-    if (lastQueryInvocationOrder === undefined) {
-      throw new Error('Expected at least one query invocation');
-    }
-    expect(mockClientRelease.mock.invocationCallOrder[0]).toBeGreaterThan(lastQueryInvocationOrder);
+    expectReleaseCalledAfterLastQuery(mockClientQuery, mockClientRelease);
     expect(result.created).toBe(true);
     expect(result.idempotentReplay).toBe(false);
     expect(result.handoff.id).toBe(41);
@@ -207,12 +211,7 @@ describe('treasury partner handoff queries', () => {
     expect(mockClientQuery).toHaveBeenNthCalledWith(5, 'ROLLBACK');
     expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
-    const queryInvocationCallOrder = mockClientQuery.mock.invocationCallOrder;
-    const lastQueryInvocationOrder = queryInvocationCallOrder[queryInvocationCallOrder.length - 1];
-    if (lastQueryInvocationOrder === undefined) {
-      throw new Error('Expected at least one query invocation');
-    }
-    expect(mockClientRelease.mock.invocationCallOrder[0]).toBeGreaterThan(lastQueryInvocationOrder);
+    expectReleaseCalledAfterLastQuery(mockClientQuery, mockClientRelease);
   });
 
   it('treats an identical treasury partner handoff payload as idempotent replay', async () => {
