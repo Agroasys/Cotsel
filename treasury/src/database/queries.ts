@@ -54,15 +54,18 @@ import { sumAllocatedEntryAmountRaw } from '../core/sweepBatchAmounts';
 import {
   createTreasuryPartnerHandoffEvidencePayloadHash,
   createTreasuryPartnerHandoffPayloadHash,
+  TreasuryPartnerHandoffConflictError,
 } from '../core/treasuryPartnerHandoff';
 
 const INGESTION_CURSOR_NAME = 'trade_events';
+const ACCOUNTING_STATE_FILTER_CHUNK_MULTIPLIER = 4;
+const ACCOUNTING_STATE_FILTER_MIN_CHUNK_SIZE = 50;
 const serviceAuthNonceStore = createPostgresNonceStore({
   tableName: 'treasury_auth_nonces',
   query: (sql, params) => pool.query(sql, params),
 });
 
-function createPartnerHandoffPayloadHash(input: {
+function createExternalPartnerHandoffPayloadHash(input: {
   sweepBatchId: number;
   partnerName: string;
   partnerReference: string;
@@ -70,6 +73,7 @@ function createPartnerHandoffPayloadHash(input: {
   evidenceReference: string | null;
   metadata: Record<string, unknown>;
 }): string {
+  // `partner_handoffs` uses a different record shape from `treasury_partner_handoffs`.
   const serialized = JSON.stringify({
     sweepBatchId: input.sweepBatchId,
     partnerName: input.partnerName,
@@ -971,7 +975,7 @@ export async function upsertPartnerHandoff(data: {
 }): Promise<PartnerHandoff> {
   const client = await pool.connect();
   const metadata = data.metadata ?? {};
-  const payloadHash = createPartnerHandoffPayloadHash({
+  const payloadHash = createExternalPartnerHandoffPayloadHash({
     sweepBatchId: data.sweepBatchId,
     partnerName: data.partnerName,
     partnerReference: data.partnerReference,
@@ -1000,6 +1004,12 @@ export async function upsertPartnerHandoff(data: {
     }
 
     const timestamp = new Date();
+    const isSubmittedOrLater = ['SUBMITTED', 'ACKNOWLEDGED', 'COMPLETED'].includes(
+      data.handoffStatus,
+    );
+    const isAcknowledgedOrCompleted = ['ACKNOWLEDGED', 'COMPLETED'].includes(data.handoffStatus);
+    const isCompleted = data.handoffStatus === 'COMPLETED';
+    const isFailed = data.handoffStatus === 'FAILED';
     const result = await client.query<PartnerHandoff>(
       `INSERT INTO partner_handoffs (
           sweep_batch_id,
@@ -1041,11 +1051,11 @@ export async function upsertPartnerHandoff(data: {
         data.handoffStatus,
         payloadHash,
         data.evidenceReference ?? null,
-        ['SUBMITTED', 'ACKNOWLEDGED', 'COMPLETED'].includes(data.handoffStatus) ? timestamp : null,
-        ['ACKNOWLEDGED', 'COMPLETED'].includes(data.handoffStatus) ? timestamp : null,
-        data.handoffStatus === 'COMPLETED' ? timestamp : null,
-        data.handoffStatus === 'FAILED' ? timestamp : null,
-        ['ACKNOWLEDGED', 'COMPLETED'].includes(data.handoffStatus) ? timestamp : null,
+        isSubmittedOrLater ? timestamp : null,
+        isAcknowledgedOrCompleted ? timestamp : null,
+        isCompleted ? timestamp : null,
+        isFailed ? timestamp : null,
+        isAcknowledgedOrCompleted ? timestamp : null,
         JSON.stringify(metadata),
       ],
     );
@@ -1370,7 +1380,10 @@ export async function listLedgerEntryAccountingProjections(filters?: {
   }
 
   const projections: ReturnType<typeof projectLedgerEntryAccountingState>[] = [];
-  const chunkSize = Math.max(limit * 4, 50);
+  const chunkSize = Math.max(
+    limit * ACCOUNTING_STATE_FILTER_CHUNK_MULTIPLIER,
+    ACCOUNTING_STATE_FILTER_MIN_CHUNK_SIZE,
+  );
   let rawOffset = 0;
   let filteredOffset = offset;
 
@@ -1819,7 +1832,7 @@ export async function upsertTreasuryPartnerHandoff(data: TreasuryPartnerHandoffI
 
     if (existing.rows[0]) {
       if (existing.rows[0].latest_event_payload_hash !== payloadHash) {
-        throw new BankPayoutConflictError(
+        throw new TreasuryPartnerHandoffConflictError(
           'Treasury partner handoff already exists with conflicting payload',
         );
       }
@@ -1937,7 +1950,7 @@ export async function appendTreasuryPartnerHandoffEvidence(
 
     if (existingEvent.rows[0]) {
       if (existingEvent.rows[0].payload_hash !== payloadHash) {
-        throw new BankPayoutConflictError(
+        throw new TreasuryPartnerHandoffConflictError(
           'Duplicate treasury partner evidence event with conflicting payload',
         );
       }

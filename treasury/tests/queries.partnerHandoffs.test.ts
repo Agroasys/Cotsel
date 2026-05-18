@@ -13,10 +13,10 @@ jest.mock('../src/database/connection', () => ({
   },
 }));
 
-import { BankPayoutConflictError } from '../src/core/bankPayout';
 import {
   createTreasuryPartnerHandoffEvidencePayloadHash,
   createTreasuryPartnerHandoffPayloadHash,
+  TreasuryPartnerHandoffConflictError,
   type TreasuryPartnerHandoffEvidencePayloadHashInput,
   type TreasuryPartnerHandoffPayloadHashInput,
 } from '../src/core/treasuryPartnerHandoff';
@@ -258,7 +258,7 @@ describe('treasury partner handoff queries', () => {
         actor: 'Treasury Operator',
         initiatedAt,
       }),
-    ).rejects.toBeInstanceOf(BankPayoutConflictError);
+    ).rejects.toBeInstanceOf(TreasuryPartnerHandoffConflictError);
   });
 
   it('treats identical treasury partner evidence as idempotent replay', async () => {
@@ -338,7 +338,7 @@ describe('treasury partner handoff queries', () => {
       observedAt,
     });
 
-    await expect(resultPromise).rejects.toBeInstanceOf(BankPayoutConflictError);
+    await expect(resultPromise).rejects.toBeInstanceOf(TreasuryPartnerHandoffConflictError);
     await expect(resultPromise).rejects.toThrow(/conflicting payload/i);
 
     expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');

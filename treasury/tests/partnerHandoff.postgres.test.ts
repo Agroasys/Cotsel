@@ -356,6 +356,6 @@ describe('treasury partner handoff routes (postgres)', () => {
       error: { code: string; message: string };
       code: string;
     };
-    expect(conflictingEvidencePayload.code).toBe('BANK_PAYOUT_CONFLICT');
+    expect(conflictingEvidencePayload.code).toBe('TREASURY_PARTNER_HANDOFF_CONFLICT');
   });
 });
