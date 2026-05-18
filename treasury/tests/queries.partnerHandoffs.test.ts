@@ -4,9 +4,6 @@ const mockPoolConnect = jest.fn();
 const baseNow = new Date('2024-01-01T00:00:00.000Z');
 const OBSERVATION_DELAY_MS = 15 * 60 * 1000;
 
-let initiatedAt: Date;
-let observedAt: Date;
-
 jest.mock('../src/database/connection', () => ({
   pool: {
     connect: mockPoolConnect,
@@ -78,11 +75,15 @@ function createEvidencePayloadHash(
   });
 }
 
+function createHandoffTimeline() {
+  const initiatedAt = new Date(baseNow);
+  const observedAt = new Date(baseNow.getTime() + OBSERVATION_DELAY_MS);
+  return { initiatedAt, observedAt };
+}
+
 describe('treasury partner handoff queries', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    initiatedAt = new Date(baseNow.getTime());
-    observedAt = new Date(baseNow.getTime() + OBSERVATION_DELAY_MS);
     mockPoolConnect.mockResolvedValue({
       query: mockClientQuery,
       release: mockClientRelease,
@@ -90,6 +91,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('writes a new treasury partner handoff inside one transaction', async () => {
+    const { initiatedAt } = createHandoffTimeline();
     const latestEventPayloadHash = createHandoffPayloadHash(initiatedAt);
 
     mockClientQuery
@@ -157,6 +159,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('rolls back and releases when a treasury partner handoff insert fails', async () => {
+    const { initiatedAt } = createHandoffTimeline();
     const insertError = new Error('insert failed');
 
     mockClientQuery
@@ -191,6 +194,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('treats an identical treasury partner handoff payload as idempotent replay', async () => {
+    const { initiatedAt } = createHandoffTimeline();
     const payloadHash = createHandoffPayloadHash(initiatedAt);
 
     mockClientQuery
@@ -228,6 +232,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('rejects conflicting treasury partner handoff payloads for the same ledger entry', async () => {
+    const { initiatedAt } = createHandoffTimeline();
     const existingPayloadHash = createHandoffPayloadHash(initiatedAt);
 
     mockClientQuery
@@ -263,6 +268,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('treats identical treasury partner evidence as idempotent replay', async () => {
+    const { observedAt } = createHandoffTimeline();
     const payloadHash = createEvidencePayloadHash(observedAt);
 
     mockClientQuery
@@ -311,6 +317,7 @@ describe('treasury partner handoff queries', () => {
   });
 
   it('rejects conflicting treasury partner evidence', async () => {
+    const { observedAt } = createHandoffTimeline();
     const existingPayloadHash = createEvidencePayloadHash(observedAt);
 
     mockClientQuery
