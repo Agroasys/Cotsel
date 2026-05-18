@@ -82,10 +82,12 @@ function createHandoffTimeline() {
   return { initiatedAt, observedAt };
 }
 
-function findExecutedQuery(sqlFragment: string) {
+type ExecutedQueryCall = [sql: string, params?: unknown];
+
+function findExecutedQuery(sqlFragment: string): ExecutedQueryCall | undefined {
   return mockClientQuery.mock.calls.find(
     (call) => typeof call[0] === 'string' && call[0].includes(sqlFragment),
-  );
+  ) as ExecutedQueryCall | undefined;
 }
 
 describe('treasury partner handoff queries', () => {
