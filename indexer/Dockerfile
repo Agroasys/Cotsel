@@ -25,7 +25,7 @@ COPY treasury/package.json treasury/package.json
 COPY patches patches
 
 RUN pnpm install --frozen-lockfile --ignore-scripts
-RUN npx patch-package --error-on-fail
+RUN pnpm --filter indexer exec patch-package --patch-dir ../patches --error-on-fail
 
 COPY indexer indexer
 
@@ -59,7 +59,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
-  && npx patch-package --error-on-fail \
+  && (cd indexer && npx --yes patch-package@8.0.1 --patch-dir ../patches --error-on-fail) \
   && pnpm store prune
 
 COPY --from=builder /app/indexer/package.json /app/indexer/package.json

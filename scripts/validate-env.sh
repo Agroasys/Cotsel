@@ -42,6 +42,25 @@ load_env_file() {
   fi
 }
 
+count_placeholder_assignments() {
+  local file="$1"
+  awk '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { next }
+    /^[A-Z0-9_]+=.*<[^>]+>.*$/ { count += 1 }
+    END { print count + 0 }
+  ' "$file"
+}
+
+require_boolean_env() {
+  local key="$1"
+  local value="${!key:-false}"
+  if [[ "$value" != "true" && "$value" != "false" ]]; then
+    echo "${key} must be true or false" >&2
+    exit 1
+  fi
+}
+
 ORIGINAL_ENV_KEYS=()
 ORIGINAL_ENV_VALUES=()
 while IFS='=' read -r key value; do
@@ -58,6 +77,13 @@ restore_external_environment_overrides() {
 }
 
 if [[ -f ".env.runtime" ]]; then
+  runtime_placeholder_count="$(count_placeholder_assignments ".env.runtime")"
+  if [[ "$runtime_placeholder_count" -gt 0 ]]; then
+    echo ".env.runtime contains placeholder markers like <id> or <secret>." >&2
+    echo "Replace every placeholder value before running profile '$PROFILE'." >&2
+    exit 1
+  fi
+
   load_env_file ".env.runtime"
   restore_external_environment_overrides
 else
@@ -210,6 +236,54 @@ if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e" || "$PROFILE" == 
   if [[ "${RECONCILIATION_NOTIFICATIONS_ENABLED:-false}" == "true" && -z "${RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL:-}" ]]; then
     echo "RECONCILIATION_NOTIFICATIONS_WEBHOOK_URL is required when RECONCILIATION_NOTIFICATIONS_ENABLED=true" >&2
     exit 1
+  fi
+
+  feature_toggle_keys=(
+    TRUSTED_SESSION_EXCHANGE_ENABLED
+    AUTH_ADMIN_CONTROL_ENABLED
+    GATEWAY_SETTLEMENT_INGRESS_ENABLED
+    GATEWAY_SETTLEMENT_CALLBACK_ENABLED
+  )
+  for key in "${feature_toggle_keys[@]}"; do
+    require_boolean_env "$key"
+  done
+
+  if [[ "${TRUSTED_SESSION_EXCHANGE_ENABLED:-false}" == "true" && -z "${TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON:-}" ]]; then
+    echo "TRUSTED_SESSION_EXCHANGE_API_KEYS_JSON is required when TRUSTED_SESSION_EXCHANGE_ENABLED=true" >&2
+    exit 1
+  fi
+
+  if [[ "${AUTH_ADMIN_CONTROL_ENABLED:-false}" == "true" ]]; then
+    if [[ -z "${AUTH_ADMIN_CONTROL_API_KEYS_JSON:-}" ]]; then
+      echo "AUTH_ADMIN_CONTROL_API_KEYS_JSON is required when AUTH_ADMIN_CONTROL_ENABLED=true" >&2
+      exit 1
+    fi
+    if [[ -z "${AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS:-}" ]]; then
+      echo "AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS is required when AUTH_ADMIN_CONTROL_ENABLED=true" >&2
+      exit 1
+    fi
+  fi
+
+  if [[ "${GATEWAY_SETTLEMENT_INGRESS_ENABLED:-false}" == "true" ]]; then
+    if [[ -z "${GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON:-}" && -z "${GATEWAY_SETTLEMENT_SERVICE_SHARED_SECRET:-}" ]]; then
+      echo "GATEWAY_SETTLEMENT_INGRESS_ENABLED requires GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON or GATEWAY_SETTLEMENT_SERVICE_SHARED_SECRET" >&2
+      exit 1
+    fi
+  fi
+
+  if [[ "${GATEWAY_SETTLEMENT_CALLBACK_ENABLED:-false}" == "true" ]]; then
+    if [[ -z "${GATEWAY_SETTLEMENT_CALLBACK_URL:-}" ]]; then
+      echo "GATEWAY_SETTLEMENT_CALLBACK_URL is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true" >&2
+      exit 1
+    fi
+    if [[ -z "${GATEWAY_SETTLEMENT_CALLBACK_API_KEY:-}" ]]; then
+      echo "GATEWAY_SETTLEMENT_CALLBACK_API_KEY is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true" >&2
+      exit 1
+    fi
+    if [[ -z "${GATEWAY_SETTLEMENT_CALLBACK_API_SECRET:-}" ]]; then
+      echo "GATEWAY_SETTLEMENT_CALLBACK_API_SECRET is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true" >&2
+      exit 1
+    fi
   fi
 
   rate_limit_service_prefixes=(AUTH RICARDIAN TREASURY ORACLE GATEWAY)

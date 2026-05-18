@@ -68,7 +68,7 @@ scripts/deploy.sh
 
 The script runs fully automated:
 
-1. Checks `.env.runtime` exists and contains no unfilled placeholders
+1. Checks `.env.runtime` exists and contains no placeholder markers
 2. Rejects any conflicting `.env.*` files
 3. Validates every required env var
 4. Builds all container images
@@ -140,8 +140,8 @@ These commands read `.env.runtime` directly — no additional setup required.
 **`FAIL: .env.runtime not found`**  
 Run `cp .env.runtime.example .env.runtime` and fill in all values.
 
-**`FAIL: .env.runtime contains N unfilled placeholder value(s)`**  
-Search for lines matching `KEY=<something>` in `.env.runtime` and fill them in.
+**`.env.runtime contains placeholder markers like <id> or <secret>.`**
+Replace every placeholder marker with a real value before deploying.
 
 **`FAIL: .env must not exist`**  
 Remove the conflicting file: `rm .env`

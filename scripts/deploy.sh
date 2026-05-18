@@ -48,23 +48,18 @@ if [[ ! -f "$RUNTIME_ENV" ]]; then
   See docs/runbooks/vm-deploy.md for the complete procedure."
 fi
 
-for conflict in ".env" ".env.local" ".env.staging-e2e" ".env.staging-e2e-real"; do
-  if [[ -e "$conflict" ]]; then
-    fail "$conflict must not exist when deploying from $RUNTIME_ENV.
-  It creates ambiguity about which values are active.
-  Remove it:
-    rm $conflict"
+while IFS= read -r conflict; do
+  if [[ "$conflict" == "$RUNTIME_ENV" || "$conflict" == *.example ]]; then
+    continue
   fi
-done
 
-# Detect unfilled placeholder values written as KEY=<something>
-unfilled="$(grep -cE '^[A-Z_]+=<[^>]+>' "$RUNTIME_ENV" 2>/dev/null || true)"
-if [[ "${unfilled}" -gt 0 ]]; then
-  fail "$RUNTIME_ENV contains ${unfilled} line(s) with unfilled placeholder values (e.g. KEY=<id>).
-  Fill in every required field before deploying."
-fi
+  fail "$conflict must not exist when deploying from $RUNTIME_ENV.
+It creates ambiguity about which values are active.
+Remove it:
+  rm $conflict"
+done < <(find . -maxdepth 1 -type f -name '.env*' -exec basename {} \; | sort)
 
-note "$RUNTIME_ENV found — no conflicting env files — no unfilled placeholders"
+note "$RUNTIME_ENV found — no conflicting env files"
 
 # ── 2. Validate all required env vars ────────────────────────────────────────
 
