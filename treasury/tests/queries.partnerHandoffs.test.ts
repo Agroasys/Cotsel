@@ -88,8 +88,7 @@ function findExecutedQuery(sqlFragment: string): ExecutedQueryCall | undefined {
   return mockClientQuery.mock.calls.find(
     (call): call is ExecutedQueryCall =>
       Array.isArray(call) &&
-      call.length >= 1 &&
-      call.length <= 2 &&
+      (call.length === 1 || call.length === 2) &&
       typeof call[0] === 'string' &&
       call[0].includes(sqlFragment),
   );
@@ -101,7 +100,12 @@ function expectReleaseCalledAfterLastQuery(queryMock: jest.Mock, releaseMock: je
   if (lastQueryInvocationOrder === undefined) {
     throw new Error('Expected at least one query invocation');
   }
-  expect(releaseMock.mock.invocationCallOrder[0]).toBeGreaterThan(lastQueryInvocationOrder);
+  const releaseInvocationCallOrder = releaseMock.mock.invocationCallOrder;
+  const firstReleaseInvocationOrder = releaseInvocationCallOrder[0];
+  if (firstReleaseInvocationOrder === undefined) {
+    throw new Error('Expected release to be called at least once');
+  }
+  expect(firstReleaseInvocationOrder).toBeGreaterThan(lastQueryInvocationOrder);
 }
 
 describe('treasury partner handoff queries', () => {
