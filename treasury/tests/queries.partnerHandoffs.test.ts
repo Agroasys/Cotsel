@@ -1,7 +1,8 @@
 const mockClientQuery = jest.fn();
 const mockClientRelease = jest.fn();
 const mockPoolConnect = jest.fn();
-const baseNow = new Date('2024-01-01T00:00:00.000Z');
+// Intentionally fixed timestamp for deterministic, time-based test behavior.
+const FIXED_TEST_DATE = new Date('2024-01-01T00:00:00.000Z');
 const OBSERVATION_DELAY_MS = 15 * 60 * 1000;
 
 jest.mock('../src/database/connection', () => ({
@@ -76,9 +77,15 @@ function createEvidencePayloadHash(
 }
 
 function createHandoffTimeline() {
-  const initiatedAt = new Date(baseNow);
-  const observedAt = new Date(baseNow.getTime() + OBSERVATION_DELAY_MS);
+  const initiatedAt = new Date(FIXED_TEST_DATE);
+  const observedAt = new Date(FIXED_TEST_DATE.getTime() + OBSERVATION_DELAY_MS);
   return { initiatedAt, observedAt };
+}
+
+function findExecutedQuery(sqlFragment: string) {
+  return mockClientQuery.mock.calls.find(
+    (call) => typeof call[0] === 'string' && call[0].includes(sqlFragment),
+  );
 }
 
 describe('treasury partner handoff queries', () => {
@@ -125,8 +132,10 @@ describe('treasury partner handoff queries', () => {
     });
 
     expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN');
-    expect(mockClientQuery.mock.calls[3][0]).toContain('INSERT INTO treasury_partner_handoffs');
-    expect(mockClientQuery.mock.calls[3][1]).toEqual([
+    const insertCall = findExecutedQuery('INSERT INTO treasury_partner_handoffs');
+    expect(insertCall).toBeDefined();
+    expect(insertCall?.[0]).toContain('INSERT INTO treasury_partner_handoffs');
+    expect(insertCall?.[1]).toEqual([
       11,
       'bridge',
       'bridge-handoff-11',
@@ -184,7 +193,7 @@ describe('treasury partner handoff queries', () => {
     ).rejects.toThrow(insertError);
 
     expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN');
-    expect(mockClientQuery.mock.calls[3][0]).toContain('INSERT INTO treasury_partner_handoffs');
+    expect(findExecutedQuery('INSERT INTO treasury_partner_handoffs')).toBeDefined();
     expect(mockClientQuery).toHaveBeenNthCalledWith(5, 'ROLLBACK');
     expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
