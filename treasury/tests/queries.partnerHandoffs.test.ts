@@ -1,5 +1,12 @@
-const mockClientQuery = jest.fn();
-const mockClientRelease = jest.fn();
+let callSequence: Array<'query' | 'release'> = [];
+const queryResponseMock = jest.fn();
+const mockClientQuery = jest.fn((...args) => {
+  callSequence.push('query');
+  return queryResponseMock(...args);
+});
+const mockClientRelease = jest.fn(() => {
+  callSequence.push('release');
+});
 const mockPoolConnect = jest.fn();
 // Intentionally fixed timestamp for deterministic, time-based test behavior.
 const FIXED_TEST_DATE = new Date('2024-01-01T00:00:00.000Z');
@@ -94,23 +101,24 @@ function findExecutedQuery(sqlFragment: string): ExecutedQueryCall | undefined {
   );
 }
 
-function expectReleaseCalledAfterLastQuery(queryMock: jest.Mock, releaseMock: jest.Mock) {
-  const queryInvocationCallOrder = queryMock.mock.invocationCallOrder;
-  const lastQueryInvocationOrder = queryInvocationCallOrder[queryInvocationCallOrder.length - 1];
-  if (lastQueryInvocationOrder === undefined) {
+function expectReleaseCalledAfterLastQuery(sequence: Array<'query' | 'release'>) {
+  const lastQueryIndex = sequence.lastIndexOf('query');
+  if (lastQueryIndex === -1) {
     throw new Error('Expected at least one query invocation');
   }
-  const releaseInvocationCallOrder = releaseMock.mock.invocationCallOrder;
-  const firstReleaseInvocationOrder = releaseInvocationCallOrder[0];
-  if (firstReleaseInvocationOrder === undefined) {
+
+  const firstReleaseIndex = sequence.indexOf('release');
+  if (firstReleaseIndex === -1) {
     throw new Error('Expected release to be called at least once');
   }
-  expect(firstReleaseInvocationOrder).toBeGreaterThan(lastQueryInvocationOrder);
+
+  expect(firstReleaseIndex).toBeGreaterThan(lastQueryIndex);
 }
 
 describe('treasury partner handoff queries', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    callSequence = [];
     mockPoolConnect.mockResolvedValue({
       query: mockClientQuery,
       release: mockClientRelease,
@@ -121,7 +129,7 @@ describe('treasury partner handoff queries', () => {
     const { initiatedAt } = createHandoffTimeline();
     const latestEventPayloadHash = createHandoffPayloadHash(initiatedAt);
 
-    mockClientQuery
+    queryResponseMock
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
         rows: [{ id: 11, trade_id: 'trade-1' }],
@@ -155,31 +163,32 @@ describe('treasury partner handoff queries', () => {
     const insertCall = findExecutedQuery('INSERT INTO treasury_partner_handoffs');
     expect(insertCall).toBeDefined();
     expect(insertCall?.[0]).toContain('INSERT INTO treasury_partner_handoffs');
-    expect(insertCall?.[1]).toEqual([
-      11,
-      'bridge',
-      'bridge-handoff-11',
-      'SUBMITTED',
-      'payout-11',
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      'Treasury Operator',
-      null,
-      null,
-      latestEventPayloadHash,
-      JSON.stringify({}),
-      initiatedAt,
-    ]);
+    const expectedInsertParams = [
+      11, // ledger_entry_id
+      'bridge', // partner_code
+      'bridge-handoff-11', // handoff_reference
+      'SUBMITTED', // partner_status
+      'payout-11', // payout_reference
+      null, // transfer_reference
+      null, // drain_reference
+      null, // destination_external_account_id
+      null, // liquidation_address_id
+      null, // source_amount
+      null, // source_currency
+      null, // destination_amount
+      null, // destination_currency
+      'Treasury Operator', // actor
+      null, // note
+      null, // failure_code
+      latestEventPayloadHash, // latest_event_payload_hash
+      JSON.stringify({}), // metadata
+      initiatedAt, // initiated_at
+    ];
+    expect(insertCall?.[1]).toEqual(expectedInsertParams);
     expect(mockClientQuery).toHaveBeenNthCalledWith(5, 'COMMIT');
     expect(mockClientQuery).not.toHaveBeenCalledWith('ROLLBACK');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
-    expectReleaseCalledAfterLastQuery(mockClientQuery, mockClientRelease);
+    expectReleaseCalledAfterLastQuery(callSequence);
     expect(result.created).toBe(true);
     expect(result.idempotentReplay).toBe(false);
     expect(result.handoff.id).toBe(41);
@@ -189,7 +198,7 @@ describe('treasury partner handoff queries', () => {
     const { initiatedAt } = createHandoffTimeline();
     const insertError = new Error('insert failed');
 
-    mockClientQuery
+    queryResponseMock
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
         rows: [{ id: 11, trade_id: 'trade-1' }],
@@ -215,14 +224,14 @@ describe('treasury partner handoff queries', () => {
     expect(mockClientQuery).toHaveBeenNthCalledWith(5, 'ROLLBACK');
     expect(mockClientQuery).not.toHaveBeenCalledWith('COMMIT');
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
-    expectReleaseCalledAfterLastQuery(mockClientQuery, mockClientRelease);
+    expectReleaseCalledAfterLastQuery(callSequence);
   });
 
   it('treats an identical treasury partner handoff payload as idempotent replay', async () => {
     const { initiatedAt } = createHandoffTimeline();
     const payloadHash = createHandoffPayloadHash(initiatedAt);
 
-    mockClientQuery
+    queryResponseMock
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
         rows: [{ id: 11, trade_id: 'trade-1' }],
@@ -262,7 +271,7 @@ describe('treasury partner handoff queries', () => {
     const { initiatedAt } = createHandoffTimeline();
     const existingPayloadHash = createHandoffPayloadHash(initiatedAt);
 
-    mockClientQuery
+    queryResponseMock
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
         rows: [{ id: 11, trade_id: 'trade-1' }],
@@ -302,7 +311,7 @@ describe('treasury partner handoff queries', () => {
     const { observedAt } = createHandoffTimeline();
     const payloadHash = createEvidencePayloadHash(observedAt);
 
-    mockClientQuery
+    queryResponseMock
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
         rows: [
@@ -351,7 +360,7 @@ describe('treasury partner handoff queries', () => {
     const { observedAt } = createHandoffTimeline();
     const existingPayloadHash = createEvidencePayloadHash(observedAt);
 
-    mockClientQuery
+    queryResponseMock
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
         rows: [
