@@ -84,6 +84,21 @@ type TradeEvent @entity {
   claimType: ClaimType
   claimRecipient: String
   claimAmount: BigInt
+
+  # RelayedActionExecuted specific
+  relayedAction: String
+  relayedUser: String
+  relayedRelayer: String
+
+  # GaslessTradeFunded specific
+  gaslessBuyer: String
+  usdcAuthorizationNonce: String
+
+  # SupplierPayoutTransferred specific
+  supplierPayoutRecipient: String
+  supplierPayoutAmount: BigInt
+  supplierPayoutType: ClaimType
+  supplierPayoutTriggeredBy: String
 }
 
 enum ClaimType {
@@ -262,6 +277,13 @@ type SystemEvent @entity {
 
   # Claimed specific
   claimAmount: BigInt
+
+  # AuthorizationConsumed specific
+  authorizationUser: String
+  authorizationAction: String
+  authorizationNonce: BigInt
+  authorizationRelayer: String
+  authorizationDeadline: BigInt
 
   # Treasury claim and payout-receiver governance specific
   proposalId: String @index

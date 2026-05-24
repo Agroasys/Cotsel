@@ -114,6 +114,50 @@ export interface BuyerLockPayload {
  */
 export type TradeParameters = BuyerLockPayload;
 
+export enum SponsoredAction {
+  CREATE_TRADE = 0,
+  OPEN_DISPUTE = 1,
+  CANCEL_LOCKED_TIMEOUT = 2,
+  REFUND_IN_TRANSIT_TIMEOUT = 3,
+  FINALIZE_AFTER_DISPUTE_WINDOW = 4,
+}
+
+export interface GaslessCreateTradeAuthorization {
+  buyer: string;
+  supplier: string;
+  totalAmount: bigint;
+  logisticsAmount: bigint;
+  platformFeesAmount: bigint;
+  supplierFirstTranche: bigint;
+  supplierSecondTranche: bigint;
+  ricardianHash: string;
+  nonce: bigint;
+  deadline: number;
+  signature: string;
+}
+
+export interface GaslessUserActionAuthorization {
+  user: string;
+  action: SponsoredAction;
+  tradeId: bigint;
+  nonce: bigint;
+  deadline: number;
+  signature: string;
+}
+
+export interface UsdcReceiveAuthorization {
+  from: string;
+  to: string;
+  value: bigint;
+  validAfter: number;
+  validBefore: number;
+  nonce: string;
+  signature: string;
+  v: number;
+  r: string;
+  s: string;
+}
+
 export interface TradeResult {
   txHash: string;
   blockNumber: number;

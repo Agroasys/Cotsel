@@ -1,6 +1,6 @@
 # ADR-0142: Pull-Over-Push Claim Settlement Model
 
-- Status: Accepted
+- Status: Superseded for supplier payouts by issue #528; still accepted for buyer refunds and treasury claim flows
 - Date: 2026-02-28
 - Related issue: [#142](https://github.com/Agroasys/Cotsel/issues/142)
 
@@ -18,6 +18,14 @@ Adopt a pull-over-push settlement model:
 - Claim-path control is split from global protocol pause:
   - `claim()` remains available during global pause.
   - `pauseClaims()` / `unpauseClaims()` provide dedicated emergency claim freeze.
+
+## Superseding Decision
+
+Issue `#528` restores direct supplier payout for active settlement flows. The current hybrid model is:
+
+- Supplier first tranche, supplier second tranche, and dispute `RESOLVE` supplier proceeds transfer directly.
+- Buyer refunds, treasury logistics/platform fee entitlements, and treasury sweeps remain claim-based.
+- Direct supplier payout emits `SupplierPayoutTransferred`; claim-based entitlements continue to emit `ClaimableAccrued`.
 
 ## Alternatives Considered
 
@@ -52,8 +60,9 @@ Adopt a pull-over-push settlement model:
 ## Compatibility and Migration Notes
 
 - Trade lifecycle semantics remain the same (LOCKED -> IN_TRANSIT -> CLOSED / dispute outcomes).
-- Payout delivery changed from immediate transfer to accrued entitlement + explicit claim withdrawal.
-- Event model now includes deterministic entitlement/claim evidence (`ClaimableAccrued`, `Claimed`).
+- Buyer refund and treasury payout delivery changed from immediate transfer to accrued entitlement + explicit claim withdrawal.
+- Supplier payout delivery is direct for active settlement flows after issue `#528`.
+- Event model includes deterministic claim evidence (`ClaimableAccrued`, `Claimed`) and supplier payout execution evidence (`SupplierPayoutTransferred`).
 - In-flight trades keep their current state semantics. Entitlements accrue when transition functions execute under the pull model; no retroactive "backfill transfer" is required for already-paid legacy transitions.
 
 ## Evidence

@@ -118,7 +118,8 @@ contract Handler is Test {
         vm.prank(oracle);
         escrow.releaseFundsStage1(tradeId);
         (,,,,,, uint256 logistics,uint256 fees, uint256 tranche1,,,) = escrow.trades(tradeId);
-        totalClaimableUsdc += logistics + tranche1 + fees;
+        totalClaimableUsdc += logistics + fees;
+        totalWithdrawn += tranche1;
         releaseStage1Triggered++;
     }
 
@@ -150,7 +151,7 @@ contract Handler is Test {
         vm.prank(oracle);
         escrow.finalizeAfterDisputeWindow(tradeId);
         (,,,,,,,,,uint256 tranche2,,) = escrow.trades(tradeId);
-        totalClaimableUsdc += tranche2;
+        totalWithdrawn += tranche2;
         releaseStage2Triggered++;
     }
 
@@ -188,7 +189,7 @@ contract Handler is Test {
         }
         uint256 proposalId = random_proposalId % disputeCount;
         
-        (uint256 tradeId,,,bool executed,,) = escrow.disputeProposals(proposalId);
+        (uint256 tradeId,AgroasysEscrow.DisputeStatus disputeStatus,,bool executed,,) = escrow.disputeProposals(proposalId);
         
         (,,,,,,, ,, uint256 tranche2,,) = escrow.trades(tradeId);
         
@@ -200,7 +201,11 @@ contract Handler is Test {
         
         if (executedNow && !executed) {
             disputeSolved++;
-            totalClaimableUsdc += tranche2;
+            if (disputeStatus == AgroasysEscrow.DisputeStatus.RESOLVE) {
+                totalWithdrawn += tranche2;
+            } else {
+                totalClaimableUsdc += tranche2;
+            }
         }
     }
 }

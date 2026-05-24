@@ -1,8 +1,14 @@
-# Pull-Over-Push Claim Flow
+# Claim and Supplier Payout Flow
 
 ## Purpose
 
-This runbook describes the escrow payout model after issue `#142` migration from direct push transfers to pull-based `claim()` settlement.
+This runbook describes the current escrow payout model after the issue `#142` claim migration and the issue `#528` supplier-payout update.
+
+Current model:
+
+- Supplier stage payouts are transferred directly by escrow transition functions.
+- Buyer refunds and treasury/logistics/platform fee entitlements accrue in `claimableUsdc`.
+- Treasury entitlements are swept through `claimTreasury()` to the configured treasury payout receiver.
 
 ## Decision Record
 
@@ -12,16 +18,22 @@ This runbook describes the escrow payout model after issue `#142` migration from
 
 ## Behavior Change
 
-- Before: payout transitions (`releaseFundsStage1`, `finalizeAfterDisputeWindow`, timeout handlers, dispute execution) transferred USDC immediately.
-- After: those transitions now accrue claimable balances per recipient in `claimableUsdc`.
-- Recipients must call `claim()` to withdraw accrued USDC.
+- Issue `#142`: buyer refunds and treasury/logistics/platform fee entitlements accrue claimable balances.
+- Issue `#528`: supplier payouts are no longer claim-based in active settlement flows. `releaseFundsStage1`, `finalizeAfterDisputeWindow`, and dispute `RESOLVE` transfer supplier proceeds directly and emit `SupplierPayoutTransferred`.
+- Existing `claim()` remains for buyer refunds and any legacy non-treasury claimable balances.
 
 ## Claim Lifecycle
 
-1. Trade transition executes (stage1/stage2/timeout/dispute).
+1. Refund or treasury-bearing transition executes.
 2. Escrow emits `ClaimableAccrued(tradeId, recipient, amount, claimType)`.
-3. Recipient calls `claim()`.
-4. Escrow emits `Claimed(claimant, amount)`.
+3. Buyer refund recipient calls `claim()`, or treasury identity/admin calls `claimTreasury()`.
+4. Escrow emits `Claimed(claimant, amount)` or `TreasuryClaimed(treasuryIdentity, payoutReceiver, amount, triggeredBy)`.
+
+Supplier payout lifecycle:
+
+1. Supplier-bearing transition executes.
+2. Escrow transfers USDC directly to the supplier.
+3. Escrow emits `SupplierPayoutTransferred(tradeId, supplier, amount, claimType, triggeredBy)`.
 
 ## Treasury Identity vs Payout Receiver
 
@@ -123,17 +135,19 @@ cast call <ESCROW_ADDRESS> "claimableUsdc(address)(uint256)" <RECIPIENT>
 cast call <ESCROW_ADDRESS> "treasuryPayoutAddress()(address)"
 ```
 
-Expected:
+Expected for claim-based balances:
 
 - Non-zero value after accrual events.
 - Zero after successful `claim()`.
 - Treasury sweep always pays the configured `treasuryPayoutAddress`.
+- Supplier stage payouts should not create `claimableUsdc(supplier)` in active settlement flows.
 
 ## Event Mapping
 
 - `ClaimableAccrued`: deterministic entitlement creation.
 - `Claimed`: successful withdrawal execution.
 - `TreasuryClaimed`: treasury-identity entitlement payout execution to payout receiver.
+- `SupplierPayoutTransferred`: successful direct supplier payout execution.
 - `TreasuryPayoutAddressUpdateProposed` / `...Approved` / `...Updated` / `...ProposalExpiredCancelled`: payout receiver governance lineage.
 - Existing business events (`FundsReleasedStage1`, `FinalTrancheReleased`, `DisputePayout`, timeout events) still mark trade-state transitions.
 
@@ -150,7 +164,7 @@ Expected:
 
 ## Rollback
 
-If rollback is required, revert the pull-over-push PR commit to restore prior direct-transfer behavior. Validate post-rollback with:
+If rollback is required, revert the relevant claim or supplier-payout PR commit chain and validate with:
 
 ```bash
 pnpm --filter ./contracts run compile
@@ -162,7 +176,7 @@ pnpm --filter ./contracts run test
 - Hardhat test suites are the release gate for this migration:
   - `contracts/tests/AgroasysEscrow.ts`
   - `contracts/tests/AgroasysEscrow.claim-security.ts`
-- Foundry coverage for pull-over-push behavior exists in:
+- Foundry coverage for claim and direct supplier-payout behavior exists in:
   - `contracts/foundry/test/AgroasysEscrowFuzz.t.sol`
   - `contracts/foundry/test/AgroasysEscrowInvariant.t.sol`
 - Run Foundry with `pnpm --filter ./contracts run test:foundry` (requires `forge` on `PATH`).

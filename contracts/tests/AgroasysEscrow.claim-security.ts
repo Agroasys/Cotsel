@@ -127,17 +127,13 @@ describe('AgroasysEscrow - Claim Security', function () {
     await usdc.mint(buyer.address, ethers.parseUnits('1000000', 6));
   });
 
-  it('blocks reentrant claim attempts from malicious receiver hooks', async function () {
+  it('blocks supplier payout hook reentrancy from creating claim-side effects', async function () {
     await createTradeToReceiver(ethers.id('claim-reentrancy'));
-    await escrow.connect(oracle).releaseFundsStage1(0);
-
-    expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
-
     await usdc.setHookEnabled(await receiver.getAddress(), true);
     await receiver.configure(true, false);
 
     const receiverBalanceBefore = await usdc.balanceOf(await receiver.getAddress());
-    await receiver.triggerClaim();
+    await escrow.connect(oracle).releaseFundsStage1(0);
 
     expect(await receiver.reentryAttempted()).to.equal(true);
     const lastError = await receiver.lastError();
@@ -162,18 +158,24 @@ describe('AgroasysEscrow - Claim Security', function () {
     );
   });
 
-  it('isolates failed claims so other recipients can still claim', async function () {
+  it('reverts failed direct supplier payout without accruing partial treasury claims', async function () {
     await createTradeToReceiver(ethers.id('claim-failure-isolation'));
-    await escrow.connect(oracle).releaseFundsStage1(0);
-
-    const treasuryClaimable = logisticsAmount + platformFeesAmount;
-    expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
 
     await usdc.setHookEnabled(await receiver.getAddress(), true);
     await receiver.configure(false, true);
 
-    await expect(receiver.triggerClaim()).to.be.revertedWith('hook revert');
-    expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
+    await expect(escrow.connect(oracle).releaseFundsStage1(0)).to.be.revertedWith('hook revert');
+    expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(0);
+    expect(await escrow.claimableUsdc(treasury.address)).to.equal(0);
+
+    const trade = await escrow.trades(0);
+    expect(trade.status).to.equal(0);
+
+    await receiver.configure(false, false);
+    await escrow.connect(oracle).releaseFundsStage1(0);
+
+    const treasuryClaimable = logisticsAmount + platformFeesAmount;
+    expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
 
     const treasuryBefore = await usdc.balanceOf(treasury.address);
     await expect(escrow.connect(treasury).claimTreasury())
@@ -181,7 +183,7 @@ describe('AgroasysEscrow - Claim Security', function () {
       .withArgs(treasury.address, treasury.address, treasuryClaimable, treasury.address);
     expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore + treasuryClaimable);
 
-    expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
+    expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(0);
   });
 
   it('isolates failed treasury sweep so other claim paths remain usable', async function () {

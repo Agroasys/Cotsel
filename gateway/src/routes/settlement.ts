@@ -7,6 +7,7 @@ import { GatewayError } from '../errors';
 import { createIdempotencyMiddleware } from '../middleware/idempotency';
 import { successResponse } from '../responses';
 import { IdempotencyStore } from '../core/idempotencyStore';
+import { GaslessSettlementExecutionService } from '../core/gaslessSettlementExecutionService';
 import { createServiceAuthMiddleware } from '../core/serviceAuth';
 import { SettlementService } from '../core/settlementService';
 import {
@@ -20,6 +21,7 @@ export interface SettlementRouterOptions {
   config: GatewayConfig;
   settlementService: SettlementService;
   settlementStore: SettlementStore;
+  gaslessSettlementService?: GaslessSettlementExecutionService | null;
   nonceStore: { consume(apiKey: string, nonce: string, ttlSeconds: number): Promise<boolean> };
   idempotencyStore: IdempotencyStore;
   lookupServiceApiKey: (
@@ -54,6 +56,14 @@ function optionalString(value: unknown, field: string): string | null {
 function requireNumber(value: unknown, field: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be a number`);
+  }
+
+  return value;
+}
+
+function requireInteger(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be an integer`);
   }
 
   return value;
@@ -261,6 +271,94 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           event: result.event,
           callbackDelivery: result.callbackDelivery,
         };
+      },
+      res,
+      next,
+    ),
+  );
+
+  router.post('/settlement/gasless-executions/create-trade', idempotency, (req, res, next) =>
+    handleRequest(
+      async () => {
+        if (!options.config.gaslessExecutionEnabled || !options.gaslessSettlementService) {
+          throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Gasless execution is disabled', {
+            reason: 'gasless_execution_disabled',
+          });
+        }
+
+        const body = requireObject(req.body, 'body');
+        rejectUnexpectedFields(
+          body,
+          [
+            'action',
+            'handoffId',
+            'chainId',
+            'contractAddress',
+            'expiresAt',
+            'payloadHash',
+            'buyerAddress',
+            'supplierAddress',
+            'totalAmount',
+            'logisticsAmount',
+            'platformFeesAmount',
+            'supplierFirstTranche',
+            'supplierSecondTranche',
+            'ricardianHash',
+            'buyerAuthorization',
+            'usdcAuthorization',
+          ],
+          'body',
+        );
+        const buyerAuthorization = requireObject(body.buyerAuthorization, 'buyerAuthorization');
+        rejectUnexpectedFields(
+          buyerAuthorization,
+          ['nonce', 'deadline', 'signature'],
+          'buyerAuthorization',
+        );
+        const usdcAuthorization = requireObject(body.usdcAuthorization, 'usdcAuthorization');
+        rejectUnexpectedFields(
+          usdcAuthorization,
+          ['from', 'to', 'value', 'validAfter', 'validBefore', 'nonce', 'v', 'r', 's'],
+          'usdcAuthorization',
+        );
+
+        return options.gaslessSettlementService.executeCreateTrade({
+          action: requireString(body.action, 'action') as 'create_trade',
+          handoffId: requireString(body.handoffId, 'handoffId'),
+          chainId: requireInteger(body.chainId, 'chainId'),
+          contractAddress: requireString(body.contractAddress, 'contractAddress'),
+          expiresAt: requireString(body.expiresAt, 'expiresAt'),
+          payloadHash: requireString(body.payloadHash, 'payloadHash'),
+          buyerAddress: requireString(body.buyerAddress, 'buyerAddress'),
+          supplierAddress: requireString(body.supplierAddress, 'supplierAddress'),
+          totalAmount: requireString(body.totalAmount, 'totalAmount'),
+          logisticsAmount: requireString(body.logisticsAmount, 'logisticsAmount'),
+          platformFeesAmount: requireString(body.platformFeesAmount, 'platformFeesAmount'),
+          supplierFirstTranche: requireString(body.supplierFirstTranche, 'supplierFirstTranche'),
+          supplierSecondTranche: requireString(body.supplierSecondTranche, 'supplierSecondTranche'),
+          ricardianHash: requireString(body.ricardianHash, 'ricardianHash'),
+          buyerAuthorization: {
+            nonce: requireString(buyerAuthorization.nonce, 'buyerAuthorization.nonce'),
+            deadline: requireString(buyerAuthorization.deadline, 'buyerAuthorization.deadline'),
+            signature: requireString(buyerAuthorization.signature, 'buyerAuthorization.signature'),
+          },
+          usdcAuthorization: {
+            from: requireString(usdcAuthorization.from, 'usdcAuthorization.from'),
+            to: requireString(usdcAuthorization.to, 'usdcAuthorization.to'),
+            value: requireString(usdcAuthorization.value, 'usdcAuthorization.value'),
+            validAfter: requireString(usdcAuthorization.validAfter, 'usdcAuthorization.validAfter'),
+            validBefore: requireString(
+              usdcAuthorization.validBefore,
+              'usdcAuthorization.validBefore',
+            ),
+            nonce: requireString(usdcAuthorization.nonce, 'usdcAuthorization.nonce'),
+            v: requireInteger(usdcAuthorization.v, 'usdcAuthorization.v'),
+            r: requireString(usdcAuthorization.r, 'usdcAuthorization.r'),
+            s: requireString(usdcAuthorization.s, 'usdcAuthorization.s'),
+          },
+          requestId: getRequestId(req),
+          sourceApiKeyId: getServiceApiKeyId(req),
+        });
       },
       res,
       next,

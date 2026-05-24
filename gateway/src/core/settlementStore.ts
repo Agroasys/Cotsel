@@ -34,6 +34,7 @@ export const SETTLEMENT_CALLBACK_STATUSES = [
 export const SETTLEMENT_EVENT_TYPES = [
   'accepted',
   'queued',
+  'simulation_completed',
   'submitted',
   'confirmed',
   'failed',

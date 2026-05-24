@@ -6,6 +6,7 @@ import type { ethers } from 'ethers';
 import { Interface } from 'ethers';
 import { IERC20__factory } from '../src/types/typechain-types/factories/@openzeppelin/contracts/token/ERC20/IERC20__factory';
 import { TEST_CONFIG, assertRequiredEnv, getBuyerSigner, hasRequiredEnv } from './setup';
+import { SponsoredAction } from '../src/types/trade';
 
 const describeIntegration = hasRequiredEnv ? describe : describe.skip;
 
@@ -33,6 +34,7 @@ type MockContractWithSigner = {
 };
 
 type BuyerSignerLike = Pick<ethers.Signer, 'getAddress' | 'signMessage' | 'provider'>;
+type TypedBuyerSignerLike = BuyerSignerLike & Pick<ethers.Signer, 'signTypedData'>;
 type BuyerSdkContract = BuyerSDK['contract'];
 type BuyerContractConnector = Pick<BuyerSdkContract, 'connect' | 'interface'>;
 type BuyerWriteInvocation = (sdk: BuyerSDK, signer: ethers.Signer) => Promise<unknown>;
@@ -44,9 +46,10 @@ function makeBuyerSigner(address = '0x2222222222222222222222222222222222222222')
   const provider = {
     getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
   };
-  const signer: BuyerSignerLike = {
+  const signer: TypedBuyerSignerLike = {
     getAddress: jest.fn().mockResolvedValue(address),
     signMessage: jest.fn().mockResolvedValue(`0x${'1'.repeat(130)}`),
+    signTypedData: jest.fn().mockResolvedValue(`0x${'4'.repeat(130)}`),
     provider: provider as unknown as ethers.Signer['provider'],
   };
   return {
@@ -70,6 +73,7 @@ function makeSdkUnit() {
   (sdk as unknown as { contract: BuyerContractConnector }).contract = {
     connect,
     interface: TRADE_LOCKED_INTERFACE,
+    getAuthorizationNonce: jest.fn().mockResolvedValue(9n),
   } as unknown as BuyerContractConnector;
   jest.spyOn(sdk, 'getUSDCAllowance').mockResolvedValue(1_000_000n);
   jest.spyOn(sdk, 'getBuyerNonce').mockResolvedValue(7n);
@@ -132,6 +136,82 @@ describe('BuyerSDK unit', () => {
 
     await expect(sdk.approveUSDC(1000000n, signer)).rejects.toThrow('wrong network');
     expect(connectSpy).not.toHaveBeenCalled();
+  });
+
+  test('createGaslessTradeAuthorization builds typed authorization from on-chain nonce', async () => {
+    const { sdk } = makeSdkUnit();
+    const { signer } = makeBuyerSigner();
+
+    const result = await sdk.createGaslessTradeAuthorization(
+      {
+        supplier: '0x1111111111111111111111111111111111111111',
+        totalAmount: 1000000n,
+        logisticsAmount: 0n,
+        platformFeesAmount: 0n,
+        supplierFirstTranche: 400000n,
+        supplierSecondTranche: 600000n,
+        ricardianHash: `0x${'a'.repeat(64)}`,
+        deadline: 123456,
+      },
+      signer,
+    );
+
+    expect(result).toMatchObject({
+      buyer: '0x2222222222222222222222222222222222222222',
+      supplier: '0x1111111111111111111111111111111111111111',
+      totalAmount: 1000000n,
+      nonce: 9n,
+      deadline: 123456,
+      signature: `0x${'4'.repeat(130)}`,
+    });
+  });
+
+  test('createUsdcReceiveAuthorization targets escrow and splits EIP-3009 signature', async () => {
+    const { sdk } = makeSdkUnit();
+    const { signer } = makeBuyerSigner();
+    const signature = `0x${'1'.repeat(64)}${'2'.repeat(64)}1b`;
+    (signer.signTypedData as jest.Mock).mockResolvedValueOnce(signature);
+
+    const result = await sdk.createUsdcReceiveAuthorization(1000000n, signer, {
+      validAfter: 10,
+      validBefore: 20,
+      nonce: `0x${'5'.repeat(64)}`,
+      tokenName: 'Mock USDC',
+    });
+
+    expect(result).toMatchObject({
+      from: '0x2222222222222222222222222222222222222222',
+      to: UNIT_CONFIG.escrowAddress,
+      value: 1000000n,
+      validAfter: 10,
+      validBefore: 20,
+      nonce: `0x${'5'.repeat(64)}`,
+      signature,
+      v: 27,
+      r: `0x${'1'.repeat(64)}`,
+      s: `0x${'2'.repeat(64)}`,
+    });
+  });
+
+  test('createGaslessUserActionAuthorization builds relayed buyer action payloads', async () => {
+    const { sdk } = makeSdkUnit();
+    const { signer } = makeBuyerSigner();
+
+    const result = await sdk.createGaslessUserActionAuthorization(
+      SponsoredAction.OPEN_DISPUTE,
+      42n,
+      signer,
+      654321,
+    );
+
+    expect(result).toEqual({
+      user: '0x2222222222222222222222222222222222222222',
+      action: SponsoredAction.OPEN_DISPUTE,
+      tradeId: 42n,
+      nonce: 9n,
+      deadline: 654321,
+      signature: `0x${'4'.repeat(130)}`,
+    });
   });
 
   test('createTrade should surface tradeId from TradeLocked receipt logs', async () => {
