@@ -21,19 +21,19 @@ import type {
   TypedLogDescription,
   TypedListener,
   TypedContractMethod,
-} from "../common";
+} from "../../../common";
 
-export interface MockUSDCInterface extends Interface {
+export interface HookedMockUSDCInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "allowance"
       | "approve"
-      | "authorizationState"
       | "balanceOf"
       | "decimals"
+      | "hookEnabled"
       | "mint"
       | "name"
-      | "receiveWithAuthorization"
+      | "setHookEnabled"
       | "symbol"
       | "totalSupply"
       | "transfer"
@@ -51,32 +51,22 @@ export interface MockUSDCInterface extends Interface {
     values: [AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "authorizationState",
-    values: [AddressLike, BytesLike]
-  ): string;
-  encodeFunctionData(
     functionFragment: "balanceOf",
     values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "decimals", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "hookEnabled",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(
     functionFragment: "mint",
     values: [AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "receiveWithAuthorization",
-    values: [
-      AddressLike,
-      AddressLike,
-      BigNumberish,
-      BigNumberish,
-      BigNumberish,
-      BytesLike,
-      BigNumberish,
-      BytesLike,
-      BytesLike
-    ]
+    functionFragment: "setHookEnabled",
+    values: [AddressLike, boolean]
   ): string;
   encodeFunctionData(functionFragment: "symbol", values?: undefined): string;
   encodeFunctionData(
@@ -94,16 +84,16 @@ export interface MockUSDCInterface extends Interface {
 
   decodeFunctionResult(functionFragment: "allowance", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "authorizationState",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "decimals", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "hookEnabled",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "mint", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "receiveWithAuthorization",
+    functionFragment: "setHookEnabled",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "symbol", data: BytesLike): Result;
@@ -154,11 +144,11 @@ export namespace TransferEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export interface MockUSDC extends BaseContract {
-  connect(runner?: ContractRunner | null): MockUSDC;
+export interface HookedMockUSDC extends BaseContract {
+  connect(runner?: ContractRunner | null): HookedMockUSDC;
   waitForDeployment(): Promise<this>;
 
-  interface: MockUSDCInterface;
+  interface: HookedMockUSDCInterface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -209,15 +199,11 @@ export interface MockUSDC extends BaseContract {
     "nonpayable"
   >;
 
-  authorizationState: TypedContractMethod<
-    [arg0: AddressLike, arg1: BytesLike],
-    [boolean],
-    "view"
-  >;
-
   balanceOf: TypedContractMethod<[account: AddressLike], [bigint], "view">;
 
   decimals: TypedContractMethod<[], [bigint], "view">;
+
+  hookEnabled: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
   mint: TypedContractMethod<
     [to: AddressLike, amount: BigNumberish],
@@ -227,18 +213,8 @@ export interface MockUSDC extends BaseContract {
 
   name: TypedContractMethod<[], [string], "view">;
 
-  receiveWithAuthorization: TypedContractMethod<
-    [
-      from: AddressLike,
-      to: AddressLike,
-      value: BigNumberish,
-      validAfter: BigNumberish,
-      validBefore: BigNumberish,
-      nonce: BytesLike,
-      v: BigNumberish,
-      r: BytesLike,
-      s: BytesLike
-    ],
+  setHookEnabled: TypedContractMethod<
+    [account: AddressLike, enabled: boolean],
     [void],
     "nonpayable"
   >;
@@ -248,7 +224,7 @@ export interface MockUSDC extends BaseContract {
   totalSupply: TypedContractMethod<[], [bigint], "view">;
 
   transfer: TypedContractMethod<
-    [to: AddressLike, value: BigNumberish],
+    [to: AddressLike, amount: BigNumberish],
     [boolean],
     "nonpayable"
   >;
@@ -278,18 +254,14 @@ export interface MockUSDC extends BaseContract {
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "authorizationState"
-  ): TypedContractMethod<
-    [arg0: AddressLike, arg1: BytesLike],
-    [boolean],
-    "view"
-  >;
-  getFunction(
     nameOrSignature: "balanceOf"
   ): TypedContractMethod<[account: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "decimals"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "hookEnabled"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
     nameOrSignature: "mint"
   ): TypedContractMethod<
@@ -301,19 +273,9 @@ export interface MockUSDC extends BaseContract {
     nameOrSignature: "name"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "receiveWithAuthorization"
+    nameOrSignature: "setHookEnabled"
   ): TypedContractMethod<
-    [
-      from: AddressLike,
-      to: AddressLike,
-      value: BigNumberish,
-      validAfter: BigNumberish,
-      validBefore: BigNumberish,
-      nonce: BytesLike,
-      v: BigNumberish,
-      r: BytesLike,
-      s: BytesLike
-    ],
+    [account: AddressLike, enabled: boolean],
     [void],
     "nonpayable"
   >;
@@ -326,7 +288,7 @@ export interface MockUSDC extends BaseContract {
   getFunction(
     nameOrSignature: "transfer"
   ): TypedContractMethod<
-    [to: AddressLike, value: BigNumberish],
+    [to: AddressLike, amount: BigNumberish],
     [boolean],
     "nonpayable"
   >;

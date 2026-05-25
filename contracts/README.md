@@ -268,7 +268,7 @@ Timelock-based admin addition proposal:
     - Returns: `proposalId`
     - Emits: `OracleUpdateProposed`, `OracleUpdateApproved`
     - Access: `onlyAdmin`
-    - Requires: Minimum 2 admin approvals (even if requiredApprovals == 1)
+    - Requires: Configured admin approval quorum, with deployment enforcing a minimum quorum of 2
 
 19. **`approveOracleUpdate(proposalId)`**
     - Adds admin approval to oracle update proposal
@@ -293,7 +293,7 @@ Timelock-based admin addition proposal:
     - Returns: `proposalId`
     - Emits: `AdminAddProposed`, `AdminAddApproved`
     - Access: `onlyAdmin`
-    - Requires: Minimum 2 admin approvals (even if requiredApprovals == 1)
+    - Requires: Configured admin approval quorum, with deployment enforcing a minimum quorum of 2
 
 23. **`approveAddAdmin(proposalId)`**
     - Adds admin approval to admin addition proposal

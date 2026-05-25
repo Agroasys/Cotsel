@@ -41,6 +41,7 @@ describe('AgroasysEscrow event schema', function () {
       'Paused(address)',
       'PlatformFeesPaidStage1(uint256,address,uint256)',
       'RelayedActionExecuted(address,address,bytes32,uint256)',
+      'RelayerUpdated(address,bool,address)',
       'SupplierPayoutTransferred(uint256,address,uint256,uint8,address)',
       'TradeCancelledAfterLockTimeout(uint256,address,uint256)',
       'TradeLocked(uint256,address,address,uint256,uint256,uint256,uint256,uint256,bytes32)',

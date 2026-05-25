@@ -65,6 +65,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     bytes32 private constant USER_ACTION_AUTHORIZATION_TYPEHASH = keccak256(
         "UserActionAuthorization(address user,uint8 action,uint256 tradeId,uint256 nonce,uint256 deadline)"
     );
+    bytes32 private immutable DOMAIN_SEPARATOR;
 
     // -----------------------------
     // Enums / Structs
@@ -213,6 +214,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
     address[] public admins;
     mapping(address => bool) public isAdmin;
+    mapping(address => bool) public isRelayer;
     uint256 public requiredApprovals;
     mapping(address => uint256) public claimableUsdc;
     uint256 public totalClaimableUsdc;
@@ -280,6 +282,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         bytes32 indexed action,
         uint256 tradeId
     );
+    event RelayerUpdated(address indexed relayer, bool allowed, address indexed updatedBy);
 
     event GaslessTradeFunded(
         uint256 indexed tradeId,
@@ -464,8 +467,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(_usdcToken != address(0), "invalid token");
         require(_oracleAddress != address(0), "invalid oracle");
         require(_treasuryAddress != address(0), "invalid treasury");
-        require(_requiredApprovals > 0, "required approvals must be > 0");
-        require(_admins.length >= 2, "at least 2 admins required");
+        require(_requiredApprovals >= 2, "required approvals must be >= 2");
         require(_admins.length >= _requiredApprovals, "not enough admins");
 
         usdcToken = IERC20(_usdcToken);
@@ -486,6 +488,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         // Can be changed in future versions if needed; keeping minimal for now.
         governanceTimelock = 24 hours;
         oracleActive = true;
+        DOMAIN_SEPARATOR = _buildDomainSeparator();
     }
 
     modifier onlyAdmin() {
@@ -495,6 +498,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
     modifier onlyTreasuryOrAdmin() {
         require(msg.sender == treasuryAddress || isAdmin[msg.sender], "only treasury or admin");
+        _;
+    }
+
+    modifier onlyRelayerOrAdmin() {
+        require(isAdmin[msg.sender] || isRelayer[msg.sender], "only relayer or admin");
         _;
     }
 
@@ -546,6 +554,12 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(claimsPaused, "claims not paused");
         claimsPaused = false;
         emit ClaimsUnpaused(msg.sender);
+    }
+
+    function setRelayer(address relayer, bool allowed) external onlyAdmin {
+        require(relayer != address(0), "invalid relayer");
+        isRelayer[relayer] = allowed;
+        emit RelayerUpdated(relayer, allowed, msg.sender);
     }
 
     /**
@@ -662,7 +676,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         revert("unsupported action");
     }
 
-    function _domainSeparatorV4() internal view returns (bytes32) {
+    function _buildDomainSeparator() internal view returns (bytes32) {
         return keccak256(
             abi.encode(
                 EIP712_DOMAIN_TYPEHASH,
@@ -674,15 +688,21 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         );
     }
 
+    function _domainSeparatorV4() internal view returns (bytes32) {
+        return DOMAIN_SEPARATOR;
+    }
+
     function _hashTypedDataV4(bytes32 structHash) internal view returns (bytes32) {
         return keccak256(abi.encodePacked("\x19\x01", _domainSeparatorV4(), structHash));
     }
 
-    function _consumeAuthorization(address user, SponsoredAction action, uint256 nonce, uint256 deadline) internal {
+    function _requireAuthorization(address user, uint256 nonce, uint256 deadline) internal view {
         require(user != address(0), "invalid user");
         require(block.timestamp <= deadline, "authorization expired");
         require(nonce == authorizationNonces[user], "bad authorization nonce");
+    }
 
+    function _consumeAuthorization(address user, SponsoredAction action, uint256 nonce, uint256 deadline) internal {
         authorizationNonces[user] = nonce + 1;
         emit AuthorizationConsumed(user, _actionName(action), nonce, msg.sender, deadline);
     }
@@ -732,7 +752,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 deadline,
         bytes memory signature
     ) internal {
-        _consumeAuthorization(buyer, SponsoredAction.CREATE_TRADE, nonce, deadline);
+        _requireAuthorization(buyer, nonce, deadline);
 
         address signer = _recoverCreateTradeAuthorization(
             buyer,
@@ -748,6 +768,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             signature
         );
         require(signer == buyer, "bad authorization");
+        _consumeAuthorization(buyer, SponsoredAction.CREATE_TRADE, nonce, deadline);
     }
 
     function _verifyUserActionAuthorization(
@@ -758,7 +779,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 deadline,
         bytes memory signature
     ) internal {
-        _consumeAuthorization(user, action, nonce, deadline);
+        _requireAuthorization(user, nonce, deadline);
 
         bytes32 structHash = keccak256(
             abi.encode(
@@ -772,6 +793,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         );
         address signer = ECDSA.recover(_hashTypedDataV4(structHash), signature);
         require(signer == user, "bad authorization");
+        _consumeAuthorization(user, action, nonce, deadline);
     }
 
     function _verifyLegacyCreateTradeSignature(
@@ -955,7 +977,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature,
         UsdcAuthorization calldata _usdcAuthorization
-    ) external whenNotPaused nonReentrant returns (uint256) {
+    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant returns (uint256) {
         _validateTradeAmounts(
             _supplier,
             _totalAmount,
@@ -1138,7 +1160,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationNonce,
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
-    ) external whenNotPaused nonReentrant {
+    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -1189,7 +1211,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationNonce,
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
-    ) external whenNotPaused nonReentrant {
+    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -1238,7 +1260,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationNonce,
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
-    ) external whenNotPaused nonReentrant {
+    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -1289,7 +1311,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationNonce,
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
-    ) external whenNotPaused nonReentrant {
+    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -1363,11 +1385,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         disputeProposalExpiresAt[proposalId] = block.timestamp + DISPUTE_PROPOSAL_TTL;
 
         emit DisputeSolutionProposed(proposalId, _tradeId, _disputeStatus, msg.sender);
-
-        // auto-execute if requiredApprovals == 1 (rare, but supported)
-        if (requiredApprovals == 1) {
-            _executeDispute(proposalId);
-        }
 
         return proposalId;
     }
@@ -1459,9 +1476,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     // Governance (timelocked) - Admin/Oracle rotation
     // -----------------------------
 
-    // Sensitive operations require at least 2 approvals, even if requiredApprovals == 1.
     function governanceApprovals() public view returns (uint256) {
-        return requiredApprovals < 2 ? 2 : requiredApprovals;
+        return requiredApprovals;
     }
 
     /**

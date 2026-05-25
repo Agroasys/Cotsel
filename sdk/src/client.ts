@@ -4,8 +4,8 @@
 import { AbstractProvider, ethers } from 'ethers';
 import { Config } from './config';
 import { ContractError, getErrorMessage } from './types/errors';
-import { AgroasysEscrow__factory } from './types/typechain-types/factories/src/AgroasysEscrow__factory';
-import type { AgroasysEscrow } from './types/typechain-types/src/AgroasysEscrow';
+import { AgroasysEscrow__factory } from './types/typechain-types/factories/src/AgroasysEscrow.sol/AgroasysEscrow__factory';
+import type { AgroasysEscrow } from './types/typechain-types/src/AgroasysEscrow.sol/AgroasysEscrow';
 import { createManagedRpcProvider } from './rpc/failoverProvider';
 
 export class Client {

@@ -3,7 +3,7 @@
  */
 import { BuyerSDK } from '../src/modules/buyerSDK';
 import type { Signer } from 'ethers';
-import { AgroasysEscrow__factory } from '../src/types/typechain-types/factories/src/AgroasysEscrow__factory';
+import { AgroasysEscrow__factory } from '../src/types/typechain-types/factories/src/AgroasysEscrow.sol/AgroasysEscrow__factory';
 import { TradeStatus } from '../src/types/trade';
 import {
   TEST_CONFIG,

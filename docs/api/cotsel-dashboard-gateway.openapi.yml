@@ -754,6 +754,47 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '503':
           $ref: '#/components/responses/UpstreamUnavailableError'
+  /settlement/gasless-executions/user-action:
+    post:
+      tags: [Settlement]
+      summary: Execute a backend-authorized gasless user action
+      description: |
+        Service-authenticated Cotsel execution boundary for gasless escrow user actions after trade creation.
+        Supported actions are open dispute, cancel locked timeout, refund in-transit timeout, and finalize after
+        dispute window. Cotsel validates the signed user-action payload, simulates the allowlisted contract call,
+        signs/broadcasts with the configured executor key, and records settlement lifecycle events.
+      operationId: createGaslessUserActionExecution
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementGaslessUserActionExecutionRequest'
+      responses:
+        '202':
+          description: Gasless user-action execution submitted by Cotsel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementGaslessUserActionExecutionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
   /settlement/handoffs/{handoffId}/execution-events:
     get:
       tags: [Settlement]
@@ -4685,6 +4726,19 @@ components:
         signature:
           type: string
           pattern: '^0x[0-9a-fA-F]+$'
+    SettlementGaslessUserAuthorization:
+      type: object
+      required: [nonce, deadline, signature]
+      properties:
+        nonce:
+          type: string
+          pattern: '^[0-9]+$'
+        deadline:
+          type: string
+          pattern: '^[0-9]+$'
+        signature:
+          type: string
+          pattern: '^0x[0-9a-fA-F]+$'
     SettlementGaslessUsdcAuthorization:
       type: object
       required: [from, to, value, validAfter, validBefore, nonce, v, r, s]
@@ -4807,6 +4861,80 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionPayload'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementGaslessUserActionExecutionRequest:
+      type: object
+      required:
+        - action
+        - handoffId
+        - chainId
+        - contractAddress
+        - expiresAt
+        - payloadHash
+        - userAddress
+        - tradeId
+        - userAuthorization
+      properties:
+        action:
+          type: string
+          enum:
+            - open_dispute
+            - cancel_locked_timeout
+            - refund_in_transit_timeout
+            - finalize_after_dispute_window
+        chainId:
+          type: integer
+          minimum: 1
+          description: Chain ID that must match the configured Cotsel settlement runtime.
+        contractAddress:
+          type: string
+          description: Escrow contract address that must match the configured allowlisted runtime.
+        expiresAt:
+          type: string
+          format: date-time
+          description: Backend-approved request expiry. Cotsel rejects expired or over-long requests.
+        payloadHash:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{64}$'
+          description: Cotsel recomputes this hash from the normalized execution payload before simulation.
+        handoffId:
+          type: string
+        userAddress:
+          type: string
+          description: Buyer wallet that signed the requested escrow action.
+        tradeId:
+          type: string
+          pattern: '^[0-9]+$'
+        userAuthorization:
+          $ref: '#/components/schemas/SettlementGaslessUserAuthorization'
+    SettlementGaslessUserActionExecutionPayload:
+      type: object
+      required: [handoff, acceptedEvent, queuedEvent, simulationEvent, submittedEvent, txHash]
+      properties:
+        handoff:
+          $ref: '#/components/schemas/SettlementHandoff'
+        acceptedEvent:
+          $ref: '#/components/schemas/SettlementExecutionEvent'
+        queuedEvent:
+          $ref: '#/components/schemas/SettlementExecutionEvent'
+        simulationEvent:
+          $ref: '#/components/schemas/SettlementExecutionEvent'
+        submittedEvent:
+          $ref: '#/components/schemas/SettlementExecutionEvent'
+        txHash:
+          type: string
+          description: Canonical EVM transaction hash submitted by Cotsel.
+    SettlementGaslessUserActionExecutionResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SettlementGaslessUserActionExecutionPayload'
         timestamp:
           type: string
           format: date-time

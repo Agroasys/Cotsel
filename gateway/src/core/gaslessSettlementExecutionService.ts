@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
-  Contract,
   getAddress,
   isAddress,
   isHexString,
@@ -13,6 +12,7 @@ import {
   Wallet,
   ZeroAddress,
 } from 'ethers';
+import { AgroasysEscrow__factory } from '@agroasys/sdk';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import { GatewayConfig } from '../config/env';
 import { GatewayError } from '../errors';
@@ -23,11 +23,15 @@ import {
   SettlementStore,
 } from './settlementStore';
 
-const GASLESS_ESCROW_ABI = [
-  'function createTradeWithAuthorization(address _buyer,address _supplierAddress,uint256 _totalAmount,uint256 _logisticsAmount,uint256 _platformFeesAmount,uint256 _supplierFirstTranche,uint256 _supplierSecondTranche,bytes32 _ricardianHash,uint256 _authorizationNonce,uint256 _authorizationDeadline,bytes _buyerAuthorizationSignature,(uint256 validAfter,uint256 validBefore,bytes32 nonce,uint8 v,bytes32 r,bytes32 s) _usdcAuthorization) returns (uint256)',
-];
-
 const HEX_32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+const USER_ACTIONS = [
+  'open_dispute',
+  'cancel_locked_timeout',
+  'refund_in_transit_timeout',
+  'finalize_after_dispute_window',
+] as const;
+
+export type GaslessUserAction = (typeof USER_ACTIONS)[number];
 
 export interface GaslessBuyerAuthorization {
   nonce: string;
@@ -68,8 +72,32 @@ export interface GaslessCreateTradeExecutionInput {
   sourceApiKeyId?: string | null;
 }
 
+export interface GaslessUserActionAuthorization {
+  nonce: string;
+  deadline: string;
+  signature: string;
+}
+
+export interface GaslessUserActionExecutionInput {
+  action: GaslessUserAction;
+  handoffId: string;
+  chainId: number;
+  contractAddress: string;
+  expiresAt: string;
+  payloadHash: string;
+  userAddress: string;
+  tradeId: string;
+  userAuthorization: GaslessUserActionAuthorization;
+  requestId: string;
+  sourceApiKeyId?: string | null;
+}
+
 type GaslessCreateTradePayload = Omit<
   GaslessCreateTradeExecutionInput,
+  'payloadHash' | 'requestId' | 'sourceApiKeyId'
+>;
+type GaslessUserActionPayload = Omit<
+  GaslessUserActionExecutionInput,
   'payloadHash' | 'requestId' | 'sourceApiKeyId'
 >;
 
@@ -87,6 +115,10 @@ export interface GaslessSettlementExecutor {
     input: GaslessCreateTradeExecutionInput,
   ): Promise<{ gasEstimate?: bigint | string | number | null }>;
   executeCreateTrade(input: GaslessCreateTradeExecutionInput): Promise<{ txHash: string }>;
+  simulateUserAction(
+    input: GaslessUserActionExecutionInput,
+  ): Promise<{ gasEstimate?: bigint | string | number | null }>;
+  executeUserAction(input: GaslessUserActionExecutionInput): Promise<{ txHash: string }>;
 }
 
 function requireAddress(value: string, field: string): string {
@@ -144,6 +176,17 @@ function requireAction(value: string, field: string): 'create_trade' {
   }
 
   return value;
+}
+
+function requireUserAction(value: string, field: string): GaslessUserAction {
+  if (!USER_ACTIONS.includes(value as GaslessUserAction)) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} is not supported`, {
+      field,
+      allowed: USER_ACTIONS,
+    });
+  }
+
+  return value as GaslessUserAction;
 }
 
 function requireChainId(value: number, expected: number): number {
@@ -205,7 +248,7 @@ function stableJson(value: unknown): string {
     .join(',')}}`;
 }
 
-function createPayloadHash(input: GaslessCreateTradePayload): string {
+function createPayloadHash(input: GaslessCreateTradePayload | GaslessUserActionPayload): string {
   return keccak256(toUtf8Bytes(stableJson(input)));
 }
 
@@ -245,6 +288,25 @@ function normalizeInput(input: GaslessCreateTradeExecutionInput): GaslessCreateT
       v: requireRecoveryId(input.usdcAuthorization.v, 'usdcAuthorization.v'),
       r: requireBytes32(input.usdcAuthorization.r, 'usdcAuthorization.r'),
       s: requireBytes32(input.usdcAuthorization.s, 'usdcAuthorization.s'),
+    },
+  };
+}
+
+function normalizeUserActionInput(
+  input: GaslessUserActionExecutionInput,
+): GaslessUserActionExecutionInput {
+  return {
+    ...input,
+    action: requireUserAction(input.action, 'action'),
+    handoffId: input.handoffId.trim(),
+    contractAddress: requireAddress(input.contractAddress, 'contractAddress'),
+    payloadHash: requireBytes32(input.payloadHash, 'payloadHash'),
+    userAddress: requireAddress(input.userAddress, 'userAddress'),
+    tradeId: requireUint(input.tradeId, 'tradeId'),
+    userAuthorization: {
+      nonce: requireUint(input.userAuthorization.nonce, 'userAuthorization.nonce'),
+      deadline: requireUint(input.userAuthorization.deadline, 'userAuthorization.deadline'),
+      signature: requireSignature(input.userAuthorization.signature, 'userAuthorization.signature'),
     },
   };
 }
@@ -331,6 +393,15 @@ function assertAuthorizationBindings(input: GaslessCreateTradeExecutionInput, no
   }
 }
 
+function assertUserAuthorizationBindings(input: GaslessUserActionExecutionInput, now: Date): void {
+  const nowSeconds = BigInt(Math.floor(now.getTime() / 1000));
+  if (BigInt(input.userAuthorization.deadline) <= nowSeconds) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'userAuthorization.deadline has expired', {
+      userAuthorizationDeadline: input.userAuthorization.deadline,
+    });
+  }
+}
+
 function assertHandoffMatchesExecution(
   handoff: SettlementHandoffRecord,
   input: GaslessCreateTradeExecutionInput,
@@ -350,7 +421,7 @@ function assertHandoffMatchesExecution(
 }
 
 function assertContractMatchesRuntime(
-  input: GaslessCreateTradeExecutionInput,
+  input: GaslessCreateTradeExecutionInput | GaslessUserActionExecutionInput,
   expectedContractAddress: string,
 ): void {
   const expected = getAddress(expectedContractAddress);
@@ -363,6 +434,22 @@ function assertContractMatchesRuntime(
 }
 
 function assertPayloadHash(input: GaslessCreateTradeExecutionInput): void {
+  const {
+    payloadHash: _payloadHash,
+    requestId: _requestId,
+    sourceApiKeyId: _sourceApiKeyId,
+    ...hashable
+  } = input;
+  const expectedPayloadHash = createPayloadHash(hashable);
+  if (input.payloadHash !== expectedPayloadHash) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'payloadHash does not match request payload', {
+      payloadHash: input.payloadHash,
+      expectedPayloadHash,
+    });
+  }
+}
+
+function assertUserActionPayloadHash(input: GaslessUserActionExecutionInput): void {
   const {
     payloadHash: _payloadHash,
     requestId: _requestId,
@@ -407,6 +494,15 @@ function buildCreateTradeArguments(input: GaslessCreateTradeExecutionInput) {
       r: input.usdcAuthorization.r,
       s: input.usdcAuthorization.s,
     },
+  ] as const;
+}
+
+function buildUserActionArguments(input: GaslessUserActionExecutionInput) {
+  return [
+    input.tradeId,
+    input.userAuthorization.nonce,
+    input.userAuthorization.deadline,
+    input.userAuthorization.signature,
   ] as const;
 }
 
@@ -551,6 +647,132 @@ export class GaslessSettlementExecutionService {
       });
     }
   }
+
+  async executeUserAction(
+    input: GaslessUserActionExecutionInput,
+  ): Promise<GaslessCreateTradeExecutionResult> {
+    const now = this.options.now?.() ?? new Date();
+    const normalized = normalizeUserActionInput({
+      ...input,
+      chainId: requireChainId(input.chainId, this.options.chainId),
+      expiresAt: parseExpiry(input.expiresAt, this.options.requestMaxTtlSeconds, now),
+    });
+    assertContractMatchesRuntime(normalized, this.options.escrowAddress);
+    assertUserAuthorizationBindings(normalized, now);
+    assertUserActionPayloadHash(normalized);
+
+    const handoff = await this.store.getHandoff(normalized.handoffId);
+    if (!handoff) {
+      throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', {
+        handoffId: normalized.handoffId,
+      });
+    }
+
+    const accepted = await this.settlementService.recordExecutionEvent({
+      handoffId: normalized.handoffId,
+      eventType: 'accepted',
+      executionStatus: 'accepted',
+      reconciliationStatus: handoff.reconciliationStatus,
+      providerStatus: 'gasless_request_accepted',
+      detail: `Gasless ${normalized.action} request accepted by Cotsel execution service.`,
+      metadata: {
+        action: normalized.action,
+        chainId: normalized.chainId,
+        contractAddress: normalized.contractAddress,
+        expiresAt: normalized.expiresAt,
+        payloadHash: normalized.payloadHash,
+        userAddress: normalized.userAddress,
+        tradeId: normalized.tradeId,
+      },
+      observedAt: new Date().toISOString(),
+      requestId: normalized.requestId,
+      sourceApiKeyId: normalized.sourceApiKeyId,
+    });
+
+    try {
+      const queued = await this.settlementService.recordExecutionEvent({
+        handoffId: normalized.handoffId,
+        eventType: 'queued',
+        executionStatus: 'queued',
+        reconciliationStatus: accepted.handoff.reconciliationStatus,
+        providerStatus: 'gasless_request_queued',
+        detail: `Gasless ${normalized.action} request queued for simulation.`,
+        metadata: {
+          action: normalized.action,
+          payloadHash: normalized.payloadHash,
+        },
+        observedAt: new Date().toISOString(),
+        requestId: normalized.requestId,
+        sourceApiKeyId: normalized.sourceApiKeyId,
+      });
+
+      const simulation = await this.executor.simulateUserAction(normalized);
+      const simulationEvent = await this.settlementService.recordExecutionEvent({
+        handoffId: normalized.handoffId,
+        eventType: 'simulation_completed',
+        executionStatus: 'queued',
+        reconciliationStatus: queued.handoff.reconciliationStatus,
+        providerStatus: 'gasless_simulation_completed',
+        detail: `Gasless ${normalized.action} transaction simulation completed.`,
+        metadata: {
+          action: normalized.action,
+          gasEstimate: serializeGasEstimate(simulation.gasEstimate),
+          payloadHash: normalized.payloadHash,
+        },
+        observedAt: new Date().toISOString(),
+        requestId: normalized.requestId,
+        sourceApiKeyId: normalized.sourceApiKeyId,
+      });
+
+      const execution = await this.executor.executeUserAction(normalized);
+      const submitted = await this.settlementService.recordExecutionEvent({
+        handoffId: normalized.handoffId,
+        eventType: 'submitted',
+        executionStatus: 'submitted',
+        reconciliationStatus: simulationEvent.handoff.reconciliationStatus,
+        providerStatus: 'gasless_broadcast_submitted',
+        txHash: execution.txHash,
+        detail: `Gasless ${normalized.action} transaction submitted by Cotsel.`,
+        metadata: {
+          action: normalized.action,
+          authorizationNonce: normalized.userAuthorization.nonce,
+          payloadHash: normalized.payloadHash,
+        },
+        observedAt: new Date().toISOString(),
+        requestId: normalized.requestId,
+        sourceApiKeyId: normalized.sourceApiKeyId,
+      });
+
+      return {
+        handoff: submitted.handoff,
+        acceptedEvent: accepted.event,
+        queuedEvent: queued.event,
+        simulationEvent: simulationEvent.event,
+        submittedEvent: submitted.event,
+        txHash: execution.txHash,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown gasless execution failure';
+      await this.settlementService.recordExecutionEvent({
+        handoffId: normalized.handoffId,
+        eventType: 'failed',
+        executionStatus: 'failed',
+        reconciliationStatus: accepted.handoff.reconciliationStatus,
+        providerStatus: 'gasless_broadcast_failed',
+        detail: message,
+        metadata: {
+          action: normalized.action,
+          payloadHash: normalized.payloadHash,
+        },
+        observedAt: new Date().toISOString(),
+        requestId: normalized.requestId,
+        sourceApiKeyId: normalized.sourceApiKeyId,
+      });
+      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Gasless execution failed', {
+        reason: message,
+      });
+    }
+  }
 }
 
 export function createEthersGaslessSettlementExecutor(
@@ -577,7 +799,7 @@ export function createEthersGaslessSettlementExecutor(
     chainId: config.chainId,
   }) as JsonRpcProvider;
   const signer = new NonceManager(new Wallet(config.gaslessExecutorPrivateKey, provider));
-  const escrow = new Contract(config.escrowAddress, GASLESS_ESCROW_ABI, signer);
+  const escrow = AgroasysEscrow__factory.connect(config.escrowAddress, signer);
   const gaslessMaxGasLimit = config.gaslessMaxGasLimit ?? 1_500_000n;
   const gaslessMinExecutorBalanceWei = config.gaslessMinExecutorBalanceWei ?? 0n;
 
@@ -616,6 +838,63 @@ export function createEthersGaslessSettlementExecutor(
     return gasEstimate;
   }
 
+  async function simulateUserAction(input: GaslessUserActionExecutionInput): Promise<bigint> {
+    await assertSignerBalance();
+    const args = buildUserActionArguments(input);
+    let gasEstimate: bigint;
+
+    if (input.action === 'open_dispute') {
+      await escrow.openDisputeWithAuthorization.staticCall(...args);
+      gasEstimate = await escrow.openDisputeWithAuthorization.estimateGas(...args);
+    } else if (input.action === 'cancel_locked_timeout') {
+      await escrow.cancelLockedTradeAfterTimeoutWithAuthorization.staticCall(...args);
+      gasEstimate = await escrow.cancelLockedTradeAfterTimeoutWithAuthorization.estimateGas(
+        ...args,
+      );
+    } else if (input.action === 'refund_in_transit_timeout') {
+      await escrow.refundInTransitAfterTimeoutWithAuthorization.staticCall(...args);
+      gasEstimate = await escrow.refundInTransitAfterTimeoutWithAuthorization.estimateGas(...args);
+    } else {
+      await escrow.finalizeAfterDisputeWindowWithAuthorization.staticCall(...args);
+      gasEstimate = await escrow.finalizeAfterDisputeWindowWithAuthorization.estimateGas(...args);
+    }
+
+    if (gasEstimate > gaslessMaxGasLimit) {
+      throw new GatewayError(
+        400,
+        'VALIDATION_ERROR',
+        'Gasless user-action gas estimate exceeds cap',
+        {
+          action: input.action,
+          gasEstimate: gasEstimate.toString(),
+          gasCap: gaslessMaxGasLimit.toString(),
+        },
+      );
+    }
+
+    return gasEstimate;
+  }
+
+  async function executeUserAction(
+    input: GaslessUserActionExecutionInput,
+    gasLimit: bigint,
+  ): Promise<string> {
+    const args = buildUserActionArguments(input);
+    if (input.action === 'open_dispute') {
+      return (await escrow.openDisputeWithAuthorization(...args, { gasLimit })).hash;
+    }
+    if (input.action === 'cancel_locked_timeout') {
+      return (await escrow.cancelLockedTradeAfterTimeoutWithAuthorization(...args, { gasLimit }))
+        .hash;
+    }
+    if (input.action === 'refund_in_transit_timeout') {
+      return (await escrow.refundInTransitAfterTimeoutWithAuthorization(...args, { gasLimit }))
+        .hash;
+    }
+
+    return (await escrow.finalizeAfterDisputeWindowWithAuthorization(...args, { gasLimit })).hash;
+  }
+
   return {
     async simulateCreateTrade(input) {
       return {
@@ -634,11 +913,24 @@ export function createEthersGaslessSettlementExecutor(
         txHash: tx.hash,
       };
     },
+
+    async simulateUserAction(input) {
+      return {
+        gasEstimate: await simulateUserAction(input),
+      };
+    },
+
+    async executeUserAction(input) {
+      const gasEstimate = await simulateUserAction(input);
+      return {
+        txHash: await executeUserAction(input, gasEstimate),
+      };
+    },
   };
 }
 
 export const testExports = {
   createPayloadHash,
-  GASLESS_ESCROW_ABI,
   buildCreateTradeArguments,
+  buildUserActionArguments,
 };

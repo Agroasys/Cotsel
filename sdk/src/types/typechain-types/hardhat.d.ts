@@ -66,9 +66,30 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.AgroasysEscrow__factory>;
     getContractFactory(
+      name: "IUSDCReceiveWithAuthorization",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IUSDCReceiveWithAuthorization__factory>;
+    getContractFactory(
       name: "MockUSDC",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockUSDC__factory>;
+    getContractFactory(
+      name: "ClaimHookReceiver",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ClaimHookReceiver__factory>;
+    getContractFactory(
+      name: "HookedMockUSDC",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.HookedMockUSDC__factory>;
+    getContractFactory(
+      name: "IClaimableEscrow",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IClaimableEscrow__factory>;
+    getContractFactory(
+      name: "ITokenTransferHook",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ITokenTransferHook__factory>;
+
     getContractAt(
       name: "IERC1155Errors",
       address: string | ethers.Addressable,
@@ -135,10 +156,36 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.AgroasysEscrow>;
     getContractAt(
+      name: "IUSDCReceiveWithAuthorization",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IUSDCReceiveWithAuthorization>;
+    getContractAt(
       name: "MockUSDC",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MockUSDC>;
+    getContractAt(
+      name: "ClaimHookReceiver",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ClaimHookReceiver>;
+    getContractAt(
+      name: "HookedMockUSDC",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.HookedMockUSDC>;
+    getContractAt(
+      name: "IClaimableEscrow",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IClaimableEscrow>;
+    getContractAt(
+      name: "ITokenTransferHook",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ITokenTransferHook>;
+
     deployContract(
       name: "IERC1155Errors",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -192,9 +239,30 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.AgroasysEscrow>;
     deployContract(
+      name: "IUSDCReceiveWithAuthorization",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IUSDCReceiveWithAuthorization>;
+    deployContract(
       name: "MockUSDC",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockUSDC>;
+    deployContract(
+      name: "ClaimHookReceiver",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ClaimHookReceiver>;
+    deployContract(
+      name: "HookedMockUSDC",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.HookedMockUSDC>;
+    deployContract(
+      name: "IClaimableEscrow",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IClaimableEscrow>;
+    deployContract(
+      name: "ITokenTransferHook",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITokenTransferHook>;
+
     deployContract(
       name: "IERC1155Errors",
       args: any[],
@@ -261,10 +329,36 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.AgroasysEscrow>;
     deployContract(
+      name: "IUSDCReceiveWithAuthorization",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IUSDCReceiveWithAuthorization>;
+    deployContract(
       name: "MockUSDC",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockUSDC>;
+    deployContract(
+      name: "ClaimHookReceiver",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ClaimHookReceiver>;
+    deployContract(
+      name: "HookedMockUSDC",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.HookedMockUSDC>;
+    deployContract(
+      name: "IClaimableEscrow",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IClaimableEscrow>;
+    deployContract(
+      name: "ITokenTransferHook",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITokenTransferHook>;
+
     // default types
     getContractFactory(
       name: string,

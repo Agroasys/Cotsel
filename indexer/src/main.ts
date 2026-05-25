@@ -621,6 +621,19 @@ processor.run(new TypeormDatabase(), async (ctx) => {
               ctx,
             );
             break;
+          case 'RelayerUpdated':
+            await handleRelayerUpdated(
+              decoded,
+              systemEvents,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
           case 'ClaimableAccrued':
             overviewSnapshot = await handleClaimableAccrued(
               decoded,
@@ -2148,6 +2161,37 @@ async function handleAuthorizationConsumed(
   );
 
   ctx.log.info(`Authorization ${action} consumed for ${user} by ${relayer}`);
+}
+
+async function handleRelayerUpdated(
+  log: DecodedEscrowLog,
+  events: SystemEvent[],
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [relayer, allowed, updatedBy] = log.args;
+
+  events.push(
+    new SystemEvent({
+      id: eventId,
+      eventName: 'RelayerUpdated',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      triggeredBy: updatedBy.toLowerCase(),
+      authorizationRelayer: relayer.toLowerCase(),
+      authorizationAction: allowed ? 'RELAYER_ALLOWED' : 'RELAYER_REVOKED',
+    }),
+  );
+
+  ctx.log.info(`Relayer ${relayer} ${allowed ? 'allowed' : 'revoked'} by ${updatedBy}`);
 }
 
 // ########################### claim events ##########################

@@ -334,7 +334,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address],
           0,
         ),
-      ).to.be.revertedWith('required approvals must be > 0');
+      ).to.be.revertedWith('required approvals must be >= 2');
 
       await expect(
         EscrowFactory.deploy(
@@ -344,7 +344,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address],
           1,
         ),
-      ).to.be.revertedWith('at least 2 admins required');
+      ).to.be.revertedWith('required approvals must be >= 2');
 
       await expect(
         EscrowFactory.deploy(
@@ -379,29 +379,29 @@ describe('AgroasysEscrow', function () {
       );
     });
 
-    it('Should emit the effective governance quorum during unpause for low-quorum dispute configs', async function () {
+    it('Should emit the configured governance quorum during unpause', async function () {
       const EscrowFactory = await ethers.getContractFactory('AgroasysEscrow');
-      const lowQuorumEscrow = await EscrowFactory.deploy(
+      const quorumEscrow = await EscrowFactory.deploy(
         await usdc.getAddress(),
         oracle.address,
         treasury.address,
         [admin1.address, admin2.address],
-        1,
+        2,
       );
-      await lowQuorumEscrow.waitForDeployment();
+      await quorumEscrow.waitForDeployment();
 
-      await expect(lowQuorumEscrow.connect(admin1).pause())
-        .to.emit(lowQuorumEscrow, 'Paused')
+      await expect(quorumEscrow.connect(admin1).pause())
+        .to.emit(quorumEscrow, 'Paused')
         .withArgs(admin1.address);
 
-      await expect(lowQuorumEscrow.connect(admin1).proposeUnpause())
-        .to.emit(lowQuorumEscrow, 'UnpauseApproved')
+      await expect(quorumEscrow.connect(admin1).proposeUnpause())
+        .to.emit(quorumEscrow, 'UnpauseApproved')
         .withArgs(admin1.address, 1, 2);
 
-      await expect(lowQuorumEscrow.connect(admin2).approveUnpause())
-        .to.emit(lowQuorumEscrow, 'UnpauseApproved')
+      await expect(quorumEscrow.connect(admin2).approveUnpause())
+        .to.emit(quorumEscrow, 'UnpauseApproved')
         .withArgs(admin2.address, 2, 2)
-        .and.to.emit(lowQuorumEscrow, 'Unpaused')
+        .and.to.emit(quorumEscrow, 'Unpaused')
         .withArgs(admin2.address);
     });
 
@@ -1496,7 +1496,7 @@ describe('AgroasysEscrow', function () {
       expect(await usdc.authorizationState(buyer.address, prepared.tokenNonce)).to.equal(false);
     });
 
-    it('executes buyer actions through typed authorization without trusting relayer identity', async function () {
+    it('executes buyer actions only through admins or allowlisted relayers', async function () {
       const { tradeId } = await createGaslessTrade(ethers.id('gasless-action'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
       await escrow.connect(oracle).confirmArrival(tradeId);
@@ -1513,10 +1513,18 @@ describe('AgroasysEscrow', function () {
       });
 
       await expect(
-        escrow.connect(admin2).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
+        escrow.connect(buyer).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
+      ).to.be.revertedWith('only relayer or admin');
+
+      await expect(escrow.connect(admin1).setRelayer(supplier.address, true))
+        .to.emit(escrow, 'RelayerUpdated')
+        .withArgs(supplier.address, true, admin1.address);
+
+      await expect(
+        escrow.connect(supplier).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
       )
         .to.emit(escrow, 'RelayedActionExecuted')
-        .withArgs(admin2.address, buyer.address, await escrow.ACTION_OPEN_DISPUTE(), tradeId);
+        .withArgs(supplier.address, buyer.address, await escrow.ACTION_OPEN_DISPUTE(), tradeId);
 
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(3);

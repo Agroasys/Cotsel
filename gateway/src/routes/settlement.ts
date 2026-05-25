@@ -8,6 +8,7 @@ import { createIdempotencyMiddleware } from '../middleware/idempotency';
 import { successResponse } from '../responses';
 import { IdempotencyStore } from '../core/idempotencyStore';
 import { GaslessSettlementExecutionService } from '../core/gaslessSettlementExecutionService';
+import type { GaslessUserAction } from '../core/gaslessSettlementExecutionService';
 import { createServiceAuthMiddleware } from '../core/serviceAuth';
 import { SettlementService } from '../core/settlementService';
 import {
@@ -355,6 +356,61 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
             v: requireInteger(usdcAuthorization.v, 'usdcAuthorization.v'),
             r: requireString(usdcAuthorization.r, 'usdcAuthorization.r'),
             s: requireString(usdcAuthorization.s, 'usdcAuthorization.s'),
+          },
+          requestId: getRequestId(req),
+          sourceApiKeyId: getServiceApiKeyId(req),
+        });
+      },
+      res,
+      next,
+    ),
+  );
+
+  router.post('/settlement/gasless-executions/user-action', idempotency, (req, res, next) =>
+    handleRequest(
+      async () => {
+        if (!options.config.gaslessExecutionEnabled || !options.gaslessSettlementService) {
+          throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Gasless execution is disabled', {
+            reason: 'gasless_execution_disabled',
+          });
+        }
+
+        const body = requireObject(req.body, 'body');
+        rejectUnexpectedFields(
+          body,
+          [
+            'action',
+            'handoffId',
+            'chainId',
+            'contractAddress',
+            'expiresAt',
+            'payloadHash',
+            'userAddress',
+            'tradeId',
+            'userAuthorization',
+          ],
+          'body',
+        );
+        const userAuthorization = requireObject(body.userAuthorization, 'userAuthorization');
+        rejectUnexpectedFields(
+          userAuthorization,
+          ['nonce', 'deadline', 'signature'],
+          'userAuthorization',
+        );
+
+        return options.gaslessSettlementService.executeUserAction({
+          action: requireString(body.action, 'action') as GaslessUserAction,
+          handoffId: requireString(body.handoffId, 'handoffId'),
+          chainId: requireInteger(body.chainId, 'chainId'),
+          contractAddress: requireString(body.contractAddress, 'contractAddress'),
+          expiresAt: requireString(body.expiresAt, 'expiresAt'),
+          payloadHash: requireString(body.payloadHash, 'payloadHash'),
+          userAddress: requireString(body.userAddress, 'userAddress'),
+          tradeId: requireString(body.tradeId, 'tradeId'),
+          userAuthorization: {
+            nonce: requireString(userAuthorization.nonce, 'userAuthorization.nonce'),
+            deadline: requireString(userAuthorization.deadline, 'userAuthorization.deadline'),
+            signature: requireString(userAuthorization.signature, 'userAuthorization.signature'),
           },
           requestId: getRequestId(req),
           sourceApiKeyId: getServiceApiKeyId(req),
