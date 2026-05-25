@@ -604,6 +604,7 @@ contract FuzzTest is Test {
         tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
         
         uint256 total = logistics + fees + tranche1 + tranche2;
+        uint256 refundablePrincipal = tranche1 + tranche2;
 
         uint256 tradeId = _create_trade(logistics, fees, tranche1, tranche2, ricardianHash);
         
@@ -615,6 +616,7 @@ contract FuzzTest is Test {
         uint256 buyerBalanceBefore = usdc.balanceOf(buyer);
         uint256 escrowBalanceBefore = usdc.balanceOf(address(escrow));
         uint256 buyerClaimableBefore = escrow.claimableUsdc(buyer);
+        uint256 treasuryClaimableBefore = escrow.claimableUsdc(treasury);
         
         vm.warp(block.timestamp + 7 days + 1);
         
@@ -626,7 +628,8 @@ contract FuzzTest is Test {
         assertEq(uint8(_statusAfter), uint8(AgroasysEscrow.TradeStatus.CLOSED), "status should be CLOSED");
         assertEq(usdc.balanceOf(buyer), buyerBalanceBefore, "buyer balance should remain unchanged before claim");
         assertEq(usdc.balanceOf(address(escrow)), escrowBalanceBefore, "escrow balance should remain unchanged before claim");
-        assertEq(escrow.claimableUsdc(buyer), buyerClaimableBefore + total, "buyer claimable should include full refund");
+        assertEq(escrow.claimableUsdc(buyer), buyerClaimableBefore + refundablePrincipal, "buyer claimable should include refundable principal");
+        assertEq(escrow.claimableUsdc(treasury), treasuryClaimableBefore + logistics + fees, "treasury claimable should retain non-refundable fees");
     }
 
 

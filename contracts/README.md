@@ -128,7 +128,7 @@ Timelock-based admin addition proposal:
 
 - `usdcToken` (IERC20): USDC token contract interface
 - `oracleAddress` (address): Authorized oracle for fund releases and arrival confirmation
-- `treasuryAddress` (address): Receives logistics and platform fees
+- `treasuryAddress` (address): Receives non-refundable logistics and platform fees
 - `paused` (bool): Global pause flag for normal protocol operations
 - `oracleActive` (bool): Oracle execution enable/disable switch
 - `admins` (address[]): Array of admin addresses
@@ -184,7 +184,8 @@ Timelock-based admin addition proposal:
 
 6. **`cancelLockedTradeAfterTimeout(tradeId)`**
    - Buyer escape hatch when a trade remains `LOCKED` past `LOCK_TIMEOUT`
-   - Refunds full `totalAmountLocked` to buyer
+   - Refunds only refundable supplier principal to buyer
+   - Keeps logistics fees, platform fees, and the fixed settlement fee claimable by treasury
    - Changes status: LOCKED to CLOSED
    - Emits: `TradeCancelledAfterLockTimeout`
    - Access: Trade buyer only
@@ -192,6 +193,7 @@ Timelock-based admin addition proposal:
 7. **`refundInTransitAfterTimeout(tradeId)`**
    - Buyer escape hatch when trade remains `IN_TRANSIT` past `IN_TRANSIT_TIMEOUT`
    - Refunds only remaining escrowed principal (`supplierSecondTranche`)
+   - Does not refund logistics fees, platform fees, or the fixed settlement fee
    - Changes status: IN_TRANSIT to CLOSED
    - Emits: `InTransitTimeoutRefunded`
    - Access: Trade buyer only

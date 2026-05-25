@@ -26,11 +26,12 @@ interface IUSDCReceiveWithAuthorization {
  * - Milestone escrow (Stage 1 + Stage 2)
  * - Arrival confirmation starts a 24h buyer dispute window
  * - Buyer can freeze during window; admins resolve with 4-eyes approval
- * - Treasury ONLY receives explicit fees (logistics + platform fees) at Stage 1; buyer principal never routes to treasury
+ * - Treasury ONLY receives explicit fees (logistics + platform fees); buyer principal never routes to treasury
  * - Signature uses buyer-scoped nonce (no global tradeId pre-query race) + deadline + domain separation
  *
  * Business rule enforced:
- * - Stage 1 accrual (40% milestone) includes: supplierFirstTranche (principal) + logisticsAmount (fee) + platformFeesAmount (fee)
+ * - Logistics/platform fees are non-refundable once a trade is funded; platformFeesAmount includes the fixed settlement fee
+ * - Stage 1 release pays supplierFirstTranche (principal) and leaves logistics/platform fees claimable by treasury
  * - Stage 2 accrual (finalization) includes: supplierSecondTranche (principal) ONLY
  */
 contract AgroasysEscrow is ReentrancyGuard, Pausable {
@@ -41,7 +42,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     // -----------------------------
     /// @notice Buyer dispute window after arrival confirmation.
     uint256 public constant DISPUTE_WINDOW = 24 hours;
-    /// @notice Maximum time a trade can remain LOCKED before buyer can cancel for full refund.
+    /// @notice Maximum time a trade can remain LOCKED before buyer can cancel for refundable principal.
     uint256 public constant LOCK_TIMEOUT = 7 days;
     /// @notice Maximum time a trade can remain IN_TRANSIT without arrival confirmation before buyer principal refund.
     uint256 public constant IN_TRANSIT_TIMEOUT = 14 days;
@@ -119,8 +120,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         address supplierAddress;
         uint256 totalAmountLocked;
 
-        uint256 logisticsAmount;     // paid to treasury at stage1
-        uint256 platformFeesAmount;  // paid to treasury at stage1
+        uint256 logisticsAmount;     // non-refundable; paid to treasury at stage1 or lock timeout cancellation
+        uint256 platformFeesAmount;  // non-refundable; includes settlement fee; paid to treasury at stage1 or lock timeout cancellation
 
         uint256 supplierFirstTranche;  // typically 40% (principal component released at stage1)
         uint256 supplierSecondTranche; // typically 60% (principal component released at stage2/finalization)
@@ -1040,6 +1041,25 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         emit ClaimableAccrued(_tradeId, _recipient, _amount, _claimType);
     }
 
+    function _nonRefundableFeeAmount(Trade storage trade) internal view returns (uint256) {
+        return trade.logisticsAmount + trade.platformFeesAmount;
+    }
+
+    function _buyerRefundablePrincipalAmount(Trade storage trade) internal view returns (uint256) {
+        if (trade.status == TradeStatus.LOCKED) {
+            return trade.supplierFirstTranche + trade.supplierSecondTranche;
+        }
+
+        if (
+            trade.status == TradeStatus.IN_TRANSIT || trade.status == TradeStatus.ARRIVAL_CONFIRMED
+                || trade.status == TradeStatus.FROZEN
+        ) {
+            return trade.supplierSecondTranche;
+        }
+
+        return 0;
+    }
+
     function _transferSupplierPayout(
         uint256 _tradeId,
         address _supplier,
@@ -1052,6 +1072,18 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
         usdcToken.safeTransfer(_supplier, _amount);
         emit SupplierPayoutTransferred(_tradeId, _supplier, _amount, _claimType, msg.sender);
+    }
+
+    function nonRefundableFeeAmount(uint256 _tradeId) public view returns (uint256) {
+        require(_tradeId < tradeCounter, "trade not found");
+        Trade storage trade = trades[_tradeId];
+        return _nonRefundableFeeAmount(trade);
+    }
+
+    function buyerRefundableAmount(uint256 _tradeId) public view returns (uint256) {
+        require(_tradeId < tradeCounter, "trade not found");
+        Trade storage trade = trades[_tradeId];
+        return _buyerRefundablePrincipalAmount(trade);
     }
 
     function claim() external whenClaimsNotPaused nonReentrant {
@@ -1238,7 +1270,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Buyer escape hatch: cancel a LOCKED trade after timeout and recover full locked amount.
+     * @notice Buyer escape hatch: cancel a LOCKED trade after timeout and recover refundable principal.
      */
     function cancelLockedTradeAfterTimeout(uint256 _tradeId) external whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
@@ -1248,11 +1280,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(trade.status == TradeStatus.LOCKED, "status must be LOCKED");
         require(block.timestamp > trade.createdAt + LOCK_TIMEOUT, "lock timeout not elapsed");
 
+        uint256 buyerRefundAmount = _buyerRefundablePrincipalAmount(trade);
         trade.status = TradeStatus.CLOSED;
 
-        _accrueClaimable(_tradeId, trade.buyerAddress, trade.totalAmountLocked, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
+        _accrueClaimable(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
+        _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
+        _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
 
-        emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, trade.totalAmountLocked);
+        emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, buyerRefundAmount);
     }
 
     function cancelLockedTradeAfterTimeoutWithAuthorization(
@@ -1276,11 +1311,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(trade.status == TradeStatus.LOCKED, "status must be LOCKED");
         require(block.timestamp > trade.createdAt + LOCK_TIMEOUT, "lock timeout not elapsed");
 
+        uint256 buyerRefundAmount = _buyerRefundablePrincipalAmount(trade);
         trade.status = TradeStatus.CLOSED;
 
-        _accrueClaimable(_tradeId, trade.buyerAddress, trade.totalAmountLocked, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
+        _accrueClaimable(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
+        _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
+        _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
 
-        emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, trade.totalAmountLocked);
+        emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, buyerRefundAmount);
         emit RelayedActionExecuted(msg.sender, trade.buyerAddress, ACTION_CANCEL_LOCKED_TIMEOUT, _tradeId);
     }
 

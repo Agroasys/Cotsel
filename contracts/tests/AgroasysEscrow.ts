@@ -406,20 +406,28 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should allow refund claims while globally paused when claim freeze is not active', async function () {
-      const { tradeId, totalAmount } = await createDefaultTrade(ethers.id('pause-claim-flow'));
+      const { tradeId, supplierFirstTranche, supplierSecondTranche } = await createDefaultTrade(
+        ethers.id('pause-claim-flow'),
+      );
       await time.increase(7 * 24 * 3600 + 1);
       await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(totalAmount);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(
+        supplierFirstTranche + supplierSecondTranche,
+      );
 
       await escrow.connect(admin1).pause();
       await claimAndAssert(buyer);
     });
 
     it('Should enforce dedicated claim freeze and restore refund claim after unpauseClaims', async function () {
-      const { tradeId, totalAmount } = await createDefaultTrade(ethers.id('claims-freeze-policy'));
+      const { tradeId, supplierFirstTranche, supplierSecondTranche } = await createDefaultTrade(
+        ethers.id('claims-freeze-policy'),
+      );
       await time.increase(7 * 24 * 3600 + 1);
       await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(totalAmount);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(
+        supplierFirstTranche + supplierSecondTranche,
+      );
 
       await expect(escrow.connect(admin1).pauseClaims())
         .to.emit(escrow, 'ClaimsPaused')
@@ -670,17 +678,27 @@ describe('AgroasysEscrow', function () {
 
   describe('Timeout Escape Hatches', function () {
     it('Should allow buyer to cancel a LOCKED trade after LOCK_TIMEOUT', async function () {
-      const { tradeId, totalAmount } = await createDefaultTrade(ethers.id('lock-timeout'));
+      const {
+        tradeId,
+        logisticsAmount,
+        platformFeesAmount,
+        supplierFirstTranche,
+        supplierSecondTranche,
+      } = await createDefaultTrade(ethers.id('lock-timeout'));
       const buyerBalBefore = await usdc.balanceOf(buyer.address);
+      const refundablePrincipal = supplierFirstTranche + supplierSecondTranche;
 
       const lockTimeout = await escrow.LOCK_TIMEOUT();
       await time.increase(lockTimeout + 1n);
 
       await expect(escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId))
         .to.emit(escrow, 'TradeCancelledAfterLockTimeout')
-        .withArgs(tradeId, buyer.address, totalAmount);
+        .withArgs(tradeId, buyer.address, refundablePrincipal);
 
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(totalAmount);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(refundablePrincipal);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(
+        logisticsAmount + platformFeesAmount,
+      );
       expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore);
       await claimAndAssert(buyer);
       const trade = await escrow.trades(tradeId);
@@ -763,15 +781,32 @@ describe('AgroasysEscrow', function () {
   });
 
   describe('Treasury Leakage Guards', function () {
-    it('Should keep treasury unchanged on LOCK timeout cancellation', async function () {
-      const { tradeId } = await createDefaultTrade(ethers.id('treasury-lock-timeout'));
+    it('Should keep non-refundable fees claimable by treasury on LOCK timeout cancellation', async function () {
+      const {
+        tradeId,
+        logisticsAmount,
+        platformFeesAmount,
+        supplierFirstTranche,
+        supplierSecondTranche,
+      } = await createDefaultTrade(ethers.id('treasury-lock-timeout'));
       const treasuryBefore = await usdc.balanceOf(treasury.address);
+      const refundablePrincipal = supplierFirstTranche + supplierSecondTranche;
+
+      expect(await escrow.nonRefundableFeeAmount(tradeId)).to.equal(
+        logisticsAmount + platformFeesAmount,
+      );
+      expect(await escrow.buyerRefundableAmount(tradeId)).to.equal(refundablePrincipal);
 
       const lockTimeout = await escrow.LOCK_TIMEOUT();
       await time.increase(lockTimeout + 1n);
       await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
 
       expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(
+        logisticsAmount + platformFeesAmount,
+      );
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(refundablePrincipal);
+      expect(await escrow.buyerRefundableAmount(tradeId)).to.equal(0);
     });
 
     it('Should keep treasury at fees-only after IN_TRANSIT timeout refund', async function () {

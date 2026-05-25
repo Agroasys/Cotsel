@@ -75,6 +75,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "approveTreasuryPayoutAddressUpdate"
       | "approveUnpause"
       | "authorizationNonces"
+      | "buyerRefundableAmount"
       | "cancelExpiredAddAdminProposal"
       | "cancelExpiredDisputeProposal"
       | "cancelExpiredOracleUpdateProposal"
@@ -110,6 +111,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "inTransitSince"
       | "isAdmin"
       | "isRelayer"
+      | "nonRefundableFeeAmount"
       | "nonces"
       | "openDispute"
       | "openDisputeWithAuthorization"
@@ -286,6 +288,10 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "buyerRefundableAmount",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "cancelExpiredAddAdminProposal",
     values: [BigNumberish]
   ): string;
@@ -445,6 +451,10 @@ export interface AgroasysEscrowInterface extends Interface {
   encodeFunctionData(
     functionFragment: "isRelayer",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "nonRefundableFeeAmount",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "nonces", values: [AddressLike]): string;
   encodeFunctionData(
@@ -677,6 +687,10 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "buyerRefundableAmount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "cancelExpiredAddAdminProposal",
     data: BytesLike
   ): Result;
@@ -807,6 +821,10 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "isAdmin", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "isRelayer", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "nonRefundableFeeAmount",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "nonces", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "openDispute",
@@ -1951,6 +1969,12 @@ export interface AgroasysEscrow extends BaseContract {
     "view"
   >;
 
+  buyerRefundableAmount: TypedContractMethod<
+    [_tradeId: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
   cancelExpiredAddAdminProposal: TypedContractMethod<
     [_proposalId: BigNumberish],
     [void],
@@ -2143,6 +2167,12 @@ export interface AgroasysEscrow extends BaseContract {
   isAdmin: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
   isRelayer: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+
+  nonRefundableFeeAmount: TypedContractMethod<
+    [_tradeId: BigNumberish],
+    [bigint],
+    "view"
+  >;
 
   nonces: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
@@ -2466,6 +2496,9 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "authorizationNonces"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
+    nameOrSignature: "buyerRefundableAmount"
+  ): TypedContractMethod<[_tradeId: BigNumberish], [bigint], "view">;
+  getFunction(
     nameOrSignature: "cancelExpiredAddAdminProposal"
   ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
   getFunction(
@@ -2637,6 +2670,9 @@ export interface AgroasysEscrow extends BaseContract {
   getFunction(
     nameOrSignature: "isRelayer"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "nonRefundableFeeAmount"
+  ): TypedContractMethod<[_tradeId: BigNumberish], [bigint], "view">;
   getFunction(
     nameOrSignature: "nonces"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
