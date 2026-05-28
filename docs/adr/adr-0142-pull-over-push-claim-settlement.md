@@ -1,6 +1,6 @@
 # ADR-0142: Pull-Over-Push Claim Settlement Model
 
-- Status: Superseded for supplier payouts by issue #528; still accepted for buyer refunds and treasury claim flows
+- Status: Superseded for supplier payouts by issue #528 and buyer refunds by PR #530; still accepted for treasury claim flows
 - Date: 2026-02-28
 - Related issue: [#142](https://github.com/Agroasys/Cotsel/issues/142)
 
@@ -10,7 +10,7 @@ Escrow payout transitions previously transferred USDC directly during stage/disp
 
 ## Decision
 
-Adopt a pull-over-push settlement model:
+Adopted a pull-over-push settlement model:
 
 - Trade-state transitions accrue recipient entitlement into `claimableUsdc` via `ClaimableAccrued` events.
 - Recipients withdraw accrued funds via `claim()`.
@@ -21,11 +21,13 @@ Adopt a pull-over-push settlement model:
 
 ## Superseding Decision
 
-Issue `#528` restores direct supplier payout for active settlement flows. The current hybrid model is:
+Issue `#528` restores direct supplier payout for active settlement flows, and PR `#530` restores direct buyer refunds. The current model is:
 
 - Supplier first tranche, supplier second tranche, and dispute `RESOLVE` supplier proceeds transfer directly.
-- Buyer refunds, treasury logistics/platform fee entitlements, and treasury sweeps remain claim-based.
-- Direct supplier payout emits `SupplierPayoutTransferred`; claim-based entitlements continue to emit `ClaimableAccrued`.
+- Buyer lock-timeout refunds, in-transit timeout refunds, and dispute `REFUND` proceeds transfer directly.
+- Treasury logistics/platform fee entitlements remain claim-based and are swept only through `claimTreasury()`.
+- The generic `claim()` function is removed from the active contract version.
+- Direct supplier payout emits `SupplierPayoutTransferred`; direct buyer refund emits `BuyerRefundTransferred`; treasury entitlements continue to emit `ClaimableAccrued`.
 
 ## Alternatives Considered
 
@@ -43,26 +45,29 @@ Issue `#528` restores direct supplier payout for active settlement flows. The cu
 
 ### Reentrancy posture
 
-- `claim()` is `nonReentrant` and zeroes `claimableUsdc[msg.sender]` before transfer.
-- State-transition functions accrue balances rather than transferring directly.
+- Supplier and buyer direct transfer paths are `nonReentrant` state-transition functions.
+- `claimTreasury()` is `nonReentrant` and zeroes `claimableUsdc[treasuryAddress]` before transfer.
+- Active state-transition functions accrue only treasury fee balances.
 
 ### Failure isolation
 
-- If a claimant transfer fails, only that claim transaction reverts.
-- Other recipients and previously accrued entitlements are unaffected.
+- If a supplier or buyer direct token transfer fails, the whole transition reverts and state is not advanced.
+- If a treasury sweep transfer fails, only that treasury transaction reverts.
+- Previously accrued treasury entitlements remain unaffected by failed buyer/supplier transition attempts.
 
 ### Pausability policy
 
 - Global pause continues to block protocol mutation paths (`whenNotPaused` routes).
-- Claim path remains available unless dedicated `claimsPaused` is enabled.
-- Rationale: preserve non-custodial access to already-accrued balances while retaining emergency claim freeze when claim path itself is at risk.
+- Treasury sweep remains available unless dedicated `claimsPaused` is enabled.
+- Rationale: preserve treasury access to already-accrued fee balances while retaining emergency claim freeze when the treasury claim path itself is at risk.
 
 ## Compatibility and Migration Notes
 
 - Trade lifecycle semantics remain the same (LOCKED -> IN_TRANSIT -> CLOSED / dispute outcomes).
-- Buyer refund and treasury payout delivery changed from immediate transfer to accrued entitlement + explicit claim withdrawal.
 - Supplier payout delivery is direct for active settlement flows after issue `#528`.
-- Event model includes deterministic claim evidence (`ClaimableAccrued`, `Claimed`) and supplier payout execution evidence (`SupplierPayoutTransferred`).
+- Buyer refund delivery is direct for active settlement flows after PR `#530`.
+- Treasury payout delivery remains accrued entitlement + explicit `claimTreasury()` sweep.
+- Event model includes deterministic treasury claim evidence (`ClaimableAccrued`, `TreasuryClaimed`) and direct payout execution evidence (`SupplierPayoutTransferred`, `BuyerRefundTransferred`).
 - In-flight trades keep their current state semantics. Entitlements accrue when transition functions execute under the pull model; no retroactive "backfill transfer" is required for already-paid legacy transitions.
 
 ## Evidence
