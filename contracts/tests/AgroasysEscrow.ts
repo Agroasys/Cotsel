@@ -1519,6 +1519,40 @@ describe('AgroasysEscrow', function () {
       expect(await usdc.authorizationState(buyer.address, prepared.tokenNonce)).to.equal(false);
     });
 
+    it('rejects expired and wrong-signer gasless create-trade authorizations', async function () {
+      const prepared = await prepareGaslessTrade(ethers.id('gasless-expired'));
+      await time.increase(3601);
+
+      await expect(submitPreparedGaslessTrade(prepared)).to.be.revertedWith(
+        'authorization expired',
+      );
+      expect(await usdc.authorizationState(buyer.address, prepared.tokenNonce)).to.equal(false);
+
+      const freshPrepared = await prepareGaslessTrade(ethers.id('gasless-wrong-signer'));
+      const wrongSignerSignature = await signCreateTradeAuthorization(supplier, {
+        buyer: buyer.address,
+        supplier: supplier.address,
+        totalAmount,
+        logisticsAmount,
+        platformFeesAmount,
+        supplierFirstTranche,
+        supplierSecondTranche,
+        ricardianHash: freshPrepared.ricardianHash,
+        nonce: freshPrepared.authNonce,
+        deadline: freshPrepared.authDeadline,
+      });
+
+      await expect(
+        submitPreparedGaslessTrade({
+          ...freshPrepared,
+          authorizationSignature: wrongSignerSignature,
+        }),
+      ).to.be.revertedWith('bad authorization');
+      expect(await usdc.authorizationState(buyer.address, freshPrepared.tokenNonce)).to.equal(
+        false,
+      );
+    });
+
     it('executes buyer actions only through admins or allowlisted relayers', async function () {
       const { tradeId } = await createGaslessTrade(ethers.id('gasless-action'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
@@ -1551,6 +1585,142 @@ describe('AgroasysEscrow', function () {
 
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(3);
+    });
+
+    it('rejects replayed, expired, and wrong-trade buyer action authorizations', async function () {
+      const { tradeId } = await createGaslessTrade(ethers.id('gasless-action-failures'));
+      await escrow.connect(oracle).releaseFundsStage1(tradeId);
+      await escrow.connect(oracle).confirmArrival(tradeId);
+
+      let blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      let deadline = BigInt(blockTimestamp + 3600);
+      const nonce = await escrow.getAuthorizationNonce(buyer.address);
+      let signature = await signUserActionAuthorization(buyer, {
+        user: buyer.address,
+        action: 1,
+        tradeId: tradeId + 1n,
+        nonce,
+        deadline,
+      });
+
+      await expect(
+        escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
+      ).to.be.revertedWith('bad authorization');
+
+      blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      const expiredDeadline = BigInt(blockTimestamp - 1);
+      signature = await signUserActionAuthorization(buyer, {
+        user: buyer.address,
+        action: 1,
+        tradeId,
+        nonce,
+        deadline: expiredDeadline,
+      });
+
+      await expect(
+        escrow
+          .connect(admin1)
+          .openDisputeWithAuthorization(tradeId, nonce, expiredDeadline, signature),
+      ).to.be.revertedWith('authorization expired');
+
+      blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      deadline = BigInt(blockTimestamp + 3600);
+      signature = await signUserActionAuthorization(buyer, {
+        user: buyer.address,
+        action: 1,
+        tradeId,
+        nonce,
+        deadline,
+      });
+
+      await escrow
+        .connect(admin1)
+        .openDisputeWithAuthorization(tradeId, nonce, deadline, signature);
+      await expect(
+        escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
+      ).to.be.revertedWith('bad authorization nonce');
+    });
+
+    it('relays lock-timeout cancellation and transfers only refundable principal to the buyer', async function () {
+      const { tradeId } = await createGaslessTrade(ethers.id('gasless-cancel-timeout'));
+      await time.increase(7 * 24 * 3600 + 1);
+
+      const buyerBefore = await usdc.balanceOf(buyer.address);
+      const nonce = await escrow.getAuthorizationNonce(buyer.address);
+      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      const deadline = BigInt(blockTimestamp + 3600);
+      const signature = await signUserActionAuthorization(buyer, {
+        user: buyer.address,
+        action: 2,
+        tradeId,
+        nonce,
+        deadline,
+      });
+
+      await expect(
+        escrow
+          .connect(admin1)
+          .cancelLockedTradeAfterTimeoutWithAuthorization(tradeId, nonce, deadline, signature),
+      )
+        .to.emit(escrow, 'BuyerRefundTransferred')
+        .withArgs(
+          tradeId,
+          buyer.address,
+          supplierFirstTranche + supplierSecondTranche,
+          4,
+          admin1.address,
+        )
+        .and.to.emit(escrow, 'RelayedActionExecuted')
+        .withArgs(
+          admin1.address,
+          buyer.address,
+          await escrow.ACTION_CANCEL_LOCKED_TIMEOUT(),
+          tradeId,
+        );
+
+      expect(await usdc.balanceOf(buyer.address)).to.equal(
+        buyerBefore + supplierFirstTranche + supplierSecondTranche,
+      );
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(
+        logisticsAmount + platformFeesAmount,
+      );
+    });
+
+    it('relays in-transit timeout refunds directly to the buyer', async function () {
+      const { tradeId } = await createGaslessTrade(ethers.id('gasless-in-transit-refund'));
+      await escrow.connect(oracle).releaseFundsStage1(tradeId);
+      await time.increase(14 * 24 * 3600 + 1);
+
+      const buyerBefore = await usdc.balanceOf(buyer.address);
+      const nonce = await escrow.getAuthorizationNonce(buyer.address);
+      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      const deadline = BigInt(blockTimestamp + 3600);
+      const signature = await signUserActionAuthorization(buyer, {
+        user: buyer.address,
+        action: 3,
+        tradeId,
+        nonce,
+        deadline,
+      });
+
+      await expect(
+        escrow
+          .connect(admin1)
+          .refundInTransitAfterTimeoutWithAuthorization(tradeId, nonce, deadline, signature),
+      )
+        .to.emit(escrow, 'BuyerRefundTransferred')
+        .withArgs(tradeId, buyer.address, supplierSecondTranche, 5, admin1.address)
+        .and.to.emit(escrow, 'RelayedActionExecuted')
+        .withArgs(
+          admin1.address,
+          buyer.address,
+          await escrow.ACTION_REFUND_IN_TRANSIT_TIMEOUT(),
+          tradeId,
+        );
+
+      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBefore + supplierSecondTranche);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
     });
   });
 
