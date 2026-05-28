@@ -147,7 +147,7 @@ describe('AgroasysEscrow - Claim Security', function () {
         ['string'],
         `0x${lastError.slice(10)}`,
       );
-      expect(decoded[0]).to.equal('nothing claimable');
+      expect(decoded[0]).to.equal('only treasury or admin');
     } else {
       expect(selector).to.equal(reentrancySelector);
     }
@@ -206,11 +206,6 @@ describe('AgroasysEscrow - Claim Security', function () {
 
     await expect(escrow.connect(treasury).claimTreasury()).to.be.revertedWith('hook revert');
     expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
-
-    // treasury cannot bypass the rotated payout address via claim()
-    await expect(escrow.connect(treasury).claim()).to.be.revertedWith(
-      'treasury must use claimTreasury',
-    );
 
     // once the hook is resolved, claimTreasury routes to the rotated receiver — state was not corrupted
     await usdc.setHookEnabled(await receiver.getAddress(), false);

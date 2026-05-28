@@ -164,7 +164,6 @@ SDK and inject a signer instead.
 | `openDispute(tradeId, signer)`                   | Open a dispute on an existing trade               |
 | `cancelLockedTradeAfterTimeout(tradeId, signer)` | Cancel stale `LOCKED` trade after timeout         |
 | `refundInTransitAfterTimeout(tradeId, signer)`   | Refund remaining principal when transit times out |
-| `claim(signer)`                                  | Claim accumulated USDC assigned to the signer     |
 
 ### OracleSDK
 

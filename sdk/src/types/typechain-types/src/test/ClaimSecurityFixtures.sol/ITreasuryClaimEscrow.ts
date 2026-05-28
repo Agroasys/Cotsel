@@ -19,19 +19,25 @@ import type {
   TypedContractMethod,
 } from "../../../common";
 
-export interface IClaimableEscrowInterface extends Interface {
-  getFunction(nameOrSignature: "claim"): FunctionFragment;
+export interface ITreasuryClaimEscrowInterface extends Interface {
+  getFunction(nameOrSignature: "claimTreasury"): FunctionFragment;
 
-  encodeFunctionData(functionFragment: "claim", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "claimTreasury",
+    values?: undefined
+  ): string;
 
-  decodeFunctionResult(functionFragment: "claim", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "claimTreasury",
+    data: BytesLike
+  ): Result;
 }
 
-export interface IClaimableEscrow extends BaseContract {
-  connect(runner?: ContractRunner | null): IClaimableEscrow;
+export interface ITreasuryClaimEscrow extends BaseContract {
+  connect(runner?: ContractRunner | null): ITreasuryClaimEscrow;
   waitForDeployment(): Promise<this>;
 
-  interface: IClaimableEscrowInterface;
+  interface: ITreasuryClaimEscrowInterface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -70,14 +76,14 @@ export interface IClaimableEscrow extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  claim: TypedContractMethod<[], [void], "nonpayable">;
+  claimTreasury: TypedContractMethod<[], [void], "nonpayable">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
   getFunction(
-    nameOrSignature: "claim"
+    nameOrSignature: "claimTreasury"
   ): TypedContractMethod<[], [void], "nonpayable">;
 
   filters: {};

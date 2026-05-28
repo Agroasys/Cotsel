@@ -3,5 +3,5 @@
 /* eslint-disable */
 export type { ClaimHookReceiver } from "./ClaimHookReceiver";
 export type { HookedMockUSDC } from "./HookedMockUSDC";
-export type { IClaimableEscrow } from "./IClaimableEscrow";
 export type { ITokenTransferHook } from "./ITokenTransferHook";
+export type { ITreasuryClaimEscrow } from "./ITreasuryClaimEscrow";

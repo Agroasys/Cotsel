@@ -29,7 +29,7 @@ export interface ClaimHookReceiverInterface extends Interface {
       | "lastError"
       | "onTokenTransferHook"
       | "reentryAttempted"
-      | "triggerClaim"
+      | "triggerTreasuryClaim"
   ): FunctionFragment;
 
   encodeFunctionData(
@@ -55,7 +55,7 @@ export interface ClaimHookReceiverInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "triggerClaim",
+    functionFragment: "triggerTreasuryClaim",
     values?: undefined
   ): string;
 
@@ -79,7 +79,7 @@ export interface ClaimHookReceiverInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "triggerClaim",
+    functionFragment: "triggerTreasuryClaim",
     data: BytesLike
   ): Result;
 }
@@ -145,7 +145,7 @@ export interface ClaimHookReceiver extends BaseContract {
 
   reentryAttempted: TypedContractMethod<[], [boolean], "view">;
 
-  triggerClaim: TypedContractMethod<[], [void], "nonpayable">;
+  triggerTreasuryClaim: TypedContractMethod<[], [void], "nonpayable">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
@@ -177,7 +177,7 @@ export interface ClaimHookReceiver extends BaseContract {
     nameOrSignature: "reentryAttempted"
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
-    nameOrSignature: "triggerClaim"
+    nameOrSignature: "triggerTreasuryClaim"
   ): TypedContractMethod<[], [void], "nonpayable">;
 
   filters: {};

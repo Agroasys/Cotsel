@@ -236,6 +236,21 @@ processor.run(new TypeormDatabase(), async (ctx) => {
               ctx,
             );
             break;
+          case 'BuyerRefundTransferred':
+            overviewSnapshot = await handleBuyerRefundTransferred(
+              decoded,
+              trades,
+              tradeEvents,
+              overviewSnapshot,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
 
           // Dispute events
           case 'DisputeSolutionProposed':
@@ -519,19 +534,6 @@ processor.run(new TypeormDatabase(), async (ctx) => {
             break;
           case 'ClaimsUnpaused':
             await handleClaimsUnpaused(
-              decoded,
-              systemEvents,
-              eventId,
-              block,
-              timestamp,
-              txHash,
-              logIndex,
-              transactionIndex,
-              ctx,
-            );
-            break;
-          case 'Claimed':
-            await handleClaimed(
               decoded,
               systemEvents,
               eventId,
@@ -1267,6 +1269,54 @@ async function handleSupplierPayoutTransferred(
 
   ctx.log.info(
     `Supplier payout transferred for trade ${tradeId}: ${amount} to ${supplier} (${claimTypeEnum})`,
+  );
+  return overviewSnapshot;
+}
+
+async function handleBuyerRefundTransferred(
+  log: DecodedEscrowLog,
+  trades: Map<string, Trade>,
+  events: TradeEvent[],
+  overviewSnapshot: OverviewSnapshot,
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [tradeId, buyer, amount, claimType, triggeredBy] = log.args;
+
+  const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
+
+  if (!trade) {
+    ctx.log.error(`Trade ${tradeId} not found for BuyerRefundTransferred event`);
+    return overviewSnapshot;
+  }
+
+  const claimTypeEnum = CLAIM_TYPE_VALUES[Number(claimType)] ?? null;
+  overviewSnapshot.lastTradeEventAt = timestamp;
+
+  events.push(
+    new TradeEvent({
+      id: eventId,
+      trade,
+      eventName: 'BuyerRefundTransferred',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      buyerRefundRecipient: buyer.toLowerCase(),
+      buyerRefundAmount: amount,
+      buyerRefundType: claimTypeEnum,
+      buyerRefundTriggeredBy: triggeredBy.toLowerCase(),
+    }),
+  );
+
+  ctx.log.info(
+    `Buyer refund transferred for trade ${tradeId}: ${amount} to ${buyer} (${claimTypeEnum})`,
   );
   return overviewSnapshot;
 }
@@ -2243,36 +2293,6 @@ async function handleClaimableAccrued(
     `Trade ${tradeId} claimable accrued: ${amount} to ${recipient} (type: ${claimTypeEnum})`,
   );
   return overviewSnapshot;
-}
-
-async function handleClaimed(
-  log: DecodedEscrowLog,
-  events: SystemEvent[],
-  eventId: string,
-  block: IndexerBlock,
-  timestamp: Date,
-  txHash: string,
-  logIndex: number,
-  transactionIndex: number,
-  ctx: IndexerContext,
-) {
-  const [claimant, amount] = log.args;
-
-  events.push(
-    new SystemEvent({
-      id: eventId,
-      eventName: 'Claimed',
-      blockNumber: block.header.height,
-      timestamp,
-      txHash,
-      logIndex,
-      transactionIndex,
-      triggeredBy: claimant.toLowerCase(),
-      claimAmount: amount,
-    }),
-  );
-
-  ctx.log.info(`Claimed ${amount} by ${claimant}`);
 }
 
 async function handleTreasuryClaimed(

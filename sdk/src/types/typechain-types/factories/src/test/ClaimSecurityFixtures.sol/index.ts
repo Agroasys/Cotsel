@@ -3,5 +3,5 @@
 /* eslint-disable */
 export { ClaimHookReceiver__factory } from "./ClaimHookReceiver__factory";
 export { HookedMockUSDC__factory } from "./HookedMockUSDC__factory";
-export { IClaimableEscrow__factory } from "./IClaimableEscrow__factory";
 export { ITokenTransferHook__factory } from "./ITokenTransferHook__factory";
+export { ITreasuryClaimEscrow__factory } from "./ITreasuryClaimEscrow__factory";

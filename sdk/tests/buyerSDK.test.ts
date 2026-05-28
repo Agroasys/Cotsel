@@ -30,7 +30,6 @@ type MockContractWithSigner = {
   openDispute: jest.Mock;
   cancelLockedTradeAfterTimeout: jest.Mock;
   refundInTransitAfterTimeout: jest.Mock;
-  claim: jest.Mock;
 };
 
 type BuyerSignerLike = Pick<ethers.Signer, 'getAddress' | 'signMessage' | 'provider'>;
@@ -66,7 +65,6 @@ function makeSdkUnit() {
     openDispute: jest.fn(),
     cancelLockedTradeAfterTimeout: jest.fn(),
     refundInTransitAfterTimeout: jest.fn(),
-    claim: jest.fn(),
   };
 
   const connect = jest.fn().mockReturnValue(contractWithSigner);
@@ -99,7 +97,6 @@ const networkMismatchCases: Array<[string, BuyerWriteInvocation]> = [
     (sdk, signer) => sdk.cancelLockedTradeAfterTimeout(11n, signer),
   ],
   ['refundInTransitAfterTimeout', (sdk, signer) => sdk.refundInTransitAfterTimeout(12n, signer)],
-  ['claim', (sdk, signer) => sdk.claim(signer)],
 ];
 
 describe('BuyerSDK unit', () => {
@@ -298,19 +295,6 @@ describe('BuyerSDK unit', () => {
     const result = await sdk.refundInTransitAfterTimeout(12n, signer);
 
     expect(contractWithSigner.refundInTransitAfterTimeout).toHaveBeenCalledWith(12n);
-    expect(tx.wait).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
-  });
-
-  test('claim should call contract and return tx result', async () => {
-    const { sdk, contractWithSigner, connect } = makeSdkUnit();
-    const { signer } = makeBuyerSigner();
-    const tx = mockSuccessCall(contractWithSigner.claim);
-
-    const result = await sdk.claim(signer);
-
-    expect(connect).toHaveBeenCalledWith(signer);
-    expect(contractWithSigner.claim).toHaveBeenCalledTimes(1);
     expect(tx.wait).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
   });

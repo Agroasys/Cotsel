@@ -134,6 +134,10 @@ interface TradeEventGraphQlRecord {
   supplierPayoutAmount?: string | null;
   supplierPayoutType?: string | null;
   supplierPayoutTriggeredBy?: string | null;
+  buyerRefundRecipient?: string | null;
+  buyerRefundAmount?: string | null;
+  buyerRefundType?: string | null;
+  buyerRefundTriggeredBy?: string | null;
 }
 
 interface TradesGraphQlResponse {
@@ -288,6 +292,8 @@ function mapEventStage(eventName: string): string {
       return 'Gasless Funding';
     case 'SupplierPayoutTransferred':
       return 'Supplier Payout';
+    case 'BuyerRefundTransferred':
+      return 'Buyer Refund';
     default:
       return eventName;
   }
@@ -313,6 +319,7 @@ function mapEventActor(eventName: string): string {
     case 'GaslessTradeFunded':
       return 'Cotsel Execution';
     case 'SupplierPayoutTransferred':
+    case 'BuyerRefundTransferred':
       return 'Escrow';
     default:
       return 'Protocol';
@@ -351,6 +358,8 @@ function mapEventDetail(event: TradeEventGraphQlRecord): string | undefined {
       return `Gasless USDC authorization funded ${asUsdcNumber(event.totalAmount ?? '0', 'event.totalAmount').toLocaleString()} USDC from ${event.gaslessBuyer ?? 'buyer'}.`;
     case 'SupplierPayoutTransferred':
       return `Supplier payout transferred directly to ${event.supplierPayoutRecipient ?? 'supplier'} for ${asUsdcNumber(event.supplierPayoutAmount ?? '0', 'event.supplierPayoutAmount').toLocaleString()} USDC.`;
+    case 'BuyerRefundTransferred':
+      return `Buyer refund transferred directly to ${event.buyerRefundRecipient ?? 'buyer'} for ${asUsdcNumber(event.buyerRefundAmount ?? '0', 'event.buyerRefundAmount').toLocaleString()} USDC.`;
     default:
       return undefined;
   }
@@ -501,6 +510,10 @@ const listTradesQuery = `
         supplierPayoutAmount
         supplierPayoutType
         supplierPayoutTriggeredBy
+        buyerRefundRecipient
+        buyerRefundAmount
+        buyerRefundType
+        buyerRefundTriggeredBy
       }
     }
   }
@@ -553,6 +566,10 @@ const tradeDetailQuery = `
         supplierPayoutAmount
         supplierPayoutType
         supplierPayoutTriggeredBy
+        buyerRefundRecipient
+        buyerRefundAmount
+        buyerRefundType
+        buyerRefundTriggeredBy
       }
     }
   }

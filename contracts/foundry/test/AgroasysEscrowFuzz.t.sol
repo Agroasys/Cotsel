@@ -477,7 +477,6 @@ contract FuzzTest is Test {
         uint256 supplierBeforeApproveSolutionBalance = usdc.balanceOf(supplier);
         uint256 treasuryBeforeApproveSolutionBalance = usdc.balanceOf(treasury);
         uint256 escrowBeforeApproveSolutionBalance = usdc.balanceOf(address(escrow));
-        uint256 buyerBeforeApproveSolutionClaimable = escrow.claimableUsdc(buyer);
 
         vm.prank(admin2);
         escrow.approveDisputeSolution(proposalId);
@@ -486,11 +485,11 @@ contract FuzzTest is Test {
 
         assertEq(uint8(_status6), uint8(AgroasysEscrow.TradeStatus.CLOSED), "status should be CLOSED");
         // check that balances are correct
-        assertEq(usdc.balanceOf(buyer),buyerBeforeApproveSolutionBalance,"buyer balance mismatch");
+        assertEq(usdc.balanceOf(buyer),buyerBeforeApproveSolutionBalance + tranche2,"buyer balance mismatch");
         assertEq(usdc.balanceOf(supplier),supplierBeforeApproveSolutionBalance,"supplier balance mismatch");
         assertEq(usdc.balanceOf(treasury),treasuryBeforeApproveSolutionBalance,"treasury balance mismatch");
-        assertEq(usdc.balanceOf(address(escrow)),escrowBeforeApproveSolutionBalance,"escrow balance mismatch");
-        assertEq(escrow.claimableUsdc(buyer),buyerBeforeApproveSolutionClaimable + tranche2,"buyer claimableUsdc mismatch");
+        assertEq(usdc.balanceOf(address(escrow)),escrowBeforeApproveSolutionBalance - tranche2,"escrow balance mismatch");
+        assertEq(escrow.claimableUsdc(buyer),0,"buyer claimableUsdc mismatch");
     }
 
 
@@ -615,7 +614,6 @@ contract FuzzTest is Test {
         
         uint256 buyerBalanceBefore = usdc.balanceOf(buyer);
         uint256 escrowBalanceBefore = usdc.balanceOf(address(escrow));
-        uint256 buyerClaimableBefore = escrow.claimableUsdc(buyer);
         uint256 treasuryClaimableBefore = escrow.claimableUsdc(treasury);
         
         vm.warp(block.timestamp + 7 days + 1);
@@ -626,9 +624,9 @@ contract FuzzTest is Test {
         (,,AgroasysEscrow.TradeStatus _statusAfter,,,,,,,,,) = escrow.trades(tradeId);
         
         assertEq(uint8(_statusAfter), uint8(AgroasysEscrow.TradeStatus.CLOSED), "status should be CLOSED");
-        assertEq(usdc.balanceOf(buyer), buyerBalanceBefore, "buyer balance should remain unchanged before claim");
-        assertEq(usdc.balanceOf(address(escrow)), escrowBalanceBefore, "escrow balance should remain unchanged before claim");
-        assertEq(escrow.claimableUsdc(buyer), buyerClaimableBefore + refundablePrincipal, "buyer claimable should include refundable principal");
+        assertEq(usdc.balanceOf(buyer), buyerBalanceBefore + refundablePrincipal, "buyer should receive refundable principal immediately");
+        assertEq(usdc.balanceOf(address(escrow)), escrowBalanceBefore - refundablePrincipal, "escrow balance should retain only non-refundable fees");
+        assertEq(escrow.claimableUsdc(buyer), 0, "buyer claimable should remain zero after direct refund");
         assertEq(escrow.claimableUsdc(treasury), treasuryClaimableBefore + logistics + fees, "treasury claimable should retain non-refundable fees");
     }
 
@@ -650,7 +648,6 @@ contract FuzzTest is Test {
         
         uint256 buyerBalanceBefore = usdc.balanceOf(buyer);
         uint256 escrowBalanceBefore = usdc.balanceOf(address(escrow));
-        uint256 buyerClaimableBefore = escrow.claimableUsdc(buyer);
         
         assertEq(escrowBalanceBefore, logistics + fees + tranche2, "escrow balance should retain only unpaid funds after stage1 payout");
         
@@ -662,13 +659,12 @@ contract FuzzTest is Test {
         (,,AgroasysEscrow.TradeStatus _statusAfter,,,,,,,,,) = escrow.trades(tradeId);
         
         assertEq(uint8(_statusAfter), uint8(AgroasysEscrow.TradeStatus.CLOSED), "status should be CLOSED");
-        assertEq(usdc.balanceOf(buyer), buyerBalanceBefore, "buyer balance should remain unchanged before claim");
-        assertEq(usdc.balanceOf(address(escrow)), escrowBalanceBefore, "escrow balance should remain unchanged before claim");
-        assertEq(escrow.claimableUsdc(buyer), buyerClaimableBefore + tranche2, "buyer claimable should include tranche2 refund");
+        assertEq(usdc.balanceOf(buyer), buyerBalanceBefore + tranche2, "buyer should receive tranche2 refund immediately");
+        assertEq(usdc.balanceOf(address(escrow)), escrowBalanceBefore - tranche2, "escrow balance should retain only treasury fees");
+        assertEq(escrow.claimableUsdc(buyer), 0, "buyer claimable should remain zero after direct refund");
     }
 
-    // after payout address rotation, treasury cannot bypass claimTreasury() via claim()
-    function test_treasuryCannotBypassPayoutRotationViaClaim() public {
+    function test_treasuryPayoutRotationRoutesClaimTreasury() public {
         uint256 tradeId = _create_trade(1_000e6, 500e6, 10_000e6, 10_000e6, keccak256("doc"));
 
         vm.prank(oracle);
@@ -688,11 +684,6 @@ contract FuzzTest is Test {
         vm.prank(admin1);
         escrow.executeTreasuryPayoutAddressUpdate(proposalId);
         assertEq(escrow.treasuryPayoutAddress(), newReceiver, "payout address should be rotated");
-
-        // treasury calling claim() directly must revert
-        vm.prank(treasury);
-        vm.expectRevert("treasury must use claimTreasury");
-        escrow.claim();
 
         // claimTreasury() routes funds to newReceiver, not treasury
         uint256 receiverBefore = usdc.balanceOf(newReceiver);

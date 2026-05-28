@@ -82,13 +82,13 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.HookedMockUSDC__factory>;
     getContractFactory(
-      name: "IClaimableEscrow",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IClaimableEscrow__factory>;
-    getContractFactory(
       name: "ITokenTransferHook",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ITokenTransferHook__factory>;
+    getContractFactory(
+      name: "ITreasuryClaimEscrow",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ITreasuryClaimEscrow__factory>;
 
     getContractAt(
       name: "IERC1155Errors",
@@ -176,15 +176,15 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.HookedMockUSDC>;
     getContractAt(
-      name: "IClaimableEscrow",
+      name: "ITokenTransferHook",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IClaimableEscrow>;
+    ): Promise<Contracts.ITokenTransferHook>;
     getContractAt(
-      name: "ITokenTransferHook",
+      name: "ITreasuryClaimEscrow",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.ITokenTransferHook>;
+    ): Promise<Contracts.ITreasuryClaimEscrow>;
 
     deployContract(
       name: "IERC1155Errors",
@@ -255,13 +255,13 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.HookedMockUSDC>;
     deployContract(
-      name: "IClaimableEscrow",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IClaimableEscrow>;
-    deployContract(
       name: "ITokenTransferHook",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ITokenTransferHook>;
+    deployContract(
+      name: "ITreasuryClaimEscrow",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITreasuryClaimEscrow>;
 
     deployContract(
       name: "IERC1155Errors",
@@ -349,15 +349,15 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.HookedMockUSDC>;
     deployContract(
-      name: "IClaimableEscrow",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IClaimableEscrow>;
-    deployContract(
       name: "ITokenTransferHook",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ITokenTransferHook>;
+    deployContract(
+      name: "ITreasuryClaimEscrow",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITreasuryClaimEscrow>;
 
     // default types
     getContractFactory(

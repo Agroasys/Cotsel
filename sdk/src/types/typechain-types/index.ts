@@ -40,7 +40,7 @@ export type { ClaimHookReceiver } from "./src/test/ClaimSecurityFixtures.sol/Cla
 export { ClaimHookReceiver__factory } from "./factories/src/test/ClaimSecurityFixtures.sol/ClaimHookReceiver__factory";
 export type { HookedMockUSDC } from "./src/test/ClaimSecurityFixtures.sol/HookedMockUSDC";
 export { HookedMockUSDC__factory } from "./factories/src/test/ClaimSecurityFixtures.sol/HookedMockUSDC__factory";
-export type { IClaimableEscrow } from "./src/test/ClaimSecurityFixtures.sol/IClaimableEscrow";
-export { IClaimableEscrow__factory } from "./factories/src/test/ClaimSecurityFixtures.sol/IClaimableEscrow__factory";
 export type { ITokenTransferHook } from "./src/test/ClaimSecurityFixtures.sol/ITokenTransferHook";
 export { ITokenTransferHook__factory } from "./factories/src/test/ClaimSecurityFixtures.sol/ITokenTransferHook__factory";
+export type { ITreasuryClaimEscrow } from "./src/test/ClaimSecurityFixtures.sol/ITreasuryClaimEscrow";
+export { ITreasuryClaimEscrow__factory } from "./factories/src/test/ClaimSecurityFixtures.sol/ITreasuryClaimEscrow__factory";

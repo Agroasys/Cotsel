@@ -19,11 +19,9 @@ import { TX_HASH_REGEX } from './testUtils';
 const DEFAULT_SUPPLIER_ADDRESS = '0x4aF052cB4B3eC7b58322548021bF254Cc4c80b2c';
 const SUPPLIER_ADDRESS = process.env.SUPPLIER_ADDRESS ?? DEFAULT_SUPPLIER_ADDRESS;
 const runManualE2E = process.env.RUN_E2E === 'true';
-const runBuyerClaimE2E = process.env.RUN_BUYER_CLAIM_E2E === 'true';
 const runBuyerDisputeE2E = process.env.RUN_BUYER_DISPUTE_E2E === 'true';
 const runBuyerTimeoutE2E = process.env.RUN_BUYER_TIMEOUT_E2E === 'true';
 const describeIntegration = runManualE2E && hasRequiredEnv ? describe : describe.skip;
-const testBuyerClaim = runManualE2E && hasRequiredEnv && runBuyerClaimE2E ? test : test.skip;
 const testBuyerDispute = runManualE2E && hasRequiredEnv && runBuyerDisputeE2E ? test : test.skip;
 const testBuyerTimeout = runManualE2E && hasRequiredEnv && runBuyerTimeoutE2E ? test : test.skip;
 function requireManualBuyerE2EEnv(name: string): string {
@@ -170,7 +168,7 @@ describeIntegration('BuyerSDK', () => {
   testBuyerTimeout('should refund in-transit trade after timeout', async () => {
     const tradeId = requireManualBuyerE2EBigIntEnv('TEST_IN_TRANSIT_TRADE_ID');
     const buyerAddress = await buyerSigner.getAddress();
-    const claimableBefore = await buyerSDK.getClaimableUsdc(buyerAddress);
+    const balanceBefore = await buyerSDK.getUSDCBalance(buyerAddress);
 
     const result = await buyerSDK.refundInTransitAfterTimeout(tradeId, buyerSigner);
     expectValidTxHash(result.txHash);
@@ -178,13 +176,7 @@ describeIntegration('BuyerSDK', () => {
 
     const tradeAfter = await escrowReadOnly.trades(tradeId);
     expect(Number(tradeAfter.status)).toBe(TradeStatus.CLOSED);
-    const claimableAfter = await buyerSDK.getClaimableUsdc(buyerAddress);
-    expect(claimableAfter).toBeGreaterThanOrEqual(claimableBefore);
-  });
-
-  testBuyerClaim('should claim funds in the escrow', async () => {
-    const result = await buyerSDK.claim(buyerSigner);
-    expectValidTxHash(result.txHash);
-    console.log(`Funds claimed: ${result.txHash}`);
+    const balanceAfter = await buyerSDK.getUSDCBalance(buyerAddress);
+    expect(balanceAfter).toBeGreaterThan(balanceBefore);
   });
 });

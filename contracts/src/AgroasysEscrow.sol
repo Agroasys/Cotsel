@@ -33,6 +33,7 @@ interface IUSDCReceiveWithAuthorization {
  * - Logistics/platform fees are non-refundable once a trade is funded; platformFeesAmount includes the fixed settlement fee
  * - Stage 1 release pays supplierFirstTranche (principal) and leaves logistics/platform fees claimable by treasury
  * - Stage 2 accrual (finalization) includes: supplierSecondTranche (principal) ONLY
+ * - Buyer refunds are transferred directly during the refund transaction; buyers never need to claim
  */
 contract AgroasysEscrow is ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
@@ -449,7 +450,13 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         ClaimType claimType,
         address indexed triggeredBy
     );
-    event Claimed(address indexed claimant, uint256 amount);
+    event BuyerRefundTransferred(
+        uint256 indexed tradeId,
+        address indexed buyer,
+        uint256 amount,
+        ClaimType claimType,
+        address indexed triggeredBy
+    );
     event ClaimsPaused(address indexed triggeredBy);
     event ClaimsUnpaused(address indexed triggeredBy);
     event OracleUpdateProposalExpiredCancelled(uint256 indexed proposalId, address indexed cancelledBy);
@@ -1074,6 +1081,20 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         emit SupplierPayoutTransferred(_tradeId, _supplier, _amount, _claimType, msg.sender);
     }
 
+    function _transferBuyerRefund(
+        uint256 _tradeId,
+        address _buyer,
+        uint256 _amount,
+        ClaimType _claimType
+    ) internal {
+        if (_amount == 0) {
+            return;
+        }
+
+        usdcToken.safeTransfer(_buyer, _amount);
+        emit BuyerRefundTransferred(_tradeId, _buyer, _amount, _claimType, msg.sender);
+    }
+
     function nonRefundableFeeAmount(uint256 _tradeId) public view returns (uint256) {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
@@ -1084,18 +1105,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
         return _buyerRefundablePrincipalAmount(trade);
-    }
-
-    function claim() external whenClaimsNotPaused nonReentrant {
-        require(msg.sender != treasuryAddress, "treasury must use claimTreasury");
-        uint256 amount = claimableUsdc[msg.sender];
-        require(amount > 0, "nothing claimable");
-
-        claimableUsdc[msg.sender] = 0;
-        totalClaimableUsdc -= amount;
-        usdcToken.safeTransfer(msg.sender, amount);
-
-        emit Claimed(msg.sender, amount);
     }
 
     /**
@@ -1283,9 +1292,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 buyerRefundAmount = _buyerRefundablePrincipalAmount(trade);
         trade.status = TradeStatus.CLOSED;
 
-        _accrueClaimable(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
         _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
         _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
+        _transferBuyerRefund(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
 
         emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, buyerRefundAmount);
     }
@@ -1314,9 +1323,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 buyerRefundAmount = _buyerRefundablePrincipalAmount(trade);
         trade.status = TradeStatus.CLOSED;
 
-        _accrueClaimable(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
         _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
         _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
+        _transferBuyerRefund(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
 
         emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, buyerRefundAmount);
         emit RelayedActionExecuted(msg.sender, trade.buyerAddress, ACTION_CANCEL_LOCKED_TIMEOUT, _tradeId);
@@ -1339,7 +1348,12 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         trade.status = TradeStatus.CLOSED;
         inTransitSince[_tradeId] = 0;
 
-        _accrueClaimable(_tradeId, trade.buyerAddress, trade.supplierSecondTranche, ClaimType.IN_TRANSIT_TIMEOUT_BUYER_REFUND);
+        _transferBuyerRefund(
+            _tradeId,
+            trade.buyerAddress,
+            trade.supplierSecondTranche,
+            ClaimType.IN_TRANSIT_TIMEOUT_BUYER_REFUND
+        );
 
         emit InTransitTimeoutRefunded(_tradeId, trade.buyerAddress, trade.supplierSecondTranche);
     }
@@ -1371,7 +1385,12 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         trade.status = TradeStatus.CLOSED;
         inTransitSince[_tradeId] = 0;
 
-        _accrueClaimable(_tradeId, trade.buyerAddress, trade.supplierSecondTranche, ClaimType.IN_TRANSIT_TIMEOUT_BUYER_REFUND);
+        _transferBuyerRefund(
+            _tradeId,
+            trade.buyerAddress,
+            trade.supplierSecondTranche,
+            ClaimType.IN_TRANSIT_TIMEOUT_BUYER_REFUND
+        );
 
         emit InTransitTimeoutRefunded(_tradeId, trade.buyerAddress, trade.supplierSecondTranche);
         emit RelayedActionExecuted(msg.sender, trade.buyerAddress, ACTION_REFUND_IN_TRANSIT_TIMEOUT, _tradeId);
@@ -1475,7 +1494,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         if (proposal.disputeStatus == DisputeStatus.REFUND) {
             // Refund buyer remaining escrowed principal (supplierSecondTranche)
             recipient = trade.buyerAddress;
-            _accrueClaimable(proposal.tradeId, recipient, payoutAmount, ClaimType.DISPUTE_REFUND_BUYER);
+            _transferBuyerRefund(proposal.tradeId, recipient, payoutAmount, ClaimType.DISPUTE_REFUND_BUYER);
         } else if (proposal.disputeStatus == DisputeStatus.RESOLVE) {
             // Release remaining escrowed principal to supplier (supplierSecondTranche)
             recipient = trade.supplierAddress;

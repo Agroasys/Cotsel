@@ -236,20 +236,6 @@ describe('AgroasysEscrow', function () {
     await escrow.connect(admin2).approveUnpause();
   }
 
-  async function claimAndAssert(claimant: SignerWithAddress) {
-    const claimable = await escrow.claimableUsdc(claimant.address);
-    const before = await usdc.balanceOf(claimant.address);
-
-    await expect(escrow.connect(claimant).claim())
-      .to.emit(escrow, 'Claimed')
-      .withArgs(claimant.address, claimable);
-
-    expect(await usdc.balanceOf(claimant.address)).to.equal(before + claimable);
-    expect(await escrow.claimableUsdc(claimant.address)).to.equal(0);
-
-    return claimable;
-  }
-
   async function rotateTreasuryPayoutReceiver(newReceiver: string, proposalId: bigint = 0n) {
     await escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(newReceiver);
     await escrow.connect(admin2).approveTreasuryPayoutAddressUpdate(proposalId);
@@ -405,46 +391,44 @@ describe('AgroasysEscrow', function () {
         .withArgs(admin2.address);
     });
 
-    it('Should allow refund claims while globally paused when claim freeze is not active', async function () {
+    it('Should direct-transfer buyer refund before global pause', async function () {
       const { tradeId, supplierFirstTranche, supplierSecondTranche } = await createDefaultTrade(
-        ethers.id('pause-claim-flow'),
+        ethers.id('pause-refund-flow'),
       );
+      const buyerBalBefore = await usdc.balanceOf(buyer.address);
+      const refundablePrincipal = supplierFirstTranche + supplierSecondTranche;
       await time.increase(7 * 24 * 3600 + 1);
-      await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(
-        supplierFirstTranche + supplierSecondTranche,
-      );
+      await expect(escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId))
+        .to.emit(escrow, 'BuyerRefundTransferred')
+        .withArgs(tradeId, buyer.address, refundablePrincipal, 4, buyer.address);
+
+      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + refundablePrincipal);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
 
       await escrow.connect(admin1).pause();
-      await claimAndAssert(buyer);
     });
 
-    it('Should enforce dedicated claim freeze and restore refund claim after unpauseClaims', async function () {
+    it('Should keep buyer refunds automatic even when treasury claims are paused', async function () {
       const { tradeId, supplierFirstTranche, supplierSecondTranche } = await createDefaultTrade(
-        ethers.id('claims-freeze-policy'),
+        ethers.id('claims-paused-buyer-refund'),
       );
-      await time.increase(7 * 24 * 3600 + 1);
-      await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(
-        supplierFirstTranche + supplierSecondTranche,
-      );
+      const buyerBalBefore = await usdc.balanceOf(buyer.address);
+      const refundablePrincipal = supplierFirstTranche + supplierSecondTranche;
 
       await expect(escrow.connect(admin1).pauseClaims())
         .to.emit(escrow, 'ClaimsPaused')
         .withArgs(admin1.address);
       expect(await escrow.claimsPaused()).to.equal(true);
 
-      await expect(escrow.connect(buyer).claim()).to.be.revertedWith('claims paused');
-
-      await escrow.connect(admin1).pause();
-      await expect(escrow.connect(buyer).claim()).to.be.revertedWith('claims paused');
+      await time.increase(7 * 24 * 3600 + 1);
+      await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
+      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + refundablePrincipal);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
 
       await expect(escrow.connect(admin2).unpauseClaims())
         .to.emit(escrow, 'ClaimsUnpaused')
         .withArgs(admin2.address);
       expect(await escrow.claimsPaused()).to.equal(false);
-
-      await claimAndAssert(buyer);
     });
 
     it('Should restrict claim freeze controls to admins', async function () {
@@ -693,14 +677,15 @@ describe('AgroasysEscrow', function () {
 
       await expect(escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId))
         .to.emit(escrow, 'TradeCancelledAfterLockTimeout')
-        .withArgs(tradeId, buyer.address, refundablePrincipal);
+        .withArgs(tradeId, buyer.address, refundablePrincipal)
+        .and.to.emit(escrow, 'BuyerRefundTransferred')
+        .withArgs(tradeId, buyer.address, refundablePrincipal, 4, buyer.address);
 
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(refundablePrincipal);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
       expect(await escrow.claimableUsdc(treasury.address)).to.equal(
         logisticsAmount + platformFeesAmount,
       );
-      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore);
-      await claimAndAssert(buyer);
+      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + refundablePrincipal);
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(4); // CLOSED
     });
@@ -718,11 +703,12 @@ describe('AgroasysEscrow', function () {
 
       await expect(escrow.connect(buyer).refundInTransitAfterTimeout(tradeId))
         .to.emit(escrow, 'InTransitTimeoutRefunded')
-        .withArgs(tradeId, buyer.address, supplierSecondTranche);
+        .withArgs(tradeId, buyer.address, supplierSecondTranche)
+        .and.to.emit(escrow, 'BuyerRefundTransferred')
+        .withArgs(tradeId, buyer.address, supplierSecondTranche, 5, buyer.address);
 
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(supplierSecondTranche);
-      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore);
-      await claimAndAssert(buyer);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
+      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + supplierSecondTranche);
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(4); // CLOSED
     });
@@ -805,7 +791,7 @@ describe('AgroasysEscrow', function () {
       expect(await escrow.claimableUsdc(treasury.address)).to.equal(
         logisticsAmount + platformFeesAmount,
       );
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(refundablePrincipal);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
       expect(await escrow.buyerRefundableAmount(tradeId)).to.equal(0);
     });
 
@@ -859,11 +845,7 @@ describe('AgroasysEscrow', function () {
     });
   });
 
-  describe('Claim Flow', function () {
-    it('Should reject claim when caller has no claimable balance', async function () {
-      await expect(escrow.connect(supplier).claim()).to.be.revertedWith('nothing claimable');
-    });
-
+  describe('Automatic Payout Flow', function () {
     it('Should pay supplier directly and keep treasury claims isolated', async function () {
       const { tradeId, supplierFirstTranche, logisticsAmount, platformFeesAmount } =
         await createDefaultTrade(ethers.id('claim-isolation'));
@@ -893,13 +875,19 @@ describe('AgroasysEscrow', function () {
       expect(await escrow.totalClaimableUsdc()).to.equal(0);
     });
 
-    it('Should prevent double refund claim', async function () {
+    it('Should prevent double buyer refund transfer', async function () {
       const { tradeId } = await createDefaultTrade(ethers.id('double-claim'));
+      const buyerBefore = await usdc.balanceOf(buyer.address);
       await time.increase(7 * 24 * 3600 + 1);
       await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
+      const buyerAfterRefund = await usdc.balanceOf(buyer.address);
 
-      await claimAndAssert(buyer);
-      await expect(escrow.connect(buyer).claim()).to.be.revertedWith('nothing claimable');
+      expect(buyerAfterRefund).to.be.gt(buyerBefore);
+      await expect(escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId)).to.be.revertedWith(
+        'status must be LOCKED',
+      );
+      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerAfterRefund);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
     });
   });
 
@@ -1883,11 +1871,12 @@ describe('AgroasysEscrow', function () {
 
       await expect(escrow.connect(admin2).approveDisputeSolution(0))
         .to.emit(escrow, 'DisputePayout')
-        .withArgs(tradeId, 0, buyer.address, supplierSecondTranche, 0);
+        .withArgs(tradeId, 0, buyer.address, supplierSecondTranche, 0)
+        .and.to.emit(escrow, 'BuyerRefundTransferred')
+        .withArgs(tradeId, buyer.address, supplierSecondTranche, 6, admin2.address);
 
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(supplierSecondTranche);
-      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore);
-      await claimAndAssert(buyer);
+      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
+      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + supplierSecondTranche);
 
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(4); // CLOSED

@@ -7,8 +7,8 @@ interface ITokenTransferHook {
     function onTokenTransferHook() external;
 }
 
-interface IClaimableEscrow {
-    function claim() external;
+interface ITreasuryClaimEscrow {
+    function claimTreasury() external;
 }
 
 contract HookedMockUSDC is ERC20 {
@@ -40,7 +40,7 @@ contract HookedMockUSDC is ERC20 {
 }
 
 contract ClaimHookReceiver is ITokenTransferHook {
-    IClaimableEscrow public immutable escrow;
+    ITreasuryClaimEscrow public immutable escrow;
 
     bool public attackEnabled;
     bool public forceRevert;
@@ -48,7 +48,7 @@ contract ClaimHookReceiver is ITokenTransferHook {
     bytes public lastError;
 
     constructor(address escrowAddress) {
-        escrow = IClaimableEscrow(escrowAddress);
+        escrow = ITreasuryClaimEscrow(escrowAddress);
     }
 
     function configure(bool _attackEnabled, bool _forceRevert) external {
@@ -56,14 +56,14 @@ contract ClaimHookReceiver is ITokenTransferHook {
         forceRevert = _forceRevert;
     }
 
-    function triggerClaim() external {
-        escrow.claim();
+    function triggerTreasuryClaim() external {
+        escrow.claimTreasury();
     }
 
     function onTokenTransferHook() external {
         if (attackEnabled && !reentryAttempted) {
             reentryAttempted = true;
-            try escrow.claim() {}
+            try escrow.claimTreasury() {}
             catch (bytes memory reason) {
                 lastError = reason;
             }

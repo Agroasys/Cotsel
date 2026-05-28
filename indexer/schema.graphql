@@ -99,6 +99,12 @@ type TradeEvent @entity {
   supplierPayoutAmount: BigInt
   supplierPayoutType: ClaimType
   supplierPayoutTriggeredBy: String
+
+  # BuyerRefundTransferred specific
+  buyerRefundRecipient: String
+  buyerRefundAmount: BigInt
+  buyerRefundType: ClaimType
+  buyerRefundTriggeredBy: String
 }
 
 enum ClaimType {
@@ -275,7 +281,7 @@ type SystemEvent @entity {
   # Paused/Unpaused/ClaimsPaused/ClaimsUnpaused specific
   triggeredBy: String
 
-  # Claimed specific
+  # TreasuryClaimed specific
   claimAmount: BigInt
 
   # AuthorizationConsumed specific

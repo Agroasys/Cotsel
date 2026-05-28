@@ -140,26 +140,4 @@ export class Client {
       });
     }
   }
-
-  async claim(signer: ethers.Signer): Promise<{ txHash: string; blockNumber: number }> {
-    await this.assertSignerCompatibility(signer);
-
-    try {
-      const contractWithSigner = this.contract.connect(signer);
-      const tx = await contractWithSigner.claim();
-      const receipt = await tx.wait();
-
-      if (!receipt) {
-        throw new ContractError('Transaction receipt not available');
-      }
-
-      return {
-        txHash: receipt.hash,
-        blockNumber: receipt.blockNumber,
-      };
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      throw new ContractError(`Failed to claim USDC: ${message}`, { error: message });
-    }
-  }
 }

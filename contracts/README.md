@@ -184,18 +184,18 @@ Timelock-based admin addition proposal:
 
 6. **`cancelLockedTradeAfterTimeout(tradeId)`**
    - Buyer escape hatch when a trade remains `LOCKED` past `LOCK_TIMEOUT`
-   - Refunds only refundable supplier principal to buyer
+   - Transfers only refundable supplier principal directly to the buyer wallet
    - Keeps logistics fees, platform fees, and the fixed settlement fee claimable by treasury
    - Changes status: LOCKED to CLOSED
-   - Emits: `TradeCancelledAfterLockTimeout`
+   - Emits: `TradeCancelledAfterLockTimeout`, `BuyerRefundTransferred`
    - Access: Trade buyer only
 
 7. **`refundInTransitAfterTimeout(tradeId)`**
    - Buyer escape hatch when trade remains `IN_TRANSIT` past `IN_TRANSIT_TIMEOUT`
-   - Refunds only remaining escrowed principal (`supplierSecondTranche`)
+   - Transfers only remaining escrowed principal (`supplierSecondTranche`) directly to the buyer wallet
    - Does not refund logistics fees, platform fees, or the fixed settlement fee
    - Changes status: IN_TRANSIT to CLOSED
-   - Emits: `InTransitTimeoutRefunded`
+   - Emits: `InTransitTimeoutRefunded`, `BuyerRefundTransferred`
    - Access: Trade buyer only
 
 8. **`proposeDisputeSolution(tradeId, disputeStatus)`**
@@ -330,7 +330,7 @@ Timelock-based admin addition proposal:
 18. **`_executeDispute(proposalId)`**
     - Executes approved dispute resolution
     - Distribution based on `DisputeStatus`:
-      - `REFUND`: buyer receives second tranche (principal)
+      - `REFUND`: buyer receives second tranche (principal) directly
       - `RESOLVE`: supplier receives second tranche (principal)
     - Note: Platform/logistics fees already paid at Stage 1, not refunded
     - Changes status: FROZEN to CLOSED
@@ -378,6 +378,7 @@ Timelock-based admin addition proposal:
 - `UnpauseProposed(proposer)`, `UnpauseApproved(approver, approvalCount, requiredApprovals)`, `UnpauseProposalCancelled(cancelledBy)`
 - `TradeCancelledAfterLockTimeout(tradeId, buyer, refundedAmount)`
 - `InTransitTimeoutRefunded(tradeId, buyer, refundedAmount)`
+- `BuyerRefundTransferred(tradeId, buyer, amount, claimType, triggeredBy)`
 - `DisputeProposalExpiredCancelled(proposalId, tradeId, cancelledBy)`
 - `OracleUpdateProposalExpiredCancelled(proposalId, cancelledBy)`
 - `AdminAddProposalExpiredCancelled(proposalId, cancelledBy)`

@@ -204,7 +204,7 @@ contract Handler is Test {
             if (disputeStatus == AgroasysEscrow.DisputeStatus.RESOLVE) {
                 totalWithdrawn += tranche2;
             } else {
-                totalClaimableUsdc += tranche2;
+                totalWithdrawn += tranche2;
             }
         }
     }
