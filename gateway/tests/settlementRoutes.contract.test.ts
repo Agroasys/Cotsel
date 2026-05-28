@@ -503,6 +503,22 @@ describe('gateway settlement routes contract', () => {
         'queued',
         'accepted',
       ]);
+      expect(listPayload.data[0].metadata).toEqual(
+        expect.objectContaining({
+          action: 'create_trade',
+          chainId: config.chainId,
+          contractAddress: config.escrowAddress,
+          buyerAddress: gaslessBody.buyerAddress,
+          supplierAddress: gaslessBody.supplierAddress,
+          totalAmount: gaslessBody.totalAmount,
+          logisticsAmount: gaslessBody.logisticsAmount,
+          platformFeesAmount: gaslessBody.platformFeesAmount,
+          supplierFirstTranche: gaslessBody.supplierFirstTranche,
+          supplierSecondTranche: gaslessBody.supplierSecondTranche,
+          ricardianHash: gaslessBody.ricardianHash,
+          payloadHash: gaslessBody.payloadHash,
+        }),
+      );
     } finally {
       server.close();
     }
@@ -573,7 +589,16 @@ describe('gateway settlement routes contract', () => {
         'queued',
         'accepted',
       ]);
-      expect(listPayload.data[0].metadata.action).toBe('open_dispute');
+      expect(listPayload.data[0].metadata).toEqual(
+        expect.objectContaining({
+          action: 'open_dispute',
+          chainId: config.chainId,
+          contractAddress: config.escrowAddress,
+          userAddress: gaslessBody.userAddress,
+          tradeId: gaslessBody.tradeId,
+          payloadHash: gaslessBody.payloadHash,
+        }),
+      );
     } finally {
       server.close();
     }
