@@ -18,6 +18,8 @@ function baseIndexedTrade(): IndexedTradeRecord {
     totalAmountLocked: 1000n,
     logisticsAmount: 100n,
     platformFeesAmount: 50n,
+    platformFeeNetAmount: 0n,
+    settlementSupportFeeAmount: 50n,
     supplierFirstTranche: 350n,
     supplierSecondTranche: 500n,
     ricardianHash: '0x' + '11'.repeat(32),

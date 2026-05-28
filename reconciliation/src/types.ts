@@ -12,6 +12,7 @@ export type DriftCode =
   | 'STATUS_MISMATCH'
   | 'PARTICIPANT_MISMATCH'
   | 'AMOUNT_MISMATCH'
+  | 'FEE_COMPONENT_MISMATCH'
   | 'HASH_MISMATCH'
   | 'ARRIVAL_TIMESTAMP_MISMATCH'
   | 'INDEXED_INVALID_ADDRESS'
@@ -25,6 +26,8 @@ export interface IndexedTradeRecord {
   totalAmountLocked: bigint;
   logisticsAmount: bigint;
   platformFeesAmount: bigint;
+  platformFeeNetAmount: bigint;
+  settlementSupportFeeAmount: bigint;
   supplierFirstTranche: bigint;
   supplierSecondTranche: bigint;
   ricardianHash: string;

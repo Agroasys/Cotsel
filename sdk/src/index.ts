@@ -52,3 +52,4 @@ export * from './runtime';
 // utils
 export * from './utils/validation';
 export * from './utils/signature';
+export * from './utils/feeSplit';

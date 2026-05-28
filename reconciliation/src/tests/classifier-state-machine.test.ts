@@ -13,6 +13,8 @@ function baseIndexedTrade(): IndexedTradeRecord {
     totalAmountLocked: 1000n,
     logisticsAmount: 100n,
     platformFeesAmount: 50n,
+    platformFeeNetAmount: 0n,
+    settlementSupportFeeAmount: 50n,
     supplierFirstTranche: 350n,
     supplierSecondTranche: 500n,
     ricardianHash: '0x' + '11'.repeat(32),
@@ -93,4 +95,20 @@ test('amount mismatch remains critical and field-specific', () => {
   assert.ok(amountFinding, 'expected AMOUNT_MISMATCH');
   assert.equal(amountFinding?.severity, 'CRITICAL');
   assert.equal(amountFinding?.comparedField, 'totalAmountLocked');
+});
+
+test('fee component mismatch is classified without relying on transaction sender', () => {
+  const indexed = baseIndexedTrade();
+  indexed.platformFeeNetAmount = 1n;
+  indexed.settlementSupportFeeAmount = 49n;
+
+  const findings = classifyDrifts({
+    indexedTrade: indexed,
+    onchainTrade: baseOnchainTrade(),
+  });
+
+  const feeFinding = findings.find((finding) => finding.mismatchCode === 'FEE_COMPONENT_MISMATCH');
+  assert.ok(feeFinding, 'expected FEE_COMPONENT_MISMATCH');
+  assert.equal(feeFinding?.severity, 'HIGH');
+  assert.equal(feeFinding?.comparedField, 'platformFeeComponents');
 });

@@ -32,6 +32,23 @@ type IndexerContext = DataHandlerContext<Store, Fields>;
 type IndexerBlock = BlockData<Fields>;
 type DecodedEscrowLog = NonNullable<ReturnType<typeof contractInterface.parseLog>>;
 
+const SETTLEMENT_SUPPORT_FEE_BASE_UNITS = 4_000_000n;
+
+function splitPlatformFeeComponents(platformFeesAmount: bigint): {
+  platformFeeNetAmount: bigint;
+  settlementSupportFeeAmount: bigint;
+} {
+  const settlementSupportFeeAmount =
+    platformFeesAmount < SETTLEMENT_SUPPORT_FEE_BASE_UNITS
+      ? platformFeesAmount
+      : SETTLEMENT_SUPPORT_FEE_BASE_UNITS;
+
+  return {
+    platformFeeNetAmount: platformFeesAmount - settlementSupportFeeAmount,
+    settlementSupportFeeAmount,
+  };
+}
+
 processor.run(new TypeormDatabase(), async (ctx) => {
   const trades: Map<string, Trade> = new Map();
   const tradeEvents: TradeEvent[] = [];
@@ -751,6 +768,8 @@ async function handleTradeLocked(
   const counters = applyTradeCreated(TradeStatus.LOCKED, snapshotCounters(overviewSnapshot));
   applySnapshotCounters(overviewSnapshot, counters);
   overviewSnapshot.lastTradeEventAt = timestamp;
+  const { platformFeeNetAmount, settlementSupportFeeAmount } =
+    splitPlatformFeeComponents(platformFeesAmount);
 
   const trade = new Trade({
     id: tradeId.toString(),
@@ -761,6 +780,8 @@ async function handleTradeLocked(
     totalAmountLocked: totalAmount,
     logisticsAmount,
     platformFeesAmount,
+    platformFeeNetAmount,
+    settlementSupportFeeAmount,
     supplierFirstTranche,
     supplierSecondTranche,
     ricardianHash,
@@ -782,6 +803,8 @@ async function handleTradeLocked(
       totalAmount,
       logisticsAmount,
       platformFeesAmount,
+      platformFeeNetAmount,
+      settlementSupportFeeAmount,
       supplierFirstTranche,
       supplierSecondTranche,
     }),
@@ -867,6 +890,8 @@ async function handlePlatformFeesPaidStage1(
   }
 
   overviewSnapshot.lastTradeEventAt = timestamp;
+  const { platformFeeNetAmount, settlementSupportFeeAmount } =
+    splitPlatformFeeComponents(platformFeesAmount);
 
   events.push(
     new TradeEvent({
@@ -879,6 +904,8 @@ async function handlePlatformFeesPaidStage1(
       logIndex,
       transactionIndex,
       paidPlatformFees: platformFeesAmount,
+      paidPlatformFeeNet: platformFeeNetAmount,
+      paidSettlementSupportFee: settlementSupportFeeAmount,
       treasuryAddress: treasury.toLowerCase(),
     }),
   );

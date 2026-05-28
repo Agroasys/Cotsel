@@ -50,6 +50,12 @@ export class TradeEvent {
     platformFeesAmount!: bigint | undefined | null
 
     @BigIntColumn_({nullable: true})
+    platformFeeNetAmount!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    settlementSupportFeeAmount!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
     supplierFirstTranche!: bigint | undefined | null
 
     @BigIntColumn_({nullable: true})
@@ -66,6 +72,12 @@ export class TradeEvent {
 
     @BigIntColumn_({nullable: true})
     paidPlatformFees!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    paidPlatformFeeNet!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    paidSettlementSupportFee!: bigint | undefined | null
 
     @BigIntColumn_({nullable: true})
     arrivalTimestamp!: bigint | undefined | null
