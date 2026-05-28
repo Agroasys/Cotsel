@@ -195,7 +195,7 @@ Release-gate-aligned validation paths:
 - `scripts/staging-e2e-real-gate.sh`
 - `scripts/postgres-backup-restore-smoke.sh`
 - `scripts/notifications-gate.sh staging-e2e-real`
-- `pnpm run pilot:rehearsal -- --window-id <window-id> --config-only`
+- `pnpm run pilot:rehearsal --window-id <window-id> --config-only`
 
 ## Rehearsal truth
 

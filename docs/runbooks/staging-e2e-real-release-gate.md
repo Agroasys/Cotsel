@@ -4,7 +4,7 @@
 
 Run a staging-grade release gate against the real indexer pipeline profile (`staging-e2e-real`) and validate reconciliation against indexed chain state.
 For pilot startup sequencing and go/no-go criteria, use `docs/runbooks/pilot-environment-onboarding.md`.
-For the controlled Base Sepolia validation itself, use `pnpm run pilot:rehearsal -- --window-id <window-id>` and store the resulting packet under `reports/base-sepolia-pilot-validation/`.
+For the controlled Base Sepolia validation itself, use `docs/runbooks/base-sepolia-gasless-settlement-proof.md`, run `pnpm run pilot:rehearsal --window-id <window-id>`, and store the resulting packet under `reports/base-sepolia-pilot-validation/`.
 For participant-facing pilot workflow guidance, use `docs/runbooks/non-custodial-pilot-user-guide.md`.
 For Base mainnet launch approval and production rollback control, use:
 

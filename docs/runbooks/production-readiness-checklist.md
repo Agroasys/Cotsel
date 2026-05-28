@@ -149,6 +149,7 @@ Purpose:
   - `docs/runbooks/postgres-service-roles-and-rls.md`
   - `docs/runbooks/staging-e2e-release-gate.md`
   - `docs/runbooks/staging-e2e-real-release-gate.md`
+  - `docs/runbooks/base-sepolia-gasless-settlement-proof.md`
   - `docs/runbooks/base-mainnet-go-no-go.md`
   - `docs/runbooks/base-mainnet-cutover-and-rollback.md`
   - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`
