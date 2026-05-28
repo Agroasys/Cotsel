@@ -216,6 +216,9 @@ export async function signUsdcReceiveAuthorization(
       validBefore: input.validBefore,
       nonce,
     };
+    // Circle native USDC on Base Mainnet and Base Sepolia uses the
+    // EIP-3009/EIP-712 token domain `USD Coin` version `2`; tests can override
+    // these fields for local mock tokens.
     const signature = await signer.signTypedData(
       {
         name: input.tokenName ?? 'USD Coin',

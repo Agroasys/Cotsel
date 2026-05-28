@@ -1382,13 +1382,24 @@ describe('AgroasysEscrow', function () {
     const supplierFirstTranche = ethers.parseUnits('40000', 6);
     const supplierSecondTranche = ethers.parseUnits('60000', 6);
 
-    async function prepareGaslessTrade(ricardianHash = ethers.id('gasless-trade')) {
+    async function prepareGaslessTrade(
+      ricardianHash = ethers.id('gasless-trade'),
+      overrides: Partial<{
+        tokenTo: string;
+        tokenValue: bigint;
+        validAfter: bigint;
+        validBefore: bigint;
+        tokenNonce: string;
+      }> = {},
+    ) {
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
       const authDeadline = BigInt(blockTimestamp + 3600);
       const authNonce = await escrow.getAuthorizationNonce(buyer.address);
-      const tokenNonce = ethers.hexlify(ethers.randomBytes(32));
-      const validAfter = 0n;
-      const validBefore = BigInt(blockTimestamp + 3600);
+      const tokenNonce = overrides.tokenNonce ?? ethers.hexlify(ethers.randomBytes(32));
+      const validAfter = overrides.validAfter ?? 0n;
+      const validBefore = overrides.validBefore ?? BigInt(blockTimestamp + 3600);
+      const tokenTo = overrides.tokenTo ?? (await escrow.getAddress());
+      const tokenValue = overrides.tokenValue ?? totalAmount;
 
       const authorizationSignature = await signCreateTradeAuthorization(buyer, {
         buyer: buyer.address,
@@ -1404,8 +1415,8 @@ describe('AgroasysEscrow', function () {
       });
       const usdcAuthorization = await signUsdcReceiveAuthorization(buyer, {
         from: buyer.address,
-        to: await escrow.getAddress(),
-        value: totalAmount,
+        to: tokenTo,
+        value: tokenValue,
         validAfter,
         validBefore,
         nonce: tokenNonce,
@@ -1486,6 +1497,30 @@ describe('AgroasysEscrow', function () {
       expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBefore - totalAmount);
     });
 
+    it('rejects direct USDC authorization submission by non-recipient relayers', async function () {
+      const prepared = await prepareGaslessTrade(ethers.id('gasless-front-run'));
+
+      await expect(
+        usdc
+          .connect(supplier)
+          .receiveWithAuthorization(
+            buyer.address,
+            await escrow.getAddress(),
+            totalAmount,
+            prepared.usdcAuthorization.validAfter,
+            prepared.usdcAuthorization.validBefore,
+            prepared.usdcAuthorization.nonce,
+            prepared.usdcAuthorization.v,
+            prepared.usdcAuthorization.r,
+            prepared.usdcAuthorization.s,
+          ),
+      ).to.be.revertedWith('caller must be recipient');
+
+      expect(await usdc.authorizationState(buyer.address, prepared.tokenNonce)).to.equal(false);
+      await submitPreparedGaslessTrade(prepared);
+      expect(await usdc.authorizationState(buyer.address, prepared.tokenNonce)).to.equal(true);
+    });
+
     it('rejects replayed gasless create-trade authorizations', async function () {
       const prepared = await prepareGaslessTrade(ethers.id('gasless-replay'));
       await submitPreparedGaslessTrade(prepared);
@@ -1493,6 +1528,21 @@ describe('AgroasysEscrow', function () {
       await expect(submitPreparedGaslessTrade(prepared)).to.be.revertedWith(
         'bad authorization nonce',
       );
+    });
+
+    it('rejects reused USDC receive authorizations even with a fresh buyer authorization', async function () {
+      const prepared = await prepareGaslessTrade(ethers.id('gasless-usdc-reuse'));
+      await submitPreparedGaslessTrade(prepared);
+
+      const freshBuyerAuthorization = await prepareGaslessTrade(ethers.id('gasless-usdc-reuse-2'));
+      await expect(
+        submitPreparedGaslessTrade({
+          ...freshBuyerAuthorization,
+          usdcAuthorization: prepared.usdcAuthorization,
+          tokenNonce: prepared.tokenNonce,
+        }),
+      ).to.be.revertedWith('authorization used');
+      expect(await escrow.getAuthorizationNonce(buyer.address)).to.equal(1n);
     });
 
     it('rejects tampered gasless trade amounts before consuming USDC authorization', async function () {
@@ -1517,6 +1567,51 @@ describe('AgroasysEscrow', function () {
       ).to.be.revertedWith('breakdown mismatch');
 
       expect(await usdc.authorizationState(buyer.address, prepared.tokenNonce)).to.equal(false);
+    });
+
+    it('rejects USDC authorizations signed for the wrong recipient or amount', async function () {
+      const wrongRecipient = await prepareGaslessTrade(ethers.id('gasless-wrong-recipient'), {
+        tokenTo: supplier.address,
+      });
+      await expect(submitPreparedGaslessTrade(wrongRecipient)).to.be.revertedWith(
+        'invalid authorization',
+      );
+      expect(await usdc.authorizationState(buyer.address, wrongRecipient.tokenNonce)).to.equal(
+        false,
+      );
+
+      const wrongAmount = await prepareGaslessTrade(ethers.id('gasless-wrong-amount'), {
+        tokenValue: totalAmount - 1n,
+      });
+      await expect(submitPreparedGaslessTrade(wrongAmount)).to.be.revertedWith(
+        'invalid authorization',
+      );
+      expect(await usdc.authorizationState(buyer.address, wrongAmount.tokenNonce)).to.equal(false);
+    });
+
+    it('rejects USDC authorizations outside their validity window', async function () {
+      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      const futureAuthorization = await prepareGaslessTrade(ethers.id('gasless-usdc-future'), {
+        validAfter: BigInt(blockTimestamp + 60),
+        validBefore: BigInt(blockTimestamp + 3600),
+      });
+      await expect(submitPreparedGaslessTrade(futureAuthorization)).to.be.revertedWith(
+        'authorization not yet valid',
+      );
+      expect(await usdc.authorizationState(buyer.address, futureAuthorization.tokenNonce)).to.equal(
+        false,
+      );
+
+      const expiredAuthorization = await prepareGaslessTrade(ethers.id('gasless-usdc-expired'), {
+        validAfter: 0n,
+        validBefore: BigInt(blockTimestamp - 1),
+      });
+      await expect(submitPreparedGaslessTrade(expiredAuthorization)).to.be.revertedWith(
+        'authorization expired',
+      );
+      expect(
+        await usdc.authorizationState(buyer.address, expiredAuthorization.tokenNonce),
+      ).to.equal(false);
     });
 
     it('rejects expired and wrong-signer gasless create-trade authorizations', async function () {

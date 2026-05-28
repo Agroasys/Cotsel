@@ -190,6 +190,46 @@ describe('BuyerSDK unit', () => {
     });
   });
 
+  test('createUsdcReceiveAuthorization defaults to the Circle native USDC EIP-3009 domain', async () => {
+    const { sdk } = makeSdkUnit();
+    const { signer } = makeBuyerSigner();
+    const signature = `0x${'1'.repeat(64)}${'2'.repeat(64)}1b`;
+    (signer.signTypedData as jest.Mock).mockResolvedValueOnce(signature);
+
+    await sdk.createUsdcReceiveAuthorization(1000000n, signer, {
+      validAfter: 10,
+      validBefore: 20,
+      nonce: `0x${'5'.repeat(64)}`,
+    });
+
+    expect(signer.signTypedData).toHaveBeenCalledWith(
+      {
+        name: 'USD Coin',
+        version: '2',
+        chainId: UNIT_CONFIG.chainId,
+        verifyingContract: UNIT_CONFIG.usdcAddress,
+      },
+      {
+        ReceiveWithAuthorization: [
+          { name: 'from', type: 'address' },
+          { name: 'to', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'validAfter', type: 'uint256' },
+          { name: 'validBefore', type: 'uint256' },
+          { name: 'nonce', type: 'bytes32' },
+        ],
+      },
+      {
+        from: '0x2222222222222222222222222222222222222222',
+        to: UNIT_CONFIG.escrowAddress,
+        value: 1000000n,
+        validAfter: 10,
+        validBefore: 20,
+        nonce: `0x${'5'.repeat(64)}`,
+      },
+    );
+  });
+
   test('createGaslessUserActionAuthorization builds relayed buyer action payloads', async () => {
     const { sdk } = makeSdkUnit();
     const { signer } = makeBuyerSigner();
