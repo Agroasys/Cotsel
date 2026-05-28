@@ -8,6 +8,11 @@ export { OracleSDK } from './modules/oracleSDK';
 
 // ricardian helper
 export { RicardianClient } from './modules/ricardianClient';
+export {
+  GaslessSettlementClient,
+  createGaslessExecutionPayloadHash,
+  sponsoredActionToGaslessAction,
+} from './modules/gaslessSettlementClient';
 export { projectTreasuryAccountingState } from './modules/treasuryAccounting';
 export type {
   TreasuryAccountingProjection,

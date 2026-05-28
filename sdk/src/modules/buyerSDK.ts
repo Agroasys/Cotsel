@@ -5,7 +5,9 @@ import { Client } from '../client';
 import {
   BuyerLockPayload,
   GaslessCreateTradeAuthorization,
+  GaslessCreateTradeExecutionRequest,
   GaslessUserActionAuthorization,
+  GaslessUserActionExecutionRequest,
   SponsoredAction,
   TradeResult,
   UsdcReceiveAuthorization,
@@ -20,8 +22,14 @@ import {
 } from '../utils/signature';
 import { ContractError, getErrorMessage } from '../types/errors';
 import { IERC20__factory } from '../types/typechain-types/factories/@openzeppelin/contracts/token/ERC20/IERC20__factory';
+import { GaslessSettlementClient } from './gaslessSettlementClient';
 
 export class BuyerSDK extends Client {
+  private readonly gaslessSettlementClient = new GaslessSettlementClient({
+    chainId: this.config.chainId,
+    escrowAddress: this.config.escrowAddress,
+  });
+
   private extractTradeIdFromReceipt(receipt: ethers.TransactionReceipt): string | undefined {
     for (const log of receipt.logs) {
       if (log.address.toLowerCase() !== this.config.escrowAddress.toLowerCase()) {
@@ -99,6 +107,36 @@ export class BuyerSDK extends Client {
     });
   }
 
+  async createGaslessTradeExecutionRequest(
+    payload: BuyerLockPayload,
+    buyerSigner: ethers.Signer,
+    input: {
+      handoffId: string;
+      expiresAt: string | Date;
+      usdc?: {
+        validAfter?: number;
+        validBefore?: number;
+        nonce?: string;
+        tokenName?: string;
+        tokenVersion?: string;
+      };
+    },
+  ): Promise<GaslessCreateTradeExecutionRequest> {
+    const authorization = await this.createGaslessTradeAuthorization(payload, buyerSigner);
+    const usdcAuthorization = await this.createUsdcReceiveAuthorization(
+      payload.totalAmount,
+      buyerSigner,
+      input.usdc,
+    );
+
+    return this.gaslessSettlementClient.buildCreateTradeExecutionRequest({
+      handoffId: input.handoffId,
+      expiresAt: input.expiresAt,
+      authorization,
+      usdcAuthorization,
+    });
+  }
+
   async createGaslessUserActionAuthorization(
     action: Exclude<SponsoredAction, SponsoredAction.CREATE_TRADE>,
     tradeId: string | bigint,
@@ -118,6 +156,31 @@ export class BuyerSDK extends Client {
       nonce,
       deadline,
     );
+  }
+
+  async createGaslessUserActionExecutionRequest(
+    action: Exclude<SponsoredAction, SponsoredAction.CREATE_TRADE>,
+    tradeId: string | bigint,
+    buyerSigner: ethers.Signer,
+    input: {
+      handoffId: string;
+      expiresAt: string | Date;
+      deadline?: number;
+    },
+  ): Promise<GaslessUserActionExecutionRequest> {
+    const authorization = await this.createGaslessUserActionAuthorization(
+      action,
+      tradeId,
+      buyerSigner,
+      input.deadline,
+    );
+
+    return this.gaslessSettlementClient.buildUserActionExecutionRequest({
+      action,
+      handoffId: input.handoffId,
+      expiresAt: input.expiresAt,
+      authorization,
+    });
   }
 
   async approveUSDC(amount: bigint, buyerSigner: ethers.Signer): Promise<TradeResult> {
@@ -180,8 +243,9 @@ export class BuyerSDK extends Client {
   /**
    * Lock funds and create a new trade in the escrow contract.
    *
-   * This is the primary entry point for external checkout UIs. The `payload`
-   * parameter MUST conform to the {@link BuyerLockPayload} canonical contract.
+   * @deprecated Prefer `createGaslessTradeExecutionRequest(...)` for production
+   * integrations. This legacy compatibility method requires the buyer signer to
+   * pay gas for approval and settlement submission.
    *
    * **Flow executed by this method:**
    * 1. Validates every field in `payload` (amount invariant, address, hash format).

@@ -1,18 +1,21 @@
 # Buyer Lock Payload — Checkout UI Integration Guide
 
-This document is the reference for external checkout UIs that
-integrate with `BuyerSDK.createTrade(...)`.
+This document is the reference for external checkout UIs that generate typed
+settlement authorizations with `BuyerSDK`.
 
 **Relevant SDK type:** `BuyerLockPayload` (`sdk/src/types/trade.ts`)
 **Backward-compatible alias:** `TradeParameters`
-**Entry point method:** `BuyerSDK.createTrade(payload, buyerSigner)`
+**Primary entry point method:** `BuyerSDK.createGaslessTradeExecutionRequest(payload, buyerSigner, input)`
+**Legacy compatibility method:** `BuyerSDK.createTrade(payload, buyerSigner)`
 
 ## Overview
 
 When a buyer initiates settlement on the Agroasys platform, the checkout UI
-must assemble a `BuyerLockPayload` and pass it to `BuyerSDK.createTrade(...)`.
-The SDK validates the payload, handles the USDC approval if needed, derives the
-nonce, constructs the EIP-191 signature, and submits the lock transaction.
+must assemble a `BuyerLockPayload` and pass it to
+`BuyerSDK.createGaslessTradeExecutionRequest(...)`. The SDK validates the
+payload, derives the on-chain authorization nonce, builds the escrow EIP-712
+create-trade authorization, builds the USDC receive-with-authorization payload,
+and returns a gateway-ready gasless execution request.
 
 The checkout UI is responsible for:
 
@@ -20,7 +23,9 @@ The checkout UI is responsible for:
    `createTrade`.
 2. Decomposing the trade value into its four canonical amount components.
 3. Providing the supplier's wallet address.
-4. Optionally setting a `deadline`.
+4. Providing the Cotsel settlement `handoffId`.
+5. Setting a short `expiresAt` timestamp for the gasless execution request.
+6. Optionally setting a signature `deadline`.
 
 ## Canonical Payload Shape
 
@@ -79,7 +84,7 @@ The nonce is **not** part of `BuyerLockPayload`. The SDK derives the current
 per-buyer on-chain nonce automatically:
 
 ```ts
-const nonce = await this.getBuyerNonce(buyerAddress);
+const nonce = await this.getAuthorizationNonce(buyerAddress);
 ```
 
 Checkout UIs MUST NOT pass a nonce.
@@ -98,15 +103,33 @@ the canonical contract is unambiguous across SDK docs and examples.
 const deadline = payload.deadline ?? Math.floor(Date.now() / 1000) + 3600;
 ```
 
-## USDC Approval
+## Gasless USDC Funding
 
-The SDK checks the buyer's current USDC allowance for the escrow contract
-before signing. If `allowance < totalAmount`, it automatically issues an
-`approve` transaction:
+The primary path uses USDC EIP-3009 `receiveWithAuthorization`. The buyer signs
+a typed USDC authorization and the relayer submits it with the escrow
+create-trade authorization. The buyer does not need native gas for deposit.
+
+```ts
+const request = await buyerSDK.createGaslessTradeExecutionRequest(payload, buyerSigner, {
+  handoffId: 'handoff-from-cotsel-gateway',
+  expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+});
+```
+
+The returned request contains stringified amounts and a `payloadHash` that the
+Cotsel gateway recomputes before relaying.
+
+## Legacy Direct Mode
+
+`BuyerSDK.createTrade(...)` remains for compatibility only. It checks the
+buyer's current USDC allowance for the escrow contract before signing. If
+`allowance < totalAmount`, it automatically issues an `approve` transaction:
 
 ```ts
 await usdcContract.approve(escrowAddress, payload.totalAmount);
 ```
 
 Checkout UIs do **not** need to call `approveUSDC` separately; `createTrade`
-handles this transparently.
+handles this transparently. This mode still requires the buyer signer to pay gas
+for approval and settlement submission, so it is not the recommended production
+path for non-technical buyers.

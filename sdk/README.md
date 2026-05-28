@@ -8,7 +8,7 @@ This SDK provides a **type-safe, role-based interface** to the Agroasys smart co
 
 The SDK is organized into **three role-based modules**:
 
-- **BuyerSDK** - Create trades, approve USDC, open disputes, and claim settled balances
+- **BuyerSDK** - Create gasless settlement authorization packages, approve USDC in legacy mode, and open/refund/cancel buyer actions
 - **OracleSDK** - Release funds at logistics milestones, confirm arrival, finalize trade (**Auth verification**)
 - **AdminSDK** - Solve frozen trades, operate protocol controls, manage treasury payout governance, and propose/approve/execute governance actions (**Auth verification**)
 
@@ -73,7 +73,10 @@ const payload: BuyerLockPayload = {
   ricardianHash: ''
 };
 
-const result = await buyerSDK.createTrade(payload, buyerSigner);
+const request = await buyerSDK.createGaslessTradeExecutionRequest(payload, buyerSigner, {
+  handoffId: '',
+  expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+});
 ```
 
 ### Recommended: external Agroasys-managed signer
@@ -102,7 +105,10 @@ const payload: BuyerLockPayload = {
   ricardianHash: '0x3a4b5c6d...f1e2d3',
 };
 
-const result = await buyerSDK.createTrade(payload, buyerSigner);
+const request = await buyerSDK.createGaslessTradeExecutionRequest(payload, buyerSigner, {
+  handoffId: 'handoff-from-cotsel-gateway',
+  expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+});
 ```
 
 Canonical buyer lock payload contract:
@@ -110,6 +116,62 @@ Canonical buyer lock payload contract:
 - `BuyerLockPayload` is the preferred public type for new integrations.
 - `TradeParameters` remains available as a backward-compatible alias.
 - Source of truth: `docs/runbooks/buyer-lock-payload.md`
+
+### Recommended: gasless settlement execution
+
+New integrations should ask the buyer signer for typed authorizations only, then
+submit the generated package to the Cotsel gasless execution service from a
+server-side caller. The buyer does not need native gas for the create-trade,
+dispute, lock-timeout cancel, in-transit refund, or dispute-window finalization
+paths.
+
+Buyer and supplier `claim()` flows are not exposed because active settlement
+versions transfer buyer refunds and supplier payouts directly. Treasury sweeps
+remain explicit through `AdminSDK.claimTreasury(...)`.
+
+```ts
+import { BuyerSDK, GaslessSettlementClient, SponsoredAction } from '@agroasys/sdk';
+
+const buyerSDK = new BuyerSDK(config);
+const gaslessClient = new GaslessSettlementClient(config);
+
+const createTradeRequest = await buyerSDK.createGaslessTradeExecutionRequest(payload, buyerSigner, {
+  handoffId: 'handoff-from-cotsel-gateway',
+  expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+});
+
+await gaslessClient.submitCreateTradeExecution(createTradeRequest, {
+  baseUrl: process.env.COTSEL_GATEWAY_URL!,
+  idempotencyKey: 'stable-order-or-handoff-key',
+  serviceAuth: {
+    apiKey: process.env.COTSEL_SERVICE_API_KEY!,
+    apiSecret: process.env.COTSEL_SERVICE_API_SECRET!,
+  },
+});
+
+const refundRequest = await buyerSDK.createGaslessUserActionExecutionRequest(
+  SponsoredAction.REFUND_IN_TRANSIT_TIMEOUT,
+  tradeId,
+  buyerSigner,
+  {
+    handoffId: 'handoff-from-cotsel-gateway',
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+  },
+);
+
+await gaslessClient.submitUserActionExecution(refundRequest, {
+  baseUrl: process.env.COTSEL_GATEWAY_URL!,
+  idempotencyKey: 'stable-user-action-key',
+  serviceAuth: {
+    apiKey: process.env.COTSEL_SERVICE_API_KEY!,
+    apiSecret: process.env.COTSEL_SERVICE_API_SECRET!,
+  },
+});
+```
+
+Keep service-auth API secrets on the backend only. Browser/frontend callers
+should generate typed authorizations with the buyer signer, then hand those
+authorization packages to a trusted backend for submission.
 
 ### Embedded-wallet / Web3Auth compatibility contract
 
@@ -154,16 +216,18 @@ SDK and inject a signer instead.
 
 ### BuyerSDK
 
-| Method                                           | Description                                       |
-| ------------------------------------------------ | ------------------------------------------------- |
-| `getBuyerNonce(address)`                         | Retrieve the current nonce for signature          |
-| `approveUSDC(amount, signer)`                    | Approve the escrow contract to spend USDC         |
-| `getUSDCBalance(address)`                        | Check USDC balance                                |
-| `getUSDCAllowance(address)`                      | Check current USDC allowance for escrow           |
-| `createTrade(params, signer)`                    | Lock funds and create a new trade                 |
-| `openDispute(tradeId, signer)`                   | Open a dispute on an existing trade               |
-| `cancelLockedTradeAfterTimeout(tradeId, signer)` | Cancel stale `LOCKED` trade after timeout         |
-| `refundInTransitAfterTimeout(tradeId, signer)`   | Refund remaining principal when transit times out |
+| Method                                                                    | Description                                             |
+| ------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `getBuyerNonce(address)`                                                  | Retrieve the current nonce for signature                |
+| `approveUSDC(amount, signer)`                                             | Approve the escrow contract to spend USDC               |
+| `getUSDCBalance(address)`                                                 | Check USDC balance                                      |
+| `getUSDCAllowance(address)`                                               | Check current USDC allowance for escrow                 |
+| `createGaslessTradeExecutionRequest(params, signer, input)`               | Build typed create-trade and USDC authorization package |
+| `createGaslessUserActionExecutionRequest(action, tradeId, signer, input)` | Build typed dispute/refund/cancel/finalize package      |
+| `createTrade(params, signer)`                                             | Legacy direct-send create-trade flow                    |
+| `openDispute(tradeId, signer)`                                            | Open a dispute on an existing trade                     |
+| `cancelLockedTradeAfterTimeout(tradeId, signer)`                          | Cancel stale `LOCKED` trade after timeout               |
+| `refundInTransitAfterTimeout(tradeId, signer)`                            | Refund remaining principal when transit times out       |
 
 ### OracleSDK
 
