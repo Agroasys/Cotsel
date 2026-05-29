@@ -880,7 +880,8 @@ async function handlePlatformFeesPaidStage1(
   transactionIndex: number,
   ctx: IndexerContext,
 ) {
-  const [tradeId, treasury, platformFeesAmount] = log.args;
+  const [tradeId, treasury, platformFeesAmount, eventPlatformFeeNet, eventSettlementSupportFee] =
+    log.args;
 
   const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
 
@@ -890,8 +891,10 @@ async function handlePlatformFeesPaidStage1(
   }
 
   overviewSnapshot.lastTradeEventAt = timestamp;
-  const { platformFeeNetAmount, settlementSupportFeeAmount } =
-    splitPlatformFeeComponents(platformFeesAmount);
+  const fallbackSplit = splitPlatformFeeComponents(platformFeesAmount);
+  const platformFeeNetAmount = eventPlatformFeeNet ?? fallbackSplit.platformFeeNetAmount;
+  const settlementSupportFeeAmount =
+    eventSettlementSupportFee ?? fallbackSplit.settlementSupportFeeAmount;
 
   events.push(
     new TradeEvent({

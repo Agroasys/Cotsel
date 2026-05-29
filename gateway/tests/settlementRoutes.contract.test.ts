@@ -14,6 +14,7 @@ import { SettlementService } from '../src/core/settlementService';
 import { createInMemorySettlementStore } from '../src/core/settlementStore';
 import {
   GaslessSettlementExecutionService,
+  type GaslessExecutionSubmission,
   testExports as gaslessSettlementExecutionTestExports,
 } from '../src/core/gaslessSettlementExecutionService';
 import { createSettlementRouter } from '../src/routes/settlement';
@@ -63,13 +64,26 @@ const config: GatewayConfig = {
   allowInsecureDownstreamAuth: true,
 };
 
+const buildConfirmedSubmission = (txHash: string): GaslessExecutionSubmission => ({
+  txHash,
+  receipt: {
+    txHash,
+    blockNumber: '12345',
+    gasUsed: '210000',
+    effectiveGasPriceWei: '1000000000',
+    nativeCostWei: '210000000000000',
+    executorAddress: '0x1111111111111111111111111111111111111111',
+    executorBalanceWei: '1000000000000000000',
+  },
+});
+
 async function startServer(
   overrides: Partial<GatewayConfig> = {},
   executorOverrides: Partial<{
     simulateCreateTrade: () => Promise<{ gasEstimate?: bigint | string | number | null }>;
-    executeCreateTrade: () => Promise<{ txHash: string }>;
+    executeCreateTrade: () => Promise<GaslessExecutionSubmission>;
     simulateUserAction: () => Promise<{ gasEstimate?: bigint | string | number | null }>;
-    executeUserAction: () => Promise<{ txHash: string }>;
+    executeUserAction: () => Promise<GaslessExecutionSubmission>;
   }> = {},
 ) {
   const runtimeConfig: GatewayConfig = { ...config, ...overrides };
@@ -80,9 +94,9 @@ async function startServer(
     settlementStore,
     {
       async executeCreateTrade() {
-        return {
-          txHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-        };
+        return buildConfirmedSubmission(
+          '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        );
       },
       async simulateCreateTrade() {
         return {
@@ -90,9 +104,9 @@ async function startServer(
         };
       },
       async executeUserAction() {
-        return {
-          txHash: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-        };
+        return buildConfirmedSubmission(
+          '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        );
       },
       async simulateUserAction() {
         return {
@@ -438,7 +452,7 @@ describe('gateway settlement routes contract', () => {
     }
   });
 
-  test('service-authenticated gasless create-trade execution records accepted and submitted events', async () => {
+  test('service-authenticated gasless create-trade execution records receipt-backed confirmed events', async () => {
     const { server, baseUrl } = await startServer();
 
     try {
@@ -484,7 +498,7 @@ describe('gateway settlement routes contract', () => {
       expect(gaslessPayload.data.txHash).toBe(
         '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       );
-      expect(gaslessPayload.data.handoff.executionStatus).toBe('submitted');
+      expect(gaslessPayload.data.handoff.executionStatus).toBe('confirmed');
 
       const eventPath = `/api/dashboard-gateway/v1/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`;
       const listResponse = await fetch(
@@ -498,6 +512,7 @@ describe('gateway settlement routes contract', () => {
       const listPayload = await listResponse.json();
 
       expect(listPayload.data.map((event: { eventType: string }) => event.eventType)).toEqual([
+        'confirmed',
         'submitted',
         'simulation_completed',
         'queued',
@@ -506,6 +521,11 @@ describe('gateway settlement routes contract', () => {
       expect(listPayload.data[0].metadata).toEqual(
         expect.objectContaining({
           action: 'create_trade',
+          gasUsed: '210000',
+          effectiveGasPriceWei: '1000000000',
+          nativeCostWei: '210000000000000',
+          executorBalanceWei: '1000000000000000000',
+          executorAddress: '0x1111111111111111111111111111111111111111',
           chainId: config.chainId,
           contractAddress: config.escrowAddress,
           buyerAddress: gaslessBody.buyerAddress,
@@ -524,7 +544,7 @@ describe('gateway settlement routes contract', () => {
     }
   });
 
-  test('service-authenticated gasless user-action execution records accepted and submitted events', async () => {
+  test('service-authenticated gasless user-action execution records receipt-backed confirmed events', async () => {
     const { server, baseUrl } = await startServer();
 
     try {
@@ -570,7 +590,7 @@ describe('gateway settlement routes contract', () => {
       expect(gaslessPayload.data.txHash).toBe(
         '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
       );
-      expect(gaslessPayload.data.handoff.executionStatus).toBe('submitted');
+      expect(gaslessPayload.data.handoff.executionStatus).toBe('confirmed');
 
       const eventPath = `/api/dashboard-gateway/v1/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`;
       const listResponse = await fetch(
@@ -584,6 +604,7 @@ describe('gateway settlement routes contract', () => {
       const listPayload = await listResponse.json();
 
       expect(listPayload.data.map((event: { eventType: string }) => event.eventType)).toEqual([
+        'confirmed',
         'submitted',
         'simulation_completed',
         'queued',
@@ -592,6 +613,11 @@ describe('gateway settlement routes contract', () => {
       expect(listPayload.data[0].metadata).toEqual(
         expect.objectContaining({
           action: 'open_dispute',
+          gasUsed: '210000',
+          effectiveGasPriceWei: '1000000000',
+          nativeCostWei: '210000000000000',
+          executorBalanceWei: '1000000000000000000',
+          executorAddress: '0x1111111111111111111111111111111111111111',
           chainId: config.chainId,
           contractAddress: config.escrowAddress,
           userAddress: gaslessBody.userAddress,

@@ -31,7 +31,7 @@ interface IUSDCReceiveWithAuthorization {
  *
  * Business rule enforced:
  * - Logistics/platform fees are non-refundable once a trade is funded; platformFeesAmount includes the fixed settlement fee
- * - Stage 1 release pays supplierFirstTranche (principal) and leaves logistics/platform fees claimable by treasury
+ * - Stage 1 release pays supplierFirstTranche (principal) directly and accrues logistics/platform fees for treasury sweep
  * - Stage 2 accrual (finalization) includes: supplierSecondTranche (principal) ONLY
  * - Buyer refunds are transferred directly during the refund transaction; buyers never need to claim
  */
@@ -305,7 +305,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     event PlatformFeesPaidStage1(
         uint256 indexed tradeId,
         address indexed treasury,
-        uint256 platformFeesAmount
+        uint256 platformFeesAmount,
+        uint256 platformFeeNetAmount,
+        uint256 settlementSupportFeeAmount
     );
 
     event ArrivalConfirmed(uint256 indexed tradeId, uint256 arrivalTimestamp);
@@ -1039,13 +1041,13 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         return newTradeId;
     }
 
-    function _accrueClaimable(uint256 _tradeId, address _recipient, uint256 _amount, ClaimType _claimType) internal {
+    function _accrueTreasuryClaimable(uint256 _tradeId, uint256 _amount, ClaimType _claimType) internal {
         if (_amount == 0) {
             return;
         }
-        claimableUsdc[_recipient] += _amount;
+        claimableUsdc[treasuryAddress] += _amount;
         totalClaimableUsdc += _amount;
-        emit ClaimableAccrued(_tradeId, _recipient, _amount, _claimType);
+        emit ClaimableAccrued(_tradeId, treasuryAddress, _amount, _claimType);
     }
 
     function _nonRefundableFeeAmount(Trade storage trade) internal view returns (uint256) {
@@ -1065,6 +1067,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         }
 
         return 0;
+    }
+
+    function _splitPlatformFeeComponents(uint256 _platformFeesAmount)
+        internal
+        pure
+        returns (uint256 platformFeeNetAmount, uint256 settlementSupportFeeAmount)
+    {
+        settlementSupportFeeAmount = _platformFeesAmount < 4_000_000 ? _platformFeesAmount : 4_000_000;
+        platformFeeNetAmount = _platformFeesAmount - settlementSupportFeeAmount;
     }
 
     function _transferSupplierPayout(
@@ -1133,7 +1144,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * Stage 1 release:
      * - Only oracle
      * - LOCKED -> IN_TRANSIT
-     * - Accrue supplier first tranche (principal)
+     * - Transfer supplier first tranche (principal) directly to supplier wallet
      * - Accrue logistics fee to treasury
      * - Accrue platform fee to treasury
      */
@@ -1147,8 +1158,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         inTransitSince[_tradeId] = block.timestamp;
 
         _transferSupplierPayout(_tradeId, trade.supplierAddress, trade.supplierFirstTranche, ClaimType.STAGE1_SUPPLIER);
-        _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
-        _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
+        _accrueTreasuryClaimable(_tradeId, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
+        _accrueTreasuryClaimable(_tradeId, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
 
         emit FundsReleasedStage1(
             _tradeId,
@@ -1158,7 +1169,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             trade.logisticsAmount
         );
 
-        emit PlatformFeesPaidStage1(_tradeId, treasuryAddress, trade.platformFeesAmount);
+        (uint256 platformFeeNetAmount, uint256 settlementSupportFeeAmount) =
+            _splitPlatformFeeComponents(trade.platformFeesAmount);
+        emit PlatformFeesPaidStage1(
+            _tradeId,
+            treasuryAddress,
+            trade.platformFeesAmount,
+            platformFeeNetAmount,
+            settlementSupportFeeAmount
+        );
     }
 
     /**
@@ -1292,8 +1311,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 buyerRefundAmount = _buyerRefundablePrincipalAmount(trade);
         trade.status = TradeStatus.CLOSED;
 
-        _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
-        _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
+        _accrueTreasuryClaimable(_tradeId, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
+        _accrueTreasuryClaimable(_tradeId, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
         _transferBuyerRefund(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
 
         emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, buyerRefundAmount);
@@ -1323,8 +1342,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 buyerRefundAmount = _buyerRefundablePrincipalAmount(trade);
         trade.status = TradeStatus.CLOSED;
 
-        _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
-        _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
+        _accrueTreasuryClaimable(_tradeId, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
+        _accrueTreasuryClaimable(_tradeId, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
         _transferBuyerRefund(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
 
         emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, buyerRefundAmount);

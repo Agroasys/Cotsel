@@ -8,6 +8,7 @@ import {
   JsonRpcProvider,
   keccak256,
   NonceManager,
+  TransactionReceipt,
   toUtf8Bytes,
   Wallet,
   ZeroAddress,
@@ -107,18 +108,34 @@ export interface GaslessCreateTradeExecutionResult {
   queuedEvent: SettlementExecutionEventRecord;
   simulationEvent: SettlementExecutionEventRecord;
   submittedEvent: SettlementExecutionEventRecord;
+  confirmedEvent?: SettlementExecutionEventRecord;
   txHash: string;
+}
+
+export interface GaslessExecutionReceipt {
+  txHash: string;
+  blockNumber: string;
+  gasUsed: string;
+  effectiveGasPriceWei: string;
+  nativeCostWei: string;
+  executorAddress: string;
+  executorBalanceWei: string;
+}
+
+export interface GaslessExecutionSubmission {
+  txHash: string;
+  receipt?: GaslessExecutionReceipt;
 }
 
 export interface GaslessSettlementExecutor {
   simulateCreateTrade(
     input: GaslessCreateTradeExecutionInput,
   ): Promise<{ gasEstimate?: bigint | string | number | null }>;
-  executeCreateTrade(input: GaslessCreateTradeExecutionInput): Promise<{ txHash: string }>;
+  executeCreateTrade(input: GaslessCreateTradeExecutionInput): Promise<GaslessExecutionSubmission>;
   simulateUserAction(
     input: GaslessUserActionExecutionInput,
   ): Promise<{ gasEstimate?: bigint | string | number | null }>;
-  executeUserAction(input: GaslessUserActionExecutionInput): Promise<{ txHash: string }>;
+  executeUserAction(input: GaslessUserActionExecutionInput): Promise<GaslessExecutionSubmission>;
 }
 
 function requireAddress(value: string, field: string): string {
@@ -473,6 +490,26 @@ function serializeGasEstimate(value: bigint | string | number | null | undefined
   return BigInt(value).toString();
 }
 
+function buildConfirmedMetadata(
+  action: string,
+  payloadHash: string,
+  receipt: GaslessExecutionReceipt,
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    action,
+    payloadHash,
+    txHash: receipt.txHash,
+    blockNumber: receipt.blockNumber,
+    gasUsed: receipt.gasUsed,
+    effectiveGasPriceWei: receipt.effectiveGasPriceWei,
+    nativeCostWei: receipt.nativeCostWei,
+    executorAddress: receipt.executorAddress,
+    executorBalanceWei: receipt.executorBalanceWei,
+    ...extra,
+  };
+}
+
 function buildCreateTradeArguments(input: GaslessCreateTradeExecutionInput) {
   return [
     input.buyerAddress,
@@ -626,13 +663,50 @@ export class GaslessSettlementExecutionService {
         requestId: normalized.requestId,
         sourceApiKeyId: normalized.sourceApiKeyId,
       });
+      let finalHandoff = submitted.handoff;
+      let confirmedEvent: SettlementExecutionEventRecord | undefined;
+
+      if (execution.receipt) {
+        const confirmed = await this.settlementService.recordExecutionEvent({
+          handoffId: normalized.handoffId,
+          eventType: 'confirmed',
+          executionStatus: 'confirmed',
+          reconciliationStatus: submitted.handoff.reconciliationStatus,
+          providerStatus: 'gasless_receipt_confirmed',
+          txHash: execution.txHash,
+          detail: 'Gasless create-trade transaction confirmed on-chain.',
+          metadata: buildConfirmedMetadata(
+            'create_trade',
+            normalized.payloadHash,
+            execution.receipt,
+            {
+              chainId: normalized.chainId,
+              contractAddress: normalized.contractAddress,
+              buyerAddress: normalized.buyerAddress,
+              supplierAddress: normalized.supplierAddress,
+              totalAmount: normalized.totalAmount,
+              logisticsAmount: normalized.logisticsAmount,
+              platformFeesAmount: normalized.platformFeesAmount,
+              supplierFirstTranche: normalized.supplierFirstTranche,
+              supplierSecondTranche: normalized.supplierSecondTranche,
+              ricardianHash: normalized.ricardianHash,
+            },
+          ),
+          observedAt: new Date().toISOString(),
+          requestId: normalized.requestId,
+          sourceApiKeyId: normalized.sourceApiKeyId,
+        });
+        finalHandoff = confirmed.handoff;
+        confirmedEvent = confirmed.event;
+      }
 
       return {
-        handoff: submitted.handoff,
+        handoff: finalHandoff,
         acceptedEvent: accepted.event,
         queuedEvent: queued.event,
         simulationEvent: simulationEvent.event,
         submittedEvent: submitted.event,
+        confirmedEvent,
         txHash: execution.txHash,
       };
     } catch (error) {
@@ -756,13 +830,44 @@ export class GaslessSettlementExecutionService {
         requestId: normalized.requestId,
         sourceApiKeyId: normalized.sourceApiKeyId,
       });
+      let finalHandoff = submitted.handoff;
+      let confirmedEvent: SettlementExecutionEventRecord | undefined;
+
+      if (execution.receipt) {
+        const confirmed = await this.settlementService.recordExecutionEvent({
+          handoffId: normalized.handoffId,
+          eventType: 'confirmed',
+          executionStatus: 'confirmed',
+          reconciliationStatus: submitted.handoff.reconciliationStatus,
+          providerStatus: 'gasless_receipt_confirmed',
+          txHash: execution.txHash,
+          detail: `Gasless ${normalized.action} transaction confirmed on-chain.`,
+          metadata: buildConfirmedMetadata(
+            normalized.action,
+            normalized.payloadHash,
+            execution.receipt,
+            {
+              chainId: normalized.chainId,
+              contractAddress: normalized.contractAddress,
+              userAddress: normalized.userAddress,
+              tradeId: normalized.tradeId,
+            },
+          ),
+          observedAt: new Date().toISOString(),
+          requestId: normalized.requestId,
+          sourceApiKeyId: normalized.sourceApiKeyId,
+        });
+        finalHandoff = confirmed.handoff;
+        confirmedEvent = confirmed.event;
+      }
 
       return {
-        handoff: submitted.handoff,
+        handoff: finalHandoff,
         acceptedEvent: accepted.event,
         queuedEvent: queued.event,
         simulationEvent: simulationEvent.event,
         submittedEvent: submitted.event,
+        confirmedEvent,
         txHash: execution.txHash,
       };
     } catch (error) {
@@ -817,8 +922,9 @@ export function createEthersGaslessSettlementExecutor(
   const gaslessMaxGasLimit = config.gaslessMaxGasLimit ?? 1_500_000n;
   const gaslessMinExecutorBalanceWei = config.gaslessMinExecutorBalanceWei ?? 0n;
 
-  async function assertSignerBalance(): Promise<void> {
-    const balance = await provider.getBalance(await signer.getAddress());
+  async function assertSignerBalance(): Promise<{ executorAddress: string; balance: bigint }> {
+    const executorAddress = await signer.getAddress();
+    const balance = await provider.getBalance(executorAddress);
     if (balance < gaslessMinExecutorBalanceWei) {
       throw new GatewayError(
         503,
@@ -830,6 +936,46 @@ export function createEthersGaslessSettlementExecutor(
         },
       );
     }
+
+    return { executorAddress, balance };
+  }
+
+  async function waitForConfirmedReceipt(tx: {
+    hash: string;
+    wait: () => Promise<TransactionReceipt | null>;
+  }): Promise<GaslessExecutionReceipt> {
+    const receipt = await tx.wait();
+    if (!receipt) {
+      throw new GatewayError(
+        502,
+        'UPSTREAM_UNAVAILABLE',
+        'Gasless transaction receipt was not available',
+        {
+          txHash: tx.hash,
+        },
+      );
+    }
+    if (receipt.status !== 1) {
+      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Gasless transaction reverted on-chain', {
+        txHash: tx.hash,
+        blockNumber: receipt.blockNumber,
+      });
+    }
+
+    const executorAddress = await signer.getAddress();
+    const executorBalance = await provider.getBalance(executorAddress);
+    const gasUsed = BigInt(receipt.gasUsed ?? 0n);
+    const effectiveGasPriceWei = BigInt(receipt.gasPrice ?? 0n);
+
+    return {
+      txHash: tx.hash,
+      blockNumber: BigInt(receipt.blockNumber).toString(),
+      gasUsed: gasUsed.toString(),
+      effectiveGasPriceWei: effectiveGasPriceWei.toString(),
+      nativeCostWei: (gasUsed * effectiveGasPriceWei).toString(),
+      executorAddress,
+      executorBalanceWei: executorBalance.toString(),
+    };
   }
 
   async function simulate(input: GaslessCreateTradeExecutionInput): Promise<bigint> {
@@ -889,24 +1035,22 @@ export function createEthersGaslessSettlementExecutor(
     return gasEstimate;
   }
 
-  async function executeUserAction(
+  async function broadcastUserAction(
     input: GaslessUserActionExecutionInput,
     gasLimit: bigint,
-  ): Promise<string> {
+  ): Promise<{ hash: string; wait: () => Promise<TransactionReceipt | null> }> {
     const args = buildUserActionArguments(input);
     if (input.action === 'open_dispute') {
-      return (await escrow.openDisputeWithAuthorization(...args, { gasLimit })).hash;
+      return escrow.openDisputeWithAuthorization(...args, { gasLimit });
     }
     if (input.action === 'cancel_locked_timeout') {
-      return (await escrow.cancelLockedTradeAfterTimeoutWithAuthorization(...args, { gasLimit }))
-        .hash;
+      return escrow.cancelLockedTradeAfterTimeoutWithAuthorization(...args, { gasLimit });
     }
     if (input.action === 'refund_in_transit_timeout') {
-      return (await escrow.refundInTransitAfterTimeoutWithAuthorization(...args, { gasLimit }))
-        .hash;
+      return escrow.refundInTransitAfterTimeoutWithAuthorization(...args, { gasLimit });
     }
 
-    return (await escrow.finalizeAfterDisputeWindowWithAuthorization(...args, { gasLimit })).hash;
+    return escrow.finalizeAfterDisputeWindowWithAuthorization(...args, { gasLimit });
   }
 
   return {
@@ -925,6 +1069,7 @@ export function createEthersGaslessSettlementExecutor(
 
       return {
         txHash: tx.hash,
+        receipt: await waitForConfirmedReceipt(tx),
       };
     },
 
@@ -936,8 +1081,10 @@ export function createEthersGaslessSettlementExecutor(
 
     async executeUserAction(input) {
       const gasEstimate = await simulateUserAction(input);
+      const tx = await broadcastUserAction(input, gasEstimate);
       return {
-        txHash: await executeUserAction(input, gasEstimate),
+        txHash: tx.hash,
+        receipt: await waitForConfirmedReceipt(tx),
       };
     },
   };

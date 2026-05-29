@@ -239,31 +239,31 @@ SDK and inject a signer instead.
 
 ### AdminSDK
 
-| Method                                                         | Description                                              |
-| -------------------------------------------------------------- | -------------------------------------------------------- |
-| `pause(signer)`                                                | Pause normal protocol operations                         |
-| `proposeUnpause(signer)`                                       | Propose unpause (multi-admin)                            |
-| `approveUnpause(signer)`                                       | Approve unpause proposal                                 |
-| `cancelUnpauseProposal(signer)`                                | Cancel active unpause proposal                           |
-| `disableOracleEmergency(signer)`                               | Emergency disable oracle + pause                         |
-| `pauseClaims(signer)`                                          | Pause treasury/partner claims                            |
-| `unpauseClaims(signer)`                                        | Resume treasury/partner claims                           |
-| `claimTreasury(signer)`                                        | Sweep claimable treasury USDC with treasury/admin signer |
-| `proposeTreasuryPayoutAddressUpdate(address, signer)`          | Propose treasury payout receiver update                  |
-| `approveTreasuryPayoutAddressUpdate(id, signer)`               | Approve payout receiver update proposal                  |
-| `executeTreasuryPayoutAddressUpdate(id, signer)`               | Execute approved payout receiver update                  |
-| `cancelExpiredTreasuryPayoutAddressUpdateProposal(id, signer)` | Cancel expired payout receiver proposal                  |
-| `proposeDisputeSolution(tradeId, status, signer)`              | Propose dispute resolution (`REFUND` or `RESOLVE`)       |
-| `approveDisputeSolution(proposalId, signer)`                   | Approve dispute proposal                                 |
-| `cancelExpiredDisputeProposal(proposalId, signer)`             | Cancel expired dispute proposal                          |
-| `proposeOracleUpdate(newOracle, signer)`                       | Propose oracle update                                    |
-| `approveOracleUpdate(proposalId, signer)`                      | Approve oracle update                                    |
-| `executeOracleUpdate(proposalId, signer)`                      | Execute approved oracle update                           |
-| `cancelExpiredOracleUpdateProposal(proposalId, signer)`        | Cancel expired oracle-update proposal                    |
-| `proposeAddAdmin(newAdmin, signer)`                            | Propose adding a new admin                               |
-| `approveAddAdmin(proposalId, signer)`                          | Approve admin-add proposal                               |
-| `executeAddAdmin(proposalId, signer)`                          | Execute approved admin addition                          |
-| `cancelExpiredAddAdminProposal(proposalId, signer)`            | Cancel expired admin-add proposal                        |
+| Method                                                         | Description                                            |
+| -------------------------------------------------------------- | ------------------------------------------------------ |
+| `pause(signer)`                                                | Pause normal protocol operations                       |
+| `proposeUnpause(signer)`                                       | Propose unpause (multi-admin)                          |
+| `approveUnpause(signer)`                                       | Approve unpause proposal                               |
+| `cancelUnpauseProposal(signer)`                                | Cancel active unpause proposal                         |
+| `disableOracleEmergency(signer)`                               | Emergency disable oracle + pause                       |
+| `pauseClaims(signer)`                                          | Pause treasury/partner claims                          |
+| `unpauseClaims(signer)`                                        | Resume treasury/partner claims                         |
+| `claimTreasury(signer)`                                        | Sweep accrued treasury USDC with treasury/admin signer |
+| `proposeTreasuryPayoutAddressUpdate(address, signer)`          | Propose treasury payout receiver update                |
+| `approveTreasuryPayoutAddressUpdate(id, signer)`               | Approve payout receiver update proposal                |
+| `executeTreasuryPayoutAddressUpdate(id, signer)`               | Execute approved payout receiver update                |
+| `cancelExpiredTreasuryPayoutAddressUpdateProposal(id, signer)` | Cancel expired payout receiver proposal                |
+| `proposeDisputeSolution(tradeId, status, signer)`              | Propose dispute resolution (`REFUND` or `RESOLVE`)     |
+| `approveDisputeSolution(proposalId, signer)`                   | Approve dispute proposal                               |
+| `cancelExpiredDisputeProposal(proposalId, signer)`             | Cancel expired dispute proposal                        |
+| `proposeOracleUpdate(newOracle, signer)`                       | Propose oracle update                                  |
+| `approveOracleUpdate(proposalId, signer)`                      | Approve oracle update                                  |
+| `executeOracleUpdate(proposalId, signer)`                      | Execute approved oracle update                         |
+| `cancelExpiredOracleUpdateProposal(proposalId, signer)`        | Cancel expired oracle-update proposal                  |
+| `proposeAddAdmin(newAdmin, signer)`                            | Propose adding a new admin                             |
+| `approveAddAdmin(proposalId, signer)`                          | Approve admin-add proposal                             |
+| `executeAddAdmin(proposalId, signer)`                          | Execute approved admin addition                        |
+| `cancelExpiredAddAdminProposal(proposalId, signer)`            | Cancel expired admin-add proposal                      |
 
 ## Auth ownership boundary
 

@@ -1525,17 +1525,23 @@ export namespace PlatformFeesPaidStage1Event {
   export type InputTuple = [
     tradeId: BigNumberish,
     treasury: AddressLike,
-    platformFeesAmount: BigNumberish
+    platformFeesAmount: BigNumberish,
+    platformFeeNetAmount: BigNumberish,
+    settlementSupportFeeAmount: BigNumberish
   ];
   export type OutputTuple = [
     tradeId: bigint,
     treasury: string,
-    platformFeesAmount: bigint
+    platformFeesAmount: bigint,
+    platformFeeNetAmount: bigint,
+    settlementSupportFeeAmount: bigint
   ];
   export interface OutputObject {
     tradeId: bigint;
     treasury: string;
     platformFeesAmount: bigint;
+    platformFeeNetAmount: bigint;
+    settlementSupportFeeAmount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -3499,7 +3505,7 @@ export interface AgroasysEscrow extends BaseContract {
       PausedEvent.OutputObject
     >;
 
-    "PlatformFeesPaidStage1(uint256,address,uint256)": TypedContractEvent<
+    "PlatformFeesPaidStage1(uint256,address,uint256,uint256,uint256)": TypedContractEvent<
       PlatformFeesPaidStage1Event.InputTuple,
       PlatformFeesPaidStage1Event.OutputTuple,
       PlatformFeesPaidStage1Event.OutputObject
