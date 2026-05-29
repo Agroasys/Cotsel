@@ -59,6 +59,119 @@ function requireEnv(values, name) {
   return String(value).trim();
 }
 
+function requireNumberEnv(values, name) {
+  const raw = requireEnv(values, name);
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive number`);
+  }
+  return parsed;
+}
+
+function parseJsonStringArrayEnv(values, name) {
+  const raw = requireEnv(values, name);
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`${name} must be a JSON array of strings`, { cause: error });
+  }
+
+  if (
+    !Array.isArray(parsed) ||
+    parsed.some((value) => typeof value !== 'string' || !value.trim())
+  ) {
+    throw new Error(`${name} must be a JSON array of non-empty strings`);
+  }
+
+  return parsed.map((value) => value.trim());
+}
+
+function sameAddress(left, right) {
+  return String(left).toLowerCase() === String(right).toLowerCase();
+}
+
+async function assertWalletHasGas({ provider, wallet, label }) {
+  const balance = await provider.getBalance(wallet.address);
+  const floor = parseUnits('0.00003', 18);
+  if (balance < floor) {
+    throw new Error(
+      `${label} ${wallet.address} needs Base Sepolia ETH for service/admin gas. ` +
+        `Do not fund buyer or supplier wallets; fund the service/admin wallet instead.`,
+    );
+  }
+}
+
+async function loadDisputeApprovers({ provider, escrow, cotselEnv, wallets }) {
+  const requiredApprovals = Number(await escrow.requiredApprovals());
+  if (!Number.isSafeInteger(requiredApprovals) || requiredApprovals < 2) {
+    throw new Error(`Invalid escrow requiredApprovals value: ${requiredApprovals}`);
+  }
+
+  const buyerIsAdmin = await escrow.isAdmin(wallets.buyer);
+  const supplierIsAdmin = await escrow.isAdmin(wallets.supplier);
+  if (buyerIsAdmin) {
+    throw new Error(
+      `Buyer wallet ${wallets.buyer} is configured as an escrow admin. ` +
+        'Redeploy with service-owned admins before running live proof.',
+    );
+  }
+  if (supplierIsAdmin) {
+    throw new Error(
+      `Supplier wallet ${wallets.supplier} is configured as an escrow admin. ` +
+        'Redeploy with service-owned admins before running live proof.',
+    );
+  }
+
+  const approverKeys = parseJsonStringArrayEnv(
+    cotselEnv,
+    'PILOT_DISPUTE_APPROVER_PRIVATE_KEYS_JSON',
+  );
+  const approvers = approverKeys.map((key) => new Wallet(key, provider));
+  const uniqueAddresses = new Set(approvers.map((wallet) => wallet.address.toLowerCase()));
+  if (uniqueAddresses.size !== approvers.length) {
+    throw new Error('PILOT_DISPUTE_APPROVER_PRIVATE_KEYS_JSON must not contain duplicate wallets');
+  }
+  if (approvers.length < requiredApprovals) {
+    throw new Error(
+      `PILOT_DISPUTE_APPROVER_PRIVATE_KEYS_JSON must contain at least ${requiredApprovals} ` +
+        'distinct non-user admin wallets',
+    );
+  }
+
+  for (const [index, approver] of approvers.entries()) {
+    if (
+      sameAddress(approver.address, wallets.buyer) ||
+      sameAddress(approver.address, wallets.supplier)
+    ) {
+      throw new Error(
+        `PILOT_DISPUTE_APPROVER_PRIVATE_KEYS_JSON[${index}] derives to a buyer/supplier user wallet. ` +
+          'Use service-owned admin wallets only.',
+      );
+    }
+    if (!(await escrow.isAdmin(approver.address))) {
+      throw new Error(
+        `PILOT_DISPUTE_APPROVER_PRIVATE_KEYS_JSON[${index}] derives to ${approver.address}, ` +
+          'which is not an escrow admin for the deployed contract.',
+      );
+    }
+    const code = await provider.getCode(approver.address);
+    if (code !== '0x') {
+      throw new Error(
+        `PILOT_DISPUTE_APPROVER_PRIVATE_KEYS_JSON[${index}] derives to ${approver.address}, ` +
+          'which has deployed code. Use a plain service-owned EOA admin wallet for live proof.',
+      );
+    }
+    await assertWalletHasGas({ provider, wallet: approver, label: `Dispute approver ${index}` });
+  }
+
+  return {
+    requiredApprovals,
+    wallets: approvers.slice(0, requiredApprovals),
+    addresses: approvers.slice(0, requiredApprovals).map((wallet) => wallet.address),
+  };
+}
+
 function serviceAuthHeaders({ apiKey, apiSecret, method, path: requestPath, body }) {
   const timestamp = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomBytes(16).toString('hex');
@@ -333,20 +446,18 @@ async function main() {
   const escrowAddress = requireEnv(cotselEnv, 'GATEWAY_ESCROW_ADDRESS');
   const usdcAddress = requireEnv(cotselEnv, 'GATEWAY_USDC_ADDRESS');
   const buyerKey = requireEnv(process.env, 'BUYER_PRIVATE_KEY');
-  const supplierKey = requireEnv(process.env, 'SUPPLIER_PRIVATE_KEY');
   const serviceKeyPrivate = requireEnv(cotselEnv, 'GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY');
+  const nativeTokenUsdPriceUsd = requireNumberEnv(cotselEnv, 'PILOT_NATIVE_TOKEN_USD_PRICE_USD');
 
   const provider = new JsonRpcProvider(rpcUrl, chainId);
   const buyer = new Wallet(buyerKey, provider);
-  const supplier = new Wallet(supplierKey, provider);
   const service = new Wallet(serviceKeyPrivate, provider);
   const escrow = new Contract(escrowAddress, ESCROW_ABI, service);
-  const escrowAsSupplier = escrow.connect(supplier);
   const usdc = new Contract(usdcAddress, ERC20_ABI, provider);
 
   const wallets = {
     buyer: await buyer.getAddress(),
-    supplier: await supplier.getAddress(),
+    supplier: requireEnv(cotselEnv, 'SUPPLIER_WALLET_ADDRESS'),
     service: await service.getAddress(),
   };
   const expectedWallets = {
@@ -354,11 +465,15 @@ async function main() {
     supplier: requireEnv(cotselEnv, 'SUPPLIER_WALLET_ADDRESS'),
     service: requireEnv(cotselEnv, 'SERVICE_WALLET_ADDRESS'),
   };
-  for (const role of Object.keys(wallets)) {
+  for (const role of ['buyer', 'service']) {
     if (wallets[role].toLowerCase() !== expectedWallets[role].toLowerCase()) {
       throw new Error(`${role} key derives to ${wallets[role]}, expected ${expectedWallets[role]}`);
     }
   }
+  if (wallets.supplier.toLowerCase() !== expectedWallets.supplier.toLowerCase()) {
+    throw new Error(`supplier wallet is ${wallets.supplier}, expected ${expectedWallets.supplier}`);
+  }
+  const disputeApprovers = await loadDisputeApprovers({ provider, escrow, cotselEnv, wallets });
 
   const decimals = await usdc.decimals();
   const amount = (value) => parseUnits(value, decimals);
@@ -392,6 +507,7 @@ async function main() {
   });
 
   const balancesBefore = await readBalances({ provider, usdc, wallets, escrowAddress, decimals });
+  const treasuryClaimableBefore = await escrow.claimableUsdc(wallets.service);
   if (balancesBefore.buyer.usdcBaseUnits < amounts.total) {
     throw new Error('Buyer does not have enough Base Sepolia USDC for the pilot proof');
   }
@@ -414,7 +530,11 @@ async function main() {
       assetAmount: 10,
       ricardianHash: amounts.ricardianHash,
       externalReference: requestId,
-      metadata: { windowId: WINDOW_ID, nativeTokenSymbol: 'ETH' },
+      metadata: {
+        windowId: WINDOW_ID,
+        nativeTokenSymbol: 'ETH',
+        nativeTokenUsdPriceUsd,
+      },
     },
   });
 
@@ -549,7 +669,12 @@ async function main() {
       assetAmount: Number(formatUnits(amounts.supplierSecondTranche, decimals)),
       ricardianHash: amounts.ricardianHash,
       externalReference: requestId,
-      metadata: { windowId: WINDOW_ID, ...observedAmounts },
+      metadata: {
+        windowId: WINDOW_ID,
+        nativeTokenSymbol: 'ETH',
+        nativeTokenUsdPriceUsd,
+        ...observedAmounts,
+      },
     },
   });
   await updateBackendRefundHandoffRemoteId({
@@ -603,9 +728,12 @@ async function main() {
   });
 
   const proposalId = (await escrow.disputeCounter()).toString();
-  const proposalReceipt = await waitForTx(await escrow.proposeDisputeSolution(tradeId, 0));
-  await ensureSupplierCanApprove({ provider, service, supplier });
-  const refundReceipt = await waitForTx(await escrowAsSupplier.approveDisputeSolution(proposalId));
+  const proposalReceipt = await waitForTx(
+    await escrow.connect(disputeApprovers.wallets[0]).proposeDisputeSolution(tradeId, 0),
+  );
+  const refundReceipt = await waitForTx(
+    await escrow.connect(disputeApprovers.wallets[1]).approveDisputeSolution(proposalId),
+  );
 
   await gatewayJson({
     baseUrl: gatewayBaseUrl,
@@ -624,6 +752,8 @@ async function main() {
       metadata: {
         action: 'buyer_refund_direct_transfer',
         tradeId,
+        nativeTokenSymbol: 'ETH',
+        nativeTokenUsdPriceUsd,
         ...observedAmounts,
       },
     },
@@ -642,6 +772,13 @@ async function main() {
   });
   const finalTrade = await escrow.trades(tradeId);
   const treasuryClaimable = await escrow.claimableUsdc(wallets.service);
+  const currentRunDeltas = {
+    buyerUsdc: balancesAfter.buyer.usdcBaseUnits - balancesBefore.buyer.usdcBaseUnits,
+    supplierUsdc: balancesAfter.supplier.usdcBaseUnits - balancesBefore.supplier.usdcBaseUnits,
+    escrowUsdc: balancesAfter.escrow.usdcBaseUnits - balancesBefore.escrow.usdcBaseUnits,
+    serviceEthWei: balancesAfter.service.ethWei - balancesBefore.service.ethWei,
+    treasuryClaimable: treasuryClaimable - treasuryClaimableBefore,
+  };
 
   fs.mkdirSync(REPORT_DIR, { recursive: true });
   const report = {
@@ -651,6 +788,12 @@ async function main() {
     escrowAddress,
     usdcAddress,
     wallets,
+    disputeApprovers: {
+      requiredApprovals: disputeApprovers.requiredApprovals,
+      addresses: disputeApprovers.addresses,
+      userWalletsAreAdmins: false,
+    },
+    nativeTokenUsdPriceUsd,
     requestId,
     backendSeed,
     backendRefund,
@@ -668,6 +811,19 @@ async function main() {
       supplierFirstTranche: amounts.supplierFirstTranche.toString(),
       supplierSecondTranche: amounts.supplierSecondTranche.toString(),
       treasuryClaimable: treasuryClaimable.toString(),
+      treasuryClaimableBefore: treasuryClaimableBefore.toString(),
+      treasuryClaimableDelta: currentRunDeltas.treasuryClaimable.toString(),
+    },
+    currentRunEvidence: {
+      balanceDeltas: {
+        buyerUsdc: currentRunDeltas.buyerUsdc.toString(),
+        supplierUsdc: currentRunDeltas.supplierUsdc.toString(),
+        escrowUsdc: currentRunDeltas.escrowUsdc.toString(),
+        serviceEthWei: currentRunDeltas.serviceEthWei.toString(),
+      },
+      nonRefundableFeesAddedToTreasury: currentRunDeltas.treasuryClaimable.toString(),
+      expectedNonRefundableFees: (amounts.logistics + amounts.platformFees).toString(),
+      note: 'Deltas are scoped to this proof run. treasuryClaimable is cumulative for the deployed escrow.',
     },
     transactions: {
       createTradeGasless: createResult.data.txHash,
@@ -698,12 +854,7 @@ async function main() {
       {
         tradeId,
         txs: report.transactions,
-        supplierUsdcDelta: (
-          balancesAfter.supplier.usdcBaseUnits - balancesBefore.supplier.usdcBaseUnits
-        ).toString(),
-        buyerUsdcDelta: (
-          balancesAfter.buyer.usdcBaseUnits - balancesBefore.buyer.usdcBaseUnits
-        ).toString(),
+        currentRunEvidence: report.currentRunEvidence,
         backendAccountingEntries: backendEvidence.accounting.length,
         backendRefundEvents: backendEvidence.refundEvents.length,
       },
@@ -711,13 +862,6 @@ async function main() {
       2,
     ),
   );
-}
-
-async function ensureSupplierCanApprove({ provider, service, supplier }) {
-  const balance = await provider.getBalance(supplier.address);
-  const floor = parseUnits('0.00003', 18);
-  if (balance >= floor) return;
-  await waitForTx(await service.sendTransaction({ to: supplier.address, value: floor - balance }));
 }
 
 async function readBalances({ provider, usdc, wallets, escrowAddress, decimals }) {

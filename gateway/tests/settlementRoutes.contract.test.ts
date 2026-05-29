@@ -85,6 +85,8 @@ async function startServer(
     executeCreateTrade: () => Promise<GaslessExecutionSubmission>;
     simulateUserAction: () => Promise<{ gasEstimate?: bigint | string | number | null }>;
     executeUserAction: () => Promise<GaslessExecutionSubmission>;
+    simulateOperatorAction: () => Promise<{ gasEstimate?: bigint | string | number | null }>;
+    executeOperatorAction: () => Promise<GaslessExecutionSubmission>;
   }> = {},
   serverOptions: Partial<{ includeProtectedRouterBeforeSettlement: boolean }> = {},
 ) {
@@ -113,6 +115,16 @@ async function startServer(
       async simulateUserAction() {
         return {
           gasEstimate: 300000n,
+        };
+      },
+      async executeOperatorAction() {
+        return buildConfirmedSubmission(
+          '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+        );
+      },
+      async simulateOperatorAction() {
+        return {
+          gasEstimate: 220000n,
         };
       },
       ...executorOverrides,
@@ -267,6 +279,27 @@ function buildGaslessUserActionBody(
   };
 }
 
+function buildGaslessOperatorActionBody(
+  handoffId: string,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const body = {
+    action: 'finalize_after_dispute_window' as const,
+    handoffId,
+    chainId: config.chainId,
+    contractAddress: config.escrowAddress,
+    expiresAt,
+    tradeId: '42',
+    ...overrides,
+  };
+
+  return {
+    ...body,
+    payloadHash: gaslessSettlementExecutionTestExports.createPayloadHash(body),
+  };
+}
+
 describe('gateway settlement routes contract', () => {
   const spec = loadOpenApiSpec();
   const validateHandoffResponse = createSchemaValidator(
@@ -294,6 +327,7 @@ describe('gateway settlement routes contract', () => {
     expect(hasOperation(spec, 'post', '/settlement/handoffs')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/gasless-executions/create-trade')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/gasless-executions/user-action')).toBe(true);
+    expect(hasOperation(spec, 'post', '/settlement/gasless-executions/operator-action')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/handoffs/{handoffId}/execution-events')).toBe(
       true,
     );
@@ -676,6 +710,86 @@ describe('gateway settlement routes contract', () => {
           payloadHash: gaslessBody.payloadHash,
         }),
       );
+    } finally {
+      server.close();
+    }
+  });
+
+  test('service-authenticated gasless operator-action finalizes without user authorization', async () => {
+    const { server, baseUrl } = await startServer();
+
+    try {
+      const handoffBody = {
+        platformId: 'agroasys-platform',
+        platformHandoffId: 'handoff-operator-action',
+        tradeId: 'TRD-operator-action',
+        phase: 'final_release',
+        settlementChannel: 'cotsel_escrow',
+        displayCurrency: 'USD',
+        displayAmount: 1000,
+        assetSymbol: 'USDC',
+        assetAmount: 1000,
+      };
+      const handoffResponse = await fetch(`${baseUrl}/settlement/handoffs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'handoff-operator-action',
+          ...withServiceAuth('/api/dashboard-gateway/v1/settlement/handoffs', handoffBody),
+        },
+        body: JSON.stringify(handoffBody),
+      });
+      const handoffPayload = await handoffResponse.json();
+      const handoffId = handoffPayload.data.handoffId as string;
+
+      const gaslessBody = buildGaslessOperatorActionBody(handoffId);
+      const gaslessPath = '/api/dashboard-gateway/v1/settlement/gasless-executions/operator-action';
+      const gaslessResponse = await fetch(
+        `${baseUrl}/settlement/gasless-executions/operator-action`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'gasless-operator-action-1',
+            'X-Request-Id': 'req-gasless-operator-action',
+            ...withServiceAuth(gaslessPath, gaslessBody),
+          },
+          body: JSON.stringify(gaslessBody),
+        },
+      );
+      const gaslessPayload = await gaslessResponse.json();
+
+      expect(gaslessResponse.status).toBe(202);
+      expect(gaslessPayload.data.txHash).toBe(
+        '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+      );
+      expect(gaslessPayload.data.handoff.executionStatus).toBe('confirmed');
+
+      const eventPath = `/api/dashboard-gateway/v1/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`;
+      const listResponse = await fetch(
+        `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+        {
+          headers: {
+            ...withServiceAuth(eventPath, null, 'GET'),
+          },
+        },
+      );
+      const listPayload = await listResponse.json();
+
+      expect(listPayload.data[0].metadata).toEqual(
+        expect.objectContaining({
+          action: 'finalize_after_dispute_window',
+          userAuthorizationRequired: false,
+          gasUsed: '210000',
+          nativeCostWei: '210000000000000',
+          executorAddress: '0x1111111111111111111111111111111111111111',
+          chainId: config.chainId,
+          contractAddress: config.escrowAddress,
+          tradeId: gaslessBody.tradeId,
+          payloadHash: gaslessBody.payloadHash,
+        }),
+      );
+      expect(listPayload.data[0].metadata).not.toHaveProperty('userAddress');
     } finally {
       server.close();
     }
