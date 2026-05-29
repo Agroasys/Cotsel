@@ -51,7 +51,7 @@ Purpose:
 
 ### Baseline transaction expectations
 
-- Core contract actions (`createTrade`, release/dispute milestones) have baseline gas observations documented from latest test/staging runs.
+- Core contract actions (`createTradeWithAuthorization`, release/dispute milestones) have baseline gas observations documented from latest test/staging runs.
 - Changes that materially increase gas costs require release-note justification and approval.
 
 ### Fee anomaly alerting

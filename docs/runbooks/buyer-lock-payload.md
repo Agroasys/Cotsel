@@ -1,23 +1,25 @@
 # Buyer Lock Payload — Checkout UI Integration Guide
 
-This document is the reference for external checkout UIs that
-integrate with `BuyerSDK.createTrade(...)`.
+This document is the reference for external checkout UIs that integrate with
+the gasless create-trade flow.
 
 **Relevant SDK type:** `BuyerLockPayload` (`sdk/src/types/trade.ts`)
 **Backward-compatible alias:** `TradeParameters`
-**Entry point method:** `BuyerSDK.createTrade(payload, buyerSigner)`
+**Entry point method:** `BuyerSDK.createGaslessTradeAuthorization(payload, buyerSigner)`
 
 ## Overview
 
 When a buyer initiates settlement on the Agroasys platform, the checkout UI
-must assemble a `BuyerLockPayload` and pass it to `BuyerSDK.createTrade(...)`.
-The SDK validates the payload, handles the USDC approval if needed, derives the
-nonce, constructs the EIP-191 signature, and submits the lock transaction.
+must assemble a `BuyerLockPayload` and pass it to
+`BuyerSDK.createGaslessTradeAuthorization(...)`. The SDK validates the payload,
+derives the on-chain authorization nonce, and asks the buyer to sign an EIP-712
+authorization. A backend relayer submits the create-trade request so the buyer
+does not need gas.
 
 The checkout UI is responsible for:
 
-1. Obtaining the `ricardianHash` from the Ricardian service **before** calling
-   `createTrade`.
+1. Obtaining the `ricardianHash` from the Ricardian service **before**
+   requesting the gasless create-trade authorization.
 2. Decomposing the trade value into its four canonical amount components.
 3. Providing the supplier's wallet address.
 4. Optionally setting a `deadline`.
@@ -79,7 +81,7 @@ The nonce is **not** part of `BuyerLockPayload`. The SDK derives the current
 per-buyer on-chain nonce automatically:
 
 ```ts
-const nonce = await this.getBuyerNonce(buyerAddress);
+const nonce = await this.getAuthorizationNonce(buyerAddress);
 ```
 
 Checkout UIs MUST NOT pass a nonce.
@@ -98,15 +100,12 @@ the canonical contract is unambiguous across SDK docs and examples.
 const deadline = payload.deadline ?? Math.floor(Date.now() / 1000) + 3600;
 ```
 
-## USDC Approval
+## USDC Pull Authorization
 
-The SDK checks the buyer's current USDC allowance for the escrow contract
-before signing. If `allowance < totalAmount`, it automatically issues an
-`approve` transaction:
+The direct buyer-paid `approve` plus `createTrade` flow is removed. For gasless
+trade creation, collect a USDC receive authorization for the escrow contract and
+send it with the signed create-trade authorization to the backend relayer:
 
 ```ts
-await usdcContract.approve(escrowAddress, payload.totalAmount);
+await buyerSDK.createUsdcReceiveAuthorization(payload.totalAmount, buyerSigner);
 ```
-
-Checkout UIs do **not** need to call `approveUSDC` separately; `createTrade`
-handles this transparently.

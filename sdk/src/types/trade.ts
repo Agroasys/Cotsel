@@ -5,10 +5,11 @@
 /**
  * Canonical buyer lock payload for external checkout UIs.
  *
- * This is the authoritative payload contract for `BuyerSDK.createTrade(...)`.
+ * This is the authoritative payload contract for
+ * `BuyerSDK.createGaslessTradeAuthorization(...)`.
  * External checkout integrations MUST construct this object to initiate the
- * escrow lock flow. The SDK validates every field before signing or submitting
- * any transaction.
+ * escrow lock flow. The SDK validates every field before the buyer signs a
+ * gasless authorization.
  *
  * ## Amount invariant
  * The following equality MUST hold and is enforced at runtime by
@@ -24,8 +25,9 @@
  *
  * ## Nonce
  * The nonce is **not** a caller-supplied field. The SDK derives the current
- * on-chain nonce via `BuyerSDK.getBuyerNonce(buyerAddress)` immediately before
- * constructing the EIP-191 signature. Checkout UIs MUST NOT pass a nonce.
+ * on-chain authorization nonce via
+ * `BuyerSDK.getAuthorizationNonce(buyerAddress)` immediately before
+ * constructing the EIP-712 signature. Checkout UIs MUST NOT pass a nonce.
  *
  * ## Deadline
  * An optional timestamp. Transactions submitted
@@ -35,10 +37,10 @@
  *
  * ## Ricardian hash linkage
  * The `ricardianHash` field anchors the on-chain escrow to a specific version
- * of the off-chain legal trade agreement. It is immutable after `createTrade`
+ * of the off-chain legal trade agreement. It is immutable after trade creation
  * and is used by auditors and courts to verify the settlement against the exact
  * document hash. The hash MUST be produced by the Ricardian service before the
- * checkout UI calls `createTrade`.
+ * checkout UI submits the gasless create-trade request.
  */
 export interface BuyerLockPayload {
   /**
@@ -54,8 +56,8 @@ export interface BuyerLockPayload {
    * Required. Must be positive and MUST satisfy the amount invariant:
    * `totalAmount === logisticsAmount + platformFeesAmount + supplierFirstTranche + supplierSecondTranche`
    *
-   * This is the amount the buyer wallet approves and the escrow contract
-   * pulls atomically during `createTrade`.
+   * This is the amount the buyer authorizes the escrow contract to pull
+   * atomically during gasless trade creation.
    */
   totalAmount: bigint;
 
@@ -88,10 +90,11 @@ export interface BuyerLockPayload {
    * SHA-256 hash of the off-chain Ricardian contract (the legal trade
    * agreement), encoded as a `0x`-prefixed 32-byte hex string (66 chars).
    *
-   * This value is immutable after `createTrade` and serves as the on-chain
+   * This value is immutable after trade creation and serves as the on-chain
    * anchor linking settlement state to the exact legal document version.
    * External checkout UIs MUST obtain this hash from the Ricardian service
-   * **before** calling `createTrade` — it cannot be back-filled later.
+   * **before** submitting the gasless create-trade request — it cannot be
+   * back-filled later.
    */
   ricardianHash: string;
 

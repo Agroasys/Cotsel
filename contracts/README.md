@@ -321,11 +321,11 @@ Timelock-based admin addition proposal:
 
 **Internal Functions:**
 
-17. **`_verifySignature(...)`**
-    - Verifies buyer's signature on trade parameters with nonce and deadline
-    - Uses domain separation (chainId + contract address)
+17. **`_verifyCreateTradeAuthorization(...)`**
+    - Verifies the buyer's gasless create-trade authorization with nonce and deadline
+    - Uses EIP-712 domain separation (chainId + contract address)
     - Returns: Recovered signer address
-    - Access: Internal (called by `createTrade`)
+    - Access: Internal (called by `createTradeWithAuthorization`)
 
 18. **`_executeDispute(proposalId)`**
     - Executes approved dispute resolution
@@ -411,7 +411,7 @@ Current suites include:
 - `Paused Matrix Hardening`
 - `Timeout Escape Hatches`
 - `Treasury Leakage Guards`
-- `createTrade`
+- `createTradeWithAuthorization`
 - `Complete Flow (Without dispute)`
 - `releaseFundsStage1`
 - `confirmArrival`
