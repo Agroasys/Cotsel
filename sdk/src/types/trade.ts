@@ -215,7 +215,7 @@ export interface GaslessUserActionExecutionRequest {
 
 export interface GaslessExecutionSubmitOptions {
   baseUrl: string;
-  idempotencyKey?: string;
+  idempotencyKey: string;
   headers?: HeadersInit;
   serviceAuth?: {
     apiKey: string;

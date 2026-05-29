@@ -87,7 +87,11 @@ function normalizeExpiry(expiresAt: string | Date): string {
   return date.toISOString();
 }
 
-function requireNonEmpty(value: string, field: string): string {
+function requireNonEmpty(value: string | undefined, field: string): string {
+  if (typeof value !== 'string') {
+    throw new ValidationError(`${field} must be a non-empty string`, { field });
+  }
+
   const trimmed = value.trim();
   if (!trimmed) {
     throw new ValidationError(`${field} must be a non-empty string`, { field });
@@ -249,13 +253,16 @@ export class GaslessSettlementClient {
     options: GaslessExecutionSubmitOptions,
   ): Promise<T> {
     const body = JSON.stringify(request);
+    const endpointUrl = `${trimBaseUrl(options.baseUrl)}${path}`;
+    const signingPath = new URL(endpointUrl).pathname;
+    const idempotencyKey = requireNonEmpty(options.idempotencyKey, 'idempotencyKey');
     const serviceAuthHeaders: HeadersInit | undefined = options.serviceAuth
       ? {
           ...createServiceAuthHeaders({
             apiKey: options.serviceAuth.apiKey,
             apiSecret: options.serviceAuth.apiSecret,
             method: 'POST',
-            path,
+            path: signingPath,
             body,
             timestamp: options.serviceAuth.timestamp,
             nonce: options.serviceAuth.nonce,
@@ -266,10 +273,10 @@ export class GaslessSettlementClient {
       { 'Content-Type': 'application/json' },
       options.headers,
       serviceAuthHeaders,
-      options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : undefined,
+      { 'Idempotency-Key': idempotencyKey },
     );
     const fetchImpl = options.fetchImpl ?? fetch;
-    const response = await fetchImpl(`${trimBaseUrl(options.baseUrl)}${path}`, {
+    const response = await fetchImpl(endpointUrl, {
       method: 'POST',
       headers,
       body,

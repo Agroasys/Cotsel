@@ -8,6 +8,7 @@ import { IERC20__factory } from '../src/types/typechain-types/factories/@openzep
 import { TEST_CONFIG, assertRequiredEnv, getBuyerSigner, hasRequiredEnv } from './setup';
 import { SponsoredAction } from '../src/types/trade';
 import { GaslessSettlementClient } from '../src/modules/gaslessSettlementClient';
+import { createServiceAuthHeaders } from '../src/modules/serviceAuth';
 
 const describeIntegration = hasRequiredEnv ? describe : describe.skip;
 
@@ -395,7 +396,7 @@ describe('BuyerSDK unit', () => {
     );
 
     const result = await client.submitUserActionExecution<{ txHash: string }>(request, {
-      baseUrl: 'https://cotsel.example',
+      baseUrl: 'https://cotsel.example/api/dashboard-gateway/v1',
       idempotencyKey: 'idem-1',
       serviceAuth: {
         apiKey: 'key-1',
@@ -409,14 +410,50 @@ describe('BuyerSDK unit', () => {
     const headers = init.headers as Headers;
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      'https://cotsel.example/settlement/gasless-executions/user-action',
+      'https://cotsel.example/api/dashboard-gateway/v1/settlement/gasless-executions/user-action',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(headers.get('Content-Type')).toBe('application/json');
     expect(headers.get('Idempotency-Key')).toBe('idem-1');
     expect(headers.get('X-Api-Key')).toBe('key-1');
-    expect(headers.get('X-Signature')).toMatch(/^[a-f0-9]{64}$/);
+    expect(headers.get('X-Signature')).toBe(
+      createServiceAuthHeaders({
+        apiKey: 'key-1',
+        apiSecret: 'secret-1',
+        method: 'POST',
+        path: '/api/dashboard-gateway/v1/settlement/gasless-executions/user-action',
+        body: JSON.stringify(request),
+        timestamp: 123,
+        nonce: 'nonce-1',
+      })['X-Signature'],
+    );
     expect(result).toEqual({ txHash: `0x${'8'.repeat(64)}` });
+  });
+
+  test('GaslessSettlementClient rejects execution submissions without idempotency keys', async () => {
+    const client = new GaslessSettlementClient(UNIT_CONFIG);
+    const request = client.buildUserActionExecutionRequest({
+      action: SponsoredAction.OPEN_DISPUTE,
+      handoffId: 'handoff-4',
+      expiresAt: '2026-06-01T00:00:00.000Z',
+      authorization: {
+        user: '0x2222222222222222222222222222222222222222',
+        action: SponsoredAction.OPEN_DISPUTE,
+        tradeId: 77n,
+        nonce: 9n,
+        deadline: 654321,
+        signature: `0x${'4'.repeat(130)}`,
+      },
+    });
+    const fetchImpl = jest.fn();
+
+    await expect(
+      client.submitUserActionExecution(request, {
+        baseUrl: 'https://cotsel.example/api/dashboard-gateway/v1',
+        fetchImpl,
+      } as unknown as Parameters<GaslessSettlementClient['submitUserActionExecution']>[1]),
+    ).rejects.toThrow('idempotencyKey must be a non-empty string');
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   test('createTrade should surface tradeId from TradeLocked receipt logs', async () => {
