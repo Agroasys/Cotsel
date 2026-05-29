@@ -351,7 +351,7 @@ Timelock-based admin addition proposal:
 
 - `TradeLocked(tradeId, buyer, supplier, totalAmount, logisticsAmount, platformFeesAmount, supplierFirstTranche, supplierSecondTranche, ricardianHash)`: New trade created and funds locked
 - `FundsReleasedStage1(tradeId, supplier, supplierFirstTranche, treasury, logisticsAmount)`: Stage 1 funds released (first tranche + logistics)
-- `PlatformFeesPaidStage1(tradeId, treasury, platformFeesAmount)`: Platform fees paid at Stage 1
+- `PlatformFeesPaidStage1(tradeId, treasury, platformFeesAmount, platformFeeNetAmount, settlementSupportFeeAmount)`: Platform and settlement support fees paid at Stage 1
 - `ArrivalConfirmed(tradeId, arrivalTimestamp)`: Arrival confirmed, 24h dispute window started
 - `FinalTrancheReleased(tradeId, supplier, supplierSecondTranche)`: Final tranche released after dispute window
 - `DisputeOpenedByBuyer(tradeId)`: Buyer opened dispute, trade frozen

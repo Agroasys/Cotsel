@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { id as keccakId } from 'ethers';
 
 import { contractInterface } from '../lib/abi.js';
 import { ESCROW_EVENT_SIGNATURES, ESCROW_EVENT_TOPICS } from '../lib/eventTopics.js';
@@ -12,4 +13,9 @@ test('active processor topics are derived from the frozen escrow ABI', () => {
 
   assert.deepEqual(ESCROW_EVENT_SIGNATURES, abiEventSignatures);
   assert.equal(ESCROW_EVENT_TOPICS.length, abiEventSignatures.length);
+  assert.ok(
+    ESCROW_EVENT_TOPICS.includes(
+      keccakId('PlatformFeesPaidStage1(uint256,address,uint256,uint256,uint256)'),
+    ),
+  );
 });
