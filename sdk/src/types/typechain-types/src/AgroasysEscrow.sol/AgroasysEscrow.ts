@@ -80,14 +80,12 @@ export interface AgroasysEscrowInterface extends Interface {
       | "cancelExpiredDisputeProposal"
       | "cancelExpiredOracleUpdateProposal"
       | "cancelExpiredTreasuryPayoutAddressUpdateProposal"
-      | "cancelLockedTradeAfterTimeout"
       | "cancelLockedTradeAfterTimeoutWithAuthorization"
       | "cancelUnpauseProposal"
       | "claimTreasury"
       | "claimableUsdc"
       | "claimsPaused"
       | "confirmArrival"
-      | "createTrade"
       | "createTradeWithAuthorization"
       | "disableOracleEmergency"
       | "disputeCounter"
@@ -112,7 +110,6 @@ export interface AgroasysEscrowInterface extends Interface {
       | "isRelayer"
       | "nonRefundableFeeAmount"
       | "nonces"
-      | "openDispute"
       | "openDisputeWithAuthorization"
       | "oracleActive"
       | "oracleAddress"
@@ -129,7 +126,6 @@ export interface AgroasysEscrowInterface extends Interface {
       | "proposeOracleUpdate"
       | "proposeTreasuryPayoutAddressUpdate"
       | "proposeUnpause"
-      | "refundInTransitAfterTimeout"
       | "refundInTransitAfterTimeoutWithAuthorization"
       | "releaseFundsStage1"
       | "requiredApprovals"
@@ -307,10 +303,6 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "cancelLockedTradeAfterTimeout",
-    values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
     functionFragment: "cancelLockedTradeAfterTimeoutWithAuthorization",
     values: [BigNumberish, BigNumberish, BigNumberish, BytesLike]
   ): string;
@@ -333,21 +325,6 @@ export interface AgroasysEscrowInterface extends Interface {
   encodeFunctionData(
     functionFragment: "confirmArrival",
     values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "createTrade",
-    values: [
-      AddressLike,
-      BigNumberish,
-      BigNumberish,
-      BigNumberish,
-      BigNumberish,
-      BigNumberish,
-      BytesLike,
-      BigNumberish,
-      BigNumberish,
-      BytesLike
-    ]
   ): string;
   encodeFunctionData(
     functionFragment: "createTradeWithAuthorization",
@@ -456,10 +433,6 @@ export interface AgroasysEscrowInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "nonces", values: [AddressLike]): string;
   encodeFunctionData(
-    functionFragment: "openDispute",
-    values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
     functionFragment: "openDisputeWithAuthorization",
     values: [BigNumberish, BigNumberish, BigNumberish, BytesLike]
   ): string;
@@ -516,10 +489,6 @@ export interface AgroasysEscrowInterface extends Interface {
   encodeFunctionData(
     functionFragment: "proposeUnpause",
     values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "refundInTransitAfterTimeout",
-    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "refundInTransitAfterTimeoutWithAuthorization",
@@ -705,10 +674,6 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "cancelLockedTradeAfterTimeout",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "cancelLockedTradeAfterTimeoutWithAuthorization",
     data: BytesLike
   ): Result;
@@ -730,10 +695,6 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "confirmArrival",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "createTrade",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -824,10 +785,6 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "nonces", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "openDispute",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "openDisputeWithAuthorization",
     data: BytesLike
   ): Result;
@@ -883,10 +840,6 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "proposeUnpause",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "refundInTransitAfterTimeout",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -2011,12 +1964,6 @@ export interface AgroasysEscrow extends BaseContract {
     "nonpayable"
   >;
 
-  cancelLockedTradeAfterTimeout: TypedContractMethod<
-    [_tradeId: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
   cancelLockedTradeAfterTimeoutWithAuthorization: TypedContractMethod<
     [
       _tradeId: BigNumberish,
@@ -2039,23 +1986,6 @@ export interface AgroasysEscrow extends BaseContract {
   confirmArrival: TypedContractMethod<
     [_tradeId: BigNumberish],
     [void],
-    "nonpayable"
-  >;
-
-  createTrade: TypedContractMethod<
-    [
-      _supplier: AddressLike,
-      _totalAmount: BigNumberish,
-      _logisticsAmount: BigNumberish,
-      _platformFeesAmount: BigNumberish,
-      _supplierFirstTranche: BigNumberish,
-      _supplierSecondTranche: BigNumberish,
-      _ricardianHash: BytesLike,
-      _buyerNonce: BigNumberish,
-      _deadline: BigNumberish,
-      _signature: BytesLike
-    ],
-    [bigint],
     "nonpayable"
   >;
 
@@ -2186,12 +2116,6 @@ export interface AgroasysEscrow extends BaseContract {
 
   nonces: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
-  openDispute: TypedContractMethod<
-    [_tradeId: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
   openDisputeWithAuthorization: TypedContractMethod<
     [
       _tradeId: BigNumberish,
@@ -2274,12 +2198,6 @@ export interface AgroasysEscrow extends BaseContract {
   >;
 
   proposeUnpause: TypedContractMethod<[], [boolean], "nonpayable">;
-
-  refundInTransitAfterTimeout: TypedContractMethod<
-    [_tradeId: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
 
   refundInTransitAfterTimeoutWithAuthorization: TypedContractMethod<
     [
@@ -2521,9 +2439,6 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "cancelExpiredTreasuryPayoutAddressUpdateProposal"
   ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "cancelLockedTradeAfterTimeout"
-  ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
-  getFunction(
     nameOrSignature: "cancelLockedTradeAfterTimeoutWithAuthorization"
   ): TypedContractMethod<
     [
@@ -2550,24 +2465,6 @@ export interface AgroasysEscrow extends BaseContract {
   getFunction(
     nameOrSignature: "confirmArrival"
   ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "createTrade"
-  ): TypedContractMethod<
-    [
-      _supplier: AddressLike,
-      _totalAmount: BigNumberish,
-      _logisticsAmount: BigNumberish,
-      _platformFeesAmount: BigNumberish,
-      _supplierFirstTranche: BigNumberish,
-      _supplierSecondTranche: BigNumberish,
-      _ricardianHash: BytesLike,
-      _buyerNonce: BigNumberish,
-      _deadline: BigNumberish,
-      _signature: BytesLike
-    ],
-    [bigint],
-    "nonpayable"
-  >;
   getFunction(
     nameOrSignature: "createTradeWithAuthorization"
   ): TypedContractMethod<
@@ -2684,9 +2581,6 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "nonces"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
-    nameOrSignature: "openDispute"
-  ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
-  getFunction(
     nameOrSignature: "openDisputeWithAuthorization"
   ): TypedContractMethod<
     [
@@ -2769,9 +2663,6 @@ export interface AgroasysEscrow extends BaseContract {
   getFunction(
     nameOrSignature: "proposeUnpause"
   ): TypedContractMethod<[], [boolean], "nonpayable">;
-  getFunction(
-    nameOrSignature: "refundInTransitAfterTimeout"
-  ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "refundInTransitAfterTimeoutWithAuthorization"
   ): TypedContractMethod<

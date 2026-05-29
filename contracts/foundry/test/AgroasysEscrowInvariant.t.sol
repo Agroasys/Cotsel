@@ -16,6 +16,19 @@ contract Handler is Test {
     AgroasysEscrow public escrow;
     MockUSDC public usdc;
 
+    bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 private constant CREATE_TRADE_AUTHORIZATION_TYPEHASH = keccak256(
+        "CreateTradeAuthorization(address buyer,address supplier,uint256 totalAmount,uint256 logisticsAmount,uint256 platformFeesAmount,uint256 supplierFirstTranche,uint256 supplierSecondTranche,bytes32 ricardianHash,uint256 nonce,uint256 deadline)"
+    );
+    bytes32 private constant USER_ACTION_AUTHORIZATION_TYPEHASH = keccak256(
+        "UserActionAuthorization(address user,uint8 action,uint256 tradeId,uint256 nonce,uint256 deadline)"
+    );
+    bytes32 private constant RECEIVE_WITH_AUTHORIZATION_TYPEHASH = keccak256(
+        "ReceiveWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+    );
+
     address public treasury;
     address public oracle;
     address public admin1;
@@ -30,6 +43,7 @@ contract Handler is Test {
     uint256 public releaseStage2Triggered;
     uint256 public disputedRaised;
     uint256 public disputeSolved;
+    mapping(uint256 => uint256) public buyerPrivateKeyByTrade;
 
 
     constructor(AgroasysEscrow _escrow, MockUSDC _usdc, address _treasury, address _oracle, address _admin1, address _admin2){
@@ -61,16 +75,20 @@ contract Handler is Test {
         address buyer = vm.addr(buyerPk);
         usdc.mint(buyer, total);
 
-        uint256 nonce = escrow.getBuyerNonce(buyer);
-
+        uint256 nonce = escrow.authorizationNonces(buyer);
         uint256 deadline = block.timestamp + 1 hours;
 
-        bytes32 messageHashRecreated = keccak256(abi.encode(
+        bytes32 escrowDomainSeparator = keccak256(abi.encode(
+            EIP712_DOMAIN_TYPEHASH,
+            keccak256(bytes("AgroasysEscrow")),
+            keccak256(bytes("1")),
             block.chainid,
-            address(escrow),
+            address(escrow)
+        ));
+        bytes32 createStructHash = keccak256(abi.encode(
+            CREATE_TRADE_AUTHORIZATION_TYPEHASH,
             buyer,
             supplier, 
-            treasury,
             total,
             logistics,
             fees,
@@ -80,15 +98,33 @@ contract Handler is Test {
             nonce,
             deadline
         ));
-
-        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHashRecreated));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(buyerPk, ethSignedMessageHash);
+        bytes32 createDigest = keccak256(abi.encodePacked("\x19\x01", escrowDomainSeparator, createStructHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(buyerPk, createDigest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes32 usdcNonce = keccak256(abi.encodePacked("invariant-usdc", buyer, nonce, ricardianHash));
+        bytes32 usdcDomainSeparator = keccak256(abi.encode(
+            EIP712_DOMAIN_TYPEHASH,
+            keccak256(bytes("Mock USDC")),
+            keccak256(bytes("2")),
+            block.chainid,
+            address(usdc)
+        ));
+        bytes32 usdcStructHash = keccak256(abi.encode(
+            RECEIVE_WITH_AUTHORIZATION_TYPEHASH,
+            buyer,
+            address(escrow),
+            total,
+            uint256(0),
+            deadline,
+            usdcNonce
+        ));
+        bytes32 usdcDigest = keccak256(abi.encodePacked("\x19\x01", usdcDomainSeparator, usdcStructHash));
+        (uint8 usdcV, bytes32 usdcR, bytes32 usdcS) = vm.sign(buyerPk, usdcDigest);
 
-        vm.startPrank(buyer);
-        usdc.approve(address(escrow), total);
-        escrow.createTrade(
+        vm.prank(admin1);
+        uint256 tradeId = escrow.createTradeWithAuthorization(
+            buyer,
             supplier,
             total,
             logistics,
@@ -98,12 +134,47 @@ contract Handler is Test {
             ricardianHash,
             nonce,
             deadline,
-            signature
+            signature,
+            AgroasysEscrow.UsdcAuthorization({
+                validAfter: 0,
+                validBefore: deadline,
+                nonce: usdcNonce,
+                v: usdcV,
+                r: usdcR,
+                s: usdcS
+            })
         );
+        buyerPrivateKeyByTrade[tradeId] = buyerPk;
         totalDeposited += total;
         tradesCreated++;
+    }
 
-        vm.stopPrank();
+    function _authorizeUserAction(
+        address user,
+        uint256 userPrivateKey,
+        uint8 action,
+        uint256 tradeId
+    ) internal returns (uint256 nonce, uint256 deadline, bytes memory signature) {
+        nonce = escrow.authorizationNonces(user);
+        deadline = block.timestamp + 1 hours;
+        bytes32 domainSeparator = keccak256(abi.encode(
+            EIP712_DOMAIN_TYPEHASH,
+            keccak256(bytes("AgroasysEscrow")),
+            keccak256(bytes("1")),
+            block.chainid,
+            address(escrow)
+        ));
+        bytes32 structHash = keccak256(abi.encode(
+            USER_ACTION_AUTHORIZATION_TYPEHASH,
+            user,
+            action,
+            tradeId,
+            nonce,
+            deadline
+        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, digest);
+        signature = abi.encodePacked(r, s, v);
     }
 
 
@@ -148,7 +219,7 @@ contract Handler is Test {
 
         vm.warp(arrivalTimestamp + 24 hours + 1);
 
-        vm.prank(oracle);
+        vm.prank(admin1);
         escrow.finalizeAfterDisputeWindow(tradeId);
         (,,,,,,,,,uint256 tranche2,,) = escrow.trades(tradeId);
         totalWithdrawn += tranche2;
@@ -164,8 +235,13 @@ contract Handler is Test {
         (,,,address buyer,,,,,,,,) = escrow.trades(tradeId);
         
 
-        vm.prank(buyer);
-        escrow.openDispute(tradeId);
+        uint256 buyerPk = buyerPrivateKeyByTrade[tradeId];
+        if (buyerPk == 0) {
+            return;
+        }
+        (uint256 nonce, uint256 deadline, bytes memory signature) = _authorizeUserAction(buyer, buyerPk, 1, tradeId);
+        vm.prank(admin1);
+        escrow.openDisputeWithAuthorization(tradeId, nonce, deadline, signature);
         disputedRaised++;
     }
 

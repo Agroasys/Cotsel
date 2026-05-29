@@ -13,6 +13,19 @@ import {MockUSDC} from "../src/MockUSDC.sol";
 contract FuzzTest is Test {
     AgroasysEscrow public escrow;
     MockUSDC public usdc;
+
+    bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 private constant CREATE_TRADE_AUTHORIZATION_TYPEHASH = keccak256(
+        "CreateTradeAuthorization(address buyer,address supplier,uint256 totalAmount,uint256 logisticsAmount,uint256 platformFeesAmount,uint256 supplierFirstTranche,uint256 supplierSecondTranche,bytes32 ricardianHash,uint256 nonce,uint256 deadline)"
+    );
+    bytes32 private constant USER_ACTION_AUTHORIZATION_TYPEHASH = keccak256(
+        "UserActionAuthorization(address user,uint8 action,uint256 tradeId,uint256 nonce,uint256 deadline)"
+    );
+    bytes32 private constant RECEIVE_WITH_AUTHORIZATION_TYPEHASH = keccak256(
+        "ReceiveWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+    );
     
     address buyer;
     uint256 buyerPk;
@@ -52,16 +65,20 @@ contract FuzzTest is Test {
         bytes32 ricardianHash
     ) internal returns (uint256) {
         uint256 total = logistics + fees + tranche1 + tranche2;
-        uint256 nonce = escrow.getBuyerNonce(buyer);
-
+        uint256 nonce = escrow.authorizationNonces(buyer);
         uint256 deadline = block.timestamp + 1 hours;
 
-        bytes32 messageHashRecreated = keccak256(abi.encode(
+        bytes32 escrowDomainSeparator = keccak256(abi.encode(
+            EIP712_DOMAIN_TYPEHASH,
+            keccak256(bytes("AgroasysEscrow")),
+            keccak256(bytes("1")),
             block.chainid,
-            address(escrow),
+            address(escrow)
+        ));
+        bytes32 createStructHash = keccak256(abi.encode(
+            CREATE_TRADE_AUTHORIZATION_TYPEHASH,
             buyer,
             supplier, 
-            treasury,
             total,
             logistics,
             fees,
@@ -71,15 +88,33 @@ contract FuzzTest is Test {
             nonce,
             deadline
         ));
-
-        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHashRecreated));
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(buyerPk, ethSignedMessageHash);
+        bytes32 createDigest = keccak256(abi.encodePacked("\x19\x01", escrowDomainSeparator, createStructHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(buyerPk, createDigest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        vm.startPrank(buyer);
-        usdc.approve(address(escrow), total);
-        uint256 createdTradeId = escrow.createTrade(
+        bytes32 usdcNonce = keccak256(abi.encodePacked("foundry-usdc", buyer, nonce, ricardianHash));
+        bytes32 usdcDomainSeparator = keccak256(abi.encode(
+            EIP712_DOMAIN_TYPEHASH,
+            keccak256(bytes("Mock USDC")),
+            keccak256(bytes("2")),
+            block.chainid,
+            address(usdc)
+        ));
+        bytes32 usdcStructHash = keccak256(abi.encode(
+            RECEIVE_WITH_AUTHORIZATION_TYPEHASH,
+            buyer,
+            address(escrow),
+            total,
+            uint256(0),
+            deadline,
+            usdcNonce
+        ));
+        bytes32 usdcDigest = keccak256(abi.encodePacked("\x19\x01", usdcDomainSeparator, usdcStructHash));
+        (uint8 usdcV, bytes32 usdcR, bytes32 usdcS) = vm.sign(buyerPk, usdcDigest);
+
+        vm.prank(admin1);
+        uint256 createdTradeId = escrow.createTradeWithAuthorization(
+            buyer,
             supplier,
             total,
             logistics,
@@ -89,11 +124,41 @@ contract FuzzTest is Test {
             ricardianHash,
             nonce,
             deadline,
-            signature
+            signature,
+            AgroasysEscrow.UsdcAuthorization({
+                validAfter: 0,
+                validBefore: deadline,
+                nonce: usdcNonce,
+                v: usdcV,
+                r: usdcR,
+                s: usdcS
+            })
         );
-        vm.stopPrank();
 
         return createdTradeId;
+    }
+
+    function _authorize_user_action(uint8 action, uint256 tradeId) internal returns (uint256 nonce, uint256 deadline, bytes memory signature) {
+        nonce = escrow.authorizationNonces(buyer);
+        deadline = block.timestamp + 1 hours;
+        bytes32 domainSeparator = keccak256(abi.encode(
+            EIP712_DOMAIN_TYPEHASH,
+            keccak256(bytes("AgroasysEscrow")),
+            keccak256(bytes("1")),
+            block.chainid,
+            address(escrow)
+        ));
+        bytes32 structHash = keccak256(abi.encode(
+            USER_ACTION_AUTHORIZATION_TYPEHASH,
+            buyer,
+            action,
+            tradeId,
+            nonce,
+            deadline
+        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(buyerPk, digest);
+        signature = abi.encodePacked(r, s, v);
     }
     
     function test_Setup() public view {
@@ -194,7 +259,7 @@ contract FuzzTest is Test {
         // increase time by 24 hours
         vm.warp(block.timestamp + 24 hours + 1);
 
-        vm.prank(oracle);
+        vm.prank(admin1);
         escrow.finalizeAfterDisputeWindow(tradeId);
 
         (,,AgroasysEscrow.TradeStatus _status4,,,,,,,,,) = escrow.trades(tradeId);
@@ -298,8 +363,9 @@ contract FuzzTest is Test {
 
         vm.warp(block.timestamp + 1 hours);
 
-        vm.prank(buyer);
-        escrow.openDispute(tradeId);
+        (uint256 actionNonce, uint256 actionDeadline, bytes memory actionSignature) = _authorize_user_action(1, tradeId);
+        vm.prank(admin1);
+        escrow.openDisputeWithAuthorization(tradeId, actionNonce, actionDeadline, actionSignature);
 
         (,,AgroasysEscrow.TradeStatus _status4,,,,,,,,,) = escrow.trades(tradeId);
 
@@ -440,8 +506,9 @@ contract FuzzTest is Test {
 
         vm.warp(block.timestamp + 1 hours);
 
-        vm.prank(buyer);
-        escrow.openDispute(tradeId);
+        (uint256 actionNonce, uint256 actionDeadline, bytes memory actionSignature) = _authorize_user_action(1, tradeId);
+        vm.prank(admin1);
+        escrow.openDisputeWithAuthorization(tradeId, actionNonce, actionDeadline, actionSignature);
 
         (,,AgroasysEscrow.TradeStatus _status4,,,,,,,,,) = escrow.trades(tradeId);
 
@@ -505,9 +572,10 @@ contract FuzzTest is Test {
         vm.prank(oracle);
         escrow.releaseFundsStage1(tradeId);
         
-        vm.prank(buyer);
+        (uint256 actionNonce, uint256 actionDeadline, bytes memory actionSignature) = _authorize_user_action(1, tradeId);
         vm.expectRevert("must be ARRIVAL_CONFIRMED");
-        escrow.openDispute(tradeId);
+        vm.prank(admin1);
+        escrow.openDisputeWithAuthorization(tradeId, actionNonce, actionDeadline, actionSignature);
     }
 
     function testFuzz_CannotOpenDisputeAfter24Hours(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
@@ -527,9 +595,10 @@ contract FuzzTest is Test {
         
         vm.warp(block.timestamp + 24 hours + 1 seconds);
         
-        vm.prank(buyer);
+        (uint256 actionNonce, uint256 actionDeadline, bytes memory actionSignature) = _authorize_user_action(1, tradeId);
         vm.expectRevert("window closed");
-        escrow.openDispute(tradeId);
+        vm.prank(admin1);
+        escrow.openDisputeWithAuthorization(tradeId, actionNonce, actionDeadline, actionSignature);
     }
 
 
@@ -550,7 +619,7 @@ contract FuzzTest is Test {
         
         vm.warp(block.timestamp + 1 hours);
         
-        vm.prank(oracle);
+        vm.prank(admin1);
         vm.expectRevert("window not elapsed");
         escrow.finalizeAfterDisputeWindow(tradeId);
     }
@@ -618,8 +687,9 @@ contract FuzzTest is Test {
         
         vm.warp(block.timestamp + 7 days + 1);
         
-        vm.prank(buyer);
-        escrow.cancelLockedTradeAfterTimeout(tradeId);
+        (uint256 actionNonce, uint256 actionDeadline, bytes memory actionSignature) = _authorize_user_action(2, tradeId);
+        vm.prank(admin1);
+        escrow.cancelLockedTradeAfterTimeoutWithAuthorization(tradeId, actionNonce, actionDeadline, actionSignature);
         
         (,,AgroasysEscrow.TradeStatus _statusAfter,,,,,,,,,) = escrow.trades(tradeId);
         
@@ -653,8 +723,9 @@ contract FuzzTest is Test {
         
         vm.warp(block.timestamp + 14 days + 1);
         
-        vm.prank(buyer);
-        escrow.refundInTransitAfterTimeout(tradeId);
+        (uint256 actionNonce, uint256 actionDeadline, bytes memory actionSignature) = _authorize_user_action(3, tradeId);
+        vm.prank(admin1);
+        escrow.refundInTransitAfterTimeoutWithAuthorization(tradeId, actionNonce, actionDeadline, actionSignature);
         
         (,,AgroasysEscrow.TradeStatus _statusAfter,,,,,,,,,) = escrow.trades(tradeId);
         

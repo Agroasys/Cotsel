@@ -313,12 +313,12 @@ Fill one copy of this section per pilot window.
 
 Attach Hardhat/Foundry baseline output.
 
-| Transaction type             | Observed gas units | Baseline gas units | Delta % | Source                  |
-| ---------------------------- | ------------------ | ------------------ | ------- | ----------------------- |
-| `createTrade`                |                    |                    |         | CI run / block explorer |
-| `releaseFundsStage1`         |                    |                    |         | CI run / block explorer |
-| `confirmArrival`             |                    |                    |         | CI run / block explorer |
-| `finalizeAfterDisputeWindow` |                    |                    |         | CI run / block explorer |
+| Transaction type               | Observed gas units | Baseline gas units | Delta % | Source                  |
+| ------------------------------ | ------------------ | ------------------ | ------- | ----------------------- |
+| `createTradeWithAuthorization` |                    |                    |         | CI run / block explorer |
+| `releaseFundsStage1`           |                    |                    |         | CI run / block explorer |
+| `confirmArrival`               |                    |                    |         | CI run / block explorer |
+| `finalizeAfterDisputeWindow`   |                    |                    |         | CI run / block explorer |
 
 ### 2.4 Narrative
 
