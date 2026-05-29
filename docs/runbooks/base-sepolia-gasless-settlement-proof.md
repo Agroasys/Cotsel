@@ -29,18 +29,18 @@ completed with real transaction, relayer, treasury, and reconciliation evidence.
 1. Buyer deposit / create trade:
    - buyer authenticates through Agroasys session handling
    - buyer signs with Web3Auth wallet
-   - buyer wallet has zero ETH before the action
+   - buyer wallet does not need or spend ETH for the action
    - relayer submits the gasless action
    - escrow emits the create-trade/funding evidence
 
 2. Supplier payout:
-   - supplier wallet has zero ETH before and after the action
+   - supplier wallet does not need or spend ETH for the action
    - payout transfers directly to the supplier wallet
    - no supplier `claim()` transaction is required
 
 3. Buyer refund:
    - exercise one dispute or timeout refund path
-   - buyer wallet has zero ETH before and after the refund
+   - buyer wallet does not need or spend ETH for the refund
    - refund transfers directly to the buyer wallet
    - no buyer `claim()` transaction is required
 
@@ -66,8 +66,8 @@ Exercise and record:
 
 ## Go / No-Go
 
-Go only when all required live flows pass with zero user ETH and the generated
-`rollout-checklist.md` has no unresolved no-go condition.
+Go only when all required live flows pass without requiring or spending user ETH
+and the generated `rollout-checklist.md` has no unresolved no-go condition.
 
 No-go if any default buyer, supplier, or buyer-refund path needs user ETH, if
 support fee is collapsed into platform fee, if reconciliation has unresolved

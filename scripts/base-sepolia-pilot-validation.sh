@@ -277,8 +277,8 @@ Mode: \`$MODE\`
 - Overall result:
 - Unresolved P0 blockers:
 - Narrower accepted scope decision (if any):
-- Zero-ETH buyer flow proven:
-- Zero-ETH supplier flow proven:
+- Buyer flow proven with no user ETH required or spent:
+- Supplier flow proven with no user ETH required or spent:
 - Support-fee ledger split reconciled:
 - Relayer failure paths observable:
 - Kill-switch / rollback decision:
@@ -297,9 +297,9 @@ Mode: \`$MODE\`
 
 ## Go criteria
 
-- [ ] Buyer deposit / create trade completed on Base Sepolia with zero ETH in the buyer wallet.
-- [ ] Supplier direct payout completed with zero ETH in the supplier wallet.
-- [ ] Buyer dispute or timeout refund completed with zero ETH in the buyer wallet.
+- [ ] Buyer deposit / create trade completed on Base Sepolia with no buyer ETH required or spent.
+- [ ] Supplier direct payout completed with no supplier ETH required or spent.
+- [ ] Buyer dispute or timeout refund completed with no buyer ETH required or spent.
 - [ ] Sponsored gas records match relayer logs and settlement events.
 - [ ] Treasury ledger separates logistics, net platform fee, and settlement support fee.
 - [ ] Reconciliation report has no unresolved CRITICAL drift.
@@ -343,6 +343,20 @@ Mode: \`$MODE\`
 | Severity | Area | Blocking condition | Evidence | Owner | Decision / next action |
 |---|---|---|---|---|---|
 | \`P0\` | \`ops\` | \`$BLOCKING_FAILURE_CLASS\` at step \`$BLOCKING_FAILURE_STEP\` blocked the rehearsal before closure evidence could be captured. | \`$REPORT_DIR/summary.json\` | \`Pilot Owner / Service Owner\` | Record the concrete managed-provider / runtime fix, rerun the rehearsal, and update signoff. |
+EOF
+    return
+  fi
+
+  if [[ "$MODE" == "live" && "$OVERALL_STATUS" == "pending_manual_evidence" ]]; then
+    cat > "$BLOCKERS_FILE" <<EOF
+# Blocker Register
+
+Window: \`$WINDOW_ID\`
+Mode: \`$MODE\`
+
+| Severity | Area | Blocking condition | Evidence | Owner | Decision / next action |
+|---|---|---|---|---|---|
+| \`P1\` | \`ops/proof\` | Automated live-env gates passed, but the packet is not closure-ready until buyer create-trade, supplier direct payout, buyer direct refund, sponsored-gas, failure-handling, and ledger/reconciliation evidence rows are populated with real transaction or operator evidence. | \`$REPORT_DIR/manual-checklist.md\`, \`$REPORT_DIR/gasless-flow-evidence.md\`, \`$REPORT_DIR/tx-links.md\` | \`Pilot Owner / Service Owner\` | Capture the missing live flow evidence, rerun or update the packet, and only then mark the pilot proof complete. |
 EOF
     return
   fi
@@ -487,8 +501,18 @@ validate_pilot_profile_truth() {
 }
 
 validate_live_managed_provider_inputs() {
+  if [[ -n "${INDEXER_GATEWAY_URL:-}" ]]; then
+    if contains_placeholder_value "$INDEXER_GATEWAY_URL"; then
+      fail_live_preflight "LIVE_MANAGED_PROVIDER_CONFIG_REQUIRED" "INDEXER_GATEWAY_URL" "INDEXER_GATEWAY_URL still contains a template placeholder: $INDEXER_GATEWAY_URL"
+      return 1
+    fi
+    if is_public_base_rpc "$INDEXER_GATEWAY_URL"; then
+      fail_live_preflight "LIVE_MANAGED_PROVIDER_CONFIG_REQUIRED" "INDEXER_GATEWAY_URL" "INDEXER_GATEWAY_URL must not use the public Base RPC endpoint for the controlled pilot runtime."
+      return 1
+    fi
+  fi
+
   for pair in \
-    "INDEXER_GATEWAY_URL:${INDEXER_GATEWAY_URL:-}" \
     "INDEXER_RPC_ENDPOINT:${INDEXER_RPC_ENDPOINT:-}" \
     "GATEWAY_RPC_URL:${GATEWAY_RPC_URL:-}" \
     "ORACLE_RPC_URL:${ORACLE_RPC_URL:-}" \

@@ -153,6 +153,7 @@ describeIntegration('BuyerSDK', () => {
   testBuyerTimeout('should cancel locked trade after timeout', async () => {
     const tradeId = requireManualBuyerE2EBigIntEnv('TEST_LOCKED_TRADE_ID');
     const buyerAddress = await buyerSigner.getAddress();
+    const balanceBefore = await buyerSDK.getUSDCBalance(buyerAddress);
     const claimableBefore = await buyerSDK.getClaimableUsdc(buyerAddress);
 
     const result = await buyerSDK.cancelLockedTradeAfterTimeout(tradeId, buyerSigner);
@@ -161,8 +162,10 @@ describeIntegration('BuyerSDK', () => {
 
     const tradeAfter = await escrowReadOnly.trades(tradeId);
     expect(Number(tradeAfter.status)).toBe(TradeStatus.CLOSED);
+    const balanceAfter = await buyerSDK.getUSDCBalance(buyerAddress);
     const claimableAfter = await buyerSDK.getClaimableUsdc(buyerAddress);
-    expect(claimableAfter).toBeGreaterThanOrEqual(claimableBefore);
+    expect(balanceAfter).toBeGreaterThan(balanceBefore);
+    expect(claimableAfter).toBe(claimableBefore);
   });
 
   testBuyerTimeout('should refund in-transit trade after timeout', async () => {

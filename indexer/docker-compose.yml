@@ -30,6 +30,7 @@ services:
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASS: ${DB_PASSWORD}
       GATEWAY_URL: ${GATEWAY_URL}
       RPC_ENDPOINT: ${RPC_ENDPOINT}
       START_BLOCK: ${START_BLOCK}
@@ -53,10 +54,11 @@ services:
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASS: ${DB_PASSWORD}
       GQL_PORT: ${GRAPHQL_PORT}
     ports:
       - '${GRAPHQL_PORT}:${GRAPHQL_PORT}'
-    command: ['npx', 'squid-graphql-server']
+    command: ['pnpm', 'exec', 'squid-graphql-server', '--no-squid-status']
     restart: unless-stopped
     networks:
       - indexer-network

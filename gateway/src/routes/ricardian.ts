@@ -19,7 +19,7 @@ export function createRicardianRouter(options: RicardianRouterOptions): Router {
   const router = Router();
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
 
-  router.use(authenticate, requireGatewayRole('operator:read'));
+  router.use(['/ricardian', '/evidence'], authenticate, requireGatewayRole('operator:read'));
 
   router.get('/ricardian/:tradeId', async (req, res, next) => {
     try {

@@ -1063,6 +1063,7 @@ export function createEthersGaslessSettlementExecutor(
     async executeCreateTrade(input) {
       const args = buildCreateTradeArguments(input);
       const gasEstimate = await simulate(input);
+      signer.reset();
       const tx = await escrow.createTradeWithAuthorization(...args, {
         gasLimit: gasEstimate,
       });
@@ -1081,6 +1082,7 @@ export function createEthersGaslessSettlementExecutor(
 
     async executeUserAction(input) {
       const gasEstimate = await simulateUserAction(input);
+      signer.reset();
       const tx = await broadcastUserAction(input, gasEstimate);
       return {
         txHash: tx.hash,

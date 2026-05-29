@@ -17,6 +17,7 @@ import {
   type GaslessExecutionSubmission,
   testExports as gaslessSettlementExecutionTestExports,
 } from '../src/core/gaslessSettlementExecutionService';
+import { createCapabilitiesRouter } from '../src/routes/capabilities';
 import { createSettlementRouter } from '../src/routes/settlement';
 
 const config: GatewayConfig = {
@@ -85,6 +86,7 @@ async function startServer(
     simulateUserAction: () => Promise<{ gasEstimate?: bigint | string | number | null }>;
     executeUserAction: () => Promise<GaslessExecutionSubmission>;
   }> = {},
+  serverOptions: Partial<{ includeProtectedRouterBeforeSettlement: boolean }> = {},
 ) {
   const runtimeConfig: GatewayConfig = { ...config, ...overrides };
   const settlementStore = createInMemorySettlementStore();
@@ -124,6 +126,19 @@ async function startServer(
   const nonceStore = createInMemoryNonceStore();
   const idempotencyStore = createInMemoryIdempotencyStore();
   const router = Router();
+  if (serverOptions.includeProtectedRouterBeforeSettlement) {
+    router.use(
+      createCapabilitiesRouter({
+        authSessionClient: {
+          async resolveSession() {
+            throw new Error('operator auth should not run for settlement service routes');
+          },
+          async checkReadiness() {},
+        },
+        config: runtimeConfig,
+      }),
+    );
+  }
   router.use(
     createSettlementRouter({
       config: runtimeConfig,
@@ -447,6 +462,42 @@ describe('gateway settlement routes contract', () => {
       expect(listResponse.status).toBe(200);
       expect(validateEventListResponse(listPayload)).toBe(true);
       expect(listPayload.data).toHaveLength(1);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('settlement service routes bypass earlier operator-auth routers', async () => {
+    const { server, baseUrl } = await startServer(
+      {},
+      {},
+      { includeProtectedRouterBeforeSettlement: true },
+    );
+
+    try {
+      const handoffBody = {
+        platformId: 'agroasys-platform',
+        platformHandoffId: 'handoff-before-auth-router',
+        tradeId: 'TRD-before-auth-router',
+        phase: 'stage_1',
+        settlementChannel: 'cotsel_escrow',
+        displayCurrency: 'USD',
+        displayAmount: 125000,
+      };
+
+      const handoffResponse = await fetch(`${baseUrl}/settlement/handoffs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'handoff-before-auth-router',
+          ...withServiceAuth('/api/dashboard-gateway/v1/settlement/handoffs', handoffBody),
+        },
+        body: JSON.stringify(handoffBody),
+      });
+      const handoffPayload = await handoffResponse.json();
+
+      expect(handoffResponse.status).toBe(202);
+      expect(validateHandoffResponse(handoffPayload)).toBe(true);
     } finally {
       server.close();
     }

@@ -77,7 +77,7 @@ export function createEvidenceBundleRouter(options: EvidenceBundleRouterOptions)
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
   const idempotency = createIdempotencyMiddleware(options.idempotencyStore);
 
-  router.use(authenticate);
+  router.use('/evidence', authenticate);
 
   router.post(
     '/evidence/bundles',
