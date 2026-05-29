@@ -31,8 +31,8 @@ interface IUSDCReceiveWithAuthorization {
  *
  * Business rule enforced:
  * - Logistics/platform fees are non-refundable once a trade is funded; platformFeesAmount includes the fixed settlement fee
- * - Stage 1 release pays supplierFirstTranche (principal) and leaves logistics/platform fees claimable by treasury
- * - Stage 2 accrual (finalization) includes: supplierSecondTranche (principal) ONLY
+ * - Stage 1 release pays supplierFirstTranche (principal) directly and accrues logistics/platform fees for treasury sweep
+ * - Stage 2 finalization pays supplierSecondTranche (principal) directly to supplier
  * - Buyer refunds are transferred directly during the refund transaction; buyers never need to claim
  */
 contract AgroasysEscrow is ReentrancyGuard, Pausable {
@@ -804,46 +804,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         _consumeAuthorization(user, action, nonce, deadline);
     }
 
-    function _verifyLegacyCreateTradeSignature(
-        address buyer,
-        address supplier,
-        uint256 totalAmount,
-        uint256 logisticsAmount,
-        uint256 platformFeesAmount,
-        uint256 supplierFirstTranche,
-        uint256 supplierSecondTranche,
-        bytes32 ricardianHash,
-        uint256 buyerNonce,
-        uint256 deadline,
-        bytes memory signature
-    ) internal view returns (address) {
-        require(block.timestamp <= deadline, "signature expired");
-
-        bytes32 messageHash = keccak256(
-            abi.encode(
-                block.chainid,
-                address(this),
-                buyer,
-                supplier,
-                treasuryAddress,
-                totalAmount,
-                logisticsAmount,
-                platformFeesAmount,
-                supplierFirstTranche,
-                supplierSecondTranche,
-                ricardianHash,
-                buyerNonce,
-                deadline
-            )
-        );
-
-        bytes32 ethSignedHash = keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash)
-        );
-
-        return ECDSA.recover(ethSignedHash, signature);
-    }
-
     function _validateTradeAmounts(
         address supplier,
         uint256 totalAmount,
@@ -912,66 +872,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     // -----------------------------
     // Trade Creation
     // -----------------------------
-    function createTrade(
-        address _supplier,
-        uint256 _totalAmount,
-        uint256 _logisticsAmount,
-        uint256 _platformFeesAmount,
-        uint256 _supplierFirstTranche,
-        uint256 _supplierSecondTranche,
-        bytes32 _ricardianHash,
-        uint256 _buyerNonce,
-        uint256 _deadline,
-        bytes memory _signature
-    ) external whenNotPaused nonReentrant returns (uint256) {
-        _validateTradeAmounts(
-            _supplier,
-            _totalAmount,
-            _logisticsAmount,
-            _platformFeesAmount,
-            _supplierFirstTranche,
-            _supplierSecondTranche,
-            _ricardianHash
-        );
-
-        // Nonce must match current buyer nonce
-        require(_buyerNonce == nonces[msg.sender], "bad nonce");
-
-        // Verify signature binds all critical fields + nonce + deadline + domain separation
-        address signer = _verifyLegacyCreateTradeSignature(
-            msg.sender,
-            _supplier,
-            _totalAmount,
-            _logisticsAmount,
-            _platformFeesAmount,
-            _supplierFirstTranche,
-            _supplierSecondTranche,
-            _ricardianHash,
-            _buyerNonce,
-            _deadline,
-            _signature
-        );
-        require(signer == msg.sender, "bad signature");
-
-        // Effects (increment nonce & create trade id) before external calls
-        nonces[msg.sender] = _buyerNonce + 1;
-        uint256 newTradeId = _storeTrade(
-            msg.sender,
-            _supplier,
-            _totalAmount,
-            _logisticsAmount,
-            _platformFeesAmount,
-            _supplierFirstTranche,
-            _supplierSecondTranche,
-            _ricardianHash
-        );
-
-        // Interactions (transfer funds into escrow)
-        usdcToken.safeTransferFrom(msg.sender, address(this), _totalAmount);
-
-        return newTradeId;
-    }
-
     function createTradeWithAuthorization(
         address _buyer,
         address _supplier,
@@ -1179,23 +1079,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     /**
-     * Buyer can open a dispute within 24h after arrival confirmation.
+     * Buyer can open a dispute through a relayed authorization within 24h after arrival confirmation.
      * This freezes remaining funds until admin resolution.
      */
-    function openDispute(uint256 _tradeId) external whenNotPaused nonReentrant {
-        require(_tradeId < tradeCounter, "trade not found");
-        Trade storage trade = trades[_tradeId];
-
-        require(trade.buyerAddress == msg.sender, "only buyer");
-        require(trade.status == TradeStatus.ARRIVAL_CONFIRMED, "must be ARRIVAL_CONFIRMED");
-        require(trade.arrivalTimestamp > 0, "arrival not set");
-        require(block.timestamp <= trade.arrivalTimestamp + DISPUTE_WINDOW, "window closed");
-
-        trade.status = TradeStatus.FROZEN;
-
-        emit DisputeOpenedByBuyer(_tradeId);
-    }
-
     function openDisputeWithAuthorization(
         uint256 _tradeId,
         uint256 _authorizationNonce,
@@ -1226,25 +1112,13 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
     /**
      * Final settlement after dispute window if no dispute was opened.
-     * Permissionless (anyone can call) to avoid funds getting stuck if oracle is down.
+     * Direct execution is admin-only; suppliers use finalizeAfterDisputeWindowWithAuthorization.
      *
-     * Business rule: Stage 2 accrues ONLY remaining supplier principal (supplierSecondTranche).
+     * Business rule: Stage 2 pays ONLY remaining supplier principal (supplierSecondTranche).
      * Treasury fees were already collected at Stage 1.
      */
-    function finalizeAfterDisputeWindow(uint256 _tradeId) external whenNotPaused nonReentrant {
-        require(_tradeId < tradeCounter, "trade not found");
-        Trade storage trade = trades[_tradeId];
-
-        require(trade.status == TradeStatus.ARRIVAL_CONFIRMED, "must be ARRIVAL_CONFIRMED");
-        require(trade.arrivalTimestamp > 0, "arrival not set");
-        require(block.timestamp > trade.arrivalTimestamp + DISPUTE_WINDOW, "window not elapsed");
-
-        trade.status = TradeStatus.CLOSED;
-        inTransitSince[_tradeId] = 0;
-
-        _transferSupplierPayout(_tradeId, trade.supplierAddress, trade.supplierSecondTranche, ClaimType.STAGE2_SUPPLIER);
-
-        emit FinalTrancheReleased(_tradeId, trade.supplierAddress, trade.supplierSecondTranche);
+    function finalizeAfterDisputeWindow(uint256 _tradeId) external onlyAdmin whenNotPaused nonReentrant {
+        _finalizeAfterDisputeWindow(_tradeId);
     }
 
     function finalizeAfterDisputeWindowWithAuthorization(
@@ -1257,13 +1131,21 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         Trade storage trade = trades[_tradeId];
 
         _verifyUserActionAuthorization(
-            trade.buyerAddress,
+            trade.supplierAddress,
             SponsoredAction.FINALIZE_AFTER_DISPUTE_WINDOW,
             _tradeId,
             _authorizationNonce,
             _authorizationDeadline,
             _authorizationSignature
         );
+
+        _finalizeAfterDisputeWindow(_tradeId);
+        emit RelayedActionExecuted(msg.sender, trade.supplierAddress, ACTION_FINALIZE_AFTER_DISPUTE_WINDOW, _tradeId);
+    }
+
+    function _finalizeAfterDisputeWindow(uint256 _tradeId) internal {
+        require(_tradeId < tradeCounter, "trade not found");
+        Trade storage trade = trades[_tradeId];
 
         require(trade.status == TradeStatus.ARRIVAL_CONFIRMED, "must be ARRIVAL_CONFIRMED");
         require(trade.arrivalTimestamp > 0, "arrival not set");
@@ -1275,28 +1157,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         _transferSupplierPayout(_tradeId, trade.supplierAddress, trade.supplierSecondTranche, ClaimType.STAGE2_SUPPLIER);
 
         emit FinalTrancheReleased(_tradeId, trade.supplierAddress, trade.supplierSecondTranche);
-        emit RelayedActionExecuted(msg.sender, trade.buyerAddress, ACTION_FINALIZE_AFTER_DISPUTE_WINDOW, _tradeId);
-    }
-
-    /**
-     * @notice Buyer escape hatch: cancel a LOCKED trade after timeout and recover refundable principal.
-     */
-    function cancelLockedTradeAfterTimeout(uint256 _tradeId) external whenNotPaused nonReentrant {
-        require(_tradeId < tradeCounter, "trade not found");
-        Trade storage trade = trades[_tradeId];
-
-        require(trade.buyerAddress == msg.sender, "only buyer");
-        require(trade.status == TradeStatus.LOCKED, "status must be LOCKED");
-        require(block.timestamp > trade.createdAt + LOCK_TIMEOUT, "lock timeout not elapsed");
-
-        uint256 buyerRefundAmount = _buyerRefundablePrincipalAmount(trade);
-        trade.status = TradeStatus.CLOSED;
-
-        _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
-        _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
-        _transferBuyerRefund(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
-
-        emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, buyerRefundAmount);
     }
 
     function cancelLockedTradeAfterTimeoutWithAuthorization(
@@ -1329,33 +1189,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
         emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, buyerRefundAmount);
         emit RelayedActionExecuted(msg.sender, trade.buyerAddress, ACTION_CANCEL_LOCKED_TIMEOUT, _tradeId);
-    }
-
-    /**
-     * @notice Buyer escape hatch: refund only remaining escrowed principal when IN_TRANSIT timeout elapses.
-     */
-    function refundInTransitAfterTimeout(uint256 _tradeId) external whenNotPaused nonReentrant {
-        require(_tradeId < tradeCounter, "trade not found");
-        Trade storage trade = trades[_tradeId];
-
-        require(trade.buyerAddress == msg.sender, "only buyer");
-        require(trade.status == TradeStatus.IN_TRANSIT, "status must be IN_TRANSIT");
-
-        uint256 transitStart = inTransitSince[_tradeId];
-        require(transitStart > 0, "in-transit timestamp not set");
-        require(block.timestamp > transitStart + IN_TRANSIT_TIMEOUT, "in-transit timeout not elapsed");
-
-        trade.status = TradeStatus.CLOSED;
-        inTransitSince[_tradeId] = 0;
-
-        _transferBuyerRefund(
-            _tradeId,
-            trade.buyerAddress,
-            trade.supplierSecondTranche,
-            ClaimType.IN_TRANSIT_TIMEOUT_BUYER_REFUND
-        );
-
-        emit InTransitTimeoutRefunded(_tradeId, trade.buyerAddress, trade.supplierSecondTranche);
     }
 
     function refundInTransitAfterTimeoutWithAuthorization(

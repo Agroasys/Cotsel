@@ -24,73 +24,116 @@ describe('AgroasysEscrow - Claim Security', function () {
   const totalAmount =
     logisticsAmount + platformFeesAmount + supplierFirstTranche + supplierSecondTranche;
 
-  async function createSignature(
+  async function signCreateTradeAuthorization(
     signer: SignerWithAddress,
-    contractAddr: string,
-    buyerAddr: string,
-    supplierAddr: string,
-    ricardianHash: string,
-    nonce: bigint,
-    deadline: bigint,
+    params: {
+      buyer: string;
+      supplier: string;
+      ricardianHash: string;
+      nonce: bigint;
+      deadline: bigint;
+    },
   ) {
     const chainId = (await ethers.provider.getNetwork()).chainId;
-    const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
-      [
-        'uint256',
-        'address',
-        'address',
-        'address',
-        'address',
-        'uint256',
-        'uint256',
-        'uint256',
-        'uint256',
-        'uint256',
-        'bytes32',
-        'uint256',
-        'uint256',
-      ],
-      [
+    return signer.signTypedData(
+      {
+        name: 'AgroasysEscrow',
+        version: '1',
         chainId,
-        contractAddr,
-        buyerAddr,
-        supplierAddr,
-        treasury.address,
+        verifyingContract: await escrow.getAddress(),
+      },
+      {
+        CreateTradeAuthorization: [
+          { name: 'buyer', type: 'address' },
+          { name: 'supplier', type: 'address' },
+          { name: 'totalAmount', type: 'uint256' },
+          { name: 'logisticsAmount', type: 'uint256' },
+          { name: 'platformFeesAmount', type: 'uint256' },
+          { name: 'supplierFirstTranche', type: 'uint256' },
+          { name: 'supplierSecondTranche', type: 'uint256' },
+          { name: 'ricardianHash', type: 'bytes32' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+      },
+      {
+        buyer: params.buyer,
+        supplier: params.supplier,
         totalAmount,
         logisticsAmount,
         platformFeesAmount,
         supplierFirstTranche,
         supplierSecondTranche,
-        ricardianHash,
-        nonce,
-        deadline,
-      ],
+        ricardianHash: params.ricardianHash,
+        nonce: params.nonce,
+        deadline: params.deadline,
+      },
     );
+  }
 
-    const messageHash = ethers.keccak256(encoded);
-    return signer.signMessage(ethers.getBytes(messageHash));
+  async function signUsdcReceiveAuthorization(
+    signer: SignerWithAddress,
+    params: {
+      from: string;
+      to: string;
+      value: bigint;
+      validAfter: bigint;
+      validBefore: bigint;
+      nonce: string;
+    },
+  ) {
+    const chainId = (await ethers.provider.getNetwork()).chainId;
+    const signature = await signer.signTypedData(
+      {
+        name: 'Mock USDC',
+        version: '2',
+        chainId,
+        verifyingContract: await usdc.getAddress(),
+      },
+      {
+        ReceiveWithAuthorization: [
+          { name: 'from', type: 'address' },
+          { name: 'to', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'validAfter', type: 'uint256' },
+          { name: 'validBefore', type: 'uint256' },
+          { name: 'nonce', type: 'bytes32' },
+        ],
+      },
+      params,
+    );
+    return ethers.Signature.from(signature);
   }
 
   async function createTradeToReceiver(ricardianHash: string) {
-    const nonce = await escrow.getBuyerNonce(buyer.address);
+    const nonce = await escrow.authorizationNonces(buyer.address);
     const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
     const deadline = BigInt(blockTimestamp + 3600);
+    const escrowAddress = await escrow.getAddress();
+    const receiverAddress = await receiver.getAddress();
+    const usdcNonce = ethers.id(`claim-security-${ricardianHash}`);
 
-    await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
-    const signature = await createSignature(
-      buyer,
-      await escrow.getAddress(),
-      buyer.address,
-      await receiver.getAddress(),
+    const signature = await signCreateTradeAuthorization(buyer, {
+      buyer: buyer.address,
+      supplier: receiverAddress,
       ricardianHash,
       nonce,
       deadline,
-    );
+    });
+    const usdcSignature = await signUsdcReceiveAuthorization(buyer, {
+      from: buyer.address,
+      to: escrowAddress,
+      value: totalAmount,
+      validAfter: 0n,
+      validBefore: deadline,
+      nonce: usdcNonce,
+    });
 
     await escrow
-      .connect(buyer)
-      .createTrade(
-        await receiver.getAddress(),
+      .connect(admin1)
+      .createTradeWithAuthorization(
+        buyer.address,
+        receiverAddress,
         totalAmount,
         logisticsAmount,
         platformFeesAmount,
@@ -100,6 +143,14 @@ describe('AgroasysEscrow - Claim Security', function () {
         nonce,
         deadline,
         signature,
+        {
+          validAfter: 0n,
+          validBefore: deadline,
+          nonce: usdcNonce,
+          v: usdcSignature.v,
+          r: usdcSignature.r,
+          s: usdcSignature.s,
+        },
       );
   }
 

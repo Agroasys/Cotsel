@@ -178,6 +178,134 @@ describe('AgroasysEscrow', function () {
     return ethers.Signature.from(signature);
   }
 
+  async function createTradeWithAuthorizationForTest(
+    supplierAddress: string,
+    totalAmount: bigint,
+    logisticsAmount: bigint,
+    platformFeesAmount: bigint,
+    supplierFirstTranche: bigint,
+    supplierSecondTranche: bigint,
+    ricardianHash: string,
+    _legacyNonce?: bigint,
+    authorizationDeadline?: bigint,
+    _legacySignature?: string,
+    buyerSigner: SignerWithAddress = buyer,
+    relayerSigner: SignerWithAddress = admin1,
+  ) {
+    const buyerAddress = buyerSigner.address;
+    const escrowAddress = await escrow.getAddress();
+    const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+    const deadline = authorizationDeadline ?? BigInt(blockTimestamp + 3600);
+    const authorizationNonce = _legacyNonce ?? (await escrow.authorizationNonces(buyerAddress));
+
+    const authorizationSignature =
+      _legacySignature ??
+      (await signCreateTradeAuthorization(buyerSigner, {
+        buyer: buyerAddress,
+        supplier: supplierAddress,
+        totalAmount,
+        logisticsAmount,
+        platformFeesAmount,
+        supplierFirstTranche,
+        supplierSecondTranche,
+        ricardianHash,
+        nonce: authorizationNonce,
+        deadline,
+      }));
+
+    const usdcNonce = ethers.id(
+      `usdc-${buyerAddress}-${authorizationNonce.toString()}-${ricardianHash}`,
+    );
+    const usdcSignature = await signUsdcReceiveAuthorization(buyerSigner, {
+      from: buyerAddress,
+      to: escrowAddress,
+      value: totalAmount,
+      validAfter: 0n,
+      validBefore: deadline,
+      nonce: usdcNonce,
+    });
+
+    return escrow
+      .connect(relayerSigner)
+      .createTradeWithAuthorization(
+        buyerAddress,
+        supplierAddress,
+        totalAmount,
+        logisticsAmount,
+        platformFeesAmount,
+        supplierFirstTranche,
+        supplierSecondTranche,
+        ricardianHash,
+        authorizationNonce,
+        deadline,
+        authorizationSignature,
+        {
+          validAfter: 0n,
+          validBefore: deadline,
+          nonce: usdcNonce,
+          v: usdcSignature.v,
+          r: usdcSignature.r,
+          s: usdcSignature.s,
+        },
+      );
+  }
+
+  async function executeUserActionWithAuthorization(
+    tradeId: bigint,
+    action: number,
+    signer: SignerWithAddress,
+    method:
+      | 'openDisputeWithAuthorization'
+      | 'cancelLockedTradeAfterTimeoutWithAuthorization'
+      | 'refundInTransitAfterTimeoutWithAuthorization'
+      | 'finalizeAfterDisputeWindowWithAuthorization',
+    relayerSigner: SignerWithAddress = admin1,
+  ) {
+    const nonce = await escrow.authorizationNonces(signer.address);
+    const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+    const deadline = BigInt(blockTimestamp + 3600);
+    const signature = await signUserActionAuthorization(signer, {
+      user: signer.address,
+      action,
+      tradeId,
+      nonce,
+      deadline,
+    });
+
+    return escrow.connect(relayerSigner)[method](tradeId, nonce, deadline, signature);
+  }
+
+  async function openDisputeAsBuyer(tradeId: bigint) {
+    return executeUserActionWithAuthorization(tradeId, 1, buyer, 'openDisputeWithAuthorization');
+  }
+
+  async function cancelLockedTradeAfterTimeoutAsBuyer(tradeId: bigint) {
+    return executeUserActionWithAuthorization(
+      tradeId,
+      2,
+      buyer,
+      'cancelLockedTradeAfterTimeoutWithAuthorization',
+    );
+  }
+
+  async function refundInTransitAfterTimeoutAsBuyer(tradeId: bigint) {
+    return executeUserActionWithAuthorization(
+      tradeId,
+      3,
+      buyer,
+      'refundInTransitAfterTimeoutWithAuthorization',
+    );
+  }
+
+  async function finalizeAfterDisputeWindowAsSupplier(tradeId: bigint) {
+    return executeUserActionWithAuthorization(
+      tradeId,
+      4,
+      supplier,
+      'finalizeAfterDisputeWindowWithAuthorization',
+    );
+  }
+
   async function createDefaultTrade(ricardianHash: string = ethers.id('trade-hash')) {
     const totalAmount = ethers.parseUnits('107000', 6);
     const logisticsAmount = ethers.parseUnits('5000', 6);
@@ -189,12 +317,7 @@ describe('AgroasysEscrow', function () {
     const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
     const deadline = BigInt(blockTimestamp + 3600);
 
-    await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
-
-    const signature = await createSignature(
-      buyer,
-      await escrow.getAddress(),
-      buyer.address,
+    await createTradeWithAuthorizationForTest(
       supplier.address,
       totalAmount,
       logisticsAmount,
@@ -205,21 +328,6 @@ describe('AgroasysEscrow', function () {
       nonce,
       deadline,
     );
-
-    await escrow
-      .connect(buyer)
-      .createTrade(
-        supplier.address,
-        totalAmount,
-        logisticsAmount,
-        platformFeesAmount,
-        supplierFirstTranche,
-        supplierSecondTranche,
-        ricardianHash,
-        nonce,
-        deadline,
-        signature,
-      );
 
     return {
       tradeId: 0n,
@@ -398,9 +506,9 @@ describe('AgroasysEscrow', function () {
       const buyerBalBefore = await usdc.balanceOf(buyer.address);
       const refundablePrincipal = supplierFirstTranche + supplierSecondTranche;
       await time.increase(7 * 24 * 3600 + 1);
-      await expect(escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId))
+      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId))
         .to.emit(escrow, 'BuyerRefundTransferred')
-        .withArgs(tradeId, buyer.address, refundablePrincipal, 4, buyer.address);
+        .withArgs(tradeId, buyer.address, refundablePrincipal, 4, admin1.address);
 
       expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + refundablePrincipal);
       expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
@@ -421,7 +529,7 @@ describe('AgroasysEscrow', function () {
       expect(await escrow.claimsPaused()).to.equal(true);
 
       await time.increase(7 * 24 * 3600 + 1);
-      await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
+      await cancelLockedTradeAfterTimeoutAsBuyer(tradeId);
       expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + refundablePrincipal);
       expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
 
@@ -516,7 +624,7 @@ describe('AgroasysEscrow', function () {
       const supplierFirstTranche = ethers.parseUnits('40000', 6);
       const supplierSecondTranche = ethers.parseUnits('60000', 6);
       const ricardianHash = ethers.id('paused-create');
-      const nonce = await escrow.getBuyerNonce(buyer.address);
+      const nonce = await escrow.authorizationNonces(buyer.address);
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
       const deadline = BigInt(blockTimestamp + 3600);
 
@@ -539,20 +647,18 @@ describe('AgroasysEscrow', function () {
       );
 
       await expect(
-        escrow
-          .connect(buyer)
-          .createTrade(
-            supplier.address,
-            totalAmount,
-            logisticsAmount,
-            platformFeesAmount,
-            supplierFirstTranche,
-            supplierSecondTranche,
-            ricardianHash,
-            nonce,
-            deadline,
-            signature,
-          ),
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          nonce,
+          deadline,
+          signature,
+        ),
       ).to.be.revertedWith('paused');
     });
 
@@ -572,15 +678,13 @@ describe('AgroasysEscrow', function () {
       await escrow.connect(oracle).confirmArrival(tradeId);
 
       await escrow.connect(admin1).pause();
-      await expect(escrow.connect(buyer).openDispute(tradeId)).to.be.revertedWith('paused');
+      await expect(openDisputeAsBuyer(tradeId)).to.be.revertedWith('paused');
       await unpauseWithQuorum();
 
       await time.increase(24 * 3600 + 1);
 
       await escrow.connect(admin1).pause();
-      await expect(escrow.connect(buyer).finalizeAfterDisputeWindow(tradeId)).to.be.revertedWith(
-        'paused',
-      );
+      await expect(finalizeAfterDisputeWindowAsSupplier(tradeId)).to.be.revertedWith('paused');
     });
 
     it('Should block dispute propose/approve while paused', async function () {
@@ -588,7 +692,7 @@ describe('AgroasysEscrow', function () {
 
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
       await escrow.connect(oracle).confirmArrival(tradeId);
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
 
       await escrow.connect(admin1).pause();
       await expect(escrow.connect(admin1).proposeDisputeSolution(tradeId, 0)).to.be.revertedWith(
@@ -640,9 +744,7 @@ describe('AgroasysEscrow', function () {
 
       await escrow.connect(admin1).pause();
 
-      await expect(escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId)).to.be.revertedWith(
-        'paused',
-      );
+      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith('paused');
     });
 
     it('Should block IN_TRANSIT timeout refund while paused', async function () {
@@ -654,9 +756,7 @@ describe('AgroasysEscrow', function () {
 
       await escrow.connect(admin1).pause();
 
-      await expect(escrow.connect(buyer).refundInTransitAfterTimeout(tradeId)).to.be.revertedWith(
-        'paused',
-      );
+      await expect(refundInTransitAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith('paused');
     });
   });
 
@@ -675,11 +775,11 @@ describe('AgroasysEscrow', function () {
       const lockTimeout = await escrow.LOCK_TIMEOUT();
       await time.increase(lockTimeout + 1n);
 
-      await expect(escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId))
+      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId))
         .to.emit(escrow, 'TradeCancelledAfterLockTimeout')
         .withArgs(tradeId, buyer.address, refundablePrincipal)
         .and.to.emit(escrow, 'BuyerRefundTransferred')
-        .withArgs(tradeId, buyer.address, refundablePrincipal, 4, buyer.address);
+        .withArgs(tradeId, buyer.address, refundablePrincipal, 4, admin1.address);
 
       expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
       expect(await escrow.claimableUsdc(treasury.address)).to.equal(
@@ -701,11 +801,11 @@ describe('AgroasysEscrow', function () {
       const inTransitTimeout = await escrow.IN_TRANSIT_TIMEOUT();
       await time.increase(inTransitTimeout + 1n);
 
-      await expect(escrow.connect(buyer).refundInTransitAfterTimeout(tradeId))
+      await expect(refundInTransitAfterTimeoutAsBuyer(tradeId))
         .to.emit(escrow, 'InTransitTimeoutRefunded')
         .withArgs(tradeId, buyer.address, supplierSecondTranche)
         .and.to.emit(escrow, 'BuyerRefundTransferred')
-        .withArgs(tradeId, buyer.address, supplierSecondTranche, 5, buyer.address);
+        .withArgs(tradeId, buyer.address, supplierSecondTranche, 5, admin1.address);
 
       expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
       expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + supplierSecondTranche);
@@ -719,7 +819,7 @@ describe('AgroasysEscrow', function () {
       const lockTimeout = await escrow.LOCK_TIMEOUT();
       await time.increase(lockTimeout - 1n);
 
-      await expect(escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId)).to.be.revertedWith(
+      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith(
         'lock timeout not elapsed',
       );
     });
@@ -732,7 +832,7 @@ describe('AgroasysEscrow', function () {
       const inTransitTimeout = await escrow.IN_TRANSIT_TIMEOUT();
       await time.increase(inTransitTimeout - 1n);
 
-      await expect(escrow.connect(buyer).refundInTransitAfterTimeout(tradeId)).to.be.revertedWith(
+      await expect(refundInTransitAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith(
         'in-transit timeout not elapsed',
       );
     });
@@ -743,9 +843,9 @@ describe('AgroasysEscrow', function () {
       const lockTimeout = await escrow.LOCK_TIMEOUT();
       await time.increase(lockTimeout + 1n);
 
-      await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
+      await cancelLockedTradeAfterTimeoutAsBuyer(tradeId);
 
-      await expect(escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId)).to.be.revertedWith(
+      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith(
         'status must be LOCKED',
       );
     });
@@ -758,9 +858,9 @@ describe('AgroasysEscrow', function () {
       const inTransitTimeout = await escrow.IN_TRANSIT_TIMEOUT();
       await time.increase(inTransitTimeout + 1n);
 
-      await escrow.connect(buyer).refundInTransitAfterTimeout(tradeId);
+      await refundInTransitAfterTimeoutAsBuyer(tradeId);
 
-      await expect(escrow.connect(buyer).refundInTransitAfterTimeout(tradeId)).to.be.revertedWith(
+      await expect(refundInTransitAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith(
         'status must be IN_TRANSIT',
       );
     });
@@ -785,7 +885,7 @@ describe('AgroasysEscrow', function () {
 
       const lockTimeout = await escrow.LOCK_TIMEOUT();
       await time.increase(lockTimeout + 1n);
-      await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
+      await cancelLockedTradeAfterTimeoutAsBuyer(tradeId);
 
       expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore);
       expect(await escrow.claimableUsdc(treasury.address)).to.equal(
@@ -810,7 +910,7 @@ describe('AgroasysEscrow', function () {
 
       const inTransitTimeout = await escrow.IN_TRANSIT_TIMEOUT();
       await time.increase(inTransitTimeout + 1n);
-      await escrow.connect(buyer).refundInTransitAfterTimeout(tradeId);
+      await refundInTransitAfterTimeoutAsBuyer(tradeId);
 
       expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBeforeBalance);
       expect(await escrow.claimableUsdc(treasury.address)).to.equal(expectedTreasuryClaimable);
@@ -820,7 +920,7 @@ describe('AgroasysEscrow', function () {
       const { tradeId } = await createDefaultTrade(ethers.id('treasury-dispute-refund'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
       await escrow.connect(oracle).confirmArrival(tradeId);
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
 
       const treasuryAfterStage1 = await escrow.claimableUsdc(treasury.address);
 
@@ -834,7 +934,7 @@ describe('AgroasysEscrow', function () {
       const { tradeId } = await createDefaultTrade(ethers.id('treasury-dispute-resolve'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
       await escrow.connect(oracle).confirmArrival(tradeId);
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
 
       const treasuryAfterStage1 = await escrow.claimableUsdc(treasury.address);
 
@@ -879,11 +979,11 @@ describe('AgroasysEscrow', function () {
       const { tradeId } = await createDefaultTrade(ethers.id('double-claim'));
       const buyerBefore = await usdc.balanceOf(buyer.address);
       await time.increase(7 * 24 * 3600 + 1);
-      await escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId);
+      await cancelLockedTradeAfterTimeoutAsBuyer(tradeId);
       const buyerAfterRefund = await usdc.balanceOf(buyer.address);
 
       expect(buyerAfterRefund).to.be.gt(buyerBefore);
-      await expect(escrow.connect(buyer).cancelLockedTradeAfterTimeout(tradeId)).to.be.revertedWith(
+      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith(
         'status must be LOCKED',
       );
       expect(await usdc.balanceOf(buyer.address)).to.equal(buyerAfterRefund);
@@ -961,7 +1061,7 @@ describe('AgroasysEscrow', function () {
     });
   });
 
-  describe('createTrade', function () {
+  describe('createTradeWithAuthorization', function () {
     const totalAmount = ethers.parseUnits('107000', 6);
     const logisticsAmount = ethers.parseUnits('5000', 6);
     const platformFeesAmount = ethers.parseUnits('2000', 6);
@@ -970,16 +1070,24 @@ describe('AgroasysEscrow', function () {
     const ricardianHash = ethers.id('trade-contract-hash');
 
     it('Should create a trade with valid signature', async function () {
-      const nonce = await escrow.getBuyerNonce(buyer.address);
+      const nonce = await escrow.authorizationNonces(buyer.address);
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
       const deadline = BigInt(blockTimestamp + 3600);
 
-      await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
+      const signature = await signCreateTradeAuthorization(buyer, {
+        buyer: buyer.address,
+        supplier: supplier.address,
+        totalAmount,
+        logisticsAmount,
+        platformFeesAmount,
+        supplierFirstTranche,
+        supplierSecondTranche,
+        ricardianHash,
+        nonce,
+        deadline,
+      });
 
-      const signature = await createSignature(
-        buyer,
-        await escrow.getAddress(),
-        buyer.address,
+      const tx = await createTradeWithAuthorizationForTest(
         supplier.address,
         totalAmount,
         logisticsAmount,
@@ -989,22 +1097,8 @@ describe('AgroasysEscrow', function () {
         ricardianHash,
         nonce,
         deadline,
+        signature,
       );
-
-      const tx = await escrow
-        .connect(buyer)
-        .createTrade(
-          supplier.address,
-          totalAmount,
-          logisticsAmount,
-          platformFeesAmount,
-          supplierFirstTranche,
-          supplierSecondTranche,
-          ricardianHash,
-          nonce,
-          deadline,
-          signature,
-        );
 
       await expect(tx)
         .to.emit(escrow, 'TradeLocked')
@@ -1026,7 +1120,7 @@ describe('AgroasysEscrow', function () {
       expect(trade.buyerAddress).to.equal(buyer.address);
       expect(trade.supplierAddress).to.equal(supplier.address);
       expect(trade.totalAmountLocked).to.equal(totalAmount);
-      expect(await escrow.getBuyerNonce(buyer.address)).to.equal(nonce + 1n);
+      expect(await escrow.authorizationNonces(buyer.address)).to.equal(nonce + 1n);
     });
 
     it('Should create multiple trades with incrementing nonces', async function () {
@@ -1034,18 +1128,26 @@ describe('AgroasysEscrow', function () {
       const hash1 = ethers.id('hash1');
       const hash2 = ethers.id('hash2');
 
-      await usdc.connect(buyer).approve(await escrow.getAddress(), amount * 2n);
-
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
       const deadline = BigInt(blockTimestamp + 3600);
 
-      const nonce0 = await escrow.getBuyerNonce(buyer.address);
+      const nonce0 = await escrow.authorizationNonces(buyer.address);
 
       // First trade with nonce 0
-      const sig1 = await createSignature(
-        buyer,
-        await escrow.getAddress(),
-        buyer.address,
+      const sig1 = await signCreateTradeAuthorization(buyer, {
+        buyer: buyer.address,
+        supplier: supplier.address,
+        totalAmount: amount,
+        logisticsAmount,
+        platformFeesAmount,
+        supplierFirstTranche,
+        supplierSecondTranche,
+        ricardianHash: hash1,
+        nonce: nonce0,
+        deadline,
+      });
+
+      await createTradeWithAuthorizationForTest(
         supplier.address,
         amount,
         logisticsAmount,
@@ -1055,29 +1157,25 @@ describe('AgroasysEscrow', function () {
         hash1,
         nonce0,
         deadline,
+        sig1,
       );
 
-      await escrow
-        .connect(buyer)
-        .createTrade(
-          supplier.address,
-          amount,
-          logisticsAmount,
-          platformFeesAmount,
-          supplierFirstTranche,
-          supplierSecondTranche,
-          hash1,
-          nonce0,
-          deadline,
-          sig1,
-        );
-
-      const nonce1 = await escrow.getBuyerNonce(buyer.address);
+      const nonce1 = await escrow.authorizationNonces(buyer.address);
       // Second trade with nonce 1
-      const sig2 = await createSignature(
-        buyer,
-        await escrow.getAddress(),
-        buyer.address,
+      const sig2 = await signCreateTradeAuthorization(buyer, {
+        buyer: buyer.address,
+        supplier: supplier.address,
+        totalAmount: amount,
+        logisticsAmount,
+        platformFeesAmount,
+        supplierFirstTranche,
+        supplierSecondTranche,
+        ricardianHash: hash2,
+        nonce: nonce1,
+        deadline,
+      });
+
+      await createTradeWithAuthorizationForTest(
         supplier.address,
         amount,
         logisticsAmount,
@@ -1087,33 +1185,17 @@ describe('AgroasysEscrow', function () {
         hash2,
         nonce1,
         deadline,
+        sig2,
       );
 
-      await escrow
-        .connect(buyer)
-        .createTrade(
-          supplier.address,
-          amount,
-          logisticsAmount,
-          platformFeesAmount,
-          supplierFirstTranche,
-          supplierSecondTranche,
-          hash2,
-          nonce1,
-          deadline,
-          sig2,
-        );
-
       expect(await escrow.tradeCounter()).to.equal(2);
-      expect(await escrow.getBuyerNonce(buyer.address)).to.equal(2);
+      expect(await escrow.authorizationNonces(buyer.address)).to.equal(2);
     });
 
     it('Should reject invalid signature (wrong signer)', async function () {
-      const nonce = await escrow.getBuyerNonce(buyer.address);
+      const nonce = await escrow.authorizationNonces(buyer.address);
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
       const deadline = BigInt(blockTimestamp + 3600);
-
-      await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
 
       // Signature from wrong signer
       const signature = await createSignature(
@@ -1132,48 +1214,7 @@ describe('AgroasysEscrow', function () {
       );
 
       await expect(
-        escrow
-          .connect(buyer)
-          .createTrade(
-            supplier.address,
-            totalAmount,
-            logisticsAmount,
-            platformFeesAmount,
-            supplierFirstTranche,
-            supplierSecondTranche,
-            ricardianHash,
-            nonce,
-            deadline,
-            signature,
-          ),
-      ).to.be.revertedWith('bad signature');
-    });
-
-    it('Should reject replay signature', async function () {
-      const nonce = await escrow.getBuyerNonce(buyer.address);
-      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      const deadline = BigInt(blockTimestamp + 3600);
-
-      await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
-
-      const signature = await createSignature(
-        buyer,
-        await escrow.getAddress(),
-        buyer.address,
-        supplier.address,
-        totalAmount,
-        logisticsAmount,
-        platformFeesAmount,
-        supplierFirstTranche,
-        supplierSecondTranche,
-        ricardianHash,
-        nonce,
-        deadline,
-      );
-
-      const tx = await escrow
-        .connect(buyer)
-        .createTrade(
+        createTradeWithAuthorizationForTest(
           supplier.address,
           totalAmount,
           logisticsAmount,
@@ -1184,7 +1225,40 @@ describe('AgroasysEscrow', function () {
           nonce,
           deadline,
           signature,
-        );
+        ),
+      ).to.be.revertedWith('bad authorization');
+    });
+
+    it('Should reject replay signature', async function () {
+      const nonce = await escrow.authorizationNonces(buyer.address);
+      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      const deadline = BigInt(blockTimestamp + 3600);
+
+      const signature = await signCreateTradeAuthorization(buyer, {
+        buyer: buyer.address,
+        supplier: supplier.address,
+        totalAmount,
+        logisticsAmount,
+        platformFeesAmount,
+        supplierFirstTranche,
+        supplierSecondTranche,
+        ricardianHash,
+        nonce,
+        deadline,
+      });
+
+      const tx = await createTradeWithAuthorizationForTest(
+        supplier.address,
+        totalAmount,
+        logisticsAmount,
+        platformFeesAmount,
+        supplierFirstTranche,
+        supplierSecondTranche,
+        ricardianHash,
+        nonce,
+        deadline,
+        signature,
+      );
 
       await expect(tx)
         .to.emit(escrow, 'TradeLocked')
@@ -1202,95 +1276,85 @@ describe('AgroasysEscrow', function () {
 
       // try to create a trade with the same signature
       await expect(
-        escrow
-          .connect(buyer)
-          .createTrade(
-            supplier.address,
-            totalAmount,
-            logisticsAmount,
-            platformFeesAmount,
-            supplierFirstTranche,
-            supplierSecondTranche,
-            ricardianHash,
-            nonce,
-            deadline,
-            signature,
-          ),
-      ).to.be.revertedWith('bad nonce'); // got rejected because of the nonce
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          nonce,
+          deadline,
+          signature,
+        ),
+      ).to.be.revertedWith('bad authorization nonce'); // got rejected because of the nonce
     });
 
     it('Should reject with invalid parameters (zero addresses, bad hash, mismatched amounts)', async function () {
-      const nonce = await escrow.getBuyerNonce(buyer.address);
+      const nonce = await escrow.authorizationNonces(buyer.address);
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
       const deadline = BigInt(blockTimestamp + 3600);
 
       await expect(
-        escrow
-          .connect(buyer)
-          .createTrade(
-            ethers.ZeroAddress,
-            totalAmount,
-            logisticsAmount,
-            platformFeesAmount,
-            supplierFirstTranche,
-            supplierSecondTranche,
-            ricardianHash,
-            nonce,
-            deadline,
-            '0x00',
-          ),
+        createTradeWithAuthorizationForTest(
+          ethers.ZeroAddress,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          nonce,
+          deadline,
+          '0x00',
+        ),
       ).to.be.revertedWith('supplier required');
 
       await expect(
-        escrow
-          .connect(buyer)
-          .createTrade(
-            await escrow.getAddress(),
-            totalAmount,
-            logisticsAmount,
-            platformFeesAmount,
-            supplierFirstTranche,
-            supplierSecondTranche,
-            ricardianHash,
-            nonce,
-            deadline,
-            '0x00',
-          ),
+        createTradeWithAuthorizationForTest(
+          await escrow.getAddress(),
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          nonce,
+          deadline,
+          '0x00',
+        ),
       ).to.be.revertedWith('supplier cannot be escrow');
 
       await expect(
-        escrow
-          .connect(buyer)
-          .createTrade(
-            supplier.address,
-            totalAmount,
-            logisticsAmount,
-            platformFeesAmount,
-            supplierFirstTranche,
-            supplierSecondTranche,
-            ethers.ZeroHash,
-            nonce,
-            deadline,
-            '0x00',
-          ),
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ethers.ZeroHash,
+          nonce,
+          deadline,
+          '0x00',
+        ),
       ).to.be.revertedWith('ricardian hash required');
 
       const wrongTotal = ethers.parseUnits('100000', 6);
       await expect(
-        escrow
-          .connect(buyer)
-          .createTrade(
-            supplier.address,
-            wrongTotal,
-            logisticsAmount,
-            platformFeesAmount,
-            supplierFirstTranche,
-            supplierSecondTranche,
-            ricardianHash,
-            nonce,
-            deadline,
-            '0x00',
-          ),
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          wrongTotal,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          nonce,
+          deadline,
+          '0x00',
+        ),
       ).to.be.revertedWith('breakdown mismatch');
     });
 
@@ -1299,53 +1363,43 @@ describe('AgroasysEscrow', function () {
       const deadline = BigInt(blockTimestamp + 3600);
       const wrongNonce = 5n;
 
-      await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
-
-      const signature = await createSignature(
-        buyer,
-        await escrow.getAddress(),
-        buyer.address,
-        supplier.address,
+      const signature = await signCreateTradeAuthorization(buyer, {
+        buyer: buyer.address,
+        supplier: supplier.address,
         totalAmount,
         logisticsAmount,
         platformFeesAmount,
         supplierFirstTranche,
         supplierSecondTranche,
         ricardianHash,
-        wrongNonce,
+        nonce: wrongNonce,
         deadline,
-      );
+      });
 
       await expect(
-        escrow
-          .connect(buyer)
-          .createTrade(
-            supplier.address,
-            totalAmount,
-            logisticsAmount,
-            platformFeesAmount,
-            supplierFirstTranche,
-            supplierSecondTranche,
-            ricardianHash,
-            wrongNonce,
-            deadline,
-            signature,
-          ),
-      ).to.be.revertedWith('bad nonce');
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          wrongNonce,
+          deadline,
+          signature,
+        ),
+      ).to.be.revertedWith('bad authorization nonce');
     });
 
     it('Should reject expired signature', async function () {
-      const nonce = await escrow.getBuyerNonce(buyer.address);
+      const nonce = await escrow.authorizationNonces(buyer.address);
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
       const expiredDeadline = BigInt(blockTimestamp - 100);
 
-      await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
-
-      const signature = await createSignature(
-        buyer,
-        await escrow.getAddress(),
-        buyer.address,
-        supplier.address,
+      const signature = await signCreateTradeAuthorization(buyer, {
+        buyer: buyer.address,
+        supplier: supplier.address,
         totalAmount,
         logisticsAmount,
         platformFeesAmount,
@@ -1353,25 +1407,23 @@ describe('AgroasysEscrow', function () {
         supplierSecondTranche,
         ricardianHash,
         nonce,
-        expiredDeadline,
-      );
+        deadline: expiredDeadline,
+      });
 
       await expect(
-        escrow
-          .connect(buyer)
-          .createTrade(
-            supplier.address,
-            totalAmount,
-            logisticsAmount,
-            platformFeesAmount,
-            supplierFirstTranche,
-            supplierSecondTranche,
-            ricardianHash,
-            nonce,
-            expiredDeadline,
-            signature,
-          ),
-      ).to.be.revertedWith('signature expired');
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          nonce,
+          expiredDeadline,
+          signature,
+        ),
+      ).to.be.revertedWith('authorization expired');
     });
   });
 
@@ -1519,40 +1571,6 @@ describe('AgroasysEscrow', function () {
       expect(await usdc.authorizationState(buyer.address, prepared.tokenNonce)).to.equal(false);
     });
 
-    it('rejects expired and wrong-signer gasless create-trade authorizations', async function () {
-      const prepared = await prepareGaslessTrade(ethers.id('gasless-expired'));
-      await time.increase(3601);
-
-      await expect(submitPreparedGaslessTrade(prepared)).to.be.revertedWith(
-        'authorization expired',
-      );
-      expect(await usdc.authorizationState(buyer.address, prepared.tokenNonce)).to.equal(false);
-
-      const freshPrepared = await prepareGaslessTrade(ethers.id('gasless-wrong-signer'));
-      const wrongSignerSignature = await signCreateTradeAuthorization(supplier, {
-        buyer: buyer.address,
-        supplier: supplier.address,
-        totalAmount,
-        logisticsAmount,
-        platformFeesAmount,
-        supplierFirstTranche,
-        supplierSecondTranche,
-        ricardianHash: freshPrepared.ricardianHash,
-        nonce: freshPrepared.authNonce,
-        deadline: freshPrepared.authDeadline,
-      });
-
-      await expect(
-        submitPreparedGaslessTrade({
-          ...freshPrepared,
-          authorizationSignature: wrongSignerSignature,
-        }),
-      ).to.be.revertedWith('bad authorization');
-      expect(await usdc.authorizationState(buyer.address, freshPrepared.tokenNonce)).to.equal(
-        false,
-      );
-    });
-
     it('executes buyer actions only through admins or allowlisted relayers', async function () {
       const { tradeId } = await createGaslessTrade(ethers.id('gasless-action'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
@@ -1586,142 +1604,6 @@ describe('AgroasysEscrow', function () {
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(3);
     });
-
-    it('rejects replayed, expired, and wrong-trade buyer action authorizations', async function () {
-      const { tradeId } = await createGaslessTrade(ethers.id('gasless-action-failures'));
-      await escrow.connect(oracle).releaseFundsStage1(tradeId);
-      await escrow.connect(oracle).confirmArrival(tradeId);
-
-      let blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      let deadline = BigInt(blockTimestamp + 3600);
-      const nonce = await escrow.getAuthorizationNonce(buyer.address);
-      let signature = await signUserActionAuthorization(buyer, {
-        user: buyer.address,
-        action: 1,
-        tradeId: tradeId + 1n,
-        nonce,
-        deadline,
-      });
-
-      await expect(
-        escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
-      ).to.be.revertedWith('bad authorization');
-
-      blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      const expiredDeadline = BigInt(blockTimestamp - 1);
-      signature = await signUserActionAuthorization(buyer, {
-        user: buyer.address,
-        action: 1,
-        tradeId,
-        nonce,
-        deadline: expiredDeadline,
-      });
-
-      await expect(
-        escrow
-          .connect(admin1)
-          .openDisputeWithAuthorization(tradeId, nonce, expiredDeadline, signature),
-      ).to.be.revertedWith('authorization expired');
-
-      blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      deadline = BigInt(blockTimestamp + 3600);
-      signature = await signUserActionAuthorization(buyer, {
-        user: buyer.address,
-        action: 1,
-        tradeId,
-        nonce,
-        deadline,
-      });
-
-      await escrow
-        .connect(admin1)
-        .openDisputeWithAuthorization(tradeId, nonce, deadline, signature);
-      await expect(
-        escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
-      ).to.be.revertedWith('bad authorization nonce');
-    });
-
-    it('relays lock-timeout cancellation and transfers only refundable principal to the buyer', async function () {
-      const { tradeId } = await createGaslessTrade(ethers.id('gasless-cancel-timeout'));
-      await time.increase(7 * 24 * 3600 + 1);
-
-      const buyerBefore = await usdc.balanceOf(buyer.address);
-      const nonce = await escrow.getAuthorizationNonce(buyer.address);
-      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      const deadline = BigInt(blockTimestamp + 3600);
-      const signature = await signUserActionAuthorization(buyer, {
-        user: buyer.address,
-        action: 2,
-        tradeId,
-        nonce,
-        deadline,
-      });
-
-      await expect(
-        escrow
-          .connect(admin1)
-          .cancelLockedTradeAfterTimeoutWithAuthorization(tradeId, nonce, deadline, signature),
-      )
-        .to.emit(escrow, 'BuyerRefundTransferred')
-        .withArgs(
-          tradeId,
-          buyer.address,
-          supplierFirstTranche + supplierSecondTranche,
-          4,
-          admin1.address,
-        )
-        .and.to.emit(escrow, 'RelayedActionExecuted')
-        .withArgs(
-          admin1.address,
-          buyer.address,
-          await escrow.ACTION_CANCEL_LOCKED_TIMEOUT(),
-          tradeId,
-        );
-
-      expect(await usdc.balanceOf(buyer.address)).to.equal(
-        buyerBefore + supplierFirstTranche + supplierSecondTranche,
-      );
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
-      expect(await escrow.claimableUsdc(treasury.address)).to.equal(
-        logisticsAmount + platformFeesAmount,
-      );
-    });
-
-    it('relays in-transit timeout refunds directly to the buyer', async function () {
-      const { tradeId } = await createGaslessTrade(ethers.id('gasless-in-transit-refund'));
-      await escrow.connect(oracle).releaseFundsStage1(tradeId);
-      await time.increase(14 * 24 * 3600 + 1);
-
-      const buyerBefore = await usdc.balanceOf(buyer.address);
-      const nonce = await escrow.getAuthorizationNonce(buyer.address);
-      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      const deadline = BigInt(blockTimestamp + 3600);
-      const signature = await signUserActionAuthorization(buyer, {
-        user: buyer.address,
-        action: 3,
-        tradeId,
-        nonce,
-        deadline,
-      });
-
-      await expect(
-        escrow
-          .connect(admin1)
-          .refundInTransitAfterTimeoutWithAuthorization(tradeId, nonce, deadline, signature),
-      )
-        .to.emit(escrow, 'BuyerRefundTransferred')
-        .withArgs(tradeId, buyer.address, supplierSecondTranche, 5, admin1.address)
-        .and.to.emit(escrow, 'RelayedActionExecuted')
-        .withArgs(
-          admin1.address,
-          buyer.address,
-          await escrow.ACTION_REFUND_IN_TRANSIT_TIMEOUT(),
-          tradeId,
-        );
-
-      expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBefore + supplierSecondTranche);
-      expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
-    });
   });
 
   describe('Complete Flow (Without dispute)', function () {
@@ -1733,17 +1615,9 @@ describe('AgroasysEscrow', function () {
     const supplierSecondTranche = ethers.parseUnits('60000', 6);
 
     beforeEach(async function () {
-      const nonce = await escrow.getBuyerNonce(buyer.address);
-      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      const deadline = BigInt(blockTimestamp + 3600);
       const ricardianHash = ethers.id('trade-hash');
 
-      await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
-
-      const signature = await createSignature(
-        buyer,
-        await escrow.getAddress(),
-        buyer.address,
+      await createTradeWithAuthorizationForTest(
         supplier.address,
         totalAmount,
         logisticsAmount,
@@ -1751,24 +1625,7 @@ describe('AgroasysEscrow', function () {
         supplierFirstTranche,
         supplierSecondTranche,
         ricardianHash,
-        nonce,
-        deadline,
       );
-
-      await escrow
-        .connect(buyer)
-        .createTrade(
-          supplier.address,
-          totalAmount,
-          logisticsAmount,
-          platformFeesAmount,
-          supplierFirstTranche,
-          supplierSecondTranche,
-          ricardianHash,
-          nonce,
-          deadline,
-          signature,
-        );
 
       tradeId = 0n;
     });
@@ -1814,7 +1671,7 @@ describe('AgroasysEscrow', function () {
 
       const supplierBalBeforeStage2 = await usdc.balanceOf(supplier.address);
 
-      await expect(escrow.connect(buyer).finalizeAfterDisputeWindow(tradeId)).to.emit(
+      await expect(finalizeAfterDisputeWindowAsSupplier(tradeId)).to.emit(
         escrow,
         'FinalTrancheReleased',
       );
@@ -1834,18 +1691,10 @@ describe('AgroasysEscrow', function () {
     let tradeId: bigint;
 
     beforeEach(async function () {
-      const nonce = await escrow.getBuyerNonce(buyer.address);
-      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      const deadline = BigInt(blockTimestamp + 3600);
       const totalAmount = ethers.parseUnits('107000', 6);
       const ricardianHash = ethers.id('trade-hash');
 
-      await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
-
-      const signature = await createSignature(
-        buyer,
-        await escrow.getAddress(),
-        buyer.address,
+      await createTradeWithAuthorizationForTest(
         supplier.address,
         totalAmount,
         ethers.parseUnits('5000', 6),
@@ -1853,24 +1702,7 @@ describe('AgroasysEscrow', function () {
         ethers.parseUnits('40000', 6),
         ethers.parseUnits('60000', 6),
         ricardianHash,
-        nonce,
-        deadline,
       );
-
-      await escrow
-        .connect(buyer)
-        .createTrade(
-          supplier.address,
-          totalAmount,
-          ethers.parseUnits('5000', 6),
-          ethers.parseUnits('2000', 6),
-          ethers.parseUnits('40000', 6),
-          ethers.parseUnits('60000', 6),
-          ricardianHash,
-          nonce,
-          deadline,
-          signature,
-        );
 
       tradeId = 0n;
     });
@@ -1894,18 +1726,10 @@ describe('AgroasysEscrow', function () {
     let tradeId: bigint;
 
     beforeEach(async function () {
-      const nonce = await escrow.getBuyerNonce(buyer.address);
-      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      const deadline = BigInt(blockTimestamp + 3600);
       const totalAmount = ethers.parseUnits('107000', 6);
       const ricardianHash = ethers.id('trade-hash');
 
-      await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
-
-      const signature = await createSignature(
-        buyer,
-        await escrow.getAddress(),
-        buyer.address,
+      await createTradeWithAuthorizationForTest(
         supplier.address,
         totalAmount,
         ethers.parseUnits('5000', 6),
@@ -1913,24 +1737,7 @@ describe('AgroasysEscrow', function () {
         ethers.parseUnits('40000', 6),
         ethers.parseUnits('60000', 6),
         ricardianHash,
-        nonce,
-        deadline,
       );
-
-      await escrow
-        .connect(buyer)
-        .createTrade(
-          supplier.address,
-          totalAmount,
-          ethers.parseUnits('5000', 6),
-          ethers.parseUnits('2000', 6),
-          ethers.parseUnits('40000', 6),
-          ethers.parseUnits('60000', 6),
-          ricardianHash,
-          nonce,
-          deadline,
-          signature,
-        );
 
       tradeId = 0n;
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
@@ -1969,17 +1776,9 @@ describe('AgroasysEscrow', function () {
     const totalAmount = ethers.parseUnits('107000', 6);
 
     beforeEach(async function () {
-      const nonce = await escrow.getBuyerNonce(buyer.address);
-      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      const deadline = BigInt(blockTimestamp + 3600);
       const ricardianHash = ethers.id('trade-hash');
 
-      await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
-
-      const signature = await createSignature(
-        buyer,
-        await escrow.getAddress(),
-        buyer.address,
+      await createTradeWithAuthorizationForTest(
         supplier.address,
         totalAmount,
         logistics,
@@ -1987,24 +1786,7 @@ describe('AgroasysEscrow', function () {
         supplierFirstTranche,
         supplierSecondTranche,
         ricardianHash,
-        nonce,
-        deadline,
       );
-
-      await escrow
-        .connect(buyer)
-        .createTrade(
-          supplier.address,
-          totalAmount,
-          logistics,
-          fees,
-          supplierFirstTranche,
-          supplierSecondTranche,
-          ricardianHash,
-          nonce,
-          deadline,
-          signature,
-        );
 
       tradeId = 0n;
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
@@ -2012,10 +1794,7 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should allow buyer to open dispute within 24h', async function () {
-      await expect(escrow.connect(buyer).openDispute(tradeId)).to.emit(
-        escrow,
-        'DisputeOpenedByBuyer',
-      );
+      await expect(openDisputeAsBuyer(tradeId)).to.emit(escrow, 'DisputeOpenedByBuyer');
 
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(3); // FROZEN
@@ -2024,15 +1803,28 @@ describe('AgroasysEscrow', function () {
     it('Should reject dispute after 24h window', async function () {
       await time.increase(24 * 3600 + 1);
 
-      await expect(escrow.connect(buyer).openDispute(tradeId)).to.be.revertedWith('window closed');
+      await expect(openDisputeAsBuyer(tradeId)).to.be.revertedWith('window closed');
     });
 
-    it('Should reject dispute from non-buyer', async function () {
-      await expect(escrow.connect(supplier).openDispute(tradeId)).to.be.revertedWith('only buyer');
+    it('Should reject dispute authorization from non-buyer', async function () {
+      const nonce = await escrow.authorizationNonces(buyer.address);
+      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      const deadline = BigInt(blockTimestamp + 3600);
+      const signature = await signUserActionAuthorization(supplier, {
+        user: buyer.address,
+        action: 1,
+        tradeId,
+        nonce,
+        deadline,
+      });
+
+      await expect(
+        escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
+      ).to.be.revertedWith('bad authorization');
     });
 
     it('Should refund buyer after dispute REFUND resolution', async function () {
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
 
       const buyerBalBefore = await usdc.balanceOf(buyer.address);
 
@@ -2053,7 +1845,7 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should pay supplier after dispute RESOLVE resolution', async function () {
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
 
       const supplierBalBefore = await usdc.balanceOf(supplier.address);
 
@@ -2074,7 +1866,7 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should reject dispute proposal from non-admin', async function () {
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
 
       await expect(escrow.connect(buyer).proposeDisputeSolution(tradeId, 0)).to.be.revertedWith(
         'only admin',
@@ -2082,7 +1874,7 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should reject dispute approval from non-admin', async function () {
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
 
       await expect(escrow.connect(buyer).approveDisputeSolution(0)).to.be.revertedWith(
@@ -2091,7 +1883,7 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should enforce dispute proposal expiry and allow manual cancellation', async function () {
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
 
       const ttl = await escrow.DISPUTE_PROPOSAL_TTL();
@@ -2111,7 +1903,7 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should auto-cancel expired active proposal when replacing with a new one', async function () {
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
 
       const ttl = await escrow.DISPUTE_PROPOSAL_TTL();
@@ -2293,7 +2085,7 @@ describe('AgroasysEscrow', function () {
       const { tradeId } = await createDefaultTrade(ethers.id('dispute-expiry-boundary-ok'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
       await escrow.connect(oracle).confirmArrival(tradeId);
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
 
       const proposal = await escrow.disputeProposals(0);
@@ -2309,7 +2101,7 @@ describe('AgroasysEscrow', function () {
       const { tradeId } = await createDefaultTrade(ethers.id('dispute-expiry-boundary-fail'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
       await escrow.connect(oracle).confirmArrival(tradeId);
-      await escrow.connect(buyer).openDispute(tradeId);
+      await openDisputeAsBuyer(tradeId);
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
 
       const proposal = await escrow.disputeProposals(0);

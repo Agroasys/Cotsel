@@ -17,16 +17,11 @@ const UNIT_CONFIG = {
   usdcAddress: '0x2000000000000000000000000000000000000002',
 };
 
-const RECEIPT = {
-  hash: `0x${'2'.repeat(64)}`,
-  blockNumber: 456,
-};
 const TRADE_LOCKED_INTERFACE = new Interface([
   'event TradeLocked(uint256 indexed tradeId,address indexed buyer,address indexed supplier,uint256 totalAmount,uint256 logisticsAmount,uint256 platformFeesAmount,uint256 supplierFirstTranche,uint256 supplierSecondTranche,bytes32 ricardianHash)',
 ]);
 
 type MockContractWithSigner = {
-  createTrade?: jest.Mock;
   openDispute: jest.Mock;
   cancelLockedTradeAfterTimeout: jest.Mock;
   refundInTransitAfterTimeout: jest.Mock;
@@ -61,7 +56,6 @@ function makeSdkUnit() {
   const sdk = new BuyerSDK(UNIT_CONFIG);
 
   const contractWithSigner: MockContractWithSigner = {
-    createTrade: jest.fn(),
     openDispute: jest.fn(),
     cancelLockedTradeAfterTimeout: jest.fn(),
     refundInTransitAfterTimeout: jest.fn(),
@@ -80,14 +74,6 @@ function makeSdkUnit() {
     .mockResolvedValue('0x3000000000000000000000000000000000000003');
 
   return { sdk, contractWithSigner, connect };
-}
-
-function mockSuccessCall(mock: jest.Mock) {
-  const tx = {
-    wait: jest.fn().mockResolvedValue(RECEIPT),
-  };
-  mock.mockResolvedValue(tx);
-  return tx;
 }
 
 const networkMismatchCases: Array<[string, BuyerWriteInvocation]> = [
@@ -211,92 +197,61 @@ describe('BuyerSDK unit', () => {
     });
   });
 
-  test('createTrade should surface tradeId from TradeLocked receipt logs', async () => {
-    const { sdk, contractWithSigner } = makeSdkUnit();
+  test('createTrade should reject direct buyer-paid execution', async () => {
+    const { sdk, connect } = makeSdkUnit();
     const { signer } = makeBuyerSigner();
-    const encodedLog = TRADE_LOCKED_INTERFACE.encodeEventLog(
-      TRADE_LOCKED_INTERFACE.getEvent('TradeLocked')!,
-      [
-        99n,
-        '0x2222222222222222222222222222222222222222',
-        '0x1111111111111111111111111111111111111111',
-        1000000n,
-        0n,
-        0n,
-        400000n,
-        600000n,
-        `0x${'a'.repeat(64)}`,
-      ],
-    );
-    const tx = {
-      wait: jest.fn().mockResolvedValue({
-        ...RECEIPT,
-        logs: [
-          {
-            address: UNIT_CONFIG.escrowAddress,
-            topics: encodedLog.topics,
-            data: encodedLog.data,
-          },
-        ],
-      }),
-    };
-    contractWithSigner.createTrade = jest.fn().mockResolvedValue(tx);
 
-    const result = await sdk.createTrade(
-      {
-        supplier: '0x1111111111111111111111111111111111111111',
-        totalAmount: 1000000n,
-        logisticsAmount: 0n,
-        platformFeesAmount: 0n,
-        supplierFirstTranche: 400000n,
-        supplierSecondTranche: 600000n,
-        ricardianHash: `0x${'a'.repeat(64)}`,
-      },
-      signer,
-    );
-
-    expect(result).toEqual({
-      txHash: RECEIPT.hash,
-      blockNumber: RECEIPT.blockNumber,
-      tradeId: '99',
-    });
+    await expect(
+      sdk.createTrade(
+        {
+          supplier: '0x1111111111111111111111111111111111111111',
+          totalAmount: 1000000n,
+          logisticsAmount: 0n,
+          platformFeesAmount: 0n,
+          supplierFirstTranche: 400000n,
+          supplierSecondTranche: 600000n,
+          ricardianHash: `0x${'a'.repeat(64)}`,
+        },
+        signer,
+      ),
+    ).rejects.toThrow('Direct buyer-paid createTrade was removed');
+    expect(connect).not.toHaveBeenCalled();
   });
 
-  test('openDispute should call contract and return tx result', async () => {
+  test('openDispute should reject direct buyer-paid execution', async () => {
     const { sdk, contractWithSigner, connect } = makeSdkUnit();
     const { signer } = makeBuyerSigner();
-    const tx = mockSuccessCall(contractWithSigner.openDispute);
 
-    const result = await sdk.openDispute(10n, signer);
+    await expect(sdk.openDispute(10n, signer)).rejects.toThrow(
+      'Direct buyer-paid openDispute was removed',
+    );
 
-    expect(connect).toHaveBeenCalledWith(signer);
-    expect(contractWithSigner.openDispute).toHaveBeenCalledWith(10n);
-    expect(tx.wait).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
+    expect(connect).not.toHaveBeenCalled();
+    expect(contractWithSigner.openDispute).not.toHaveBeenCalled();
   });
 
-  test('cancelLockedTradeAfterTimeout should call contract and return tx result', async () => {
-    const { sdk, contractWithSigner } = makeSdkUnit();
+  test('cancelLockedTradeAfterTimeout should reject direct buyer-paid execution', async () => {
+    const { sdk, contractWithSigner, connect } = makeSdkUnit();
     const { signer } = makeBuyerSigner();
-    const tx = mockSuccessCall(contractWithSigner.cancelLockedTradeAfterTimeout);
 
-    const result = await sdk.cancelLockedTradeAfterTimeout(11n, signer);
+    await expect(sdk.cancelLockedTradeAfterTimeout(11n, signer)).rejects.toThrow(
+      'Direct buyer-paid cancelLockedTradeAfterTimeout was removed',
+    );
 
-    expect(contractWithSigner.cancelLockedTradeAfterTimeout).toHaveBeenCalledWith(11n);
-    expect(tx.wait).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
+    expect(connect).not.toHaveBeenCalled();
+    expect(contractWithSigner.cancelLockedTradeAfterTimeout).not.toHaveBeenCalled();
   });
 
-  test('refundInTransitAfterTimeout should call contract and return tx result', async () => {
-    const { sdk, contractWithSigner } = makeSdkUnit();
+  test('refundInTransitAfterTimeout should reject direct buyer-paid execution', async () => {
+    const { sdk, contractWithSigner, connect } = makeSdkUnit();
     const { signer } = makeBuyerSigner();
-    const tx = mockSuccessCall(contractWithSigner.refundInTransitAfterTimeout);
 
-    const result = await sdk.refundInTransitAfterTimeout(12n, signer);
+    await expect(sdk.refundInTransitAfterTimeout(12n, signer)).rejects.toThrow(
+      'Direct buyer-paid refundInTransitAfterTimeout was removed',
+    );
 
-    expect(contractWithSigner.refundInTransitAfterTimeout).toHaveBeenCalledWith(12n);
-    expect(tx.wait).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
+    expect(connect).not.toHaveBeenCalled();
+    expect(contractWithSigner.refundInTransitAfterTimeout).not.toHaveBeenCalled();
   });
 
   for (const [name, invoke] of networkMismatchCases) {
