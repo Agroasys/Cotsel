@@ -109,3 +109,30 @@ send it with the signed create-trade authorization to the backend relayer:
 ```ts
 await buyerSDK.createUsdcReceiveAuthorization(payload.totalAmount, buyerSigner);
 ```
+
+### Failure and Retry Semantics
+
+The preferred funding path is `receiveWithAuthorization`; do not fall back to a
+standalone `approve` flow for the default checkout path.
+
+- Treat the USDC authorization as retriable only while there is no confirmed
+  Cotsel create-trade transaction and the token authorization nonce has not been
+  consumed.
+- If backend or Cotsel validation rejects the envelope before broadcast, the UI
+  should ask the backend for a fresh quote/payload and collect a fresh buyer
+  authorization instead of editing the failed payload.
+- If simulation fails because the authorization is expired, not yet valid, has
+  the wrong recipient, has the wrong amount, or mismatches the canonical quote,
+  collect a fresh authorization; do not retry the same payload.
+- If a transaction is submitted, keep retries idempotent through the backend
+  request id and idempotency key. Do not create a second authorization for the
+  same checkout attempt until the first submission is confirmed failed or
+  expired without token nonce consumption.
+- Once the create-trade transaction is confirmed, or the USDC authorization nonce
+  is observed as used, consider that authorization spent. Future retries must use
+  a new quote/payload and a new USDC authorization nonce.
+
+If the preferred authorization path is temporarily unavailable, the fallback is
+operational: pause gasless checkout for the affected chain, surface a failed
+payment state, and let support restart the checkout with a fresh quote after the
+incident is cleared. Do not silently switch users back to residual allowances.
