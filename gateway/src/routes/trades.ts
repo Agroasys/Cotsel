@@ -61,7 +61,7 @@ export function createTradeRouter(options: TradeRouterOptions): Router {
   const router = Router();
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
 
-  router.use(authenticate, requireGatewayRole('operator:read'));
+  router.use('/trades', authenticate, requireGatewayRole('operator:read'));
 
   router.get('/trades', async (req, res, next) => {
     try {

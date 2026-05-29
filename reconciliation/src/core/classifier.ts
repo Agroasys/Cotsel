@@ -1,4 +1,9 @@
-import { TradeStatus, type Trade } from '@agroasys/sdk';
+import {
+  SETTLEMENT_SUPPORT_FEE_BASE_UNITS,
+  TradeStatus,
+  splitPlatformFeeComponents,
+  type Trade,
+} from '@agroasys/sdk';
 import type { CompareInput, DriftFinding } from '../types';
 import { isZeroAddress, normalizeAddressOrNull } from '../utils/address';
 
@@ -63,6 +68,38 @@ function compareAmounts(indexed: CompareInput['indexedTrade'], onchain: Trade): 
   }
 
   return mismatches;
+}
+
+function compareFeeComponents(indexed: CompareInput['indexedTrade']): DriftFinding[] {
+  const expected = splitPlatformFeeComponents(indexed.platformFeesAmount);
+
+  if (
+    indexed.platformFeeNetAmount === expected.platformFeeNetAmount &&
+    indexed.settlementSupportFeeAmount === expected.settlementSupportFeeAmount
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      tradeId: indexed.tradeId,
+      severity: 'HIGH',
+      mismatchCode: 'FEE_COMPONENT_MISMATCH',
+      comparedField: 'platformFeeComponents',
+      onchainValue: indexed.platformFeesAmount.toString(),
+      indexedValue: JSON.stringify({
+        platformFeeNetAmount: indexed.platformFeeNetAmount.toString(),
+        settlementSupportFeeAmount: indexed.settlementSupportFeeAmount.toString(),
+      }),
+      details: {
+        grossPlatformFeesAmount: indexed.platformFeesAmount.toString(),
+        expectedPlatformFeeNetAmount: expected.platformFeeNetAmount.toString(),
+        expectedSettlementSupportFeeAmount: expected.settlementSupportFeeAmount.toString(),
+        configuredSettlementSupportFeeBaseUnits: SETTLEMENT_SUPPORT_FEE_BASE_UNITS.toString(),
+        impact: 'fee component accounting',
+      },
+    },
+  ];
 }
 
 function invalidAddressFinding(
@@ -194,6 +231,7 @@ export function classifyDrifts(input: CompareInput): DriftFinding[] {
   }
 
   findings.push(...compareAmounts(indexedTrade, onchainTrade));
+  findings.push(...compareFeeComponents(indexedTrade));
 
   if (onchainTrade.ricardianHash.toLowerCase() !== indexedTrade.ricardianHash.toLowerCase()) {
     findings.push({

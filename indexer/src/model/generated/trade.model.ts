@@ -38,6 +38,12 @@ export class Trade {
     platformFeesAmount!: bigint
 
     @BigIntColumn_({nullable: false})
+    platformFeeNetAmount!: bigint
+
+    @BigIntColumn_({nullable: false})
+    settlementSupportFeeAmount!: bigint
+
+    @BigIntColumn_({nullable: false})
     supplierFirstTranche!: bigint
 
     @BigIntColumn_({nullable: false})

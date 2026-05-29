@@ -970,6 +970,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
          SET status = CASE WHEN $5 THEN 'dead_letter' ELSE 'failed' END,
              response_status = $3,
              last_error = $4,
+             last_attempted_at = $2,
              next_attempt_at = $6,
              updated_at = NOW()
          WHERE delivery_id = $1`,

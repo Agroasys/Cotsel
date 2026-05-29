@@ -13,6 +13,8 @@ interface GraphQlResponse {
       totalAmountLocked: string;
       logisticsAmount: string;
       platformFeesAmount: string;
+      platformFeeNetAmount: string;
+      settlementSupportFeeAmount: string;
       supplierFirstTranche: string;
       supplierSecondTranche: string;
       ricardianHash: string;
@@ -37,6 +39,8 @@ export class IndexerClient {
           totalAmountLocked
           logisticsAmount
           platformFeesAmount
+          platformFeeNetAmount
+          settlementSupportFeeAmount
           supplierFirstTranche
           supplierSecondTranche
           ricardianHash
@@ -82,6 +86,8 @@ export class IndexerClient {
       totalAmountLocked: BigInt(trade.totalAmountLocked),
       logisticsAmount: BigInt(trade.logisticsAmount),
       platformFeesAmount: BigInt(trade.platformFeesAmount),
+      platformFeeNetAmount: BigInt(trade.platformFeeNetAmount),
+      settlementSupportFeeAmount: BigInt(trade.settlementSupportFeeAmount),
       supplierFirstTranche: BigInt(trade.supplierFirstTranche),
       supplierSecondTranche: BigInt(trade.supplierSecondTranche),
       ricardianHash: trade.ricardianHash,

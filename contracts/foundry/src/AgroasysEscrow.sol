@@ -305,7 +305,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     event PlatformFeesPaidStage1(
         uint256 indexed tradeId,
         address indexed treasury,
-        uint256 platformFeesAmount
+        uint256 platformFeesAmount,
+        uint256 platformFeeNetAmount,
+        uint256 settlementSupportFeeAmount
     );
 
     event ArrivalConfirmed(uint256 indexed tradeId, uint256 arrivalTimestamp);
@@ -967,6 +969,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         return 0;
     }
 
+    function _splitPlatformFeeComponents(uint256 _platformFeesAmount)
+        internal
+        pure
+        returns (uint256 platformFeeNetAmount, uint256 settlementSupportFeeAmount)
+    {
+        settlementSupportFeeAmount = _platformFeesAmount < 4_000_000 ? _platformFeesAmount : 4_000_000;
+        platformFeeNetAmount = _platformFeesAmount - settlementSupportFeeAmount;
+    }
+
     function _transferSupplierPayout(
         uint256 _tradeId,
         address _supplier,
@@ -1058,7 +1069,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             trade.logisticsAmount
         );
 
-        emit PlatformFeesPaidStage1(_tradeId, treasuryAddress, trade.platformFeesAmount);
+        (uint256 platformFeeNetAmount, uint256 settlementSupportFeeAmount) =
+            _splitPlatformFeeComponents(trade.platformFeesAmount);
+        emit PlatformFeesPaidStage1(
+            _tradeId,
+            treasuryAddress,
+            trade.platformFeesAmount,
+            platformFeeNetAmount,
+            settlementSupportFeeAmount
+        );
     }
 
     /**

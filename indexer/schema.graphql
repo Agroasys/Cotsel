@@ -9,6 +9,8 @@ type Trade @entity {
   totalAmountLocked: BigInt!
   logisticsAmount: BigInt!
   platformFeesAmount: BigInt!
+  platformFeeNetAmount: BigInt!
+  settlementSupportFeeAmount: BigInt!
   supplierFirstTranche: BigInt!
   supplierSecondTranche: BigInt!
   ricardianHash: String!
@@ -47,6 +49,8 @@ type TradeEvent @entity {
   totalAmount: BigInt
   logisticsAmount: BigInt
   platformFeesAmount: BigInt
+  platformFeeNetAmount: BigInt
+  settlementSupportFeeAmount: BigInt
   supplierFirstTranche: BigInt
   supplierSecondTranche: BigInt
 
@@ -57,6 +61,8 @@ type TradeEvent @entity {
 
   # PlatformFeesPaidStage1 specific
   paidPlatformFees: BigInt
+  paidPlatformFeeNet: BigInt
+  paidSettlementSupportFee: BigInt
 
   # ArrivalConfirmed specific
   arrivalTimestamp: BigInt

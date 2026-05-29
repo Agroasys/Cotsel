@@ -86,7 +86,7 @@ export function createApprovalWorkflowRouter(options: ApprovalWorkflowRouterOpti
   const router = Router();
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
 
-  router.use(authenticate, requireGatewayRole('operator:read'));
+  router.use('/approvals', authenticate, requireGatewayRole('operator:read'));
 
   router.get('/approvals', async (req, res, next) => {
     try {

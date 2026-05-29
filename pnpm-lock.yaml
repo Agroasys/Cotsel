@@ -41,6 +41,9 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      jest-mock:
+        specifier: 30.4.1
+        version: 30.4.1
       lint-staged:
         specifier: ^16.4.0
         version: 16.4.0

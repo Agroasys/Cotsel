@@ -161,6 +161,82 @@ export interface UsdcReceiveAuthorization {
   s: string;
 }
 
+export type GaslessUserAction =
+  | 'open_dispute'
+  | 'cancel_locked_timeout'
+  | 'refund_in_transit_timeout'
+  | 'finalize_after_dispute_window';
+
+export interface GaslessExecutionAuthorizationFields {
+  nonce: string;
+  deadline: string;
+  signature: string;
+}
+
+export interface GaslessExecutionUsdcAuthorizationFields {
+  from: string;
+  to: string;
+  value: string;
+  validAfter: string;
+  validBefore: string;
+  nonce: string;
+  v: number;
+  r: string;
+  s: string;
+}
+
+export interface GaslessCreateTradeExecutionRequest {
+  action: 'create_trade';
+  handoffId: string;
+  chainId: number;
+  contractAddress: string;
+  expiresAt: string;
+  payloadHash: string;
+  buyerAddress: string;
+  supplierAddress: string;
+  totalAmount: string;
+  logisticsAmount: string;
+  platformFeesAmount: string;
+  supplierFirstTranche: string;
+  supplierSecondTranche: string;
+  ricardianHash: string;
+  buyerAuthorization: GaslessExecutionAuthorizationFields;
+  usdcAuthorization: GaslessExecutionUsdcAuthorizationFields;
+}
+
+export interface GaslessUserActionExecutionRequest {
+  action: GaslessUserAction;
+  handoffId: string;
+  chainId: number;
+  contractAddress: string;
+  expiresAt: string;
+  payloadHash: string;
+  userAddress: string;
+  tradeId: string;
+  userAuthorization: GaslessExecutionAuthorizationFields;
+}
+
+export interface GaslessExecutionSubmitOptions {
+  baseUrl: string;
+  idempotencyKey: string;
+  headers?: HeadersInit;
+  serviceAuth?: {
+    apiKey: string;
+    apiSecret: string;
+    timestamp?: number;
+    nonce?: string;
+  };
+  fetchImpl?: typeof fetch;
+}
+
+export interface GaslessExecutionResponseEnvelope<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  timestamp?: string;
+}
+
 export interface TradeResult {
   txHash: string;
   blockNumber: number;

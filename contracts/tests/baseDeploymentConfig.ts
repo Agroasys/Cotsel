@@ -60,6 +60,16 @@ describe('Base deployment config', function () {
     ).to.throw(/must contain at least two admin addresses/);
   });
 
+  it('rejects buyer or supplier wallets in deployment admin lists when provided', async function () {
+    expect(() =>
+      loadBaseDeploymentConfig('base-sepolia', 84532, {
+        ...validEnv,
+        DEPLOY_FORBIDDEN_USER_WALLETS:
+          '0x4aF052cB4B3eC7b58322548021bF254Cc4c80b2c,0x1111111111111111111111111111111111111111',
+      }),
+    ).to.throw(/must not include buyer\/supplier user wallet/);
+  });
+
   it('rejects chain id mismatches for the selected Base network', async function () {
     expect(() => loadBaseDeploymentConfig('base-sepolia', 8453, validEnv)).to.throw(
       /requires chainId=84532, received 8453/,

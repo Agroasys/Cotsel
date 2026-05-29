@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { formatUnits } from 'ethers';
+import { splitPlatformFeeComponents } from '@agroasys/sdk';
 import { ComplianceStore } from './complianceStore';
 import {
   deriveIndexerFreshnessState,
@@ -42,6 +43,8 @@ export interface DashboardTradeRecord {
   updatedAt: string;
   ricardianHash: string;
   platformFee: number;
+  platformFeesTotal: number;
+  settlementSupportFee: number;
   logisticsAmount: number;
   timeline: DashboardTradeEventRecord[];
   complianceStatus: DashboardComplianceStatus;
@@ -99,6 +102,8 @@ interface TradeGraphQlRecord {
   totalAmountLocked: string;
   logisticsAmount: string;
   platformFeesAmount: string;
+  platformFeeNetAmount: string;
+  settlementSupportFeeAmount: string;
   ricardianHash: string;
   createdAt: string;
   arrivalTimestamp?: string | null;
@@ -113,6 +118,8 @@ interface TradeEventGraphQlRecord {
   releasedFirstTranche?: string | null;
   releasedLogisticsAmount?: string | null;
   paidPlatformFees?: string | null;
+  paidPlatformFeeNet?: string | null;
+  paidSettlementSupportFee?: string | null;
   arrivalTimestamp?: string | null;
   finalTranche?: string | null;
   finalRecipient?: string | null;
@@ -233,6 +240,17 @@ function asUsdcNumber(raw: string, field: string): number {
   }
 }
 
+function splitPlatformFeesAsStrings(platformFeesAmount: string): {
+  platformFeeNetAmount: string;
+  settlementSupportFeeAmount: string;
+} {
+  const split = splitPlatformFeeComponents(BigInt(platformFeesAmount));
+  return {
+    platformFeeNetAmount: split.platformFeeNetAmount.toString(),
+    settlementSupportFeeAmount: split.settlementSupportFeeAmount.toString(),
+  };
+}
+
 function mapTradeStatus(status: TradeGraphQlRecord['status']): DashboardTradeStatus {
   switch (status) {
     case 'LOCKED':
@@ -334,8 +352,12 @@ function mapEventDetail(event: TradeEventGraphQlRecord): string | undefined {
         : undefined;
     case 'FundsReleasedStage1':
       return `Stage 1 released ${asUsdcNumber(event.releasedFirstTranche ?? '0', 'event.releasedFirstTranche').toLocaleString()} USDC plus ${asUsdcNumber(event.releasedLogisticsAmount ?? '0', 'event.releasedLogisticsAmount').toLocaleString()} USDC logistics.`;
-    case 'PlatformFeesPaidStage1':
-      return `Platform fees settled: ${asUsdcNumber(event.paidPlatformFees ?? '0', 'event.paidPlatformFees').toLocaleString()} USDC.`;
+    case 'PlatformFeesPaidStage1': {
+      const fallbackSplit = splitPlatformFeesAsStrings(event.paidPlatformFees ?? '0');
+      const platformFeeNet = event.paidPlatformFeeNet ?? fallbackSplit.platformFeeNetAmount;
+      const supportFee = event.paidSettlementSupportFee ?? fallbackSplit.settlementSupportFeeAmount;
+      return `Platform fee settled: ${asUsdcNumber(platformFeeNet, 'event.paidPlatformFeeNet').toLocaleString()} USDC; settlement support fee: ${asUsdcNumber(supportFee, 'event.paidSettlementSupportFee').toLocaleString()} USDC.`;
+    }
     case 'ArrivalConfirmed':
       return event.arrivalTimestamp
         ? `Arrival confirmed at ${assertUnixSecondsTimestamp(event.arrivalTimestamp, 'event.arrivalTimestamp')}.`
@@ -478,6 +500,8 @@ const listTradesQuery = `
       totalAmountLocked
       logisticsAmount
       platformFeesAmount
+      platformFeeNetAmount
+      settlementSupportFeeAmount
       ricardianHash
       createdAt
       arrivalTimestamp
@@ -489,6 +513,8 @@ const listTradesQuery = `
         releasedFirstTranche
         releasedLogisticsAmount
         paidPlatformFees
+        paidPlatformFeeNet
+        paidSettlementSupportFee
         arrivalTimestamp
         finalTranche
         finalRecipient
@@ -534,6 +560,8 @@ const tradeDetailQuery = `
       totalAmountLocked
       logisticsAmount
       platformFeesAmount
+      platformFeeNetAmount
+      settlementSupportFeeAmount
       ricardianHash
       createdAt
       arrivalTimestamp
@@ -545,6 +573,8 @@ const tradeDetailQuery = `
         releasedFirstTranche
         releasedLogisticsAmount
         paidPlatformFees
+        paidPlatformFeeNet
+        paidSettlementSupportFee
         arrivalTimestamp
         finalTranche
         finalRecipient
@@ -710,7 +740,12 @@ export class TradeReadService implements TradeReadReader {
       createdAt: assertIsoTimestamp(trade.createdAt, 'trade.createdAt'),
       updatedAt,
       ricardianHash: trade.ricardianHash,
-      platformFee: asUsdcNumber(trade.platformFeesAmount, 'trade.platformFeesAmount'),
+      platformFee: asUsdcNumber(trade.platformFeeNetAmount, 'trade.platformFeeNetAmount'),
+      platformFeesTotal: asUsdcNumber(trade.platformFeesAmount, 'trade.platformFeesAmount'),
+      settlementSupportFee: asUsdcNumber(
+        trade.settlementSupportFeeAmount,
+        'trade.settlementSupportFeeAmount',
+      ),
       logisticsAmount: asUsdcNumber(trade.logisticsAmount, 'trade.logisticsAmount'),
       timeline,
       complianceStatus: mapComplianceStatus(compliance?.currentResult ?? null),

@@ -23,7 +23,9 @@ const tradeFixture = {
   createdAt: '2026-03-14T09:00:00.000Z',
   updatedAt: '2026-03-14T10:00:00.000Z',
   ricardianHash: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-  platformFee: 1250,
+  platformFee: 1246,
+  platformFeesTotal: 1250,
+  settlementSupportFee: 4,
   logisticsAmount: 3000,
   complianceStatus: 'pass' as const,
   settlement: {
