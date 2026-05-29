@@ -191,6 +191,66 @@ processor.run(new TypeormDatabase(), async (ctx) => {
               ctx,
             );
             break;
+          case 'RelayedActionExecuted':
+            overviewSnapshot = await handleRelayedActionExecuted(
+              decoded,
+              trades,
+              tradeEvents,
+              overviewSnapshot,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'GaslessTradeFunded':
+            overviewSnapshot = await handleGaslessTradeFunded(
+              decoded,
+              trades,
+              tradeEvents,
+              overviewSnapshot,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'SupplierPayoutTransferred':
+            overviewSnapshot = await handleSupplierPayoutTransferred(
+              decoded,
+              trades,
+              tradeEvents,
+              overviewSnapshot,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'BuyerRefundTransferred':
+            overviewSnapshot = await handleBuyerRefundTransferred(
+              decoded,
+              trades,
+              tradeEvents,
+              overviewSnapshot,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
 
           // Dispute events
           case 'DisputeSolutionProposed':
@@ -485,19 +545,6 @@ processor.run(new TypeormDatabase(), async (ctx) => {
               ctx,
             );
             break;
-          case 'Claimed':
-            await handleClaimed(
-              decoded,
-              systemEvents,
-              eventId,
-              block,
-              timestamp,
-              txHash,
-              logIndex,
-              transactionIndex,
-              ctx,
-            );
-            break;
           case 'TreasuryClaimed':
             await handleTreasuryClaimed(
               decoded,
@@ -552,6 +599,32 @@ processor.run(new TypeormDatabase(), async (ctx) => {
             break;
           case 'TreasuryPayoutAddressUpdateProposalExpiredCancelled':
             await handleTreasuryPayoutAddressUpdateProposalExpiredCancelled(
+              decoded,
+              systemEvents,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'AuthorizationConsumed':
+            await handleAuthorizationConsumed(
+              decoded,
+              systemEvents,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'RelayerUpdated':
+            await handleRelayerUpdated(
               decoded,
               systemEvents,
               eventId,
@@ -1061,6 +1134,190 @@ async function handleInTransitTimeoutRefunded(
   );
 
   ctx.log.info(`Trade ${tradeId} in-transit timeout - refunded ${refundedAmount} to ${buyer}`);
+  return overviewSnapshot;
+}
+
+async function handleRelayedActionExecuted(
+  log: DecodedEscrowLog,
+  trades: Map<string, Trade>,
+  events: TradeEvent[],
+  overviewSnapshot: OverviewSnapshot,
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [relayer, user, action, tradeId] = log.args;
+
+  const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
+
+  if (!trade) {
+    ctx.log.error(`Trade ${tradeId} not found for RelayedActionExecuted event`);
+    return overviewSnapshot;
+  }
+
+  overviewSnapshot.lastTradeEventAt = timestamp;
+
+  events.push(
+    new TradeEvent({
+      id: eventId,
+      trade,
+      eventName: 'RelayedActionExecuted',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      relayedAction: action,
+      relayedUser: user.toLowerCase(),
+      relayedRelayer: relayer.toLowerCase(),
+    }),
+  );
+
+  ctx.log.info(`Relayed action ${action} executed for trade ${tradeId} by ${relayer}`);
+  return overviewSnapshot;
+}
+
+async function handleGaslessTradeFunded(
+  log: DecodedEscrowLog,
+  trades: Map<string, Trade>,
+  events: TradeEvent[],
+  overviewSnapshot: OverviewSnapshot,
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [tradeId, buyer, usdcAuthorizationNonce, amount] = log.args;
+
+  const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
+
+  if (!trade) {
+    ctx.log.error(`Trade ${tradeId} not found for GaslessTradeFunded event`);
+    return overviewSnapshot;
+  }
+
+  overviewSnapshot.lastTradeEventAt = timestamp;
+
+  events.push(
+    new TradeEvent({
+      id: eventId,
+      trade,
+      eventName: 'GaslessTradeFunded',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      gaslessBuyer: buyer.toLowerCase(),
+      usdcAuthorizationNonce,
+      totalAmount: amount,
+    }),
+  );
+
+  ctx.log.info(`Gasless trade ${tradeId} funded for ${amount} from ${buyer}`);
+  return overviewSnapshot;
+}
+
+async function handleSupplierPayoutTransferred(
+  log: DecodedEscrowLog,
+  trades: Map<string, Trade>,
+  events: TradeEvent[],
+  overviewSnapshot: OverviewSnapshot,
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [tradeId, supplier, amount, claimType, triggeredBy] = log.args;
+
+  const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
+
+  if (!trade) {
+    ctx.log.error(`Trade ${tradeId} not found for SupplierPayoutTransferred event`);
+    return overviewSnapshot;
+  }
+
+  const claimTypeEnum = CLAIM_TYPE_VALUES[Number(claimType)] ?? null;
+  overviewSnapshot.lastTradeEventAt = timestamp;
+
+  events.push(
+    new TradeEvent({
+      id: eventId,
+      trade,
+      eventName: 'SupplierPayoutTransferred',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      supplierPayoutRecipient: supplier.toLowerCase(),
+      supplierPayoutAmount: amount,
+      supplierPayoutType: claimTypeEnum,
+      supplierPayoutTriggeredBy: triggeredBy.toLowerCase(),
+    }),
+  );
+
+  ctx.log.info(
+    `Supplier payout transferred for trade ${tradeId}: ${amount} to ${supplier} (${claimTypeEnum})`,
+  );
+  return overviewSnapshot;
+}
+
+async function handleBuyerRefundTransferred(
+  log: DecodedEscrowLog,
+  trades: Map<string, Trade>,
+  events: TradeEvent[],
+  overviewSnapshot: OverviewSnapshot,
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [tradeId, buyer, amount, claimType, triggeredBy] = log.args;
+
+  const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
+
+  if (!trade) {
+    ctx.log.error(`Trade ${tradeId} not found for BuyerRefundTransferred event`);
+    return overviewSnapshot;
+  }
+
+  const claimTypeEnum = CLAIM_TYPE_VALUES[Number(claimType)] ?? null;
+  overviewSnapshot.lastTradeEventAt = timestamp;
+
+  events.push(
+    new TradeEvent({
+      id: eventId,
+      trade,
+      eventName: 'BuyerRefundTransferred',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      buyerRefundRecipient: buyer.toLowerCase(),
+      buyerRefundAmount: amount,
+      buyerRefundType: claimTypeEnum,
+      buyerRefundTriggeredBy: triggeredBy.toLowerCase(),
+    }),
+  );
+
+  ctx.log.info(
+    `Buyer refund transferred for trade ${tradeId}: ${amount} to ${buyer} (${claimTypeEnum})`,
+  );
   return overviewSnapshot;
 }
 
@@ -1922,6 +2179,71 @@ async function handleUnpaused(
   ctx.log.info(`System unpaused by ${triggeredBy}`);
 }
 
+async function handleAuthorizationConsumed(
+  log: DecodedEscrowLog,
+  events: SystemEvent[],
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [user, action, nonce, relayer, deadline] = log.args;
+
+  events.push(
+    new SystemEvent({
+      id: eventId,
+      eventName: 'AuthorizationConsumed',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      triggeredBy: relayer.toLowerCase(),
+      authorizationUser: user.toLowerCase(),
+      authorizationAction: action,
+      authorizationNonce: nonce,
+      authorizationRelayer: relayer.toLowerCase(),
+      authorizationDeadline: deadline,
+    }),
+  );
+
+  ctx.log.info(`Authorization ${action} consumed for ${user} by ${relayer}`);
+}
+
+async function handleRelayerUpdated(
+  log: DecodedEscrowLog,
+  events: SystemEvent[],
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [relayer, allowed, updatedBy] = log.args;
+
+  events.push(
+    new SystemEvent({
+      id: eventId,
+      eventName: 'RelayerUpdated',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      triggeredBy: updatedBy.toLowerCase(),
+      authorizationRelayer: relayer.toLowerCase(),
+      authorizationAction: allowed ? 'RELAYER_ALLOWED' : 'RELAYER_REVOKED',
+    }),
+  );
+
+  ctx.log.info(`Relayer ${relayer} ${allowed ? 'allowed' : 'revoked'} by ${updatedBy}`);
+}
+
 // ########################### claim events ##########################
 
 const CLAIM_TYPE_VALUES = Object.values(ClaimType);
@@ -1971,36 +2293,6 @@ async function handleClaimableAccrued(
     `Trade ${tradeId} claimable accrued: ${amount} to ${recipient} (type: ${claimTypeEnum})`,
   );
   return overviewSnapshot;
-}
-
-async function handleClaimed(
-  log: DecodedEscrowLog,
-  events: SystemEvent[],
-  eventId: string,
-  block: IndexerBlock,
-  timestamp: Date,
-  txHash: string,
-  logIndex: number,
-  transactionIndex: number,
-  ctx: IndexerContext,
-) {
-  const [claimant, amount] = log.args;
-
-  events.push(
-    new SystemEvent({
-      id: eventId,
-      eventName: 'Claimed',
-      blockNumber: block.header.height,
-      timestamp,
-      txHash,
-      logIndex,
-      transactionIndex,
-      triggeredBy: claimant.toLowerCase(),
-      claimAmount: amount,
-    }),
-  );
-
-  ctx.log.info(`Claimed ${amount} by ${claimant}`);
 }
 
 async function handleTreasuryClaimed(

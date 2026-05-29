@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { AgroasysEscrow__factory } from '../src/types/typechain-types/factories/src/AgroasysEscrow__factory';
+import { AgroasysEscrow__factory } from '../src/types/typechain-types/factories/src/AgroasysEscrow.sol/AgroasysEscrow__factory';
 import type { JsonFragment } from 'ethers';
 
 type EventFragment = JsonFragment & {

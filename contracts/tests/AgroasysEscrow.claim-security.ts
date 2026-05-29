@@ -24,73 +24,116 @@ describe('AgroasysEscrow - Claim Security', function () {
   const totalAmount =
     logisticsAmount + platformFeesAmount + supplierFirstTranche + supplierSecondTranche;
 
-  async function createSignature(
+  async function signCreateTradeAuthorization(
     signer: SignerWithAddress,
-    contractAddr: string,
-    buyerAddr: string,
-    supplierAddr: string,
-    ricardianHash: string,
-    nonce: bigint,
-    deadline: bigint,
+    params: {
+      buyer: string;
+      supplier: string;
+      ricardianHash: string;
+      nonce: bigint;
+      deadline: bigint;
+    },
   ) {
     const chainId = (await ethers.provider.getNetwork()).chainId;
-    const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
-      [
-        'uint256',
-        'address',
-        'address',
-        'address',
-        'address',
-        'uint256',
-        'uint256',
-        'uint256',
-        'uint256',
-        'uint256',
-        'bytes32',
-        'uint256',
-        'uint256',
-      ],
-      [
+    return signer.signTypedData(
+      {
+        name: 'AgroasysEscrow',
+        version: '1',
         chainId,
-        contractAddr,
-        buyerAddr,
-        supplierAddr,
-        treasury.address,
+        verifyingContract: await escrow.getAddress(),
+      },
+      {
+        CreateTradeAuthorization: [
+          { name: 'buyer', type: 'address' },
+          { name: 'supplier', type: 'address' },
+          { name: 'totalAmount', type: 'uint256' },
+          { name: 'logisticsAmount', type: 'uint256' },
+          { name: 'platformFeesAmount', type: 'uint256' },
+          { name: 'supplierFirstTranche', type: 'uint256' },
+          { name: 'supplierSecondTranche', type: 'uint256' },
+          { name: 'ricardianHash', type: 'bytes32' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+      },
+      {
+        buyer: params.buyer,
+        supplier: params.supplier,
         totalAmount,
         logisticsAmount,
         platformFeesAmount,
         supplierFirstTranche,
         supplierSecondTranche,
-        ricardianHash,
-        nonce,
-        deadline,
-      ],
+        ricardianHash: params.ricardianHash,
+        nonce: params.nonce,
+        deadline: params.deadline,
+      },
     );
+  }
 
-    const messageHash = ethers.keccak256(encoded);
-    return signer.signMessage(ethers.getBytes(messageHash));
+  async function signUsdcReceiveAuthorization(
+    signer: SignerWithAddress,
+    params: {
+      from: string;
+      to: string;
+      value: bigint;
+      validAfter: bigint;
+      validBefore: bigint;
+      nonce: string;
+    },
+  ) {
+    const chainId = (await ethers.provider.getNetwork()).chainId;
+    const signature = await signer.signTypedData(
+      {
+        name: 'Mock USDC',
+        version: '2',
+        chainId,
+        verifyingContract: await usdc.getAddress(),
+      },
+      {
+        ReceiveWithAuthorization: [
+          { name: 'from', type: 'address' },
+          { name: 'to', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'validAfter', type: 'uint256' },
+          { name: 'validBefore', type: 'uint256' },
+          { name: 'nonce', type: 'bytes32' },
+        ],
+      },
+      params,
+    );
+    return ethers.Signature.from(signature);
   }
 
   async function createTradeToReceiver(ricardianHash: string) {
-    const nonce = await escrow.getBuyerNonce(buyer.address);
+    const nonce = await escrow.authorizationNonces(buyer.address);
     const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
     const deadline = BigInt(blockTimestamp + 3600);
+    const escrowAddress = await escrow.getAddress();
+    const receiverAddress = await receiver.getAddress();
+    const usdcNonce = ethers.id(`claim-security-${ricardianHash}`);
 
-    await usdc.connect(buyer).approve(await escrow.getAddress(), totalAmount);
-    const signature = await createSignature(
-      buyer,
-      await escrow.getAddress(),
-      buyer.address,
-      await receiver.getAddress(),
+    const signature = await signCreateTradeAuthorization(buyer, {
+      buyer: buyer.address,
+      supplier: receiverAddress,
       ricardianHash,
       nonce,
       deadline,
-    );
+    });
+    const usdcSignature = await signUsdcReceiveAuthorization(buyer, {
+      from: buyer.address,
+      to: escrowAddress,
+      value: totalAmount,
+      validAfter: 0n,
+      validBefore: deadline,
+      nonce: usdcNonce,
+    });
 
     await escrow
-      .connect(buyer)
-      .createTrade(
-        await receiver.getAddress(),
+      .connect(admin1)
+      .createTradeWithAuthorization(
+        buyer.address,
+        receiverAddress,
         totalAmount,
         logisticsAmount,
         platformFeesAmount,
@@ -100,6 +143,14 @@ describe('AgroasysEscrow - Claim Security', function () {
         nonce,
         deadline,
         signature,
+        {
+          validAfter: 0n,
+          validBefore: deadline,
+          nonce: usdcNonce,
+          v: usdcSignature.v,
+          r: usdcSignature.r,
+          s: usdcSignature.s,
+        },
       );
   }
 
@@ -127,17 +178,13 @@ describe('AgroasysEscrow - Claim Security', function () {
     await usdc.mint(buyer.address, ethers.parseUnits('1000000', 6));
   });
 
-  it('blocks reentrant claim attempts from malicious receiver hooks', async function () {
+  it('blocks supplier payout hook reentrancy from creating claim-side effects', async function () {
     await createTradeToReceiver(ethers.id('claim-reentrancy'));
-    await escrow.connect(oracle).releaseFundsStage1(0);
-
-    expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
-
     await usdc.setHookEnabled(await receiver.getAddress(), true);
     await receiver.configure(true, false);
 
     const receiverBalanceBefore = await usdc.balanceOf(await receiver.getAddress());
-    await receiver.triggerClaim();
+    await escrow.connect(oracle).releaseFundsStage1(0);
 
     expect(await receiver.reentryAttempted()).to.equal(true);
     const lastError = await receiver.lastError();
@@ -151,7 +198,7 @@ describe('AgroasysEscrow - Claim Security', function () {
         ['string'],
         `0x${lastError.slice(10)}`,
       );
-      expect(decoded[0]).to.equal('nothing claimable');
+      expect(decoded[0]).to.equal('only treasury or admin');
     } else {
       expect(selector).to.equal(reentrancySelector);
     }
@@ -162,18 +209,24 @@ describe('AgroasysEscrow - Claim Security', function () {
     );
   });
 
-  it('isolates failed claims so other recipients can still claim', async function () {
+  it('reverts failed direct supplier payout without accruing partial treasury claims', async function () {
     await createTradeToReceiver(ethers.id('claim-failure-isolation'));
-    await escrow.connect(oracle).releaseFundsStage1(0);
-
-    const treasuryClaimable = logisticsAmount + platformFeesAmount;
-    expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
 
     await usdc.setHookEnabled(await receiver.getAddress(), true);
     await receiver.configure(false, true);
 
-    await expect(receiver.triggerClaim()).to.be.revertedWith('hook revert');
-    expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
+    await expect(escrow.connect(oracle).releaseFundsStage1(0)).to.be.revertedWith('hook revert');
+    expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(0);
+    expect(await escrow.claimableUsdc(treasury.address)).to.equal(0);
+
+    const trade = await escrow.trades(0);
+    expect(trade.status).to.equal(0);
+
+    await receiver.configure(false, false);
+    await escrow.connect(oracle).releaseFundsStage1(0);
+
+    const treasuryClaimable = logisticsAmount + platformFeesAmount;
+    expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
 
     const treasuryBefore = await usdc.balanceOf(treasury.address);
     await expect(escrow.connect(treasury).claimTreasury())
@@ -181,7 +234,7 @@ describe('AgroasysEscrow - Claim Security', function () {
       .withArgs(treasury.address, treasury.address, treasuryClaimable, treasury.address);
     expect(await usdc.balanceOf(treasury.address)).to.equal(treasuryBefore + treasuryClaimable);
 
-    expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(supplierFirstTranche);
+    expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(0);
   });
 
   it('isolates failed treasury sweep so other claim paths remain usable', async function () {
@@ -204,11 +257,6 @@ describe('AgroasysEscrow - Claim Security', function () {
 
     await expect(escrow.connect(treasury).claimTreasury()).to.be.revertedWith('hook revert');
     expect(await escrow.claimableUsdc(treasury.address)).to.equal(treasuryClaimable);
-
-    // treasury cannot bypass the rotated payout address via claim()
-    await expect(escrow.connect(treasury).claim()).to.be.revertedWith(
-      'treasury must use claimTreasury',
-    );
 
     // once the hook is resolved, claimTreasury routes to the rotated receiver — state was not corrupted
     await usdc.setHookEnabled(await receiver.getAddress(), false);

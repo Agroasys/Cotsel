@@ -2,4 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { AgroasysEscrow } from "./AgroasysEscrow";
-export type { MockUSDC } from "./MockUSDC";
+export type { IUSDCReceiveWithAuthorization } from "./IUSDCReceiveWithAuthorization";

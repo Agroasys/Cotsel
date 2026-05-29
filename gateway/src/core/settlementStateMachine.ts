@@ -15,6 +15,7 @@ const EXECUTION_TRANSITIONS: Record<SettlementExecutionStatus, SettlementExecuti
 };
 
 const RECONCILIATION_EVENT_TYPES = new Set<SettlementEventType>(['reconciled', 'drift_detected']);
+const NON_MUTATING_EXECUTION_EVENT_TYPES = new Set<SettlementEventType>(['simulation_completed']);
 
 export function validateExecutionTransition(
   current: SettlementExecutionStatus,
@@ -39,6 +40,22 @@ export function validateExecutionTransition(
         409,
         'CONFLICT',
         'Reconciliation events cannot mutate settlement execution state',
+        {
+          currentExecutionStatus: current,
+          nextExecutionStatus: next,
+          eventType,
+        },
+      );
+    }
+    return;
+  }
+
+  if (NON_MUTATING_EXECUTION_EVENT_TYPES.has(eventType)) {
+    if (next !== current) {
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'Execution telemetry events cannot mutate settlement execution state',
         {
           currentExecutionStatus: current,
           nextExecutionStatus: next,

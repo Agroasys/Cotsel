@@ -48,6 +48,11 @@ export interface GatewayConfig {
   settlementCallbackMaxAttempts: number;
   settlementCallbackInitialBackoffMs: number;
   settlementCallbackMaxBackoffMs: number;
+  gaslessExecutionEnabled?: boolean;
+  gaslessExecutorPrivateKey?: string;
+  gaslessMaxGasLimit?: bigint;
+  gaslessMinExecutorBalanceWei?: bigint;
+  gaslessRequestMaxTtlSeconds?: number;
   oracleBaseUrl?: string;
   oracleServiceApiKey?: string;
   oracleServiceApiSecret?: string;
@@ -114,6 +119,16 @@ function envBool(name: string, fallback: boolean): boolean {
   throw new Error(`${name} must be true or false`);
 }
 
+function envBigInt(name: string, fallback: bigint): bigint {
+  const raw = process.env[name]?.trim();
+  if (!raw) {
+    return fallback;
+  }
+
+  assert(/^\d+$/.test(raw), `${name} must be a non-negative integer`);
+  return BigInt(raw);
+}
+
 function parseAllowlist(raw: string | undefined): string[] {
   if (!raw) {
     return [];
@@ -140,6 +155,15 @@ function parseUrlList(raw: string | undefined): string[] {
 function assertAddress(name: string, value: string): string {
   assert(isAddress(value), `${name} must be a valid EVM address`);
   return getAddress(value);
+}
+
+function assertPrivateKey(name: string, value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  assert(/^0x[a-fA-F0-9]{64}$/.test(value), `${name} must be a 32-byte hex private key`);
+  return value;
 }
 
 function assertDownstreamServiceAuth(
@@ -190,6 +214,13 @@ export function loadConfig(): GatewayConfig {
     process.env.GATEWAY_SETTLEMENT_CALLBACK_API_KEY?.trim() || undefined;
   const settlementCallbackApiSecret =
     process.env.GATEWAY_SETTLEMENT_CALLBACK_API_SECRET?.trim() || undefined;
+  const gaslessExecutionEnabled = envBool('GATEWAY_GASLESS_EXECUTION_ENABLED', false);
+  const gaslessExecutorPrivateKey = assertPrivateKey(
+    'GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY',
+    process.env.GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY?.trim() ||
+      process.env.GATEWAY_EXECUTOR_PRIVATE_KEY?.trim() ||
+      undefined,
+  );
   const oracleBaseUrl =
     process.env.GATEWAY_ORACLE_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
   const treasuryBaseUrl =
@@ -320,6 +351,10 @@ export function loadConfig(): GatewayConfig {
     envNumber('GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS', 8000) >= 1000,
     'GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS must be >= 1000',
   );
+  assert(
+    envNumber('GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS', 900) >= 30,
+    'GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS must be >= 30',
+  );
 
   if (
     (oracleServiceApiKey && !oracleServiceApiSecret) ||
@@ -396,6 +431,13 @@ export function loadConfig(): GatewayConfig {
     );
   }
 
+  if (gaslessExecutionEnabled) {
+    assert(
+      gaslessExecutorPrivateKey,
+      'GATEWAY_GASLESS_EXECUTION_ENABLED requires GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY or GATEWAY_EXECUTOR_PRIVATE_KEY',
+    );
+  }
+
   return {
     port: envNumber('PORT', 3600),
     dbHost: env('DB_HOST'),
@@ -450,6 +492,11 @@ export function loadConfig(): GatewayConfig {
       2000,
     ),
     settlementCallbackMaxBackoffMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000),
+    gaslessExecutionEnabled,
+    gaslessExecutorPrivateKey,
+    gaslessMaxGasLimit: envBigInt('GATEWAY_GASLESS_MAX_GAS_LIMIT', 1_500_000n),
+    gaslessMinExecutorBalanceWei: envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n),
+    gaslessRequestMaxTtlSeconds: envNumber('GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS', 900),
     oracleBaseUrl,
     oracleServiceApiKey,
     oracleServiceApiSecret,

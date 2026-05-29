@@ -70,8 +70,8 @@ export function validateTradeParameters(params: BuyerLockPayload): void {
 }
 
 /**
- * Validates a {@link BuyerLockPayload} before it is used to call
- * `BuyerSDK.createTrade(...)`.
+ * Validates a {@link BuyerLockPayload} before it is used to build a gasless
+ * create-trade authorization.
  *
  * Enforces:
  * - `supplier` is a valid non-zero EVM address.

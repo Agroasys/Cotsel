@@ -18,7 +18,7 @@ Provide an operator-safe, step-by-step walkthrough of Agroasys hybrid settlement
 
 ## Scope
 
-- Buyer lock into escrow (`createTrade`) and milestone-based releases.
+- Buyer lock into escrow (`createTradeWithAuthorization`) and milestone-based releases.
 - On-chain and off-chain verification checkpoints.
 - Failure handling for indexer/oracle/reconciliation paths.
 
@@ -86,7 +86,8 @@ scripts/docker-services.sh logs staging-e2e-real indexer-graphql
 
 ### 2. Buyer lock (escrow encumbrance)
 
-Trigger trade creation through approved checkout/backend flow that calls `createTrade`.
+Trigger trade creation through the approved checkout/backend flow that submits
+`createTradeWithAuthorization`.
 
 Expected result:
 

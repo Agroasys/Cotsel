@@ -128,7 +128,7 @@ Timelock-based admin addition proposal:
 
 - `usdcToken` (IERC20): USDC token contract interface
 - `oracleAddress` (address): Authorized oracle for fund releases and arrival confirmation
-- `treasuryAddress` (address): Receives logistics and platform fees
+- `treasuryAddress` (address): Receives non-refundable logistics and platform fees
 - `paused` (bool): Global pause flag for normal protocol operations
 - `oracleActive` (bool): Oracle execution enable/disable switch
 - `admins` (address[]): Array of admin addresses
@@ -184,16 +184,18 @@ Timelock-based admin addition proposal:
 
 6. **`cancelLockedTradeAfterTimeout(tradeId)`**
    - Buyer escape hatch when a trade remains `LOCKED` past `LOCK_TIMEOUT`
-   - Refunds full `totalAmountLocked` to buyer
+   - Transfers only refundable supplier principal directly to the buyer wallet
+   - Keeps logistics fees, platform fees, and the fixed settlement fee claimable by treasury
    - Changes status: LOCKED to CLOSED
-   - Emits: `TradeCancelledAfterLockTimeout`
+   - Emits: `TradeCancelledAfterLockTimeout`, `BuyerRefundTransferred`
    - Access: Trade buyer only
 
 7. **`refundInTransitAfterTimeout(tradeId)`**
    - Buyer escape hatch when trade remains `IN_TRANSIT` past `IN_TRANSIT_TIMEOUT`
-   - Refunds only remaining escrowed principal (`supplierSecondTranche`)
+   - Transfers only remaining escrowed principal (`supplierSecondTranche`) directly to the buyer wallet
+   - Does not refund logistics fees, platform fees, or the fixed settlement fee
    - Changes status: IN_TRANSIT to CLOSED
-   - Emits: `InTransitTimeoutRefunded`
+   - Emits: `InTransitTimeoutRefunded`, `BuyerRefundTransferred`
    - Access: Trade buyer only
 
 8. **`proposeDisputeSolution(tradeId, disputeStatus)`**
@@ -268,7 +270,7 @@ Timelock-based admin addition proposal:
     - Returns: `proposalId`
     - Emits: `OracleUpdateProposed`, `OracleUpdateApproved`
     - Access: `onlyAdmin`
-    - Requires: Minimum 2 admin approvals (even if requiredApprovals == 1)
+    - Requires: Configured admin approval quorum, with deployment enforcing a minimum quorum of 2
 
 19. **`approveOracleUpdate(proposalId)`**
     - Adds admin approval to oracle update proposal
@@ -293,7 +295,7 @@ Timelock-based admin addition proposal:
     - Returns: `proposalId`
     - Emits: `AdminAddProposed`, `AdminAddApproved`
     - Access: `onlyAdmin`
-    - Requires: Minimum 2 admin approvals (even if requiredApprovals == 1)
+    - Requires: Configured admin approval quorum, with deployment enforcing a minimum quorum of 2
 
 23. **`approveAddAdmin(proposalId)`**
     - Adds admin approval to admin addition proposal
@@ -319,16 +321,16 @@ Timelock-based admin addition proposal:
 
 **Internal Functions:**
 
-17. **`_verifySignature(...)`**
-    - Verifies buyer's signature on trade parameters with nonce and deadline
-    - Uses domain separation (chainId + contract address)
+17. **`_verifyCreateTradeAuthorization(...)`**
+    - Verifies the buyer's gasless create-trade authorization with nonce and deadline
+    - Uses EIP-712 domain separation (chainId + contract address)
     - Returns: Recovered signer address
-    - Access: Internal (called by `createTrade`)
+    - Access: Internal (called by `createTradeWithAuthorization`)
 
 18. **`_executeDispute(proposalId)`**
     - Executes approved dispute resolution
     - Distribution based on `DisputeStatus`:
-      - `REFUND`: buyer receives second tranche (principal)
+      - `REFUND`: buyer receives second tranche (principal) directly
       - `RESOLVE`: supplier receives second tranche (principal)
     - Note: Platform/logistics fees already paid at Stage 1, not refunded
     - Changes status: FROZEN to CLOSED
@@ -376,6 +378,7 @@ Timelock-based admin addition proposal:
 - `UnpauseProposed(proposer)`, `UnpauseApproved(approver, approvalCount, requiredApprovals)`, `UnpauseProposalCancelled(cancelledBy)`
 - `TradeCancelledAfterLockTimeout(tradeId, buyer, refundedAmount)`
 - `InTransitTimeoutRefunded(tradeId, buyer, refundedAmount)`
+- `BuyerRefundTransferred(tradeId, buyer, amount, claimType, triggeredBy)`
 - `DisputeProposalExpiredCancelled(proposalId, tradeId, cancelledBy)`
 - `OracleUpdateProposalExpiredCancelled(proposalId, cancelledBy)`
 - `AdminAddProposalExpiredCancelled(proposalId, cancelledBy)`
@@ -408,7 +411,7 @@ Current suites include:
 - `Paused Matrix Hardening`
 - `Timeout Escape Hatches`
 - `Treasury Leakage Guards`
-- `createTrade`
+- `createTradeWithAuthorization`
 - `Complete Flow (Without dispute)`
 - `releaseFundsStage1`
 - `confirmArrival`

@@ -7,17 +7,33 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
+interface IUSDCReceiveWithAuthorization {
+    function receiveWithAuthorization(
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+}
+
 /**
  * AgroasysEscrow
  * - Milestone escrow (Stage 1 + Stage 2)
  * - Arrival confirmation starts a 24h buyer dispute window
  * - Buyer can freeze during window; admins resolve with 4-eyes approval
- * - Treasury ONLY receives explicit fees (logistics + platform fees) at Stage 1; buyer principal never routes to treasury
+ * - Treasury ONLY receives explicit fees (logistics + platform fees); buyer principal never routes to treasury
  * - Signature uses buyer-scoped nonce (no global tradeId pre-query race) + deadline + domain separation
  *
  * Business rule enforced:
- * - Stage 1 accrual (40% milestone) includes: supplierFirstTranche (principal) + logisticsAmount (fee) + platformFeesAmount (fee)
- * - Stage 2 accrual (finalization) includes: supplierSecondTranche (principal) ONLY
+ * - Logistics/platform fees are non-refundable once a trade is funded; platformFeesAmount includes the fixed settlement fee
+ * - Stage 1 release pays supplierFirstTranche (principal) directly and accrues logistics/platform fees for treasury sweep
+ * - Stage 2 finalization pays supplierSecondTranche (principal) directly to supplier
+ * - Buyer refunds are transferred directly during the refund transaction; buyers never need to claim
  */
 contract AgroasysEscrow is ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
@@ -27,7 +43,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     // -----------------------------
     /// @notice Buyer dispute window after arrival confirmation.
     uint256 public constant DISPUTE_WINDOW = 24 hours;
-    /// @notice Maximum time a trade can remain LOCKED before buyer can cancel for full refund.
+    /// @notice Maximum time a trade can remain LOCKED before buyer can cancel for refundable principal.
     uint256 public constant LOCK_TIMEOUT = 7 days;
     /// @notice Maximum time a trade can remain IN_TRANSIT without arrival confirmation before buyer principal refund.
     uint256 public constant IN_TRANSIT_TIMEOUT = 14 days;
@@ -35,6 +51,23 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     uint256 public constant DISPUTE_PROPOSAL_TTL = 7 days;
     /// @notice Time-to-live for governance proposals (oracle/admin updates).
     uint256 public constant GOVERNANCE_PROPOSAL_TTL = 7 days;
+
+    bytes32 public constant ACTION_CREATE_TRADE = keccak256("CREATE_TRADE");
+    bytes32 public constant ACTION_OPEN_DISPUTE = keccak256("OPEN_DISPUTE");
+    bytes32 public constant ACTION_CANCEL_LOCKED_TIMEOUT = keccak256("CANCEL_LOCKED_TIMEOUT");
+    bytes32 public constant ACTION_REFUND_IN_TRANSIT_TIMEOUT = keccak256("REFUND_IN_TRANSIT_TIMEOUT");
+    bytes32 public constant ACTION_FINALIZE_AFTER_DISPUTE_WINDOW = keccak256("FINALIZE_AFTER_DISPUTE_WINDOW");
+
+    bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 private constant CREATE_TRADE_AUTHORIZATION_TYPEHASH = keccak256(
+        "CreateTradeAuthorization(address buyer,address supplier,uint256 totalAmount,uint256 logisticsAmount,uint256 platformFeesAmount,uint256 supplierFirstTranche,uint256 supplierSecondTranche,bytes32 ricardianHash,uint256 nonce,uint256 deadline)"
+    );
+    bytes32 private constant USER_ACTION_AUTHORIZATION_TYPEHASH = keccak256(
+        "UserActionAuthorization(address user,uint8 action,uint256 tradeId,uint256 nonce,uint256 deadline)"
+    );
+    bytes32 private immutable DOMAIN_SEPARATOR;
 
     // -----------------------------
     // Enums / Structs
@@ -63,6 +96,23 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         DISPUTE_RESOLVE_SUPPLIER
     }
 
+    enum SponsoredAction {
+        CREATE_TRADE,
+        OPEN_DISPUTE,
+        CANCEL_LOCKED_TIMEOUT,
+        REFUND_IN_TRANSIT_TIMEOUT,
+        FINALIZE_AFTER_DISPUTE_WINDOW
+    }
+
+    struct UsdcAuthorization {
+        uint256 validAfter;
+        uint256 validBefore;
+        bytes32 nonce;
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+    }
+
     struct Trade {
         uint256 tradeId;
         bytes32 ricardianHash;
@@ -71,8 +121,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         address supplierAddress;
         uint256 totalAmountLocked;
 
-        uint256 logisticsAmount;     // paid to treasury at stage1
-        uint256 platformFeesAmount;  // paid to treasury at stage1
+        uint256 logisticsAmount;     // non-refundable; paid to treasury at stage1 or lock timeout cancellation
+        uint256 platformFeesAmount;  // non-refundable; includes settlement fee; paid to treasury at stage1 or lock timeout cancellation
 
         uint256 supplierFirstTranche;  // typically 40% (principal component released at stage1)
         uint256 supplierSecondTranche; // typically 60% (principal component released at stage2/finalization)
@@ -134,6 +184,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
     // buyer-scoped nonce to prevent signature replay and global counter races
     mapping(address => uint256) public nonces;
+    mapping(address => uint256) public authorizationNonces;
 
     // dispute proposals
     mapping(uint256 => DisputeProposal) public disputeProposals;
@@ -165,6 +216,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
     address[] public admins;
     mapping(address => bool) public isAdmin;
+    mapping(address => bool) public isRelayer;
     uint256 public requiredApprovals;
     mapping(address => uint256) public claimableUsdc;
     uint256 public totalClaimableUsdc;
@@ -216,6 +268,29 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 supplierFirstTranche,
         uint256 supplierSecondTranche,
         bytes32 ricardianHash
+    );
+
+    event AuthorizationConsumed(
+        address indexed user,
+        bytes32 indexed action,
+        uint256 nonce,
+        address indexed relayer,
+        uint256 deadline
+    );
+
+    event RelayedActionExecuted(
+        address indexed relayer,
+        address indexed user,
+        bytes32 indexed action,
+        uint256 tradeId
+    );
+    event RelayerUpdated(address indexed relayer, bool allowed, address indexed updatedBy);
+
+    event GaslessTradeFunded(
+        uint256 indexed tradeId,
+        address indexed buyer,
+        bytes32 indexed usdcAuthorizationNonce,
+        uint256 amount
     );
 
     event FundsReleasedStage1(
@@ -368,7 +443,20 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 amount,
         ClaimType claimType
     );
-    event Claimed(address indexed claimant, uint256 amount);
+    event SupplierPayoutTransferred(
+        uint256 indexed tradeId,
+        address indexed supplier,
+        uint256 amount,
+        ClaimType claimType,
+        address indexed triggeredBy
+    );
+    event BuyerRefundTransferred(
+        uint256 indexed tradeId,
+        address indexed buyer,
+        uint256 amount,
+        ClaimType claimType,
+        address indexed triggeredBy
+    );
     event ClaimsPaused(address indexed triggeredBy);
     event ClaimsUnpaused(address indexed triggeredBy);
     event OracleUpdateProposalExpiredCancelled(uint256 indexed proposalId, address indexed cancelledBy);
@@ -387,7 +475,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(_usdcToken != address(0), "invalid token");
         require(_oracleAddress != address(0), "invalid oracle");
         require(_treasuryAddress != address(0), "invalid treasury");
-        require(_requiredApprovals > 0, "required approvals must be > 0");
+        require(_requiredApprovals >= 2, "required approvals must be >= 2");
         require(_admins.length >= _requiredApprovals, "not enough admins");
 
         usdcToken = IERC20(_usdcToken);
@@ -408,6 +496,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         // Can be changed in future versions if needed; keeping minimal for now.
         governanceTimelock = 24 hours;
         oracleActive = true;
+        DOMAIN_SEPARATOR = _buildDomainSeparator();
     }
 
     modifier onlyAdmin() {
@@ -417,6 +506,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
     modifier onlyTreasuryOrAdmin() {
         require(msg.sender == treasuryAddress || isAdmin[msg.sender], "only treasury or admin");
+        _;
+    }
+
+    modifier onlyRelayerOrAdmin() {
+        require(isAdmin[msg.sender] || isRelayer[msg.sender], "only relayer or admin");
         _;
     }
 
@@ -470,6 +564,12 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         emit ClaimsUnpaused(msg.sender);
     }
 
+    function setRelayer(address relayer, bool allowed) external onlyAdmin {
+        require(relayer != address(0), "invalid relayer");
+        isRelayer[relayer] = allowed;
+        emit RelayerUpdated(relayer, allowed, msg.sender);
+    }
+
     /**
      * @notice Propose unpausing the protocol (requires multi-sig approval).
      */
@@ -493,7 +593,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         hasActiveUnpauseProposal = true;
 
         emit UnpauseProposed(msg.sender);
-        emit UnpauseApproved(msg.sender, 1, requiredApprovals);
+        emit UnpauseApproved(msg.sender, 1, governanceApprovals());
 
         return true;
     }
@@ -510,7 +610,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         unpauseHasApproved[msg.sender] = true;
         unpauseProposal.approvalCount++;
 
-        emit UnpauseApproved(msg.sender, unpauseProposal.approvalCount, requiredApprovals);
+        emit UnpauseApproved(msg.sender, unpauseProposal.approvalCount, governanceApprovals());
 
         if (unpauseProposal.approvalCount >= governanceApprovals()) {
             _executeUnpause();
@@ -569,9 +669,53 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     // -----------------------------
-    // Signature Verification (buyer nonce + deadline)
+    // Authorization Verification
     // -----------------------------
-    function _verifySignature(
+    function getAuthorizationNonce(address user) external view returns (uint256) {
+        return authorizationNonces[user];
+    }
+
+    function _actionName(SponsoredAction action) internal pure returns (bytes32) {
+        if (action == SponsoredAction.CREATE_TRADE) return ACTION_CREATE_TRADE;
+        if (action == SponsoredAction.OPEN_DISPUTE) return ACTION_OPEN_DISPUTE;
+        if (action == SponsoredAction.CANCEL_LOCKED_TIMEOUT) return ACTION_CANCEL_LOCKED_TIMEOUT;
+        if (action == SponsoredAction.REFUND_IN_TRANSIT_TIMEOUT) return ACTION_REFUND_IN_TRANSIT_TIMEOUT;
+        if (action == SponsoredAction.FINALIZE_AFTER_DISPUTE_WINDOW) return ACTION_FINALIZE_AFTER_DISPUTE_WINDOW;
+        revert("unsupported action");
+    }
+
+    function _buildDomainSeparator() internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH,
+                keccak256(bytes("AgroasysEscrow")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(this)
+            )
+        );
+    }
+
+    function _domainSeparatorV4() internal view returns (bytes32) {
+        return DOMAIN_SEPARATOR;
+    }
+
+    function _hashTypedDataV4(bytes32 structHash) internal view returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19\x01", _domainSeparatorV4(), structHash));
+    }
+
+    function _requireAuthorization(address user, uint256 nonce, uint256 deadline) internal view {
+        require(user != address(0), "invalid user");
+        require(block.timestamp <= deadline, "authorization expired");
+        require(nonce == authorizationNonces[user], "bad authorization nonce");
+    }
+
+    function _consumeAuthorization(address user, SponsoredAction action, uint256 nonce, uint256 deadline) internal {
+        authorizationNonces[user] = nonce + 1;
+        emit AuthorizationConsumed(user, _actionName(action), nonce, msg.sender, deadline);
+    }
+
+    function _recoverCreateTradeAuthorization(
         address buyer,
         address supplier,
         uint256 totalAmount,
@@ -584,16 +728,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 deadline,
         bytes memory signature
     ) internal view returns (address) {
-        require(block.timestamp <= deadline, "signature expired");
-
-        // Domain separation: chain + contract address
-        bytes32 messageHash = keccak256(
+        bytes32 structHash = keccak256(
             abi.encode(
-                block.chainid,
-                address(this),
+                CREATE_TRADE_AUTHORIZATION_TYPEHASH,
                 buyer,
                 supplier,
-                treasuryAddress,
                 totalAmount,
                 logisticsAmount,
                 platformFeesAmount,
@@ -605,18 +744,136 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             )
         );
 
-        // EIP-191 personal_sign style
-        bytes32 ethSignedHash = keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash)
+        return ECDSA.recover(_hashTypedDataV4(structHash), signature);
+    }
+
+    function _verifyCreateTradeAuthorization(
+        address buyer,
+        address supplier,
+        uint256 totalAmount,
+        uint256 logisticsAmount,
+        uint256 platformFeesAmount,
+        uint256 supplierFirstTranche,
+        uint256 supplierSecondTranche,
+        bytes32 ricardianHash,
+        uint256 nonce,
+        uint256 deadline,
+        bytes memory signature
+    ) internal {
+        _requireAuthorization(buyer, nonce, deadline);
+
+        address signer = _recoverCreateTradeAuthorization(
+            buyer,
+            supplier,
+            totalAmount,
+            logisticsAmount,
+            platformFeesAmount,
+            supplierFirstTranche,
+            supplierSecondTranche,
+            ricardianHash,
+            nonce,
+            deadline,
+            signature
+        );
+        require(signer == buyer, "bad authorization");
+        _consumeAuthorization(buyer, SponsoredAction.CREATE_TRADE, nonce, deadline);
+    }
+
+    function _verifyUserActionAuthorization(
+        address user,
+        SponsoredAction action,
+        uint256 tradeId,
+        uint256 nonce,
+        uint256 deadline,
+        bytes memory signature
+    ) internal {
+        _requireAuthorization(user, nonce, deadline);
+
+        bytes32 structHash = keccak256(
+            abi.encode(
+                USER_ACTION_AUTHORIZATION_TYPEHASH,
+                user,
+                uint8(action),
+                tradeId,
+                nonce,
+                deadline
+            )
+        );
+        address signer = ECDSA.recover(_hashTypedDataV4(structHash), signature);
+        require(signer == user, "bad authorization");
+        _consumeAuthorization(user, action, nonce, deadline);
+    }
+
+    function _validateTradeAmounts(
+        address supplier,
+        uint256 totalAmount,
+        uint256 logisticsAmount,
+        uint256 platformFeesAmount,
+        uint256 supplierFirstTranche,
+        uint256 supplierSecondTranche,
+        bytes32 ricardianHash
+    ) internal view {
+        require(ricardianHash != bytes32(0), "ricardian hash required");
+        require(supplier != address(0), "supplier required");
+        require(supplier != address(this), "supplier cannot be escrow");
+
+        uint256 totalExpected = logisticsAmount
+            + platformFeesAmount
+            + supplierFirstTranche
+            + supplierSecondTranche;
+
+        require(totalAmount == totalExpected, "breakdown mismatch");
+        require(supplierFirstTranche > 0 && supplierSecondTranche > 0, "tranches must be > 0");
+    }
+
+    function _storeTrade(
+        address buyer,
+        address supplier,
+        uint256 totalAmount,
+        uint256 logisticsAmount,
+        uint256 platformFeesAmount,
+        uint256 supplierFirstTranche,
+        uint256 supplierSecondTranche,
+        bytes32 ricardianHash
+    ) internal returns (uint256) {
+        uint256 newTradeId = tradeCounter;
+        tradeCounter++;
+
+        trades[newTradeId] = Trade({
+            tradeId: newTradeId,
+            ricardianHash: ricardianHash,
+            status: TradeStatus.LOCKED,
+            buyerAddress: buyer,
+            supplierAddress: supplier,
+            totalAmountLocked: totalAmount,
+            logisticsAmount: logisticsAmount,
+            platformFeesAmount: platformFeesAmount,
+            supplierFirstTranche: supplierFirstTranche,
+            supplierSecondTranche: supplierSecondTranche,
+            createdAt: block.timestamp,
+            arrivalTimestamp: 0
+        });
+
+        emit TradeLocked(
+            newTradeId,
+            buyer,
+            supplier,
+            totalAmount,
+            logisticsAmount,
+            platformFeesAmount,
+            supplierFirstTranche,
+            supplierSecondTranche,
+            ricardianHash
         );
 
-        return ECDSA.recover(ethSignedHash, signature);
+        return newTradeId;
     }
 
     // -----------------------------
     // Trade Creation
     // -----------------------------
-    function createTrade(
+    function createTradeWithAuthorization(
+        address _buyer,
         address _supplier,
         uint256 _totalAmount,
         uint256 _logisticsAmount,
@@ -624,66 +881,12 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _supplierFirstTranche,
         uint256 _supplierSecondTranche,
         bytes32 _ricardianHash,
-        uint256 _buyerNonce,
-        uint256 _deadline,
-        bytes memory _signature
-    ) external whenNotPaused nonReentrant returns (uint256) {
-        require(_ricardianHash != bytes32(0), "ricardian hash required");
-        require(_supplier != address(0), "supplier required");
-
-        uint256 totalExpected = _logisticsAmount
-            + _platformFeesAmount
-            + _supplierFirstTranche
-            + _supplierSecondTranche;
-
-        require(_totalAmount == totalExpected, "breakdown mismatch");
-        require(_supplierFirstTranche > 0 && _supplierSecondTranche > 0, "tranches must be > 0");
-
-        // Nonce must match current buyer nonce
-        require(_buyerNonce == nonces[msg.sender], "bad nonce");
-
-        // Verify signature binds all critical fields + nonce + deadline + domain separation
-        address signer = _verifySignature(
-            msg.sender,
-            _supplier,
-            _totalAmount,
-            _logisticsAmount,
-            _platformFeesAmount,
-            _supplierFirstTranche,
-            _supplierSecondTranche,
-            _ricardianHash,
-            _buyerNonce,
-            _deadline,
-            _signature
-        );
-        require(signer == msg.sender, "bad signature");
-
-        // Effects (increment nonce & create trade id) before external calls
-        nonces[msg.sender] = _buyerNonce + 1;
-        uint256 newTradeId = tradeCounter;
-        tradeCounter++;
-
-        trades[newTradeId] = Trade({
-            tradeId: newTradeId,
-            ricardianHash: _ricardianHash,
-            status: TradeStatus.LOCKED,
-            buyerAddress: msg.sender,
-            supplierAddress: _supplier,
-            totalAmountLocked: _totalAmount,
-            logisticsAmount: _logisticsAmount,
-            platformFeesAmount: _platformFeesAmount,
-            supplierFirstTranche: _supplierFirstTranche,
-            supplierSecondTranche: _supplierSecondTranche,
-            createdAt: block.timestamp,
-            arrivalTimestamp: 0
-        });
-
-        // Interactions (transfer funds into escrow)
-        usdcToken.safeTransferFrom(msg.sender, address(this), _totalAmount);
-
-        emit TradeLocked(
-            newTradeId,
-            msg.sender,
+        uint256 _authorizationNonce,
+        uint256 _authorizationDeadline,
+        bytes memory _authorizationSignature,
+        UsdcAuthorization calldata _usdcAuthorization
+    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant returns (uint256) {
+        _validateTradeAmounts(
             _supplier,
             _totalAmount,
             _logisticsAmount,
@@ -692,6 +895,46 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             _supplierSecondTranche,
             _ricardianHash
         );
+
+        _verifyCreateTradeAuthorization(
+            _buyer,
+            _supplier,
+            _totalAmount,
+            _logisticsAmount,
+            _platformFeesAmount,
+            _supplierFirstTranche,
+            _supplierSecondTranche,
+            _ricardianHash,
+            _authorizationNonce,
+            _authorizationDeadline,
+            _authorizationSignature
+        );
+
+        uint256 newTradeId = _storeTrade(
+            _buyer,
+            _supplier,
+            _totalAmount,
+            _logisticsAmount,
+            _platformFeesAmount,
+            _supplierFirstTranche,
+            _supplierSecondTranche,
+            _ricardianHash
+        );
+
+        IUSDCReceiveWithAuthorization(address(usdcToken)).receiveWithAuthorization(
+            _buyer,
+            address(this),
+            _totalAmount,
+            _usdcAuthorization.validAfter,
+            _usdcAuthorization.validBefore,
+            _usdcAuthorization.nonce,
+            _usdcAuthorization.v,
+            _usdcAuthorization.r,
+            _usdcAuthorization.s
+        );
+
+        emit GaslessTradeFunded(newTradeId, _buyer, _usdcAuthorization.nonce, _totalAmount);
+        emit RelayedActionExecuted(msg.sender, _buyer, ACTION_CREATE_TRADE, newTradeId);
 
         return newTradeId;
     }
@@ -705,16 +948,63 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         emit ClaimableAccrued(_tradeId, _recipient, _amount, _claimType);
     }
 
-    function claim() external whenClaimsNotPaused nonReentrant {
-        require(msg.sender != treasuryAddress, "treasury must use claimTreasury");
-        uint256 amount = claimableUsdc[msg.sender];
-        require(amount > 0, "nothing claimable");
+    function _nonRefundableFeeAmount(Trade storage trade) internal view returns (uint256) {
+        return trade.logisticsAmount + trade.platformFeesAmount;
+    }
 
-        claimableUsdc[msg.sender] = 0;
-        totalClaimableUsdc -= amount;
-        usdcToken.safeTransfer(msg.sender, amount);
+    function _buyerRefundablePrincipalAmount(Trade storage trade) internal view returns (uint256) {
+        if (trade.status == TradeStatus.LOCKED) {
+            return trade.supplierFirstTranche + trade.supplierSecondTranche;
+        }
 
-        emit Claimed(msg.sender, amount);
+        if (
+            trade.status == TradeStatus.IN_TRANSIT || trade.status == TradeStatus.ARRIVAL_CONFIRMED
+                || trade.status == TradeStatus.FROZEN
+        ) {
+            return trade.supplierSecondTranche;
+        }
+
+        return 0;
+    }
+
+    function _transferSupplierPayout(
+        uint256 _tradeId,
+        address _supplier,
+        uint256 _amount,
+        ClaimType _claimType
+    ) internal {
+        if (_amount == 0) {
+            return;
+        }
+
+        usdcToken.safeTransfer(_supplier, _amount);
+        emit SupplierPayoutTransferred(_tradeId, _supplier, _amount, _claimType, msg.sender);
+    }
+
+    function _transferBuyerRefund(
+        uint256 _tradeId,
+        address _buyer,
+        uint256 _amount,
+        ClaimType _claimType
+    ) internal {
+        if (_amount == 0) {
+            return;
+        }
+
+        usdcToken.safeTransfer(_buyer, _amount);
+        emit BuyerRefundTransferred(_tradeId, _buyer, _amount, _claimType, msg.sender);
+    }
+
+    function nonRefundableFeeAmount(uint256 _tradeId) public view returns (uint256) {
+        require(_tradeId < tradeCounter, "trade not found");
+        Trade storage trade = trades[_tradeId];
+        return _nonRefundableFeeAmount(trade);
+    }
+
+    function buyerRefundableAmount(uint256 _tradeId) public view returns (uint256) {
+        require(_tradeId < tradeCounter, "trade not found");
+        Trade storage trade = trades[_tradeId];
+        return _buyerRefundablePrincipalAmount(trade);
     }
 
     /**
@@ -756,7 +1046,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         trade.status = TradeStatus.IN_TRANSIT;
         inTransitSince[_tradeId] = block.timestamp;
 
-        _accrueClaimable(_tradeId, trade.supplierAddress, trade.supplierFirstTranche, ClaimType.STAGE1_SUPPLIER);
+        _transferSupplierPayout(_tradeId, trade.supplierAddress, trade.supplierFirstTranche, ClaimType.STAGE1_SUPPLIER);
         _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
         _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
 
@@ -789,14 +1079,27 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     /**
-     * Buyer can open a dispute within 24h after arrival confirmation.
+     * Buyer can open a dispute through a relayed authorization within 24h after arrival confirmation.
      * This freezes remaining funds until admin resolution.
      */
-    function openDispute(uint256 _tradeId) external whenNotPaused nonReentrant {
+    function openDisputeWithAuthorization(
+        uint256 _tradeId,
+        uint256 _authorizationNonce,
+        uint256 _authorizationDeadline,
+        bytes memory _authorizationSignature
+    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
-        require(trade.buyerAddress == msg.sender, "only buyer");
+        _verifyUserActionAuthorization(
+            trade.buyerAddress,
+            SponsoredAction.OPEN_DISPUTE,
+            _tradeId,
+            _authorizationNonce,
+            _authorizationDeadline,
+            _authorizationSignature
+        );
+
         require(trade.status == TradeStatus.ARRIVAL_CONFIRMED, "must be ARRIVAL_CONFIRMED");
         require(trade.arrivalTimestamp > 0, "arrival not set");
         require(block.timestamp <= trade.arrivalTimestamp + DISPUTE_WINDOW, "window closed");
@@ -804,16 +1107,43 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         trade.status = TradeStatus.FROZEN;
 
         emit DisputeOpenedByBuyer(_tradeId);
+        emit RelayedActionExecuted(msg.sender, trade.buyerAddress, ACTION_OPEN_DISPUTE, _tradeId);
     }
 
     /**
      * Final settlement after dispute window if no dispute was opened.
-     * Permissionless (anyone can call) to avoid funds getting stuck if oracle is down.
+     * Direct execution is admin-only; suppliers use finalizeAfterDisputeWindowWithAuthorization.
      *
-     * Business rule: Stage 2 accrues ONLY remaining supplier principal (supplierSecondTranche).
+     * Business rule: Stage 2 pays ONLY remaining supplier principal (supplierSecondTranche).
      * Treasury fees were already collected at Stage 1.
      */
-    function finalizeAfterDisputeWindow(uint256 _tradeId) external whenNotPaused nonReentrant {
+    function finalizeAfterDisputeWindow(uint256 _tradeId) external onlyAdmin whenNotPaused nonReentrant {
+        _finalizeAfterDisputeWindow(_tradeId);
+    }
+
+    function finalizeAfterDisputeWindowWithAuthorization(
+        uint256 _tradeId,
+        uint256 _authorizationNonce,
+        uint256 _authorizationDeadline,
+        bytes memory _authorizationSignature
+    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
+        require(_tradeId < tradeCounter, "trade not found");
+        Trade storage trade = trades[_tradeId];
+
+        _verifyUserActionAuthorization(
+            trade.supplierAddress,
+            SponsoredAction.FINALIZE_AFTER_DISPUTE_WINDOW,
+            _tradeId,
+            _authorizationNonce,
+            _authorizationDeadline,
+            _authorizationSignature
+        );
+
+        _finalizeAfterDisputeWindow(_tradeId);
+        emit RelayedActionExecuted(msg.sender, trade.supplierAddress, ACTION_FINALIZE_AFTER_DISPUTE_WINDOW, _tradeId);
+    }
+
+    function _finalizeAfterDisputeWindow(uint256 _tradeId) internal {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -824,37 +1154,61 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         trade.status = TradeStatus.CLOSED;
         inTransitSince[_tradeId] = 0;
 
-        _accrueClaimable(_tradeId, trade.supplierAddress, trade.supplierSecondTranche, ClaimType.STAGE2_SUPPLIER);
+        _transferSupplierPayout(_tradeId, trade.supplierAddress, trade.supplierSecondTranche, ClaimType.STAGE2_SUPPLIER);
 
         emit FinalTrancheReleased(_tradeId, trade.supplierAddress, trade.supplierSecondTranche);
     }
 
-    /**
-     * @notice Buyer escape hatch: cancel a LOCKED trade after timeout and recover full locked amount.
-     */
-    function cancelLockedTradeAfterTimeout(uint256 _tradeId) external whenNotPaused nonReentrant {
+    function cancelLockedTradeAfterTimeoutWithAuthorization(
+        uint256 _tradeId,
+        uint256 _authorizationNonce,
+        uint256 _authorizationDeadline,
+        bytes memory _authorizationSignature
+    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
-        require(trade.buyerAddress == msg.sender, "only buyer");
+        _verifyUserActionAuthorization(
+            trade.buyerAddress,
+            SponsoredAction.CANCEL_LOCKED_TIMEOUT,
+            _tradeId,
+            _authorizationNonce,
+            _authorizationDeadline,
+            _authorizationSignature
+        );
+
         require(trade.status == TradeStatus.LOCKED, "status must be LOCKED");
         require(block.timestamp > trade.createdAt + LOCK_TIMEOUT, "lock timeout not elapsed");
 
+        uint256 buyerRefundAmount = _buyerRefundablePrincipalAmount(trade);
         trade.status = TradeStatus.CLOSED;
 
-        _accrueClaimable(_tradeId, trade.buyerAddress, trade.totalAmountLocked, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
+        _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
+        _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
+        _transferBuyerRefund(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
 
-        emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, trade.totalAmountLocked);
+        emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, buyerRefundAmount);
+        emit RelayedActionExecuted(msg.sender, trade.buyerAddress, ACTION_CANCEL_LOCKED_TIMEOUT, _tradeId);
     }
 
-    /**
-     * @notice Buyer escape hatch: refund only remaining escrowed principal when IN_TRANSIT timeout elapses.
-     */
-    function refundInTransitAfterTimeout(uint256 _tradeId) external whenNotPaused nonReentrant {
+    function refundInTransitAfterTimeoutWithAuthorization(
+        uint256 _tradeId,
+        uint256 _authorizationNonce,
+        uint256 _authorizationDeadline,
+        bytes memory _authorizationSignature
+    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
-        require(trade.buyerAddress == msg.sender, "only buyer");
+        _verifyUserActionAuthorization(
+            trade.buyerAddress,
+            SponsoredAction.REFUND_IN_TRANSIT_TIMEOUT,
+            _tradeId,
+            _authorizationNonce,
+            _authorizationDeadline,
+            _authorizationSignature
+        );
+
         require(trade.status == TradeStatus.IN_TRANSIT, "status must be IN_TRANSIT");
 
         uint256 transitStart = inTransitSince[_tradeId];
@@ -864,9 +1218,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         trade.status = TradeStatus.CLOSED;
         inTransitSince[_tradeId] = 0;
 
-        _accrueClaimable(_tradeId, trade.buyerAddress, trade.supplierSecondTranche, ClaimType.IN_TRANSIT_TIMEOUT_BUYER_REFUND);
+        _transferBuyerRefund(
+            _tradeId,
+            trade.buyerAddress,
+            trade.supplierSecondTranche,
+            ClaimType.IN_TRANSIT_TIMEOUT_BUYER_REFUND
+        );
 
         emit InTransitTimeoutRefunded(_tradeId, trade.buyerAddress, trade.supplierSecondTranche);
+        emit RelayedActionExecuted(msg.sender, trade.buyerAddress, ACTION_REFUND_IN_TRANSIT_TIMEOUT, _tradeId);
     }
 
     // -----------------------------
@@ -915,11 +1275,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         disputeProposalExpiresAt[proposalId] = block.timestamp + DISPUTE_PROPOSAL_TTL;
 
         emit DisputeSolutionProposed(proposalId, _tradeId, _disputeStatus, msg.sender);
-
-        // auto-execute if requiredApprovals == 1 (rare, but supported)
-        if (requiredApprovals == 1) {
-            _executeDispute(proposalId);
-        }
 
         return proposalId;
     }
@@ -972,11 +1327,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         if (proposal.disputeStatus == DisputeStatus.REFUND) {
             // Refund buyer remaining escrowed principal (supplierSecondTranche)
             recipient = trade.buyerAddress;
-            _accrueClaimable(proposal.tradeId, recipient, payoutAmount, ClaimType.DISPUTE_REFUND_BUYER);
+            _transferBuyerRefund(proposal.tradeId, recipient, payoutAmount, ClaimType.DISPUTE_REFUND_BUYER);
         } else if (proposal.disputeStatus == DisputeStatus.RESOLVE) {
             // Release remaining escrowed principal to supplier (supplierSecondTranche)
             recipient = trade.supplierAddress;
-            _accrueClaimable(proposal.tradeId, recipient, payoutAmount, ClaimType.DISPUTE_RESOLVE_SUPPLIER);
+            _transferSupplierPayout(proposal.tradeId, recipient, payoutAmount, ClaimType.DISPUTE_RESOLVE_SUPPLIER);
         } else {
             revert("invalid dispute status");
         }
@@ -1011,9 +1366,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     // Governance (timelocked) - Admin/Oracle rotation
     // -----------------------------
 
-    // Sensitive operations require at least 2 approvals, even if requiredApprovals == 1.
     function governanceApprovals() public view returns (uint256) {
-        return requiredApprovals < 2 ? 2 : requiredApprovals;
+        return requiredApprovals;
     }
 
     /**

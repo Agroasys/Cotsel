@@ -84,6 +84,27 @@ type TradeEvent @entity {
   claimType: ClaimType
   claimRecipient: String
   claimAmount: BigInt
+
+  # RelayedActionExecuted specific
+  relayedAction: String
+  relayedUser: String
+  relayedRelayer: String
+
+  # GaslessTradeFunded specific
+  gaslessBuyer: String
+  usdcAuthorizationNonce: String
+
+  # SupplierPayoutTransferred specific
+  supplierPayoutRecipient: String
+  supplierPayoutAmount: BigInt
+  supplierPayoutType: ClaimType
+  supplierPayoutTriggeredBy: String
+
+  # BuyerRefundTransferred specific
+  buyerRefundRecipient: String
+  buyerRefundAmount: BigInt
+  buyerRefundType: ClaimType
+  buyerRefundTriggeredBy: String
 }
 
 enum ClaimType {
@@ -260,8 +281,15 @@ type SystemEvent @entity {
   # Paused/Unpaused/ClaimsPaused/ClaimsUnpaused specific
   triggeredBy: String
 
-  # Claimed specific
+  # TreasuryClaimed specific
   claimAmount: BigInt
+
+  # AuthorizationConsumed specific
+  authorizationUser: String
+  authorizationAction: String
+  authorizationNonce: BigInt
+  authorizationRelayer: String
+  authorizationDeadline: BigInt
 
   # Treasury claim and payout-receiver governance specific
   proposalId: String @index

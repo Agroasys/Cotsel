@@ -1,8 +1,15 @@
-# Pull-Over-Push Claim Flow
+# Treasury Claim and Direct Payout Flow
 
 ## Purpose
 
-This runbook describes the escrow payout model after issue `#142` migration from direct push transfers to pull-based `claim()` settlement.
+This runbook describes the current escrow payout model after the issue `#142` claim migration, the issue `#528` supplier-payout update, and the PR `#530` buyer-refund update.
+
+Current model:
+
+- Supplier stage payouts are transferred directly by escrow transition functions.
+- Buyer refunds are transferred directly by escrow refund functions.
+- Treasury logistics/platform fee entitlements accrue in `claimableUsdc`.
+- Treasury entitlements are swept through `claimTreasury()` to the configured treasury payout receiver.
 
 ## Decision Record
 
@@ -12,23 +19,38 @@ This runbook describes the escrow payout model after issue `#142` migration from
 
 ## Behavior Change
 
-- Before: payout transitions (`releaseFundsStage1`, `finalizeAfterDisputeWindow`, timeout handlers, dispute execution) transferred USDC immediately.
-- After: those transitions now accrue claimable balances per recipient in `claimableUsdc`.
-- Recipients must call `claim()` to withdraw accrued USDC.
+- Issue `#142`: treasury/logistics/platform fee entitlements accrue claimable balances.
+- Issue `#528`: supplier payouts are no longer claim-based in active settlement flows. `releaseFundsStage1`, `finalizeAfterDisputeWindow`, and dispute `RESOLVE` transfer supplier proceeds directly and emit `SupplierPayoutTransferred`.
+- PR `#530`: buyer refunds are no longer claim-based in active settlement flows. Lock-timeout cancellation, in-transit timeout refund, and dispute `REFUND` transfer buyer refunds directly and emit `BuyerRefundTransferred`.
+- The generic `claim()` function is removed from this contract version; only `claimTreasury()` remains.
 
-## Claim Lifecycle
+## Payout Lifecycle
 
-1. Trade transition executes (stage1/stage2/timeout/dispute).
-2. Escrow emits `ClaimableAccrued(tradeId, recipient, amount, claimType)`.
-3. Recipient calls `claim()`.
-4. Escrow emits `Claimed(claimant, amount)`.
+Treasury claim lifecycle:
+
+1. Treasury-bearing transition executes.
+2. Escrow emits `ClaimableAccrued(tradeId, treasuryAddress, amount, claimType)`.
+3. Treasury identity/admin calls `claimTreasury()`.
+4. Escrow emits `TreasuryClaimed(treasuryIdentity, payoutReceiver, amount, triggeredBy)`.
+
+Supplier payout lifecycle:
+
+1. Supplier-bearing transition executes.
+2. Escrow transfers USDC directly to the supplier.
+3. Escrow emits `SupplierPayoutTransferred(tradeId, supplier, amount, claimType, triggeredBy)`.
+
+Buyer refund lifecycle:
+
+1. Buyer refund transition executes.
+2. Escrow transfers refundable principal directly to the buyer.
+3. Escrow emits `BuyerRefundTransferred(tradeId, buyer, amount, claimType, triggeredBy)`.
 
 ## Treasury Identity vs Payout Receiver
 
 - `treasuryAddress` is the immutable treasury identity used in:
   - trade signature preimage verification
   - treasury fee accrual accounting (`claimableUsdc[treasuryAddress]`)
-- `treasuryPayoutAddress` is the rotatable payout destination for treasury withdrawals.
+- `treasuryPayoutAddress` is the rotatable payout destination for treasury sweeps.
 - On deployments built from this contract version, `claimTreasury()` is destination-locked:
   - callable only by `treasuryAddress` or an admin
   - no destination parameter
@@ -45,26 +67,28 @@ Operational consequence:
 
 ## Safety Guarantees
 
-- `claim()` uses checks-effects-interactions:
-  - verifies `claimableUsdc[msg.sender] > 0`
-  - sets claimable balance to zero before token transfer
-- `claim()` is `nonReentrant`.
-- Failed claim transfer reverts that claimant transaction only; other recipients' claimable balances remain unaffected.
+- Supplier and buyer direct transfers happen inside `nonReentrant` escrow transition functions.
+- Transition state is updated before the token transfer, and a failed token transfer reverts the whole transition.
+- `claimTreasury()` uses checks-effects-interactions:
+  - verifies `claimableUsdc[treasuryAddress] > 0`
+  - sets treasury claimable balance to zero before token transfer
+- `claimTreasury()` is `nonReentrant`.
+- Failed treasury sweep transfer reverts that treasury transaction only; buyer/supplier direct payout paths do not use treasury claimable balances.
 
 ## Pause Policy Decision
 
 - Policy split:
   - Global `paused` blocks protocol mutation paths (trade creation, stage transitions, dispute execution, timeout flows).
-  - `claim()` remains available during global pause to preserve non-custodial access to already-accrued balances.
-  - `claimTreasury()` follows the same claim-path posture as `claim()`.
-  - Dedicated `claimsPaused` controls (`pauseClaims()` / `unpauseClaims()`) can freeze claims during claim-path incidents.
+  - Direct buyer/supplier payout paths are blocked by global pause because they are protocol mutation paths.
+  - `claimTreasury()` remains available during global pause unless dedicated `claimsPaused` is enabled.
+  - Dedicated `claimsPaused` controls (`pauseClaims()` / `unpauseClaims()`) can freeze treasury sweeps during claim-path incidents.
 - Incident decision matrix:
   - Use `pause()` for protocol mutation incidents.
-  - Use `pauseClaims()` only for claim/accounting/token-transfer incidents.
+  - Use `pauseClaims()` only for treasury claim/accounting/token-transfer incidents.
   - Use both if both risk surfaces are impacted.
 - This behavior is test-backed in the repository-root path `./contracts/tests/AgroasysEscrow.ts`:
-  - `Should allow claims while globally paused when claim freeze is not active`
-  - `Should enforce dedicated claim freeze and restore claim after unpauseClaims`
+  - `Should direct-transfer buyer refund before global pause`
+  - `Should keep buyer refunds automatic even when treasury claims are paused`
   - `Should allow treasury sweep during global pause when claims are not paused`
   - `Should block treasury sweep when claims are paused`
 
@@ -123,17 +147,20 @@ cast call <ESCROW_ADDRESS> "claimableUsdc(address)(uint256)" <RECIPIENT>
 cast call <ESCROW_ADDRESS> "treasuryPayoutAddress()(address)"
 ```
 
-Expected:
+Expected for active settlement balances:
 
-- Non-zero value after accrual events.
-- Zero after successful `claim()`.
+- Treasury has non-zero value after fee accrual events.
+- Treasury is zero after successful `claimTreasury()`.
 - Treasury sweep always pays the configured `treasuryPayoutAddress`.
+- Supplier stage payouts should not create `claimableUsdc(supplier)` in active settlement flows.
+- Buyer refund paths should not create `claimableUsdc(buyer)` in active settlement flows.
 
 ## Event Mapping
 
 - `ClaimableAccrued`: deterministic entitlement creation.
-- `Claimed`: successful withdrawal execution.
 - `TreasuryClaimed`: treasury-identity entitlement payout execution to payout receiver.
+- `SupplierPayoutTransferred`: successful direct supplier payout execution.
+- `BuyerRefundTransferred`: successful direct buyer refund execution.
 - `TreasuryPayoutAddressUpdateProposed` / `...Approved` / `...Updated` / `...ProposalExpiredCancelled`: payout receiver governance lineage.
 - Existing business events (`FundsReleasedStage1`, `FinalTrancheReleased`, `DisputePayout`, timeout events) still mark trade-state transitions.
 
@@ -150,7 +177,7 @@ Expected:
 
 ## Rollback
 
-If rollback is required, revert the pull-over-push PR commit to restore prior direct-transfer behavior. Validate post-rollback with:
+If rollback is required, revert the relevant claim or supplier-payout PR commit chain and validate with:
 
 ```bash
 pnpm --filter ./contracts run compile
@@ -162,7 +189,7 @@ pnpm --filter ./contracts run test
 - Hardhat test suites are the release gate for this migration:
   - `contracts/tests/AgroasysEscrow.ts`
   - `contracts/tests/AgroasysEscrow.claim-security.ts`
-- Foundry coverage for pull-over-push behavior exists in:
+- Foundry coverage for claim and direct supplier-payout behavior exists in:
   - `contracts/foundry/test/AgroasysEscrowFuzz.t.sol`
   - `contracts/foundry/test/AgroasysEscrowInvariant.t.sol`
 - Run Foundry with `pnpm --filter ./contracts run test:foundry` (requires `forge` on `PATH`).

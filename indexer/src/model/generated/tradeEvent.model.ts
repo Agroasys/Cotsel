@@ -105,4 +105,43 @@ export class TradeEvent {
 
     @BigIntColumn_({nullable: true})
     claimAmount!: bigint | undefined | null
+
+    @StringColumn_({nullable: true})
+    relayedAction!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    relayedUser!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    relayedRelayer!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    gaslessBuyer!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    usdcAuthorizationNonce!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    supplierPayoutRecipient!: string | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    supplierPayoutAmount!: bigint | undefined | null
+
+    @Column_("varchar", {length: 31, nullable: true})
+    supplierPayoutType!: ClaimType | undefined | null
+
+    @StringColumn_({nullable: true})
+    supplierPayoutTriggeredBy!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    buyerRefundRecipient!: string | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    buyerRefundAmount!: bigint | undefined | null
+
+    @Column_("varchar", {length: 31, nullable: true})
+    buyerRefundType!: ClaimType | undefined | null
+
+    @StringColumn_({nullable: true})
+    buyerRefundTriggeredBy!: string | undefined | null
 }

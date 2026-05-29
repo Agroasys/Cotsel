@@ -2,4 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export { AgroasysEscrow__factory } from "./AgroasysEscrow__factory";
-export { MockUSDC__factory } from "./MockUSDC__factory";
+export { IUSDCReceiveWithAuthorization__factory } from "./IUSDCReceiveWithAuthorization__factory";

@@ -1,23 +1,25 @@
 # Buyer Lock Payload — Checkout UI Integration Guide
 
-This document is the reference for external checkout UIs that
-integrate with `BuyerSDK.createTrade(...)`.
+This document is the reference for external checkout UIs that integrate with
+the gasless create-trade flow.
 
 **Relevant SDK type:** `BuyerLockPayload` (`sdk/src/types/trade.ts`)
 **Backward-compatible alias:** `TradeParameters`
-**Entry point method:** `BuyerSDK.createTrade(payload, buyerSigner)`
+**Entry point method:** `BuyerSDK.createGaslessTradeAuthorization(payload, buyerSigner)`
 
 ## Overview
 
 When a buyer initiates settlement on the Agroasys platform, the checkout UI
-must assemble a `BuyerLockPayload` and pass it to `BuyerSDK.createTrade(...)`.
-The SDK validates the payload, handles the USDC approval if needed, derives the
-nonce, constructs the EIP-191 signature, and submits the lock transaction.
+must assemble a `BuyerLockPayload` and pass it to
+`BuyerSDK.createGaslessTradeAuthorization(...)`. The SDK validates the payload,
+derives the on-chain authorization nonce, and asks the buyer to sign an EIP-712
+authorization. A backend relayer submits the create-trade request so the buyer
+does not need gas.
 
 The checkout UI is responsible for:
 
-1. Obtaining the `ricardianHash` from the Ricardian service **before** calling
-   `createTrade`.
+1. Obtaining the `ricardianHash` from the Ricardian service **before**
+   requesting the gasless create-trade authorization.
 2. Decomposing the trade value into its four canonical amount components.
 3. Providing the supplier's wallet address.
 4. Optionally setting a `deadline`.
@@ -79,7 +81,7 @@ The nonce is **not** part of `BuyerLockPayload`. The SDK derives the current
 per-buyer on-chain nonce automatically:
 
 ```ts
-const nonce = await this.getBuyerNonce(buyerAddress);
+const nonce = await this.getAuthorizationNonce(buyerAddress);
 ```
 
 Checkout UIs MUST NOT pass a nonce.
@@ -98,15 +100,39 @@ the canonical contract is unambiguous across SDK docs and examples.
 const deadline = payload.deadline ?? Math.floor(Date.now() / 1000) + 3600;
 ```
 
-## USDC Approval
+## USDC Pull Authorization
 
-The SDK checks the buyer's current USDC allowance for the escrow contract
-before signing. If `allowance < totalAmount`, it automatically issues an
-`approve` transaction:
+The direct buyer-paid `approve` plus `createTrade` flow is removed. For gasless
+trade creation, collect a USDC receive authorization for the escrow contract and
+send it with the signed create-trade authorization to the backend relayer:
 
 ```ts
-await usdcContract.approve(escrowAddress, payload.totalAmount);
+await buyerSDK.createUsdcReceiveAuthorization(payload.totalAmount, buyerSigner);
 ```
 
-Checkout UIs do **not** need to call `approveUSDC` separately; `createTrade`
-handles this transparently.
+### Failure and Retry Semantics
+
+The preferred funding path is `receiveWithAuthorization`; do not fall back to a
+standalone `approve` flow for the default checkout path.
+
+- Treat the USDC authorization as retriable only while there is no confirmed
+  Cotsel create-trade transaction and the token authorization nonce has not been
+  consumed.
+- If backend or Cotsel validation rejects the envelope before broadcast, the UI
+  should ask the backend for a fresh quote/payload and collect a fresh buyer
+  authorization instead of editing the failed payload.
+- If simulation fails because the authorization is expired, not yet valid, has
+  the wrong recipient, has the wrong amount, or mismatches the canonical quote,
+  collect a fresh authorization; do not retry the same payload.
+- If a transaction is submitted, keep retries idempotent through the backend
+  request id and idempotency key. Do not create a second authorization for the
+  same checkout attempt until the first submission is confirmed failed or
+  expired without token nonce consumption.
+- Once the create-trade transaction is confirmed, or the USDC authorization nonce
+  is observed as used, consider that authorization spent. Future retries must use
+  a new quote/payload and a new USDC authorization nonce.
+
+If the preferred authorization path is temporarily unavailable, the fallback is
+operational: pause gasless checkout for the affected chain, surface a failed
+payment state, and let support restart the checkout with a fresh quote after the
+incident is cleared. Do not silently switch users back to residual allowances.

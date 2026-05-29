@@ -11,9 +11,10 @@ overrides:
   cookie: 0.7.0
   fast-uri: 3.1.2
   follow-redirects: 1.16.0
+  js-cookie: 3.0.7
   lodash: 4.18.1
   serialize-javascript: 7.0.5
-  tmp: 0.2.4
+  tmp: 0.2.6
   undici: 6.24.0
 
 importers:
@@ -135,8 +136,8 @@ importers:
         specifier: 4.18.1
         version: 4.18.1
       tmp:
-        specifier: 0.2.4
-        version: 0.2.4
+        specifier: 0.2.6
+        version: 0.2.6
     devDependencies:
       '@nomicfoundation/hardhat-chai-matchers':
         specifier: ^2.1.2
@@ -7228,12 +7229,12 @@ packages:
       node-notifier:
         optional: true
 
-  js-cookie@3.0.1:
+  js-cookie@3.0.7:
     resolution:
       {
-        integrity: sha512-+0rgsUXZu4ncpPxRL+lNEptWMOWl9etvPHc/koSRp6MPwpRYAhmk0dUG00J4bxVV3r9uUzfo24wW0knS07SKSw==,
+        integrity: sha512-z/wZZgDrkNV1eA0ULjM/F9/50Ya8fbzgKneSpoPsXSGd0KnpdtHfOZWK+GcwLk+EZbS4F9RBhU+K2RgzuDaItw==,
       }
-    engines: { node: '>=12' }
+    engines: { node: '>=20' }
 
   js-sha3@0.8.0:
     resolution:
@@ -9645,10 +9646,10 @@ packages:
       }
     engines: { node: '>=12.0.0' }
 
-  tmp@0.2.4:
+  tmp@0.2.6:
     resolution:
       {
-        integrity: sha512-UdiSoX6ypifLmrfQ/XfiawN6hkjSBpCjhKxxZcWlUUmoXLaCKQU0bx4HF/tdDK2uzRuchf1txGvrWBzYREssoQ==,
+        integrity: sha512-5sJPdPjfI5Kx+qbrDesxkglRBxW//g7hCsqspEjwkewGvBMGIKMOTKzLt1hFVJzyadba3lDUN20O9qhvbQUSTA==,
       }
     engines: { node: '>=14.14' }
 
@@ -12137,7 +12138,7 @@ snapshots:
       '@segment/analytics.js-video-plugins': 0.2.1
       '@segment/facade': 3.4.10
       dset: 3.1.4
-      js-cookie: 3.0.1
+      js-cookie: 3.0.7
       node-fetch: 2.7.0
       tslib: 2.8.1
       unfetch: 4.2.0
@@ -16123,7 +16124,7 @@ snapshots:
       - supports-color
       - ts-node
 
-  js-cookie@3.0.1: {}
+  js-cookie@3.0.7: {}
 
   js-sha3@0.8.0: {}
 
@@ -16708,7 +16709,7 @@ snapshots:
       open: 7.4.2
       semver: 7.7.4
       slash: 2.0.0
-      tmp: 0.2.4
+      tmp: 0.2.6
       yaml: 2.8.3
 
   path-exists@4.0.0: {}
@@ -17346,7 +17347,7 @@ snapshots:
       js-sha3: 0.8.0
       memorystream: 0.3.1
       semver: 5.7.2
-      tmp: 0.2.4
+      tmp: 0.2.6
     transitivePeerDependencies:
       - debug
 
@@ -17556,7 +17557,7 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
 
-  tmp@0.2.4: {}
+  tmp@0.2.6: {}
 
   tmpl@1.0.5: {}
 

@@ -21,11 +21,43 @@ import type {
   TypedLogDescription,
   TypedListener,
   TypedContractMethod,
-} from "../common";
+} from "../../common";
+
+export declare namespace AgroasysEscrow {
+  export type UsdcAuthorizationStruct = {
+    validAfter: BigNumberish;
+    validBefore: BigNumberish;
+    nonce: BytesLike;
+    v: BigNumberish;
+    r: BytesLike;
+    s: BytesLike;
+  };
+
+  export type UsdcAuthorizationStructOutput = [
+    validAfter: bigint,
+    validBefore: bigint,
+    nonce: string,
+    v: bigint,
+    r: string,
+    s: string
+  ] & {
+    validAfter: bigint;
+    validBefore: bigint;
+    nonce: string;
+    v: bigint;
+    r: string;
+    s: string;
+  };
+}
 
 export interface AgroasysEscrowInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "ACTION_CANCEL_LOCKED_TIMEOUT"
+      | "ACTION_CREATE_TRADE"
+      | "ACTION_FINALIZE_AFTER_DISPUTE_WINDOW"
+      | "ACTION_OPEN_DISPUTE"
+      | "ACTION_REFUND_IN_TRANSIT_TIMEOUT"
       | "DISPUTE_PROPOSAL_TTL"
       | "DISPUTE_WINDOW"
       | "GOVERNANCE_PROPOSAL_TTL"
@@ -42,18 +74,19 @@ export interface AgroasysEscrowInterface extends Interface {
       | "approveOracleUpdate"
       | "approveTreasuryPayoutAddressUpdate"
       | "approveUnpause"
+      | "authorizationNonces"
+      | "buyerRefundableAmount"
       | "cancelExpiredAddAdminProposal"
       | "cancelExpiredDisputeProposal"
       | "cancelExpiredOracleUpdateProposal"
       | "cancelExpiredTreasuryPayoutAddressUpdateProposal"
-      | "cancelLockedTradeAfterTimeout"
+      | "cancelLockedTradeAfterTimeoutWithAuthorization"
       | "cancelUnpauseProposal"
-      | "claim"
       | "claimTreasury"
       | "claimableUsdc"
       | "claimsPaused"
       | "confirmArrival"
-      | "createTrade"
+      | "createTradeWithAuthorization"
       | "disableOracleEmergency"
       | "disputeCounter"
       | "disputeHasApproved"
@@ -64,6 +97,8 @@ export interface AgroasysEscrowInterface extends Interface {
       | "executeOracleUpdate"
       | "executeTreasuryPayoutAddressUpdate"
       | "finalizeAfterDisputeWindow"
+      | "finalizeAfterDisputeWindowWithAuthorization"
+      | "getAuthorizationNonce"
       | "getBuyerNonce"
       | "getNextTradeId"
       | "governanceApprovals"
@@ -72,8 +107,10 @@ export interface AgroasysEscrowInterface extends Interface {
       | "hasPendingTreasuryPayoutAddressUpdateProposal"
       | "inTransitSince"
       | "isAdmin"
+      | "isRelayer"
+      | "nonRefundableFeeAmount"
       | "nonces"
-      | "openDispute"
+      | "openDisputeWithAuthorization"
       | "oracleActive"
       | "oracleAddress"
       | "oracleUpdateCounter"
@@ -89,9 +126,10 @@ export interface AgroasysEscrowInterface extends Interface {
       | "proposeOracleUpdate"
       | "proposeTreasuryPayoutAddressUpdate"
       | "proposeUnpause"
-      | "refundInTransitAfterTimeout"
+      | "refundInTransitAfterTimeoutWithAuthorization"
       | "releaseFundsStage1"
       | "requiredApprovals"
+      | "setRelayer"
       | "totalClaimableUsdc"
       | "tradeActiveDisputeProposalId"
       | "tradeCounter"
@@ -117,8 +155,9 @@ export interface AgroasysEscrowInterface extends Interface {
       | "AdminAddProposed"
       | "AdminAdded"
       | "ArrivalConfirmed"
+      | "AuthorizationConsumed"
+      | "BuyerRefundTransferred"
       | "ClaimableAccrued"
-      | "Claimed"
       | "ClaimsPaused"
       | "ClaimsUnpaused"
       | "DisputeApproved"
@@ -130,6 +169,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "FinalTrancheReleased"
       | "FundsReleasedStage1"
       | "FundsReleasedStage2"
+      | "GaslessTradeFunded"
       | "InTransitTimeoutRefunded"
       | "OracleDisabledEmergency"
       | "OracleUpdateApproved"
@@ -138,6 +178,9 @@ export interface AgroasysEscrowInterface extends Interface {
       | "OracleUpdated"
       | "Paused"
       | "PlatformFeesPaidStage1"
+      | "RelayedActionExecuted"
+      | "RelayerUpdated"
+      | "SupplierPayoutTransferred"
       | "TradeCancelledAfterLockTimeout"
       | "TradeLocked"
       | "TreasuryClaimed"
@@ -151,6 +194,26 @@ export interface AgroasysEscrowInterface extends Interface {
       | "Unpaused"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "ACTION_CANCEL_LOCKED_TIMEOUT",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ACTION_CREATE_TRADE",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ACTION_FINALIZE_AFTER_DISPUTE_WINDOW",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ACTION_OPEN_DISPUTE",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ACTION_REFUND_IN_TRANSIT_TIMEOUT",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "DISPUTE_PROPOSAL_TTL",
     values?: undefined
@@ -216,6 +279,14 @@ export interface AgroasysEscrowInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "authorizationNonces",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "buyerRefundableAmount",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "cancelExpiredAddAdminProposal",
     values: [BigNumberish]
   ): string;
@@ -232,14 +303,13 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "cancelLockedTradeAfterTimeout",
-    values: [BigNumberish]
+    functionFragment: "cancelLockedTradeAfterTimeoutWithAuthorization",
+    values: [BigNumberish, BigNumberish, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "cancelUnpauseProposal",
     values?: undefined
   ): string;
-  encodeFunctionData(functionFragment: "claim", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "claimTreasury",
     values?: undefined
@@ -257,8 +327,9 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "createTrade",
+    functionFragment: "createTradeWithAuthorization",
     values: [
+      AddressLike,
       AddressLike,
       BigNumberish,
       BigNumberish,
@@ -268,7 +339,8 @@ export interface AgroasysEscrowInterface extends Interface {
       BytesLike,
       BigNumberish,
       BigNumberish,
-      BytesLike
+      BytesLike,
+      AgroasysEscrow.UsdcAuthorizationStruct
     ]
   ): string;
   encodeFunctionData(
@@ -312,6 +384,14 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "finalizeAfterDisputeWindowWithAuthorization",
+    values: [BigNumberish, BigNumberish, BigNumberish, BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getAuthorizationNonce",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "getBuyerNonce",
     values: [AddressLike]
   ): string;
@@ -343,10 +423,18 @@ export interface AgroasysEscrowInterface extends Interface {
     functionFragment: "isAdmin",
     values: [AddressLike]
   ): string;
+  encodeFunctionData(
+    functionFragment: "isRelayer",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "nonRefundableFeeAmount",
+    values: [BigNumberish]
+  ): string;
   encodeFunctionData(functionFragment: "nonces", values: [AddressLike]): string;
   encodeFunctionData(
-    functionFragment: "openDispute",
-    values: [BigNumberish]
+    functionFragment: "openDisputeWithAuthorization",
+    values: [BigNumberish, BigNumberish, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "oracleActive",
@@ -403,8 +491,8 @@ export interface AgroasysEscrowInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "refundInTransitAfterTimeout",
-    values: [BigNumberish]
+    functionFragment: "refundInTransitAfterTimeoutWithAuthorization",
+    values: [BigNumberish, BigNumberish, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "releaseFundsStage1",
@@ -413,6 +501,10 @@ export interface AgroasysEscrowInterface extends Interface {
   encodeFunctionData(
     functionFragment: "requiredApprovals",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setRelayer",
+    values: [AddressLike, boolean]
   ): string;
   encodeFunctionData(
     functionFragment: "totalClaimableUsdc",
@@ -477,6 +569,26 @@ export interface AgroasysEscrowInterface extends Interface {
   encodeFunctionData(functionFragment: "usdcToken", values?: undefined): string;
 
   decodeFunctionResult(
+    functionFragment: "ACTION_CANCEL_LOCKED_TIMEOUT",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "ACTION_CREATE_TRADE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "ACTION_FINALIZE_AFTER_DISPUTE_WINDOW",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "ACTION_OPEN_DISPUTE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "ACTION_REFUND_IN_TRANSIT_TIMEOUT",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "DISPUTE_PROPOSAL_TTL",
     data: BytesLike
   ): Result;
@@ -538,6 +650,14 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "authorizationNonces",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "buyerRefundableAmount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "cancelExpiredAddAdminProposal",
     data: BytesLike
   ): Result;
@@ -554,14 +674,13 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "cancelLockedTradeAfterTimeout",
+    functionFragment: "cancelLockedTradeAfterTimeoutWithAuthorization",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "cancelUnpauseProposal",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "claim", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "claimTreasury",
     data: BytesLike
@@ -579,7 +698,7 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "createTrade",
+    functionFragment: "createTradeWithAuthorization",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -623,6 +742,14 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "finalizeAfterDisputeWindowWithAuthorization",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getAuthorizationNonce",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getBuyerNonce",
     data: BytesLike
   ): Result;
@@ -651,9 +778,14 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "isAdmin", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "isRelayer", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "nonRefundableFeeAmount",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "nonces", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "openDispute",
+    functionFragment: "openDisputeWithAuthorization",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -711,7 +843,7 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "refundInTransitAfterTimeout",
+    functionFragment: "refundInTransitAfterTimeoutWithAuthorization",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -722,6 +854,7 @@ export interface AgroasysEscrowInterface extends Interface {
     functionFragment: "requiredApprovals",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "setRelayer", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "totalClaimableUsdc",
     data: BytesLike
@@ -873,6 +1006,62 @@ export namespace ArrivalConfirmedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace AuthorizationConsumedEvent {
+  export type InputTuple = [
+    user: AddressLike,
+    action: BytesLike,
+    nonce: BigNumberish,
+    relayer: AddressLike,
+    deadline: BigNumberish
+  ];
+  export type OutputTuple = [
+    user: string,
+    action: string,
+    nonce: bigint,
+    relayer: string,
+    deadline: bigint
+  ];
+  export interface OutputObject {
+    user: string;
+    action: string;
+    nonce: bigint;
+    relayer: string;
+    deadline: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace BuyerRefundTransferredEvent {
+  export type InputTuple = [
+    tradeId: BigNumberish,
+    buyer: AddressLike,
+    amount: BigNumberish,
+    claimType: BigNumberish,
+    triggeredBy: AddressLike
+  ];
+  export type OutputTuple = [
+    tradeId: bigint,
+    buyer: string,
+    amount: bigint,
+    claimType: bigint,
+    triggeredBy: string
+  ];
+  export interface OutputObject {
+    tradeId: bigint;
+    buyer: string;
+    amount: bigint;
+    claimType: bigint;
+    triggeredBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace ClaimableAccruedEvent {
   export type InputTuple = [
     tradeId: BigNumberish,
@@ -891,19 +1080,6 @@ export namespace ClaimableAccruedEvent {
     recipient: string;
     amount: bigint;
     claimType: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace ClaimedEvent {
-  export type InputTuple = [claimant: AddressLike, amount: BigNumberish];
-  export type OutputTuple = [claimant: string, amount: bigint];
-  export interface OutputObject {
-    claimant: string;
-    amount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -1147,6 +1323,31 @@ export namespace FundsReleasedStage2Event {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace GaslessTradeFundedEvent {
+  export type InputTuple = [
+    tradeId: BigNumberish,
+    buyer: AddressLike,
+    usdcAuthorizationNonce: BytesLike,
+    amount: BigNumberish
+  ];
+  export type OutputTuple = [
+    tradeId: bigint,
+    buyer: string,
+    usdcAuthorizationNonce: string,
+    amount: bigint
+  ];
+  export interface OutputObject {
+    tradeId: bigint;
+    buyer: string;
+    usdcAuthorizationNonce: string;
+    amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace InTransitTimeoutRefundedEvent {
   export type InputTuple = [
     tradeId: BigNumberish,
@@ -1288,6 +1489,81 @@ export namespace PlatformFeesPaidStage1Event {
     tradeId: bigint;
     treasury: string;
     platformFeesAmount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RelayedActionExecutedEvent {
+  export type InputTuple = [
+    relayer: AddressLike,
+    user: AddressLike,
+    action: BytesLike,
+    tradeId: BigNumberish
+  ];
+  export type OutputTuple = [
+    relayer: string,
+    user: string,
+    action: string,
+    tradeId: bigint
+  ];
+  export interface OutputObject {
+    relayer: string;
+    user: string;
+    action: string;
+    tradeId: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RelayerUpdatedEvent {
+  export type InputTuple = [
+    relayer: AddressLike,
+    allowed: boolean,
+    updatedBy: AddressLike
+  ];
+  export type OutputTuple = [
+    relayer: string,
+    allowed: boolean,
+    updatedBy: string
+  ];
+  export interface OutputObject {
+    relayer: string;
+    allowed: boolean;
+    updatedBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace SupplierPayoutTransferredEvent {
+  export type InputTuple = [
+    tradeId: BigNumberish,
+    supplier: AddressLike,
+    amount: BigNumberish,
+    claimType: BigNumberish,
+    triggeredBy: AddressLike
+  ];
+  export type OutputTuple = [
+    tradeId: bigint,
+    supplier: string,
+    amount: bigint,
+    claimType: bigint,
+    triggeredBy: string
+  ];
+  export interface OutputObject {
+    tradeId: bigint;
+    supplier: string;
+    amount: bigint;
+    claimType: bigint;
+    triggeredBy: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -1565,6 +1841,20 @@ export interface AgroasysEscrow extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  ACTION_CANCEL_LOCKED_TIMEOUT: TypedContractMethod<[], [string], "view">;
+
+  ACTION_CREATE_TRADE: TypedContractMethod<[], [string], "view">;
+
+  ACTION_FINALIZE_AFTER_DISPUTE_WINDOW: TypedContractMethod<
+    [],
+    [string],
+    "view"
+  >;
+
+  ACTION_OPEN_DISPUTE: TypedContractMethod<[], [string], "view">;
+
+  ACTION_REFUND_IN_TRANSIT_TIMEOUT: TypedContractMethod<[], [string], "view">;
+
   DISPUTE_PROPOSAL_TTL: TypedContractMethod<[], [bigint], "view">;
 
   DISPUTE_WINDOW: TypedContractMethod<[], [bigint], "view">;
@@ -1638,6 +1928,18 @@ export interface AgroasysEscrow extends BaseContract {
 
   approveUnpause: TypedContractMethod<[], [void], "nonpayable">;
 
+  authorizationNonces: TypedContractMethod<
+    [arg0: AddressLike],
+    [bigint],
+    "view"
+  >;
+
+  buyerRefundableAmount: TypedContractMethod<
+    [_tradeId: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
   cancelExpiredAddAdminProposal: TypedContractMethod<
     [_proposalId: BigNumberish],
     [void],
@@ -1662,15 +1964,18 @@ export interface AgroasysEscrow extends BaseContract {
     "nonpayable"
   >;
 
-  cancelLockedTradeAfterTimeout: TypedContractMethod<
-    [_tradeId: BigNumberish],
+  cancelLockedTradeAfterTimeoutWithAuthorization: TypedContractMethod<
+    [
+      _tradeId: BigNumberish,
+      _authorizationNonce: BigNumberish,
+      _authorizationDeadline: BigNumberish,
+      _authorizationSignature: BytesLike
+    ],
     [void],
     "nonpayable"
   >;
 
   cancelUnpauseProposal: TypedContractMethod<[], [void], "nonpayable">;
-
-  claim: TypedContractMethod<[], [void], "nonpayable">;
 
   claimTreasury: TypedContractMethod<[], [void], "nonpayable">;
 
@@ -1684,8 +1989,9 @@ export interface AgroasysEscrow extends BaseContract {
     "nonpayable"
   >;
 
-  createTrade: TypedContractMethod<
+  createTradeWithAuthorization: TypedContractMethod<
     [
+      _buyer: AddressLike,
       _supplier: AddressLike,
       _totalAmount: BigNumberish,
       _logisticsAmount: BigNumberish,
@@ -1693,9 +1999,10 @@ export interface AgroasysEscrow extends BaseContract {
       _supplierFirstTranche: BigNumberish,
       _supplierSecondTranche: BigNumberish,
       _ricardianHash: BytesLike,
-      _buyerNonce: BigNumberish,
-      _deadline: BigNumberish,
-      _signature: BytesLike
+      _authorizationNonce: BigNumberish,
+      _authorizationDeadline: BigNumberish,
+      _authorizationSignature: BytesLike,
+      _usdcAuthorization: AgroasysEscrow.UsdcAuthorizationStruct
     ],
     [bigint],
     "nonpayable"
@@ -1762,6 +2069,23 @@ export interface AgroasysEscrow extends BaseContract {
     "nonpayable"
   >;
 
+  finalizeAfterDisputeWindowWithAuthorization: TypedContractMethod<
+    [
+      _tradeId: BigNumberish,
+      _authorizationNonce: BigNumberish,
+      _authorizationDeadline: BigNumberish,
+      _authorizationSignature: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  getAuthorizationNonce: TypedContractMethod<
+    [user: AddressLike],
+    [bigint],
+    "view"
+  >;
+
   getBuyerNonce: TypedContractMethod<[buyer: AddressLike], [bigint], "view">;
 
   getNextTradeId: TypedContractMethod<[], [bigint], "view">;
@@ -1782,10 +2106,23 @@ export interface AgroasysEscrow extends BaseContract {
 
   isAdmin: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
+  isRelayer: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+
+  nonRefundableFeeAmount: TypedContractMethod<
+    [_tradeId: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
   nonces: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
-  openDispute: TypedContractMethod<
-    [_tradeId: BigNumberish],
+  openDisputeWithAuthorization: TypedContractMethod<
+    [
+      _tradeId: BigNumberish,
+      _authorizationNonce: BigNumberish,
+      _authorizationDeadline: BigNumberish,
+      _authorizationSignature: BytesLike
+    ],
     [void],
     "nonpayable"
   >;
@@ -1862,8 +2199,13 @@ export interface AgroasysEscrow extends BaseContract {
 
   proposeUnpause: TypedContractMethod<[], [boolean], "nonpayable">;
 
-  refundInTransitAfterTimeout: TypedContractMethod<
-    [_tradeId: BigNumberish],
+  refundInTransitAfterTimeoutWithAuthorization: TypedContractMethod<
+    [
+      _tradeId: BigNumberish,
+      _authorizationNonce: BigNumberish,
+      _authorizationDeadline: BigNumberish,
+      _authorizationSignature: BytesLike
+    ],
     [void],
     "nonpayable"
   >;
@@ -1875,6 +2217,12 @@ export interface AgroasysEscrow extends BaseContract {
   >;
 
   requiredApprovals: TypedContractMethod<[], [bigint], "view">;
+
+  setRelayer: TypedContractMethod<
+    [relayer: AddressLike, allowed: boolean],
+    [void],
+    "nonpayable"
+  >;
 
   totalClaimableUsdc: TypedContractMethod<[], [bigint], "view">;
 
@@ -1993,6 +2341,21 @@ export interface AgroasysEscrow extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "ACTION_CANCEL_LOCKED_TIMEOUT"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "ACTION_CREATE_TRADE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "ACTION_FINALIZE_AFTER_DISPUTE_WINDOW"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "ACTION_OPEN_DISPUTE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "ACTION_REFUND_IN_TRANSIT_TIMEOUT"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "DISPUTE_PROPOSAL_TTL"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
@@ -2058,6 +2421,12 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "approveUnpause"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "authorizationNonces"
+  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "buyerRefundableAmount"
+  ): TypedContractMethod<[_tradeId: BigNumberish], [bigint], "view">;
+  getFunction(
     nameOrSignature: "cancelExpiredAddAdminProposal"
   ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
   getFunction(
@@ -2070,13 +2439,19 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "cancelExpiredTreasuryPayoutAddressUpdateProposal"
   ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "cancelLockedTradeAfterTimeout"
-  ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
+    nameOrSignature: "cancelLockedTradeAfterTimeoutWithAuthorization"
+  ): TypedContractMethod<
+    [
+      _tradeId: BigNumberish,
+      _authorizationNonce: BigNumberish,
+      _authorizationDeadline: BigNumberish,
+      _authorizationSignature: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "cancelUnpauseProposal"
-  ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "claim"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "claimTreasury"
@@ -2091,9 +2466,10 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "confirmArrival"
   ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "createTrade"
+    nameOrSignature: "createTradeWithAuthorization"
   ): TypedContractMethod<
     [
+      _buyer: AddressLike,
       _supplier: AddressLike,
       _totalAmount: BigNumberish,
       _logisticsAmount: BigNumberish,
@@ -2101,9 +2477,10 @@ export interface AgroasysEscrow extends BaseContract {
       _supplierFirstTranche: BigNumberish,
       _supplierSecondTranche: BigNumberish,
       _ricardianHash: BytesLike,
-      _buyerNonce: BigNumberish,
-      _deadline: BigNumberish,
-      _signature: BytesLike
+      _authorizationNonce: BigNumberish,
+      _authorizationDeadline: BigNumberish,
+      _authorizationSignature: BytesLike,
+      _usdcAuthorization: AgroasysEscrow.UsdcAuthorizationStruct
     ],
     [bigint],
     "nonpayable"
@@ -2156,6 +2533,21 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "finalizeAfterDisputeWindow"
   ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "finalizeAfterDisputeWindowWithAuthorization"
+  ): TypedContractMethod<
+    [
+      _tradeId: BigNumberish,
+      _authorizationNonce: BigNumberish,
+      _authorizationDeadline: BigNumberish,
+      _authorizationSignature: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "getAuthorizationNonce"
+  ): TypedContractMethod<[user: AddressLike], [bigint], "view">;
+  getFunction(
     nameOrSignature: "getBuyerNonce"
   ): TypedContractMethod<[buyer: AddressLike], [bigint], "view">;
   getFunction(
@@ -2180,11 +2572,26 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "isAdmin"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
+    nameOrSignature: "isRelayer"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "nonRefundableFeeAmount"
+  ): TypedContractMethod<[_tradeId: BigNumberish], [bigint], "view">;
+  getFunction(
     nameOrSignature: "nonces"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
-    nameOrSignature: "openDispute"
-  ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
+    nameOrSignature: "openDisputeWithAuthorization"
+  ): TypedContractMethod<
+    [
+      _tradeId: BigNumberish,
+      _authorizationNonce: BigNumberish,
+      _authorizationDeadline: BigNumberish,
+      _authorizationSignature: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "oracleActive"
   ): TypedContractMethod<[], [boolean], "view">;
@@ -2257,14 +2664,30 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "proposeUnpause"
   ): TypedContractMethod<[], [boolean], "nonpayable">;
   getFunction(
-    nameOrSignature: "refundInTransitAfterTimeout"
-  ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
+    nameOrSignature: "refundInTransitAfterTimeoutWithAuthorization"
+  ): TypedContractMethod<
+    [
+      _tradeId: BigNumberish,
+      _authorizationNonce: BigNumberish,
+      _authorizationDeadline: BigNumberish,
+      _authorizationSignature: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "releaseFundsStage1"
   ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "requiredApprovals"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "setRelayer"
+  ): TypedContractMethod<
+    [relayer: AddressLike, allowed: boolean],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "totalClaimableUsdc"
   ): TypedContractMethod<[], [bigint], "view">;
@@ -2410,18 +2833,25 @@ export interface AgroasysEscrow extends BaseContract {
     ArrivalConfirmedEvent.OutputObject
   >;
   getEvent(
+    key: "AuthorizationConsumed"
+  ): TypedContractEvent<
+    AuthorizationConsumedEvent.InputTuple,
+    AuthorizationConsumedEvent.OutputTuple,
+    AuthorizationConsumedEvent.OutputObject
+  >;
+  getEvent(
+    key: "BuyerRefundTransferred"
+  ): TypedContractEvent<
+    BuyerRefundTransferredEvent.InputTuple,
+    BuyerRefundTransferredEvent.OutputTuple,
+    BuyerRefundTransferredEvent.OutputObject
+  >;
+  getEvent(
     key: "ClaimableAccrued"
   ): TypedContractEvent<
     ClaimableAccruedEvent.InputTuple,
     ClaimableAccruedEvent.OutputTuple,
     ClaimableAccruedEvent.OutputObject
-  >;
-  getEvent(
-    key: "Claimed"
-  ): TypedContractEvent<
-    ClaimedEvent.InputTuple,
-    ClaimedEvent.OutputTuple,
-    ClaimedEvent.OutputObject
   >;
   getEvent(
     key: "ClaimsPaused"
@@ -2501,6 +2931,13 @@ export interface AgroasysEscrow extends BaseContract {
     FundsReleasedStage2Event.OutputObject
   >;
   getEvent(
+    key: "GaslessTradeFunded"
+  ): TypedContractEvent<
+    GaslessTradeFundedEvent.InputTuple,
+    GaslessTradeFundedEvent.OutputTuple,
+    GaslessTradeFundedEvent.OutputObject
+  >;
+  getEvent(
     key: "InTransitTimeoutRefunded"
   ): TypedContractEvent<
     InTransitTimeoutRefundedEvent.InputTuple,
@@ -2555,6 +2992,27 @@ export interface AgroasysEscrow extends BaseContract {
     PlatformFeesPaidStage1Event.InputTuple,
     PlatformFeesPaidStage1Event.OutputTuple,
     PlatformFeesPaidStage1Event.OutputObject
+  >;
+  getEvent(
+    key: "RelayedActionExecuted"
+  ): TypedContractEvent<
+    RelayedActionExecutedEvent.InputTuple,
+    RelayedActionExecutedEvent.OutputTuple,
+    RelayedActionExecutedEvent.OutputObject
+  >;
+  getEvent(
+    key: "RelayerUpdated"
+  ): TypedContractEvent<
+    RelayerUpdatedEvent.InputTuple,
+    RelayerUpdatedEvent.OutputTuple,
+    RelayerUpdatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "SupplierPayoutTransferred"
+  ): TypedContractEvent<
+    SupplierPayoutTransferredEvent.InputTuple,
+    SupplierPayoutTransferredEvent.OutputTuple,
+    SupplierPayoutTransferredEvent.OutputObject
   >;
   getEvent(
     key: "TradeCancelledAfterLockTimeout"
@@ -2690,6 +3148,28 @@ export interface AgroasysEscrow extends BaseContract {
       ArrivalConfirmedEvent.OutputObject
     >;
 
+    "AuthorizationConsumed(address,bytes32,uint256,address,uint256)": TypedContractEvent<
+      AuthorizationConsumedEvent.InputTuple,
+      AuthorizationConsumedEvent.OutputTuple,
+      AuthorizationConsumedEvent.OutputObject
+    >;
+    AuthorizationConsumed: TypedContractEvent<
+      AuthorizationConsumedEvent.InputTuple,
+      AuthorizationConsumedEvent.OutputTuple,
+      AuthorizationConsumedEvent.OutputObject
+    >;
+
+    "BuyerRefundTransferred(uint256,address,uint256,uint8,address)": TypedContractEvent<
+      BuyerRefundTransferredEvent.InputTuple,
+      BuyerRefundTransferredEvent.OutputTuple,
+      BuyerRefundTransferredEvent.OutputObject
+    >;
+    BuyerRefundTransferred: TypedContractEvent<
+      BuyerRefundTransferredEvent.InputTuple,
+      BuyerRefundTransferredEvent.OutputTuple,
+      BuyerRefundTransferredEvent.OutputObject
+    >;
+
     "ClaimableAccrued(uint256,address,uint256,uint8)": TypedContractEvent<
       ClaimableAccruedEvent.InputTuple,
       ClaimableAccruedEvent.OutputTuple,
@@ -2699,17 +3179,6 @@ export interface AgroasysEscrow extends BaseContract {
       ClaimableAccruedEvent.InputTuple,
       ClaimableAccruedEvent.OutputTuple,
       ClaimableAccruedEvent.OutputObject
-    >;
-
-    "Claimed(address,uint256)": TypedContractEvent<
-      ClaimedEvent.InputTuple,
-      ClaimedEvent.OutputTuple,
-      ClaimedEvent.OutputObject
-    >;
-    Claimed: TypedContractEvent<
-      ClaimedEvent.InputTuple,
-      ClaimedEvent.OutputTuple,
-      ClaimedEvent.OutputObject
     >;
 
     "ClaimsPaused(address)": TypedContractEvent<
@@ -2833,6 +3302,17 @@ export interface AgroasysEscrow extends BaseContract {
       FundsReleasedStage2Event.OutputObject
     >;
 
+    "GaslessTradeFunded(uint256,address,bytes32,uint256)": TypedContractEvent<
+      GaslessTradeFundedEvent.InputTuple,
+      GaslessTradeFundedEvent.OutputTuple,
+      GaslessTradeFundedEvent.OutputObject
+    >;
+    GaslessTradeFunded: TypedContractEvent<
+      GaslessTradeFundedEvent.InputTuple,
+      GaslessTradeFundedEvent.OutputTuple,
+      GaslessTradeFundedEvent.OutputObject
+    >;
+
     "InTransitTimeoutRefunded(uint256,address,uint256)": TypedContractEvent<
       InTransitTimeoutRefundedEvent.InputTuple,
       InTransitTimeoutRefundedEvent.OutputTuple,
@@ -2919,6 +3399,39 @@ export interface AgroasysEscrow extends BaseContract {
       PlatformFeesPaidStage1Event.InputTuple,
       PlatformFeesPaidStage1Event.OutputTuple,
       PlatformFeesPaidStage1Event.OutputObject
+    >;
+
+    "RelayedActionExecuted(address,address,bytes32,uint256)": TypedContractEvent<
+      RelayedActionExecutedEvent.InputTuple,
+      RelayedActionExecutedEvent.OutputTuple,
+      RelayedActionExecutedEvent.OutputObject
+    >;
+    RelayedActionExecuted: TypedContractEvent<
+      RelayedActionExecutedEvent.InputTuple,
+      RelayedActionExecutedEvent.OutputTuple,
+      RelayedActionExecutedEvent.OutputObject
+    >;
+
+    "RelayerUpdated(address,bool,address)": TypedContractEvent<
+      RelayerUpdatedEvent.InputTuple,
+      RelayerUpdatedEvent.OutputTuple,
+      RelayerUpdatedEvent.OutputObject
+    >;
+    RelayerUpdated: TypedContractEvent<
+      RelayerUpdatedEvent.InputTuple,
+      RelayerUpdatedEvent.OutputTuple,
+      RelayerUpdatedEvent.OutputObject
+    >;
+
+    "SupplierPayoutTransferred(uint256,address,uint256,uint8,address)": TypedContractEvent<
+      SupplierPayoutTransferredEvent.InputTuple,
+      SupplierPayoutTransferredEvent.OutputTuple,
+      SupplierPayoutTransferredEvent.OutputObject
+    >;
+    SupplierPayoutTransferred: TypedContractEvent<
+      SupplierPayoutTransferredEvent.InputTuple,
+      SupplierPayoutTransferredEvent.OutputTuple,
+      SupplierPayoutTransferredEvent.OutputObject
     >;
 
     "TradeCancelledAfterLockTimeout(uint256,address,uint256)": TypedContractEvent<

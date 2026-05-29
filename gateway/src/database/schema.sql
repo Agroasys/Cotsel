@@ -307,6 +307,7 @@ CREATE TABLE IF NOT EXISTS settlement_execution_events (
     event_type TEXT NOT NULL CHECK (event_type IN (
         'accepted',
         'queued',
+        'simulation_completed',
         'submitted',
         'confirmed',
         'failed',
@@ -369,6 +370,33 @@ ALTER TABLE settlement_handoffs
 
 ALTER TABLE settlement_execution_events
     DROP COLUMN IF EXISTS extrinsic_hash;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'settlement_execution_events_event_type_check'
+          AND conrelid = 'settlement_execution_events'::regclass
+    ) THEN
+        ALTER TABLE settlement_execution_events
+            DROP CONSTRAINT settlement_execution_events_event_type_check;
+    END IF;
+
+    ALTER TABLE settlement_execution_events
+        ADD CONSTRAINT settlement_execution_events_event_type_check
+        CHECK (event_type IN (
+            'accepted',
+            'queued',
+            'simulation_completed',
+            'submitted',
+            'confirmed',
+            'failed',
+            'rejected',
+            'reconciled',
+            'drift_detected'
+        ));
+END $$;
 
 ALTER TABLE governance_actions
     ADD COLUMN IF NOT EXISTS intent_key TEXT;

@@ -33,6 +33,10 @@ import {
 } from './core/settlementStore';
 import { createServiceApiKeyLookup } from './core/serviceAuth';
 import { SettlementCallbackDispatcher } from './core/settlementCallbackDispatcher';
+import {
+  createEthersGaslessSettlementExecutor,
+  GaslessSettlementExecutionService,
+} from './core/gaslessSettlementExecutionService';
 import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { IndexerGraphqlClient } from './core/indexerGraphqlClient';
@@ -97,6 +101,18 @@ const settlementServiceApiKeyLookup = createServiceApiKeyLookup(
   config.settlementServiceAuthApiKeysJson,
 );
 const settlementService = new SettlementService(config, settlementStore);
+const gaslessSettlementService = config.gaslessExecutionEnabled
+  ? new GaslessSettlementExecutionService(
+      settlementService,
+      settlementStore,
+      createEthersGaslessSettlementExecutor(config),
+      {
+        chainId: config.chainId,
+        escrowAddress: config.escrowAddress,
+        requestMaxTtlSeconds: config.gaslessRequestMaxTtlSeconds ?? 900,
+      },
+    )
+  : null;
 const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore, {
   failedOperationWorkflow: errorHandlerWorkflow,
 });
@@ -487,6 +503,7 @@ async function bootstrap(): Promise<void> {
       config,
       settlementService,
       settlementStore,
+      gaslessSettlementService,
       nonceStore: settlementNonceStore,
       idempotencyStore,
       lookupServiceApiKey: settlementServiceApiKeyLookup,

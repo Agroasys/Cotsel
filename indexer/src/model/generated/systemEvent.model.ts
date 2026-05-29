@@ -39,6 +39,21 @@ export class SystemEvent {
     @BigIntColumn_({nullable: true})
     claimAmount!: bigint | undefined | null
 
+    @StringColumn_({nullable: true})
+    authorizationUser!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    authorizationAction!: string | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    authorizationNonce!: bigint | undefined | null
+
+    @StringColumn_({nullable: true})
+    authorizationRelayer!: string | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    authorizationDeadline!: bigint | undefined | null
+
     @Index_()
     @StringColumn_({nullable: true})
     proposalId!: string | undefined | null

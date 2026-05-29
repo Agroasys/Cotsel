@@ -28,10 +28,12 @@ export interface MockUSDCInterface extends Interface {
     nameOrSignature:
       | "allowance"
       | "approve"
+      | "authorizationState"
       | "balanceOf"
       | "decimals"
       | "mint"
       | "name"
+      | "receiveWithAuthorization"
       | "symbol"
       | "totalSupply"
       | "transfer"
@@ -49,6 +51,10 @@ export interface MockUSDCInterface extends Interface {
     values: [AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "authorizationState",
+    values: [AddressLike, BytesLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "balanceOf",
     values: [AddressLike]
   ): string;
@@ -58,6 +64,20 @@ export interface MockUSDCInterface extends Interface {
     values: [AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "receiveWithAuthorization",
+    values: [
+      AddressLike,
+      AddressLike,
+      BigNumberish,
+      BigNumberish,
+      BigNumberish,
+      BytesLike,
+      BigNumberish,
+      BytesLike,
+      BytesLike
+    ]
+  ): string;
   encodeFunctionData(functionFragment: "symbol", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "totalSupply",
@@ -74,10 +94,18 @@ export interface MockUSDCInterface extends Interface {
 
   decodeFunctionResult(functionFragment: "allowance", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "authorizationState",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "decimals", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "mint", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "receiveWithAuthorization",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "symbol", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "totalSupply",
@@ -181,6 +209,12 @@ export interface MockUSDC extends BaseContract {
     "nonpayable"
   >;
 
+  authorizationState: TypedContractMethod<
+    [arg0: AddressLike, arg1: BytesLike],
+    [boolean],
+    "view"
+  >;
+
   balanceOf: TypedContractMethod<[account: AddressLike], [bigint], "view">;
 
   decimals: TypedContractMethod<[], [bigint], "view">;
@@ -192,6 +226,22 @@ export interface MockUSDC extends BaseContract {
   >;
 
   name: TypedContractMethod<[], [string], "view">;
+
+  receiveWithAuthorization: TypedContractMethod<
+    [
+      from: AddressLike,
+      to: AddressLike,
+      value: BigNumberish,
+      validAfter: BigNumberish,
+      validBefore: BigNumberish,
+      nonce: BytesLike,
+      v: BigNumberish,
+      r: BytesLike,
+      s: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
 
   symbol: TypedContractMethod<[], [string], "view">;
 
@@ -228,6 +278,13 @@ export interface MockUSDC extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "authorizationState"
+  ): TypedContractMethod<
+    [arg0: AddressLike, arg1: BytesLike],
+    [boolean],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "balanceOf"
   ): TypedContractMethod<[account: AddressLike], [bigint], "view">;
   getFunction(
@@ -243,6 +300,23 @@ export interface MockUSDC extends BaseContract {
   getFunction(
     nameOrSignature: "name"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "receiveWithAuthorization"
+  ): TypedContractMethod<
+    [
+      from: AddressLike,
+      to: AddressLike,
+      value: BigNumberish,
+      validAfter: BigNumberish,
+      validBefore: BigNumberish,
+      nonce: BytesLike,
+      v: BigNumberish,
+      r: BytesLike,
+      s: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "symbol"
   ): TypedContractMethod<[], [string], "view">;

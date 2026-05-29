@@ -3,64 +3,28 @@
  */
 import { BuyerSDK } from '../src/modules/buyerSDK';
 import type { Signer } from 'ethers';
-import { AgroasysEscrow__factory } from '../src/types/typechain-types/factories/src/AgroasysEscrow__factory';
-import { TradeStatus } from '../src/types/trade';
 import {
   TEST_CONFIG,
   assertRequiredEnv,
   getBuyerSigner,
-  getOptionalEnv,
   generateTestRicardianHash,
   hasRequiredEnv,
   parseUSDC,
 } from './setup';
-import { TX_HASH_REGEX } from './testUtils';
 
 const DEFAULT_SUPPLIER_ADDRESS = '0x4aF052cB4B3eC7b58322548021bF254Cc4c80b2c';
 const SUPPLIER_ADDRESS = process.env.SUPPLIER_ADDRESS ?? DEFAULT_SUPPLIER_ADDRESS;
 const runManualE2E = process.env.RUN_E2E === 'true';
-const runBuyerClaimE2E = process.env.RUN_BUYER_CLAIM_E2E === 'true';
-const runBuyerDisputeE2E = process.env.RUN_BUYER_DISPUTE_E2E === 'true';
-const runBuyerTimeoutE2E = process.env.RUN_BUYER_TIMEOUT_E2E === 'true';
 const describeIntegration = runManualE2E && hasRequiredEnv ? describe : describe.skip;
-const testBuyerClaim = runManualE2E && hasRequiredEnv && runBuyerClaimE2E ? test : test.skip;
-const testBuyerDispute = runManualE2E && hasRequiredEnv && runBuyerDisputeE2E ? test : test.skip;
-const testBuyerTimeout = runManualE2E && hasRequiredEnv && runBuyerTimeoutE2E ? test : test.skip;
-function requireManualBuyerE2EEnv(name: string): string {
-  const value = getOptionalEnv(name);
-  if (!value) {
-    throw new Error(`Missing required manual buyer E2E environment variable: ${name}`);
-  }
-  return value;
-}
-
-function requireManualBuyerE2EBigIntEnv(name: string): bigint {
-  const value = requireManualBuyerE2EEnv(name);
-  try {
-    return BigInt(value);
-  } catch {
-    throw new Error(`Invalid bigint in manual buyer E2E environment variable ${name}: ${value}`);
-  }
-}
-
-function expectValidTxHash(txHash: string): void {
-  expect(txHash).toMatch(TX_HASH_REGEX);
-}
 
 describeIntegration('BuyerSDK', () => {
   let buyerSDK: BuyerSDK;
   let buyerSigner: Signer;
-  let escrowReadOnly: ReturnType<typeof AgroasysEscrow__factory.connect>;
 
   beforeAll(() => {
     assertRequiredEnv();
     buyerSDK = new BuyerSDK(TEST_CONFIG);
     buyerSigner = getBuyerSigner();
-    const provider = buyerSigner.provider;
-    if (!provider) {
-      throw new Error('buyerSigner provider is unavailable');
-    }
-    escrowReadOnly = AgroasysEscrow__factory.connect(TEST_CONFIG.escrowAddress, provider);
   });
 
   test('should get buyer nonce', async () => {
@@ -94,7 +58,7 @@ describeIntegration('BuyerSDK', () => {
     console.log(`USDC allowance: ${allowance}`);
   });
 
-  test('should create a trade', async () => {
+  test('should reject direct buyer-paid trade creation', async () => {
     const tradeParams = {
       supplier: SUPPLIER_ADDRESS,
       totalAmount: parseUSDC('10000'),
@@ -105,25 +69,9 @@ describeIntegration('BuyerSDK', () => {
       ricardianHash: generateTestRicardianHash('test1'),
     };
 
-    const buyerAddress = await buyerSigner.getAddress();
-    const tradeCounterBefore = await escrowReadOnly.tradeCounter();
-    const result = await buyerSDK.createTrade(tradeParams, buyerSigner);
-    const tradeCounterAfter = await escrowReadOnly.tradeCounter();
-
-    expectValidTxHash(result.txHash);
-    expect(tradeCounterAfter).toBe(tradeCounterBefore + 1n);
-    console.log(`Trade created: ${result.txHash}`);
-
-    const createdTrade = await escrowReadOnly.trades(tradeCounterBefore);
-    expect(createdTrade.buyerAddress.toLowerCase()).toBe(buyerAddress.toLowerCase());
-    expect(createdTrade.supplierAddress.toLowerCase()).toBe(tradeParams.supplier.toLowerCase());
-    expect(createdTrade.totalAmountLocked).toBe(tradeParams.totalAmount);
-    expect(createdTrade.logisticsAmount).toBe(tradeParams.logisticsAmount);
-    expect(createdTrade.platformFeesAmount).toBe(tradeParams.platformFeesAmount);
-    expect(createdTrade.supplierFirstTranche).toBe(tradeParams.supplierFirstTranche);
-    expect(createdTrade.supplierSecondTranche).toBe(tradeParams.supplierSecondTranche);
-    expect(createdTrade.ricardianHash.toLowerCase()).toBe(tradeParams.ricardianHash.toLowerCase());
-    expect(Number(createdTrade.status)).toBe(TradeStatus.LOCKED);
+    await expect(buyerSDK.createTrade(tradeParams, buyerSigner)).rejects.toThrow(
+      'Direct buyer-paid createTrade was removed',
+    );
   });
 
   test('should fail to create a trade with invalid supplier address', async () => {
@@ -139,52 +87,21 @@ describeIntegration('BuyerSDK', () => {
     await expect(buyerSDK.createTrade(invalidTradeParams, buyerSigner)).rejects.toThrow();
   });
 
-  testBuyerDispute('should open dispute', async () => {
-    const tradeId = requireManualBuyerE2EBigIntEnv('TEST_DISPUTE_TRADE_ID');
-
-    const tradeBefore = await escrowReadOnly.trades(tradeId);
-    expect([TradeStatus.LOCKED, TradeStatus.IN_TRANSIT]).toContain(Number(tradeBefore.status));
-    const result = await buyerSDK.openDispute(tradeId, buyerSigner);
-    expectValidTxHash(result.txHash);
-    console.log(`Dispute opened: ${result.txHash}`);
-
-    const tradeAfter = await escrowReadOnly.trades(tradeId);
-    expect(Number(tradeAfter.status)).toBe(TradeStatus.FROZEN);
+  test('should reject direct buyer-paid dispute opening', async () => {
+    await expect(buyerSDK.openDispute(1n, buyerSigner)).rejects.toThrow(
+      'Direct buyer-paid openDispute was removed',
+    );
   });
 
-  testBuyerTimeout('should cancel locked trade after timeout', async () => {
-    const tradeId = requireManualBuyerE2EBigIntEnv('TEST_LOCKED_TRADE_ID');
-    const buyerAddress = await buyerSigner.getAddress();
-    const claimableBefore = await buyerSDK.getClaimableUsdc(buyerAddress);
-
-    const result = await buyerSDK.cancelLockedTradeAfterTimeout(tradeId, buyerSigner);
-    expectValidTxHash(result.txHash);
-    console.log(`Locked trade cancelled: ${result.txHash}`);
-
-    const tradeAfter = await escrowReadOnly.trades(tradeId);
-    expect(Number(tradeAfter.status)).toBe(TradeStatus.CLOSED);
-    const claimableAfter = await buyerSDK.getClaimableUsdc(buyerAddress);
-    expect(claimableAfter).toBeGreaterThanOrEqual(claimableBefore);
+  test('should reject direct buyer-paid locked timeout cancellation', async () => {
+    await expect(buyerSDK.cancelLockedTradeAfterTimeout(1n, buyerSigner)).rejects.toThrow(
+      'Direct buyer-paid cancelLockedTradeAfterTimeout was removed',
+    );
   });
 
-  testBuyerTimeout('should refund in-transit trade after timeout', async () => {
-    const tradeId = requireManualBuyerE2EBigIntEnv('TEST_IN_TRANSIT_TRADE_ID');
-    const buyerAddress = await buyerSigner.getAddress();
-    const claimableBefore = await buyerSDK.getClaimableUsdc(buyerAddress);
-
-    const result = await buyerSDK.refundInTransitAfterTimeout(tradeId, buyerSigner);
-    expectValidTxHash(result.txHash);
-    console.log(`In-transit trade refunded: ${result.txHash}`);
-
-    const tradeAfter = await escrowReadOnly.trades(tradeId);
-    expect(Number(tradeAfter.status)).toBe(TradeStatus.CLOSED);
-    const claimableAfter = await buyerSDK.getClaimableUsdc(buyerAddress);
-    expect(claimableAfter).toBeGreaterThanOrEqual(claimableBefore);
-  });
-
-  testBuyerClaim('should claim funds in the escrow', async () => {
-    const result = await buyerSDK.claim(buyerSigner);
-    expectValidTxHash(result.txHash);
-    console.log(`Funds claimed: ${result.txHash}`);
+  test('should reject direct buyer-paid in-transit timeout refund', async () => {
+    await expect(buyerSDK.refundInTransitAfterTimeout(1n, buyerSigner)).rejects.toThrow(
+      'Direct buyer-paid refundInTransitAfterTimeout was removed',
+    );
   });
 });

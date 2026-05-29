@@ -111,8 +111,7 @@ When pull-over-push treasury sweep is enabled, use these deterministic checks:
 
 - Treasury accrual source:
   - sum `ClaimableAccrued` where `claimRecipient == treasuryAddress`
-- Treasury payout execution sources:
-  - sum `Claimed.claimAmount` where `triggeredBy == treasuryAddress` (direct treasury key path)
+- Treasury payout execution source:
   - sum `TreasuryClaimed.claimAmount` (destination-locked sweep path)
 - Outstanding treasury entitlement:
   - on-chain `claimableUsdc(treasuryAddress)`
@@ -121,8 +120,7 @@ Conservation formula (per escrow address):
 
 ```text
 TreasuryAccruedTotal
-  = TreasuryClaimedDirectTotal
-  + TreasuryClaimedSweepTotal
+  = TreasuryClaimedSweepTotal
   + TreasuryOutstandingClaimable
 ```
 

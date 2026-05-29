@@ -125,6 +125,19 @@ interface TradeEventGraphQlRecord {
   payoutRecipient?: string | null;
   payoutAmount?: string | null;
   payoutType?: string | null;
+  relayedAction?: string | null;
+  relayedUser?: string | null;
+  relayedRelayer?: string | null;
+  gaslessBuyer?: string | null;
+  usdcAuthorizationNonce?: string | null;
+  supplierPayoutRecipient?: string | null;
+  supplierPayoutAmount?: string | null;
+  supplierPayoutType?: string | null;
+  supplierPayoutTriggeredBy?: string | null;
+  buyerRefundRecipient?: string | null;
+  buyerRefundAmount?: string | null;
+  buyerRefundType?: string | null;
+  buyerRefundTriggeredBy?: string | null;
 }
 
 interface TradesGraphQlResponse {
@@ -273,6 +286,14 @@ function mapEventStage(eventName: string): string {
       return 'Dispute Payout';
     case 'ClaimableAccrued':
       return 'Claim Accrued';
+    case 'RelayedActionExecuted':
+      return 'Relayed Action';
+    case 'GaslessTradeFunded':
+      return 'Gasless Funding';
+    case 'SupplierPayoutTransferred':
+      return 'Supplier Payout';
+    case 'BuyerRefundTransferred':
+      return 'Buyer Refund';
     default:
       return eventName;
   }
@@ -294,6 +315,12 @@ function mapEventActor(eventName: string): string {
       return 'Treasury';
     case 'DisputePayout':
       return 'Governance';
+    case 'RelayedActionExecuted':
+    case 'GaslessTradeFunded':
+      return 'Cotsel Execution';
+    case 'SupplierPayoutTransferred':
+    case 'BuyerRefundTransferred':
+      return 'Escrow';
     default:
       return 'Protocol';
   }
@@ -325,6 +352,14 @@ function mapEventDetail(event: TradeEventGraphQlRecord): string | undefined {
       return `Governance resolved dispute with ${event.payoutType ?? 'unknown'} payout of ${asUsdcNumber(event.payoutAmount ?? '0', 'event.payoutAmount').toLocaleString()} USDC to ${event.payoutRecipient ?? 'recipient'}.`;
     case 'ClaimableAccrued':
       return `Claim accrued: ${event.claimType ?? 'unknown'} for ${event.claimRecipient ?? 'recipient'} (${asUsdcNumber(event.claimAmount ?? '0', 'event.claimAmount').toLocaleString()} USDC).`;
+    case 'RelayedActionExecuted':
+      return `Relayed ${event.relayedAction ?? 'action'} for ${event.relayedUser ?? 'user'} through ${event.relayedRelayer ?? 'relayer'}.`;
+    case 'GaslessTradeFunded':
+      return `Gasless USDC authorization funded ${asUsdcNumber(event.totalAmount ?? '0', 'event.totalAmount').toLocaleString()} USDC from ${event.gaslessBuyer ?? 'buyer'}.`;
+    case 'SupplierPayoutTransferred':
+      return `Supplier payout transferred directly to ${event.supplierPayoutRecipient ?? 'supplier'} for ${asUsdcNumber(event.supplierPayoutAmount ?? '0', 'event.supplierPayoutAmount').toLocaleString()} USDC.`;
+    case 'BuyerRefundTransferred':
+      return `Buyer refund transferred directly to ${event.buyerRefundRecipient ?? 'buyer'} for ${asUsdcNumber(event.buyerRefundAmount ?? '0', 'event.buyerRefundAmount').toLocaleString()} USDC.`;
     default:
       return undefined;
   }
@@ -466,6 +501,19 @@ const listTradesQuery = `
         payoutRecipient
         payoutAmount
         payoutType
+        relayedAction
+        relayedUser
+        relayedRelayer
+        gaslessBuyer
+        usdcAuthorizationNonce
+        supplierPayoutRecipient
+        supplierPayoutAmount
+        supplierPayoutType
+        supplierPayoutTriggeredBy
+        buyerRefundRecipient
+        buyerRefundAmount
+        buyerRefundType
+        buyerRefundTriggeredBy
       }
     }
   }
@@ -509,6 +557,19 @@ const tradeDetailQuery = `
         payoutRecipient
         payoutAmount
         payoutType
+        relayedAction
+        relayedUser
+        relayedRelayer
+        gaslessBuyer
+        usdcAuthorizationNonce
+        supplierPayoutRecipient
+        supplierPayoutAmount
+        supplierPayoutType
+        supplierPayoutTriggeredBy
+        buyerRefundRecipient
+        buyerRefundAmount
+        buyerRefundType
+        buyerRefundTriggeredBy
       }
     }
   }

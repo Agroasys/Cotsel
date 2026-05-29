@@ -11,7 +11,7 @@ import {
   getOptionalEnv,
   hasRequiredEnv,
 } from './setup';
-import { AgroasysEscrow__factory } from '../src/types/typechain-types/factories/src/AgroasysEscrow__factory';
+import { AgroasysEscrow__factory } from '../src/types/typechain-types/factories/src/AgroasysEscrow.sol/AgroasysEscrow__factory';
 import type { Signer } from 'ethers';
 import { TX_HASH_REGEX } from './testUtils';
 
