@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, StringColumn as StringColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_, BigIntColumn as BigIntColumn_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, Relation as Relation_, StringColumn as StringColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_, BigIntColumn as BigIntColumn_} from "@subsquid/typeorm-store"
 import {Trade} from "./trade.model"
 import {DisputeStatus} from "./_disputeStatus"
 import {ClaimType} from "./_claimType"
@@ -14,7 +14,7 @@ export class TradeEvent {
 
     @Index_()
     @ManyToOne_(() => Trade, {nullable: true})
-    trade!: Trade
+    trade!: Relation_<Trade>
 
     @Index_()
     @StringColumn_({nullable: false})

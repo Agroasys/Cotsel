@@ -1,4 +1,4 @@
-import {Entity as Entity_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, StringColumn as StringColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_, BigIntColumn as BigIntColumn_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, Relation as Relation_, StringColumn as StringColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_, BigIntColumn as BigIntColumn_} from "@subsquid/typeorm-store"
 import {AdminAddProposal} from "./adminAddProposal.model"
 
 @Entity_()
@@ -12,7 +12,7 @@ export class AdminEvent {
 
     @Index_()
     @ManyToOne_(() => AdminAddProposal, {nullable: true})
-    adminAddProposal!: AdminAddProposal | undefined | null
+    adminAddProposal!: Relation_<AdminAddProposal> | undefined | null
 
     @Index_()
     @StringColumn_({nullable: false})
