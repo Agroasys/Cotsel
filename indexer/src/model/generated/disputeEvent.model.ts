@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, StringColumn as StringColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, Relation as Relation_, StringColumn as StringColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
 import {DisputeProposal} from "./disputeProposal.model"
 import {DisputeStatus} from "./_disputeStatus"
 
@@ -13,7 +13,7 @@ export class DisputeEvent {
 
     @Index_()
     @ManyToOne_(() => DisputeProposal, {nullable: true})
-    dispute!: DisputeProposal
+    dispute!: Relation_<DisputeProposal>
 
     @Index_()
     @StringColumn_({nullable: false})

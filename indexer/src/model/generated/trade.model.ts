@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_, OneToMany as OneToMany_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_, OneToMany as OneToMany_, Relation as Relation_} from "@subsquid/typeorm-store"
 import {TradeStatus} from "./_tradeStatus"
 import {TradeEvent} from "./tradeEvent.model"
 import {DisputeProposal} from "./disputeProposal.model"
@@ -60,8 +60,8 @@ export class Trade {
     arrivalTimestamp!: Date | undefined | null
 
     @OneToMany_(() => TradeEvent, e => e.trade)
-    events!: TradeEvent[]
+    events!: Relation_<TradeEvent[]>
 
     @OneToMany_(() => DisputeProposal, e => e.trade)
-    disputes!: DisputeProposal[]
+    disputes!: Relation_<DisputeProposal[]>
 }
