@@ -1,6 +1,6 @@
 import type { SettlementConfirmationStage } from '@agroasys/sdk';
 
-export type TreasuryComponent = 'LOGISTICS' | 'PLATFORM_FEE';
+export type TreasuryComponent = 'LOGISTICS' | 'PLATFORM_FEE' | 'SETTLEMENT_SUPPORT_FEE';
 
 export type PayoutState =
   | 'PENDING_REVIEW'
@@ -252,6 +252,8 @@ export interface IndexerTradeEvent {
   timestamp: Date;
   releasedLogisticsAmount?: string | null;
   paidPlatformFees?: string | null;
+  paidPlatformFeeNet?: string | null;
+  paidSettlementSupportFee?: string | null;
 }
 
 export interface IndexerTreasuryClaimEvent {

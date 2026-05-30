@@ -825,6 +825,18 @@ const _abi = [
         name: "platformFeesAmount",
         type: "uint256",
       },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "platformFeeNetAmount",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "settlementSupportFeeAmount",
+        type: "uint256",
+      },
     ],
     name: "PlatformFeesPaidStage1",
     type: "event",

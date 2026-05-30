@@ -21,7 +21,6 @@ module.exports = class GaslessExecutionEventFields1777000000000 {
     await db.query(
       `ALTER TABLE "trade_event" ADD COLUMN IF NOT EXISTS "supplier_payout_triggered_by" text`,
     );
-
     await db.query(`ALTER TABLE "system_event" ADD COLUMN IF NOT EXISTS "authorization_user" text`);
     await db.query(
       `ALTER TABLE "system_event" ADD COLUMN IF NOT EXISTS "authorization_action" text`,

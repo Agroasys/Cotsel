@@ -12,6 +12,8 @@ interface GraphQlResponse {
       timestamp: string;
       releasedLogisticsAmount?: string | null;
       paidPlatformFees?: string | null;
+      paidPlatformFeeNet?: string | null;
+      paidSettlementSupportFee?: string | null;
       trade: {
         tradeId: string;
       };
@@ -50,6 +52,8 @@ export class IndexerClient {
           timestamp
           releasedLogisticsAmount
           paidPlatformFees
+          paidPlatformFeeNet
+          paidSettlementSupportFee
           trade {
             tradeId
           }
@@ -95,6 +99,8 @@ export class IndexerClient {
       timestamp: new Date(event.timestamp),
       releasedLogisticsAmount: event.releasedLogisticsAmount || null,
       paidPlatformFees: event.paidPlatformFees || null,
+      paidPlatformFeeNet: event.paidPlatformFeeNet || null,
+      paidSettlementSupportFee: event.paidSettlementSupportFee || null,
     }));
   }
 

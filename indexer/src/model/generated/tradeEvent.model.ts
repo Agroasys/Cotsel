@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, StringColumn as StringColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_, BigIntColumn as BigIntColumn_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, Relation as Relation_, StringColumn as StringColumn_, IntColumn as IntColumn_, DateTimeColumn as DateTimeColumn_, BigIntColumn as BigIntColumn_} from "@subsquid/typeorm-store"
 import {Trade} from "./trade.model"
 import {DisputeStatus} from "./_disputeStatus"
 import {ClaimType} from "./_claimType"
@@ -14,7 +14,7 @@ export class TradeEvent {
 
     @Index_()
     @ManyToOne_(() => Trade, {nullable: true})
-    trade!: Trade
+    trade!: Relation_<Trade>
 
     @Index_()
     @StringColumn_({nullable: false})
@@ -50,6 +50,12 @@ export class TradeEvent {
     platformFeesAmount!: bigint | undefined | null
 
     @BigIntColumn_({nullable: true})
+    platformFeeNetAmount!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    settlementSupportFeeAmount!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
     supplierFirstTranche!: bigint | undefined | null
 
     @BigIntColumn_({nullable: true})
@@ -66,6 +72,12 @@ export class TradeEvent {
 
     @BigIntColumn_({nullable: true})
     paidPlatformFees!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    paidPlatformFeeNet!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    paidSettlementSupportFee!: bigint | undefined | null
 
     @BigIntColumn_({nullable: true})
     arrivalTimestamp!: bigint | undefined | null

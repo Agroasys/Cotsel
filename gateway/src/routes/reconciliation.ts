@@ -100,7 +100,7 @@ export function createReconciliationRouter(options: ReconciliationRouterOptions)
   const router = Router();
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
 
-  router.use(authenticate, requireGatewayRole('operator:read'));
+  router.use('/reconciliation', authenticate, requireGatewayRole('operator:read'));
 
   router.get('/reconciliation', async (req, res, next) => {
     try {

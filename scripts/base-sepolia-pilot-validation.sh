@@ -80,8 +80,10 @@ SUMMARY_FILE="$REPORT_DIR/summary.json"
 GATE_OUTPUT_FILE="$REPORT_DIR/gate-output.txt"
 BLOCKERS_FILE="$REPORT_DIR/blockers.md"
 MANUAL_CHECKLIST_FILE="$REPORT_DIR/manual-checklist.md"
+GASLESS_FLOW_EVIDENCE_FILE="$REPORT_DIR/gasless-flow-evidence.md"
 TX_LINKS_FILE="$REPORT_DIR/tx-links.md"
 SIGNOFF_FILE="$REPORT_DIR/signoff.md"
+ROLLOUT_CHECKLIST_FILE="$REPORT_DIR/rollout-checklist.md"
 NOTIFICATIONS_REPORT_SOURCE="$ROOT_DIR/reports/notifications/${PROFILE}.json"
 RECONCILIATION_REPORT_SOURCE="$ROOT_DIR/reports/reconciliation/${PROFILE}-report.json"
 NOTIFICATIONS_REPORT_TARGET="$REPORT_DIR/notifications-report.json"
@@ -169,26 +171,74 @@ Mode: \`$MODE\`
 
 Complete every section below during the live Base Sepolia rehearsal.
 
-- [ ] Buyer lock evidence captured
+- [ ] Buyer authenticated session captured
+  - auth user id:
+  - wallet address:
+  - Web3Auth signing evidence path:
+  - ETH balance before create trade:
+- [ ] Buyer deposit / gasless create trade evidence captured
   - txHash:
   - tradeId:
+  - relayer request id:
+  - idempotency key:
   - evidence path:
-- [ ] Oracle release evidence captured
+- [ ] Supplier payout evidence captured
   - txHash:
-  - trigger type:
+  - supplier wallet:
+  - supplier ETH balance before payout:
+  - supplier ETH balance after payout:
+  - event name:
   - evidence path:
-- [ ] Dispute or hold path captured
+- [ ] Buyer refund path evidence captured
   - txHash or operator record:
+  - refund type:
+  - buyer wallet:
+  - buyer ETH balance before refund:
+  - buyer ETH balance after refund:
+  - event name:
   - evidence path:
+- [ ] Gas sponsorship evidence captured
+  - relayer logs path:
+  - gas spend record path:
+  - sponsored action ids:
+- [ ] Support-fee accounting evidence captured
+  - treasury ledger path:
+  - platform fee ledger entry:
+  - settlement support fee ledger entry:
 - [ ] Reconciliation result captured
   - run key:
   - report path:
-- [ ] Treasury ingest/export or freeze-control observation captured
-  - evidence path:
-- [ ] Dashboard operator path observation captured
-  - evidence path:
-- [ ] Operator observations and anomalies recorded
-  - notes:
+- [ ] Failure handling exercised
+  - expired auth evidence:
+  - repeated failure/idempotency evidence:
+  - relayer outage or disabled-relayer evidence:
+  - fallback UX evidence:
+- [ ] No default ETH top-up path was used
+  - exception record if fallback support tooling was used:
+EOF
+
+  cat > "$GASLESS_FLOW_EVIDENCE_FILE" <<EOF
+# Gasless Settlement Flow Evidence
+
+Window: \`$WINDOW_ID\`
+Mode: \`$MODE\`
+
+Record one row for each required live Base Sepolia proof path.
+
+| Flow | Required outcome | User ETH before | User ETH after | Relayed action evidence | Settlement event evidence | Ledger/reconciliation evidence | Result |
+|---|---|---:|---:|---|---|---|---|
+| buyer deposit / create trade | trade created through sponsored execution | | | | | | |
+| supplier payout | supplier receives direct transfer without claim gas | | | | | | |
+| buyer dispute or timeout refund | buyer receives direct transfer without claim gas | | | | | | |
+
+## Failure handling
+
+| Failure case | Expected behavior | Evidence | Result |
+|---|---|---|---|
+| expired authorization | rejected before fund movement | | |
+| repeated failed submission | idempotent, no duplicate settlement | | |
+| relayer outage or disabled relayer | observable failure, no ambiguous fund movement | | |
+| fallback support tooling | operator-approved exception only, never default user flow | | |
 EOF
 
   cat > "$TX_LINKS_FILE" <<EOF
@@ -200,10 +250,11 @@ Record Base explorer links and supporting transaction references here.
 
 | Lifecycle step | tradeId | txHash | Explorer URL | Notes |
 |---|---|---|---|---|
-| buyer lock | | | | |
-| oracle release | | | | |
-| dispute or hold | | | | |
-| treasury or freeze control | | | | |
+| buyer gasless create trade | | | | |
+| supplier direct payout | | | | |
+| buyer direct refund | | | | |
+| relayer failure or fallback drill | | | | |
+| treasury claim or control action | | | | |
 EOF
 
   cat > "$SIGNOFF_FILE" <<EOF
@@ -226,11 +277,58 @@ Mode: \`$MODE\`
 - Overall result:
 - Unresolved P0 blockers:
 - Narrower accepted scope decision (if any):
+- Buyer flow proven with no user ETH required or spent:
+- Supplier flow proven with no user ETH required or spent:
+- Support-fee ledger split reconciled:
+- Relayer failure paths observable:
+- Kill-switch / rollback decision:
 
 ## Approvals
 - Pilot Owner:
 - On-call Engineer:
 - Service Owner:
+EOF
+
+  cat > "$ROLLOUT_CHECKLIST_FILE" <<EOF
+# Production Rollout Checklist
+
+Window: \`$WINDOW_ID\`
+Mode: \`$MODE\`
+
+## Go criteria
+
+- [ ] Buyer deposit / create trade completed on Base Sepolia with no buyer ETH required or spent.
+- [ ] Supplier direct payout completed with no supplier ETH required or spent.
+- [ ] Buyer dispute or timeout refund completed with no buyer ETH required or spent.
+- [ ] Sponsored gas records match relayer logs and settlement events.
+- [ ] Treasury ledger separates logistics, net platform fee, and settlement support fee.
+- [ ] Reconciliation report has no unresolved CRITICAL drift.
+- [ ] Expired auth, repeated failure, and relayer outage paths are observable and do not create fund-movement ambiguity.
+- [ ] No ETH top-up was used as a default user path.
+
+## No-go criteria
+
+- [ ] Any user wallet requires ETH for the default buyer, supplier, or buyer-refund flow.
+- [ ] Treasury support fee is collapsed into platform fee in the live ledger.
+- [ ] Reconciliation relies on transaction sender instead of event/user evidence.
+- [ ] Relayer outage creates duplicate settlement or unclear fund state.
+- [ ] Indexer lag, missing events, or unresolved CRITICAL drift prevents auditability.
+- [ ] Any required operator cannot identify the kill-switch and rollback owner.
+
+## Kill-switch and rollback conditions
+
+- Disable gasless submission if relayer dispatch fails repeatedly, emits ambiguous settlement state, or produces duplicate/idempotency conflicts.
+- Pause affected settlement transitions if reconciliation reports unresolved CRITICAL drift.
+- Stop rollout and revert to the last known-good deploy/config if gateway, indexer, treasury, or reconciliation cannot agree on trade state.
+- Keep ETH top-ups as support-only exception tooling with recorded approval; do not use them as a rollout bypass.
+
+## Final decision
+
+- Decision: \`go / no-go / narrower-scope-go\`
+- Decision owner:
+- Timestamp:
+- Evidence packet path:
+- Required follow-up issues:
 EOF
 }
 
@@ -245,6 +343,20 @@ Mode: \`$MODE\`
 | Severity | Area | Blocking condition | Evidence | Owner | Decision / next action |
 |---|---|---|---|---|---|
 | \`P0\` | \`ops\` | \`$BLOCKING_FAILURE_CLASS\` at step \`$BLOCKING_FAILURE_STEP\` blocked the rehearsal before closure evidence could be captured. | \`$REPORT_DIR/summary.json\` | \`Pilot Owner / Service Owner\` | Record the concrete managed-provider / runtime fix, rerun the rehearsal, and update signoff. |
+EOF
+    return
+  fi
+
+  if [[ "$MODE" == "live" && "$OVERALL_STATUS" == "pending_manual_evidence" ]]; then
+    cat > "$BLOCKERS_FILE" <<EOF
+# Blocker Register
+
+Window: \`$WINDOW_ID\`
+Mode: \`$MODE\`
+
+| Severity | Area | Blocking condition | Evidence | Owner | Decision / next action |
+|---|---|---|---|---|---|
+| \`P1\` | \`ops/proof\` | Automated live-env gates passed, but the packet is not closure-ready until buyer create-trade, supplier direct payout, buyer direct refund, sponsored-gas, failure-handling, and ledger/reconciliation evidence rows are populated with real transaction or operator evidence. | \`$REPORT_DIR/manual-checklist.md\`, \`$REPORT_DIR/gasless-flow-evidence.md\`, \`$REPORT_DIR/tx-links.md\` | \`Pilot Owner / Service Owner\` | Capture the missing live flow evidence, rerun or update the packet, and only then mark the pilot proof complete. |
 EOF
     return
   fi
@@ -389,8 +501,18 @@ validate_pilot_profile_truth() {
 }
 
 validate_live_managed_provider_inputs() {
+  if [[ -n "${INDEXER_GATEWAY_URL:-}" ]]; then
+    if contains_placeholder_value "$INDEXER_GATEWAY_URL"; then
+      fail_live_preflight "LIVE_MANAGED_PROVIDER_CONFIG_REQUIRED" "INDEXER_GATEWAY_URL" "INDEXER_GATEWAY_URL still contains a template placeholder: $INDEXER_GATEWAY_URL"
+      return 1
+    fi
+    if is_public_base_rpc "$INDEXER_GATEWAY_URL"; then
+      fail_live_preflight "LIVE_MANAGED_PROVIDER_CONFIG_REQUIRED" "INDEXER_GATEWAY_URL" "INDEXER_GATEWAY_URL must not use the public Base RPC endpoint for the controlled pilot runtime."
+      return 1
+    fi
+  fi
+
   for pair in \
-    "INDEXER_GATEWAY_URL:${INDEXER_GATEWAY_URL:-}" \
     "INDEXER_RPC_ENDPOINT:${INDEXER_RPC_ENDPOINT:-}" \
     "GATEWAY_RPC_URL:${GATEWAY_RPC_URL:-}" \
     "ORACLE_RPC_URL:${ORACLE_RPC_URL:-}" \
@@ -509,8 +631,10 @@ const report = {
     gateOutput: "gate-output.txt",
     blockers: "blockers.md",
     manualChecklist: "manual-checklist.md",
+    gaslessFlowEvidence: "gasless-flow-evidence.md",
     txLinks: "tx-links.md",
     signoff: "signoff.md",
+    rolloutChecklist: "rollout-checklist.md",
     reconciliationReport: fs.existsSync(`${process.env.REPORT_DIR}/reconciliation-report.json`)
       ? "reconciliation-report.json"
       : null,

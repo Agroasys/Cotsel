@@ -1,3 +1,4 @@
+import { splitPlatformFeeComponents } from '@agroasys/sdk';
 import { config } from '../config';
 import { IndexerClient } from '../indexer/client';
 import {
@@ -7,9 +8,25 @@ import {
   upsertTreasuryClaimEvent,
 } from '../database/queries';
 import { Logger } from '../utils/logger';
+import type { TreasuryComponent } from '../types';
 
-function buildEntryKey(eventId: string, component: 'LOGISTICS' | 'PLATFORM_FEE'): string {
+function buildEntryKey(eventId: string, component: TreasuryComponent): string {
   return `${eventId}:${component.toLowerCase()}`;
+}
+
+function resolvePlatformFeeSplit(event: {
+  paidPlatformFees: string;
+  paidPlatformFeeNet?: string | null;
+  paidSettlementSupportFee?: string | null;
+}): { platformFeeNetAmount: bigint; settlementSupportFeeAmount: bigint } {
+  if (event.paidPlatformFeeNet && event.paidSettlementSupportFee) {
+    return {
+      platformFeeNetAmount: BigInt(event.paidPlatformFeeNet),
+      settlementSupportFeeAmount: BigInt(event.paidSettlementSupportFee),
+    };
+  }
+
+  return splitPlatformFeeComponents(BigInt(event.paidPlatformFees));
 }
 
 const TRADE_EVENT_CURSOR = 'trade_events';
@@ -71,20 +88,57 @@ export class TreasuryIngestionService {
             continue;
           }
 
-          const { initialStateCreated } = await upsertLedgerEntryWithInitialState({
-            entryKey: buildEntryKey(event.id, 'PLATFORM_FEE'),
-            tradeId: event.tradeId,
-            txHash: event.txHash,
-            blockNumber: event.blockNumber,
-            eventName: event.eventName,
-            componentType: 'PLATFORM_FEE',
-            amountRaw: event.paidPlatformFees,
-            sourceTimestamp: event.timestamp,
-            metadata: { sourceEventId: event.id },
+          const { platformFeeNetAmount, settlementSupportFeeAmount } = resolvePlatformFeeSplit({
+            paidPlatformFees: event.paidPlatformFees,
+            paidPlatformFeeNet: event.paidPlatformFeeNet,
+            paidSettlementSupportFee: event.paidSettlementSupportFee,
           });
+          const grossPlatformFeesAmount = BigInt(event.paidPlatformFees);
+          const platformEntries = [
+            {
+              componentType: 'PLATFORM_FEE',
+              amountRaw: platformFeeNetAmount.toString(),
+              metadata: {
+                sourceEventId: event.id,
+                grossPlatformFeesAmount: grossPlatformFeesAmount.toString(),
+                settlementSupportFeeAmount: settlementSupportFeeAmount.toString(),
+              },
+            },
+            {
+              componentType: 'SETTLEMENT_SUPPORT_FEE',
+              amountRaw: settlementSupportFeeAmount.toString(),
+              metadata: {
+                sourceEventId: event.id,
+                grossPlatformFeesAmount: grossPlatformFeesAmount.toString(),
+                platformFeeNetAmount: platformFeeNetAmount.toString(),
+              },
+            },
+          ] satisfies Array<{
+            componentType: TreasuryComponent;
+            amountRaw: string;
+            metadata: Record<string, unknown>;
+          }>;
 
-          if (initialStateCreated) {
-            inserted += 1;
+          for (const entry of platformEntries) {
+            if (BigInt(entry.amountRaw) <= 0n) {
+              continue;
+            }
+
+            const { initialStateCreated } = await upsertLedgerEntryWithInitialState({
+              entryKey: buildEntryKey(event.id, entry.componentType),
+              tradeId: event.tradeId,
+              txHash: event.txHash,
+              blockNumber: event.blockNumber,
+              eventName: event.eventName,
+              componentType: entry.componentType,
+              amountRaw: entry.amountRaw,
+              sourceTimestamp: event.timestamp,
+              metadata: entry.metadata,
+            });
+
+            if (initialStateCreated) {
+              inserted += 1;
+            }
           }
         }
       }

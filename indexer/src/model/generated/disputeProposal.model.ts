@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, ManyToOne as ManyToOne_, IntColumn as IntColumn_, BooleanColumn as BooleanColumn_, DateTimeColumn as DateTimeColumn_, OneToMany as OneToMany_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, ManyToOne as ManyToOne_, Relation as Relation_, IntColumn as IntColumn_, BooleanColumn as BooleanColumn_, DateTimeColumn as DateTimeColumn_, OneToMany as OneToMany_} from "@subsquid/typeorm-store"
 import {Trade} from "./trade.model"
 import {DisputeStatus} from "./_disputeStatus"
 import {DisputeEvent} from "./disputeEvent.model"
@@ -18,7 +18,7 @@ export class DisputeProposal {
 
     @Index_()
     @ManyToOne_(() => Trade, {nullable: true})
-    trade!: Trade
+    trade!: Relation_<Trade>
 
     @Index_()
     @Column_("varchar", {length: 7, nullable: false})
@@ -47,5 +47,5 @@ export class DisputeProposal {
     cancelled!: boolean
 
     @OneToMany_(() => DisputeEvent, e => e.dispute)
-    events!: DisputeEvent[]
+    events!: Relation_<DisputeEvent[]>
 }

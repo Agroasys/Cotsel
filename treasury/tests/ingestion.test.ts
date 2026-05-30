@@ -34,6 +34,8 @@ function makeEvent(
     timestamp: data.timestamp || new Date('2026-01-01T00:00:00.000Z'),
     releasedLogisticsAmount: data.releasedLogisticsAmount,
     paidPlatformFees: data.paidPlatformFees,
+    paidPlatformFeeNet: data.paidPlatformFeeNet,
+    paidSettlementSupportFee: data.paidSettlementSupportFee,
   };
 }
 
@@ -55,7 +57,7 @@ describe('TreasuryIngestionService', () => {
         id: 'evt-2',
         tradeId: 'trade-1',
         eventName: 'PlatformFeesPaidStage1',
-        paidPlatformFees: '10',
+        paidPlatformFees: '5000000',
       }),
       makeEvent({
         id: 'evt-3',
@@ -94,7 +96,7 @@ describe('TreasuryIngestionService', () => {
 
     const firstRun = await service.ingestOnce();
 
-    expect(firstRun).toEqual({ fetched: 3, inserted: 3 });
+    expect(firstRun).toEqual({ fetched: 3, inserted: 4 });
     expect(fetchTreasuryEvents.mock.calls[0][1]).toBe(0);
     expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(1, 3, 'trade_events');
     expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(2, 0, 'claim_events');
@@ -118,7 +120,8 @@ describe('TreasuryIngestionService', () => {
     mockSetIngestionOffset.mockResolvedValue(undefined);
     mockUpsertLedgerEntryWithInitialState
       .mockResolvedValueOnce({ entry: { id: 1 }, initialStateCreated: true })
-      .mockResolvedValueOnce({ entry: { id: 1 }, initialStateCreated: false });
+      .mockResolvedValueOnce({ entry: { id: 1 }, initialStateCreated: false })
+      .mockResolvedValueOnce({ entry: { id: 1 }, initialStateCreated: true });
 
     const fetchTreasuryEvents = jest
       .fn()
@@ -133,7 +136,7 @@ describe('TreasuryIngestionService', () => {
           id: 'evt-b',
           tradeId: 'trade-a',
           eventName: 'PlatformFeesPaidStage1',
-          paidPlatformFees: '50',
+          paidPlatformFees: '5000000',
         }),
       ])
       .mockResolvedValueOnce([]);
@@ -146,7 +149,23 @@ describe('TreasuryIngestionService', () => {
 
     const result = await service.ingestOnce();
 
-    expect(result).toEqual({ fetched: 2, inserted: 1 });
+    expect(result).toEqual({ fetched: 2, inserted: 2 });
+    expect(mockUpsertLedgerEntryWithInitialState).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        entryKey: 'evt-b:platform_fee',
+        componentType: 'PLATFORM_FEE',
+        amountRaw: '1000000',
+      }),
+    );
+    expect(mockUpsertLedgerEntryWithInitialState).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        entryKey: 'evt-b:settlement_support_fee',
+        componentType: 'SETTLEMENT_SUPPORT_FEE',
+        amountRaw: '4000000',
+      }),
+    );
     expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(1, 2, 'trade_events');
     expect(mockSetIngestionOffset).toHaveBeenNthCalledWith(2, 0, 'claim_events');
   });
@@ -222,7 +241,9 @@ describe('TreasuryIngestionService', () => {
     mockSetIngestionOffset.mockResolvedValue(undefined);
     mockUpsertLedgerEntryWithInitialState
       .mockResolvedValueOnce({ entry: { id: 1 }, initialStateCreated: true })
-      .mockResolvedValueOnce({ entry: { id: 1 }, initialStateCreated: false });
+      .mockResolvedValueOnce({ entry: { id: 2 }, initialStateCreated: true })
+      .mockResolvedValueOnce({ entry: { id: 1 }, initialStateCreated: false })
+      .mockResolvedValueOnce({ entry: { id: 2 }, initialStateCreated: false });
 
     const fetchTreasuryEvents = jest
       .fn()
@@ -231,13 +252,13 @@ describe('TreasuryIngestionService', () => {
           id: 'evt-replay',
           tradeId: 'trade-replay',
           eventName: 'PlatformFeesPaidStage1',
-          paidPlatformFees: '15',
+          paidPlatformFees: '5000000',
         }),
         makeEvent({
           id: 'evt-replay',
           tradeId: 'trade-replay',
           eventName: 'PlatformFeesPaidStage1',
-          paidPlatformFees: '15',
+          paidPlatformFees: '5000000',
         }),
       ])
       .mockResolvedValueOnce([]);
@@ -250,14 +271,22 @@ describe('TreasuryIngestionService', () => {
 
     const result = await service.ingestOnce();
 
-    expect(result).toEqual({ fetched: 2, inserted: 1 });
+    expect(result).toEqual({ fetched: 2, inserted: 2 });
     expect(mockUpsertLedgerEntryWithInitialState).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ entryKey: 'evt-replay:platform_fee' }),
     );
     expect(mockUpsertLedgerEntryWithInitialState).toHaveBeenNthCalledWith(
       2,
+      expect.objectContaining({ entryKey: 'evt-replay:settlement_support_fee' }),
+    );
+    expect(mockUpsertLedgerEntryWithInitialState).toHaveBeenNthCalledWith(
+      3,
       expect.objectContaining({ entryKey: 'evt-replay:platform_fee' }),
+    );
+    expect(mockUpsertLedgerEntryWithInitialState).toHaveBeenNthCalledWith(
+      4,
+      expect.objectContaining({ entryKey: 'evt-replay:settlement_support_fee' }),
     );
   });
 

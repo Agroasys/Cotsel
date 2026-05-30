@@ -39,7 +39,7 @@ describe('AgroasysEscrow event schema', function () {
       'OracleUpdateProposed(uint256,address,address,uint256,bool)',
       'OracleUpdated(address,address)',
       'Paused(address)',
-      'PlatformFeesPaidStage1(uint256,address,uint256)',
+      'PlatformFeesPaidStage1(uint256,address,uint256,uint256,uint256)',
       'RelayedActionExecuted(address,address,bytes32,uint256)',
       'RelayerUpdated(address,bool,address)',
       'SupplierPayoutTransferred(uint256,address,uint256,uint8,address)',

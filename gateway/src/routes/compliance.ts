@@ -179,7 +179,7 @@ export function createComplianceRouter(options: ComplianceRouterOptions): Router
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
   const idempotency = createIdempotencyMiddleware(options.idempotencyStore);
 
-  router.use(authenticate);
+  router.use('/compliance', authenticate);
 
   router.get(
     '/compliance/decisions/:decisionId',

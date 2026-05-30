@@ -124,7 +124,13 @@ PY
 get_indexer_head_from_db() {
   validate_identifier "POSTGRES_USER" "${POSTGRES_USER:-}" || return 1
   validate_identifier "INDEXER_DB_NAME" "${INDEXER_DB_NAME:-}" || return 1
-  run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -Atc 'SELECT COALESCE(MAX(block_number), 0) FROM trade_event;'
+  run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -Atc '
+    SELECT COALESCE(
+      (SELECT height FROM squid_processor.hot_block ORDER BY height DESC LIMIT 1),
+      (SELECT height FROM squid_processor.status WHERE id = 0),
+      0
+    );
+  '
 }
 
 run_compose() {
@@ -389,6 +395,13 @@ else:
 }
 
 read_indexer_head() {
+  local db_head
+  db_head="$(get_indexer_head_from_db 2>/dev/null || true)"
+  if [[ "$db_head" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$db_head"
+    return 0
+  fi
+
   local status_response
   status_response="$(run_graphql_query '{ squidStatus { height } }' || true)"
   local head
@@ -683,13 +696,7 @@ if is_service_running "${INDEXER_PIPELINE_SERVICE}"; then
   run_compose restart "${INDEXER_PIPELINE_SERVICE}" >/dev/null
   sleep "$PIPELINE_RESTART_SLEEP"
   if retry_cmd "indexer graphql readiness after pipeline restart" "$READINESS_RETRY_ATTEMPTS" "$READINESS_RETRY_DELAY" run_graphql_query "$READINESS_QUERY" >/dev/null; then
-    STATUS_AFTER_RESTART="$(run_graphql_query '{ squidStatus { height } }' || true)"
-    HEAD_AFTER_RESTART="$(printf '%s' "$STATUS_AFTER_RESTART" | extract_indexer_head_height)"
-    if [[ -z "$HEAD_AFTER_RESTART" ]]; then
-      HEAD_AFTER_RESTART="$(
-        run_with_prefixed_stderr "get_indexer_head_from_db" get_indexer_head_from_db || true
-      )"
-    fi
+    HEAD_AFTER_RESTART="$(read_indexer_head || true)"
 
     if [[ -n "$HEAD_BEFORE_RESTART" && -n "$HEAD_AFTER_RESTART" ]]; then
       echo "reorg/resync probe: headBeforeRestart=${HEAD_BEFORE_RESTART}, headAfterRestart=${HEAD_AFTER_RESTART}"

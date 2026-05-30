@@ -92,12 +92,16 @@ const tradeParams = {
   ricardianHash: 'ricardian-hash',
 };
 
-const trade = await buyerSDK.createTrade(tradeParams, buyerSigner);
+const gaslessRequest = await buyerSDK.createGaslessTradeExecutionRequest(tradeParams, buyerSigner, {
+  handoffId: 'demo-handoff-id',
+  expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+});
 ```
 
 **Show:**
 
-- `TradeLocked` event emitted on-chain.
+- Buyer signs typed authorizations; the relayer submits the gasless request.
+- `TradeLocked` event emitted on-chain after relayer submission.
 - Trade status transitions to `LOCKED`.
 - Escrow balance increases by 10,000 USDC.
 - Buyer balance decreases by 10,000 USDC.

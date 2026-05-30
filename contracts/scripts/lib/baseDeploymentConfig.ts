@@ -126,6 +126,34 @@ function parseAdminList(env: NodeJS.ProcessEnv): string[] {
   return admins;
 }
 
+function parseOptionalAddressList(name: string, env: NodeJS.ProcessEnv): string[] {
+  const raw = optionalEnv(name, env);
+  if (raw === null) {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value, index) => parseAddress(`${name}[${index}]`, value));
+}
+
+function assertAdminsDoNotIncludeForbiddenUsers(admins: string[], forbiddenUsers: string[]): void {
+  if (forbiddenUsers.length === 0) {
+    return;
+  }
+
+  const adminSet = new Set(admins.map((address) => address.toLowerCase()));
+  const forbiddenAdmin = forbiddenUsers.find((address) => adminSet.has(address.toLowerCase()));
+  if (forbiddenAdmin) {
+    throw new Error(
+      `DEPLOY_ADMINS must not include buyer/supplier user wallet ${forbiddenAdmin}. ` +
+        "Use service-owned admin wallets for dispute and governance approvals.",
+    );
+  }
+}
+
 export function getBaseDeploymentTarget(networkName: string): BaseDeploymentTarget {
   if (networkName !== "base-sepolia" && networkName !== "base-mainnet") {
     throw new Error(
@@ -159,6 +187,7 @@ export function loadBaseDeploymentConfig(
   const oracleAddress = parseAddressEnv("DEPLOY_ORACLE_ADDRESS", env);
   const treasuryAddress = parseAddressEnv("DEPLOY_TREASURY_ADDRESS", env);
   const admins = parseAdminList(env);
+  assertAdminsDoNotIncludeForbiddenUsers(admins, parseOptionalAddressList("DEPLOY_FORBIDDEN_USER_WALLETS", env));
   const requiredApprovals = parsePositiveIntEnv("DEPLOY_REQUIRED_APPROVALS", env);
   if (requiredApprovals > admins.length) {
     throw new Error("DEPLOY_REQUIRED_APPROVALS must not exceed the number of admin addresses");

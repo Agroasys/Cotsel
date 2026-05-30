@@ -795,6 +795,47 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '503':
           $ref: '#/components/responses/UpstreamUnavailableError'
+  /settlement/gasless-executions/operator-action:
+    post:
+      tags: [Settlement]
+      summary: Execute a service-owned gasless settlement action
+      description: |
+        Service-authenticated Cotsel execution boundary for settlement actions that do not require a buyer or
+        supplier wallet signature. The retained action is finalize after dispute window; Cotsel validates the
+        backend-approved payload, simulates the allowlisted contract call, signs/broadcasts with the configured
+        executor key, and records settlement lifecycle events.
+      operationId: createGaslessOperatorActionExecution
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionRequest'
+      responses:
+        '202':
+          description: Gasless operator-action execution submitted by Cotsel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
   /settlement/handoffs/{handoffId}/execution-events:
     get:
       tags: [Settlement]
@@ -4318,6 +4359,8 @@ components:
         - updatedAt
         - ricardianHash
         - platformFee
+        - platformFeesTotal
+        - settlementSupportFee
         - logisticsAmount
         - timeline
         - complianceStatus
@@ -4350,6 +4393,13 @@ components:
           type: string
         platformFee:
           type: number
+          description: Platform fee net of the fixed settlement support fee.
+        platformFeesTotal:
+          type: number
+          description: Gross platform fee amount emitted by the escrow contract.
+        settlementSupportFee:
+          type: number
+          description: Fixed settlement support fee component in USDC.
         logisticsAmount:
           type: number
         timeline:
@@ -4935,6 +4985,70 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/SettlementGaslessUserActionExecutionPayload'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementGaslessOperatorActionExecutionRequest:
+      type: object
+      required:
+        - action
+        - handoffId
+        - chainId
+        - contractAddress
+        - expiresAt
+        - payloadHash
+        - tradeId
+      properties:
+        action:
+          type: string
+          enum:
+            - finalize_after_dispute_window
+        chainId:
+          type: integer
+          minimum: 1
+          description: Chain ID that must match the configured Cotsel settlement runtime.
+        contractAddress:
+          type: string
+          description: Escrow contract address that must match the configured allowlisted runtime.
+        expiresAt:
+          type: string
+          format: date-time
+          description: Backend-approved request expiry. Cotsel rejects expired or over-long requests.
+        payloadHash:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{64}$'
+          description: Cotsel recomputes this hash from the normalized execution payload before simulation.
+        handoffId:
+          type: string
+        tradeId:
+          type: string
+          pattern: '^[0-9]+$'
+    SettlementGaslessOperatorActionExecutionPayload:
+      type: object
+      required: [handoff, acceptedEvent, queuedEvent, simulationEvent, submittedEvent, txHash]
+      properties:
+        handoff:
+          $ref: '#/components/schemas/SettlementHandoff'
+        acceptedEvent:
+          $ref: '#/components/schemas/SettlementExecutionEvent'
+        queuedEvent:
+          $ref: '#/components/schemas/SettlementExecutionEvent'
+        simulationEvent:
+          $ref: '#/components/schemas/SettlementExecutionEvent'
+        submittedEvent:
+          $ref: '#/components/schemas/SettlementExecutionEvent'
+        txHash:
+          type: string
+          description: Canonical EVM transaction hash submitted by Cotsel.
+    SettlementGaslessOperatorActionExecutionResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionPayload'
         timestamp:
           type: string
           format: date-time

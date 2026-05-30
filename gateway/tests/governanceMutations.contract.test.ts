@@ -83,7 +83,9 @@ const tradeFixture: DashboardTradeRecord = {
   createdAt: '2026-03-07T09:00:00.000Z',
   updatedAt: '2026-03-07T10:00:00.000Z',
   ricardianHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-  platformFee: 1250,
+  platformFee: 1246,
+  platformFeesTotal: 1250,
+  settlementSupportFee: 4,
   logisticsAmount: 3000,
   complianceStatus: 'pass',
   settlement: {

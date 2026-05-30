@@ -106,7 +106,7 @@ export function createGovernanceRouter(options: GovernanceRouterOptions): Router
   const router = Router();
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
 
-  router.use(authenticate, requireGatewayRole('operator:read'));
+  router.use('/governance', authenticate, requireGatewayRole('operator:read'));
 
   router.get('/governance/status', async (_req, res, next) => {
     try {

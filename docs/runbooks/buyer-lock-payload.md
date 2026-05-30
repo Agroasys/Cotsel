@@ -5,16 +5,18 @@ the gasless create-trade flow.
 
 **Relevant SDK type:** `BuyerLockPayload` (`sdk/src/types/trade.ts`)
 **Backward-compatible alias:** `TradeParameters`
-**Entry point method:** `BuyerSDK.createGaslessTradeAuthorization(payload, buyerSigner)`
+**Primary entry point method:** `BuyerSDK.createGaslessTradeExecutionRequest(payload, buyerSigner, input)`
 
 ## Overview
 
 When a buyer initiates settlement on the Agroasys platform, the checkout UI
 must assemble a `BuyerLockPayload` and pass it to
-`BuyerSDK.createGaslessTradeAuthorization(...)`. The SDK validates the payload,
-derives the on-chain authorization nonce, and asks the buyer to sign an EIP-712
-authorization. A backend relayer submits the create-trade request so the buyer
-does not need gas.
+`BuyerSDK.createGaslessTradeExecutionRequest(...)`. The SDK validates the
+payload, derives the on-chain authorization nonce, asks the buyer to sign an
+EIP-712 escrow authorization, asks the buyer to sign the USDC
+receive-with-authorization payload, and returns a gateway-ready gasless
+execution request. A backend relayer submits the create-trade request so the
+buyer does not need native gas.
 
 The checkout UI is responsible for:
 
@@ -22,7 +24,9 @@ The checkout UI is responsible for:
    requesting the gasless create-trade authorization.
 2. Decomposing the trade value into its four canonical amount components.
 3. Providing the supplier's wallet address.
-4. Optionally setting a `deadline`.
+4. Providing the Cotsel settlement `handoffId`.
+5. Setting a short `expiresAt` timestamp for the gasless execution request.
+6. Optionally setting a signature `deadline`.
 
 ## Canonical Payload Shape
 
@@ -104,11 +108,19 @@ const deadline = payload.deadline ?? Math.floor(Date.now() / 1000) + 3600;
 
 The direct buyer-paid `approve` plus `createTrade` flow is removed. For gasless
 trade creation, collect a USDC receive authorization for the escrow contract and
-send it with the signed create-trade authorization to the backend relayer:
+send it with the signed create-trade authorization to the backend relayer.
+
+The preferred SDK call builds both signatures and returns the gateway request:
 
 ```ts
-await buyerSDK.createUsdcReceiveAuthorization(payload.totalAmount, buyerSigner);
+const request = await buyerSDK.createGaslessTradeExecutionRequest(payload, buyerSigner, {
+  handoffId: 'handoff-from-cotsel-gateway',
+  expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+});
 ```
+
+The returned request contains stringified amounts and a `payloadHash` that the
+Cotsel gateway recomputes before relaying.
 
 ### Failure and Retry Semantics
 

@@ -1,4 +1,4 @@
-import {Entity as Entity_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, IntColumn as IntColumn_, BooleanColumn as BooleanColumn_, DateTimeColumn as DateTimeColumn_, BigIntColumn as BigIntColumn_, OneToMany as OneToMany_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, IntColumn as IntColumn_, BooleanColumn as BooleanColumn_, DateTimeColumn as DateTimeColumn_, BigIntColumn as BigIntColumn_, OneToMany as OneToMany_, Relation as Relation_} from "@subsquid/typeorm-store"
 import {AdminEvent} from "./adminEvent.model"
 
 @Entity_()
@@ -44,5 +44,5 @@ export class AdminAddProposal {
     cancelled!: boolean
 
     @OneToMany_(() => AdminEvent, e => e.adminAddProposal)
-    events!: AdminEvent[]
+    events!: Relation_<AdminEvent[]>
 }

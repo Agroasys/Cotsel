@@ -270,6 +270,82 @@ INSERT INTO treasury_ingestion_state (cursor_name, next_offset)
 VALUES ('claim_events', 0)
 ON CONFLICT (cursor_name) DO NOTHING;
 
+WITH gross_platform_fee_entries AS (
+    SELECT e.*
+    FROM treasury_ledger_entries e
+    WHERE e.event_name = 'PlatformFeesPaidStage1'
+      AND e.component_type = 'PLATFORM_FEE'
+      AND e.amount_raw ~ '^[0-9]+$'
+      AND e.amount_raw::numeric >= 4000000
+      AND NOT EXISTS (
+          SELECT 1
+          FROM treasury_ledger_entries support
+          WHERE support.event_name = 'PlatformFeesPaidStage1'
+            AND support.component_type = 'SETTLEMENT_SUPPORT_FEE'
+            AND support.metadata->>'sourceEventId' = e.metadata->>'sourceEventId'
+      )
+),
+updated_platform_fee_entries AS (
+    UPDATE treasury_ledger_entries e
+    SET amount_raw = (e.amount_raw::numeric - 4000000)::text,
+        metadata = e.metadata || jsonb_build_object(
+            'grossPlatformFeesAmount', e.amount_raw,
+            'settlementSupportFeeAmount', '4000000'
+        )
+    FROM gross_platform_fee_entries gross
+    WHERE e.id = gross.id
+    RETURNING
+        gross.entry_key,
+        gross.trade_id,
+        gross.tx_hash,
+        gross.block_number,
+        gross.event_name,
+        gross.source_timestamp,
+        gross.metadata,
+        gross.amount_raw
+),
+inserted_support_fee_entries AS (
+    INSERT INTO treasury_ledger_entries (
+        entry_key,
+        trade_id,
+        tx_hash,
+        block_number,
+        event_name,
+        component_type,
+        amount_raw,
+        source_timestamp,
+        metadata
+    )
+    SELECT
+        regexp_replace(entry_key, ':platform_fee$', ':settlement_support_fee'),
+        trade_id,
+        tx_hash,
+        block_number,
+        event_name,
+        'SETTLEMENT_SUPPORT_FEE',
+        '4000000',
+        source_timestamp,
+        metadata || jsonb_build_object(
+            'grossPlatformFeesAmount', amount_raw,
+            'platformFeeNetAmount', (amount_raw::numeric - 4000000)::text
+        )
+    FROM updated_platform_fee_entries
+    ON CONFLICT (entry_key) DO NOTHING
+    RETURNING id
+)
+INSERT INTO payout_lifecycle_events (ledger_entry_id, state, note, actor)
+SELECT
+    id,
+    'PENDING_REVIEW',
+    'Backfilled from historical gross PlatformFeesPaidStage1 treasury entry',
+    'system:schema-backfill'
+FROM inserted_support_fee_entries
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM payout_lifecycle_events lifecycle
+    WHERE lifecycle.ledger_entry_id = inserted_support_fee_entries.id
+);
+
 CREATE INDEX IF NOT EXISTS idx_treasury_ledger_trade_id ON treasury_ledger_entries(trade_id);
 CREATE INDEX IF NOT EXISTS idx_treasury_ledger_created_at ON treasury_ledger_entries(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_treasury_payout_state_created ON payout_lifecycle_events(state, created_at DESC);

@@ -18,7 +18,7 @@ export function createOverviewRouter(options: OverviewRouterOptions): Router {
   const router = Router();
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
 
-  router.use(authenticate, requireGatewayRole('operator:read'));
+  router.use('/overview', authenticate, requireGatewayRole('operator:read'));
 
   router.get('/overview', async (_req, res, next) => {
     try {

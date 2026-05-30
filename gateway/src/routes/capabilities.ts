@@ -18,7 +18,7 @@ export function createCapabilitiesRouter(options: CapabilitiesRouterOptions): Ro
   const router = Router();
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
 
-  router.use(authenticate);
+  router.use('/auth/capabilities', authenticate);
 
   router.get('/auth/capabilities', async (req, res, next) => {
     try {
