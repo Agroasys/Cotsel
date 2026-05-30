@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { buildCapacityReport, parseArgs } from '../gasless-relayer-capacity-rehearsal.mjs';
 
@@ -66,4 +69,87 @@ test('gasless relayer capacity parser accepts npm separator', () => {
   const parsed = parseArgs(['--', '--mode', 'config-only', '--stdout']);
   assert.equal(parsed.mode, 'config-only');
   assert.equal(parsed.stdout, true);
+});
+
+test('gasless relayer capacity live mode validates transaction proof content', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gasless-capacity-'));
+  const evidenceFile = path.join(tmpDir, 'live-proof.json');
+  fs.writeFileSync(
+    evidenceFile,
+    JSON.stringify({
+      transactions: {
+        createTradeGasless: '0xcreate',
+        stage1Release: '0xstage1',
+        confirmArrival: '0xarrival',
+        openDisputeGasless: '0xdispute',
+        proposeRefund: '0xproposal',
+        approveRefund: '0xrefund',
+      },
+      currentRunEvidence: {
+        balanceDeltas: {
+          buyerUsdc: '-7000000',
+          supplierUsdc: '2000000',
+          serviceEthWei: '-1000000000000',
+        },
+        nonRefundableFeesAddedToTreasury: '5000000',
+        expectedNonRefundableFees: '5000000',
+      },
+      trade: {
+        totalAmount: '10000000',
+        supplierFirstTranche: '2000000',
+        supplierSecondTranche: '3000000',
+      },
+      gateway: {
+        refundEvents: [
+          {
+            eventType: 'reconciled',
+            executionStatus: 'confirmed',
+            reconciliationStatus: 'matched',
+            txHash: '0xrefund',
+          },
+        ],
+      },
+      gatewayEvidence: {
+        callbackDeliveries: [
+          {
+            eventType: 'reconciled',
+            reconciliationStatus: 'matched',
+            status: 'delivered',
+            deliveredAt: '2026-05-30T00:00:00.000Z',
+          },
+        ],
+      },
+      backendEvidence: {
+        accounting: [{ id: 1 }],
+        refundEvents: [
+          {
+            eventType: 'execution_reconciled',
+            sourceSystem: 'reconciler',
+            externalTransactionHash: '0xrefund',
+            observedBuyerRefundCents: '300',
+          },
+        ],
+      },
+    }),
+  );
+
+  withEnv(
+    {
+      GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
+    },
+    () => {
+      const report = buildCapacityReport(
+        { mode: 'live', output: 'unused.json', evidenceFile },
+        new Date('2026-05-30T00:00:00.000Z'),
+      );
+
+      assert.equal(report.status, 'pass');
+      assert.equal(report.evidence.type, 'live-base-sepolia-proof');
+      assert.equal(report.evidence.transactionCount, 6);
+      assert.equal(report.evidence.backendAccountingEntries, 1);
+      assert.equal(report.evidence.backendRefundEvents, 1);
+      assert.equal(report.evidence.gatewayRefundEvents, 1);
+      assert.equal(report.evidence.gatewayCallbackDeliveries, 1);
+    },
+  );
 });

@@ -183,10 +183,102 @@ function buildCapacityReport(options, now = new Date()) {
       blockers.push(`live evidence file is missing: ${options.evidenceFile}`);
     } else {
       const parsed = JSON.parse(fs.readFileSync(options.evidenceFile, 'utf8'));
+      const transactionKeys = [
+        'createTradeGasless',
+        'stage1Release',
+        'confirmArrival',
+        'openDisputeGasless',
+        'proposeRefund',
+        'approveRefund',
+      ];
+      const transactions = parsed.transactions ?? {};
+      const missingTransactions = transactionKeys.filter((key) => !transactions[key]);
+      const nonRefundableFeesMatch =
+        parsed.currentRunEvidence?.nonRefundableFeesAddedToTreasury &&
+        parsed.currentRunEvidence?.expectedNonRefundableFees &&
+        parsed.currentRunEvidence.nonRefundableFeesAddedToTreasury ===
+          parsed.currentRunEvidence.expectedNonRefundableFees;
+      const supplierPayoutDeltaMatches =
+        parsed.currentRunEvidence?.balanceDeltas?.supplierUsdc &&
+        parsed.trade?.supplierFirstTranche &&
+        parsed.currentRunEvidence.balanceDeltas.supplierUsdc === parsed.trade.supplierFirstTranche;
+      const buyerNetDeltaMatches =
+        parsed.currentRunEvidence?.balanceDeltas?.buyerUsdc &&
+        parsed.trade?.totalAmount &&
+        parsed.trade?.supplierSecondTranche &&
+        parsed.currentRunEvidence.balanceDeltas.buyerUsdc ===
+          `-${BigInt(parsed.trade.totalAmount) - BigInt(parsed.trade.supplierSecondTranche)}`;
+      const servicePaidGas =
+        parsed.currentRunEvidence?.balanceDeltas?.serviceEthWei &&
+        BigInt(parsed.currentRunEvidence.balanceDeltas.serviceEthWei) < 0n;
+      const hasBackendAccounting = (parsed.backendEvidence?.accounting?.length ?? 0) > 0;
+      const hasGatewayReconciledRefund = (parsed.gateway?.refundEvents ?? []).some(
+        (event) =>
+          event.eventType === 'reconciled' &&
+          event.executionStatus === 'confirmed' &&
+          event.reconciliationStatus === 'matched' &&
+          Boolean(event.txHash),
+      );
+      const hasDeliveredReconciledCallback = (
+        parsed.gatewayEvidence?.callbackDeliveries ?? []
+      ).some(
+        (delivery) =>
+          delivery.eventType === 'reconciled' &&
+          delivery.reconciliationStatus === 'matched' &&
+          delivery.status === 'delivered' &&
+          delivery.deliveredAt,
+      );
+      const hasBackendReconciledRefund = (parsed.backendEvidence?.refundEvents ?? []).some(
+        (event) =>
+          event.eventType === 'execution_reconciled' &&
+          event.sourceSystem === 'reconciler' &&
+          Boolean(event.externalTransactionHash) &&
+          event.observedBuyerRefundCents !== null &&
+          event.observedBuyerRefundCents !== undefined,
+      );
+      if (missingTransactions.length > 0) {
+        blockers.push(
+          `live evidence is missing required transaction hashes: ${missingTransactions.join(', ')}`,
+        );
+      }
+      if (!nonRefundableFeesMatch) {
+        blockers.push(
+          'live evidence does not prove non-refundable fee accrual matches expected fees',
+        );
+      }
+      if (!supplierPayoutDeltaMatches) {
+        blockers.push('live evidence does not prove the direct supplier payout delta');
+      }
+      if (!buyerNetDeltaMatches) {
+        blockers.push('live evidence does not prove the direct buyer refund net delta');
+      }
+      if (!servicePaidGas) {
+        blockers.push('live evidence does not prove service-wallet gas payment');
+      }
+      if (!hasBackendAccounting) {
+        blockers.push('live evidence does not include backend sponsorship accounting rows');
+      }
+      if (!hasGatewayReconciledRefund) {
+        blockers.push(
+          'live evidence does not include a matched gateway refund reconciliation event',
+        );
+      }
+      if (!hasDeliveredReconciledCallback) {
+        blockers.push('live evidence does not include delivered callback evidence');
+      }
+      if (!hasBackendReconciledRefund) {
+        blockers.push('live evidence does not include a matched backend refund ledger event');
+      }
       evidence = {
         ...evidence,
         present: true,
-        status: parsed.status ?? parsed.result ?? null,
+        type: parsed.transactions ? 'live-base-sepolia-proof' : 'summary',
+        status: parsed.status ?? parsed.result ?? 'provided',
+        transactionCount: Object.values(transactions).filter(Boolean).length,
+        backendAccountingEntries: parsed.backendEvidence?.accounting?.length ?? null,
+        backendRefundEvents: parsed.backendEvidence?.refundEvents?.length ?? null,
+        gatewayRefundEvents: parsed.gateway?.refundEvents?.length ?? null,
+        gatewayCallbackDeliveries: parsed.gatewayEvidence?.callbackDeliveries?.length ?? null,
       };
     }
   }

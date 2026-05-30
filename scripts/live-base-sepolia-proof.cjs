@@ -433,6 +433,65 @@ async function readBackendEvidence(backendEnv, requestId, regularHandoffId) {
   }
 }
 
+async function readGatewayEvidence(cotselEnv, handoffIds) {
+  const client = new Client({
+    host: '127.0.0.1',
+    port: Number(requireEnv(cotselEnv, 'POSTGRES_PORT')),
+    database: requireEnv(cotselEnv, 'GATEWAY_DB_NAME'),
+    user: requireEnv(cotselEnv, 'GATEWAY_DB_RUNTIME_USER'),
+    password: requireEnv(cotselEnv, 'GATEWAY_DB_RUNTIME_PASSWORD'),
+    options: '-c app.service_name=gateway',
+  });
+  await client.connect();
+  try {
+    const handoffs = await client.query(
+      `SELECT handoff_id AS "handoffId", execution_status AS "executionStatus",
+              reconciliation_status AS "reconciliationStatus", callback_status AS "callbackStatus",
+              tx_hash AS "txHash", latest_event_type AS "latestEventType",
+              callback_delivered_at AS "callbackDeliveredAt"
+       FROM settlement_handoffs
+       WHERE handoff_id = ANY($1::text[])
+       ORDER BY created_at`,
+      [handoffIds],
+    );
+    const callbackDeliveries = await client.query(
+      `SELECT deliveries.delivery_id AS "deliveryId", deliveries.handoff_id AS "handoffId",
+              events.event_type AS "eventType", events.execution_status AS "executionStatus",
+              events.reconciliation_status AS "reconciliationStatus",
+              deliveries.status, deliveries.attempt_count AS "attemptCount",
+              deliveries.response_status AS "responseStatus",
+              deliveries.delivered_at AS "deliveredAt"
+       FROM settlement_callback_deliveries deliveries
+       JOIN settlement_execution_events events ON events.event_id = deliveries.event_id
+       WHERE deliveries.handoff_id = ANY($1::text[])
+       ORDER BY deliveries.created_at`,
+      [handoffIds],
+    );
+    return {
+      handoffs: handoffs.rows,
+      callbackDeliveries: callbackDeliveries.rows,
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+async function waitForGatewayCallbacks(cotselEnv, handoffIds, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = null;
+  while (Date.now() <= deadline) {
+    latest = await readGatewayEvidence(cotselEnv, handoffIds);
+    const hasPending = latest.callbackDeliveries.some((delivery) =>
+      ['pending', 'delivering'].includes(delivery.status),
+    );
+    if (latest.callbackDeliveries.length > 0 && !hasPending) {
+      return latest;
+    }
+    await wait(2000);
+  }
+  return latest;
+}
+
 async function main() {
   const cotselEnv = parseEnvFile(path.join(COTSEL_ROOT, '.env.staging-e2e-real'));
   const backendEnv = parseEnvFile(path.join(BACKEND_ROOT, '.env'));
@@ -735,7 +794,7 @@ async function main() {
     await escrow.connect(disputeApprovers.wallets[1]).approveDisputeSolution(proposalId),
   );
 
-  await gatewayJson({
+  const refundReconciledResult = await gatewayJson({
     baseUrl: gatewayBaseUrl,
     apiKey: serviceKey.id,
     apiSecret: serviceKey.secret,
@@ -759,7 +818,10 @@ async function main() {
     },
   });
 
-  await wait(12000);
+  const gatewayEvidence = await waitForGatewayCallbacks(cotselEnv, [
+    handoffCreate.data.handoffId,
+    handoffRefund.data.handoffId,
+  ]);
   const balancesAfter = await readBalances({ provider, usdc, wallets, escrowAddress, decimals });
   const backendEvidence = await readBackendEvidence(backendEnv, requestId, backendRefund.handoffId);
   const gatewayEvents = await gatewayJson({
@@ -798,8 +860,11 @@ async function main() {
     backendSeed,
     backendRefund,
     handoffs: {
-      create: handoffCreate.data,
-      refund: handoffRefund.data,
+      createInitial: handoffCreate.data,
+      createConfirmed: createResult.data.handoff,
+      refundInitial: handoffRefund.data,
+      refundAfterGaslessDispute: disputeResult.data.handoff,
+      refundReconciled: refundReconciledResult.data.handoff,
     },
     trade: {
       tradeId,
@@ -845,6 +910,7 @@ async function main() {
       disputeResult: disputeResult.data,
       refundEvents: gatewayEvents.data,
     },
+    gatewayEvidence,
     backendEvidence,
   };
   fs.writeFileSync(REPORT_PATH, `${JSON.stringify(report, bigintReplacer, 2)}\n`);

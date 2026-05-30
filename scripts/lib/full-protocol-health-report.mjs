@@ -128,6 +128,23 @@ function uniquePresent(values) {
   return [...new Set(values.filter(Boolean).map((value) => String(value).toLowerCase()))];
 }
 
+function redactSensitiveOutput(value) {
+  return String(value || '')
+    .replace(
+      /(PRIVATE_KEY|SECRET|PASSWORD|API_KEY|API_KEYS_JSON|HMAC_SECRET|JWT_SECRET|DATABASE_URL|RPC_URL|RPC_ENDPOINT|WEBHOOK_SIGNING_SECRET|ENCRYPTION_KEY)(\s*[:=]\s*)([^\s]+)/g,
+      '$1$2[REDACTED]',
+    )
+    .replace(
+      /(https:\/\/api\.developer\.coinbase\.com\/rpc\/v1\/base-sepolia\/)[A-Za-z0-9_-]+/g,
+      '$1[REDACTED]',
+    )
+    .replace(
+      /(https:\/\/base-sepolia\.g\.alchemy\.com\/v2\/)[A-Za-z0-9_-]+/g,
+      '$1[REDACTED]',
+    )
+    .replace(/0x[a-fA-F0-9]{64}/g, '[REDACTED_PRIVATE_KEY]');
+}
+
 function runCommand(rootDir, command, args, timeoutMs) {
   const startedAt = new Date().toISOString();
   const result = spawnSync(command, args, {
@@ -143,8 +160,8 @@ function runCommand(rootDir, command, args, timeoutMs) {
     signal: result.signal,
     startedAt,
     finishedAt: new Date().toISOString(),
-    stdout: (result.stdout || '').slice(-12000),
-    stderr: (result.stderr || '').slice(-12000),
+    stdout: redactSensitiveOutput(result.stdout).slice(-12000),
+    stderr: redactSensitiveOutput(result.stderr).slice(-12000),
     error: result.error ? result.error.message : null,
   };
 }

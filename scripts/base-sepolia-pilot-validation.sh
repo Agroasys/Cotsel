@@ -93,6 +93,14 @@ SUMMARY_LOG="$LOG_DIR/summary.log"
 mkdir -p "$REPORT_DIR" "$LOG_DIR"
 : > "$SUMMARY_LOG"
 
+redact_sensitive_output() {
+  sed -E \
+    -e 's#(PRIVATE_KEY|SECRET|PASSWORD|API_KEY|API_KEYS_JSON|HMAC_SECRET|JWT_SECRET|DATABASE_URL|RPC_URL|RPC_ENDPOINT|WEBHOOK_SIGNING_SECRET|ENCRYPTION_KEY)([[:space:]]*[:=][[:space:]]*)([^[:space:]]+)#\1\2[REDACTED]#g' \
+    -e 's#(https://api\.developer\.coinbase\.com/rpc/v1/base-sepolia/)[A-Za-z0-9_-]+#\1[REDACTED]#g' \
+    -e 's#(https://base-sepolia\.g\.alchemy\.com/v2/)[A-Za-z0-9_-]+#\1[REDACTED]#g' \
+    -e 's#0x[a-fA-F0-9]{64}#[REDACTED_PRIVATE_KEY]#g'
+}
+
 run_step() {
   local step="$1"
   local status_var="$2"
@@ -103,7 +111,7 @@ run_step() {
   echo "[${step}] command: $*" | tee -a "$SUMMARY_LOG"
 
   set +e
-  "$@" > >(tee "$log_file") 2> >(tee -a "$log_file" >&2)
+  "$@" > >(redact_sensitive_output | tee "$log_file") 2> >(redact_sensitive_output | tee -a "$log_file" >&2)
   local status=$?
   set -e
 
