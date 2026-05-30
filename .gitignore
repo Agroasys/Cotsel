@@ -13,6 +13,7 @@ env/*.env
 reports/notifications/*.json
 reports/reconciliation/staging-e2e-real-report.json
 reports/base-sepolia-pilot-validation/*
+reports/full-protocol-health/*
 reports/dashboard-parity/
 reports/pilot-rehearsal/*
 !reports/pilot-rehearsal/README.md

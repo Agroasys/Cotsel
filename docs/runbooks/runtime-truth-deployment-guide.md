@@ -193,6 +193,7 @@ Release-gate-aligned validation paths:
 - `.github/workflows/release-gate.yml`
 - `scripts/validate-env.sh staging-e2e-real`
 - `scripts/staging-e2e-real-gate.sh`
+- `pnpm run protocol:health -- --profile staging-e2e-real --mode config-only`
 - `scripts/postgres-backup-restore-smoke.sh`
 - `scripts/notifications-gate.sh staging-e2e-real`
 - `pnpm run pilot:rehearsal --window-id <window-id> --config-only`
@@ -223,6 +224,7 @@ Those are separate workstreams or external dependencies.
 ## Related runbooks
 
 - `docs/runbooks/docker-profiles.md`
+- `docs/runbooks/full-protocol-deployment-health.md`
 - `docs/runbooks/production-readiness-checklist.md`
 - `docs/runbooks/staging-e2e-real-release-gate.md`
 - `docs/runbooks/service-auth-matrix.md`
