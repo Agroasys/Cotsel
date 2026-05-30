@@ -475,6 +475,30 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
+  /operations/gasless-relayer/readiness:
+    get:
+      tags: [Operations]
+      summary: Gasless relayer readiness and risk-control posture
+      description: |
+        Operator read surface for the Cotsel gasless relayer. It exposes whether sponsored
+        settlement broadcasts are enabled or paused, the signer custody mode, active chain and
+        contract allowlist, gas-spend caps, queue pressure, and alert-level controls used by
+        finance and operations before enabling user-facing gas sponsorship.
+      operationId: getGaslessRelayerReadiness
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Gasless relayer readiness snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GaslessRelayerReadinessResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /trades:
     get:
       tags: [Trades]
@@ -3648,6 +3672,111 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/OperationsSummarySnapshot'
+        timestamp:
+          type: string
+          format: date-time
+    GaslessRelayerReadinessSnapshot:
+      type: object
+      required:
+        - enabled
+        - state
+        - generatedAt
+      properties:
+        enabled:
+          type: boolean
+        paused:
+          type: boolean
+        state:
+          type: string
+          enum: [ready, paused, degraded, blocked, disabled]
+        generatedAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        signerCustodyMode:
+          type: string
+          enum: [raw_private_key, kms, mpc]
+        activeExecutionPath:
+          type: object
+          required: [chainId, escrowAddress, rpcFallbackCount]
+          properties:
+            chainId:
+              type: integer
+            escrowAddress:
+              type: string
+            rpcFallbackCount:
+              type: integer
+              minimum: 0
+        controls:
+          type: object
+          required:
+            - gasLimitCap
+            - maxFeePerGasWei
+            - maxNativeCostWei
+            - minExecutorBalanceWei
+            - lowBalanceAlertWei
+            - stuckQueueThresholdMs
+            - repeatedFailureAlertThreshold
+          properties:
+            gasLimitCap:
+              type: string
+            maxFeePerGasWei:
+              type: string
+            maxNativeCostWei:
+              type: string
+            minExecutorBalanceWei:
+              type: string
+            lowBalanceAlertWei:
+              type: string
+            stuckQueueThresholdMs:
+              type: integer
+              minimum: 1000
+            repeatedFailureAlertThreshold:
+              type: integer
+              minimum: 1
+        queue:
+          type: object
+          required: [pending, active, lastQueueWaitMs, lastSubmissionAt]
+          properties:
+            pending:
+              type: integer
+              minimum: 0
+            active:
+              type: integer
+              minimum: 0
+            lastQueueWaitMs:
+              type: integer
+              nullable: true
+              minimum: 0
+            lastSubmissionAt:
+              type: string
+              format: date-time
+              nullable: true
+        alerts:
+          type: array
+          items:
+            type: object
+            required: [code, severity, detail]
+            properties:
+              code:
+                type: string
+              severity:
+                $ref: '#/components/schemas/OperationsIncidentSeverity'
+              detail:
+                type: string
+        recentFailureCount:
+          type: integer
+          minimum: 0
+    GaslessRelayerReadinessResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/GaslessRelayerReadinessSnapshot'
         timestamp:
           type: string
           format: date-time

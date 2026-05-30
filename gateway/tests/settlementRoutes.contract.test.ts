@@ -133,6 +133,16 @@ async function startServer(
       chainId: runtimeConfig.chainId,
       escrowAddress: runtimeConfig.escrowAddress,
       requestMaxTtlSeconds: runtimeConfig.gaslessRequestMaxTtlSeconds ?? 900,
+      broadcastPaused: runtimeConfig.gaslessBroadcastPaused,
+      signerCustodyMode: runtimeConfig.gaslessSignerCustodyMode,
+      rpcFallbackCount: runtimeConfig.rpcFallbackUrls.length,
+      gasLimitCap: runtimeConfig.gaslessMaxGasLimit,
+      maxFeePerGasWei: runtimeConfig.gaslessMaxFeePerGasWei,
+      maxNativeCostWei: runtimeConfig.gaslessMaxNativeCostWei,
+      minExecutorBalanceWei: runtimeConfig.gaslessMinExecutorBalanceWei,
+      lowBalanceAlertWei: runtimeConfig.gaslessLowBalanceAlertWei,
+      stuckQueueThresholdMs: runtimeConfig.gaslessStuckQueueThresholdMs,
+      repeatedFailureAlertThreshold: runtimeConfig.gaslessRepeatedFailureAlertThreshold,
     },
   );
   const nonceStore = createInMemoryNonceStore();
@@ -710,6 +720,136 @@ describe('gateway settlement routes contract', () => {
           payloadHash: gaslessBody.payloadHash,
         }),
       );
+    } finally {
+      server.close();
+    }
+  });
+
+  test('gasless relayer pause fails closed before settlement telemetry is accepted', async () => {
+    const { server, baseUrl } = await startServer({ gaslessBroadcastPaused: true });
+
+    try {
+      const handoffBody = {
+        platformId: 'agroasys-platform',
+        platformHandoffId: 'handoff-gasless-paused',
+        tradeId: 'TRD-gasless-paused',
+        phase: 'lock',
+        settlementChannel: 'cotsel_escrow',
+        displayCurrency: 'USD',
+        displayAmount: 1000,
+        assetSymbol: 'USDC',
+        assetAmount: 1000,
+      };
+      const handoffResponse = await fetch(`${baseUrl}/settlement/handoffs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'handoff-gasless-paused',
+          ...withServiceAuth('/api/dashboard-gateway/v1/settlement/handoffs', handoffBody),
+        },
+        body: JSON.stringify(handoffBody),
+      });
+      const handoffPayload = await handoffResponse.json();
+      const handoffId = handoffPayload.data.handoffId as string;
+      const gaslessBody = buildGaslessCreateTradeBody(handoffId);
+      const gaslessPath = '/api/dashboard-gateway/v1/settlement/gasless-executions/create-trade';
+      const gaslessResponse = await fetch(`${baseUrl}/settlement/gasless-executions/create-trade`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'gasless-create-trade-paused',
+          ...withServiceAuth(gaslessPath, gaslessBody),
+        },
+        body: JSON.stringify(gaslessBody),
+      });
+      const gaslessPayload = await gaslessResponse.json();
+
+      expect(gaslessResponse.status).toBe(503);
+      expect(gaslessPayload.error.code).toBe('UPSTREAM_UNAVAILABLE');
+      expect(gaslessPayload.error.message).toContain('broadcast is paused');
+
+      const eventPath = `/api/dashboard-gateway/v1/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`;
+      const listResponse = await fetch(
+        `${baseUrl}/settlement/handoffs/${encodeURIComponent(handoffId)}/execution-events`,
+        {
+          headers: {
+            ...withServiceAuth(eventPath, null, 'GET'),
+          },
+        },
+      );
+      const listPayload = await listResponse.json();
+      expect(listPayload.data).toEqual([]);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('gasless execution serializes broadcasts to avoid nonce races', async () => {
+    const observedConcurrency: number[] = [];
+    let inFlight = 0;
+    let txIndex = 0;
+    const { server, baseUrl } = await startServer(
+      {},
+      {
+        async executeCreateTrade() {
+          inFlight += 1;
+          observedConcurrency.push(inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          inFlight -= 1;
+          txIndex += 1;
+          return buildConfirmedSubmission(`0x${txIndex.toString(16).padStart(64, 'e')}`);
+        },
+      },
+    );
+
+    try {
+      async function createHandoff(label: string): Promise<string> {
+        const handoffBody = {
+          platformId: 'agroasys-platform',
+          platformHandoffId: `handoff-gasless-queue-${label}`,
+          tradeId: `TRD-gasless-queue-${label}`,
+          phase: 'lock',
+          settlementChannel: 'cotsel_escrow',
+          displayCurrency: 'USD',
+          displayAmount: 1000,
+          assetSymbol: 'USDC',
+          assetAmount: 1000,
+        };
+        const handoffResponse = await fetch(`${baseUrl}/settlement/handoffs`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': `handoff-gasless-queue-${label}`,
+            ...withServiceAuth('/api/dashboard-gateway/v1/settlement/handoffs', handoffBody),
+          },
+          body: JSON.stringify(handoffBody),
+        });
+        const payload = await handoffResponse.json();
+        return payload.data.handoffId as string;
+      }
+
+      const handoffIds = await Promise.all([createHandoff('a'), createHandoff('b')]);
+      const gaslessPath = '/api/dashboard-gateway/v1/settlement/gasless-executions/create-trade';
+      const responses = await Promise.all(
+        handoffIds.map((handoffId, index) => {
+          const body = buildGaslessCreateTradeBody(handoffId, {
+            ricardianHash: `0x${(index + 1).toString(16).repeat(64)}`,
+          });
+          return fetch(`${baseUrl}/settlement/gasless-executions/create-trade`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Idempotency-Key': `gasless-create-trade-queue-${index}`,
+              ...withServiceAuth(gaslessPath, body),
+            },
+            body: JSON.stringify(body),
+          });
+        }),
+      );
+
+      expect(responses.map((response) => response.status)).toEqual([202, 202]);
+      expect(Math.max(...observedConcurrency)).toBe(1);
+      expect(observedConcurrency).toEqual([1, 1]);
     } finally {
       server.close();
     }

@@ -110,6 +110,16 @@ const gaslessSettlementService = config.gaslessExecutionEnabled
         chainId: config.chainId,
         escrowAddress: config.escrowAddress,
         requestMaxTtlSeconds: config.gaslessRequestMaxTtlSeconds ?? 900,
+        broadcastPaused: config.gaslessBroadcastPaused,
+        signerCustodyMode: config.gaslessSignerCustodyMode,
+        rpcFallbackCount: config.rpcFallbackUrls.length,
+        gasLimitCap: config.gaslessMaxGasLimit,
+        maxFeePerGasWei: config.gaslessMaxFeePerGasWei,
+        maxNativeCostWei: config.gaslessMaxNativeCostWei,
+        minExecutorBalanceWei: config.gaslessMinExecutorBalanceWei,
+        lowBalanceAlertWei: config.gaslessLowBalanceAlertWei,
+        stuckQueueThresholdMs: config.gaslessStuckQueueThresholdMs,
+        repeatedFailureAlertThreshold: config.gaslessRepeatedFailureAlertThreshold,
       },
     )
   : null;
@@ -521,6 +531,7 @@ async function bootstrap(): Promise<void> {
       authSessionClient,
       config,
       operationsSummaryService,
+      gaslessSettlementService,
     }),
   );
 

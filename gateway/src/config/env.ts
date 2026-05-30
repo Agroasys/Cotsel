@@ -50,9 +50,18 @@ export interface GatewayConfig {
   settlementCallbackMaxBackoffMs: number;
   gaslessExecutionEnabled?: boolean;
   gaslessExecutorPrivateKey?: string;
+  gaslessSignerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
+  gaslessAllowRawPrivateKeyInProduction?: boolean;
+  gaslessBroadcastPaused?: boolean;
   gaslessMaxGasLimit?: bigint;
+  gaslessMaxFeePerGasWei?: bigint;
+  gaslessMaxNativeCostWei?: bigint;
   gaslessMinExecutorBalanceWei?: bigint;
+  gaslessLowBalanceAlertWei?: bigint;
   gaslessRequestMaxTtlSeconds?: number;
+  gaslessStuckQueueThresholdMs?: number;
+  gaslessRepeatedFailureAlertThreshold?: number;
+  gaslessRequireRpcFallback?: boolean;
   oracleBaseUrl?: string;
   oracleServiceApiKey?: string;
   oracleServiceApiSecret?: string;
@@ -129,6 +138,17 @@ function envBigInt(name: string, fallback: bigint): bigint {
   return BigInt(raw);
 }
 
+function parseGaslessSignerCustodyMode(
+  value: string | undefined,
+): 'raw_private_key' | 'kms' | 'mpc' {
+  const normalized = value?.trim() || 'raw_private_key';
+  if (normalized === 'raw_private_key' || normalized === 'kms' || normalized === 'mpc') {
+    return normalized;
+  }
+
+  throw new Error('GATEWAY_GASLESS_SIGNER_CUSTODY_MODE must be raw_private_key, kms, or mpc');
+}
+
 function parseAllowlist(raw: string | undefined): string[] {
   if (!raw) {
     return [];
@@ -184,6 +204,7 @@ function assertDownstreamServiceAuth(
 }
 
 export function loadConfig(): GatewayConfig {
+  const nodeEnv = process.env.NODE_ENV || 'development';
   const buildTime = process.env.GATEWAY_BUILD_TIME?.trim() || new Date().toISOString();
   const authBaseUrl = env('GATEWAY_AUTH_BASE_URL').replace(/\/$/, '');
   const indexerGraphqlUrl = env('GATEWAY_INDEXER_GRAPHQL_URL').replace(/\/$/, '');
@@ -215,6 +236,18 @@ export function loadConfig(): GatewayConfig {
   const settlementCallbackApiSecret =
     process.env.GATEWAY_SETTLEMENT_CALLBACK_API_SECRET?.trim() || undefined;
   const gaslessExecutionEnabled = envBool('GATEWAY_GASLESS_EXECUTION_ENABLED', false);
+  const gaslessSignerCustodyMode = parseGaslessSignerCustodyMode(
+    process.env.GATEWAY_GASLESS_SIGNER_CUSTODY_MODE,
+  );
+  const gaslessAllowRawPrivateKeyInProduction = envBool(
+    'GATEWAY_GASLESS_ALLOW_RAW_PRIVATE_KEY_IN_PRODUCTION',
+    false,
+  );
+  const gaslessBroadcastPaused = envBool('GATEWAY_GASLESS_BROADCAST_PAUSED', false);
+  const gaslessRequireRpcFallback = envBool(
+    'GATEWAY_GASLESS_REQUIRE_RPC_FALLBACK',
+    nodeEnv === 'production',
+  );
   const gaslessExecutorPrivateKey = assertPrivateKey(
     'GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY',
     process.env.GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY?.trim() ||
@@ -241,7 +274,6 @@ export function loadConfig(): GatewayConfig {
     process.env.GATEWAY_RICARDIAN_SERVICE_API_SECRET?.trim() || undefined;
   const dbMigrationUser = process.env.DB_MIGRATION_USER?.trim() || undefined;
   const dbMigrationPassword = process.env.DB_MIGRATION_PASSWORD?.trim() || undefined;
-  const nodeEnv = process.env.NODE_ENV || 'development';
   const operatorSignerEnvironment =
     process.env.GATEWAY_OPERATOR_SIGNER_ENVIRONMENT?.trim() || nodeEnv;
   const allowInsecureDownstreamAuth = envBool(
@@ -436,6 +468,40 @@ export function loadConfig(): GatewayConfig {
       gaslessExecutorPrivateKey,
       'GATEWAY_GASLESS_EXECUTION_ENABLED requires GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY or GATEWAY_EXECUTOR_PRIVATE_KEY',
     );
+    assert(
+      envBigInt('GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI', 50_000_000_000n) > 0n,
+      'GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI must be > 0 when gasless execution is enabled',
+    );
+    assert(
+      envBigInt('GATEWAY_GASLESS_MAX_NATIVE_COST_WEI', 100_000_000_000_000_000n) > 0n,
+      'GATEWAY_GASLESS_MAX_NATIVE_COST_WEI must be > 0 when gasless execution is enabled',
+    );
+    assert(
+      envBigInt('GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI', 0n) <=
+        envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n) ||
+        envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n) === 0n,
+      'GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI must be <= GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI when both are set',
+    );
+    assert(
+      envNumber('GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS', 300000) >= 1000,
+      'GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS must be >= 1000',
+    );
+    assert(
+      envNumber('GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD', 3) >= 1,
+      'GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD must be >= 1',
+    );
+    if (nodeEnv === 'production') {
+      assert(
+        gaslessSignerCustodyMode !== 'raw_private_key' || gaslessAllowRawPrivateKeyInProduction,
+        'Production gasless execution must use KMS/MPC signer custody or explicitly approve the raw-private-key emergency exception',
+      );
+    }
+    if (gaslessRequireRpcFallback) {
+      assert(
+        rpcFallbackUrls.length > 0,
+        'GATEWAY_GASLESS_REQUIRE_RPC_FALLBACK requires at least one GATEWAY_RPC_FALLBACK_URLS entry',
+      );
+    }
   }
 
   return {
@@ -494,9 +560,24 @@ export function loadConfig(): GatewayConfig {
     settlementCallbackMaxBackoffMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000),
     gaslessExecutionEnabled,
     gaslessExecutorPrivateKey,
+    gaslessSignerCustodyMode,
+    gaslessAllowRawPrivateKeyInProduction,
+    gaslessBroadcastPaused,
     gaslessMaxGasLimit: envBigInt('GATEWAY_GASLESS_MAX_GAS_LIMIT', 1_500_000n),
+    gaslessMaxFeePerGasWei: envBigInt('GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI', 50_000_000_000n),
+    gaslessMaxNativeCostWei: envBigInt(
+      'GATEWAY_GASLESS_MAX_NATIVE_COST_WEI',
+      100_000_000_000_000_000n,
+    ),
     gaslessMinExecutorBalanceWei: envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n),
+    gaslessLowBalanceAlertWei: envBigInt('GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI', 0n),
     gaslessRequestMaxTtlSeconds: envNumber('GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS', 900),
+    gaslessStuckQueueThresholdMs: envNumber('GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS', 300000),
+    gaslessRepeatedFailureAlertThreshold: envNumber(
+      'GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD',
+      3,
+    ),
+    gaslessRequireRpcFallback,
     oracleBaseUrl,
     oracleServiceApiKey,
     oracleServiceApiSecret,

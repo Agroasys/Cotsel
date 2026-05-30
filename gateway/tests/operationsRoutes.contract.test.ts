@@ -9,6 +9,7 @@ import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createOperationsRouter } from '../src/routes/operations';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
+import type { GaslessSettlementExecutionService } from '../src/core/gaslessSettlementExecutionService';
 import type {
   OperationsSummaryReader,
   OperationsSummarySnapshot,
@@ -154,6 +155,7 @@ const operationsFixture: OperationsSummarySnapshot = {
 async function startServer(
   role: 'admin' | 'buyer' | null,
   fixture: OperationsSummarySnapshot = operationsFixture,
+  gaslessSettlementService?: GaslessSettlementExecutionService | null,
 ) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
@@ -177,7 +179,14 @@ async function startServer(
   };
 
   const router = Router();
-  router.use(createOperationsRouter({ authSessionClient, config, operationsSummaryService }));
+  router.use(
+    createOperationsRouter({
+      authSessionClient,
+      config,
+      operationsSummaryService,
+      gaslessSettlementService,
+    }),
+  );
 
   const app = createApp(config, {
     version: '0.1.0',
@@ -208,10 +217,15 @@ describe('gateway operations summary route contract', () => {
     spec,
     '#/components/schemas/OperationsSummaryResponse',
   );
+  const validateGaslessRelayerReadiness = createSchemaValidator(
+    spec,
+    '#/components/schemas/GaslessRelayerReadinessResponse',
+  );
 
   test('OpenAPI spec exposes operations read endpoints', () => {
     expect(hasOperation(spec, 'get', '/operations')).toBe(true);
     expect(hasOperation(spec, 'get', '/operations/summary')).toBe(true);
+    expect(hasOperation(spec, 'get', '/operations/gasless-relayer/readiness')).toBe(true);
   });
 
   test('GET /operations and /operations/summary return schema-valid snapshots', async () => {
@@ -263,6 +277,66 @@ describe('gateway operations summary route contract', () => {
       expect(forbiddenResponse.status).toBe(403);
     } finally {
       forbiddenServer.close();
+    }
+  });
+
+  test('GET /operations/gasless-relayer/readiness returns gasless control-plane posture', async () => {
+    const gaslessSettlementService = {
+      getRelayerReadiness: jest.fn().mockReturnValue({
+        enabled: true,
+        paused: true,
+        state: 'paused',
+        generatedAt: '2026-03-12T00:00:00.000Z',
+        signerCustodyMode: 'raw_private_key',
+        activeExecutionPath: {
+          chainId: 84532,
+          escrowAddress: '0x0000000000000000000000000000000000000999',
+          rpcFallbackCount: 1,
+        },
+        controls: {
+          gasLimitCap: '1500000',
+          maxFeePerGasWei: '50000000000',
+          maxNativeCostWei: '100000000000000000',
+          minExecutorBalanceWei: '10000000000000000',
+          lowBalanceAlertWei: '5000000000000000',
+          stuckQueueThresholdMs: 300000,
+          repeatedFailureAlertThreshold: 3,
+        },
+        queue: {
+          pending: 0,
+          active: 0,
+          lastQueueWaitMs: null,
+          lastSubmissionAt: null,
+        },
+        alerts: [
+          {
+            code: 'gasless_broadcast_paused',
+            severity: 'high',
+            detail: 'Gasless relayer broadcasts are paused by operator configuration.',
+          },
+        ],
+        recentFailureCount: 0,
+      }),
+    } as unknown as GaslessSettlementExecutionService;
+    const { server, baseUrl } = await startServer(
+      'admin',
+      operationsFixture,
+      gaslessSettlementService,
+    );
+
+    try {
+      const response = await fetch(`${baseUrl}/operations/gasless-relayer/readiness`, {
+        headers: { Authorization: 'Bearer sess-admin' },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(validateGaslessRelayerReadiness(payload)).toBe(true);
+      expect(payload.data.state).toBe('paused');
+      expect(payload.data.controls.maxFeePerGasWei).toBe('50000000000');
+      expect(payload.data.alerts[0].code).toBe('gasless_broadcast_paused');
+    } finally {
+      server.close();
     }
   });
 });

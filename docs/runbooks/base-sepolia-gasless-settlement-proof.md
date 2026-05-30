@@ -64,6 +64,41 @@ Exercise and record:
 - relayer outage or disabled-relayer behavior
 - fallback UX, with ETH top-up treated only as support tooling
 
+## Relayer Operator Controls
+
+Before any live proof is treated as release evidence, record the output from
+`GET /api/dashboard-gateway/v1/operations/gasless-relayer/readiness` and verify:
+
+- `GATEWAY_GASLESS_BROADCAST_PAUSED=false` only during the approved execution window
+- signer custody is `kms` or `mpc` for production; `raw_private_key` is staging-only unless a time-boxed emergency exception is explicitly approved
+- `GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI` and `GATEWAY_GASLESS_MAX_NATIVE_COST_WEI` are set and below treasury-approved spend caps
+- `GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI` and `GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI` match the hot-wallet refill policy
+- `GATEWAY_RPC_FALLBACK_URLS` contains an independent managed fallback provider when gasless execution is enabled
+- queue, stuck-queue, and repeated-failure alert thresholds are visible in the readiness payload
+
+Emergency pause is `GATEWAY_GASLESS_BROADCAST_PAUSED=true`. When paused, Cotsel
+must reject new gasless broadcasts before accepting settlement execution
+telemetry, so there is no ambiguous fund-movement state.
+
+## Capacity Rehearsal
+
+Run the deterministic control-plane rehearsal before live traffic:
+
+```bash
+pnpm run gasless:capacity -- --mode config-only --stdout
+```
+
+For live evidence, attach the populated Base Sepolia proof packet:
+
+```bash
+pnpm run gasless:capacity -- --mode live --evidence-file reports/base-sepolia-pilot-validation/<window-id>/summary.json --stdout
+```
+
+The release target remains at least 500 user-facing on-chain settlement
+transactions/day and $10M/day notional with burst margin. Config-only rehearsal
+is not live proof; it only verifies that queue, gas-cap, fallback-provider, and
+spend-threshold settings are coherent before the Base Sepolia run.
+
 ## Go / No-Go
 
 Go only when all required live flows pass without requiring or spending user ETH

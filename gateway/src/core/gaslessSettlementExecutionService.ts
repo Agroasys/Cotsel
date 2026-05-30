@@ -145,6 +145,40 @@ export interface GaslessExecutionSubmission {
   receipt?: GaslessExecutionReceipt;
 }
 
+export interface GaslessRelayerReadinessSnapshot {
+  enabled: true;
+  paused: boolean;
+  state: 'ready' | 'paused' | 'degraded' | 'blocked';
+  generatedAt: string;
+  signerCustodyMode: 'raw_private_key' | 'kms' | 'mpc';
+  activeExecutionPath: {
+    chainId: number;
+    escrowAddress: string;
+    rpcFallbackCount: number;
+  };
+  controls: {
+    gasLimitCap: string;
+    maxFeePerGasWei: string;
+    maxNativeCostWei: string;
+    minExecutorBalanceWei: string;
+    lowBalanceAlertWei: string;
+    stuckQueueThresholdMs: number;
+    repeatedFailureAlertThreshold: number;
+  };
+  queue: {
+    pending: number;
+    active: number;
+    lastQueueWaitMs: number | null;
+    lastSubmissionAt: string | null;
+  };
+  alerts: Array<{
+    code: string;
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    detail: string;
+  }>;
+  recentFailureCount: number;
+}
+
 export interface GaslessSettlementExecutor {
   simulateCreateTrade(
     input: GaslessCreateTradeExecutionInput,
@@ -613,6 +647,13 @@ function buildUserActionArguments(input: GaslessUserActionExecutionInput) {
 }
 
 export class GaslessSettlementExecutionService {
+  private broadcastQueue: Promise<void> = Promise.resolve();
+  private pendingBroadcasts = 0;
+  private activeBroadcasts = 0;
+  private lastQueueWaitMs: number | null = null;
+  private lastSubmissionAt: string | null = null;
+  private repeatedFailureCount = 0;
+
   constructor(
     private readonly settlementService: SettlementService,
     private readonly store: SettlementStore,
@@ -621,9 +662,125 @@ export class GaslessSettlementExecutionService {
       chainId: number;
       escrowAddress: string;
       requestMaxTtlSeconds: number;
+      broadcastPaused?: boolean;
+      signerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
+      rpcFallbackCount?: number;
+      gasLimitCap?: bigint;
+      maxFeePerGasWei?: bigint;
+      maxNativeCostWei?: bigint;
+      minExecutorBalanceWei?: bigint;
+      lowBalanceAlertWei?: bigint;
+      stuckQueueThresholdMs?: number;
+      repeatedFailureAlertThreshold?: number;
       now?: () => Date;
     },
   ) {}
+
+  getRelayerReadiness(): GaslessRelayerReadinessSnapshot {
+    const alerts: GaslessRelayerReadinessSnapshot['alerts'] = [];
+    const stuckQueueThresholdMs = this.options.stuckQueueThresholdMs ?? 300_000;
+    const repeatedFailureAlertThreshold = this.options.repeatedFailureAlertThreshold ?? 3;
+
+    if (this.options.broadcastPaused) {
+      alerts.push({
+        code: 'gasless_broadcast_paused',
+        severity: 'high',
+        detail: 'Gasless relayer broadcasts are paused by operator configuration.',
+      });
+    }
+
+    if (this.pendingBroadcasts > 0 && (this.lastQueueWaitMs ?? 0) >= stuckQueueThresholdMs) {
+      alerts.push({
+        code: 'gasless_queue_stuck',
+        severity: 'high',
+        detail: 'Gasless relayer queue wait time exceeded the stuck-queue threshold.',
+      });
+    }
+
+    if (this.repeatedFailureCount >= repeatedFailureAlertThreshold) {
+      alerts.push({
+        code: 'gasless_repeated_failures',
+        severity: 'high',
+        detail: 'Gasless relayer has crossed the repeated-failure alert threshold.',
+      });
+    }
+
+    const state: GaslessRelayerReadinessSnapshot['state'] = this.options.broadcastPaused
+      ? 'paused'
+      : alerts.some((alert) => alert.severity === 'critical' || alert.severity === 'high')
+        ? 'degraded'
+        : 'ready';
+
+    return {
+      enabled: true,
+      paused: Boolean(this.options.broadcastPaused),
+      state,
+      generatedAt: (this.options.now?.() ?? new Date()).toISOString(),
+      signerCustodyMode: this.options.signerCustodyMode ?? 'raw_private_key',
+      activeExecutionPath: {
+        chainId: this.options.chainId,
+        escrowAddress: getAddress(this.options.escrowAddress),
+        rpcFallbackCount: this.options.rpcFallbackCount ?? 0,
+      },
+      controls: {
+        gasLimitCap: (this.options.gasLimitCap ?? 1_500_000n).toString(),
+        maxFeePerGasWei: (this.options.maxFeePerGasWei ?? 50_000_000_000n).toString(),
+        maxNativeCostWei: (this.options.maxNativeCostWei ?? 100_000_000_000_000_000n).toString(),
+        minExecutorBalanceWei: (this.options.minExecutorBalanceWei ?? 0n).toString(),
+        lowBalanceAlertWei: (this.options.lowBalanceAlertWei ?? 0n).toString(),
+        stuckQueueThresholdMs,
+        repeatedFailureAlertThreshold,
+      },
+      queue: {
+        pending: this.pendingBroadcasts,
+        active: this.activeBroadcasts,
+        lastQueueWaitMs: this.lastQueueWaitMs,
+        lastSubmissionAt: this.lastSubmissionAt,
+      },
+      alerts,
+      recentFailureCount: this.repeatedFailureCount,
+    };
+  }
+
+  private assertBroadcastOpen(action: string): void {
+    if (!this.options.broadcastPaused) {
+      return;
+    }
+
+    throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Gasless relayer broadcast is paused', {
+      action,
+      reason: 'operator_kill_switch',
+    });
+  }
+
+  private async enqueueBroadcast<T>(operation: () => Promise<T>): Promise<T> {
+    const queuedAtMs = Date.now();
+    this.pendingBroadcasts += 1;
+
+    const run = this.broadcastQueue.then(async () => {
+      this.pendingBroadcasts -= 1;
+      this.activeBroadcasts += 1;
+      this.lastQueueWaitMs = Date.now() - queuedAtMs;
+      try {
+        const result = await operation();
+        this.lastSubmissionAt = (this.options.now?.() ?? new Date()).toISOString();
+        this.repeatedFailureCount = 0;
+        return result;
+      } catch (error) {
+        this.repeatedFailureCount += 1;
+        throw error;
+      } finally {
+        this.activeBroadcasts -= 1;
+      }
+    });
+
+    this.broadcastQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return run;
+  }
 
   async executeCreateTrade(
     input: GaslessCreateTradeExecutionInput,
@@ -638,6 +795,7 @@ export class GaslessSettlementExecutionService {
     assertContractMatchesRuntime(normalized, this.options.escrowAddress);
     assertAuthorizationBindings(normalized, now);
     assertPayloadHash(normalized);
+    this.assertBroadcastOpen('create_trade');
 
     const handoff = await this.store.getHandoff(normalized.handoffId);
     if (!handoff) {
@@ -704,7 +862,9 @@ export class GaslessSettlementExecutionService {
         sourceApiKeyId: normalized.sourceApiKeyId,
       });
 
-      const execution = await this.executor.executeCreateTrade(normalized);
+      const execution = await this.enqueueBroadcast(() =>
+        this.executor.executeCreateTrade(normalized),
+      );
       const submitted = await this.settlementService.recordExecutionEvent({
         handoffId: normalized.handoffId,
         eventType: 'submitted',
@@ -813,6 +973,7 @@ export class GaslessSettlementExecutionService {
     assertContractMatchesRuntime(normalized, this.options.escrowAddress);
     assertUserAuthorizationBindings(normalized, now);
     assertUserActionPayloadHash(normalized);
+    this.assertBroadcastOpen(normalized.action);
 
     const handoff = await this.store.getHandoff(normalized.handoffId);
     if (!handoff) {
@@ -877,7 +1038,9 @@ export class GaslessSettlementExecutionService {
         sourceApiKeyId: normalized.sourceApiKeyId,
       });
 
-      const execution = await this.executor.executeUserAction(normalized);
+      const execution = await this.enqueueBroadcast(() =>
+        this.executor.executeUserAction(normalized),
+      );
       const submitted = await this.settlementService.recordExecutionEvent({
         handoffId: normalized.handoffId,
         eventType: 'submitted',
@@ -973,6 +1136,7 @@ export class GaslessSettlementExecutionService {
     });
     assertContractMatchesRuntime(normalized, this.options.escrowAddress);
     assertOperatorActionPayloadHash(normalized);
+    this.assertBroadcastOpen(normalized.action);
 
     const handoff = await this.store.getHandoff(normalized.handoffId);
     if (!handoff) {
@@ -1039,7 +1203,9 @@ export class GaslessSettlementExecutionService {
         sourceApiKeyId: normalized.sourceApiKeyId,
       });
 
-      const execution = await this.executor.executeOperatorAction(normalized);
+      const execution = await this.enqueueBroadcast(() =>
+        this.executor.executeOperatorAction(normalized),
+      );
       const submitted = await this.settlementService.recordExecutionEvent({
         handoffId: normalized.handoffId,
         eventType: 'submitted',
@@ -1134,6 +1300,8 @@ export function createEthersGaslessSettlementExecutor(
     | 'escrowAddress'
     | 'gaslessExecutorPrivateKey'
     | 'gaslessMaxGasLimit'
+    | 'gaslessMaxFeePerGasWei'
+    | 'gaslessMaxNativeCostWei'
     | 'gaslessMinExecutorBalanceWei'
   >,
 ): GaslessSettlementExecutor {
@@ -1151,6 +1319,8 @@ export function createEthersGaslessSettlementExecutor(
   const signer = new NonceManager(new Wallet(config.gaslessExecutorPrivateKey, provider));
   const escrow = AgroasysEscrow__factory.connect(config.escrowAddress, signer);
   const gaslessMaxGasLimit = config.gaslessMaxGasLimit ?? 1_500_000n;
+  const gaslessMaxFeePerGasWei = config.gaslessMaxFeePerGasWei ?? 50_000_000_000n;
+  const gaslessMaxNativeCostWei = config.gaslessMaxNativeCostWei ?? 100_000_000_000_000_000n;
   const gaslessMinExecutorBalanceWei = config.gaslessMinExecutorBalanceWei ?? 0n;
 
   async function assertSignerBalance(): Promise<{ executorAddress: string; balance: bigint }> {
@@ -1229,6 +1399,58 @@ export function createEthersGaslessSettlementExecutor(
     return gasEstimate;
   }
 
+  async function assertGasSpendCap(gasEstimate: bigint): Promise<{
+    maxFeePerGas?: bigint;
+    maxPriorityFeePerGas?: bigint;
+    gasPrice?: bigint;
+  }> {
+    const feeData = await provider.getFeeData();
+    const effectiveFeePerGasWei = feeData.maxFeePerGas ?? feeData.gasPrice;
+    if (!effectiveFeePerGasWei) {
+      throw new GatewayError(
+        503,
+        'UPSTREAM_UNAVAILABLE',
+        'Gasless relayer could not resolve chain fee data',
+      );
+    }
+
+    if (effectiveFeePerGasWei > gaslessMaxFeePerGasWei) {
+      throw new GatewayError(
+        503,
+        'UPSTREAM_UNAVAILABLE',
+        'Gasless relayer fee-per-gas cap exceeded',
+        {
+          feePerGasWei: effectiveFeePerGasWei.toString(),
+          maxFeePerGasWei: gaslessMaxFeePerGasWei.toString(),
+        },
+      );
+    }
+
+    const estimatedNativeCostWei = gasEstimate * effectiveFeePerGasWei;
+    if (estimatedNativeCostWei > gaslessMaxNativeCostWei) {
+      throw new GatewayError(
+        503,
+        'UPSTREAM_UNAVAILABLE',
+        'Gasless relayer native spend cap exceeded',
+        {
+          estimatedNativeCostWei: estimatedNativeCostWei.toString(),
+          maxNativeCostWei: gaslessMaxNativeCostWei.toString(),
+        },
+      );
+    }
+
+    if (feeData.maxFeePerGas) {
+      return {
+        maxFeePerGas: feeData.maxFeePerGas,
+        ...(feeData.maxPriorityFeePerGas
+          ? { maxPriorityFeePerGas: feeData.maxPriorityFeePerGas }
+          : {}),
+      };
+    }
+
+    return { gasPrice: effectiveFeePerGasWei };
+  }
+
   async function simulateUserAction(input: GaslessUserActionExecutionInput): Promise<bigint> {
     await assertSignerBalance();
     const args = buildUserActionArguments(input);
@@ -1291,19 +1513,33 @@ export function createEthersGaslessSettlementExecutor(
   async function broadcastUserAction(
     input: GaslessUserActionExecutionInput,
     gasLimit: bigint,
+    feeOverrides: {
+      maxFeePerGas?: bigint;
+      maxPriorityFeePerGas?: bigint;
+      gasPrice?: bigint;
+    },
   ): Promise<{ hash: string; wait: () => Promise<TransactionReceipt | null> }> {
     const args = buildUserActionArguments(input);
     if (input.action === 'open_dispute') {
-      return escrow.openDisputeWithAuthorization(...args, { gasLimit });
+      return escrow.openDisputeWithAuthorization(...args, { gasLimit, ...feeOverrides });
     }
     if (input.action === 'cancel_locked_timeout') {
-      return escrow.cancelLockedTradeAfterTimeoutWithAuthorization(...args, { gasLimit });
+      return escrow.cancelLockedTradeAfterTimeoutWithAuthorization(...args, {
+        gasLimit,
+        ...feeOverrides,
+      });
     }
     if (input.action === 'refund_in_transit_timeout') {
-      return escrow.refundInTransitAfterTimeoutWithAuthorization(...args, { gasLimit });
+      return escrow.refundInTransitAfterTimeoutWithAuthorization(...args, {
+        gasLimit,
+        ...feeOverrides,
+      });
     }
 
-    return escrow.finalizeAfterDisputeWindowWithAuthorization(...args, { gasLimit });
+    return escrow.finalizeAfterDisputeWindowWithAuthorization(...args, {
+      gasLimit,
+      ...feeOverrides,
+    });
   }
 
   return {
@@ -1316,8 +1552,10 @@ export function createEthersGaslessSettlementExecutor(
     async executeCreateTrade(input) {
       const args = buildCreateTradeArguments(input);
       const gasEstimate = await simulate(input);
+      const feeOverrides = await assertGasSpendCap(gasEstimate);
       const tx = await escrow.createTradeWithAuthorization(...args, {
         gasLimit: gasEstimate,
+        ...feeOverrides,
       });
 
       return {
@@ -1334,7 +1572,8 @@ export function createEthersGaslessSettlementExecutor(
 
     async executeUserAction(input) {
       const gasEstimate = await simulateUserAction(input);
-      const tx = await broadcastUserAction(input, gasEstimate);
+      const feeOverrides = await assertGasSpendCap(gasEstimate);
+      const tx = await broadcastUserAction(input, gasEstimate, feeOverrides);
       return {
         txHash: tx.hash,
         receipt: await waitForConfirmedReceipt(tx),
@@ -1349,8 +1588,10 @@ export function createEthersGaslessSettlementExecutor(
 
     async executeOperatorAction(input) {
       const gasEstimate = await simulateOperatorAction(input);
+      const feeOverrides = await assertGasSpendCap(gasEstimate);
       const tx = await escrow.finalizeAfterDisputeWindow(input.tradeId, {
         gasLimit: gasEstimate,
+        ...feeOverrides,
       });
       return {
         txHash: tx.hash,
