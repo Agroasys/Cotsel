@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-05-29T11:09:13.056Z",
-  "commitSha": "c16df4a0aebdc3bc305c32dc7caa882cbaa19f3c",
+  "generatedAt": "2026-05-29T17:25:22.329Z",
+  "commitSha": "72b1aa1904de1891e7f89768abba687e1556a51d",
   "network": {
     "hardhatName": "base-sepolia",
     "runtimeKey": "base-sepolia",
@@ -9,16 +9,18 @@
   },
   "contract": {
     "name": "AgroasysEscrow",
-    "address": "0x72120a4198FF6eF7dF7239eaa89A5434f162dBdD",
-    "deploymentTxHash": "0xbe3ea1bee86f65e6673ed49df0a0eba48b38d524e16f10b79b9050518b6ceef1",
-    "explorerAddressUrl": "https://sepolia.basescan.org/address/0x72120a4198FF6eF7dF7239eaa89A5434f162dBdD",
+    "address": "0xd2FB11ba1D95F1dF165b45Deb1B12c538fa920d4",
+    "deploymentTxHash": "0xd6aad7e67e1f1e1d7bb80234ca317d1a021653bb87c25d797165dfa6d7002421",
+    "deploymentBlock": 42152846,
+    "explorerAddressUrl": "https://sepolia.basescan.org/address/0xd2FB11ba1D95F1dF165b45Deb1B12c538fa920d4",
+    "explorerDeploymentTxUrl": "https://sepolia.basescan.org/tx/0xd6aad7e67e1f1e1d7bb80234ca317d1a021653bb87c25d797165dfa6d7002421",
     "constructorArguments": {
       "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
       "oracleAddress": "0x8b4C1A4545A36F2b9D91d32B678C69c05bCA2333",
       "treasuryAddress": "0x8b4C1A4545A36F2b9D91d32B678C69c05bCA2333",
       "admins": [
         "0x8b4C1A4545A36F2b9D91d32B678C69c05bCA2333",
-        "0xC32148D10AF6a0DD50f4f4CddF998C9fEd2A2789"
+        "0x996E4092021f70859E7c5bc6DD111275a828069b"
       ],
       "requiredApprovals": 2
     }
@@ -30,8 +32,19 @@
   },
   "artifact": {
     "compilerVersion": "0.8.34",
-    "abiSha256": "021d6f2ea22e18f3a01288bbaa3919cb11fd2333c3f5b6e5baf851a05e9d3776",
-    "bytecodeSha256": "523b00b905d184f87ab67a985dd9959bf152469454169bec2f17e3237b0cbbaf",
-    "deployedBytecodeSha256": "83b24be9e53410dc4eddcd2c32a416b82bf735607295246ad5ee5359782c52b9"
+    "abiSha256": "f6d6be36726a952f96f59af3b30194a9ced670c225e7c798aedab56238bc4cb3",
+    "chainDeployedBytecodeSha256": "51f3c02b9cd1ce661ba2f207e0ab4699b9735ad517c789b32ad9439d49574892",
+    "eventTopicEvidence": {
+      "PlatformFeesPaidStage1(uint256,address,uint256,uint256,uint256)": "0xc16c7bb7ef90cd4375b18716f3bad44ab2327cbc75bdd1d2fa611ec95167a681"
+    }
+  },
+  "audit": {
+    "auditedAt": "2026-05-30T03:36:00Z",
+    "chainId": 84532,
+    "indexerStartBlock": 42152846,
+    "buyerWalletIsAdmin": false,
+    "supplierWalletIsAdmin": false,
+    "serviceWalletIsAdmin": true,
+    "secondServiceAdminIsAdmin": true
   }
 }
