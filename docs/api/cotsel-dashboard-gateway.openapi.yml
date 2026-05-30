@@ -3735,6 +3735,9 @@ components:
             repeatedFailureAlertThreshold:
               type: integer
               minimum: 1
+        executorBalanceWei:
+          type: string
+          nullable: true
         queue:
           type: object
           required: [pending, active, lastQueueWaitMs, lastSubmissionAt]

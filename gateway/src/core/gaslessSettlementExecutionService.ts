@@ -165,6 +165,7 @@ export interface GaslessRelayerReadinessSnapshot {
     stuckQueueThresholdMs: number;
     repeatedFailureAlertThreshold: number;
   };
+  executorBalanceWei: string | null;
   queue: {
     pending: number;
     active: number;
@@ -652,6 +653,7 @@ export class GaslessSettlementExecutionService {
   private activeBroadcasts = 0;
   private lastQueueWaitMs: number | null = null;
   private lastSubmissionAt: string | null = null;
+  private lastExecutorBalanceWei: bigint | null = null;
   private repeatedFailureCount = 0;
 
   constructor(
@@ -680,6 +682,7 @@ export class GaslessSettlementExecutionService {
     const alerts: GaslessRelayerReadinessSnapshot['alerts'] = [];
     const stuckQueueThresholdMs = this.options.stuckQueueThresholdMs ?? 300_000;
     const repeatedFailureAlertThreshold = this.options.repeatedFailureAlertThreshold ?? 3;
+    const lowBalanceAlertWei = this.options.lowBalanceAlertWei ?? 0n;
 
     if (this.options.broadcastPaused) {
       alerts.push({
@@ -705,6 +708,19 @@ export class GaslessSettlementExecutionService {
       });
     }
 
+    if (
+      this.lastExecutorBalanceWei !== null &&
+      lowBalanceAlertWei > 0n &&
+      this.lastExecutorBalanceWei <= lowBalanceAlertWei
+    ) {
+      alerts.push({
+        code: 'gasless_low_executor_balance',
+        severity: 'critical',
+        detail:
+          'Gasless executor balance is at or below the configured low-balance alert threshold.',
+      });
+    }
+
     const state: GaslessRelayerReadinessSnapshot['state'] = this.options.broadcastPaused
       ? 'paused'
       : alerts.some((alert) => alert.severity === 'critical' || alert.severity === 'high')
@@ -727,10 +743,11 @@ export class GaslessSettlementExecutionService {
         maxFeePerGasWei: (this.options.maxFeePerGasWei ?? 50_000_000_000n).toString(),
         maxNativeCostWei: (this.options.maxNativeCostWei ?? 100_000_000_000_000_000n).toString(),
         minExecutorBalanceWei: (this.options.minExecutorBalanceWei ?? 0n).toString(),
-        lowBalanceAlertWei: (this.options.lowBalanceAlertWei ?? 0n).toString(),
+        lowBalanceAlertWei: lowBalanceAlertWei.toString(),
         stuckQueueThresholdMs,
         repeatedFailureAlertThreshold,
       },
+      executorBalanceWei: this.lastExecutorBalanceWei?.toString() ?? null,
       queue: {
         pending: this.pendingBroadcasts,
         active: this.activeBroadcasts,
@@ -740,6 +757,23 @@ export class GaslessSettlementExecutionService {
       alerts,
       recentFailureCount: this.repeatedFailureCount,
     };
+  }
+
+  private recordExecutionReceipt(receipt: GaslessExecutionReceipt): void {
+    this.lastExecutorBalanceWei = BigInt(receipt.executorBalanceWei);
+  }
+
+  private buildConfirmedExecutionMetadata(
+    action: string,
+    payloadHash: string,
+    receipt: GaslessExecutionReceipt,
+    extra: Record<string, unknown>,
+  ): Record<string, unknown> {
+    return buildConfirmedMetadata(action, payloadHash, receipt, {
+      minExecutorBalanceWei: (this.options.minExecutorBalanceWei ?? 0n).toString(),
+      lowBalanceAlertWei: (this.options.lowBalanceAlertWei ?? 0n).toString(),
+      ...extra,
+    });
   }
 
   private assertBroadcastOpen(action: string): void {
@@ -896,6 +930,7 @@ export class GaslessSettlementExecutionService {
       let confirmedEvent: SettlementExecutionEventRecord | undefined;
 
       if (execution.receipt) {
+        this.recordExecutionReceipt(execution.receipt);
         const confirmed = await this.settlementService.recordExecutionEvent({
           handoffId: normalized.handoffId,
           eventType: 'confirmed',
@@ -904,7 +939,7 @@ export class GaslessSettlementExecutionService {
           providerStatus: 'gasless_receipt_confirmed',
           txHash: execution.txHash,
           detail: 'Gasless create-trade transaction confirmed on-chain.',
-          metadata: buildConfirmedMetadata(
+          metadata: this.buildConfirmedExecutionMetadata(
             'create_trade',
             normalized.payloadHash,
             execution.receipt,
@@ -1066,6 +1101,7 @@ export class GaslessSettlementExecutionService {
       let confirmedEvent: SettlementExecutionEventRecord | undefined;
 
       if (execution.receipt) {
+        this.recordExecutionReceipt(execution.receipt);
         const confirmed = await this.settlementService.recordExecutionEvent({
           handoffId: normalized.handoffId,
           eventType: 'confirmed',
@@ -1074,7 +1110,7 @@ export class GaslessSettlementExecutionService {
           providerStatus: 'gasless_receipt_confirmed',
           txHash: execution.txHash,
           detail: `Gasless ${normalized.action} transaction confirmed on-chain.`,
-          metadata: buildConfirmedMetadata(
+          metadata: this.buildConfirmedExecutionMetadata(
             normalized.action,
             normalized.payloadHash,
             execution.receipt,
@@ -1230,6 +1266,7 @@ export class GaslessSettlementExecutionService {
       let confirmedEvent: SettlementExecutionEventRecord | undefined;
 
       if (execution.receipt) {
+        this.recordExecutionReceipt(execution.receipt);
         const confirmed = await this.settlementService.recordExecutionEvent({
           handoffId: normalized.handoffId,
           eventType: 'confirmed',
@@ -1238,7 +1275,7 @@ export class GaslessSettlementExecutionService {
           providerStatus: 'gasless_operator_receipt_confirmed',
           txHash: execution.txHash,
           detail: `Gasless operator ${normalized.action} transaction confirmed on-chain.`,
-          metadata: buildConfirmedMetadata(
+          metadata: this.buildConfirmedExecutionMetadata(
             normalized.action,
             normalized.payloadHash,
             execution.receipt,

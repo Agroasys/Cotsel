@@ -302,6 +302,7 @@ describe('gateway operations summary route contract', () => {
           stuckQueueThresholdMs: 300000,
           repeatedFailureAlertThreshold: 3,
         },
+        executorBalanceWei: '4000000000000000',
         queue: {
           pending: 0,
           active: 0,
@@ -313,6 +314,12 @@ describe('gateway operations summary route contract', () => {
             code: 'gasless_broadcast_paused',
             severity: 'high',
             detail: 'Gasless relayer broadcasts are paused by operator configuration.',
+          },
+          {
+            code: 'gasless_low_executor_balance',
+            severity: 'critical',
+            detail:
+              'Gasless executor balance is at or below the configured low-balance alert threshold.',
           },
         ],
         recentFailureCount: 0,
@@ -333,8 +340,10 @@ describe('gateway operations summary route contract', () => {
       expect(response.status).toBe(200);
       expect(validateGaslessRelayerReadiness(payload)).toBe(true);
       expect(payload.data.state).toBe('paused');
+      expect(payload.data.executorBalanceWei).toBe('4000000000000000');
       expect(payload.data.controls.maxFeePerGasWei).toBe('50000000000');
       expect(payload.data.alerts[0].code).toBe('gasless_broadcast_paused');
+      expect(payload.data.alerts[1].code).toBe('gasless_low_executor_balance');
     } finally {
       server.close();
     }

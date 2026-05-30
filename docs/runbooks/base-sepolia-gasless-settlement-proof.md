@@ -72,9 +72,9 @@ Before any live proof is treated as release evidence, record the output from
 - `GATEWAY_GASLESS_BROADCAST_PAUSED=false` only during the approved execution window
 - signer custody is `kms` or `mpc` for production; `raw_private_key` is staging-only unless a time-boxed emergency exception is explicitly approved
 - `GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI` and `GATEWAY_GASLESS_MAX_NATIVE_COST_WEI` are set and below treasury-approved spend caps
-- `GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI` and `GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI` match the hot-wallet refill policy
+- `GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI` is at or above `GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI`, so operators are alerted before the executor reaches the hard no-broadcast floor
 - `GATEWAY_RPC_FALLBACK_URLS` contains an independent managed fallback provider when gasless execution is enabled
-- queue, stuck-queue, and repeated-failure alert thresholds are visible in the readiness payload
+- executor balance, queue, stuck-queue, low-balance, and repeated-failure alert thresholds are visible in the readiness payload
 
 Emergency pause is `GATEWAY_GASLESS_BROADCAST_PAUSED=true`. When paused, Cotsel
 must reject new gasless broadcasts before accepting settlement execution

@@ -22,7 +22,7 @@ test('gasless relayer capacity rehearsal passes coherent config-only controls', 
       GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI: '1000000000',
       GATEWAY_GASLESS_MAX_NATIVE_COST_WEI: '2000000000000000',
       GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '100000000000000000',
-      GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '50000000000000000',
+      GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '150000000000000000',
       GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
     },
     () => {
@@ -36,6 +36,24 @@ test('gasless relayer capacity rehearsal passes coherent config-only controls', 
       assert.equal(report.targets.notionalUsdPerDay, 10_000_000);
       assert.equal(report.controls.fallbackRpcCount, 1);
       assert.equal(report.blockers.length, 0);
+    },
+  );
+});
+
+test('gasless relayer capacity rehearsal fails when low-balance alert is below hard floor', () => {
+  withEnv(
+    {
+      GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '100000000000000000',
+      GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '50000000000000000',
+    },
+    () => {
+      const report = buildCapacityReport(
+        { mode: 'config-only', output: 'unused.json', evidenceFile: null },
+        new Date('2026-05-30T00:00:00.000Z'),
+      );
+
+      assert.equal(report.status, 'fail');
+      assert.match(report.blockers.join('\n'), /low-balance alert threshold is below/);
     },
   );
 });

@@ -198,6 +198,7 @@ async function startServer(
   return {
     server,
     baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
+    gaslessSettlementService,
   };
 }
 
@@ -548,7 +549,10 @@ describe('gateway settlement routes contract', () => {
   });
 
   test('service-authenticated gasless create-trade execution records receipt-backed confirmed events', async () => {
-    const { server, baseUrl } = await startServer();
+    const { server, baseUrl, gaslessSettlementService } = await startServer({
+      gaslessLowBalanceAlertWei: 1_100_000_000_000_000_000n,
+      gaslessMinExecutorBalanceWei: 1_000_000_000_000_000n,
+    });
 
     try {
       const handoffBody = {
@@ -620,6 +624,8 @@ describe('gateway settlement routes contract', () => {
           effectiveGasPriceWei: '1000000000',
           nativeCostWei: '210000000000000',
           executorBalanceWei: '1000000000000000000',
+          minExecutorBalanceWei: '1000000000000000',
+          lowBalanceAlertWei: '1100000000000000000',
           executorAddress: '0x1111111111111111111111111111111111111111',
           chainId: config.chainId,
           contractAddress: config.escrowAddress,
@@ -633,6 +639,16 @@ describe('gateway settlement routes contract', () => {
           ricardianHash: gaslessBody.ricardianHash,
           payloadHash: gaslessBody.payloadHash,
         }),
+      );
+      const readiness = gaslessSettlementService.getRelayerReadiness();
+      expect(readiness.executorBalanceWei).toBe('1000000000000000000');
+      expect(readiness.alerts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'gasless_low_executor_balance',
+            severity: 'critical',
+          }),
+        ]),
       );
     } finally {
       server.close();

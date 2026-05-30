@@ -164,9 +164,9 @@ function buildCapacityReport(options, now = new Date()) {
   if (
     lowBalanceAlertWei > 0n &&
     minExecutorBalanceWei > 0n &&
-    lowBalanceAlertWei > minExecutorBalanceWei
+    lowBalanceAlertWei < minExecutorBalanceWei
   ) {
-    blockers.push('low-balance alert threshold exceeds minimum executor balance floor');
+    blockers.push('low-balance alert threshold is below the minimum executor balance floor');
   }
   if (
     minExecutorBalanceWei > 0n &&
