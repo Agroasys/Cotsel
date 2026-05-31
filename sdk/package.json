@@ -1,6 +1,6 @@
 {
   "name": "@agroasys/sdk",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publishConfig": {
     "access": "restricted",
     "registry": "https://npm.pkg.github.com"
@@ -72,14 +72,6 @@
   "dependencies": {
     "ethers": "^6.4.0",
     "ox": "^0.14.20"
-  },
-  "peerDependencies": {
-    "@web3auth/modal": "^10.16.0"
-  },
-  "peerDependenciesMeta": {
-    "@web3auth/modal": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "dotenv": "^17.4.2",
