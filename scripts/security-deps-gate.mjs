@@ -27,15 +27,21 @@ function parseAudit(stdout) {
 }
 
 function vulnerabilities(report) {
-  return (
-    report?.metadata?.vulnerabilities ?? {
-      critical: 0,
-      high: 0,
-      moderate: 0,
-      low: 0,
-      total: 0,
-    }
-  );
+  const summary = report?.metadata?.vulnerabilities ?? {
+    critical: 0,
+    high: 0,
+    moderate: 0,
+    low: 0,
+  };
+  return {
+    critical: summary.critical ?? 0,
+    high: summary.high ?? 0,
+    moderate: summary.moderate ?? 0,
+    low: summary.low ?? 0,
+    total:
+      summary.total ??
+      (summary.critical ?? 0) + (summary.high ?? 0) + (summary.moderate ?? 0) + (summary.low ?? 0),
+  };
 }
 
 const auditProd = runPnpm(['audit', '--prod', '--json']);
@@ -51,8 +57,8 @@ console.log(
 console.log(`pnpm list --depth Infinity: exit=${lsAll.exitCode}`);
 
 let failed = false;
-if (summary.critical > 0 || summary.high > 0) {
-  console.error('Release gate failed: production dependency audit has high/critical findings.');
+if (summary.critical > 0 || summary.high > 0 || summary.moderate > 0 || summary.low > 0) {
+  console.error('Release gate failed: production dependency audit has findings.');
   failed = true;
 }
 

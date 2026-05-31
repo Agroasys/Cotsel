@@ -8,6 +8,9 @@ type TreasuryConnection = typeof import('../src/database/connection');
 type TreasuryControllerModule = typeof import('../src/api/controller');
 type TreasuryRoutesModule = typeof import('../src/api/routes');
 
+const runPostgresIntegrationTests = process.env.TREASURY_POSTGRES_TESTS === 'true';
+const describePostgres = runPostgresIntegrationTests ? describe : describe.skip;
+
 async function createFreshTreasuryDatabase() {
   const dbName = `treasury_bridge_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const admin = new Pool({
@@ -18,7 +21,12 @@ async function createFreshTreasuryDatabase() {
     password: process.env.DB_MIGRATION_PASSWORD || process.env.DB_PASSWORD || 'postgres',
   });
 
-  await admin.query(`CREATE DATABASE "${dbName}"`);
+  try {
+    await admin.query(`CREATE DATABASE "${dbName}"`);
+  } catch (error) {
+    await admin.end();
+    throw error;
+  }
 
   return {
     dbName,
@@ -35,7 +43,7 @@ async function createFreshTreasuryDatabase() {
   };
 }
 
-describe('treasury partner handoff persistence (postgres)', () => {
+describePostgres('treasury partner handoff persistence (postgres)', () => {
   jest.setTimeout(120_000);
 
   let cleanup: (() => Promise<void>) | null = null;
@@ -161,7 +169,7 @@ describe('treasury partner handoff persistence (postgres)', () => {
   });
 });
 
-describe('treasury partner handoff routes (postgres)', () => {
+describePostgres('treasury partner handoff routes (postgres)', () => {
   jest.setTimeout(120_000);
 
   let cleanup: (() => Promise<void>) | null = null;
@@ -169,7 +177,7 @@ describe('treasury partner handoff routes (postgres)', () => {
   let queries: TreasuryQueries;
   let TreasuryControllerCtor: TreasuryControllerModule['TreasuryController'];
   let createRouterFn: TreasuryRoutesModule['createRouter'];
-  let server: Server;
+  let server: Server | null = null;
   let baseUrl: string;
 
   beforeAll(async () => {
@@ -204,14 +212,20 @@ describe('treasury partner handoff routes (postgres)', () => {
       server = app.listen(0, () => resolve());
     });
 
+    if (!server) {
+      throw new Error('Treasury partner handoff test server failed to start');
+    }
+
     const address = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${address.port}`;
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
-    });
+    if (server) {
+      await new Promise<void>((resolve, reject) => {
+        server?.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
     await connection?.closeConnection();
     await cleanup?.();
   });
