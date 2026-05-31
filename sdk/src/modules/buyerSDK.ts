@@ -21,10 +21,10 @@ import {
 } from '../utils/signature';
 import { ContractError, getErrorMessage } from '../types/errors';
 import { IERC20__factory } from '../types/typechain-types/factories/@openzeppelin/contracts/token/ERC20/IERC20__factory';
-import { GaslessSettlementClient } from './gaslessSettlementClient';
+import { GaslessSettlementRequestBuilder } from './gaslessExecutionPayload';
 
 export class BuyerSDK extends Client {
-  private readonly gaslessSettlementClient = new GaslessSettlementClient({
+  private readonly gaslessSettlementRequestBuilder = new GaslessSettlementRequestBuilder({
     chainId: this.config.chainId,
     escrowAddress: this.config.escrowAddress,
   });
@@ -128,7 +128,7 @@ export class BuyerSDK extends Client {
       input.usdc,
     );
 
-    return this.gaslessSettlementClient.buildCreateTradeExecutionRequest({
+    return this.gaslessSettlementRequestBuilder.buildCreateTradeExecutionRequest({
       handoffId: input.handoffId,
       expiresAt: input.expiresAt,
       authorization,
@@ -174,7 +174,7 @@ export class BuyerSDK extends Client {
       input.deadline,
     );
 
-    return this.gaslessSettlementClient.buildUserActionExecutionRequest({
+    return this.gaslessSettlementRequestBuilder.buildUserActionExecutionRequest({
       action,
       handoffId: input.handoffId,
       expiresAt: input.expiresAt,

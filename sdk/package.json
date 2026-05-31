@@ -1,6 +1,6 @@
 {
   "name": "@agroasys/sdk",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publishConfig": {
     "access": "restricted",
     "registry": "https://npm.pkg.github.com"
