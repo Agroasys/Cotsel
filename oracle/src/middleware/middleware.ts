@@ -58,7 +58,7 @@ export async function hmacMiddleware(
   }
 
   try {
-    const body = JSON.stringify(req.body);
+    const body = JSON.stringify(req.body ?? {});
     verifyRequestSignature(timestamp, body, signature, config.hmacSecret);
     const nonce = providedNonce || deriveRequestNonce(timestamp, body, signature);
 

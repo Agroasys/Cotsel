@@ -61,6 +61,11 @@ interface SignerBindingBody {
   reason?: string;
 }
 
+interface ListQuery {
+  limit?: string;
+  accountId?: string;
+}
+
 function actorFromRequest(req: Request) {
   const apiKeyId = req.serviceAuth?.apiKeyId;
   if (!apiKeyId) {
@@ -152,6 +157,30 @@ function optionalCapabilities(value: unknown): OperatorCapability[] | undefined 
   return [...new Set(value)] as OperatorCapability[];
 }
 
+function parseLimit(value: unknown): number {
+  if (value === undefined) {
+    return 100;
+  }
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) {
+    throw new HttpError(400, 'BadRequest', 'limit must be an integer');
+  }
+  const limit = Number.parseInt(value, 10);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    throw new HttpError(400, 'BadRequest', 'limit must be between 1 and 200');
+  }
+  return limit;
+}
+
+function optionalAccountId(value: unknown): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new HttpError(400, 'BadRequest', 'accountId must be a non-empty string');
+  }
+  return value.trim();
+}
+
 function profilePayload(profile: UserProfile) {
   return {
     userId: profile.id,
@@ -191,6 +220,62 @@ function statusForAdminError(error: unknown): number {
 
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
+
+  async listAuthorityProfiles(
+    req: Request<Record<string, never>, unknown, unknown, ListQuery>,
+    res: Response<ApiSuccessResponse | ApiErrorResponse>,
+  ): Promise<void> {
+    try {
+      const profiles = await this.adminService.listAuthorityProfiles({
+        limit: parseLimit(req.query.limit),
+      });
+      res.json(
+        success({
+          items: profiles.map((snapshot) => ({
+            ...profilePayload(snapshot.profile),
+            capabilities: snapshot.capabilities,
+            signerBindings: snapshot.signerBindings,
+            recentAuditEvents: snapshot.recentAuditEvents,
+          })),
+          generatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch (error) {
+      handleControllerError(
+        res,
+        error,
+        'AdminAuthorityListFailed',
+        statusForAdminError(error),
+        'Admin authority list failed',
+      );
+    }
+  }
+
+  async listAuditEvents(
+    req: Request<Record<string, never>, unknown, unknown, ListQuery>,
+    res: Response<ApiSuccessResponse | ApiErrorResponse>,
+  ): Promise<void> {
+    try {
+      const events = await this.adminService.listAuditEvents({
+        accountId: optionalAccountId(req.query.accountId),
+        limit: parseLimit(req.query.limit),
+      });
+      res.json(
+        success({
+          items: events,
+          generatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch (error) {
+      handleControllerError(
+        res,
+        error,
+        'AdminAuditListFailed',
+        statusForAdminError(error),
+        'Admin audit list failed',
+      );
+    }
+  }
 
   async provision(
     req: Request<Record<string, never>, unknown, ProvisionBody>,

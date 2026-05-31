@@ -46,6 +46,13 @@ export function createRouter(
     }
   });
 
+  router.get(
+    '/triggers',
+    authMiddleware,
+    hmacMiddleware,
+    asyncHandler((req, res) => controller.listTriggers(req, res)),
+  );
+
   router.post(
     '/release-stage1',
     authMiddleware,

@@ -707,6 +707,192 @@ export async function findProfileById(pool: Pool, id: string): Promise<UserProfi
   return result.rows[0] ?? null;
 }
 
+export interface AdminAuditEventRecord {
+  id: string;
+  accountId: string;
+  targetUserId: string | null;
+  action: AdminAuditAction;
+  actorType: AdminActor['type'];
+  actorId: string;
+  previousRole: string | null;
+  newRole: string | null;
+  reason: string;
+  breakGlassExpiresAt: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface OperatorSignerBindingRecord extends OperatorSignerAuthorization {
+  active: boolean;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  revokedReason: string | null;
+}
+
+export interface OperatorProfileAuthoritySnapshot {
+  profile: UserProfile;
+  capabilities: OperatorCapability[];
+  signerBindings: OperatorSignerBindingRecord[];
+  recentAuditEvents: AdminAuditEventRecord[];
+}
+
+interface AdminAuditEventRow {
+  id: string;
+  accountId: string;
+  targetUserId: string | null;
+  action: AdminAuditAction;
+  actorType: AdminActor['type'];
+  actorId: string;
+  previousRole: string | null;
+  newRole: string | null;
+  reason: string;
+  breakGlassExpiresAt: Date | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
+interface OperatorSignerBindingRow {
+  bindingId: string;
+  walletAddress: string;
+  actionClass: OperatorSignerActionClass;
+  environment: string;
+  active: boolean;
+  approvedAt: Date;
+  approvedBy: string;
+  ticketRef: string | null;
+  notes: string | null;
+  revokedAt: Date | null;
+  revokedBy: string | null;
+  revokedReason: string | null;
+}
+
+function mapAdminAuditEvent(row: AdminAuditEventRow): AdminAuditEventRecord {
+  return {
+    id: row.id,
+    accountId: row.accountId,
+    targetUserId: row.targetUserId,
+    action: row.action,
+    actorType: row.actorType,
+    actorId: row.actorId,
+    previousRole: row.previousRole,
+    newRole: row.newRole,
+    reason: row.reason,
+    breakGlassExpiresAt: row.breakGlassExpiresAt?.toISOString() ?? null,
+    metadata: row.metadata ?? {},
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function mapSignerBinding(row: OperatorSignerBindingRow): OperatorSignerBindingRecord {
+  return {
+    bindingId: row.bindingId,
+    walletAddress: row.walletAddress,
+    actionClass: row.actionClass,
+    environment: row.environment,
+    active: row.active,
+    approvedAt: row.approvedAt.toISOString(),
+    approvedBy: row.approvedBy,
+    ticketRef: row.ticketRef,
+    notes: row.notes,
+    revokedAt: row.revokedAt?.toISOString() ?? null,
+    revokedBy: row.revokedBy,
+    revokedReason: row.revokedReason,
+  };
+}
+
+export async function listAdminAuditEvents(
+  pool: Pool | PoolClient,
+  input: { accountId?: string; limit?: number } = {},
+): Promise<AdminAuditEventRecord[]> {
+  const limit = Math.min(Math.max(input.limit ?? 100, 1), 200);
+  const params: unknown[] = [];
+  const where: string[] = [];
+
+  if (input.accountId) {
+    params.push(input.accountId);
+    where.push(`account_id = $${params.length}`);
+  }
+
+  params.push(limit);
+  const result = await pool.query<AdminAuditEventRow>(
+    `SELECT id::text,
+            account_id AS "accountId",
+            target_user_id::text AS "targetUserId",
+            action,
+            actor_type AS "actorType",
+            actor_id AS "actorId",
+            previous_role AS "previousRole",
+            new_role AS "newRole",
+            reason,
+            break_glass_expires_at AS "breakGlassExpiresAt",
+            metadata,
+            created_at AS "createdAt"
+     FROM auth_admin_audit_events
+     ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
+     ORDER BY created_at DESC, id DESC
+     LIMIT $${params.length}`,
+    params,
+  );
+
+  return result.rows.map(mapAdminAuditEvent);
+}
+
+async function listSignerBindingsByAccountId(
+  pool: Pool | PoolClient,
+  accountId: string,
+): Promise<OperatorSignerBindingRecord[]> {
+  const result = await pool.query<OperatorSignerBindingRow>(
+    `SELECT id::text AS "bindingId",
+            wallet_address AS "walletAddress",
+            action_class AS "actionClass",
+            environment,
+            active,
+            created_at AS "approvedAt",
+            provisioned_by AS "approvedBy",
+            provision_ticket_ref AS "ticketRef",
+            notes,
+            revoked_at AS "revokedAt",
+            revoked_by AS "revokedBy",
+            revoked_reason AS "revokedReason"
+     FROM operator_signer_bindings
+     WHERE account_id = $1
+     ORDER BY active DESC, created_at DESC, id DESC`,
+    [accountId],
+  );
+
+  return result.rows.map(mapSignerBinding);
+}
+
+export async function listOperatorAuthorityProfiles(
+  pool: Pool,
+  input: { limit?: number } = {},
+): Promise<OperatorProfileAuthoritySnapshot[]> {
+  const limit = Math.min(Math.max(input.limit ?? 100, 1), 200);
+  const result = await pool.query<UserProfile>(
+    `SELECT ${USER_PROFILE_FIELDS}
+     FROM user_profiles
+     WHERE role = 'admin'
+        OR break_glass_role IS NOT NULL
+        OR account_id IN (SELECT account_id FROM operator_capability_bindings)
+        OR account_id IN (SELECT account_id FROM operator_signer_bindings)
+     ORDER BY updated_at DESC, created_at DESC
+     LIMIT $1`,
+    [limit],
+  );
+
+  return Promise.all(
+    result.rows.map(async (profile) => ({
+      profile,
+      capabilities: await listOperatorCapabilitiesByAccountId(pool, profile.accountId),
+      signerBindings: await listSignerBindingsByAccountId(pool, profile.accountId),
+      recentAuditEvents: await listAdminAuditEvents(pool, {
+        accountId: profile.accountId,
+        limit: 10,
+      }),
+    })),
+  );
+}
+
 export async function deactivateProfile(pool: Pool, id: string): Promise<void> {
   await pool.query(`UPDATE user_profiles SET active = FALSE, updated_at = NOW() WHERE id = $1`, [
     id,

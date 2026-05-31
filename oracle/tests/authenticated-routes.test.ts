@@ -74,6 +74,9 @@ describe('oracle authenticated routes', () => {
     rejectTrigger: async (_req: Request, res: Response) => {
       res.status(200).json({ success: true });
     },
+    listTriggers: async (req: Request, res: Response) => {
+      res.status(200).json({ success: true, status: req.query.status ?? null });
+    },
   };
 
   beforeEach(async () => {
@@ -209,5 +212,22 @@ describe('oracle authenticated routes', () => {
         message: 'Authentication nonce store unavailable',
       }),
     );
+  });
+
+  test('valid signed GET reaches protected trigger queue route', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+
+    const response = await fetch(`${baseUrl}/api/oracle/triggers?status=pending_approval`, {
+      headers: createSignedHeaders({}, { nonce: 'oracle-trigger-list' }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        status: 'pending_approval',
+      }),
+    );
+    expect(mockConsumeHmacNonce).toHaveBeenCalledWith('test-api-key', 'oracle-trigger-list', 600);
   });
 });

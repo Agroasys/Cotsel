@@ -105,6 +105,38 @@ export function createRouter(
   }
 
   if (options?.adminController && options.adminControlMiddleware) {
+    router.get(
+      '/admin/profiles',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.listAuthorityProfiles(
+          req as Request<
+            Record<string, never>,
+            unknown,
+            unknown,
+            { limit?: string; accountId?: string }
+          >,
+          res,
+        ),
+      ),
+    );
+
+    router.get(
+      '/admin/audit-events',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.listAuditEvents(
+          req as Request<
+            Record<string, never>,
+            unknown,
+            unknown,
+            { limit?: string; accountId?: string }
+          >,
+          res,
+        ),
+      ),
+    );
+
     router.post(
       '/admin/profiles/provision',
       options.adminControlMiddleware,

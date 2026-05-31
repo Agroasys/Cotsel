@@ -89,6 +89,36 @@ export async function getTriggersByStatus(
   return result.rows;
 }
 
+export async function listTriggers(input: {
+  status?: TriggerStatus;
+  tradeId?: string;
+  limit?: number;
+}): Promise<Trigger[]> {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (input.status) {
+    params.push(input.status);
+    conditions.push(`status = $${params.length}`);
+  }
+
+  if (input.tradeId) {
+    params.push(input.tradeId);
+    conditions.push(`trade_id = $${params.length}`);
+  }
+
+  params.push(Math.min(Math.max(input.limit ?? 100, 1), 200));
+  const result = await pool.query(
+    `SELECT *
+     FROM oracle_triggers
+     ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+     ORDER BY updated_at DESC, created_at DESC
+     LIMIT $${params.length}`,
+    params,
+  );
+  return result.rows;
+}
+
 export async function getExhaustedTriggersForRedrive(limit: number = 50): Promise<Trigger[]> {
   const result = await pool.query(
     `SELECT * FROM oracle_triggers

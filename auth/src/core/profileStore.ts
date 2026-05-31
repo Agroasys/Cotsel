@@ -21,6 +21,10 @@ import {
   revokeBreakGlassAdmin,
   reviewBreakGlassAdmin,
   deactivateProfileWithAudit,
+  listAdminAuditEvents,
+  listOperatorAuthorityProfiles,
+  type AdminAuditEventRecord,
+  type OperatorProfileAuthoritySnapshot,
 } from '../database/queries';
 
 export interface ProfileStore {
@@ -29,6 +33,8 @@ export interface ProfileStore {
   findByWallet(walletAddress: string): Promise<UserProfile | null>;
   findByAccountId(accountId: string): Promise<UserProfile | null>;
   findById(id: string): Promise<UserProfile | null>;
+  listAuthorityProfiles(input?: { limit?: number }): Promise<OperatorProfileAuthoritySnapshot[]>;
+  listAuditEvents(input?: { accountId?: string; limit?: number }): Promise<AdminAuditEventRecord[]>;
   deactivate(id: string): Promise<void>;
   provision(input: {
     accountId: string;
@@ -83,6 +89,12 @@ export function createPostgresProfileStore(pool: Pool): ProfileStore {
     },
     findById(id) {
       return findProfileById(pool, id);
+    },
+    listAuthorityProfiles(input) {
+      return listOperatorAuthorityProfiles(pool, input);
+    },
+    listAuditEvents(input) {
+      return listAdminAuditEvents(pool, input);
     },
     deactivate(id) {
       return deactivateProfile(pool, id);

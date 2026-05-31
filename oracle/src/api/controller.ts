@@ -18,7 +18,8 @@ import {
   RejectRequest,
   ReleaseStage1Request,
 } from '../types';
-import { TriggerType } from '../types/trigger';
+import { Trigger, TriggerStatus, TriggerType } from '../types/trigger';
+import { listTriggers } from '../database/queries';
 import { ValidationError } from '../utils/errors';
 
 type TriggerRequestBody = {
@@ -30,6 +31,11 @@ type RedriveRequestBody = TriggerRequestBody & {
   triggerType?: TriggerType;
 };
 type RouteParams = Record<string, string | string[]>;
+type TriggerListQuery = {
+  status?: string;
+  tradeId?: string;
+  limit?: string;
+};
 
 type TriggerExecutionResult = {
   idempotencyKey: string;
@@ -41,6 +47,7 @@ type TriggerExecutionResult = {
 };
 
 const ORACLE_TRIGGER_TYPES = Object.values(TriggerType);
+const ORACLE_TRIGGER_STATUSES: readonly string[] = Object.values(TriggerStatus);
 
 function buildOracleSuccess(result: TriggerExecutionResult): OracleResponse {
   return {
@@ -115,6 +122,65 @@ function parseApprovalBody(body: unknown): { idempotencyKey: string; actor: stri
   };
 }
 
+function parseTriggerListQuery(query: TriggerListQuery): {
+  status?: TriggerStatus;
+  tradeId?: string;
+  limit: number;
+} {
+  const limit =
+    query.limit === undefined
+      ? 100
+      : /^\d+$/.test(query.limit)
+        ? Number.parseInt(query.limit, 10)
+        : Number.NaN;
+
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    throw new HttpError(400, 'BadRequest', 'limit must be between 1 and 200');
+  }
+
+  if (query.status !== undefined && !ORACLE_TRIGGER_STATUSES.includes(query.status)) {
+    throw new HttpError(400, 'BadRequest', 'status is invalid');
+  }
+
+  return {
+    status: query.status as TriggerStatus | undefined,
+    tradeId: query.tradeId?.trim() || undefined,
+    limit,
+  };
+}
+
+function serializeTrigger(trigger: Trigger) {
+  return {
+    id: trigger.id,
+    actionKey: trigger.action_key,
+    requestId: trigger.request_id,
+    idempotencyKey: trigger.idempotency_key,
+    tradeId: trigger.trade_id,
+    triggerType: trigger.trigger_type,
+    attemptCount: trigger.attempt_count,
+    status: trigger.status,
+    txHash: trigger.tx_hash,
+    blockNumber: trigger.block_number ? Number(trigger.block_number) : null,
+    confirmationStage: trigger.confirmation_stage,
+    confirmationStageAt: trigger.confirmation_stage_at?.toISOString() ?? null,
+    indexerConfirmed: trigger.indexer_confirmed,
+    indexerConfirmedAt: trigger.indexer_confirmed_at?.toISOString() ?? null,
+    indexerEventId: trigger.indexer_event_id,
+    lastError: trigger.last_error,
+    errorType: trigger.error_type,
+    onChainVerified: trigger.on_chain_verified,
+    onChainVerifiedAt: trigger.on_chain_verified_at?.toISOString() ?? null,
+    createdAt: trigger.created_at.toISOString(),
+    submittedAt: trigger.submitted_at?.toISOString() ?? null,
+    confirmedAt: trigger.confirmed_at?.toISOString() ?? null,
+    updatedAt: trigger.updated_at.toISOString(),
+    approvedBy: trigger.approved_by,
+    approvedAt: trigger.approved_at?.toISOString() ?? null,
+    rejectedBy: trigger.rejected_by,
+    rejectedAt: trigger.rejected_at?.toISOString() ?? null,
+  };
+}
+
 function parseRejectBody(body: unknown): {
   idempotencyKey: string;
   actor: string;
@@ -131,6 +197,27 @@ function parseRejectBody(body: unknown): {
 
 export class OracleController {
   constructor(private triggerManager: TriggerManager) {}
+
+  async listTriggers(
+    req: Request<RouteParams, unknown, unknown, TriggerListQuery>,
+    res: Response<OracleResponse | ErrorResponse>,
+  ): Promise<void> {
+    try {
+      const query = parseTriggerListQuery(req.query);
+      const triggers = await listTriggers(query);
+      res.status(200).json({
+        success: true,
+        data: {
+          items: triggers.map(serializeTrigger),
+          generatedAt: timestamp(),
+        },
+        timestamp: timestamp(),
+      } as unknown as OracleResponse);
+    } catch (error: unknown) {
+      Logger.error('Controller error in listTriggers', error);
+      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+    }
+  }
 
   async releaseStage1(
     req: Request<RouteParams, unknown, ReleaseStage1Request>,

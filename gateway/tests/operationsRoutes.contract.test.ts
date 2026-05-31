@@ -14,6 +14,7 @@ import type {
   OperationsSummaryReader,
   OperationsSummarySnapshot,
 } from '../src/core/operationsSummaryService';
+import type { FailedOperationRecord, FailedOperationStore } from '../src/core/failedOperationStore';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -156,6 +157,7 @@ async function startServer(
   role: 'admin' | 'buyer' | null,
   fixture: OperationsSummarySnapshot = operationsFixture,
   gaslessSettlementService?: GaslessSettlementExecutionService | null,
+  failedOperationStore?: FailedOperationStore | null,
 ) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
@@ -185,6 +187,7 @@ async function startServer(
       config,
       operationsSummaryService,
       gaslessSettlementService,
+      failedOperationStore,
     }),
   );
 
@@ -344,6 +347,78 @@ describe('gateway operations summary route contract', () => {
       expect(payload.data.controls.maxFeePerGasWei).toBe('50000000000');
       expect(payload.data.alerts[0].code).toBe('gasless_broadcast_paused');
       expect(payload.data.alerts[1].code).toBe('gasless_low_executor_balance');
+    } finally {
+      server.close();
+    }
+  });
+
+  test('GET /operations/failed-operations returns sanitized replay queue records', async () => {
+    const failedRecord: FailedOperationRecord = {
+      failedOperationId: 'failed-op-1',
+      operationType: 'settlement-callback',
+      operationKey: 'callback-1',
+      targetService: 'agroasys-backend',
+      route: '/settlement/callbacks',
+      method: 'POST',
+      payloadHash: 'hash-1',
+      requestPayload: { secret: 'redacted-by-route' },
+      requestId: 'req-failed-1',
+      correlationId: null,
+      idempotencyKey: 'idem-1',
+      actionKey: null,
+      actorId: null,
+      actorUserId: 'admin-1',
+      actorWalletAddress: null,
+      actorRole: 'admin',
+      sessionReference: 'session-1',
+      replayEligible: true,
+      failureState: 'open',
+      firstFailedAt: '2026-03-12T00:00:00.000Z',
+      lastFailedAt: '2026-03-12T00:05:00.000Z',
+      retryCount: 3,
+      terminalErrorClass: 'infrastructure',
+      terminalErrorCode: 'CALLBACK_503',
+      terminalErrorMessage: 'Callback service unavailable',
+      metadata: { source: 'test' },
+      lastReplayedAt: null,
+      createdAt: '2026-03-12T00:00:00.000Z',
+      updatedAt: '2026-03-12T00:05:00.000Z',
+    };
+    const failedOperationStore = {
+      list: jest.fn().mockResolvedValue([failedRecord]),
+      get: jest.fn(),
+      recordFailure: jest.fn(),
+      markReplayed: jest.fn(),
+      markReplayFailed: jest.fn(),
+    } as unknown as FailedOperationStore;
+    const { server, baseUrl } = await startServer(
+      'admin',
+      operationsFixture,
+      null,
+      failedOperationStore,
+    );
+
+    try {
+      const response = await fetch(
+        `${baseUrl}/operations/failed-operations?failureState=open&replayEligible=true`,
+        { headers: { Authorization: 'Bearer sess-admin' } },
+      );
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(failedOperationStore.list).toHaveBeenCalledWith({
+        failureState: 'open',
+        replayEligible: true,
+      });
+      expect(payload.data.items).toHaveLength(1);
+      expect(payload.data.items[0]).toEqual(
+        expect.objectContaining({
+          failedOperationId: 'failed-op-1',
+          replayEligible: true,
+          failureState: 'open',
+          requestPayload: null,
+        }),
+      );
     } finally {
       server.close();
     }

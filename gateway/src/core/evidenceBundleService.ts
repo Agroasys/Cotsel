@@ -135,6 +135,7 @@ export interface EvidenceBundleGenerationInput {
 export interface EvidenceBundleService {
   generate(input: EvidenceBundleGenerationInput): Promise<EvidenceBundleManifest>;
   get(bundleId: string): Promise<EvidenceBundleManifest | null>;
+  list(input?: { tradeId?: string; limit?: number }): Promise<EvidenceBundleManifest[]>;
 }
 
 export class GatewayEvidenceBundleService implements EvidenceBundleService {
@@ -250,6 +251,11 @@ export class GatewayEvidenceBundleService implements EvidenceBundleService {
     }
 
     return stored.manifest as unknown as EvidenceBundleManifest;
+  }
+
+  async list(input: { tradeId?: string; limit?: number } = {}): Promise<EvidenceBundleManifest[]> {
+    const records = await this.store.list(input);
+    return records.map((record) => record.manifest as unknown as EvidenceBundleManifest);
   }
 
   private describeDegradedReason(error: unknown): string {

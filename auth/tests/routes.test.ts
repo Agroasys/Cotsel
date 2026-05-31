@@ -41,6 +41,8 @@ function createLegacyWalletController(): LegacyWalletAuthController {
 
 function createAdminController(): AdminController {
   return {
+    listAuthorityProfiles: jest.fn(),
+    listAuditEvents: jest.fn(),
     provision: jest.fn(),
     deactivate: jest.fn(),
     provisionSigner: jest.fn(),
@@ -78,6 +80,8 @@ describe('auth router', () => {
       adminControlMiddleware: jest.fn(),
     });
 
+    expect(listRoutes(router)).toContain('GET /admin/profiles');
+    expect(listRoutes(router)).toContain('GET /admin/audit-events');
     expect(listRoutes(router)).toContain('POST /admin/signers/provision');
     expect(listRoutes(router)).toContain('POST /admin/signers/revoke');
   });
