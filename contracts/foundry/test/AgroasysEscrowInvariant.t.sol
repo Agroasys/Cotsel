@@ -294,6 +294,7 @@ contract InvariantTest is Test {
     Handler public handler;
 
     address oracle;
+    address relayer;
     address admin1;
     address admin2;
     address admin3;
@@ -302,6 +303,7 @@ contract InvariantTest is Test {
     function setUp() public {
         treasury = makeAddr("treasury");
         oracle = makeAddr("oracle");
+        relayer = makeAddr("relayer");
         admin1 = makeAddr("admin1");
         admin2 = makeAddr("admin2");
         admin3 = makeAddr("admin3");
@@ -313,7 +315,7 @@ contract InvariantTest is Test {
         admins[1] = admin2;
         admins[2] = admin3;
 
-        escrow = new AgroasysEscrow(address(usdc), oracle,treasury ,admins, 2);
+        escrow = new AgroasysEscrow(address(usdc), oracle, treasury, relayer, admins, 2);
 
         handler = new Handler(escrow,usdc,treasury,oracle,admin1,admin2);
 

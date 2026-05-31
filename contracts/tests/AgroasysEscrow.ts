@@ -14,6 +14,7 @@ describe('AgroasysEscrow', function () {
   let supplier: SignerWithAddress;
   let treasury: SignerWithAddress;
   let oracle: SignerWithAddress;
+  let relayer: SignerWithAddress;
   let admin1: SignerWithAddress;
   let admin2: SignerWithAddress;
   let admin3: SignerWithAddress;
@@ -352,7 +353,8 @@ describe('AgroasysEscrow', function () {
   }
 
   beforeEach(async function () {
-    [buyer, supplier, treasury, oracle, admin1, admin2, admin3] = await ethers.getSigners();
+    [buyer, supplier, treasury, oracle, relayer, admin1, admin2, admin3] =
+      await ethers.getSigners();
 
     const USDCFactory = await ethers.getContractFactory('MockUSDC');
     usdc = await USDCFactory.deploy();
@@ -366,6 +368,7 @@ describe('AgroasysEscrow', function () {
       await usdc.getAddress(),
       oracle.address,
       treasury.address,
+      relayer.address,
       admins,
       2,
     );
@@ -382,6 +385,7 @@ describe('AgroasysEscrow', function () {
       expect(await escrow.oracleActive()).to.be.true;
       expect(await escrow.paused()).to.be.false;
       expect(await escrow.claimsPaused()).to.be.false;
+      expect(await escrow.isRelayer(relayer.address)).to.be.true;
       expect(await escrow.isAdmin(admin1.address)).to.be.true;
       expect(await escrow.isAdmin(admin2.address)).to.be.true;
       expect(await escrow.isAdmin(admin3.address)).to.be.true;
@@ -395,6 +399,7 @@ describe('AgroasysEscrow', function () {
           ethers.ZeroAddress,
           oracle.address,
           treasury.address,
+          relayer.address,
           [admin1.address],
           1,
         ),
@@ -405,6 +410,7 @@ describe('AgroasysEscrow', function () {
           await usdc.getAddress(),
           ethers.ZeroAddress,
           treasury.address,
+          relayer.address,
           [admin1.address],
           1,
         ),
@@ -415,6 +421,7 @@ describe('AgroasysEscrow', function () {
           await usdc.getAddress(),
           oracle.address,
           ethers.ZeroAddress,
+          relayer.address,
           [admin1.address],
           1,
         ),
@@ -425,6 +432,18 @@ describe('AgroasysEscrow', function () {
           await usdc.getAddress(),
           oracle.address,
           treasury.address,
+          ethers.ZeroAddress,
+          [admin1.address],
+          1,
+        ),
+      ).to.be.revertedWith('invalid relayer');
+
+      await expect(
+        EscrowFactory.deploy(
+          await usdc.getAddress(),
+          oracle.address,
+          treasury.address,
+          relayer.address,
           [admin1.address],
           0,
         ),
@@ -435,6 +454,7 @@ describe('AgroasysEscrow', function () {
           await usdc.getAddress(),
           oracle.address,
           treasury.address,
+          relayer.address,
           [admin1.address],
           1,
         ),
@@ -445,6 +465,7 @@ describe('AgroasysEscrow', function () {
           await usdc.getAddress(),
           oracle.address,
           treasury.address,
+          relayer.address,
           [admin1.address, admin2.address],
           3,
         ),
@@ -479,6 +500,7 @@ describe('AgroasysEscrow', function () {
         await usdc.getAddress(),
         oracle.address,
         treasury.address,
+        relayer.address,
         [admin1.address, admin2.address],
         2,
       );

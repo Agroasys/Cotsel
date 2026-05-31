@@ -17,6 +17,7 @@ export interface BaseDeploymentConfig {
   readonly usdcAddress: string;
   readonly oracleAddress: string;
   readonly treasuryAddress: string;
+  readonly relayerAddress: string;
   readonly admins: string[];
   readonly requiredApprovals: number;
   readonly confirmations: number;
@@ -154,6 +155,22 @@ function assertAdminsDoNotIncludeForbiddenUsers(admins: string[], forbiddenUsers
   }
 }
 
+function assertRelayerDoesNotIncludeForbiddenUsers(relayerAddress: string, forbiddenUsers: string[]): void {
+  if (forbiddenUsers.length === 0) {
+    return;
+  }
+
+  const forbiddenRelayer = forbiddenUsers.find(
+    (address) => address.toLowerCase() === relayerAddress.toLowerCase(),
+  );
+  if (forbiddenRelayer) {
+    throw new Error(
+      `DEPLOY_RELAYER_ADDRESS must not be buyer/supplier user wallet ${forbiddenRelayer}. ` +
+        "Use a service-owned relayer wallet for sponsored settlement execution.",
+    );
+  }
+}
+
 export function getBaseDeploymentTarget(networkName: string): BaseDeploymentTarget {
   if (networkName !== "base-sepolia" && networkName !== "base-mainnet") {
     throw new Error(
@@ -186,8 +203,11 @@ export function loadBaseDeploymentConfig(
 
   const oracleAddress = parseAddressEnv("DEPLOY_ORACLE_ADDRESS", env);
   const treasuryAddress = parseAddressEnv("DEPLOY_TREASURY_ADDRESS", env);
+  const relayerAddress = parseAddressEnv("DEPLOY_RELAYER_ADDRESS", env);
   const admins = parseAdminList(env);
-  assertAdminsDoNotIncludeForbiddenUsers(admins, parseOptionalAddressList("DEPLOY_FORBIDDEN_USER_WALLETS", env));
+  const forbiddenUserWallets = parseOptionalAddressList("DEPLOY_FORBIDDEN_USER_WALLETS", env);
+  assertAdminsDoNotIncludeForbiddenUsers(admins, forbiddenUserWallets);
+  assertRelayerDoesNotIncludeForbiddenUsers(relayerAddress, forbiddenUserWallets);
   const requiredApprovals = parsePositiveIntEnv("DEPLOY_REQUIRED_APPROVALS", env);
   if (requiredApprovals > admins.length) {
     throw new Error("DEPLOY_REQUIRED_APPROVALS must not exceed the number of admin addresses");
@@ -205,6 +225,7 @@ export function loadBaseDeploymentConfig(
     usdcAddress: target.officialUsdcAddress,
     oracleAddress,
     treasuryAddress,
+    relayerAddress,
     admins,
     requiredApprovals,
     confirmations,
