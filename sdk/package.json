@@ -1,6 +1,6 @@
 {
   "name": "@agroasys/sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publishConfig": {
     "access": "restricted",
     "registry": "https://npm.pkg.github.com"
@@ -30,6 +30,12 @@
       "require": "./dist/legacy.js",
       "default": "./dist/legacy.js"
     },
+    "./buyer": {
+      "types": "./dist/buyer.d.ts",
+      "import": "./dist/buyer.js",
+      "require": "./dist/buyer.js",
+      "default": "./dist/buyer.js"
+    },
     "./rpc/failoverProvider": {
       "types": "./dist/rpc/failoverProvider.d.ts",
       "import": "./dist/rpc/failoverProvider.js",
@@ -39,6 +45,9 @@
   },
   "typesVersions": {
     "*": {
+      "buyer": [
+        "dist/buyer.d.ts"
+      ],
       "legacy": [
         "dist/legacy.d.ts"
       ],
@@ -62,11 +71,19 @@
   },
   "dependencies": {
     "ethers": "^6.4.0",
-    "@web3auth/modal": "^10.16.0",
     "ox": "^0.14.20"
+  },
+  "peerDependencies": {
+    "@web3auth/modal": "^10.16.0"
+  },
+  "peerDependenciesMeta": {
+    "@web3auth/modal": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "dotenv": "^17.4.2",
+    "@web3auth/modal": "^10.16.0",
     "@types/jest": "^30.0.0",
     "@types/node": "25.6.0",
     "jest": "^30.4.2",

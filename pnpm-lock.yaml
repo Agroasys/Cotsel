@@ -501,9 +501,6 @@ importers:
 
   sdk:
     dependencies:
-      '@web3auth/modal':
-        specifier: ^10.16.0
-        version: 10.16.0(@babel/runtime@7.28.6)(@sentry/core@9.47.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(ioredis@5.10.1)(ox@0.14.20(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)(utf-8-validate@6.0.6)(viem@2.45.0(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@6.0.6))
       ethers:
         specifier: ^6.4.0
         version: 6.16.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -517,6 +514,9 @@ importers:
       '@types/node':
         specifier: 25.6.0
         version: 25.6.0
+      '@web3auth/modal':
+        specifier: ^10.16.0
+        version: 10.16.0(@babel/runtime@7.28.6)(@sentry/core@9.47.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(ioredis@5.10.1)(ox@0.14.20(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)(utf-8-validate@6.0.6)(viem@2.45.0(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@6.0.6))
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
