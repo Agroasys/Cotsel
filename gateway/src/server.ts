@@ -552,6 +552,7 @@ async function bootstrap(): Promise<void> {
       gaslessSettlementService,
       failedOperationStore,
       failedOperationReplayer,
+      idempotencyStore,
     }),
   );
 
