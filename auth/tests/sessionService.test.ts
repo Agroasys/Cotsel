@@ -104,6 +104,8 @@ function makeStores(profile: UserProfile) {
     findByWallet: jest.fn(async (_w: string): Promise<UserProfile | null> => profile),
     findByAccountId: jest.fn(async (_accountId: string): Promise<UserProfile | null> => profile),
     findById: jest.fn(async (_id: string): Promise<UserProfile | null> => profile),
+    listAuthorityProfiles: jest.fn(async () => []),
+    listAuditEvents: jest.fn(async () => []),
     deactivate: jest.fn(async (_id: string): Promise<void> => undefined),
     provision: jest.fn(async (): Promise<UserProfile> => profile),
     grantBreakGlass: jest.fn(async (): Promise<UserProfile> => profile),

@@ -41,6 +41,16 @@ Gateway responsibilities:
 - enforce idempotency, request tracing, and stable error shapes
 - own downstream HTTP orchestration policy for service-routed reads and probes through `gateway/src/core/serviceRegistry.ts` and `gateway/src/core/serviceOrchestrator.ts`
 
+Gasless create-trade boundary:
+
+- Cotsel-Dash may prepare the Ricardian artifact and collect the buyer signatures required for a gasless create-trade authorization package.
+- Cotsel-Dash must submit only the signed authorization package to a dashboard-authenticated gateway route.
+- The dashboard browser must never store settlement service-auth API keys, service-auth HMAC secrets, or service-auth headers.
+- The dashboard browser must never call `/settlement/gasless-executions/create-trade` directly because that route is the service-authenticated execution ingress.
+- The gateway must validate dashboard session authority, mutation/write posture, idempotency, gasless-execution readiness, and signed payload shape before dispatch.
+- The gateway remains the trusted server boundary that calls the existing gasless execution service and sponsors the privileged on-chain submission through the configured executor.
+- Execution evidence must distinguish buyer authorization, gateway submission, relayer broadcast, chain confirmation, callback delivery, and reconciliation. A signed authorization alone is not proof of escrow funding.
+
 Operations read surface:
 
 - `GET /operations/summary` provides service health and incident summary for operator operations pages.

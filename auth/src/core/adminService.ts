@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { ProfileStore } from './profileStore';
 import { OperatorAuthorityStore } from './operatorAuthorityStore';
+import type { AdminAuditEventRecord, OperatorProfileAuthoritySnapshot } from '../database/queries';
 import {
   incrementAdminBreakGlassGranted,
   incrementAdminBreakGlassRevoked,
@@ -60,6 +61,8 @@ interface SignerBindingInput {
 }
 
 export interface AdminService {
+  listAuthorityProfiles(input?: { limit?: number }): Promise<OperatorProfileAuthoritySnapshot[]>;
+  listAuditEvents(input?: { accountId?: string; limit?: number }): Promise<AdminAuditEventRecord[]>;
   provisionProfile(input: ProvisionProfileInput): Promise<UserProfile>;
   grantBreakGlass(input: GrantBreakGlassInput): Promise<UserProfile>;
   revokeBreakGlass(input: AccountActionInput): Promise<UserProfile | null>;
@@ -86,6 +89,14 @@ export function createAdminService(
   maxBreakGlassTtlSeconds: number,
 ): AdminService {
   return {
+    async listAuthorityProfiles(input = {}) {
+      return profiles.listAuthorityProfiles(input);
+    },
+
+    async listAuditEvents(input = {}) {
+      return profiles.listAuditEvents(input);
+    },
+
     async provisionProfile(input) {
       const reason = normalizeReason(input.reason);
       const previous = await profiles.findByAccountId(input.accountId);

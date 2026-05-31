@@ -778,6 +778,47 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '503':
           $ref: '#/components/responses/UpstreamUnavailableError'
+  /dashboard-settlement/gasless-executions/create-trade:
+    post:
+      tags: [Settlement]
+      summary: Submit a buyer-signed gasless create-trade package from the dashboard
+      description: |
+        Dashboard-authenticated submission boundary for Cotsel-Dash operator or integration
+        rehearsal flows. The browser submits only the buyer-signed gasless authorization package
+        created by the SDK. It must not include service-auth headers, service-auth API keys, or
+        service-auth secrets. The gateway validates the operator session, write posture,
+        idempotency, gasless readiness, and payload shape before dispatching to the existing
+        server-side gasless execution service.
+      operationId: submitDashboardGaslessCreateTradeExecution
+      security:
+        - sessionBearer: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionRequest'
+      responses:
+        '202':
+          description: Dashboard gasless create-trade package accepted for sponsored execution.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
   /settlement/gasless-executions/user-action:
     post:
       tags: [Settlement]
@@ -940,6 +981,40 @@ paths:
         '403':
           $ref: '#/components/responses/ForbiddenError'
   /evidence/bundles:
+    get:
+      tags: [Evidence]
+      summary: List generated evidence bundle manifests
+      operationId: listEvidenceBundles
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: tradeId
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Generated evidence bundle manifests visible to operators.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceBundleListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
     post:
       tags: [Evidence]
       summary: Generate an evidence bundle manifest for a trade
@@ -5876,6 +5951,27 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/EvidenceBundleManifest'
+        timestamp:
+          type: string
+          format: date-time
+    EvidenceBundleListResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required: [items, generatedAt]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/EvidenceBundleManifest'
+            generatedAt:
+              type: string
+              format: date-time
         timestamp:
           type: string
           format: date-time

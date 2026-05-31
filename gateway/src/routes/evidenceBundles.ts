@@ -53,6 +53,24 @@ function parseBundleId(value: unknown): string {
   return bundleId;
 }
 
+function parseOptionalTradeId(value: unknown): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return parseTradeId(value);
+}
+
+function parseLimit(value: unknown): number {
+  if (value === undefined) {
+    return 50;
+  }
+  const parsed = typeof value === 'string' ? Number.parseInt(value, 10) : NaN;
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'limit must be an integer from 1 to 100');
+  }
+  return parsed;
+}
+
 function getMutationContext(req: MutationRequest): MutationContext {
   if (!req.gatewayPrincipal) {
     throw new GatewayError(401, 'AUTH_REQUIRED', 'Authentication is required');
@@ -78,6 +96,24 @@ export function createEvidenceBundleRouter(options: EvidenceBundleRouterOptions)
   const idempotency = createIdempotencyMiddleware(options.idempotencyStore);
 
   router.use('/evidence', authenticate);
+
+  router.get('/evidence/bundles', requireGatewayRole('operator:read'), async (req, res, next) => {
+    try {
+      const items = await options.evidenceBundleService.list({
+        tradeId: parseOptionalTradeId(req.query.tradeId),
+        limit: parseLimit(req.query.limit),
+      });
+
+      res.status(200).json(
+        successResponse({
+          items,
+          generatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.post(
     '/evidence/bundles',

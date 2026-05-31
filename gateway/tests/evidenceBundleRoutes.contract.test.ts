@@ -238,8 +238,13 @@ describe('gateway evidence bundle routes contract', () => {
     spec,
     '#/components/schemas/EvidenceBundleResponse',
   );
+  const validateBundleListResponse = createSchemaValidator(
+    spec,
+    '#/components/schemas/EvidenceBundleListResponse',
+  );
 
   test('OpenAPI spec exposes evidence bundle generation and retrieval routes', () => {
+    expect(hasOperation(spec, 'get', '/evidence/bundles')).toBe(true);
     expect(hasOperation(spec, 'post', '/evidence/bundles')).toBe(true);
     expect(hasOperation(spec, 'get', '/evidence/bundles/{bundleId}')).toBe(true);
     expect(hasOperation(spec, 'get', '/evidence/bundles/{bundleId}/download')).toBe(true);
@@ -281,6 +286,24 @@ describe('gateway evidence bundle routes contract', () => {
     expect((getPayload as { data: { bundleId: string } }).data.bundleId).toBe(
       (createPayload as { data: { bundleId: string } }).data.bundleId,
     );
+
+    const listResponse = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: `/api/dashboard-gateway/v1/evidence/bundles?tradeId=${trade.id}&limit=10`,
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'x-request-id': 'req-evidence-list',
+      },
+    });
+    const listPayload = listResponse.json<Record<string, unknown>>();
+
+    expect(listResponse.status).toBe(200);
+    expect(validateBundleListResponse(listPayload)).toBe(true);
+    expect((listPayload as { data: { items: Array<{ bundleId: string }> } }).data.items).toEqual([
+      expect.objectContaining({
+        bundleId: (createPayload as { data: { bundleId: string } }).data.bundleId,
+      }),
+    ]);
   });
 
   test('GET /evidence/bundles/{bundleId}/download returns a JSON attachment', async () => {

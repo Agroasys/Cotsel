@@ -4,16 +4,87 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { GatewayConfig } from '../config/env';
 import { AuthSessionClient } from '../core/authSessionClient';
+import {
+  FailedOperationState,
+  FailedOperationStore,
+  type FailedOperationRecord,
+} from '../core/failedOperationStore';
+import { GatewayFailedOperationReplayer } from '../core/errorHandlerWorkflow';
 import type { GaslessSettlementExecutionService } from '../core/gaslessSettlementExecutionService';
 import { OperationsSummaryReader } from '../core/operationsSummaryService';
-import { createAuthenticationMiddleware, requireGatewayRole } from '../middleware/auth';
+import {
+  createAuthenticationMiddleware,
+  requireGatewayRole,
+  requireMutationWriteAccess,
+} from '../middleware/auth';
 import { successResponse } from '../responses';
+import { GatewayError } from '../errors';
 
 export interface OperationsRouterOptions {
   authSessionClient: AuthSessionClient;
   config: GatewayConfig;
   operationsSummaryService: OperationsSummaryReader;
   gaslessSettlementService?: GaslessSettlementExecutionService | null;
+  failedOperationStore?: FailedOperationStore | null;
+  failedOperationReplayer?: GatewayFailedOperationReplayer | null;
+}
+
+const FAILED_OPERATION_STATES: readonly FailedOperationState[] = [
+  'open',
+  'replayed',
+  'replay_failed',
+];
+
+function parseFailedOperationState(raw: unknown): FailedOperationState | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== 'string' || !FAILED_OPERATION_STATES.includes(raw as FailedOperationState)) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'failureState' is invalid", {
+      allowed: FAILED_OPERATION_STATES,
+    });
+  }
+  return raw as FailedOperationState;
+}
+
+function parseReplayEligible(raw: unknown): boolean | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (raw === 'true') {
+    return true;
+  }
+  if (raw === 'false') {
+    return false;
+  }
+  throw new GatewayError(
+    400,
+    'VALIDATION_ERROR',
+    "Query parameter 'replayEligible' must be true or false",
+  );
+}
+
+function requireFailedOperationStore(
+  store: FailedOperationStore | null | undefined,
+): FailedOperationStore {
+  if (!store) {
+    throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Failed-operation queue is not configured');
+  }
+  return store;
+}
+
+function parseFailedOperationId(raw: string | string[] | undefined): string {
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'Path parameter failedOperationId is required');
+  }
+  return raw.trim();
+}
+
+function sanitizeFailedOperation(record: FailedOperationRecord) {
+  return {
+    ...record,
+    requestPayload: null,
+  };
 }
 
 export function createOperationsRouter(options: OperationsRouterOptions): Router {
@@ -48,6 +119,61 @@ export function createOperationsRouter(options: OperationsRouterOptions): Router
 
     res.status(200).json(successResponse(options.gaslessSettlementService.getRelayerReadiness()));
   });
+
+  router.get('/operations/failed-operations', async (req, res, next) => {
+    try {
+      const records = await requireFailedOperationStore(options.failedOperationStore).list({
+        failureState: parseFailedOperationState(req.query.failureState),
+        replayEligible: parseReplayEligible(req.query.replayEligible),
+      });
+      res.status(200).json(
+        successResponse({
+          items: records.map(sanitizeFailedOperation),
+          generatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/operations/failed-operations/:failedOperationId', async (req, res, next) => {
+    try {
+      const failedOperationId = parseFailedOperationId(req.params.failedOperationId);
+      const record = await requireFailedOperationStore(options.failedOperationStore).get(
+        failedOperationId,
+      );
+      if (!record) {
+        throw new GatewayError(404, 'NOT_FOUND', 'Failed operation not found', {
+          failedOperationId,
+        });
+      }
+      res.status(200).json(successResponse(sanitizeFailedOperation(record)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post(
+    '/operations/failed-operations/:failedOperationId/replay',
+    requireMutationWriteAccess(),
+    async (req, res, next) => {
+      try {
+        const failedOperationId = parseFailedOperationId(req.params.failedOperationId);
+        if (!options.failedOperationReplayer) {
+          throw new GatewayError(
+            503,
+            'UPSTREAM_UNAVAILABLE',
+            'Failed-operation replay is not configured',
+          );
+        }
+        const replayed = await options.failedOperationReplayer.replay(failedOperationId);
+        res.status(202).json(successResponse(sanitizeFailedOperation(replayed)));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   return router;
 }

@@ -22,7 +22,10 @@ import { GatewayEvidenceBundleService } from './core/evidenceBundleService';
 import { createPostgresEvidenceBundleStore } from './core/evidenceBundleStore';
 import { createPostgresGovernanceActionStore } from './core/governanceStore';
 import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore';
-import { GatewayErrorHandlerWorkflow } from './core/errorHandlerWorkflow';
+import {
+  GatewayErrorHandlerWorkflow,
+  GatewayFailedOperationReplayer,
+} from './core/errorHandlerWorkflow';
 import { createPostgresFailedOperationStore } from './core/failedOperationStore';
 import { createPostgresIdempotencyStore } from './core/idempotencyStore';
 import { OperatorSettingsReadService } from './core/operatorSettingsReadService';
@@ -60,6 +63,7 @@ import { createAccessLogRouter } from './routes/accessLogs';
 import { createApprovalWorkflowRouter } from './routes/approvals';
 import { createCapabilitiesRouter } from './routes/capabilities';
 import { createComplianceRouter } from './routes/compliance';
+import { createDashboardSettlementRouter } from './routes/dashboardSettlement';
 import { createEvidenceBundleRouter } from './routes/evidenceBundles';
 import { createGovernanceRouter } from './routes/governance';
 import { createGovernanceMutationRouter } from './routes/governanceMutations';
@@ -138,6 +142,12 @@ const governanceDirectSignMonitor = new GovernanceDirectSignMonitor(
   governanceWriteStore,
   auditLogStore,
   governanceTransactionVerifier,
+);
+const failedOperationReplayer = new GatewayFailedOperationReplayer(
+  failedOperationStore,
+  governanceMutationService,
+  complianceService,
+  settlementCallbackDispatcher,
 );
 const treasuryReadService = new TreasuryReadService(governanceStatusService, governanceActionStore);
 const reconciliationReadService = new ReconciliationReadService(settlementStore);
@@ -509,6 +519,14 @@ async function bootstrap(): Promise<void> {
     }),
   );
   extraRouter.use(
+    createDashboardSettlementRouter({
+      authSessionClient,
+      config,
+      gaslessSettlementService,
+      idempotencyStore,
+    }),
+  );
+  extraRouter.use(
     createSettlementRouter({
       config,
       settlementService,
@@ -532,6 +550,8 @@ async function bootstrap(): Promise<void> {
       config,
       operationsSummaryService,
       gaslessSettlementService,
+      failedOperationStore,
+      failedOperationReplayer,
     }),
   );
 

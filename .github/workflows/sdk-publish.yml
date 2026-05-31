@@ -1,0 +1,75 @@
+name: SDK Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact @agroasys/sdk version to publish
+        required: true
+        type: string
+      dist_tag:
+        description: npm dist-tag to publish
+        required: true
+        default: next
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish @agroasys/sdk
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+          scope: '@agroasys'
+          cache: pnpm
+
+      - name: Validate requested version
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const requested = process.env.SDK_VERSION;
+          const current = JSON.parse(fs.readFileSync('sdk/package.json', 'utf8')).version;
+          if (requested !== current) {
+            console.error(`Refusing to publish @agroasys/sdk@${current} as ${requested}. Update sdk/package.json first.`);
+            process.exit(1);
+          }
+          if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(requested)) {
+            console.error(`Invalid semver version: ${requested}`);
+            process.exit(1);
+          }
+          NODE
+        env:
+          SDK_VERSION: ${{ inputs.version }}
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate SDK
+        run: |
+          pnpm --filter @agroasys/sdk run lint
+          pnpm --filter @agroasys/sdk run typecheck
+          pnpm --filter @agroasys/sdk run test
+          pnpm --filter @agroasys/sdk run build
+
+      - name: Publish SDK package
+        working-directory: sdk
+        run: npm publish --tag "$SDK_DIST_TAG"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SDK_DIST_TAG: ${{ inputs.dist_tag }}

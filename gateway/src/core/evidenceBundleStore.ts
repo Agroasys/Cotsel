@@ -22,6 +22,7 @@ export interface EvidenceBundleManifestRecord {
 export interface EvidenceBundleStore {
   save(record: EvidenceBundleManifestRecord): Promise<EvidenceBundleManifestRecord>;
   get(bundleId: string): Promise<EvidenceBundleManifestRecord | null>;
+  list(input?: { tradeId?: string; limit?: number }): Promise<EvidenceBundleManifestRecord[]>;
 }
 
 interface EvidenceBundleRow {
@@ -129,6 +130,27 @@ export function createPostgresEvidenceBundleStore(pool: Pool): EvidenceBundleSto
 
       return result.rows[0] ? mapRow(result.rows[0]) : null;
     },
+
+    async list(input = {}) {
+      const params: unknown[] = [];
+      const conditions: string[] = [];
+      if (input.tradeId) {
+        params.push(input.tradeId);
+        conditions.push(`trade_id = $${params.length}`);
+      }
+      params.push(Math.min(Math.max(input.limit ?? 50, 1), 100));
+      const limitParam = params.length;
+      const result = await pool.query<EvidenceBundleRow>(
+        `${selectColumns}
+         FROM evidence_bundles
+         ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+         ORDER BY generated_at DESC
+         LIMIT $${limitParam}`,
+        params,
+      );
+
+      return result.rows.map(mapRow);
+    },
   };
 }
 
@@ -148,6 +170,14 @@ export function createInMemoryEvidenceBundleStore(
     async get(bundleId) {
       const record = items.get(bundleId);
       return record ? cloneManifest(record) : null;
+    },
+
+    async list(input = {}) {
+      return [...items.values()]
+        .filter((record) => !input.tradeId || record.tradeId === input.tradeId)
+        .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt))
+        .slice(0, Math.min(Math.max(input.limit ?? 50, 1), 100))
+        .map(cloneManifest);
     },
   };
 }
