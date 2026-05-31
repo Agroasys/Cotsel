@@ -39,18 +39,6 @@ export class Client {
     }
   }
 
-  async getBuyerNonce(buyerAddress: string): Promise<bigint> {
-    try {
-      return await this.contract.getBuyerNonce(buyerAddress);
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      throw new ContractError(`Failed to get buyer nonce: ${message}`, {
-        buyerAddress,
-        error: message,
-      });
-    }
-  }
-
   async getTreasuryAddress(): Promise<string> {
     try {
       return await this.contract.treasuryAddress();

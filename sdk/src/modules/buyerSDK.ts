@@ -29,30 +29,6 @@ export class BuyerSDK extends Client {
     escrowAddress: this.config.escrowAddress,
   });
 
-  private extractTradeIdFromReceipt(receipt: ethers.TransactionReceipt): string | undefined {
-    for (const log of receipt.logs) {
-      if (log.address.toLowerCase() !== this.config.escrowAddress.toLowerCase()) {
-        continue;
-      }
-
-      try {
-        const parsed = this.contract.interface.parseLog(log);
-        if (parsed?.name === 'TradeLocked') {
-          return BigInt(parsed.args.tradeId).toString();
-        }
-      } catch {
-        continue;
-      }
-    }
-
-    return undefined;
-  }
-
-  async getBuyerNonce(buyerAddress: string): Promise<bigint> {
-    validateAddress(buyerAddress, 'buyer');
-    return super.getBuyerNonce(buyerAddress);
-  }
-
   async getAuthorizationNonce(userAddress: string): Promise<bigint> {
     validateAddress(userAddress, 'user');
     const contract = this.contract as unknown as {
@@ -139,15 +115,15 @@ export class BuyerSDK extends Client {
   async createGaslessUserActionAuthorization(
     action: Exclude<SponsoredAction, SponsoredAction.CREATE_TRADE>,
     tradeId: string | bigint,
-    buyerSigner: ethers.Signer,
+    userSigner: ethers.Signer,
     deadline = Math.floor(Date.now() / 1000) + 3600,
   ): Promise<GaslessUserActionAuthorization> {
-    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
-    const buyerAddress = await buyerSigner.getAddress();
-    const nonce = await this.getAuthorizationNonce(buyerAddress);
+    await this.assertSignerCompatibility(userSigner, 'User signer');
+    const userAddress = await userSigner.getAddress();
+    const nonce = await this.getAuthorizationNonce(userAddress);
 
     return signGaslessUserActionAuthorization(
-      buyerSigner,
+      userSigner,
       this.config.chainId,
       this.config.escrowAddress,
       action,
@@ -160,7 +136,7 @@ export class BuyerSDK extends Client {
   async createGaslessUserActionExecutionRequest(
     action: Exclude<SponsoredAction, SponsoredAction.CREATE_TRADE>,
     tradeId: string | bigint,
-    buyerSigner: ethers.Signer,
+    userSigner: ethers.Signer,
     input: {
       handoffId: string;
       expiresAt: string | Date;
@@ -170,7 +146,7 @@ export class BuyerSDK extends Client {
     const authorization = await this.createGaslessUserActionAuthorization(
       action,
       tradeId,
-      buyerSigner,
+      userSigner,
       input.deadline,
     );
 
@@ -180,48 +156,6 @@ export class BuyerSDK extends Client {
       expiresAt: input.expiresAt,
       authorization,
     });
-  }
-
-  async approveUSDC(amount: bigint, buyerSigner: ethers.Signer): Promise<TradeResult> {
-    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
-
-    try {
-      const usdcContract = IERC20__factory.connect(this.config.usdcAddress, buyerSigner);
-
-      const tx = await usdcContract.approve(this.config.escrowAddress, amount);
-
-      const receipt = await tx.wait();
-
-      if (!receipt) {
-        throw new ContractError('Transaction receipt not available');
-      }
-
-      return {
-        txHash: receipt.hash,
-        blockNumber: receipt.blockNumber,
-      };
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      throw new ContractError(`Failed to approve USDC: ${message}`, {
-        amount: amount.toString(),
-        error: message,
-      });
-    }
-  }
-
-  async getUSDCAllowance(buyerAddress: string): Promise<bigint> {
-    validateAddress(buyerAddress, 'buyer');
-    try {
-      const usdcContract = IERC20__factory.connect(this.config.usdcAddress, this.provider);
-
-      return await usdcContract.allowance(buyerAddress, this.config.escrowAddress);
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      throw new ContractError(`Failed to get USDC allowance: ${message}`, {
-        buyerAddress,
-        error: message,
-      });
-    }
   }
 
   async getUSDCBalance(buyerAddress: string): Promise<bigint> {
@@ -267,7 +201,7 @@ export class BuyerSDK extends Client {
     await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
 
     throw new ContractError(
-      'Direct buyer-paid openDispute was removed. Use createGaslessUserActionRequest with SponsoredAction.OPEN_DISPUTE instead.',
+      'Direct buyer-paid openDispute was removed. Use createGaslessUserActionExecutionRequest with SponsoredAction.OPEN_DISPUTE instead.',
       { tradeId: tradeId.toString() },
     );
   }
@@ -279,7 +213,7 @@ export class BuyerSDK extends Client {
     await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
 
     throw new ContractError(
-      'Direct buyer-paid cancelLockedTradeAfterTimeout was removed. Use createGaslessUserActionRequest with SponsoredAction.CANCEL_LOCKED_TIMEOUT instead.',
+      'Direct buyer-paid cancelLockedTradeAfterTimeout was removed. Use createGaslessUserActionExecutionRequest with SponsoredAction.CANCEL_LOCKED_TIMEOUT instead.',
       { tradeId: tradeId.toString() },
     );
   }
@@ -291,7 +225,7 @@ export class BuyerSDK extends Client {
     await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
 
     throw new ContractError(
-      'Direct buyer-paid refundInTransitAfterTimeout was removed. Use createGaslessUserActionRequest with SponsoredAction.REFUND_IN_TRANSIT_TIMEOUT instead.',
+      'Direct buyer-paid refundInTransitAfterTimeout was removed. Use createGaslessUserActionExecutionRequest with SponsoredAction.REFUND_IN_TRANSIT_TIMEOUT instead.',
       { tradeId: tradeId.toString() },
     );
   }

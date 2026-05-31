@@ -27,10 +27,10 @@ describeIntegration('BuyerSDK', () => {
     buyerSigner = getBuyerSigner();
   });
 
-  test('should get buyer nonce', async () => {
+  test('should get authorization nonce', async () => {
     const buyerAddress = await buyerSigner.getAddress();
-    const nonce1 = await buyerSDK.getBuyerNonce(buyerAddress);
-    const nonce2 = await buyerSDK.getBuyerNonce(buyerAddress);
+    const nonce1 = await buyerSDK.getAuthorizationNonce(buyerAddress);
+    const nonce2 = await buyerSDK.getAuthorizationNonce(buyerAddress);
 
     expect(typeof nonce1).toBe('bigint');
     expect(typeof nonce2).toBe('bigint');
@@ -39,23 +39,19 @@ describeIntegration('BuyerSDK', () => {
     // When no transactions are sent between calls, the nonce should remain stable.
     expect(nonce2).toBe(nonce1);
 
-    console.log(`Buyer nonce (first call): ${nonce1}`);
-    console.log(`Buyer nonce (second call): ${nonce2}`);
+    console.log(`Authorization nonce (first call): ${nonce1}`);
+    console.log(`Authorization nonce (second call): ${nonce2}`);
   });
 
-  test('should check USDC balance and allowance', async () => {
+  test('should check USDC balance', async () => {
     const buyerAddress = await buyerSigner.getAddress();
 
     const balance = await buyerSDK.getUSDCBalance(buyerAddress);
-    const allowance = await buyerSDK.getUSDCAllowance(buyerAddress);
 
     expect(typeof balance).toBe('bigint');
-    expect(typeof allowance).toBe('bigint');
     expect(balance).toBeGreaterThanOrEqual(0n);
-    expect(allowance).toBeGreaterThanOrEqual(0n);
 
     console.log(`USDC balance: ${balance}`);
-    console.log(`USDC allowance: ${allowance}`);
   });
 
   test('should reject direct buyer-paid trade creation', async () => {

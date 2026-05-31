@@ -18,8 +18,9 @@ export type Eip1193ProviderLike = {
  *
  * The provider must expose a `request(...)` method compatible with
  * `ethers.BrowserProvider`. In production this means the provider must support
- * standard chain/account access, message signing, and transaction submission
- * methods for the flows the SDK will execute.
+ * standard chain/account access and the signing method required by the selected
+ * flow. Buyer gasless settlement uses typed-data signatures; transaction
+ * submission is only needed for signer-paid admin/oracle operations.
  */
 export async function createSignerFromEip1193Provider(
   provider: Eip1193ProviderLike,

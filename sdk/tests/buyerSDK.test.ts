@@ -4,7 +4,6 @@
 import { BuyerSDK } from '../src/modules/buyerSDK';
 import type { ethers } from 'ethers';
 import { Interface } from 'ethers';
-import { IERC20__factory } from '../src/types/typechain-types/factories/@openzeppelin/contracts/token/ERC20/IERC20__factory';
 import { TEST_CONFIG, assertRequiredEnv, getBuyerSigner, hasRequiredEnv } from './setup';
 import { SponsoredAction } from '../src/types/trade';
 import { GaslessSettlementClient } from '../src/modules/gaslessSettlementClient';
@@ -69,8 +68,6 @@ function makeSdkUnit() {
     interface: TRADE_LOCKED_INTERFACE,
     getAuthorizationNonce: jest.fn().mockResolvedValue(9n),
   } as unknown as BuyerContractConnector;
-  jest.spyOn(sdk, 'getUSDCAllowance').mockResolvedValue(1_000_000n);
-  jest.spyOn(sdk, 'getBuyerNonce').mockResolvedValue(7n);
   jest
     .spyOn(sdk, 'getTreasuryAddress')
     .mockResolvedValue('0x3000000000000000000000000000000000000003');
@@ -111,16 +108,6 @@ describe('BuyerSDK unit', () => {
         signer,
       ),
     ).rejects.toThrow('wrong network');
-  });
-
-  test('approveUSDC should reject signer network mismatches', async () => {
-    const { sdk } = makeSdkUnit();
-    const { signer, provider } = makeBuyerSigner();
-    const connectSpy = jest.spyOn(IERC20__factory, 'connect');
-    provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
-
-    await expect(sdk.approveUSDC(1000000n, signer)).rejects.toThrow('wrong network');
-    expect(connectSpy).not.toHaveBeenCalled();
   });
 
   test('createGaslessTradeAuthorization builds typed authorization from on-chain nonce', async () => {
@@ -481,21 +468,19 @@ describeIntegration('BuyerSDK integration smoke', () => {
     buyerSigner = getBuyerSigner();
   });
 
-  test('should get buyer nonce', async () => {
+  test('should get authorization nonce', async () => {
     const buyerAddress = await buyerSigner.getAddress();
-    const nonce = await buyerSDK.getBuyerNonce(buyerAddress);
+    const nonce = await buyerSDK.getAuthorizationNonce(buyerAddress);
 
     expect(typeof nonce).toBe('bigint');
     expect(nonce).toBeGreaterThanOrEqual(0n);
   });
 
-  test('should check USDC balance and allowance', async () => {
+  test('should check USDC balance', async () => {
     const buyerAddress = await buyerSigner.getAddress();
 
     const balance = await buyerSDK.getUSDCBalance(buyerAddress);
-    const allowance = await buyerSDK.getUSDCAllowance(buyerAddress);
 
     expect(typeof balance).toBe('bigint');
-    expect(typeof allowance).toBe('bigint');
   });
 });
