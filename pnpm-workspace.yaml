@@ -19,7 +19,7 @@ preferWorkspacePackages: true
 minimumReleaseAge: 10080
 overrides:
   '@protobufjs/utf8': 1.1.1
-  axios: 1.15.2
+  axios: 1.16.1
   bn.js: 4.12.3
   cookie: 0.7.0
   fast-uri: 3.1.2
@@ -29,3 +29,7 @@ overrides:
   serialize-javascript: 7.0.5
   tmp: 0.2.6
   undici: 6.24.0
+  brace-expansion@>=4 <5.0.6: 5.0.6
+  qs: 6.15.2
+  uuid@<11.1.1: 11.1.1
+  ws@>=8 <8.20.1: 8.21.0

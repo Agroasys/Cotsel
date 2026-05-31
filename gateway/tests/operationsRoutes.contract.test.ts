@@ -10,11 +10,13 @@ import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createOperationsRouter } from '../src/routes/operations';
 import type { AuthSessionClient } from '../src/core/authSessionClient';
 import type { GaslessSettlementExecutionService } from '../src/core/gaslessSettlementExecutionService';
+import type { GatewayFailedOperationReplayer } from '../src/core/errorHandlerWorkflow';
 import type {
   OperationsSummaryReader,
   OperationsSummarySnapshot,
 } from '../src/core/operationsSummaryService';
 import type { FailedOperationRecord, FailedOperationStore } from '../src/core/failedOperationStore';
+import type { IdempotencyStore } from '../src/core/idempotencyStore';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -158,6 +160,9 @@ async function startServer(
   fixture: OperationsSummarySnapshot = operationsFixture,
   gaslessSettlementService?: GaslessSettlementExecutionService | null,
   failedOperationStore?: FailedOperationStore | null,
+  failedOperationReplayer?: GatewayFailedOperationReplayer | null,
+  idempotencyStore?: IdempotencyStore | null,
+  routeConfig: GatewayConfig = config,
 ) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
@@ -184,14 +189,16 @@ async function startServer(
   router.use(
     createOperationsRouter({
       authSessionClient,
-      config,
+      config: routeConfig,
       operationsSummaryService,
       gaslessSettlementService,
       failedOperationStore,
+      failedOperationReplayer,
+      idempotencyStore,
     }),
   );
 
-  const app = createApp(config, {
+  const app = createApp(routeConfig, {
     version: '0.1.0',
     commitSha: config.commitSha,
     buildTime: config.buildTime,
@@ -416,6 +423,117 @@ describe('gateway operations summary route contract', () => {
           failedOperationId: 'failed-op-1',
           replayEligible: true,
           failureState: 'open',
+          requestPayload: null,
+        }),
+      );
+    } finally {
+      server.close();
+    }
+  });
+
+  test('POST /operations/failed-operations/:id/replay requires idempotency before replaying', async () => {
+    const replayedRecord: FailedOperationRecord = {
+      failedOperationId: 'failed-op-1',
+      operationType: 'settlement-callback',
+      operationKey: 'callback-1',
+      targetService: 'agroasys-backend',
+      route: '/settlement/callbacks',
+      method: 'POST',
+      payloadHash: 'hash-1',
+      requestPayload: { callback: true },
+      requestId: 'req-failed-1',
+      correlationId: null,
+      idempotencyKey: 'idem-1',
+      actionKey: null,
+      actorId: null,
+      actorUserId: 'admin-1',
+      actorWalletAddress: null,
+      actorRole: 'admin',
+      sessionReference: 'session-1',
+      replayEligible: true,
+      failureState: 'replayed',
+      firstFailedAt: '2026-03-12T00:00:00.000Z',
+      lastFailedAt: '2026-03-12T00:05:00.000Z',
+      retryCount: 3,
+      terminalErrorClass: 'infrastructure',
+      terminalErrorCode: 'CALLBACK_503',
+      terminalErrorMessage: 'Callback service unavailable',
+      metadata: { replayed: true },
+      lastReplayedAt: '2026-03-12T00:10:00.000Z',
+      createdAt: '2026-03-12T00:00:00.000Z',
+      updatedAt: '2026-03-12T00:10:00.000Z',
+    };
+    const failedOperationStore = {
+      list: jest.fn(),
+      get: jest.fn(),
+      recordFailure: jest.fn(),
+      markReplayed: jest.fn(),
+      markReplayFailed: jest.fn(),
+    } as unknown as FailedOperationStore;
+    const failedOperationReplayer = {
+      replay: jest.fn().mockResolvedValue(replayedRecord),
+    } as unknown as GatewayFailedOperationReplayer;
+    const idempotencyStore = {
+      get: jest.fn(),
+      createPending: jest.fn().mockResolvedValue({
+        created: true,
+        record: {
+          idempotencyKey: 'replay-1',
+          actorId: 'user:uid-admin',
+          endpoint: '/operations/failed-operations/:failedOperationId/replay',
+          requestMethod: 'POST',
+          requestPath: '/api/dashboard-gateway/v1/operations/failed-operations/failed-op-1/replay',
+          requestFingerprint: 'hash',
+          requestId: 'req-replay-1',
+          responseStatus: null,
+          responseHeaders: {},
+          responseBody: null,
+          completedAt: null,
+          createdAt: '2026-03-12T00:00:00.000Z',
+        },
+      }),
+      complete: jest.fn().mockResolvedValue(undefined),
+      releasePending: jest.fn().mockResolvedValue(undefined),
+      markReplay: jest.fn().mockResolvedValue(undefined),
+    } as unknown as IdempotencyStore;
+    const writeConfig = {
+      ...config,
+      enableMutations: true,
+      writeAllowlist: ['uid-admin'],
+    };
+    const { server, baseUrl } = await startServer(
+      'admin',
+      operationsFixture,
+      null,
+      failedOperationStore,
+      failedOperationReplayer,
+      idempotencyStore,
+      writeConfig,
+    );
+
+    try {
+      const response = await fetch(`${baseUrl}/operations/failed-operations/failed-op-1/replay`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'Idempotency-Key': 'replay-1',
+        },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(202);
+      expect(idempotencyStore.createPending).toHaveBeenCalledWith(
+        expect.objectContaining({
+          idempotencyKey: 'replay-1',
+          actorId: 'user:uid-admin',
+          requestMethod: 'POST',
+        }),
+      );
+      expect(failedOperationReplayer.replay).toHaveBeenCalledWith('failed-op-1');
+      expect(payload.data).toEqual(
+        expect.objectContaining({
+          failedOperationId: 'failed-op-1',
+          failureState: 'replayed',
           requestPayload: null,
         }),
       );

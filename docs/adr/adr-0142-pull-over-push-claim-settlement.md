@@ -1,6 +1,6 @@
-# ADR-0142: Pull-Over-Push Claim Settlement Model
+# ADR-0142: Historical Pull-Over-Push Claim Settlement Model
 
-- Status: Superseded for supplier payouts by issue #528 and buyer refunds by PR #530; still accepted for treasury claim flows
+- Status: Historical for buyer/supplier settlement; retained only for treasury fee sweep accounting
 - Date: 2026-02-28
 - Related issue: [#142](https://github.com/Agroasys/Cotsel/issues/142)
 
@@ -8,9 +8,9 @@
 
 Escrow payout transitions previously transferred USDC directly during stage/dispute/timeout functions. This coupled core trade-state mutation with external token-transfer side effects and made payout-path failures harder to isolate.
 
-## Decision
+## Historical Decision
 
-Adopted a pull-over-push settlement model:
+ADR-0142 originally adopted a pull-over-push settlement model:
 
 - Trade-state transitions accrue recipient entitlement into `claimableUsdc` via `ClaimableAccrued` events.
 - Recipients withdraw accrued funds via `claim()`.
@@ -19,7 +19,9 @@ Adopted a pull-over-push settlement model:
   - `claim()` remains available during global pause.
   - `pauseClaims()` / `unpauseClaims()` provide dedicated emergency claim freeze.
 
-## Superseding Decision
+This is no longer the active buyer/supplier payout model.
+
+## Active Settlement Model
 
 Issue `#528` restores direct supplier payout for active settlement flows, and PR `#530` restores direct buyer refunds. The current model is:
 

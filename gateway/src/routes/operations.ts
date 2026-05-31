@@ -11,12 +11,14 @@ import {
 } from '../core/failedOperationStore';
 import { GatewayFailedOperationReplayer } from '../core/errorHandlerWorkflow';
 import type { GaslessSettlementExecutionService } from '../core/gaslessSettlementExecutionService';
+import { IdempotencyStore } from '../core/idempotencyStore';
 import { OperationsSummaryReader } from '../core/operationsSummaryService';
 import {
   createAuthenticationMiddleware,
   requireGatewayRole,
   requireMutationWriteAccess,
 } from '../middleware/auth';
+import { createIdempotencyMiddleware } from '../middleware/idempotency';
 import { successResponse } from '../responses';
 import { GatewayError } from '../errors';
 
@@ -27,6 +29,7 @@ export interface OperationsRouterOptions {
   gaslessSettlementService?: GaslessSettlementExecutionService | null;
   failedOperationStore?: FailedOperationStore | null;
   failedOperationReplayer?: GatewayFailedOperationReplayer | null;
+  idempotencyStore?: IdempotencyStore | null;
 }
 
 const FAILED_OPERATION_STATES: readonly FailedOperationState[] = [
@@ -90,6 +93,16 @@ function sanitizeFailedOperation(record: FailedOperationRecord) {
 export function createOperationsRouter(options: OperationsRouterOptions): Router {
   const router = Router();
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
+  const replayIdempotency = options.idempotencyStore
+    ? createIdempotencyMiddleware(options.idempotencyStore)
+    : (_req: Request, _res: Response, next: NextFunction) =>
+        next(
+          new GatewayError(
+            503,
+            'UPSTREAM_UNAVAILABLE',
+            'Failed-operation replay idempotency is not configured',
+          ),
+        );
 
   router.use('/operations', authenticate, requireGatewayRole('operator:read'));
 
@@ -157,6 +170,7 @@ export function createOperationsRouter(options: OperationsRouterOptions): Router
   router.post(
     '/operations/failed-operations/:failedOperationId/replay',
     requireMutationWriteAccess(),
+    replayIdempotency,
     async (req, res, next) => {
       try {
         const failedOperationId = parseFailedOperationId(req.params.failedOperationId);
