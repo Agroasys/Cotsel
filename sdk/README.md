@@ -225,6 +225,9 @@ SDK and inject a signer instead.
 | `getUSDCBalance(address)`                                                 | Check USDC balance                                           |
 | `createGaslessTradeExecutionRequest(params, signer, input)`               | Build typed create-trade and USDC authorization package      |
 | `createGaslessUserActionExecutionRequest(action, tradeId, signer, input)` | Build typed dispute/refund/cancel/finalize package           |
+| `getBuyerNonce(address)`                                                  | Deprecated alias for `getAuthorizationNonce(address)`        |
+| `approveUSDC(amount, signer)`                                             | Deprecated guard that rejects direct ERC-20 approval         |
+| `getUSDCAllowance(address)`                                               | Deprecated guard that rejects allowance-based buyer flow     |
 | `createTrade(params, signer)`                                             | Deprecated guard that rejects direct buyer-paid create-trade |
 | `openDispute(tradeId, signer)`                                            | Deprecated guard that rejects direct buyer-paid dispute      |
 | `cancelLockedTradeAfterTimeout(tradeId, signer)`                          | Deprecated guard that rejects direct buyer-paid cancellation |

@@ -31,10 +31,15 @@ export class BuyerSDK extends Client {
 
   async getAuthorizationNonce(userAddress: string): Promise<bigint> {
     validateAddress(userAddress, 'user');
-    const contract = this.contract as unknown as {
-      getAuthorizationNonce(userAddress: string): Promise<bigint>;
-    };
-    return contract.getAuthorizationNonce(userAddress);
+    return super.getAuthorizationNonce(userAddress);
+  }
+
+  /**
+   * @deprecated Use `getAuthorizationNonce(address)`.
+   */
+  async getBuyerNonce(buyerAddress: string): Promise<bigint> {
+    validateAddress(buyerAddress, 'buyer');
+    return this.getAuthorizationNonce(buyerAddress);
   }
 
   async createGaslessTradeAuthorization(
@@ -156,6 +161,31 @@ export class BuyerSDK extends Client {
       expiresAt: input.expiresAt,
       authorization,
     });
+  }
+
+  /**
+   * @deprecated ERC-20 allowance approvals are no longer part of the active
+   * buyer settlement path. Use `createGaslessTradeExecutionRequest(...)`.
+   */
+  async approveUSDC(amount: bigint, buyerSigner: ethers.Signer): Promise<TradeResult> {
+    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
+
+    throw new ContractError(
+      'Direct USDC approval was removed from the buyer settlement path. Use createGaslessTradeExecutionRequest with a USDC receive authorization instead.',
+      { amount: amount.toString() },
+    );
+  }
+
+  /**
+   * @deprecated Escrow allowance is not used by gasless buyer settlement.
+   */
+  async getUSDCAllowance(buyerAddress: string): Promise<bigint> {
+    validateAddress(buyerAddress, 'buyer');
+
+    throw new ContractError(
+      'Escrow USDC allowance is no longer used by buyer settlement. Use getUSDCBalance and createGaslessTradeExecutionRequest instead.',
+      { buyerAddress },
+    );
   }
 
   async getUSDCBalance(buyerAddress: string): Promise<bigint> {

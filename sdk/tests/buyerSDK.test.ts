@@ -138,6 +138,12 @@ describe('BuyerSDK unit', () => {
     });
   });
 
+  test('getBuyerNonce remains a deprecated alias for authorization nonce', async () => {
+    const { sdk } = makeSdkUnit();
+
+    await expect(sdk.getBuyerNonce('0x2222222222222222222222222222222222222222')).resolves.toBe(9n);
+  });
+
   test('createUsdcReceiveAuthorization targets escrow and splits EIP-3009 signature', async () => {
     const { sdk } = makeSdkUnit();
     const { signer } = makeBuyerSigner();
@@ -407,6 +413,34 @@ describe('BuyerSDK unit', () => {
         signer,
       ),
     ).rejects.toThrow('Direct buyer-paid createTrade was removed');
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  test('approveUSDC should reject with the gasless migration guard', async () => {
+    const { sdk, connect } = makeSdkUnit();
+    const { signer } = makeBuyerSigner();
+
+    await expect(sdk.approveUSDC(1000000n, signer)).rejects.toThrow(
+      'Direct USDC approval was removed',
+    );
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  test('approveUSDC should reject signer network mismatches before migration guard', async () => {
+    const { sdk, connect } = makeSdkUnit();
+    const { signer, provider } = makeBuyerSigner();
+    provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
+
+    await expect(sdk.approveUSDC(1000000n, signer)).rejects.toThrow('wrong network');
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  test('getUSDCAllowance should reject with the gasless migration guard', async () => {
+    const { sdk, connect } = makeSdkUnit();
+
+    await expect(
+      sdk.getUSDCAllowance('0x2222222222222222222222222222222222222222'),
+    ).rejects.toThrow('Escrow USDC allowance is no longer used');
     expect(connect).not.toHaveBeenCalled();
   });
 

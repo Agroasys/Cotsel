@@ -118,6 +118,25 @@ export class Client {
     }
   }
 
+  async getAuthorizationNonce(userAddress: string): Promise<bigint> {
+    try {
+      return await this.contract.getAuthorizationNonce(userAddress);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      throw new ContractError(`Failed to get authorization nonce: ${message}`, {
+        userAddress,
+        error: message,
+      });
+    }
+  }
+
+  /**
+   * @deprecated Use `getAuthorizationNonce(address)`.
+   */
+  async getBuyerNonce(buyerAddress: string): Promise<bigint> {
+    return this.getAuthorizationNonce(buyerAddress);
+  }
+
   async getTotalClaimableUsdc(): Promise<bigint> {
     try {
       return await this.contract.totalClaimableUsdc();
