@@ -23,7 +23,7 @@ contract address. Existing trades and balances remain on the previous contract.
 From the repository root:
 
 ```bash
-cd /home/matysek/dev/crypto-defi/agroasys/Cotsel
+cd /path/to/repo
 
 cp env/base-sepolia-deploy.env.example env/base-sepolia-deploy.env
 ```

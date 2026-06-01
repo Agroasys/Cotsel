@@ -342,8 +342,8 @@ contract InvariantTest is Test {
         console2.log("Total deposited (USDC):", uint256(handler.totalDeposited()/1e6));
         console2.log("Total withdrawn (USDC):", uint256(handler.totalWithdrawn()/1e6));
         console2.log("Total claimable accrued (USDC):", uint256(handler.totalClaimableUsdc()/1e6));
-        console2.log("Total triger stage 1:", uint256(handler.releaseStage1Triggered()));
-        console2.log("Total triger stage 2:", uint256(handler.releaseStage2Triggered()));
+        console2.log("Total trigger stage 1:", uint256(handler.releaseStage1Triggered()));
+        console2.log("Total trigger stage 2:", uint256(handler.releaseStage2Triggered()));
         console2.log("Total dispute raised:", uint256(handler.disputedRaised()));
         console2.log("Total dispute solved:", uint256(handler.disputeSolved()));
     }

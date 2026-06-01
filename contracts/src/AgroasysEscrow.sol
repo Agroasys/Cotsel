@@ -1655,6 +1655,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function getBuyerNonce(address buyer) external view returns (uint256) {
-        return nonces[buyer];
+        return authorizationNonces[buyer];
     }
 }

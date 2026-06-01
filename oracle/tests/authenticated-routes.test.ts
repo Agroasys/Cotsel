@@ -149,6 +149,35 @@ describe('oracle authenticated routes', () => {
     );
   });
 
+  test('reused nonce with freshly generated signed headers is rejected', async () => {
+    mockConsumeHmacNonce.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const payload = { tradeId: 'trade-2b', requestId: 'req-2b' };
+    const nonce = 'oracle-replay-nonce-fresh-timestamp';
+    const firstTimestamp = Date.now().toString();
+    const secondTimestamp = (Date.now() + 1_000).toString();
+
+    const firstResponse = await fetch(`${baseUrl}/api/oracle/release-stage1`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, { nonce, timestamp: firstTimestamp }),
+      body: JSON.stringify(payload),
+    });
+
+    const secondResponse = await fetch(`${baseUrl}/api/oracle/release-stage1`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, { nonce, timestamp: secondTimestamp }),
+      body: JSON.stringify(payload),
+    });
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(401);
+    await expect(secondResponse.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: 'Unauthorized',
+        message: 'Replay detected for nonce',
+      }),
+    );
+  });
+
   test('invalid signature is rejected at the route boundary', async () => {
     mockConsumeHmacNonce.mockResolvedValue(true);
     const payload = { tradeId: 'trade-3', requestId: 'req-3' };

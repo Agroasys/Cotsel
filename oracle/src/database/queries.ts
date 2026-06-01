@@ -243,6 +243,7 @@ export async function approveTrigger(
          WHERE idempotency_key = $3
            AND status = $4
          RETURNING *`,
+    // Approval lifts the manual gate and re-queues the trigger for execution.
     [TriggerStatus.PENDING, actor, idempotencyKey, TriggerStatus.PENDING_APPROVAL],
   );
   return result.rows[0] || null;
