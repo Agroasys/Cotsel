@@ -15,12 +15,12 @@ import {
   ApiSuccessResponse,
   OPERATOR_CAPABILITIES,
   OPERATOR_SIGNER_ACTION_CLASSES,
-  BreakGlassReviewStatus,
   OperatorCapability,
   OperatorSignerActionClass,
   UserProfile,
   UserRole,
 } from '../types';
+import { resolveBreakGlassReviewStatus } from '../core/breakGlassReviewStatus';
 import { assertWalletAddress, handleControllerError, requireAuthRole } from './controllerSupport';
 
 const VALID_BREAK_GLASS_BASE_ROLES: Exclude<UserRole, 'admin'>[] = ['buyer', 'supplier', 'oracle'];
@@ -218,29 +218,6 @@ function profilePayload(profile: UserProfile) {
       }),
     },
   };
-}
-
-function resolveBreakGlassReviewStatus(input: {
-  active: boolean;
-  role: 'admin' | null;
-  expiresAt: string | null;
-  grantedAt: string | null;
-  revokedAt: string | null;
-  reviewedAt: string | null;
-}): BreakGlassReviewStatus {
-  if (input.reviewedAt) {
-    return 'reviewed';
-  }
-  if (!input.role && !input.grantedAt && !input.expiresAt && !input.revokedAt) {
-    return 'none';
-  }
-  if (input.revokedAt) {
-    return 'revoked_unreviewed';
-  }
-  if (input.active) {
-    return 'active_unreviewed';
-  }
-  return 'expired_unreviewed';
 }
 
 function statusForAdminError(error: unknown): number {

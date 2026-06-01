@@ -162,6 +162,10 @@ applied, which review status applies, and which approved binding was used. A
 reviewer should never need to infer whether a privileged signer action came from
 normal durable admin posture or incident posture.
 
+Gateway-auth contracts require the review status to be present on every
+break-glass session context. Missing or unknown review status is treated as an
+invalid upstream auth payload and is rejected fail-closed.
+
 ## Historical Baseline Before Signer Hardening
 
 ### 1. Historical authoritative session model

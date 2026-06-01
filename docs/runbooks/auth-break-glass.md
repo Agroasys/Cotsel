@@ -95,6 +95,10 @@ privileged audit records include `breakGlassActive`, `breakGlassReason`,
 incident authority and see whether emergency access still needs post-incident
 closure.
 
+Gateway session validation treats the break-glass review status as required
+evidence. If auth omits `breakGlass.reviewStatus` or emits an unknown value, the
+gateway fails closed instead of accepting an ambiguous emergency posture.
+
 ## Expiry
 
 Break-glass expires at `break_glass_expires_at`. Expired elevation is not

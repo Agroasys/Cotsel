@@ -5,7 +5,6 @@ import { Pool, PoolClient } from 'pg';
 import {
   AdminActor,
   AdminAuditAction,
-  BreakGlassReviewStatus,
   BreakGlassSessionContext,
   OPERATOR_CAPABILITIES,
   OPERATOR_SIGNER_ACTION_CLASSES,
@@ -16,6 +15,7 @@ import {
   UserSession,
   UserRole,
 } from '../types';
+import { resolveBreakGlassReviewStatus } from '../core/breakGlassReviewStatus';
 
 type SessionRow = Omit<
   UserSession,
@@ -169,29 +169,6 @@ function normalizeBreakGlassContext(row: SessionRow): BreakGlassSessionContext {
       reviewedAt,
     }),
   };
-}
-
-function resolveBreakGlassReviewStatus(input: {
-  active: boolean;
-  role: 'admin' | null;
-  expiresAt: string | null;
-  grantedAt: string | null;
-  revokedAt: string | null;
-  reviewedAt: string | null;
-}): BreakGlassReviewStatus {
-  if (input.reviewedAt) {
-    return 'reviewed';
-  }
-  if (!input.role && !input.grantedAt && !input.expiresAt && !input.revokedAt) {
-    return 'none';
-  }
-  if (input.revokedAt) {
-    return 'revoked_unreviewed';
-  }
-  if (input.active) {
-    return 'active_unreviewed';
-  }
-  return 'expired_unreviewed';
 }
 
 export function normalizeSessionRow(row: SessionRow): UserSession {

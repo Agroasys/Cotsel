@@ -77,6 +77,7 @@ function buildSession(overrides: Partial<AuthSession> = {}): AuthSession {
       revokedBy: null,
       reviewedAt: null,
       reviewedBy: null,
+      reviewStatus: 'none',
     },
     email: 'admin@agroasys.io',
     issuedAt: 1,
@@ -416,6 +417,7 @@ describe('signer authorization enforcement', () => {
               revokedBy: null,
               reviewedAt: null,
               reviewedBy: null,
+              reviewStatus: 'active_unreviewed',
             },
             signerAuthorizations: [
               buildSignerAuthorization({
@@ -452,6 +454,7 @@ describe('signer authorization enforcement', () => {
             revokedBy: null,
             reviewedAt: null,
             reviewedBy: null,
+            reviewStatus: 'active_unreviewed',
           },
           signerAuthorizations: [
             buildSignerAuthorization({

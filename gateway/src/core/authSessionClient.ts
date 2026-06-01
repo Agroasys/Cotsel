@@ -50,7 +50,7 @@ export interface BreakGlassSessionContext {
   revokedBy: string | null;
   reviewedAt: string | null;
   reviewedBy: string | null;
-  reviewStatus?: BreakGlassReviewStatus;
+  reviewStatus: BreakGlassReviewStatus;
 }
 
 export interface AuthSession {
@@ -153,8 +153,7 @@ function isBreakGlassSessionContext(value: unknown): value is BreakGlassSessionC
     isStringOrNull(candidate.revokedBy) &&
     isStringOrNull(candidate.reviewedAt) &&
     isStringOrNull(candidate.reviewedBy) &&
-    (candidate.reviewStatus === undefined ||
-      isKnownValue(BREAK_GLASS_REVIEW_STATUSES, candidate.reviewStatus))
+    isKnownValue(BREAK_GLASS_REVIEW_STATUSES, candidate.reviewStatus)
   );
 }
 
