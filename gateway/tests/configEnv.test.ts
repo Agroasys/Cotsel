@@ -167,8 +167,8 @@ describe('gateway runtime env config', () => {
         GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'raw_private_key',
         GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI: '1000000000',
         GATEWAY_GASLESS_MAX_NATIVE_COST_WEI: '100000000000000',
-        GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '1',
-        GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '2',
+        GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '2',
+        GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '1',
         GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS: '5000',
         GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD: '2',
       },
@@ -181,10 +181,32 @@ describe('gateway runtime env config', () => {
         expect(config.rpcFallbackUrls).toEqual(['https://fallback.example.test']);
         expect(config.gaslessMaxFeePerGasWei).toBe(1000000000n);
         expect(config.gaslessMaxNativeCostWei).toBe(100000000000000n);
-        expect(config.gaslessLowBalanceAlertWei).toBe(1n);
-        expect(config.gaslessMinExecutorBalanceWei).toBe(2n);
+        expect(config.gaslessLowBalanceAlertWei).toBe(2n);
+        expect(config.gaslessMinExecutorBalanceWei).toBe(1n);
         expect(config.gaslessStuckQueueThresholdMs).toBe(5000);
         expect(config.gaslessRepeatedFailureAlertThreshold).toBe(2);
+      },
+    );
+  });
+
+  test('gasless relayer low-balance alert threshold must protect the minimum executor balance floor', () => {
+    withEnv(
+      {
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_GASLESS_EXECUTION_ENABLED: 'true',
+        GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY:
+          '0x0000000000000000000000000000000000000000000000000000000000000001',
+        GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '1',
+        GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '2',
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI must be >= GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI when both are set',
+        );
       },
     );
   });
