@@ -32,6 +32,7 @@ contract FuzzTest is Test {
     address supplier;
     address treasury;
     address oracle;
+    address relayer;
     address admin1;
     address admin2;
     address admin3;
@@ -41,6 +42,7 @@ contract FuzzTest is Test {
         supplier = makeAddr("supplier");
         treasury = makeAddr("treasury");
         oracle = makeAddr("oracle");
+        relayer = makeAddr("relayer");
         admin1 = makeAddr("admin1");
         admin2 = makeAddr("admin2");
         admin3 = makeAddr("admin3");
@@ -53,7 +55,7 @@ contract FuzzTest is Test {
         admins[1] = admin2;
         admins[2] = admin3;
         
-        escrow = new AgroasysEscrow(address(usdc), oracle, treasury ,admins, 2);
+        escrow = new AgroasysEscrow(address(usdc), oracle, treasury, relayer, admins, 2);
     }
 
     // helper function

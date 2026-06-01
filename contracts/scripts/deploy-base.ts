@@ -148,6 +148,7 @@ async function main(): Promise<void> {
     config.usdcAddress,
     config.oracleAddress,
     config.treasuryAddress,
+    config.relayerAddress,
     config.admins,
     config.requiredApprovals,
   ] as const;
@@ -158,6 +159,7 @@ async function main(): Promise<void> {
   console.log(`USDC              : ${config.usdcAddress}`);
   console.log(`Oracle            : ${config.oracleAddress}`);
   console.log(`Treasury          : ${config.treasuryAddress}`);
+  console.log(`Relayer           : ${config.relayerAddress}`);
   console.log(`Admins            : ${config.admins.join(', ')}`);
   console.log(`Required approvals: ${config.requiredApprovals}`);
   console.log(`Verify            : ${config.verify}`);
@@ -209,6 +211,7 @@ async function main(): Promise<void> {
         usdcAddress: config.usdcAddress,
         oracleAddress: config.oracleAddress,
         treasuryAddress: config.treasuryAddress,
+        relayerAddress: config.relayerAddress,
         admins: config.admins,
         requiredApprovals: config.requiredApprovals,
       },

@@ -13,6 +13,7 @@ describe('AgroasysEscrow - Claim Security', function () {
   let buyer: SignerWithAddress;
   let treasury: SignerWithAddress;
   let oracle: SignerWithAddress;
+  let relayer: SignerWithAddress;
   let admin1: SignerWithAddress;
   let admin2: SignerWithAddress;
   let admin3: SignerWithAddress;
@@ -155,7 +156,7 @@ describe('AgroasysEscrow - Claim Security', function () {
   }
 
   beforeEach(async function () {
-    [buyer, treasury, oracle, admin1, admin2, admin3] = await ethers.getSigners();
+    [buyer, treasury, oracle, relayer, admin1, admin2, admin3] = await ethers.getSigners();
 
     const HookedUSDCFactory = await ethers.getContractFactory('HookedMockUSDC');
     usdc = await HookedUSDCFactory.deploy();
@@ -166,6 +167,7 @@ describe('AgroasysEscrow - Claim Security', function () {
       await usdc.getAddress(),
       oracle.address,
       treasury.address,
+      relayer.address,
       [admin1.address, admin2.address, admin3.address],
       2,
     );

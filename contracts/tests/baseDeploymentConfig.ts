@@ -11,6 +11,7 @@ describe('Base deployment config', function () {
   const validEnv = {
     DEPLOY_ORACLE_ADDRESS: '0x20e7E6fC0905E17De2D28E926Ad56324a6844a1D',
     DEPLOY_TREASURY_ADDRESS: '0x229C75F0cD13D6ab7621403Bd951a9e43ba53b1e',
+    DEPLOY_RELAYER_ADDRESS: '0x3333333333333333333333333333333333333333',
     DEPLOY_ADMINS:
       '0x20e7E6fC0905E17De2D28E926Ad56324a6844a1D,0x229C75F0cD13D6ab7621403Bd951a9e43ba53b1e,0x4aF052cB4B3eC7b58322548021bF254Cc4c80b2c',
     DEPLOY_REQUIRED_APPROVALS: '2',
@@ -27,6 +28,7 @@ describe('Base deployment config', function () {
 
     expect(config.target.runtimeKey).to.equal('base-sepolia');
     expect(config.usdcAddress).to.equal('0x036CbD53842c5426634e7929541eC2318f3dCF7e');
+    expect(config.relayerAddress).to.equal('0x3333333333333333333333333333333333333333');
     expect(config.requiredApprovals).to.equal(2);
     expect(config.admins).to.have.length(3);
     expect(config.confirmations).to.equal(1);
@@ -68,6 +70,17 @@ describe('Base deployment config', function () {
           '0x4aF052cB4B3eC7b58322548021bF254Cc4c80b2c,0x1111111111111111111111111111111111111111',
       }),
     ).to.throw(/must not include buyer\/supplier user wallet/);
+  });
+
+  it('rejects buyer or supplier wallets as deployment relayers when provided', async function () {
+    expect(() =>
+      loadBaseDeploymentConfig('base-sepolia', 84532, {
+        ...validEnv,
+        DEPLOY_RELAYER_ADDRESS: '0x1111111111111111111111111111111111111111',
+        DEPLOY_FORBIDDEN_USER_WALLETS:
+          '0x1111111111111111111111111111111111111111,0x2222222222222222222222222222222222222222',
+      }),
+    ).to.throw(/DEPLOY_RELAYER_ADDRESS must not be buyer\/supplier user wallet/);
   });
 
   it('rejects chain id mismatches for the selected Base network', async function () {

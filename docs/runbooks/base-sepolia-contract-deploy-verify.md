@@ -12,9 +12,10 @@ contract address. Existing trades and balances remain on the previous contract.
 
 - The deployer wallet is funded on Base Sepolia.
 - `DEPLOY_ADMINS` contains at least two unique admin addresses.
+- `DEPLOY_RELAYER_ADDRESS` is a service-owned gasless execution wallet.
 - `DEPLOY_REQUIRED_APPROVALS` does not exceed the admin count.
 - `BASESCAN_API_KEY` is available when `DEPLOY_VERIFY=true`.
-- The selected oracle, treasury, and admin addresses have been reviewed for the
+- The selected oracle, treasury, relayer, and admin addresses have been reviewed for the
   rehearsal window.
 
 ## Prepare Env File

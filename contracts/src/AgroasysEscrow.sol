@@ -471,12 +471,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         address _usdcToken,
         address _oracleAddress,
         address _treasuryAddress,
+        address _relayerAddress,
         address[] memory _admins,
         uint256 _requiredApprovals
     ) {
         require(_usdcToken != address(0), "invalid token");
         require(_oracleAddress != address(0), "invalid oracle");
         require(_treasuryAddress != address(0), "invalid treasury");
+        require(_relayerAddress != address(0), "invalid relayer");
         require(_requiredApprovals >= 2, "required approvals must be >= 2");
         require(_admins.length >= _requiredApprovals, "not enough admins");
 
@@ -484,6 +486,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         oracleAddress = _oracleAddress;
         treasuryAddress = _treasuryAddress;
         treasuryPayoutAddress = _treasuryAddress;
+        isRelayer[_relayerAddress] = true;
         requiredApprovals = _requiredApprovals;
 
         for (uint256 i = 0; i < _admins.length; i++) {
@@ -499,6 +502,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         governanceTimelock = 24 hours;
         oracleActive = true;
         DOMAIN_SEPARATOR = _buildDomainSeparator();
+        emit RelayerUpdated(_relayerAddress, true, msg.sender);
     }
 
     modifier onlyAdmin() {
