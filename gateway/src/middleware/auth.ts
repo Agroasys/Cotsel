@@ -347,21 +347,20 @@ export function requireAuthorizedSignerBinding(
   const signerEnvironment = config.operatorSignerEnvironment ?? config.nodeEnv;
   const policy = evaluateSignerPolicy(principal, actionClass, signerEnvironment);
   if (policy.result !== 'authorized') {
-    throw new GatewayError(
-      403,
-      'SIGNER_POLICY_RESTRICTED',
-      `${actionDescription} is not allowed while break-glass authority is active`,
-      {
-        reason: policy.reason,
-        signerWallet: walletAddress,
-        actionClass,
-        environment: signerEnvironment,
-        signerPolicyResult: policy.result,
-        breakGlassActive: policy.breakGlassActive,
-        breakGlassReason: policy.breakGlassReason,
-        breakGlassExpiresAt: policy.breakGlassExpiresAt,
-      },
-    );
+    const message =
+      policy.reason === 'emergency_admin_requires_break_glass'
+        ? `${actionDescription} requires active break-glass authority`
+        : `${actionDescription} is not allowed while break-glass authority is active`;
+    throw new GatewayError(403, 'SIGNER_POLICY_RESTRICTED', message, {
+      reason: policy.reason,
+      signerWallet: walletAddress,
+      actionClass,
+      environment: signerEnvironment,
+      signerPolicyResult: policy.result,
+      breakGlassActive: policy.breakGlassActive,
+      breakGlassReason: policy.breakGlassReason,
+      breakGlassExpiresAt: policy.breakGlassExpiresAt,
+    });
   }
 
   const binding = (principal.session.signerAuthorizations ?? []).find(
@@ -395,6 +394,19 @@ export function evaluateSignerPolicy(
 ): SignerPolicyEvaluation {
   const breakGlass = principal.session.breakGlass;
   const breakGlassContext = breakGlass ?? INACTIVE_BREAK_GLASS_CONTEXT;
+  if (!breakGlassContext.active && actionClass === 'emergency_admin') {
+    return {
+      required: true,
+      result: 'restricted',
+      actionClass,
+      environment,
+      reason: 'emergency_admin_requires_break_glass',
+      breakGlassActive: false,
+      breakGlassReason: null,
+      breakGlassExpiresAt: null,
+    };
+  }
+
   if (breakGlassContext.active && actionClass !== 'emergency_admin') {
     return {
       required: true,
