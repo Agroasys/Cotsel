@@ -33,6 +33,19 @@ export interface SignerAuthorization {
   notes: string | null;
 }
 
+export interface BreakGlassSessionContext {
+  active: boolean;
+  role: 'admin' | null;
+  expiresAt: string | null;
+  grantedAt: string | null;
+  grantedBy: string | null;
+  reason: string | null;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+}
+
 export interface AuthSession {
   userId: string;
   accountId?: string;
@@ -40,6 +53,7 @@ export interface AuthSession {
   role: AuthServiceRole;
   capabilities: OperatorCapability[];
   signerAuthorizations: SignerAuthorization[];
+  breakGlass?: BreakGlassSessionContext;
   issuedAt: number;
   expiresAt: number;
   email?: string | null;
@@ -108,6 +122,26 @@ function isSignerAuthorization(value: unknown): value is SignerAuthorization {
   );
 }
 
+function isBreakGlassSessionContext(value: unknown): value is BreakGlassSessionContext {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.active === 'boolean' &&
+    (candidate.role === 'admin' || candidate.role === null) &&
+    isStringOrNull(candidate.expiresAt) &&
+    isStringOrNull(candidate.grantedAt) &&
+    isStringOrNull(candidate.grantedBy) &&
+    isStringOrNull(candidate.reason) &&
+    isStringOrNull(candidate.revokedAt) &&
+    isStringOrNull(candidate.revokedBy) &&
+    isStringOrNull(candidate.reviewedAt) &&
+    isStringOrNull(candidate.reviewedBy)
+  );
+}
+
 function isAuthSession(value: unknown): value is AuthSession {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
@@ -123,6 +157,7 @@ function isAuthSession(value: unknown): value is AuthSession {
     candidate.capabilities.every((capability) => isKnownValue(OPERATOR_CAPABILITIES, capability)) &&
     Array.isArray(candidate.signerAuthorizations) &&
     candidate.signerAuthorizations.every(isSignerAuthorization) &&
+    isBreakGlassSessionContext(candidate.breakGlass) &&
     typeof candidate.issuedAt === 'number' &&
     Number.isFinite(candidate.issuedAt) &&
     typeof candidate.expiresAt === 'number' &&

@@ -5,7 +5,11 @@ import type { AuditLogStore } from './auditLogStore';
 import type { AuthSession, SignerActionClass, SignerAuthorization } from './authSessionClient';
 import { GatewayError } from '../errors';
 import type { RequestContext } from '../middleware/requestContext';
-import { resolveGatewayActorKey, resolveTreasuryCapabilities } from '../middleware/auth';
+import {
+  resolveGatewayActorKey,
+  resolveTreasuryCapabilities,
+  type AuthorizedSignerBinding,
+} from '../middleware/auth';
 import type { DownstreamServiceOrchestrator } from './serviceOrchestrator';
 
 interface TreasuryEnvelope<T> {
@@ -77,6 +81,7 @@ export type TreasuryWorkflowMutationContext = {
   requestContext?: Pick<RequestContext, 'requestId' | 'correlationId'>;
   route: string;
   method: string;
+  sessionReference: string;
   session: AuthSession;
   signerPolicy?: TreasurySignerPolicyContext;
   audit: TreasuryWorkflowAuditInput;
@@ -86,7 +91,7 @@ export interface TreasurySignerPolicyContext {
   required: boolean;
   result: 'authorized' | 'not_required';
   actionClass?: SignerActionClass;
-  binding?: SignerAuthorization;
+  binding?: SignerAuthorization | AuthorizedSignerBinding;
 }
 
 export interface TreasuryWorkflowClient extends TreasuryWorkflowReader {
@@ -170,6 +175,20 @@ function describeActor(session: AuthSession): string {
   }
 
   return parts.join('|');
+}
+
+function isAuthorizedSignerBinding(
+  binding: SignerAuthorization | AuthorizedSignerBinding | undefined,
+): binding is AuthorizedSignerBinding {
+  return Boolean(binding && 'policy' in binding);
+}
+
+function breakGlassEvidence(session: AuthSession) {
+  return {
+    active: session.breakGlass?.active ?? false,
+    reason: session.breakGlass?.reason ?? null,
+    expiresAt: session.breakGlass?.expiresAt ?? null,
+  };
 }
 
 function assertRecord(value: unknown, message: string): Record<string, unknown> {
@@ -612,6 +631,10 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
       required: false,
       result: 'not_required' as const,
     };
+    const authorizedBinding = isAuthorizedSignerBinding(signerPolicy.binding)
+      ? signerPolicy.binding
+      : null;
+    const breakGlass = breakGlassEvidence(context.session);
     return {
       gatewayActorKey: resolveGatewayActorKey(context.session),
       gatewayUserId: context.session.userId,
@@ -624,9 +647,20 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
       signerPolicyRequired: signerPolicy.required,
       signerPolicyResult: signerPolicy.result,
       signerPolicyActionClass: signerPolicy.actionClass ?? null,
+      signerPolicyEnvironment:
+        authorizedBinding?.policy.environment ?? signerPolicy.binding?.environment ?? null,
+      signerPolicyReason: authorizedBinding?.policy.reason ?? null,
       signerBindingId: signerPolicy.binding?.bindingId ?? null,
       signerBindingEnvironment: signerPolicy.binding?.environment ?? null,
       signerBindingWallet: signerPolicy.binding?.walletAddress ?? null,
+      signerActualWallet: signerPolicy.binding?.walletAddress ?? null,
+      operatorSessionReference: context.sessionReference,
+      operatorAccountId: context.session.accountId ?? null,
+      operatorUserId: context.session.userId,
+      operatorWalletAddress: context.session.walletAddress ?? null,
+      breakGlassActive: breakGlass.active,
+      breakGlassReason: breakGlass.reason,
+      breakGlassExpiresAt: breakGlass.expiresAt,
       auditReason: context.audit.reason,
       auditTicketRef: context.audit.ticketRef,
       auditEvidenceReferences: context.audit.evidenceReferences ?? [],
@@ -684,9 +718,19 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
           signerPolicyRequired: complianceMetadata.signerPolicyRequired,
           signerPolicyResult: complianceMetadata.signerPolicyResult,
           signerPolicyActionClass: complianceMetadata.signerPolicyActionClass,
+          signerPolicyEnvironment: complianceMetadata.signerPolicyEnvironment,
+          signerPolicyReason: complianceMetadata.signerPolicyReason,
           signerBindingId: complianceMetadata.signerBindingId,
           signerBindingEnvironment: complianceMetadata.signerBindingEnvironment,
           signerBindingWallet: complianceMetadata.signerBindingWallet,
+          signerActualWallet: complianceMetadata.signerActualWallet,
+          operatorSessionReference: complianceMetadata.operatorSessionReference,
+          operatorAccountId: complianceMetadata.operatorAccountId,
+          operatorUserId: complianceMetadata.operatorUserId,
+          operatorWalletAddress: complianceMetadata.operatorWalletAddress,
+          breakGlassActive: complianceMetadata.breakGlassActive,
+          breakGlassReason: complianceMetadata.breakGlassReason,
+          breakGlassExpiresAt: complianceMetadata.breakGlassExpiresAt,
           signerPolicy: context.signerPolicy ?? { required: false, result: 'not_required' },
           result: dataRecord,
         },

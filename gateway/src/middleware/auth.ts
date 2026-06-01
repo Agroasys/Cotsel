@@ -8,6 +8,7 @@ import { GatewayConfig } from '../config/env';
 import {
   AuthSession,
   AuthSessionClient,
+  BreakGlassSessionContext,
   SignerActionClass,
   SignerAuthorization,
 } from '../core/authSessionClient';
@@ -34,6 +35,19 @@ const OPERATOR_ACTION_CAPABILITIES: readonly OperatorActionCapability[] = [
   'compliance:write',
 ];
 
+const INACTIVE_BREAK_GLASS_CONTEXT: BreakGlassSessionContext = {
+  active: false,
+  role: null,
+  expiresAt: null,
+  grantedAt: null,
+  grantedBy: null,
+  reason: null,
+  revokedAt: null,
+  revokedBy: null,
+  reviewedAt: null,
+  reviewedBy: null,
+};
+
 export interface GatewayPrincipal {
   sessionReference: string;
   session: AuthSession;
@@ -41,6 +55,27 @@ export interface GatewayPrincipal {
   operatorActionCapabilities: OperatorActionCapability[];
   treasuryCapabilities: TreasuryCapability[];
   writeEnabled: boolean;
+}
+
+export type SignerPolicyResult = 'authorized' | 'denied' | 'restricted';
+
+export interface SignerPolicyEvaluation {
+  required: true;
+  result: SignerPolicyResult;
+  actionClass: SignerActionClass;
+  environment: string;
+  reason: string | null;
+  breakGlassActive: boolean;
+  breakGlassReason: string | null;
+  breakGlassExpiresAt: string | null;
+}
+
+export interface AuthorizedSignerBinding extends SignerAuthorization {
+  policy: SignerPolicyEvaluation;
+}
+
+function resolveBreakGlassContext(session: AuthSession): BreakGlassSessionContext {
+  return session.breakGlass ?? INACTIVE_BREAK_GLASS_CONTEXT;
 }
 
 export function resolveGatewayActorKey(session: AuthSession): string {
@@ -213,6 +248,7 @@ export function createAuthenticationMiddleware(client: AuthSessionClient, config
       session: {
         ...session,
         signerAuthorizations: normalizeSignerAuthorizations(session),
+        breakGlass: resolveBreakGlassContext(session),
       },
       gatewayRoles: mapGatewayRoles(session),
       operatorActionCapabilities: resolveOperatorActionCapabilities(session),
@@ -306,9 +342,28 @@ export function requireAuthorizedSignerBinding(
   actionClass: SignerActionClass,
   signerWallet: string,
   actionDescription: string,
-): SignerAuthorization {
+): AuthorizedSignerBinding {
   const walletAddress = requireSignerWalletAddress(signerWallet);
   const signerEnvironment = config.operatorSignerEnvironment ?? config.nodeEnv;
+  const policy = evaluateSignerPolicy(principal, actionClass, signerEnvironment);
+  if (policy.result !== 'authorized') {
+    throw new GatewayError(
+      403,
+      'SIGNER_POLICY_RESTRICTED',
+      `${actionDescription} is not allowed while break-glass authority is active`,
+      {
+        reason: policy.reason,
+        signerWallet: walletAddress,
+        actionClass,
+        environment: signerEnvironment,
+        signerPolicyResult: policy.result,
+        breakGlassActive: policy.breakGlassActive,
+        breakGlassReason: policy.breakGlassReason,
+        breakGlassExpiresAt: policy.breakGlassExpiresAt,
+      },
+    );
+  }
+
   const binding = (principal.session.signerAuthorizations ?? []).find(
     (authorization) =>
       authorization.walletAddress === walletAddress &&
@@ -330,5 +385,37 @@ export function requireAuthorizedSignerBinding(
     );
   }
 
-  return binding;
+  return { ...binding, policy };
+}
+
+export function evaluateSignerPolicy(
+  principal: GatewayPrincipal,
+  actionClass: SignerActionClass,
+  environment: string,
+): SignerPolicyEvaluation {
+  const breakGlass = principal.session.breakGlass;
+  const breakGlassContext = breakGlass ?? INACTIVE_BREAK_GLASS_CONTEXT;
+  if (breakGlassContext.active && actionClass !== 'emergency_admin') {
+    return {
+      required: true,
+      result: 'restricted',
+      actionClass,
+      environment,
+      reason: 'break_glass_restricts_ordinary_signer_actions',
+      breakGlassActive: true,
+      breakGlassReason: breakGlassContext.reason,
+      breakGlassExpiresAt: breakGlassContext.expiresAt,
+    };
+  }
+
+  return {
+    required: true,
+    result: 'authorized',
+    actionClass,
+    environment,
+    reason: breakGlassContext.active ? 'break_glass_explicit_emergency_action_allowed' : null,
+    breakGlassActive: breakGlassContext.active,
+    breakGlassReason: breakGlassContext.reason,
+    breakGlassExpiresAt: breakGlassContext.expiresAt,
+  };
 }

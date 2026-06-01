@@ -31,6 +31,24 @@ Additional fields should be populated when available from the service boundary:
 - `logIndex`
 - approval or ticket reference
 
+Signer-required governance and treasury actions must also include the signer
+policy evidence emitted by the gateway:
+
+- `operatorSessionReference`
+- `operatorAccountId`
+- `operatorUserId`
+- `operatorWalletAddress`
+- `signerPolicyResult`
+- `signerPolicyReason`
+- `signerPolicyActionClass`
+- `signerPolicyEnvironment`
+- `signerBindingId`
+- `signerBindingWallet`
+- `signerActualWallet` or final signer wallet when the chain proof is available
+- `breakGlassActive`
+- `breakGlassReason`
+- `breakGlassExpiresAt`
+
 If a field is not available for the workflow, record `N/A` instead of leaving it blank.
 If the runtime logger does not emit a field directly, source it from the nearest
 authoritative gateway ledger, request record, or operator evidence source.
@@ -52,6 +70,12 @@ authoritative gateway ledger, request record, or operator evidence source.
 | Trade ID           | Action Key           | Request ID           | Trace ID           | Correlation ID           | Actor            | Intent            | Outcome                | Tx Hash           | Service     | Evidence link   |
 | ------------------ | -------------------- | -------------------- | ------------------ | ------------------------ | ---------------- | ----------------- | ---------------------- | ----------------- | ----------- | --------------- |
 | `<tradeId or N/A>` | `<actionKey or N/A>` | `<requestId or N/A>` | `<traceId or N/A>` | `<correlationId or N/A>` | `<actor or N/A>` | `<intent or N/A>` | `<outcome or pending>` | `<txHash or N/A>` | `<service>` | `<path or URL>` |
+
+## Signer Policy Evidence Table
+
+| Operator session   | Operator account/user | Action class     | Policy result     | Policy reason     | Binding ID    | Binding wallet    | Actual signer     | Break-glass       |
+| ------------------ | --------------------- | ---------------- | ----------------- | ----------------- | ------------- | ----------------- | ----------------- | ----------------- |
+| `<session or N/A>` | `<account/user>`      | `<class or N/A>` | `<result or N/A>` | `<reason or N/A>` | `<id or N/A>` | `<wallet or N/A>` | `<wallet or N/A>` | `<active/reason>` |
 
 ## Supporting Artifacts
 
