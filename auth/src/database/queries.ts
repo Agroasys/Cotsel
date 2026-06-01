@@ -5,6 +5,7 @@ import { Pool, PoolClient } from 'pg';
 import {
   AdminActor,
   AdminAuditAction,
+  BreakGlassReviewStatus,
   BreakGlassSessionContext,
   OPERATOR_CAPABILITIES,
   OPERATOR_SIGNER_ACTION_CLASSES,
@@ -140,6 +141,8 @@ function timestampIsoOrNull(value: Date | string | null | undefined): string | n
 function normalizeBreakGlassContext(row: SessionRow): BreakGlassSessionContext {
   const expiresAt = timestampIsoOrNull(row.breakGlassExpiresAt);
   const revokedAt = timestampIsoOrNull(row.breakGlassRevokedAt);
+  const reviewedAt = timestampIsoOrNull(row.breakGlassReviewedAt);
+  const grantedAt = timestampIsoOrNull(row.breakGlassGrantedAt);
   const active =
     row.breakGlassRole === 'admin' &&
     expiresAt !== null &&
@@ -150,14 +153,45 @@ function normalizeBreakGlassContext(row: SessionRow): BreakGlassSessionContext {
     active,
     role: row.breakGlassRole ?? null,
     expiresAt,
-    grantedAt: timestampIsoOrNull(row.breakGlassGrantedAt),
+    grantedAt,
     grantedBy: row.breakGlassGrantedBy ?? null,
     reason: row.breakGlassReason ?? null,
     revokedAt,
     revokedBy: row.breakGlassRevokedBy ?? null,
-    reviewedAt: timestampIsoOrNull(row.breakGlassReviewedAt),
+    reviewedAt,
     reviewedBy: row.breakGlassReviewedBy ?? null,
+    reviewStatus: resolveBreakGlassReviewStatus({
+      active,
+      role: row.breakGlassRole ?? null,
+      expiresAt,
+      grantedAt,
+      revokedAt,
+      reviewedAt,
+    }),
   };
+}
+
+function resolveBreakGlassReviewStatus(input: {
+  active: boolean;
+  role: 'admin' | null;
+  expiresAt: string | null;
+  grantedAt: string | null;
+  revokedAt: string | null;
+  reviewedAt: string | null;
+}): BreakGlassReviewStatus {
+  if (input.reviewedAt) {
+    return 'reviewed';
+  }
+  if (!input.role && !input.grantedAt && !input.expiresAt && !input.revokedAt) {
+    return 'none';
+  }
+  if (input.revokedAt) {
+    return 'revoked_unreviewed';
+  }
+  if (input.active) {
+    return 'active_unreviewed';
+  }
+  return 'expired_unreviewed';
 }
 
 export function normalizeSessionRow(row: SessionRow): UserSession {

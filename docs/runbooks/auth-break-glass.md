@@ -89,9 +89,11 @@ operator routes:
 
 Rejected signer attempts return `SIGNER_POLICY_RESTRICTED` with the action
 class, signer environment, and break-glass evidence fields. Successful
-privileged audit records include `breakGlassActive`, `breakGlassReason`, and
-`breakGlassExpiresAt` so reviewers can separate normal signer use from
-incident authority.
+privileged audit records include `breakGlassActive`, `breakGlassReason`,
+`breakGlassExpiresAt`, `breakGlassReviewedAt`, `breakGlassReviewedBy`, and
+`breakGlassReviewStatus` so reviewers can separate normal signer use from
+incident authority and see whether emergency access still needs post-incident
+closure.
 
 ## Expiry
 
@@ -151,6 +153,8 @@ The reviewer must confirm:
   binding and incident approval
 - privileged actions during the window match the incident scope
 - the audit trail exists in `auth_admin_audit_events`
+- the profile/session break-glass context has `reviewStatus: reviewed` after
+  review is complete
 
 ## Required Alerts
 

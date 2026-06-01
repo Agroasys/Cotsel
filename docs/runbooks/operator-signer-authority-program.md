@@ -108,6 +108,7 @@ Relevant runtime surfaces:
 - `gateway/src/routes/governanceMutations.ts`
 - `gateway/src/core/governanceMutationService.ts`
 - `gateway/src/core/governanceStore.ts`
+- `gateway/tests/signerPolicyCoverage.test.ts`
 
 ### 4. Treasury has an explicit session-only vs signer-required policy
 
@@ -124,7 +125,14 @@ Relevant runtime surfaces:
 
 - `gateway/src/routes/treasury.ts`
 - `gateway/src/core/treasuryWorkflowService.ts`
+- `gateway/tests/signerPolicyCoverage.test.ts`
 - `docs/adr/adr-0412-treasury-revenue-controls-boundary.md`
+
+Future governance, treasury, or emergency signer-required route additions must
+extend the centralized signer policy path and update
+`gateway/tests/signerPolicyCoverage.test.ts`. A privileged route that bypasses
+`requireAuthorizedSignerBinding` is a security regression, even if it still has
+operator session or write-allowlist checks.
 
 ### 5. Break-glass admin posture is not ordinary signer posture
 
@@ -150,9 +158,9 @@ Allowed under break-glass only by explicit backend policy:
 
 Runtime evidence for privileged actions must mark whether break-glass was
 active, why it was active, when it expires, which signer policy result was
-applied, and which approved binding was used. A reviewer should never need to
-infer whether a privileged signer action came from normal durable admin posture
-or incident posture.
+applied, which review status applies, and which approved binding was used. A
+reviewer should never need to infer whether a privileged signer action came from
+normal durable admin posture or incident posture.
 
 ## Historical Baseline Before Signer Hardening
 

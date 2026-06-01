@@ -73,6 +73,7 @@ function buildAuthSession(overrides: Record<string, unknown> = {}) {
       revokedBy: null,
       reviewedAt: null,
       reviewedBy: null,
+      reviewStatus: 'none',
     },
     issuedAt: 1777353600,
     expiresAt: 1777357200,

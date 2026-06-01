@@ -74,6 +74,13 @@ export interface UserSession {
   revokedAt: number | null;
 }
 
+export type BreakGlassReviewStatus =
+  | 'none'
+  | 'active_unreviewed'
+  | 'revoked_unreviewed'
+  | 'expired_unreviewed'
+  | 'reviewed';
+
 export interface BreakGlassSessionContext {
   active: boolean;
   role: 'admin' | null;
@@ -85,6 +92,7 @@ export interface BreakGlassSessionContext {
   revokedBy: string | null;
   reviewedAt: string | null;
   reviewedBy: string | null;
+  reviewStatus: BreakGlassReviewStatus;
 }
 
 export interface OperatorSignerAuthorization {

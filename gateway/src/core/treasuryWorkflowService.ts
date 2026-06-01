@@ -188,6 +188,9 @@ function breakGlassEvidence(session: AuthSession) {
     active: session.breakGlass?.active ?? false,
     reason: session.breakGlass?.reason ?? null,
     expiresAt: session.breakGlass?.expiresAt ?? null,
+    reviewedAt: session.breakGlass?.reviewedAt ?? null,
+    reviewedBy: session.breakGlass?.reviewedBy ?? null,
+    reviewStatus: session.breakGlass?.reviewStatus ?? null,
   };
 }
 
@@ -661,6 +664,9 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
       breakGlassActive: breakGlass.active,
       breakGlassReason: breakGlass.reason,
       breakGlassExpiresAt: breakGlass.expiresAt,
+      breakGlassReviewedAt: breakGlass.reviewedAt,
+      breakGlassReviewedBy: breakGlass.reviewedBy,
+      breakGlassReviewStatus: breakGlass.reviewStatus,
       auditReason: context.audit.reason,
       auditTicketRef: context.audit.ticketRef,
       auditEvidenceReferences: context.audit.evidenceReferences ?? [],
@@ -731,6 +737,9 @@ export class TreasuryWorkflowService implements TreasuryWorkflowClient {
           breakGlassActive: complianceMetadata.breakGlassActive,
           breakGlassReason: complianceMetadata.breakGlassReason,
           breakGlassExpiresAt: complianceMetadata.breakGlassExpiresAt,
+          breakGlassReviewedAt: complianceMetadata.breakGlassReviewedAt,
+          breakGlassReviewedBy: complianceMetadata.breakGlassReviewedBy,
+          breakGlassReviewStatus: complianceMetadata.breakGlassReviewStatus,
           signerPolicy: context.signerPolicy ?? { required: false, result: 'not_required' },
           result: dataRecord,
         },
