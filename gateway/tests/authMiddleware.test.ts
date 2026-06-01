@@ -480,4 +480,30 @@ describe('signer authorization enforcement', () => {
       }),
     );
   });
+
+  test('blocks emergency signer action bindings outside active break-glass authority', () => {
+    expect(() =>
+      requireAuthorizedSignerBinding(
+        {
+          sessionReference: 'sha256:test',
+          session: buildSession({
+            signerAuthorizations: [
+              buildSignerAuthorization({
+                walletAddress: '0x00000000000000000000000000000000000000AA',
+                actionClass: 'emergency_admin',
+              }),
+            ],
+          }),
+          gatewayRoles: ['operator:read', 'operator:write'],
+          operatorActionCapabilities: ['governance:write'],
+          treasuryCapabilities: [],
+          writeEnabled: true,
+        },
+        baseConfig,
+        'emergency_admin',
+        '0x00000000000000000000000000000000000000AA',
+        'Preparing emergency admin action',
+      ),
+    ).toThrow('requires active break-glass authority');
+  });
 });

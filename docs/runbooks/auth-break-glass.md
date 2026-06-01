@@ -84,6 +84,8 @@ operator routes:
 - `compliance_sensitive`: blocked under break-glass.
 - `emergency_admin`: allowed only when the account has an explicit active signer
   binding for `emergency_admin` in the active gateway signer environment.
+  Outside active break-glass authority, `emergency_admin` remains restricted even
+  if such a binding exists.
 
 Rejected signer attempts return `SIGNER_POLICY_RESTRICTED` with the action
 class, signer environment, and break-glass evidence fields. Successful
