@@ -5,6 +5,7 @@ import { Pool, PoolClient } from 'pg';
 import {
   AdminActor,
   AdminAuditAction,
+  BreakGlassSessionContext,
   OPERATOR_CAPABILITIES,
   OPERATOR_SIGNER_ACTION_CLASSES,
   OperatorCapability,
@@ -17,13 +18,22 @@ import {
 
 type SessionRow = Omit<
   UserSession,
-  'issuedAt' | 'expiresAt' | 'revokedAt' | 'capabilities' | 'signerAuthorizations'
+  'issuedAt' | 'expiresAt' | 'revokedAt' | 'capabilities' | 'signerAuthorizations' | 'breakGlass'
 > & {
   issuedAt: number | string;
   expiresAt: number | string;
   revokedAt: number | string | null;
   capabilities: OperatorCapability[] | null;
   signerAuthorizations: OperatorSignerAuthorization[] | null;
+  breakGlassRole?: 'admin' | null;
+  breakGlassExpiresAt?: Date | string | null;
+  breakGlassGrantedAt?: Date | string | null;
+  breakGlassGrantedBy?: string | null;
+  breakGlassReason?: string | null;
+  breakGlassRevokedAt?: Date | string | null;
+  breakGlassRevokedBy?: string | null;
+  breakGlassReviewedAt?: Date | string | null;
+  breakGlassReviewedBy?: string | null;
 };
 
 const USER_PROFILE_FIELDS = `
@@ -110,11 +120,59 @@ function normalizeSignerAuthorizations(
   );
 }
 
+function timestampIsoOrNull(value: Date | string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid break-glass timestamp returned from database: ${value}`);
+  }
+
+  return parsed.toISOString();
+}
+
+function normalizeBreakGlassContext(row: SessionRow): BreakGlassSessionContext {
+  const expiresAt = timestampIsoOrNull(row.breakGlassExpiresAt);
+  const revokedAt = timestampIsoOrNull(row.breakGlassRevokedAt);
+  const active =
+    row.breakGlassRole === 'admin' &&
+    expiresAt !== null &&
+    Date.parse(expiresAt) > Date.now() &&
+    revokedAt === null;
+
+  return {
+    active,
+    role: row.breakGlassRole ?? null,
+    expiresAt,
+    grantedAt: timestampIsoOrNull(row.breakGlassGrantedAt),
+    grantedBy: row.breakGlassGrantedBy ?? null,
+    reason: row.breakGlassReason ?? null,
+    revokedAt,
+    revokedBy: row.breakGlassRevokedBy ?? null,
+    reviewedAt: timestampIsoOrNull(row.breakGlassReviewedAt),
+    reviewedBy: row.breakGlassReviewedBy ?? null,
+  };
+}
+
 export function normalizeSessionRow(row: SessionRow): UserSession {
   return {
-    ...row,
+    sessionId: row.sessionId,
+    accountId: row.accountId,
+    userId: row.userId,
+    walletAddress: row.walletAddress,
+    email: row.email,
+    role: row.role,
+    issuedRole: row.issuedRole,
+    active: row.active,
     capabilities: normalizeCapabilityList(row.capabilities),
     signerAuthorizations: normalizeSignerAuthorizations(row.signerAuthorizations),
+    breakGlass: normalizeBreakGlassContext(row),
     issuedAt: parseSessionEpoch(row.issuedAt, 'issuedAt'),
     expiresAt: parseSessionEpoch(row.expiresAt, 'expiresAt'),
     revokedAt: row.revokedAt === null ? null : parseSessionEpoch(row.revokedAt, 'revokedAt'),
@@ -1348,6 +1406,15 @@ export async function findSessionById(pool: Pool, sessionId: string): Promise<Us
             ) AS "signerAuthorizations",
             user_sessions.role AS "issuedRole",
             user_profiles.active AS active,
+            user_profiles.break_glass_role AS "breakGlassRole",
+            user_profiles.break_glass_expires_at AS "breakGlassExpiresAt",
+            user_profiles.break_glass_granted_at AS "breakGlassGrantedAt",
+            user_profiles.break_glass_granted_by AS "breakGlassGrantedBy",
+            user_profiles.break_glass_reason AS "breakGlassReason",
+            user_profiles.break_glass_revoked_at AS "breakGlassRevokedAt",
+            user_profiles.break_glass_revoked_by AS "breakGlassRevokedBy",
+            user_profiles.break_glass_reviewed_at AS "breakGlassReviewedAt",
+            user_profiles.break_glass_reviewed_by AS "breakGlassReviewedBy",
             issued_at AS "issuedAt", expires_at AS "expiresAt",
             revoked_at AS "revokedAt"
      FROM user_sessions

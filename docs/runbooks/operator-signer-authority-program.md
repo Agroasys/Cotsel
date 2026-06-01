@@ -112,12 +112,43 @@ Relevant runtime surfaces:
 - Treasury preparatory actions remain session/capability/write-posture controlled.
 - Treasury close-, approval-, and execution-sensitive actions require explicit signer bindings.
 - Treasury signer policy is carried into downstream metadata and gateway audit records.
+- Governance and treasury signer evidence now use the same core fields:
+  operator account/user/session identity, request/correlation IDs where
+  available, action class, signer environment, signer binding ID, approved
+  binding wallet, actual signer wallet where known, signer policy result,
+  policy reason, and break-glass context.
 
 Relevant runtime surfaces:
 
 - `gateway/src/routes/treasury.ts`
 - `gateway/src/core/treasuryWorkflowService.ts`
 - `docs/adr/adr-0412-treasury-revenue-controls-boundary.md`
+
+### 5. Break-glass admin posture is not ordinary signer posture
+
+Break-glass elevation can make a session effective-admin for emergency-safe
+operator access, but it does not silently inherit normal governance or treasury
+signing authority. Gateway signer policy restricts ordinary signer-required
+action classes while `auth` reports `breakGlass.active = true`.
+
+Restricted under break-glass:
+
+- `governance`
+- `treasury_approve`
+- `treasury_execute`
+- `treasury_close`
+- `compliance_sensitive`
+
+Allowed under break-glass only by explicit backend policy:
+
+- `emergency_admin`, and only when the account also has an active
+  `emergency_admin` signer binding for the active signer environment.
+
+Runtime evidence for privileged actions must mark whether break-glass was
+active, why it was active, when it expires, which signer policy result was
+applied, and which approved binding was used. A reviewer should never need to
+infer whether a privileged signer action came from normal durable admin posture
+or incident posture.
 
 ## Historical Baseline Before Batch 1-5
 

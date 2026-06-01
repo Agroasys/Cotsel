@@ -18,6 +18,11 @@ For every action class below, the operator packet must include:
 - named actor and approver role
 - applied runbook
 - request/correlation identifiers
+- operator session identity, account/user identity, and break-glass context
+  whenever the action is signer-required
+- signer policy result, action class, approved binding ID, binding wallet, actual
+  signer wallet when known, and signer environment whenever the action is
+  signer-required
 - before/after state or chain truth
 - failure/rollback decision when relevant
 - evidence storage location
@@ -57,23 +62,29 @@ does not emit it yet. Do not leave blanks.
 Use this table in the ticket, incident, or launch record for any action class in
 this index.
 
-| Field                         | Value                            |
-| ----------------------------- | -------------------------------- |
-| Action class                  | `<one row from Action Classes>`  |
-| Environment                   | `<staging / production / pilot>` |
-| Incident/change/ticket        | `<URL or id>`                    |
-| Applied runbook               | `<path or URL>`                  |
-| Operator / actor              | `<name or service id>`           |
-| Approver role(s)              | `<roles>`                        |
-| Request ID                    | `<id or N/A>`                    |
-| Correlation ID                | `<id or N/A>`                    |
-| Trade/action/batch identifier | `<id or N/A>`                    |
-| Before state                  | `<state / hash / balance / N/A>` |
-| After state                   | `<state / hash / balance / N/A>` |
-| Tx hash / external reference  | `<hash / provider ref / N/A>`    |
-| Validation command/output     | `<path or summary>`              |
-| Rollback or follow-up state   | `<not needed / linked item>`     |
-| Evidence storage location     | `<path or URL>`                  |
+| Field                         | Value                             |
+| ----------------------------- | --------------------------------- |
+| Action class                  | `<one row from Action Classes>`   |
+| Environment                   | `<staging / production / pilot>`  |
+| Incident/change/ticket        | `<URL or id>`                     |
+| Applied runbook               | `<path or URL>`                   |
+| Operator / actor              | `<name or service id>`            |
+| Approver role(s)              | `<roles>`                         |
+| Request ID                    | `<id or N/A>`                     |
+| Correlation ID                | `<id or N/A>`                     |
+| Operator session reference    | `<sha256 ref or N/A>`             |
+| Operator account/user         | `<account / user id or N/A>`      |
+| Signer policy result          | `<authorized / restricted / N/A>` |
+| Signer action class           | `<class or N/A>`                  |
+| Signer binding / wallet       | `<binding id / wallet or N/A>`    |
+| Break-glass active / reason   | `<true/false and reason or N/A>`  |
+| Trade/action/batch identifier | `<id or N/A>`                     |
+| Before state                  | `<state / hash / balance / N/A>`  |
+| After state                   | `<state / hash / balance / N/A>`  |
+| Tx hash / external reference  | `<hash / provider ref / N/A>`     |
+| Validation command/output     | `<path or summary>`               |
+| Rollback or follow-up state   | `<not needed / linked item>`      |
+| Evidence storage location     | `<path or URL>`                   |
 
 ## Non-Goals
 

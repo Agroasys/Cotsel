@@ -22,7 +22,11 @@ Signer custody source of truth:
 
 - Contract interactions must be executed through approved admin tooling and governance flow.
 - Do not execute ad-hoc scripts outside approved signer path.
-- Emergency disable may use a break-glass signer session only under the custody and evidence rules in `docs/runbooks/gateway-governance-signer-custody.md`.
+- Emergency disable may use break-glass admin access only for emergency-safe
+  operator access. Ordinary governance and treasury signer action classes remain
+  blocked under break-glass unless an explicit `emergency_admin` signer binding
+  exists under the custody and evidence rules in
+  `docs/runbooks/gateway-governance-signer-custody.md`.
 
 ## Expected outputs
 

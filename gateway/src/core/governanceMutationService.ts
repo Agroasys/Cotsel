@@ -23,6 +23,7 @@ import {
 import {
   requireWalletBoundSession,
   resolveGatewayActorKey,
+  type AuthorizedSignerBinding,
   type GatewayPrincipal,
 } from '../middleware/auth';
 import { RequestContext } from '../middleware/requestContext';
@@ -186,6 +187,12 @@ function normalizeSignerWallet(walletAddress: string): string {
   return normalizeAddress(walletAddress, 'signerWallet');
 }
 
+function isAuthorizedSignerBinding(
+  binding: SignerAuthorization | undefined,
+): binding is AuthorizedSignerBinding {
+  return Boolean(binding && 'policy' in binding);
+}
+
 function requireProposalId(value: number | null | undefined, message: string): number {
   if (value === null || value === undefined) {
     throw new GatewayError(500, 'INTERNAL_ERROR', message);
@@ -328,6 +335,16 @@ function buildAuditRecord(
     signerBindingId: signerBinding?.bindingId ?? null,
     signerActionClass: signerBinding?.actionClass ?? null,
     signerEnvironment: signerBinding?.environment ?? null,
+    signerPolicyResult: isAuthorizedSignerBinding(signerBinding)
+      ? signerBinding.policy.result
+      : null,
+    signerPolicyReason: isAuthorizedSignerBinding(signerBinding)
+      ? signerBinding.policy.reason
+      : null,
+    signerBindingWallet: signerBinding?.walletAddress ?? null,
+    breakGlassActive: principal.session.breakGlass?.active ?? false,
+    breakGlassReason: principal.session.breakGlass?.reason ?? null,
+    breakGlassExpiresAt: principal.session.breakGlass?.expiresAt ?? null,
   };
 }
 
@@ -773,6 +790,19 @@ export class GovernanceMutationService {
         intentHash,
         preparedPayloadHash: signing.preparedPayloadHash,
         signerWallet: signing.signerWallet,
+        signerBindingId: input.signerBinding?.bindingId ?? null,
+        signerActionClass: input.signerBinding?.actionClass ?? null,
+        signerEnvironment: input.signerBinding?.environment ?? null,
+        signerPolicyResult: isAuthorizedSignerBinding(input.signerBinding)
+          ? input.signerBinding.policy.result
+          : null,
+        signerPolicyReason: isAuthorizedSignerBinding(input.signerBinding)
+          ? input.signerBinding.policy.reason
+          : null,
+        signerBindingWallet: input.signerBinding?.walletAddress ?? null,
+        breakGlassActive: input.principal.session.breakGlass?.active ?? false,
+        breakGlassReason: input.principal.session.breakGlass?.reason ?? null,
+        breakGlassExpiresAt: input.principal.session.breakGlass?.expiresAt ?? null,
         idempotencyKey: input.idempotencyKey,
       },
     };
@@ -1105,6 +1135,22 @@ export class GovernanceMutationService {
         assertedSignerWallet,
         finalSignerWallet: verification.finalSignerWallet,
         preparedPayloadHash: expectedSigning.preparedPayloadHash,
+        signerBindingId: input.signerBinding?.bindingId ?? existing.audit.signerBindingId ?? null,
+        signerActionClass:
+          input.signerBinding?.actionClass ?? existing.audit.signerActionClass ?? null,
+        signerEnvironment:
+          input.signerBinding?.environment ?? existing.audit.signerEnvironment ?? null,
+        signerPolicyResult: isAuthorizedSignerBinding(input.signerBinding)
+          ? input.signerBinding.policy.result
+          : (existing.audit.signerPolicyResult ?? null),
+        signerPolicyReason: isAuthorizedSignerBinding(input.signerBinding)
+          ? input.signerBinding.policy.reason
+          : (existing.audit.signerPolicyReason ?? null),
+        signerBindingWallet:
+          input.signerBinding?.walletAddress ?? existing.audit.signerBindingWallet ?? null,
+        breakGlassActive: input.principal.session.breakGlass?.active ?? false,
+        breakGlassReason: input.principal.session.breakGlass?.reason ?? null,
+        breakGlassExpiresAt: input.principal.session.breakGlass?.expiresAt ?? null,
       },
     };
 

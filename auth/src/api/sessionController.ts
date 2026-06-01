@@ -20,6 +20,18 @@ import {
 } from './controllerSupport';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const INACTIVE_BREAK_GLASS_CONTEXT = {
+  active: false,
+  role: null,
+  expiresAt: null,
+  grantedAt: null,
+  grantedBy: null,
+  reason: null,
+  revokedAt: null,
+  revokedBy: null,
+  reviewedAt: null,
+  reviewedBy: null,
+} as const;
 
 interface TrustedSessionExchangeBody {
   accountId?: string;
@@ -131,6 +143,7 @@ export class SessionController {
         role: session.role,
         capabilities: session.capabilities,
         signerAuthorizations: session.signerAuthorizations,
+        breakGlass: session.breakGlass ?? INACTIVE_BREAK_GLASS_CONTEXT,
         issuedAt: session.issuedAt,
         expiresAt: session.expiresAt,
       }),

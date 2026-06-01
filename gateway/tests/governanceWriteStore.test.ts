@@ -343,6 +343,7 @@ describe('createPostgresGovernanceWriteStore', () => {
       'requested_by',
       'approved_by',
       'actor_account_id',
+      'signer_policy_evidence',
       'final_signer_wallet',
       'verification_state',
       'verification_error',
@@ -363,13 +364,22 @@ describe('createPostgresGovernanceWriteStore', () => {
         valueExpression === expectedPlaceholder ||
           valueExpression === `${expectedPlaceholder}::jsonb`,
       ).toBe(true);
-      if (['evidence_links', 'approved_by', 'prepared_signing_payload'].includes(column)) {
+      if (
+        [
+          'evidence_links',
+          'approved_by',
+          'signer_policy_evidence',
+          'prepared_signing_payload',
+        ].includes(column)
+      ) {
         expect(valueExpression).toBe(`${expectedPlaceholder}::jsonb`);
       }
     });
     expect(values[columns.indexOf('evidence_links')]).toBe('$21::jsonb');
     expect(values[columns.indexOf('approved_by')]).toBe('$27::jsonb');
-    expect(values[columns.indexOf('prepared_signing_payload')]).toBe('$34::jsonb');
+    expect(values[columns.indexOf('signer_policy_evidence')]).toBe('$29::jsonb');
+    expect(values[columns.indexOf('prepared_signing_payload')]).toBe('$35::jsonb');
+    expect(sql).toContain('signer_policy_evidence = EXCLUDED.signer_policy_evidence');
     expect(sql).toContain('prepared_signing_payload = EXCLUDED.prepared_signing_payload');
     expect(params[columns.indexOf('prepared_signing_payload')]).toEqual(
       JSON.stringify(directSignAction.signing),
