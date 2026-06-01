@@ -34,6 +34,7 @@ export {
 export { createManagedRpcProvider } from './rpc/failoverProvider';
 export { createSignerFromEip1193Provider } from './wallet/eip1193';
 export type { Eip1193ProviderLike, Eip1193RequestArguments } from './wallet/eip1193';
+export { web3Wallet } from './wallet/wallet-provider';
 export { AgroasysEscrow__factory } from './types/typechain-types/factories/src/AgroasysEscrow.sol/AgroasysEscrow__factory';
 
 // types

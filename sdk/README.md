@@ -173,10 +173,24 @@ Keep service-auth API secrets on the backend only. Browser/frontend callers
 should generate typed authorizations with the buyer signer, then hand those
 authorization packages to a trusted backend for submission.
 
-### Embedded-wallet / Web3Auth compatibility contract
+### Web3Auth / embedded-wallet signer contract
 
-The recommended embedded-wallet path is an injected EIP-1193 provider that the
-SDK converts into an ethers signer via `createSignerFromEip1193Provider(...)`.
+The recommended embedded-wallet path for non-crypto-native users is Web3Auth.
+The SDK exposes `web3Wallet` to bootstrap a Web3Auth signer, and also exposes
+`createSignerFromEip1193Provider(...)` for hosts that already own an EIP-1193
+provider.
+
+```ts
+import { BuyerSDK, web3Wallet } from '@agroasys/sdk';
+
+const buyerSDK = new BuyerSDK(config);
+const buyerSigner = await web3Wallet.connect();
+
+const request = await buyerSDK.createGaslessTradeExecutionRequest(payload, buyerSigner, {
+  handoffId: 'handoff-from-cotsel-gateway',
+  expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+});
+```
 
 Minimum provider capabilities required by the buyer flow:
 
@@ -198,40 +212,16 @@ The harness proves that an EIP-1193/embedded-wallet signer can pass through the
 SDK lock flow and produce the typed authorizations expected by the gasless
 settlement gateway.
 
-### Legacy demo helper: Web3Auth wallet provider
-
-```ts
-import { web3Wallet } from '@agroasys/sdk/legacy';
-
-await web3Wallet.connect();
-const address = await web3Wallet.getAddress();
-```
-
-`CLIENT_ID` is required. `WEB3AUTH_NETWORK` defaults to `SAPPHIRE_DEVNET`.
-
-This helper is legacy/demo-only.
-
-Do not use it as the default production integration path. Production
-integrations should keep wallet bootstrap and identity ownership outside the
-SDK and inject a signer instead.
-
 ## Functions
 
 ### BuyerSDK
 
-| Method                                                                    | Description                                                  |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `getAuthorizationNonce(address)`                                          | Retrieve the current typed-authorization nonce               |
-| `getUSDCBalance(address)`                                                 | Check USDC balance                                           |
-| `createGaslessTradeExecutionRequest(params, signer, input)`               | Build typed create-trade and USDC authorization package      |
-| `createGaslessUserActionExecutionRequest(action, tradeId, signer, input)` | Build typed dispute/refund/cancel/finalize package           |
-| `getBuyerNonce(address)`                                                  | Deprecated alias for `getAuthorizationNonce(address)`        |
-| `approveUSDC(amount, signer)`                                             | Deprecated guard that rejects direct ERC-20 approval         |
-| `getUSDCAllowance(address)`                                               | Deprecated guard that rejects allowance-based buyer flow     |
-| `createTrade(params, signer)`                                             | Deprecated guard that rejects direct buyer-paid create-trade |
-| `openDispute(tradeId, signer)`                                            | Deprecated guard that rejects direct buyer-paid dispute      |
-| `cancelLockedTradeAfterTimeout(tradeId, signer)`                          | Deprecated guard that rejects direct buyer-paid cancellation |
-| `refundInTransitAfterTimeout(tradeId, signer)`                            | Deprecated guard that rejects direct buyer-paid refund       |
+| Method                                                                    | Description                                             |
+| ------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `getAuthorizationNonce(address)`                                          | Retrieve the current typed-authorization nonce          |
+| `getUSDCBalance(address)`                                                 | Check USDC balance                                      |
+| `createGaslessTradeExecutionRequest(params, signer, input)`               | Build typed create-trade and USDC authorization package |
+| `createGaslessUserActionExecutionRequest(action, tradeId, signer, input)` | Build typed dispute/refund/cancel/finalize package      |
 
 ### OracleSDK
 
@@ -274,13 +264,9 @@ SDK and inject a signer instead.
 Production integrations should follow this boundary:
 
 - Agroasys auth owns user identity
-- Agroasys-owned embedded wallet bootstrap owns wallet/session state
-- this SDK consumes an injected signer
+- Web3Auth provides the non-custodial embedded signer for buyer authorizations
+- this SDK consumes the Web3Auth signer or another injected EIP-1193 signer
 - Cotsel remains the settlement engine, not the identity root
-
-The `web3Wallet` and `AuthClient` helpers remain available from the
-`@agroasys/sdk/legacy` entrypoint for demo and backward-compatibility flows.
-They are not the recommended production integration path.
 
 ## Testing
 
@@ -317,6 +303,7 @@ ADMIN2_PRIVATE_KEY=
 # Web3Auth wallet provider
 CLIENT_ID=
 WEB3AUTH_NETWORK=SAPPHIRE_DEVNET
+
 ```
 
 ## License

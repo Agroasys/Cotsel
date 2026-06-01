@@ -9,7 +9,6 @@ import {
   GaslessUserActionAuthorization,
   GaslessUserActionExecutionRequest,
   SponsoredAction,
-  TradeResult,
   UsdcReceiveAuthorization,
 } from '../types/trade';
 import { ethers } from 'ethers';
@@ -32,14 +31,6 @@ export class BuyerSDK extends Client {
   async getAuthorizationNonce(userAddress: string): Promise<bigint> {
     validateAddress(userAddress, 'user');
     return super.getAuthorizationNonce(userAddress);
-  }
-
-  /**
-   * @deprecated Use `getAuthorizationNonce(address)`.
-   */
-  async getBuyerNonce(buyerAddress: string): Promise<bigint> {
-    validateAddress(buyerAddress, 'buyer');
-    return this.getAuthorizationNonce(buyerAddress);
   }
 
   async createGaslessTradeAuthorization(
@@ -163,31 +154,6 @@ export class BuyerSDK extends Client {
     });
   }
 
-  /**
-   * @deprecated ERC-20 allowance approvals are no longer part of the active
-   * buyer settlement path. Use `createGaslessTradeExecutionRequest(...)`.
-   */
-  async approveUSDC(amount: bigint, buyerSigner: ethers.Signer): Promise<TradeResult> {
-    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
-
-    throw new ContractError(
-      'Direct USDC approval was removed from the buyer settlement path. Use createGaslessTradeExecutionRequest with a USDC receive authorization instead.',
-      { amount: amount.toString() },
-    );
-  }
-
-  /**
-   * @deprecated Escrow allowance is not used by gasless buyer settlement.
-   */
-  async getUSDCAllowance(buyerAddress: string): Promise<bigint> {
-    validateAddress(buyerAddress, 'buyer');
-
-    throw new ContractError(
-      'Escrow USDC allowance is no longer used by buyer settlement. Use getUSDCBalance and createGaslessTradeExecutionRequest instead.',
-      { buyerAddress },
-    );
-  }
-
   async getUSDCBalance(buyerAddress: string): Promise<bigint> {
     validateAddress(buyerAddress, 'buyer');
     try {
@@ -201,62 +167,5 @@ export class BuyerSDK extends Client {
         error: message,
       });
     }
-  }
-
-  /**
-   * Deprecated direct buyer-paid lock flow.
-   *
-   * @deprecated User-paid settlement writes were removed from the contract.
-   * Keep this method as an explicit migration guard so older integrations fail
-   * with an actionable error instead of trying to call a removed ABI method.
-   *
-   * New checkout integrations should use `createGaslessTradeExecutionRequest`
-   * plus `GaslessSettlementClient.submitCreateTradeExecution`.
-   */
-  async createTrade(payload: BuyerLockPayload, buyerSigner: ethers.Signer): Promise<TradeResult> {
-    validateTradeParameters(payload);
-    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
-
-    throw new ContractError(
-      'Direct buyer-paid createTrade was removed. Use createGaslessTradeExecutionRequest and GaslessSettlementClient.submitCreateTradeExecution instead.',
-      {
-        supplier: payload.supplier,
-        totalAmount: payload.totalAmount.toString(),
-        ricardianHash: payload.ricardianHash,
-      },
-    );
-  }
-
-  async openDispute(tradeId: string | bigint, buyerSigner: ethers.Signer): Promise<TradeResult> {
-    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
-
-    throw new ContractError(
-      'Direct buyer-paid openDispute was removed. Use createGaslessUserActionExecutionRequest with SponsoredAction.OPEN_DISPUTE instead.',
-      { tradeId: tradeId.toString() },
-    );
-  }
-
-  async cancelLockedTradeAfterTimeout(
-    tradeId: string | bigint,
-    buyerSigner: ethers.Signer,
-  ): Promise<TradeResult> {
-    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
-
-    throw new ContractError(
-      'Direct buyer-paid cancelLockedTradeAfterTimeout was removed. Use createGaslessUserActionExecutionRequest with SponsoredAction.CANCEL_LOCKED_TIMEOUT instead.',
-      { tradeId: tradeId.toString() },
-    );
-  }
-
-  async refundInTransitAfterTimeout(
-    tradeId: string | bigint,
-    buyerSigner: ethers.Signer,
-  ): Promise<TradeResult> {
-    await this.assertSignerCompatibility(buyerSigner, 'Buyer signer');
-
-    throw new ContractError(
-      'Direct buyer-paid refundInTransitAfterTimeout was removed. Use createGaslessUserActionExecutionRequest with SponsoredAction.REFUND_IN_TRANSIT_TIMEOUT instead.',
-      { tradeId: tradeId.toString() },
-    );
   }
 }

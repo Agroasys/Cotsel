@@ -237,12 +237,6 @@ export interface GaslessExecutionResponseEnvelope<T = unknown> {
   timestamp?: string;
 }
 
-export interface TradeResult {
-  txHash: string;
-  blockNumber: number;
-  tradeId?: string;
-}
-
 export enum TradeStatus {
   LOCKED = 0,
   IN_TRANSIT = 1,

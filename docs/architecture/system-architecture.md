@@ -75,7 +75,7 @@ flowchart LR
         supplier_app["Agroasys Supplier App<br/>status / evidence / confirmations"]
         ops_dash["Cotsel-Dash<br/>operator dashboard"]
         sdk["Agroasys SDK<br/>typed platform + settlement client"]
-        web3auth["Web3Auth<br/>embedded wallet / signer"]
+        wallet_provider["Web3Auth / Embedded Wallet<br/>EIP-1193 signer"]
         doc_uploader["Secure Document Uploader"]
       end
 
@@ -86,7 +86,7 @@ flowchart LR
         auth_db[("Identity Postgres<br/>profiles + sessions")]
       end
     end
-    class buyer_app,supplier_app,ops_dash,sdk,web3auth,doc_uploader frontend
+    class buyer_app,supplier_app,ops_dash,sdk,wallet_provider,doc_uploader frontend
     class auth_service,shared_auth identity
     class auth_db storage
 
@@ -175,8 +175,10 @@ flowchart LR
 
     buyer_app --> sdk
     supplier_app --> sdk
-    sdk --> web3auth
-    web3auth --> escrow_contract
+    buyer_app --> wallet_provider
+    supplier_app --> wallet_provider
+    wallet_provider --> sdk
+    sdk --> escrow_contract
     buyer_app --> doc_uploader
     supplier_app --> doc_uploader
     doc_uploader --> ops_docs
