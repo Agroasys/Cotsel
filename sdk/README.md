@@ -8,7 +8,7 @@ This SDK provides a **type-safe, role-based interface** to the Agroasys smart co
 
 The SDK is organized into **three role-based modules**:
 
-- **BuyerSDK** - Create gasless settlement authorization packages, approve USDC in legacy mode, and open/refund/cancel buyer actions
+- **BuyerSDK** - Create gasless settlement authorization packages and buyer/supplier user-action authorization packages
 - **OracleSDK** - Release funds at logistics milestones, confirm arrival, finalize trade (**Auth verification**)
 - **AdminSDK** - Solve frozen trades, operate protocol controls, manage treasury payout governance, and propose/approve/execute governance actions (**Auth verification**)
 
@@ -182,8 +182,11 @@ Minimum provider capabilities required by the buyer flow:
 
 - `request({ method: "eth_chainId" })` for network verification
 - `request({ method: "eth_accounts" })` or `eth_requestAccounts` for signer resolution
-- `request({ method: "personal_sign" })` for the canonical trade signature
-- standard transaction submission support such as `eth_sendTransaction` for real approve/createTrade execution in production runtimes
+- `request({ method: "eth_signTypedData_v4" })` for trade and USDC authorizations
+
+Buyer and supplier wallets do not submit settlement transactions in the gasless
+flow. They sign typed authorizations, then a trusted backend submits the package
+through the relayer/gateway.
 
 Deterministic compatibility harness:
 
@@ -192,8 +195,8 @@ npm run -w sdk test -- --runTestsByPath tests/web3AuthSignerCompatibility.test.t
 ```
 
 The harness proves that an EIP-1193/embedded-wallet signer can pass through the
-SDK lock flow, trigger allowance handling, produce the canonical signature, and
-submit the lock call through the current `BuyerSDK` assumptions.
+SDK lock flow and produce the typed authorizations expected by the gasless
+settlement gateway.
 
 ### Legacy demo helper: Web3Auth wallet provider
 
@@ -216,18 +219,19 @@ SDK and inject a signer instead.
 
 ### BuyerSDK
 
-| Method                                                                    | Description                                             |
-| ------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `getBuyerNonce(address)`                                                  | Retrieve the current nonce for signature                |
-| `approveUSDC(amount, signer)`                                             | Approve the escrow contract to spend USDC               |
-| `getUSDCBalance(address)`                                                 | Check USDC balance                                      |
-| `getUSDCAllowance(address)`                                               | Check current USDC allowance for escrow                 |
-| `createGaslessTradeExecutionRequest(params, signer, input)`               | Build typed create-trade and USDC authorization package |
-| `createGaslessUserActionExecutionRequest(action, tradeId, signer, input)` | Build typed dispute/refund/cancel/finalize package      |
-| `createTrade(params, signer)`                                             | Legacy direct-send create-trade flow                    |
-| `openDispute(tradeId, signer)`                                            | Open a dispute on an existing trade                     |
-| `cancelLockedTradeAfterTimeout(tradeId, signer)`                          | Cancel stale `LOCKED` trade after timeout               |
-| `refundInTransitAfterTimeout(tradeId, signer)`                            | Refund remaining principal when transit times out       |
+| Method                                                                    | Description                                                  |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `getAuthorizationNonce(address)`                                          | Retrieve the current typed-authorization nonce               |
+| `getUSDCBalance(address)`                                                 | Check USDC balance                                           |
+| `createGaslessTradeExecutionRequest(params, signer, input)`               | Build typed create-trade and USDC authorization package      |
+| `createGaslessUserActionExecutionRequest(action, tradeId, signer, input)` | Build typed dispute/refund/cancel/finalize package           |
+| `getBuyerNonce(address)`                                                  | Deprecated alias for `getAuthorizationNonce(address)`        |
+| `approveUSDC(amount, signer)`                                             | Deprecated guard that rejects direct ERC-20 approval         |
+| `getUSDCAllowance(address)`                                               | Deprecated guard that rejects allowance-based buyer flow     |
+| `createTrade(params, signer)`                                             | Deprecated guard that rejects direct buyer-paid create-trade |
+| `openDispute(tradeId, signer)`                                            | Deprecated guard that rejects direct buyer-paid dispute      |
+| `cancelLockedTradeAfterTimeout(tradeId, signer)`                          | Deprecated guard that rejects direct buyer-paid cancellation |
+| `refundInTransitAfterTimeout(tradeId, signer)`                            | Deprecated guard that rejects direct buyer-paid refund       |
 
 ### OracleSDK
 

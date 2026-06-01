@@ -9,8 +9,9 @@ import { ethers } from 'ethers';
 const require = createRequire(import.meta.url);
 
 let BuyerSDK;
+let GaslessSettlementClient;
 try {
-  ({ BuyerSDK } = require('../dist/index.js'));
+  ({ BuyerSDK, GaslessSettlementClient } = require('../dist/index.js'));
 } catch (error) {
   throw new Error(
     `Could not load sdk/dist/index.js. Run "npm run build -w sdk" before this script. ${
@@ -25,10 +26,7 @@ const BASE_SEPOLIA_RPC_URL = 'https://sepolia.base.org';
 const BASE_SEPOLIA_USDC = '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
 const USDC_DECIMALS = 6;
 
-const USDC_ABI = [
-  'function balanceOf(address account) view returns (uint256)',
-  'function allowance(address owner, address spender) view returns (uint256)',
-];
+const USDC_ABI = ['function balanceOf(address account) view returns (uint256)'];
 
 function parseArgs(argv) {
   const args = {};
@@ -135,6 +133,23 @@ function splitFallbackUrls(raw) {
     .filter(Boolean);
 }
 
+function buildExecutionLabel(labelPrefix) {
+  return `${labelPrefix}-${new Date().toISOString()}`;
+}
+
+function buildHandoffId(args, label) {
+  return readValue(args, 'handoff-id', ['COTSEL_HANDOFF_ID', 'GASLESS_HANDOFF_ID'], label);
+}
+
+function buildIdempotencyKey(args, handoffId) {
+  return readValue(
+    args,
+    'idempotency-key',
+    ['IDEMPOTENCY_KEY', 'COTSEL_IDEMPOTENCY_KEY', 'GASLESS_IDEMPOTENCY_KEY'],
+    `base-sepolia-create-trade:${handoffId}`,
+  );
+}
+
 function buildTradePayload({ supplier, totalAmount, label }) {
   const logisticsAmount = totalAmount / 10n;
   const platformFeesAmount = totalAmount / 20n;
@@ -210,6 +225,18 @@ const amountInput =
   readValue(args, 'total-usdc', ['TRADE_TOTAL_USDC']);
 const totalAmount = parseUsdcAmount('trade total', amountInput, '1');
 const labelPrefix = readValue(args, 'label-prefix', ['TRADE_LABEL_PREFIX'], 'COTSEL-DASH-167');
+const gatewayBaseUrl = requireValue(args, 'gateway-url', [
+  'COTSEL_GATEWAY_URL',
+  'COTSEL_DASHBOARD_GATEWAY_URL',
+  'DASHBOARD_GATEWAY_BASE_URL',
+]);
+const serviceApiKey = requireEnvValue(args, 'service-api-key', 'COTSEL_SERVICE_API_KEY');
+const serviceApiSecret = requireEnvValue(args, 'service-api-secret', 'COTSEL_SERVICE_API_SECRET');
+const expiresMinutes = parsePositiveInt(
+  'expires minutes',
+  readValue(args, 'expires-minutes', ['GASLESS_EXPIRES_MINUTES']),
+  15,
+);
 
 if (chainId !== BASE_SEPOLIA_CHAIN_ID) {
   throw new Error(`This helper is for Base Sepolia only. Expected chain id 84532, got ${chainId}`);
@@ -228,11 +255,10 @@ if (
 }
 const usdc = new ethers.Contract(usdcAddress, USDC_ABI, provider);
 
-const [network, nativeBalance, usdcBalance, allowance] = await Promise.all([
+const [network, nativeBalance, usdcBalance] = await Promise.all([
   provider.getNetwork(),
   provider.getBalance(buyerAddress),
   usdc.balanceOf(buyerAddress),
-  usdc.allowance(buyerAddress, escrowAddress),
 ]);
 
 if (network.chainId !== BigInt(chainId)) {
@@ -245,19 +271,17 @@ if (usdcBalance < totalAmount) {
   );
 }
 
-if (nativeBalance === 0n) {
-  throw new Error('Buyer has no Base Sepolia ETH for gas');
-}
-
-console.log('Base Sepolia trade creation preflight');
+console.log('Base Sepolia gasless trade creation preflight');
 console.log(`buyer: ${buyerAddress}`);
 console.log(`supplier: ${supplier}`);
 console.log(`escrow: ${escrowAddress}`);
 console.log(`usdc: ${usdcAddress}`);
-console.log(`buyer ETH: ${ethers.formatEther(nativeBalance)}`);
+console.log(
+  `buyer ETH: ${ethers.formatEther(nativeBalance)} (not required for gasless buyer flow)`,
+);
 console.log(`buyer USDC: ${formatUsdc(usdcBalance)}`);
-console.log(`current allowance: ${formatUsdc(allowance)}`);
-console.log(`creating one trade at ${formatUsdc(totalAmount)} USDC`);
+console.log(`gateway: ${gatewayBaseUrl}`);
+console.log(`creating one gasless trade at ${formatUsdc(totalAmount)} USDC`);
 
 const buyerSDK = new BuyerSDK({
   rpc,
@@ -266,20 +290,44 @@ const buyerSDK = new BuyerSDK({
   escrowAddress,
   usdcAddress,
 });
+const gaslessClient = new GaslessSettlementClient({
+  rpc,
+  rpcFallbackUrls,
+  chainId,
+  escrowAddress,
+  usdcAddress,
+});
 
-const label = `${labelPrefix}-${new Date().toISOString()}`;
+const label = buildExecutionLabel(labelPrefix);
 const payload = buildTradePayload({ supplier, totalAmount, label });
+const handoffId = buildHandoffId(args, label);
+const idempotencyKey = buildIdempotencyKey(args, handoffId);
+const expiresAt = new Date(Date.now() + expiresMinutes * 60 * 1000);
 
-console.log('\nCreating trade...');
-const result = await buyerSDK.createTrade(payload, buyerSigner);
+console.log('\nBuilding gasless create-trade execution request...');
+const request = await buyerSDK.createGaslessTradeExecutionRequest(payload, buyerSigner, {
+  handoffId,
+  expiresAt,
+});
 
-console.log('\nCreated trade:');
+console.log('Submitting gasless create-trade execution...');
+const result = await gaslessClient.submitCreateTradeExecution(request, {
+  baseUrl: gatewayBaseUrl,
+  idempotencyKey,
+  serviceAuth: {
+    apiKey: serviceApiKey,
+    apiSecret: serviceApiSecret,
+  },
+});
+
+console.log('\nSubmitted gasless trade execution:');
 console.log(
   JSON.stringify(
     {
-      tradeId: result.tradeId ?? null,
-      txHash: result.txHash,
-      blockNumber: result.blockNumber,
+      result,
+      handoffId,
+      idempotencyKey,
+      expiresAt: expiresAt.toISOString(),
       buyer: buyerAddress,
       supplier,
       totalUsdc: formatUsdc(totalAmount),

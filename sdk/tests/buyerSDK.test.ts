@@ -4,7 +4,6 @@
 import { BuyerSDK } from '../src/modules/buyerSDK';
 import type { ethers } from 'ethers';
 import { Interface } from 'ethers';
-import { IERC20__factory } from '../src/types/typechain-types/factories/@openzeppelin/contracts/token/ERC20/IERC20__factory';
 import { TEST_CONFIG, assertRequiredEnv, getBuyerSigner, hasRequiredEnv } from './setup';
 import { SponsoredAction } from '../src/types/trade';
 import { GaslessSettlementClient } from '../src/modules/gaslessSettlementClient';
@@ -69,8 +68,6 @@ function makeSdkUnit() {
     interface: TRADE_LOCKED_INTERFACE,
     getAuthorizationNonce: jest.fn().mockResolvedValue(9n),
   } as unknown as BuyerContractConnector;
-  jest.spyOn(sdk, 'getUSDCAllowance').mockResolvedValue(1_000_000n);
-  jest.spyOn(sdk, 'getBuyerNonce').mockResolvedValue(7n);
   jest
     .spyOn(sdk, 'getTreasuryAddress')
     .mockResolvedValue('0x3000000000000000000000000000000000000003');
@@ -113,16 +110,6 @@ describe('BuyerSDK unit', () => {
     ).rejects.toThrow('wrong network');
   });
 
-  test('approveUSDC should reject signer network mismatches', async () => {
-    const { sdk } = makeSdkUnit();
-    const { signer, provider } = makeBuyerSigner();
-    const connectSpy = jest.spyOn(IERC20__factory, 'connect');
-    provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
-
-    await expect(sdk.approveUSDC(1000000n, signer)).rejects.toThrow('wrong network');
-    expect(connectSpy).not.toHaveBeenCalled();
-  });
-
   test('createGaslessTradeAuthorization builds typed authorization from on-chain nonce', async () => {
     const { sdk } = makeSdkUnit();
     const { signer } = makeBuyerSigner();
@@ -149,6 +136,12 @@ describe('BuyerSDK unit', () => {
       deadline: 123456,
       signature: `0x${'4'.repeat(130)}`,
     });
+  });
+
+  test('getBuyerNonce remains a deprecated alias for authorization nonce', async () => {
+    const { sdk } = makeSdkUnit();
+
+    await expect(sdk.getBuyerNonce('0x2222222222222222222222222222222222222222')).resolves.toBe(9n);
   });
 
   test('createUsdcReceiveAuthorization targets escrow and splits EIP-3009 signature', async () => {
@@ -423,6 +416,34 @@ describe('BuyerSDK unit', () => {
     expect(connect).not.toHaveBeenCalled();
   });
 
+  test('approveUSDC should reject with the gasless migration guard', async () => {
+    const { sdk, connect } = makeSdkUnit();
+    const { signer } = makeBuyerSigner();
+
+    await expect(sdk.approveUSDC(1000000n, signer)).rejects.toThrow(
+      'Direct USDC approval was removed',
+    );
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  test('approveUSDC should reject signer network mismatches before migration guard', async () => {
+    const { sdk, connect } = makeSdkUnit();
+    const { signer, provider } = makeBuyerSigner();
+    provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
+
+    await expect(sdk.approveUSDC(1000000n, signer)).rejects.toThrow('wrong network');
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  test('getUSDCAllowance should reject with the gasless migration guard', async () => {
+    const { sdk, connect } = makeSdkUnit();
+
+    await expect(
+      sdk.getUSDCAllowance('0x2222222222222222222222222222222222222222'),
+    ).rejects.toThrow('Escrow USDC allowance is no longer used');
+    expect(connect).not.toHaveBeenCalled();
+  });
+
   test('openDispute should reject direct buyer-paid execution', async () => {
     const { sdk, contractWithSigner, connect } = makeSdkUnit();
     const { signer } = makeBuyerSigner();
@@ -481,21 +502,19 @@ describeIntegration('BuyerSDK integration smoke', () => {
     buyerSigner = getBuyerSigner();
   });
 
-  test('should get buyer nonce', async () => {
+  test('should get authorization nonce', async () => {
     const buyerAddress = await buyerSigner.getAddress();
-    const nonce = await buyerSDK.getBuyerNonce(buyerAddress);
+    const nonce = await buyerSDK.getAuthorizationNonce(buyerAddress);
 
     expect(typeof nonce).toBe('bigint');
     expect(nonce).toBeGreaterThanOrEqual(0n);
   });
 
-  test('should check USDC balance and allowance', async () => {
+  test('should check USDC balance', async () => {
     const buyerAddress = await buyerSigner.getAddress();
 
     const balance = await buyerSDK.getUSDCBalance(buyerAddress);
-    const allowance = await buyerSDK.getUSDCAllowance(buyerAddress);
 
     expect(typeof balance).toBe('bigint');
-    expect(typeof allowance).toBe('bigint');
   });
 });
