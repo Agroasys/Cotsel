@@ -476,11 +476,13 @@ export function loadConfig(): GatewayConfig {
       envBigInt('GATEWAY_GASLESS_MAX_NATIVE_COST_WEI', 100_000_000_000_000_000n) > 0n,
       'GATEWAY_GASLESS_MAX_NATIVE_COST_WEI must be > 0 when gasless execution is enabled',
     );
+    const gaslessLowBalanceAlertWei = envBigInt('GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI', 0n);
+    const gaslessMinExecutorBalanceWei = envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n);
     assert(
-      envBigInt('GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI', 0n) <=
-        envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n) ||
-        envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n) === 0n,
-      'GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI must be <= GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI when both are set',
+      gaslessLowBalanceAlertWei === 0n ||
+        gaslessMinExecutorBalanceWei === 0n ||
+        gaslessLowBalanceAlertWei >= gaslessMinExecutorBalanceWei,
+      'GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI must be >= GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI when both are set',
     );
     assert(
       envNumber('GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS', 300000) >= 1000,
