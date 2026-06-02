@@ -594,6 +594,7 @@ describe('gateway governance mutation routes contract', () => {
             revokedBy: null,
             reviewedAt: null,
             reviewedBy: null,
+            reviewStatus: 'active_unreviewed',
           },
           issuedAt: Date.now(),
           expiresAt: Date.now() + 60_000,

@@ -73,6 +73,7 @@ function buildAuthSession(overrides: Record<string, unknown> = {}) {
       revokedBy: null,
       reviewedAt: null,
       reviewedBy: null,
+      reviewStatus: 'none',
     },
     issuedAt: 1777353600,
     expiresAt: 1777357200,
@@ -159,6 +160,35 @@ describe('AuthSessionClient contract validation', () => {
     await expect(client.resolveSession('sess-1', 'req-1')).rejects.toMatchObject({
       statusCode: 503,
       code: 'UPSTREAM_UNAVAILABLE',
+    });
+  });
+
+  test('fails closed when auth omits break-glass review evidence status', async () => {
+    const breakGlassWithoutReviewStatus = {
+      active: false,
+      role: null,
+      expiresAt: null,
+      grantedAt: null,
+      grantedBy: null,
+      reason: null,
+      revokedAt: null,
+      revokedBy: null,
+      reviewedAt: null,
+      reviewedBy: null,
+    };
+    const malformedSession = buildAuthSession({ breakGlass: breakGlassWithoutReviewStatus });
+    global.fetch = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: malformedSession }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const client = createAuthSessionClient(baseConfig);
+    await expect(client.resolveSession('sess-1', 'req-1')).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: 'Auth service returned an invalid session payload',
     });
   });
 });

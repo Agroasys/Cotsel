@@ -68,6 +68,9 @@ function governanceActionParams(action: GovernanceActionRecord): unknown[] {
       breakGlassActive: action.audit.breakGlassActive ?? false,
       breakGlassReason: action.audit.breakGlassReason ?? null,
       breakGlassExpiresAt: action.audit.breakGlassExpiresAt ?? null,
+      breakGlassReviewedAt: action.audit.breakGlassReviewedAt ?? null,
+      breakGlassReviewedBy: action.audit.breakGlassReviewedBy ?? null,
+      breakGlassReviewStatus: action.audit.breakGlassReviewStatus ?? null,
     }),
     action.finalSignerWallet ?? null,
     action.verificationState ??

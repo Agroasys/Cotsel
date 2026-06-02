@@ -21,6 +21,12 @@ export type SignerActionClass =
   | 'treasury_close'
   | 'compliance_sensitive'
   | 'emergency_admin';
+export type BreakGlassReviewStatus =
+  | 'none'
+  | 'active_unreviewed'
+  | 'revoked_unreviewed'
+  | 'expired_unreviewed'
+  | 'reviewed';
 
 export interface SignerAuthorization {
   bindingId: string;
@@ -44,6 +50,7 @@ export interface BreakGlassSessionContext {
   revokedBy: string | null;
   reviewedAt: string | null;
   reviewedBy: string | null;
+  reviewStatus: BreakGlassReviewStatus;
 }
 
 export interface AuthSession {
@@ -86,6 +93,13 @@ const SIGNER_ACTION_CLASSES: SignerActionClass[] = [
   'treasury_close',
   'compliance_sensitive',
   'emergency_admin',
+];
+const BREAK_GLASS_REVIEW_STATUSES: BreakGlassReviewStatus[] = [
+  'none',
+  'active_unreviewed',
+  'revoked_unreviewed',
+  'expired_unreviewed',
+  'reviewed',
 ];
 
 function buildUrl(baseUrl: string, pathname: string): string {
@@ -138,7 +152,8 @@ function isBreakGlassSessionContext(value: unknown): value is BreakGlassSessionC
     isStringOrNull(candidate.revokedAt) &&
     isStringOrNull(candidate.revokedBy) &&
     isStringOrNull(candidate.reviewedAt) &&
-    isStringOrNull(candidate.reviewedBy)
+    isStringOrNull(candidate.reviewedBy) &&
+    isKnownValue(BREAK_GLASS_REVIEW_STATUSES, candidate.reviewStatus)
   );
 }
 

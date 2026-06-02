@@ -127,6 +127,9 @@ export interface GovernanceActionAuditRecord {
   breakGlassActive?: boolean;
   breakGlassReason?: string | null;
   breakGlassExpiresAt?: string | null;
+  breakGlassReviewedAt?: string | null;
+  breakGlassReviewedBy?: string | null;
+  breakGlassReviewStatus?: string | null;
   finalSignerWallet?: string | null;
   finalSignerVerifiedAt?: string | null;
 }

@@ -15,6 +15,7 @@ import {
   UserSession,
   UserRole,
 } from '../types';
+import { resolveBreakGlassReviewStatus } from '../core/breakGlassReviewStatus';
 
 type SessionRow = Omit<
   UserSession,
@@ -140,6 +141,8 @@ function timestampIsoOrNull(value: Date | string | null | undefined): string | n
 function normalizeBreakGlassContext(row: SessionRow): BreakGlassSessionContext {
   const expiresAt = timestampIsoOrNull(row.breakGlassExpiresAt);
   const revokedAt = timestampIsoOrNull(row.breakGlassRevokedAt);
+  const reviewedAt = timestampIsoOrNull(row.breakGlassReviewedAt);
+  const grantedAt = timestampIsoOrNull(row.breakGlassGrantedAt);
   const active =
     row.breakGlassRole === 'admin' &&
     expiresAt !== null &&
@@ -150,13 +153,21 @@ function normalizeBreakGlassContext(row: SessionRow): BreakGlassSessionContext {
     active,
     role: row.breakGlassRole ?? null,
     expiresAt,
-    grantedAt: timestampIsoOrNull(row.breakGlassGrantedAt),
+    grantedAt,
     grantedBy: row.breakGlassGrantedBy ?? null,
     reason: row.breakGlassReason ?? null,
     revokedAt,
     revokedBy: row.breakGlassRevokedBy ?? null,
-    reviewedAt: timestampIsoOrNull(row.breakGlassReviewedAt),
+    reviewedAt,
     reviewedBy: row.breakGlassReviewedBy ?? null,
+    reviewStatus: resolveBreakGlassReviewStatus({
+      active,
+      role: row.breakGlassRole ?? null,
+      expiresAt,
+      grantedAt,
+      revokedAt,
+      reviewedAt,
+    }),
   };
 }
 

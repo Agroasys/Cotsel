@@ -46,6 +46,7 @@ const INACTIVE_BREAK_GLASS_CONTEXT: BreakGlassSessionContext = {
   revokedBy: null,
   reviewedAt: null,
   reviewedBy: null,
+  reviewStatus: 'none',
 };
 
 export interface GatewayPrincipal {
@@ -68,6 +69,9 @@ export interface SignerPolicyEvaluation {
   breakGlassActive: boolean;
   breakGlassReason: string | null;
   breakGlassExpiresAt: string | null;
+  breakGlassReviewedAt?: string | null;
+  breakGlassReviewedBy?: string | null;
+  breakGlassReviewStatus?: BreakGlassSessionContext['reviewStatus'] | null;
 }
 
 export interface AuthorizedSignerBinding extends SignerAuthorization {
@@ -360,6 +364,9 @@ export function requireAuthorizedSignerBinding(
       breakGlassActive: policy.breakGlassActive,
       breakGlassReason: policy.breakGlassReason,
       breakGlassExpiresAt: policy.breakGlassExpiresAt,
+      breakGlassReviewedAt: policy.breakGlassReviewedAt ?? null,
+      breakGlassReviewedBy: policy.breakGlassReviewedBy ?? null,
+      breakGlassReviewStatus: policy.breakGlassReviewStatus ?? null,
     });
   }
 
@@ -404,6 +411,9 @@ export function evaluateSignerPolicy(
       breakGlassActive: false,
       breakGlassReason: null,
       breakGlassExpiresAt: null,
+      breakGlassReviewedAt: breakGlassContext.reviewedAt ?? null,
+      breakGlassReviewedBy: breakGlassContext.reviewedBy ?? null,
+      breakGlassReviewStatus: breakGlassContext.reviewStatus ?? null,
     };
   }
 
@@ -417,6 +427,9 @@ export function evaluateSignerPolicy(
       breakGlassActive: true,
       breakGlassReason: breakGlassContext.reason,
       breakGlassExpiresAt: breakGlassContext.expiresAt,
+      breakGlassReviewedAt: breakGlassContext.reviewedAt ?? null,
+      breakGlassReviewedBy: breakGlassContext.reviewedBy ?? null,
+      breakGlassReviewStatus: breakGlassContext.reviewStatus ?? null,
     };
   }
 
@@ -429,5 +442,8 @@ export function evaluateSignerPolicy(
     breakGlassActive: breakGlassContext.active,
     breakGlassReason: breakGlassContext.reason,
     breakGlassExpiresAt: breakGlassContext.expiresAt,
+    breakGlassReviewedAt: breakGlassContext.reviewedAt ?? null,
+    breakGlassReviewedBy: breakGlassContext.reviewedBy ?? null,
+    breakGlassReviewStatus: breakGlassContext.reviewStatus ?? null,
   };
 }

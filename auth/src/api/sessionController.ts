@@ -31,6 +31,7 @@ const INACTIVE_BREAK_GLASS_CONTEXT = {
   revokedBy: null,
   reviewedAt: null,
   reviewedBy: null,
+  reviewStatus: 'none',
 } as const;
 
 interface TrustedSessionExchangeBody {

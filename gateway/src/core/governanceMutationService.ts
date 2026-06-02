@@ -345,6 +345,9 @@ function buildAuditRecord(
     breakGlassActive: principal.session.breakGlass?.active ?? false,
     breakGlassReason: principal.session.breakGlass?.reason ?? null,
     breakGlassExpiresAt: principal.session.breakGlass?.expiresAt ?? null,
+    breakGlassReviewedAt: principal.session.breakGlass?.reviewedAt ?? null,
+    breakGlassReviewedBy: principal.session.breakGlass?.reviewedBy ?? null,
+    breakGlassReviewStatus: principal.session.breakGlass?.reviewStatus ?? null,
   };
 }
 
@@ -803,6 +806,9 @@ export class GovernanceMutationService {
         breakGlassActive: input.principal.session.breakGlass?.active ?? false,
         breakGlassReason: input.principal.session.breakGlass?.reason ?? null,
         breakGlassExpiresAt: input.principal.session.breakGlass?.expiresAt ?? null,
+        breakGlassReviewedAt: input.principal.session.breakGlass?.reviewedAt ?? null,
+        breakGlassReviewedBy: input.principal.session.breakGlass?.reviewedBy ?? null,
+        breakGlassReviewStatus: input.principal.session.breakGlass?.reviewStatus ?? null,
         idempotencyKey: input.idempotencyKey,
       },
     };
@@ -1151,6 +1157,9 @@ export class GovernanceMutationService {
         breakGlassActive: input.principal.session.breakGlass?.active ?? false,
         breakGlassReason: input.principal.session.breakGlass?.reason ?? null,
         breakGlassExpiresAt: input.principal.session.breakGlass?.expiresAt ?? null,
+        breakGlassReviewedAt: input.principal.session.breakGlass?.reviewedAt ?? null,
+        breakGlassReviewedBy: input.principal.session.breakGlass?.reviewedBy ?? null,
+        breakGlassReviewStatus: input.principal.session.breakGlass?.reviewStatus ?? null,
       },
     };
 

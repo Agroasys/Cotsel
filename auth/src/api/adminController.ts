@@ -20,6 +20,7 @@ import {
   UserProfile,
   UserRole,
 } from '../types';
+import { resolveBreakGlassReviewStatus } from '../core/breakGlassReviewStatus';
 import { assertWalletAddress, handleControllerError, requireAuthRole } from './controllerSupport';
 
 const VALID_BREAK_GLASS_BASE_ROLES: Exclude<UserRole, 'admin'>[] = ['buyer', 'supplier', 'oracle'];
@@ -182,6 +183,11 @@ function optionalAccountId(value: unknown): string | undefined {
 }
 
 function profilePayload(profile: UserProfile) {
+  const breakGlassActive =
+    profile.breakGlassRole === 'admin' &&
+    profile.breakGlassExpiresAt !== null &&
+    profile.breakGlassExpiresAt.getTime() > Date.now() &&
+    profile.breakGlassRevokedAt === null;
   return {
     userId: profile.id,
     accountId: profile.accountId,
@@ -192,11 +198,7 @@ function profilePayload(profile: UserProfile) {
     orgId: profile.orgId,
     active: profile.active,
     breakGlass: {
-      active:
-        profile.breakGlassRole === 'admin' &&
-        profile.breakGlassExpiresAt !== null &&
-        profile.breakGlassExpiresAt.getTime() > Date.now() &&
-        profile.breakGlassRevokedAt === null,
+      active: breakGlassActive,
       role: profile.breakGlassRole,
       expiresAt: profile.breakGlassExpiresAt?.toISOString() ?? null,
       grantedAt: profile.breakGlassGrantedAt?.toISOString() ?? null,
@@ -206,6 +208,14 @@ function profilePayload(profile: UserProfile) {
       revokedBy: profile.breakGlassRevokedBy,
       reviewedAt: profile.breakGlassReviewedAt?.toISOString() ?? null,
       reviewedBy: profile.breakGlassReviewedBy,
+      reviewStatus: resolveBreakGlassReviewStatus({
+        active: breakGlassActive,
+        role: profile.breakGlassRole,
+        expiresAt: profile.breakGlassExpiresAt?.toISOString() ?? null,
+        grantedAt: profile.breakGlassGrantedAt?.toISOString() ?? null,
+        revokedAt: profile.breakGlassRevokedAt?.toISOString() ?? null,
+        reviewedAt: profile.breakGlassReviewedAt?.toISOString() ?? null,
+      }),
     },
   };
 }
