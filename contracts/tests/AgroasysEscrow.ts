@@ -314,7 +314,7 @@ describe('AgroasysEscrow', function () {
     const supplierFirstTranche = ethers.parseUnits('40000', 6);
     const supplierSecondTranche = ethers.parseUnits('60000', 6);
 
-    const nonce = await escrow.getBuyerNonce(buyer.address);
+    const nonce = await escrow.getAuthorizationNonce(buyer.address);
     const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
     const deadline = BigInt(blockTimestamp + 3600);
 

@@ -3,17 +3,8 @@
  */
 import { BuyerSDK } from '../src/modules/buyerSDK';
 import type { Signer } from 'ethers';
-import {
-  TEST_CONFIG,
-  assertRequiredEnv,
-  getBuyerSigner,
-  generateTestRicardianHash,
-  hasRequiredEnv,
-  parseUSDC,
-} from './setup';
+import { TEST_CONFIG, assertRequiredEnv, getBuyerSigner, hasRequiredEnv } from './setup';
 
-const DEFAULT_SUPPLIER_ADDRESS = '0x4aF052cB4B3eC7b58322548021bF254Cc4c80b2c';
-const SUPPLIER_ADDRESS = process.env.SUPPLIER_ADDRESS ?? DEFAULT_SUPPLIER_ADDRESS;
 const runManualE2E = process.env.RUN_E2E === 'true';
 const describeIntegration = runManualE2E && hasRequiredEnv ? describe : describe.skip;
 
@@ -52,52 +43,5 @@ describeIntegration('BuyerSDK', () => {
     expect(balance).toBeGreaterThanOrEqual(0n);
 
     console.log(`USDC balance: ${balance}`);
-  });
-
-  test('should reject direct buyer-paid trade creation', async () => {
-    const tradeParams = {
-      supplier: SUPPLIER_ADDRESS,
-      totalAmount: parseUSDC('10000'),
-      logisticsAmount: parseUSDC('1000'),
-      platformFeesAmount: parseUSDC('500'),
-      supplierFirstTranche: parseUSDC('4000'),
-      supplierSecondTranche: parseUSDC('4500'),
-      ricardianHash: generateTestRicardianHash('test1'),
-    };
-
-    await expect(buyerSDK.createTrade(tradeParams, buyerSigner)).rejects.toThrow(
-      'Direct buyer-paid createTrade was removed',
-    );
-  });
-
-  test('should fail to create a trade with invalid supplier address', async () => {
-    const invalidTradeParams = {
-      supplier: '0xINVALID_SUPPLIER_ADDRESS',
-      totalAmount: parseUSDC('10000'),
-      logisticsAmount: parseUSDC('1000'),
-      platformFeesAmount: parseUSDC('500'),
-      supplierFirstTranche: parseUSDC('4000'),
-      supplierSecondTranche: parseUSDC('4500'),
-      ricardianHash: generateTestRicardianHash('invalid-supplier-test'),
-    };
-    await expect(buyerSDK.createTrade(invalidTradeParams, buyerSigner)).rejects.toThrow();
-  });
-
-  test('should reject direct buyer-paid dispute opening', async () => {
-    await expect(buyerSDK.openDispute(1n, buyerSigner)).rejects.toThrow(
-      'Direct buyer-paid openDispute was removed',
-    );
-  });
-
-  test('should reject direct buyer-paid locked timeout cancellation', async () => {
-    await expect(buyerSDK.cancelLockedTradeAfterTimeout(1n, buyerSigner)).rejects.toThrow(
-      'Direct buyer-paid cancelLockedTradeAfterTimeout was removed',
-    );
-  });
-
-  test('should reject direct buyer-paid in-transit timeout refund', async () => {
-    await expect(buyerSDK.refundInTransitAfterTimeout(1n, buyerSigner)).rejects.toThrow(
-      'Direct buyer-paid refundInTransitAfterTimeout was removed',
-    );
   });
 });

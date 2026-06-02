@@ -99,7 +99,6 @@ export interface AgroasysEscrowInterface extends Interface {
       | "finalizeAfterDisputeWindow"
       | "finalizeAfterDisputeWindowWithAuthorization"
       | "getAuthorizationNonce"
-      | "getBuyerNonce"
       | "getNextTradeId"
       | "governanceApprovals"
       | "governanceTimelock"
@@ -389,10 +388,6 @@ export interface AgroasysEscrowInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "getAuthorizationNonce",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "getBuyerNonce",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
@@ -747,10 +742,6 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "getAuthorizationNonce",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "getBuyerNonce",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -2092,8 +2083,6 @@ export interface AgroasysEscrow extends BaseContract {
     "view"
   >;
 
-  getBuyerNonce: TypedContractMethod<[buyer: AddressLike], [bigint], "view">;
-
   getNextTradeId: TypedContractMethod<[], [bigint], "view">;
 
   governanceApprovals: TypedContractMethod<[], [bigint], "view">;
@@ -2553,9 +2542,6 @@ export interface AgroasysEscrow extends BaseContract {
   getFunction(
     nameOrSignature: "getAuthorizationNonce"
   ): TypedContractMethod<[user: AddressLike], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "getBuyerNonce"
-  ): TypedContractMethod<[buyer: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "getNextTradeId"
   ): TypedContractMethod<[], [bigint], "view">;

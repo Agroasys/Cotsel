@@ -1653,8 +1653,4 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     function getNextTradeId() external view returns (uint256) {
         return tradeCounter;
     }
-
-    function getBuyerNonce(address buyer) external view returns (uint256) {
-        return authorizationNonces[buyer];
-    }
 }

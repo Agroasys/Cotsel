@@ -193,15 +193,15 @@ Relevant runtime surfaces:
 ### 5. Historical operator wallet path in Dash
 
 - Connected-mode wallet usage currently flows through `src/lib/integrations/web3layer-sdk.ts`.
-- That adapter dynamically imports `@agroasys/sdk` and expects `BuyerSDK` plus `web3Wallet`.
-- The repo-local SDK exports `web3Wallet` only from the legacy entrypoint and backs it with a deprecated `Web3Auth` wrapper.
+- That adapter imports `@agroasys/sdk/buyer` and expects `BuyerSDK` plus `createSignerFromEip1193Provider`.
+- The SDK also exposes the Web3Auth-backed `web3Wallet` helper for non-crypto-native buyer signer bootstrap.
 - Session bootstrap prefers platform session exchange when configured, but falls back to a legacy wallet-signed admin bootstrap path when it is not.
 
 Relevant runtime surfaces:
 
 - `Cotsel-Dash/src/lib/integrations/web3layer-sdk.ts`
 - `Cotsel-Dash/src/lib/api/auth-session.ts`
-- `sdk/src/legacy.ts`
+- `sdk/src/wallet/eip1193.ts`
 - `sdk/src/wallet/wallet-provider.ts`
 
 ### 6. Suitability of the historical wallet path for the target operator model

@@ -24,12 +24,6 @@
       "require": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./legacy": {
-      "types": "./dist/legacy.d.ts",
-      "import": "./dist/legacy.js",
-      "require": "./dist/legacy.js",
-      "default": "./dist/legacy.js"
-    },
     "./buyer": {
       "types": "./dist/buyer.d.ts",
       "import": "./dist/buyer.js",
@@ -47,9 +41,6 @@
     "*": {
       "buyer": [
         "dist/buyer.d.ts"
-      ],
-      "legacy": [
-        "dist/legacy.d.ts"
       ],
       "rpc/failoverProvider": [
         "dist/rpc/failoverProvider.d.ts"

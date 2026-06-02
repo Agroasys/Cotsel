@@ -56,7 +56,19 @@ class FakeEip1193Provider {
 
 describe('Web3Auth-compatible signer validation', () => {
   afterEach(() => {
+    jest.dontMock('@web3auth/modal');
+    jest.resetModules();
     jest.restoreAllMocks();
+  });
+
+  test('SDK main entrypoint does not load Web3Auth modal during import', async () => {
+    jest.doMock('@web3auth/modal', () => {
+      throw new Error('Web3Auth modal should only load when web3Wallet.connect() is called');
+    });
+
+    const sdk = await import('../src/index');
+
+    expect(sdk.web3Wallet).toBeDefined();
   });
 
   test('createSignerFromEip1193Provider signs through personal_sign', async () => {

@@ -144,13 +144,13 @@ Timelock-based admin addition proposal:
 
 **Public/External Functions:**
 
-1. **`createTrade(supplier, totalAmount, logisticsAmount, platformFeesAmount, supplierFirstTranche, supplierSecondTranche, ricardianHash, buyerNonce, deadline, signature)`**
-   - Creates new trade with buyer signature verification using buyer-scoped nonce
-   - Locks funds in escrow (USDC transferFrom buyer)
+1. **`createTradeWithAuthorization(buyer, supplier, totalAmount, logisticsAmount, platformFeesAmount, supplierFirstTranche, supplierSecondTranche, ricardianHash, authorizationNonce, authorizationDeadline, authorizationSignature, usdcAuthorization)`**
+   - Creates new trade with buyer typed-data authorization and USDC receive authorization
+   - Pulls USDC into escrow atomically through the token authorization
    - Returns: `tradeId`
    - Emits: `TradeLocked`
-   - Access: Anyone (msg.sender becomes buyer), blocked if paused
-   - Requires: Valid signature with matching nonce and deadline, non-zero addresses, amounts matching breakdown, USDC approval
+   - Access: `onlyRelayerOrAdmin`, blocked if paused
+   - Requires: Valid signatures with matching nonce/deadline, non-zero addresses, and amounts matching the breakdown
 
 2. **`releaseFundsStage1(tradeId)`**
    - Releases first stage funds after BOL verification
@@ -166,37 +166,37 @@ Timelock-based admin addition proposal:
    - Emits: `ArrivalConfirmed`
    - Access: `onlyOracle`, `onlyOracleActive`, `whenNotPaused`
 
-4. **`openDispute(tradeId)`**
-   - Buyer opens dispute within 24-hour window
+4. **`openDisputeWithAuthorization(tradeId, authorizationNonce, authorizationDeadline, authorizationSignature)`**
+   - Buyer opens dispute within 24-hour window through a relayed authorization
    - Freezes all remaining funds in escrow
    - Changes status: ARRIVAL_CONFIRMED to FROZEN
-   - Emits: `DisputeOpenedByBuyer`
-   - Access: Trade buyer only (`whenNotPaused`)
-   - Requires: Called before `arrivalTimestamp + 24 hours`
+   - Emits: `DisputeOpenedByBuyer`, `RelayedActionExecuted`
+   - Access: `onlyRelayerOrAdmin`, `whenNotPaused`
+   - Requires: Valid buyer authorization before `arrivalTimestamp + 24 hours`
 
 5. **`finalizeAfterDisputeWindow(tradeId)`**
-   - Finalizes trade after 24h dispute window expires (permissionless)
+   - Finalizes trade after 24h dispute window expires
    - Pays: supplier (second tranche only)
    - Changes status: ARRIVAL_CONFIRMED to CLOSED
    - Emits: `FinalTrancheReleased`
-   - Access: Anyone (`whenNotPaused`, permissionless to avoid funds getting stuck)
+   - Access: `onlyAdmin`, `whenNotPaused`
    - Requires: Called after `arrivalTimestamp + 24 hours`
 
-6. **`cancelLockedTradeAfterTimeout(tradeId)`**
+6. **`cancelLockedTradeAfterTimeoutWithAuthorization(tradeId, authorizationNonce, authorizationDeadline, authorizationSignature)`**
    - Buyer escape hatch when a trade remains `LOCKED` past `LOCK_TIMEOUT`
    - Transfers only refundable supplier principal directly to the buyer wallet
    - Keeps logistics fees, platform fees, and the fixed settlement fee claimable by treasury
    - Changes status: LOCKED to CLOSED
-   - Emits: `TradeCancelledAfterLockTimeout`, `BuyerRefundTransferred`
-   - Access: Trade buyer only
+   - Emits: `TradeCancelledAfterLockTimeout`, `BuyerRefundTransferred`, `RelayedActionExecuted`
+   - Access: `onlyRelayerOrAdmin`, `whenNotPaused`
 
-7. **`refundInTransitAfterTimeout(tradeId)`**
+7. **`refundInTransitAfterTimeoutWithAuthorization(tradeId, authorizationNonce, authorizationDeadline, authorizationSignature)`**
    - Buyer escape hatch when trade remains `IN_TRANSIT` past `IN_TRANSIT_TIMEOUT`
    - Transfers only remaining escrowed principal (`supplierSecondTranche`) directly to the buyer wallet
    - Does not refund logistics fees, platform fees, or the fixed settlement fee
    - Changes status: IN_TRANSIT to CLOSED
-   - Emits: `InTransitTimeoutRefunded`, `BuyerRefundTransferred`
-   - Access: Trade buyer only
+   - Emits: `InTransitTimeoutRefunded`, `BuyerRefundTransferred`, `RelayedActionExecuted`
+   - Access: `onlyRelayerOrAdmin`, `whenNotPaused`
 
 8. **`proposeDisputeSolution(tradeId, disputeStatus)`**
    - Creates dispute resolution proposal
@@ -256,15 +256,9 @@ Timelock-based admin addition proposal:
 - Returns: `tradeCounter`
 - Access: View function (anyone)
 
-17. **`getBuyerNonce(buyer)`**
-
-- Returns the current nonce for a buyer address
-- Returns: `nonces[buyer]`
-- Access: View function (anyone)
-
 **Governance Functions:**
 
-18. **`proposeOracleUpdate(newOracle)`**
+17. **`proposeOracleUpdate(newOracle)`**
     - Creates timelock-based oracle rotation proposal
     - First admin approval automatically counted
     - Returns: `proposalId`
@@ -272,24 +266,24 @@ Timelock-based admin addition proposal:
     - Access: `onlyAdmin`
     - Requires: Configured admin approval quorum, with deployment enforcing a minimum quorum of 2
 
-19. **`approveOracleUpdate(proposalId)`**
+18. **`approveOracleUpdate(proposalId)`**
     - Adds admin approval to oracle update proposal
     - Emits: `OracleUpdateApproved`
     - Access: `onlyAdmin`
     - Requires: Not already approved by this admin, proposal not executed
 
-20. **`executeOracleUpdate(proposalId)`**
+19. **`executeOracleUpdate(proposalId)`**
     - Executes approved oracle update after timelock or emergency fast-track
     - Emits: `OracleUpdated`
     - Access: `onlyAdmin`
     - Requires: Sufficient approvals; timelock elapsed for normal proposals, immediate execution for emergency fast-track proposals
 
-21. **`cancelExpiredOracleUpdateProposal(proposalId)`**
+20. **`cancelExpiredOracleUpdateProposal(proposalId)`**
     - Cancels expired oracle update proposal
     - Emits: `OracleUpdateProposalExpiredCancelled`
     - Access: `onlyAdmin`
 
-22. **`proposeAddAdmin(newAdmin)`**
+21. **`proposeAddAdmin(newAdmin)`**
     - Creates timelock-based admin addition proposal
     - First admin approval automatically counted
     - Returns: `proposalId`
@@ -297,24 +291,24 @@ Timelock-based admin addition proposal:
     - Access: `onlyAdmin`
     - Requires: Configured admin approval quorum, with deployment enforcing a minimum quorum of 2
 
-23. **`approveAddAdmin(proposalId)`**
+22. **`approveAddAdmin(proposalId)`**
     - Adds admin approval to admin addition proposal
     - Emits: `AdminAddApproved`
     - Access: `onlyAdmin`
     - Requires: Not already approved by this admin, proposal not executed
 
-24. **`executeAddAdmin(proposalId)`**
+23. **`executeAddAdmin(proposalId)`**
     - Executes approved admin addition after timelock expires
     - Emits: `AdminAdded`
     - Access: `onlyAdmin`
     - Requires: Sufficient approvals, timelock elapsed (24h)
 
-25. **`cancelExpiredAddAdminProposal(proposalId)`**
+24. **`cancelExpiredAddAdminProposal(proposalId)`**
     - Cancels expired admin-add proposal
     - Emits: `AdminAddProposalExpiredCancelled`
     - Access: `onlyAdmin`
 
-26. **`governanceApprovals()`**
+25. **`governanceApprovals()`**
     - Returns minimum approvals required for governance operations
     - Returns: `max(2, requiredApprovals)` for extra security
     - Access: View function (anyone)

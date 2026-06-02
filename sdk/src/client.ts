@@ -130,13 +130,6 @@ export class Client {
     }
   }
 
-  /**
-   * @deprecated Use `getAuthorizationNonce(address)`.
-   */
-  async getBuyerNonce(buyerAddress: string): Promise<bigint> {
-    return this.getAuthorizationNonce(buyerAddress);
-  }
-
   async getTotalClaimableUsdc(): Promise<bigint> {
     try {
       return await this.contract.totalClaimableUsdc();

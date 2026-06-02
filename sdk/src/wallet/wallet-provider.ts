@@ -1,23 +1,20 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-/**
- * @deprecated Agroasys should own embedded-wallet bootstrap and signer
- * injection. This helper remains only for local demos and standalone SDK
- * experiments.
- */
-import { Web3Auth, WEB3AUTH_NETWORK } from '@web3auth/modal';
 import { ethers } from 'ethers';
 import { createSignerFromEip1193Provider } from './eip1193';
 
-type Web3AuthNetwork = (typeof WEB3AUTH_NETWORK)[keyof typeof WEB3AUTH_NETWORK];
+type Web3AuthModalModule = typeof import('@web3auth/modal');
+type Web3AuthNetworkMap = Web3AuthModalModule['WEB3AUTH_NETWORK'];
+type Web3AuthNetwork = Web3AuthNetworkMap[keyof Web3AuthNetworkMap];
+type Web3AuthInstance = InstanceType<Web3AuthModalModule['Web3Auth']>;
 
 type WalletProviderConfig = {
   clientId: string;
   network: Web3AuthNetwork;
 };
 
-function loadWalletProviderConfig(): WalletProviderConfig {
+function loadWalletProviderConfig(networks: Web3AuthNetworkMap): WalletProviderConfig {
   const clientId = process.env.CLIENT_ID?.trim();
   if (!clientId) {
     throw new Error(
@@ -26,11 +23,11 @@ function loadWalletProviderConfig(): WalletProviderConfig {
   }
 
   const rawNetwork = (process.env.WEB3AUTH_NETWORK ?? 'SAPPHIRE_DEVNET').trim().toUpperCase();
-  const network = (WEB3AUTH_NETWORK as Record<string, Web3AuthNetwork>)[rawNetwork];
+  const network = (networks as Record<string, Web3AuthNetwork>)[rawNetwork];
 
   if (!network) {
     throw new Error(
-      `Unsupported WEB3AUTH_NETWORK="${rawNetwork}". Valid options: ${Object.keys(WEB3AUTH_NETWORK).join(', ')}`,
+      `Unsupported WEB3AUTH_NETWORK="${rawNetwork}". Valid options: ${Object.keys(networks).join(', ')}`,
     );
   }
 
@@ -38,7 +35,7 @@ function loadWalletProviderConfig(): WalletProviderConfig {
 }
 
 class Web3AuthWrapper {
-  private web3auth: Web3Auth | null = null;
+  private web3auth: Web3AuthInstance | null = null;
   private signer: ethers.Signer | null = null;
 
   async connect(): Promise<ethers.Signer> {
@@ -46,7 +43,8 @@ class Web3AuthWrapper {
       return this.signer;
     }
 
-    const config = loadWalletProviderConfig();
+    const { Web3Auth, WEB3AUTH_NETWORK } = await import('@web3auth/modal');
+    const config = loadWalletProviderConfig(WEB3AUTH_NETWORK);
 
     this.web3auth = new Web3Auth({
       clientId: config.clientId,

@@ -3,7 +3,6 @@
  */
 import { BuyerSDK } from '../src/modules/buyerSDK';
 import type { ethers } from 'ethers';
-import { Interface } from 'ethers';
 import { TEST_CONFIG, assertRequiredEnv, getBuyerSigner, hasRequiredEnv } from './setup';
 import { SponsoredAction } from '../src/types/trade';
 import { GaslessSettlementClient } from '../src/modules/gaslessSettlementClient';
@@ -18,21 +17,10 @@ const UNIT_CONFIG = {
   usdcAddress: '0x2000000000000000000000000000000000000002',
 };
 
-const TRADE_LOCKED_INTERFACE = new Interface([
-  'event TradeLocked(uint256 indexed tradeId,address indexed buyer,address indexed supplier,uint256 totalAmount,uint256 logisticsAmount,uint256 platformFeesAmount,uint256 supplierFirstTranche,uint256 supplierSecondTranche,bytes32 ricardianHash)',
-]);
-
-type MockContractWithSigner = {
-  openDispute: jest.Mock;
-  cancelLockedTradeAfterTimeout: jest.Mock;
-  refundInTransitAfterTimeout: jest.Mock;
-};
-
 type BuyerSignerLike = Pick<ethers.Signer, 'getAddress' | 'signMessage' | 'provider'>;
 type TypedBuyerSignerLike = BuyerSignerLike & Pick<ethers.Signer, 'signTypedData'>;
 type BuyerSdkContract = BuyerSDK['contract'];
-type BuyerContractConnector = Pick<BuyerSdkContract, 'connect' | 'interface'>;
-type BuyerWriteInvocation = (sdk: BuyerSDK, signer: ethers.Signer) => Promise<unknown>;
+type BuyerContractReader = Pick<BuyerSdkContract, 'getAuthorizationNonce'>;
 
 function makeBuyerSigner(address = '0x2222222222222222222222222222222222222222'): {
   signer: ethers.Signer;
@@ -56,58 +44,16 @@ function makeBuyerSigner(address = '0x2222222222222222222222222222222222222222')
 function makeSdkUnit() {
   const sdk = new BuyerSDK(UNIT_CONFIG);
 
-  const contractWithSigner: MockContractWithSigner = {
-    openDispute: jest.fn(),
-    cancelLockedTradeAfterTimeout: jest.fn(),
-    refundInTransitAfterTimeout: jest.fn(),
-  };
-
-  const connect = jest.fn().mockReturnValue(contractWithSigner);
-  (sdk as unknown as { contract: BuyerContractConnector }).contract = {
-    connect,
-    interface: TRADE_LOCKED_INTERFACE,
+  (sdk as unknown as { contract: BuyerContractReader }).contract = {
     getAuthorizationNonce: jest.fn().mockResolvedValue(9n),
-  } as unknown as BuyerContractConnector;
-  jest
-    .spyOn(sdk, 'getTreasuryAddress')
-    .mockResolvedValue('0x3000000000000000000000000000000000000003');
+  } as unknown as BuyerContractReader;
 
-  return { sdk, contractWithSigner, connect };
+  return { sdk };
 }
-
-const networkMismatchCases: Array<[string, BuyerWriteInvocation]> = [
-  ['openDispute', (sdk, signer) => sdk.openDispute(10n, signer)],
-  [
-    'cancelLockedTradeAfterTimeout',
-    (sdk, signer) => sdk.cancelLockedTradeAfterTimeout(11n, signer),
-  ],
-  ['refundInTransitAfterTimeout', (sdk, signer) => sdk.refundInTransitAfterTimeout(12n, signer)],
-];
 
 describe('BuyerSDK unit', () => {
   afterEach(() => {
     jest.restoreAllMocks();
-  });
-
-  test('createTrade should reject signer network mismatches', async () => {
-    const { sdk } = makeSdkUnit();
-    const { signer, provider } = makeBuyerSigner();
-    provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
-
-    await expect(
-      sdk.createTrade(
-        {
-          supplier: '0x1111111111111111111111111111111111111111',
-          totalAmount: 1000000n,
-          logisticsAmount: 0n,
-          platformFeesAmount: 0n,
-          supplierFirstTranche: 400000n,
-          supplierSecondTranche: 600000n,
-          ricardianHash: `0x${'a'.repeat(64)}`,
-        },
-        signer,
-      ),
-    ).rejects.toThrow('wrong network');
   });
 
   test('createGaslessTradeAuthorization builds typed authorization from on-chain nonce', async () => {
@@ -136,12 +82,6 @@ describe('BuyerSDK unit', () => {
       deadline: 123456,
       signature: `0x${'4'.repeat(130)}`,
     });
-  });
-
-  test('getBuyerNonce remains a deprecated alias for authorization nonce', async () => {
-    const { sdk } = makeSdkUnit();
-
-    await expect(sdk.getBuyerNonce('0x2222222222222222222222222222222222222222')).resolves.toBe(9n);
   });
 
   test('createUsdcReceiveAuthorization targets escrow and splits EIP-3009 signature', async () => {
@@ -394,102 +334,6 @@ describe('BuyerSDK unit', () => {
     ).rejects.toThrow('idempotencyKey must be a non-empty string');
     expect(fetchImpl).not.toHaveBeenCalled();
   });
-
-  test('createTrade should reject direct buyer-paid execution', async () => {
-    const { sdk, connect } = makeSdkUnit();
-    const { signer } = makeBuyerSigner();
-
-    await expect(
-      sdk.createTrade(
-        {
-          supplier: '0x1111111111111111111111111111111111111111',
-          totalAmount: 1000000n,
-          logisticsAmount: 0n,
-          platformFeesAmount: 0n,
-          supplierFirstTranche: 400000n,
-          supplierSecondTranche: 600000n,
-          ricardianHash: `0x${'a'.repeat(64)}`,
-        },
-        signer,
-      ),
-    ).rejects.toThrow('Direct buyer-paid createTrade was removed');
-    expect(connect).not.toHaveBeenCalled();
-  });
-
-  test('approveUSDC should reject with the gasless migration guard', async () => {
-    const { sdk, connect } = makeSdkUnit();
-    const { signer } = makeBuyerSigner();
-
-    await expect(sdk.approveUSDC(1000000n, signer)).rejects.toThrow(
-      'Direct USDC approval was removed',
-    );
-    expect(connect).not.toHaveBeenCalled();
-  });
-
-  test('approveUSDC should reject signer network mismatches before migration guard', async () => {
-    const { sdk, connect } = makeSdkUnit();
-    const { signer, provider } = makeBuyerSigner();
-    provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
-
-    await expect(sdk.approveUSDC(1000000n, signer)).rejects.toThrow('wrong network');
-    expect(connect).not.toHaveBeenCalled();
-  });
-
-  test('getUSDCAllowance should reject with the gasless migration guard', async () => {
-    const { sdk, connect } = makeSdkUnit();
-
-    await expect(
-      sdk.getUSDCAllowance('0x2222222222222222222222222222222222222222'),
-    ).rejects.toThrow('Escrow USDC allowance is no longer used');
-    expect(connect).not.toHaveBeenCalled();
-  });
-
-  test('openDispute should reject direct buyer-paid execution', async () => {
-    const { sdk, contractWithSigner, connect } = makeSdkUnit();
-    const { signer } = makeBuyerSigner();
-
-    await expect(sdk.openDispute(10n, signer)).rejects.toThrow(
-      'Direct buyer-paid openDispute was removed',
-    );
-
-    expect(connect).not.toHaveBeenCalled();
-    expect(contractWithSigner.openDispute).not.toHaveBeenCalled();
-  });
-
-  test('cancelLockedTradeAfterTimeout should reject direct buyer-paid execution', async () => {
-    const { sdk, contractWithSigner, connect } = makeSdkUnit();
-    const { signer } = makeBuyerSigner();
-
-    await expect(sdk.cancelLockedTradeAfterTimeout(11n, signer)).rejects.toThrow(
-      'Direct buyer-paid cancelLockedTradeAfterTimeout was removed',
-    );
-
-    expect(connect).not.toHaveBeenCalled();
-    expect(contractWithSigner.cancelLockedTradeAfterTimeout).not.toHaveBeenCalled();
-  });
-
-  test('refundInTransitAfterTimeout should reject direct buyer-paid execution', async () => {
-    const { sdk, contractWithSigner, connect } = makeSdkUnit();
-    const { signer } = makeBuyerSigner();
-
-    await expect(sdk.refundInTransitAfterTimeout(12n, signer)).rejects.toThrow(
-      'Direct buyer-paid refundInTransitAfterTimeout was removed',
-    );
-
-    expect(connect).not.toHaveBeenCalled();
-    expect(contractWithSigner.refundInTransitAfterTimeout).not.toHaveBeenCalled();
-  });
-
-  for (const [name, invoke] of networkMismatchCases) {
-    test(`${name} should reject signer network mismatches`, async () => {
-      const { sdk, connect } = makeSdkUnit();
-      const { signer, provider } = makeBuyerSigner();
-      provider.getNetwork.mockResolvedValueOnce({ chainId: 1n });
-
-      await expect(invoke(sdk, signer)).rejects.toThrow('wrong network');
-      expect(connect).not.toHaveBeenCalled();
-    });
-  }
 });
 
 describeIntegration('BuyerSDK integration smoke', () => {
