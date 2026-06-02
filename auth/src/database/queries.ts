@@ -1260,6 +1260,14 @@ export async function reviewBreakGlassAdmin(
     if (!previous?.breakGlassGrantedAt) {
       throw new Error('No break-glass event found for account');
     }
+    const breakGlassActive =
+      previous.breakGlassRole === 'admin' &&
+      previous.breakGlassExpiresAt !== null &&
+      previous.breakGlassExpiresAt.getTime() > Date.now() &&
+      previous.breakGlassRevokedAt === null;
+    if (breakGlassActive) {
+      throw new Error('Break-glass review is only valid for revoked or expired grants');
+    }
 
     await client.query(
       `UPDATE user_profiles

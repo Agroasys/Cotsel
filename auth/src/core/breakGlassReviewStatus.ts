@@ -15,17 +15,17 @@ export interface BreakGlassReviewStatusInput {
 export function resolveBreakGlassReviewStatus(
   input: BreakGlassReviewStatusInput,
 ): BreakGlassReviewStatus {
-  if (input.reviewedAt) {
-    return 'reviewed';
-  }
   if (!input.role && !input.grantedAt && !input.expiresAt && !input.revokedAt) {
     return 'none';
   }
-  if (input.revokedAt) {
-    return 'revoked_unreviewed';
-  }
   if (input.active) {
     return 'active_unreviewed';
+  }
+  if (input.reviewedAt) {
+    return 'reviewed';
+  }
+  if (input.revokedAt) {
+    return 'revoked_unreviewed';
   }
   return 'expired_unreviewed';
 }

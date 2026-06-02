@@ -60,6 +60,17 @@ describe('resolveBreakGlassReviewStatus', () => {
         reviewedAt: '2026-06-01T02:00:00.000Z',
       },
     ],
+    [
+      'active_unreviewed',
+      {
+        active: true,
+        role: 'admin' as const,
+        expiresAt: '2026-06-02T00:00:00.000Z',
+        grantedAt: '2026-06-01T00:00:00.000Z',
+        revokedAt: null,
+        reviewedAt: '2026-06-01T02:00:00.000Z',
+      },
+    ],
   ] as const)('returns %s', (expected, input) => {
     expect(resolveBreakGlassReviewStatus(input)).toBe(expected);
   });
