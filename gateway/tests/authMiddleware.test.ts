@@ -54,6 +54,9 @@ const baseConfig: GatewayConfig = {
   allowInsecureDownstreamAuth: true,
 };
 
+const ACTIVE_BREAK_GLASS_EXPIRES_AT = new Date(Date.now() + 86_400_000).toISOString();
+const ACTIVE_BREAK_GLASS_GRANTED_AT = new Date(Date.now() - 86_400_000).toISOString();
+
 function mockRes() {
   return {} as Response;
 }
@@ -409,8 +412,8 @@ describe('signer authorization enforcement', () => {
             breakGlass: {
               active: true,
               role: 'admin',
-              expiresAt: '2026-06-01T00:30:00.000Z',
-              grantedAt: '2026-06-01T00:00:00.000Z',
+              expiresAt: ACTIVE_BREAK_GLASS_EXPIRES_AT,
+              grantedAt: ACTIVE_BREAK_GLASS_GRANTED_AT,
               grantedBy: 'incident-commander',
               reason: 'INC-483 emergency authority test',
               revokedAt: null,
@@ -446,8 +449,8 @@ describe('signer authorization enforcement', () => {
           breakGlass: {
             active: true,
             role: 'admin',
-            expiresAt: '2026-06-01T00:30:00.000Z',
-            grantedAt: '2026-06-01T00:00:00.000Z',
+            expiresAt: ACTIVE_BREAK_GLASS_EXPIRES_AT,
+            grantedAt: ACTIVE_BREAK_GLASS_GRANTED_AT,
             grantedBy: 'incident-commander',
             reason: 'INC-483 emergency authority test',
             revokedAt: null,

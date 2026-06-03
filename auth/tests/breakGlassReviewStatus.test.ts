@@ -3,6 +3,9 @@
  */
 import { resolveBreakGlassReviewStatus } from '../src/core/breakGlassReviewStatus';
 
+const ACTIVE_GRANT_EXPIRES_AT = new Date(Date.now() + 86_400_000).toISOString();
+const ACTIVE_GRANT_GRANTED_AT = new Date(Date.now() - 86_400_000).toISOString();
+
 describe('resolveBreakGlassReviewStatus', () => {
   test.each([
     [
@@ -21,8 +24,8 @@ describe('resolveBreakGlassReviewStatus', () => {
       {
         active: true,
         role: 'admin' as const,
-        expiresAt: '2026-06-02T00:00:00.000Z',
-        grantedAt: '2026-06-01T00:00:00.000Z',
+        expiresAt: ACTIVE_GRANT_EXPIRES_AT,
+        grantedAt: ACTIVE_GRANT_GRANTED_AT,
         revokedAt: null,
         reviewedAt: null,
       },
@@ -65,8 +68,8 @@ describe('resolveBreakGlassReviewStatus', () => {
       {
         active: true,
         role: 'admin' as const,
-        expiresAt: '2026-06-02T00:00:00.000Z',
-        grantedAt: '2026-06-01T00:00:00.000Z',
+        expiresAt: ACTIVE_GRANT_EXPIRES_AT,
+        grantedAt: ACTIVE_GRANT_GRANTED_AT,
         revokedAt: null,
         reviewedAt: '2026-06-01T02:00:00.000Z',
       },
