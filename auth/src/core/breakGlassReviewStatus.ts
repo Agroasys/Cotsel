@@ -18,10 +18,19 @@ export function resolveBreakGlassReviewStatus(
   if (!input.role && !input.grantedAt && !input.expiresAt && !input.revokedAt) {
     return 'none';
   }
-  if (input.active) {
+  const grantIsCurrentlyActive =
+    input.role === 'admin' &&
+    input.expiresAt !== null &&
+    Date.parse(input.expiresAt) > Date.now() &&
+    input.revokedAt === null;
+  const hasClosureEvidence =
+    input.revokedAt !== null ||
+    (input.expiresAt !== null && Date.parse(input.expiresAt) <= Date.now());
+
+  if (input.active || grantIsCurrentlyActive) {
     return 'active_unreviewed';
   }
-  if (input.reviewedAt) {
+  if (input.reviewedAt && hasClosureEvidence) {
     return 'reviewed';
   }
   if (input.revokedAt) {

@@ -137,6 +137,14 @@ describe('normalizeSessionRow', () => {
         breakGlassReviewedBy: 'security-owner',
       }).breakGlass,
     ).toEqual(expect.objectContaining({ active: false, reviewStatus: 'reviewed' }));
+    expect(
+      normalizeSessionRow({
+        ...baseRow,
+        breakGlassExpiresAt: null,
+        breakGlassReviewedAt: future,
+        breakGlassReviewedBy: 'security-owner',
+      }).breakGlass,
+    ).toEqual(expect.objectContaining({ active: false, reviewStatus: 'expired_unreviewed' }));
   });
 });
 

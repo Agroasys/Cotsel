@@ -380,6 +380,42 @@ describe('admin controls persistence integration', () => {
             break_glass_reviewed_at: null,
           });
 
+          await pool.query(
+            `UPDATE user_profiles SET break_glass_expires_at = NULL
+             WHERE account_id = $1`,
+            ['agroasys-user:bg-1'],
+          );
+          const incompleteGrantReviewBody = JSON.stringify({
+            accountId: 'agroasys-user:bg-1',
+            reason: 'INC-2000 reject review without closure evidence',
+          });
+          const incompleteGrantReview = await fetch(`${app.baseUrl}${reviewPath}`, {
+            method: 'POST',
+            headers: signedHeaders({
+              method: 'POST',
+              path: reviewPath,
+              body: incompleteGrantReviewBody,
+              nonce: 'nonce-bg-incomplete-review-reject-1',
+            }),
+            body: incompleteGrantReviewBody,
+          });
+          expect(incompleteGrantReview.status).toBe(409);
+          const incompleteGrantReviewState = await pool.query(
+            `SELECT break_glass_role, break_glass_expires_at, break_glass_reviewed_at
+             FROM user_profiles WHERE account_id = $1`,
+            ['agroasys-user:bg-1'],
+          );
+          expect(incompleteGrantReviewState.rows[0]).toMatchObject({
+            break_glass_role: 'admin',
+            break_glass_expires_at: null,
+            break_glass_reviewed_at: null,
+          });
+          await pool.query(
+            `UPDATE user_profiles SET break_glass_expires_at = NOW() + INTERVAL '5 minutes'
+             WHERE account_id = $1`,
+            ['agroasys-user:bg-1'],
+          );
+
           const existingSupplierBody = JSON.stringify({
             accountId: 'agroasys-user:supplier-bg',
             role: 'supplier',
