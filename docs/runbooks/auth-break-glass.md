@@ -72,6 +72,33 @@ Signer-required gateway actions still require an approved signer wallet binding
 for the relevant action class and environment unless a separate policy
 explicitly grants that authority.
 
+The gateway enforces break-glass signer policy separately from durable admin
+signer policy. While break-glass is active, ordinary signer-required action
+classes are restricted even if the session can otherwise reach emergency-safe
+operator routes:
+
+- `governance`: blocked under break-glass.
+- `treasury_approve`: blocked under break-glass.
+- `treasury_execute`: blocked under break-glass.
+- `treasury_close`: blocked under break-glass.
+- `compliance_sensitive`: blocked under break-glass.
+- `emergency_admin`: allowed only when the account has an explicit active signer
+  binding for `emergency_admin` in the active gateway signer environment.
+  Outside active break-glass authority, `emergency_admin` remains restricted even
+  if such a binding exists.
+
+Rejected signer attempts return `SIGNER_POLICY_RESTRICTED` with the action
+class, signer environment, and break-glass evidence fields. Successful
+privileged audit records include `breakGlassActive`, `breakGlassReason`,
+`breakGlassExpiresAt`, `breakGlassReviewedAt`, `breakGlassReviewedBy`, and
+`breakGlassReviewStatus` so reviewers can separate normal signer use from
+incident authority and see whether emergency access still needs post-incident
+closure.
+
+Gateway session validation treats the break-glass review status as required
+evidence. If auth omits `breakGlass.reviewStatus` or emits an unknown value, the
+gateway fails closed instead of accepting an ambiguous emergency posture.
+
 ## Expiry
 
 Break-glass expires at `break_glass_expires_at`. Expired elevation is not
@@ -125,8 +152,13 @@ The reviewer must confirm:
 - access was revoked or expired
 - no durable admin role was created accidentally
 - no signer-required privileged action bypassed the approved signer-binding policy
+- any signer-required action attempted during break-glass has either
+  `SIGNER_POLICY_RESTRICTED` evidence or an explicit `emergency_admin` signer
+  binding and incident approval
 - privileged actions during the window match the incident scope
 - the audit trail exists in `auth_admin_audit_events`
+- the profile/session break-glass context has `reviewStatus: reviewed` after
+  review is complete
 
 ## Required Alerts
 

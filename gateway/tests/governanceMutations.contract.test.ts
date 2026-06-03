@@ -72,6 +72,9 @@ const baseConfig: GatewayConfig = {
   allowInsecureDownstreamAuth: true,
 };
 
+const ACTIVE_BREAK_GLASS_EXPIRES_AT = new Date(Date.now() + 86_400_000).toISOString();
+const ACTIVE_BREAK_GLASS_GRANTED_AT = new Date(Date.now() - 86_400_000).toISOString();
+
 const tradeFixture: DashboardTradeRecord = {
   id: 'TRD-LOCAL-9001',
   buyer: 'buyer@demo',
@@ -490,6 +493,19 @@ describe('gateway governance mutation routes contract', () => {
       expect(storedAction.verificationState).toBe('not_started');
       expect(storedAction.monitoringState).toBe('not_started');
       expect(storedAction.actorId).toBe('account:acct-admin');
+      expect(storedAction.audit).toEqual(
+        expect.objectContaining({
+          actorSessionId: 'sha256:a145f1e557a0eaf8596f0970c50d8145eda40695b0e4295e22899733e78df84a',
+          actorAccountId: 'acct-admin',
+          signerBindingId: 'binding-governance-admin',
+          signerActionClass: 'governance',
+          signerEnvironment: 'test',
+          signerPolicyResult: 'authorized',
+          signerPolicyReason: null,
+          signerBindingWallet: getAddress('0x00000000000000000000000000000000000000aa'),
+          breakGlassActive: false,
+        }),
+      );
     } finally {
       server.close();
     }
@@ -542,6 +558,73 @@ describe('gateway governance mutation routes contract', () => {
       expect(validatePrepared(payload)).toBe(true);
       expect(payload.data.signing.signerWallet).toBe(
         getAddress('0x00000000000000000000000000000000000000aa'),
+      );
+    } finally {
+      server.close();
+    }
+  });
+
+  test('direct-sign prepare rejects ordinary governance signing under break-glass authority', async () => {
+    const { server, baseUrl } = await startServer({
+      sessionFixtures: {
+        'sess-break-glass': {
+          userId: 'uid-admin',
+          accountId: 'acct-admin',
+          walletAddress: '0x00000000000000000000000000000000000000aa',
+          role: 'admin',
+          email: 'admin@agroasys.io',
+          capabilities: ['governance:write'],
+          signerAuthorizations: [
+            {
+              bindingId: 'binding-governance-admin',
+              walletAddress: '0x00000000000000000000000000000000000000aa',
+              actionClass: 'governance',
+              environment: 'test',
+              approvedAt: '2026-03-07T00:00:00.000Z',
+              approvedBy: 'ops-admin-control',
+              ticketRef: 'SEC-301',
+              notes: null,
+            },
+          ],
+          breakGlass: {
+            active: true,
+            role: 'admin',
+            expiresAt: ACTIVE_BREAK_GLASS_EXPIRES_AT,
+            grantedAt: ACTIVE_BREAK_GLASS_GRANTED_AT,
+            grantedBy: 'incident-commander',
+            reason: 'INC-483 emergency authority test',
+            revokedAt: null,
+            revokedBy: null,
+            reviewedAt: null,
+            reviewedBy: null,
+            reviewStatus: 'active_unreviewed',
+          },
+          issuedAt: Date.now(),
+          expiresAt: Date.now() + 60_000,
+        },
+      },
+    });
+
+    try {
+      const response = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-break-glass',
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-break-glass-pause-prepare',
+        },
+        body: JSON.stringify(buildAuditBody()),
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(payload.error.code).toBe('SIGNER_POLICY_RESTRICTED');
+      expect(payload.error.details).toEqual(
+        expect.objectContaining({
+          signerPolicyResult: 'restricted',
+          breakGlassActive: true,
+          actionClass: 'governance',
+        }),
       );
     } finally {
       server.close();

@@ -9,9 +9,11 @@ This note is not a replacement for:
 - [`docs/adr/adr-0411-human-governance-direct-wallet-signing.md`](../adr/adr-0411-human-governance-direct-wallet-signing.md)
 - [`docs/adr/adr-0412-treasury-revenue-controls-boundary.md`](../adr/adr-0412-treasury-revenue-controls-boundary.md)
 
-It exists to freeze the historical baseline, the implemented Batch 1-5 runtime truth in `Cotsel`, and the remaining end-state for the operator signer hardening program.
+It exists to freeze the historical baseline and the completed Cotsel runtime truth
+for the operator signer hardening program, including the signer-policy tail for
+Cotsel#483, Cotsel#484, and Cotsel#485.
 
-## Current Runtime State After Batch 1-5
+## Current Runtime State
 
 ### 1. Session access remains the operator identity boundary
 
@@ -106,20 +108,65 @@ Relevant runtime surfaces:
 - `gateway/src/routes/governanceMutations.ts`
 - `gateway/src/core/governanceMutationService.ts`
 - `gateway/src/core/governanceStore.ts`
+- `gateway/tests/signerPolicyCoverage.test.ts`
 
 ### 4. Treasury has an explicit session-only vs signer-required policy
 
 - Treasury preparatory actions remain session/capability/write-posture controlled.
 - Treasury close-, approval-, and execution-sensitive actions require explicit signer bindings.
 - Treasury signer policy is carried into downstream metadata and gateway audit records.
+- Governance and treasury signer evidence now use the same core fields:
+  operator account/user/session identity, request/correlation IDs where
+  available, action class, signer environment, signer binding ID, approved
+  binding wallet, actual signer wallet where known, signer policy result,
+  policy reason, and break-glass context.
 
 Relevant runtime surfaces:
 
 - `gateway/src/routes/treasury.ts`
 - `gateway/src/core/treasuryWorkflowService.ts`
+- `gateway/tests/signerPolicyCoverage.test.ts`
 - `docs/adr/adr-0412-treasury-revenue-controls-boundary.md`
 
-## Historical Baseline Before Batch 1-5
+Future governance, treasury, or emergency signer-required route additions must
+extend the centralized signer policy path and update
+`gateway/tests/signerPolicyCoverage.test.ts`. A privileged route that bypasses
+`requireAuthorizedSignerBinding` is a security regression, even if it still has
+operator session or write-allowlist checks.
+
+### 5. Break-glass admin posture is not ordinary signer posture
+
+Break-glass elevation can make a session effective-admin for emergency-safe
+operator access, but it does not silently inherit normal governance or treasury
+signing authority. Gateway signer policy restricts ordinary signer-required
+action classes while `auth` reports `breakGlass.active = true`.
+
+Restricted under break-glass:
+
+- `governance`
+- `treasury_approve`
+- `treasury_execute`
+- `treasury_close`
+- `compliance_sensitive`
+
+Allowed under break-glass only by explicit backend policy:
+
+- `emergency_admin`, and only when the account also has an active
+  `emergency_admin` signer binding for the active signer environment. Outside an
+  active break-glass session, `emergency_admin` is restricted even if such a
+  binding exists.
+
+Runtime evidence for privileged actions must mark whether break-glass was
+active, why it was active, when it expires, which signer policy result was
+applied, which review status applies, and which approved binding was used. A
+reviewer should never need to infer whether a privileged signer action came from
+normal durable admin posture or incident posture.
+
+Gateway-auth contracts require the review status to be present on every
+break-glass session context. Missing or unknown review status is treated as an
+invalid upstream auth payload and is rejected fail-closed.
+
+## Historical Baseline Before Signer Hardening
 
 ### 1. Historical authoritative session model
 
@@ -139,7 +186,7 @@ Relevant runtime surfaces:
 ### 2. Historical signer model
 
 - Governance already has a real `prepare -> wallet sign/broadcast -> confirm -> verify/monitor` backend path.
-- Governance signer verification is currently anchored to the wallet bound to the authenticated admin session.
+- Governance signer verification was anchored to the wallet bound to the authenticated admin session.
 - There is no explicit backend-managed operator signer authorization model that answers:
   - which wallet is approved
   - for which action class
@@ -157,7 +204,7 @@ Relevant runtime surfaces:
 
 ### 3. Privileged actions that already required wallet-bound behavior
 
-Current backend wallet-bound enforcement exists for:
+Historical backend wallet-bound enforcement existed for:
 
 - governance direct-sign preparation
 - governance direct-sign confirmation
@@ -173,7 +220,7 @@ Relevant runtime surfaces:
 
 ### 4. Privileged actions that did not require wallet-bound behavior and needed explicit policy review
 
-Current backend session/capability/write-allowlist gating exists without signer enforcement for:
+Historical backend session/capability/write-allowlist gating existed without signer enforcement for:
 
 - treasury accounting-period close request
 - treasury accounting-period close

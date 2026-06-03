@@ -755,6 +755,9 @@ ALTER TABLE governance_actions
     ADD COLUMN IF NOT EXISTS actor_account_id TEXT;
 
 ALTER TABLE governance_actions
+    ADD COLUMN IF NOT EXISTS signer_policy_evidence JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+ALTER TABLE governance_actions
     ADD COLUMN IF NOT EXISTS final_signer_wallet TEXT;
 
 ALTER TABLE governance_actions

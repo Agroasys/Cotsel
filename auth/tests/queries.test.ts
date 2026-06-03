@@ -83,6 +83,69 @@ describe('normalizeSessionRow', () => {
       }),
     ).toThrow('Invalid issuedAt session timestamp returned from database');
   });
+
+  test('derives break-glass post-incident review status from session rows', () => {
+    const future = new Date(Date.now() + 60_000).toISOString();
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const baseRow = {
+      sessionId: 'sess-review',
+      accountId: 'acct-review',
+      userId: 'user-review',
+      walletAddress: null,
+      email: 'ops@example.com',
+      role: 'admin' as const,
+      capabilities: null,
+      signerAuthorizations: null,
+      issuedAt: '1772916944',
+      expiresAt: '1772920544',
+      revokedAt: null,
+      breakGlassRole: 'admin' as const,
+      breakGlassGrantedAt: past,
+      breakGlassGrantedBy: 'incident-commander',
+      breakGlassReason: 'INC-548 review status proof',
+      breakGlassRevokedAt: null,
+      breakGlassRevokedBy: null,
+      breakGlassReviewedAt: null,
+      breakGlassReviewedBy: null,
+    };
+
+    expect(
+      normalizeSessionRow({
+        ...baseRow,
+        breakGlassExpiresAt: future,
+      }).breakGlass,
+    ).toEqual(expect.objectContaining({ active: true, reviewStatus: 'active_unreviewed' }));
+    expect(
+      normalizeSessionRow({
+        ...baseRow,
+        breakGlassExpiresAt: past,
+      }).breakGlass,
+    ).toEqual(expect.objectContaining({ active: false, reviewStatus: 'expired_unreviewed' }));
+    expect(
+      normalizeSessionRow({
+        ...baseRow,
+        breakGlassExpiresAt: future,
+        breakGlassRevokedAt: past,
+        breakGlassRevokedBy: 'security-owner',
+      }).breakGlass,
+    ).toEqual(expect.objectContaining({ active: false, reviewStatus: 'revoked_unreviewed' }));
+    expect(
+      normalizeSessionRow({
+        ...baseRow,
+        breakGlassExpiresAt: past,
+        breakGlassReviewedAt: future,
+        breakGlassReviewedBy: 'security-owner',
+      }).breakGlass,
+    ).toEqual(expect.objectContaining({ active: false, reviewStatus: 'reviewed' }));
+    expect(
+      normalizeSessionRow({
+        ...baseRow,
+        breakGlassExpiresAt: null,
+        breakGlassReviewedAt: future,
+        breakGlassReviewedBy: 'security-owner',
+      }).breakGlass,
+    ).toEqual(expect.objectContaining({ active: false, reviewStatus: 'expired_unreviewed' }));
+  });
 });
 
 describe('upsertTrustedProfile', () => {

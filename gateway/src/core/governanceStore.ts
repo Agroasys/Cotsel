@@ -121,6 +121,15 @@ export interface GovernanceActionAuditRecord {
   signerBindingId?: string | null;
   signerActionClass?: string | null;
   signerEnvironment?: string | null;
+  signerPolicyResult?: string | null;
+  signerPolicyReason?: string | null;
+  signerBindingWallet?: string | null;
+  breakGlassActive?: boolean;
+  breakGlassReason?: string | null;
+  breakGlassExpiresAt?: string | null;
+  breakGlassReviewedAt?: string | null;
+  breakGlassReviewedBy?: string | null;
+  breakGlassReviewStatus?: string | null;
   finalSignerWallet?: string | null;
   finalSignerVerifiedAt?: string | null;
 }
@@ -219,6 +228,7 @@ interface GovernanceActionRow {
   requestedBy: string;
   approvedBy: string[] | null;
   actorAccountId: string | null;
+  signerPolicyEvidence: Record<string, unknown> | null;
   finalSignerWallet: string | null;
   verificationState: GovernanceVerificationState | null;
   verificationError: string | null;
@@ -385,6 +395,7 @@ function mapRow(row: GovernanceActionRow): GovernanceActionRecord {
       createdAt: row.createdAt.toISOString(),
       requestedBy: row.requestedBy,
       ...(row.approvedBy && row.approvedBy.length > 0 ? { approvedBy: row.approvedBy } : {}),
+      ...(row.signerPolicyEvidence ?? {}),
       ...(row.finalSignerWallet ? { finalSignerWallet: row.finalSignerWallet } : {}),
       ...(row.verifiedAt ? { finalSignerVerifiedAt: row.verifiedAt.toISOString() } : {}),
     },
@@ -452,6 +463,7 @@ export function createPostgresGovernanceActionStore(pool: Pool): GovernanceActio
     requested_by AS "requestedBy",
     approved_by AS "approvedBy",
     actor_account_id AS "actorAccountId",
+    signer_policy_evidence AS "signerPolicyEvidence",
     final_signer_wallet AS "finalSignerWallet",
     verification_state AS "verificationState",
     verification_error AS "verificationError",

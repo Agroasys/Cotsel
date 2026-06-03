@@ -381,6 +381,10 @@ describe('AuthController.getSession', () => {
           walletAddress: WALLET,
           email: 'admin@example.com',
           role: 'buyer',
+          breakGlass: expect.objectContaining({
+            active: false,
+            reviewStatus: 'none',
+          }),
         }),
       }),
     );

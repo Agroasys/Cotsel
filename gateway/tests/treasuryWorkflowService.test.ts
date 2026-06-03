@@ -19,6 +19,7 @@ function buildCreateSweepBatchContext(
     },
     route: '/api/dashboard-gateway/v1/treasury/sweep-batches',
     method: 'POST',
+    sessionReference: 'sha256:session',
     session: {
       accountId: 'acct-admin',
       userId: 'uid-admin',
@@ -439,9 +440,16 @@ describe('TreasuryWorkflowService', () => {
         signerPolicyRequired: true,
         signerPolicyResult: 'authorized',
         signerPolicyActionClass: 'treasury_approve',
+        signerPolicyEnvironment: 'production',
         signerBindingId: 'binding-1',
         signerBindingEnvironment: 'production',
         signerBindingWallet: '0x00000000000000000000000000000000000000aa',
+        signerActualWallet: '0x00000000000000000000000000000000000000aa',
+        operatorSessionReference: 'sha256:session',
+        operatorAccountId: 'acct-admin',
+        operatorUserId: 'uid-admin',
+        operatorWalletAddress: '0x00000000000000000000000000000000000000aa',
+        breakGlassActive: false,
       }),
     );
     expect(auditLogStore.entries).toHaveLength(1);
@@ -450,9 +458,16 @@ describe('TreasuryWorkflowService', () => {
         signerPolicyRequired: true,
         signerPolicyResult: 'authorized',
         signerPolicyActionClass: 'treasury_approve',
+        signerPolicyEnvironment: 'production',
         signerBindingId: 'binding-1',
         signerBindingEnvironment: 'production',
         signerBindingWallet: '0x00000000000000000000000000000000000000aa',
+        signerActualWallet: '0x00000000000000000000000000000000000000aa',
+        operatorSessionReference: 'sha256:session',
+        operatorAccountId: 'acct-admin',
+        operatorUserId: 'uid-admin',
+        operatorWalletAddress: '0x00000000000000000000000000000000000000aa',
+        breakGlassActive: false,
       }),
     );
   });

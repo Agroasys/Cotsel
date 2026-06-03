@@ -54,6 +54,9 @@ const baseConfig: GatewayConfig = {
   allowInsecureDownstreamAuth: true,
 };
 
+const ACTIVE_BREAK_GLASS_EXPIRES_AT = new Date(Date.now() + 86_400_000).toISOString();
+const ACTIVE_BREAK_GLASS_GRANTED_AT = new Date(Date.now() - 86_400_000).toISOString();
+
 function mockRes() {
   return {} as Response;
 }
@@ -66,6 +69,19 @@ function buildSession(overrides: Partial<AuthSession> = {}): AuthSession {
     role: 'admin',
     capabilities: [],
     signerAuthorizations: [],
+    breakGlass: {
+      active: false,
+      role: null,
+      expiresAt: null,
+      grantedAt: null,
+      grantedBy: null,
+      reason: null,
+      revokedAt: null,
+      revokedBy: null,
+      reviewedAt: null,
+      reviewedBy: null,
+      reviewStatus: 'none',
+    },
     email: 'admin@agroasys.io',
     issuedAt: 1,
     expiresAt: 2,
@@ -385,5 +401,115 @@ describe('signer authorization enforcement', () => {
         'Preparing privileged governance approval',
       ),
     ).toThrow('requires an approved signer wallet binding for governance in test');
+  });
+
+  test('blocks ordinary signer-required actions for active break-glass sessions', () => {
+    expect(() =>
+      requireAuthorizedSignerBinding(
+        {
+          sessionReference: 'sha256:test',
+          session: buildSession({
+            breakGlass: {
+              active: true,
+              role: 'admin',
+              expiresAt: ACTIVE_BREAK_GLASS_EXPIRES_AT,
+              grantedAt: ACTIVE_BREAK_GLASS_GRANTED_AT,
+              grantedBy: 'incident-commander',
+              reason: 'INC-483 emergency authority test',
+              revokedAt: null,
+              revokedBy: null,
+              reviewedAt: null,
+              reviewedBy: null,
+              reviewStatus: 'active_unreviewed',
+            },
+            signerAuthorizations: [
+              buildSignerAuthorization({
+                actionClass: 'governance',
+              }),
+            ],
+          }),
+          gatewayRoles: ['operator:read', 'operator:write'],
+          operatorActionCapabilities: ['governance:write'],
+          treasuryCapabilities: [],
+          writeEnabled: true,
+        },
+        baseConfig,
+        'governance',
+        '0x00000000000000000000000000000000000000AA',
+        'Preparing privileged governance approval',
+      ),
+    ).toThrow('not allowed while break-glass authority is active');
+  });
+
+  test('allows break-glass sessions only for explicit emergency signer action bindings', () => {
+    const binding = requireAuthorizedSignerBinding(
+      {
+        sessionReference: 'sha256:test',
+        session: buildSession({
+          breakGlass: {
+            active: true,
+            role: 'admin',
+            expiresAt: ACTIVE_BREAK_GLASS_EXPIRES_AT,
+            grantedAt: ACTIVE_BREAK_GLASS_GRANTED_AT,
+            grantedBy: 'incident-commander',
+            reason: 'INC-483 emergency authority test',
+            revokedAt: null,
+            revokedBy: null,
+            reviewedAt: null,
+            reviewedBy: null,
+            reviewStatus: 'active_unreviewed',
+          },
+          signerAuthorizations: [
+            buildSignerAuthorization({
+              walletAddress: '0x00000000000000000000000000000000000000AA',
+              actionClass: 'emergency_admin',
+            }),
+          ],
+        }),
+        gatewayRoles: ['operator:read', 'operator:write'],
+        operatorActionCapabilities: ['governance:write'],
+        treasuryCapabilities: [],
+        writeEnabled: true,
+      },
+      baseConfig,
+      'emergency_admin',
+      '0x00000000000000000000000000000000000000AA',
+      'Preparing emergency admin action',
+    );
+
+    expect(binding.policy).toEqual(
+      expect.objectContaining({
+        result: 'authorized',
+        actionClass: 'emergency_admin',
+        breakGlassActive: true,
+        reason: 'break_glass_explicit_emergency_action_allowed',
+      }),
+    );
+  });
+
+  test('blocks emergency signer action bindings outside active break-glass authority', () => {
+    expect(() =>
+      requireAuthorizedSignerBinding(
+        {
+          sessionReference: 'sha256:test',
+          session: buildSession({
+            signerAuthorizations: [
+              buildSignerAuthorization({
+                walletAddress: '0x00000000000000000000000000000000000000AA',
+                actionClass: 'emergency_admin',
+              }),
+            ],
+          }),
+          gatewayRoles: ['operator:read', 'operator:write'],
+          operatorActionCapabilities: ['governance:write'],
+          treasuryCapabilities: [],
+          writeEnabled: true,
+        },
+        baseConfig,
+        'emergency_admin',
+        '0x00000000000000000000000000000000000000AA',
+        'Preparing emergency admin action',
+      ),
+    ).toThrow('requires active break-glass authority');
   });
 });

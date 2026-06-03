@@ -483,6 +483,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
           requestContext: req.requestContext,
           route: req.originalUrl || req.path,
           method: req.method,
+          sessionReference: req.gatewayPrincipal!.sessionReference,
           session: req.gatewayPrincipal!.session,
           signerPolicy: { required: false, result: 'not_required' },
           audit: parseAudit(body.audit),
@@ -508,6 +509,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             requestContext: req.requestContext,
             route: req.originalUrl || req.path,
             method: req.method,
+            sessionReference: req.gatewayPrincipal!.sessionReference,
             session: req.gatewayPrincipal!.session,
             signerPolicy: {
               required: true,
@@ -543,6 +545,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             requestContext: req.requestContext,
             route: req.originalUrl || req.path,
             method: req.method,
+            sessionReference: req.gatewayPrincipal!.sessionReference,
             session: req.gatewayPrincipal!.session,
             signerPolicy: {
               required: true,
@@ -583,6 +586,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
           requestContext: req.requestContext,
           route: req.originalUrl || req.path,
           method: req.method,
+          sessionReference: req.gatewayPrincipal!.sessionReference,
           session: req.gatewayPrincipal!.session,
           signerPolicy: { required: false, result: 'not_required' },
           audit: parseAudit(body.audit),
@@ -612,6 +616,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             requestContext: req.requestContext,
             route: req.originalUrl || req.path,
             method: req.method,
+            sessionReference: req.gatewayPrincipal!.sessionReference,
             session: req.gatewayPrincipal!.session,
             signerPolicy: { required: false, result: 'not_required' },
             audit: parseAudit(body.audit),
@@ -638,6 +643,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             requestContext: req.requestContext,
             route: req.originalUrl || req.path,
             method: req.method,
+            sessionReference: req.gatewayPrincipal!.sessionReference,
             session: req.gatewayPrincipal!.session,
             signerPolicy: {
               required: true,
@@ -673,6 +679,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             requestContext: req.requestContext,
             route: req.originalUrl || req.path,
             method: req.method,
+            sessionReference: req.gatewayPrincipal!.sessionReference,
             session: req.gatewayPrincipal!.session,
             signerPolicy: {
               required: true,
@@ -711,6 +718,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             requestContext: req.requestContext,
             route: req.originalUrl || req.path,
             method: req.method,
+            sessionReference: req.gatewayPrincipal!.sessionReference,
             session: req.gatewayPrincipal!.session,
             signerPolicy: {
               required: true,
@@ -749,6 +757,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
           requestContext: req.requestContext,
           route: req.originalUrl || req.path,
           method: req.method,
+          sessionReference: req.gatewayPrincipal!.sessionReference,
           session: req.gatewayPrincipal!.session,
           signerPolicy: {
             required: true,
@@ -795,6 +804,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             requestContext: req.requestContext,
             route: req.originalUrl || req.path,
             method: req.method,
+            sessionReference: req.gatewayPrincipal!.sessionReference,
             session: req.gatewayPrincipal!.session,
             signerPolicy: {
               required: true,
@@ -842,6 +852,7 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
             requestContext: req.requestContext,
             route: req.originalUrl || req.path,
             method: req.method,
+            sessionReference: req.gatewayPrincipal!.sessionReference,
             session: req.gatewayPrincipal!.session,
             signerPolicy: {
               required: true,

@@ -68,9 +68,31 @@ export interface UserSession {
   signerAuthorizations: OperatorSignerAuthorization[];
   issuedRole?: UserRole;
   active?: boolean;
+  breakGlass?: BreakGlassSessionContext;
   issuedAt: number;
   expiresAt: number;
   revokedAt: number | null;
+}
+
+export type BreakGlassReviewStatus =
+  | 'none'
+  | 'active_unreviewed'
+  | 'revoked_unreviewed'
+  | 'expired_unreviewed'
+  | 'reviewed';
+
+export interface BreakGlassSessionContext {
+  active: boolean;
+  role: 'admin' | null;
+  expiresAt: string | null;
+  grantedAt: string | null;
+  grantedBy: string | null;
+  reason: string | null;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  reviewStatus: BreakGlassReviewStatus;
 }
 
 export interface OperatorSignerAuthorization {

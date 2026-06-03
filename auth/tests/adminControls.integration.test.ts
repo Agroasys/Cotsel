@@ -309,6 +309,7 @@ describe('admin controls persistence integration', () => {
           expect(durableAdmin.status).toBe(201);
 
           const grantPath = '/api/auth/v1/admin/break-glass/grant';
+          const reviewPath = '/api/auth/v1/admin/break-glass/review';
           const rejectedAdminGrantBody = JSON.stringify({
             accountId: 'agroasys-user:admin-2',
             baseRole: 'buyer',
@@ -353,6 +354,67 @@ describe('admin controls persistence integration', () => {
           expect(breakGlassProfile.rows[0].role).toBe('buyer');
           expect(breakGlassProfile.rows[0].break_glass_role).toBe('admin');
           expect(breakGlassProfile.rows[0].break_glass_expires_at).toBeTruthy();
+
+          const activeReviewBody = JSON.stringify({
+            accountId: 'agroasys-user:bg-1',
+            reason: 'INC-2000 reject review before temporary admin expires',
+          });
+          const activeReview = await fetch(`${app.baseUrl}${reviewPath}`, {
+            method: 'POST',
+            headers: signedHeaders({
+              method: 'POST',
+              path: reviewPath,
+              body: activeReviewBody,
+              nonce: 'nonce-bg-active-review-reject-1',
+            }),
+            body: activeReviewBody,
+          });
+          expect(activeReview.status).toBe(409);
+          const activeReviewState = await pool.query(
+            `SELECT break_glass_role, break_glass_reviewed_at
+             FROM user_profiles WHERE account_id = $1`,
+            ['agroasys-user:bg-1'],
+          );
+          expect(activeReviewState.rows[0]).toMatchObject({
+            break_glass_role: 'admin',
+            break_glass_reviewed_at: null,
+          });
+
+          await pool.query(
+            `UPDATE user_profiles SET break_glass_expires_at = NULL
+             WHERE account_id = $1`,
+            ['agroasys-user:bg-1'],
+          );
+          const incompleteGrantReviewBody = JSON.stringify({
+            accountId: 'agroasys-user:bg-1',
+            reason: 'INC-2000 reject review without closure evidence',
+          });
+          const incompleteGrantReview = await fetch(`${app.baseUrl}${reviewPath}`, {
+            method: 'POST',
+            headers: signedHeaders({
+              method: 'POST',
+              path: reviewPath,
+              body: incompleteGrantReviewBody,
+              nonce: 'nonce-bg-incomplete-review-reject-1',
+            }),
+            body: incompleteGrantReviewBody,
+          });
+          expect(incompleteGrantReview.status).toBe(409);
+          const incompleteGrantReviewState = await pool.query(
+            `SELECT break_glass_role, break_glass_expires_at, break_glass_reviewed_at
+             FROM user_profiles WHERE account_id = $1`,
+            ['agroasys-user:bg-1'],
+          );
+          expect(incompleteGrantReviewState.rows[0]).toMatchObject({
+            break_glass_role: 'admin',
+            break_glass_expires_at: null,
+            break_glass_reviewed_at: null,
+          });
+          await pool.query(
+            `UPDATE user_profiles SET break_glass_expires_at = NOW() + INTERVAL '5 minutes'
+             WHERE account_id = $1`,
+            ['agroasys-user:bg-1'],
+          );
 
           const existingSupplierBody = JSON.stringify({
             accountId: 'agroasys-user:supplier-bg',
@@ -415,7 +477,6 @@ describe('admin controls persistence integration', () => {
           );
           await expect(app.sessionService.resolve(bgSession.sessionId)).resolves.toBeNull();
 
-          const reviewPath = '/api/auth/v1/admin/break-glass/review';
           const reviewBody = JSON.stringify({
             accountId: 'agroasys-user:bg-1',
             reason: 'INC-2000 reviewed expired temporary admin integration proof',
