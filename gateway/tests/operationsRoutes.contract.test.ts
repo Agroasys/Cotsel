@@ -312,6 +312,20 @@ describe('gateway operations summary route contract', () => {
           stuckQueueThresholdMs: 300000,
           repeatedFailureAlertThreshold: 3,
         },
+        capacityPolicy: {
+          targetTransactionsPerDay: 500,
+          averageTransactionsPerHour: 21,
+          burstTransactionsPerHour: 84,
+          burstMultiplierBasisPoints: 40000,
+          safetyMarginBasisPoints: 12500,
+          maxCostPerTxWei: '75000000000000000',
+          requiredBurstHourBalanceWei: '7875000000000000000',
+          configuredMinExecutorBalanceWei: '10000000000000000',
+          configuredLowBalanceAlertWei: '5000000000000000',
+          floorMeetsPolicy: false,
+          lowBalanceAlertProtectsPolicy: false,
+          failClosed: false,
+        },
         executorBalanceWei: '4000000000000000',
         queue: {
           pending: 0,
@@ -352,6 +366,7 @@ describe('gateway operations summary route contract', () => {
       expect(payload.data.state).toBe('paused');
       expect(payload.data.executorBalanceWei).toBe('4000000000000000');
       expect(payload.data.controls.maxFeePerGasWei).toBe('50000000000');
+      expect(payload.data.capacityPolicy.requiredBurstHourBalanceWei).toBe('7875000000000000000');
       expect(payload.data.alerts[0].code).toBe('gasless_broadcast_paused');
       expect(payload.data.alerts[1].code).toBe('gasless_low_executor_balance');
     } finally {

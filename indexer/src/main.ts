@@ -1062,6 +1062,8 @@ async function handleDisputeOpenedByBuyer(
       blockNumber: block.header.height,
       timestamp,
       txHash,
+      logIndex,
+      transactionIndex,
     }),
   );
 

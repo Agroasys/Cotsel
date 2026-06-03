@@ -190,7 +190,7 @@ function serviceAuthHeaders({ apiKey, apiSecret, method, path: requestPath, body
   };
 }
 
-async function gatewayJson({
+async function gatewayRequest({
   baseUrl,
   apiKey,
   apiSecret,
@@ -210,10 +210,24 @@ async function gatewayJson({
     body: body === null || body === undefined ? undefined : JSON.stringify(body),
   });
   const payload = await response.json().catch(() => null);
+  return {
+    ok: response.ok,
+    status: response.status,
+    headers: Object.fromEntries(response.headers.entries()),
+    payload,
+  };
+}
+
+async function gatewayJson(input) {
+  const response = await gatewayRequest(input);
   if (!response.ok) {
-    throw new Error(`${method} ${route} failed ${response.status}: ${JSON.stringify(payload)}`);
+    throw new Error(
+      `${input.method || 'POST'} ${input.route} failed ${response.status}: ${JSON.stringify(
+        response.payload,
+      )}`,
+    );
   }
-  return payload;
+  return response.payload;
 }
 
 function stableJson(value) {
@@ -227,6 +241,102 @@ function stableJson(value) {
 
 function payloadHash(payload) {
   return keccak256(toUtf8Bytes(stableJson(payload)));
+}
+
+async function expectGatewayFailure({
+  expectedStatus,
+  expectedCode,
+  expectedMessageIncludes,
+  ...request
+}) {
+  const response = await gatewayRequest(request);
+  const errorPayload = response.payload?.error ?? {};
+  const errorMessage = String(errorPayload.message ?? response.payload?.message ?? '');
+  const errorCode = errorPayload.code ?? response.payload?.code ?? null;
+  const passed =
+    response.status === expectedStatus &&
+    (!expectedCode || errorCode === expectedCode) &&
+    (!expectedMessageIncludes || errorMessage.includes(expectedMessageIncludes));
+  return {
+    route: request.route,
+    idempotencyKey: request.idempotencyKey ?? null,
+    expectedStatus,
+    actualStatus: response.status,
+    expectedCode: expectedCode ?? null,
+    actualCode: errorCode,
+    expectedMessageIncludes: expectedMessageIncludes ?? null,
+    message: errorMessage,
+    passed,
+    noTxExpected: true,
+  };
+}
+
+function operatorEvidenceRef(values, name) {
+  const value = values[name] || process.env[name] || '';
+  return value.trim() ? { status: 'provided', evidenceRef: value.trim() } : null;
+}
+
+function readOperatorEvidencePacket(values, name, scenario) {
+  const reference = operatorEvidenceRef(values, name);
+  if (!reference) {
+    return {
+      scenario,
+      status: 'missing',
+      evidenceRef: null,
+      sourceEnv: name,
+      error: `${name} is required and must point to a structured JSON evidence file`,
+    };
+  }
+
+  const evidencePath = path.isAbsolute(reference.evidenceRef)
+    ? reference.evidenceRef
+    : path.resolve(COTSEL_ROOT, reference.evidenceRef);
+  if (!fs.existsSync(evidencePath)) {
+    return {
+      scenario,
+      status: 'invalid',
+      evidenceRef: reference.evidenceRef,
+      sourceEnv: name,
+      error: `Evidence file does not exist: ${reference.evidenceRef}`,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    return {
+      ...parsed,
+      scenario: parsed.scenario ?? scenario,
+      evidenceRef: parsed.evidenceRef ?? reference.evidenceRef,
+      sourceEnv: name,
+      sourcePath: reference.evidenceRef,
+    };
+  } catch (error) {
+    return {
+      scenario,
+      status: 'invalid',
+      evidenceRef: reference.evidenceRef,
+      sourceEnv: name,
+      error: error instanceof Error ? error.message : 'Unable to parse structured evidence file',
+    };
+  }
+}
+
+function isIdempotencyInProgress(response) {
+  if (response.status !== 409) return false;
+  const message = String(response.payload?.error?.message ?? response.payload?.message ?? '');
+  return message.includes('already in progress');
+}
+
+async function waitForIdempotentReplay(request, attempts = 8, delayMs = 250) {
+  let latest = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    latest = await gatewayRequest(request);
+    if (!isIdempotencyInProgress(latest)) {
+      return { ...latest, attempts };
+    }
+    await wait(delayMs * attempt);
+  }
+  return { ...latest, attempts };
 }
 
 async function waitForTx(tx) {
@@ -689,6 +799,51 @@ async function main() {
       s: usdcSignature.s,
     },
   };
+  const failureModeEvidence = {
+    relayerOutageOrDisabled: readOperatorEvidencePacket(
+      cotselEnv,
+      'PILOT_RELAYER_OUTAGE_EVIDENCE_REF',
+      'relayer_outage_or_disabled',
+    ),
+    fallbackUx: readOperatorEvidencePacket(
+      cotselEnv,
+      'PILOT_FALLBACK_UX_EVIDENCE_REF',
+      'fallback_ux',
+    ),
+    operatorFailureRehearsal: readOperatorEvidencePacket(
+      cotselEnv,
+      'PILOT_FAILURE_REHEARSAL_EVIDENCE_REF',
+      'operator_failure_rehearsal',
+    ),
+  };
+  const expiredCreatePayload = {
+    ...createPayload,
+    buyerAuthorization: {
+      ...createPayload.buyerAuthorization,
+      deadline: String(nowSeconds - 60),
+    },
+  };
+  const tradeCounterBeforeExpiredCheck = await escrow.tradeCounter();
+  const expiredAuthorization = await expectGatewayFailure({
+    baseUrl: gatewayBaseUrl,
+    apiKey: serviceKey.id,
+    apiSecret: serviceKey.secret,
+    route: '/settlement/gasless-executions/create-trade',
+    idempotencyKey: `gasless-create-expired-${requestId}`,
+    body: { ...expiredCreatePayload, payloadHash: payloadHash(expiredCreatePayload) },
+    expectedStatus: 400,
+    expectedMessageIncludes: 'buyerAuthorization.deadline has expired',
+  });
+  const tradeCounterAfterExpiredCheck = await escrow.tradeCounter();
+  failureModeEvidence.expiredAuthorization = {
+    ...expiredAuthorization,
+    tradeCounterBefore: tradeCounterBeforeExpiredCheck.toString(),
+    tradeCounterAfter: tradeCounterAfterExpiredCheck.toString(),
+    noTradeCreated: tradeCounterAfterExpiredCheck === tradeCounterBeforeExpiredCheck,
+    passed:
+      expiredAuthorization.passed &&
+      tradeCounterAfterExpiredCheck === tradeCounterBeforeExpiredCheck,
+  };
   const createResult = await gatewayJson({
     baseUrl: gatewayBaseUrl,
     apiKey: serviceKey.id,
@@ -697,6 +852,37 @@ async function main() {
     idempotencyKey: `gasless-create-${requestId}`,
     body: { ...createPayload, payloadHash: payloadHash(createPayload) },
   });
+  const createReplayResult = await waitForIdempotentReplay(
+    {
+      baseUrl: gatewayBaseUrl,
+      apiKey: serviceKey.id,
+      apiSecret: serviceKey.secret,
+      route: '/settlement/gasless-executions/create-trade',
+      idempotencyKey: `gasless-create-${requestId}`,
+      body: { ...createPayload, payloadHash: payloadHash(createPayload) },
+    },
+    8,
+    250,
+  );
+  const tradeCounterAfterReplay = await escrow.tradeCounter();
+  failureModeEvidence.idempotentReplay = {
+    route: '/settlement/gasless-executions/create-trade',
+    idempotencyKey: `gasless-create-${requestId}`,
+    expectedStatus: 202,
+    actualStatus: createReplayResult.status,
+    attempts: createReplayResult.attempts,
+    replayHeader: createReplayResult.headers['x-idempotent-replay'] ?? null,
+    firstTxHash: createResult.data.txHash,
+    replayTxHash: createReplayResult.payload?.data?.txHash ?? null,
+    tradeCounterBefore: tradeCounterBefore.toString(),
+    tradeCounterAfterReplay: tradeCounterAfterReplay.toString(),
+    noDuplicateTradeCreated: tradeCounterAfterReplay === tradeCounterBefore + 1n,
+    passed:
+      createReplayResult.status === 202 &&
+      createReplayResult.headers['x-idempotent-replay'] === 'true' &&
+      createReplayResult.payload?.data?.txHash === createResult.data.txHash &&
+      tradeCounterAfterReplay === tradeCounterBefore + 1n,
+  };
   const tradeId = tradeCounterBefore.toString();
   const tradeAfterCreate = await escrow.trades(tradeId);
 
@@ -898,6 +1084,7 @@ async function main() {
       proposeRefund: proposalReceipt.txHash,
       approveRefund: refundReceipt.txHash,
     },
+    failureModeEvidence,
     dispute: {
       proposalId,
     },
@@ -921,6 +1108,7 @@ async function main() {
         tradeId,
         txs: report.transactions,
         currentRunEvidence: report.currentRunEvidence,
+        failureModeEvidence: report.failureModeEvidence,
         backendAccountingEntries: backendEvidence.accounting.length,
         backendRefundEvents: backendEvidence.refundEvents.length,
       },

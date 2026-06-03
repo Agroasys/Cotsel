@@ -6,6 +6,7 @@ import { strict as assert } from 'assert';
 import { getAddress, isAddress } from 'ethers';
 import { parseAllowedOrigins } from '@agroasys/shared-edge';
 import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
+import { calculateGaslessExecutorCapacityPolicy } from '../core/gaslessExecutorCapacityPolicy';
 
 dotenv.config();
 
@@ -58,6 +59,11 @@ export interface GatewayConfig {
   gaslessMaxNativeCostWei?: bigint;
   gaslessMinExecutorBalanceWei?: bigint;
   gaslessLowBalanceAlertWei?: bigint;
+  gaslessCapacityTargetTxPerDay?: number;
+  gaslessCapacityBurstMultiplierBasisPoints?: number;
+  gaslessCapacitySafetyMarginBasisPoints?: number;
+  gaslessCapacityRequiredExecutorBalanceWei?: bigint;
+  gaslessCapacityFailClosed?: boolean;
   gaslessRequestMaxTtlSeconds?: number;
   gaslessStuckQueueThresholdMs?: number;
   gaslessRepeatedFailureAlertThreshold?: number;
@@ -108,6 +114,18 @@ function envNumber(name: string, fallback?: number): number {
   const value = raw ?? env(name);
   const parsed = Number.parseInt(value, 10);
   assert(!Number.isNaN(parsed), `${name} must be a number`);
+  return parsed;
+}
+
+function envPositiveInteger(name: string, fallback?: number): number {
+  const raw = process.env[name];
+  if ((raw === undefined || raw === '') && fallback !== undefined) {
+    return fallback;
+  }
+
+  const value = raw ?? env(name);
+  const parsed = Number(value);
+  assert(Number.isInteger(parsed) && parsed > 0, `${name} must be a positive integer`);
   return parsed;
 }
 
@@ -253,6 +271,42 @@ export function loadConfig(): GatewayConfig {
     process.env.GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY?.trim() ||
       process.env.GATEWAY_EXECUTOR_PRIVATE_KEY?.trim() ||
       undefined,
+  );
+  const gaslessMaxGasLimit = envBigInt('GATEWAY_GASLESS_MAX_GAS_LIMIT', 1_500_000n);
+  const gaslessMaxFeePerGasWei = envBigInt('GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI', 50_000_000_000n);
+  const gaslessMaxNativeCostWei = envBigInt(
+    'GATEWAY_GASLESS_MAX_NATIVE_COST_WEI',
+    100_000_000_000_000_000n,
+  );
+  const gaslessMinExecutorBalanceWei = envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n);
+  const gaslessLowBalanceAlertWei = envBigInt('GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI', 0n);
+  const gaslessCapacityTargetTxPerDay = envPositiveInteger(
+    'GATEWAY_GASLESS_CAPACITY_TARGET_TX_PER_DAY',
+    500,
+  );
+  const gaslessCapacityBurstMultiplierBasisPoints = envPositiveInteger(
+    'GATEWAY_GASLESS_CAPACITY_BURST_MULTIPLIER_BASIS_POINTS',
+    40_000,
+  );
+  const gaslessCapacitySafetyMarginBasisPoints = envPositiveInteger(
+    'GATEWAY_GASLESS_CAPACITY_SAFETY_MARGIN_BASIS_POINTS',
+    12_500,
+  );
+  const gaslessCapacityFailClosed = envBool(
+    'GATEWAY_GASLESS_CAPACITY_FAIL_CLOSED',
+    nodeEnv === 'production' || chainId === 8453,
+  );
+  const gaslessCapacityPolicy = calculateGaslessExecutorCapacityPolicy({
+    targetTransactionsPerDay: gaslessCapacityTargetTxPerDay,
+    burstMultiplierBasisPoints: gaslessCapacityBurstMultiplierBasisPoints,
+    safetyMarginBasisPoints: gaslessCapacitySafetyMarginBasisPoints,
+    maxCostPerTxWei: gaslessMaxGasLimit * gaslessMaxFeePerGasWei,
+    configuredMinExecutorBalanceWei: gaslessMinExecutorBalanceWei,
+    configuredLowBalanceAlertWei: gaslessLowBalanceAlertWei,
+    failClosed: gaslessCapacityFailClosed,
+  });
+  const gaslessCapacityRequiredExecutorBalanceWei = BigInt(
+    gaslessCapacityPolicy.requiredBurstHourBalanceWei,
   );
   const oracleBaseUrl =
     process.env.GATEWAY_ORACLE_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
@@ -469,21 +523,41 @@ export function loadConfig(): GatewayConfig {
       'GATEWAY_GASLESS_EXECUTION_ENABLED requires GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY or GATEWAY_EXECUTOR_PRIVATE_KEY',
     );
     assert(
-      envBigInt('GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI', 50_000_000_000n) > 0n,
+      gaslessMaxFeePerGasWei > 0n,
       'GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI must be > 0 when gasless execution is enabled',
     );
     assert(
-      envBigInt('GATEWAY_GASLESS_MAX_NATIVE_COST_WEI', 100_000_000_000_000_000n) > 0n,
+      gaslessMaxNativeCostWei > 0n,
       'GATEWAY_GASLESS_MAX_NATIVE_COST_WEI must be > 0 when gasless execution is enabled',
     );
-    const gaslessLowBalanceAlertWei = envBigInt('GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI', 0n);
-    const gaslessMinExecutorBalanceWei = envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n);
     assert(
       gaslessLowBalanceAlertWei === 0n ||
         gaslessMinExecutorBalanceWei === 0n ||
         gaslessLowBalanceAlertWei >= gaslessMinExecutorBalanceWei,
       'GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI must be >= GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI when both are set',
     );
+    assert(
+      gaslessCapacityTargetTxPerDay > 0,
+      'GATEWAY_GASLESS_CAPACITY_TARGET_TX_PER_DAY must be > 0',
+    );
+    assert(
+      gaslessCapacityBurstMultiplierBasisPoints > 0,
+      'GATEWAY_GASLESS_CAPACITY_BURST_MULTIPLIER_BASIS_POINTS must be > 0',
+    );
+    assert(
+      gaslessCapacitySafetyMarginBasisPoints >= 10_000,
+      'GATEWAY_GASLESS_CAPACITY_SAFETY_MARGIN_BASIS_POINTS must be >= 10000',
+    );
+    if (gaslessCapacityFailClosed) {
+      assert(
+        gaslessCapacityPolicy.floorMeetsPolicy,
+        'GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI must cover the configured gasless burst-hour capacity policy when fail-closed capacity is enabled',
+      );
+      assert(
+        gaslessCapacityPolicy.lowBalanceAlertProtectsPolicy,
+        'GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI must cover the configured gasless burst-hour capacity policy when fail-closed capacity is enabled',
+      );
+    }
     assert(
       envNumber('GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS', 300000) >= 1000,
       'GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS must be >= 1000',
@@ -565,14 +639,16 @@ export function loadConfig(): GatewayConfig {
     gaslessSignerCustodyMode,
     gaslessAllowRawPrivateKeyInProduction,
     gaslessBroadcastPaused,
-    gaslessMaxGasLimit: envBigInt('GATEWAY_GASLESS_MAX_GAS_LIMIT', 1_500_000n),
-    gaslessMaxFeePerGasWei: envBigInt('GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI', 50_000_000_000n),
-    gaslessMaxNativeCostWei: envBigInt(
-      'GATEWAY_GASLESS_MAX_NATIVE_COST_WEI',
-      100_000_000_000_000_000n,
-    ),
-    gaslessMinExecutorBalanceWei: envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n),
-    gaslessLowBalanceAlertWei: envBigInt('GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI', 0n),
+    gaslessMaxGasLimit,
+    gaslessMaxFeePerGasWei,
+    gaslessMaxNativeCostWei,
+    gaslessMinExecutorBalanceWei,
+    gaslessLowBalanceAlertWei,
+    gaslessCapacityTargetTxPerDay,
+    gaslessCapacityBurstMultiplierBasisPoints,
+    gaslessCapacitySafetyMarginBasisPoints,
+    gaslessCapacityRequiredExecutorBalanceWei,
+    gaslessCapacityFailClosed,
     gaslessRequestMaxTtlSeconds: envNumber('GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS', 900),
     gaslessStuckQueueThresholdMs: envNumber('GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS', 300000),
     gaslessRepeatedFailureAlertThreshold: envNumber(

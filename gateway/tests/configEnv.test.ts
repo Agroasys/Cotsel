@@ -143,6 +143,8 @@ describe('gateway runtime env config', () => {
           '0x0000000000000000000000000000000000000000000000000000000000000001',
         GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'raw_private_key',
         GATEWAY_GASLESS_ALLOW_RAW_PRIVATE_KEY_IN_PRODUCTION: 'false',
+        GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '10000000000000000000',
+        GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '10000000000000000000',
       },
       () => {
         const { loadConfig } = loadConfigModule();
@@ -183,8 +185,60 @@ describe('gateway runtime env config', () => {
         expect(config.gaslessMaxNativeCostWei).toBe(100000000000000n);
         expect(config.gaslessLowBalanceAlertWei).toBe(2n);
         expect(config.gaslessMinExecutorBalanceWei).toBe(1n);
+        expect(config.gaslessCapacityTargetTxPerDay).toBe(500);
+        expect(config.gaslessCapacityBurstMultiplierBasisPoints).toBe(40000);
+        expect(config.gaslessCapacitySafetyMarginBasisPoints).toBe(12500);
+        expect(config.gaslessCapacityRequiredExecutorBalanceWei).toBe(157500000000000000n);
+        expect(config.gaslessCapacityFailClosed).toBe(false);
         expect(config.gaslessStuckQueueThresholdMs).toBe(5000);
         expect(config.gaslessRepeatedFailureAlertThreshold).toBe(2);
+      },
+    );
+  });
+
+  test('gasless relayer capacity policy fails closed when configured for production readiness', () => {
+    withEnv(
+      {
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_GASLESS_EXECUTION_ENABLED: 'true',
+        GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY:
+          '0x0000000000000000000000000000000000000000000000000000000000000001',
+        GATEWAY_GASLESS_CAPACITY_FAIL_CLOSED: 'true',
+        GATEWAY_GASLESS_MAX_GAS_LIMIT: '1500000',
+        GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI: '1000000000',
+        GATEWAY_GASLESS_MAX_NATIVE_COST_WEI: '2000000000000000',
+        GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '100000000000000000',
+        GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '150000000000000000',
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI must cover the configured gasless burst-hour capacity policy when fail-closed capacity is enabled',
+        );
+      },
+    );
+  });
+
+  test('gasless relayer capacity policy rejects fractional capacity inputs', () => {
+    withEnv(
+      {
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_GASLESS_EXECUTION_ENABLED: 'true',
+        GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY:
+          '0x0000000000000000000000000000000000000000000000000000000000000001',
+        GATEWAY_GASLESS_CAPACITY_TARGET_TX_PER_DAY: '500.5',
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'GATEWAY_GASLESS_CAPACITY_TARGET_TX_PER_DAY must be a positive integer',
+        );
       },
     );
   });
