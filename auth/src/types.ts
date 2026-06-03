@@ -122,7 +122,6 @@ export interface AuthConfig {
   dbMigrationUser?: string;
   dbMigrationPassword?: string;
   sessionTtlSeconds: number;
-  legacyWalletLoginEnabled: boolean;
   corsAllowedOrigins: string[];
   corsAllowNoOrigin: boolean;
   rateLimitEnabled: boolean;

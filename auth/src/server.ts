@@ -19,8 +19,7 @@ import { createPostgresSessionStore } from './core/sessionStore';
 import { createSessionService } from './core/sessionService';
 import { createAdminService } from './core/adminService';
 import { createPostgresOperatorAuthorityStore } from './core/operatorAuthorityStore';
-import { createInMemoryChallengeStore } from './core/challengeStore';
-import { LegacyWalletAuthController, SessionController } from './api/controller';
+import { SessionController } from './api/controller';
 import { AdminController } from './api/adminController';
 import { createRouter } from './api/routes';
 import { authRateLimitPolicy } from './httpSecurity';
@@ -83,7 +82,6 @@ async function bootstrap(): Promise<void> {
   const operatorAuthorityStore = createPostgresOperatorAuthorityStore(pool);
   const sessionStore = createPostgresSessionStore(pool);
   const sessionService = createSessionService(sessionStore, profileStore);
-  const challengeStore = createInMemoryChallengeStore();
   const trustedSessionExchangeNonceStore = createPostgresNonceStore({
     tableName: 'trusted_session_exchange_nonces',
     query: (sql, params) => pool.query(sql, params),
@@ -170,9 +168,6 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  const legacyWalletController = config.legacyWalletLoginEnabled
-    ? new LegacyWalletAuthController(sessionService, challengeStore, config.sessionTtlSeconds)
-    : undefined;
   const sessionController = new SessionController(sessionService, config.sessionTtlSeconds);
   const adminController = config.adminControlEnabled
     ? new AdminController(
@@ -184,7 +179,6 @@ async function bootstrap(): Promise<void> {
       )
     : undefined;
   const router = createRouter(sessionController, sessionService, {
-    legacyWalletController,
     trustedSessionExchangeMiddleware,
     adminController,
     adminControlMiddleware,

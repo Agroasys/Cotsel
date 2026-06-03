@@ -10,12 +10,6 @@ const HEALTH_RATE_LIMIT: RouteRateLimitPolicy = {
   sustained: { limit: 600, windowSeconds: 60 },
 };
 
-const LEGACY_AUTH_RATE_LIMIT: RouteRateLimitPolicy = {
-  name: 'legacy_wallet_login',
-  burst: { limit: 5, windowSeconds: 60 },
-  sustained: { limit: 30, windowSeconds: 300 },
-};
-
 const SESSION_RATE_LIMIT: RouteRateLimitPolicy = {
   name: 'session',
   burst: { limit: 30, windowSeconds: 60 },
@@ -39,10 +33,6 @@ export function authRateLimitPolicy(req: Pick<Request, 'path'>): RouteRateLimitP
 
   if (path === '/health' || path === '/ready') {
     return HEALTH_RATE_LIMIT;
-  }
-
-  if (path === '/challenge' || path === '/login') {
-    return LEGACY_AUTH_RATE_LIMIT;
   }
 
   if (path === '/session' || path === '/session/refresh' || path === '/session/revoke') {

@@ -6,7 +6,6 @@ const counters: Record<string, number> = {
   sessions_issued: 0,
   sessions_refreshed: 0,
   sessions_revoked: 0,
-  login_errors: 0,
   admin_durable_provisioned: 0,
   admin_durable_revoked: 0,
   admin_break_glass_granted: 0,
@@ -32,10 +31,6 @@ export function incrementSessionRefreshed(): void {
 
 export function incrementSessionRevoked(): void {
   increment('sessions_revoked');
-}
-
-export function incrementLoginError(): void {
-  increment('login_errors');
 }
 
 export function incrementAdminDurableProvisioned(): void {
