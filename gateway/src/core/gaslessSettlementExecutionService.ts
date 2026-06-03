@@ -23,6 +23,10 @@ import {
   SettlementHandoffRecord,
   SettlementStore,
 } from './settlementStore';
+import {
+  calculateGaslessExecutorCapacityPolicy,
+  type GaslessExecutorCapacityPolicy,
+} from './gaslessExecutorCapacityPolicy';
 
 const HEX_32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 const USER_ACTIONS = [
@@ -165,6 +169,7 @@ export interface GaslessRelayerReadinessSnapshot {
     stuckQueueThresholdMs: number;
     repeatedFailureAlertThreshold: number;
   };
+  capacityPolicy: GaslessExecutorCapacityPolicy;
   executorBalanceWei: string | null;
   queue: {
     pending: number;
@@ -647,6 +652,23 @@ function buildUserActionArguments(input: GaslessUserActionExecutionInput) {
   ] as const;
 }
 
+export function isGaslessNonceDriftError(error: unknown): boolean {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code)
+      : '';
+  if (code === 'NONCE_EXPIRED') {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return (
+    message.includes('nonce too low') ||
+    message.includes('nonce has already been used') ||
+    message.includes('replacement fee too low')
+  );
+}
+
 export class GaslessSettlementExecutionService {
   private broadcastQueue: Promise<void> = Promise.resolve();
   private pendingBroadcasts = 0;
@@ -672,6 +694,11 @@ export class GaslessSettlementExecutionService {
       maxNativeCostWei?: bigint;
       minExecutorBalanceWei?: bigint;
       lowBalanceAlertWei?: bigint;
+      capacityTargetTxPerDay?: number;
+      capacityBurstMultiplierBasisPoints?: number;
+      capacitySafetyMarginBasisPoints?: number;
+      capacityRequiredExecutorBalanceWei?: bigint;
+      capacityFailClosed?: boolean;
       stuckQueueThresholdMs?: number;
       repeatedFailureAlertThreshold?: number;
       now?: () => Date;
@@ -683,6 +710,22 @@ export class GaslessSettlementExecutionService {
     const stuckQueueThresholdMs = this.options.stuckQueueThresholdMs ?? 300_000;
     const repeatedFailureAlertThreshold = this.options.repeatedFailureAlertThreshold ?? 3;
     const lowBalanceAlertWei = this.options.lowBalanceAlertWei ?? 0n;
+    const gasLimitCap = this.options.gasLimitCap ?? 1_500_000n;
+    const maxFeePerGasWei = this.options.maxFeePerGasWei ?? 50_000_000_000n;
+    const maxNativeCostWei = this.options.maxNativeCostWei ?? 100_000_000_000_000_000n;
+    const minExecutorBalanceWei = this.options.minExecutorBalanceWei ?? 0n;
+    const capacityPolicy = calculateGaslessExecutorCapacityPolicy({
+      targetTransactionsPerDay: this.options.capacityTargetTxPerDay ?? 500,
+      burstMultiplierBasisPoints: this.options.capacityBurstMultiplierBasisPoints ?? 40_000,
+      safetyMarginBasisPoints: this.options.capacitySafetyMarginBasisPoints ?? 12_500,
+      maxCostPerTxWei: gasLimitCap * maxFeePerGasWei,
+      configuredMinExecutorBalanceWei: minExecutorBalanceWei,
+      configuredLowBalanceAlertWei: lowBalanceAlertWei,
+      failClosed: this.options.capacityFailClosed ?? false,
+    });
+    const requiredExecutorBalanceWei =
+      this.options.capacityRequiredExecutorBalanceWei ??
+      BigInt(capacityPolicy.requiredBurstHourBalanceWei);
 
     if (this.options.broadcastPaused) {
       alerts.push({
@@ -721,11 +764,49 @@ export class GaslessSettlementExecutionService {
       });
     }
 
+    if (!capacityPolicy.floorMeetsPolicy) {
+      alerts.push({
+        code: 'gasless_executor_capacity_floor_below_policy',
+        severity: capacityPolicy.failClosed ? 'critical' : 'medium',
+        detail:
+          'Configured executor balance floor does not cover the gasless burst-hour capacity policy.',
+      });
+    }
+
+    if (!capacityPolicy.lowBalanceAlertProtectsPolicy) {
+      alerts.push({
+        code: 'gasless_executor_capacity_alert_below_policy',
+        severity: capacityPolicy.failClosed ? 'critical' : 'medium',
+        detail:
+          'Configured low-balance alert threshold does not cover the gasless burst-hour capacity policy.',
+      });
+    }
+
+    if (
+      this.lastExecutorBalanceWei !== null &&
+      this.lastExecutorBalanceWei < requiredExecutorBalanceWei
+    ) {
+      alerts.push({
+        code: 'gasless_executor_balance_below_capacity_policy',
+        severity: capacityPolicy.failClosed ? 'critical' : 'high',
+        detail: 'Observed executor balance does not cover the gasless burst-hour capacity policy.',
+      });
+    }
+
+    const hasCriticalCapacityAlert = alerts.some(
+      (alert) =>
+        alert.severity === 'critical' &&
+        (alert.code === 'gasless_executor_capacity_floor_below_policy' ||
+          alert.code === 'gasless_executor_capacity_alert_below_policy' ||
+          alert.code === 'gasless_executor_balance_below_capacity_policy'),
+    );
     const state: GaslessRelayerReadinessSnapshot['state'] = this.options.broadcastPaused
       ? 'paused'
-      : alerts.some((alert) => alert.severity === 'critical' || alert.severity === 'high')
-        ? 'degraded'
-        : 'ready';
+      : hasCriticalCapacityAlert
+        ? 'blocked'
+        : alerts.some((alert) => alert.severity === 'critical' || alert.severity === 'high')
+          ? 'degraded'
+          : 'ready';
 
     return {
       enabled: true,
@@ -739,14 +820,15 @@ export class GaslessSettlementExecutionService {
         rpcFallbackCount: this.options.rpcFallbackCount ?? 0,
       },
       controls: {
-        gasLimitCap: (this.options.gasLimitCap ?? 1_500_000n).toString(),
-        maxFeePerGasWei: (this.options.maxFeePerGasWei ?? 50_000_000_000n).toString(),
-        maxNativeCostWei: (this.options.maxNativeCostWei ?? 100_000_000_000_000_000n).toString(),
-        minExecutorBalanceWei: (this.options.minExecutorBalanceWei ?? 0n).toString(),
+        gasLimitCap: gasLimitCap.toString(),
+        maxFeePerGasWei: maxFeePerGasWei.toString(),
+        maxNativeCostWei: maxNativeCostWei.toString(),
+        minExecutorBalanceWei: minExecutorBalanceWei.toString(),
         lowBalanceAlertWei: lowBalanceAlertWei.toString(),
         stuckQueueThresholdMs,
         repeatedFailureAlertThreshold,
       },
+      capacityPolicy,
       executorBalanceWei: this.lastExecutorBalanceWei?.toString() ?? null,
       queue: {
         pending: this.pendingBroadcasts,
@@ -1579,6 +1661,20 @@ export function createEthersGaslessSettlementExecutor(
     });
   }
 
+  async function withFreshSignerNonce<T>(operation: () => Promise<T>): Promise<T> {
+    signer.reset();
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isGaslessNonceDriftError(error)) {
+        throw error;
+      }
+
+      signer.reset();
+      return operation();
+    }
+  }
+
   return {
     async simulateCreateTrade(input) {
       return {
@@ -1590,10 +1686,12 @@ export function createEthersGaslessSettlementExecutor(
       const args = buildCreateTradeArguments(input);
       const gasEstimate = await simulate(input);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await escrow.createTradeWithAuthorization(...args, {
-        gasLimit: gasEstimate,
-        ...feeOverrides,
-      });
+      const tx = await withFreshSignerNonce(() =>
+        escrow.createTradeWithAuthorization(...args, {
+          gasLimit: gasEstimate,
+          ...feeOverrides,
+        }),
+      );
 
       return {
         txHash: tx.hash,
@@ -1610,7 +1708,9 @@ export function createEthersGaslessSettlementExecutor(
     async executeUserAction(input) {
       const gasEstimate = await simulateUserAction(input);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await broadcastUserAction(input, gasEstimate, feeOverrides);
+      const tx = await withFreshSignerNonce(() =>
+        broadcastUserAction(input, gasEstimate, feeOverrides),
+      );
       return {
         txHash: tx.hash,
         receipt: await waitForConfirmedReceipt(tx),
@@ -1626,10 +1726,12 @@ export function createEthersGaslessSettlementExecutor(
     async executeOperatorAction(input) {
       const gasEstimate = await simulateOperatorAction(input);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await escrow.finalizeAfterDisputeWindow(input.tradeId, {
-        gasLimit: gasEstimate,
-        ...feeOverrides,
-      });
+      const tx = await withFreshSignerNonce(() =>
+        escrow.finalizeAfterDisputeWindow(input.tradeId, {
+          gasLimit: gasEstimate,
+          ...feeOverrides,
+        }),
+      );
       return {
         txHash: tx.hash,
         receipt: await waitForConfirmedReceipt(tx),

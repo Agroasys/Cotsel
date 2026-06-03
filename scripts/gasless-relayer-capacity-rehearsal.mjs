@@ -10,6 +10,7 @@ const DEFAULT_BURST_MULTIPLIER = 4;
 const DEFAULT_GAS_LIMIT_CAP = 1_500_000n;
 const DEFAULT_MAX_FEE_PER_GAS_WEI = 50_000_000_000n;
 const DEFAULT_MAX_NATIVE_COST_WEI = 100_000_000_000_000_000n;
+const DEFAULT_SAFETY_MARGIN_BASIS_POINTS = 12_500;
 
 function usage() {
   console.error(`Usage: node scripts/gasless-relayer-capacity-rehearsal.mjs [options]
@@ -108,6 +109,14 @@ function envBool(name, fallback) {
   throw new Error(`${name} must be true or false`);
 }
 
+function envPositiveInteger(name, fallback) {
+  const value = envNumber(name, fallback);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return value;
+}
+
 function parseUrlList(raw) {
   return (raw || '')
     .split(',')
@@ -115,8 +124,59 @@ function parseUrlList(raw) {
     .filter(Boolean);
 }
 
+function ceilDiv(numerator, denominator) {
+  return (numerator + denominator - 1n) / denominator;
+}
+
+const FAILURE_MODE_EVIDENCE_REQUIREMENTS = {
+  relayerOutageOrDisabled: {
+    scenario: 'relayer_outage_or_disabled',
+    requiredChecks: ['readinessCaptured', 'broadcastPausedOrDisabled', 'noUserEthRequired'],
+  },
+  fallbackUx: {
+    scenario: 'fallback_ux',
+    requiredChecks: ['fallbackPresented', 'operatorRecoveryPathCaptured', 'noUserEthRequired'],
+  },
+  operatorFailureRehearsal: {
+    scenario: 'operator_failure_rehearsal',
+    requiredChecks: ['readinessCaptured'],
+    anyChecks: [
+      'stuckQueueAlertVisible',
+      'repeatedFailureAlertVisible',
+      'droppedExecutionCaptured',
+    ],
+  },
+};
+
+function hasValidTimestamp(value) {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
+}
+
+function hasNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function evidencePacketPasses(packet, requirement) {
+  if (!packet || typeof packet !== 'object') {
+    return false;
+  }
+  const checks = packet.checks && typeof packet.checks === 'object' ? packet.checks : {};
+  const requiredChecksPass = requirement.requiredChecks.every((key) => checks[key] === true);
+  const anyChecksPass = requirement.anyChecks
+    ? requirement.anyChecks.some((key) => checks[key] === true)
+    : true;
+  return (
+    packet.status === 'passed' &&
+    packet.scenario === requirement.scenario &&
+    hasNonEmptyString(packet.evidenceRef) &&
+    hasValidTimestamp(packet.observedAt) &&
+    requiredChecksPass &&
+    anyChecksPass
+  );
+}
+
 function buildCapacityReport(options, now = new Date()) {
-  const targetTransactionsPerDay = envNumber(
+  const targetTransactionsPerDay = envPositiveInteger(
     'GATEWAY_GASLESS_CAPACITY_TARGET_TX_PER_DAY',
     DEFAULT_TARGET_TX_PER_DAY,
   );
@@ -128,6 +188,17 @@ function buildCapacityReport(options, now = new Date()) {
     'GATEWAY_GASLESS_CAPACITY_BURST_MULTIPLIER',
     DEFAULT_BURST_MULTIPLIER,
   );
+  const burstMultiplierBasisPoints = envPositiveInteger(
+    'GATEWAY_GASLESS_CAPACITY_BURST_MULTIPLIER_BASIS_POINTS',
+    Math.ceil(burstMultiplier * 10_000),
+  );
+  const safetyMarginBasisPoints = envPositiveInteger(
+    'GATEWAY_GASLESS_CAPACITY_SAFETY_MARGIN_BASIS_POINTS',
+    DEFAULT_SAFETY_MARGIN_BASIS_POINTS,
+  );
+  if (safetyMarginBasisPoints < 10_000) {
+    throw new Error('GATEWAY_GASLESS_CAPACITY_SAFETY_MARGIN_BASIS_POINTS must be >= 10000');
+  }
   const gasLimitCap = envBigInt('GATEWAY_GASLESS_MAX_GAS_LIMIT', DEFAULT_GAS_LIMIT_CAP);
   const maxFeePerGasWei = envBigInt(
     'GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI',
@@ -140,11 +211,21 @@ function buildCapacityReport(options, now = new Date()) {
   const minExecutorBalanceWei = envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n);
   const lowBalanceAlertWei = envBigInt('GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI', 0n);
   const requireFallback = envBool('GATEWAY_GASLESS_REQUIRE_RPC_FALLBACK', options.mode === 'live');
+  const failClosedCapacity = envBool(
+    'GATEWAY_GASLESS_CAPACITY_FAIL_CLOSED',
+    process.env.NODE_ENV === 'production' || process.env.GATEWAY_CHAIN_ID === '8453',
+  );
   const fallbackUrls = parseUrlList(process.env.GATEWAY_RPC_FALLBACK_URLS);
 
-  const averageTransactionsPerHour = targetTransactionsPerDay / 24;
-  const burstTransactionsPerHour = Math.ceil(averageTransactionsPerHour * burstMultiplier);
+  const averageTransactionsPerHour = Math.ceil(targetTransactionsPerDay / 24);
+  const burstTransactionsPerHour = Number(
+    ceilDiv(BigInt(targetTransactionsPerDay) * BigInt(burstMultiplierBasisPoints), 24n * 10_000n),
+  );
   const maxCostPerTxWei = gasLimitCap * maxFeePerGasWei;
+  const requiredBurstHourBalanceWei = ceilDiv(
+    maxCostPerTxWei * BigInt(burstTransactionsPerHour) * BigInt(safetyMarginBasisPoints),
+    10_000n,
+  );
   const projectedDailyMaxCostWei = maxCostPerTxWei * BigInt(targetTransactionsPerDay);
   const blockers = [];
   const warnings = [];
@@ -168,11 +249,23 @@ function buildCapacityReport(options, now = new Date()) {
   ) {
     blockers.push('low-balance alert threshold is below the minimum executor balance floor');
   }
-  if (
-    minExecutorBalanceWei > 0n &&
-    minExecutorBalanceWei < maxCostPerTxWei * BigInt(burstTransactionsPerHour)
-  ) {
-    warnings.push('executor balance floor may not cover one burst hour at configured gas caps');
+  if (minExecutorBalanceWei < requiredBurstHourBalanceWei) {
+    const message =
+      'executor balance floor does not cover the configured burst-hour capacity policy';
+    if (failClosedCapacity) {
+      blockers.push(message);
+    } else {
+      warnings.push(message);
+    }
+  }
+  if (lowBalanceAlertWei < requiredBurstHourBalanceWei) {
+    const message =
+      'low-balance alert threshold does not cover the configured burst-hour capacity policy';
+    if (failClosedCapacity) {
+      blockers.push(message);
+    } else {
+      warnings.push(message);
+    }
   }
 
   let evidence = { required: options.mode === 'live', present: false, path: options.evidenceFile };
@@ -236,6 +329,25 @@ function buildCapacityReport(options, now = new Date()) {
           event.observedBuyerRefundCents !== null &&
           event.observedBuyerRefundCents !== undefined,
       );
+      const failureModeEvidence = parsed.failureModeEvidence ?? {};
+      const expiredAuthorizationProven =
+        failureModeEvidence.expiredAuthorization?.passed === true &&
+        failureModeEvidence.expiredAuthorization?.noTradeCreated === true;
+      const idempotentReplayProven =
+        failureModeEvidence.idempotentReplay?.passed === true &&
+        failureModeEvidence.idempotentReplay?.noDuplicateTradeCreated === true;
+      const relayerOutageEvidencePresent = evidencePacketPasses(
+        failureModeEvidence.relayerOutageOrDisabled,
+        FAILURE_MODE_EVIDENCE_REQUIREMENTS.relayerOutageOrDisabled,
+      );
+      const fallbackUxEvidencePresent = evidencePacketPasses(
+        failureModeEvidence.fallbackUx,
+        FAILURE_MODE_EVIDENCE_REQUIREMENTS.fallbackUx,
+      );
+      const operatorFailureRehearsalEvidencePresent = evidencePacketPasses(
+        failureModeEvidence.operatorFailureRehearsal,
+        FAILURE_MODE_EVIDENCE_REQUIREMENTS.operatorFailureRehearsal,
+      );
       if (missingTransactions.length > 0) {
         blockers.push(
           `live evidence is missing required transaction hashes: ${missingTransactions.join(', ')}`,
@@ -269,6 +381,29 @@ function buildCapacityReport(options, now = new Date()) {
       if (!hasBackendReconciledRefund) {
         blockers.push('live evidence does not include a matched backend refund ledger event');
       }
+      if (!expiredAuthorizationProven) {
+        blockers.push(
+          'live evidence does not prove expired gasless authorization rejection with no trade created',
+        );
+      }
+      if (!idempotentReplayProven) {
+        blockers.push(
+          'live evidence does not prove idempotent replay returned the original result without a duplicate trade',
+        );
+      }
+      if (!relayerOutageEvidencePresent) {
+        blockers.push(
+          'live evidence does not include relayer outage or disabled-relayer rehearsal evidence',
+        );
+      }
+      if (!fallbackUxEvidencePresent) {
+        blockers.push('live evidence does not include fallback UX/operator recovery evidence');
+      }
+      if (!operatorFailureRehearsalEvidencePresent) {
+        blockers.push(
+          'live evidence does not include operator failure rehearsal evidence for dropped or stuck execution',
+        );
+      }
       evidence = {
         ...evidence,
         present: true,
@@ -279,6 +414,13 @@ function buildCapacityReport(options, now = new Date()) {
         backendRefundEvents: parsed.backendEvidence?.refundEvents?.length ?? null,
         gatewayRefundEvents: parsed.gateway?.refundEvents?.length ?? null,
         gatewayCallbackDeliveries: parsed.gatewayEvidence?.callbackDeliveries?.length ?? null,
+        failureModes: {
+          expiredAuthorization: expiredAuthorizationProven,
+          idempotentReplay: idempotentReplayProven,
+          relayerOutageOrDisabled: relayerOutageEvidencePresent,
+          fallbackUx: fallbackUxEvidencePresent,
+          operatorFailureRehearsal: operatorFailureRehearsalEvidencePresent,
+        },
       };
     }
   }
@@ -291,6 +433,8 @@ function buildCapacityReport(options, now = new Date()) {
       transactionsPerDay: targetTransactionsPerDay,
       notionalUsdPerDay: targetNotionalUsd,
       burstMultiplier,
+      burstMultiplierBasisPoints,
+      safetyMarginBasisPoints,
       averageTransactionsPerHour,
       burstTransactionsPerHour,
     },
@@ -305,11 +449,13 @@ function buildCapacityReport(options, now = new Date()) {
       maxFeePerGasWei: maxFeePerGasWei.toString(),
       maxNativeCostWei: maxNativeCostWei.toString(),
       maxCostPerTxWei: maxCostPerTxWei.toString(),
+      requiredBurstHourBalanceWei: requiredBurstHourBalanceWei.toString(),
       projectedDailyMaxCostWei: projectedDailyMaxCostWei.toString(),
       minExecutorBalanceWei: minExecutorBalanceWei.toString(),
       lowBalanceAlertWei: lowBalanceAlertWei.toString(),
       fallbackRpcCount: fallbackUrls.length,
       requireFallback,
+      failClosedCapacity,
     },
     evidence,
     blockers,

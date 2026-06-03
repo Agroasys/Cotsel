@@ -87,14 +87,15 @@ describe('AgroasysEscrow', function () {
       nonce: bigint;
       deadline: bigint;
     },
+    domainOverrides: Partial<{ chainId: bigint; verifyingContract: string }> = {},
   ) {
     const chainId = (await ethers.provider.getNetwork()).chainId;
     return signer.signTypedData(
       {
         name: 'AgroasysEscrow',
         version: '1',
-        chainId,
-        verifyingContract: await escrow.getAddress(),
+        chainId: domainOverrides.chainId ?? chainId,
+        verifyingContract: domainOverrides.verifyingContract ?? (await escrow.getAddress()),
       },
       {
         CreateTradeAuthorization: [
@@ -123,14 +124,15 @@ describe('AgroasysEscrow', function () {
       nonce: bigint;
       deadline: bigint;
     },
+    domainOverrides: Partial<{ chainId: bigint; verifyingContract: string }> = {},
   ) {
     const chainId = (await ethers.provider.getNetwork()).chainId;
     return signer.signTypedData(
       {
         name: 'AgroasysEscrow',
         version: '1',
-        chainId,
-        verifyingContract: await escrow.getAddress(),
+        chainId: domainOverrides.chainId ?? chainId,
+        verifyingContract: domainOverrides.verifyingContract ?? (await escrow.getAddress()),
       },
       {
         UserActionAuthorization: [
@@ -1447,6 +1449,83 @@ describe('AgroasysEscrow', function () {
         ),
       ).to.be.revertedWith('authorization expired');
     });
+
+    it('rejects create-trade signatures from the wrong EIP-712 chain domain', async function () {
+      const nonce = await escrow.authorizationNonces(buyer.address);
+      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      const deadline = BigInt(blockTimestamp + 3600);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const signature = await signCreateTradeAuthorization(
+        buyer,
+        {
+          buyer: buyer.address,
+          supplier: supplier.address,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          nonce,
+          deadline,
+        },
+        { chainId: chainId + 1n },
+      );
+
+      await expect(
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          nonce,
+          deadline,
+          signature,
+        ),
+      ).to.be.revertedWith('bad authorization');
+    });
+
+    it('rejects create-trade signatures from the wrong EIP-712 verifying contract domain', async function () {
+      const nonce = await escrow.authorizationNonces(buyer.address);
+      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      const deadline = BigInt(blockTimestamp + 3600);
+
+      const signature = await signCreateTradeAuthorization(
+        buyer,
+        {
+          buyer: buyer.address,
+          supplier: supplier.address,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          nonce,
+          deadline,
+        },
+        { verifyingContract: relayer.address },
+      );
+
+      await expect(
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ricardianHash,
+          nonce,
+          deadline,
+          signature,
+        ),
+      ).to.be.revertedWith('bad authorization');
+    });
   });
 
   describe('Gasless typed authorizations', function () {
@@ -1839,6 +1918,49 @@ describe('AgroasysEscrow', function () {
         nonce,
         deadline,
       });
+
+      await expect(
+        escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
+      ).to.be.revertedWith('bad authorization');
+    });
+
+    it('rejects user-action signatures from the wrong EIP-712 chain domain', async function () {
+      const nonce = await escrow.authorizationNonces(buyer.address);
+      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      const deadline = BigInt(blockTimestamp + 3600);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+      const signature = await signUserActionAuthorization(
+        buyer,
+        {
+          user: buyer.address,
+          action: 1,
+          tradeId,
+          nonce,
+          deadline,
+        },
+        { chainId: chainId + 1n },
+      );
+
+      await expect(
+        escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
+      ).to.be.revertedWith('bad authorization');
+    });
+
+    it('rejects user-action signatures from the wrong EIP-712 verifying contract domain', async function () {
+      const nonce = await escrow.authorizationNonces(buyer.address);
+      const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
+      const deadline = BigInt(blockTimestamp + 3600);
+      const signature = await signUserActionAuthorization(
+        buyer,
+        {
+          user: buyer.address,
+          action: 1,
+          tradeId,
+          nonce,
+          deadline,
+        },
+        { verifyingContract: relayer.address },
+      );
 
       await expect(
         escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),

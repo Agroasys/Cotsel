@@ -141,6 +141,11 @@ async function startServer(
       maxNativeCostWei: runtimeConfig.gaslessMaxNativeCostWei,
       minExecutorBalanceWei: runtimeConfig.gaslessMinExecutorBalanceWei,
       lowBalanceAlertWei: runtimeConfig.gaslessLowBalanceAlertWei,
+      capacityTargetTxPerDay: runtimeConfig.gaslessCapacityTargetTxPerDay,
+      capacityBurstMultiplierBasisPoints: runtimeConfig.gaslessCapacityBurstMultiplierBasisPoints,
+      capacitySafetyMarginBasisPoints: runtimeConfig.gaslessCapacitySafetyMarginBasisPoints,
+      capacityRequiredExecutorBalanceWei: runtimeConfig.gaslessCapacityRequiredExecutorBalanceWei,
+      capacityFailClosed: runtimeConfig.gaslessCapacityFailClosed,
       stuckQueueThresholdMs: runtimeConfig.gaslessStuckQueueThresholdMs,
       repeatedFailureAlertThreshold: runtimeConfig.gaslessRepeatedFailureAlertThreshold,
     },
@@ -642,6 +647,13 @@ describe('gateway settlement routes contract', () => {
       );
       const readiness = gaslessSettlementService.getRelayerReadiness();
       expect(readiness.executorBalanceWei).toBe('1000000000000000000');
+      expect(readiness.capacityPolicy).toEqual(
+        expect.objectContaining({
+          targetTransactionsPerDay: 500,
+          burstTransactionsPerHour: 84,
+          failClosed: false,
+        }),
+      );
       expect(readiness.alerts).toEqual(
         expect.arrayContaining([
           expect.objectContaining({

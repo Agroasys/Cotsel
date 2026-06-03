@@ -3811,6 +3811,51 @@ components:
             repeatedFailureAlertThreshold:
               type: integer
               minimum: 1
+        capacityPolicy:
+          type: object
+          required:
+            - targetTransactionsPerDay
+            - averageTransactionsPerHour
+            - burstTransactionsPerHour
+            - burstMultiplierBasisPoints
+            - safetyMarginBasisPoints
+            - maxCostPerTxWei
+            - requiredBurstHourBalanceWei
+            - configuredMinExecutorBalanceWei
+            - configuredLowBalanceAlertWei
+            - floorMeetsPolicy
+            - lowBalanceAlertProtectsPolicy
+            - failClosed
+          properties:
+            targetTransactionsPerDay:
+              type: integer
+              minimum: 1
+            averageTransactionsPerHour:
+              type: integer
+              minimum: 1
+            burstTransactionsPerHour:
+              type: integer
+              minimum: 1
+            burstMultiplierBasisPoints:
+              type: integer
+              minimum: 1
+            safetyMarginBasisPoints:
+              type: integer
+              minimum: 10000
+            maxCostPerTxWei:
+              type: string
+            requiredBurstHourBalanceWei:
+              type: string
+            configuredMinExecutorBalanceWei:
+              type: string
+            configuredLowBalanceAlertWei:
+              type: string
+            floorMeetsPolicy:
+              type: boolean
+            lowBalanceAlertProtectsPolicy:
+              type: boolean
+            failClosed:
+              type: boolean
         executorBalanceWei:
           type: string
           nullable: true
