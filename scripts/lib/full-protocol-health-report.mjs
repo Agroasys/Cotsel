@@ -322,7 +322,6 @@ export function buildStaticProtocolReport({
     auth: {
       baseUrl: authBaseUrl,
       trustedSessionExchangeRoute: `${authBaseUrl}/session/exchange/agroasys`,
-      browserLoginRoute: `${authBaseUrl}/login`,
       sessionPosture: session,
     },
     gateway: {

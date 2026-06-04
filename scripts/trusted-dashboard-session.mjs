@@ -11,7 +11,7 @@ import {
   maskSessionId,
   normalizeTimeoutMs,
   writeSessionArtifact,
-} from './lib/dashboard-operator-session.mjs';
+} from './lib/trusted-dashboard-session-support.mjs';
 
 const require = createRequire(import.meta.url);
 const {

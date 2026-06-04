@@ -14,7 +14,8 @@ import { Logger } from '../utils/logger';
 
 export interface SessionService {
   /**
-   * Upserts the UserProfile (idempotent) and issues a fresh session for a wallet address.
+   * Upserts a non-privileged wallet identity and issues a fresh session.
+   * Public wallet proof collection is not exposed by this service.
    */
   login(
     walletAddress: string,
