@@ -54,7 +54,6 @@ function csvEnv(name: string): string[] {
 
 export function loadConfig(): AuthConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
-  const legacyWalletLoginEnabled = envBoolean('LEGACY_WALLET_LOGIN_ENABLED', false);
   const trustedSessionExchangeEnabled = envBoolean('TRUSTED_SESSION_EXCHANGE_ENABLED', false);
   const trustedSessionExchangeMaxSkewSeconds = envNumber(
     'TRUSTED_SESSION_EXCHANGE_MAX_SKEW_SECONDS',
@@ -101,10 +100,6 @@ export function loadConfig(): AuthConfig {
     adminBreakGlassMaxTtlSeconds > 0 && adminBreakGlassMaxTtlSeconds <= 86400,
     'AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS must be between 1 and 86400',
   );
-  assert(
-    !legacyWalletLoginEnabled || nodeEnv === 'development' || nodeEnv === 'test',
-    'LEGACY_WALLET_LOGIN_ENABLED=true is allowed only when NODE_ENV is development or test',
-  );
   const dbMigrationUser = optionalEnv('DB_MIGRATION_USER');
   const dbMigrationPassword = optionalEnv('DB_MIGRATION_PASSWORD');
   assert(
@@ -123,7 +118,6 @@ export function loadConfig(): AuthConfig {
     dbMigrationUser,
     dbMigrationPassword,
     sessionTtlSeconds: envNumber('SESSION_TTL_SECONDS', 3600),
-    legacyWalletLoginEnabled,
     corsAllowedOrigins: parseAllowedOrigins(process.env.AUTH_CORS_ALLOWED_ORIGINS),
     corsAllowNoOrigin: envBoolean('AUTH_CORS_ALLOW_NO_ORIGIN', false),
     rateLimitEnabled: envBoolean('AUTH_RATE_LIMIT_ENABLED', true),

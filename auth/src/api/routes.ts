@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Router, Request, Response, NextFunction, RequestHandler } from 'express';
-import { LegacyWalletAuthController, SessionController } from './controller';
+import { SessionController } from './controller';
 import { AdminController } from './adminController';
 import { createSessionMiddleware } from '../middleware/middleware';
 import { SessionService } from '../core/sessionService';
@@ -17,7 +17,6 @@ export function createRouter(
   sessionController: SessionController,
   sessionService: SessionService,
   options?: {
-    legacyWalletController?: LegacyWalletAuthController;
     trustedSessionExchangeMiddleware?: RequestHandler;
     adminController?: AdminController;
     adminControlMiddleware?: RequestHandler;
@@ -43,42 +42,6 @@ export function createRouter(
       timestamp: new Date().toISOString(),
     });
   });
-
-  //  Public endpoints
-
-  // Step 1 of login: browser requests a nonce to sign.
-  if (options?.legacyWalletController) {
-    router.get(
-      '/challenge',
-      asyncHandler((req, res) =>
-        options.legacyWalletController!.getChallenge(
-          req as Request<unknown, unknown, unknown, { wallet?: string }>,
-          res,
-        ),
-      ),
-    );
-
-    // Step 2 of login: browser submits wallet + signature.
-    router.post(
-      '/login',
-      asyncHandler((req, res) =>
-        options.legacyWalletController!.login(
-          req as Request<
-            unknown,
-            unknown,
-            {
-              walletAddress?: string;
-              signature?: string;
-              role?: import('../types').UserRole;
-              orgId?: string;
-              ttlSeconds?: number;
-            }
-          >,
-          res,
-        ),
-      ),
-    );
-  }
 
   if (options?.trustedSessionExchangeMiddleware) {
     router.post(

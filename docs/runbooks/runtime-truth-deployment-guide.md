@@ -69,16 +69,6 @@ Out of active runtime scope:
   - `POST /api/auth/v1/session/exchange/agroasys`
 - `gateway` consumes those bearer sessions and applies route-level authorization
 
-### Compatibility truth
-
-The wallet-signature login path in `auth` remains available only as a compatibility path:
-
-- `GET /api/auth/v1/challenge`
-- `POST /api/auth/v1/login`
-
-This path is disabled by default in production candidates and must not be described as the normal production login path.
-It is allowed only when `LEGACY_WALLET_LOGIN_ENABLED=true` in `development` or `test`.
-
 ### Governance truth
 
 Human privileged governance uses the direct-sign model:

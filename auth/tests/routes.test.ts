@@ -1,5 +1,5 @@
 import { SessionService } from '../src/core/sessionService';
-import { LegacyWalletAuthController, SessionController } from '../src/api/controller';
+import { SessionController } from '../src/api/controller';
 import { createRouter } from '../src/api/routes';
 import { AdminController } from '../src/api/adminController';
 
@@ -32,13 +32,6 @@ function createSessionController(): SessionController {
   } as unknown as SessionController;
 }
 
-function createLegacyWalletController(): LegacyWalletAuthController {
-  return {
-    getChallenge: jest.fn(),
-    login: jest.fn(),
-  } as unknown as LegacyWalletAuthController;
-}
-
 function createAdminController(): AdminController {
   return {
     listAuthorityProfiles: jest.fn(),
@@ -58,20 +51,18 @@ describe('auth router', () => {
     resolve: jest.fn(),
   } as unknown as SessionService;
 
-  test('does not mount legacy wallet routes when disabled', () => {
+  test('does not mount session exchange route when disabled', () => {
     const router = createRouter(createSessionController(), sessionService);
 
-    expect(listRoutes(router)).not.toContain('GET /challenge');
-    expect(listRoutes(router)).not.toContain('POST /login');
+    expect(listRoutes(router)).not.toContain('POST /session/exchange/agroasys');
   });
 
-  test('mounts legacy wallet routes when explicitly enabled', () => {
+  test('mounts session exchange route when enabled', () => {
     const router = createRouter(createSessionController(), sessionService, {
-      legacyWalletController: createLegacyWalletController(),
+      trustedSessionExchangeMiddleware: jest.fn(),
     });
 
-    expect(listRoutes(router)).toContain('GET /challenge');
-    expect(listRoutes(router)).toContain('POST /login');
+    expect(listRoutes(router)).toContain('POST /session/exchange/agroasys');
   });
 
   test('mounts admin signer routes when admin controls are enabled', () => {

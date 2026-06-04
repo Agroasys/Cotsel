@@ -11,7 +11,6 @@ const BASE_ENV: Record<string, string> = {
   DB_MIGRATION_USER: '',
   DB_MIGRATION_PASSWORD: '',
   SESSION_TTL_SECONDS: '3600',
-  LEGACY_WALLET_LOGIN_ENABLED: 'true',
 };
 
 function withEnv(overrides: Record<string, string | undefined>, run: () => void): void {
@@ -50,35 +49,6 @@ function loadConfigModule(): typeof import('../src/config') {
 }
 
 describe('auth config', () => {
-  test('production disables the legacy wallet login path by default', () => {
-    withEnv(
-      {
-        NODE_ENV: 'production',
-        LEGACY_WALLET_LOGIN_ENABLED: undefined,
-      },
-      () => {
-        const { loadConfig } = loadConfigModule();
-        const config = loadConfig();
-        expect(config.legacyWalletLoginEnabled).toBe(false);
-      },
-    );
-  });
-
-  test('non-development environments reject explicit legacy wallet login enablement', () => {
-    withEnv(
-      {
-        NODE_ENV: 'staging',
-        LEGACY_WALLET_LOGIN_ENABLED: 'true',
-      },
-      () => {
-        const { loadConfig } = loadConfigModule();
-        expect(() => loadConfig()).toThrow(
-          'LEGACY_WALLET_LOGIN_ENABLED=true is allowed only when NODE_ENV is development or test',
-        );
-      },
-    );
-  });
-
   test('browser no-origin CORS is disabled by default', () => {
     withEnv({}, () => {
       const { loadConfig } = loadConfigModule();

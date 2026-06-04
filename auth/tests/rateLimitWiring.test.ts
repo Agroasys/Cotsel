@@ -57,14 +57,6 @@ function buildApp(): Promise<{ app: express.Express; close: () => Promise<void> 
       res.status(200).json({ success: true });
     },
   };
-  const legacyWalletController = {
-    async getChallenge(_req: Request, res: Response) {
-      res.status(200).json({ success: true });
-    },
-    async login(_req: Request, res: Response) {
-      res.status(200).json({ success: true });
-    },
-  };
   const sessionService = {
     async resolve() {
       return {
@@ -88,7 +80,6 @@ function buildApp(): Promise<{ app: express.Express; close: () => Promise<void> 
       '/api/auth/v1',
       limiter.middleware,
       createRouter(sessionController as never, sessionService as never, {
-        legacyWalletController: legacyWalletController as never,
         trustedSessionExchangeMiddleware: (_req: Request, _res: Response, next: NextFunction) =>
           next(),
         adminController: adminController as never,
@@ -104,25 +95,7 @@ function buildApp(): Promise<{ app: express.Express; close: () => Promise<void> 
 }
 
 describe('auth rate-limit wiring', () => {
-  test('challenge route uses the tighter legacy-wallet throttle', async () => {
-    const { app, close } = await buildApp();
-
-    try {
-      await withServer(app, async (baseUrl) => {
-        for (let attempt = 0; attempt < 5; attempt += 1) {
-          const response = await request(baseUrl, '/api/auth/v1/challenge?wallet=0x1234');
-          expect(response.status).toBe(200);
-        }
-
-        const blocked = await request(baseUrl, '/api/auth/v1/challenge?wallet=0x1234');
-        expect(blocked.status).toBe(429);
-      });
-    } finally {
-      await close();
-    }
-  });
-
-  test('session refresh uses the broader session throttle, not the legacy-wallet limit', async () => {
+  test('session refresh uses the broader session throttle', async () => {
     const { app, close } = await buildApp();
 
     try {
