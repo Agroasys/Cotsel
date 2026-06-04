@@ -3192,9 +3192,6 @@ components:
         Production path:
         - trusted upstream session exchange via `/api/auth/v1/session/exchange/agroasys`
 
-        Compatibility path:
-        - `/api/auth/v1/login` after explicit wallet-signature login when that legacy flow is enabled
-
         Repo evidence:
         - `auth/src/api/controller.ts`
         - `auth/src/middleware/middleware.ts`

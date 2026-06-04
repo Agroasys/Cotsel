@@ -14,8 +14,7 @@ import { Logger } from '../utils/logger';
 
 export interface SessionService {
   /**
-   * Called after the current legacy wallet-proof bootstrap resolves on the client.
-   * Upserts the UserProfile (idempotent) and issues a fresh session.
+   * Upserts the UserProfile (idempotent) and issues a fresh session for a wallet address.
    */
   login(
     walletAddress: string,
@@ -25,8 +24,7 @@ export interface SessionService {
   ): Promise<SessionIssueResult>;
 
   /**
-   * Issues a session for a trusted upstream account identity, without requiring
-   * the legacy wallet-proof bootstrap.
+   * Issues a session for a trusted upstream account identity.
    */
   issueTrustedSession(
     identity: TrustedSessionIdentity,
