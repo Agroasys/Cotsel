@@ -33,6 +33,7 @@ type IndexerBlock = BlockData<Fields>;
 type DecodedEscrowLog = NonNullable<ReturnType<typeof contractInterface.parseLog>>;
 
 const SETTLEMENT_SUPPORT_FEE_BASE_UNITS = 4_000_000n;
+const PROPOSAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function splitPlatformFeeComponents(platformFeesAmount: bigint): {
   platformFeeNetAmount: bigint;
@@ -1442,9 +1443,7 @@ async function handleDisputeSolutionProposed(
 
   const disputeStatusEnum = disputeStatus === 0n ? DisputeStatus.REFUND : DisputeStatus.RESOLVE;
 
-  // Calculate expiration (7 days TTL)
-  const DISPUTE_PROPOSAL_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
-  const expiresAt = new Date(timestamp.getTime() + DISPUTE_PROPOSAL_TTL);
+  const expiresAt = new Date(timestamp.getTime() + PROPOSAL_TTL_MS);
 
   const proposal = new DisputeProposal({
     id: proposalId.toString(),
@@ -1695,9 +1694,7 @@ async function handleOracleUpdateProposed(
 ) {
   const [proposalId, proposer, newOracle, eta, emergencyFastTrack] = log.args;
 
-  // Calculate expiration (7 days TTL)
-  const GOVERNANCE_PROPOSAL_TTL = 7 * 24 * 60 * 60 * 1000;
-  const expiresAt = new Date(timestamp.getTime() + GOVERNANCE_PROPOSAL_TTL);
+  const expiresAt = new Date(timestamp.getTime() + PROPOSAL_TTL_MS);
 
   const proposal = new OracleUpdateProposal({
     id: proposalId.toString(),
@@ -1906,9 +1903,7 @@ async function handleAdminAddProposed(
 ) {
   const [proposalId, proposer, newAdmin, eta] = log.args;
 
-  // Calculate expiration (7 days TTL)
-  const GOVERNANCE_PROPOSAL_TTL = 7 * 24 * 60 * 60 * 1000;
-  const expiresAt = new Date(timestamp.getTime() + GOVERNANCE_PROPOSAL_TTL);
+  const expiresAt = new Date(timestamp.getTime() + PROPOSAL_TTL_MS);
 
   const proposal = new AdminAddProposal({
     id: proposalId.toString(),
@@ -2147,6 +2142,8 @@ async function handleUnpauseApproved(
       logIndex,
       transactionIndex,
       triggeredBy: triggeredBy.toLowerCase(),
+      approvalCount: Number(approvalCount),
+      requiredApprovals: Number(requiredApprovals),
     }),
   );
 
