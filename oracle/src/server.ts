@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -75,7 +74,6 @@ async function bootstrap() {
       config.escrowAddress,
       config.usdcAddress,
       config.chainId,
-      indexerClient,
     );
 
     const triggerManager = new TriggerManager(

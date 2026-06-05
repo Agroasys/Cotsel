@@ -25,8 +25,7 @@
     "ethers": "^6.4.0",
     "pg": "^8.20.0",
     "@agroasys/sdk": "^1.0.0",
-    "@agroasys/notifications": "^1.0.0",
-    "reflect-metadata": "^0.2.2"
+    "@agroasys/notifications": "^1.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
