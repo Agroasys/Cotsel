@@ -3,7 +3,6 @@ import { OracleSDK, Trade } from '@agroasys/sdk';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import type { SettlementConfirmationHeads } from '@agroasys/sdk';
 import { Logger } from '../utils/logger';
-import { IndexerClient, IndexerTrade } from './indexer-client';
 
 export interface BlockchainResult {
   txHash: string;
@@ -14,7 +13,6 @@ export class SDKClient {
   private sdk: OracleSDK;
   private provider: ethers.AbstractProvider;
   private signer: ethers.Wallet;
-  private indexer: IndexerClient;
 
   constructor(
     rpcUrl: string,
@@ -23,7 +21,6 @@ export class SDKClient {
     escrowAddress: string,
     usdcAddress: string,
     chainId: number,
-    indexer: IndexerClient,
   ) {
     const provider = createManagedRpcProvider(rpcUrl, rpcFallbackUrls, { chainId });
     this.provider = provider;
@@ -36,8 +33,6 @@ export class SDKClient {
       escrowAddress,
       usdcAddress,
     });
-
-    this.indexer = indexer;
 
     Logger.info('SDKClient initialized', {
       oracleAddress: this.signer.address,
@@ -88,23 +83,6 @@ export class SDKClient {
     }
 
     return trade;
-  }
-
-  private mapIndexerTradeToSDK(indexerTrade: IndexerTrade): Trade {
-    return {
-      tradeId: indexerTrade.tradeId,
-      buyer: indexerTrade.buyer,
-      supplier: indexerTrade.supplier,
-      status: indexerTrade.status,
-      totalAmountLocked: indexerTrade.totalAmountLocked,
-      logisticsAmount: indexerTrade.logisticsAmount,
-      platformFeesAmount: indexerTrade.platformFeesAmount,
-      supplierFirstTranche: indexerTrade.supplierFirstTranche,
-      supplierSecondTranche: indexerTrade.supplierSecondTranche,
-      ricardianHash: indexerTrade.ricardianHash,
-      createdAt: indexerTrade.createdAt,
-      arrivalTimestamp: indexerTrade.arrivalTimestamp ?? undefined,
-    };
   }
 
   async releaseFundsStage1(tradeId: string): Promise<BlockchainResult> {

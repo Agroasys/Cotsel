@@ -54,28 +54,12 @@ export async function getTriggerByIdempotencyKey(idempotencyKey: string): Promis
   return result.rows[0] || null;
 }
 
-export async function getTriggersByActionKey(actionKey: string): Promise<Trigger[]> {
-  const result = await pool.query(
-    'SELECT * FROM oracle_triggers WHERE action_key = $1 ORDER BY created_at DESC',
-    [actionKey],
-  );
-  return result.rows;
-}
-
 export async function getLatestTriggerByActionKey(actionKey: string): Promise<Trigger | null> {
   const result = await pool.query(
     'SELECT * FROM oracle_triggers WHERE action_key = $1 ORDER BY created_at DESC LIMIT 1',
     [actionKey],
   );
   return result.rows[0] || null;
-}
-
-export async function getTriggersByTradeId(tradeId: string): Promise<Trigger[]> {
-  const result = await pool.query(
-    'SELECT * FROM oracle_triggers WHERE trade_id = $1 ORDER BY created_at DESC',
-    [tradeId],
-  );
-  return result.rows;
 }
 
 export async function getTriggersByStatus(
@@ -115,17 +99,6 @@ export async function listTriggers(input: {
      ORDER BY updated_at DESC, created_at DESC
      LIMIT $${params.length}`,
     params,
-  );
-  return result.rows;
-}
-
-export async function getExhaustedTriggersForRedrive(limit: number = 50): Promise<Trigger[]> {
-  const result = await pool.query(
-    `SELECT * FROM oracle_triggers
-         WHERE status = $1
-         ORDER BY updated_at ASC
-         LIMIT $2`,
-    [TriggerStatus.EXHAUSTED_NEEDS_REDRIVE, limit],
   );
   return result.rows;
 }

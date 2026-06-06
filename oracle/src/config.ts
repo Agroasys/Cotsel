@@ -78,8 +78,6 @@ export function loadConfig(): OracleConfig {
     const nodeEnv = process.env.NODE_ENV || 'development';
     const notificationsEnabled = validateEnvBool('NOTIFICATIONS_ENABLED', false);
     const notificationsWebhookUrl = process.env.NOTIFICATIONS_WEBHOOK_URL;
-    const indexerGraphqlTimeoutMinMs = validateEnvNumber('INDEXER_GQL_TIMEOUT_MIN_MS', 1000);
-    const indexerGraphqlTimeoutMaxMs = validateEnvNumber('INDEXER_GQL_TIMEOUT_MAX_MS', 60000);
     const indexerGraphqlRequestTimeoutMs = validateEnvNumber('INDEXER_GQL_TIMEOUT_MS', 10000);
     const retryAttempts = validateEnvNumber('RETRY_ATTEMPTS', 3);
     const retryDelay = validateEnvNumber('RETRY_DELAY', 1000);
@@ -99,16 +97,9 @@ export function loadConfig(): OracleConfig {
       'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
     );
 
-    assert(indexerGraphqlTimeoutMinMs >= 1000, 'INDEXER_GQL_TIMEOUT_MIN_MS must be >= 1000');
-    assert(indexerGraphqlTimeoutMaxMs <= 60000, 'INDEXER_GQL_TIMEOUT_MAX_MS must be <= 60000');
     assert(
-      indexerGraphqlTimeoutMinMs <= indexerGraphqlTimeoutMaxMs,
-      'INDEXER_GQL_TIMEOUT_MIN_MS must be <= INDEXER_GQL_TIMEOUT_MAX_MS',
-    );
-    assert(
-      indexerGraphqlRequestTimeoutMs >= indexerGraphqlTimeoutMinMs &&
-        indexerGraphqlRequestTimeoutMs <= indexerGraphqlTimeoutMaxMs,
-      `INDEXER_GQL_TIMEOUT_MS must be between ${indexerGraphqlTimeoutMinMs} and ${indexerGraphqlTimeoutMaxMs}`,
+      indexerGraphqlRequestTimeoutMs >= 1000 && indexerGraphqlRequestTimeoutMs <= 60000,
+      'INDEXER_GQL_TIMEOUT_MS must be between 1000 and 60000',
     );
 
     const runtime = resolveSettlementRuntime({
