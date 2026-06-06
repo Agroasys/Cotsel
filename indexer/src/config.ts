@@ -27,9 +27,6 @@ export interface IndexerConfig {
 
   // contract
   contractAddress: string;
-
-  // graphql
-  graphqlPort: number;
 }
 
 function validateEnv(name: string): string {
@@ -92,7 +89,6 @@ export function loadConfig(): IndexerConfig {
       finalityConfirmationBlocks: validateEnvNumber('FINALITY_CONFIRMATION_BLOCKS'),
       prometheusPort: optionalEnvNumber('PROMETHEUS_PORT'),
       contractAddress: validateEnv('CONTRACT_ADDRESS').toLowerCase(),
-      graphqlPort: validateEnvNumber('GRAPHQL_PORT'),
     };
 
     return config;
