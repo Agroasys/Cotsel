@@ -57,6 +57,24 @@ function loadConfigModule(): typeof import('./config') {
   return loaded;
 }
 
+describe('INDEXER_GQL_TIMEOUT_MS validation', () => {
+  test('rejects value below 1000', () => {
+    withEnv({ INDEXER_GQL_TIMEOUT_MS: '999' }, () => {
+      expect(() => loadConfigModule()).toThrow(
+        'INDEXER_GQL_TIMEOUT_MS must be between 1000 and 60000',
+      );
+    });
+  });
+
+  test('rejects value above 60000', () => {
+    withEnv({ INDEXER_GQL_TIMEOUT_MS: '60001' }, () => {
+      expect(() => loadConfigModule()).toThrow(
+        'INDEXER_GQL_TIMEOUT_MS must be between 1000 and 60000',
+      );
+    });
+  });
+});
+
 describe('oracle runtime config', () => {
   test('resolves base-sepolia defaults from settlement runtime key', () => {
     withEnv(
