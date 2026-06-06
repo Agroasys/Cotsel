@@ -149,55 +149,33 @@ export class TreasuryIngestionService {
       }
     }
 
-    const claimEventFetcher = (
-      this.indexerClient as unknown as {
-        fetchTreasuryClaimEvents?: (
-          limit: number,
-          offset: number,
-        ) => Promise<
-          Array<{
-            id: string;
-            txHash: string;
-            blockNumber: number;
-            timestamp: Date;
-            claimAmount: string;
-            treasuryIdentity: string;
-            payoutReceiver: string;
-            triggeredBy: string | null;
-          }>
-        >;
+    while (fetched < config.ingestMaxEvents) {
+      const remaining = config.ingestMaxEvents - fetched;
+      const limit = Math.min(config.ingestBatchSize, remaining);
+
+      const claimEvents = await this.indexerClient.fetchTreasuryClaimEvents(limit, claimOffset);
+      if (claimEvents.length === 0) {
+        break;
       }
-    ).fetchTreasuryClaimEvents;
 
-    if (claimEventFetcher) {
-      while (fetched < config.ingestMaxEvents) {
-        const remaining = config.ingestMaxEvents - fetched;
-        const limit = Math.min(config.ingestBatchSize, remaining);
+      for (const event of claimEvents) {
+        fetched += 1;
+        await upsertTreasuryClaimEvent({
+          sourceEventId: event.id,
+          matchedSweepBatchId: null,
+          txHash: event.txHash,
+          blockNumber: event.blockNumber,
+          observedAt: event.timestamp,
+          treasuryIdentity: event.treasuryIdentity,
+          payoutReceiver: event.payoutReceiver,
+          amountRaw: event.claimAmount,
+          triggeredBy: event.triggeredBy,
+        });
+      }
 
-        const events = await claimEventFetcher.call(this.indexerClient, limit, claimOffset);
-        if (events.length === 0) {
-          break;
-        }
-
-        for (const event of events) {
-          fetched += 1;
-          await upsertTreasuryClaimEvent({
-            sourceEventId: event.id,
-            matchedSweepBatchId: null,
-            txHash: event.txHash,
-            blockNumber: event.blockNumber,
-            observedAt: event.timestamp,
-            treasuryIdentity: event.treasuryIdentity,
-            payoutReceiver: event.payoutReceiver,
-            amountRaw: event.claimAmount,
-            triggeredBy: event.triggeredBy,
-          });
-        }
-
-        claimOffset += events.length;
-        if (events.length < limit) {
-          break;
-        }
+      claimOffset += claimEvents.length;
+      if (claimEvents.length < limit) {
+        break;
       }
     }
 

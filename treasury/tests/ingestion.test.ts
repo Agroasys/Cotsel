@@ -87,11 +87,18 @@ describe('TreasuryIngestionService', () => {
     const fetchTreasuryEvents = jest.fn(async (_limit: number, offset: number) => {
       return events.slice(offset);
     });
+    const fetchTreasuryClaimEvents = jest.fn().mockResolvedValue([]);
 
     (
-      service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }
+      service as unknown as {
+        indexerClient: {
+          fetchTreasuryEvents: typeof fetchTreasuryEvents;
+          fetchTreasuryClaimEvents: typeof fetchTreasuryClaimEvents;
+        };
+      }
     ).indexerClient = {
       fetchTreasuryEvents,
+      fetchTreasuryClaimEvents,
     };
 
     const firstRun = await service.ingestOnce();
@@ -142,9 +149,15 @@ describe('TreasuryIngestionService', () => {
       .mockResolvedValueOnce([]);
 
     (
-      service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }
+      service as unknown as {
+        indexerClient: {
+          fetchTreasuryEvents: typeof fetchTreasuryEvents;
+          fetchTreasuryClaimEvents: jest.Mock;
+        };
+      }
     ).indexerClient = {
       fetchTreasuryEvents,
+      fetchTreasuryClaimEvents: jest.fn().mockResolvedValue([]),
     };
 
     const result = await service.ingestOnce();
@@ -190,9 +203,15 @@ describe('TreasuryIngestionService', () => {
       .mockResolvedValueOnce([]);
 
     (
-      service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }
+      service as unknown as {
+        indexerClient: {
+          fetchTreasuryEvents: typeof fetchTreasuryEvents;
+          fetchTreasuryClaimEvents: jest.Mock;
+        };
+      }
     ).indexerClient = {
       fetchTreasuryEvents,
+      fetchTreasuryClaimEvents: jest.fn().mockResolvedValue([]),
     };
 
     const result = await service.ingestOnce();
@@ -221,9 +240,15 @@ describe('TreasuryIngestionService', () => {
       .mockResolvedValueOnce([]);
 
     (
-      service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }
+      service as unknown as {
+        indexerClient: {
+          fetchTreasuryEvents: typeof fetchTreasuryEvents;
+          fetchTreasuryClaimEvents: jest.Mock;
+        };
+      }
     ).indexerClient = {
       fetchTreasuryEvents,
+      fetchTreasuryClaimEvents: jest.fn().mockResolvedValue([]),
     };
 
     const result = await service.ingestOnce();
@@ -264,9 +289,15 @@ describe('TreasuryIngestionService', () => {
       .mockResolvedValueOnce([]);
 
     (
-      service as unknown as { indexerClient: { fetchTreasuryEvents: typeof fetchTreasuryEvents } }
+      service as unknown as {
+        indexerClient: {
+          fetchTreasuryEvents: typeof fetchTreasuryEvents;
+          fetchTreasuryClaimEvents: jest.Mock;
+        };
+      }
     ).indexerClient = {
       fetchTreasuryEvents,
+      fetchTreasuryClaimEvents: jest.fn().mockResolvedValue([]),
     };
 
     const result = await service.ingestOnce();

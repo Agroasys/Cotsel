@@ -516,49 +516,4 @@ describe('treasury service-authenticated routes', () => {
     expect(consumeNonce).toHaveBeenCalledWith('svc-a', 'treasury-external-handoff-nonce', 600);
     expect(recordPartnerHandoffHandler).toHaveBeenCalledTimes(1);
   });
-
-  test('legacy partner-handoff alias remains wired to the same internal controller', async () => {
-    // Legacy alias coverage:
-    // `/partner-handoff` is retained for backwards compatibility and is expected
-    // to route to the canonical `external-handoff` controller during migration.
-    // When deprecation signalling is enabled by the route layer, this test should
-    // continue to assert it (for example via `Deprecation`/`Sunset` headers).
-    const body = Buffer.from(
-      JSON.stringify({
-        partnerName: 'licensed-counterparty',
-        partnerReference: 'handoff-legacy-1',
-        handoffStatus: 'ACKNOWLEDGED',
-      }),
-    );
-    const signed = createSignedRequestParts({
-      path: '/api/treasury/v1/internal/sweep-batches/11/partner-handoff',
-      body,
-      nonce: 'treasury-legacy-partner-handoff-nonce',
-    });
-
-    const response = await fetch(
-      `${baseUrl}/api/treasury/v1/internal/sweep-batches/11/partner-handoff`,
-      {
-        method: 'POST',
-        headers: signed.headers,
-        body: signed.bodyText,
-      },
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(
-      expect.objectContaining({
-        success: true,
-        route: 'external-handoff',
-      }),
-    );
-    expect(consumeNonce).toHaveBeenCalledWith(
-      'svc-a',
-      'treasury-legacy-partner-handoff-nonce',
-      600,
-    );
-    expect(response.headers.get('deprecation')).toBe('true');
-    expect(response.headers.get('sunset')).toBe('Thu, 31 Dec 2026 23:59:59 GMT');
-    expect(recordPartnerHandoffHandler).toHaveBeenCalledTimes(1);
-  });
 });

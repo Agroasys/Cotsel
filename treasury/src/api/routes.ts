@@ -51,12 +51,6 @@ export function createRouter(
     options.authMiddleware,
     options.mutationAuthMiddleware,
   ].filter(Boolean) as RequestHandler[];
-  const addLegacyPartnerHandoffDeprecationHeaders: RequestHandler = (_req, res, next) => {
-    res.setHeader('Deprecation', 'true');
-    res.setHeader('Sunset', 'Thu, 31 Dec 2026 23:59:59 GMT');
-    next();
-  };
-
   router.get(
     '/reconciliation/control-summary',
     ...protectedMiddlewares,
@@ -182,12 +176,6 @@ export function createRouter(
   router.post(
     '/internal/sweep-batches/:batchId/external-handoff',
     ...internalMutationMiddlewares,
-    controller.recordPartnerHandoff.bind(controller),
-  );
-  router.post(
-    '/internal/sweep-batches/:batchId/partner-handoff',
-    ...internalMutationMiddlewares,
-    addLegacyPartnerHandoffDeprecationHeaders,
     controller.recordPartnerHandoff.bind(controller),
   );
   router.post(

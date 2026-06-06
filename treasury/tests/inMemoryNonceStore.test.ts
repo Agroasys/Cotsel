@@ -1,4 +1,4 @@
-import { createInMemoryNonceStore } from '../src/auth/inMemoryNonceStore';
+import { createInMemoryNonceStore } from '@agroasys/shared-auth';
 
 describe('in-memory nonce store', () => {
   test('accepts first nonce and rejects replay within ttl', async () => {
