@@ -182,8 +182,6 @@ counterparty-owned.
 Compatibility note:
 
 - request fields remain `partnerName` and `partnerReference` for stable client compatibility
-- the legacy route `/treasury/sweep-batches/:batchId/partner-handoff` remains supported as an alias
-  to `/treasury/sweep-batches/:batchId/external-handoff`
 
 ### 7. Record realization only after evidence is complete
 

@@ -61,7 +61,6 @@ Internal mutation routes for gateway/service callers:
 - `POST /api/treasury/v1/internal/sweep-batches/:batchId/approve`
 - `POST /api/treasury/v1/internal/sweep-batches/:batchId/match-execution`
 - `POST /api/treasury/v1/internal/sweep-batches/:batchId/external-handoff`
-- `POST /api/treasury/v1/internal/sweep-batches/:batchId/partner-handoff` (legacy-compatible alias)
 - `POST /api/treasury/v1/internal/sweep-batches/:batchId/close`
 
 Health semantics:
