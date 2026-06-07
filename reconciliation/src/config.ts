@@ -27,7 +27,6 @@ export interface ReconciliationConfig {
   explorerBaseUrl?: string | null;
   indexerGraphqlUrl: string;
   indexerGraphqlRequestTimeoutMs: number;
-  enforceContainerSafeIndexerUrl: boolean;
   notificationsEnabled: boolean;
   notificationsWebhookUrl?: string;
   notificationsCooldownMs: number;
@@ -129,28 +128,15 @@ export function loadConfig(): ReconciliationConfig {
   }
 
   const indexerGraphqlUrl = envUrl('INDEXER_GRAPHQL_URL');
-  const indexerGraphqlTimeoutMinMs = envNumber('INDEXER_GQL_TIMEOUT_MIN_MS', 1000);
-  const indexerGraphqlTimeoutMaxMs = envNumber('INDEXER_GQL_TIMEOUT_MAX_MS', 60000);
   const indexerGraphqlRequestTimeoutMs = envNumber('INDEXER_GQL_TIMEOUT_MS', 10000);
-  const enforceContainerSafeIndexerUrl = envBool(
-    'RECONCILIATION_REQUIRE_CONTAINER_SAFE_INDEXER_URL',
-    false,
-  );
 
-  if (enforceContainerSafeIndexerUrl) {
+  if (envBool('RECONCILIATION_REQUIRE_CONTAINER_SAFE_INDEXER_URL', false)) {
     assertContainerSafeIndexerUrl(indexerGraphqlUrl, 'INDEXER_GRAPHQL_URL');
   }
 
-  assert(indexerGraphqlTimeoutMinMs >= 1000, 'INDEXER_GQL_TIMEOUT_MIN_MS must be >= 1000');
-  assert(indexerGraphqlTimeoutMaxMs <= 60000, 'INDEXER_GQL_TIMEOUT_MAX_MS must be <= 60000');
   assert(
-    indexerGraphqlTimeoutMinMs <= indexerGraphqlTimeoutMaxMs,
-    'INDEXER_GQL_TIMEOUT_MIN_MS must be <= INDEXER_GQL_TIMEOUT_MAX_MS',
-  );
-  assert(
-    indexerGraphqlRequestTimeoutMs >= indexerGraphqlTimeoutMinMs &&
-      indexerGraphqlRequestTimeoutMs <= indexerGraphqlTimeoutMaxMs,
-    `INDEXER_GQL_TIMEOUT_MS must be between ${indexerGraphqlTimeoutMinMs} and ${indexerGraphqlTimeoutMaxMs}`,
+    indexerGraphqlRequestTimeoutMs >= 1000 && indexerGraphqlRequestTimeoutMs <= 60000,
+    'INDEXER_GQL_TIMEOUT_MS must be between 1000 and 60000',
   );
 
   const runtime = resolveSettlementRuntime({
@@ -191,7 +177,6 @@ export function loadConfig(): ReconciliationConfig {
     explorerBaseUrl: runtime.explorerBaseUrl,
     indexerGraphqlUrl,
     indexerGraphqlRequestTimeoutMs,
-    enforceContainerSafeIndexerUrl,
     notificationsEnabled,
     notificationsWebhookUrl,
     notificationsCooldownMs: envNumber('NOTIFICATIONS_COOLDOWN_MS', 300000),
