@@ -17,6 +17,9 @@ Cotsel was initially developed to support the Agroasys platform, but it is open-
 - **Current phase:** Post-migration Base operations and launch-governance maintenance.
 - **Operational readiness criteria:** `docs/runbooks/production-readiness-checklist.md`.
 - **Active chain truth:** Base is the only active v1 settlement target in this repo. Base Sepolia has verified pilot evidence, and Base mainnet go/no-go plus rollback control surfaces are installed. This repo does not, by itself, prove a completed Base mainnet launch unless a filled approval record and mainnet deployment evidence are attached.
+- **Control-plane posture:** Human privileged governance uses direct-sign prepare/confirm flows; legacy human queue routes fail closed and executor-backed paths are retained only for delegated or service roles.
+- **Revenue and reconciliation posture:** Treasury close, external handoff, and realization workflows are evidence-led and reconciliation-gated where documented. Cotsel records settlement and treasury-control truth, but it does not become the bank, off-ramp, or customer accounting ledger.
+- **Gasless posture:** Gasless execution is optional, capacity-bounded, and routed through gateway controls. Buyer authorization, gateway submission, relayer broadcast, chain confirmation, callback delivery, and reconciliation are distinct evidence steps.
 
 ## Who Should Read Next
 
@@ -31,6 +34,14 @@ Cotsel was initially developed to support the Agroasys platform, but it is open-
 - It does not replace internal ERP systems, banking rails, or external marketplace frontends.
 - Enterprise data-boundary and attestation expectations are defined in `docs/adr/adr-0143-privacy-attestation-composability.md`.
 
+Operational truth ownership is deliberately split:
+
+- **Contract truth:** escrow state, treasury fee accrual, treasury claim execution, and emitted settlement events.
+- **Gateway truth:** session authorization, operator action records, signer policy, direct-sign governance confirmation, treasury workflow capability checks, and audit lineage.
+- **Treasury truth:** settlement-evidence entries, accounting periods, sweep batches, external handoff records, realization records, and close-packet projections.
+- **Reconciliation truth:** tie-out status, drift classification, close blockers, and exception evidence.
+- **External execution truth:** bank, fiat, or off-ramp completion evidence owned by the regulated counterparty.
+
 Optimize for deterministic operations and auditability. If a step matters in production, it should be scriptable, tested, and documented in a runbook.
 
 Canonical target-state architecture:
@@ -41,24 +52,48 @@ Canonical target-state architecture:
 - `indexer`: indexed chain events for query and operational visibility.
 - `ricardian`: contract-hash evidence workflow linking legal agreement to settlement lifecycle.
 - `gateway`: operator control-plane gateway for governance and compliance workflows.
+- `auth`: Cotsel session boundary for trusted upstream identity exchange, refresh, revoke, and profile resolution.
+- `treasury`: append-only settlement evidence, sweep-batch, close, external handoff, and revenue-control workflows.
+- `reconciliation`: read-only drift detection, reconciliation reports, and close-blocking exception evidence.
+- `notifications`: shared notification routing, cooldown, and delivery helper module.
 
 ## Core Components
 
-- **Escrow Contract (`/contracts`)**  
-  A settlement state machine implemented in Solidity for Base-first delivery. The contract governs milestone-gated releases, dispute holds, pause controls, and deterministic settlement transitions.
+- **Escrow Contract (`/contracts`)**
+  A settlement state machine implemented in Solidity for Base-first delivery. The contract governs milestone-gated releases, direct supplier payouts, direct buyer refunds, treasury fee accrual, pause controls, dispute paths, and deterministic settlement transitions.
 
-- **Oracle Service (`/oracle`)**  
+- **Gateway (`/gateway`)**
+  The dashboard/operator control plane. It authenticates Cotsel sessions, enforces capability and signer policy, prepares and confirms direct-sign governance actions, routes treasury workflows, assembles read models, and owns gateway-side audit lineage.
+
+- **Auth Service (`/auth`)**
+  The Cotsel session boundary. In the Agroasys-integrated production model, upstream Agroasys identity is exchanged for a Cotsel session, while refresh, revoke, profile resolution, and bearer-session authorization stay local to this service.
+
+- **Oracle Service (`/oracle`)**
   A Node.js service that submits signed milestone attestations to the contract. Attestations are schema-validated and designed to be replay-safe and idempotent. Each attestation references external evidence identifiers, such as Bill of Lading or inspection certificate references, that support operational and audit review.
 
-- **Ricardian Anchoring (`/ricardian`)**  
+- **Ricardian Anchoring (`/ricardian`)**
   The protocol does not store contracts on-chain. Each trade is anchored by a SHA-256 hash of the signed off-chain agreement (TradeID). Evidence references and settlement actions are linked to this immutable identifier across the lifecycle.
 
-- **Indexer (`/indexer`)**  
+- **Indexer (`/indexer`)**
   An indexing service that tracks settlement events to support reconciliation, operational monitoring, and audit-style reporting. It provides a normalized trade timeline, state transitions, and payout references.
+
+- **Treasury Service (`/treasury`)**
+  The settlement-evidence and revenue-controls service. It stores ledger entries, accounting periods, sweep batches, matched treasury-claim evidence, external handoff references, bank/deposit evidence, realization records, and close-packet projections.
+
+- **Reconciliation Worker (`/reconciliation`)**
+  A read-only worker and report generator that compares indexed and on-chain state, persists drift findings, classifies severity, and supplies reconciliation evidence used by operations and close workflows.
+
+- **Notifications (`/notifications`)**
+  Shared notification delivery helpers with template versioning, severity routing, cooldown, and bounded retry controls for service alerts.
+
+- **Shared Packages (`/shared-*`)**
+  Shared HTTP validation/response helpers, service-to-service authentication, Postgres/RLS helpers, CORS, and Redis-backed rate-limit primitives used across services.
 
 ## How It Works
 
 Cotsel implements a deterministic two-stage settlement flow. This supports commercial trade patterns where certain operational costs and fees can be released earlier while preserving safety for the principal settlement amount.
+
+Active buyer and supplier settlement paths are direct-transfer paths: supplier stage payouts and buyer refunds execute inside escrow state-transition functions and emit direct payout evidence. Treasury logistics, platform, and settlement-support fee entitlements accrue to the treasury claimable balance and are swept separately through `claimTreasury()` to the configured treasury payout receiver.
 
 ## Lifecycle
 
@@ -67,11 +102,15 @@ Cotsel implements a deterministic two-stage settlement flow. This supports comme
 
 - **Stage 1 Release (Operational)**
   Trigger: the oracle submits a signed attestation referencing validated shipment or milestone evidence.
-  Action: in a single state transition, configured fees are allocated to their recipients and the supplier receives tranche one of the principal.
+  Action: escrow transfers the supplier's first principal tranche directly, accrues treasury-entitled fees to `claimableUsdc[treasuryAddress]`, and emits payout and accrual evidence for indexer, treasury, and reconciliation.
 
 - **Stage 2 Release (Final Settlement)**
   Trigger: the oracle submits a signed attestation referencing destination inspection or final acceptance evidence.
-  Action: the remaining supplier tranche is released, completing settlement.
+  Action: escrow transfers the remaining supplier tranche directly, completing settlement for the supplier side while treasury sweep and revenue-close evidence continue through governed controls.
+
+- **Treasury Sweep and Close**
+  Trigger: governed treasury action and matched on-chain `TreasuryClaimed` evidence.
+  Action: treasury records sweep-batch execution, external handoff, realization, and close evidence without becoming the external fiat executor or accounting ledger of record.
 
 ## Tech Stack
 
@@ -82,9 +121,11 @@ Cotsel implements a deterministic two-stage settlement flow. This supports comme
 
 **Services and runtime**
 
-- Service logic: TypeScript on Node.js 20.x
+- Service logic: TypeScript on Node.js `>=20 <23`
+- Package manager: pnpm `10.29.2`
 - Infrastructure: Docker and Docker Compose
-- Storage: Postgres for indexed and operational views
+- Storage: Postgres for indexed, gateway, auth, reconciliation, and treasury operational views
+- Shared runtime support: Redis-backed rate limiting and nonce storage where configured; Redis is not settlement truth
 
 **Network and assets**
 
@@ -100,7 +141,8 @@ Cotsel implements a deterministic two-stage settlement flow. This supports comme
 
 Cotsel uses a two-tier async strategy to separate payments-grade durability from non-critical background processing.
 
-- Durable jobs and event routing: SQS with DLQs for durable processing of webhooks, payouts, chain events, reconciliation, and notifications, plus EventBridge for internal event routing such as `trade.updated`, `escrow.locked`, and `docs.approved`.
+- Durable jobs and event routing target: SQS with DLQs for durable processing of webhooks, payouts, chain events, reconciliation, and notifications, plus EventBridge for internal event routing such as `trade.updated`, `escrow.locked`, and `docs.approved`.
+- Current in-repo service state: gateway, gasless execution, governance, settlement callback, treasury, and reconciliation workflows persist operational evidence and queue-like state in Postgres-backed records where implemented.
 - Non-critical async jobs: BullMQ and Redis are permitted only for best-effort background tasks such as email delivery and PDF generation.
 - Redis usage boundary: Redis may be used for caching, short-lived locks, and rate-limiting tokens only. Redis is never a source of truth for settlement, reconciliation, or payments-grade workflows.
 
@@ -123,9 +165,13 @@ cotsel/
 ├── sdk/                # External integration SDK
 ├── shared/             # Shared utilities used across services
 ├── shared-auth/        # Shared authentication primitives and helpers
+├── shared-db/          # Shared Postgres pool, role, and RLS helpers
+├── shared-edge/        # Shared CORS and rate-limit primitives
+├── shared-http/        # Shared HTTP response and validation helpers
 ├── docs/               # ADRs, runbooks, API contracts, and governance docs
 ├── scripts/            # CI guards, ops scripts, and verification helpers
 ├── env/                # Environment templates and profile inputs
+├── patches/            # Package-manager patch artifacts
 ├── postgres/           # Database bootstrap and local operational assets
 └── reports/            # Generated validation and evidence artifacts
 ```
@@ -134,9 +180,48 @@ cotsel/
 
 - **Fee / Gas Abstraction**: Any sponsored-fee or gas-abstraction path is optional, tightly bounded, and never a prerequisite for settlement safety. The default path preserves explicit non-custodial signing and does not depend on a mandatory account-abstraction rollout.
 
+- **Gasless Execution Boundary**: Gasless create-trade and user-action execution is gateway-mediated. Browser clients submit signed authorization packages to the dashboard gateway; service-auth keys, HMAC secrets, relayer custody, gas caps, queue state, and broadcast controls stay server-side.
+
+- **Session and Service Authentication**: The `auth` service issues Cotsel sessions from trusted upstream identity. Service-to-service routes use HMAC/API-key authentication through shared primitives, with nonce replay protection where configured.
+
+- **Direct-Sign Governance**: Human privileged governance uses prepare -> review -> sign -> confirm. The approved operator wallet signs directly, and gateway records action state, audit evidence, verification state, monitoring state, and transaction hashes.
+
+- **Treasury Control Boundary**: Treasury operator mutations enter through gateway-owned workflow surfaces. Treasury internal endpoints are service-to-service only; treasury stores execution evidence and accounting-control truth, while gateway owns approval/signing truth and external counterparties own fiat completion truth.
+
+- **Rate-Limit and Redis Boundary**: Auth, gateway, oracle, treasury, and shared-edge rate limiting can use Redis-backed enforcement and explicit fail-open/fail-closed policy. Redis is support infrastructure, never settlement or reconciliation truth.
+
 - **Oracle Key Isolation**: Oracle-gated functions are restricted to an authorized attester key. The oracle service should be deployed with strict key-management controls, isolated runtime boundaries, restricted access, and least privilege. Hardened key storage such as an HSM or equivalent secure key-management service is recommended.
 
 - **Ricardian Anchoring Integrity**: The `ricardianHash` (TradeID) is committed at trade creation and treated as immutable for that trade lifecycle. This provides a stable reference linking off-chain agreement text to on-chain settlement state and supports audit and dispute review through verifiable evidence traceability.
+
+## Local Development and Validation
+
+Install dependencies with the repo-pinned package manager:
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+Useful root checks:
+
+```bash
+pnpm run format:check
+pnpm run typecheck
+pnpm run lint
+```
+
+Useful service checks:
+
+```bash
+pnpm --dir contracts run test
+pnpm --dir gateway run test
+pnpm --dir treasury run test
+pnpm --dir reconciliation run test
+```
+
+Docker and connected-environment workflows are documented in `docs/docker-services.md`,
+`docs/runbooks/docker-profiles.md`, `docs/runbooks/staging-e2e-release-gate.md`, and
+`docs/runbooks/staging-e2e-real-release-gate.md`.
 
 ## Security
 
