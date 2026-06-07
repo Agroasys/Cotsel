@@ -194,35 +194,6 @@ cotsel/
 
 - **Ricardian Anchoring Integrity**: The `ricardianHash` (TradeID) is committed at trade creation and treated as immutable for that trade lifecycle. This provides a stable reference linking off-chain agreement text to on-chain settlement state and supports audit and dispute review through verifiable evidence traceability.
 
-## Local Development and Validation
-
-Install dependencies with the repo-pinned package manager:
-
-```bash
-pnpm install --frozen-lockfile
-```
-
-Useful root checks:
-
-```bash
-pnpm run format:check
-pnpm run typecheck
-pnpm run lint
-```
-
-Useful service checks:
-
-```bash
-pnpm --dir contracts run test
-pnpm --dir gateway run test
-pnpm --dir treasury run test
-pnpm --dir reconciliation run test
-```
-
-Docker and connected-environment workflows are documented in `docs/docker-services.md`,
-`docs/runbooks/docker-profiles.md`, `docs/runbooks/staging-e2e-release-gate.md`, and
-`docs/runbooks/staging-e2e-real-release-gate.md`.
-
 ## Security
 
 See `SECURITY.md` for disclosure policy.
