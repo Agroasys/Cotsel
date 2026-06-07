@@ -12,7 +12,6 @@ import {
   upsertRunTradeScope,
 } from '../database/queries';
 import { DriftFinding, DriftSeverity, ReconcileMode, RunStats } from '../types';
-import { incrementDriftClassification } from '../metrics/counters';
 
 const DEFAULT_SEVERITY_COUNTS: Record<DriftSeverity, number> = {
   CRITICAL: 0,
@@ -156,7 +155,6 @@ export class ReconciliationService {
 
             stats.driftCount += 1;
             stats.severityCounts[finding.severity] += 1;
-            incrementDriftClassification(finding.severity, finding.mismatchCode);
 
             Logger.warn('Reconciliation drift detected', {
               runKey,

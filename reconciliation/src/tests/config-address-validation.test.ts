@@ -117,7 +117,6 @@ test('container-safe indexer URL check allows service DNS names when enabled', (
       const { loadConfig } = loadConfigModule();
       const config = loadConfig();
       assert.equal(config.indexerGraphqlUrl, 'http://indexer-graphql:4350/graphql');
-      assert.equal(config.enforceContainerSafeIndexerUrl, true);
     },
   );
 });

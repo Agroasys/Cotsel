@@ -43,7 +43,6 @@ interface TreasuryLedgerStateRow {
   sweep_batch_id: number | null;
   sweep_batch_status: string | null;
   matched_sweep_tx_hash: string | null;
-  matched_sweep_block_number: number | null;
   matched_swept_at: Date | null;
   partner_name: string | null;
   partner_reference: string | null;
@@ -218,7 +217,6 @@ async function fetchTreasuryLedgerStates(
         batch.id AS sweep_batch_id,
         batch.status AS sweep_batch_status,
         claim.tx_hash AS matched_sweep_tx_hash,
-        claim.block_number AS matched_sweep_block_number,
         claim.observed_at AS matched_swept_at,
         handoff.partner_name,
         handoff.partner_reference,
