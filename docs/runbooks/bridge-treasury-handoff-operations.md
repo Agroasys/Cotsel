@@ -30,7 +30,6 @@ Creating a Bridge handoff records:
 Use the canonical treasury route:
 
 - `POST /api/treasury/v1/internal/sweep-batches/:batchId/external-handoff`
-- legacy alias: `POST /api/treasury/v1/internal/sweep-batches/:batchId/partner-handoff`
 
 For ledger-entry Bridge execution traceability, treasury also exposes:
 

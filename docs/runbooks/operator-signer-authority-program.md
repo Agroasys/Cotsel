@@ -371,9 +371,6 @@ This matrix is the Batch 4 policy decision for the current treasury mutation sur
 - `POST /treasury/sweep-batches/:batchId/external-handoff`
   Signer class: `treasury_execute`
   Reason: partner-handoff recording is an execution-stage attestation with external control significance.
-- `POST /treasury/sweep-batches/:batchId/partner-handoff`
-  Signer class: `treasury_execute`
-  Reason: legacy alias of the same execution-stage handoff mutation.
 - `POST /treasury/sweep-batches/:batchId/close`
   Signer class: `treasury_close`
   Reason: closing a batch finalizes a sensitive treasury workflow stage.

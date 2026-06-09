@@ -36,7 +36,6 @@ export interface TreasuryConfig {
   rateLimitEnabled: boolean;
   rateLimitRedisUrl?: string;
   settlementRuntimeKey?: SettlementRuntimeKey;
-  networkName?: string;
   rpcUrl?: string;
   rpcFallbackUrls: string[];
   chainId?: number;
@@ -182,8 +181,6 @@ export function loadConfig(): TreasuryConfig {
   const nonceTtlSeconds = process.env.NONCE_TTL_SECONDS
     ? envNumber('NONCE_TTL_SECONDS')
     : authNonceTtlSeconds;
-  const indexerGraphqlTimeoutMinMs = envNumber('INDEXER_GQL_TIMEOUT_MIN_MS', 1000);
-  const indexerGraphqlTimeoutMaxMs = envNumber('INDEXER_GQL_TIMEOUT_MAX_MS', 60000);
   const indexerGraphqlRequestTimeoutMs = envNumber('INDEXER_GQL_TIMEOUT_MS', 10000);
   const runtime = hasSettlementRuntimeOverride()
     ? resolveSettlementRuntime({
@@ -221,16 +218,9 @@ export function loadConfig(): TreasuryConfig {
     assert(nonceRedisUrl, 'REDIS_URL is required when NONCE_STORE=redis');
   }
 
-  assert(indexerGraphqlTimeoutMinMs >= 1000, 'INDEXER_GQL_TIMEOUT_MIN_MS must be >= 1000');
-  assert(indexerGraphqlTimeoutMaxMs <= 60000, 'INDEXER_GQL_TIMEOUT_MAX_MS must be <= 60000');
   assert(
-    indexerGraphqlTimeoutMinMs <= indexerGraphqlTimeoutMaxMs,
-    'INDEXER_GQL_TIMEOUT_MIN_MS must be <= INDEXER_GQL_TIMEOUT_MAX_MS',
-  );
-  assert(
-    indexerGraphqlRequestTimeoutMs >= indexerGraphqlTimeoutMinMs &&
-      indexerGraphqlRequestTimeoutMs <= indexerGraphqlTimeoutMaxMs,
-    `INDEXER_GQL_TIMEOUT_MS must be between ${indexerGraphqlTimeoutMinMs} and ${indexerGraphqlTimeoutMaxMs}`,
+    indexerGraphqlRequestTimeoutMs >= 1000 && indexerGraphqlRequestTimeoutMs <= 60000,
+    'INDEXER_GQL_TIMEOUT_MS must be between 1000 and 60000',
   );
 
   const config: TreasuryConfig = {
@@ -261,7 +251,6 @@ export function loadConfig(): TreasuryConfig {
     rateLimitEnabled,
     rateLimitRedisUrl,
     settlementRuntimeKey: runtime?.runtimeKey,
-    networkName: runtime?.networkName,
     rpcUrl: runtime?.rpcUrl,
     rpcFallbackUrls: runtime?.rpcFallbackUrls ?? [],
     chainId: runtime?.chainId,
