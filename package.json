@@ -61,6 +61,7 @@
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs",
     "security:deps:gate": "node scripts/security-deps-gate.mjs",
+    "dashboard:route-inventory:check": "node scripts/tests/dashboard-gateway-route-inventory-guard.mjs",
     "shared:boundary:guard": "node scripts/shared-package-boundary-guard.mjs"
   },
   "devDependencies": {
