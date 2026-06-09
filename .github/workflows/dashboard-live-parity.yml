@@ -37,10 +37,10 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.cotsel_ref != '' && inputs.cotsel_ref || github.ref }}
 
-      - name: Checkout Cotsel-Dash
+      - name: Checkout Cotsel.dash
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          repository: Agroasys/Cotsel-Dash
+          repository: Agroasys/Cotsel.dash
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.dash_ref != '' && inputs.dash_ref || 'main' }}
           path: cotsel-dash
           token: ${{ secrets.COTSEL_DASH_CHECKOUT_TOKEN || github.token }}
