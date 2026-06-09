@@ -37,13 +37,23 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.cotsel_ref != '' && inputs.cotsel_ref || github.ref }}
 
+      - name: Verify Cotsel.dash checkout token
+        shell: bash
+        env:
+          COTSEL_DASH_CHECKOUT_TOKEN: ${{ secrets.COTSEL_DASH_CHECKOUT_TOKEN }}
+        run: |
+          if [[ -z "${COTSEL_DASH_CHECKOUT_TOKEN}" ]]; then
+            echo "::error title=Missing Cotsel.dash checkout token::Dashboard Live Parity requires repository secret COTSEL_DASH_CHECKOUT_TOKEN with read access to Agroasys/Cotsel.dash. The default GITHUB_TOKEN is scoped to Agroasys/Cotsel and cannot read the dashboard repository."
+            exit 1
+          fi
+
       - name: Checkout Cotsel.dash
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           repository: Agroasys/Cotsel.dash
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.dash_ref != '' && inputs.dash_ref || 'main' }}
           path: cotsel-dash
-          token: ${{ secrets.COTSEL_DASH_CHECKOUT_TOKEN || github.token }}
+          token: ${{ secrets.COTSEL_DASH_CHECKOUT_TOKEN }}
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
