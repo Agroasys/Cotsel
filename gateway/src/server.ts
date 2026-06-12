@@ -21,7 +21,6 @@ import { createPostgresComplianceWriteStore } from './core/complianceWriteStore'
 import { GatewayEvidenceBundleService } from './core/evidenceBundleService';
 import { createPostgresEvidenceBundleStore } from './core/evidenceBundleStore';
 import { createPostgresGovernanceActionStore } from './core/governanceStore';
-import { createPostgresGovernanceWriteStore } from './core/governanceWriteStore';
 import {
   GatewayErrorHandlerWorkflow,
   GatewayFailedOperationReplayer,
@@ -43,11 +42,6 @@ import {
 import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { IndexerGraphqlClient } from './core/indexerGraphqlClient';
-import { GovernanceDirectSignMonitor } from './core/governanceDirectSignMonitor';
-import {
-  createDefaultTransactionVerifier,
-  GovernanceMutationService,
-} from './core/governanceMutationService';
 import { createGovernanceStatusService } from './core/governanceStatusService';
 import { EvidenceReadService } from './core/evidenceReadService';
 import { OperationsSummaryService } from './core/operationsSummaryService';
@@ -66,7 +60,6 @@ import { createComplianceRouter } from './routes/compliance';
 import { createDashboardSettlementRouter } from './routes/dashboardSettlement';
 import { createEvidenceBundleRouter } from './routes/evidenceBundles';
 import { createGovernanceRouter } from './routes/governance';
-import { createGovernanceMutationRouter } from './routes/governanceMutations';
 import { createOperationsRouter } from './routes/operations';
 import { createOverviewRouter } from './routes/overview';
 import { createReconciliationRouter } from './routes/reconciliation';
@@ -89,7 +82,6 @@ const complianceWriteStore = createPostgresComplianceWriteStore(pool, compliance
 const complianceService = new ComplianceService(complianceStore, complianceWriteStore);
 const evidenceBundleStore = createPostgresEvidenceBundleStore(pool);
 const governanceActionStore = createPostgresGovernanceActionStore(pool);
-const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);
 const governanceStatusService = createGovernanceStatusService(config);
 const approvalWorkflowReadService = new GovernanceApprovalWorkflowReadService(
   governanceActionStore,
@@ -135,22 +127,8 @@ const gaslessSettlementService = config.gaslessExecutionEnabled
 const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore, {
   failedOperationWorkflow: errorHandlerWorkflow,
 });
-const governanceTransactionVerifier = createDefaultTransactionVerifier(config);
-const governanceMutationService = new GovernanceMutationService(
-  config,
-  governanceActionStore,
-  governanceWriteStore,
-  governanceTransactionVerifier,
-);
-const governanceDirectSignMonitor = new GovernanceDirectSignMonitor(
-  governanceActionStore,
-  governanceWriteStore,
-  auditLogStore,
-  governanceTransactionVerifier,
-);
 const failedOperationReplayer = new GatewayFailedOperationReplayer(
   failedOperationStore,
-  governanceMutationService,
   complianceService,
   settlementCallbackDispatcher,
 );
@@ -486,16 +464,6 @@ async function bootstrap(): Promise<void> {
     }),
   );
   extraRouter.use(
-    createGovernanceMutationRouter({
-      authSessionClient,
-      config,
-      governanceReader: governanceStatusService,
-      mutationService: governanceMutationService,
-      idempotencyStore,
-      failedOperationWorkflow: errorHandlerWorkflow,
-    }),
-  );
-  extraRouter.use(
     createTradeRouter({
       authSessionClient,
       config,
@@ -580,12 +548,10 @@ async function bootstrap(): Promise<void> {
     });
   });
   settlementCallbackDispatcher.start();
-  governanceDirectSignMonitor.start();
 
   const shutdown = async (signal: string): Promise<void> => {
     Logger.info('Shutting down dashboard gateway', { signal });
     settlementCallbackDispatcher.stop();
-    governanceDirectSignMonitor.stop();
     await requestRateLimiter.close();
     await closeConnection(pool);
     server.close(() => process.exit(0));
@@ -603,7 +569,6 @@ async function bootstrap(): Promise<void> {
     void (async () => {
       Logger.error('Dashboard gateway server error', error);
       settlementCallbackDispatcher.stop();
-      governanceDirectSignMonitor.stop();
       await requestRateLimiter.close().catch(() => undefined);
       await closeConnection(pool);
       process.exit(1);

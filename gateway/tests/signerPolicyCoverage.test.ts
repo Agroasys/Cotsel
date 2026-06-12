@@ -16,61 +16,7 @@ function routeBlock(source: string, route: string): string {
   return source.slice(start, nextRoute === -1 ? undefined : nextRoute);
 }
 
-function routerPostBlocks(source: string): Array<{ route: string; block: string }> {
-  const blocks: Array<{ route: string; block: string }> = [];
-  let cursor = 0;
-
-  while (cursor < source.length) {
-    const start = source.indexOf('router.post(', cursor);
-    if (start === -1) {
-      break;
-    }
-
-    const routeMatch = source.slice(start).match(/router\.post\(\s*['"]([^'"]+)['"]/);
-    expect(routeMatch).not.toBeNull();
-
-    const nextRoute = source.indexOf('router.post(', start + 'router.post('.length);
-    blocks.push({
-      route: routeMatch?.[1] ?? '',
-      block: source.slice(start, nextRoute === -1 ? undefined : nextRoute),
-    });
-    cursor = start + 'router.post('.length;
-  }
-
-  return blocks;
-}
-
 describe('privileged signer route coverage', () => {
-  test('governance direct-sign route support uses centralized signer policy', () => {
-    const source = readGatewaySource('src/routes/governanceMutationRouteSupport.ts');
-
-    expect(source).toContain('requireAuthorizedSignerBinding');
-    expect(source).toContain('requireSignerWalletAddress');
-    expect(source).toMatch(
-      /requireAuthorizedSignerBinding\(\s*req\.gatewayPrincipal,\s*config,\s*'governance'/,
-    );
-    expect(source).toContain('prepareAndRespond');
-    expect(source).toContain('confirmAndRespond');
-  });
-
-  test('governance direct-sign route handlers only enter through signer-policy wrappers', () => {
-    const source = readGatewaySource('src/routes/governanceDirectSignMutations.ts');
-    const blocks = routerPostBlocks(source);
-
-    expect(blocks.length).toBeGreaterThan(0);
-    for (const { route, block } of blocks) {
-      if (route.endsWith('/prepare')) {
-        expect(block).toContain('prepareAndRespond(');
-        expect(block).not.toContain('confirmAndRespond(');
-        continue;
-      }
-
-      expect(route).toBe('/governance/actions/:actionId/confirm');
-      expect(block).toContain('confirmAndRespond(');
-      expect(block).not.toContain('prepareAndRespond(');
-    }
-  });
-
   test('treasury signer-required routes call the centralized signer policy helper', () => {
     const source = readGatewaySource('src/routes/treasury.ts');
     const directSignerRoutes = [
