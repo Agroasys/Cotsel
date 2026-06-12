@@ -51,6 +51,9 @@ Replay is not recorded for:
 Operator rule:
 
 - do not replay a failed operation until the underlying dependency failure is understood and contained
+- dashboard/API replay requires an admin session with mutation write access and the explicit `operations:replay`
+  operator capability
+- dashboard/API replay is accepted only while the failed-operation record is still `open` and `replayEligible=true`
 - preserve the original intent identity: replay keeps the same `requestId`, `correlationId`, and `idempotencyKey`
 - treat replay as a controlled reattempt of the same logical action, not a new operator request
 
@@ -88,6 +91,15 @@ Replay one failed operation and emit JSON:
 node scripts/gateway-dead-letter-workflow.mjs replay <failedOperationId> --json
 ```
 
+Dashboard/API replay:
+
+```bash
+curl -fsS -X POST \
+  -H "Authorization: Bearer <admin session with operations:replay>" \
+  -H "Idempotency-Key: <unique replay command id>" \
+  "${DASHBOARD_GATEWAY_BASE_URL}/operations/failed-operations/<failedOperationId>/replay"
+```
+
 ## Operator replay procedure
 
 1. Confirm the failure class is `infrastructure` or `unexpected`.
@@ -101,9 +113,11 @@ node scripts/gateway-dead-letter-workflow.mjs replay <failedOperationId> --json
    - `requestId`
    - `correlationId`
    - `idempotencyKey`
-4. Run the replay command.
-5. Confirm the record transitions to `replayed`. If replay fails, it transitions to `replay_failed` and retains the latest terminal error.
-6. Attach the replay output to the incident or operator evidence packet.
+4. Confirm the record remains `open` and `replayEligible=true`.
+5. Confirm the operator has the `operations:replay` capability when using the dashboard/API route.
+6. Run the replay command.
+7. Confirm the record transitions to `replayed`. If replay fails, it transitions to `replay_failed` and retains the latest terminal error.
+8. Attach the replay output to the incident or operator evidence packet.
 
 ## Incident ownership
 
@@ -121,5 +135,7 @@ Record these fields in the incident or operator evidence packet:
 - `correlationId`
 - `idempotencyKey`
 - failure class/code/message
+- pre-replay `failureState` and `replayEligible` values
+- operator replay authority evidence (`operations:replay` capability or CLI service authority)
 - replay result
 - ticket reference and operator identity

@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS operator_capability_bindings (
     capability    TEXT NOT NULL CHECK (capability IN (
         'governance:write',
         'compliance:write',
+        'operations:replay',
         'treasury:read',
         'treasury:prepare',
         'treasury:approve',

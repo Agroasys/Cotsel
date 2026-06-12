@@ -79,6 +79,7 @@ async function startServer(
             ? [
                 'governance:write',
                 'compliance:write',
+                'operations:replay',
                 'treasury:read',
                 'treasury:prepare',
                 'treasury:approve',
@@ -199,6 +200,7 @@ describe('gateway capabilities route contract', () => {
       expect(payload.data.subject.capabilities).toEqual([
         'governance:write',
         'compliance:write',
+        'operations:replay',
         'treasury:read',
         'treasury:prepare',
         'treasury:approve',
@@ -209,6 +211,7 @@ describe('gateway capabilities route contract', () => {
       expect(payload.data.routes.governanceRead).toBe(true);
       expect(payload.data.actions.governanceWrite).toBe(true);
       expect(payload.data.actions.complianceWrite).toBe(true);
+      expect(payload.data.actions.operationsReplay).toBe(true);
       expect(payload.data.actions.treasuryRead).toBe(true);
       expect(payload.data.actions.treasuryPrepare).toBe(true);
       expect(payload.data.actions.treasuryApprove).toBe(true);

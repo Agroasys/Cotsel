@@ -7,6 +7,7 @@ export type AdminActorType = 'service_auth' | 'system';
 export const OPERATOR_CAPABILITIES = [
   'governance:write',
   'compliance:write',
+  'operations:replay',
   'treasury:read',
   'treasury:prepare',
   'treasury:approve',

@@ -21,7 +21,10 @@ export type TreasuryCapability =
   | 'treasury:approve'
   | 'treasury:execute_match'
   | 'treasury:close';
-export type OperatorActionCapability = 'governance:write' | 'compliance:write';
+export type OperatorActionCapability =
+  | 'governance:write'
+  | 'compliance:write'
+  | 'operations:replay';
 
 const TREASURY_CAPABILITIES: readonly TreasuryCapability[] = [
   'treasury:read',
@@ -33,6 +36,7 @@ const TREASURY_CAPABILITIES: readonly TreasuryCapability[] = [
 const OPERATOR_ACTION_CAPABILITIES: readonly OperatorActionCapability[] = [
   'governance:write',
   'compliance:write',
+  'operations:replay',
 ];
 
 const INACTIVE_BREAK_GLASS_CONTEXT: BreakGlassSessionContext = {

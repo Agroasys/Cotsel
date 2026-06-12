@@ -51,32 +51,32 @@ describe('oracle authenticated routes', () => {
   let server: Server;
   let baseUrl: string;
   const controller = {
-    releaseStage1: async (req: Request, res: Response) => {
+    releaseStage1: jest.fn(async (req: Request, res: Response) => {
       res.status(200).json({
         success: true,
         route: 'release-stage1',
         requestHash: req.hmacSignature,
         nonce: req.hmacNonce,
       });
-    },
-    confirmArrival: async (_req: Request, res: Response) => {
+    }),
+    confirmArrival: jest.fn(async (_req: Request, res: Response) => {
       res.status(200).json({ success: true });
-    },
-    finalizeTrade: async (_req: Request, res: Response) => {
+    }),
+    finalizeTrade: jest.fn(async (_req: Request, res: Response) => {
       res.status(200).json({ success: true });
-    },
-    redriveTrigger: async (_req: Request, res: Response) => {
-      res.status(200).json({ success: true });
-    },
-    approveTrigger: async (_req: Request, res: Response) => {
-      res.status(200).json({ success: true });
-    },
-    rejectTrigger: async (_req: Request, res: Response) => {
-      res.status(200).json({ success: true });
-    },
-    listTriggers: async (req: Request, res: Response) => {
+    }),
+    redriveTrigger: jest.fn(async (req: Request, res: Response) => {
+      res.status(200).json({ success: true, route: 'redrive', nonce: req.hmacNonce });
+    }),
+    approveTrigger: jest.fn(async (req: Request, res: Response) => {
+      res.status(200).json({ success: true, route: 'approve', nonce: req.hmacNonce });
+    }),
+    rejectTrigger: jest.fn(async (req: Request, res: Response) => {
+      res.status(200).json({ success: true, route: 'reject', nonce: req.hmacNonce });
+    }),
+    listTriggers: jest.fn(async (req: Request, res: Response) => {
       res.status(200).json({ success: true, status: req.query.status ?? null });
-    },
+    }),
   };
 
   beforeEach(async () => {
@@ -141,6 +141,7 @@ describe('oracle authenticated routes', () => {
 
     expect(firstResponse.status).toBe(200);
     expect(secondResponse.status).toBe(401);
+    expect(controller.releaseStage1).toHaveBeenCalledTimes(1);
     await expect(secondResponse.json()).resolves.toEqual(
       expect.objectContaining({
         error: 'Unauthorized',
@@ -170,6 +171,7 @@ describe('oracle authenticated routes', () => {
 
     expect(firstResponse.status).toBe(200);
     expect(secondResponse.status).toBe(401);
+    expect(controller.releaseStage1).toHaveBeenCalledTimes(1);
     await expect(secondResponse.json()).resolves.toEqual(
       expect.objectContaining({
         error: 'Unauthorized',
@@ -258,5 +260,102 @@ describe('oracle authenticated routes', () => {
       }),
     );
     expect(mockConsumeHmacNonce).toHaveBeenCalledWith('test-api-key', 'oracle-trigger-list', 600);
+  });
+
+  test('valid signed redrive request reaches redrive route once', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const payload = {
+      tradeId: 'trade-redrive',
+      requestId: 'req-redrive',
+      triggerType: 'release_stage_1',
+    };
+
+    const response = await fetch(`${baseUrl}/api/oracle/redrive`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, { nonce: 'oracle-redrive-route' }),
+      body: JSON.stringify(payload),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        route: 'redrive',
+        nonce: 'oracle-redrive-route',
+      }),
+    );
+    expect(controller.redriveTrigger).toHaveBeenCalledTimes(1);
+  });
+
+  test('valid signed approve request reaches approval route once', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const payload = {
+      idempotencyKey: 'RELEASE_STAGE_1:trade-approval:req-approval',
+      actor: 'operator@agroasys',
+    };
+
+    const response = await fetch(`${baseUrl}/api/oracle/approve`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, { nonce: 'oracle-approve-route' }),
+      body: JSON.stringify(payload),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        route: 'approve',
+        nonce: 'oracle-approve-route',
+      }),
+    );
+    expect(controller.approveTrigger).toHaveBeenCalledTimes(1);
+  });
+
+  test('valid signed reject request reaches rejection route once with audit reason payload', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const payload = {
+      idempotencyKey: 'RELEASE_STAGE_1:trade-reject:req-reject',
+      actor: 'operator@agroasys',
+      reason: 'Oracle evidence did not match the reviewed trade state.',
+    };
+
+    const response = await fetch(`${baseUrl}/api/oracle/reject`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, { nonce: 'oracle-reject-route' }),
+      body: JSON.stringify(payload),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        route: 'reject',
+        nonce: 'oracle-reject-route',
+      }),
+    );
+    expect(controller.rejectTrigger).toHaveBeenCalledTimes(1);
+  });
+
+  test('replayed approval request is rejected before approval controller runs', async () => {
+    mockConsumeHmacNonce.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const payload = {
+      idempotencyKey: 'RELEASE_STAGE_1:trade-replay:req-replay',
+      actor: 'operator@agroasys',
+    };
+
+    const firstResponse = await fetch(`${baseUrl}/api/oracle/approve`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, { nonce: 'oracle-approval-replay' }),
+      body: JSON.stringify(payload),
+    });
+    const secondResponse = await fetch(`${baseUrl}/api/oracle/approve`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, { nonce: 'oracle-approval-replay' }),
+      body: JSON.stringify(payload),
+    });
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(401);
+    expect(controller.approveTrigger).toHaveBeenCalledTimes(1);
   });
 });

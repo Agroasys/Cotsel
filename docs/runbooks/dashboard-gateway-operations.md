@@ -188,10 +188,18 @@ Approved remote staging health evidence as of `2026-04-02`:
 - Mutation routes additionally require:
   - `GATEWAY_ENABLE_MUTATIONS=true`
   - caller membership in `GATEWAY_WRITE_ALLOWLIST`
+  - route-specific operator capabilities from auth session truth:
+    - `governance:write` for governance direct-sign prepare/confirm routes
+    - `compliance:write` for compliance mutation routes
+    - `operations:replay` for failed-operation replay
+    - `treasury:prepare`, `treasury:approve`, `treasury:execute_match`, or `treasury:close`
+      for the matching treasury workflow routes
+  - approved signer binding policy for signer-required governance and treasury routes
 
 Operational implication:
 
 - a valid admin session alone is not sufficient to mutate protocol controls.
+- broad `operator:write` access does not imply replay, governance, compliance, or treasury authority.
 - connected validation remains read-only until governance/compliance read verification is complete.
 
 ## Request tracing and log policy
