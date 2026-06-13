@@ -53,6 +53,9 @@ export interface GatewayConfig {
   gaslessExecutorPrivateKey?: string;
   gaslessSignerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
   gaslessAllowRawPrivateKeyInProduction?: boolean;
+  gaslessManagedSignerUrl?: string;
+  gaslessManagedSignerApiKey?: string;
+  gaslessManagedSignerRequestTimeoutMs?: number;
   gaslessBroadcastPaused?: boolean;
   gaslessMaxGasLimit?: bigint;
   gaslessMaxFeePerGasWei?: bigint;
@@ -66,6 +69,7 @@ export interface GatewayConfig {
   gaslessCapacityFailClosed?: boolean;
   gaslessRequestMaxTtlSeconds?: number;
   gaslessStuckQueueThresholdMs?: number;
+  gaslessReceiptTimeoutMs?: number;
   gaslessRepeatedFailureAlertThreshold?: number;
   gaslessRequireRpcFallback?: boolean;
   oracleBaseUrl?: string;
@@ -272,6 +276,10 @@ export function loadConfig(): GatewayConfig {
       process.env.GATEWAY_EXECUTOR_PRIVATE_KEY?.trim() ||
       undefined,
   );
+  const gaslessManagedSignerUrl =
+    process.env.GATEWAY_GASLESS_MANAGED_SIGNER_URL?.trim()?.replace(/\/$/, '') || undefined;
+  const gaslessManagedSignerApiKey =
+    process.env.GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY?.trim() || undefined;
   const gaslessMaxGasLimit = envBigInt('GATEWAY_GASLESS_MAX_GAS_LIMIT', 1_500_000n);
   const gaslessMaxFeePerGasWei = envBigInt('GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI', 50_000_000_000n);
   const gaslessMaxNativeCostWei = envBigInt(
@@ -347,6 +355,13 @@ export function loadConfig(): GatewayConfig {
     rpcUrl.startsWith('http://') || rpcUrl.startsWith('https://'),
     'GATEWAY_RPC_URL must be an absolute http(s) URL',
   );
+  if (gaslessManagedSignerUrl) {
+    assert(
+      gaslessManagedSignerUrl.startsWith('http://') ||
+        gaslessManagedSignerUrl.startsWith('https://'),
+      'GATEWAY_GASLESS_MANAGED_SIGNER_URL must be an absolute http(s) URL',
+    );
+  }
   for (const [index, fallbackUrl] of rpcFallbackUrls.entries()) {
     assert(
       fallbackUrl.startsWith('http://') || fallbackUrl.startsWith('https://'),
@@ -441,6 +456,14 @@ export function loadConfig(): GatewayConfig {
     envNumber('GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS', 900) >= 30,
     'GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS must be >= 30',
   );
+  assert(
+    envNumber('GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS', 5000) >= 1000,
+    'GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS must be >= 1000',
+  );
+  assert(
+    envNumber('GATEWAY_GASLESS_RECEIPT_TIMEOUT_MS', 120000) >= 1000,
+    'GATEWAY_GASLESS_RECEIPT_TIMEOUT_MS must be >= 1000',
+  );
 
   if (
     (oracleServiceApiKey && !oracleServiceApiSecret) ||
@@ -518,10 +541,21 @@ export function loadConfig(): GatewayConfig {
   }
 
   if (gaslessExecutionEnabled) {
-    assert(
-      gaslessExecutorPrivateKey,
-      'GATEWAY_GASLESS_EXECUTION_ENABLED requires GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY or GATEWAY_EXECUTOR_PRIVATE_KEY',
-    );
+    if (gaslessSignerCustodyMode === 'raw_private_key') {
+      assert(
+        gaslessExecutorPrivateKey,
+        'GATEWAY_GASLESS_EXECUTION_ENABLED requires GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY or GATEWAY_EXECUTOR_PRIVATE_KEY when GATEWAY_GASLESS_SIGNER_CUSTODY_MODE=raw_private_key',
+      );
+    } else {
+      assert(
+        gaslessManagedSignerUrl,
+        'GATEWAY_GASLESS_EXECUTION_ENABLED requires GATEWAY_GASLESS_MANAGED_SIGNER_URL when GATEWAY_GASLESS_SIGNER_CUSTODY_MODE is kms or mpc',
+      );
+      assert(
+        !gaslessExecutorPrivateKey,
+        'GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY must not be set when GATEWAY_GASLESS_SIGNER_CUSTODY_MODE is kms or mpc',
+      );
+    }
     assert(
       gaslessMaxFeePerGasWei > 0n,
       'GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI must be > 0 when gasless execution is enabled',
@@ -571,6 +605,16 @@ export function loadConfig(): GatewayConfig {
         gaslessSignerCustodyMode !== 'raw_private_key' || gaslessAllowRawPrivateKeyInProduction,
         'Production gasless execution must use KMS/MPC signer custody or explicitly approve the raw-private-key emergency exception',
       );
+      if (gaslessSignerCustodyMode !== 'raw_private_key') {
+        assert(
+          gaslessManagedSignerUrl?.startsWith('https://'),
+          'Production managed gasless signer custody requires an https GATEWAY_GASLESS_MANAGED_SIGNER_URL',
+        );
+        assert(
+          Boolean(gaslessManagedSignerApiKey),
+          'Production managed gasless signer custody requires GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY',
+        );
+      }
     }
     if (gaslessRequireRpcFallback) {
       assert(
@@ -638,6 +682,12 @@ export function loadConfig(): GatewayConfig {
     gaslessExecutorPrivateKey,
     gaslessSignerCustodyMode,
     gaslessAllowRawPrivateKeyInProduction,
+    gaslessManagedSignerUrl,
+    gaslessManagedSignerApiKey,
+    gaslessManagedSignerRequestTimeoutMs: envNumber(
+      'GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS',
+      5000,
+    ),
     gaslessBroadcastPaused,
     gaslessMaxGasLimit,
     gaslessMaxFeePerGasWei,
@@ -651,6 +701,7 @@ export function loadConfig(): GatewayConfig {
     gaslessCapacityFailClosed,
     gaslessRequestMaxTtlSeconds: envNumber('GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS', 900),
     gaslessStuckQueueThresholdMs: envNumber('GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS', 300000),
+    gaslessReceiptTimeoutMs: envNumber('GATEWAY_GASLESS_RECEIPT_TIMEOUT_MS', 120000),
     gaslessRepeatedFailureAlertThreshold: envNumber(
       'GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD',
       3,

@@ -39,6 +39,7 @@ import {
   createEthersGaslessSettlementExecutor,
   GaslessSettlementExecutionService,
 } from './core/gaslessSettlementExecutionService';
+import { createPostgresGaslessRelayerBroadcastLock } from './core/gaslessRelayerBroadcastLock';
 import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { IndexerGraphqlClient } from './core/indexerGraphqlClient';
@@ -120,7 +121,9 @@ const gaslessSettlementService = config.gaslessExecutionEnabled
         capacityRequiredExecutorBalanceWei: config.gaslessCapacityRequiredExecutorBalanceWei,
         capacityFailClosed: config.gaslessCapacityFailClosed,
         stuckQueueThresholdMs: config.gaslessStuckQueueThresholdMs,
+        receiptTimeoutMs: config.gaslessReceiptTimeoutMs,
         repeatedFailureAlertThreshold: config.gaslessRepeatedFailureAlertThreshold,
+        broadcastLock: createPostgresGaslessRelayerBroadcastLock(pool),
       },
     )
   : null;
