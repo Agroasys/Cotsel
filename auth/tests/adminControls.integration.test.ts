@@ -581,7 +581,7 @@ describe('admin controls persistence integration', () => {
             accountId: 'agroasys-user:signer-1',
             role: 'admin',
             email: 'signer@example.com',
-            capabilities: ['governance:write', 'compliance:write'],
+            capabilities: ['governance:write', 'compliance:write', 'operations:replay'],
             capabilityTicketRef: 'SEC-1100',
             reason: 'SEC-1100 durable admin provisioning for signer binding proof',
           });
@@ -607,6 +607,7 @@ describe('admin controls persistence integration', () => {
           expect(resolvedBeforeSigner?.capabilities).toEqual([
             'compliance:write',
             'governance:write',
+            'operations:replay',
           ]);
           expect(resolvedBeforeSigner?.signerAuthorizations).toEqual([]);
 
@@ -640,6 +641,7 @@ describe('admin controls persistence integration', () => {
           const resolved = await app.sessionService.resolve(session.sessionId);
           expect(resolved?.capabilities).toContain('governance:write');
           expect(resolved?.capabilities).toContain('compliance:write');
+          expect(resolved?.capabilities).toContain('operations:replay');
           expect(resolved?.signerAuthorizations).toEqual(
             expect.arrayContaining([
               expect.objectContaining({

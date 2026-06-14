@@ -75,5 +75,8 @@ describe('auth router', () => {
     expect(listRoutes(router)).toContain('GET /admin/audit-events');
     expect(listRoutes(router)).toContain('POST /admin/signers/provision');
     expect(listRoutes(router)).toContain('POST /admin/signers/revoke');
+    expect(listRoutes(router)).toContain('POST /admin/break-glass/grant');
+    expect(listRoutes(router)).toContain('POST /admin/break-glass/revoke');
+    expect(listRoutes(router)).toContain('POST /admin/break-glass/review');
   });
 });

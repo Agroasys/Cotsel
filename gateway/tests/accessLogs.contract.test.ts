@@ -79,6 +79,8 @@ async function startServer(options: StartServerOptions = {}) {
             : '0x00000000000000000000000000000000000000bb',
         role,
         email: role === 'admin' ? 'admin@agroasys.io' : 'buyer@agroasys.io',
+        capabilities: [],
+        signerAuthorizations: [],
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
       };
@@ -237,5 +239,22 @@ describe('gateway access log routes contract', () => {
 
     expect(disabledResponse.status).toBe(403);
     expect(validateError(disabledPayload)).toBe(true);
+  });
+
+  test('access log reads require authenticated operator authority', async () => {
+    const unauthenticatedApp = await startServer({ sessionRole: null });
+    const unauthenticatedResponse = await sendInProcessRequest(unauthenticatedApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/access-logs',
+    });
+    expect(unauthenticatedResponse.status).toBe(401);
+
+    const buyerApp = await startServer({ sessionRole: 'buyer' });
+    const buyerResponse = await sendInProcessRequest(buyerApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/access-logs',
+      headers: { authorization: 'Bearer session-buyer' },
+    });
+    expect(buyerResponse.status).toBe(403);
   });
 });

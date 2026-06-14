@@ -2300,7 +2300,7 @@ components:
       enum: [operator:read, operator:write]
     OperatorCapabilitySubject:
       type: object
-      required: [accountId, userId, authRole, gatewayRoles]
+      required: [accountId, userId, authRole, gatewayRoles, capabilities]
       properties:
         accountId:
           type: string
@@ -2315,6 +2315,19 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GatewayRole'
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum:
+              - governance:write
+              - compliance:write
+              - operations:replay
+              - treasury:read
+              - treasury:prepare
+              - treasury:approve
+              - treasury:execute_match
+              - treasury:close
     OperatorRouteCapabilities:
       type: object
       required: [overviewRead, operationsRead, tradesRead, governanceRead, complianceRead]
@@ -2331,11 +2344,32 @@ components:
           type: boolean
     OperatorActionCapabilities:
       type: object
-      required: [governanceWrite, complianceWrite]
+      required:
+        - governanceWrite
+        - complianceWrite
+        - operationsReplay
+        - treasuryRead
+        - treasuryPrepare
+        - treasuryApprove
+        - treasuryExecuteMatch
+        - treasuryClose
       properties:
         governanceWrite:
           type: boolean
         complianceWrite:
+          type: boolean
+        operationsReplay:
+          type: boolean
+          description: True only when the operator has explicit authority to replay failed control-plane operations.
+        treasuryRead:
+          type: boolean
+        treasuryPrepare:
+          type: boolean
+        treasuryApprove:
+          type: boolean
+        treasuryExecuteMatch:
+          type: boolean
+        treasuryClose:
           type: boolean
     OperatorWriteAccess:
       type: object

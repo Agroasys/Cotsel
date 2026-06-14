@@ -17,6 +17,7 @@ import type {
 } from '../src/core/operationsSummaryService';
 import type { FailedOperationRecord, FailedOperationStore } from '../src/core/failedOperationStore';
 import type { IdempotencyStore } from '../src/core/idempotencyStore';
+import type { OperatorCapability } from '../src/core/authSessionClient';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -163,6 +164,7 @@ async function startServer(
   failedOperationReplayer?: GatewayFailedOperationReplayer | null,
   idempotencyStore?: IdempotencyStore | null,
   routeConfig: GatewayConfig = config,
+  capabilities: OperatorCapability[] = role === 'admin' ? ['operations:replay'] : [],
 ) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
@@ -174,6 +176,8 @@ async function startServer(
         userId: `uid-${role}`,
         walletAddress: '0x00000000000000000000000000000000000000aa',
         role,
+        capabilities,
+        signerAuthorizations: [],
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
       };
@@ -446,6 +450,261 @@ describe('gateway operations summary route contract', () => {
     }
   });
 
+  test('POST /operations/failed-operations/:id/replay requires explicit replay capability', async () => {
+    const failedOperationStore = {
+      list: jest.fn(),
+      get: jest.fn(),
+      recordFailure: jest.fn(),
+      markReplayed: jest.fn(),
+      markReplayFailed: jest.fn(),
+    } as unknown as FailedOperationStore;
+    const failedOperationReplayer = {
+      replay: jest.fn(),
+    } as unknown as GatewayFailedOperationReplayer;
+    const idempotencyStore = {
+      get: jest.fn(),
+      createPending: jest.fn(),
+      complete: jest.fn(),
+      releasePending: jest.fn(),
+      markReplay: jest.fn(),
+    } as unknown as IdempotencyStore;
+    const writeConfig = {
+      ...config,
+      enableMutations: true,
+      writeAllowlist: ['uid-admin'],
+    };
+    const { server, baseUrl } = await startServer(
+      'admin',
+      operationsFixture,
+      null,
+      failedOperationStore,
+      failedOperationReplayer,
+      idempotencyStore,
+      writeConfig,
+      [],
+    );
+
+    try {
+      const response = await fetch(`${baseUrl}/operations/failed-operations/failed-op-1/replay`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'Idempotency-Key': 'replay-1',
+        },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(payload.error.message).toBe("Operator capability 'operations:replay' is required");
+      expect(idempotencyStore.createPending).not.toHaveBeenCalled();
+      expect(failedOperationReplayer.replay).not.toHaveBeenCalled();
+    } finally {
+      server.close();
+    }
+  });
+
+  test('POST /operations/failed-operations/:id/replay rejects ineligible records before replaying', async () => {
+    const replayedRecord: FailedOperationRecord = {
+      failedOperationId: 'failed-op-2',
+      operationType: 'settlement-callback',
+      operationKey: 'callback-2',
+      targetService: 'agroasys-backend',
+      route: '/settlement/callbacks',
+      method: 'POST',
+      payloadHash: 'hash-2',
+      requestPayload: { callback: true },
+      requestId: 'req-failed-2',
+      correlationId: null,
+      idempotencyKey: 'idem-2',
+      actionKey: null,
+      actorId: null,
+      actorUserId: 'admin-1',
+      actorWalletAddress: null,
+      actorRole: 'admin',
+      sessionReference: 'session-1',
+      replayEligible: false,
+      failureState: 'open',
+      firstFailedAt: '2026-03-12T00:00:00.000Z',
+      lastFailedAt: '2026-03-12T00:05:00.000Z',
+      retryCount: 3,
+      terminalErrorClass: 'client_contract',
+      terminalErrorCode: 'NOT_REPLAYABLE',
+      terminalErrorMessage: 'Permanent validation failure',
+      metadata: { replayed: false },
+      lastReplayedAt: null,
+      createdAt: '2026-03-12T00:00:00.000Z',
+      updatedAt: '2026-03-12T00:10:00.000Z',
+    };
+    const failedOperationStore = {
+      list: jest.fn(),
+      get: jest.fn().mockResolvedValue(replayedRecord),
+      recordFailure: jest.fn(),
+      markReplayed: jest.fn(),
+      markReplayFailed: jest.fn(),
+    } as unknown as FailedOperationStore;
+    const failedOperationReplayer = {
+      replay: jest.fn(),
+    } as unknown as GatewayFailedOperationReplayer;
+    const idempotencyStore = {
+      get: jest.fn(),
+      createPending: jest.fn().mockResolvedValue({
+        created: true,
+        record: {
+          idempotencyKey: 'replay-2',
+          actorId: 'user:uid-admin',
+          endpoint: '/operations/failed-operations/:failedOperationId/replay',
+          requestMethod: 'POST',
+          requestPath: '/api/dashboard-gateway/v1/operations/failed-operations/failed-op-2/replay',
+          requestFingerprint: 'hash',
+          requestId: 'req-replay-2',
+          responseStatus: null,
+          responseHeaders: {},
+          responseBody: null,
+          completedAt: null,
+          createdAt: '2026-03-12T00:00:00.000Z',
+        },
+      }),
+      complete: jest.fn().mockResolvedValue(undefined),
+      releasePending: jest.fn().mockResolvedValue(undefined),
+      markReplay: jest.fn().mockResolvedValue(undefined),
+    } as unknown as IdempotencyStore;
+    const writeConfig = {
+      ...config,
+      enableMutations: true,
+      writeAllowlist: ['uid-admin'],
+    };
+    const { server, baseUrl } = await startServer(
+      'admin',
+      operationsFixture,
+      null,
+      failedOperationStore,
+      failedOperationReplayer,
+      idempotencyStore,
+      writeConfig,
+    );
+
+    try {
+      const response = await fetch(`${baseUrl}/operations/failed-operations/failed-op-2/replay`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'Idempotency-Key': 'replay-2',
+        },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.error.message).toBe('Failed operation is not replayable');
+      expect(failedOperationStore.get).toHaveBeenCalledWith('failed-op-2');
+      expect(failedOperationReplayer.replay).not.toHaveBeenCalled();
+    } finally {
+      server.close();
+    }
+  });
+
+  test('POST /operations/failed-operations/:id/replay rejects already replayed records before replaying again', async () => {
+    const replayedRecord: FailedOperationRecord = {
+      failedOperationId: 'failed-op-replayed',
+      operationType: 'settlement-callback',
+      operationKey: 'callback-replayed',
+      targetService: 'agroasys-backend',
+      route: '/settlement/callbacks',
+      method: 'POST',
+      payloadHash: 'hash-replayed',
+      requestPayload: { callback: true },
+      requestId: 'req-failed-replayed',
+      correlationId: null,
+      idempotencyKey: 'idem-replayed',
+      actionKey: null,
+      actorId: null,
+      actorUserId: 'admin-1',
+      actorWalletAddress: null,
+      actorRole: 'admin',
+      sessionReference: 'session-1',
+      replayEligible: true,
+      failureState: 'replayed',
+      firstFailedAt: '2026-03-12T00:00:00.000Z',
+      lastFailedAt: '2026-03-12T00:05:00.000Z',
+      retryCount: 3,
+      terminalErrorClass: 'infrastructure',
+      terminalErrorCode: 'CALLBACK_503',
+      terminalErrorMessage: 'Callback service unavailable',
+      metadata: { replayed: true },
+      lastReplayedAt: '2026-03-12T00:10:00.000Z',
+      createdAt: '2026-03-12T00:00:00.000Z',
+      updatedAt: '2026-03-12T00:10:00.000Z',
+    };
+    const failedOperationStore = {
+      list: jest.fn(),
+      get: jest.fn().mockResolvedValue(replayedRecord),
+      recordFailure: jest.fn(),
+      markReplayed: jest.fn(),
+      markReplayFailed: jest.fn(),
+    } as unknown as FailedOperationStore;
+    const failedOperationReplayer = {
+      replay: jest.fn(),
+    } as unknown as GatewayFailedOperationReplayer;
+    const idempotencyStore = {
+      get: jest.fn(),
+      createPending: jest.fn().mockResolvedValue({
+        created: true,
+        record: {
+          idempotencyKey: 'replay-already-replayed',
+          actorId: 'user:uid-admin',
+          endpoint: '/operations/failed-operations/:failedOperationId/replay',
+          requestMethod: 'POST',
+          requestPath:
+            '/api/dashboard-gateway/v1/operations/failed-operations/failed-op-replayed/replay',
+          requestFingerprint: 'hash',
+          requestId: 'req-replay-already-replayed',
+          responseStatus: null,
+          responseHeaders: {},
+          responseBody: null,
+          completedAt: null,
+          createdAt: '2026-03-12T00:00:00.000Z',
+        },
+      }),
+      complete: jest.fn().mockResolvedValue(undefined),
+      releasePending: jest.fn().mockResolvedValue(undefined),
+      markReplay: jest.fn().mockResolvedValue(undefined),
+    } as unknown as IdempotencyStore;
+    const writeConfig = {
+      ...config,
+      enableMutations: true,
+      writeAllowlist: ['uid-admin'],
+    };
+    const { server, baseUrl } = await startServer(
+      'admin',
+      operationsFixture,
+      null,
+      failedOperationStore,
+      failedOperationReplayer,
+      idempotencyStore,
+      writeConfig,
+    );
+
+    try {
+      const response = await fetch(
+        `${baseUrl}/operations/failed-operations/failed-op-replayed/replay`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer sess-admin',
+            'Idempotency-Key': 'replay-already-replayed',
+          },
+        },
+      );
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.error.message).toBe('Failed operation is not replayable');
+      expect(failedOperationStore.get).toHaveBeenCalledWith('failed-op-replayed');
+      expect(failedOperationReplayer.replay).not.toHaveBeenCalled();
+    } finally {
+      server.close();
+    }
+  });
+
   test('POST /operations/failed-operations/:id/replay requires idempotency before replaying', async () => {
     const replayedRecord: FailedOperationRecord = {
       failedOperationId: 'failed-op-1',
@@ -480,7 +739,11 @@ describe('gateway operations summary route contract', () => {
     };
     const failedOperationStore = {
       list: jest.fn(),
-      get: jest.fn(),
+      get: jest.fn().mockResolvedValue({
+        ...replayedRecord,
+        failureState: 'open',
+        lastReplayedAt: null,
+      }),
       recordFailure: jest.fn(),
       markReplayed: jest.fn(),
       markReplayFailed: jest.fn(),

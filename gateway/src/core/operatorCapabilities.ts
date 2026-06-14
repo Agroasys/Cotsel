@@ -16,6 +16,7 @@ export interface OperatorRouteCapabilities {
 export interface OperatorActionCapabilities {
   governanceWrite: boolean;
   complianceWrite: boolean;
+  operationsReplay: boolean;
   treasuryRead: boolean;
   treasuryPrepare: boolean;
   treasuryApprove: boolean;
@@ -77,6 +78,9 @@ export function buildOperatorCapabilitySnapshot(
       complianceWrite:
         canWriteOperatorActions &&
         principal.operatorActionCapabilities.includes('compliance:write'),
+      operationsReplay:
+        canWriteOperatorActions &&
+        principal.operatorActionCapabilities.includes('operations:replay'),
       treasuryRead: principal.treasuryCapabilities.includes('treasury:read'),
       treasuryPrepare:
         canWriteOperatorActions && principal.treasuryCapabilities.includes('treasury:prepare'),

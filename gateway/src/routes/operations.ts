@@ -15,6 +15,7 @@ import { IdempotencyStore } from '../core/idempotencyStore';
 import { OperationsSummaryReader } from '../core/operationsSummaryService';
 import {
   createAuthenticationMiddleware,
+  requireOperatorActionCapability,
   requireGatewayRole,
   requireMutationWriteAccess,
 } from '../middleware/auth';
@@ -88,6 +89,28 @@ function sanitizeFailedOperation(record: FailedOperationRecord) {
     ...record,
     requestPayload: null,
   };
+}
+
+async function requireReplayableFailedOperation(
+  store: FailedOperationStore | null | undefined,
+  failedOperationId: string,
+): Promise<FailedOperationRecord> {
+  const record = await requireFailedOperationStore(store).get(failedOperationId);
+  if (!record) {
+    throw new GatewayError(404, 'NOT_FOUND', 'Failed operation not found', {
+      failedOperationId,
+    });
+  }
+
+  if (!record.replayEligible || record.failureState !== 'open') {
+    throw new GatewayError(409, 'CONFLICT', 'Failed operation is not replayable', {
+      failedOperationId,
+      replayEligible: record.replayEligible,
+      failureState: record.failureState,
+    });
+  }
+
+  return record;
 }
 
 export function createOperationsRouter(options: OperationsRouterOptions): Router {
@@ -170,6 +193,7 @@ export function createOperationsRouter(options: OperationsRouterOptions): Router
   router.post(
     '/operations/failed-operations/:failedOperationId/replay',
     requireMutationWriteAccess(),
+    requireOperatorActionCapability('operations:replay'),
     replayIdempotency,
     async (req, res, next) => {
       try {
@@ -181,6 +205,7 @@ export function createOperationsRouter(options: OperationsRouterOptions): Router
             'Failed-operation replay is not configured',
           );
         }
+        await requireReplayableFailedOperation(options.failedOperationStore, failedOperationId);
         const replayed = await options.failedOperationReplayer.replay(failedOperationId);
         res.status(202).json(successResponse(sanitizeFailedOperation(replayed)));
       } catch (error) {

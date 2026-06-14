@@ -351,4 +351,38 @@ describe('gateway evidence bundle routes contract', () => {
     expect(response.status).toBe(403);
     expect(payload.error.code).toBe('FORBIDDEN');
   });
+
+  test('evidence bundle reads require an authenticated operator session', async () => {
+    const unauthenticatedApp = await startServer({ sessionRole: null });
+    const unauthenticatedResponse = await sendInProcessRequest(unauthenticatedApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/evidence/bundles',
+    });
+    expect(unauthenticatedResponse.status).toBe(401);
+
+    const buyerApp = await startServer({ sessionRole: 'buyer' });
+    const buyerResponse = await sendInProcessRequest(buyerApp, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/evidence/bundles',
+      headers: { authorization: 'Bearer sess-buyer' },
+    });
+    expect(buyerResponse.status).toBe(403);
+  });
+
+  test('evidence bundle generation requires idempotency before creating a bundle', async () => {
+    const app = await startServer();
+    const response = await sendInProcessRequest(app, {
+      method: 'POST',
+      path: '/api/dashboard-gateway/v1/evidence/bundles',
+      headers: {
+        authorization: 'Bearer sess-admin',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ tradeId: trade.id }),
+    });
+    const payload = response.json<{ error: { code: string } }>();
+
+    expect(response.status).toBe(400);
+    expect(payload.error.code).toBe('VALIDATION_ERROR');
+  });
 });

@@ -66,6 +66,8 @@ async function startServer(role: 'admin' | 'buyer' | null = 'admin') {
             : '0x00000000000000000000000000000000000000bb',
         role,
         email: role === 'admin' ? 'admin@agroasys.io' : 'buyer@agroasys.io',
+        capabilities: [],
+        signerAuthorizations: [],
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
       };
@@ -191,5 +193,19 @@ describe('gateway settings routes contract', () => {
       headers: { authorization: 'Bearer session-buyer' },
     });
     expect(forbiddenResponse.status).toBe(403);
+  });
+
+  test('settings audit feed rejects invalid cursors before reading audit state', async () => {
+    const app = await startServer('admin');
+    const response = await sendInProcessRequest(app, {
+      method: 'GET',
+      path: '/api/dashboard-gateway/v1/settings/audit-feed?cursor=not-a-valid-cursor',
+      headers: { authorization: 'Bearer session-admin' },
+    });
+    const payload = response.json<{ error: { code: string; message: string } }>();
+
+    expect(response.status).toBe(400);
+    expect(payload.error.code).toBe('VALIDATION_ERROR');
+    expect(payload.error.message).toBe("Query parameter 'cursor' is invalid");
   });
 });

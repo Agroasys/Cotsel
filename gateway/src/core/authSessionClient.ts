@@ -9,6 +9,7 @@ export type AuthServiceRole = 'buyer' | 'supplier' | 'admin' | 'oracle';
 export type OperatorCapability =
   | 'governance:write'
   | 'compliance:write'
+  | 'operations:replay'
   | 'treasury:read'
   | 'treasury:prepare'
   | 'treasury:approve'
@@ -80,6 +81,7 @@ const AUTH_SERVICE_ROLES: AuthServiceRole[] = ['buyer', 'supplier', 'admin', 'or
 const OPERATOR_CAPABILITIES: OperatorCapability[] = [
   'governance:write',
   'compliance:write',
+  'operations:replay',
   'treasury:read',
   'treasury:prepare',
   'treasury:approve',
