@@ -314,6 +314,7 @@ describe('gateway operations summary route contract', () => {
           minExecutorBalanceWei: '10000000000000000',
           lowBalanceAlertWei: '5000000000000000',
           stuckQueueThresholdMs: 300000,
+          receiptTimeoutMs: 120000,
           repeatedFailureAlertThreshold: 3,
         },
         capacityPolicy: {

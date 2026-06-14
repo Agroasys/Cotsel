@@ -2736,6 +2736,7 @@ components:
             - minExecutorBalanceWei
             - lowBalanceAlertWei
             - stuckQueueThresholdMs
+            - receiptTimeoutMs
             - repeatedFailureAlertThreshold
           properties:
             gasLimitCap:
@@ -2749,6 +2750,9 @@ components:
             lowBalanceAlertWei:
               type: string
             stuckQueueThresholdMs:
+              type: integer
+              minimum: 1000
+            receiptTimeoutMs:
               type: integer
               minimum: 1000
             repeatedFailureAlertThreshold:

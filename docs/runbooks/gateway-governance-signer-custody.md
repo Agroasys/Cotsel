@@ -56,7 +56,7 @@ Interpretation for the executor boundary during migration:
 - the gateway API process must never hold the signer key; only the isolated executor invocation may access signer material
 - no smart-wallet or paymaster shortcut is an approved replacement for this signer boundary in delegated/service execution
 
-Until a managed signer adapter exists in code, production approval is limited to environments where the raw private key is injected from a managed custody system for a bounded execution window and never persisted in source control, images, CI logs, or long-lived shell history.
+Gasless settlement execution now supports managed signer custody through `GATEWAY_GASLESS_MANAGED_SIGNER_URL` when `GATEWAY_GASLESS_SIGNER_CUSTODY_MODE` is `kms` or `mpc`. Production gasless execution must use that managed signer path; raw private-key gasless custody is not an allowed production mode.
 
 ## Approved custody models
 
@@ -164,6 +164,89 @@ Store the operator packet in:
 
 - `docs/runbooks/operator-audit-evidence-template.md`
 - `docs/incidents/incident-evidence-template.md` when incident-driven
+
+## Gasless executor wallet refill / top-up procedure
+
+### When to refill
+
+Refill the gasless executor wallet when any of the following conditions are observed:
+
+- The `gasless_low_executor_balance` alert fires (severity: critical). This means the executor balance has dropped to or below `GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI`.
+- The readiness endpoint (`GET /api/dashboard-gateway/v1/operations/gasless-relayer/readiness`) returns `state: degraded` or `state: blocked`.
+- The `gasless_executor_balance_below_capacity_policy` alert is present, indicating the observed balance does not cover the burst-hour capacity policy (`requiredBurstHourBalanceWei`).
+- A proactive balance check shows the executor is trending below the safety margin for the next 24-48 hours of expected transaction volume.
+
+### How to check the current balance
+
+1. **Readiness endpoint** (preferred):
+
+   ```bash
+   curl -s https://<gateway-host>/api/dashboard-gateway/v1/operations/gasless-relayer/readiness \
+     | jq '.executorBalanceWei, .state, .alerts'
+   ```
+
+   The `executorBalanceWei` field shows the last observed balance. The `state` field will be `ready`, `degraded`, or `blocked`. The `alerts` array contains any active threshold violations.
+
+2. **On-chain balance check**:
+
+   ```bash
+   cast balance <executor-address> --rpc-url <rpc-url>
+   ```
+
+   Use the executor address shown in the readiness payload under `controls` or from the managed signer address endpoint.
+
+3. **Capacity policy check**: Compare the balance against `capacityPolicy.requiredBurstHourBalanceWei` in the readiness response. If the balance is below that value and `capacityFailClosed` is true, the relayer will reject new broadcasts.
+
+### How to fund the executor
+
+1. Identify the approved funding source address. Only pre-approved treasury or operations wallets may send ETH to the executor. The approved funding addresses must be documented in the team's access control records.
+
+2. Transfer native ETH to the executor address:
+
+   ```bash
+   cast send <executor-address> --value <amount-in-wei> \
+     --rpc-url <rpc-url> \
+     --private-key <funding-wallet-key>
+   ```
+
+   Or use the approved multisig/treasury workflow if the funding source is a multisig.
+
+3. Record the following for the refill:
+   - funding source address
+   - executor destination address
+   - amount transferred (in ETH and wei)
+   - transaction hash
+   - block number
+   - operator identity
+   - linked alert or incident ticket
+   - timestamp
+
+### How to verify recovery
+
+1. Wait for the transfer to confirm on-chain (1 block confirmation minimum).
+
+2. Re-check the readiness endpoint:
+
+   ```bash
+   curl -s https://<gateway-host>/api/dashboard-gateway/v1/operations/gasless-relayer/readiness \
+     | jq '.executorBalanceWei, .state, .alerts'
+   ```
+
+   The `state` should return to `ready`. The `gasless_low_executor_balance` and `gasless_executor_balance_below_capacity_policy` alerts should no longer be present.
+
+   Note: The readiness `executorBalanceWei` updates after the next broadcast or service restart. If the balance still shows stale data, trigger a lightweight health check or wait for the next scheduled broadcast.
+
+3. Verify the next broadcast succeeds by monitoring the settlement execution event log or by checking that a pending gasless request completes without error.
+
+4. Confirm no `blocked` or `degraded` state persists in the readiness snapshot.
+
+### Safety constraints
+
+- **Approved funding addresses only**: Only transfer ETH from pre-approved funding wallets (treasury, operations multisig, or designated refill wallet). Do not fund from personal wallets, exchange hot wallets, or unknown addresses.
+- **Document the transfer hash**: Every refill must have its transaction hash recorded in the operator audit log alongside the alert or incident ticket that triggered the refill.
+- **Verify before closing**: Do not close the alert or incident until the readiness endpoint confirms `state: ready` and at least one subsequent broadcast has succeeded.
+- **Do not over-fund**: Transfer only the amount needed to restore the balance above `requiredBurstHourBalanceWei` plus a reasonable buffer (e.g., 2x the burst-hour requirement). Excess funds in the executor wallet increase exposure if the key is compromised.
+- **Post-refill rotation check**: If the refill was triggered by an incident involving suspected key compromise, complete the refill first to restore service, then immediately follow the rotation procedure in the "Rotation and revocation" section above.
 
 ## References
 

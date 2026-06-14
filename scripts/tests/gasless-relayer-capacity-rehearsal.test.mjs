@@ -106,6 +106,61 @@ test('gasless relayer capacity rehearsal fails when low-balance alert is below h
   );
 });
 
+test('gasless relayer capacity rehearsal blocks raw-key custody for production-like chains', () => {
+  withEnv(
+    {
+      NODE_ENV: 'production',
+      GATEWAY_CHAIN_ID: '8453',
+      GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'raw_private_key',
+      GATEWAY_GASLESS_ALLOW_RAW_PRIVATE_KEY_IN_PRODUCTION: 'false',
+      GATEWAY_GASLESS_MAX_GAS_LIMIT: '1500000',
+      GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI: '1000000000',
+      GATEWAY_GASLESS_MAX_NATIVE_COST_WEI: '2000000000000000',
+      GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '200000000000000000',
+      GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '200000000000000000',
+      GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
+    },
+    () => {
+      const report = buildCapacityReport(
+        { mode: 'config-only', output: 'unused.json', evidenceFile: null },
+        new Date('2026-05-30T00:00:00.000Z'),
+      );
+
+      assert.equal(report.status, 'fail');
+      assert.match(report.blockers.join('\n'), /production gasless custody must use kms\/mpc/);
+    },
+  );
+});
+
+test('gasless relayer capacity rehearsal blocks managed custody with raw executor key material', () => {
+  withEnv(
+    {
+      NODE_ENV: 'development',
+      GATEWAY_CHAIN_ID: '84532',
+      GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'kms',
+      GATEWAY_GASLESS_MANAGED_SIGNER_URL: 'https://signer.example.test',
+      GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY:
+        '0x0000000000000000000000000000000000000000000000000000000000000001',
+      GATEWAY_EXECUTOR_PRIVATE_KEY: '',
+      GATEWAY_GASLESS_MAX_GAS_LIMIT: '1500000',
+      GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI: '1000000000',
+      GATEWAY_GASLESS_MAX_NATIVE_COST_WEI: '2000000000000000',
+      GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '200000000000000000',
+      GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '200000000000000000',
+      GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
+    },
+    () => {
+      const report = buildCapacityReport(
+        { mode: 'config-only', output: 'unused.json', evidenceFile: null },
+        new Date('2026-05-30T00:00:00.000Z'),
+      );
+
+      assert.equal(report.status, 'fail');
+      assert.match(report.blockers.join('\n'), /must not configure a raw executor private key/);
+    },
+  );
+});
+
 test('gasless relayer capacity rehearsal fails live mode without evidence and fallback', () => {
   withEnv(
     {

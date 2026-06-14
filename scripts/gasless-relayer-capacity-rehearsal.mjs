@@ -216,6 +216,21 @@ function buildCapacityReport(options, now = new Date()) {
     process.env.NODE_ENV === 'production' || process.env.GATEWAY_CHAIN_ID === '8453',
   );
   const fallbackUrls = parseUrlList(process.env.GATEWAY_RPC_FALLBACK_URLS);
+  const signerCustodyMode = (process.env.GATEWAY_GASLESS_SIGNER_CUSTODY_MODE || 'raw_private_key')
+    .trim()
+    .toLowerCase();
+  const allowRawPrivateKeyInProduction = envBool(
+    'GATEWAY_GASLESS_ALLOW_RAW_PRIVATE_KEY_IN_PRODUCTION',
+    false,
+  );
+  const managedSignerUrl = (process.env.GATEWAY_GASLESS_MANAGED_SIGNER_URL || '').trim();
+  const managedSignerApiKey = (process.env.GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY || '').trim();
+  const rawGaslessExecutorKeyConfigured = Boolean(
+    (process.env.GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY || '').trim() ||
+    (process.env.GATEWAY_EXECUTOR_PRIVATE_KEY || '').trim(),
+  );
+  const productionLike =
+    process.env.NODE_ENV === 'production' || process.env.GATEWAY_CHAIN_ID === '8453';
 
   const averageTransactionsPerHour = Math.ceil(targetTransactionsPerDay / 24);
   const burstTransactionsPerHour = Number(
@@ -241,6 +256,39 @@ function buildCapacityReport(options, now = new Date()) {
   }
   if (requireFallback && fallbackUrls.length === 0) {
     blockers.push('managed fallback RPC is required for live gasless rehearsal');
+  }
+  if (!['raw_private_key', 'kms', 'mpc'].includes(signerCustodyMode)) {
+    blockers.push('GATEWAY_GASLESS_SIGNER_CUSTODY_MODE must be raw_private_key, kms, or mpc');
+  }
+  if (
+    signerCustodyMode === 'raw_private_key' &&
+    productionLike &&
+    !allowRawPrivateKeyInProduction
+  ) {
+    blockers.push('production gasless custody must use kms/mpc or an approved raw-key exception');
+  }
+  if ((signerCustodyMode === 'kms' || signerCustodyMode === 'mpc') && !managedSignerUrl) {
+    blockers.push('managed gasless custody requires GATEWAY_GASLESS_MANAGED_SIGNER_URL');
+  }
+  if (
+    (signerCustodyMode === 'kms' || signerCustodyMode === 'mpc') &&
+    rawGaslessExecutorKeyConfigured
+  ) {
+    blockers.push('managed gasless custody must not configure a raw executor private key');
+  }
+  if (
+    (signerCustodyMode === 'kms' || signerCustodyMode === 'mpc') &&
+    productionLike &&
+    !managedSignerUrl.startsWith('https://')
+  ) {
+    blockers.push('production managed gasless custody requires an https managed signer URL');
+  }
+  if (
+    (signerCustodyMode === 'kms' || signerCustodyMode === 'mpc') &&
+    productionLike &&
+    !managedSignerApiKey
+  ) {
+    blockers.push('production managed gasless custody requires a managed signer API key');
   }
   if (
     lowBalanceAlertWei > 0n &&
@@ -456,6 +504,9 @@ function buildCapacityReport(options, now = new Date()) {
       fallbackRpcCount: fallbackUrls.length,
       requireFallback,
       failClosedCapacity,
+      signerCustodyMode,
+      managedSignerConfigured: Boolean(managedSignerUrl),
+      managedSignerApiKeyConfigured: Boolean(managedSignerApiKey),
     },
     evidence,
     blockers,

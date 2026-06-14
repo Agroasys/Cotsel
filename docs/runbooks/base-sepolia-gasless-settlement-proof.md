@@ -118,6 +118,7 @@ Before any live proof is treated as release evidence, record the output from
 
 - `GATEWAY_GASLESS_BROADCAST_PAUSED=false` only during the approved execution window
 - signer custody is `kms` or `mpc` for production; `raw_private_key` is staging-only unless a time-boxed emergency exception is explicitly approved
+- managed signer custody uses `GATEWAY_GASLESS_MANAGED_SIGNER_URL`; production also requires `GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY` and rejects raw gasless executor private-key material in managed mode
 - `GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI` and `GATEWAY_GASLESS_MAX_NATIVE_COST_WEI` are set and below treasury-approved spend caps
 - `GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI` is at or above `GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI`, so operators are alerted before the executor reaches the hard no-broadcast floor
 - `capacityPolicy.requiredBurstHourBalanceWei` is at or below both `GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI` and `GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI` before production/mainnet launch

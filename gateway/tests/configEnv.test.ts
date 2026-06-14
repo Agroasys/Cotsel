@@ -130,7 +130,7 @@ describe('gateway runtime env config', () => {
     );
   });
 
-  test('production rejects raw private-key gasless relayer custody without explicit emergency exception', () => {
+  test('production rejects raw private-key gasless relayer custody', () => {
     withEnv(
       {
         NODE_ENV: 'production',
@@ -142,15 +142,92 @@ describe('gateway runtime env config', () => {
         GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY:
           '0x0000000000000000000000000000000000000000000000000000000000000001',
         GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'raw_private_key',
-        GATEWAY_GASLESS_ALLOW_RAW_PRIVATE_KEY_IN_PRODUCTION: 'false',
         GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '10000000000000000000',
         GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '10000000000000000000',
       },
       () => {
         const { loadConfig } = loadConfigModule();
         expect(() => loadConfig()).toThrow(
-          'Production gasless execution must use KMS/MPC signer custody or explicitly approve the raw-private-key emergency exception',
+          'Production gasless execution must use KMS/MPC signer custody; raw private-key gasless custody is not allowed',
         );
+      },
+    );
+  });
+
+  test('managed gasless custody rejects raw executor private key material', () => {
+    withEnv(
+      {
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_GASLESS_EXECUTION_ENABLED: 'true',
+        GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY:
+          '0x0000000000000000000000000000000000000000000000000000000000000001',
+        GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'kms',
+        GATEWAY_GASLESS_MANAGED_SIGNER_URL: 'https://signer.example.test',
+        GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '10000000000000000000',
+        GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '10000000000000000000',
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY must not be set when GATEWAY_GASLESS_SIGNER_CUSTODY_MODE is kms or mpc',
+        );
+      },
+    );
+  });
+
+  test('production managed gasless custody requires https signer URL and API key', () => {
+    withEnv(
+      {
+        NODE_ENV: 'production',
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_GASLESS_EXECUTION_ENABLED: 'true',
+        GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'mpc',
+        GATEWAY_GASLESS_MANAGED_SIGNER_URL: 'http://signer.example.test',
+        GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY: '',
+        GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '10000000000000000000',
+        GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '10000000000000000000',
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'Production managed gasless signer custody requires an https GATEWAY_GASLESS_MANAGED_SIGNER_URL',
+        );
+      },
+    );
+  });
+
+  test('managed gasless custody parses signer service contract without raw executor key', () => {
+    withEnv(
+      {
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_GASLESS_EXECUTION_ENABLED: 'true',
+        GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'kms',
+        GATEWAY_GASLESS_MANAGED_SIGNER_URL: 'https://signer.example.test/',
+        GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY: 'test-key',
+        GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS: '2500',
+        GATEWAY_GASLESS_RECEIPT_TIMEOUT_MS: '3000',
+        GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '10000000000000000000',
+        GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '10000000000000000000',
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        const config = loadConfig();
+
+        expect(config.gaslessSignerCustodyMode).toBe('kms');
+        expect(config.gaslessExecutorPrivateKey).toBeUndefined();
+        expect(config.gaslessManagedSignerUrl).toBe('https://signer.example.test');
+        expect(config.gaslessManagedSignerApiKey).toBe('test-key');
+        expect(config.gaslessManagedSignerRequestTimeoutMs).toBe(2500);
+        expect(config.gaslessReceiptTimeoutMs).toBe(3000);
       },
     );
   });
@@ -172,6 +249,7 @@ describe('gateway runtime env config', () => {
         GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '2',
         GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '1',
         GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS: '5000',
+        GATEWAY_GASLESS_RECEIPT_TIMEOUT_MS: '60000',
         GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD: '2',
       },
       () => {
@@ -191,6 +269,7 @@ describe('gateway runtime env config', () => {
         expect(config.gaslessCapacityRequiredExecutorBalanceWei).toBe(157500000000000000n);
         expect(config.gaslessCapacityFailClosed).toBe(false);
         expect(config.gaslessStuckQueueThresholdMs).toBe(5000);
+        expect(config.gaslessReceiptTimeoutMs).toBe(60000);
         expect(config.gaslessRepeatedFailureAlertThreshold).toBe(2);
       },
     );

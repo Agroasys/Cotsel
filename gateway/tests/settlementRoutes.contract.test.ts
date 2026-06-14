@@ -147,6 +147,7 @@ async function startServer(
       capacityRequiredExecutorBalanceWei: runtimeConfig.gaslessCapacityRequiredExecutorBalanceWei,
       capacityFailClosed: runtimeConfig.gaslessCapacityFailClosed,
       stuckQueueThresholdMs: runtimeConfig.gaslessStuckQueueThresholdMs,
+      receiptTimeoutMs: runtimeConfig.gaslessReceiptTimeoutMs,
       repeatedFailureAlertThreshold: runtimeConfig.gaslessRepeatedFailureAlertThreshold,
     },
   );
