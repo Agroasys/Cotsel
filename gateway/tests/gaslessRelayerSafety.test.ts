@@ -689,4 +689,95 @@ describe('gasless relayer safety controls', () => {
       '0x1212121212121212121212121212121212121212121212121212121212121212',
     );
   });
+
+  test('managed executor surfaces transient RPC broadcast failure and recovers on next submission', async () => {
+    const dependencies = createFakeManagedSignerDependencies({
+      broadcastFailures: [new Error('ECONNREFUSED: connect ECONNREFUSED 127.0.0.1:8545')],
+      nonceStart: 50,
+    });
+    const executor =
+      gaslessSettlementExecutionTestExports.createManagedSignerGaslessSettlementExecutor(
+        {
+          rpcUrl: config.rpcUrl,
+          rpcFallbackUrls: config.rpcFallbackUrls,
+          chainId: config.chainId,
+          escrowAddress: config.escrowAddress,
+          gaslessSignerCustodyMode: 'kms',
+          gaslessManagedSignerUrl: 'https://signer.example.test',
+          gaslessMaxGasLimit: 1_500_000n,
+          gaslessMaxFeePerGasWei: 10n,
+          gaslessMaxNativeCostWei: 10_000_000n,
+          gaslessMinExecutorBalanceWei: 10n,
+        },
+        dependencies,
+      );
+
+    // First broadcast fails with a connection error (not a nonce error),
+    // so the executor does not retry internally — it surfaces the failure.
+    await expect(
+      executor.executeCreateTrade(buildCreateTradeInput('handoff-rpc-fail', '1')),
+    ).rejects.toThrow('ECONNREFUSED');
+
+    // The failure consumed the mock error; next call succeeds, proving
+    // the executor does not leave poisoned nonce or signer state.
+    const recovered = await executor.executeCreateTrade(
+      buildCreateTradeInput('handoff-rpc-recover', '2'),
+    );
+    expect(recovered.txHash).toBe(
+      '0x9999999999999999999999999999999999999999999999999999999999999999',
+    );
+    expect(dependencies.provider.broadcastTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  test('readiness reports rpcFallbackCount zero when no fallback URLs are configured', async () => {
+    const store = createInMemorySettlementStore();
+    const settlementService = new SettlementService(config, store);
+    const service = createService(settlementService, store, {
+      options: { rpcFallbackCount: 0 },
+    });
+
+    const readiness = service.getRelayerReadiness();
+    expect(readiness.activeExecutionPath.rpcFallbackCount).toBe(0);
+    expect(readiness.state).toBe('ready');
+  });
+
+  test('service-level RPC broadcast failure does not block subsequent successful broadcasts', async () => {
+    const store = createInMemorySettlementStore();
+    const settlementService = new SettlementService(config, store);
+    let callCount = 0;
+    const service = createService(settlementService, store, {
+      executeCreateTrade: async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          throw new Error('ECONNREFUSED: primary RPC node down');
+        }
+
+        return buildConfirmedSubmission(
+          '0xabababababababababababababababababababababababababababababababab',
+          '100',
+        );
+      },
+    });
+    const failHandoffId = await createHandoff(store, '3');
+    const recoverHandoffId = await createHandoff(store, '4');
+
+    // First broadcast fails with a connection error.
+    await expectGatewayError(
+      service.executeCreateTrade(buildCreateTradeInput(failHandoffId, '3')),
+      {
+        statusCode: 502,
+        code: 'UPSTREAM_UNAVAILABLE',
+        message: 'Gasless execution failed',
+      },
+    );
+    expect(service.getRelayerReadiness().recentFailureCount).toBe(1);
+
+    // Second broadcast succeeds via fallback (simulates FallbackProvider recovery).
+    const result = await service.executeCreateTrade(buildCreateTradeInput(recoverHandoffId, '4'));
+    expect(result.txHash).toBe(
+      '0xabababababababababababababababababababababababababababababababab',
+    );
+    expect(service.getRelayerReadiness().recentFailureCount).toBe(0);
+    expect(service.getRelayerReadiness().state).toBe('ready');
+  });
 });
