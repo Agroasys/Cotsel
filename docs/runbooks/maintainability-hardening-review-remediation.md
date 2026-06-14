@@ -72,10 +72,9 @@ Files that remain large by design or current risk level:
 Remediated now:
 
 - `gateway/src/routes/governanceMutations.ts` mixed retired queue routes, active
-  direct-sign routes, signer validation helpers, and response helpers. Active
-  direct-sign prepare/confirm routes now live in
-  `gateway/src/routes/governanceDirectSignMutations.ts`, with shared route
-  helpers in `gateway/src/routes/governanceMutationRouteSupport.ts`.
+  direct-sign routes, signer validation helpers, and response helpers. The
+  governance mutation/execution surface was subsequently removed from the gateway
+  entirely (PR #567), so `governanceDirectSignMutations.ts` no longer exists.
 - `gateway/src/core/settlementStore.ts` mixed production Postgres persistence
   with the in-memory adapter used by gateway route/read-service tests. The
   in-memory adapter now lives in
