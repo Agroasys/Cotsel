@@ -52,7 +52,6 @@ export interface GatewayConfig {
   gaslessExecutionEnabled?: boolean;
   gaslessExecutorPrivateKey?: string;
   gaslessSignerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
-  gaslessAllowRawPrivateKeyInProduction?: boolean;
   gaslessManagedSignerUrl?: string;
   gaslessManagedSignerApiKey?: string;
   gaslessManagedSignerRequestTimeoutMs?: number;
@@ -260,10 +259,6 @@ export function loadConfig(): GatewayConfig {
   const gaslessExecutionEnabled = envBool('GATEWAY_GASLESS_EXECUTION_ENABLED', false);
   const gaslessSignerCustodyMode = parseGaslessSignerCustodyMode(
     process.env.GATEWAY_GASLESS_SIGNER_CUSTODY_MODE,
-  );
-  const gaslessAllowRawPrivateKeyInProduction = envBool(
-    'GATEWAY_GASLESS_ALLOW_RAW_PRIVATE_KEY_IN_PRODUCTION',
-    false,
   );
   const gaslessBroadcastPaused = envBool('GATEWAY_GASLESS_BROADCAST_PAUSED', false);
   const gaslessRequireRpcFallback = envBool(
@@ -602,19 +597,17 @@ export function loadConfig(): GatewayConfig {
     );
     if (nodeEnv === 'production') {
       assert(
-        gaslessSignerCustodyMode !== 'raw_private_key' || gaslessAllowRawPrivateKeyInProduction,
-        'Production gasless execution must use KMS/MPC signer custody or explicitly approve the raw-private-key emergency exception',
+        gaslessSignerCustodyMode !== 'raw_private_key',
+        'Production gasless execution must use KMS/MPC signer custody; raw private-key gasless custody is not allowed',
       );
-      if (gaslessSignerCustodyMode !== 'raw_private_key') {
-        assert(
-          gaslessManagedSignerUrl?.startsWith('https://'),
-          'Production managed gasless signer custody requires an https GATEWAY_GASLESS_MANAGED_SIGNER_URL',
-        );
-        assert(
-          Boolean(gaslessManagedSignerApiKey),
-          'Production managed gasless signer custody requires GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY',
-        );
-      }
+      assert(
+        gaslessManagedSignerUrl?.startsWith('https://'),
+        'Production managed gasless signer custody requires an https GATEWAY_GASLESS_MANAGED_SIGNER_URL',
+      );
+      assert(
+        Boolean(gaslessManagedSignerApiKey),
+        'Production managed gasless signer custody requires GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY',
+      );
     }
     if (gaslessRequireRpcFallback) {
       assert(
@@ -681,7 +674,6 @@ export function loadConfig(): GatewayConfig {
     gaslessExecutionEnabled,
     gaslessExecutorPrivateKey,
     gaslessSignerCustodyMode,
-    gaslessAllowRawPrivateKeyInProduction,
     gaslessManagedSignerUrl,
     gaslessManagedSignerApiKey,
     gaslessManagedSignerRequestTimeoutMs: envNumber(

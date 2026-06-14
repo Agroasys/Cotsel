@@ -56,7 +56,7 @@ Interpretation for the executor boundary during migration:
 - the gateway API process must never hold the signer key; only the isolated executor invocation may access signer material
 - no smart-wallet or paymaster shortcut is an approved replacement for this signer boundary in delegated/service execution
 
-Gasless settlement execution now supports managed signer custody through `GATEWAY_GASLESS_MANAGED_SIGNER_URL` when `GATEWAY_GASLESS_SIGNER_CUSTODY_MODE` is `kms` or `mpc`. Production gasless execution must use that managed signer path; the gateway must not be configured with a raw gasless executor private key in managed custody mode.
+Gasless settlement execution now supports managed signer custody through `GATEWAY_GASLESS_MANAGED_SIGNER_URL` when `GATEWAY_GASLESS_SIGNER_CUSTODY_MODE` is `kms` or `mpc`. Production gasless execution must use that managed signer path; raw private-key gasless custody is not an allowed production mode.
 
 ## Approved custody models
 

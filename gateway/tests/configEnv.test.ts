@@ -130,7 +130,7 @@ describe('gateway runtime env config', () => {
     );
   });
 
-  test('production rejects raw private-key gasless relayer custody without explicit emergency exception', () => {
+  test('production rejects raw private-key gasless relayer custody', () => {
     withEnv(
       {
         NODE_ENV: 'production',
@@ -142,14 +142,13 @@ describe('gateway runtime env config', () => {
         GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY:
           '0x0000000000000000000000000000000000000000000000000000000000000001',
         GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'raw_private_key',
-        GATEWAY_GASLESS_ALLOW_RAW_PRIVATE_KEY_IN_PRODUCTION: 'false',
         GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '10000000000000000000',
         GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '10000000000000000000',
       },
       () => {
         const { loadConfig } = loadConfigModule();
         expect(() => loadConfig()).toThrow(
-          'Production gasless execution must use KMS/MPC signer custody or explicitly approve the raw-private-key emergency exception',
+          'Production gasless execution must use KMS/MPC signer custody; raw private-key gasless custody is not allowed',
         );
       },
     );
