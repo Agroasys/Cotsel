@@ -53,39 +53,23 @@ removal only after gateway access logs, contract tests, and dashboard live parit
 
 ## Observed Dashboard Gateway Mutations
 
-| Route                                                                                    | Cotsel module                                         | Dashboard adapter         |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------- |
-| `POST /access-logs`                                                                      | `gateway/src/routes/accessLogs.ts`                    | `accessLogs.ts`           |
-| `POST /evidence/bundles`                                                                 | `gateway/src/routes/evidenceBundles.ts`               | `evidence.ts`             |
-| `POST /compliance/decisions`                                                             | `gateway/src/routes/compliance.ts`                    | `compliance.ts`           |
-| `POST /compliance/trades/:tradeId/block-oracle-progression`                              | `gateway/src/routes/compliance.ts`                    | `compliance.ts`           |
-| `POST /compliance/trades/:tradeId/resume-oracle-progression`                             | `gateway/src/routes/compliance.ts`                    | `compliance.ts`           |
-| `POST /governance/pause/prepare`                                                         | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/unpause/proposal/prepare`                                              | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/unpause/proposal/approve/prepare`                                      | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/unpause/proposal/cancel/prepare`                                       | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/claims/pause/prepare`                                                  | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/claims/unpause/prepare`                                                | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/treasury/sweep/prepare`                                                | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/oracle/disable-emergency/prepare`                                      | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/oracle/proposals/prepare`                                              | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/oracle/proposals/:proposalId/approve/prepare`                          | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/oracle/proposals/:proposalId/execute/prepare`                          | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/oracle/proposals/:proposalId/cancel-expired/prepare`                   | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/treasury/payout-receiver/proposals/prepare`                            | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/treasury/payout-receiver/proposals/:proposalId/approve/prepare`        | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/treasury/payout-receiver/proposals/:proposalId/execute/prepare`        | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/treasury/payout-receiver/proposals/:proposalId/cancel-expired/prepare` | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /governance/actions/:actionId/confirm`                                             | `gateway/src/routes/governanceDirectSignMutations.ts` | `governance.ts`           |
-| `POST /treasury/sweep-batches/:batchId/approve`                                          | `gateway/src/routes/treasury.ts`                      | `treasury.ts`             |
-| `POST /treasury/accounting-periods/:periodId/close`                                      | `gateway/src/routes/treasury.ts`                      | `treasury.ts`             |
-| `POST /treasury/sweep-batches/:batchId/close`                                            | `gateway/src/routes/treasury.ts`                      | `treasury.ts`             |
-| `POST /treasury/entries/:entryId/realizations`                                           | `gateway/src/routes/treasury.ts`                      | `treasury.ts`             |
-| `POST /treasury/sweep-batches/:batchId/match-execution`                                  | `gateway/src/routes/treasury.ts`                      | `treasury.ts`             |
-| `POST /treasury/sweep-batches/:batchId/external-handoff`                                 | `gateway/src/routes/treasury.ts`                      | `treasury.ts`             |
-| `POST /treasury/accounting-periods/:periodId/request-close`                              | `gateway/src/routes/treasury.ts`                      | `treasury.ts`             |
-| `POST /treasury/sweep-batches/:batchId/request-approval`                                 | `gateway/src/routes/treasury.ts`                      | `treasury.ts`             |
-| `POST /dashboard-settlement/gasless-executions/create-trade`                             | `gateway/src/routes/dashboardSettlement.ts`           | `settlement-execution.ts` |
+| Route                                                        | Cotsel module                               | Dashboard adapter         |
+| ------------------------------------------------------------ | ------------------------------------------- | ------------------------- |
+| `POST /access-logs`                                          | `gateway/src/routes/accessLogs.ts`          | `accessLogs.ts`           |
+| `POST /evidence/bundles`                                     | `gateway/src/routes/evidenceBundles.ts`     | `evidence.ts`             |
+| `POST /compliance/decisions`                                 | `gateway/src/routes/compliance.ts`          | `compliance.ts`           |
+| `POST /compliance/trades/:tradeId/block-oracle-progression`  | `gateway/src/routes/compliance.ts`          | `compliance.ts`           |
+| `POST /compliance/trades/:tradeId/resume-oracle-progression` | `gateway/src/routes/compliance.ts`          | `compliance.ts`           |
+| ~~Governance direct-sign mutation routes~~                   | ~~Removed in PR #567~~                      | ~~`governance.ts`~~       |
+| `POST /treasury/sweep-batches/:batchId/approve`              | `gateway/src/routes/treasury.ts`            | `treasury.ts`             |
+| `POST /treasury/accounting-periods/:periodId/close`          | `gateway/src/routes/treasury.ts`            | `treasury.ts`             |
+| `POST /treasury/sweep-batches/:batchId/close`                | `gateway/src/routes/treasury.ts`            | `treasury.ts`             |
+| `POST /treasury/entries/:entryId/realizations`               | `gateway/src/routes/treasury.ts`            | `treasury.ts`             |
+| `POST /treasury/sweep-batches/:batchId/match-execution`      | `gateway/src/routes/treasury.ts`            | `treasury.ts`             |
+| `POST /treasury/sweep-batches/:batchId/external-handoff`     | `gateway/src/routes/treasury.ts`            | `treasury.ts`             |
+| `POST /treasury/accounting-periods/:periodId/request-close`  | `gateway/src/routes/treasury.ts`            | `treasury.ts`             |
+| `POST /treasury/sweep-batches/:batchId/request-approval`     | `gateway/src/routes/treasury.ts`            | `treasury.ts`             |
+| `POST /dashboard-settlement/gasless-executions/create-trade` | `gateway/src/routes/dashboardSettlement.ts` | `settlement-execution.ts` |
 
 ## Auth Service Routes Used By Cotsel.dash
 
