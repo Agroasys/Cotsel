@@ -20,10 +20,10 @@
     "@agroasys/shared-edge": "^1.0.0",
     "express": "^5.2.1",
     "cors": "^2.8.6",
-    "helmet": "^8.1.0",
+    "helmet": "^8.2.0",
     "dotenv": "^17.4.2",
     "ethers": "^6.4.0",
-    "pg": "^8.20.0",
+    "pg": "^8.21.0",
     "@agroasys/sdk": "^1.0.0",
     "@agroasys/notifications": "^1.0.0"
   },
