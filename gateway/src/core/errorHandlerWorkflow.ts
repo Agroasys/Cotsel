@@ -10,14 +10,9 @@ import type { AuditLogStore } from './auditLogStore';
 import { ComplianceService } from './complianceService';
 import { createGatewayErrorEnvelope } from './errorEnvelope';
 import type { FailedOperationRecord, FailedOperationStore } from './failedOperationStore';
-import {
-  GovernanceMutationService,
-  type GovernanceMutationAuditInput,
-} from './governanceMutationService';
 import { SettlementCallbackDispatcher } from './settlementCallbackDispatcher';
 
 export type ReplayableOperationType =
-  | 'governance.queue_action'
   | 'compliance.create_decision'
   | 'compliance.block_oracle_progression'
   | 'compliance.resume_oracle_progression'
@@ -37,17 +32,6 @@ export interface FailedOperationPrincipalSnapshot {
   operatorActionCapabilities: OperatorActionCapability[];
   treasuryCapabilities: TreasuryCapability[];
   writeEnabled: boolean;
-}
-
-export interface GovernanceReplaySpec {
-  type: 'governance.queue_action';
-  category: Parameters<GovernanceMutationService['queueAction']>[0]['category'];
-  contractMethod: string;
-  routePath: string;
-  proposalId?: number | null;
-  targetAddress?: string | null;
-  tradeId?: string | null;
-  audit: GovernanceMutationAuditInput;
 }
 
 export interface ComplianceDecisionReplaySpec {
@@ -77,7 +61,6 @@ export interface SettlementCallbackReplaySpec {
 }
 
 export type FailedOperationReplaySpec =
-  | GovernanceReplaySpec
   | ComplianceDecisionReplaySpec
   | ComplianceControlReplaySpec
   | SettlementCallbackReplaySpec;
@@ -299,7 +282,6 @@ function restorePrincipal(snapshot: FailedOperationPrincipalSnapshot): GatewayPr
 export class GatewayFailedOperationReplayer {
   constructor(
     private readonly failedOperationStore: FailedOperationStore,
-    private readonly governanceMutationService: GovernanceMutationService,
     private readonly complianceService: ComplianceService,
     private readonly settlementCallbackDispatcher: SettlementCallbackDispatcher,
   ) {}
@@ -342,26 +324,6 @@ export class GatewayFailedOperationReplayer {
       };
 
       switch (replaySpec.type) {
-        case 'governance.queue_action': {
-          const principal = restorePrincipal(principalSnapshot);
-          await this.governanceMutationService.queueAction({
-            category: replaySpec.category,
-            contractMethod: replaySpec.contractMethod,
-            routePath: replaySpec.routePath,
-            proposalId: replaySpec.proposalId ?? null,
-            targetAddress: replaySpec.targetAddress ?? null,
-            tradeId: replaySpec.tradeId ?? null,
-            audit: replaySpec.audit,
-            principal,
-            requestContext: {
-              requestId: record.requestId,
-              correlationId: record.correlationId ?? record.requestId,
-              startedAtMs: Date.now(),
-            },
-            idempotencyKey: record.idempotencyKey || record.operationKey,
-          });
-          break;
-        }
         case 'compliance.create_decision': {
           const principal = restorePrincipal(principalSnapshot);
           await this.complianceService.createDecision({

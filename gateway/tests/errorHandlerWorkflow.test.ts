@@ -12,7 +12,6 @@ import {
   createInMemoryFailedOperationStore,
   FailedOperationConflictError,
 } from '../src/core/failedOperationStore';
-import { GovernanceMutationService } from '../src/core/governanceMutationService';
 import { SettlementCallbackDispatcher } from '../src/core/settlementCallbackDispatcher';
 import type { GatewayPrincipal } from '../src/middleware/auth';
 import { GatewayError } from '../src/errors';
@@ -166,96 +165,6 @@ describe('gateway error handler workflow', () => {
     });
   });
 
-  test('replayer marks a governance failed operation as replayed after a successful retry', async () => {
-    const failedOperationStore = createInMemoryFailedOperationStore();
-    const recorded = await failedOperationStore.recordFailure({
-      operationType: 'governance.queue_action',
-      operationKey: 'wallet:0xaa:/governance/pause:idem-2',
-      targetService: 'gateway_governance_queue',
-      route: '/api/dashboard-gateway/v1/governance/pause',
-      method: 'POST',
-      requestPayload: { audit: { reason: 'Replay' } },
-      requestId: 'req-2',
-      correlationId: 'corr-2',
-      idempotencyKey: 'idem-2',
-      actorId: 'user:uid-admin',
-      actorUserId: 'uid-admin',
-      actorWalletAddress: '0x00000000000000000000000000000000000000aa',
-      actorRole: 'admin',
-      sessionReference: 'sess-ref-1',
-      replayEligible: true,
-      terminalErrorClass: 'infrastructure',
-      terminalErrorCode: 'UPSTREAM_UNAVAILABLE',
-      terminalErrorMessage: 'queue unavailable',
-      failedAt: '2026-03-26T18:00:00.000Z',
-      metadata: {
-        principalSnapshot: {
-          actorId: 'account:acct-admin',
-          actorAccountId: 'acct-admin',
-          actorUserId: 'uid-admin',
-          actorWalletAddress: '0x00000000000000000000000000000000000000aa',
-          actorEmail: 'admin@agroasys.io',
-          actorRole: 'admin',
-          sessionReference: 'sess-ref-1',
-          capabilities: ['governance:write'],
-          signerAuthorizations: [],
-          gatewayRoles: ['operator:read', 'operator:write'],
-          operatorActionCapabilities: ['governance:write'],
-          treasuryCapabilities: ['treasury:read'],
-          writeEnabled: true,
-        },
-        replaySpec: {
-          type: 'governance.queue_action',
-          category: 'pause',
-          contractMethod: 'pause',
-          routePath: '/api/dashboard-gateway/v1/governance/pause',
-          audit: {
-            reason: 'Documented replay action.',
-            evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets.agroasys.local/AGRO-3001' }],
-            ticketRef: 'AGRO-3001',
-          },
-        },
-      },
-    });
-
-    const governanceMutationService = {
-      queueAction: jest.fn().mockResolvedValue({
-        actionId: 'action-1',
-      }),
-    } as Pick<GovernanceMutationService, 'queueAction'> as GovernanceMutationService;
-    const complianceService = {} as ComplianceService;
-    const settlementCallbackDispatcher = {} as SettlementCallbackDispatcher;
-
-    const replayer = new GatewayFailedOperationReplayer(
-      failedOperationStore,
-      governanceMutationService,
-      complianceService,
-      settlementCallbackDispatcher,
-    );
-
-    const replayed = await replayer.replay(recorded.failedOperationId);
-    expect(governanceMutationService.queueAction).toHaveBeenCalledTimes(1);
-    expect(governanceMutationService.queueAction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        principal: expect.objectContaining({
-          session: expect.objectContaining({
-            accountId: 'acct-admin',
-            userId: 'uid-admin',
-            email: 'admin@agroasys.io',
-            capabilities: ['governance:write'],
-            signerAuthorizations: [],
-          }),
-          gatewayRoles: ['operator:read', 'operator:write'],
-          operatorActionCapabilities: ['governance:write'],
-          treasuryCapabilities: ['treasury:read'],
-          writeEnabled: true,
-        }),
-      }),
-    );
-    expect(replayed.failureState).toBe('replayed');
-    expect(replayed.lastReplayedAt).toBeTruthy();
-  });
-
   test('replayer fails closed for legacy records without a captured principal snapshot', async () => {
     const failedOperationStore = createInMemoryFailedOperationStore();
     const recorded = await failedOperationStore.recordFailure({
@@ -313,7 +222,6 @@ describe('gateway error handler workflow', () => {
 
     const replayer = new GatewayFailedOperationReplayer(
       failedOperationStore,
-      {} as GovernanceMutationService,
       complianceService,
       {} as SettlementCallbackDispatcher,
     );

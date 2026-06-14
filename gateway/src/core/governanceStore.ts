@@ -88,6 +88,16 @@ export interface EvidenceLink {
   note?: string;
 }
 
+/**
+ * Operator-supplied audit context attached to a privileged mutation
+ * (reason, supporting evidence links, and a tracking ticket reference).
+ */
+export interface GovernanceMutationAuditInput {
+  reason: string;
+  evidenceLinks: EvidenceLink[];
+  ticketRef: string;
+}
+
 export type GovernanceSigningArgValue = string | number | boolean;
 
 export interface GovernancePreparedTransactionRequest {

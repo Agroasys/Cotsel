@@ -22,12 +22,11 @@ import {
   ComplianceTradeStatusRecord,
   OracleProgressionBlockRecord,
 } from './complianceStore';
-import { GovernanceMutationAuditInput } from './governanceMutationService';
 import type { GatewayPrincipal } from '../middleware/auth';
 import { resolveGatewayActorKey } from '../middleware/auth';
 import { RequestContext } from '../middleware/requestContext';
 import { GatewayError } from '../errors';
-import { EvidenceLink } from './governanceStore';
+import { EvidenceLink, GovernanceMutationAuditInput } from './governanceStore';
 import { ComplianceWriteStore } from './complianceWriteStore';
 import { validateEvidenceLink } from './evidenceValidation';
 
