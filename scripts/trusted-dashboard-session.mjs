@@ -286,6 +286,12 @@ function createRedactedPreview(value, maxLength = 200) {
  * @typedef {string | number | boolean | null | JsonObject | JsonArray} JsonValue
  * @typedef {{ [key: string]: JsonValue }} JsonObject
  * @typedef {JsonValue[]} JsonArray
+ * @typedef {{
+ *   body?: string,
+ *   headers?: Record<string, string>,
+ *   timeoutMs: number,
+ *   operation?: string
+ * }} TrustedSessionRequestOptions
  */
 
 /**
@@ -300,8 +306,7 @@ function createRedactedPreview(value, maxLength = 200) {
  * or the JSON literal `null` (body text `"null"`), which are all parsed and returned.
  *
  * @param {string} url - Absolute URL to send the request to.
- * @param {{ body?: string, headers?: Record<string, string>, timeoutMs: number, operation?: string }} options
- *   Request options.
+ * @param {unknown} options - Request options.
  * @param {string} [options.body] - Serialized request body (typically JSON string).
  * @param {Record<string, string>} [options.headers] - Additional request headers.
  * @param {number} options.timeoutMs - Timeout in milliseconds before aborting the request.
@@ -312,7 +317,9 @@ async function fetchJson(url, options) {
   if (typeof options !== 'object' || options === null) {
     fail('trusted session exchange request requires an options object');
   }
-  const { body, headers = {}, timeoutMs, operation } = options;
+  /** @type {TrustedSessionRequestOptions} */
+  const requestOptions = options;
+  const { body, headers = {}, timeoutMs, operation } = requestOptions;
   const operationLabel = operation ?? 'trusted session exchange request';
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     fail(`${operationLabel} requires a positive finite timeoutMs value`);
