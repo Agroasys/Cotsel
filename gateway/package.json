@@ -23,8 +23,8 @@
     "dotenv": "^17.4.2",
     "ethers": "^6.4.0",
     "express": "^5.2.1",
-    "helmet": "^8.1.0",
-    "pg": "^8.20.0"
+    "helmet": "^8.2.0",
+    "pg": "^8.21.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
