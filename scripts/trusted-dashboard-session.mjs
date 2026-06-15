@@ -309,7 +309,7 @@ function createRedactedPreview(value, maxLength = 200) {
  * @returns {TrustedSessionRequestOptions}
  */
 function requireTrustedSessionRequestOptions(rawOptions) {
-  if (typeof rawOptions !== 'object' || rawOptions === null) {
+  if (Object.prototype.toString.call(rawOptions) !== '[object Object]') {
     fail('trusted session exchange request requires an options object');
   }
 
