@@ -11,7 +11,12 @@ function withEnv(overrides, fn) {
   try {
     return fn();
   } finally {
-    process.env = snapshot;
+    Object.keys(process.env).forEach((key) => {
+      if (!(key in snapshot)) {
+        delete process.env[key];
+      }
+    });
+    Object.assign(process.env, snapshot);
   }
 }
 

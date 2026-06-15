@@ -71,7 +71,7 @@ removal only after gateway access logs, contract tests, and dashboard live parit
 | `POST /treasury/sweep-batches/:batchId/request-approval`     | `gateway/src/routes/treasury.ts`            | `treasury.ts`             |
 | `POST /dashboard-settlement/gasless-executions/create-trade` | `gateway/src/routes/dashboardSettlement.ts` | `settlement-execution.ts` |
 
-## Auth Service Routes Used By Cotsel.dash
+## Auth Service Routes Used by Cotsel.dash
 
 These routes are not under `VITE_API_DASHBOARD_GATEWAY_BASE_URL`; they are under the Cotsel auth
 base URL.

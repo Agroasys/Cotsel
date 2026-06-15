@@ -9,6 +9,19 @@ import {
   signServiceAuthCanonicalString,
 } from '../src/auth/serviceAuth';
 
+jest.mock('../src/database/queries', () => ({
+  ...jest.requireActual('../src/database/queries'),
+  updateAccountingPeriodStatus: jest.fn(),
+  getSweepBatchDetail: jest.fn(),
+  updateSweepBatchStatus: jest.fn(),
+}));
+
+jest.mock('../src/core/closeReporting', () => ({
+  loadTreasuryAccountingPeriodClosePacket: jest.fn(),
+  loadTreasuryBatchTraceReport: jest.fn(),
+  renderTreasuryAccountingPeriodClosePacketMarkdown: jest.fn().mockReturnValue('# close packet'),
+}));
+
 type ServiceAuthRequest = Request & {
   serviceAuth?: {
     apiKeyId: string;
@@ -887,19 +900,6 @@ describe('admin bridge route safety — state guard tests', () => {
   process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'postgres';
   process.env.INDEXER_GRAPHQL_URL =
     process.env.INDEXER_GRAPHQL_URL || 'http://127.0.0.1:3100/graphql';
-
-  jest.mock('../src/database/queries', () => ({
-    ...jest.requireActual('../src/database/queries'),
-    updateAccountingPeriodStatus: jest.fn(),
-    getSweepBatchDetail: jest.fn(),
-    updateSweepBatchStatus: jest.fn(),
-  }));
-
-  jest.mock('../src/core/closeReporting', () => ({
-    loadTreasuryAccountingPeriodClosePacket: jest.fn(),
-    loadTreasuryBatchTraceReport: jest.fn(),
-    renderTreasuryAccountingPeriodClosePacketMarkdown: jest.fn().mockReturnValue('# close packet'),
-  }));
 
   type TreasuryControllerType = typeof import('../src/api/controller').TreasuryController;
   type QueriesModule = typeof import('../src/database/queries');

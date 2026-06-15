@@ -8,6 +8,10 @@ import path from 'node:path';
 const repoRoot = process.cwd();
 const inventoryPath = path.join(repoRoot, 'docs/runbooks/dashboard-gateway-route-inventory.md');
 const workflowPath = path.join(repoRoot, '.github/workflows/dashboard-live-parity.yml');
+// Sanity guard: the route inventory should contain at least this many documented rows.
+const MIN_EXPECTED_ROUTE_ROWS = 30;
+const TRUSTED_AGROASYS_ROUTE_PATH = '/session/exchange/agroasys';
+const TRUSTED_AGROASYS_ROUTE_ENTRY = `POST ${TRUSTED_AGROASYS_ROUTE_PATH}`;
 
 function fail(message) {
   console.error(`[FAIL] ${message}`);
@@ -38,8 +42,10 @@ const routeRows = [
   sourcePath: match[3],
 }));
 
-if (routeRows.length < 30) {
-  fail(`Expected at least 30 inventory route rows, found ${routeRows.length}`);
+if (routeRows.length < MIN_EXPECTED_ROUTE_ROWS) {
+  fail(
+    `Expected at least ${MIN_EXPECTED_ROUTE_ROWS} inventory route rows, found ${routeRows.length}`,
+  );
 }
 
 for (const row of routeRows) {
@@ -57,7 +63,7 @@ const requiredSections = [
   '## Source of Truth',
   '## Observed Dashboard Gateway Reads',
   '## Observed Dashboard Gateway Mutations',
-  '## Auth Service Routes Used By Cotsel.dash',
+  '## Auth Service Routes Used by Cotsel.dash',
   '## Keep Until Proven Dead',
   '## Cleanup Rule',
 ];
@@ -68,12 +74,12 @@ for (const section of requiredSections) {
   }
 }
 
-if (!inventory.includes('POST /session/exchange/agroasys')) {
+if (!inventory.includes(TRUSTED_AGROASYS_ROUTE_ENTRY)) {
   fail('Route inventory must document the trusted Agroasys session exchange route.');
 }
 
 const authRoutes = readRequired(path.join(repoRoot, 'auth/src/api/routes.ts'));
-if (!authRoutes.includes('/session/exchange/agroasys')) {
+if (!authRoutes.includes(TRUSTED_AGROASYS_ROUTE_PATH)) {
   fail('Auth routes no longer expose /session/exchange/agroasys.');
 }
 

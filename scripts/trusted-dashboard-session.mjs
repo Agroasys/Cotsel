@@ -260,7 +260,7 @@ function createRedactedPreview(value, maxLength = 200) {
     // Redact object/JSON-style sensitive key-value pairs (e.g. "token":"abc", secret=xyz).
     .replace(
       new RegExp(
-        `(["']?${SENSITIVE_KEY_PATTERN_SOURCE}["']?\\s*[:=]\\s*["']?)([^\\s"',;}&]+)(["']?)`,
+        `(["']?${SENSITIVE_KEY_PATTERN_SOURCE}["']?\\s*[:=]\\s*["']?)([^\\s"',;\\}&]+)(["']?)`,
         'gi',
       ),
       '$1[REDACTED]$3',
@@ -295,15 +295,11 @@ function createRedactedPreview(value, maxLength = 200) {
  */
 
 /**
- * Executes a POST request and parses a JSON response.
+ * Validates and returns trusted-session request options.
  *
- * Return semantics:
- * - Returns parsed JSON for non-empty response bodies.
- * - Returns `null` only when the response is successful (`response.ok`) and the body is empty.
- * - Treats empty response bodies on non-success statuses as errors.
- *
- * Note: an empty response body is distinct from valid JSON payloads such as `{}`, `[]`,
- * or the JSON literal `null` (body text `"null"`), which are all parsed and returned.
+ * Ensures the provided value is a plain object so downstream code can safely
+ * treat it as {@link TrustedSessionRequestOptions}. Throws via `fail(...)`
+ * when the value is missing or not an object.
  *
  * @param {unknown} rawOptions - Request options candidate.
  * @returns {TrustedSessionRequestOptions}
