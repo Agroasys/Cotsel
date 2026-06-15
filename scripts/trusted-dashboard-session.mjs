@@ -305,20 +305,34 @@ function createRedactedPreview(value, maxLength = 200) {
  * Note: an empty response body is distinct from valid JSON payloads such as `{}`, `[]`,
  * or the JSON literal `null` (body text `"null"`), which are all parsed and returned.
  *
+ * @param {unknown} rawOptions - Request options candidate.
+ * @returns {TrustedSessionRequestOptions}
+ */
+function requireTrustedSessionRequestOptions(rawOptions) {
+  if (typeof rawOptions !== 'object' || rawOptions === null) {
+    fail('trusted session exchange request requires an options object');
+  }
+
+  return /** @type {TrustedSessionRequestOptions} */ (rawOptions);
+}
+
+/**
+ * Executes a POST request and parses a JSON response.
+ *
+ * Return semantics:
+ * - Returns parsed JSON for non-empty response bodies.
+ * - Returns `null` only when the response is successful (`response.ok`) and the body is empty.
+ * - Treats empty response bodies on non-success statuses as errors.
+ *
+ * Note: an empty response body is distinct from valid JSON payloads such as `{}`, `[]`,
+ * or the JSON literal `null` (body text `"null"`), which are all parsed and returned.
+ *
  * @param {string} url - Absolute URL to send the request to.
  * @param {unknown} options - Request options.
- * @param {string} [options.body] - Serialized request body (typically JSON string).
- * @param {Record<string, string>} [options.headers] - Additional request headers.
- * @param {number} options.timeoutMs - Timeout in milliseconds before aborting the request.
- * @param {string} [options.operation] - Logical operation being performed for clearer error messages.
  * @returns {Promise<JsonValue|null>} Parsed JSON response payload, or null when a successful response has an empty body.
  */
 async function fetchJson(url, options) {
-  if (typeof options !== 'object' || options === null) {
-    fail('trusted session exchange request requires an options object');
-  }
-  /** @type {TrustedSessionRequestOptions} */
-  const requestOptions = options;
+  const requestOptions = requireTrustedSessionRequestOptions(options);
   const { body, headers = {}, timeoutMs, operation } = requestOptions;
   const operationLabel = operation ?? 'trusted session exchange request';
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
