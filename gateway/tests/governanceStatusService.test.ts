@@ -210,6 +210,43 @@ describe('GovernanceStatusService', () => {
     expect(provider.getBlock).toHaveBeenCalledWith('latest');
   });
 
+  test('bounds the active-proposal scan to the most-recent window', async () => {
+    const provider = {
+      getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
+      getBlock: jest.fn().mockResolvedValue({ timestamp: 1000 }),
+    } as unknown as JsonRpcProvider;
+
+    // Counter far larger than the 256-id scan window; only the newest window of
+    // proposal IDs should ever be read from the RPC provider for a single status
+    // request, capping the fan-out regardless of how large the counter grows.
+    const oracleUpdateCounter = 5000n;
+    const oracleUpdateProposals = jest.fn().mockResolvedValue({ createdAt: 0n, executed: false });
+    const oracleUpdateProposalExpiresAt = jest.fn().mockResolvedValue(0n);
+    const oracleUpdateProposalCancelled = jest.fn().mockResolvedValue(false);
+
+    const service = new GovernanceStatusService(
+      provider,
+      createGovernanceContractMock({
+        oracleUpdateCounter: jest.fn().mockResolvedValue(oracleUpdateCounter),
+        oracleUpdateProposals,
+        oracleUpdateProposalExpiresAt,
+        oracleUpdateProposalCancelled,
+        treasuryPayoutAddressUpdateCounter: jest.fn().mockResolvedValue(0n),
+      }),
+      31337,
+      50,
+    );
+
+    const snapshot = await service.getGovernanceStatus();
+
+    expect(snapshot.activeOracleProposalIds).toEqual([]);
+    // Exactly the 256-id window is scanned, never the full 5000-id range.
+    expect(oracleUpdateProposals).toHaveBeenCalledTimes(256);
+    const scannedIds = oracleUpdateProposals.mock.calls.map(([id]) => id as bigint);
+    expect(scannedIds[0]).toBe(oracleUpdateCounter - 256n);
+    expect(scannedIds[scannedIds.length - 1]).toBe(oracleUpdateCounter - 1n);
+  });
+
   test('fails readiness when chain RPC probe exceeds the configured timeout', async () => {
     const never = new Promise<never>(() => undefined);
     const provider = {
