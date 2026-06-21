@@ -69,7 +69,6 @@ const USER_PROFILE_FIELDS = `
 const LEGACY_ACCOUNT_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OPERATOR_CAPABILITY_SET = new Set<string>(OPERATOR_CAPABILITIES);
-const OPERATOR_SIGNER_ACTION_CLASS_SET = new Set<string>(OPERATOR_SIGNER_ACTION_CLASSES);
 
 function parseSessionEpoch(
   value: number | string,
@@ -89,36 +88,35 @@ function parseSessionEpoch(
   throw new Error(`Invalid ${field} session timestamp returned from database`);
 }
 
-function normalizeCapabilityList(
-  value: OperatorCapability[] | null | undefined,
-): OperatorCapability[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter((capability): capability is OperatorCapability =>
-    OPERATOR_CAPABILITY_SET.has(capability),
-  );
+// A durable admin role is the single operator control plane: it confers the full
+// operator capability set and authorizes the operator's own wallet as the signer
+// for every action class. There is no separate capability-list or signer-binding
+// plane, so both are derived from the resolved role rather than stored bindings.
+// The wildcard `environment: '*'` matches any consumer-advertised signer
+// environment (gateway/dashboard), so no per-environment provisioning is needed.
+function deriveOperatorCapabilities(role: UserRole): OperatorCapability[] {
+  return role === 'admin' ? [...OPERATOR_CAPABILITIES] : [];
 }
 
-function normalizeSignerAuthorizations(
-  value: OperatorSignerAuthorization[] | null | undefined,
+function deriveSignerAuthorizations(
+  role: UserRole,
+  walletAddress: string | null,
+  approvedAtIso: string,
 ): OperatorSignerAuthorization[] {
-  if (!Array.isArray(value)) {
+  if (role !== 'admin' || !walletAddress) {
     return [];
   }
 
-  return value.filter((binding): binding is OperatorSignerAuthorization =>
-    Boolean(
-      binding &&
-      typeof binding.bindingId === 'string' &&
-      typeof binding.walletAddress === 'string' &&
-      typeof binding.environment === 'string' &&
-      typeof binding.approvedAt === 'string' &&
-      typeof binding.approvedBy === 'string' &&
-      OPERATOR_SIGNER_ACTION_CLASS_SET.has(binding.actionClass),
-    ),
-  );
+  return OPERATOR_SIGNER_ACTION_CLASSES.map((actionClass) => ({
+    bindingId: `admin-role:${actionClass}`,
+    walletAddress,
+    actionClass,
+    environment: '*',
+    approvedAt: approvedAtIso,
+    approvedBy: 'durable-admin-role',
+    ticketRef: null,
+    notes: 'Derived from durable admin role',
+  }));
 }
 
 function timestampIsoOrNull(value: Date | string | null | undefined): string | null {
@@ -172,6 +170,7 @@ function normalizeBreakGlassContext(row: SessionRow): BreakGlassSessionContext {
 }
 
 export function normalizeSessionRow(row: SessionRow): UserSession {
+  const issuedAt = parseSessionEpoch(row.issuedAt, 'issuedAt');
   return {
     sessionId: row.sessionId,
     accountId: row.accountId,
@@ -181,10 +180,14 @@ export function normalizeSessionRow(row: SessionRow): UserSession {
     role: row.role,
     issuedRole: row.issuedRole,
     active: row.active,
-    capabilities: normalizeCapabilityList(row.capabilities),
-    signerAuthorizations: normalizeSignerAuthorizations(row.signerAuthorizations),
+    capabilities: deriveOperatorCapabilities(row.role),
+    signerAuthorizations: deriveSignerAuthorizations(
+      row.role,
+      row.walletAddress,
+      new Date(issuedAt * 1000).toISOString(),
+    ),
     breakGlass: normalizeBreakGlassContext(row),
-    issuedAt: parseSessionEpoch(row.issuedAt, 'issuedAt'),
+    issuedAt,
     expiresAt: parseSessionEpoch(row.expiresAt, 'expiresAt'),
     revokedAt: row.revokedAt === null ? null : parseSessionEpoch(row.revokedAt, 'revokedAt'),
   };
