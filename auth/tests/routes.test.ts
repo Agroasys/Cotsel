@@ -38,8 +38,6 @@ function createAdminController(): AdminController {
     listAuditEvents: jest.fn(),
     provision: jest.fn(),
     deactivate: jest.fn(),
-    provisionSigner: jest.fn(),
-    revokeSigner: jest.fn(),
     grantBreakGlass: jest.fn(),
     revokeBreakGlass: jest.fn(),
     reviewBreakGlass: jest.fn(),
@@ -65,18 +63,21 @@ describe('auth router', () => {
     expect(listRoutes(router)).toContain('POST /session/exchange/agroasys');
   });
 
-  test('mounts admin signer routes when admin controls are enabled', () => {
+  test('mounts admin control routes when admin controls are enabled', () => {
     const router = createRouter(createSessionController(), sessionService, {
       adminController: createAdminController(),
       adminControlMiddleware: jest.fn(),
     });
 
-    expect(listRoutes(router)).toContain('GET /admin/profiles');
-    expect(listRoutes(router)).toContain('GET /admin/audit-events');
-    expect(listRoutes(router)).toContain('POST /admin/signers/provision');
-    expect(listRoutes(router)).toContain('POST /admin/signers/revoke');
-    expect(listRoutes(router)).toContain('POST /admin/break-glass/grant');
-    expect(listRoutes(router)).toContain('POST /admin/break-glass/revoke');
-    expect(listRoutes(router)).toContain('POST /admin/break-glass/review');
+    const routes = listRoutes(router);
+    expect(routes).toContain('GET /admin/profiles');
+    expect(routes).toContain('GET /admin/audit-events');
+    expect(routes).toContain('POST /admin/profiles/provision');
+    expect(routes).toContain('POST /admin/profiles/deactivate');
+    expect(routes).toContain('POST /admin/break-glass/grant');
+    expect(routes).toContain('POST /admin/break-glass/revoke');
+    expect(routes).toContain('POST /admin/break-glass/review');
+    expect(routes).not.toContain('POST /admin/signers/provision');
+    expect(routes).not.toContain('POST /admin/signers/revoke');
   });
 });

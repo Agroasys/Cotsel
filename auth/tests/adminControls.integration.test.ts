@@ -14,7 +14,6 @@ import {
 } from '@agroasys/shared-auth/serviceAuth';
 import { createPostgresNonceStore } from '@agroasys/shared-auth/nonceStore';
 import { createAdminService } from '../src/core/adminService';
-import { createPostgresOperatorAuthorityStore } from '../src/core/operatorAuthorityStore';
 import { createPostgresProfileStore } from '../src/core/profileStore';
 import { createPostgresSessionStore } from '../src/core/sessionStore';
 import { createSessionService } from '../src/core/sessionService';
@@ -159,7 +158,6 @@ function signedHeaders(input: {
 
 async function startAdminApp(pool: Pool) {
   const profiles = createPostgresProfileStore(pool);
-  const authority = createPostgresOperatorAuthorityStore(pool);
   const sessions = createPostgresSessionStore(pool);
   const sessionService = createSessionService(sessions, profiles);
   const nonceStore = createPostgresNonceStore({
@@ -175,7 +173,7 @@ async function startAdminApp(pool: Pool) {
     consumeNonce: nonceStore.consume,
   });
   const router = createRouter(new SessionController(sessionService), sessionService, {
-    adminController: new AdminController(createAdminService(profiles, authority, 3600)),
+    adminController: new AdminController(createAdminService(profiles, 3600)),
     adminControlMiddleware: adminMiddleware,
   });
   const app = express();
@@ -261,11 +259,6 @@ describe('admin controls persistence integration', () => {
             ['agroasys-user:admin-1'],
           );
           expect(provisioned.rows[0]).toMatchObject({ role: 'admin', active: true });
-          const implicitCapabilities = await pool.query(
-            `SELECT capability FROM operator_capability_bindings WHERE account_id = $1`,
-            ['agroasys-user:admin-1'],
-          );
-          expect(implicitCapabilities.rows).toEqual([]);
 
           const session = await app.sessionService.issueTrustedSession({
             accountId: 'agroasys-user:admin-1',
@@ -665,58 +658,6 @@ describe('admin controls persistence integration', () => {
               }),
             ]),
           );
-        } finally {
-          await app.close();
-        }
-      });
-    },
-  );
-
-  integrationTest(
-    'signer bindings cannot be provisioned for non-durable-admin profiles',
-    async () => {
-      await withPostgres(async (pool) => {
-        const app = await startAdminApp(pool);
-        try {
-          const provisionPath = '/api/auth/v1/admin/profiles/provision';
-          const provisionBody = JSON.stringify({
-            accountId: 'agroasys-user:buyer-1',
-            role: 'buyer',
-            email: 'buyer1@example.com',
-            reason: 'SEC-1200 create non-admin profile before signer rejection proof',
-          });
-          const provision = await fetch(`${app.baseUrl}${provisionPath}`, {
-            method: 'POST',
-            headers: signedHeaders({
-              method: 'POST',
-              path: provisionPath,
-              body: provisionBody,
-              nonce: 'nonce-non-admin-profile-provision',
-            }),
-            body: provisionBody,
-          });
-          expect(provision.status).toBe(201);
-
-          const signerProvisionPath = '/api/auth/v1/admin/signers/provision';
-          const signerProvisionBody = JSON.stringify({
-            accountId: 'agroasys-user:buyer-1',
-            walletAddress: '0x00000000000000000000000000000000000000bb',
-            actionClass: 'governance',
-            environment: 'staging-e2e-real',
-            ticketRef: 'SEC-1201',
-            reason: 'SEC-1201 should reject signer binding for non-admin profile',
-          });
-          const signerProvision = await fetch(`${app.baseUrl}${signerProvisionPath}`, {
-            method: 'POST',
-            headers: signedHeaders({
-              method: 'POST',
-              path: signerProvisionPath,
-              body: signerProvisionBody,
-              nonce: 'nonce-non-admin-signer-provision',
-            }),
-            body: signerProvisionBody,
-          });
-          expect(signerProvision.status).toBe(400);
         } finally {
           await app.close();
         }
