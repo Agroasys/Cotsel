@@ -39,11 +39,6 @@ export interface GovernanceProposalState {
   targetAddress: string;
 }
 
-export interface GovernanceStatusRequest {
-  oracleProposalIds?: number[];
-  treasuryPayoutReceiverProposalIds?: number[];
-}
-
 interface UnpauseProposal {
   approvalCount: bigint;
   executed: boolean;
@@ -72,7 +67,7 @@ interface TreasuryPayoutReceiverProposal {
 
 export interface EscrowGovernanceReader {
   checkReadiness(): Promise<void>;
-  getGovernanceStatus(request?: GovernanceStatusRequest): Promise<GovernanceStatusSnapshot>;
+  getGovernanceStatus(): Promise<GovernanceStatusSnapshot>;
 }
 
 export interface GovernanceMutationPreflightReader extends EscrowGovernanceReader {
@@ -155,14 +150,20 @@ function toSafeInteger(value: bigint, field: string): number {
   return numeric;
 }
 
+// Proposal IDs are minted sequentially on-chain (0..counter-1). We enumerate the
+// full range and keep only the entries the contract still reports as active, so
+// the gateway needs no off-chain mirror of governance proposals.
 async function collectActiveProposalIds(
-  candidateProposalIds: number[],
+  proposalCounter: bigint,
   chainTimeSeconds: bigint,
   loadProposal: (proposalId: bigint) => Promise<{ createdAt: bigint; executed: boolean }>,
   loadExpiry: (proposalId: bigint) => Promise<bigint>,
   loadCancelled: (proposalId: bigint) => Promise<boolean>,
 ): Promise<number[]> {
-  const ids = [...new Set(candidateProposalIds)].map((proposalId) => BigInt(proposalId));
+  const ids: bigint[] = [];
+  for (let id = 0n; id < proposalCounter; id += 1n) {
+    ids.push(id);
+  }
 
   const snapshots = await Promise.all(
     ids.map(async (proposalId) => {
@@ -226,9 +227,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
     }
   }
 
-  async getGovernanceStatus(
-    request: GovernanceStatusRequest = {},
-  ): Promise<GovernanceStatusSnapshot> {
+  async getGovernanceStatus(): Promise<GovernanceStatusSnapshot> {
     try {
       const snapshot = await this.runChainRead(
         'getGovernanceStatus.snapshot',
@@ -244,6 +243,8 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
           this.contract.requiredApprovals(),
           this.contract.hasActiveUnpauseProposal(),
           this.contract.unpauseProposal(),
+          this.contract.oracleUpdateCounter(),
+          this.contract.treasuryPayoutAddressUpdateCounter(),
         ] as const),
       );
       const latestBlock = await this.runChainRead(
@@ -262,6 +263,8 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         requiredApprovals,
         hasActiveUnpauseProposal,
         unpauseProposal,
+        oracleUpdateCounter,
+        treasuryPayoutAddressUpdateCounter,
       ] = snapshot;
 
       const chainTimeSeconds = BigInt(latestBlock?.timestamp ?? 0);
@@ -271,14 +274,14 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
           'getGovernanceStatus.activeProposals',
           Promise.all([
             collectActiveProposalIds(
-              request.oracleProposalIds ?? [],
+              oracleUpdateCounter,
               chainTimeSeconds,
               (proposalId) => this.contract.oracleUpdateProposals(proposalId),
               (proposalId) => this.contract.oracleUpdateProposalExpiresAt(proposalId),
               (proposalId) => this.contract.oracleUpdateProposalCancelled(proposalId),
             ),
             collectActiveProposalIds(
-              request.treasuryPayoutReceiverProposalIds ?? [],
+              treasuryPayoutAddressUpdateCounter,
               chainTimeSeconds,
               (proposalId) => this.contract.treasuryPayoutAddressUpdateProposals(proposalId),
               (proposalId) =>

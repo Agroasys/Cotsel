@@ -88,6 +88,8 @@ describe('GovernanceStatusService', () => {
           createdAt: 100n,
           proposer: '0x0000000000000000000000000000000000000099',
         }),
+        oracleUpdateCounter: jest.fn().mockResolvedValue(3n),
+        treasuryPayoutAddressUpdateCounter: jest.fn().mockResolvedValue(2n),
         oracleUpdateProposals: jest
           .fn()
           .mockResolvedValueOnce({ createdAt: 10n, executed: false })
@@ -120,10 +122,7 @@ describe('GovernanceStatusService', () => {
       50,
     );
 
-    const snapshot = await service.getGovernanceStatus({
-      oracleProposalIds: [0, 1, 2],
-      treasuryPayoutReceiverProposalIds: [0, 1],
-    });
+    const snapshot = await service.getGovernanceStatus();
 
     expect(snapshot).toEqual({
       paused: false,
@@ -191,6 +190,7 @@ describe('GovernanceStatusService', () => {
           createdAt: 0n,
           proposer: '0x0',
         }),
+        oracleUpdateCounter: jest.fn().mockResolvedValue(1n),
         oracleUpdateProposals: jest.fn().mockResolvedValue({ createdAt: 10n, executed: false }),
         oracleUpdateProposalExpiresAt: jest.fn().mockResolvedValue(600n),
         oracleUpdateProposalCancelled: jest.fn().mockResolvedValue(false),
@@ -204,12 +204,9 @@ describe('GovernanceStatusService', () => {
       50,
     );
 
-    const snapshot = await service.getGovernanceStatus({
-      oracleProposalIds: [7],
-      treasuryPayoutReceiverProposalIds: [],
-    });
+    const snapshot = await service.getGovernanceStatus();
 
-    expect(snapshot.activeOracleProposalIds).toEqual([7]);
+    expect(snapshot.activeOracleProposalIds).toEqual([0]);
     expect(provider.getBlock).toHaveBeenCalledWith('latest');
   });
 

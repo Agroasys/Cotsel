@@ -4,12 +4,7 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { GatewayConfig } from '../config/env';
 import { AuthSessionClient } from '../core/authSessionClient';
-import { GOVERNANCE_ACTION_STATUSES, GovernanceActionStatus } from '../core/governanceStore';
-import {
-  TREASURY_ACTION_CATEGORIES,
-  TreasuryActionCategory,
-  TreasuryReadReader,
-} from '../core/treasuryReadService';
+import { TreasuryReadReader } from '../core/treasuryReadService';
 import {
   TreasuryWorkflowAuditInput,
   TreasuryWorkflowClient,
@@ -24,7 +19,6 @@ import {
   requireTreasuryCapability,
 } from '../middleware/auth';
 import { successResponse } from '../responses';
-import { decodeGovernanceActionCursor } from '../core/governanceStore';
 
 export interface TreasuryRouterOptions {
   authSessionClient: AuthSessionClient;
@@ -40,25 +34,6 @@ interface TreasuryAuditPayload {
     evidenceReferences?: string[];
     metadata?: Record<string, unknown>;
   };
-}
-
-function parseEnum<T extends string>(
-  raw: unknown,
-  values: readonly T[],
-  field: string,
-): T | undefined {
-  if (raw === undefined) {
-    return undefined;
-  }
-
-  if (typeof raw !== 'string' || !values.includes(raw as T)) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `Query parameter '${field}' is invalid`, {
-      field,
-      allowed: values,
-    });
-  }
-
-  return raw as T;
 }
 
 function parseLimit(raw: unknown): number {
@@ -80,30 +55,6 @@ function parseLimit(raw: unknown): number {
   }
 
   return limit;
-}
-
-function parseCursor(raw: unknown): string | undefined {
-  if (raw === undefined) {
-    return undefined;
-  }
-
-  if (typeof raw !== 'string' || raw.trim() === '') {
-    throw new GatewayError(
-      400,
-      'VALIDATION_ERROR',
-      "Query parameter 'cursor' must be a non-empty string",
-    );
-  }
-
-  try {
-    decodeGovernanceActionCursor(raw);
-  } catch (error) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'cursor' is invalid", {
-      reason: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  return raw;
 }
 
 function parseOffset(raw: unknown): number {
@@ -256,29 +207,6 @@ export function createTreasuryRouter(options: TreasuryRouterOptions): Router {
     try {
       const snapshot = await options.treasuryReadService.getTreasurySnapshot();
       res.status(200).json(successResponse(snapshot));
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.get('/treasury/actions', async (req, res, next) => {
-    try {
-      const result = await options.treasuryReadService.listTreasuryActions({
-        category: parseEnum<TreasuryActionCategory>(
-          req.query.category,
-          TREASURY_ACTION_CATEGORIES,
-          'category',
-        ),
-        status: parseEnum<GovernanceActionStatus>(
-          req.query.status,
-          GOVERNANCE_ACTION_STATUSES,
-          'status',
-        ),
-        limit: parseLimit(req.query.limit),
-        cursor: parseCursor(req.query.cursor),
-      });
-
-      res.status(200).json(successResponse(result));
     } catch (error) {
       next(error);
     }

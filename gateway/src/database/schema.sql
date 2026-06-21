@@ -114,60 +114,6 @@ CREATE TABLE IF NOT EXISTS role_assignments (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS governance_actions (
-    action_id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    intent_key TEXT,
-    proposal_id BIGINT,
-    category TEXT NOT NULL CHECK (category IN (
-        'pause',
-        'unpause',
-        'claims_pause',
-        'claims_unpause',
-        'treasury_sweep',
-        'treasury_payout_receiver_update',
-        'oracle_disable_emergency',
-        'oracle_update'
-    )),
-    status TEXT NOT NULL CHECK (status IN (
-        'requested',
-        'submitted',
-        'pending_approvals',
-        'approved',
-        'executed',
-        'cancelled',
-        'expired',
-        'stale',
-        'failed'
-    )),
-    contract_method TEXT NOT NULL,
-    tx_hash TEXT,
-    block_number BIGINT,
-    trade_id TEXT,
-    chain_id TEXT,
-    target_address TEXT,
-    request_id TEXT NOT NULL,
-    correlation_id TEXT,
-    idempotency_key TEXT NOT NULL,
-    actor_id TEXT NOT NULL,
-    endpoint TEXT NOT NULL,
-    intent_hash TEXT NOT NULL,
-    attestation_ref JSONB,
-    reason TEXT NOT NULL,
-    evidence_links JSONB NOT NULL DEFAULT '[]'::jsonb,
-    ticket_ref TEXT NOT NULL,
-    actor_session_id TEXT NOT NULL,
-    actor_wallet TEXT NOT NULL,
-    actor_role TEXT NOT NULL,
-    requested_by TEXT NOT NULL,
-    approved_by JSONB NOT NULL DEFAULT '[]'::jsonb,
-    error_code TEXT,
-    error_message TEXT,
-    created_at TIMESTAMP NOT NULL,
-    expires_at TIMESTAMP,
-    executed_at TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS compliance_decisions (
     decision_id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     trade_id TEXT NOT NULL,
@@ -236,12 +182,6 @@ ALTER TABLE access_log_entries
 
 ALTER TABLE evidence_bundles
     ALTER COLUMN generated_by_wallet DROP NOT NULL;
-
-ALTER TABLE governance_actions
-    DROP COLUMN IF EXISTS extrinsic_hash;
-
-ALTER TABLE governance_actions
-    ALTER COLUMN actor_wallet DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS service_auth_nonces (
     api_key TEXT NOT NULL,
@@ -398,12 +338,6 @@ BEGIN
         ));
 END $$;
 
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS intent_key TEXT;
-
-ALTER TABLE governance_actions
-    ALTER COLUMN action_id SET DEFAULT gen_random_uuid()::text;
-
 ALTER TABLE compliance_decisions
     ALTER COLUMN decision_id SET DEFAULT gen_random_uuid()::text;
 
@@ -424,21 +358,6 @@ ALTER TABLE audit_log
 
 ALTER TABLE settlement_handoffs
     ADD COLUMN IF NOT EXISTS latest_event_id TEXT;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS actor_id TEXT;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS endpoint TEXT;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS intent_hash TEXT;
 
 ALTER TABLE compliance_decisions
     ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
@@ -468,32 +387,6 @@ ALTER TABLE idempotency_keys
 
 ALTER TABLE idempotency_keys
     ALTER COLUMN endpoint SET NOT NULL;
-
-UPDATE governance_actions
-SET actor_id = COALESCE(NULLIF(actor_id, ''), requested_by),
-    endpoint = COALESCE(NULLIF(endpoint, ''), '/governance/actions'),
-    idempotency_key = COALESCE(NULLIF(idempotency_key, ''), CONCAT('legacy:', action_id)),
-    intent_hash = COALESCE(NULLIF(intent_hash, ''), encode(digest(COALESCE(intent_key, action_id), 'sha256'), 'hex'))
-WHERE actor_id IS NULL
-   OR endpoint IS NULL
-   OR idempotency_key IS NULL
-   OR intent_hash IS NULL
-   OR actor_id = ''
-   OR endpoint = ''
-   OR idempotency_key = ''
-   OR intent_hash = '';
-
-ALTER TABLE governance_actions
-    ALTER COLUMN actor_id SET NOT NULL;
-
-ALTER TABLE governance_actions
-    ALTER COLUMN endpoint SET NOT NULL;
-
-ALTER TABLE governance_actions
-    ALTER COLUMN idempotency_key SET NOT NULL;
-
-ALTER TABLE governance_actions
-    ALTER COLUMN intent_hash SET NOT NULL;
 
 UPDATE compliance_decisions
 SET actor_id = COALESCE(NULLIF(actor_id, ''), requested_by),
@@ -539,31 +432,6 @@ END $$;
 ALTER TABLE idempotency_keys
     ADD CONSTRAINT idempotency_keys_pkey PRIMARY KEY (actor_id, endpoint, idempotency_key);
 
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conrelid = 'governance_actions'::regclass
-          AND conname = 'governance_actions_status_check'
-    ) THEN
-        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_status_check;
-    END IF;
-END $$;
-
-ALTER TABLE governance_actions
-    ADD CONSTRAINT governance_actions_status_check CHECK (status IN (
-        'requested',
-        'submitted',
-        'pending_approvals',
-        'approved',
-        'executed',
-        'cancelled',
-        'expired',
-        'stale',
-        'failed'
-    ));
-
 CREATE OR REPLACE FUNCTION current_app_service_name()
 RETURNS TEXT
 LANGUAGE sql
@@ -587,7 +455,6 @@ BEGIN
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE failed_operations TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE access_log_entries TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE role_assignments TO %I', runtime_user);
-        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE governance_actions TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE compliance_decisions TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE oracle_progression_blocks TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE evidence_bundles TO %I', runtime_user);
@@ -635,14 +502,6 @@ ALTER TABLE role_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE role_assignments FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS role_assignments_service_isolation ON role_assignments;
 CREATE POLICY role_assignments_service_isolation ON role_assignments
-    FOR ALL
-    USING (current_app_service_name() = 'gateway')
-    WITH CHECK (current_app_service_name() = 'gateway');
-
-ALTER TABLE governance_actions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE governance_actions FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS governance_actions_service_isolation ON governance_actions;
-CREATE POLICY governance_actions_service_isolation ON governance_actions
     FOR ALL
     USING (current_app_service_name() = 'gateway')
     WITH CHECK (current_app_service_name() = 'gateway');
@@ -703,23 +562,6 @@ CREATE POLICY settlement_callback_deliveries_service_isolation ON settlement_cal
     USING (current_app_service_name() = 'gateway')
     WITH CHECK (current_app_service_name() = 'gateway');
 
-UPDATE governance_actions
-SET intent_key = CONCAT_WS('|',
-        'v1',
-        LOWER(COALESCE(category, '')),
-        LOWER(COALESCE(contract_method, '')),
-        COALESCE(proposal_id::text, ''),
-        LOWER(COALESCE(target_address, '')),
-        LOWER(COALESCE(trade_id, '')),
-        LOWER(COALESCE(chain_id, ''))
-    )
-WHERE intent_key IS NULL;
-
-UPDATE governance_actions
-SET expires_at = created_at + INTERVAL '86400 seconds'
-WHERE expires_at IS NULL
-  AND status = 'requested';
-
 CREATE INDEX IF NOT EXISTS idx_idempotency_created_at ON idempotency_keys(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_idempotency_completed_at ON idempotency_keys(completed_at DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS idx_idempotency_actor_endpoint_created_at ON idempotency_keys(actor_id, endpoint, created_at DESC);
@@ -736,137 +578,6 @@ CREATE INDEX IF NOT EXISTS idx_access_log_created_at ON access_log_entries(creat
 CREATE INDEX IF NOT EXISTS idx_access_log_event_type_created_at ON access_log_entries(event_type, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_access_log_actor_created_at ON access_log_entries(actor_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_access_log_request_id ON access_log_entries(request_id);
-CREATE INDEX IF NOT EXISTS idx_governance_actions_created_at ON governance_actions(created_at DESC, action_id DESC);
-CREATE INDEX IF NOT EXISTS idx_governance_actions_category_status_created_at ON governance_actions(category, status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_governance_actions_trade_id_created_at ON governance_actions(trade_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_governance_actions_intent_key_status_created_at ON governance_actions(intent_key, status, created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_governance_actions_actor_endpoint_idempotency ON governance_actions(actor_id, endpoint, idempotency_key);
-CREATE INDEX IF NOT EXISTS idx_governance_actions_intent_hash_status_created_at ON governance_actions(intent_hash, status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_governance_actions_requested_expires_at ON governance_actions(expires_at ASC, action_id ASC)
-WHERE status = 'requested' AND expires_at IS NOT NULL;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS flow_type TEXT NOT NULL DEFAULT 'executor';
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS broadcast_at TIMESTAMP;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS actor_account_id TEXT;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS signer_policy_evidence JSONB NOT NULL DEFAULT '{}'::jsonb;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS final_signer_wallet TEXT;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS verification_state TEXT;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS verification_error TEXT;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS monitoring_state TEXT;
-
-ALTER TABLE governance_actions
-    ADD COLUMN IF NOT EXISTS prepared_signing_payload JSONB;
-
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conrelid = 'governance_actions'::regclass
-          AND conname = 'governance_actions_flow_type_check'
-    ) THEN
-        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_flow_type_check;
-    END IF;
-END $$;
-
-ALTER TABLE governance_actions
-    ADD CONSTRAINT governance_actions_flow_type_check CHECK (flow_type IN ('executor', 'direct_sign'));
-
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conrelid = 'governance_actions'::regclass
-          AND conname = 'governance_actions_status_check'
-    ) THEN
-        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_status_check;
-    END IF;
-END $$;
-
-ALTER TABLE governance_actions
-    ADD CONSTRAINT governance_actions_status_check CHECK (status IN (
-        'requested',
-        'submitted',
-        'pending_approvals',
-        'approved',
-        'executed',
-        'cancelled',
-        'expired',
-        'stale',
-        'failed',
-        'prepared',
-        'broadcast_pending_verification',
-        'broadcast'
-    ));
-
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conrelid = 'governance_actions'::regclass
-          AND conname = 'governance_actions_verification_state_check'
-    ) THEN
-        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_verification_state_check;
-    END IF;
-END $$;
-
-ALTER TABLE governance_actions
-    ADD CONSTRAINT governance_actions_verification_state_check CHECK (
-        verification_state IS NULL
-        OR verification_state IN ('not_required', 'not_started', 'pending', 'verified', 'failed')
-    );
-
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conrelid = 'governance_actions'::regclass
-          AND conname = 'governance_actions_monitoring_state_check'
-    ) THEN
-        ALTER TABLE governance_actions DROP CONSTRAINT governance_actions_monitoring_state_check;
-    END IF;
-END $$;
-
-ALTER TABLE governance_actions
-    ADD CONSTRAINT governance_actions_monitoring_state_check CHECK (
-        monitoring_state IS NULL
-        OR monitoring_state IN (
-            'not_required',
-            'not_started',
-            'pending_verification',
-            'pending_confirmation',
-            'confirmed',
-            'finalized',
-            'reverted',
-            'stale'
-        )
-    );
-
-CREATE INDEX IF NOT EXISTS idx_governance_actions_prepared_expires_at ON governance_actions(expires_at ASC, action_id ASC)
-WHERE status = 'prepared' AND expires_at IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_governance_actions_flow_type_status_created_at ON governance_actions(flow_type, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_trade_id_decided_at ON compliance_decisions(trade_id, decided_at DESC, decision_id DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_result_decided_at ON compliance_decisions(result, decided_at DESC);
 CREATE INDEX IF NOT EXISTS idx_compliance_decisions_reason_code_decided_at ON compliance_decisions(reason_code, decided_at DESC);

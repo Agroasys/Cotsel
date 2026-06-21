@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { ComplianceDecisionRecord, ComplianceStore } from './complianceStore';
-import type { GovernanceActionRecord, GovernanceActionStore } from './governanceStore';
 import type { DashboardTradeSettlementRecord, TradeReadReader } from './tradeReadService';
 import type { SettlementStore } from './settlementStore';
 import type { RicardianClient, RicardianDocumentRecord } from './ricardianClient';
@@ -43,7 +42,6 @@ export interface TradeEvidenceResult {
   ricardianHash: string;
   settlement: DashboardTradeSettlementRecord | null;
   complianceDecisions: ComplianceDecisionRecord[];
-  governanceActions: GovernanceActionRecord[];
   freshness: EvidenceFreshness;
 }
 
@@ -114,29 +112,12 @@ async function readAllComplianceDecisions(
   return items;
 }
 
-async function readAllGovernanceActions(
-  governanceActionStore: GovernanceActionStore,
-  tradeId: string,
-): Promise<GovernanceActionRecord[]> {
-  const items: GovernanceActionRecord[] = [];
-  let cursor: string | undefined;
-
-  do {
-    const page = await governanceActionStore.list({ tradeId, limit: 100, cursor });
-    items.push(...page.items);
-    cursor = page.nextCursor ?? undefined;
-  } while (cursor);
-
-  return items;
-}
-
 export class EvidenceReadService implements EvidenceReadReader {
   constructor(
     private readonly tradeReadService: TradeReadReader,
     private readonly settlementStore: SettlementStore,
     private readonly ricardianClient: RicardianClient,
     private readonly complianceStore: ComplianceStore,
-    private readonly governanceActionStore: GovernanceActionStore,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -232,20 +213,15 @@ export class EvidenceReadService implements EvidenceReadReader {
 
     const queriedAt = this.now().toISOString();
 
-    const [complianceResult, governanceResult] = await Promise.allSettled([
+    const [complianceResult] = await Promise.allSettled([
       readAllComplianceDecisions(this.complianceStore, tradeId),
-      readAllGovernanceActions(this.governanceActionStore, tradeId),
     ]);
 
     const complianceDecisions =
       complianceResult.status === 'fulfilled' ? complianceResult.value : [];
-    const governanceActions = governanceResult.status === 'fulfilled' ? governanceResult.value : [];
     const responseDegradedReason = combineDegradedReasons([
       complianceResult.status === 'rejected'
         ? degradedReason(complianceResult.reason, 'Compliance evidence source is unavailable')
-        : undefined,
-      governanceResult.status === 'rejected'
-        ? degradedReason(governanceResult.reason, 'Governance evidence source is unavailable')
         : undefined,
     ]);
 
@@ -254,13 +230,11 @@ export class EvidenceReadService implements EvidenceReadReader {
       ricardianHash: trade.ricardianHash,
       settlement: trade.settlement,
       complianceDecisions,
-      governanceActions,
       freshness: {
         source: 'gateway_ledgers',
         sourceFreshAt: maxTimestamp([
           trade.settlement?.updatedAt ?? null,
           ...complianceDecisions.map((decision) => decision.decidedAt),
-          ...governanceActions.flatMap((action) => [action.executedAt, action.createdAt]),
         ]),
         queriedAt,
         available: responseDegradedReason ? false : true,

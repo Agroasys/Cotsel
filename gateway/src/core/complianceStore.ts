@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Pool } from 'pg';
-import { EvidenceLink } from './governanceStore';
+import { EvidenceLink } from './auditContext';
 
 export const COMPLIANCE_DECISION_TYPES = ['KYB', 'KYT', 'SANCTIONS'] as const;
 export const COMPLIANCE_DECISION_RESULTS = ['ALLOW', 'DENY'] as const;

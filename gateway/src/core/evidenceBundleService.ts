@@ -7,7 +7,7 @@ import type {
   ComplianceStore,
   OracleProgressionBlockRecord,
 } from './complianceStore';
-import type { EvidenceLink } from './governanceStore';
+import type { EvidenceLink } from './auditContext';
 import type { DashboardTradeRecord, TradeReadReader } from './tradeReadService';
 import type { GatewayPrincipal } from '../middleware/auth';
 import type { RequestContext } from '../middleware/requestContext';

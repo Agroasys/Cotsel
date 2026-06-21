@@ -82,48 +82,6 @@ const treasuryFixture = {
   },
 };
 
-const treasuryActionsFixture = {
-  items: [
-    {
-      actionId: 'gov-1',
-      intentKey: 'v1|treasury_sweep|sweeptreasury||||31337|',
-      proposalId: null,
-      category: 'treasury_sweep',
-      status: 'executed',
-      contractMethod: 'sweepTreasury',
-      txHash: '0xabc',
-      blockNumber: 17,
-      tradeId: null,
-      chainId: '31337',
-      targetAddress: null,
-      createdAt: '2026-03-14T10:00:00.000Z',
-      expiresAt: '2026-03-15T10:00:00.000Z',
-      executedAt: '2026-03-14T10:01:00.000Z',
-      requestId: 'req-1',
-      correlationId: 'corr-1',
-      errorCode: null,
-      errorMessage: null,
-      audit: {
-        reason: 'Sweep treasury.',
-        evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/agro-1' }],
-        ticketRef: 'AGRO-1',
-        actorSessionId: 'sess-1',
-        actorWallet: '0x00000000000000000000000000000000000000a1',
-        actorRole: 'admin',
-        createdAt: '2026-03-14T10:00:00.000Z',
-        requestedBy: 'uid-admin-1',
-      },
-    },
-  ],
-  nextCursor: null,
-  freshness: {
-    source: 'gateway_governance_ledger',
-    sourceFreshAt: '2026-03-14T10:01:00.000Z',
-    queriedAt: '2026-03-14T10:16:00.000Z',
-    available: true,
-  },
-};
-
 const accountingPeriodsFixture = [
   {
     id: 7,
@@ -395,7 +353,6 @@ async function startServer(
 
   const treasuryReadService: TreasuryReadReader = {
     getTreasurySnapshot: jest.fn().mockResolvedValue(treasuryFixture),
-    listTreasuryActions: jest.fn().mockResolvedValue(treasuryActionsFixture),
     ...(options?.treasuryRead ?? {}),
   };
 
@@ -489,10 +446,6 @@ describe('gateway treasury routes contract', () => {
     spec,
     '#/components/schemas/TreasurySnapshotResponse',
   );
-  const validateActions = createSchemaValidator(
-    spec,
-    '#/components/schemas/TreasuryActionListResponse',
-  );
   const validateAccountingPeriods = createSchemaValidator(
     spec,
     '#/components/schemas/TreasuryAccountingPeriodListResponse',
@@ -512,7 +465,6 @@ describe('gateway treasury routes contract', () => {
 
   test('OpenAPI spec exposes treasury read endpoints', () => {
     expect(hasOperation(spec, 'get', '/treasury')).toBe(true);
-    expect(hasOperation(spec, 'get', '/treasury/actions')).toBe(true);
     expect(hasOperation(spec, 'get', '/treasury/accounting-periods')).toBe(true);
     expect(hasOperation(spec, 'get', '/treasury/accounting-periods/{periodId}/rollforward')).toBe(
       true,
@@ -558,20 +510,6 @@ describe('gateway treasury routes contract', () => {
     expect(response.headers['x-request-id']).toBe('req-treasury');
     expect(validateSnapshot(payload)).toBe(true);
     expect(payload.data.state.sweepVisibility.canSweep).toBe(true);
-  });
-
-  test('GET /treasury/actions returns treasury governance history', async () => {
-    const app = await startServer('admin');
-    const response = await sendInProcessRequest(app, {
-      method: 'GET',
-      path: '/api/dashboard-gateway/v1/treasury/actions?category=treasury_sweep&status=executed&limit=20',
-      headers: { authorization: 'Bearer sess-admin' },
-    });
-    const payload = response.json<{ data: { items: Array<{ category: string }> } }>();
-
-    expect(response.status).toBe(200);
-    expect(validateActions(payload)).toBe(true);
-    expect(payload.data.items[0].category).toBe('treasury_sweep');
   });
 
   test('GET treasury revenue-control reads return schema-valid payloads', async () => {
@@ -988,7 +926,7 @@ describe('gateway treasury routes contract', () => {
     expect(payload.data.freshness.available).toBe(false);
   });
 
-  test('treasury routes require an authenticated admin session and validate query parameters', async () => {
+  test('treasury routes require an authenticated admin session', async () => {
     const unauthenticatedApp = await startServer(null);
     const unauthenticatedResponse = await sendInProcessRequest(unauthenticatedApp, {
       method: 'GET',
@@ -1003,20 +941,5 @@ describe('gateway treasury routes contract', () => {
       headers: { authorization: 'Bearer sess-buyer' },
     });
     expect(forbiddenResponse.status).toBe(403);
-
-    const app = await startServer('admin');
-    const invalidCategory = await sendInProcessRequest(app, {
-      method: 'GET',
-      path: '/api/dashboard-gateway/v1/treasury/actions?category=broken',
-      headers: { authorization: 'Bearer sess-admin' },
-    });
-    expect(invalidCategory.status).toBe(400);
-
-    const invalidCursor = await sendInProcessRequest(app, {
-      method: 'GET',
-      path: '/api/dashboard-gateway/v1/treasury/actions?cursor=not-a-cursor',
-      headers: { authorization: 'Bearer sess-admin' },
-    });
-    expect(invalidCursor.status).toBe(400);
   });
 });

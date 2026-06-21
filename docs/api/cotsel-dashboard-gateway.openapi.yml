@@ -1105,74 +1105,6 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
-  /governance/actions:
-    get:
-      tags: [Governance]
-      summary: List recent governance actions
-      operationId: listGovernanceActions
-      parameters:
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
-        - name: category
-          in: query
-          schema:
-            $ref: '#/components/schemas/GovernanceActionCategory'
-        - name: status
-          in: query
-          schema:
-            $ref: '#/components/schemas/GovernanceActionStatus'
-        - name: tradeId
-          in: query
-          schema:
-            type: string
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 50
-        - name: cursor
-          in: query
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Governance action history.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GovernanceActionListResponse'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-  /governance/actions/{actionId}:
-    get:
-      tags: [Governance]
-      summary: Get governance action by id
-      operationId: getGovernanceAction
-      parameters:
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
-        - name: actionId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Governance action detail.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GovernanceActionResponse'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
   /treasury:
     get:
       tags: [Treasury]
@@ -1191,50 +1123,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TreasurySnapshotResponse'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-  /treasury/actions:
-    get:
-      tags: [Treasury]
-      summary: List treasury governance actions for dashboard history views
-      description: |
-        Treasury history read surface derived from the gateway governance ledger. This route is
-        restricted to treasury-related categories and uses deterministic cursor pagination to remain
-        consistent with the underlying governance action ledger.
-      operationId: listTreasuryActions
-      parameters:
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
-        - name: category
-          in: query
-          schema:
-            $ref: '#/components/schemas/TreasuryActionCategory'
-        - name: status
-          in: query
-          schema:
-            $ref: '#/components/schemas/GovernanceActionStatus'
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 50
-        - name: cursor
-          in: query
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Treasury governance history with cursor pagination and freshness metadata.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TreasuryActionListResponse'
-        '400':
-          $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
