@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { GatewayError } from '../errors';
-import { EvidenceLink } from './governanceStore';
+import { EvidenceLink } from './auditContext';
 
 const VALID_EVIDENCE_KINDS = new Set<EvidenceLink['kind']>([
   'runbook',

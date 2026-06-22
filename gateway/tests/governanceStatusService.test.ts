@@ -88,6 +88,8 @@ describe('GovernanceStatusService', () => {
           createdAt: 100n,
           proposer: '0x0000000000000000000000000000000000000099',
         }),
+        oracleUpdateCounter: jest.fn().mockResolvedValue(3n),
+        treasuryPayoutAddressUpdateCounter: jest.fn().mockResolvedValue(2n),
         oracleUpdateProposals: jest
           .fn()
           .mockResolvedValueOnce({ createdAt: 10n, executed: false })
@@ -120,10 +122,7 @@ describe('GovernanceStatusService', () => {
       50,
     );
 
-    const snapshot = await service.getGovernanceStatus({
-      oracleProposalIds: [0, 1, 2],
-      treasuryPayoutReceiverProposalIds: [0, 1],
-    });
+    const snapshot = await service.getGovernanceStatus();
 
     expect(snapshot).toEqual({
       paused: false,
@@ -191,6 +190,7 @@ describe('GovernanceStatusService', () => {
           createdAt: 0n,
           proposer: '0x0',
         }),
+        oracleUpdateCounter: jest.fn().mockResolvedValue(1n),
         oracleUpdateProposals: jest.fn().mockResolvedValue({ createdAt: 10n, executed: false }),
         oracleUpdateProposalExpiresAt: jest.fn().mockResolvedValue(600n),
         oracleUpdateProposalCancelled: jest.fn().mockResolvedValue(false),
@@ -204,13 +204,47 @@ describe('GovernanceStatusService', () => {
       50,
     );
 
-    const snapshot = await service.getGovernanceStatus({
-      oracleProposalIds: [7],
-      treasuryPayoutReceiverProposalIds: [],
-    });
+    const snapshot = await service.getGovernanceStatus();
 
-    expect(snapshot.activeOracleProposalIds).toEqual([7]);
+    expect(snapshot.activeOracleProposalIds).toEqual([0]);
     expect(provider.getBlock).toHaveBeenCalledWith('latest');
+  });
+
+  test('bounds the active-proposal scan to the most-recent window', async () => {
+    const provider = {
+      getNetwork: jest.fn().mockResolvedValue({ chainId: 31337n }),
+      getBlock: jest.fn().mockResolvedValue({ timestamp: 1000 }),
+    } as unknown as JsonRpcProvider;
+
+    // Counter far larger than the 256-id scan window; only the newest window of
+    // proposal IDs should ever be read from the RPC provider for a single status
+    // request, capping the fan-out regardless of how large the counter grows.
+    const oracleUpdateCounter = 5000n;
+    const oracleUpdateProposals = jest.fn().mockResolvedValue({ createdAt: 0n, executed: false });
+    const oracleUpdateProposalExpiresAt = jest.fn().mockResolvedValue(0n);
+    const oracleUpdateProposalCancelled = jest.fn().mockResolvedValue(false);
+
+    const service = new GovernanceStatusService(
+      provider,
+      createGovernanceContractMock({
+        oracleUpdateCounter: jest.fn().mockResolvedValue(oracleUpdateCounter),
+        oracleUpdateProposals,
+        oracleUpdateProposalExpiresAt,
+        oracleUpdateProposalCancelled,
+        treasuryPayoutAddressUpdateCounter: jest.fn().mockResolvedValue(0n),
+      }),
+      31337,
+      50,
+    );
+
+    const snapshot = await service.getGovernanceStatus();
+
+    expect(snapshot.activeOracleProposalIds).toEqual([]);
+    // Exactly the 256-id window is scanned, never the full 5000-id range.
+    expect(oracleUpdateProposals).toHaveBeenCalledTimes(256);
+    const scannedIds = oracleUpdateProposals.mock.calls.map(([id]) => id as bigint);
+    expect(scannedIds[0]).toBe(oracleUpdateCounter - 256n);
+    expect(scannedIds[scannedIds.length - 1]).toBe(oracleUpdateCounter - 1n);
   });
 
   test('fails readiness when chain RPC probe exceeds the configured timeout', async () => {

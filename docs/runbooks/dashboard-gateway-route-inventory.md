@@ -26,7 +26,6 @@ removal only after gateway access logs, contract tests, and dashboard live parit
 | `GET /reconciliation`                                     | `gateway/src/routes/reconciliation.ts` | `reconciliation.ts`        |
 | `GET /reconciliation/handoffs/:handoffId`                 | `gateway/src/routes/reconciliation.ts` | `reconciliation.ts`        |
 | `GET /treasury`                                           | `gateway/src/routes/treasury.ts`       | `treasury.ts`              |
-| `GET /treasury/actions`                                   | `gateway/src/routes/treasury.ts`       | `treasury.ts`              |
 | `GET /treasury/accounting-periods`                        | `gateway/src/routes/treasury.ts`       | `treasury.ts`              |
 | `GET /treasury/accounting-periods/:periodId/close-packet` | `gateway/src/routes/treasury.ts`       | `treasury.ts`              |
 | `GET /treasury/accounting-periods/:periodId/rollforward`  | `gateway/src/routes/treasury.ts`       | `treasury.ts`              |
@@ -40,14 +39,10 @@ removal only after gateway access logs, contract tests, and dashboard live parit
 | `GET /compliance/trades/:tradeId/decisions`               | `gateway/src/routes/compliance.ts`     | `compliance.ts`            |
 | `GET /compliance/decisions/:decisionId`                   | `gateway/src/routes/compliance.ts`     | `compliance.ts`            |
 | `GET /governance/status`                                  | `gateway/src/routes/governance.ts`     | `governance.ts`            |
-| `GET /governance/actions`                                 | `gateway/src/routes/governance.ts`     | `governance.ts`            |
-| `GET /governance/actions/:actionId`                       | `gateway/src/routes/governance.ts`     | `governance.ts`            |
 | `GET /settings/role-assignments`                          | `gateway/src/routes/settings.ts`       | `settings.ts`              |
 | `GET /settings/audit-feed`                                | `gateway/src/routes/settings.ts`       | `settings.ts`              |
 | `GET /access-logs`                                        | `gateway/src/routes/accessLogs.ts`     | `accessLogs.ts`            |
 | `GET /access-logs/:entryId`                               | `gateway/src/routes/accessLogs.ts`     | `accessLogs.ts`            |
-| `GET /approvals`                                          | `gateway/src/routes/approvals.ts`      | `approval-workflow.ts`     |
-| `GET /approvals/:approvalId`                              | `gateway/src/routes/approvals.ts`      | `approval-workflow.ts`     |
 | `GET /ricardian/:tradeId`                                 | `gateway/src/routes/ricardian.ts`      | `ricardian.ts`             |
 | `GET /evidence/:tradeId`                                  | `gateway/src/routes/ricardian.ts`      | `evidence.ts`              |
 

@@ -3,7 +3,7 @@
  */
 import { createInMemoryComplianceStore } from '../src/core/complianceStore';
 import { TradeReadService } from '../src/core/tradeReadService';
-import { EvidenceLink } from '../src/core/governanceStore';
+import { EvidenceLink } from '../src/core/auditContext';
 import { createInMemorySettlementStore } from '../src/core/settlementStore';
 
 const evidenceLinks: EvidenceLink[] = [{ kind: 'ticket', uri: 'https://tickets/agro-1' }];

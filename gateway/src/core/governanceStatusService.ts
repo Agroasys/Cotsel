@@ -5,6 +5,7 @@ import { AbstractProvider, Contract } from 'ethers';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import { GatewayConfig } from '../config/env';
 import { GatewayError } from '../errors';
+import { Logger } from '../logging/logger';
 import { withTimeout } from './downstreamTimeout';
 
 export interface GovernanceStatusSnapshot {
@@ -39,11 +40,6 @@ export interface GovernanceProposalState {
   targetAddress: string;
 }
 
-export interface GovernanceStatusRequest {
-  oracleProposalIds?: number[];
-  treasuryPayoutReceiverProposalIds?: number[];
-}
-
 interface UnpauseProposal {
   approvalCount: bigint;
   executed: boolean;
@@ -72,7 +68,7 @@ interface TreasuryPayoutReceiverProposal {
 
 export interface EscrowGovernanceReader {
   checkReadiness(): Promise<void>;
-  getGovernanceStatus(request?: GovernanceStatusRequest): Promise<GovernanceStatusSnapshot>;
+  getGovernanceStatus(): Promise<GovernanceStatusSnapshot>;
 }
 
 export interface GovernanceMutationPreflightReader extends EscrowGovernanceReader {
@@ -155,33 +151,76 @@ function toSafeInteger(value: bigint, field: string): number {
   return numeric;
 }
 
+// Hard upper bound on how many of the most-recent proposal IDs a single
+// governance-status read will scan. Proposal IDs are minted sequentially
+// on-chain (0..counter-1) and older entries necessarily resolve (execute,
+// cancel, or expire), so active proposals cluster at the high end of the range.
+// Bounding the scan keeps one dashboard read from fanning out an unbounded
+// number of RPC calls as the on-chain counters grow.
+const MAX_ACTIVE_PROPOSAL_SCAN = 256;
+
+// Cap on how many proposal IDs are read from the RPC provider at once, so even
+// a full-window scan issues a bounded number of simultaneous calls rather than
+// firing the entire window in parallel.
+const PROPOSAL_SCAN_CONCURRENCY = 16;
+
+// Enumerate the most-recent window of sequentially minted proposal IDs and keep
+// only the entries the contract still reports as active, so the gateway needs no
+// off-chain mirror of governance proposals. Anything older than the window is
+// treated as inactive (degraded behavior, surfaced via a warning log) because a
+// sequential proposal that old has necessarily resolved or expired.
 async function collectActiveProposalIds(
-  candidateProposalIds: number[],
+  proposalSet: string,
+  proposalCounter: bigint,
   chainTimeSeconds: bigint,
   loadProposal: (proposalId: bigint) => Promise<{ createdAt: bigint; executed: boolean }>,
   loadExpiry: (proposalId: bigint) => Promise<bigint>,
   loadCancelled: (proposalId: bigint) => Promise<boolean>,
 ): Promise<number[]> {
-  const ids = [...new Set(candidateProposalIds)].map((proposalId) => BigInt(proposalId));
+  const windowSize = BigInt(MAX_ACTIVE_PROPOSAL_SCAN);
+  const windowStart = proposalCounter > windowSize ? proposalCounter - windowSize : 0n;
 
-  const snapshots = await Promise.all(
-    ids.map(async (proposalId) => {
-      const [proposal, expiresAt, cancelled] = await Promise.all([
-        loadProposal(proposalId),
-        loadExpiry(proposalId),
-        loadCancelled(proposalId),
-      ]);
+  if (windowStart > 0n) {
+    Logger.warn('Governance proposal scan truncated to most-recent window', {
+      proposalSet,
+      proposalCounter: proposalCounter.toString(),
+      scannedFromId: windowStart.toString(),
+      windowSize: MAX_ACTIVE_PROPOSAL_SCAN,
+    });
+  }
 
-      const active =
-        proposal.createdAt > 0n &&
-        !proposal.executed &&
-        !cancelled &&
-        expiresAt >= chainTimeSeconds;
-      return active ? toSafeInteger(proposalId, 'proposalId') : null;
-    }),
-  );
+  const ids: bigint[] = [];
+  for (let id = windowStart; id < proposalCounter; id += 1n) {
+    ids.push(id);
+  }
 
-  return snapshots.filter((value): value is number => value !== null);
+  const active: number[] = [];
+  for (let offset = 0; offset < ids.length; offset += PROPOSAL_SCAN_CONCURRENCY) {
+    const snapshots = await Promise.all(
+      ids.slice(offset, offset + PROPOSAL_SCAN_CONCURRENCY).map(async (proposalId) => {
+        const [proposal, expiresAt, cancelled] = await Promise.all([
+          loadProposal(proposalId),
+          loadExpiry(proposalId),
+          loadCancelled(proposalId),
+        ]);
+
+        const isActive =
+          proposal.createdAt > 0n &&
+          !proposal.executed &&
+          !cancelled &&
+          expiresAt >= chainTimeSeconds;
+        return isActive ? toSafeInteger(proposalId, 'proposalId') : null;
+      }),
+    );
+
+    for (const value of snapshots) {
+      if (value !== null) {
+        active.push(value);
+      }
+    }
+  }
+
+  return active;
 }
 
 export class GovernanceStatusService implements GovernanceMutationPreflightReader {
@@ -226,9 +265,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
     }
   }
 
-  async getGovernanceStatus(
-    request: GovernanceStatusRequest = {},
-  ): Promise<GovernanceStatusSnapshot> {
+  async getGovernanceStatus(): Promise<GovernanceStatusSnapshot> {
     try {
       const snapshot = await this.runChainRead(
         'getGovernanceStatus.snapshot',
@@ -244,6 +281,8 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
           this.contract.requiredApprovals(),
           this.contract.hasActiveUnpauseProposal(),
           this.contract.unpauseProposal(),
+          this.contract.oracleUpdateCounter(),
+          this.contract.treasuryPayoutAddressUpdateCounter(),
         ] as const),
       );
       const latestBlock = await this.runChainRead(
@@ -262,6 +301,8 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
         requiredApprovals,
         hasActiveUnpauseProposal,
         unpauseProposal,
+        oracleUpdateCounter,
+        treasuryPayoutAddressUpdateCounter,
       ] = snapshot;
 
       const chainTimeSeconds = BigInt(latestBlock?.timestamp ?? 0);
@@ -271,14 +312,16 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
           'getGovernanceStatus.activeProposals',
           Promise.all([
             collectActiveProposalIds(
-              request.oracleProposalIds ?? [],
+              'oracleUpdate',
+              oracleUpdateCounter,
               chainTimeSeconds,
               (proposalId) => this.contract.oracleUpdateProposals(proposalId),
               (proposalId) => this.contract.oracleUpdateProposalExpiresAt(proposalId),
               (proposalId) => this.contract.oracleUpdateProposalCancelled(proposalId),
             ),
             collectActiveProposalIds(
-              request.treasuryPayoutReceiverProposalIds ?? [],
+              'treasuryPayoutAddressUpdate',
+              treasuryPayoutAddressUpdateCounter,
               chainTimeSeconds,
               (proposalId) => this.contract.treasuryPayoutAddressUpdateProposals(proposalId),
               (proposalId) =>

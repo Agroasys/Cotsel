@@ -26,7 +26,7 @@ import type { GatewayPrincipal } from '../middleware/auth';
 import { resolveGatewayActorKey } from '../middleware/auth';
 import { RequestContext } from '../middleware/requestContext';
 import { GatewayError } from '../errors';
-import { EvidenceLink, GovernanceMutationAuditInput } from './governanceStore';
+import { EvidenceLink, GovernanceMutationAuditInput } from './auditContext';
 import { ComplianceWriteStore } from './complianceWriteStore';
 import { validateEvidenceLink } from './evidenceValidation';
 

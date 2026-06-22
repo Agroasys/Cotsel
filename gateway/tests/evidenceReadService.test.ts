@@ -2,11 +2,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { ComplianceStore } from '../src/core/complianceStore';
-import {
-  buildGovernanceIntentKey,
-  createInMemoryGovernanceActionStore,
-  type GovernanceActionRecord,
-} from '../src/core/governanceStore';
 import { EvidenceReadService } from '../src/core/evidenceReadService';
 import type { RicardianClient } from '../src/core/ricardianClient';
 import { createInMemorySettlementStore } from '../src/core/settlementStore';
@@ -51,46 +46,6 @@ const tradeFixture = {
   },
   timeline: [],
 };
-
-const governanceFixture: GovernanceActionRecord[] = [
-  {
-    actionId: 'gov-1',
-    intentKey: buildGovernanceIntentKey({
-      category: 'pause',
-      contractMethod: 'pause',
-      tradeId: 'TRD-9001',
-      chainId: '31337',
-    }),
-    proposalId: null,
-    category: 'pause',
-    status: 'executed',
-    contractMethod: 'pause',
-    txHash: '0xabc',
-    blockNumber: 17,
-    tradeId: 'TRD-9001',
-    chainId: '31337',
-    targetAddress: null,
-    createdAt: '2026-03-14T10:00:00.000Z',
-    expiresAt: '2026-03-15T10:00:00.000Z',
-    executedAt: '2026-03-14T10:01:00.000Z',
-    requestId: 'req-1',
-    correlationId: 'corr-1',
-    errorCode: null,
-    errorMessage: null,
-    flowType: 'executor',
-    broadcastAt: null,
-    audit: {
-      reason: 'Pause trade.',
-      evidenceLinks: [{ kind: 'ticket', uri: 'https://tickets/agro-1' }],
-      ticketRef: 'AGRO-1',
-      actorSessionId: 'sess-1',
-      actorWallet: '0x00000000000000000000000000000000000000a1',
-      actorRole: 'admin',
-      createdAt: '2026-03-14T10:00:00.000Z',
-      requestedBy: 'uid-admin-1',
-    },
-  },
-];
 
 const tradeFreshnessFixture = {
   source: 'indexer_graphql' as const,
@@ -172,7 +127,6 @@ describe('evidence read service', () => {
       settlementStore,
       ricardianClient,
       complianceStore,
-      createInMemoryGovernanceActionStore(governanceFixture),
       () => new Date('2026-03-14T11:00:00.000Z'),
     );
 
@@ -261,7 +215,6 @@ describe('evidence read service', () => {
       settlementStore,
       ricardianClient,
       complianceStore,
-      createInMemoryGovernanceActionStore(governanceFixture),
       () => new Date('2026-03-14T11:00:00.000Z'),
     );
 
@@ -270,7 +223,6 @@ describe('evidence read service', () => {
     expect(result.tradeId).toBe('TRD-9001');
     expect(result.settlement?.handoffId).toBe('sth-1');
     expect(result.complianceDecisions).toHaveLength(1);
-    expect(result.governanceActions).toHaveLength(1);
     expect(result.freshness).toEqual({
       source: 'gateway_ledgers',
       sourceFreshAt: '2026-03-14T10:06:00.000Z',
@@ -320,7 +272,6 @@ describe('evidence read service', () => {
       settlementStore,
       ricardianClient,
       complianceStore,
-      createInMemoryGovernanceActionStore(governanceFixture),
       () => new Date('2026-03-14T11:00:00.000Z'),
     );
 
@@ -391,7 +342,6 @@ describe('evidence read service', () => {
       settlementStore,
       ricardianClient,
       complianceStore,
-      createInMemoryGovernanceActionStore(governanceFixture),
       () => new Date('2026-03-14T11:00:00.000Z'),
     );
 
@@ -430,13 +380,11 @@ describe('evidence read service', () => {
       settlementStore,
       ricardianClient,
       complianceStore,
-      createInMemoryGovernanceActionStore(governanceFixture),
       () => new Date('2026-03-14T11:00:00.000Z'),
     );
 
     const result = await service.getTradeEvidence('TRD-9001');
 
-    expect(result.governanceActions).toHaveLength(1);
     expect(result.complianceDecisions).toHaveLength(0);
     expect(result.freshness.available).toBe(false);
     expect(result.freshness.degradedReason).toContain('compliance store unavailable');
