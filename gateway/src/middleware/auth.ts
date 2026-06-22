@@ -378,7 +378,9 @@ export function requireAuthorizedSignerBinding(
     (authorization) =>
       authorization.walletAddress === walletAddress &&
       authorization.actionClass === actionClass &&
-      authorization.environment === signerEnvironment,
+      // A wildcard environment is the role-derived admin authorization, which is
+      // valid in any environment; otherwise the binding is environment-scoped.
+      (authorization.environment === signerEnvironment || authorization.environment === '*'),
   );
 
   if (!binding) {

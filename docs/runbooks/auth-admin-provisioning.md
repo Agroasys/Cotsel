@@ -24,9 +24,11 @@ the signed `POST /session/exchange/agroasys` route.
 No browser client, dashboard client, or caller-supplied login role is
 authoritative for durable admin access.
 
-Durable admin provisioning is not the same thing as privileged signer
-authorization. Admin profile state controls session authority. Approved signer
-wallet bindings are a second control plane and must be provisioned separately.
+Operator authority is derived entirely from the durable admin role. A durable
+admin profile confers the full operator capability set and authorizes the
+operator's own session wallet as the signer for every action class. There is no
+separate capability list or signer-binding control plane to provision — the only
+thing you provision is the admin profile below.
 
 ## Required Configuration
 
@@ -117,41 +119,19 @@ Durable admin grant events emit `auth.durable_admin_provisioned`. Durable admin
 revocation or deactivation emits `auth.durable_admin_revoked`. Both events must
 be reconciled against `auth_admin_audit_events` during access review.
 
-## Operator Signer Binding Provisioning
+## Operator Signer Authority
 
-Endpoint:
+Signer authority is no longer provisioned separately. When a profile holds the
+durable admin role, every resolved session for that profile derives:
 
-```text
-POST /api/auth/v1/admin/signers/provision
-```
+- the full operator capability set, and
+- a signer authorization for every action class, bound to the operator's own
+  session wallet with a wildcard environment (`*`).
 
-Body:
-
-```json
-{
-  "accountId": "agroasys-user:123",
-  "walletAddress": "0x00000000000000000000000000000000000000aa",
-  "actionClass": "governance",
-  "environment": "staging-e2e-real",
-  "ticketRef": "SEC-2200",
-  "reason": "SEC-2200 approve governance signer for staging validation"
-}
-```
-
-Rules:
-
-- signer bindings may be provisioned only for active durable admin profiles
-- signer bindings are action-class scoped and environment scoped
-- signer bindings do not change session role or gateway write allowlist state
-- a connected wallet is not authoritative unless a matching signer binding exists
-
-Revoke signer bindings with:
-
-```text
-POST /api/auth/v1/admin/signers/revoke
-```
-
-Durable admin review must confirm both role state and active signer bindings.
+There are no `POST /admin/signers/provision` or `POST /admin/signers/revoke`
+endpoints. To grant or remove signer authority, grant or revoke the durable
+admin role using the provision endpoint above. Durable admin review only needs
+to confirm role state.
 
 ## Deactivation
 

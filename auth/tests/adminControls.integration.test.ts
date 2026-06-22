@@ -14,13 +14,13 @@ import {
 } from '@agroasys/shared-auth/serviceAuth';
 import { createPostgresNonceStore } from '@agroasys/shared-auth/nonceStore';
 import { createAdminService } from '../src/core/adminService';
-import { createPostgresOperatorAuthorityStore } from '../src/core/operatorAuthorityStore';
 import { createPostgresProfileStore } from '../src/core/profileStore';
 import { createPostgresSessionStore } from '../src/core/sessionStore';
 import { createSessionService } from '../src/core/sessionService';
 import { AdminController } from '../src/api/adminController';
 import { createRouter } from '../src/api/routes';
 import { SessionController } from '../src/api/controller';
+import { OPERATOR_CAPABILITIES, OPERATOR_SIGNER_ACTION_CLASSES } from '../src/types';
 
 const POSTGRES_IMAGE = process.env.AUTH_TEST_POSTGRES_IMAGE || 'postgres:16-alpine';
 const API_KEY_ID = 'ops-admin-control-test';
@@ -158,7 +158,6 @@ function signedHeaders(input: {
 
 async function startAdminApp(pool: Pool) {
   const profiles = createPostgresProfileStore(pool);
-  const authority = createPostgresOperatorAuthorityStore(pool);
   const sessions = createPostgresSessionStore(pool);
   const sessionService = createSessionService(sessions, profiles);
   const nonceStore = createPostgresNonceStore({
@@ -174,7 +173,7 @@ async function startAdminApp(pool: Pool) {
     consumeNonce: nonceStore.consume,
   });
   const router = createRouter(new SessionController(sessionService), sessionService, {
-    adminController: new AdminController(createAdminService(profiles, authority, 3600)),
+    adminController: new AdminController(createAdminService(profiles, 3600)),
     adminControlMiddleware: adminMiddleware,
   });
   const app = express();
@@ -260,11 +259,6 @@ describe('admin controls persistence integration', () => {
             ['agroasys-user:admin-1'],
           );
           expect(provisioned.rows[0]).toMatchObject({ role: 'admin', active: true });
-          const implicitCapabilities = await pool.query(
-            `SELECT capability FROM operator_capability_bindings WHERE account_id = $1`,
-            ['agroasys-user:admin-1'],
-          );
-          expect(implicitCapabilities.rows).toEqual([]);
 
           const session = await app.sessionService.issueTrustedSession({
             accountId: 'agroasys-user:admin-1',
@@ -546,7 +540,7 @@ describe('admin controls persistence integration', () => {
   );
 
   integrationTest(
-    'trusted admin session exchange does not auto-grant operator capabilities or signer authority',
+    'a durable admin role confers the full operator capability set and wallet signer authority',
     async () => {
       await withPostgres(async (pool) => {
         const app = await startAdminApp(pool);
@@ -560,6 +554,43 @@ describe('admin controls persistence integration', () => {
 
           const resolved = await app.sessionService.resolve(session.sessionId);
           expect(resolved?.role).toBe('admin');
+          // Capabilities and signer authority derive from the admin role, not a
+          // separate provisioning plane.
+          expect([...(resolved?.capabilities ?? [])].sort()).toEqual(
+            [...OPERATOR_CAPABILITIES].sort(),
+          );
+          expect(
+            (resolved?.signerAuthorizations ?? [])
+              .map((authorization) => authorization.actionClass)
+              .sort(),
+          ).toEqual([...OPERATOR_SIGNER_ACTION_CLASSES].sort());
+          for (const authorization of resolved?.signerAuthorizations ?? []) {
+            expect(authorization.walletAddress).toBe('0x00000000000000000000000000000000000000bb');
+            expect(authorization.environment).toBe('*');
+          }
+        } finally {
+          await app.close();
+        }
+      });
+    },
+    120000,
+  );
+
+  integrationTest(
+    'a non-admin session is granted no operator capabilities or signer authority',
+    async () => {
+      await withPostgres(async (pool) => {
+        const app = await startAdminApp(pool);
+        try {
+          const session = await app.sessionService.issueTrustedSession({
+            accountId: 'agroasys-user:buyer-only',
+            role: 'buyer',
+            email: 'buyer-only@example.com',
+            walletAddress: '0x00000000000000000000000000000000000000cc',
+          });
+
+          const resolved = await app.sessionService.resolve(session.sessionId);
+          expect(resolved?.role).toBe('buyer');
           expect(resolved?.capabilities).toEqual([]);
           expect(resolved?.signerAuthorizations).toEqual([]);
         } finally {
@@ -571,19 +602,20 @@ describe('admin controls persistence integration', () => {
   );
 
   integrationTest(
-    'signer binding provisioning and revocation flow into resolved session truth',
+    'provisioning a durable admin profile yields full capabilities and derived signer authority',
     async () => {
       await withPostgres(async (pool) => {
         const app = await startAdminApp(pool);
         try {
+          // Provisioning only needs the durable admin grant + wallet. There is no
+          // separate capability list or signer binding to provision.
           const provisionPath = '/api/auth/v1/admin/profiles/provision';
           const provisionBody = JSON.stringify({
             accountId: 'agroasys-user:signer-1',
             role: 'admin',
             email: 'signer@example.com',
-            capabilities: ['governance:write', 'compliance:write', 'operations:replay'],
-            capabilityTicketRef: 'SEC-1100',
-            reason: 'SEC-1100 durable admin provisioning for signer binding proof',
+            walletAddress: '0x00000000000000000000000000000000000000aa',
+            reason: 'SEC-1100 durable admin provisioning for derived authority proof',
           });
           const provision = await fetch(`${app.baseUrl}${provisionPath}`, {
             method: 'POST',
@@ -597,41 +629,6 @@ describe('admin controls persistence integration', () => {
           });
           expect(provision.status).toBe(201);
 
-          const preSignerSession = await app.sessionService.issueTrustedSession({
-            accountId: 'agroasys-user:signer-1',
-            role: 'admin',
-            email: 'signer@example.com',
-            walletAddress: '0x00000000000000000000000000000000000000aa',
-          });
-          const resolvedBeforeSigner = await app.sessionService.resolve(preSignerSession.sessionId);
-          expect(resolvedBeforeSigner?.capabilities).toEqual([
-            'compliance:write',
-            'governance:write',
-            'operations:replay',
-          ]);
-          expect(resolvedBeforeSigner?.signerAuthorizations).toEqual([]);
-
-          const signerProvisionPath = '/api/auth/v1/admin/signers/provision';
-          const signerProvisionBody = JSON.stringify({
-            accountId: 'agroasys-user:signer-1',
-            walletAddress: '0x00000000000000000000000000000000000000aa',
-            actionClass: 'governance',
-            environment: 'staging-e2e-real',
-            ticketRef: 'SEC-1101',
-            reason: 'SEC-1101 approve governance signer for staging proof',
-          });
-          const signerProvision = await fetch(`${app.baseUrl}${signerProvisionPath}`, {
-            method: 'POST',
-            headers: signedHeaders({
-              method: 'POST',
-              path: signerProvisionPath,
-              body: signerProvisionBody,
-              nonce: 'nonce-signer-provision-binding',
-            }),
-            body: signerProvisionBody,
-          });
-          expect(signerProvision.status).toBe(201);
-
           const session = await app.sessionService.issueTrustedSession({
             accountId: 'agroasys-user:signer-1',
             role: 'admin',
@@ -639,93 +636,28 @@ describe('admin controls persistence integration', () => {
             walletAddress: '0x00000000000000000000000000000000000000aa',
           });
           const resolved = await app.sessionService.resolve(session.sessionId);
-          expect(resolved?.capabilities).toContain('governance:write');
-          expect(resolved?.capabilities).toContain('compliance:write');
-          expect(resolved?.capabilities).toContain('operations:replay');
+
+          // The admin role confers the full operator capability set.
+          expect([...(resolved?.capabilities ?? [])].sort()).toEqual(
+            [...OPERATOR_CAPABILITIES].sort(),
+          );
+
+          // The operator's own wallet is the derived signer for every action class
+          // with a wildcard environment, so no consumer-specific binding is needed.
+          expect(
+            (resolved?.signerAuthorizations ?? [])
+              .map((authorization) => authorization.actionClass)
+              .sort(),
+          ).toEqual([...OPERATOR_SIGNER_ACTION_CLASSES].sort());
           expect(resolved?.signerAuthorizations).toEqual(
             expect.arrayContaining([
               expect.objectContaining({
                 walletAddress: '0x00000000000000000000000000000000000000aa',
                 actionClass: 'governance',
-                environment: 'staging-e2e-real',
+                environment: '*',
               }),
             ]),
           );
-
-          const signerRevokePath = '/api/auth/v1/admin/signers/revoke';
-          const signerRevokeBody = JSON.stringify({
-            accountId: 'agroasys-user:signer-1',
-            walletAddress: '0x00000000000000000000000000000000000000aa',
-            actionClass: 'governance',
-            environment: 'staging-e2e-real',
-            reason: 'SEC-1102 revoke governance signer after proof',
-          });
-          const signerRevoke = await fetch(`${app.baseUrl}${signerRevokePath}`, {
-            method: 'POST',
-            headers: signedHeaders({
-              method: 'POST',
-              path: signerRevokePath,
-              body: signerRevokeBody,
-              nonce: 'nonce-signer-revoke-binding',
-            }),
-            body: signerRevokeBody,
-          });
-          expect(signerRevoke.status).toBe(200);
-
-          const resolvedAfterRevoke = await app.sessionService.resolve(session.sessionId);
-          expect(resolvedAfterRevoke?.signerAuthorizations).toEqual([]);
-        } finally {
-          await app.close();
-        }
-      });
-    },
-  );
-
-  integrationTest(
-    'signer bindings cannot be provisioned for non-durable-admin profiles',
-    async () => {
-      await withPostgres(async (pool) => {
-        const app = await startAdminApp(pool);
-        try {
-          const provisionPath = '/api/auth/v1/admin/profiles/provision';
-          const provisionBody = JSON.stringify({
-            accountId: 'agroasys-user:buyer-1',
-            role: 'buyer',
-            email: 'buyer1@example.com',
-            reason: 'SEC-1200 create non-admin profile before signer rejection proof',
-          });
-          const provision = await fetch(`${app.baseUrl}${provisionPath}`, {
-            method: 'POST',
-            headers: signedHeaders({
-              method: 'POST',
-              path: provisionPath,
-              body: provisionBody,
-              nonce: 'nonce-non-admin-profile-provision',
-            }),
-            body: provisionBody,
-          });
-          expect(provision.status).toBe(201);
-
-          const signerProvisionPath = '/api/auth/v1/admin/signers/provision';
-          const signerProvisionBody = JSON.stringify({
-            accountId: 'agroasys-user:buyer-1',
-            walletAddress: '0x00000000000000000000000000000000000000bb',
-            actionClass: 'governance',
-            environment: 'staging-e2e-real',
-            ticketRef: 'SEC-1201',
-            reason: 'SEC-1201 should reject signer binding for non-admin profile',
-          });
-          const signerProvision = await fetch(`${app.baseUrl}${signerProvisionPath}`, {
-            method: 'POST',
-            headers: signedHeaders({
-              method: 'POST',
-              path: signerProvisionPath,
-              body: signerProvisionBody,
-              nonce: 'nonce-non-admin-signer-provision',
-            }),
-            body: signerProvisionBody,
-          });
-          expect(signerProvision.status).toBe(400);
         } finally {
           await app.close();
         }

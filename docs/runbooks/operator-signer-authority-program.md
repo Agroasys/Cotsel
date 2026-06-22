@@ -1,5 +1,13 @@
 # Operator Signer Authority Program
 
+> **Superseded (2026-06):** The separate signer-binding control plane described
+> below has been retired. Operator signer authority is now derived from the
+> durable admin role — a durable admin confers the full capability set and a
+> wildcard-environment signer authorization for its own session wallet across
+> every action class. This document is retained only as the historical baseline;
+> for current provisioning see
+> [`auth-admin-provisioning.md`](./auth-admin-provisioning.md).
+
 ## Purpose
 
 Lock the implementation target for operator signer authority across `Cotsel` and `Cotsel-Dash`.
