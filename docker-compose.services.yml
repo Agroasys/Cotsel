@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real', 'infra']
+    profiles: ['runtime']
     restart: unless-stopped
     environment:
       POSTGRES_USER: '${POSTGRES_USER}'
@@ -19,7 +19,7 @@ services:
 
   postgres-init:
     image: postgres:16-alpine
-    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
+    profiles: ['runtime']
     restart: 'no'
     environment:
       POSTGRES_USER: '${POSTGRES_USER}'
@@ -128,7 +128,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real', 'infra']
+    profiles: ['runtime']
     restart: unless-stopped
     command: ['redis-server', '--appendonly', 'yes']
     volumes:
@@ -141,40 +141,8 @@ services:
       timeout: 5s
       retries: 5
 
-  indexer:
-    image: node:20-alpine
-    profiles: ['local-dev']
-    restart: unless-stopped
-    environment:
-      LOCAL_DEV_INDEXER_FIXTURE_MODE: '${LOCAL_DEV_INDEXER_FIXTURE_MODE:-empty}'
-      LOCAL_DEV_INDEXER_FIXTURE_PATH: '/app/scripts/fixtures/local-dev-dashboard-parity-trade.json'
-      LOCAL_DEV_INDEXER_PORT: '4350'
-    command:
-      - node
-      - /app/scripts/local-dev-indexer-responder.mjs
-    volumes:
-      - ./scripts/local-dev-indexer-responder.mjs:/app/scripts/local-dev-indexer-responder.mjs:ro
-      - ./scripts/lib/local-dev-indexer-fixture.mjs:/app/scripts/lib/local-dev-indexer-fixture.mjs:ro
-      - ./scripts/fixtures/local-dev-dashboard-parity-trade.json:/app/scripts/fixtures/local-dev-dashboard-parity-trade.json:ro
-    healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - |
-          fetch('http://127.0.0.1:4350/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: 'query { __typename }' }),
-          })
-            .then((response) => process.exit(response.ok ? 0 : 1))
-            .catch(() => process.exit(1));
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   indexer-migrate:
-    profiles: ['staging-e2e', 'staging-e2e-real']
+    profiles: ['runtime']
     build:
       context: .
       dockerfile: indexer/Dockerfile
@@ -191,7 +159,7 @@ services:
     command: ['pnpm', 'exec', 'squid-typeorm-migration', 'apply']
 
   indexer-pipeline:
-    profiles: ['staging-e2e', 'staging-e2e-real']
+    profiles: ['runtime']
     restart: unless-stopped
     build:
       context: .
@@ -229,7 +197,7 @@ services:
       retries: 5
 
   indexer-graphql:
-    profiles: ['staging-e2e', 'staging-e2e-real']
+    profiles: ['runtime']
     build:
       context: .
       dockerfile: indexer/Dockerfile
@@ -268,7 +236,7 @@ services:
       retries: 8
 
   ricardian:
-    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
+    profiles: ['runtime']
     restart: unless-stopped
     build:
       context: .
@@ -314,7 +282,7 @@ services:
       retries: 8
 
   auth:
-    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
+    profiles: ['runtime']
     restart: unless-stopped
     build:
       context: .
@@ -366,7 +334,7 @@ services:
       retries: 8
 
   gateway:
-    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
+    profiles: ['runtime']
     restart: unless-stopped
     build:
       context: .
@@ -473,7 +441,7 @@ services:
       retries: 8
 
   treasury:
-    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
+    profiles: ['runtime']
     restart: unless-stopped
     build:
       context: .
@@ -503,9 +471,6 @@ services:
     depends_on:
       postgres-init:
         condition: service_completed_successfully
-      indexer:
-        condition: service_healthy
-        required: false
       indexer-graphql:
         condition: service_healthy
         required: false
@@ -528,7 +493,7 @@ services:
       retries: 8
 
   oracle:
-    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
+    profiles: ['runtime']
     restart: unless-stopped
     build:
       context: .
@@ -565,9 +530,6 @@ services:
     depends_on:
       postgres-init:
         condition: service_completed_successfully
-      indexer:
-        condition: service_healthy
-        required: false
       indexer-graphql:
         condition: service_healthy
         required: false
@@ -590,7 +552,7 @@ services:
       retries: 8
 
   reconciliation:
-    profiles: ['local-dev', 'staging-e2e', 'staging-e2e-real']
+    profiles: ['runtime']
     restart: unless-stopped
     build:
       context: .
@@ -630,9 +592,6 @@ services:
     depends_on:
       postgres-init:
         condition: service_completed_successfully
-      indexer:
-        condition: service_healthy
-        required: false
       indexer-graphql:
         condition: service_healthy
         required: false
@@ -649,16 +608,6 @@ services:
       interval: 15s
       timeout: 5s
       retries: 8
-  hardhat:
-    profiles: ['local-dev']
-    restart: unless-stopped
-    build:
-      context: ./contracts
-      dockerfile: Dockerfile
-    ports:
-      - '8545:8545'
-    networks:
-      - default
 
 volumes:
   postgres-data:

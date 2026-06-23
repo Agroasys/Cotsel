@@ -1,31 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROFILE="${1:-}"
+PROFILE="${1:-runtime}"
 COMPOSE_FILE="docker-compose.services.yml"
 
 usage() {
-  echo "Usage: scripts/notifications-wiring-health.sh <local-dev|staging-e2e-real>" >&2
+  echo "Usage: scripts/notifications-wiring-health.sh [runtime]" >&2
 }
 
-if [[ -z "$PROFILE" ]]; then
+if [[ "$PROFILE" != "runtime" ]]; then
+  echo "Unsupported profile: $PROFILE (only 'runtime' is supported)" >&2
   usage
   exit 1
 fi
-
-case "$PROFILE" in
-  local-dev)
-    PROFILE_FILE=".env.local"
-    ;;
-  staging-e2e-real)
-    PROFILE_FILE=".env.staging-e2e-real"
-    ;;
-  *)
-    echo "Unsupported profile: $PROFILE" >&2
-    usage
-    exit 1
-    ;;
-esac
 
 load_env_file() {
   local file="$1"
@@ -110,8 +97,7 @@ require_timeout_milliseconds() {
   return 0
 }
 
-load_env_file ".env"
-load_env_file "$PROFILE_FILE"
+load_env_file ".env.runtime"
 
 oracle_enabled="${ORACLE_NOTIFICATIONS_ENABLED:-false}"
 oracle_webhook="${ORACLE_NOTIFICATIONS_WEBHOOK_URL:-}"
