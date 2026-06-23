@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$ROOT_DIR/scripts/docker-services.sh"
+SCRIPT="$ROOT_DIR/scripts/cotsel.sh"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -85,24 +85,24 @@ chmod +x "$tmp_dir/docker"
 
 output_runtime="$(
   cd "$tmp_dir"
-  PATH="$tmp_dir:$PATH" "$SCRIPT" config staging-e2e-real
+  PATH="$tmp_dir:$PATH" "$SCRIPT" config
 )"
 
 if ! grep -q 'INDEXER_START_BLOCK: 444' <<<"$output_runtime"; then
-  echo "expected .env.runtime to drive docker-services config output" >&2
+  echo "expected .env.runtime to drive cotsel config output" >&2
   echo "$output_runtime" >&2
   exit 1
 fi
 
 output_external="$(
   cd "$tmp_dir"
-  PATH="$tmp_dir:$PATH" INDEXER_START_BLOCK=555 "$SCRIPT" config staging-e2e-real
+  PATH="$tmp_dir:$PATH" INDEXER_START_BLOCK=555 "$SCRIPT" config
 )"
 
 if ! grep -q 'INDEXER_START_BLOCK: 555' <<<"$output_external"; then
-  echo "expected exported env to override .env.runtime in docker-services config output" >&2
+  echo "expected exported env to override .env.runtime in cotsel config output" >&2
   echo "$output_external" >&2
   exit 1
 fi
 
-echo "docker-services runtime env precedence: pass"
+echo "cotsel runtime env precedence: pass"

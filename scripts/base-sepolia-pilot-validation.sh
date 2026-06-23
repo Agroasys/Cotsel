@@ -5,12 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="live"
 BRING_UP_PROFILE="false"
 WINDOW_ID=""
-PROFILE="staging-e2e-real"
+PROFILE="runtime"
 REPORT_ROOT="${PILOT_REHEARSAL_REPORT_ROOT:-$ROOT_DIR/reports/base-sepolia-pilot-validation}"
 STARTED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 FINISHED_AT=""
-TEMP_BASE_ENV_CREATED="false"
-TEMP_PROFILE_ENV_CREATED="false"
+TEMP_RUNTIME_ENV_CREATED="false"
 
 validate_env_status="not_run"
 profile_up_status="not_run"
@@ -32,7 +31,7 @@ Usage: scripts/base-sepolia-pilot-validation.sh --window-id <id> [--config-only]
 Options:
   --window-id <id>       Deterministic pilot window identifier, for example PILOT-2026-03-31
   --config-only          Validate the rehearsal contract without claiming a live run
-  --bring-up-profile     Explicitly run docker-services up staging-e2e-real before live checks
+  --bring-up-profile     Explicitly run cotsel.sh up before live checks
 EOF
 }
 
@@ -384,11 +383,8 @@ EOF
 }
 
 cleanup_temp_env() {
-  if [[ "$TEMP_BASE_ENV_CREATED" == "true" && -f "$ROOT_DIR/.env" ]]; then
-    rm -f "$ROOT_DIR/.env"
-  fi
-  if [[ "$TEMP_PROFILE_ENV_CREATED" == "true" && -f "$ROOT_DIR/.env.staging-e2e-real" ]]; then
-    rm -f "$ROOT_DIR/.env.staging-e2e-real"
+  if [[ "$TEMP_RUNTIME_ENV_CREATED" == "true" && -f "$ROOT_DIR/.env.runtime" ]]; then
+    rm -f "$ROOT_DIR/.env.runtime"
   fi
 }
 
@@ -451,9 +447,7 @@ fail_live_preflight() {
 }
 
 validate_pilot_profile_truth() {
-  load_env_file "$ROOT_DIR/.env"
-  restore_external_environment_overrides
-  load_env_file "$ROOT_DIR/.env.staging-e2e-real"
+  load_env_file "$ROOT_DIR/.env.runtime"
   restore_external_environment_overrides
 
   if [[ "${STAGING_E2E_REAL_NETWORK_NAME:-}" != "Base Sepolia" ]]; then
@@ -661,13 +655,9 @@ write_templates
 write_blockers
 
 if [[ "$MODE" == "config-only" ]]; then
-  if [[ ! -f "$ROOT_DIR/.env" ]]; then
-    cp "$ROOT_DIR/.env.example" "$ROOT_DIR/.env"
-    TEMP_BASE_ENV_CREATED="true"
-  fi
-  if [[ ! -f "$ROOT_DIR/.env.staging-e2e-real" ]]; then
-    cp "$ROOT_DIR/.env.staging-e2e-real.example" "$ROOT_DIR/.env.staging-e2e-real"
-    TEMP_PROFILE_ENV_CREATED="true"
+  if [[ ! -f "$ROOT_DIR/.env.runtime" ]]; then
+    cp "$ROOT_DIR/.env.runtime.example" "$ROOT_DIR/.env.runtime"
+    TEMP_RUNTIME_ENV_CREATED="true"
   fi
 fi
 
@@ -698,7 +688,7 @@ if [[ "$MODE" == "live" ]]; then
 fi
 
 if [[ "$MODE" == "live" && "$BRING_UP_PROFILE" == "true" ]]; then
-  if ! run_step profile-up profile_up_status PROFILE_UP_FAILED "$ROOT_DIR/scripts/docker-services.sh" up "$PROFILE"; then
+  if ! run_step profile-up profile_up_status PROFILE_UP_FAILED "$ROOT_DIR/scripts/cotsel.sh" up; then
     FINISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     write_blockers
     write_summary
@@ -708,7 +698,7 @@ if [[ "$MODE" == "live" && "$BRING_UP_PROFILE" == "true" ]]; then
 fi
 
 if [[ "$MODE" == "live" ]]; then
-  if ! run_step profile-health profile_health_status PROFILE_HEALTH_FAILED "$ROOT_DIR/scripts/docker-services.sh" health "$PROFILE"; then
+  if ! run_step profile-health profile_health_status PROFILE_HEALTH_FAILED "$ROOT_DIR/scripts/cotsel.sh" health; then
     FINISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     write_blockers
     write_summary
@@ -720,7 +710,7 @@ else
 fi
 
 if [[ "$MODE" == "config-only" ]]; then
-  if ! run_step staging-gate staging_gate_status STAGING_GATE_FAILED env STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true "$ROOT_DIR/scripts/staging-e2e-real-gate.sh"; then
+  if ! run_step staging-gate staging_gate_status STAGING_GATE_FAILED env STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true "$ROOT_DIR/scripts/runtime-gate.sh"; then
     FINISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     write_blockers
     write_summary
@@ -728,7 +718,7 @@ if [[ "$MODE" == "config-only" ]]; then
     exit 1
   fi
 else
-  if ! run_step staging-gate staging_gate_status STAGING_GATE_FAILED "$ROOT_DIR/scripts/staging-e2e-real-gate.sh"; then
+  if ! run_step staging-gate staging_gate_status STAGING_GATE_FAILED "$ROOT_DIR/scripts/runtime-gate.sh"; then
     FINISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     write_blockers
     write_summary

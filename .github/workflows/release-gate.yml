@@ -383,12 +383,18 @@ jobs:
             echo "" >> "$report"
           }
 
-          run_check docker-services-args scripts/tests/docker-services-args.test.sh
-          run_check docker-services-health scripts/tests/docker-services-health.test.sh
-          run_check docker-services-env-precedence scripts/tests/docker-services-env-precedence.test.sh
-          run_check docker-services-env-layering scripts/tests/docker-services-env-layering.test.sh
-          run_check staging-e2e-real-gate-start-block scripts/tests/staging-e2e-real-gate-start-block.test.sh
+          run_check cotsel-args scripts/tests/cotsel-args.test.sh
+          run_check cotsel-health scripts/tests/cotsel-health.test.sh
+          run_check cotsel-env-preflight scripts/tests/cotsel-env-preflight.test.sh
+          run_check cotsel-runtime-env scripts/tests/cotsel-runtime-env.test.sh
+          run_check cotsel-runtime-conflict-guard scripts/tests/cotsel-runtime-conflict-guard.test.sh
+          run_check runtime-gate-start-block scripts/tests/runtime-gate-start-block.test.sh
           run_check notifications-wiring-health scripts/tests/notifications-wiring-health.test.sh
+          run_check validate-env-rate-limit-redis scripts/tests/validate-env-rate-limit-redis.test.sh
+          run_check validate-env-gateway-db-name scripts/tests/validate-env-gateway-db-name.test.sh
+          run_check validate-env-runtime-placeholders scripts/tests/validate-env-runtime-placeholders.test.sh
+          run_check validate-env-runtime-service-auth scripts/tests/validate-env-runtime-service-auth.test.sh
+          run_check compose-rate-limit-wiring scripts/tests/compose-rate-limit-wiring.test.sh
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -428,8 +434,8 @@ jobs:
             reports/postgres-recovery/backup-restore-smoke.log
             reports/postgres-recovery/backup-restore-smoke.json
 
-  staging-e2e-real-gate:
-    name: ci/staging-e2e-real-gate
+  runtime-gate:
+    name: ci/runtime-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -449,11 +455,10 @@ jobs:
       - name: Build notifications workspace
         run: pnpm --filter ./notifications run build
 
-      - name: Prepare CI gate env files
+      - name: Prepare CI gate env file
         run: |
-          cp .env.example .env
-          cp .env.staging-e2e-real.example .env.staging-e2e-real
-          cat <<'EOF' >> .env.staging-e2e-real
+          cp scripts/tests/fixtures/runtime.env .env.runtime
+          cat <<'EOF' >> .env.runtime
           STAGING_E2E_REAL_DYNAMIC_START_BLOCK=false
           STAGING_E2E_REAL_GATE_RPC_URL=
           EOF
@@ -463,8 +468,8 @@ jobs:
         run: |
           set +e
           mkdir -p ci-reports
-          raw_log="ci-reports/staging-e2e-real-gate.raw.txt"
-          report="ci-reports/staging-e2e-real-gate.txt"
+          raw_log="ci-reports/runtime-gate.raw.txt"
+          report="ci-reports/runtime-gate.txt"
           fail=0
 
           run_check() {
@@ -480,9 +485,9 @@ jobs:
             echo "" >> "$raw_log"
           }
 
-          run_check validate-env scripts/validate-env.sh staging-e2e-real
-          run_check staging-gate bash -lc "STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true scripts/staging-e2e-real-gate.sh"
-          run_check notifications-gate scripts/notifications-gate.sh staging-e2e-real
+          run_check validate-env scripts/validate-env.sh runtime
+          run_check runtime-gate bash -lc "STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true scripts/runtime-gate.sh"
+          run_check notifications-gate scripts/notifications-gate.sh runtime
 
           sed -E \
             -e 's/((API_KEY|HMAC_SECRET|PRIVATE_KEY|PASSWORD|SECRET|TOKEN|MNEMONIC)([[:space:]]*[:=][[:space:]]*))[^[:space:]"]+/\1***REDACTED***/gI' \
@@ -500,22 +505,22 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: ci-report-staging-e2e-real-gate
-          path: ci-reports/staging-e2e-real-gate.txt
+          name: ci-report-runtime-gate
+          path: ci-reports/runtime-gate.txt
 
       - name: Upload notifications gate report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ci-report-notifications-gate
-          path: reports/notifications/staging-e2e-real.json
+          path: reports/notifications/runtime.json
 
       - name: Upload reconciliation report artifact
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ci-report-reconciliation-report
-          path: reports/reconciliation/staging-e2e-real-report.json
+          path: reports/reconciliation/runtime-report.json
           if-no-files-found: error
 
   contracts:
@@ -1025,7 +1030,7 @@ jobs:
       - dependency-security
       - docs-profile-guard
       - env-profile-regression
-      - staging-e2e-real-gate
+      - runtime-gate
       - auth
       - gateway
       - contracts
@@ -1048,7 +1053,7 @@ jobs:
           results["ci/dependency-security"]="${{ needs.dependency-security.result }}"
           results["ci/docs-profile-guard"]="${{ needs.docs-profile-guard.result }}"
           results["ci/env-profile-regression"]="${{ needs.env-profile-regression.result }}"
-          results["ci/staging-e2e-real-gate"]="${{ needs.staging-e2e-real-gate.result }}"
+          results["ci/runtime-gate"]="${{ needs.runtime-gate.result }}"
           results["ci/auth"]="${{ needs.auth.result }}"
           results["ci/gateway"]="${{ needs.gateway.result }}"
           results["ci/contracts"]="${{ needs.contracts.result }}"

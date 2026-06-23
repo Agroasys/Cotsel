@@ -18,16 +18,6 @@ run_step() {
   "$@"
 }
 
-load_env_file() {
-  local file="$1"
-  if [[ -f "$file" ]]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "$file"
-    set +a
-  fi
-}
-
 run_backend_continuity_contracts() {
   (
     cd "$BACKEND_REPO_DIR"
@@ -57,19 +47,6 @@ run_dashboard_connected_contracts() {
   )
 }
 
-run_live_parity() {
-  (
-    cd "$ROOT_DIR"
-    load_env_file ".env.example"
-    load_env_file ".env.local.example"
-    load_env_file ".env"
-    load_env_file ".env.local"
-    LOCAL_DEV_INDEXER_FIXTURE_MODE="dashboard-parity" \
-      DASHBOARD_LIVE_SUITE_REPO_DIR="$DASHBOARD_REPO_DIR" \
-      pnpm run dashboard:parity:ci
-  )
-}
-
 main() {
   if [[ ! -d "$BACKEND_REPO_DIR" || ! -f "$BACKEND_REPO_DIR/package.json" ]]; then
     echo "Agroasys backend repository not found at ${BACKEND_REPO_DIR}" >&2
@@ -84,7 +61,6 @@ main() {
   run_step "backend settlement-handoff continuity" run_backend_continuity_contracts
   run_step "gateway Base-era contract continuity" run_gateway_continuity_contracts
   run_step "dashboard connected contract continuity" run_dashboard_connected_contracts
-  run_step "live local parity across gateway and dashboard" run_live_parity
 }
 
 main "$@"

@@ -18,8 +18,8 @@ Options:
   --output <path>           JSON output path. Default: ${DEFAULT_REPORT_PATH}
   --session-file <path>     Trusted dashboard session artifact to inspect
   --run-validate-env        Execute scripts/validate-env.sh for the profile
-  --run-docker-health       Execute scripts/docker-services.sh health for the profile
-  --run-staging-gate        Execute scripts/staging-e2e-real-gate.sh
+  --run-docker-health       Execute scripts/cotsel.sh health
+  --run-staging-gate        Execute scripts/runtime-gate.sh
   --timeout-ms <number>     Timeout per command. Default: 300000
   --stdout                  Also print the JSON report to stdout
 `);

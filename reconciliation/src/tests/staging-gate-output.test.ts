@@ -29,7 +29,7 @@ const EXPECTED_SQL_FINGERPRINTS = {
   driftSummarySql: '5f1c1e667a6e0d74ad1d28219a5fcfb3c6ff3776f9fb92340410ee5f50b6b312',
 } as const;
 
-test('staging-e2e-real gate captures reconciliation run summary output', () => {
+test('runtime gate captures reconciliation run summary output', () => {
   const script = GATE_SCRIPT_CONTENTS;
   const sql = loadStagingGateSqlContract(script);
 
@@ -37,7 +37,7 @@ test('staging-e2e-real gate captures reconciliation run summary output', () => {
   assert.equal(sql.runSummarySql, EXPECTED_RUN_SUMMARY_SQL);
 });
 
-test('staging-e2e-real gate captures drift classification snapshot output', () => {
+test('runtime gate captures drift classification snapshot output', () => {
   const script = GATE_SCRIPT_CONTENTS;
   const sql = loadStagingGateSqlContract(script);
 
@@ -45,7 +45,7 @@ test('staging-e2e-real gate captures drift classification snapshot output', () =
   assert.equal(sql.driftSummarySql, EXPECTED_DRIFT_SUMMARY_SQL);
 });
 
-test('staging-e2e-real gate SQL fingerprint stays stable unless SQL changes intentionally', () => {
+test('runtime gate SQL fingerprint stays stable unless SQL changes intentionally', () => {
   const sql = loadStagingGateSqlContract();
 
   // Keep a short hash signal in CI output so SQL changes are obvious in diffs.
@@ -53,21 +53,21 @@ test('staging-e2e-real gate SQL fingerprint stays stable unless SQL changes inte
   assert.equal(sqlFingerprint(sql.driftSummarySql), EXPECTED_SQL_FINGERPRINTS.driftSummarySql);
 });
 
-test('staging-e2e-real SQL extractor reports actionable marker errors when script format changes', () => {
+test('runtime SQL extractor reports actionable marker errors when script format changes', () => {
   assert.throws(
     () => loadStagingGateSqlContract('#!/usr/bin/env bash\necho "no sql markers"\n'),
-    /staging-e2e-real gate script format changed, update markers in stagingGateSqlContract\.ts/,
+    /runtime gate script format changed, update markers in stagingGateSqlContract\.ts/,
   );
 });
 
-test('staging-e2e-real gate writes deterministic reconciliation report output', () => {
+test('runtime gate writes deterministic reconciliation report output', () => {
   const script = GATE_SCRIPT_CONTENTS;
 
-  assert.match(script, /reports\/reconciliation\/staging-e2e-real-report\.json/);
+  assert.match(script, /reports\/reconciliation\/runtime-report\.json/);
   assert.match(script, /node reconciliation\/dist\/report-cli\.js --run-key=/);
 });
 
-test('staging-e2e-real gate emits config-only reconciliation report payload', () => {
+test('runtime gate emits config-only reconciliation report payload', () => {
   const script = GATE_SCRIPT_CONTENTS;
 
   assert.match(script, /STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY/);

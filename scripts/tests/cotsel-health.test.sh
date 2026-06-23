@@ -2,13 +2,21 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$ROOT_DIR/scripts/docker-services.sh"
+SCRIPT="$ROOT_DIR/scripts/cotsel.sh"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 state_dir="$tmp_dir/state"
 mkdir -p "$state_dir"
+
+# Hermetic workdir: a copy of the compose file plus a minimal .env.runtime with
+# notifications disabled, so the run does not depend on the ambient environment.
+cp "$ROOT_DIR/docker-compose.services.yml" "$tmp_dir/docker-compose.services.yml"
+cat > "$tmp_dir/.env.runtime" <<'ENV'
+ORACLE_NOTIFICATIONS_ENABLED=false
+RECONCILIATION_NOTIFICATIONS_ENABLED=false
+ENV
 
 cat > "$tmp_dir/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -63,7 +71,9 @@ case "$command" in
   ps)
     if [[ "${1:-}" == "-q" ]]; then
       service="${2:-}"
-      if [[ "$profile" == "local-dev" && "$service" == "reconciliation" ]]; then
+      # Exercise the readiness wait loop: report reconciliation as not-yet-present
+      # for the first couple of polls, then healthy.
+      if [[ "$service" == "reconciliation" ]]; then
         counter_file="$state_dir/reconciliation_ps_q_count"
         count=0
         if [[ -f "$counter_file" ]]; then
@@ -80,17 +90,7 @@ case "$command" in
     fi
 
     if [[ "${1:-}" == "--services" ]]; then
-      case "$profile" in
-        local-dev)
-          printf '%s\n' postgres redis indexer oracle reconciliation ricardian treasury auth gateway
-          ;;
-        infra)
-          printf '%s\n' postgres redis
-          ;;
-        staging-e2e|staging-e2e-real)
-          printf '%s\n' postgres redis indexer-pipeline indexer-graphql oracle reconciliation ricardian treasury gateway
-          ;;
-      esac
+      printf '%s\n' postgres redis indexer-pipeline indexer-graphql oracle reconciliation ricardian treasury auth gateway
       exit 0
     fi
 
@@ -121,18 +121,18 @@ EOF
 
 chmod +x "$tmp_dir/docker" "$tmp_dir/curl"
 
-local_log="$tmp_dir/local.log"
+health_log="$tmp_dir/health.log"
 (
-  cd "$ROOT_DIR"
+  cd "$tmp_dir"
   PATH="$tmp_dir:$PATH" \
     DOCKER_SERVICES_SKIP_ENV_PRECHECK=true \
     DOCKER_MOCK_STATE_DIR="$state_dir" \
-    DOCKER_MOCK_LOG_FILE="$local_log" \
+    DOCKER_MOCK_LOG_FILE="$health_log" \
     DOCKER_SERVICES_WAIT_TIMEOUT_SECONDS=5 \
     DOCKER_SERVICES_WAIT_POLL_SECONDS=0 \
     DOCKER_SERVICES_HEALTH_RETRIES=1 \
     DOCKER_SERVICES_HEALTH_RETRY_DELAY_SECONDS=0 \
-    "$SCRIPT" health local-dev >/dev/null
+    "$SCRIPT" health >/dev/null
 )
 
 reconciliation_wait_count="$(cat "$state_dir/reconciliation_ps_q_count")"
@@ -141,38 +141,16 @@ if (( reconciliation_wait_count < 3 )); then
   exit 1
 fi
 
-if ! grep -q "http://127.0.0.1:3600/api/dashboard-gateway/v1/healthz" "$local_log"; then
-  echo "expected local-dev health check to probe gateway health endpoint" >&2
-  cat "$local_log" >&2
+if ! grep -q "http://127.0.0.1:3600/api/dashboard-gateway/v1/healthz" "$health_log"; then
+  echo "expected runtime health check to probe gateway health endpoint" >&2
+  cat "$health_log" >&2
   exit 1
 fi
 
-infra_log="$tmp_dir/infra.log"
-(
-  cd "$ROOT_DIR"
-  PATH="$tmp_dir:$PATH" \
-    DOCKER_SERVICES_SKIP_ENV_PRECHECK=true \
-    DOCKER_MOCK_STATE_DIR="$state_dir" \
-    DOCKER_MOCK_LOG_FILE="$infra_log" \
-    DOCKER_SERVICES_WAIT_TIMEOUT_SECONDS=5 \
-    DOCKER_SERVICES_WAIT_POLL_SECONDS=0 \
-    DOCKER_SERVICES_HEALTH_RETRIES=1 \
-    DOCKER_SERVICES_HEALTH_RETRY_DELAY_SECONDS=0 \
-    "$SCRIPT" health infra >/dev/null
-)
-
-if grep -Eq -- ' --profile infra ps -q (indexer|indexer-pipeline|indexer-graphql|reconciliation|oracle|ricardian|treasury)( |$)' "$infra_log"; then
-  echo "infra health should not poll non-infra services" >&2
-  cat "$infra_log" >&2
+if ! grep -q "http://127.0.0.1:3005/api/auth/v1/health" "$health_log"; then
+  echo "expected runtime health check to probe auth health endpoint" >&2
+  cat "$health_log" >&2
   exit 1
 fi
 
-for required_service in postgres redis; do
-  if ! grep -Eq -- " --profile infra ps -q ${required_service}( |$)" "$infra_log"; then
-    echo "infra health did not poll required service: ${required_service}" >&2
-    cat "$infra_log" >&2
-    exit 1
-  fi
-done
-
-echo "docker-services health wait/profile behavior: pass"
+echo "cotsel health wait/profile behavior: pass"

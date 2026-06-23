@@ -7,7 +7,6 @@ import path from 'node:path';
 
 const repoRoot = process.cwd();
 const inventoryPath = path.join(repoRoot, 'docs/runbooks/dashboard-gateway-route-inventory.md');
-const workflowPath = path.join(repoRoot, '.github/workflows/dashboard-live-parity.yml');
 // Sanity guard: the route inventory should contain at least this many documented rows.
 const MIN_EXPECTED_ROUTE_ROWS = 30;
 const TRUSTED_AGROASYS_ROUTE_PATH = '/session/exchange/agroasys';
@@ -32,7 +31,6 @@ function routePathToLiteral(routePath) {
 }
 
 const inventory = readRequired(inventoryPath);
-const workflow = readRequired(workflowPath);
 
 const routeRows = [
   ...inventory.matchAll(/\|\s*`(GET|POST|PUT|PATCH|DELETE) ([^`]+)`\s*\|\s*`([^`]+)`\s*\|/g),
@@ -81,14 +79,6 @@ if (!inventory.includes(TRUSTED_AGROASYS_ROUTE_ENTRY)) {
 const authRoutes = readRequired(path.join(repoRoot, 'auth/src/api/routes.ts'));
 if (!authRoutes.includes(TRUSTED_AGROASYS_ROUTE_PATH)) {
   fail('Auth routes no longer expose /session/exchange/agroasys.');
-}
-
-if (!workflow.includes('COTSEL_DASH_CHECKOUT_TOKEN')) {
-  fail('Dashboard Live Parity workflow must require COTSEL_DASH_CHECKOUT_TOKEN.');
-}
-
-if (workflow.includes('secrets.COTSEL_DASH_CHECKOUT_TOKEN || github.token')) {
-  fail('Dashboard Live Parity workflow must not fall back to github.token for Cotsel.dash.');
 }
 
 if (process.exitCode) {

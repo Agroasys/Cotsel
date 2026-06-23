@@ -1,30 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROFILE="${1:-}"
+PROFILE="${1:-runtime}"
 
 usage() {
-  echo "Usage: scripts/notifications-gate.sh <local-dev|staging-e2e-real>" >&2
+  echo "Usage: scripts/notifications-gate.sh [runtime]" >&2
 }
 
-if [[ -z "$PROFILE" ]]; then
+if [[ "$PROFILE" != "runtime" ]]; then
+  echo "Unsupported profile: $PROFILE (only 'runtime' is supported)" >&2
   usage
   exit 1
 fi
-
-case "$PROFILE" in
-  local-dev)
-    PROFILE_FILE=".env.local"
-    ;;
-  staging-e2e-real)
-    PROFILE_FILE=".env.staging-e2e-real"
-    ;;
-  *)
-    echo "Unsupported profile: $PROFILE" >&2
-    usage
-    exit 1
-    ;;
-esac
 
 load_env_file() {
   local file="$1"
@@ -36,8 +23,7 @@ load_env_file() {
   fi
 }
 
-load_env_file ".env"
-load_env_file "$PROFILE_FILE"
+load_env_file ".env.runtime"
 
 scripts/notifications-wiring-health.sh "$PROFILE"
 
