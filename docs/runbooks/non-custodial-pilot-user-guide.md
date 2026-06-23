@@ -76,18 +76,18 @@ If your dashboard shows equivalent wording, map it to these lifecycle meanings.
 
 ## Pilot Environment Validation (Operator-Assisted)
 
-This guide is validated against the `staging-e2e-real` pilot profile.
+This guide is validated against the `runtime` profile.
 Operators should confirm environment readiness before participant sessions using:
 
 ```bash
-scripts/validate-env.sh staging-e2e-real
-scripts/docker-services.sh health staging-e2e-real
-scripts/staging-e2e-real-gate.sh
+scripts/validate-env.sh runtime
+scripts/cotsel.sh health
+scripts/runtime-gate.sh
 ```
 
 Reference runbook:
 
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 
 ## Common Issues and What To Do
 
@@ -138,7 +138,7 @@ When requesting help, always include:
 ## Related Runbooks
 
 - `docs/runbooks/pilot-environment-onboarding.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 - `docs/runbooks/demo/community-demo-checklist.md`
 - `docs/runbooks/demo/community-demo-script.md`
 - `docs/runbooks/oracle-redrive.md`

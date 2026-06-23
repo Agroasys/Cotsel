@@ -183,7 +183,7 @@ CRITICAL drift, or if relayer failure creates ambiguous fund movement.
 ## Related Runbooks
 
 - `docs/runbooks/pilot-environment-onboarding.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 - `docs/runbooks/production-readiness-checklist.md`
 - `docs/runbooks/base-mainnet-go-no-go.md`
 - `docs/runbooks/base-mainnet-cutover-and-rollback.md`

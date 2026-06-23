@@ -242,4 +242,4 @@ Approve as in Step 3.2 (with `ORACLE_MANUAL_APPROVAL_ENABLED=true`):
 - `docs/runbooks/oracle-redrive.md`
 - `docs/runbooks/reconciliation.md`
 - `docs/runbooks/pilot-environment-onboarding.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`

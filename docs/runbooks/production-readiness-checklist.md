@@ -144,11 +144,11 @@ Purpose:
   - `docs/runbooks/runtime-truth-deployment-guide.md`
   - `docs/runbooks/service-auth-matrix.md`
   - `docs/runbooks/secrets-and-token-rotation.md`
-  - `docs/runbooks/docker-profiles.md`
+  - `docs/runbooks/runtime-stack.md`
   - `docs/runbooks/postgres-backup-restore-recovery.md`
   - `docs/runbooks/postgres-service-roles-and-rls.md`
-  - `docs/runbooks/staging-e2e-release-gate.md`
-  - `docs/runbooks/staging-e2e-real-release-gate.md`
+  - `docs/runbooks/runtime-release-gate.md`
+  - `docs/runbooks/runtime-release-gate.md`
   - `docs/runbooks/base-sepolia-gasless-settlement-proof.md`
   - `docs/runbooks/base-mainnet-go-no-go.md`
   - `docs/runbooks/base-mainnet-cutover-and-rollback.md`

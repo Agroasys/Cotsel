@@ -76,7 +76,7 @@ Current deterministic behavior in-repo:
 - Oracle retry loop: bounded by `RETRY_ATTEMPTS` (default `3`) with exponential backoff from `RETRY_DELAY` (default `1000ms`, max `30000ms`).
 - Reconciliation: no mutating retry loop; reruns are daemon/one-shot controlled.
 - Notifications: bounded retries per notifier configuration (`retryAttempts`, `retryDelayMs`, `maxRetryDelayMs`).
-- Staging gate readiness retries use bounded shell retries (for example, `retry_cmd 30 2` in `scripts/staging-e2e-real-gate.sh`).
+- Staging gate readiness retries use bounded shell retries (for example, `retry_cmd 30 2` in `scripts/runtime-gate.sh`).
 
 Boundary rule for the dashboard gateway runtime (#123):
 
@@ -177,5 +177,5 @@ Legend: `A` accountable, `R` responsible, `C` consulted, `I` informed.
 4. If drift/indexing mismatch is suspected, execute `docs/runbooks/reconciliation.md`.
 5. Validate profile health and release-gate diagnostics:
 
-- `docs/runbooks/staging-e2e-release-gate.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`

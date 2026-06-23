@@ -26,7 +26,7 @@ Current architecture and runtime surface:
 - Service orchestration is service-directed (see `docs/runbooks/api-gateway-boundary.md`), and this policy defines the required gate behavior before trade execution paths proceed.
 - Incident and evidence operations are executed through:
   - `docs/incidents/first-15-minutes-checklist.md`
-  - `docs/runbooks/staging-e2e-real-release-gate.md`
+  - `docs/runbooks/runtime-release-gate.md`
   - `docs/observability/logging-schema.md`
 
 Policy authority:
@@ -289,7 +289,7 @@ Pilot role mapping:
 ## Operational references
 
 - `docs/incidents/first-15-minutes-checklist.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 - `docs/runbooks/api-gateway-boundary.md`
 - `docs/runbooks/dashboard-gateway-operations.md`
 - `docs/observability/logging-schema.md`

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide a deterministic onboarding and go/no-go procedure for the `staging-e2e-real` pilot environment.
+Provide a deterministic onboarding and go/no-go procedure for the `runtime` pilot environment.
 
 This runbook is the environment-readiness prerequisite for the controlled pilot
 validation flow driven by `scripts/base-sepolia-pilot-validation.sh`. It is not the
@@ -32,7 +32,7 @@ full rehearsal record on its own.
 - Contract deployments or governance changes.
 - Production rollout approvals.
 - KPI/case-study package content (tracked by separate roadmap items).
-- Public dashboard URLs inside `.env.staging-e2e-real`; record those separately in the dashboard gateway runbooks and issue tracker.
+- Public dashboard URLs inside `.env.runtime`; record those separately in the dashboard gateway runbooks and issue tracker.
 
 ## Approved remote dashboard contract
 
@@ -44,7 +44,7 @@ For remote connected-read validation against this staging target:
 - explorer base: `https://sepolia-explorer.base.org/tx/`
 - posture: read-only
 
-These public dashboard endpoints are not copied into `.env.staging-e2e-real`. That env file remains the internal container-profile contract for the pilot stack.
+These public dashboard endpoints are not copied into `.env.runtime`. That env file remains the internal container-profile contract for the pilot stack.
 
 ## Pilot Checklist
 
@@ -53,7 +53,7 @@ These public dashboard endpoints are not copied into `.env.staging-e2e-real`. Th
   - `On-call Engineer` (`Platform On-Call`, pager route from `docs/runbooks/monitoring-alerting-baseline.md`)
   - `Pilot Owner` (`Aston`, pilot default)
   - `Service Owner` (named owning maintainer for the in-scope subsystem; record this in the pilot ticket before the window opens)
-- Required contract addresses set in `.env.staging-e2e-real`:
+- Required contract addresses set in `.env.runtime`:
   - `GATEWAY_ESCROW_ADDRESS`
   - `RECONCILIATION_ESCROW_ADDRESS`
   - `RECONCILIATION_USDC_ADDRESS`
@@ -92,17 +92,16 @@ These public dashboard endpoints are not copied into `.env.staging-e2e-real`. Th
 ### 1. Initialize environment files
 
 ```bash
-cp .env.example .env
-cp .env.staging-e2e-real.example .env.staging-e2e-real
+cp .env.runtime.example .env.runtime
 ```
 
-Set pilot addresses/chain config in `.env.staging-e2e-real` before proceeding.
+Set pilot addresses/chain config in `.env.runtime` before proceeding.
 Do not leave placeholder URLs, public Base RPC endpoints, or zero-value escrow
 addresses in the live pilot profile.
 
 Expected result:
 
-- `.env` and `.env.staging-e2e-real` exist with pilot-specific values.
+- `.env` and `.env.runtime` exist with pilot-specific values.
 
 If not:
 
@@ -111,12 +110,12 @@ If not:
 ### 2. Validate env deterministically
 
 ```bash
-scripts/validate-env.sh staging-e2e-real
+scripts/validate-env.sh runtime
 ```
 
 Expected result:
 
-- Output includes `env validation passed for profile: staging-e2e-real`.
+- Output includes `env validation passed for profile: runtime`.
 
 If not:
 
@@ -126,9 +125,9 @@ If not:
 ### 3. Bring up pilot profile and verify health
 
 ```bash
-scripts/docker-services.sh down staging-e2e-real || true
-scripts/docker-services.sh up staging-e2e-real
-scripts/docker-services.sh health staging-e2e-real
+scripts/cotsel.sh down || true
+scripts/cotsel.sh up
+scripts/cotsel.sh health
 ```
 
 Expected result:
@@ -143,16 +142,16 @@ If not:
 - Capture logs and fix startup/health failures before continuing:
 
 ```bash
-scripts/docker-services.sh logs staging-e2e-real indexer-graphql
-scripts/docker-services.sh logs staging-e2e-real oracle
-scripts/docker-services.sh logs staging-e2e-real reconciliation
-scripts/docker-services.sh logs staging-e2e-real treasury
+scripts/cotsel.sh logs indexer-graphql
+scripts/cotsel.sh logs oracle
+scripts/cotsel.sh logs reconciliation
+scripts/cotsel.sh logs treasury
 ```
 
 ### 4. Run staging gate dry run
 
 ```bash
-scripts/staging-e2e-real-gate.sh
+scripts/runtime-gate.sh
 ```
 
 Expected result:
@@ -161,7 +160,7 @@ Expected result:
 
 If not:
 
-- Follow `docs/runbooks/staging-e2e-real-release-gate.md` failure modes.
+- Follow `docs/runbooks/runtime-release-gate.md` failure modes.
 - Do not start pilot activity while gate is red.
 
 ### 5. Verify DB population and reconciliation evidence
@@ -171,21 +170,21 @@ Load env values into shell:
 ```bash
 set -a
 source .env
-source .env.staging-e2e-real
+source .env.runtime
 set +a
 ```
 
 Check indexer trade events are present:
 
 ```bash
-docker compose -f docker-compose.services.yml --profile staging-e2e-real exec -T postgres \
+docker compose -f docker-compose.services.yml --profile runtime exec -T postgres \
   psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -Atc "SELECT COUNT(*) FROM trade_event;"
 ```
 
 Check reconciliation runs table has rows:
 
 ```bash
-docker compose -f docker-compose.services.yml --profile staging-e2e-real exec -T postgres \
+docker compose -f docker-compose.services.yml --profile runtime exec -T postgres \
   psql -U "${POSTGRES_USER}" -d "${RECONCILIATION_DB_NAME}" -Atc "SELECT COUNT(*) FROM reconcile_runs;"
 ```
 
@@ -203,8 +202,8 @@ If not:
 Capture logs:
 
 ```bash
-scripts/docker-services.sh logs staging-e2e-real oracle
-scripts/docker-services.sh logs staging-e2e-real reconciliation
+scripts/cotsel.sh logs oracle
+scripts/cotsel.sh logs reconciliation
 ```
 
 Expected result:
@@ -219,7 +218,7 @@ If not:
 ### 7. Verify retry/timeout ceilings are configured
 
 ```bash
-rg -n "ORACLE_RETRY_ATTEMPTS|ORACLE_RETRY_DELAY|STAGING_E2E_REAL_LAG_WARMUP_SECONDS|STAGING_E2E_REAL_LAG_POLL_SECONDS|STAGING_E2E_MAX_INDEXER_LAG_BLOCKS" .env .env.staging-e2e-real
+rg -n "ORACLE_RETRY_ATTEMPTS|ORACLE_RETRY_DELAY|STAGING_E2E_REAL_LAG_WARMUP_SECONDS|STAGING_E2E_REAL_LAG_POLL_SECONDS|STAGING_E2E_MAX_INDEXER_LAG_BLOCKS" .env .env.runtime
 ```
 
 Expected result:
@@ -234,9 +233,9 @@ If not:
 
 Go only when all are true:
 
-- `scripts/validate-env.sh staging-e2e-real` passed.
-- `scripts/docker-services.sh health staging-e2e-real` passed.
-- `scripts/staging-e2e-real-gate.sh` passed.
+- `scripts/validate-env.sh runtime` passed.
+- `scripts/cotsel.sh health` passed.
+- `scripts/runtime-gate.sh` passed.
 - Managed Base Sepolia primary + fallback provider values are explicitly set for
   gateway, oracle, and reconciliation.
 - Indexer and reconciliation DB checks show expected non-empty pilot evidence.
@@ -269,7 +268,7 @@ No-go if any criterion fails:
 - Health check failure:
   - Capture service logs, restart from clean profile, and re-check.
 - Gate failure:
-  - Use failure-mode guidance in `docs/runbooks/staging-e2e-real-release-gate.md`.
+  - Use failure-mode guidance in `docs/runbooks/runtime-release-gate.md`.
 - Data population failure:
   - Re-check start block, contract address scope, and indexer head progress.
 
@@ -278,7 +277,7 @@ No-go if any criterion fails:
 1. Stop pilot profile if correctness is uncertain:
 
 ```bash
-scripts/docker-services.sh down staging-e2e-real
+scripts/cotsel.sh down
 ```
 
 2. Capture evidence bundle (logs, DB query outputs, gate output).
@@ -291,9 +290,9 @@ scripts/docker-services.sh down staging-e2e-real
 
 ## Related Runbooks
 
-- `docs/runbooks/staging-e2e-real-release-gate.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 - `scripts/base-sepolia-pilot-validation.sh`
-- `docs/runbooks/docker-profiles.md`
+- `docs/runbooks/runtime-stack.md`
 - `docs/runbooks/reconciliation.md`
 - `docs/runbooks/oracle-redrive.md`

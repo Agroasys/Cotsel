@@ -62,7 +62,7 @@ authoritative gateway ledger, request record, or operator evidence source.
 | Prepared by                 | `<name>`                                                                           |
 | Reviewed by                 | `<name>`                                                                           |
 | Generated at (UTC)          | `<timestamp>`                                                                      |
-| Environment                 | `<local-dev / staging-e2e-real / pilot / production>`                              |
+| Environment                 | `<runtime / pilot / production>`                                                   |
 | Incident / ticket reference | `<URL or id>`                                                                      |
 
 ## Core Evidence Table

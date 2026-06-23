@@ -53,9 +53,9 @@ for heading in "${cutover_headings[@]}"; do
 done
 
 required_refs=(
-  "scripts/validate-env.sh staging-e2e-real"
-  "scripts/staging-e2e-real-gate.sh"
-  "scripts/notifications-gate.sh staging-e2e-real"
+  "scripts/validate-env.sh runtime"
+  "scripts/runtime-gate.sh"
+  "scripts/notifications-gate.sh runtime"
   "pnpm --filter ./reconciliation run reconcile:report"
 )
 

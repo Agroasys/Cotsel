@@ -13,7 +13,6 @@ It is intentionally disciplined:
 The stack and infra expectations reflected here come from:
 
 - `docs/architecture/job-and-eventing-strategy.md`
-- `docs/runbooks/dashboard-local-parity.md`
 - `docs/runbooks/dashboard-gateway-operations.md`
 - the reviewed stack/infra source-of-truth docs (`technical stack.pdf`, `INFRA.pdf`)
 
@@ -295,6 +294,5 @@ flowchart LR
 ## Related Documents
 
 - [`../../README.md`](../../README.md)
-- [`../runbooks/dashboard-local-parity.md`](../runbooks/dashboard-local-parity.md)
 - [`../runbooks/dashboard-gateway-operations.md`](../runbooks/dashboard-gateway-operations.md)
 - [`./job-and-eventing-strategy.md`](./job-and-eventing-strategy.md)

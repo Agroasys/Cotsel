@@ -282,7 +282,7 @@ Fill one copy of this section per pilot window.
 | Field                    | Value                          |
 | ------------------------ | ------------------------------ |
 | Pilot window             | `PILOT-<YYYY-MM-DD>`           |
-| Environment              | `staging-e2e-real` / `mainnet` |
+| Environment              | `runtime` / `mainnet`          |
 | Report generated at      | `<timestamp>`                  |
 | Operator                 | `<name / handle>`              |
 | Pilot Owner sign-off     | `<name / handle>`              |
@@ -404,12 +404,12 @@ Before signing off on the pilot report:
 
 ## Related Runbooks
 
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 - `scripts/base-sepolia-pilot-validation.sh`
 - `docs/runbooks/pilot-environment-onboarding.md`
 - `docs/runbooks/hybrid-split-walkthrough.md`
 - `docs/runbooks/reconciliation.md`
 - `docs/runbooks/oracle-redrive.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 - `docs/runbooks/production-readiness-checklist.md`
 - `docs/runbooks/treasury-to-fiat-sop.md`

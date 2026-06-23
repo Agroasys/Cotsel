@@ -28,7 +28,6 @@
 
 ## Runtime checks (if infra touched)
 
-- [ ] `scripts/docker-services.sh up local-dev`
-- [ ] `scripts/docker-services.sh health local-dev`
-- [ ] `scripts/docker-services.sh up staging-e2e`
-- [ ] `scripts/docker-services.sh health staging-e2e`
+- [ ] `scripts/cotsel.sh up`
+- [ ] `scripts/cotsel.sh health`
+- [ ] `scripts/cotsel.sh up --gate` (full validated deploy, when applicable)

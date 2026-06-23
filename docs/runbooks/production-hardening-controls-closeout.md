@@ -70,7 +70,7 @@ pass. `docs/runbooks/monitoring-alerting-baseline.md` covers
 The baseline validator now recognizes `auth` as an in-scope monitored service.
 
 Runtime wiring now makes the new controls usable in deployed service profiles.
-`.env.example`, `env/auth.env.example`, and `docker-compose.services.yml`
+`.env.runtime.example`, `env/auth.env.runtime.example`, and `docker-compose.services.yml`
 include auth admin-control settings, Redis-backed rate-limit settings, and
 fail-open toggles. Redis remains the shared runtime support for distributed
 limits and nonce/rate-limit behavior where configured.
@@ -82,7 +82,7 @@ evidence is not polluted by unsupported Node 25 warnings.
 
 ## Files And Modules Changed
 
-- `.env.example`
+- `.env.runtime.example`
 - `.github/workflows/release-gate.yml`
 - `auth/src/api/adminController.ts`
 - `auth/src/api/controllerSupport.ts`
@@ -109,7 +109,7 @@ evidence is not polluted by unsupported Node 25 warnings.
 - `docs/runbooks/auth-break-glass.md`
 - `docs/runbooks/monitoring-alerting-baseline.md`
 - `docs/security/dependency-vuln-policy.md`
-- `env/auth.env.example`
+- `env/auth.env.runtime.example`
 - `gateway/src/config/env.ts`
 - `gateway/src/server.ts`
 - `package-lock.json`

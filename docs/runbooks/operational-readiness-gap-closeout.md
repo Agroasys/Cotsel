@@ -99,13 +99,13 @@ Still not done:
 Evidence:
 
 - `.github/workflows/`
-- `docs/runbooks/docker-profiles.md`
+- `docs/runbooks/runtime-stack.md`
 - `docs/runbooks/monitoring-alerting-baseline.md`
 - `docs/runbooks/production-readiness-checklist.md`
 - `docs/owners.md`
 - `docs/runbooks/production-sensitive-action-evidence.md`
 - `scripts/shared-package-boundary-guard.mjs`
-- `scripts/docker-services.sh`
+- `scripts/cotsel.sh`
 
 ## Non-Goals
 

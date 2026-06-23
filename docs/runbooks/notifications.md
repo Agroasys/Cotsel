@@ -76,17 +76,17 @@ Capture evidence when escalating:
 2. Restore prior template version mapping in `NOTIFICATION_TEMPLATE_VERSIONS`.
 3. Re-run notifications tests and the deterministic gate probe:
    - `pnpm --filter ./notifications run build`
-   - `scripts/notifications-gate.sh staging-e2e-real`
+   - `scripts/notifications-gate.sh runtime`
 4. Confirm no secrets are logged and retry bounds are still enforced.
 
 ## Runtime Health + Release Evidence
 
 - Profile-level wiring health checks:
-  - `scripts/docker-services.sh health local-dev`
-  - `scripts/docker-services.sh health staging-e2e-real`
+  - `scripts/cotsel.sh health`
+  - `scripts/cotsel.sh health`
 - Deterministic critical-path probe:
-  - `scripts/notifications-gate.sh staging-e2e-real`
-  - Report output: `reports/notifications/staging-e2e-real.json`
+  - `scripts/notifications-gate.sh runtime`
+  - Report output: `reports/notifications/runtime.json`
 - CI evidence artifact:
   - `ci-report-notifications-gate` from `.github/workflows/release-gate.yml`
   - Contains deterministic probe output for:
@@ -105,5 +105,5 @@ Capture evidence when escalating:
 pnpm --filter ./notifications run test --if-present
 pnpm --filter ./notifications run lint
 pnpm --filter ./notifications run build
-scripts/notifications-gate.sh staging-e2e-real
+scripts/notifications-gate.sh runtime
 ```

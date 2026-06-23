@@ -55,7 +55,7 @@ Open `.env.runtime` and fill in every value. Required fields include:
 
 All fields are documented inline in `.env.runtime.example`.
 
-**Do not create `.env`, `.env.staging-e2e-real`, or any other `.env.*` file.**  
+**Do not create `.env`, `.env.runtime`, or any other `.env.*` file.**  
 The deploy script will refuse to run if any of those exist alongside `.env.runtime`.
 
 ---
@@ -63,7 +63,7 @@ The deploy script will refuse to run if any of those exist alongside `.env.runti
 ### 3. Run the deploy script
 
 ```bash
-scripts/deploy.sh
+scripts/cotsel.sh up --gate
 ```
 
 The script runs fully automated:
@@ -80,7 +80,7 @@ The script runs fully automated:
 **First build takes several minutes.** Subsequent deploys that only change config can skip the build:
 
 ```bash
-scripts/deploy.sh --skip-build
+scripts/cotsel.sh up --gate --skip-build
 ```
 
 ---
@@ -92,7 +92,7 @@ On success the script prints:
 ```
 ──────────────────────────────────────────────────────────────
 Deployment complete
-  profile:   staging-e2e-real
+  profile:   runtime
   env file:  .env.runtime
 ...
 ──────────────────────────────────────────────────────────────
@@ -104,21 +104,21 @@ If anything fails, the script exits with a `FAIL:` message and a non-zero exit c
 
 ## Operational commands
 
-After a successful deploy, use `scripts/docker-services.sh` for day-to-day operations:
+After a successful deploy, use `scripts/cotsel.sh` for day-to-day operations:
 
 ```bash
 # Tail logs for all services (or a single one)
-scripts/docker-services.sh logs staging-e2e-real
-scripts/docker-services.sh logs staging-e2e-real gateway
+scripts/cotsel.sh logs
+scripts/cotsel.sh logs gateway
 
 # Re-check service health
-scripts/docker-services.sh health staging-e2e-real
+scripts/cotsel.sh health
 
 # Show running containers
-scripts/docker-services.sh ps staging-e2e-real
+scripts/cotsel.sh ps
 
 # Stop and remove all containers (data volumes preserved)
-scripts/docker-services.sh down staging-e2e-real
+scripts/cotsel.sh down
 ```
 
 These commands read `.env.runtime` directly — no additional setup required.
@@ -127,11 +127,11 @@ These commands read `.env.runtime` directly — no additional setup required.
 
 ## Re-deploying
 
-| Scenario                                 | Command                                                                 |
-| ---------------------------------------- | ----------------------------------------------------------------------- |
-| Code change (pull + deploy)              | `git pull && scripts/deploy.sh`                                         |
-| Config change only (edit `.env.runtime`) | `scripts/deploy.sh --skip-build`                                        |
-| Full teardown and fresh start            | `scripts/docker-services.sh down staging-e2e-real && scripts/deploy.sh` |
+| Scenario                                 | Command                                                 |
+| ---------------------------------------- | ------------------------------------------------------- |
+| Code change (pull + deploy)              | `git pull && scripts/cotsel.sh up --gate`               |
+| Config change only (edit `.env.runtime`) | `scripts/cotsel.sh up --gate --skip-build`              |
+| Full teardown and fresh start            | `scripts/cotsel.sh down && scripts/cotsel.sh up --gate` |
 
 ---
 
@@ -161,5 +161,5 @@ The indexer needs time to sync. Increase `STAGING_E2E_REAL_LAG_WARMUP_SECONDS` i
 
 - `.env.runtime.example` — canonical list of every configuration field
 - `docs/runbooks/secrets-and-token-rotation.md` — rotating keys and API secrets
-- `docs/runbooks/staging-e2e-real-release-gate.md` — what the gate validates
+- `docs/runbooks/runtime-release-gate.md` — what the gate validates
 - `docs/runbooks/postgres-backup-restore-recovery.md` — database backup procedure

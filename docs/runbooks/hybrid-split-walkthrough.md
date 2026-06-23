@@ -33,19 +33,18 @@ Provide an operator-safe, step-by-step walkthrough of Agroasys hybrid settlement
 - Environment initialized from repo examples:
 
 ```bash
-cp .env.example .env
-cp .env.staging-e2e-real.example .env.staging-e2e-real
-scripts/validate-env.sh staging-e2e-real
+cp .env.runtime.example .env.runtime
+scripts/validate-env.sh runtime
 ```
 
 - Required services healthy:
 
 ```bash
-scripts/docker-services.sh up staging-e2e-real
-scripts/docker-services.sh health staging-e2e-real
+scripts/cotsel.sh up
+scripts/cotsel.sh health
 ```
 
-- Contract addresses for escrow/USDC/indexer are set consistently across `.env` and `.env.staging-e2e-real`.
+- Contract addresses for escrow/USDC/indexer are set consistently across `.env` and `.env.runtime`.
 - Oracle and reconciliation RPC/indexer URLs target the same chain dataset.
 
 ## Hybrid Model Summary (On-Chain vs Off-Chain)
@@ -64,8 +63,8 @@ scripts/docker-services.sh health staging-e2e-real
 Run baseline readiness:
 
 ```bash
-scripts/docker-services.sh health staging-e2e-real
-scripts/staging-e2e-real-gate.sh
+scripts/cotsel.sh health
+scripts/runtime-gate.sh
 ```
 
 Expected result:
@@ -79,9 +78,9 @@ If not:
 - Collect logs:
 
 ```bash
-scripts/docker-services.sh logs staging-e2e-real oracle
-scripts/docker-services.sh logs staging-e2e-real reconciliation
-scripts/docker-services.sh logs staging-e2e-real indexer-graphql
+scripts/cotsel.sh logs oracle
+scripts/cotsel.sh logs reconciliation
+scripts/cotsel.sh logs indexer-graphql
 ```
 
 ### 2. Buyer lock (escrow encumbrance)
@@ -106,7 +105,7 @@ curl -fsS "http://127.0.0.1:${INDEXER_GRAPHQL_PORT:-4350}/graphql" \
 If not:
 
 - Confirm escrow address and indexer contract address alignment in env files.
-- Confirm indexer head is advancing using `scripts/staging-e2e-real-gate.sh`.
+- Confirm indexer head is advancing using `scripts/runtime-gate.sh`.
 - Do not proceed to release steps until `TradeLocked` visibility is restored.
 
 ### 3. Stage-1 release (oracle-triggered)
@@ -182,7 +181,7 @@ Capture and attach:
 - Signal: GraphQL readiness fails or head lag breaches threshold.
 - Action:
   - Restart profile from clean state.
-  - Re-run `scripts/staging-e2e-real-gate.sh`.
+  - Re-run `scripts/runtime-gate.sh`.
   - Escalate if lag remains above threshold or chain mismatch is detected.
 
 ### Oracle trigger fails or exhausts retries
@@ -235,5 +234,5 @@ Capture and attach:
 
 - `docs/runbooks/reconciliation.md`
 - `docs/runbooks/oracle-redrive.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 - `docs/runbooks/treasury-to-fiat-sop.md`
