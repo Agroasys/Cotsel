@@ -18,5 +18,7 @@ assert_fails "$SCRIPT" up --bogus            # unknown option
 assert_fails "$SCRIPT" down --gate           # --gate only valid with up
 assert_fails "$SCRIPT" up --skip-build       # --skip-build only valid with up --gate
 assert_fails "$SCRIPT" health some-service   # service arg not allowed for health
+assert_fails "$SCRIPT" reset some-service    # service arg not allowed for reset
+assert_fails "$SCRIPT" reset --gate          # --gate only valid with up
 
 echo "cotsel arg parser smoke: pass"

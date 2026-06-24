@@ -33,7 +33,8 @@ scripts/cotsel.sh build              # build images (all, or one service)
 scripts/cotsel.sh up                 # validate env + start the stack
 scripts/cotsel.sh health             # wait for + probe service health
 scripts/cotsel.sh logs reconciliation
-scripts/cotsel.sh down               # stop + remove (with volumes)
+scripts/cotsel.sh down               # stop + remove containers (data volumes preserved)
+scripts/cotsel.sh reset              # stop + remove containers AND volumes (wipes Postgres/Redis)
 
 # Full validated deploy (VM): single-source env guard + validate + build + gate
 scripts/cotsel.sh up --gate

@@ -50,7 +50,7 @@ Correlation keys are emitted by reconciliation findings when available:
 
 ## Docker
 
-See `docs/docker-services.md` and `docs/runbooks/reconciliation.md`.
+See `docs/cotsel-cli.md` and `docs/runbooks/reconciliation.md`.
 
 ## License
 

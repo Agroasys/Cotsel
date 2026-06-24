@@ -12,7 +12,8 @@ set -euo pipefail
 #   scripts/cotsel.sh up                   start services (validate env first)
 #   scripts/cotsel.sh up --gate            full validated deploy + release gate
 #   scripts/cotsel.sh up --gate --skip-build   re-deploy with current images
-#   scripts/cotsel.sh down                 stop + remove (with volumes)
+#   scripts/cotsel.sh down                 stop + remove containers (keep data)
+#   scripts/cotsel.sh reset                stop + remove containers AND volumes
 #   scripts/cotsel.sh logs [service]       tail logs
 #   scripts/cotsel.sh ps                   list services
 #   scripts/cotsel.sh health               wait for + probe service health
@@ -32,7 +33,7 @@ WAIT_POLL_SECONDS="${DOCKER_SERVICES_WAIT_POLL_SECONDS:-2}"
 HEALTH_LOG_TAIL_LINES="${DOCKER_SERVICES_HEALTH_LOG_TAIL_LINES:-80}"
 
 usage() {
-  echo "Usage: scripts/cotsel.sh <build|up|down|logs|ps|health|config> [service] [--gate] [--skip-build]" >&2
+  echo "Usage: scripts/cotsel.sh <build|up|down|reset|logs|ps|health|config> [service] [--gate] [--skip-build]" >&2
 }
 
 ACTION="${1:-}"
@@ -67,7 +68,7 @@ if [[ -z "$ACTION" ]]; then
 fi
 
 case "$ACTION" in
-  build|up|down|logs|ps|health|config) ;;
+  build|up|down|reset|logs|ps|health|config) ;;
   *)
     echo "Unknown action: $ACTION" >&2
     usage
@@ -428,7 +429,8 @@ Remove it:
   printf '\nOperational commands:\n'
   printf '  scripts/cotsel.sh logs [svc]   tail logs\n'
   printf '  scripts/cotsel.sh health       re-check\n'
-  printf '  scripts/cotsel.sh down         stop + rm\n'
+  printf '  scripts/cotsel.sh down         stop + rm (keep data)\n'
+  printf '  scripts/cotsel.sh reset        stop + rm + wipe volumes\n'
   printf '%s\n' "$sep"
 }
 
@@ -451,6 +453,12 @@ case "$ACTION" in
     fi
     ;;
   down)
+    # Non-destructive: stop and remove containers but preserve data volumes
+    # (Postgres/Redis). Use `reset` to also wipe volumes.
+    run_compose down
+    ;;
+  reset)
+    # Destructive: remove containers AND named volumes — wipes Postgres/Redis data.
     run_compose down -v
     ;;
   logs)

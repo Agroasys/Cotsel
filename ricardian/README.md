@@ -76,7 +76,7 @@ Correlation keys are emitted by call path when available:
 
 ## Docker
 
-See `docs/docker-services.md` and `docs/runbooks/docker-profiles.md` for runtime operations.
+See `docs/cotsel-cli.md` and `docs/runbooks/runtime-stack.md` for runtime operations.
 
 ## License
 

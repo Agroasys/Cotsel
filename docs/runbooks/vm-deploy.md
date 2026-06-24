@@ -55,8 +55,8 @@ Open `.env.runtime` and fill in every value. Required fields include:
 
 All fields are documented inline in `.env.runtime.example`.
 
-**Do not create `.env`, `.env.runtime`, or any other `.env.*` file.**  
-The deploy script will refuse to run if any of those exist alongside `.env.runtime`.
+**Create only `.env.runtime`.** Do not create `.env` or any other sibling `.env*` file.  
+The deploy script will refuse to run if any conflicting env file exists alongside `.env.runtime`.
 
 ---
 
@@ -127,11 +127,11 @@ These commands read `.env.runtime` directly — no additional setup required.
 
 ## Re-deploying
 
-| Scenario                                 | Command                                                 |
-| ---------------------------------------- | ------------------------------------------------------- |
-| Code change (pull + deploy)              | `git pull && scripts/cotsel.sh up --gate`               |
-| Config change only (edit `.env.runtime`) | `scripts/cotsel.sh up --gate --skip-build`              |
-| Full teardown and fresh start            | `scripts/cotsel.sh down && scripts/cotsel.sh up --gate` |
+| Scenario                                  | Command                                                  |
+| ----------------------------------------- | -------------------------------------------------------- |
+| Code change (pull + deploy)               | `git pull && scripts/cotsel.sh up --gate`                |
+| Config change only (edit `.env.runtime`)  | `scripts/cotsel.sh up --gate --skip-build`               |
+| Full teardown and fresh start (wipe data) | `scripts/cotsel.sh reset && scripts/cotsel.sh up --gate` |
 
 ---
 

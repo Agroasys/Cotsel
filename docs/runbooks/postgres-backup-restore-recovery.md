@@ -74,7 +74,7 @@ Rollback controls:
 Integrity verification baseline:
 
 - `SELECT COUNT(*)` on service-critical tables before/after restore.
-- Service health via `scripts/cotsel.sh health <profile>`.
+- Service health via `scripts/cotsel.sh health`.
 - Reconciliation/indexer quick checks via `scripts/runtime-gate.sh` for staging profiles.
 
 ## Capacity, retention, and availability guardrails

@@ -43,7 +43,8 @@ scripts/cotsel.sh health             # wait for + probe service health
 scripts/cotsel.sh logs [service]     # tail logs
 scripts/cotsel.sh ps
 scripts/cotsel.sh config             # render resolved compose config
-scripts/cotsel.sh down               # stop + remove (with volumes)
+scripts/cotsel.sh down               # stop + remove containers (data volumes preserved)
+scripts/cotsel.sh reset              # stop + remove containers AND volumes (wipes Postgres/Redis)
 ```
 
 ## Health Endpoints

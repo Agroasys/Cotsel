@@ -334,7 +334,7 @@ curl -fsS -H "Authorization: Bearer <session>" \
 - `pnpm --filter ./gateway run lint`
 - `pnpm --filter ./gateway run test`
 - `pnpm --filter ./gateway run build`
-- `scripts/cotsel.sh health <profile>`
+- `scripts/cotsel.sh health`
 - `curl /healthz`
 - `curl /readyz`
 - `curl /version`
