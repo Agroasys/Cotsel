@@ -36,8 +36,8 @@ Control-surface note:
 ## Authoritative references
 
 - Production baseline readiness: `docs/runbooks/production-readiness-checklist.md`
-- Staging release gate: `docs/runbooks/staging-e2e-release-gate.md`
-- Staging real release gate: `docs/runbooks/staging-e2e-real-release-gate.md`
+- Staging release gate: `docs/runbooks/runtime-release-gate.md`
+- Staging real release gate: `docs/runbooks/runtime-release-gate.md`
 - Mainnet cutover and rollback: `docs/runbooks/base-mainnet-cutover-and-rollback.md`
 - Incident containment baseline: `docs/incidents/first-15-minutes-checklist.md`
 - Signer custody baseline: `docs/runbooks/gateway-governance-signer-custody.md`
@@ -82,10 +82,10 @@ The approval record must link all of the following:
 
 2. Current staging runtime health
 
-- `scripts/validate-env.sh staging-e2e-real`
-- `scripts/docker-services.sh health staging-e2e-real`
-- `scripts/staging-e2e-real-gate.sh`
-- `scripts/notifications-gate.sh staging-e2e-real`
+- `scripts/validate-env.sh runtime`
+- `scripts/cotsel.sh health`
+- `scripts/runtime-gate.sh`
+- `scripts/notifications-gate.sh runtime`
 - latest reconciliation report generated via:
   - `pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out reports/reconciliation/<file>.json`
 
@@ -133,10 +133,10 @@ The approval record must link all of the following:
 These are the required in-repo validation surfaces for launch approval:
 
 ```bash
-scripts/validate-env.sh staging-e2e-real
-scripts/docker-services.sh health staging-e2e-real
-scripts/staging-e2e-real-gate.sh
-scripts/notifications-gate.sh staging-e2e-real
+scripts/validate-env.sh runtime
+scripts/cotsel.sh health
+scripts/runtime-gate.sh
+scripts/notifications-gate.sh runtime
 pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out reports/reconciliation/<file>.json
 ```
 
@@ -159,7 +159,7 @@ The approval outcome is `NO-GO` if any of the following are true:
 
 - M4 is not fully merged and closed remotely
 - any required approval role is unassigned
-- staging-e2e-real validation is red or unresolved
+- runtime validation is red or unresolved
 - reconciliation report includes unresolved critical drift
 - notifications gate is red
 - signer custody model is incomplete or relies on an unapproved production secret posture

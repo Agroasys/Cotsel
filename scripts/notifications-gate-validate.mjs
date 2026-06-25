@@ -90,7 +90,7 @@ function startCaptureServer() {
 }
 
 async function main() {
-  const profile = (process.env.NOTIFICATIONS_GATE_PROFILE || 'staging-e2e-real').trim();
+  const profile = (process.env.NOTIFICATIONS_GATE_PROFILE || 'runtime').trim();
   const outFile = (
     process.env.NOTIFICATIONS_GATE_OUT_FILE || `reports/notifications/${profile}.json`
   ).trim();

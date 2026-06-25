@@ -64,7 +64,7 @@ function extractHeredocSql(script: string, config: SqlBlockConfig): string {
 }
 
 export function loadStagingGateScript(): string {
-  const gatePath = path.resolve(__dirname, '../../../../scripts/staging-e2e-real-gate.sh');
+  const gatePath = path.resolve(__dirname, '../../../../scripts/runtime-gate.sh');
   return fs.readFileSync(gatePath, 'utf8');
 }
 
@@ -79,7 +79,7 @@ export function loadStagingGateSqlContract(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `staging-e2e-real gate script format changed, update markers in stagingGateSqlContract.ts. ${message}`,
+      `runtime gate script format changed, update markers in stagingGateSqlContract.ts. ${message}`,
     );
   }
 }

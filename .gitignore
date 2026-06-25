@@ -1,17 +1,11 @@
 node_modules
-.env
-.env.local
-.env.staging-e2e
-.env.staging-e2e-real
-.env.runtime
+# Single runtime env file is never committed; only its template is tracked.
+.env*
+!.env.runtime.example
 env/*.env
 !env/*.env.example
-!.env.example
-!.env.local.example
-!.env.staging-e2e.example
-!.env.staging-e2e-real.example
 reports/notifications/*.json
-reports/reconciliation/staging-e2e-real-report.json
+reports/reconciliation/runtime-report.json
 reports/base-sepolia-pilot-validation/*
 reports/full-protocol-health/*
 reports/gasless-relayer-capacity/*

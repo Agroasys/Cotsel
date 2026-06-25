@@ -45,19 +45,19 @@ Out of active runtime scope:
 
 ## Service map
 
-| Service            | Runtime role                              | Required in local parity                                  | Required in staging-e2e-real | Production-candidate role |
-| ------------------ | ----------------------------------------- | --------------------------------------------------------- | ---------------------------- | ------------------------- |
-| `auth`             | Cotsel bearer session service             | yes                                                       | yes                          | yes                       |
-| `gateway`          | dashboard/operator control plane          | yes                                                       | yes                          | yes                       |
-| `oracle`           | trade-progression attestation runner      | yes                                                       | yes                          | yes                       |
-| `reconciliation`   | drift detection and evidence worker       | optional in narrow local work, expected in profile health | yes                          | yes                       |
-| `ricardian`        | document hash / record service            | yes                                                       | yes                          | yes                       |
-| `treasury`         | ledger and payout lifecycle service       | yes                                                       | yes                          | yes                       |
-| `notifications`    | outbound event delivery hooks             | yes when gate is enabled                                  | yes                          | yes                       |
-| `indexer-pipeline` | chain event ingestion                     | mocked in plain local-dev, real in staging-e2e-real       | yes                          | yes                       |
-| `indexer-graphql`  | read model / evidence query surface       | mocked in plain local-dev, real in staging-e2e-real       | yes                          | yes                       |
-| `postgres`         | system of record                          | yes                                                       | yes                          | yes                       |
-| `redis`            | nonce/rate-limit support where configured | yes                                                       | yes                          | yes                       |
+| Service            | Runtime role                              | Required in `runtime` | Production-candidate role |
+| ------------------ | ----------------------------------------- | --------------------- | ------------------------- |
+| `auth`             | Cotsel bearer session service             | yes                   | yes                       |
+| `gateway`          | dashboard/operator control plane          | yes                   | yes                       |
+| `oracle`           | trade-progression attestation runner      | yes                   | yes                       |
+| `reconciliation`   | drift detection and evidence worker       | yes                   | yes                       |
+| `ricardian`        | document hash / record service            | yes                   | yes                       |
+| `treasury`         | ledger and payout lifecycle service       | yes                   | yes                       |
+| `notifications`    | outbound event delivery hooks             | yes                   | yes                       |
+| `indexer-pipeline` | chain event ingestion                     | yes                   | yes                       |
+| `indexer-graphql`  | read model / evidence query surface       | yes                   | yes                       |
+| `postgres`         | system of record                          | yes                   | yes                       |
+| `redis`            | nonce/rate-limit support where configured | yes                   | yes                       |
 
 ## Identity and auth boundary
 
@@ -130,17 +130,9 @@ Current high-level posture:
 Use for fast engineering iteration:
 
 ```bash
-cp .env.example .env
-cp .env.local.example .env.local
-scripts/docker-services.sh up local-dev
-scripts/docker-services.sh health local-dev
-```
-
-Narrow dashboard parity path:
-
-```bash
-pnpm run dashboard:parity:session
-pnpm run dashboard:parity:gate
+cp .env.runtime.example .env.runtime
+scripts/cotsel.sh up
+scripts/cotsel.sh health
 ```
 
 ### Staging release profile
@@ -148,13 +140,12 @@ pnpm run dashboard:parity:gate
 Use for real indexer/reconciliation validation:
 
 ```bash
-cp .env.example .env
-cp .env.staging-e2e-real.example .env.staging-e2e-real
-scripts/validate-env.sh staging-e2e-real
-scripts/docker-services.sh up staging-e2e-real
-scripts/docker-services.sh health staging-e2e-real
-scripts/staging-e2e-real-gate.sh
-scripts/notifications-gate.sh staging-e2e-real
+cp .env.runtime.example .env.runtime
+scripts/validate-env.sh runtime
+scripts/cotsel.sh up
+scripts/cotsel.sh health
+scripts/runtime-gate.sh
+scripts/notifications-gate.sh runtime
 ```
 
 ### Production-candidate repo proof
@@ -181,11 +172,11 @@ pnpm run lint
 Release-gate-aligned validation paths:
 
 - `.github/workflows/release-gate.yml`
-- `scripts/validate-env.sh staging-e2e-real`
-- `scripts/staging-e2e-real-gate.sh`
-- `pnpm run protocol:health -- --profile staging-e2e-real --mode config-only`
+- `scripts/validate-env.sh runtime`
+- `scripts/runtime-gate.sh`
+- `pnpm run protocol:health -- --profile runtime --mode config-only`
 - `scripts/postgres-backup-restore-smoke.sh`
-- `scripts/notifications-gate.sh staging-e2e-real`
+- `scripts/notifications-gate.sh runtime`
 - `pnpm run pilot:rehearsal --window-id <window-id> --config-only`
 
 ## Rehearsal truth
@@ -213,10 +204,10 @@ Those are separate workstreams or external dependencies.
 
 ## Related runbooks
 
-- `docs/runbooks/docker-profiles.md`
+- `docs/runbooks/runtime-stack.md`
 - `docs/runbooks/full-protocol-deployment-health.md`
 - `docs/runbooks/production-readiness-checklist.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 - `docs/runbooks/service-auth-matrix.md`
 - `docs/runbooks/postgres-service-roles-and-rls.md`
 - `docs/runbooks/secrets-and-token-rotation.md`

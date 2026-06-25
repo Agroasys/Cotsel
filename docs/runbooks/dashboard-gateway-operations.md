@@ -36,13 +36,9 @@ Approved remote staging contract:
 - mode: read-only first
 - governance signer mode: human direct-sign for privileged governance, executor only for delegated/service roles
 
-Local parity source of truth:
-
-- `docs/runbooks/dashboard-local-parity.md`
-
 This means:
 
-- Cotsel-Dash connected validation may target either the local/docker parity contract or the approved remote staging contract above.
+- Cotsel-Dash connected validation targets the approved remote staging contract above.
 - Mutations stay disabled by default.
 - Remote staging writes stay blocked until an explicit posture change is approved and the gateway allowlist is populated with exact auth principal IDs.
 
@@ -145,8 +141,8 @@ Example local commands:
 ```bash
 nvm use 20
 pnpm install --frozen-lockfile
-scripts/docker-services.sh up local-dev
-scripts/docker-services.sh health local-dev
+scripts/cotsel.sh up
+scripts/cotsel.sh health
 export DASHBOARD_GATEWAY_LOCAL_BASE_URL="${DASHBOARD_GATEWAY_LOCAL_BASE_URL:-<local dashboard gateway base>}"
 curl -fsS "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/healthz"
 curl -fsS "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/readyz"
@@ -154,15 +150,6 @@ curl -fsS "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/version"
 curl -fsS -H "Authorization: Bearer <session>" \
   "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/operations/summary"
 ```
-
-Parity-enabled local browser verification:
-
-- standard `local-dev` keeps the trade registry empty for fast iteration
-- set `LOCAL_DEV_INDEXER_FIXTURE_MODE=dashboard-parity` to expose the canonical seeded trade `TRD-LOCAL-9001`
-- use `pnpm run dashboard:parity:session` and `pnpm run dashboard:parity:gate` before running dashboard live local-contract verification
-- use `pnpm run dashboard:parity:ci` for the Cotsel-owned CI-adjacent orchestration path that also runs the Dash live suite
-- treat `scripts/docker-services.sh health local-dev` as the broader whole-profile health check, not the dashboard parity gate
-- canonical steps and failure interpretation live in `docs/runbooks/dashboard-local-parity.md`
 
 ## Health and readiness interpretation
 
@@ -347,7 +334,7 @@ curl -fsS -H "Authorization: Bearer <session>" \
 - `pnpm --filter ./gateway run lint`
 - `pnpm --filter ./gateway run test`
 - `pnpm --filter ./gateway run build`
-- `scripts/docker-services.sh health <profile>`
+- `scripts/cotsel.sh health`
 - `curl /healthz`
 - `curl /readyz`
 - `curl /version`
@@ -355,7 +342,6 @@ curl -fsS -H "Authorization: Bearer <session>" \
 
 ## References
 
-- `docs/runbooks/dashboard-local-parity.md`
 - `docs/api/cotsel-dashboard-gateway.openapi.yml`
 - `docs/runbooks/dashboard-api-gateway-boundary.md`
 - `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`

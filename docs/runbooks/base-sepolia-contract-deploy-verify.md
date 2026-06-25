@@ -25,7 +25,7 @@ From the repository root:
 ```bash
 cd /path/to/repo
 
-cp env/base-sepolia-deploy.env.example env/base-sepolia-deploy.env
+cp env/base-sepolia-deploy.env.runtime.example env/base-sepolia-deploy.env
 ```
 
 Fill `env/base-sepolia-deploy.env`.

@@ -109,7 +109,7 @@ Validation:
 
 - `gateway/tests/reconciliationReadService.test.ts`
 - `gateway/tests/reconciliationRoutes.contract.test.ts`
-- `scripts/docker-services.sh health <profile>`
+- `scripts/cotsel.sh health`
 
 ## Non-Goals
 

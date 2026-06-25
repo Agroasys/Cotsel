@@ -13,7 +13,7 @@ EOF
 
 if (
   cd "$tmp_dir" &&
-  bash "$SCRIPT" staging-e2e-real >/tmp/validate-env-runtime-placeholders.out 2>/tmp/validate-env-runtime-placeholders.err
+  bash "$SCRIPT" runtime >/tmp/validate-env-runtime-placeholders.out 2>/tmp/validate-env-runtime-placeholders.err
 ); then
   echo "expected validate-env.sh to fail when .env.runtime contains placeholder markers" >&2
   exit 1

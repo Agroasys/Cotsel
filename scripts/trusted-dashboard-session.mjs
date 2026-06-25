@@ -41,7 +41,7 @@ const NONCE_BYTES = 16;
 const DEFAULT_TRUSTED_SESSION_EXCHANGE_PATH = 'session/exchange/agroasys';
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_AUTH_BASE_URL = 'https://cotsel.sys.agroasys.com/api/auth/v1';
-const DEFAULT_PROFILE_FILE = '.env.staging-e2e-real';
+const DEFAULT_PROFILE_FILE = '.env.runtime';
 
 function fail(message) {
   console.error(`ERROR: ${message}`);

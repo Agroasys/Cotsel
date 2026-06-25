@@ -47,7 +47,7 @@ EOF
 if (
   cd "$tmp_dir" &&
   cp "$session_fixture" .env.runtime &&
-  bash "$SCRIPT" staging-e2e-real >/tmp/validate-env-runtime-session.out 2>/tmp/validate-env-runtime-session.err
+  bash "$SCRIPT" runtime >/tmp/validate-env-runtime-session.out 2>/tmp/validate-env-runtime-session.err
 ); then
   echo "expected validate-env.sh to fail when session exchange is enabled without API keys" >&2
   exit 1
@@ -66,7 +66,7 @@ EOF
 if (
   cd "$tmp_dir" &&
   cp "$settlement_fixture" .env.runtime &&
-  bash "$SCRIPT" staging-e2e-real >/tmp/validate-env-runtime-settlement.out 2>/tmp/validate-env-runtime-settlement.err
+  bash "$SCRIPT" runtime >/tmp/validate-env-runtime-settlement.out 2>/tmp/validate-env-runtime-settlement.err
 ); then
   echo "expected validate-env.sh to fail when settlement ingress is enabled without service auth" >&2
   exit 1
@@ -85,7 +85,7 @@ EOF
 if (
   cd "$tmp_dir" &&
   cp "$admin_fixture" .env.runtime &&
-  bash "$SCRIPT" staging-e2e-real >/tmp/validate-env-runtime-admin.out 2>/tmp/validate-env-runtime-admin.err
+  bash "$SCRIPT" runtime >/tmp/validate-env-runtime-admin.out 2>/tmp/validate-env-runtime-admin.err
 ); then
   echo "expected validate-env.sh to fail when admin control is enabled without API key config" >&2
   exit 1

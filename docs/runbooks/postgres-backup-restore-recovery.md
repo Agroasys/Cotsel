@@ -39,7 +39,7 @@ Use this when capturing a backup for a specific service database:
 
 ```bash
 mkdir -p reports/postgres-recovery
-docker compose -f docker-compose.services.yml --profile infra exec -T postgres \
+docker compose -f docker-compose.services.yml --profile runtime exec -T postgres \
   pg_dump -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" \
   > "reports/postgres-recovery/indexer-$(date -u +%Y%m%dT%H%M%SZ).sql"
 ```
@@ -52,7 +52,7 @@ Restore into a target database after creating the database and confirming creden
 
 ```bash
 cat reports/postgres-recovery/indexer-<timestamp>.sql \
-  | docker compose -f docker-compose.services.yml --profile infra exec -T postgres \
+  | docker compose -f docker-compose.services.yml --profile runtime exec -T postgres \
       psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}"
 ```
 
@@ -67,15 +67,15 @@ Migration operations must follow this order:
 
 Rollback controls:
 
-1. Stop the affected service profile with `scripts/docker-services.sh down <profile>`.
+1. Stop the affected service profile with `scripts/cotsel.sh down <profile>`.
 2. Restore the pre-migration logical backup.
 3. Re-run migration only after root cause and ordering fix are documented.
 
 Integrity verification baseline:
 
 - `SELECT COUNT(*)` on service-critical tables before/after restore.
-- Service health via `scripts/docker-services.sh health <profile>`.
-- Reconciliation/indexer quick checks via `scripts/staging-e2e-real-gate.sh` for staging profiles.
+- Service health via `scripts/cotsel.sh health`.
+- Reconciliation/indexer quick checks via `scripts/runtime-gate.sh` for staging profiles.
 
 ## Capacity, retention, and availability guardrails
 

@@ -18,7 +18,7 @@ Provide a repeatable, operator-safe checklist for public pilot demonstrations of
 
 ## Operational Safety Controls
 
-- [ ] Demo runs against `staging-e2e-real` profile.
+- [ ] Demo runs against the `runtime` profile.
 - [ ] Oracle signing key is a dedicated demo key, never reuse pilot or production oracle keys.
 - [ ] `TREASURY_AUTH_ENABLED=true` on staging, confirm auth headers are tested before go-live.
 - [ ] Screen share preview reviewed before audience is admitted.
@@ -27,23 +27,23 @@ Provide a repeatable, operator-safe checklist for public pilot demonstrations of
 
 ### 1. Environment validation
 
-- [ ] `.env` and `.env.staging-e2e-real` populated with demo values.
+- [ ] `.env` and `.env.runtime` populated with demo values.
 - [ ] Run env validation:
 
 ```bash
-scripts/validate-env.sh staging-e2e-real
+scripts/validate-env.sh runtime
 ```
 
-- [ ] Output includes `env validation passed for profile: staging-e2e-real`.
+- [ ] Output includes `env validation passed for profile: runtime`.
 
 ### 2. Services healthy
 
 - [ ] Bring up demo profile:
 
 ```bash
-scripts/docker-services.sh down staging-e2e-real
-scripts/docker-services.sh up staging-e2e-real
-scripts/docker-services.sh health staging-e2e-real
+scripts/cotsel.sh down
+scripts/cotsel.sh up
+scripts/cotsel.sh health
 ```
 
 - [ ] All required services running: `postgres`, `redis`, `indexer-pipeline`, `indexer-graphql`, `oracle`, `reconciliation`, `ricardian`, `treasury`.
@@ -53,7 +53,7 @@ scripts/docker-services.sh health staging-e2e-real
 - [ ] Run gate:
 
 ```bash
-scripts/staging-e2e-real-gate.sh
+scripts/runtime-gate.sh
 ```
 
 - [ ] Gate reports schema parity, lag metrics, reorg/resync probe, reconciliation summary, and drift snapshot, all green.
@@ -91,7 +91,7 @@ curl -fsS http://127.0.0.1:${ORACLE_PORT:-3001}/api/oracle/ready
 - [ ] Stop demo profile:
 
 ```bash
-scripts/docker-services.sh down staging-e2e-real
+scripts/cotsel.sh down
 ```
 
 - [ ] Rotate demo oracle signing key.

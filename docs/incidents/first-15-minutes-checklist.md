@@ -5,22 +5,22 @@
 3. Capture current service health:
 
 ```bash
-scripts/docker-services.sh ps local-dev
-scripts/docker-services.sh health local-dev
+scripts/cotsel.sh ps
+scripts/cotsel.sh health
 ```
 
 4. Capture key logs:
 
 ```bash
-scripts/docker-services.sh logs local-dev oracle
-scripts/docker-services.sh logs local-dev reconciliation
-scripts/docker-services.sh logs local-dev treasury
-scripts/docker-services.sh logs local-dev ricardian
+scripts/cotsel.sh logs oracle
+scripts/cotsel.sh logs reconciliation
+scripts/cotsel.sh logs treasury
+scripts/cotsel.sh logs ricardian
 ```
 
 5. Run release-gate diagnostics for the impacted profile:
-   - `docs/runbooks/staging-e2e-release-gate.md`
-   - `docs/runbooks/staging-e2e-real-release-gate.md`
+   - `docs/runbooks/runtime-release-gate.md`
+   - `docs/runbooks/runtime-release-gate.md`
    - For Base mainnet launch or rollback windows, also use:
      - `docs/runbooks/base-mainnet-go-no-go.md`
      - `docs/runbooks/base-mainnet-cutover-and-rollback.md`

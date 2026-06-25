@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$ROOT_DIR/scripts/staging-e2e-real-gate.sh"
+SCRIPT="$ROOT_DIR/scripts/runtime-gate.sh"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -10,15 +10,14 @@ workspace_dir="$tmp_dir/workspace"
 bin_dir="$tmp_dir/bin"
 
 mkdir -p "$workspace_dir/scripts" "$bin_dir"
-cp "$ROOT_DIR/.env.example" "$workspace_dir/.env"
-cp "$ROOT_DIR/.env.staging-e2e-real.example" "$workspace_dir/.env.staging-e2e-real"
+cp "$ROOT_DIR/scripts/tests/fixtures/runtime.env" "$workspace_dir/.env.runtime"
 
-cat > "$workspace_dir/scripts/docker-services.sh" <<'EOF'
+cat > "$workspace_dir/scripts/cotsel.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${1:-}" != "config" || "${2:-}" != "staging-e2e-real" ]]; then
-  echo "unexpected docker-services invocation: $*" >&2
+if [[ "${1:-}" != "config" ]]; then
+  echo "unexpected cotsel invocation: $*" >&2
   exit 1
 fi
 
@@ -37,7 +36,7 @@ fi
 echo '{}'
 EOF
 
-chmod +x "$workspace_dir/scripts/docker-services.sh" "$bin_dir/curl"
+chmod +x "$workspace_dir/scripts/cotsel.sh" "$bin_dir/curl"
 
 output="$(
   cd "$workspace_dir"
@@ -56,9 +55,9 @@ if ! grep -q 'dynamic start block: INDEXER_START_BLOCK=750' <<<"$output"; then
 fi
 
 if ! grep -q 'INDEXER_START_BLOCK: 750' <<<"$output"; then
-  echo "expected computed start block to be passed into docker-services config" >&2
+  echo "expected computed start block to be passed into cotsel config" >&2
   echo "$output" >&2
   exit 1
 fi
 
-echo "staging-e2e-real gate start block propagation: pass"
+echo "runtime gate start block propagation: pass"

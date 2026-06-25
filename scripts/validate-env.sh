@@ -1,36 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROFILE="${1:-}"
+# Single profile: `runtime`. The argument is accepted for backward-compatible
+# call sites but only `runtime` is valid.
+PROFILE="${1:-runtime}"
 
 usage() {
-  echo "Usage: scripts/validate-env.sh <local-dev|staging-e2e|staging-e2e-real|infra>" >&2
+  echo "Usage: scripts/validate-env.sh [runtime]" >&2
 }
 
-if [[ -z "$PROFILE" ]]; then
+if [[ "$PROFILE" != "runtime" ]]; then
+  echo "Unsupported profile: $PROFILE (only 'runtime' is supported)" >&2
   usage
   exit 1
 fi
-
-case "$PROFILE" in
-  local-dev)
-    PROFILE_FILE=".env.local"
-    ;;
-  staging-e2e)
-    PROFILE_FILE=".env.staging-e2e"
-    ;;
-  staging-e2e-real)
-    PROFILE_FILE=".env.staging-e2e-real"
-    ;;
-  infra)
-    PROFILE_FILE=".env.infra"
-    ;;
-  *)
-    echo "Unsupported profile: $PROFILE" >&2
-    usage
-    exit 1
-    ;;
-esac
 
 load_env_file() {
   local file="$1"
@@ -76,36 +59,21 @@ restore_external_environment_overrides() {
   done
 }
 
-if [[ -f ".env.runtime" ]]; then
-  runtime_placeholder_count="$(count_placeholder_assignments ".env.runtime")"
-  if [[ "$runtime_placeholder_count" -gt 0 ]]; then
-    echo ".env.runtime contains placeholder markers like <id> or <secret>." >&2
-    echo "Replace every placeholder value before running profile '$PROFILE'." >&2
-    exit 1
-  fi
-
-  load_env_file ".env.runtime"
-  restore_external_environment_overrides
-else
-  if [[ ! -f ".env" ]]; then
-    echo "Missing required base env file: .env" >&2
-    echo "Create it from the checked-in template: cp .env.example .env" >&2
-    exit 1
-  fi
-
-  if [[ "$PROFILE" != "infra" && ! -f "$PROFILE_FILE" ]]; then
-    echo "Missing required profile env file: $PROFILE_FILE" >&2
-    echo "Create it from the checked-in template: cp ${PROFILE_FILE}.example ${PROFILE_FILE}" >&2
-    exit 1
-  fi
-
-  load_env_file ".env"
-  restore_external_environment_overrides
-  if [[ -f "$PROFILE_FILE" ]]; then
-    load_env_file "$PROFILE_FILE"
-  fi
-  restore_external_environment_overrides
+if [[ ! -f ".env.runtime" ]]; then
+  echo "Missing required env file: .env.runtime" >&2
+  echo "Create it from the checked-in template: cp .env.runtime.example .env.runtime" >&2
+  exit 1
 fi
+
+runtime_placeholder_count="$(count_placeholder_assignments ".env.runtime")"
+if [[ "$runtime_placeholder_count" -gt 0 ]]; then
+  echo ".env.runtime contains placeholder markers like <id> or <secret>." >&2
+  echo "Replace every placeholder value before running profile '$PROFILE'." >&2
+  exit 1
+fi
+
+load_env_file ".env.runtime"
+restore_external_environment_overrides
 
 required_groups=(
   # shared compose/database inputs
@@ -120,7 +88,7 @@ required_groups=(
   INDEXER_DB_NAME
 )
 
-if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e" || "$PROFILE" == "staging-e2e-real" ]]; then
+if true; then
   required_groups+=(
     # service ports used by local/staging compose profiles
     AUTH_PORT
@@ -162,7 +130,7 @@ if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e" || "$PROFILE" == 
   )
 fi
 
-if [[ "$PROFILE" == "staging-e2e-real" ]]; then
+if true; then
   required_groups+=(
     GATEWAY_AUTH_BASE_URL
     GATEWAY_INDEXER_GRAPHQL_URL
@@ -172,7 +140,7 @@ if [[ "$PROFILE" == "staging-e2e-real" ]]; then
   )
 fi
 
-if [[ "$PROFILE" == "staging-e2e" || "$PROFILE" == "staging-e2e-real" ]]; then
+if true; then
   required_groups+=(
     # indexer pipeline aliases (indexer/src/config.ts)
     INDEXER_RPC_ENDPOINT\|RPC_ENDPOINT
@@ -184,7 +152,7 @@ if [[ "$PROFILE" == "staging-e2e" || "$PROFILE" == "staging-e2e-real" ]]; then
   )
 fi
 
-if [[ "$PROFILE" == "staging-e2e-real" ]]; then
+if true; then
   required_groups+=(
     # real staging gate context
     STAGING_E2E_REAL_NETWORK_NAME
@@ -213,11 +181,11 @@ if [[ "${#missing_groups[@]}" -gt 0 ]]; then
   for group in "${missing_groups[@]}"; do
     echo "  - ${group//|/ or }" >&2
   done
-  echo "Review .env and ${PROFILE_FILE}; external environment variables may override file values." >&2
+  echo "Review .env.runtime; external environment variables may override file values." >&2
   exit 1
 fi
 
-if [[ "$PROFILE" == "local-dev" || "$PROFILE" == "staging-e2e" || "$PROFILE" == "staging-e2e-real" ]]; then
+if true; then
   if [[ "${ORACLE_NOTIFICATIONS_ENABLED:-}" != "true" && "${ORACLE_NOTIFICATIONS_ENABLED:-}" != "false" ]]; then
     echo "ORACLE_NOTIFICATIONS_ENABLED must be true or false" >&2
     exit 1
@@ -332,7 +300,7 @@ contains_retired_runtime_marker() {
   [[ "$value" == *legacy* || "$value" == *retired* || "$value" == *archive* || "$value" == *deprecated* ]]
 }
 
-if [[ "$PROFILE" == "staging-e2e-real" ]]; then
+if true; then
   if [[ "${STAGING_E2E_REAL_NETWORK_NAME:-}" != "Base Sepolia" ]]; then
     echo "STAGING_E2E_REAL_NETWORK_NAME must be 'Base Sepolia' for M4 pilot readiness" >&2
     exit 1
@@ -352,24 +320,24 @@ if [[ "$PROFILE" == "staging-e2e-real" ]]; then
   done
 
   if [[ -n "${ORACLE_SETTLEMENT_RUNTIME:-}" && "${ORACLE_SETTLEMENT_RUNTIME:-}" != "base-sepolia" ]]; then
-    echo "ORACLE_SETTLEMENT_RUNTIME must be base-sepolia for staging-e2e-real" >&2
+    echo "ORACLE_SETTLEMENT_RUNTIME must be base-sepolia for runtime" >&2
     exit 1
   fi
 
   if [[ -n "${RECONCILIATION_SETTLEMENT_RUNTIME:-}" && "${RECONCILIATION_SETTLEMENT_RUNTIME:-}" != "base-sepolia" ]]; then
-    echo "RECONCILIATION_SETTLEMENT_RUNTIME must be base-sepolia for staging-e2e-real" >&2
+    echo "RECONCILIATION_SETTLEMENT_RUNTIME must be base-sepolia for runtime" >&2
     exit 1
   fi
 
   if [[ -n "${GATEWAY_SETTLEMENT_RUNTIME:-}" && "${GATEWAY_SETTLEMENT_RUNTIME:-}" != "base-sepolia" ]]; then
-    echo "GATEWAY_SETTLEMENT_RUNTIME must be base-sepolia for staging-e2e-real" >&2
+    echo "GATEWAY_SETTLEMENT_RUNTIME must be base-sepolia for runtime" >&2
     exit 1
   fi
 
   for var_name in ORACLE_CHAIN_ID RECONCILIATION_CHAIN_ID GATEWAY_CHAIN_ID; do
     value="${!var_name:-}"
     if [[ -n "$value" && "$value" != "84532" ]]; then
-      echo "$var_name must be 84532 for staging-e2e-real" >&2
+      echo "$var_name must be 84532 for runtime" >&2
       exit 1
     fi
   done

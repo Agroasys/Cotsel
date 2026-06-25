@@ -27,9 +27,8 @@ Maintain a single execution board for `Cotsel` where every roadmap item and PR i
 
 ## Runtime Profile Context
 
-- `local-dev`: fast local feedback with lightweight indexer responder.
-- `staging-e2e-real`: release-gate profile using real indexer pipeline (`indexer-migrate`, `indexer-pipeline`, `indexer-graphql`).
-- Release gate policy: `staging-e2e-real` health + gate checks must pass before release promotion.
+- `runtime`: the single compose profile; the same stack serves local development and VM deployment, differing only in `.env.runtime` values. Uses the real indexer pipeline (`indexer-migrate`, `indexer-pipeline`, `indexer-graphql`).
+- Release gate policy: `runtime` health + gate checks (`scripts/cotsel.sh up --gate`) must pass before release promotion.
 
 ## PR Policy (Required)
 

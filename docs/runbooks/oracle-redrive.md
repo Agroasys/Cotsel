@@ -184,10 +184,10 @@ curl -fsS http://127.0.0.1:3001/api/oracle/ready
 Operational diagnostics (profile as appropriate):
 
 ```bash
-scripts/docker-services.sh health staging-e2e-real
-scripts/docker-services.sh logs staging-e2e-real oracle
-scripts/docker-services.sh logs staging-e2e-real reconciliation
-scripts/docker-services.sh logs staging-e2e-real indexer-graphql
+scripts/cotsel.sh health
+scripts/cotsel.sh logs oracle
+scripts/cotsel.sh logs reconciliation
+scripts/cotsel.sh logs indexer-graphql
 ```
 
 Example re-drive request:
@@ -240,8 +240,8 @@ When escalating, include: `tradeId`, `actionKey`, `requestId`, `txHash`, current
 - Incident checklist: `docs/incidents/first-15-minutes-checklist.md`
 - Incident evidence template: `docs/incidents/incident-evidence-template.md`
 - Operator audit evidence template: `docs/runbooks/operator-audit-evidence-template.md`
-- Staging gate runbook: `docs/runbooks/staging-e2e-real-release-gate.md`
-- Staging gate diagnostics (non-real profile): `docs/runbooks/staging-e2e-release-gate.md`
+- Staging gate runbook: `docs/runbooks/runtime-release-gate.md`
+- Staging gate diagnostics (non-real profile): `docs/runbooks/runtime-release-gate.md`
 - Hybrid lifecycle walkthrough: `docs/runbooks/hybrid-split-walkthrough.md`
 
 ## Manual Approval Mode (Pilot)

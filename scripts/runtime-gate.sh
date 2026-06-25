@@ -2,7 +2,7 @@
 set -euo pipefail
 
 COMPOSE_FILE="docker-compose.services.yml"
-PROFILE="staging-e2e-real"
+PROFILE="runtime"
 failure_count=0
 INDEXER_PIPELINE_SERVICE="${INDEXER_PIPELINE_SERVICE:-indexer-pipeline}"
 PIPELINE_RESTART_SLEEP="${STAGING_E2E_REAL_PIPELINE_RESTART_SLEEP:-5}"
@@ -496,15 +496,8 @@ else:
     sys.stdout.write("0")'
 }
 
-if [[ -f ".env.runtime" ]]; then
-  load_env_file ".env.runtime"
-  restore_external_environment_overrides
-else
-  load_env_file ".env"
-  restore_external_environment_overrides
-  load_env_file ".env.staging-e2e-real"
-  restore_external_environment_overrides
-fi
+load_env_file ".env.runtime"
+restore_external_environment_overrides
 
 INDEXER_GRAPHQL_DEFAULT_URL="http://127.0.0.1:${INDEXER_GRAPHQL_PORT:-4350}/graphql"
 INDEXER_GATEWAY_URL_HOST="${STAGING_E2E_REAL_GATE_INDEXER_GRAPHQL_URL:-$INDEXER_GRAPHQL_DEFAULT_URL}"
@@ -521,13 +514,13 @@ READINESS_RETRY_ATTEMPTS="${STAGING_E2E_REAL_READINESS_RETRY_ATTEMPTS:-30}"
 READINESS_RETRY_DELAY="${STAGING_E2E_REAL_READINESS_RETRY_DELAY:-2}"
 MIN_INDEXER_START_BLOCK="${STAGING_E2E_REAL_MIN_INDEXER_START_BLOCK:-$DEFAULT_MIN_INDEXER_START_BLOCK}"
 
-RUN_KEY="staging-e2e-real-gate-$(date +%s)"
+RUN_KEY="runtime-gate-$(date +%s)"
 validate_run_key
-RECONCILIATION_REPORT_PATH="reports/reconciliation/staging-e2e-real-report.json"
+RECONCILIATION_REPORT_PATH="reports/reconciliation/runtime-report.json"
 
 mkdir -p "$(dirname "$RECONCILIATION_REPORT_PATH")"
 
-echo "Starting staging-e2e-real validation gate"
+echo "Starting runtime validation gate"
 echo "profile=${PROFILE} indexerHostUrl=${INDEXER_GATEWAY_URL_HOST} rpcHostUrl=${RPC_GATEWAY_URL_HOST}"
 
 run_validation require_integer_digits "STAGING_E2E_REAL_START_BLOCK_BACKOFF" "$START_BLOCK_BACKOFF"
@@ -547,7 +540,7 @@ run_validation require_positive_value "STAGING_E2E_REAL_READINESS_RETRY_DELAY" "
 run_validation require_positive_value "STAGING_E2E_REAL_PIPELINE_RESTART_SLEEP" "$PIPELINE_RESTART_SLEEP"
 
 if [[ "$failure_count" -gt 0 ]]; then
-  echo "staging-e2e-real gate failed with ${failure_count} check(s)" >&2
+  echo "runtime gate failed with ${failure_count} check(s)" >&2
   exit 1
 fi
 
@@ -572,7 +565,7 @@ if [[ "${STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY:-false}" == "true" ]]; then
 }
 EOF
   echo "reconciliation report generated (config-only): path=${RECONCILIATION_REPORT_PATH}"
-  INDEXER_START_BLOCK="${INDEXER_START_BLOCK:-}" scripts/docker-services.sh config "$PROFILE"
+  INDEXER_START_BLOCK="${INDEXER_START_BLOCK:-}" scripts/cotsel.sh config
   exit 0
 fi
 
@@ -587,8 +580,8 @@ READINESS_QUERY='query { trades(limit: 1) { tradeId } }'
 READINESS_IN_NETWORK_QUERY='query { trades(limit: 1) { tradeId } }'
 SCHEMA_PARITY_QUERY='query { trades(limit: 1) { tradeId buyer supplier status totalAmountLocked logisticsAmount platformFeesAmount supplierFirstTranche supplierSecondTranche ricardianHash createdAt arrivalTimestamp } }'
 
-INDEXER_START_BLOCK="${INDEXER_START_BLOCK:-}" scripts/docker-services.sh up "$PROFILE"
-if scripts/docker-services.sh health "$PROFILE"; then
+INDEXER_START_BLOCK="${INDEXER_START_BLOCK:-}" scripts/cotsel.sh up
+if scripts/cotsel.sh health; then
   pass "profile health check passed"
 else
   fail "profile health check failed"
@@ -786,8 +779,8 @@ else
 fi
 
 if [[ "$failure_count" -gt 0 ]]; then
-  echo "staging-e2e-real gate failed with ${failure_count} check(s)" >&2
+  echo "runtime gate failed with ${failure_count} check(s)" >&2
   exit 1
 fi
 
-echo "staging-e2e-real gate passed"
+echo "runtime gate passed"

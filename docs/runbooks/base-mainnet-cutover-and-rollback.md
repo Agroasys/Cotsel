@@ -22,7 +22,7 @@ This runbook does not cover:
 
 - Launch approval record: `docs/runbooks/base-mainnet-go-no-go.md`
 - Production readiness baseline: `docs/runbooks/production-readiness-checklist.md`
-- Staging real validation: `docs/runbooks/staging-e2e-real-release-gate.md`
+- Staging real validation: `docs/runbooks/runtime-release-gate.md`
 - Incident triage baseline: `docs/incidents/first-15-minutes-checklist.md`
 - Emergency disable/unpause controls: `docs/runbooks/emergency-disable-unpause.md`
 - Signer custody controls: `docs/runbooks/gateway-governance-signer-custody.md`
@@ -66,10 +66,10 @@ Execute these steps in order. If any step fails, stop and evaluate rollback trig
 2. Reconfirm current staging-real evidence.
    - Run:
      ```bash
-     scripts/validate-env.sh staging-e2e-real
-     scripts/docker-services.sh health staging-e2e-real
-     scripts/staging-e2e-real-gate.sh
-     scripts/notifications-gate.sh staging-e2e-real
+     scripts/validate-env.sh runtime
+     scripts/cotsel.sh health
+     scripts/runtime-gate.sh
+     scripts/notifications-gate.sh runtime
      pnpm --filter ./reconciliation run reconcile:report -- --run-key=<runKey> --out reports/reconciliation/<file>.json
      ```
    - If any required check fails, stop and mark the window `NO-GO`.

@@ -1,8 +1,8 @@
-# Staging E2E Real Release Gate
+# Runtime Release Gate
 
 ## Purpose
 
-Run a staging-grade release gate against the real indexer pipeline profile (`staging-e2e-real`) and validate reconciliation against indexed chain state.
+Run the release gate against the `runtime` profile (the real indexer pipeline) and validate reconciliation against indexed chain state. The gate is invoked by `scripts/cotsel.sh up --gate`, which runs `scripts/runtime-gate.sh` after env validation and image build.
 For pilot startup sequencing and go/no-go criteria, use `docs/runbooks/pilot-environment-onboarding.md`.
 For the controlled Base Sepolia validation itself, use `docs/runbooks/base-sepolia-gasless-settlement-proof.md`, run `pnpm run pilot:rehearsal --window-id <window-id>`, and store the resulting packet under `reports/base-sepolia-pilot-validation/`.
 For participant-facing pilot workflow guidance, use `docs/runbooks/non-custodial-pilot-user-guide.md`.
@@ -11,22 +11,19 @@ For Base mainnet launch approval and production rollback control, use:
 - `docs/runbooks/base-mainnet-go-no-go.md`
 - `docs/runbooks/base-mainnet-cutover-and-rollback.md`
 
-## Profile differences
+## Indexer components
 
-- `local-dev`: lightweight in-memory GraphQL responder (`indexer`) for fast iteration.
-- `staging-e2e`: existing staging profile.
-- `staging-e2e-real`: explicit release-gate profile using real indexer components:
-  - `indexer-migrate`
-  - `indexer-pipeline`
-  - `indexer-graphql`
+The `runtime` profile uses the real indexer pipeline:
+
+- `indexer-migrate`
+- `indexer-pipeline`
+- `indexer-graphql`
 
 ## Preconditions
 
 - Docker Engine + Compose plugin installed.
-- Env files created:
-  - `.env`
-  - `.env.staging-e2e-real`
-- `staging-e2e-real` must be Base Sepolia only:
+- `.env.runtime` created from `.env.runtime.example` with every value filled in.
+- The `runtime` profile must be Base Sepolia only:
   - `STAGING_E2E_REAL_NETWORK_NAME=Base Sepolia`
   - `STAGING_E2E_REAL_CHAIN_ID=84532`
 - Active runtime URLs must not point at retired legacy settlement infrastructure.
@@ -56,26 +53,25 @@ For Base mainnet launch approval and production rollback control, use:
 ## Commands
 
 ```bash
-cp .env.example .env
-cp .env.staging-e2e-real.example .env.staging-e2e-real
+cp .env.runtime.example .env.runtime
 
-scripts/validate-env.sh staging-e2e-real
-scripts/docker-services.sh down staging-e2e-real || true
-scripts/docker-services.sh up staging-e2e-real
-scripts/docker-services.sh health staging-e2e-real
-scripts/staging-e2e-real-gate.sh
+scripts/validate-env.sh runtime
+scripts/cotsel.sh down || true
+scripts/cotsel.sh up
+scripts/cotsel.sh health
+scripts/runtime-gate.sh
 pnpm --filter ./notifications run build
-scripts/notifications-gate.sh staging-e2e-real
-scripts/docker-services.sh logs staging-e2e-real reconciliation
-scripts/docker-services.sh logs staging-e2e-real indexer-graphql
-scripts/docker-services.sh down staging-e2e-real
+scripts/notifications-gate.sh runtime
+scripts/cotsel.sh logs reconciliation
+scripts/cotsel.sh logs indexer-graphql
+scripts/cotsel.sh down
 ```
 
 ## CI scope note
 
-The manual `staging-e2e-real` flow above is a staging validation runbook.
-GitHub Actions release-gate enforces workspace lint/typecheck/test/build checks and a CI-safe staging gate path (`scripts/validate-env.sh staging-e2e-real` plus `STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true scripts/staging-e2e-real-gate.sh`).
-CI does not execute the full Docker `up/health/logs/down` staging profile sequence from this runbook.
+The manual `runtime` gate flow above is a staging validation runbook.
+GitHub Actions release-gate enforces workspace lint/typecheck/test/build checks and a CI-safe gate path (`scripts/validate-env.sh runtime` plus `STAGING_E2E_REAL_GATE_ASSERT_CONFIG_ONLY=true scripts/runtime-gate.sh`).
+CI does not execute the full Docker `up/health/logs/down` sequence from this runbook.
 This runbook is a prerequisite gate for pilot readiness; it is not the
 canonical pilot rehearsal report or evidence packet.
 It is also not, by itself, a production go/no-go record.
@@ -86,15 +82,15 @@ CI also runs deterministic notification-path verification and uploads `ci-report
 
 ## Expected output
 
-- `health staging-e2e-real` reports required services running and healthy.
-- `scripts/staging-e2e-real-gate.sh` reports:
+- `scripts/cotsel.sh health` reports required services running and healthy.
+- `scripts/runtime-gate.sh` reports:
   - schema parity result
   - indexer head + lag metrics
   - reorg/resync probe result
   - reconciliation run summary
   - drift classification snapshot
   - warmup-aware lag enforcement (lag threshold enforced after head readiness)
-- `scripts/notifications-gate.sh staging-e2e-real` writes `reports/notifications/staging-e2e-real.json` with:
+- `scripts/notifications-gate.sh runtime` writes `reports/notifications/runtime.json` with:
   - delivery + dedup checks for critical oracle/reconciliation event types
   - severity-route/template metadata validation
 
@@ -117,10 +113,10 @@ CI also runs deterministic notification-path verification and uploads `ci-report
 1. Stop profile:
 
 ```bash
-scripts/docker-services.sh down staging-e2e-real
+scripts/cotsel.sh down
 ```
 
-2. Revert `.env.staging-e2e-real` to last known-good values.
+2. Revert `.env.runtime` to last known-good values.
 3. Re-run the command sequence from a clean start.
 
 ## Escalation

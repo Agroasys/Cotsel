@@ -69,7 +69,7 @@ test('buildStaticProtocolReport passes for consistent Base Sepolia profile truth
   const root = fixtureRepo();
   const escrow = '0xd2FB11ba1D95F1dF165b45Deb1B12c538fa920d4';
   fs.writeFileSync(
-    path.join(root, '.env.staging-e2e-real'),
+    path.join(root, '.env.runtime'),
     [
       'STAGING_E2E_REAL_NETWORK_NAME=Base Sepolia',
       'STAGING_E2E_REAL_CHAIN_ID=84532',
@@ -96,7 +96,7 @@ test('buildStaticProtocolReport passes for consistent Base Sepolia profile truth
 
   const report = buildStaticProtocolReport({
     rootDir: root,
-    profile: 'staging-e2e-real',
+    profile: 'runtime',
     mode: 'config-only',
     now: new Date('2026-05-30T00:00:00Z'),
   });
@@ -111,7 +111,7 @@ test('buildStaticProtocolReport passes for consistent Base Sepolia profile truth
 test('buildStaticProtocolReport fails when live mode has no trusted session artifact', () => {
   const root = fixtureRepo();
   fs.writeFileSync(
-    path.join(root, '.env.staging-e2e-real'),
+    path.join(root, '.env.runtime'),
     [
       'STAGING_E2E_REAL_NETWORK_NAME=Base Sepolia',
       'STAGING_E2E_REAL_CHAIN_ID=84532',
@@ -123,7 +123,7 @@ test('buildStaticProtocolReport fails when live mode has no trusted session arti
 
   const report = buildStaticProtocolReport({
     rootDir: root,
-    profile: 'staging-e2e-real',
+    profile: 'runtime',
     mode: 'live',
   });
 

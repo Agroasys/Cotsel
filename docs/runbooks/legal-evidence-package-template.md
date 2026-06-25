@@ -189,5 +189,5 @@ Required packet metadata (include in `01-cover-sheet.md`):
 - `docs/runbooks/ricardian-hash-repro.md`
 - `docs/runbooks/reconciliation.md`
 - `docs/runbooks/pilot-kpi-report-template.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 - `docs/runbooks/production-readiness-checklist.md`

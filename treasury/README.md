@@ -165,7 +165,7 @@ does not become `EXECUTED` from operator-supplied amount or destination fields a
 
 ## Docker
 
-See `docs/docker-services.md` and `docs/runbooks/docker-profiles.md` for runtime operations.
+See `docs/cotsel-cli.md` and `docs/runbooks/runtime-stack.md` for runtime operations.
 
 ## License
 

@@ -603,7 +603,7 @@ async function waitForGatewayCallbacks(cotselEnv, handoffIds, timeoutMs = 30000)
 }
 
 async function main() {
-  const cotselEnv = parseEnvFile(path.join(COTSEL_ROOT, '.env.staging-e2e-real'));
+  const cotselEnv = parseEnvFile(path.join(COTSEL_ROOT, '.env.runtime'));
   const backendEnv = parseEnvFile(path.join(BACKEND_ROOT, '.env'));
   const apiKeys = JSON.parse(requireEnv(cotselEnv, 'GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON'));
   const serviceKey = apiKeys.find((key) => key.active !== false);

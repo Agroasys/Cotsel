@@ -34,22 +34,22 @@ Config/report contract only:
 
 ```bash
 pnpm run protocol:health -- \
-  --profile staging-e2e-real \
+  --profile runtime \
   --mode config-only \
-  --output reports/full-protocol-health/staging-e2e-real.json
+  --output reports/full-protocol-health/runtime.json
 ```
 
 Full local/live backend lane:
 
 ```bash
 pnpm run protocol:health -- \
-  --profile staging-e2e-real \
+  --profile runtime \
   --mode live \
   --session-file /path/to/trusted-dashboard-session.json \
   --run-validate-env \
   --run-docker-health \
   --run-staging-gate \
-  --output reports/full-protocol-health/staging-e2e-real-live.json
+  --output reports/full-protocol-health/runtime-live.json
 ```
 
 ## Report Contract
@@ -81,7 +81,7 @@ The JSON report includes:
 
 For `config-only`:
 
-- profile is `staging-e2e-real`
+- profile is `runtime`
 - chain is Base Sepolia (`84532`)
 - runtime is `base-sepolia` where configured
 - escrow addresses are present and consistent across gateway, oracle,
@@ -102,9 +102,9 @@ For `live`:
 If the report fails:
 
 1. Fix env/address/deploy-report mismatches first.
-2. Re-run `scripts/validate-env.sh staging-e2e-real`.
-3. Re-run `scripts/docker-services.sh health staging-e2e-real`.
-4. Re-run `scripts/staging-e2e-real-gate.sh`.
+2. Re-run `scripts/validate-env.sh runtime`.
+3. Re-run `scripts/cotsel.sh health`.
+4. Re-run `scripts/runtime-gate.sh`.
 5. Mint a fresh trusted dashboard session and rerun the report in `live` mode.
 
 Do not hand off to Cotsel-Dash until the report is green or the exception is
@@ -113,7 +113,7 @@ explicitly recorded in the issue thread with owner, scope, and expiry.
 ## Related
 
 - `docs/runbooks/runtime-truth-deployment-guide.md`
-- `docs/runbooks/staging-e2e-real-release-gate.md`
+- `docs/runbooks/runtime-release-gate.md`
 - `docs/runbooks/base-sepolia-gasless-settlement-proof.md`
 - `docs/runbooks/auth-admin-provisioning.md`
 - `docs/runbooks/dashboard-gateway-operations.md`

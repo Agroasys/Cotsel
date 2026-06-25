@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const DEFAULT_PROFILE = 'staging-e2e-real';
+export const DEFAULT_PROFILE = 'runtime';
 export const DEFAULT_REPORT_PATH = 'reports/full-protocol-health/latest.json';
 export const REQUIRED_SERVICE_NAMES = [
   'auth',
@@ -58,9 +58,9 @@ export function loadProfileEnv(rootDir, profile = DEFAULT_PROFILE) {
     };
   }
 
-  const profileFile = profile === 'local-dev' ? '.env.local' : `.env.${profile}`;
+  const profileFile = '.env.runtime';
   return {
-    source: `.env + ${profileFile}`,
+    source: profileFile,
     values: {
       ...readEnvFile(path.join(rootDir, '.env')),
       ...readEnvFile(path.join(rootDir, profileFile)),
@@ -208,7 +208,7 @@ export function buildStaticProtocolReport({
     values.RECONCILIATION_USDC_ADDRESS ||
     DEFAULT_BASE_SEPOLIA_USDC;
 
-  reportCheck(checks, 'profile_is_staging_e2e_real', profile === 'staging-e2e-real', {
+  reportCheck(checks, 'profile_is_runtime', profile === 'runtime', {
     profile,
   });
   reportCheck(checks, 'base_sepolia_runtime', runtime == null || runtime === 'base-sepolia', {
@@ -445,10 +445,10 @@ export function attachCommandResults(report, { rootDir, runValidateEnv, runDocke
     commands.push(runCommand(rootDir, 'bash', ['scripts/validate-env.sh', report.profile], timeoutMs));
   }
   if (runDockerHealth) {
-    commands.push(runCommand(rootDir, 'bash', ['scripts/docker-services.sh', 'health', report.profile], timeoutMs));
+    commands.push(runCommand(rootDir, 'bash', ['scripts/cotsel.sh', 'health'], timeoutMs));
   }
   if (runStagingGate) {
-    commands.push(runCommand(rootDir, 'bash', ['scripts/staging-e2e-real-gate.sh'], timeoutMs));
+    commands.push(runCommand(rootDir, 'bash', ['scripts/runtime-gate.sh'], timeoutMs));
   }
   const commandChecks = commands.map((command) => ({
     name: `command:${command.command}`,

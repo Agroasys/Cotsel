@@ -62,4 +62,4 @@ assert_block_contains \
   "condition: service_healthy" \
   "expected oracle compose block to wait for redis health"
 
-echo "docker-services compose rate-limit wiring: pass"
+echo "compose rate-limit wiring: pass"

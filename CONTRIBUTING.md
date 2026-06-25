@@ -136,15 +136,14 @@ Use `--if-present` where needed if a workspace does not define a script in your 
 
 ## Docker/Runtime Validation (When Infra Is Touched)
 
-Use profile-aware scripts:
+There is one compose profile (`runtime`) and one env file (`.env.runtime`):
 
 ```bash
-scripts/docker-services.sh up local-dev
-scripts/docker-services.sh health local-dev
+scripts/cotsel.sh up
+scripts/cotsel.sh health
 
-scripts/docker-services.sh up staging-e2e
-scripts/docker-services.sh health staging-e2e
-scripts/staging-e2e-gate.sh
+# Full validated deploy + release gate
+scripts/cotsel.sh up --gate
 ```
 
 Use service DNS inside compose networking (never `localhost` for inter-container calls).

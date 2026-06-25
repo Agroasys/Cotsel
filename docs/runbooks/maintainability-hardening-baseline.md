@@ -120,26 +120,24 @@ Rows that are not immediate implementation targets:
 
 Current strengths:
 
-- `scripts/docker-services.sh` provides profile-aware `build`, `up`, `down`,
+- `scripts/cotsel.sh` provides profile-aware `build`, `up`, `down`,
   `logs`, `ps`, `health`, and `config` commands.
 - `scripts/validate-env.sh` fails fast when required `.env` or profile env files
   are missing.
-- `docs/runbooks/docker-profiles.md` and
+- `docs/runbooks/runtime-stack.md` and
   `docs/runbooks/runtime-truth-deployment-guide.md` document local and staging
   startup paths.
-- Local-dev has a lightweight indexer responder and an optional
-  dashboard-parity fixture mode.
-- Script tests exist for docker-service args, health behavior, env layering,
-  env precedence, compose rate-limit wiring, profile naming, and local-dev
-  fixture behavior.
+- Script tests exist for cotsel args, health behavior, env preflight,
+  runtime env precedence, compose rate-limit wiring, and the runtime
+  single-source-of-truth conflict guard.
 
 Current weakness:
 
-- A clean checkout requires copying `.env.example` and profile examples before
-  startup. That is documented, but `scripts/docker-services.sh config local-dev`
+- A clean checkout requires copying `.env.runtime.example` and profile examples before
+  startup. That is documented, but `scripts/cotsel.sh config`
   can still render a compose config with many blank values and warnings when
   env files have not been created. `validate-env.sh` catches this, but
-  `docker-services.sh` does not automatically enforce that guard before config
+  `cotsel.sh` does not automatically enforce that guard before config
   rendering.
 - Full Docker startup was not executed during Batch 0; this baseline records
   script and config truth only. Batch 4 must perform operational startup proof.

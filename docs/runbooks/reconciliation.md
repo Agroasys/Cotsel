@@ -48,12 +48,12 @@ Notes:
 - Treasury-linked rows now also surface `rampReference`, `fiatDepositState`, `fiatDepositFailureReason`, and `fiatDepositObservedAt` when deposit evidence exists.
 - Treasury-linked rows also surface `bankReference`, `bankPayoutState`, `bankFailureCode`, `bankConfirmedAt`, and `bankPayoutDivergenceReason` when bank-finality evidence exists.
 
-Docker local-dev profile:
+Docker runtime profile:
 
 ```bash
-scripts/docker-services.sh up local-dev
-scripts/docker-services.sh health local-dev
-scripts/docker-services.sh logs local-dev reconciliation
+scripts/cotsel.sh up
+scripts/cotsel.sh health
+scripts/cotsel.sh logs reconciliation
 ```
 
 ## Expected outputs
@@ -226,21 +226,21 @@ Oracle retry/redrive semantics (for settlement action remediation):
 
 ## Staging Gate Evidence Output
 
-`scripts/staging-e2e-real-gate.sh` captures both:
+`scripts/runtime-gate.sh` captures both:
 
 - reconciliation run summary:
   - output prefix: `reconciliation run summary:`
 - drift snapshot:
   - output prefix: `drift classification snapshot:`
 - reconciliation report artifact:
-  - output file: `reports/reconciliation/staging-e2e-real-report.json`
+  - output file: `reports/reconciliation/runtime-report.json`
 - treasury payout path evidence:
   - `TreasuryClaimed` and payout receiver governance events in indexer output/artifacts when present
 
 Run and verify:
 
 ```bash
-scripts/staging-e2e-real-gate.sh
+scripts/runtime-gate.sh
 ```
 
 CI artifact name:
@@ -285,7 +285,7 @@ CI artifact name:
 1. Stop daemon:
 
 ```bash
-scripts/docker-services.sh down local-dev
+scripts/cotsel.sh down
 ```
 
 2. Revert to previous env profile values.
