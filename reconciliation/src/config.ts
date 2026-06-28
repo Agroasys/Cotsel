@@ -19,6 +19,8 @@ export interface ReconciliationConfig {
   dbMigrationPassword?: string;
   rpcUrl: string;
   rpcFallbackUrls: string[];
+  rpcQuorum?: number;
+  rpcStallTimeoutMs?: number;
   chainId: number;
   escrowAddress: string;
   usdcAddress: string;
@@ -163,6 +165,10 @@ export function loadConfig(): ReconciliationConfig {
     dbMigrationPassword: optionalEnv('DB_MIGRATION_PASSWORD'),
     rpcUrl: runtime.rpcUrl,
     rpcFallbackUrls: runtime.rpcFallbackUrls,
+    rpcQuorum: optionalEnv('RPC_QUORUM') ? envNumber('RPC_QUORUM') : undefined,
+    rpcStallTimeoutMs: optionalEnv('RPC_STALL_TIMEOUT_MS')
+      ? envNumber('RPC_STALL_TIMEOUT_MS')
+      : undefined,
     chainId: runtime.chainId,
     escrowAddress: normalizeAddressOrThrow(
       runtime.escrowAddress ?? envAddress('ESCROW_ADDRESS'),

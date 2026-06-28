@@ -6,7 +6,6 @@ import {
   Interface,
   isAddress,
   isHexString,
-  JsonRpcProvider,
   keccak256,
   NonceManager,
   TransactionReceipt,
@@ -1492,6 +1491,7 @@ export function createEthersGaslessSettlementExecutor(
     GatewayConfig,
     | 'rpcUrl'
     | 'rpcFallbackUrls'
+    | 'rpcQuorum'
     | 'chainId'
     | 'escrowAddress'
     | 'gaslessExecutorPrivateKey'
@@ -1520,7 +1520,8 @@ export function createEthersGaslessSettlementExecutor(
 
   const provider = createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
     chainId: config.chainId,
-  }) as JsonRpcProvider;
+    quorum: config.rpcQuorum,
+  });
   const signer = new NonceManager(new Wallet(config.gaslessExecutorPrivateKey, provider));
   const escrow = AgroasysEscrow__factory.connect(config.escrowAddress, signer);
   const gaslessMaxGasLimit = config.gaslessMaxGasLimit ?? 1_500_000n;
@@ -1830,6 +1831,7 @@ export function createEthersGaslessSettlementExecutor(
 interface ManagedSignerGaslessConfig {
   rpcUrl: string;
   rpcFallbackUrls: string[];
+  rpcQuorum?: number;
   chainId: number;
   escrowAddress: string;
   gaslessSignerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
@@ -2025,6 +2027,7 @@ function createManagedSignerGaslessSettlementExecutor(
     dependencies?.provider ??
     (createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
       chainId: config.chainId,
+      quorum: config.rpcQuorum,
     }) as Provider as GaslessManagedProvider);
   const signerTransport = dependencies?.signerTransport ?? createHttpManagedSignerTransport(config);
   const escrowInterface = new Interface(AgroasysEscrow__factory.abi);

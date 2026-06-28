@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import type { Request, Response, NextFunction } from 'express';
 import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
+import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
 import { config } from './config';
 import { createRouter } from './api/routes';
 import { TreasuryController } from './api/controller';
@@ -23,6 +24,14 @@ type ServiceAuthRequest = Request & {
 async function bootstrap(): Promise<void> {
   await testConnection();
   await runMigrations();
+
+  if (config.rpcUrl) {
+    Logger.info('Validating RPC endpoints for treasury startup', {
+      rpcUrl: redactRpcUrlForLogs(config.rpcUrl),
+      fallbackRpcUrls: config.rpcFallbackUrls.map(redactRpcUrlForLogs),
+    });
+    await assertRpcEndpointsReachable([config.rpcUrl, ...config.rpcFallbackUrls]);
+  }
 
   const shouldIngestOnce = process.argv.includes('--ingest-once');
 

@@ -579,6 +579,7 @@ export class GovernanceStatusService implements GovernanceMutationPreflightReade
 export function createGovernanceStatusService(config: GatewayConfig): GovernanceStatusService {
   const provider = createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
     chainId: config.chainId,
+    quorum: config.rpcQuorum,
     stallTimeoutMs: Math.max(250, Math.floor(config.rpcReadTimeoutMs / 2)),
   });
   const contract = new Contract(

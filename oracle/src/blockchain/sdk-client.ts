@@ -21,14 +21,21 @@ export class SDKClient {
     escrowAddress: string,
     usdcAddress: string,
     chainId: number,
+    rpcOptions: { quorum?: number; stallTimeoutMs?: number } = {},
   ) {
-    const provider = createManagedRpcProvider(rpcUrl, rpcFallbackUrls, { chainId });
+    const provider = createManagedRpcProvider(rpcUrl, rpcFallbackUrls, {
+      chainId,
+      quorum: rpcOptions.quorum,
+      stallTimeoutMs: rpcOptions.stallTimeoutMs,
+    });
     this.provider = provider;
     this.signer = new ethers.Wallet(privateKey, provider);
 
     this.sdk = new OracleSDK({
       rpc: rpcUrl,
       rpcFallbackUrls,
+      rpcQuorum: rpcOptions.quorum,
+      rpcStallTimeoutMs: rpcOptions.stallTimeoutMs,
       chainId,
       escrowAddress,
       usdcAddress,

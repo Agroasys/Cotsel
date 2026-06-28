@@ -1,7 +1,7 @@
 import type { BlockData, DataHandlerContext } from '@subsquid/evm-processor';
 import { TypeormDatabase } from '@subsquid/typeorm-store';
 import type { Store } from '@subsquid/typeorm-store';
-import { processor, ESCROW_ADDRESS, type Fields } from './processor';
+import { processor, applyReachableRpcEndpoint, ESCROW_ADDRESS, type Fields } from './processor';
 import { contractInterface } from './abi';
 import {
   Trade,
@@ -50,7 +50,7 @@ function splitPlatformFeeComponents(platformFeesAmount: bigint): {
   };
 }
 
-processor.run(new TypeormDatabase(), async (ctx) => {
+async function processBatch(ctx: IndexerContext): Promise<void> {
   const trades: Map<string, Trade> = new Map();
   const tradeEvents: TradeEvent[] = [];
   const disputeProposals: Map<string, DisputeProposal> = new Map();
@@ -696,7 +696,14 @@ processor.run(new TypeormDatabase(), async (ctx) => {
   ctx.log.info(
     `Processed ${trades.size} trades, ${tradeEvents.length} trade events, ${disputeProposals.size} dispute proposals, ${disputeEvents.length} dispute events, ${oracleUpdateProposals.size} oracle proposals, ${oracleEvents.length} oracle events, ${adminAddProposals.size} admin proposals, ${adminEvents.length} admin events, ${systemEvents.length} system events`,
   );
-});
+}
+
+async function bootstrap(): Promise<void> {
+  await applyReachableRpcEndpoint();
+  await processor.run(new TypeormDatabase(), processBatch);
+}
+
+void bootstrap();
 
 // helper
 async function getOrLoadTrade(

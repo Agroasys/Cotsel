@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { Router } from 'express';
 import { createHttpRateLimiter } from '@agroasys/shared-edge';
+import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
 import { runMigrations } from './database/migrations';
 import { createPool, closeConnection, testConnection } from './database/index';
 import { loadConfig } from './config/env';
@@ -374,6 +375,12 @@ async function readinessCheck() {
 }
 
 async function bootstrap(): Promise<void> {
+  Logger.info('Validating RPC endpoints for gateway startup', {
+    rpcUrl: redactRpcUrlForLogs(config.rpcUrl),
+    fallbackRpcUrls: config.rpcFallbackUrls.map(redactRpcUrlForLogs),
+  });
+  await assertRpcEndpointsReachable([config.rpcUrl, ...config.rpcFallbackUrls]);
+
   Logger.info('Initializing gateway database');
   await testConnection(pool);
   const migrationPool = createPool(config, 'migration');

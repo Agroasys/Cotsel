@@ -126,6 +126,10 @@ export function loadConfig(): OracleConfig {
       // network
       rpcUrl: runtime.rpcUrl,
       rpcFallbackUrls: runtime.rpcFallbackUrls,
+      rpcQuorum: process.env.RPC_QUORUM ? validateEnvNumber('RPC_QUORUM') : undefined,
+      rpcStallTimeoutMs: process.env.RPC_STALL_TIMEOUT_MS
+        ? validateEnvNumber('RPC_STALL_TIMEOUT_MS')
+        : undefined,
       chainId: runtime.chainId,
       escrowAddress: runtime.escrowAddress
         ? ethers.getAddress(runtime.escrowAddress)
@@ -175,6 +179,15 @@ export function loadConfig(): OracleConfig {
     assert(
       config.hmacNonceTtlSeconds >= 60 && config.hmacNonceTtlSeconds <= 3600,
       'HMAC_NONCE_TTL_SECONDS must be between 60 and 3600',
+    );
+    assert(
+      config.rpcQuorum === undefined || (config.rpcQuorum >= 1 && config.rpcQuorum <= 10),
+      'RPC_QUORUM must be between 1 and 10',
+    );
+    assert(
+      config.rpcStallTimeoutMs === undefined ||
+        (config.rpcStallTimeoutMs >= 250 && config.rpcStallTimeoutMs <= 30000),
+      'RPC_STALL_TIMEOUT_MS must be between 250 and 30000',
     );
     assert(config.notificationsCooldownMs >= 0, 'NOTIFICATIONS_COOLDOWN_MS must be >= 0');
     assert(
