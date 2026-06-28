@@ -5,17 +5,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "build:sdk": "pnpm --dir ../sdk run build",
-    "prebuild": "pnpm run build:sdk",
     "build": "rm -rf lib && tsc",
     "start": "node -r dotenv/config lib/main.js",
     "lint": "eslint --max-warnings=0 .",
-    "pretypecheck": "pnpm run build:sdk",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test ./tests/*.test.mjs"
   },
   "dependencies": {
-    "@agroasys/sdk": "^1.0.0",
     "@subsquid/evm-processor": "^1.30.1",
     "@subsquid/evm-typegen": "^5.0.0",
     "@subsquid/graphql-server": "^4.12.0",

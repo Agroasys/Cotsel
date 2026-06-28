@@ -1,5 +1,5 @@
 import { EvmBatchProcessor, type EvmBatchProcessorFields } from '@subsquid/evm-processor';
-import { selectReachableRpcEndpoint, redactRpcUrlForLogs } from '@agroasys/sdk';
+import { selectReachableRpcEndpoint, redactRpcUrlForLogs } from './rpc-preflight';
 import { loadConfig } from './config';
 import { ESCROW_EVENT_TOPICS } from './eventTopics';
 
