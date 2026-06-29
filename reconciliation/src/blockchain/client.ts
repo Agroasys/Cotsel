@@ -8,6 +8,8 @@ export class OnchainClient {
     this.sdk = new OracleSDK({
       rpc: config.rpcUrl,
       rpcFallbackUrls: config.rpcFallbackUrls,
+      rpcQuorum: config.rpcQuorum,
+      rpcStallTimeoutMs: config.rpcStallTimeoutMs,
       chainId: config.chainId,
       escrowAddress: config.escrowAddress,
       usdcAddress: config.usdcAddress,

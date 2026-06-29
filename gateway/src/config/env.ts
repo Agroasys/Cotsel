@@ -26,6 +26,7 @@ export interface GatewayConfig {
   rpcUrl: string;
   rpcFallbackUrls: string[];
   rpcReadTimeoutMs: number;
+  rpcQuorum?: number;
   chainId: number;
   escrowAddress: string;
   settlementRuntimeKey?: SettlementRuntimeKey;
@@ -399,6 +400,11 @@ export function loadConfig(): GatewayConfig {
     'GATEWAY_RPC_READ_TIMEOUT_MS must be >= 1000',
   );
   assert(
+    !process.env.GATEWAY_RPC_QUORUM ||
+      (envNumber('GATEWAY_RPC_QUORUM') >= 1 && envNumber('GATEWAY_RPC_QUORUM') <= 10),
+    'GATEWAY_RPC_QUORUM must be between 1 and 10',
+  );
+  assert(
     envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400) >= 60,
     'GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS must be >= 60',
   );
@@ -633,6 +639,7 @@ export function loadConfig(): GatewayConfig {
     rpcUrl,
     rpcFallbackUrls,
     rpcReadTimeoutMs: envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000),
+    rpcQuorum: process.env.GATEWAY_RPC_QUORUM ? envNumber('GATEWAY_RPC_QUORUM') : undefined,
     chainId,
     escrowAddress: assertAddress('GATEWAY_ESCROW_ADDRESS', runtime.escrowAddress ?? escrowAddress),
     settlementRuntimeKey: runtime.runtimeKey,

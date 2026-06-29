@@ -37,7 +37,13 @@ export function createManagedRpcProvider(
     return providers[0].provider;
   }
 
+  // Clamp the requested quorum to the number of providers (and at least 1) so
+  // an over-specified RPC_QUORUM can never make FallbackProvider throw and take
+  // the service down. Quorum is opt-in; the default of 1 keeps liveness first.
+  const requestedQuorum = options.quorum ?? 1;
+  const quorum = Math.min(Math.max(1, requestedQuorum), providers.length);
+
   return new FallbackProvider(providers, undefined, {
-    quorum: options.quorum ?? 1,
+    quorum,
   });
 }

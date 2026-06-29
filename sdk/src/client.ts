@@ -15,6 +15,8 @@ export class Client {
   constructor(protected config: Config) {
     this.provider = createManagedRpcProvider(config.rpc, config.rpcFallbackUrls, {
       chainId: config.chainId,
+      quorum: config.rpcQuorum,
+      stallTimeoutMs: config.rpcStallTimeoutMs,
     });
     this.contract = AgroasysEscrow__factory.connect(config.escrowAddress, this.provider);
   }

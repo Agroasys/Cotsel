@@ -83,6 +83,8 @@ export class TreasuryEligibilityService {
       (config.rpcUrl && config.chainId
         ? createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
             chainId: config.chainId,
+            quorum: config.rpcQuorum,
+            stallTimeoutMs: config.rpcStallTimeoutMs,
           })
         : null);
     this.reconciliationGate = deps?.reconciliationGate ?? new ReconciliationGateService();

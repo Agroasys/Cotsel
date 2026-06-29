@@ -38,6 +38,8 @@ export interface TreasuryConfig {
   settlementRuntimeKey?: SettlementRuntimeKey;
   rpcUrl?: string;
   rpcFallbackUrls: string[];
+  rpcQuorum?: number;
+  rpcStallTimeoutMs?: number;
   chainId?: number;
   explorerBaseUrl?: string | null;
   reconciliationDb: {
@@ -253,6 +255,10 @@ export function loadConfig(): TreasuryConfig {
     settlementRuntimeKey: runtime?.runtimeKey,
     rpcUrl: runtime?.rpcUrl,
     rpcFallbackUrls: runtime?.rpcFallbackUrls ?? [],
+    rpcQuorum: optionalEnv('RPC_QUORUM') ? envNumber('RPC_QUORUM') : undefined,
+    rpcStallTimeoutMs: optionalEnv('RPC_STALL_TIMEOUT_MS')
+      ? envNumber('RPC_STALL_TIMEOUT_MS')
+      : undefined,
     chainId: runtime?.chainId,
     explorerBaseUrl: runtime?.explorerBaseUrl ?? null,
     reconciliationDb: reconciliationDbName

@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
 import { WebhookNotifier } from '@agroasys/notifications';
+import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
 import { config } from './config';
 import { createRouter } from './api/routes';
 import { OracleController } from './api/controller';
@@ -67,6 +68,12 @@ async function bootstrap() {
       logger: Logger,
     });
 
+    Logger.info('Validating RPC endpoints for oracle startup', {
+      rpcUrl: redactRpcUrlForLogs(config.rpcUrl),
+      fallbackRpcUrls: config.rpcFallbackUrls.map(redactRpcUrlForLogs),
+    });
+    await assertRpcEndpointsReachable([config.rpcUrl, ...config.rpcFallbackUrls]);
+
     const sdkClient = new SDKClient(
       config.rpcUrl,
       config.rpcFallbackUrls,
@@ -74,6 +81,7 @@ async function bootstrap() {
       config.escrowAddress,
       config.usdcAddress,
       config.chainId,
+      { quorum: config.rpcQuorum, stallTimeoutMs: config.rpcStallTimeoutMs },
     );
 
     const triggerManager = new TriggerManager(

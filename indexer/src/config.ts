@@ -14,6 +14,7 @@ export interface IndexerConfig {
   // network
   gatewayUrl: string | null;
   rpcEndpoint: string;
+  rpcFallbackEndpoints: string[];
   startBlock: number;
   rateLimit: number;
   rpcCapacity: number | null;
@@ -68,6 +69,18 @@ function validateEnvNumber(name: string): number {
   return num;
 }
 
+function parseUrlList(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => value.replace(/\/$/, ''));
+}
+
 export function loadConfig(): IndexerConfig {
   try {
     const config: IndexerConfig = {
@@ -78,6 +91,7 @@ export function loadConfig(): IndexerConfig {
       dbPassword: validateEnv('DB_PASSWORD'),
       gatewayUrl: optionalEnv('GATEWAY_URL'),
       rpcEndpoint: validateEnv('RPC_ENDPOINT'),
+      rpcFallbackEndpoints: parseUrlList(process.env.RPC_FALLBACK_ENDPOINTS),
       startBlock: validateEnvNumber('START_BLOCK'),
       rateLimit: validateEnvNumber('RATE_LIMIT'),
       rpcCapacity: optionalEnvNumber('RPC_CAPACITY'),

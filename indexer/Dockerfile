@@ -22,10 +22,7 @@ COPY shared-db/package.json shared-db/package.json
 COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
 COPY treasury/package.json treasury/package.json
-COPY patches patches
-
 RUN pnpm install --frozen-lockfile --ignore-scripts
-RUN pnpm --filter indexer exec patch-package --patch-dir ../patches --error-on-fail
 
 COPY indexer indexer
 
@@ -52,14 +49,11 @@ COPY shared-db/package.json shared-db/package.json
 COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
 COPY treasury/package.json treasury/package.json
-COPY patches patches
-
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
-  && (cd indexer && npx --yes patch-package@8.0.1 --patch-dir ../patches --error-on-fail) \
   && pnpm store prune
 
 COPY --from=builder /app/indexer/package.json /app/indexer/package.json

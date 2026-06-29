@@ -32,6 +32,13 @@ export {
   signServiceAuthCanonicalString,
 } from './modules/serviceAuth';
 export { createManagedRpcProvider } from './rpc/failoverProvider';
+export {
+  assertRpcEndpointReachable,
+  assertRpcEndpointsReachable,
+  redactRpcUrlForLogs,
+  selectReachableRpcEndpoint,
+} from './rpc/reachability';
+export type { ReachableRpcEndpointSelection } from './rpc/reachability';
 export { createSignerFromEip1193Provider } from './wallet/eip1193';
 export type { Eip1193ProviderLike, Eip1193RequestArguments } from './wallet/eip1193';
 export { web3Wallet } from './wallet/wallet-provider';

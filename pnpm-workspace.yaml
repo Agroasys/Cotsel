@@ -33,3 +33,9 @@ overrides:
   qs: 6.15.2
   uuid@<11.1.1: 11.1.1
   ws@>=8 <8.20.1: 8.21.0
+  # Dedupe graphql to a single instance. @subsquid/openreader builds the schema
+  # while @subsquid/graphql-server merges it; when they resolve different graphql
+  # patch versions, cross-instance `instanceof` checks fail and mergeSchemas throws
+  # "Unknown type Query". One graphql version keeps the indexer GraphQL API working
+  # without patching @subsquid/graphql-server.
+  graphql: 15.10.2
