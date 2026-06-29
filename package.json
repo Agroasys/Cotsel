@@ -70,13 +70,13 @@
     "globals": "^17.6.0",
     "husky": "^9.1.7",
     "jest-mock": "30.4.1",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.0.8",
     "lodash": "4.18.1",
     "pg": "8.20.0",
     "prettier": "^3.8.2",
     "typescript-eslint": "^8.58.1",
-    "undici": "6.24.0",
-    "viem": "2.45.0"
+    "undici": "8.5.0",
+    "viem": "2.53.1"
   },
   "lint-staged": {
     "*.{js,cjs,mjs,ts}": [
@@ -100,7 +100,7 @@
     "lodash": "4.18.1",
     "serialize-javascript": "7.0.5",
     "tmp": "0.2.7",
-    "undici": "6.24.0",
+    "undici": "8.5.0",
     "brace-expansion@^1.1.7": "1.1.14",
     "brace-expansion@^2.0.1": "2.1.0",
     "brace-expansion@^2.0.2": "2.1.0",
