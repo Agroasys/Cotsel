@@ -413,6 +413,17 @@ async function bootstrap(): Promise<void> {
 
   const extraRouter = Router();
   extraRouter.use(
+    createSettlementRouter({
+      config,
+      settlementService,
+      settlementStore,
+      gaslessSettlementService,
+      nonceStore: settlementNonceStore,
+      idempotencyStore,
+      lookupServiceApiKey: settlementServiceApiKeyLookup,
+    }),
+  );
+  extraRouter.use(
     createCapabilitiesRouter({
       authSessionClient,
       config,
@@ -500,17 +511,6 @@ async function bootstrap(): Promise<void> {
       config,
       gaslessSettlementService,
       idempotencyStore,
-    }),
-  );
-  extraRouter.use(
-    createSettlementRouter({
-      config,
-      settlementService,
-      settlementStore,
-      gaslessSettlementService,
-      nonceStore: settlementNonceStore,
-      idempotencyStore,
-      lookupServiceApiKey: settlementServiceApiKeyLookup,
     }),
   );
   extraRouter.use(
