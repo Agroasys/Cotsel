@@ -183,7 +183,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     uint256 public tradeCounter;
 
     // buyer-scoped nonce to prevent signature replay and global counter races
-    mapping(address => uint256) public nonces;
     mapping(address => uint256) public authorizationNonces;
 
     // dispute proposals

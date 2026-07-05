@@ -108,7 +108,6 @@ export interface AgroasysEscrowInterface extends Interface {
       | "isAdmin"
       | "isRelayer"
       | "nonRefundableFeeAmount"
-      | "nonces"
       | "openDisputeWithAuthorization"
       | "oracleActive"
       | "oracleAddress"
@@ -426,7 +425,6 @@ export interface AgroasysEscrowInterface extends Interface {
     functionFragment: "nonRefundableFeeAmount",
     values: [BigNumberish]
   ): string;
-  encodeFunctionData(functionFragment: "nonces", values: [AddressLike]): string;
   encodeFunctionData(
     functionFragment: "openDisputeWithAuthorization",
     values: [BigNumberish, BigNumberish, BigNumberish, BytesLike]
@@ -774,7 +772,6 @@ export interface AgroasysEscrowInterface extends Interface {
     functionFragment: "nonRefundableFeeAmount",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "nonces", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "openDisputeWithAuthorization",
     data: BytesLike
@@ -2109,8 +2106,6 @@ export interface AgroasysEscrow extends BaseContract {
     "view"
   >;
 
-  nonces: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
-
   openDisputeWithAuthorization: TypedContractMethod<
     [
       _tradeId: BigNumberish,
@@ -2569,9 +2564,6 @@ export interface AgroasysEscrow extends BaseContract {
   getFunction(
     nameOrSignature: "nonRefundableFeeAmount"
   ): TypedContractMethod<[_tradeId: BigNumberish], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "nonces"
-  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "openDisputeWithAuthorization"
   ): TypedContractMethod<
