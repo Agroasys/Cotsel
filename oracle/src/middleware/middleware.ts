@@ -4,7 +4,7 @@ import { config } from '../config';
 import { consumeHmacNonce } from '../database/queries';
 import { Logger } from '../utils/logger';
 import { ErrorResponse } from '../types';
-import { deriveRequestNonce, verifyRequestSignature } from '../utils/crypto';
+import { deriveRequestNonce, hashSignature, verifyRequestSignature } from '../utils/crypto';
 
 function extractBearerToken(authHeader?: string): string | null {
   if (!authHeader) {
@@ -85,7 +85,7 @@ export async function hmacMiddleware(
       timestamp,
       ip: req.ip,
       nonce: nonce.substring(0, 16) + '...',
-      signature: signature.substring(0, 16) + '...',
+      signatureHash: hashSignature(signature),
     });
 
     next();

@@ -22,6 +22,12 @@ export function deriveRequestNonce(timestamp: string, body: string, signature: s
   return crypto.createHash('sha256').update([timestamp, body, signature].join(':')).digest('hex');
 }
 
+// Hash the HMAC signature so logs can correlate a request without exposing any
+// portion of the raw signature material.
+export function hashSignature(signature: string): string {
+  return crypto.createHash('sha256').update(signature).digest('hex');
+}
+
 export function verifyRequestSignature(
   timestamp: string,
   body: string,
