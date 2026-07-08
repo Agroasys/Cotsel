@@ -119,3 +119,72 @@ describe('oracle runtime config', () => {
     );
   });
 });
+
+describe('oracle signer custody', () => {
+  const RUNTIME_ENV = {
+    SETTLEMENT_RUNTIME: 'base-sepolia',
+    RPC_URL: undefined,
+    RPC_FALLBACK_URLS: undefined,
+    CHAIN_ID: undefined,
+    EXPLORER_BASE_URL: undefined,
+    USDC_ADDRESS: undefined,
+  };
+
+  test('defaults to raw_private_key custody', () => {
+    withEnv({ ...RUNTIME_ENV }, () => {
+      const config = loadConfigModule().loadConfig();
+      expect(config.oracleSignerCustodyMode).toBe('raw_private_key');
+      expect(config.oraclePrivateKey).toBe(BASE_ENV.ORACLE_PRIVATE_KEY);
+    });
+  });
+
+  test('rejects an unknown custody mode', () => {
+    withEnv({ ORACLE_SIGNER_CUSTODY_MODE: 'smart_wallet' }, () => {
+      expect(() => loadConfigModule().loadConfig()).toThrow(
+        'ORACLE_SIGNER_CUSTODY_MODE must be raw_private_key, kms, or mpc',
+      );
+    });
+  });
+
+  test('kms custody requires a managed signer url', () => {
+    withEnv({ ORACLE_SIGNER_CUSTODY_MODE: 'kms', ORACLE_PRIVATE_KEY: undefined }, () => {
+      expect(() => loadConfigModule().loadConfig()).toThrow(
+        'ORACLE_MANAGED_SIGNER_URL is required when ORACLE_SIGNER_CUSTODY_MODE is kms or mpc',
+      );
+    });
+  });
+
+  test('kms custody rejects a non-http managed signer url', () => {
+    withEnv(
+      {
+        ORACLE_SIGNER_CUSTODY_MODE: 'kms',
+        ORACLE_PRIVATE_KEY: undefined,
+        ORACLE_MANAGED_SIGNER_URL: 'ftp://signer.internal',
+      },
+      () => {
+        expect(() => loadConfigModule().loadConfig()).toThrow(
+          'ORACLE_MANAGED_SIGNER_URL must be an absolute http(s) URL',
+        );
+      },
+    );
+  });
+
+  test('kms custody resolves without a private key', () => {
+    withEnv(
+      {
+        ...RUNTIME_ENV,
+        ORACLE_SIGNER_CUSTODY_MODE: 'kms',
+        ORACLE_PRIVATE_KEY: undefined,
+        ORACLE_MANAGED_SIGNER_URL: 'https://signer.internal/',
+        ORACLE_MANAGED_SIGNER_API_KEY: 'signer-token',
+      },
+      () => {
+        const config = loadConfigModule().loadConfig();
+        expect(config.oracleSignerCustodyMode).toBe('kms');
+        expect(config.oraclePrivateKey).toBeUndefined();
+        expect(config.oracleManagedSignerUrl).toBe('https://signer.internal');
+        expect(config.oracleManagedSignerApiKey).toBe('signer-token');
+      },
+    );
+  });
+});

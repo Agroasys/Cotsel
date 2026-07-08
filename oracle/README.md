@@ -143,15 +143,17 @@ Correlation keys are emitted when available:
 
 Copy `oracle/.env.example` to `.env` and fill in the values for each section below before starting the service:
 
-| Variable                                                                      | Purpose                                                             |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `PORT`                                                                        | HTTP listener                                                       |
-| `API_KEY`, `HMAC_SECRET`                                                      | HMAC authentication secrets                                         |
-| `RPC_URL`, `CHAIN_ID`, `ESCROW_ADDRESS`, `USDC_ADDRESS`, `ORACLE_PRIVATE_KEY` | Chain connection + oracle signing                                   |
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`                     | Postgres configuration                                              |
-| `INDEXER_GRAPHQL_URL`                                                         | Read-only backend indexer endpoint                                  |
-| `RETRY_ATTEMPTS`, `RETRY_DELAY`                                               | Retry configuration for failed blockchain calls                     |
-| `NOTIFICATIONS_*`                                                             | Optional notification webhooks & cooldowns listed in `.env.example` |
+| Variable                                                                                                 | Purpose                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                                                                                                   | HTTP listener                                                                                                                     |
+| `API_KEY`, `HMAC_SECRET`                                                                                 | HMAC authentication secrets                                                                                                       |
+| `RPC_URL`, `CHAIN_ID`, `ESCROW_ADDRESS`, `USDC_ADDRESS`, `ORACLE_PRIVATE_KEY`                            | Chain connection + oracle signing                                                                                                 |
+| `ORACLE_SIGNER_CUSTODY_MODE`                                                                             | `raw_private_key` (default, uses `ORACLE_PRIVATE_KEY`) or `kms`/`mpc` to sign via a managed signer service so no key lives in env |
+| `ORACLE_MANAGED_SIGNER_URL`, `ORACLE_MANAGED_SIGNER_API_KEY`, `ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS` | Managed signer endpoint, bearer token, and request timeout — required when custody mode is `kms`/`mpc`                            |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`                                                | Postgres configuration                                                                                                            |
+| `INDEXER_GRAPHQL_URL`                                                                                    | Read-only backend indexer endpoint                                                                                                |
+| `RETRY_ATTEMPTS`, `RETRY_DELAY`                                                                          | Retry configuration for failed blockchain calls                                                                                   |
+| `NOTIFICATIONS_*`                                                                                        | Optional notification webhooks & cooldowns listed in `.env.example`                                                               |
 
 ## License
 

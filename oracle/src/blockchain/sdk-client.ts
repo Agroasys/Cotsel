@@ -3,21 +3,51 @@ import { OracleSDK, Trade } from '@agroasys/sdk';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import type { SettlementConfirmationHeads } from '@agroasys/sdk';
 import { Logger } from '../utils/logger';
+import { ManagedSigner, ManagedSignerOptions, SignerCustodyMode } from './managed-signer';
 
 export interface BlockchainResult {
   txHash: string;
   blockNumber: number;
 }
 
+export interface OracleSignerConfig {
+  custodyMode: SignerCustodyMode;
+  privateKey?: string;
+  managedSigner?: Omit<ManagedSignerOptions, 'custodyMode'>;
+}
+
+function createOracleSigner(
+  signerConfig: OracleSignerConfig,
+  provider: ethers.Provider,
+): ethers.Signer {
+  if (signerConfig.custodyMode === 'raw_private_key') {
+    if (!signerConfig.privateKey) {
+      throw new Error('ORACLE_PRIVATE_KEY is required for raw_private_key signer custody');
+    }
+    return new ethers.Wallet(signerConfig.privateKey, provider);
+  }
+
+  if (!signerConfig.managedSigner) {
+    throw new Error(
+      `Managed signer configuration is required for ${signerConfig.custodyMode} custody`,
+    );
+  }
+
+  return new ManagedSigner(
+    { ...signerConfig.managedSigner, custodyMode: signerConfig.custodyMode },
+    provider,
+  );
+}
+
 export class SDKClient {
   private sdk: OracleSDK;
   private provider: ethers.AbstractProvider;
-  private signer: ethers.Wallet;
+  private signer: ethers.Signer;
 
   constructor(
     rpcUrl: string,
     rpcFallbackUrls: string[],
-    privateKey: string,
+    signerConfig: OracleSignerConfig,
     escrowAddress: string,
     usdcAddress: string,
     chainId: number,
@@ -29,7 +59,7 @@ export class SDKClient {
       stallTimeoutMs: rpcOptions.stallTimeoutMs,
     });
     this.provider = provider;
-    this.signer = new ethers.Wallet(privateKey, provider);
+    this.signer = createOracleSigner(signerConfig, provider);
 
     this.sdk = new OracleSDK({
       rpc: rpcUrl,
@@ -42,10 +72,17 @@ export class SDKClient {
     });
 
     Logger.info('SDKClient initialized', {
-      oracleAddress: this.signer.address,
+      custodyMode: signerConfig.custodyMode,
       escrowAddress,
       chainId,
     });
+
+    // Signer address may require a network call for managed custody, so resolve it
+    // out of band for observability without blocking construction.
+    void this.signer
+      .getAddress()
+      .then((oracleAddress) => Logger.info('Oracle signer resolved', { oracleAddress }))
+      .catch((error) => Logger.warn('Failed to resolve oracle signer address', { error }));
   }
 
   private async getBlockNumberForTag(tag: 'latest' | 'safe' | 'finalized'): Promise<number | null> {

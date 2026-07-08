@@ -77,7 +77,17 @@ async function bootstrap() {
     const sdkClient = new SDKClient(
       config.rpcUrl,
       config.rpcFallbackUrls,
-      config.oraclePrivateKey,
+      {
+        custodyMode: config.oracleSignerCustodyMode,
+        privateKey: config.oraclePrivateKey,
+        managedSigner: config.oracleManagedSignerUrl
+          ? {
+              url: config.oracleManagedSignerUrl,
+              apiKey: config.oracleManagedSignerApiKey,
+              requestTimeoutMs: config.oracleManagedSignerRequestTimeoutMs,
+            }
+          : undefined,
+      },
       config.escrowAddress,
       config.usdcAddress,
       config.chainId,
