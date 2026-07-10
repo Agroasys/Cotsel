@@ -95,7 +95,7 @@ export function loadConfig(): OracleConfig {
     const dbMigrationPassword = optionalEnv('DB_MIGRATION_PASSWORD');
 
     const oracleSignerCustodyMode = parseSignerCustodyMode(process.env.ORACLE_SIGNER_CUSTODY_MODE);
-    const oracleManagedSignerUrl = optionalEnv('ORACLE_MANAGED_SIGNER_URL')?.replace(/\/$/, '');
+    const oracleManagedSignerUrl = optionalEnv('ORACLE_MANAGED_SIGNER_URL')?.replace(/\/+$/, '');
     const oracleManagedSignerApiKey = optionalEnv('ORACLE_MANAGED_SIGNER_API_KEY');
     const oracleManagedSignerRequestTimeoutMs = process.env.ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS
       ? validateEnvNumber('ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS')
@@ -111,12 +111,13 @@ export function loadConfig(): OracleConfig {
           oracleManagedSignerUrl.startsWith('https://'),
         'ORACLE_MANAGED_SIGNER_URL must be an absolute http(s) URL',
       );
+      // Only meaningful in managed-signer (kms/mpc) mode; the timeout is unused otherwise.
+      assert(
+        oracleManagedSignerRequestTimeoutMs === undefined ||
+          oracleManagedSignerRequestTimeoutMs >= 1000,
+        'ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS must be >= 1000',
+      );
     }
-    assert(
-      oracleManagedSignerRequestTimeoutMs === undefined ||
-        oracleManagedSignerRequestTimeoutMs >= 1000,
-      'ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS must be >= 1000',
-    );
 
     if (notificationsEnabled) {
       assert(

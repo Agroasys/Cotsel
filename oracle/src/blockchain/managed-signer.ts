@@ -36,6 +36,52 @@ function isHexTransaction(value: unknown): value is string {
   return typeof value === 'string' && /^0x[a-fA-F0-9]+$/.test(value);
 }
 
+// Case-insensitive, checksum-normalized address comparison that never throws on
+// malformed input (so a bad value is rejected with a clear error instead of a raw
+// ethers parse throw).
+function addressMatches(candidate: unknown, expected: string): boolean {
+  return (
+    typeof candidate === 'string' &&
+    ethers.isAddress(candidate) &&
+    ethers.getAddress(candidate) === ethers.getAddress(expected)
+  );
+}
+
+// Defense in depth: never broadcast a signature we cannot tie back to the exact
+// transaction we asked to sign. A compromised or MITM'd signer could otherwise
+// return a valid signature over a *different* transaction, and we'd happily
+// broadcast it. Parse the signed payload, recover the sender, and assert it and
+// the core fields match what we sent.
+function assertSignedTransactionMatches(
+  signedTransaction: string,
+  signerAddress: string,
+  request: ManagedSignerRequestTransaction,
+): void {
+  let parsed: ethers.Transaction;
+  try {
+    parsed = ethers.Transaction.from(signedTransaction);
+  } catch {
+    throw new Error('Managed signer returned an unparseable signed transaction');
+  }
+
+  if (!addressMatches(parsed.from, signerAddress)) {
+    throw new Error('Managed signer returned a transaction signed by an unexpected address');
+  }
+
+  const recipientMatches = parsed.to !== null && addressMatches(parsed.to, request.to);
+  if (
+    !recipientMatches ||
+    Number(parsed.chainId) !== request.chainId ||
+    parsed.nonce !== request.nonce ||
+    parsed.value !== BigInt(request.value) ||
+    (parsed.data ?? '0x').toLowerCase() !== request.data.toLowerCase()
+  ) {
+    throw new Error(
+      'Managed signer returned a transaction that does not match the signing request',
+    );
+  }
+}
+
 function serializeTransaction(tx: ethers.TransactionRequest): ManagedSignerRequestTransaction {
   return {
     chainId: Number(tx.chainId),
@@ -74,7 +120,7 @@ export class ManagedSigner extends ethers.AbstractSigner {
     provider: ethers.Provider,
   ) {
     super(provider);
-    const base = options.url.replace(/\/$/, '');
+    const base = options.url.replace(/\/+$/, '');
     this.signerUrl = `${base}/api/signers/${SIGNER_NAME}/sign-transaction`;
     this.addressUrl = `${base}/api/signers/${SIGNER_NAME}/address`;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
@@ -113,11 +159,12 @@ export class ManagedSigner extends ethers.AbstractSigner {
 
   async signTransaction(tx: ethers.TransactionRequest): Promise<string> {
     const signerAddress = await this.getAddress();
+    const requestTransaction = serializeTransaction(tx);
     const body = {
       custodyMode: this.options.custodyMode,
       operation: OPERATION,
       signerAddress,
-      transaction: serializeTransaction(tx),
+      transaction: requestTransaction,
     };
 
     const response = await fetch(this.signerUrl, {
@@ -133,9 +180,11 @@ export class ManagedSigner extends ethers.AbstractSigner {
     }
 
     const payload = (await response.json()) as ManagedSignerResponse;
+    // Early, cheap check when the service echoes the signer address; malformed or
+    // mismatched values are rejected here rather than throwing a raw parse error.
     if (
       payload.signerAddress !== undefined &&
-      ethers.getAddress(String(payload.signerAddress)) !== ethers.getAddress(signerAddress)
+      !addressMatches(payload.signerAddress, signerAddress)
     ) {
       throw new Error('Managed signer returned an unexpected signer address');
     }
@@ -143,9 +192,16 @@ export class ManagedSigner extends ethers.AbstractSigner {
       throw new Error('Managed signer returned an invalid signed transaction');
     }
 
+    assertSignedTransactionMatches(payload.signedTransaction, signerAddress, requestTransaction);
+
     return payload.signedTransaction;
   }
 
+  // The oracle settlement flow only ever signs transactions: the SDK entry points
+  // (`releaseFundsStage1`, `confirmArrival`, `finalizeAfterDisputeWindow`) all route
+  // through `contract.connect(signer).<method>()`, i.e. `signTransaction`, and never
+  // `signMessage`/`signTypedData`. These throw so any future off-path signing surfaces
+  // here immediately rather than silently at settlement time in kms/mpc mode.
   async signMessage(): Promise<string> {
     throw new Error('Managed signer does not support message signing for the oracle');
   }
