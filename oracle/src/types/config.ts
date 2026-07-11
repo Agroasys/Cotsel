@@ -20,7 +20,13 @@ export interface OracleConfig {
   settlementRuntimeKey?: string;
   networkName?: string;
   explorerBaseUrl?: string | null;
-  oraclePrivateKey: string;
+
+  // signer custody
+  oracleSignerCustodyMode: 'raw_private_key' | 'kms' | 'mpc';
+  oraclePrivateKey?: string;
+  oracleManagedSignerUrl?: string;
+  oracleManagedSignerApiKey?: string;
+  oracleManagedSignerRequestTimeoutMs?: number;
 
   // oracle db
   dbHost: string;

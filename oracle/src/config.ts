@@ -61,6 +61,14 @@ function validateEnvBool(name: string, fallback: boolean): boolean {
   return value.toLowerCase() === 'true';
 }
 
+function parseSignerCustodyMode(value: string | undefined): 'raw_private_key' | 'kms' | 'mpc' {
+  const normalized = value?.trim() || 'raw_private_key';
+  if (normalized === 'raw_private_key' || normalized === 'kms' || normalized === 'mpc') {
+    return normalized;
+  }
+  throw new Error('ORACLE_SIGNER_CUSTODY_MODE must be raw_private_key, kms, or mpc');
+}
+
 function parseUrlList(raw: string | undefined): string[] {
   if (!raw) {
     return [];
@@ -85,6 +93,31 @@ export function loadConfig(): OracleConfig {
     const manualApprovalEnabled = validateEnvBool('ORACLE_MANUAL_APPROVAL_ENABLED', false);
     const dbMigrationUser = optionalEnv('DB_MIGRATION_USER');
     const dbMigrationPassword = optionalEnv('DB_MIGRATION_PASSWORD');
+
+    const oracleSignerCustodyMode = parseSignerCustodyMode(process.env.ORACLE_SIGNER_CUSTODY_MODE);
+    const oracleManagedSignerUrl = optionalEnv('ORACLE_MANAGED_SIGNER_URL')?.replace(/\/+$/, '');
+    const oracleManagedSignerApiKey = optionalEnv('ORACLE_MANAGED_SIGNER_API_KEY');
+    const oracleManagedSignerRequestTimeoutMs = process.env.ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS
+      ? validateEnvNumber('ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS')
+      : undefined;
+
+    if (oracleSignerCustodyMode !== 'raw_private_key') {
+      assert(
+        oracleManagedSignerUrl,
+        'ORACLE_MANAGED_SIGNER_URL is required when ORACLE_SIGNER_CUSTODY_MODE is kms or mpc',
+      );
+      assert(
+        oracleManagedSignerUrl.startsWith('http://') ||
+          oracleManagedSignerUrl.startsWith('https://'),
+        'ORACLE_MANAGED_SIGNER_URL must be an absolute http(s) URL',
+      );
+      // Only meaningful in managed-signer (kms/mpc) mode; the timeout is unused otherwise.
+      assert(
+        oracleManagedSignerRequestTimeoutMs === undefined ||
+          oracleManagedSignerRequestTimeoutMs >= 1000,
+        'ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS must be >= 1000',
+      );
+    }
 
     if (notificationsEnabled) {
       assert(
@@ -140,7 +173,14 @@ export function loadConfig(): OracleConfig {
       settlementRuntimeKey: runtime.runtimeKey,
       networkName: runtime.networkName,
       explorerBaseUrl: runtime.explorerBaseUrl,
-      oraclePrivateKey: validateEnv('ORACLE_PRIVATE_KEY'),
+      oracleSignerCustodyMode,
+      oraclePrivateKey:
+        oracleSignerCustodyMode === 'raw_private_key'
+          ? validateEnv('ORACLE_PRIVATE_KEY')
+          : optionalEnv('ORACLE_PRIVATE_KEY'),
+      oracleManagedSignerUrl,
+      oracleManagedSignerApiKey,
+      oracleManagedSignerRequestTimeoutMs,
 
       // oracle db
       dbHost: validateEnv('DB_HOST'),
