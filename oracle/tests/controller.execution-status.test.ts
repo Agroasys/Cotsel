@@ -16,9 +16,10 @@ function responseRecorder() {
 
 function triggerResult(status: TriggerStatus) {
   return {
-    idempotencyKey: 'FINALIZE_TRADE:request-42',
-    actionKey: 'FINALIZE_TRADE:42',
+    idempotencyKey: 'FINAL_RELEASE:request-42',
+    actionKey: 'FINAL_RELEASE:42',
     status,
+    idempotent: false,
     message: `result: ${status}`,
   };
 }

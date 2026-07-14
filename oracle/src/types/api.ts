@@ -5,6 +5,7 @@ export interface OracleResponse {
   status: string;
   txHash?: string;
   blockNumber?: number;
+  idempotent: boolean;
   message: string;
   timestamp: string;
 }

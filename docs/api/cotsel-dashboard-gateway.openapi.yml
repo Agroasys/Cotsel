@@ -4207,7 +4207,7 @@ components:
           const: true
         data:
           type: object
-          required: [handoffId, phase, oraclePath, oracle]
+          required: [handoffId, phase, oraclePath, disposition, oracle]
           properties:
             handoffId:
               type: string
@@ -4221,6 +4221,9 @@ components:
                 - final_release_after_notice_deadline
             oraclePath:
               type: string
+            disposition:
+              type: string
+              enum: [submitted, already_completed]
             oracle:
               type: object
               additionalProperties: true

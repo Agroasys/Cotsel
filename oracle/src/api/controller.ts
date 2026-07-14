@@ -45,6 +45,7 @@ type TriggerExecutionResult = {
   status: string;
   txHash?: string;
   blockNumber?: number;
+  idempotent: boolean;
   message: string;
 };
 
@@ -64,6 +65,7 @@ function buildOracleExecutionResponse(result: TriggerExecutionResult): OracleRes
     status: result.status,
     txHash: result.txHash,
     blockNumber: result.blockNumber,
+    idempotent: result.idempotent,
     message: result.message,
     timestamp: timestamp(),
   };

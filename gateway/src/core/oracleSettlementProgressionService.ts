@@ -21,6 +21,7 @@ export interface OracleSettlementProgressionResult {
   handoffId: string;
   phase: ExecutableSettlementPhase;
   oraclePath: string;
+  disposition: 'submitted' | 'already_completed';
   oracle: Record<string, unknown>;
 }
 
@@ -78,7 +79,13 @@ export class OracleSettlementProgressionService {
       );
     }
 
-    return { handoffId, phase, oraclePath: path, oracle: body };
+    return {
+      handoffId,
+      phase,
+      oraclePath: path,
+      disposition: body.idempotent === true ? 'already_completed' : 'submitted',
+      oracle: body,
+    };
   }
 
   private requireExecutablePhase(handoff: SettlementHandoffRecord): ExecutableSettlementPhase {

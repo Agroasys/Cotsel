@@ -54,6 +54,37 @@ describe('OracleSettlementProgressionService', () => {
       }),
     );
     expect(result).toMatchObject({ handoffId: 'sth-42', phase, oraclePath: path });
+    expect(result.disposition).toBe('submitted');
+  });
+
+  it('classifies a converged final release as already completed', async () => {
+    const store = {
+      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_notice_deadline')),
+    };
+    const orchestrator = {
+      fetch: jest.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            success: true,
+            status: 'SUBMITTED',
+            idempotent: true,
+            txHash: `0x${'a'.repeat(64)}`,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    };
+    const service = new OracleSettlementProgressionService(
+      store as unknown as SettlementStore,
+      orchestrator as unknown as DownstreamServiceOrchestrator,
+    );
+
+    const result = await service.executeHandoff('sth-42', 'req-42');
+
+    expect(result).toMatchObject({
+      disposition: 'already_completed',
+      oracle: { idempotent: true, txHash: `0x${'a'.repeat(64)}` },
+    });
   });
 
   it('fails closed for governed dispute resolution instead of auto-executing it', async () => {
