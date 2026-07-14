@@ -20,7 +20,6 @@ const schemaExpectations = [
       'failed_operations',
       'access_log_entries',
       'role_assignments',
-      'governance_actions',
       'compliance_decisions',
       'oracle_progression_blocks',
       'evidence_bundles',

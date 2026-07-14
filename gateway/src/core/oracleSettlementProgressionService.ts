@@ -29,6 +29,7 @@ export class OracleSettlementProgressionService {
     private readonly settlementStore: SettlementStore,
     private readonly orchestrator: DownstreamServiceOrchestrator,
     private readonly immediateInspectionAcceptanceEnabled = true,
+    private readonly now: () => Date = () => new Date(),
   ) {}
 
   async executeHandoff(
@@ -85,11 +86,20 @@ export class OracleSettlementProgressionService {
       handoff.phase === 'final_release_after_inspection_acceptance' &&
       !this.immediateInspectionAcceptanceEnabled
     ) {
+      const noticeDeadline = this.resolveNoticeDeadline(handoff);
+      if (noticeDeadline && noticeDeadline.getTime() <= this.now().getTime()) {
+        return 'final_release_after_notice_deadline';
+      }
+
       throw new GatewayError(
         409,
         'CONFLICT',
-        'Immediate inspection-acceptance release is disabled until buyer-signed on-chain acceptance is available',
-        { handoffId: handoff.handoffId, phase: handoff.phase },
+        'Immediate inspection-acceptance release is disabled until buyer-signed on-chain acceptance is available. Deadline finalization will become available when the inspection notice window expires.',
+        {
+          handoffId: handoff.handoffId,
+          phase: handoff.phase,
+          noticeDeadlineAt: noticeDeadline?.toISOString() ?? null,
+        },
       );
     }
 
@@ -103,6 +113,14 @@ export class OracleSettlementProgressionService {
       'This settlement phase does not support automatic oracle progression',
       { handoffId: handoff.handoffId, phase: handoff.phase },
     );
+  }
+
+  private resolveNoticeDeadline(handoff: SettlementHandoffRecord): Date | null {
+    const value = handoff.metadata.noticeDeadlineAt;
+    if (typeof value !== 'string') return null;
+
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) ? new Date(timestamp) : null;
   }
 
   private async readResponseBody(

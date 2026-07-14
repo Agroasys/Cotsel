@@ -66,6 +66,14 @@ Purpose:
   acceptance entry point. Until that contract upgrade is deployed and rehearsed,
   immediate acceptance must remain disabled in mainnet policy and final release
   must use the no-dispute deadline or governed dispute resolution.
+- While immediate acceptance is disabled, an early buyer acceptance must still
+  complete automatically: before the deadline the gateway fails that phase
+  closed; at or after the exact notice deadline it may remap the same durable
+  handoff to `final_release_after_notice_deadline`, and Agroasys may submit a
+  separate deadline-fallback handoff if the immediate handoff already exhausted
+  its retries. Both routes execute `/api/oracle/finalize-trade`. Reconciliation
+  must prove only one final-tranche movement, and any failure after the deadline
+  is a settlement-blocking incident rather than a manual normal path.
 
 ## 2) Gas and Fee Expectations
 

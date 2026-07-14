@@ -92,6 +92,13 @@ creating a different payment schedule. All components remain refundable while
 the trade is still `LOCKED`; fees become claimable only when Stage 1 is validly
 released.
 
+The launch percentages and fee proportions are contract-enforced policy, not a
+runtime configuration switch. Changing the 60/40 split, the 1% buyer fee, the
+0.5% supplier deduction, or the USD 4 support fee requires a coordinated
+Agroasys calculation change, Cotsel contract release, SDK/gateway compatibility
+update, migration or versioning plan for in-flight trades, and a new set of
+cross-repository conservation tests.
+
 **Checkout UI responsibility:**
 
 Call the Ricardian service to anchor the legal document and receive the hash **before** assembling the `BuyerLockPayload`.

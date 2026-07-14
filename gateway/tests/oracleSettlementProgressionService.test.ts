@@ -5,11 +5,12 @@ import { OracleSettlementProgressionService } from '../src/core/oracleSettlement
 import type { DownstreamServiceOrchestrator } from '../src/core/serviceOrchestrator';
 import type { SettlementHandoffRecord, SettlementStore } from '../src/core/settlementStore';
 
-const handoff = (phase: string) =>
+const handoff = (phase: string, metadata: Record<string, unknown> = {}) =>
   ({
     handoffId: 'sth-42',
     tradeId: '9001',
     phase,
+    metadata,
   }) as unknown as SettlementHandoffRecord;
 
 describe('OracleSettlementProgressionService', () => {
@@ -86,6 +87,41 @@ describe('OracleSettlementProgressionService', () => {
       code: 'CONFLICT',
     });
     expect(orchestrator.fetch).not.toHaveBeenCalled();
+  });
+
+  it('falls back to deadline finalization after the notice window expires', async () => {
+    const store = {
+      getHandoff: jest.fn().mockResolvedValue(
+        handoff('final_release_after_inspection_acceptance', {
+          noticeDeadlineAt: '2026-07-17T08:00:00.000Z',
+        }),
+      ),
+    };
+    const orchestrator = {
+      fetch: jest.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true, status: 'SUBMITTED' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    };
+    const service = new OracleSettlementProgressionService(
+      store as unknown as SettlementStore,
+      orchestrator as unknown as DownstreamServiceOrchestrator,
+      false,
+      () => new Date('2026-07-17T08:00:01.000Z'),
+    );
+
+    const result = await service.executeHandoff('sth-42', 'req-42');
+
+    expect(orchestrator.fetch).toHaveBeenCalledWith(
+      'oracle',
+      expect.objectContaining({ path: '/api/oracle/finalize-trade' }),
+    );
+    expect(result).toMatchObject({
+      phase: 'final_release_after_notice_deadline',
+      oraclePath: '/api/oracle/finalize-trade',
+    });
   });
 
   it('fails closed when a legacy handoff is not bound to an on-chain trade id', async () => {
