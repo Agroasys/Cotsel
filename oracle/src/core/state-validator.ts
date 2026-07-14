@@ -17,9 +17,12 @@ export class StateValidator {
         break;
 
       case TriggerType.CONFIRM_ARRIVAL:
+      case TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD:
+      case TriggerType.CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL:
         this.validateConfirmArrival(trade);
         break;
 
+      case TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE:
       case TriggerType.FINALIZE_TRADE:
         this.validateFinalizeTrade(trade);
         break;
@@ -57,30 +60,12 @@ export class StateValidator {
       );
     }
 
-    if (trade.arrivalTimestamp) {
-      const DISPUTE_WINDOW_HOURS = 24;
-      const disputeWindowMs = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000;
-      const arrivalTime = trade.arrivalTimestamp.getTime();
-      const now = Date.now();
-
-      if (now <= arrivalTime + disputeWindowMs) {
-        const remainingMs = arrivalTime + disputeWindowMs - now;
-        const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000));
-        const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
-
-        throw new ValidationError(
-          `Cannot finalize: Dispute window (24h) not expired. Remaining: ${remainingHours}h (${remainingMinutes} minutes)`,
-        );
-      }
-
-      Logger.info('Dispute window validation passed', {
-        tradeId: trade.tradeId,
-        arrivalTimestamp: trade.arrivalTimestamp.toISOString(),
-        elapsedHours: ((now - arrivalTime) / (60 * 60 * 1000)).toFixed(2),
-      });
-    } else {
+    if (!trade.arrivalTimestamp) {
       throw new ValidationError(`Cannot finalize: Trade ${trade.tradeId} has no arrival timestamp`);
     }
+
+    // The contract owns the per-trade 48h/72h deadline and the separate
+    // immediate path for explicit buyer acceptance.
   }
 
   static validateTradeId(tradeId: string): void {

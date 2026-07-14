@@ -45,6 +45,8 @@ const RECEIPT = {
 type MockContractWithSigner = {
   releaseFundsStage1: jest.Mock;
   confirmArrival: jest.Mock;
+  confirmInspectionAvailable: jest.Mock;
+  finalizeAfterInspectionAcceptance: jest.Mock;
   finalizeAfterDisputeWindow: jest.Mock;
 };
 
@@ -75,6 +77,8 @@ function makeSdkUnit(authorizedOracle = '0x1111111111111111111111111111111111111
   const contractWithSigner: MockContractWithSigner = {
     releaseFundsStage1: jest.fn(),
     confirmArrival: jest.fn(),
+    confirmInspectionAvailable: jest.fn(),
+    finalizeAfterInspectionAcceptance: jest.fn(),
     finalizeAfterDisputeWindow: jest.fn(),
   };
   const connect = jest.fn().mockReturnValue(contractWithSigner);
@@ -118,6 +122,40 @@ describe('OracleSDK unit', () => {
 
     await expect(sdk.confirmArrival(3n, signer)).rejects.toBeInstanceOf(AuthorizationError);
     expect(connect).not.toHaveBeenCalled();
+  });
+
+  test('confirmInspectionAvailable should send only an approved policy window', async () => {
+    const { sdk, contractWithSigner } = makeSdkUnit();
+    const { signer } = makeOracleSigner();
+    const tx = mockSuccessCall(contractWithSigner.confirmInspectionAvailable);
+
+    const result = await sdk.confirmInspectionAvailable(3n, 72 * 60 * 60, signer);
+
+    expect(contractWithSigner.confirmInspectionAvailable).toHaveBeenCalledWith(3n, 72 * 60 * 60);
+    expect(tx.wait).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
+  });
+
+  test('confirmInspectionAvailable should reject an arbitrary window before contract execution', async () => {
+    const { sdk, contractWithSigner } = makeSdkUnit();
+    const { signer } = makeOracleSigner();
+
+    await expect(sdk.confirmInspectionAvailable(3n, 12 * 60 * 60, signer)).rejects.toThrow(
+      'approved 48-hour or 72-hour policy',
+    );
+    expect(contractWithSigner.confirmInspectionAvailable).not.toHaveBeenCalled();
+  });
+
+  test('finalizeAfterInspectionAcceptance should use the oracle-authorized immediate path', async () => {
+    const { sdk, contractWithSigner } = makeSdkUnit();
+    const { signer } = makeOracleSigner();
+    const tx = mockSuccessCall(contractWithSigner.finalizeAfterInspectionAcceptance);
+
+    const result = await sdk.finalizeAfterInspectionAcceptance(4n, signer);
+
+    expect(contractWithSigner.finalizeAfterInspectionAcceptance).toHaveBeenCalledWith(4n);
+    expect(tx.wait).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
   });
 
   test('releaseFundsStage1 should reject signer network mismatches before oracle verification', async () => {

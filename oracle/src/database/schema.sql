@@ -94,10 +94,16 @@ BEGIN
         ));
 
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_trigger_type') THEN
-        ALTER TABLE oracle_triggers ADD CONSTRAINT check_trigger_type
-            CHECK (trigger_type IN ('RELEASE_STAGE_1', 'CONFIRM_ARRIVAL', 'FINALIZE_TRADE'));
-    END IF;
+    ALTER TABLE oracle_triggers DROP CONSTRAINT IF EXISTS check_trigger_type;
+    ALTER TABLE oracle_triggers ADD CONSTRAINT check_trigger_type
+        CHECK (trigger_type IN (
+            'RELEASE_STAGE_1',
+            'CONFIRM_ARRIVAL',
+            'CONFIRM_INSPECTION_AVAILABLE_STANDARD',
+            'CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL',
+            'FINALIZE_AFTER_INSPECTION_ACCEPTANCE',
+            'FINALIZE_TRADE'
+        ));
 
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_error_type') THEN
         ALTER TABLE oracle_triggers ADD CONSTRAINT check_error_type

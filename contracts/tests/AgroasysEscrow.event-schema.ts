@@ -33,6 +33,8 @@ describe('AgroasysEscrow event schema', function () {
       'FundsReleasedStage2(uint256,address,uint256,address,uint256)',
       'GaslessTradeFunded(uint256,address,bytes32,uint256)',
       'InTransitTimeoutRefunded(uint256,address,uint256)',
+      'InspectionAcceptedForFinalRelease(uint256,uint256)',
+      'InspectionAvailable(uint256,uint256,uint256,uint256)',
       'OracleDisabledEmergency(address,address)',
       'OracleUpdateApproved(uint256,address,uint256,uint256)',
       'OracleUpdateProposalExpiredCancelled(uint256,address)',

@@ -24,6 +24,28 @@ The gateway remains an operator control plane and does not replace service-owned
 | Ricardian reads              | `ricardian` (`/api/ricardian/v1/*`) | Gateway uses shared HMAC service auth when configured, retries reads only, and treats 404 as a true not-found instead of degraded fallback.                     |
 | Notifications emission       | library/runtime hooks               | No gateway mutation/read surface yet; operations summary may probe a configured URL but absence remains deterministic `unavailable`.                            |
 
+### Agroasys settlement handoff progression
+
+Agroasys uses two service-authenticated, separately idempotent gateway calls for every automatic
+settlement transition. `POST /settlement/handoffs` first records the durable handoff and its
+immutable phase. After that succeeds, `POST /settlement/handoffs/{handoffId}/oracle-execution`
+maps that stored phase to the authoritative oracle command. The executable phases are the 60%
+custody-and-document release, standard 72-hour inspection availability, explicitly classified
+48-hour packaged-local inspection availability, immediate final release after buyer acceptance,
+and final release after an undisputed notice deadline.
+
+Inspection availability is a zero-money handoff. It exists to start the matching Cotsel contract
+clock from the same contract-defined milestone used by Agroasys; it must never be interpreted as a
+supplier or treasury payment. Dispute-resolution handoffs are not automatically progressed through
+this route because their payout allocation remains governed by the dispute-resolution workflow.
+
+The progression route accepts only a numeric on-chain Cotsel trade identifier. A legacy order
+reference cannot be substituted. If ingress succeeds but oracle progression fails with a server or
+transport error, the Agroasys outbox retries the same ingress key and the same progression key; the
+gateway replays the stored ingress response and retries the released progression reservation. A 4xx
+state conflict is retained as deterministic evidence and requires correction or operator review,
+not a mutated retry.
+
 Ownership rule:
 
 - Gateway orchestration policy ownership: platform/ops maintainers under the active Base governance scope.

@@ -217,7 +217,7 @@ contract Handler is Test {
 
         (,,,,,,,,,,,uint256 arrivalTimestamp) = escrow.trades(tradeId);
 
-        vm.warp(arrivalTimestamp + 24 hours + 1);
+        vm.warp(arrivalTimestamp + 72 hours + 1);
 
         vm.prank(admin1);
         escrow.finalizeAfterDisputeWindow(tradeId);

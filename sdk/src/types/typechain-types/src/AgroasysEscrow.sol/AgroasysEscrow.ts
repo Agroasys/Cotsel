@@ -63,6 +63,8 @@ export interface AgroasysEscrowInterface extends Interface {
       | "GOVERNANCE_PROPOSAL_TTL"
       | "IN_TRANSIT_TIMEOUT"
       | "LOCK_TIMEOUT"
+      | "PACKAGED_LOCAL_INSPECTION_WINDOW"
+      | "STANDARD_INSPECTION_WINDOW"
       | "adminAddCounter"
       | "adminAddHasApproved"
       | "adminAddProposalCancelled"
@@ -86,6 +88,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "claimableUsdc"
       | "claimsPaused"
       | "confirmArrival"
+      | "confirmInspectionAvailable"
       | "createTradeWithAuthorization"
       | "disableOracleEmergency"
       | "disputeCounter"
@@ -98,6 +101,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "executeTreasuryPayoutAddressUpdate"
       | "finalizeAfterDisputeWindow"
       | "finalizeAfterDisputeWindowWithAuthorization"
+      | "finalizeAfterInspectionAcceptance"
       | "getAuthorizationNonce"
       | "getNextTradeId"
       | "governanceApprovals"
@@ -105,6 +109,8 @@ export interface AgroasysEscrowInterface extends Interface {
       | "hasActiveUnpauseProposal"
       | "hasPendingTreasuryPayoutAddressUpdateProposal"
       | "inTransitSince"
+      | "inspectionDeadline"
+      | "inspectionWindowSeconds"
       | "isAdmin"
       | "isRelayer"
       | "nonRefundableFeeAmount"
@@ -169,6 +175,8 @@ export interface AgroasysEscrowInterface extends Interface {
       | "FundsReleasedStage2"
       | "GaslessTradeFunded"
       | "InTransitTimeoutRefunded"
+      | "InspectionAcceptedForFinalRelease"
+      | "InspectionAvailable"
       | "OracleDisabledEmergency"
       | "OracleUpdateApproved"
       | "OracleUpdateProposalExpiredCancelled"
@@ -230,6 +238,14 @@ export interface AgroasysEscrowInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "LOCK_TIMEOUT",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "PACKAGED_LOCAL_INSPECTION_WINDOW",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "STANDARD_INSPECTION_WINDOW",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -325,6 +341,10 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "confirmInspectionAvailable",
+    values: [BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "createTradeWithAuthorization",
     values: [
       AddressLike,
@@ -386,6 +406,10 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [BigNumberish, BigNumberish, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "finalizeAfterInspectionAcceptance",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "getAuthorizationNonce",
     values: [AddressLike]
   ): string;
@@ -411,6 +435,14 @@ export interface AgroasysEscrowInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "inTransitSince",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "inspectionDeadline",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "inspectionWindowSeconds",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -602,6 +634,14 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "PACKAGED_LOCAL_INSPECTION_WINDOW",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "STANDARD_INSPECTION_WINDOW",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "adminAddCounter",
     data: BytesLike
   ): Result;
@@ -691,6 +731,10 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "confirmInspectionAvailable",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "createTradeWithAuthorization",
     data: BytesLike
   ): Result;
@@ -739,6 +783,10 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "finalizeAfterInspectionAcceptance",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getAuthorizationNonce",
     data: BytesLike
   ): Result;
@@ -764,6 +812,14 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "inTransitSince",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "inspectionDeadline",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "inspectionWindowSeconds",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "isAdmin", data: BytesLike): Result;
@@ -1358,6 +1414,44 @@ export namespace InTransitTimeoutRefundedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace InspectionAcceptedForFinalReleaseEvent {
+  export type InputTuple = [tradeId: BigNumberish, acceptedAt: BigNumberish];
+  export type OutputTuple = [tradeId: bigint, acceptedAt: bigint];
+  export interface OutputObject {
+    tradeId: bigint;
+    acceptedAt: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace InspectionAvailableEvent {
+  export type InputTuple = [
+    tradeId: BigNumberish,
+    inspectionAvailableAt: BigNumberish,
+    inspectionWindowSeconds: BigNumberish,
+    noticeDeadline: BigNumberish
+  ];
+  export type OutputTuple = [
+    tradeId: bigint,
+    inspectionAvailableAt: bigint,
+    inspectionWindowSeconds: bigint,
+    noticeDeadline: bigint
+  ];
+  export interface OutputObject {
+    tradeId: bigint;
+    inspectionAvailableAt: bigint;
+    inspectionWindowSeconds: bigint;
+    noticeDeadline: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace OracleDisabledEmergencyEvent {
   export type InputTuple = [by: AddressLike, previousOracle: AddressLike];
   export type OutputTuple = [by: string, previousOracle: string];
@@ -1859,6 +1953,10 @@ export interface AgroasysEscrow extends BaseContract {
 
   LOCK_TIMEOUT: TypedContractMethod<[], [bigint], "view">;
 
+  PACKAGED_LOCAL_INSPECTION_WINDOW: TypedContractMethod<[], [bigint], "view">;
+
+  STANDARD_INSPECTION_WINDOW: TypedContractMethod<[], [bigint], "view">;
+
   adminAddCounter: TypedContractMethod<[], [bigint], "view">;
 
   adminAddHasApproved: TypedContractMethod<
@@ -1983,6 +2081,12 @@ export interface AgroasysEscrow extends BaseContract {
     "nonpayable"
   >;
 
+  confirmInspectionAvailable: TypedContractMethod<
+    [_tradeId: BigNumberish, _windowSeconds: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   createTradeWithAuthorization: TypedContractMethod<
     [
       _buyer: AddressLike,
@@ -2074,6 +2178,12 @@ export interface AgroasysEscrow extends BaseContract {
     "nonpayable"
   >;
 
+  finalizeAfterInspectionAcceptance: TypedContractMethod<
+    [_tradeId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   getAuthorizationNonce: TypedContractMethod<
     [user: AddressLike],
     [bigint],
@@ -2095,6 +2205,18 @@ export interface AgroasysEscrow extends BaseContract {
   >;
 
   inTransitSince: TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+
+  inspectionDeadline: TypedContractMethod<
+    [_tradeId: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
+  inspectionWindowSeconds: TypedContractMethod<
+    [arg0: BigNumberish],
+    [bigint],
+    "view"
+  >;
 
   isAdmin: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
@@ -2361,6 +2483,12 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "LOCK_TIMEOUT"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "PACKAGED_LOCAL_INSPECTION_WINDOW"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "STANDARD_INSPECTION_WINDOW"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "adminAddCounter"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
@@ -2456,6 +2584,13 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "confirmArrival"
   ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "confirmInspectionAvailable"
+  ): TypedContractMethod<
+    [_tradeId: BigNumberish, _windowSeconds: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "createTradeWithAuthorization"
   ): TypedContractMethod<
     [
@@ -2535,6 +2670,9 @@ export interface AgroasysEscrow extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "finalizeAfterInspectionAcceptance"
+  ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "getAuthorizationNonce"
   ): TypedContractMethod<[user: AddressLike], [bigint], "view">;
   getFunction(
@@ -2554,6 +2692,12 @@ export interface AgroasysEscrow extends BaseContract {
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
     nameOrSignature: "inTransitSince"
+  ): TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "inspectionDeadline"
+  ): TypedContractMethod<[_tradeId: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "inspectionWindowSeconds"
   ): TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
   getFunction(
     nameOrSignature: "isAdmin"
@@ -2927,6 +3071,20 @@ export interface AgroasysEscrow extends BaseContract {
     InTransitTimeoutRefundedEvent.InputTuple,
     InTransitTimeoutRefundedEvent.OutputTuple,
     InTransitTimeoutRefundedEvent.OutputObject
+  >;
+  getEvent(
+    key: "InspectionAcceptedForFinalRelease"
+  ): TypedContractEvent<
+    InspectionAcceptedForFinalReleaseEvent.InputTuple,
+    InspectionAcceptedForFinalReleaseEvent.OutputTuple,
+    InspectionAcceptedForFinalReleaseEvent.OutputObject
+  >;
+  getEvent(
+    key: "InspectionAvailable"
+  ): TypedContractEvent<
+    InspectionAvailableEvent.InputTuple,
+    InspectionAvailableEvent.OutputTuple,
+    InspectionAvailableEvent.OutputObject
   >;
   getEvent(
     key: "OracleDisabledEmergency"
@@ -3306,6 +3464,28 @@ export interface AgroasysEscrow extends BaseContract {
       InTransitTimeoutRefundedEvent.InputTuple,
       InTransitTimeoutRefundedEvent.OutputTuple,
       InTransitTimeoutRefundedEvent.OutputObject
+    >;
+
+    "InspectionAcceptedForFinalRelease(uint256,uint256)": TypedContractEvent<
+      InspectionAcceptedForFinalReleaseEvent.InputTuple,
+      InspectionAcceptedForFinalReleaseEvent.OutputTuple,
+      InspectionAcceptedForFinalReleaseEvent.OutputObject
+    >;
+    InspectionAcceptedForFinalRelease: TypedContractEvent<
+      InspectionAcceptedForFinalReleaseEvent.InputTuple,
+      InspectionAcceptedForFinalReleaseEvent.OutputTuple,
+      InspectionAcceptedForFinalReleaseEvent.OutputObject
+    >;
+
+    "InspectionAvailable(uint256,uint256,uint256,uint256)": TypedContractEvent<
+      InspectionAvailableEvent.InputTuple,
+      InspectionAvailableEvent.OutputTuple,
+      InspectionAvailableEvent.OutputObject
+    >;
+    InspectionAvailable: TypedContractEvent<
+      InspectionAvailableEvent.InputTuple,
+      InspectionAvailableEvent.OutputTuple,
+      InspectionAvailableEvent.OutputObject
     >;
 
     "OracleDisabledEmergency(address,address)": TypedContractEvent<

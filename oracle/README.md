@@ -48,7 +48,8 @@ Secure oracle service that automates blockchain transactions in the Agroasys eco
 
 ## Purpose
 
-The oracle automatically executes trade state transitions (release funds, confirm arrival, finalize) while ensuring:
+The oracle automatically executes trade state transitions (release Stage 1,
+record inspection availability, and finalize the protected 40%) while ensuring:
 
 - Idempotency - No double execution
 - Resilience - Automatic retries with exponential backoff
@@ -104,15 +105,18 @@ All requests require HMAC signature verification and API key.
 All Oracle routes are mounted under `/api/oracle`, so the full URL for each entry below looks like `POST /api/oracle/release-stage1` when the service is exposed via Docker compose or `/api/oracle/health` when probing the health endpoint.
 
 - POST /release-stage1
-- POST /confirm-arrival
+- POST /confirm-inspection-available/standard
+- POST /confirm-inspection-available/packaged-local
+- POST /finalize-after-inspection-acceptance
 - POST /finalize-trade
+- POST /confirm-arrival (legacy compatibility; applies the standard 72-hour policy)
 - POST /redrive
 - GET /health
 - GET /ready
 
 ## Request Contract
 
-For `POST /release-stage1`, `POST /confirm-arrival`, and `POST /finalize-trade`:
+For the release, inspection-availability, acceptance, and deadline-finalization routes:
 
 - JSON body must include `tradeId` and `requestId`
 - Headers must include:

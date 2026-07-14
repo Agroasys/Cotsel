@@ -258,8 +258,8 @@ contract FuzzTest is Test {
         uint256 treasuryBeforeReleaseFundsStage2Balance = usdc.balanceOf(treasury);
         uint256 escrowBeforeReleaseFundsStage2Balance = usdc.balanceOf(address(escrow));
 
-        // increase time by 24 hours
-        vm.warp(block.timestamp + 24 hours + 1);
+        // increase time beyond the standard 72-hour inspection notice window
+        vm.warp(block.timestamp + 72 hours + 1);
 
         vm.prank(admin1);
         escrow.finalizeAfterDisputeWindow(tradeId);
@@ -580,7 +580,7 @@ contract FuzzTest is Test {
         escrow.openDisputeWithAuthorization(tradeId, actionNonce, actionDeadline, actionSignature);
     }
 
-    function testFuzz_CannotOpenDisputeAfter24Hours(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
+    function testFuzz_CannotOpenDisputeAfter72Hours(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
         vm.assume(ricardianHash != bytes32(0));
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
         fees = uint96(bound(fees, 500e6, 5_000e6));
@@ -595,7 +595,7 @@ contract FuzzTest is Test {
         vm.prank(oracle);
         escrow.confirmArrival(tradeId);
         
-        vm.warp(block.timestamp + 24 hours + 1 seconds);
+        vm.warp(block.timestamp + 72 hours + 1 seconds);
         
         (uint256 actionNonce, uint256 actionDeadline, bytes memory actionSignature) = _authorize_user_action(1, tradeId);
         vm.expectRevert("window closed");
@@ -604,7 +604,7 @@ contract FuzzTest is Test {
     }
 
 
-    function testFuzz_CannotReleaseStage2Before24Hours(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
+    function testFuzz_CannotReleaseStage2Before72Hours(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
         vm.assume(ricardianHash != bytes32(0));
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
         fees = uint96(bound(fees, 500e6, 5_000e6));
@@ -674,7 +674,7 @@ contract FuzzTest is Test {
         tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
         
         uint256 total = logistics + fees + tranche1 + tranche2;
-        uint256 refundablePrincipal = tranche1 + tranche2;
+        uint256 refundableProtectedAmount = total;
 
         uint256 tradeId = _create_trade(logistics, fees, tranche1, tranche2, ricardianHash);
         
@@ -696,10 +696,10 @@ contract FuzzTest is Test {
         (,,AgroasysEscrow.TradeStatus _statusAfter,,,,,,,,,) = escrow.trades(tradeId);
         
         assertEq(uint8(_statusAfter), uint8(AgroasysEscrow.TradeStatus.CLOSED), "status should be CLOSED");
-        assertEq(usdc.balanceOf(buyer), buyerBalanceBefore + refundablePrincipal, "buyer should receive refundable principal immediately");
-        assertEq(usdc.balanceOf(address(escrow)), escrowBalanceBefore - refundablePrincipal, "escrow balance should retain only non-refundable fees");
+        assertEq(usdc.balanceOf(buyer), buyerBalanceBefore + refundableProtectedAmount, "buyer should receive every protected component immediately");
+        assertEq(usdc.balanceOf(address(escrow)), escrowBalanceBefore - refundableProtectedAmount, "escrow balance should release the full protected amount");
         assertEq(escrow.claimableUsdc(buyer), 0, "buyer claimable should remain zero after direct refund");
-        assertEq(escrow.claimableUsdc(treasury), treasuryClaimableBefore + logistics + fees, "treasury claimable should retain non-refundable fees");
+        assertEq(escrow.claimableUsdc(treasury), treasuryClaimableBefore, "treasury should receive no fees before stage one");
     }
 
 

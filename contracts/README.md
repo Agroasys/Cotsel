@@ -43,9 +43,9 @@ Escrow contract implementing secure trade execution with multi-stage fund releas
 **`TradeStatus`**
 
 - `LOCKED`: Initial deposit, funds locked in escrow
-- `IN_TRANSIT`: BOL verified, stage 1 funds released (logistics + first tranche)
-- `ARRIVAL_CONFIRMED`: Oracle confirms arrival, 24-hour dispute window starts
-- `FROZEN`: Buyer raised dispute within 24h window, funds frozen
+- `IN_TRANSIT`: Independent custody and required shipping documents verified; stage 1 funds released
+- `ARRIVAL_CONFIRMED`: Goods are available for inspection and the order's 48- or 72-hour notice window is active
+- `FROZEN`: Buyer raised a dispute within the order's notice window; remaining funds are frozen
 - `CLOSED`: Trade completed or dispute resolved
 
 **`DisputeStatus`**
@@ -66,10 +66,11 @@ Complete trade data structure stored on-chain:
 - `totalAmountLocked` (uint256): Total amount locked by buyer
 - `logisticsAmount` (uint256): Logistics fees (paid at stage 1)
 - `platformFeesAmount` (uint256): Platform fees (paid at stage 1)
-- `supplierFirstTranche` (uint256): First payment to supplier (paid at stage 1, ~40%)
-- `supplierSecondTranche` (uint256): Second payment to supplier (paid at stage 2, ~60%)
+- `supplierFirstTranche` (uint256): Net first supplier payment (the 60% gross tranche less the 0.5% full-order supplier fee)
+- `supplierSecondTranche` (uint256): Remaining 40% supplier payment
 - `createdAt` (uint256): Trade creation timestamp
-- `arrivalTimestamp` (uint256): Arrival confirmation timestamp (starts 24h window)
+- `arrivalTimestamp` (uint256): Compatibility field storing when goods became available for inspection
+- `inspectionWindowSeconds` (mapping): Per-trade 48- or 72-hour inspection-notice window
 
 **`DisputeProposal`**
 Multi-signature dispute proposal structure:
@@ -134,7 +135,9 @@ Timelock-based admin addition proposal:
 - `admins` (address[]): Array of admin addresses
 - `requiredApprovals` (uint256): Minimum approvals required to execute dispute
 - `governanceTimelock` (uint256): Delay (24h) between approval and execution for governance operations
-- `DISPUTE_WINDOW` (constant uint256): 24-hour window for buyer to open dispute after arrival
+- `STANDARD_INSPECTION_WINDOW` (constant uint256): 72-hour ordinary agricultural notice window
+- `PACKAGED_LOCAL_INSPECTION_WINDOW` (constant uint256): 48-hour notice window for explicitly classified packaged-local orders
+- `DISPUTE_WINDOW` (constant uint256): Compatibility alias for the 72-hour standard inspection window
 - `LOCK_TIMEOUT` (constant uint256): Buyer timeout to cancel LOCKED trade
 - `IN_TRANSIT_TIMEOUT` (constant uint256): Buyer timeout to refund principal while IN_TRANSIT
 - `DISPUTE_PROPOSAL_TTL` (constant uint256): Dispute proposal expiry
@@ -153,44 +156,52 @@ Timelock-based admin addition proposal:
    - Requires: Valid signatures with matching nonce/deadline, non-zero addresses, and amounts matching the breakdown
 
 2. **`releaseFundsStage1(tradeId)`**
-   - Releases first stage funds after BOL verification
-   - Pays: supplier (first tranche) + treasury (logistics + platform fees)
+   - Releases first-stage funds only after independent logistics custody and required shipping-document verification
+   - Pays: supplier (net 60% first tranche) + treasury (logistics, buyer fee, fixed support fee, and supplier fee)
    - Changes status: LOCKED to IN_TRANSIT
    - Emits: `FundsReleasedStage1`, `PlatformFeesPaidStage1`
    - Access: `onlyOracle`, `onlyOracleActive`, `whenNotPaused`
 
-3. **`confirmArrival(tradeId)`**
-   - Confirms goods arrival, starts 24-hour dispute window
+3. **`confirmInspectionAvailable(tradeId, windowSeconds)`**
+   - Records that goods are available for buyer inspection and starts the order's notice window
+   - Accepts only the standard 72-hour policy or explicit packaged-local 48-hour policy
    - Changes status: IN_TRANSIT to ARRIVAL_CONFIRMED
    - Sets `arrivalTimestamp` to current block timestamp
-   - Emits: `ArrivalConfirmed`
+   - Emits: `InspectionAvailable`
    - Access: `onlyOracle`, `onlyOracleActive`, `whenNotPaused`
 
+   `confirmArrival(tradeId)` remains as a compatibility method for in-flight integrations and applies the standard 72-hour policy.
+
 4. **`openDisputeWithAuthorization(tradeId, authorizationNonce, authorizationDeadline, authorizationSignature)`**
-   - Buyer opens dispute within 24-hour window through a relayed authorization
+   - Buyer opens a dispute within the trade's 48- or 72-hour notice window through a relayed authorization
    - Freezes all remaining funds in escrow
    - Changes status: ARRIVAL_CONFIRMED to FROZEN
    - Emits: `DisputeOpenedByBuyer`, `RelayedActionExecuted`
    - Access: `onlyRelayerOrAdmin`, `whenNotPaused`
-   - Requires: Valid buyer authorization before `arrivalTimestamp + 24 hours`
+   - Requires: Valid buyer authorization before `inspectionDeadline(tradeId)`
 
 5. **`finalizeAfterDisputeWindow(tradeId)`**
-   - Finalizes trade after 24h dispute window expires
+   - Automatically finalizes after the configured notice window expires without a dispute
    - Pays: supplier (second tranche only)
    - Changes status: ARRIVAL_CONFIRMED to CLOSED
    - Emits: `FinalTrancheReleased`
    - Access: `onlyAdmin`, `whenNotPaused`
-   - Requires: Called after `arrivalTimestamp + 24 hours`
+   - Requires: Called after `inspectionDeadline(tradeId)`
 
-6. **`cancelLockedTradeAfterTimeoutWithAuthorization(tradeId, authorizationNonce, authorizationDeadline, authorizationSignature)`**
+6. **`finalizeAfterInspectionAcceptance(tradeId)`**
+   - Immediately pays the protected final 40% after the buyer explicitly accepts the inspected goods
+   - Does not wait for the remaining notice time
+   - Access: `onlyOracle`, `onlyOracleActive`, `whenNotPaused`
+
+7. **`cancelLockedTradeAfterTimeoutWithAuthorization(tradeId, authorizationNonce, authorizationDeadline, authorizationSignature)`**
    - Buyer escape hatch when a trade remains `LOCKED` past `LOCK_TIMEOUT`
-   - Transfers only refundable supplier principal directly to the buyer wallet
-   - Keeps logistics fees, platform fees, and the fixed settlement fee claimable by treasury
+   - Returns the complete locked amount directly to the buyer because no stage-one fulfillment condition was completed
+   - Leaves no logistics, platform, supplier, or support fee claimable by treasury while the trade was still `LOCKED`
    - Changes status: LOCKED to CLOSED
    - Emits: `TradeCancelledAfterLockTimeout`, `BuyerRefundTransferred`, `RelayedActionExecuted`
    - Access: `onlyRelayerOrAdmin`, `whenNotPaused`
 
-7. **`refundInTransitAfterTimeoutWithAuthorization(tradeId, authorizationNonce, authorizationDeadline, authorizationSignature)`**
+8. **`refundInTransitAfterTimeoutWithAuthorization(tradeId, authorizationNonce, authorizationDeadline, authorizationSignature)`**
    - Buyer escape hatch when trade remains `IN_TRANSIT` past `IN_TRANSIT_TIMEOUT`
    - Transfers only remaining escrowed principal (`supplierSecondTranche`) directly to the buyer wallet
    - Does not refund logistics fees, platform fees, or the fixed settlement fee
@@ -198,7 +209,7 @@ Timelock-based admin addition proposal:
    - Emits: `InTransitTimeoutRefunded`, `BuyerRefundTransferred`, `RelayedActionExecuted`
    - Access: `onlyRelayerOrAdmin`, `whenNotPaused`
 
-8. **`proposeDisputeSolution(tradeId, disputeStatus)`**
+9. **`proposeDisputeSolution(tradeId, disputeStatus)`**
    - Creates dispute resolution proposal
    - First admin approval automatically counted
    - Returns: `proposalId`
@@ -206,51 +217,52 @@ Timelock-based admin addition proposal:
    - Access: `onlyAdmin`, `whenNotPaused`
    - Requires: Trade status must be FROZEN
 
-9. **`approveDisputeSolution(proposalId)`**
-   - Adds admin approval to dispute proposal
-   - Auto-executes `_executeDispute()` when threshold reached
-   - Emits: `DisputeApproved`, potentially `DisputeFinalized`
-   - Access: `onlyAdmin`, `whenNotPaused`
-   - Requires: Not already approved by this admin, proposal not executed
+10. **`approveDisputeSolution(proposalId)`**
 
-10. **`cancelExpiredDisputeProposal(proposalId)`**
+- Adds admin approval to dispute proposal
+- Auto-executes `_executeDispute()` when threshold reached
+- Emits: `DisputeApproved`, potentially `DisputeFinalized`
+- Access: `onlyAdmin`, `whenNotPaused`
+- Requires: Not already approved by this admin, proposal not executed
+
+11. **`cancelExpiredDisputeProposal(proposalId)`**
 
 - Cancels expired dispute proposal
 - Emits: `DisputeProposalExpiredCancelled`
 - Access: `onlyAdmin`, `whenNotPaused`
 
-11. **`pause()`**
+12. **`pause()`**
 
 - Emergency pause for protocol operations
 - Emits: `Paused`
 - Access: `onlyAdmin`
 
-12. **`proposeUnpause()`**
+13. **`proposeUnpause()`**
 
 - Starts unpause recovery proposal
 - Emits: `UnpauseProposed`, `UnpauseApproved`
 - Access: `onlyAdmin`
 - Requires: `paused == true` and `oracleActive == true`
 
-13. **`approveUnpause()`**
+14. **`approveUnpause()`**
 
 - Adds approval to active unpause proposal
 - Emits: `UnpauseApproved`, and `Unpaused` once quorum is reached
 - Access: `onlyAdmin`
 
-14. **`cancelUnpauseProposal()`**
+15. **`cancelUnpauseProposal()`**
 
 - Cancels active unpause proposal
 - Emits: `UnpauseProposalCancelled`
 - Access: `onlyAdmin`
 
-15. **`disableOracleEmergency()`**
+16. **`disableOracleEmergency()`**
 
 - Emergency containment: disables oracle-triggered transitions and pauses protocol
 - Emits: `OracleDisabledEmergency` (and `Paused` if not already paused)
 - Access: `onlyAdmin`
 
-16. **`getNextTradeId()`**
+17. **`getNextTradeId()`**
 
 - Returns the next available trade ID
 - Returns: `tradeCounter`
@@ -258,7 +270,7 @@ Timelock-based admin addition proposal:
 
 **Governance Functions:**
 
-17. **`proposeOracleUpdate(newOracle)`**
+18. **`proposeOracleUpdate(newOracle)`**
     - Creates timelock-based oracle rotation proposal
     - First admin approval automatically counted
     - Returns: `proposalId`
@@ -266,24 +278,24 @@ Timelock-based admin addition proposal:
     - Access: `onlyAdmin`
     - Requires: Configured admin approval quorum, with deployment enforcing a minimum quorum of 2
 
-18. **`approveOracleUpdate(proposalId)`**
+19. **`approveOracleUpdate(proposalId)`**
     - Adds admin approval to oracle update proposal
     - Emits: `OracleUpdateApproved`
     - Access: `onlyAdmin`
     - Requires: Not already approved by this admin, proposal not executed
 
-19. **`executeOracleUpdate(proposalId)`**
+20. **`executeOracleUpdate(proposalId)`**
     - Executes approved oracle update after timelock or emergency fast-track
     - Emits: `OracleUpdated`
     - Access: `onlyAdmin`
     - Requires: Sufficient approvals; timelock elapsed for normal proposals, immediate execution for emergency fast-track proposals
 
-20. **`cancelExpiredOracleUpdateProposal(proposalId)`**
+21. **`cancelExpiredOracleUpdateProposal(proposalId)`**
     - Cancels expired oracle update proposal
     - Emits: `OracleUpdateProposalExpiredCancelled`
     - Access: `onlyAdmin`
 
-21. **`proposeAddAdmin(newAdmin)`**
+22. **`proposeAddAdmin(newAdmin)`**
     - Creates timelock-based admin addition proposal
     - First admin approval automatically counted
     - Returns: `proposalId`
@@ -291,24 +303,24 @@ Timelock-based admin addition proposal:
     - Access: `onlyAdmin`
     - Requires: Configured admin approval quorum, with deployment enforcing a minimum quorum of 2
 
-22. **`approveAddAdmin(proposalId)`**
+23. **`approveAddAdmin(proposalId)`**
     - Adds admin approval to admin addition proposal
     - Emits: `AdminAddApproved`
     - Access: `onlyAdmin`
     - Requires: Not already approved by this admin, proposal not executed
 
-23. **`executeAddAdmin(proposalId)`**
+24. **`executeAddAdmin(proposalId)`**
     - Executes approved admin addition after timelock expires
     - Emits: `AdminAdded`
     - Access: `onlyAdmin`
     - Requires: Sufficient approvals, timelock elapsed (24h)
 
-24. **`cancelExpiredAddAdminProposal(proposalId)`**
+25. **`cancelExpiredAddAdminProposal(proposalId)`**
     - Cancels expired admin-add proposal
     - Emits: `AdminAddProposalExpiredCancelled`
     - Access: `onlyAdmin`
 
-25. **`governanceApprovals()`**
+26. **`governanceApprovals()`**
     - Returns minimum approvals required for governance operations
     - Returns: `max(2, requiredApprovals)` for extra security
     - Access: View function (anyone)
@@ -346,8 +358,10 @@ Timelock-based admin addition proposal:
 - `TradeLocked(tradeId, buyer, supplier, totalAmount, logisticsAmount, platformFeesAmount, supplierFirstTranche, supplierSecondTranche, ricardianHash)`: New trade created and funds locked
 - `FundsReleasedStage1(tradeId, supplier, supplierFirstTranche, treasury, logisticsAmount)`: Stage 1 funds released (first tranche + logistics)
 - `PlatformFeesPaidStage1(tradeId, treasury, platformFeesAmount, platformFeeNetAmount, settlementSupportFeeAmount)`: Platform and settlement support fees paid at Stage 1
-- `ArrivalConfirmed(tradeId, arrivalTimestamp)`: Arrival confirmed, 24h dispute window started
-- `FinalTrancheReleased(tradeId, supplier, supplierSecondTranche)`: Final tranche released after dispute window
+- `InspectionAvailable(tradeId, inspectionAvailableAt, inspectionWindowSeconds, inspectionDeadline)`: Goods became inspectable and the 48- or 72-hour notice window started
+- `ArrivalConfirmed(tradeId, arrivalTimestamp)`: Compatibility event emitted by the legacy `confirmArrival` entry point
+- `InspectionAcceptedForFinalRelease(tradeId, acceptedAt)`: Buyer acceptance authorized immediate final release
+- `FinalTrancheReleased(tradeId, supplier, supplierSecondTranche)`: Protected final 40% released after acceptance or the no-dispute deadline
 - `DisputeOpenedByBuyer(tradeId)`: Buyer opened dispute, trade frozen
 
 **Dispute Events:**

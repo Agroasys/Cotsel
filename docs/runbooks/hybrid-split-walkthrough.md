@@ -152,7 +152,11 @@ If not:
 
 ### 5. Stage-2 release (final settlement)
 
-After arrival is confirmed and the dispute window elapses without an active dispute, final settlement is executed via `finalizeAfterDisputeWindow` (permissionless on-chain closeout).
+After goods become available for inspection, the oracle records the order's 48-
+or 72-hour notice policy. The final 40% is released immediately through
+`finalizeAfterInspectionAcceptance` when the buyer accepts the inspected goods,
+or through `finalizeAfterDisputeWindow` when the exact notice deadline passes
+without an active dispute.
 
 Expected result:
 

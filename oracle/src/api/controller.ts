@@ -12,7 +12,9 @@ import { Logger } from '../utils/logger';
 import {
   ApprovalRequest,
   ConfirmArrivalRequest,
+  ConfirmInspectionAvailableRequest,
   ErrorResponse,
+  FinalizeAfterInspectionAcceptanceRequest,
   FinalizeTradeRequest,
   OracleResponse,
   RejectRequest,
@@ -259,6 +261,50 @@ export class OracleController {
     }
   }
 
+  async confirmInspectionAvailableStandard(
+    req: Request<RouteParams, unknown, ConfirmInspectionAvailableRequest>,
+    res: Response<OracleResponse | ErrorResponse>,
+  ): Promise<void> {
+    await this.executeInspectionTrigger(
+      req,
+      res,
+      TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD,
+      'confirmInspectionAvailableStandard',
+    );
+  }
+
+  async confirmInspectionAvailablePackagedLocal(
+    req: Request<RouteParams, unknown, ConfirmInspectionAvailableRequest>,
+    res: Response<OracleResponse | ErrorResponse>,
+  ): Promise<void> {
+    await this.executeInspectionTrigger(
+      req,
+      res,
+      TriggerType.CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL,
+      'confirmInspectionAvailablePackagedLocal',
+    );
+  }
+
+  async finalizeAfterInspectionAcceptance(
+    req: Request<RouteParams, unknown, FinalizeAfterInspectionAcceptanceRequest>,
+    res: Response<OracleResponse | ErrorResponse>,
+  ): Promise<void> {
+    try {
+      const { tradeId, requestId } = parseTriggerBody(req.body);
+      const result = await this.triggerManager.executeTrigger({
+        tradeId,
+        requestId,
+        triggerType: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+        requestHash: req.hmacSignature,
+      });
+
+      res.status(200).json(buildOracleSuccess(result));
+    } catch (error: unknown) {
+      Logger.error('Controller error in finalizeAfterInspectionAcceptance', error);
+      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+    }
+  }
+
   async finalizeTrade(
     req: Request<RouteParams, unknown, FinalizeTradeRequest>,
     res: Response<OracleResponse | ErrorResponse>,
@@ -275,6 +321,30 @@ export class OracleController {
       res.status(200).json(buildOracleSuccess(result));
     } catch (error: unknown) {
       Logger.error('Controller error in finalizeTrade', error);
+      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+    }
+  }
+
+  private async executeInspectionTrigger(
+    req: Request<RouteParams, unknown, ConfirmInspectionAvailableRequest>,
+    res: Response<OracleResponse | ErrorResponse>,
+    triggerType:
+      | TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD
+      | TriggerType.CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL,
+    operation: string,
+  ): Promise<void> {
+    try {
+      const { tradeId, requestId } = parseTriggerBody(req.body);
+      const result = await this.triggerManager.executeTrigger({
+        tradeId,
+        requestId,
+        triggerType,
+        requestHash: req.hmacSignature,
+      });
+
+      res.status(200).json(buildOracleSuccess(result));
+    } catch (error: unknown) {
+      Logger.error(`Controller error in ${operation}`, error);
       res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
     }
   }

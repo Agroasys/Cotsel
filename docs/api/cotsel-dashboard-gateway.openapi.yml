@@ -738,6 +738,52 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '409':
           $ref: '#/components/responses/ConflictError'
+  /settlement/handoffs/{handoffId}/oracle-execution:
+    post:
+      tags: [Settlement]
+      summary: Progress an accepted handoff through the authoritative oracle
+      description: |
+        Service-authenticated, idempotent execution step used after handoff ingress. The gateway maps the stored
+        settlement phase to the matching oracle command. It supports custody-and-document release, standard or
+        packaged-local inspection availability, buyer inspection acceptance, and notice-deadline finalization.
+        Governed dispute resolutions are deliberately rejected and must follow their administrative workflow.
+        The stored trade identifier must be a numeric on-chain Cotsel trade id.
+      operationId: executeSettlementHandoffOracleProgression
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/SettlementHandoffId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '202':
+          description: The oracle accepted the settlement progression command.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementOracleProgressionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
   /settlement/gasless-executions/create-trade:
     post:
       tags: [Settlement]
@@ -4149,6 +4195,35 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/SettlementHandoff'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementOracleProgressionResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required: [handoffId, phase, oraclePath, oracle]
+          properties:
+            handoffId:
+              type: string
+            phase:
+              type: string
+              enum:
+                - initial_release_after_custody_and_documents
+                - inspection_available_standard
+                - inspection_available_packaged_local
+                - final_release_after_inspection_acceptance
+                - final_release_after_notice_deadline
+            oraclePath:
+              type: string
+            oracle:
+              type: object
+              additionalProperties: true
         timestamp:
           type: string
           format: date-time

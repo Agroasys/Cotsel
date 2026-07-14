@@ -64,25 +64,31 @@ export interface BuyerLockPayload {
   /**
    * Logistics fee component, in the smallest USDC unit.
    *
-   * Routed to the `TreasuryWallet` during Stage 1.
+   * Routed to the `TreasuryWallet` during Stage 1, after independent custody
+   * and required shipping-document verification.
    */
   logisticsAmount: bigint;
 
   /**
    * Platform service fee component, in the smallest USDC unit.
    *
-   * Routed to the `TreasuryWallet` during Stage 1.
+   * For the Agroasys 60/40 policy this combines the buyer's 1% fee, the fixed
+   * USD 4 settlement/support fee, and the supplier's 0.5% full-order fee. It
+   * is routed to the `TreasuryWallet` during Stage 1.
    */
   platformFeesAmount: bigint;
 
   /**
-   * First supplier tranche, released at Stage 1.
+   * Net first supplier tranche, released at Stage 1. Agroasys calculates this
+   * as 60% of the gross goods value less the supplier fee equal to 0.5% of the
+   * full goods value.
    */
   supplierFirstTranche: bigint;
 
   /**
-   * Second supplier tranche, released at Stage 2 (arrival / inspection
-   * attestation).
+   * Remaining 40% supplier goods principal. Released immediately after buyer
+   * inspection acceptance or automatically after the applicable 48- or
+   * 72-hour notice deadline if no dispute is open.
    */
   supplierSecondTranche: bigint;
 

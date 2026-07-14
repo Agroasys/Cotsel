@@ -52,6 +52,7 @@ import { ReconciliationReadService } from './core/reconciliationReadService';
 import { RicardianClient } from './core/ricardianClient';
 import { createDownstreamServiceRegistry } from './core/serviceRegistry';
 import { ServiceOrchestrator } from './core/serviceOrchestrator';
+import { OracleSettlementProgressionService } from './core/oracleSettlementProgressionService';
 import { Logger } from './logging/logger';
 import { createAccessLogRouter } from './routes/accessLogs';
 import { createCapabilitiesRouter } from './routes/capabilities';
@@ -213,6 +214,10 @@ const downstreamServiceRegistry = createDownstreamServiceRegistry([
   },
 ]);
 const orchestrator = new ServiceOrchestrator(downstreamServiceRegistry);
+const oracleSettlementProgressionService = new OracleSettlementProgressionService(
+  settlementStore,
+  orchestrator,
+);
 const treasuryWorkflowService = new TreasuryWorkflowService(orchestrator, auditLogStore);
 const indexerClient = new IndexerGraphqlClient(
   config.indexerGraphqlUrl,
@@ -416,6 +421,7 @@ async function bootstrap(): Promise<void> {
       settlementService,
       settlementStore,
       gaslessSettlementService,
+      oracleSettlementProgressionService,
       nonceStore: settlementNonceStore,
       idempotencyStore,
       lookupServiceApiKey: settlementServiceApiKeyLookup,

@@ -1,0 +1,106 @@
+/**
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { GatewayError } from '../errors';
+import type { DownstreamServiceOrchestrator } from './serviceOrchestrator';
+import type { SettlementHandoffRecord, SettlementStore } from './settlementStore';
+
+const ORACLE_PATH_BY_PHASE = {
+  initial_release_after_custody_and_documents: '/api/oracle/release-stage1',
+  inspection_available_standard: '/api/oracle/confirm-inspection-available/standard',
+  inspection_available_packaged_local: '/api/oracle/confirm-inspection-available/packaged-local',
+  final_release_after_inspection_acceptance: '/api/oracle/finalize-after-inspection-acceptance',
+  final_release_after_notice_deadline: '/api/oracle/finalize-trade',
+} as const;
+
+type ExecutableSettlementPhase = keyof typeof ORACLE_PATH_BY_PHASE;
+
+export interface OracleSettlementProgressionResult {
+  handoffId: string;
+  phase: ExecutableSettlementPhase;
+  oraclePath: string;
+  oracle: Record<string, unknown>;
+}
+
+export class OracleSettlementProgressionService {
+  constructor(
+    private readonly settlementStore: SettlementStore,
+    private readonly orchestrator: DownstreamServiceOrchestrator,
+  ) {}
+
+  async executeHandoff(
+    handoffId: string,
+    requestId: string,
+  ): Promise<OracleSettlementProgressionResult> {
+    const handoff = await this.settlementStore.getHandoff(handoffId);
+    if (!handoff) {
+      throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', { handoffId });
+    }
+
+    if (!/^\d+$/.test(handoff.tradeId)) {
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'Settlement handoff is not bound to a numeric on-chain trade identifier',
+        { handoffId, tradeId: handoff.tradeId },
+      );
+    }
+
+    const phase = this.requireExecutablePhase(handoff);
+    const path = ORACLE_PATH_BY_PHASE[phase];
+    const response = await this.orchestrator.fetch('oracle', {
+      method: 'POST',
+      path,
+      body: { tradeId: handoff.tradeId, requestId },
+      readOnly: false,
+      authenticated: true,
+      operation: `oracle:settlement:${phase}`,
+      requestContext: { requestId, correlationId: requestId },
+    });
+    const body = await this.readResponseBody(response, handoff);
+
+    if (!response.ok || body.success !== true) {
+      throw new GatewayError(
+        502,
+        'UPSTREAM_UNAVAILABLE',
+        'Oracle rejected the settlement progression command',
+        { handoffId, phase, oracleStatus: response.status },
+      );
+    }
+
+    return { handoffId, phase, oraclePath: path, oracle: body };
+  }
+
+  private requireExecutablePhase(handoff: SettlementHandoffRecord): ExecutableSettlementPhase {
+    if (handoff.phase in ORACLE_PATH_BY_PHASE) {
+      return handoff.phase as ExecutableSettlementPhase;
+    }
+
+    throw new GatewayError(
+      409,
+      'CONFLICT',
+      'This settlement phase does not support automatic oracle progression',
+      { handoffId: handoff.handoffId, phase: handoff.phase },
+    );
+  }
+
+  private async readResponseBody(
+    response: Response,
+    handoff: SettlementHandoffRecord,
+  ): Promise<Record<string, unknown>> {
+    try {
+      const body = (await response.json()) as unknown;
+      if (body && typeof body === 'object' && !Array.isArray(body)) {
+        return body as Record<string, unknown>;
+      }
+    } catch {
+      // The normalized error below avoids returning upstream response bodies.
+    }
+
+    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Oracle returned an invalid response', {
+      handoffId: handoff.handoffId,
+      phase: handoff.phase,
+      oracleStatus: response.status,
+    });
+  }
+}

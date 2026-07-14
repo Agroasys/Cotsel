@@ -161,6 +161,42 @@ export class SDKClient {
     };
   }
 
+  async confirmInspectionAvailable(
+    tradeId: string,
+    windowSeconds: number,
+  ): Promise<BlockchainResult> {
+    Logger.info('Executing confirmInspectionAvailable', { tradeId, windowSeconds });
+
+    const result = await this.sdk.confirmInspectionAvailable(tradeId, windowSeconds, this.signer);
+
+    Logger.info('Inspection availability confirmation successful', {
+      tradeId,
+      windowSeconds,
+      txHash: result.txHash,
+    });
+
+    return {
+      txHash: result.txHash,
+      blockNumber: result.blockNumber,
+    };
+  }
+
+  async finalizeAfterInspectionAcceptance(tradeId: string): Promise<BlockchainResult> {
+    Logger.info('Executing finalizeAfterInspectionAcceptance', { tradeId });
+
+    const result = await this.sdk.finalizeAfterInspectionAcceptance(tradeId, this.signer);
+
+    Logger.info('Inspection acceptance finalization successful', {
+      tradeId,
+      txHash: result.txHash,
+    });
+
+    return {
+      txHash: result.txHash,
+      blockNumber: result.blockNumber,
+    };
+  }
+
   async finalizeTrade(tradeId: string): Promise<BlockchainResult> {
     Logger.info('Executing finalizeTrade', { tradeId });
 

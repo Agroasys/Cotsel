@@ -14,6 +14,7 @@ import type {
 } from '../core/gaslessSettlementExecutionService';
 import { createServiceAuthMiddleware } from '../core/serviceAuth';
 import { SettlementService } from '../core/settlementService';
+import { OracleSettlementProgressionService } from '../core/oracleSettlementProgressionService';
 import {
   SettlementStore,
   SETTLEMENT_EVENT_TYPES,
@@ -26,6 +27,7 @@ export interface SettlementRouterOptions {
   settlementService: SettlementService;
   settlementStore: SettlementStore;
   gaslessSettlementService?: GaslessSettlementExecutionService | null;
+  oracleSettlementProgressionService?: OracleSettlementProgressionService | null;
   nonceStore: { consume(apiKey: string, nonce: string, ttlSeconds: number): Promise<boolean> };
   idempotencyStore: IdempotencyStore;
   lookupServiceApiKey: (
@@ -229,6 +231,24 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
         });
 
         return handoff;
+      },
+      res,
+      next,
+    ),
+  );
+
+  router.post('/settlement/handoffs/:handoffId/oracle-execution', idempotency, (req, res, next) =>
+    handleRequest(
+      async () => {
+        if (!options.oracleSettlementProgressionService) {
+          throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Oracle progression is unavailable');
+        }
+        const handoffId = requireString(req.params.handoffId, 'handoffId');
+        rejectUnexpectedFields(requireObject(req.body ?? {}, 'body'), [], 'body');
+        return options.oracleSettlementProgressionService.executeHandoff(
+          handoffId,
+          getRequestId(req),
+        );
       },
       res,
       next,

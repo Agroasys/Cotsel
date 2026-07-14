@@ -26,6 +26,16 @@ export interface ConfirmArrivalRequest {
   requestId: string;
 }
 
+export interface ConfirmInspectionAvailableRequest {
+  tradeId: string;
+  requestId: string;
+}
+
+export interface FinalizeAfterInspectionAcceptanceRequest {
+  tradeId: string;
+  requestId: string;
+}
+
 export interface FinalizeTradeRequest {
   tradeId: string;
   requestId: string;

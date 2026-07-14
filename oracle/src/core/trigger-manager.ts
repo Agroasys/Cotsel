@@ -534,6 +534,15 @@ export class TriggerManager {
       case TriggerType.CONFIRM_ARRIVAL:
         return await this.sdkClient.confirmArrival(tradeId);
 
+      case TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD:
+        return await this.sdkClient.confirmInspectionAvailable(tradeId, 72 * 60 * 60);
+
+      case TriggerType.CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL:
+        return await this.sdkClient.confirmInspectionAvailable(tradeId, 48 * 60 * 60);
+
+      case TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE:
+        return await this.sdkClient.finalizeAfterInspectionAcceptance(tradeId);
+
       case TriggerType.FINALIZE_TRADE:
         return await this.sdkClient.finalizeTrade(tradeId);
 
