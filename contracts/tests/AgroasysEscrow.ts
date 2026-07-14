@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { expect } from 'chai';
-import { ethers } from 'hardhat';
+import { artifacts, ethers } from 'hardhat';
 import { AgroasysEscrow, MockUSDC } from '../typechain-types';
 import { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers';
 import { time } from '@nomicfoundation/hardhat-network-helpers';
@@ -310,10 +310,10 @@ describe('AgroasysEscrow', function () {
   }
 
   async function createDefaultTrade(ricardianHash: string = ethers.id('trade-hash')) {
-    const totalAmount = ethers.parseUnits('107000', 6);
+    const totalAmount = ethers.parseUnits('106004', 6);
     const logisticsAmount = ethers.parseUnits('5000', 6);
-    const platformFeesAmount = ethers.parseUnits('2000', 6);
-    const supplierFirstTranche = ethers.parseUnits('60000', 6);
+    const platformFeesAmount = ethers.parseUnits('1504', 6);
+    const supplierFirstTranche = ethers.parseUnits('59500', 6);
     const supplierSecondTranche = ethers.parseUnits('40000', 6);
 
     const nonce = await escrow.getAuthorizationNonce(buyer.address);
@@ -378,6 +378,13 @@ describe('AgroasysEscrow', function () {
   });
 
   describe('Deployment', function () {
+    it('Keeps deployed bytecode within the EVM contract-size limit', async function () {
+      const artifact = await artifacts.readArtifact('AgroasysEscrow');
+      const deployedBytecodeBytes = (artifact.deployedBytecode.length - 2) / 2;
+
+      expect(deployedBytecodeBytes).to.be.at.most(24_576);
+    });
+
     it('Should set correct initial values', async function () {
       expect(await escrow.oracleAddress()).to.equal(oracle.address);
       expect(await escrow.treasuryAddress()).to.equal(treasury.address);
@@ -638,11 +645,11 @@ describe('AgroasysEscrow', function () {
 
   describe('Paused Matrix Hardening', function () {
     it('Should block createTrade while paused', async function () {
-      const totalAmount = ethers.parseUnits('107000', 6);
+      const totalAmount = ethers.parseUnits('106004', 6);
       const logisticsAmount = ethers.parseUnits('5000', 6);
-      const platformFeesAmount = ethers.parseUnits('2000', 6);
-      const supplierFirstTranche = ethers.parseUnits('40000', 6);
-      const supplierSecondTranche = ethers.parseUnits('60000', 6);
+      const platformFeesAmount = ethers.parseUnits('1504', 6);
+      const supplierFirstTranche = ethers.parseUnits('59500', 6);
+      const supplierSecondTranche = ethers.parseUnits('40000', 6);
       const ricardianHash = ethers.id('paused-create');
       const nonce = await escrow.authorizationNonces(buyer.address);
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
@@ -1061,10 +1068,10 @@ describe('AgroasysEscrow', function () {
   });
 
   describe('createTradeWithAuthorization', function () {
-    const totalAmount = ethers.parseUnits('107000', 6);
+    const totalAmount = ethers.parseUnits('106004', 6);
     const logisticsAmount = ethers.parseUnits('5000', 6);
-    const platformFeesAmount = ethers.parseUnits('2000', 6);
-    const supplierFirstTranche = ethers.parseUnits('60000', 6);
+    const platformFeesAmount = ethers.parseUnits('1504', 6);
+    const supplierFirstTranche = ethers.parseUnits('59500', 6);
     const supplierSecondTranche = ethers.parseUnits('40000', 6);
     const ricardianHash = ethers.id('trade-contract-hash');
 
@@ -1161,8 +1168,22 @@ describe('AgroasysEscrow', function () {
       );
     });
 
+    it('Should reject non-launch tranche or fee proportions on the strict entry point', async function () {
+      await expect(
+        createTradeWithAuthorizationForTest(
+          supplier.address,
+          ethers.parseUnits('1064', 6),
+          ethers.parseUnits('50', 6),
+          ethers.parseUnits('19', 6),
+          ethers.parseUnits('400', 6),
+          ethers.parseUnits('595', 6),
+          ethers.id('invalid-launch-accounting'),
+        ),
+      ).to.be.revertedWith('invalid launch settlement schedule');
+    });
+
     it('Should create multiple trades with incrementing nonces', async function () {
-      const amount = ethers.parseUnits('107000', 6);
+      const amount = ethers.parseUnits('106004', 6);
       const hash1 = ethers.id('hash1');
       const hash2 = ethers.id('hash2');
 
@@ -1543,11 +1564,11 @@ describe('AgroasysEscrow', function () {
   });
 
   describe('Gasless typed authorizations', function () {
-    const totalAmount = ethers.parseUnits('107000', 6);
+    const totalAmount = ethers.parseUnits('106004', 6);
     const logisticsAmount = ethers.parseUnits('5000', 6);
-    const platformFeesAmount = ethers.parseUnits('2000', 6);
-    const supplierFirstTranche = ethers.parseUnits('40000', 6);
-    const supplierSecondTranche = ethers.parseUnits('60000', 6);
+    const platformFeesAmount = ethers.parseUnits('1504', 6);
+    const supplierFirstTranche = ethers.parseUnits('59500', 6);
+    const supplierSecondTranche = ethers.parseUnits('40000', 6);
 
     async function prepareGaslessTrade(ricardianHash = ethers.id('gasless-trade')) {
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
@@ -1723,11 +1744,11 @@ describe('AgroasysEscrow', function () {
 
   describe('Complete Flow (Without dispute)', function () {
     let tradeId: bigint;
-    const totalAmount = ethers.parseUnits('107000', 6);
+    const totalAmount = ethers.parseUnits('106004', 6);
     const logisticsAmount = ethers.parseUnits('5000', 6);
-    const platformFeesAmount = ethers.parseUnits('2000', 6);
-    const supplierFirstTranche = ethers.parseUnits('40000', 6);
-    const supplierSecondTranche = ethers.parseUnits('60000', 6);
+    const platformFeesAmount = ethers.parseUnits('1504', 6);
+    const supplierFirstTranche = ethers.parseUnits('59500', 6);
+    const supplierSecondTranche = ethers.parseUnits('40000', 6);
 
     beforeEach(async function () {
       const ricardianHash = ethers.id('trade-hash');
@@ -1806,15 +1827,15 @@ describe('AgroasysEscrow', function () {
     let tradeId: bigint;
 
     beforeEach(async function () {
-      const totalAmount = ethers.parseUnits('107000', 6);
+      const totalAmount = ethers.parseUnits('106004', 6);
       const ricardianHash = ethers.id('trade-hash');
 
       await createTradeWithAuthorizationForTest(
         supplier.address,
         totalAmount,
         ethers.parseUnits('5000', 6),
-        ethers.parseUnits('2000', 6),
-        ethers.parseUnits('60000', 6),
+        ethers.parseUnits('1504', 6),
+        ethers.parseUnits('59500', 6),
         ethers.parseUnits('40000', 6),
         ricardianHash,
       );
@@ -1841,16 +1862,16 @@ describe('AgroasysEscrow', function () {
     let tradeId: bigint;
 
     beforeEach(async function () {
-      const totalAmount = ethers.parseUnits('107000', 6);
+      const totalAmount = ethers.parseUnits('106004', 6);
       const ricardianHash = ethers.id('trade-hash');
 
       await createTradeWithAuthorizationForTest(
         supplier.address,
         totalAmount,
         ethers.parseUnits('5000', 6),
-        ethers.parseUnits('2000', 6),
+        ethers.parseUnits('1504', 6),
+        ethers.parseUnits('59500', 6),
         ethers.parseUnits('40000', 6),
-        ethers.parseUnits('60000', 6),
         ricardianHash,
       );
 
@@ -1907,6 +1928,32 @@ describe('AgroasysEscrow', function () {
       );
     });
 
+    it('Should let the active oracle release the final tranche after the notice deadline', async function () {
+      const supplierBefore = await usdc.balanceOf(supplier.address);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
+      await time.increase(72 * 3600 + 1);
+
+      await expect(escrow.connect(oracle).finalizeAfterDisputeWindow(tradeId)).to.emit(
+        escrow,
+        'FinalTrancheReleased',
+      );
+
+      const trade = await escrow.trades(tradeId);
+      expect(trade.status).to.equal(4);
+      expect(await usdc.balanceOf(supplier.address)).to.equal(
+        supplierBefore + trade.supplierSecondTranche,
+      );
+    });
+
+    it('Should reject deadline finalization from an unrelated account', async function () {
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
+      await time.increase(72 * 3600 + 1);
+
+      await expect(escrow.connect(buyer).finalizeAfterDisputeWindow(tradeId)).to.be.revertedWith(
+        'only oracle or admin',
+      );
+    });
+
     it('Should reject if not oracle', async function () {
       await expect(escrow.connect(buyer).confirmArrival(tradeId)).to.be.revertedWith('only oracle');
     });
@@ -1923,10 +1970,10 @@ describe('AgroasysEscrow', function () {
   describe('Dispute Flow', function () {
     let tradeId: bigint;
     const supplierSecondTranche = ethers.parseUnits('40000', 6);
-    const supplierFirstTranche = ethers.parseUnits('60000', 6);
+    const supplierFirstTranche = ethers.parseUnits('59500', 6);
     const logistics = ethers.parseUnits('5000', 6);
-    const fees = ethers.parseUnits('2000', 6);
-    const totalAmount = ethers.parseUnits('107000', 6);
+    const fees = ethers.parseUnits('1504', 6);
+    const totalAmount = ethers.parseUnits('106004', 6);
 
     beforeEach(async function () {
       const ricardianHash = ethers.id('trade-hash');

@@ -15,6 +15,8 @@ const ORACLE_PATH_BY_PHASE = {
 
 type ExecutableSettlementPhase = keyof typeof ORACLE_PATH_BY_PHASE;
 
+const ACCEPTED_ORACLE_STATUSES = new Set(['SUBMITTED', 'CONFIRMED']);
+
 export interface OracleSettlementProgressionResult {
   handoffId: string;
   phase: ExecutableSettlementPhase;
@@ -26,6 +28,7 @@ export class OracleSettlementProgressionService {
   constructor(
     private readonly settlementStore: SettlementStore,
     private readonly orchestrator: DownstreamServiceOrchestrator,
+    private readonly immediateInspectionAcceptanceEnabled = true,
   ) {}
 
   async executeHandoff(
@@ -59,12 +62,18 @@ export class OracleSettlementProgressionService {
     });
     const body = await this.readResponseBody(response, handoff);
 
-    if (!response.ok || body.success !== true) {
+    const oracleStatus = typeof body.status === 'string' ? body.status : null;
+    if (
+      !response.ok ||
+      body.success !== true ||
+      oracleStatus === null ||
+      !ACCEPTED_ORACLE_STATUSES.has(oracleStatus)
+    ) {
       throw new GatewayError(
         502,
         'UPSTREAM_UNAVAILABLE',
-        'Oracle rejected the settlement progression command',
-        { handoffId, phase, oracleStatus: response.status },
+        'Oracle did not submit the settlement progression transaction',
+        { handoffId, phase, upstreamStatus: response.status, oracleStatus },
       );
     }
 
@@ -72,6 +81,18 @@ export class OracleSettlementProgressionService {
   }
 
   private requireExecutablePhase(handoff: SettlementHandoffRecord): ExecutableSettlementPhase {
+    if (
+      handoff.phase === 'final_release_after_inspection_acceptance' &&
+      !this.immediateInspectionAcceptanceEnabled
+    ) {
+      throw new GatewayError(
+        409,
+        'CONFLICT',
+        'Immediate inspection-acceptance release is disabled until buyer-signed on-chain acceptance is available',
+        { handoffId: handoff.handoffId, phase: handoff.phase },
+      );
+    }
+
     if (handoff.phase in ORACLE_PATH_BY_PHASE) {
       return handoff.phase as ExecutableSettlementPhase;
     }

@@ -149,6 +149,36 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
               ctx,
             );
             break;
+          case 'InspectionAvailable':
+            overviewSnapshot = await handleInspectionAvailable(
+              decoded,
+              trades,
+              tradeEvents,
+              overviewSnapshot,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'InspectionAcceptedForFinalRelease':
+            overviewSnapshot = await handleInspectionAcceptedForFinalRelease(
+              decoded,
+              trades,
+              tradeEvents,
+              overviewSnapshot,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
           case 'FinalTrancheReleased':
             overviewSnapshot = await handleFinalTrancheReleased(
               decoded,
@@ -974,6 +1004,101 @@ async function handleArrivalConfirmed(
   );
 
   ctx.log.info(`Trade ${tradeId} arrival confirmed at ${arrivalTimestamp}`);
+  return overviewSnapshot;
+}
+
+async function handleInspectionAvailable(
+  log: DecodedEscrowLog,
+  trades: Map<string, Trade>,
+  events: TradeEvent[],
+  overviewSnapshot: OverviewSnapshot,
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [tradeId, inspectionAvailableAt, inspectionWindowSeconds, noticeDeadline] = log.args;
+  const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
+
+  if (!trade) {
+    ctx.log.error(`Trade ${tradeId} not found for InspectionAvailable event`);
+    return overviewSnapshot;
+  }
+
+  const counters = applyTradeTransition(
+    trade.status,
+    TradeStatus.ARRIVAL_CONFIRMED,
+    snapshotCounters(overviewSnapshot),
+  );
+  applySnapshotCounters(overviewSnapshot, counters);
+  overviewSnapshot.lastTradeEventAt = timestamp;
+
+  trade.status = TradeStatus.ARRIVAL_CONFIRMED;
+  trade.arrivalTimestamp = new Date(Number(inspectionAvailableAt) * 1000);
+  trades.set(tradeId.toString(), trade);
+
+  events.push(
+    new TradeEvent({
+      id: eventId,
+      trade,
+      eventName: 'InspectionAvailable',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      inspectionAvailableAt,
+      inspectionWindowSeconds,
+      inspectionNoticeDeadline: noticeDeadline,
+    }),
+  );
+
+  ctx.log.info(
+    `Trade ${tradeId} available for inspection at ${inspectionAvailableAt}; notice deadline ${noticeDeadline}`,
+  );
+  return overviewSnapshot;
+}
+
+async function handleInspectionAcceptedForFinalRelease(
+  log: DecodedEscrowLog,
+  trades: Map<string, Trade>,
+  events: TradeEvent[],
+  overviewSnapshot: OverviewSnapshot,
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [tradeId, acceptedAt] = log.args;
+  const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
+
+  if (!trade) {
+    ctx.log.error(`Trade ${tradeId} not found for InspectionAcceptedForFinalRelease event`);
+    return overviewSnapshot;
+  }
+
+  overviewSnapshot.lastTradeEventAt = timestamp;
+  events.push(
+    new TradeEvent({
+      id: eventId,
+      trade,
+      eventName: 'InspectionAcceptedForFinalRelease',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      inspectionAcceptedAt: acceptedAt,
+    }),
+  );
+
+  ctx.log.info(`Trade ${tradeId} inspection accepted at ${acceptedAt}`);
   return overviewSnapshot;
 }
 

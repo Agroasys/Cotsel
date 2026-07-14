@@ -47,6 +47,26 @@ Purpose:
 - Gateway governance signer custody is defined in `docs/runbooks/gateway-governance-signer-custody.md`.
 - Production governance execution must use managed signer custody; raw `GATEWAY_EXECUTOR_PRIVATE_KEY` env injection is staging-only unless a time-boxed exception is approved and rotated immediately after use.
 
+### Inspection-settlement signer authority
+
+- Automatic notice-deadline finalization may be executed by the active oracle;
+  governed admin execution exists only as a recovery path. The production oracle
+  must use managed signer custody, gateway HMAC authentication, replay protection,
+  phase allowlisting, and reconciliation monitoring.
+- An oracle execution is successful only when its durable trigger status is
+  `SUBMITTED` or `CONFIRMED`. `TERMINAL_FAILURE`, `EXHAUSTED_NEEDS_REDRIVE`,
+  `REJECTED`, pending, and executing states must fail closed at the gateway and
+  must not complete the upstream settlement handoff.
+- **Mainnet blocker:** immediate final release after inspection acceptance
+  currently trusts Agroasys participant authorization plus the Cotsel oracle
+  boundary; the escrow contract does not yet verify a buyer EIP-712 acceptance
+  signature. Before mainnet enablement, add a buyer-signed acceptance action
+  bound to chain ID, escrow address, trade ID, nonce, and expiry; relay it through
+  the existing gasless authorization path; and remove the oracle-only immediate
+  acceptance entry point. Until that contract upgrade is deployed and rehearsed,
+  immediate acceptance must remain disabled in mainnet policy and final release
+  must use the no-dispute deadline or governed dispute resolution.
+
 ## 2) Gas and Fee Expectations
 
 ### Baseline transaction expectations

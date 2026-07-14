@@ -84,10 +84,13 @@ the supplier and 69.00 to treasury (10.00 buyer fee + 4.00 support fee + 5.00
 supplier fee + 50.00 logistics). The remaining 400.00 stays protected for final
 settlement.
 
-The escrow contract enforces the component-sum invariant. Agroasys is the
-authoritative calculator for the 1%, USD 4, 0.5%, and 60/40 commercial policy.
-All components remain refundable while the trade is still `LOCKED`; fees become
-claimable only when Stage 1 is validly released.
+Agroasys is the authoritative calculator for the 1%, USD 4, 0.5%, and 60/40
+commercial policy. The escrow contract independently rejects a trade unless the
+component sum and those exact launch proportions are both correct. This second
+check prevents a malformed or compromised upstream instruction from silently
+creating a different payment schedule. All components remain refundable while
+the trade is still `LOCKED`; fees become claimable only when Stage 1 is validly
+released.
 
 **Checkout UI responsibility:**
 

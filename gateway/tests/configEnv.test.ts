@@ -61,6 +61,36 @@ function loadConfigModule(): typeof import('../src/config/env') {
 }
 
 describe('gateway runtime env config', () => {
+  it('disables immediate inspection-acceptance release by default', () => {
+    withEnv(
+      {
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+      },
+      () => {
+        expect(loadConfigModule().loadConfig().immediateInspectionAcceptanceEnabled).toBe(false);
+      },
+    );
+  });
+
+  it('rejects oracle-only immediate acceptance release in production', () => {
+    withEnv(
+      {
+        NODE_ENV: 'production',
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED: 'true',
+      },
+      () => {
+        expect(() => loadConfigModule().loadConfig()).toThrow(
+          'GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED cannot be enabled in production',
+        );
+      },
+    );
+  });
+
   test('resolves base-sepolia runtime from canonical runtime key without explicit RPC inputs', () => {
     withEnv(
       {

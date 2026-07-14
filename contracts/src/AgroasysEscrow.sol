@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 interface IUSDCReceiveWithAuthorization {
     function receiveWithAuthorization(
@@ -45,6 +46,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     uint256 public constant STANDARD_INSPECTION_WINDOW = 72 hours;
     /// @notice Inspection notice window for explicitly classified packaged local deliveries.
     uint256 public constant PACKAGED_LOCAL_INSPECTION_WINDOW = 48 hours;
+    uint256 private constant BUYER_PLATFORM_FEE_BPS = 100;
+    uint256 private constant SUPPLIER_PLATFORM_FEE_BPS = 50;
+    uint256 private constant FIRST_SUPPLIER_TRANCHE_BPS = 6_000;
+    uint256 private constant BPS_DENOMINATOR = 10_000;
+    uint256 private constant SETTLEMENT_SUPPORT_FEE = 4_000_000;
     /// @notice Compatibility alias for integrations reading the historical public constant.
     uint256 public constant DISPUTE_WINDOW = STANDARD_INSPECTION_WINDOW;
     /// @notice Maximum time a trade can remain LOCKED before buyer can cancel for refundable principal.
@@ -546,6 +552,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         _;
     }
 
+    modifier onlyOracleOrAdmin() {
+        bool callerIsOracle = msg.sender == oracleAddress;
+        require(callerIsOracle || isAdmin[msg.sender], "only oracle or admin");
+        if (callerIsOracle) {
+            require(oracleActive, "oracle disabled");
+        }
+        _;
+    }
+
     /// @dev Keep backwards-compatible revert messages for existing consumers/tests.
     function _requireNotPaused() internal view override {
         require(!paused(), "paused");
@@ -904,6 +919,36 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         bytes memory _authorizationSignature,
         UsdcAuthorization calldata _usdcAuthorization
     ) external onlyRelayerOrAdmin whenNotPaused nonReentrant returns (uint256) {
+        return _createTradeWithAuthorization(
+            _buyer,
+            _supplier,
+            _totalAmount,
+            _logisticsAmount,
+            _platformFeesAmount,
+            _supplierFirstTranche,
+            _supplierSecondTranche,
+            _ricardianHash,
+            _authorizationNonce,
+            _authorizationDeadline,
+            _authorizationSignature,
+            _usdcAuthorization
+        );
+    }
+
+    function _createTradeWithAuthorization(
+        address _buyer,
+        address _supplier,
+        uint256 _totalAmount,
+        uint256 _logisticsAmount,
+        uint256 _platformFeesAmount,
+        uint256 _supplierFirstTranche,
+        uint256 _supplierSecondTranche,
+        bytes32 _ricardianHash,
+        uint256 _authorizationNonce,
+        uint256 _authorizationDeadline,
+        bytes memory _authorizationSignature,
+        UsdcAuthorization calldata _usdcAuthorization
+    ) internal returns (uint256) {
         _validateTradeAmounts(
             _supplier,
             _totalAmount,
@@ -912,6 +957,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             _supplierFirstTranche,
             _supplierSecondTranche,
             _ricardianHash
+        );
+        _validateLaunchSettlementSchedule(
+            _platformFeesAmount,
+            _supplierFirstTranche,
+            _supplierSecondTranche
         );
 
         _verifyCreateTradeAuthorization(
@@ -955,6 +1005,57 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         emit RelayedActionExecuted(msg.sender, _buyer, ACTION_CREATE_TRADE, newTradeId);
 
         return newTradeId;
+    }
+
+    function _validateLaunchSettlementSchedule(
+        uint256 platformFeesAmount,
+        uint256 supplierFirstTranche,
+        uint256 supplierSecondTranche
+    ) internal pure {
+        uint256 netSupplierPayout = supplierFirstTranche + supplierSecondTranche;
+        uint256 maximumGoodsCandidate = Math.mulDiv(
+            netSupplierPayout,
+            BPS_DENOMINATOR,
+            BPS_DENOMINATOR - SUPPLIER_PLATFORM_FEE_BPS
+        );
+
+        bool valid = _matchesLaunchSettlementSchedule(
+            maximumGoodsCandidate,
+            platformFeesAmount,
+            supplierFirstTranche,
+            supplierSecondTranche
+        );
+        if (!valid && maximumGoodsCandidate > 0) {
+            valid = _matchesLaunchSettlementSchedule(
+                maximumGoodsCandidate - 1,
+                platformFeesAmount,
+                supplierFirstTranche,
+                supplierSecondTranche
+            );
+        }
+
+        require(valid, "invalid launch settlement schedule");
+    }
+
+    function _matchesLaunchSettlementSchedule(
+        uint256 goodsAmount,
+        uint256 platformFeesAmount,
+        uint256 supplierFirstTranche,
+        uint256 supplierSecondTranche
+    ) internal pure returns (bool) {
+        uint256 buyerFee = Math.mulDiv(goodsAmount, BUYER_PLATFORM_FEE_BPS, BPS_DENOMINATOR);
+        uint256 supplierFee = Math.mulDiv(goodsAmount, SUPPLIER_PLATFORM_FEE_BPS, BPS_DENOMINATOR);
+        uint256 firstTrancheGross = Math.mulDiv(
+            goodsAmount,
+            FIRST_SUPPLIER_TRANCHE_BPS,
+            BPS_DENOMINATOR
+        );
+
+        return
+            firstTrancheGross >= supplierFee &&
+            supplierFirstTranche == firstTrancheGross - supplierFee &&
+            supplierSecondTranche == goodsAmount - firstTrancheGross &&
+            platformFeesAmount == buyerFee + supplierFee + SETTLEMENT_SUPPORT_FEE;
     }
 
     function _accrueClaimable(uint256 _tradeId, address _recipient, uint256 _amount, ClaimType _claimType) internal {
@@ -1187,12 +1288,13 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
     /**
      * Final settlement after dispute window if no dispute was opened.
-     * Direct execution is admin-only; suppliers use finalizeAfterDisputeWindowWithAuthorization.
+     * Direct execution is available to the active oracle for automatic expiry and to admins
+     * for governed recovery; suppliers use finalizeAfterDisputeWindowWithAuthorization.
      *
      * Business rule: Stage 2 pays ONLY remaining supplier principal (supplierSecondTranche).
      * Treasury fees were already collected at Stage 1.
      */
-    function finalizeAfterDisputeWindow(uint256 _tradeId) external onlyAdmin whenNotPaused nonReentrant {
+    function finalizeAfterDisputeWindow(uint256 _tradeId) external onlyOracleOrAdmin whenNotPaused nonReentrant {
         _finalizeAfterDisputeWindow(_tradeId);
     }
 

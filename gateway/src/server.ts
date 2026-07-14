@@ -217,6 +217,7 @@ const orchestrator = new ServiceOrchestrator(downstreamServiceRegistry);
 const oracleSettlementProgressionService = new OracleSettlementProgressionService(
   settlementStore,
   orchestrator,
+  config.immediateInspectionAcceptanceEnabled,
 );
 const treasuryWorkflowService = new TreasuryWorkflowService(orchestrator, auditLogStore);
 const indexerClient = new IndexerGraphqlClient(

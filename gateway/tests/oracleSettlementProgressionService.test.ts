@@ -29,7 +29,7 @@ describe('OracleSettlementProgressionService', () => {
     const store = { getHandoff: jest.fn().mockResolvedValue(handoff(phase)) };
     const orchestrator = {
       fetch: jest.fn().mockResolvedValue(
-        new Response(JSON.stringify({ success: true, status: 'PENDING' }), {
+        new Response(JSON.stringify({ success: true, status: 'SUBMITTED' }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }),
@@ -61,6 +61,24 @@ describe('OracleSettlementProgressionService', () => {
     const service = new OracleSettlementProgressionService(
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
+    );
+
+    await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
+    });
+    expect(orchestrator.fetch).not.toHaveBeenCalled();
+  });
+
+  it('can disable oracle-only immediate acceptance release by deployment policy', async () => {
+    const store = {
+      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_inspection_acceptance')),
+    };
+    const orchestrator = { fetch: jest.fn() };
+    const service = new OracleSettlementProgressionService(
+      store as unknown as SettlementStore,
+      orchestrator as unknown as DownstreamServiceOrchestrator,
+      false,
     );
 
     await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
@@ -111,4 +129,30 @@ describe('OracleSettlementProgressionService', () => {
       code: 'UPSTREAM_UNAVAILABLE',
     });
   });
+
+  it.each(['TERMINAL_FAILURE', 'EXHAUSTED_NEEDS_REDRIVE', 'PENDING', 'EXECUTING'])(
+    'does not complete a handoff when the oracle reports %s',
+    async (status) => {
+      const store = {
+        getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_notice_deadline')),
+      };
+      const orchestrator = {
+        fetch: jest.fn().mockResolvedValue(
+          new Response(JSON.stringify({ success: status === 'PENDING', status }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+      };
+      const service = new OracleSettlementProgressionService(
+        store as unknown as SettlementStore,
+        orchestrator as unknown as DownstreamServiceOrchestrator,
+      );
+
+      await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
+        statusCode: 502,
+        code: 'UPSTREAM_UNAVAILABLE',
+      });
+    },
+  );
 });

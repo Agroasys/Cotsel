@@ -83,6 +83,18 @@ export class TradeEvent {
     arrivalTimestamp!: bigint | undefined | null
 
     @BigIntColumn_({nullable: true})
+    inspectionAvailableAt!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    inspectionWindowSeconds!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    inspectionNoticeDeadline!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
+    inspectionAcceptedAt!: bigint | undefined | null
+
+    @BigIntColumn_({nullable: true})
     finalTranche!: bigint | undefined | null
 
     @StringColumn_({nullable: true})

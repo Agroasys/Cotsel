@@ -67,6 +67,14 @@ type TradeEvent @entity {
   # ArrivalConfirmed specific
   arrivalTimestamp: BigInt
 
+  # InspectionAvailable specific
+  inspectionAvailableAt: BigInt
+  inspectionWindowSeconds: BigInt
+  inspectionNoticeDeadline: BigInt
+
+  # InspectionAcceptedForFinalRelease specific
+  inspectionAcceptedAt: BigInt
+
   # FinalTrancheReleased specific
   finalTranche: BigInt
   finalRecipient: String

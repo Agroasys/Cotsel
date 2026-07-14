@@ -65,9 +65,12 @@ contract Handler is Test {
         uint16 privateKey
     ) public {
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        fees = uint96(bound(fees, 500e6, 5_000e6));
-        tranche1 = uint96(bound(tranche1, 10_000e6, 100_000e6));
-        tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
+        uint256 goodsAmount = bound(fees, 20_000e6, 200_000e6);
+        uint256 supplierFee = goodsAmount * 50 / 10_000;
+        uint256 firstGross = goodsAmount * 6_000 / 10_000;
+        fees = uint96(goodsAmount / 100 + supplierFee + 4e6);
+        tranche1 = uint96(firstGross - supplierFee);
+        tranche2 = uint96(goodsAmount - firstGross);
 
         uint256 total = logistics + fees + tranche1 + tranche2;
 
@@ -219,7 +222,7 @@ contract Handler is Test {
 
         vm.warp(arrivalTimestamp + 72 hours + 1);
 
-        vm.prank(admin1);
+        vm.prank(oracle);
         escrow.finalizeAfterDisputeWindow(tradeId);
         (,,,,,,,,,uint256 tranche2,,) = escrow.trades(tradeId);
         totalWithdrawn += tranche2;

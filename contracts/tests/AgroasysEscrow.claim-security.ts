@@ -19,9 +19,9 @@ describe('AgroasysEscrow - Claim Security', function () {
   let admin3: SignerWithAddress;
 
   const logisticsAmount = ethers.parseUnits('5000', 6);
-  const platformFeesAmount = ethers.parseUnits('2000', 6);
-  const supplierFirstTranche = ethers.parseUnits('40000', 6);
-  const supplierSecondTranche = ethers.parseUnits('60000', 6);
+  const platformFeesAmount = ethers.parseUnits('1504', 6);
+  const supplierFirstTranche = ethers.parseUnits('59500', 6);
+  const supplierSecondTranche = ethers.parseUnits('40000', 6);
   const totalAmount =
     logisticsAmount + platformFeesAmount + supplierFirstTranche + supplierSecondTranche;
 
