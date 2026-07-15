@@ -46,8 +46,10 @@ Logistics event signal
 **[4] On-chain pre-condition** — before submitting any transaction, the oracle reads current escrow state:
 
 - `RELEASE_STAGE_1` requires trade in `LOCKED` state
-- `CONFIRM_ARRIVAL` requires trade in `IN_TRANSIT` state
-- `FINALIZE_TRADE` requires trade in `ARRIVAL_CONFIRMED` state with expired dispute window
+- `CONFIRM_INSPECTION_AVAILABLE_STANDARD` and `CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL` require trade in `IN_TRANSIT` state
+- `FINALIZE_AFTER_INSPECTION_ACCEPTANCE` requires trade in `ARRIVAL_CONFIRMED` state
+- `FINALIZE_TRADE` requires trade in `ARRIVAL_CONFIRMED` state with the configured 48- or 72-hour notice deadline expired
+- `CONFIRM_ARRIVAL` is retained only for compatibility and applies the standard 72-hour policy
 
 If the pre-condition fails, the trigger is moved to `TERMINAL_FAILURE` (non-retryable) and must not be re-driven.
 

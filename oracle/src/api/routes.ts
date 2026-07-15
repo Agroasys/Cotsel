@@ -68,6 +68,27 @@ export function createRouter(
   );
 
   router.post(
+    '/confirm-inspection-available/standard',
+    authMiddleware,
+    hmacMiddleware,
+    asyncHandler((req, res) => controller.confirmInspectionAvailableStandard(req, res)),
+  );
+
+  router.post(
+    '/confirm-inspection-available/packaged-local',
+    authMiddleware,
+    hmacMiddleware,
+    asyncHandler((req, res) => controller.confirmInspectionAvailablePackagedLocal(req, res)),
+  );
+
+  router.post(
+    '/finalize-after-inspection-acceptance',
+    authMiddleware,
+    hmacMiddleware,
+    asyncHandler((req, res) => controller.finalizeAfterInspectionAcceptance(req, res)),
+  );
+
+  router.post(
     '/finalize-trade',
     authMiddleware,
     hmacMiddleware,

@@ -9,9 +9,10 @@ import { createRouter } from './api/routes';
 import { OracleController } from './api/controller';
 import { errorHandler } from './middleware/middleware';
 import { Logger } from './utils/logger';
-import { testConnection, closeConnection } from './database/connection';
+import { testConnection, closeConnection, pool } from './database/connection';
 import { runMigrations } from './database/migrations';
 import { TriggerManager } from './core/trigger-manager';
+import { createPostgresOracleActionLock } from './core/oracle-action-lock';
 import { SDKClient } from './blockchain/sdk-client';
 import { IndexerClient } from './blockchain/indexer-client';
 import { ConfirmationWorker } from './worker/confirmation-worker';
@@ -100,6 +101,7 @@ async function bootstrap() {
       config.retryDelay,
       notifier,
       config.manualApprovalEnabled,
+      createPostgresOracleActionLock(pool),
     );
 
     const controller = new OracleController(triggerManager);

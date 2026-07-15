@@ -234,7 +234,7 @@ describeManual('Oracle API integration (manual)', () => {
     expect(data).toMatchObject({
       success: true,
       idempotencyKey: expect.any(String),
-      actionKey: expect.stringContaining('FINALIZE_TRADE'),
+      actionKey: expect.stringContaining('FINAL_RELEASE'),
       status: expect.any(String),
       timestamp: expect.any(String),
     });

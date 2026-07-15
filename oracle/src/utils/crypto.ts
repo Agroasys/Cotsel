@@ -1,8 +1,14 @@
 import crypto from 'crypto';
 import { Logger } from './logger';
 
+const FINAL_RELEASE_OPERATIONS = new Set([
+  'FINALIZE_AFTER_INSPECTION_ACCEPTANCE',
+  'FINALIZE_TRADE',
+]);
+
 export function generateActionKey(operation: string, tradeId: string): string {
-  return `${operation}:${tradeId}`;
+  const canonicalOperation = FINAL_RELEASE_OPERATIONS.has(operation) ? 'FINAL_RELEASE' : operation;
+  return `${canonicalOperation}:${tradeId}`;
 }
 
 export function generateRequestId(): string {

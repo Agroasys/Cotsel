@@ -64,13 +64,13 @@ Expected result:
 
 Use the status tracker to monitor progression:
 
-| Status                   | Meaning                                         | Participant Action                |
-| ------------------------ | ----------------------------------------------- | --------------------------------- |
-| `LOCKED`                 | Buyer funds locked in escrow                    | Wait for oracle progression       |
-| `IN_TRANSIT`             | Stage-1 release processed; shipment in progress | Monitor arrival/dispute window    |
-| `ARRIVED`                | Arrival confirmed; dispute window active        | Raise dispute only if required    |
-| `COMPLETED`              | Final tranche released; settlement complete     | Archive evidence and confirmation |
-| `FROZEN` / dispute state | Trade is under dispute governance               | Follow support/on-call guidance   |
+| Status                   | Meaning                                                                                   | Participant Action                         |
+| ------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `LOCKED`                 | Buyer funds locked in escrow                                                              | Wait for oracle progression                |
+| `IN_TRANSIT`             | Net 60% supplier release and fee allocation processed after custody/document verification | Monitor delivery progress                  |
+| `ARRIVED`                | Goods available for inspection; 48- or 72-hour notice window active                       | Accept inspected goods or report a problem |
+| `COMPLETED`              | Final tranche released; settlement complete                                               | Archive evidence and confirmation          |
+| `FROZEN` / dispute state | Trade is under dispute governance                                                         | Follow support/on-call guidance            |
 
 If your dashboard shows equivalent wording, map it to these lifecycle meanings.
 

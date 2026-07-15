@@ -18,4 +18,10 @@ test('active processor topics are derived from the frozen escrow ABI', () => {
       keccakId('PlatformFeesPaidStage1(uint256,address,uint256,uint256,uint256)'),
     ),
   );
+  assert.ok(
+    ESCROW_EVENT_TOPICS.includes(keccakId('InspectionAvailable(uint256,uint256,uint256,uint256)')),
+  );
+  assert.ok(
+    ESCROW_EVENT_TOPICS.includes(keccakId('InspectionAcceptedForFinalRelease(uint256,uint256)')),
+  );
 });

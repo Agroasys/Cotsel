@@ -5,6 +5,7 @@ coverage
 reports
 contracts/artifacts
 contracts/cache
+contracts/ignition/deployments
 contracts/typechain-types
 contracts/foundry/cache
 contracts/foundry/out

@@ -140,6 +140,19 @@ contract FuzzTest is Test {
         return createdTradeId;
     }
 
+    function _launch_schedule(uint96 goodsAmount)
+        internal
+        pure
+        returns (uint96 fees, uint96 tranche1, uint96 tranche2)
+    {
+        uint256 supplierFee = uint256(goodsAmount) * 50 / 10_000;
+        uint256 firstGross = uint256(goodsAmount) * 6_000 / 10_000;
+
+        fees = uint96(uint256(goodsAmount) / 100 + supplierFee + 4e6);
+        tranche1 = uint96(firstGross - supplierFee);
+        tranche2 = uint96(uint256(goodsAmount) - firstGross);
+    }
+
     function _authorize_user_action(uint8 action, uint256 tradeId) internal returns (uint256 nonce, uint256 deadline, bytes memory signature) {
         nonce = escrow.authorizationNonces(buyer);
         deadline = block.timestamp + 1 hours;
@@ -176,9 +189,8 @@ contract FuzzTest is Test {
         // check fuzzed inputs
         vm.assume(ricardianHash != bytes32(0));
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        fees = uint96(bound(fees, 500e6, 5_000e6));
-        tranche1 = uint96(bound(tranche1, 10_000e6, 100_000e6));
-        tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
         
         uint256 total = logistics + fees + tranche1 + tranche2;
 
@@ -258,8 +270,8 @@ contract FuzzTest is Test {
         uint256 treasuryBeforeReleaseFundsStage2Balance = usdc.balanceOf(treasury);
         uint256 escrowBeforeReleaseFundsStage2Balance = usdc.balanceOf(address(escrow));
 
-        // increase time by 24 hours
-        vm.warp(block.timestamp + 24 hours + 1);
+        // increase time beyond the standard 72-hour inspection notice window
+        vm.warp(block.timestamp + 72 hours + 1);
 
         vm.prank(admin1);
         escrow.finalizeAfterDisputeWindow(tradeId);
@@ -281,9 +293,8 @@ contract FuzzTest is Test {
         // check fuzzed inputs
         vm.assume(ricardianHash != bytes32(0));
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        fees = uint96(bound(fees, 500e6, 5_000e6));
-        tranche1 = uint96(bound(tranche1, 10_000e6, 100_000e6));
-        tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
         
         uint256 total = logistics + fees + tranche1 + tranche2;
 
@@ -423,9 +434,8 @@ contract FuzzTest is Test {
         // check fuzzed inputs
         vm.assume(ricardianHash != bytes32(0));
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        fees = uint96(bound(fees, 500e6, 5_000e6));
-        tranche1 = uint96(bound(tranche1, 10_000e6, 100_000e6));
-        tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
         
         uint256 total = logistics + fees + tranche1 + tranche2;
 
@@ -565,9 +575,8 @@ contract FuzzTest is Test {
     function testFuzz_CannotOpenDisputeBeforeArrival(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
         vm.assume(ricardianHash != bytes32(0));
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        fees = uint96(bound(fees, 500e6, 5_000e6));
-        tranche1 = uint96(bound(tranche1, 10_000e6, 100_000e6));
-        tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
 
         
         uint256 tradeId = _create_trade(logistics,fees,tranche1,tranche2, ricardianHash);
@@ -580,12 +589,11 @@ contract FuzzTest is Test {
         escrow.openDisputeWithAuthorization(tradeId, actionNonce, actionDeadline, actionSignature);
     }
 
-    function testFuzz_CannotOpenDisputeAfter24Hours(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
+    function testFuzz_CannotOpenDisputeAfter72Hours(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
         vm.assume(ricardianHash != bytes32(0));
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        fees = uint96(bound(fees, 500e6, 5_000e6));
-        tranche1 = uint96(bound(tranche1, 10_000e6, 100_000e6));
-        tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
 
      
         uint256 tradeId = _create_trade(logistics,fees,tranche1,tranche2, ricardianHash);
@@ -595,7 +603,7 @@ contract FuzzTest is Test {
         vm.prank(oracle);
         escrow.confirmArrival(tradeId);
         
-        vm.warp(block.timestamp + 24 hours + 1 seconds);
+        vm.warp(block.timestamp + 72 hours + 1 seconds);
         
         (uint256 actionNonce, uint256 actionDeadline, bytes memory actionSignature) = _authorize_user_action(1, tradeId);
         vm.expectRevert("window closed");
@@ -604,12 +612,11 @@ contract FuzzTest is Test {
     }
 
 
-    function testFuzz_CannotReleaseStage2Before24Hours(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
+    function testFuzz_CannotReleaseStage2Before72Hours(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
         vm.assume(ricardianHash != bytes32(0));
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        fees = uint96(bound(fees, 500e6, 5_000e6));
-        tranche1 = uint96(bound(tranche1, 10_000e6, 100_000e6));
-        tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
 
      
         uint256 tradeId = _create_trade(logistics,fees,tranche1,tranche2, ricardianHash);
@@ -624,6 +631,61 @@ contract FuzzTest is Test {
         vm.prank(admin1);
         vm.expectRevert("window not elapsed");
         escrow.finalizeAfterDisputeWindow(tradeId);
+    }
+
+    function test_OracleFinalizesAfterStandardInspectionDeadline() public {
+        (uint96 fees, uint96 tranche1, uint96 tranche2) = _launch_schedule(100_000e6);
+        uint256 tradeId = _create_trade(5_000e6, fees, tranche1, tranche2, keccak256("standard-window"));
+
+        vm.prank(oracle);
+        escrow.releaseFundsStage1(tradeId);
+        vm.prank(oracle);
+        escrow.confirmInspectionAvailable(tradeId, 72 hours);
+        vm.warp(block.timestamp + 72 hours + 1);
+
+        uint256 supplierBefore = usdc.balanceOf(supplier);
+        vm.prank(oracle);
+        escrow.finalizeAfterDisputeWindow(tradeId);
+
+        (,,AgroasysEscrow.TradeStatus status,,,,,,,,,) = escrow.trades(tradeId);
+        assertEq(uint8(status), uint8(AgroasysEscrow.TradeStatus.CLOSED));
+        assertEq(usdc.balanceOf(supplier), supplierBefore + tranche2);
+    }
+
+    function test_PackagedLocalInspectionUses48HourWindow() public {
+        (uint96 fees, uint96 tranche1, uint96 tranche2) = _launch_schedule(100_000e6);
+        uint256 tradeId = _create_trade(5_000e6, fees, tranche1, tranche2, keccak256("packaged-window"));
+
+        vm.prank(oracle);
+        escrow.releaseFundsStage1(tradeId);
+        vm.prank(oracle);
+        escrow.confirmInspectionAvailable(tradeId, 48 hours);
+
+        assertEq(escrow.inspectionDeadline(tradeId), block.timestamp + 48 hours);
+        vm.warp(block.timestamp + 48 hours + 1);
+        vm.prank(oracle);
+        escrow.finalizeAfterDisputeWindow(tradeId);
+
+        (,,AgroasysEscrow.TradeStatus status,,,,,,,,,) = escrow.trades(tradeId);
+        assertEq(uint8(status), uint8(AgroasysEscrow.TradeStatus.CLOSED));
+    }
+
+    function test_InspectionAcceptanceReleasesFinalTrancheImmediately() public {
+        (uint96 fees, uint96 tranche1, uint96 tranche2) = _launch_schedule(100_000e6);
+        uint256 tradeId = _create_trade(5_000e6, fees, tranche1, tranche2, keccak256("buyer-acceptance"));
+
+        vm.prank(oracle);
+        escrow.releaseFundsStage1(tradeId);
+        vm.prank(oracle);
+        escrow.confirmInspectionAvailable(tradeId, 72 hours);
+
+        uint256 supplierBefore = usdc.balanceOf(supplier);
+        vm.prank(oracle);
+        escrow.finalizeAfterInspectionAcceptance(tradeId);
+
+        (,,AgroasysEscrow.TradeStatus status,,,,,,,,,) = escrow.trades(tradeId);
+        assertEq(uint8(status), uint8(AgroasysEscrow.TradeStatus.CLOSED));
+        assertEq(usdc.balanceOf(supplier), supplierBefore + tranche2);
     }
 
     function testFuzz_UpdateOracle(address new_oracle) public {
@@ -669,12 +731,11 @@ contract FuzzTest is Test {
     function testFuzz_CancelLockedTradeAfterTimeout(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
         vm.assume(ricardianHash != bytes32(0));
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        fees = uint96(bound(fees, 500e6, 5_000e6));
-        tranche1 = uint96(bound(tranche1, 10_000e6, 100_000e6));
-        tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
         
         uint256 total = logistics + fees + tranche1 + tranche2;
-        uint256 refundablePrincipal = tranche1 + tranche2;
+        uint256 refundableProtectedAmount = total;
 
         uint256 tradeId = _create_trade(logistics, fees, tranche1, tranche2, ricardianHash);
         
@@ -696,19 +757,18 @@ contract FuzzTest is Test {
         (,,AgroasysEscrow.TradeStatus _statusAfter,,,,,,,,,) = escrow.trades(tradeId);
         
         assertEq(uint8(_statusAfter), uint8(AgroasysEscrow.TradeStatus.CLOSED), "status should be CLOSED");
-        assertEq(usdc.balanceOf(buyer), buyerBalanceBefore + refundablePrincipal, "buyer should receive refundable principal immediately");
-        assertEq(usdc.balanceOf(address(escrow)), escrowBalanceBefore - refundablePrincipal, "escrow balance should retain only non-refundable fees");
+        assertEq(usdc.balanceOf(buyer), buyerBalanceBefore + refundableProtectedAmount, "buyer should receive every protected component immediately");
+        assertEq(usdc.balanceOf(address(escrow)), escrowBalanceBefore - refundableProtectedAmount, "escrow balance should release the full protected amount");
         assertEq(escrow.claimableUsdc(buyer), 0, "buyer claimable should remain zero after direct refund");
-        assertEq(escrow.claimableUsdc(treasury), treasuryClaimableBefore + logistics + fees, "treasury claimable should retain non-refundable fees");
+        assertEq(escrow.claimableUsdc(treasury), treasuryClaimableBefore, "treasury should receive no fees before stage one");
     }
 
 
     function testFuzz_RefundInTransitAfterTimeout(uint96 logistics, uint96 fees, uint96 tranche1, uint96 tranche2, bytes32 ricardianHash) public {
         vm.assume(ricardianHash != bytes32(0));
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        fees = uint96(bound(fees, 500e6, 5_000e6));
-        tranche1 = uint96(bound(tranche1, 10_000e6, 100_000e6));
-        tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
+        uint96 goodsAmount = uint96(bound(fees, 20_000e6, 200_000e6));
+        (fees, tranche1, tranche2) = _launch_schedule(goodsAmount);
         
         uint256 tradeId = _create_trade(logistics, fees, tranche1, tranche2, ricardianHash);
         
@@ -738,7 +798,8 @@ contract FuzzTest is Test {
     }
 
     function test_treasuryPayoutRotationRoutesClaimTreasury() public {
-        uint256 tradeId = _create_trade(1_000e6, 500e6, 10_000e6, 10_000e6, keccak256("doc"));
+        (uint96 fees, uint96 tranche1, uint96 tranche2) = _launch_schedule(20_000e6);
+        uint256 tradeId = _create_trade(1_000e6, fees, tranche1, tranche2, keccak256("doc"));
 
         vm.prank(oracle);
         escrow.releaseFundsStage1(tradeId);

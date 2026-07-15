@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 interface IUSDCReceiveWithAuthorization {
     function receiveWithAuthorization(
@@ -24,13 +25,13 @@ interface IUSDCReceiveWithAuthorization {
 /**
  * AgroasysEscrow
  * - Milestone escrow (Stage 1 + Stage 2)
- * - Arrival confirmation starts a 24h buyer dispute window
+ * - Inspection availability starts the order's 48h or 72h buyer notice window
  * - Buyer can freeze during window; admins resolve with 4-eyes approval
  * - Treasury ONLY receives explicit fees (logistics + platform fees); buyer principal never routes to treasury
  * - Signature uses buyer-scoped nonce (no global tradeId pre-query race) + deadline + domain separation
  *
  * Business rule enforced:
- * - Logistics/platform fees are non-refundable once a trade is funded; platformFeesAmount includes the fixed settlement fee
+ * - All buyer funds remain protected until Stage 1; platformFeesAmount includes buyer and supplier platform fees plus the fixed settlement fee
  * - Stage 1 release pays supplierFirstTranche (principal) directly and accrues logistics/platform fees for treasury sweep
  * - Stage 2 finalization pays supplierSecondTranche (principal) directly to supplier
  * - Buyer refunds are transferred directly during the refund transaction; buyers never need to claim
@@ -41,8 +42,17 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     // -----------------------------
     // Constants
     // -----------------------------
-    /// @notice Buyer dispute window after arrival confirmation.
-    uint256 public constant DISPUTE_WINDOW = 24 hours;
+    /// @notice Standard inspection notice window for ordinary agricultural deliveries.
+    uint256 public constant STANDARD_INSPECTION_WINDOW = 72 hours;
+    /// @notice Inspection notice window for explicitly classified packaged local deliveries.
+    uint256 public constant PACKAGED_LOCAL_INSPECTION_WINDOW = 48 hours;
+    uint256 private constant BUYER_PLATFORM_FEE_BPS = 100;
+    uint256 private constant SUPPLIER_PLATFORM_FEE_BPS = 50;
+    uint256 private constant FIRST_SUPPLIER_TRANCHE_BPS = 6_000;
+    uint256 private constant BPS_DENOMINATOR = 10_000;
+    uint256 private constant SETTLEMENT_SUPPORT_FEE = 4_000_000;
+    /// @notice Compatibility alias for integrations reading the historical public constant.
+    uint256 public constant DISPUTE_WINDOW = STANDARD_INSPECTION_WINDOW;
     /// @notice Maximum time a trade can remain LOCKED before buyer can cancel for refundable principal.
     uint256 public constant LOCK_TIMEOUT = 7 days;
     /// @notice Maximum time a trade can remain IN_TRANSIT without arrival confirmation before buyer principal refund.
@@ -75,7 +85,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     enum TradeStatus {
         LOCKED,            // initial deposit
         IN_TRANSIT,        // stage1 released (supplier first tranche + logistics fee + platform fee paid)
-        ARRIVAL_CONFIRMED, // oracle confirms arrival; 24h dispute window starts
+        ARRIVAL_CONFIRMED, // oracle confirms goods are available for inspection; notice window starts
         FROZEN,            // buyer opened dispute within window
         CLOSED             // finalized or resolved
     }
@@ -121,14 +131,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         address supplierAddress;
         uint256 totalAmountLocked;
 
-        uint256 logisticsAmount;     // non-refundable; paid to treasury at stage1 or lock timeout cancellation
-        uint256 platformFeesAmount;  // non-refundable; includes settlement fee; paid to treasury at stage1 or lock timeout cancellation
+        uint256 logisticsAmount;     // protected until stage1; paid to treasury after custody and document verification
+        uint256 platformFeesAmount;  // protected until stage1; includes buyer/supplier fees and fixed settlement fee
 
-        uint256 supplierFirstTranche;  // typically 40% (principal component released at stage1)
-        uint256 supplierSecondTranche; // typically 60% (principal component released at stage2/finalization)
+        uint256 supplierFirstTranche;  // 60% gross goods tranche less the supplier fee, released at stage1
+        uint256 supplierSecondTranche; // remaining 40% goods tranche, released at stage2/finalization
 
         uint256 createdAt;
-        uint256 arrivalTimestamp; // set on confirmArrival
+        uint256 arrivalTimestamp; // inspection-availability timestamp retained under the legacy field name
     }
 
     struct DisputeProposal {
@@ -199,6 +209,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
     /// @notice Timestamp when a trade moved to IN_TRANSIT.
     mapping(uint256 => uint256) public inTransitSince;
+    /// @notice Contract-defined inspection notice window for each trade.
+    mapping(uint256 => uint256) public inspectionWindowSeconds;
 
     // roles
     address public oracleAddress;
@@ -310,6 +322,13 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     );
 
     event ArrivalConfirmed(uint256 indexed tradeId, uint256 arrivalTimestamp);
+    event InspectionAvailable(
+        uint256 indexed tradeId,
+        uint256 inspectionAvailableAt,
+        uint256 inspectionWindowSeconds,
+        uint256 noticeDeadline
+    );
+    event InspectionAcceptedForFinalRelease(uint256 indexed tradeId, uint256 acceptedAt);
 
     // NOTE: Stage 2 now pays supplierSecondTranche ONLY (no treasury payment).
     // This event is kept as-is for backward compatibility, but is no longer emitted.
@@ -530,6 +549,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
     modifier onlyOracleActive() {
         require(oracleActive, "oracle disabled");
+        _;
+    }
+
+    modifier onlyOracleOrAdmin() {
+        bool callerIsOracle = msg.sender == oracleAddress;
+        require(callerIsOracle || isAdmin[msg.sender], "only oracle or admin");
+        if (callerIsOracle) {
+            require(oracleActive, "oracle disabled");
+        }
         _;
     }
 
@@ -891,6 +919,36 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         bytes memory _authorizationSignature,
         UsdcAuthorization calldata _usdcAuthorization
     ) external onlyRelayerOrAdmin whenNotPaused nonReentrant returns (uint256) {
+        return _createTradeWithAuthorization(
+            _buyer,
+            _supplier,
+            _totalAmount,
+            _logisticsAmount,
+            _platformFeesAmount,
+            _supplierFirstTranche,
+            _supplierSecondTranche,
+            _ricardianHash,
+            _authorizationNonce,
+            _authorizationDeadline,
+            _authorizationSignature,
+            _usdcAuthorization
+        );
+    }
+
+    function _createTradeWithAuthorization(
+        address _buyer,
+        address _supplier,
+        uint256 _totalAmount,
+        uint256 _logisticsAmount,
+        uint256 _platformFeesAmount,
+        uint256 _supplierFirstTranche,
+        uint256 _supplierSecondTranche,
+        bytes32 _ricardianHash,
+        uint256 _authorizationNonce,
+        uint256 _authorizationDeadline,
+        bytes memory _authorizationSignature,
+        UsdcAuthorization calldata _usdcAuthorization
+    ) internal returns (uint256) {
         _validateTradeAmounts(
             _supplier,
             _totalAmount,
@@ -899,6 +957,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             _supplierFirstTranche,
             _supplierSecondTranche,
             _ricardianHash
+        );
+        _validateLaunchSettlementSchedule(
+            _platformFeesAmount,
+            _supplierFirstTranche,
+            _supplierSecondTranche
         );
 
         _verifyCreateTradeAuthorization(
@@ -944,6 +1007,57 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         return newTradeId;
     }
 
+    function _validateLaunchSettlementSchedule(
+        uint256 platformFeesAmount,
+        uint256 supplierFirstTranche,
+        uint256 supplierSecondTranche
+    ) internal pure {
+        uint256 netSupplierPayout = supplierFirstTranche + supplierSecondTranche;
+        uint256 maximumGoodsCandidate = Math.mulDiv(
+            netSupplierPayout,
+            BPS_DENOMINATOR,
+            BPS_DENOMINATOR - SUPPLIER_PLATFORM_FEE_BPS
+        );
+
+        bool valid = _matchesLaunchSettlementSchedule(
+            maximumGoodsCandidate,
+            platformFeesAmount,
+            supplierFirstTranche,
+            supplierSecondTranche
+        );
+        if (!valid && maximumGoodsCandidate > 0) {
+            valid = _matchesLaunchSettlementSchedule(
+                maximumGoodsCandidate - 1,
+                platformFeesAmount,
+                supplierFirstTranche,
+                supplierSecondTranche
+            );
+        }
+
+        require(valid, "invalid launch settlement schedule");
+    }
+
+    function _matchesLaunchSettlementSchedule(
+        uint256 goodsAmount,
+        uint256 platformFeesAmount,
+        uint256 supplierFirstTranche,
+        uint256 supplierSecondTranche
+    ) internal pure returns (bool) {
+        uint256 buyerFee = Math.mulDiv(goodsAmount, BUYER_PLATFORM_FEE_BPS, BPS_DENOMINATOR);
+        uint256 supplierFee = Math.mulDiv(goodsAmount, SUPPLIER_PLATFORM_FEE_BPS, BPS_DENOMINATOR);
+        uint256 firstTrancheGross = Math.mulDiv(
+            goodsAmount,
+            FIRST_SUPPLIER_TRANCHE_BPS,
+            BPS_DENOMINATOR
+        );
+
+        return
+            firstTrancheGross >= supplierFee &&
+            supplierFirstTranche == firstTrancheGross - supplierFee &&
+            supplierSecondTranche == goodsAmount - firstTrancheGross &&
+            platformFeesAmount == buyerFee + supplierFee + SETTLEMENT_SUPPORT_FEE;
+    }
+
     function _accrueClaimable(uint256 _tradeId, address _recipient, uint256 _amount, ClaimType _claimType) internal {
         if (_amount == 0) {
             return;
@@ -954,12 +1068,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function _nonRefundableFeeAmount(Trade storage trade) internal view returns (uint256) {
+        if (trade.status == TradeStatus.LOCKED) {
+            return 0;
+        }
         return trade.logisticsAmount + trade.platformFeesAmount;
     }
 
     function _buyerRefundablePrincipalAmount(Trade storage trade) internal view returns (uint256) {
         if (trade.status == TradeStatus.LOCKED) {
-            return trade.supplierFirstTranche + trade.supplierSecondTranche;
+            return trade.totalAmountLocked;
         }
 
         if (
@@ -1084,24 +1201,61 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     /**
-     * Arrival confirmation starts dispute window.
-     * Only oracle can confirm arrival.
+     * Compatibility entry point for a standard 72-hour inspection window.
+     * New integrations should call confirmInspectionAvailable with the order policy.
      */
     function confirmArrival(uint256 _tradeId) external onlyOracle onlyOracleActive whenNotPaused nonReentrant {
+        _confirmInspectionAvailable(_tradeId, STANDARD_INSPECTION_WINDOW);
+        emit ArrivalConfirmed(_tradeId, trades[_tradeId].arrivalTimestamp);
+    }
+
+    function confirmInspectionAvailable(uint256 _tradeId, uint256 _windowSeconds)
+        external
+        onlyOracle
+        onlyOracleActive
+        whenNotPaused
+        nonReentrant
+    {
+        _confirmInspectionAvailable(_tradeId, _windowSeconds);
+    }
+
+    function _confirmInspectionAvailable(uint256 _tradeId, uint256 _windowSeconds) internal {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
         require(trade.status == TradeStatus.IN_TRANSIT, "status must be IN_TRANSIT");
+        require(
+            _windowSeconds == STANDARD_INSPECTION_WINDOW || _windowSeconds == PACKAGED_LOCAL_INSPECTION_WINDOW,
+            "unsupported inspection window"
+        );
 
         trade.status = TradeStatus.ARRIVAL_CONFIRMED;
         trade.arrivalTimestamp = block.timestamp;
+        inspectionWindowSeconds[_tradeId] = _windowSeconds;
         inTransitSince[_tradeId] = 0;
 
-        emit ArrivalConfirmed(_tradeId, trade.arrivalTimestamp);
+        emit InspectionAvailable(
+            _tradeId,
+            trade.arrivalTimestamp,
+            _windowSeconds,
+            trade.arrivalTimestamp + _windowSeconds
+        );
+    }
+
+    function inspectionDeadline(uint256 _tradeId) public view returns (uint256) {
+        require(_tradeId < tradeCounter, "trade not found");
+        Trade storage trade = trades[_tradeId];
+        require(trade.arrivalTimestamp > 0, "inspection not available");
+        return trade.arrivalTimestamp + _inspectionWindow(_tradeId);
+    }
+
+    function _inspectionWindow(uint256 _tradeId) internal view returns (uint256) {
+        uint256 configuredWindow = inspectionWindowSeconds[_tradeId];
+        return configuredWindow == 0 ? STANDARD_INSPECTION_WINDOW : configuredWindow;
     }
 
     /**
-     * Buyer can open a dispute through a relayed authorization within 24h after arrival confirmation.
+     * Buyer can open a dispute through a relayed authorization during the inspection notice window.
      * This freezes remaining funds until admin resolution.
      */
     function openDisputeWithAuthorization(
@@ -1124,7 +1278,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
         require(trade.status == TradeStatus.ARRIVAL_CONFIRMED, "must be ARRIVAL_CONFIRMED");
         require(trade.arrivalTimestamp > 0, "arrival not set");
-        require(block.timestamp <= trade.arrivalTimestamp + DISPUTE_WINDOW, "window closed");
+        require(block.timestamp <= inspectionDeadline(_tradeId), "window closed");
 
         trade.status = TradeStatus.FROZEN;
 
@@ -1134,12 +1288,13 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
     /**
      * Final settlement after dispute window if no dispute was opened.
-     * Direct execution is admin-only; suppliers use finalizeAfterDisputeWindowWithAuthorization.
+     * Direct execution is available to the active oracle for automatic expiry and to admins
+     * for governed recovery; suppliers use finalizeAfterDisputeWindowWithAuthorization.
      *
      * Business rule: Stage 2 pays ONLY remaining supplier principal (supplierSecondTranche).
      * Treasury fees were already collected at Stage 1.
      */
-    function finalizeAfterDisputeWindow(uint256 _tradeId) external onlyAdmin whenNotPaused nonReentrant {
+    function finalizeAfterDisputeWindow(uint256 _tradeId) external onlyOracleOrAdmin whenNotPaused nonReentrant {
         _finalizeAfterDisputeWindow(_tradeId);
     }
 
@@ -1165,14 +1320,37 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         emit RelayedActionExecuted(msg.sender, trade.supplierAddress, ACTION_FINALIZE_AFTER_DISPUTE_WINDOW, _tradeId);
     }
 
+    /**
+     * Releases the final tranche immediately after Agroasys records the buyer's explicit
+     * acceptance that the inspected goods meet the agreed terms.
+     */
+    function finalizeAfterInspectionAcceptance(uint256 _tradeId)
+        external
+        onlyOracle
+        onlyOracleActive
+        whenNotPaused
+        nonReentrant
+    {
+        require(_tradeId < tradeCounter, "trade not found");
+        Trade storage trade = trades[_tradeId];
+        require(trade.status == TradeStatus.ARRIVAL_CONFIRMED, "must be ARRIVAL_CONFIRMED");
+
+        _releaseFinalTranche(_tradeId, trade);
+        emit InspectionAcceptedForFinalRelease(_tradeId, block.timestamp);
+    }
+
     function _finalizeAfterDisputeWindow(uint256 _tradeId) internal {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
         require(trade.status == TradeStatus.ARRIVAL_CONFIRMED, "must be ARRIVAL_CONFIRMED");
         require(trade.arrivalTimestamp > 0, "arrival not set");
-        require(block.timestamp > trade.arrivalTimestamp + DISPUTE_WINDOW, "window not elapsed");
+        require(block.timestamp > inspectionDeadline(_tradeId), "window not elapsed");
 
+        _releaseFinalTranche(_tradeId, trade);
+    }
+
+    function _releaseFinalTranche(uint256 _tradeId, Trade storage trade) internal {
         trade.status = TradeStatus.CLOSED;
         inTransitSince[_tradeId] = 0;
 
@@ -1202,11 +1380,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(trade.status == TradeStatus.LOCKED, "status must be LOCKED");
         require(block.timestamp > trade.createdAt + LOCK_TIMEOUT, "lock timeout not elapsed");
 
-        uint256 buyerRefundAmount = _buyerRefundablePrincipalAmount(trade);
+        uint256 buyerRefundAmount = trade.totalAmountLocked;
         trade.status = TradeStatus.CLOSED;
 
-        _accrueClaimable(_tradeId, treasuryAddress, trade.logisticsAmount, ClaimType.STAGE1_LOGISTICS_FEE);
-        _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
         _transferBuyerRefund(_tradeId, trade.buyerAddress, buyerRefundAmount, ClaimType.LOCK_TIMEOUT_BUYER_REFUND);
 
         emit TradeCancelledAfterLockTimeout(_tradeId, trade.buyerAddress, buyerRefundAmount);

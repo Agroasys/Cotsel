@@ -134,10 +134,54 @@ describe('TriggerManager retry and idempotency states', () => {
     expect(mockedUpdateTrigger).not.toHaveBeenCalled();
   });
 
+  it('serializes both final-release reasons under one financial action key', async () => {
+    const latest = {
+      ...buildTrigger(TriggerStatus.SUBMITTED),
+      action_key: 'FINAL_RELEASE:1',
+      trigger_type: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+      tx_hash: `0x${'a'.repeat(64)}`,
+    };
+    mockedGetLatestTriggerByActionKey.mockResolvedValue(latest);
+    const lockedActionKeys: string[] = [];
+    const actionLock = {
+      async withLock<T>(actionKey: string, work: () => Promise<T>): Promise<T> {
+        lockedActionKeys.push(actionKey);
+        return work();
+      },
+    };
+    const sdkClient = {
+      getTrade: jest.fn(),
+      finalizeAfterInspectionAcceptance: jest.fn(),
+      finalizeTrade: jest.fn(),
+    } as unknown as TriggerManagerSdkClient;
+    const manager = new TriggerManager(sdkClient, 3, 1, undefined, false, actionLock);
+
+    const accepted = await manager.executeTrigger({
+      tradeId: '1',
+      requestId: 'req-accepted',
+      triggerType: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+    });
+    const deadline = await manager.executeTrigger({
+      tradeId: '1',
+      requestId: 'req-deadline',
+      triggerType: TriggerType.FINALIZE_TRADE,
+    });
+
+    expect(lockedActionKeys).toEqual(['FINAL_RELEASE:1', 'FINAL_RELEASE:1']);
+    expect(mockedGetLatestTriggerByActionKey).toHaveBeenCalledWith('FINAL_RELEASE:1');
+    expect(accepted).toMatchObject({ idempotent: true, txHash: latest.tx_hash });
+    expect(deadline).toMatchObject({ idempotent: true, txHash: latest.tx_hash });
+    expect(sdkClient.finalizeAfterInspectionAcceptance).not.toHaveBeenCalled();
+    expect(sdkClient.finalizeTrade).not.toHaveBeenCalled();
+  });
+
   it('transitions to exhausted when retry ceiling is reached', async () => {
     mockedGetLatestTriggerByActionKey.mockResolvedValue(null);
     mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
-    mockedCreateTrigger.mockResolvedValue(buildTrigger(TriggerStatus.PENDING));
+    mockedCreateTrigger.mockResolvedValue({
+      ...buildTrigger(TriggerStatus.PENDING),
+      request_id: 'req-retry',
+    });
 
     const sdkClient: TriggerManagerSdkClient = {
       getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
@@ -171,7 +215,10 @@ describe('TriggerManager retry and idempotency states', () => {
   it('transitions immediately to terminal failure for terminal errors without retrying', async () => {
     mockedGetLatestTriggerByActionKey.mockResolvedValue(null);
     mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
-    mockedCreateTrigger.mockResolvedValue(buildTrigger(TriggerStatus.PENDING));
+    mockedCreateTrigger.mockResolvedValue({
+      ...buildTrigger(TriggerStatus.PENDING),
+      request_id: 'req-terminal',
+    });
 
     const sdkClient: TriggerManagerSdkClient = {
       getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),

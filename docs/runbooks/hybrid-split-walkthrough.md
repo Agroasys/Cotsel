@@ -152,7 +152,14 @@ If not:
 
 ### 5. Stage-2 release (final settlement)
 
-After arrival is confirmed and the dispute window elapses without an active dispute, final settlement is executed via `finalizeAfterDisputeWindow` (permissionless on-chain closeout).
+After goods become available for inspection, the oracle records the order's 48-
+or 72-hour notice policy. The final 40% can be released immediately through
+`finalizeAfterInspectionAcceptance` when buyer-signed on-chain acceptance is
+enabled. Until that mainnet security upgrade is enabled, an early acceptance is
+recorded but the gateway fails the immediate oracle path closed; at the exact
+notice deadline, the durable handoff is remapped or replaced by Agroasys with a
+deadline-fallback handoff and `finalizeAfterDisputeWindow` releases the final
+40% automatically when no dispute is active.
 
 Expected result:
 

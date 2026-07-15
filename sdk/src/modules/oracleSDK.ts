@@ -8,6 +8,9 @@ import { OracleResult } from '../types/oracle';
 import { Trade, TradeStatus } from '../types/trade';
 
 export class OracleSDK extends Client {
+  static readonly STANDARD_INSPECTION_WINDOW_SECONDS = 72 * 60 * 60;
+  static readonly PACKAGED_LOCAL_INSPECTION_WINDOW_SECONDS = 48 * 60 * 60;
+
   private async verifyOracle(oracleSigner: ethers.Signer): Promise<void> {
     await this.assertSignerCompatibility(oracleSigner, 'Oracle signer');
 
@@ -72,6 +75,74 @@ export class OracleSDK extends Client {
     } catch (error: unknown) {
       const message = getErrorMessage(error);
       throw new ContractError(`Failed to confirm arrival: ${message}`, {
+        tradeId: tradeId.toString(),
+        error: message,
+      });
+    }
+  }
+
+  async confirmInspectionAvailable(
+    tradeId: string | bigint,
+    windowSeconds: number,
+    oracleSigner: ethers.Signer,
+  ): Promise<OracleResult> {
+    await this.verifyOracle(oracleSigner);
+
+    if (
+      windowSeconds !== OracleSDK.STANDARD_INSPECTION_WINDOW_SECONDS &&
+      windowSeconds !== OracleSDK.PACKAGED_LOCAL_INSPECTION_WINDOW_SECONDS
+    ) {
+      throw new ContractError('Inspection window must be the approved 48-hour or 72-hour policy', {
+        tradeId: tradeId.toString(),
+        windowSeconds,
+      });
+    }
+
+    try {
+      const contractWithSigner = this.contract.connect(oracleSigner);
+      const tx = await contractWithSigner.confirmInspectionAvailable(tradeId, windowSeconds);
+      const receipt = await tx.wait();
+
+      if (!receipt) {
+        throw new ContractError('Transaction receipt not available');
+      }
+
+      return {
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+      };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      throw new ContractError(`Failed to confirm inspection availability: ${message}`, {
+        tradeId: tradeId.toString(),
+        windowSeconds,
+        error: message,
+      });
+    }
+  }
+
+  async finalizeAfterInspectionAcceptance(
+    tradeId: string | bigint,
+    oracleSigner: ethers.Signer,
+  ): Promise<OracleResult> {
+    await this.verifyOracle(oracleSigner);
+
+    try {
+      const contractWithSigner = this.contract.connect(oracleSigner);
+      const tx = await contractWithSigner.finalizeAfterInspectionAcceptance(tradeId);
+      const receipt = await tx.wait();
+
+      if (!receipt) {
+        throw new ContractError('Transaction receipt not available');
+      }
+
+      return {
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+      };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      throw new ContractError(`Failed to finalize after inspection acceptance: ${message}`, {
         tradeId: tradeId.toString(),
         error: message,
       });

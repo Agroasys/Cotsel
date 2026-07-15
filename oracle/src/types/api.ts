@@ -5,6 +5,7 @@ export interface OracleResponse {
   status: string;
   txHash?: string;
   blockNumber?: number;
+  idempotent: boolean;
   message: string;
   timestamp: string;
 }
@@ -22,6 +23,16 @@ export interface ReleaseStage1Request {
 }
 
 export interface ConfirmArrivalRequest {
+  tradeId: string;
+  requestId: string;
+}
+
+export interface ConfirmInspectionAvailableRequest {
+  tradeId: string;
+  requestId: string;
+}
+
+export interface FinalizeAfterInspectionAcceptanceRequest {
   tradeId: string;
   requestId: string;
 }

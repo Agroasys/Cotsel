@@ -14,11 +14,12 @@ All values are illustrative for the demo session:
 
 | Field                   | Demo Value    |
 | ----------------------- | ------------- |
-| `totalAmount`           | 10,000 USDC   |
-| `logisticsAmount`       | 1,000 USDC    |
-| `platformFeesAmount`    | 500 USDC      |
-| `supplierFirstTranche`  | 4,000 USDC    |
-| `supplierSecondTranche` | 4,500 USDC    |
+| Supplier goods value    | 1,000 USDC    |
+| `totalAmount`           | 1,064 USDC    |
+| `logisticsAmount`       | 50 USDC       |
+| `platformFeesAmount`    | 19 USDC       |
+| `supplierFirstTranche`  | 595 USDC      |
+| `supplierSecondTranche` | 400 USDC      |
 | `tradeId`               | 0             |
 | `documentRef`           | (to complete) |
 
@@ -84,11 +85,13 @@ Show the SDK usage pattern:
 // (6 decimals)
 const tradeParams = {
   supplier: 'supplier-address',
-  totalAmount: parseUSDC('10000'),
-  logisticsAmount: parseUSDC('1000'),
-  platformFeesAmount: parseUSDC('500'),
-  supplierFirstTranche: parseUSDC('4000'),
-  supplierSecondTranche: parseUSDC('4500'),
+  totalAmount: parseUSDC('1064'),
+  logisticsAmount: parseUSDC('50'),
+  // Buyer fee 10 + fixed support fee 4 + supplier fee 5
+  platformFeesAmount: parseUSDC('19'),
+  // Gross first tranche 600 less supplier fee 5
+  supplierFirstTranche: parseUSDC('595'),
+  supplierSecondTranche: parseUSDC('400'),
   ricardianHash: 'ricardian-hash',
 };
 
@@ -145,41 +148,41 @@ Pre-approval checklist (narrate each item):
 
 **Show audience events emitted:**
 
-- `FundsReleasedStage1(tradeId, supplier, 4_000 USDC, treasury, 1_000 USDC)`
-- `PlatformFeesPaidStage1(tradeId, treasury, 500 USDC)`
+- `FundsReleasedStage1(tradeId, supplier, 595 USDC, treasury, 50 USDC)`
+- `PlatformFeesPaidStage1(tradeId, treasury, 19 USDC)`
 
 **Show audience state:**
 
 - Trade status: `IN_TRANSIT`
-- Supplier received: 4,000 USDC
-- Treasury received: 1,500 USDC (logistics + platform fee)
-- Escrow still holds: 4,500 USDC (supplier second tranche)
+- Supplier received: 595 USDC (60% gross less the 0.5% full-order supplier fee)
+- Treasury claimable: 69 USDC (50 logistics + 10 buyer fee + 4 support + 5 supplier fee)
+- Escrow still protects: 400 USDC (the remaining 40% supplier principal)
 
-## Act 5 — Arrival Confirmation: Quality Verified at Destination
+## Act 5 — Goods Available For Inspection
 
-> When the goods arrive and the Inspection Report confirms quality and quantity, the oracle triggers arrival confirmation. This opens the 24-hour dispute window, the buyer's last opportunity to raise a quality dispute before final settlement.
+> Arrival alone does not start settlement. After the goods are discharged or delivered into custody and are actually available for inspection, the oracle starts the order's inspection-notice window. Ordinary bulk agricultural deliveries use 72 hours; explicitly classified packaged-local deliveries use 48 hours.
 
 **Demo steps:**
 
-### Step 5.1 — Oracle triggers arrival confirmation
+### Step 5.1 — Oracle records inspection availability
 
 Approve as in Step 3.2 (with `ORACLE_MANUAL_APPROVAL_ENABLED=true`):
 
-> Inspection Report validated at destination port.
+> Goods are available for weighing, sampling, and inspection at the contracted location.
 
 **Show audience:**
 
-- `ArrivalConfirmed(tradeId, arrivalTimestamp)` event emitted.
+- `InspectionAvailable(tradeId, inspectionAvailableAt, windowSeconds, deadline)` event emitted.
 - Trade status: `ARRIVAL_CONFIRMED`.
-- 24-hour dispute window is now open.
+- Exact 48- or 72-hour notice deadline is now recorded.
 
-> From this moment, the buyer has 24 hours to raise a dispute. If no dispute is raised, the protocol automatically finalizes and releases the remaining 4,500 USDC to the supplier.
+> The buyer can accept the inspected goods immediately, which releases the remaining 400 USDC without waiting. If the buyer reports no problem, the protocol releases the 400 USDC automatically at the exact notice deadline. A 7- or 14-day evidence period exists only after an active dispute has already placed the final tranche on hold.
 
 ## Act 6 — Final Settlement: Dispute Window Elapses
 
 **Narrator prompt:**
 
-> "No dispute was raised. The 24-hour window has elapsed. The protocol finalizes the trade."
+> "No dispute was raised. The order's notice deadline has elapsed. The protocol finalizes the trade."
 
 **Demo steps:**
 
@@ -187,7 +190,7 @@ Approve as in Step 3.2 (with `ORACLE_MANUAL_APPROVAL_ENABLED=true`):
 
 **Show:**
 
-- `FinalTrancheReleased(tradeId, supplier, 4_500 USDC)` event emitted.
+- `FinalTrancheReleased(tradeId, supplier, 400 USDC)` event emitted.
 - Trade status: `CLOSED`.
 - Escrow balance: 0 USDC for this trade.
 - Supplier total received: 4,000 + 4,500 = 8,500 USDC.
@@ -219,7 +222,7 @@ Approve as in Step 3.2 (with `ORACLE_MANUAL_APPROVAL_ENABLED=true`):
 
 - Create a second trade (T2 from E2E matrix).
 - Progress through Stage 1 and Arrival Confirmation.
-- Buyer calls `openDispute` within the 24-hour window.
+- Buyer calls `openDispute` within the order's 72-hour standard or explicitly selected 48-hour packaged-local notice window.
 - Admin 1 proposes `RESOLVE` (supplier keeps second tranche) or `REFUND` (buyer receives second tranche).
 - Admin M approves -> execution is automatic at M-of-N approval threshold.
 

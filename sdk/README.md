@@ -9,7 +9,7 @@ This SDK provides a **type-safe, role-based interface** to the Agroasys smart co
 The SDK is organized into **three role-based modules**:
 
 - **BuyerSDK** - Create gasless settlement authorization packages and buyer/supplier user-action authorization packages
-- **OracleSDK** - Release funds at logistics milestones, confirm arrival, finalize trade (**Auth verification**)
+- **OracleSDK** - Release Stage 1 after custody and document verification, start inspection, and finalize the protected 40% (**Auth verification**)
 - **AdminSDK** - Solve frozen trades, operate protocol controls, manage treasury payout governance, and propose/approve/execute governance actions (**Auth verification**)
 
 All modules extend a shared **Client** base class, which handles provider initialization and common contract reads.
@@ -97,11 +97,11 @@ const buyerSDK = new BuyerSDK(config);
 const buyerSigner = await createSignerFromEip1193Provider(agroasysManagedProvider);
 const payload: BuyerLockPayload = {
   supplier: '0xSupplierAddress...',
-  totalAmount: 141_500_000n,
-  logisticsAmount: 10_000_000n,
-  platformFeesAmount: 1_500_000n,
-  supplierFirstTranche: 52_000_000n,
-  supplierSecondTranche: 78_000_000n,
+  totalAmount: 1_064_000_000n,
+  logisticsAmount: 50_000_000n,
+  platformFeesAmount: 19_000_000n,
+  supplierFirstTranche: 595_000_000n,
+  supplierSecondTranche: 400_000_000n,
   ricardianHash: '0x3a4b5c6d...f1e2d3',
 };
 
@@ -225,11 +225,13 @@ settlement gateway.
 
 ### OracleSDK
 
-| Method                                        | Description                                |
-| --------------------------------------------- | ------------------------------------------ |
-| `releaseFundsStage1(tradeId, signer)`         | Release first tranche                      |
-| `confirmArrival(tradeId, signer)`             | Confirm goods arrival at destination       |
-| `finalizeAfterDisputeWindow(tradeId, signer)` | Release final tranche after dispute window |
+| Method                                                       | Description                                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `releaseFundsStage1(tradeId, signer)`                        | Release net supplier 60% plus logistics and fees after custody/document verification |
+| `confirmInspectionAvailable(tradeId, windowSeconds, signer)` | Start an explicit 48- or 72-hour inspection-notice window                            |
+| `finalizeAfterInspectionAcceptance(tradeId, signer)`         | Release final 40% immediately after buyer inspection acceptance                      |
+| `finalizeAfterDisputeWindow(tradeId, signer)`                | Release final 40% after the notice deadline without a dispute                        |
+| `confirmArrival(tradeId, signer)`                            | Legacy compatibility; starts the standard 72-hour policy                             |
 
 ### AdminSDK
 

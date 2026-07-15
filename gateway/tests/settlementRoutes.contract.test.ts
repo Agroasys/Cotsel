@@ -342,6 +342,9 @@ describe('gateway settlement routes contract', () => {
 
   test('OpenAPI spec exposes settlement ingress routes', () => {
     expect(hasOperation(spec, 'post', '/settlement/handoffs')).toBe(true);
+    expect(hasOperation(spec, 'post', '/settlement/handoffs/{handoffId}/oracle-execution')).toBe(
+      true,
+    );
     expect(hasOperation(spec, 'post', '/settlement/gasless-executions/create-trade')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/gasless-executions/user-action')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/gasless-executions/operator-action')).toBe(true);

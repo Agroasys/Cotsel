@@ -12,7 +12,9 @@ import { Logger } from '../utils/logger';
 import {
   ApprovalRequest,
   ConfirmArrivalRequest,
+  ConfirmInspectionAvailableRequest,
   ErrorResponse,
+  FinalizeAfterInspectionAcceptanceRequest,
   FinalizeTradeRequest,
   OracleResponse,
   RejectRequest,
@@ -43,23 +45,53 @@ type TriggerExecutionResult = {
   status: string;
   txHash?: string;
   blockNumber?: number;
+  idempotent: boolean;
   message: string;
 };
 
 const ORACLE_TRIGGER_TYPES = Object.values(TriggerType);
 const ORACLE_TRIGGER_STATUSES: readonly string[] = Object.values(TriggerStatus);
 
-function buildOracleSuccess(result: TriggerExecutionResult): OracleResponse {
+const ACCEPTED_EXECUTION_STATUSES = new Set<string>([
+  TriggerStatus.SUBMITTED,
+  TriggerStatus.CONFIRMED,
+]);
+
+function buildOracleExecutionResponse(result: TriggerExecutionResult): OracleResponse {
   return {
-    success: true,
+    success: ACCEPTED_EXECUTION_STATUSES.has(result.status),
     idempotencyKey: result.idempotencyKey,
     actionKey: result.actionKey,
     status: result.status,
     txHash: result.txHash,
     blockNumber: result.blockNumber,
+    idempotent: result.idempotent,
     message: result.message,
     timestamp: timestamp(),
   };
+}
+
+function resolveExecutionStatusCode(result: TriggerExecutionResult): number {
+  if (ACCEPTED_EXECUTION_STATUSES.has(result.status)) {
+    return 200;
+  }
+  if (result.status === TriggerStatus.TERMINAL_FAILURE) {
+    return 422;
+  }
+  if (result.status === TriggerStatus.EXHAUSTED_NEEDS_REDRIVE) {
+    return 503;
+  }
+  if (result.status === TriggerStatus.REJECTED) {
+    return 409;
+  }
+  return 202;
+}
+
+function sendOracleExecutionResult(
+  res: Response<OracleResponse | ErrorResponse>,
+  result: TriggerExecutionResult,
+): void {
+  res.status(resolveExecutionStatusCode(result)).json(buildOracleExecutionResponse(result));
 }
 
 function buildOracleErrorResponse(error: unknown): ErrorResponse {
@@ -232,7 +264,7 @@ export class OracleController {
         requestHash: req.hmacSignature,
       });
 
-      res.status(200).json(buildOracleSuccess(result));
+      sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in releaseStage1', error);
       res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
@@ -252,9 +284,53 @@ export class OracleController {
         requestHash: req.hmacSignature,
       });
 
-      res.status(200).json(buildOracleSuccess(result));
+      sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in confirmArrival', error);
+      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+    }
+  }
+
+  async confirmInspectionAvailableStandard(
+    req: Request<RouteParams, unknown, ConfirmInspectionAvailableRequest>,
+    res: Response<OracleResponse | ErrorResponse>,
+  ): Promise<void> {
+    await this.executeInspectionTrigger(
+      req,
+      res,
+      TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD,
+      'confirmInspectionAvailableStandard',
+    );
+  }
+
+  async confirmInspectionAvailablePackagedLocal(
+    req: Request<RouteParams, unknown, ConfirmInspectionAvailableRequest>,
+    res: Response<OracleResponse | ErrorResponse>,
+  ): Promise<void> {
+    await this.executeInspectionTrigger(
+      req,
+      res,
+      TriggerType.CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL,
+      'confirmInspectionAvailablePackagedLocal',
+    );
+  }
+
+  async finalizeAfterInspectionAcceptance(
+    req: Request<RouteParams, unknown, FinalizeAfterInspectionAcceptanceRequest>,
+    res: Response<OracleResponse | ErrorResponse>,
+  ): Promise<void> {
+    try {
+      const { tradeId, requestId } = parseTriggerBody(req.body);
+      const result = await this.triggerManager.executeTrigger({
+        tradeId,
+        requestId,
+        triggerType: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+        requestHash: req.hmacSignature,
+      });
+
+      sendOracleExecutionResult(res, result);
+    } catch (error: unknown) {
+      Logger.error('Controller error in finalizeAfterInspectionAcceptance', error);
       res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
     }
   }
@@ -272,9 +348,33 @@ export class OracleController {
         requestHash: req.hmacSignature,
       });
 
-      res.status(200).json(buildOracleSuccess(result));
+      sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in finalizeTrade', error);
+      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
+    }
+  }
+
+  private async executeInspectionTrigger(
+    req: Request<RouteParams, unknown, ConfirmInspectionAvailableRequest>,
+    res: Response<OracleResponse | ErrorResponse>,
+    triggerType:
+      | TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD
+      | TriggerType.CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL,
+    operation: string,
+  ): Promise<void> {
+    try {
+      const { tradeId, requestId } = parseTriggerBody(req.body);
+      const result = await this.triggerManager.executeTrigger({
+        tradeId,
+        requestId,
+        triggerType,
+        requestHash: req.hmacSignature,
+      });
+
+      sendOracleExecutionResult(res, result);
+    } catch (error: unknown) {
+      Logger.error(`Controller error in ${operation}`, error);
       res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
     }
   }
@@ -299,7 +399,7 @@ export class OracleController {
         isRedrive: true,
       });
 
-      res.status(200).json(buildOracleSuccess(result));
+      sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in redriveTrigger', error);
       res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
@@ -314,7 +414,7 @@ export class OracleController {
       const { idempotencyKey, actor } = parseApprovalBody(req.body);
       const result = await this.triggerManager.resumeAfterApproval(idempotencyKey, actor);
 
-      res.status(200).json(buildOracleSuccess(result));
+      sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in approveTrigger', error);
       res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
@@ -329,7 +429,7 @@ export class OracleController {
       const { idempotencyKey, actor, reason } = parseRejectBody(req.body);
       const result = await this.triggerManager.rejectPendingTrigger(idempotencyKey, actor, reason);
 
-      res.status(200).json(buildOracleSuccess(result));
+      sendOracleExecutionResult(res, result);
     } catch (error: unknown) {
       Logger.error('Controller error in rejectTrigger', error);
       res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));

@@ -41,6 +41,8 @@ contract Handler is Test {
     uint256 public tradesCreated;
     uint256 public releaseStage1Triggered;
     uint256 public releaseStage2Triggered;
+    uint256 public inspectionAvailableTriggered;
+    uint256 public inspectionAcceptanceTriggered;
     uint256 public disputedRaised;
     uint256 public disputeSolved;
     mapping(uint256 => uint256) public buyerPrivateKeyByTrade;
@@ -65,9 +67,12 @@ contract Handler is Test {
         uint16 privateKey
     ) public {
         logistics = uint96(bound(logistics, 1000e6, 10_000e6));
-        fees = uint96(bound(fees, 500e6, 5_000e6));
-        tranche1 = uint96(bound(tranche1, 10_000e6, 100_000e6));
-        tranche2 = uint96(bound(tranche2, 10_000e6, 100_000e6));
+        uint256 goodsAmount = bound(fees, 20_000e6, 200_000e6);
+        uint256 supplierFee = goodsAmount * 50 / 10_000;
+        uint256 firstGross = goodsAmount * 6_000 / 10_000;
+        fees = uint96(goodsAmount / 100 + supplierFee + 4e6);
+        tranche1 = uint96(firstGross - supplierFee);
+        tranche2 = uint96(goodsAmount - firstGross);
 
         uint256 total = logistics + fees + tranche1 + tranche2;
 
@@ -207,6 +212,42 @@ contract Handler is Test {
         escrow.confirmArrival(tradeId);
     }
 
+    function confirmInspectionAvailable(uint96 random_tradeId, bool packagedLocal) public {
+        uint256 tradeCount = escrow.tradeCounter();
+        if (tradeCount==0){
+            return;
+        }
+
+        uint256 tradeId = random_tradeId % tradeCount;
+        (,, AgroasysEscrow.TradeStatus status,,,,,,,,,) = escrow.trades(tradeId);
+        if (status != AgroasysEscrow.TradeStatus.IN_TRANSIT) {
+            return;
+        }
+
+        vm.prank(oracle);
+        escrow.confirmInspectionAvailable(tradeId, packagedLocal ? 48 hours : 72 hours);
+        inspectionAvailableTriggered++;
+    }
+
+    function finalizeAfterInspectionAcceptance(uint96 random_tradeId) public {
+        uint256 tradeCount = escrow.tradeCounter();
+        if (tradeCount==0){
+            return;
+        }
+
+        uint256 tradeId = random_tradeId % tradeCount;
+        (,, AgroasysEscrow.TradeStatus status,,,,,,, uint256 tranche2,,) = escrow.trades(tradeId);
+        if (status != AgroasysEscrow.TradeStatus.ARRIVAL_CONFIRMED) {
+            return;
+        }
+
+        vm.prank(oracle);
+        escrow.finalizeAfterInspectionAcceptance(tradeId);
+        totalWithdrawn += tranche2;
+        releaseStage2Triggered++;
+        inspectionAcceptanceTriggered++;
+    }
+
     function finalizeAfterDisputeWindow(uint96 random_tradeId) public {
         uint256 tradeCount = escrow.tradeCounter();
         if (tradeCount==0){
@@ -217,9 +258,9 @@ contract Handler is Test {
 
         (,,,,,,,,,,,uint256 arrivalTimestamp) = escrow.trades(tradeId);
 
-        vm.warp(arrivalTimestamp + 24 hours + 1);
+        vm.warp(arrivalTimestamp + 72 hours + 1);
 
-        vm.prank(admin1);
+        vm.prank(oracle);
         escrow.finalizeAfterDisputeWindow(tradeId);
         (,,,,,,,,,uint256 tranche2,,) = escrow.trades(tradeId);
         totalWithdrawn += tranche2;
@@ -321,14 +362,16 @@ contract InvariantTest is Test {
 
         targetContract(address(handler));
 
-        bytes4[] memory selectors = new bytes4[](7);
+        bytes4[] memory selectors = new bytes4[](9);
         selectors[0] = Handler.createTrade.selector;
         selectors[1] = Handler.releaseFundsStage1.selector;
         selectors[2] = Handler.confirmArrival.selector;
-        selectors[3] = Handler.finalizeAfterDisputeWindow.selector;
-        selectors[4] = Handler.openDisputeByBuyer.selector;
-        selectors[5] = Handler.proposeDisputeSolution.selector;
-        selectors[6] = Handler.approveDisputeSolution.selector;
+        selectors[3] = Handler.confirmInspectionAvailable.selector;
+        selectors[4] = Handler.finalizeAfterInspectionAcceptance.selector;
+        selectors[5] = Handler.finalizeAfterDisputeWindow.selector;
+        selectors[6] = Handler.openDisputeByBuyer.selector;
+        selectors[7] = Handler.proposeDisputeSolution.selector;
+        selectors[8] = Handler.approveDisputeSolution.selector;
         
                 
         targetSelector(
@@ -344,6 +387,8 @@ contract InvariantTest is Test {
         console2.log("Total claimable accrued (USDC):", uint256(handler.totalClaimableUsdc()/1e6));
         console2.log("Total trigger stage 1:", uint256(handler.releaseStage1Triggered()));
         console2.log("Total trigger stage 2:", uint256(handler.releaseStage2Triggered()));
+        console2.log("Total inspection available:", uint256(handler.inspectionAvailableTriggered()));
+        console2.log("Total inspection accepted:", uint256(handler.inspectionAcceptanceTriggered()));
         console2.log("Total dispute raised:", uint256(handler.disputedRaised()));
         console2.log("Total dispute solved:", uint256(handler.disputeSolved()));
     }

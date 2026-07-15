@@ -37,6 +37,7 @@ export interface GatewayConfig {
   writeAllowlist: string[];
   governanceQueueTtlSeconds: number;
   settlementIngressEnabled: boolean;
+  immediateInspectionAcceptanceEnabled?: boolean;
   settlementServiceAuthApiKeysJson: string;
   settlementServiceAuthSharedSecret?: string;
   settlementServiceAuthMaxSkewSeconds: number;
@@ -246,6 +247,10 @@ export function loadConfig(): GatewayConfig {
   const writeAllowlist = parseAllowlist(process.env.GATEWAY_WRITE_ALLOWLIST);
   const enableMutations = envBool('GATEWAY_ENABLE_MUTATIONS', false);
   const settlementIngressEnabled = envBool('GATEWAY_SETTLEMENT_INGRESS_ENABLED', false);
+  const immediateInspectionAcceptanceEnabled = envBool(
+    'GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED',
+    false,
+  );
   const settlementServiceAuthApiKeysJson =
     process.env.GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON?.trim() || '[]';
   const settlementServiceAuthSharedSecret =
@@ -522,6 +527,11 @@ export function loadConfig(): GatewayConfig {
     );
   }
 
+  assert(
+    !immediateInspectionAcceptanceEnabled || (nodeEnv !== 'production' && chainId !== 8453),
+    'GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED cannot be enabled in production until buyer-signed on-chain acceptance is implemented',
+  );
+
   if (settlementCallbackEnabled) {
     assert(
       settlementCallbackUrl,
@@ -650,6 +660,7 @@ export function loadConfig(): GatewayConfig {
     writeAllowlist,
     governanceQueueTtlSeconds: envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400),
     settlementIngressEnabled,
+    immediateInspectionAcceptanceEnabled,
     settlementServiceAuthApiKeysJson,
     settlementServiceAuthSharedSecret,
     settlementServiceAuthMaxSkewSeconds: envNumber(

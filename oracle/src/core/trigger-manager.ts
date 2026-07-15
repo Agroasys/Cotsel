@@ -29,6 +29,7 @@ import {
 } from '../metrics/counters';
 import { WebhookNotifier } from '@agroasys/notifications';
 import { approveTrigger, rejectTrigger } from '../database/queries';
+import { NOOP_ORACLE_ACTION_LOCK, type OracleActionLock } from './oracle-action-lock';
 
 export interface TriggerRequest {
   tradeId: string;
@@ -45,6 +46,7 @@ export interface TriggerResponse {
   status: TriggerStatus;
   txHash?: string;
   blockNumber?: number;
+  idempotent: boolean;
   message: string;
 }
 
@@ -57,19 +59,28 @@ export class TriggerManager {
     private baseDelayMs: number = 1000,
     private notifier?: WebhookNotifier,
     private manualApprovalEnabled: boolean = false,
+    private readonly actionLock: OracleActionLock = NOOP_ORACLE_ACTION_LOCK,
   ) {}
 
   async executeTrigger(request: TriggerRequest): Promise<TriggerResponse> {
     StateValidator.validateTradeId(request.tradeId);
 
+    const actionKey = generateActionKey(request.triggerType, request.tradeId);
+    return this.actionLock.withLock(actionKey, () =>
+      this.executeTriggerWithActionLock(request, actionKey),
+    );
+  }
+
+  private async executeTriggerWithActionLock(
+    request: TriggerRequest,
+    actionKey: string,
+  ): Promise<TriggerResponse> {
     Logger.info('Processing trigger request', {
       tradeId: request.tradeId,
       requestId: request.requestId,
       triggerType: request.triggerType,
       isRedrive: request.isRedrive || false,
     });
-
-    const actionKey = generateActionKey(request.triggerType, request.tradeId);
 
     const latestTrigger = await getLatestTriggerByActionKey(actionKey);
 
@@ -87,6 +98,7 @@ export class TriggerManager {
         status: latestTrigger.status,
         txHash: latestTrigger.tx_hash || undefined,
         blockNumber: latestTrigger.block_number ? Number(latestTrigger.block_number) : undefined,
+        idempotent: true,
         message: 'Action already completed (idempotent)',
       };
     }
@@ -108,6 +120,9 @@ export class TriggerManager {
 
       if (this.manualApprovalEnabled && !request.isRedrive) {
         const trigger = await this.createNewTrigger(request, actionKey);
+        if (trigger.request_id !== request.requestId) {
+          return this.handleExistingTrigger(trigger, actionKey);
+        }
 
         await updateTrigger(trigger.idempotency_key, {
           status: TriggerStatus.PENDING_APPROVAL,
@@ -126,6 +141,7 @@ export class TriggerManager {
           actionKey,
           requestId: request.requestId,
           status: TriggerStatus.PENDING_APPROVAL,
+          idempotent: false,
           message: 'Trigger created and awaiting manual approval',
         };
       }
@@ -138,6 +154,9 @@ export class TriggerManager {
       });
 
       const trigger = await this.createNewTrigger(request, actionKey);
+      if (trigger.request_id !== request.requestId) {
+        return this.handleExistingTrigger(trigger, actionKey);
+      }
       return await this.executeWithRetry(trigger, actionKey);
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
@@ -193,6 +212,10 @@ export class TriggerManager {
         status: TriggerStatus.PENDING,
       });
 
+      if (newTrigger.request_id !== newRequestId) {
+        return this.handleExistingTrigger(newTrigger, exhaustedTrigger.action_key);
+      }
+
       Logger.info('Re-drive trigger created', {
         actionKey: newTrigger.action_key,
         newRequestId: newRequestId.substring(0, 16),
@@ -220,6 +243,7 @@ export class TriggerManager {
           requestId: exhaustedTrigger.request_id,
           status: TriggerStatus.CONFIRMED,
           txHash: exhaustedTrigger.tx_hash || undefined,
+          idempotent: true,
           message: 'Action already executed on-chain (verified during re-drive)',
         };
       }
@@ -248,6 +272,7 @@ export class TriggerManager {
         status: trigger.status,
         txHash: trigger.tx_hash || undefined,
         blockNumber: trigger.block_number ? Number(trigger.block_number) : undefined,
+        idempotent: true,
         message: 'Trigger already executed for this request (idempotent)',
       };
     }
@@ -258,6 +283,7 @@ export class TriggerManager {
         actionKey,
         requestId: trigger.request_id,
         status: trigger.status,
+        idempotent: false,
         message: trigger.last_error || 'Trigger failed with terminal error',
       };
     }
@@ -268,6 +294,7 @@ export class TriggerManager {
         actionKey,
         requestId: trigger.request_id,
         status: trigger.status,
+        idempotent: false,
         message:
           'Trigger exhausted retries. Use re-drive endpoint to retry with on-chain verification.',
       };
@@ -278,6 +305,7 @@ export class TriggerManager {
       actionKey,
       requestId: trigger.request_id,
       status: trigger.status,
+      idempotent: false,
       message: 'Trigger in progress',
     };
   }
@@ -293,16 +321,23 @@ export class TriggerManager {
       return this.buildResponseFromTrigger(existing, 'Trigger already processed');
     }
 
-    incrementOracleApproved(updated.action_key);
+    return this.actionLock.withLock(updated.action_key, async () => {
+      const current = await getTriggerByIdempotencyKey(idempotencyKey);
+      if (current && this.isActionAlreadyCompleted(current)) {
+        return this.handleExistingTrigger(current, current.action_key);
+      }
 
-    Logger.audit('TRIGGER_APPROVED', updated.trade_id, {
-      actionKey: updated.action_key,
-      idempotencyKey,
-      actor,
-      approvedAt: updated.approved_at,
+      incrementOracleApproved(updated.action_key);
+
+      Logger.audit('TRIGGER_APPROVED', updated.trade_id, {
+        actionKey: updated.action_key,
+        idempotencyKey,
+        actor,
+        approvedAt: updated.approved_at,
+      });
+
+      return this.executeWithRetry(updated, updated.action_key);
     });
-
-    return this.executeWithRetry(updated, updated.action_key);
   }
 
   async rejectPendingTrigger(
@@ -341,6 +376,7 @@ export class TriggerManager {
       status: trigger.status,
       txHash: trigger.tx_hash ?? undefined,
       blockNumber: trigger.block_number ? Number(trigger.block_number) : undefined,
+      idempotent: this.isActionAlreadyCompleted(trigger),
       message,
     };
   }
@@ -404,6 +440,7 @@ export class TriggerManager {
           status: TriggerStatus.SUBMITTED,
           txHash: result.txHash,
           blockNumber: result.blockNumber,
+          idempotent: false,
           message: 'Transaction submitted, awaiting confirmation',
         };
       } catch (error: unknown) {
@@ -440,6 +477,7 @@ export class TriggerManager {
             actionKey,
             requestId: trigger.request_id,
             status: nextStatus,
+            idempotent: false,
             message: oracleError.message,
           };
         }
@@ -459,6 +497,7 @@ export class TriggerManager {
             actionKey,
             requestId: trigger.request_id,
             status: nextStatus,
+            idempotent: false,
             message: exhaustedMessage,
           };
         }
@@ -533,6 +572,15 @@ export class TriggerManager {
 
       case TriggerType.CONFIRM_ARRIVAL:
         return await this.sdkClient.confirmArrival(tradeId);
+
+      case TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD:
+        return await this.sdkClient.confirmInspectionAvailable(tradeId, 72 * 60 * 60);
+
+      case TriggerType.CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL:
+        return await this.sdkClient.confirmInspectionAvailable(tradeId, 48 * 60 * 60);
+
+      case TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE:
+        return await this.sdkClient.finalizeAfterInspectionAcceptance(tradeId);
 
       case TriggerType.FINALIZE_TRADE:
         return await this.sdkClient.finalizeTrade(tradeId);

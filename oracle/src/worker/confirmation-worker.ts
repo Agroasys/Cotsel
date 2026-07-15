@@ -272,7 +272,10 @@ export class ConfirmationWorker {
       case TriggerType.RELEASE_STAGE_1:
         return status !== TRADE_STATUS_LOCKED;
       case TriggerType.CONFIRM_ARRIVAL:
+      case TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD:
+      case TriggerType.CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL:
         return status !== TRADE_STATUS_IN_TRANSIT;
+      case TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE:
       case TriggerType.FINALIZE_TRADE:
         return status !== TRADE_STATUS_ARRIVAL_CONFIRMED;
       default:

@@ -152,8 +152,9 @@ describe('TriggerManager — manual approval gate', () => {
       releaseFundsStage1: jest.fn().mockResolvedValue({ txHash: '0xabcd', blockNumber: 1 }),
     } as unknown as TriggerManagerSdkClient;
 
-    const newTrigger = buildTrigger({ status: TriggerStatus.PENDING });
-    (mockCreateTrigger as jest.Mock).mockResolvedValue(newTrigger);
+    (mockCreateTrigger as jest.Mock).mockImplementation(async (input: { requestId: string }) =>
+      buildTrigger({ status: TriggerStatus.PENDING, request_id: input.requestId }),
+    );
     (mockUpdateTrigger as jest.Mock).mockResolvedValue(undefined);
 
     const manager = new TriggerManager(sdkClient, 3, 0, undefined, true);
