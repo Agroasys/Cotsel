@@ -100,6 +100,7 @@ const gaslessSettlementService = config.gaslessExecutionEnabled
       {
         chainId: config.chainId,
         escrowAddress: config.escrowAddress,
+        usdcAddress: config.usdcAddress,
         requestMaxTtlSeconds: config.gaslessRequestMaxTtlSeconds ?? 900,
         broadcastPaused: config.gaslessBroadcastPaused,
         signerCustodyMode: config.gaslessSignerCustodyMode,

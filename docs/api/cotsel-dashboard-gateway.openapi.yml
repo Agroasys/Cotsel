@@ -948,6 +948,45 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '503':
           $ref: '#/components/responses/UpstreamUnavailableError'
+  /wallet/usdc/gasless-transfers:
+    post:
+      tags: [Settlement]
+      summary: Relay an exact user-authorized USDC wallet transfer
+      description: |
+        Service-authenticated sponsorship boundary for outgoing Agroasys wallet transfers. Cotsel accepts only
+        the configured chain and USDC token, verifies the EIP-3009 TransferWithAuthorization signer and expiry,
+        simulates the exact call, and pays the native network fee from the managed relayer. It does not own the
+        Agroasys wallet ledger or initiate transfers without the user's exact authorization.
+      operationId: createSponsoredWalletUsdcTransfer
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SponsoredWalletUsdcTransferRequest'
+      responses:
+        '202':
+          description: The sponsored USDC transfer was confirmed and receipt evidence was returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsoredWalletUsdcTransferResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
   /settlement/handoffs/{handoffId}/execution-events:
     get:
       tags: [Settlement]
@@ -4183,6 +4222,124 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionPayload'
+        timestamp:
+          type: string
+          format: date-time
+    SponsoredWalletUsdcTransferRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - action
+        - platformTransferId
+        - chainId
+        - tokenAddress
+        - authorizationDomainName
+        - from
+        - to
+        - value
+        - validAfter
+        - validBefore
+        - nonce
+        - v
+        - r
+        - s
+      properties:
+        action:
+          type: string
+          const: wallet_usdc_transfer
+        platformTransferId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        chainId:
+          type: integer
+          minimum: 1
+        tokenAddress:
+          type: string
+          description: USDC token address that must match the configured allowlist.
+        authorizationDomainName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        from:
+          type: string
+          description: Verified Agroasys wallet that signed the authorization.
+        to:
+          type: string
+          description: External recipient wallet.
+        value:
+          type: string
+          pattern: '^[0-9]+$'
+          description: Exact USDC amount in token base units.
+        validAfter:
+          type: string
+          pattern: '^[0-9]+$'
+        validBefore:
+          type: string
+          pattern: '^[0-9]+$'
+        nonce:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{64}$'
+        v:
+          type: integer
+          enum: [27, 28]
+        r:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{64}$'
+        s:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{64}$'
+    SponsoredWalletUsdcTransferReceipt:
+      type: object
+      required:
+        - txHash
+        - blockNumber
+        - gasUsed
+        - effectiveGasPriceWei
+        - nativeCostWei
+        - executorAddress
+        - executorBalanceWei
+      properties:
+        txHash:
+          type: string
+        blockNumber:
+          type: string
+          pattern: '^[0-9]+$'
+        gasUsed:
+          type: string
+          pattern: '^[0-9]+$'
+        effectiveGasPriceWei:
+          type: string
+          pattern: '^[0-9]+$'
+        nativeCostWei:
+          type: string
+          pattern: '^[0-9]+$'
+        executorAddress:
+          type: string
+        executorBalanceWei:
+          type: string
+          pattern: '^[0-9]+$'
+    SponsoredWalletUsdcTransferPayload:
+      type: object
+      required: [platformTransferId, txHash, receipt, requestId]
+      properties:
+        platformTransferId:
+          type: string
+        txHash:
+          type: string
+        receipt:
+          $ref: '#/components/schemas/SponsoredWalletUsdcTransferReceipt'
+        requestId:
+          type: string
+    SponsoredWalletUsdcTransferResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SponsoredWalletUsdcTransferPayload'
         timestamp:
           type: string
           format: date-time

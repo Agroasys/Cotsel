@@ -19,8 +19,11 @@ confirmation establish readiness, but neither event transfers funds into Cotsel.
 1. Agroasys owns automatic direct participant USDC receipt discovery, send intents, chain
    verification, participant-ledger posting, balance reservation, activity history, and
    reconciliation. Customers do not manually submit receipt transaction hashes.
-2. Cotsel does not expose a generic participant-to-wallet transfer function and does not become the
-   participant accounting ledger.
+2. Cotsel exposes one service-authenticated sponsorship route for an exact EIP-3009
+   `TransferWithAuthorization`. It verifies the configured chain and USDC token, the participant's
+   signature, amount, recipient, nonce, and short expiry before its managed relayer pays the native
+   network fee. It is not a generic public transfer API and Cotsel does not become the participant
+   accounting ledger.
 3. Agroasys may call the Cotsel trade-creation/funding path only after both parties have signed, the
    selected logistics quotation has been accepted, its fee has been confirmed, and the buyer has
    explicitly selected **Pay now** and approved the exact payment package.
@@ -36,6 +39,8 @@ confirmation establish readiness, but neither event transfers funds into Cotsel.
 - An external USDC receipt cannot create order escrow or satisfy an order milestone by itself.
 - A direct wallet send cannot spend funds already transferred to escrow or participant claims held by
   Cotsel.
+- Cotsel cannot choose the participant, recipient, or amount for a sponsored send; the user-signed
+  authorization binds all three and the USDC contract enforces the one-time nonce.
 - A Bridge deposit and a direct receipt observer cannot post the same destination chain event twice;
   Agroasys retains one authoritative ledger owner for that event.
 - Cotsel rejects a malformed order settlement package even if Agroasys marked the order ready to pay.
@@ -47,6 +52,8 @@ confirmation establish readiness, but neither event transfers funds into Cotsel.
 ## Consequences
 
 Participants get familiar crypto receive/send controls without expanding the escrow contract into a
-general wallet. Agroasys must operate the USDC receipt/send reconciler and retain an auditable link
-between verified chain transactions and ledger entries. Cotsel remains narrower: it validates and
-executes funded order settlement after explicit buyer approval.
+general wallet. Incoming transfers need no sponsorship. For outgoing transfers, Agroasys reserves the
+participant balance and obtains the exact wallet authorization, while Cotsel only broadcasts that
+authorization and records the relayer gas evidence. Agroasys remains responsible for receipt/send
+reconciliation and the participant ledger. Cotsel continues to own order settlement after explicit
+buyer approval, with the wallet-sponsorship route kept separate from escrow state transitions.
