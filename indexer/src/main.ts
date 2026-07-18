@@ -134,21 +134,6 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
               ctx,
             );
             break;
-          case 'ArrivalConfirmed':
-            overviewSnapshot = await handleArrivalConfirmed(
-              decoded,
-              trades,
-              tradeEvents,
-              overviewSnapshot,
-              eventId,
-              block,
-              timestamp,
-              txHash,
-              logIndex,
-              transactionIndex,
-              ctx,
-            );
-            break;
           case 'InspectionAvailable':
             overviewSnapshot = await handleInspectionAvailable(
               decoded,
@@ -952,58 +937,6 @@ async function handlePlatformFeesPaidStage1(
   );
 
   ctx.log.info(`Trade ${tradeId} platform fees paid: ${platformFeesAmount}`);
-  return overviewSnapshot;
-}
-
-async function handleArrivalConfirmed(
-  log: DecodedEscrowLog,
-  trades: Map<string, Trade>,
-  events: TradeEvent[],
-  overviewSnapshot: OverviewSnapshot,
-  eventId: string,
-  block: IndexerBlock,
-  timestamp: Date,
-  txHash: string,
-  logIndex: number,
-  transactionIndex: number,
-  ctx: IndexerContext,
-) {
-  const [tradeId, arrivalTimestamp] = log.args;
-
-  const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
-
-  if (!trade) {
-    ctx.log.error(`Trade ${tradeId} not found for ArrivalConfirmed event`);
-    return overviewSnapshot;
-  }
-
-  const counters = applyTradeTransition(
-    trade.status,
-    TradeStatus.ARRIVAL_CONFIRMED,
-    snapshotCounters(overviewSnapshot),
-  );
-  applySnapshotCounters(overviewSnapshot, counters);
-  overviewSnapshot.lastTradeEventAt = timestamp;
-
-  trade.status = TradeStatus.ARRIVAL_CONFIRMED;
-  trade.arrivalTimestamp = new Date(Number(arrivalTimestamp) * 1000);
-  trades.set(tradeId.toString(), trade);
-
-  events.push(
-    new TradeEvent({
-      id: eventId,
-      trade,
-      eventName: 'ArrivalConfirmed',
-      blockNumber: block.header.height,
-      timestamp,
-      txHash,
-      logIndex,
-      transactionIndex,
-      arrivalTimestamp,
-    }),
-  );
-
-  ctx.log.info(`Trade ${tradeId} arrival confirmed at ${arrivalTimestamp}`);
   return overviewSnapshot;
 }
 

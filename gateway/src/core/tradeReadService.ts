@@ -120,7 +120,7 @@ interface TradeEventGraphQlRecord {
   paidPlatformFees?: string | null;
   paidPlatformFeeNet?: string | null;
   paidSettlementSupportFee?: string | null;
-  arrivalTimestamp?: string | null;
+  inspectionAvailableAt?: string | null;
   finalTranche?: string | null;
   finalRecipient?: string | null;
   refundedAmount?: string | null;
@@ -290,7 +290,7 @@ function mapEventStage(eventName: string): string {
       return 'Stage 1 Release';
     case 'PlatformFeesPaidStage1':
       return 'Platform Fee Settlement';
-    case 'ArrivalConfirmed':
+    case 'InspectionAvailable':
       return 'Arrival Confirmed';
     case 'FinalTrancheReleased':
       return 'Final Settlement';
@@ -325,7 +325,7 @@ function mapEventActor(eventName: string): string {
     case 'InTransitTimeoutRefunded':
       return 'Buyer';
     case 'FundsReleasedStage1':
-    case 'ArrivalConfirmed':
+    case 'InspectionAvailable':
     case 'FinalTrancheReleased':
       return 'Oracle';
     case 'PlatformFeesPaidStage1':
@@ -358,9 +358,9 @@ function mapEventDetail(event: TradeEventGraphQlRecord): string | undefined {
       const supportFee = event.paidSettlementSupportFee ?? fallbackSplit.settlementSupportFeeAmount;
       return `Platform fee settled: ${asUsdcNumber(platformFeeNet, 'event.paidPlatformFeeNet').toLocaleString()} USDC; settlement support fee: ${asUsdcNumber(supportFee, 'event.paidSettlementSupportFee').toLocaleString()} USDC.`;
     }
-    case 'ArrivalConfirmed':
-      return event.arrivalTimestamp
-        ? `Arrival confirmed at ${assertUnixSecondsTimestamp(event.arrivalTimestamp, 'event.arrivalTimestamp')}.`
+    case 'InspectionAvailable':
+      return event.inspectionAvailableAt
+        ? `Arrival confirmed at ${assertUnixSecondsTimestamp(event.inspectionAvailableAt, 'event.inspectionAvailableAt')}.`
         : 'Arrival milestone confirmed by oracle.';
     case 'FinalTrancheReleased':
       return `Final tranche released to ${event.finalRecipient ?? 'supplier'} for ${asUsdcNumber(event.finalTranche ?? '0', 'event.finalTranche').toLocaleString()} USDC.`;
@@ -515,7 +515,7 @@ const listTradesQuery = `
         paidPlatformFees
         paidPlatformFeeNet
         paidSettlementSupportFee
-        arrivalTimestamp
+        inspectionAvailableAt
         finalTranche
         finalRecipient
         refundedAmount
@@ -575,7 +575,7 @@ const tradeDetailQuery = `
         paidPlatformFees
         paidPlatformFeeNet
         paidSettlementSupportFee
-        arrivalTimestamp
+        inspectionAvailableAt
         finalTranche
         finalRecipient
         refundedAmount

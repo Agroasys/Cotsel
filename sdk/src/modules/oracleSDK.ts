@@ -53,34 +53,6 @@ export class OracleSDK extends Client {
     }
   }
 
-  async confirmArrival(
-    tradeId: string | bigint,
-    oracleSigner: ethers.Signer,
-  ): Promise<OracleResult> {
-    await this.verifyOracle(oracleSigner);
-
-    try {
-      const contractWithSigner = this.contract.connect(oracleSigner);
-      const tx = await contractWithSigner.confirmArrival(tradeId);
-      const receipt = await tx.wait();
-
-      if (!receipt) {
-        throw new ContractError('Transaction receipt not available');
-      }
-
-      return {
-        txHash: receipt.hash,
-        blockNumber: receipt.blockNumber,
-      };
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      throw new ContractError(`Failed to confirm arrival: ${message}`, {
-        tradeId: tradeId.toString(),
-        error: message,
-      });
-    }
-  }
-
   async confirmInspectionAvailable(
     tradeId: string | bigint,
     windowSeconds: number,

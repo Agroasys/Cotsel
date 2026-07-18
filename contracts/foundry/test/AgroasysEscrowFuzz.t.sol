@@ -251,7 +251,7 @@ contract FuzzTest is Test {
         uint256 escrowBeforeArrivalConfirmationBalance = usdc.balanceOf(address(escrow));
 
         vm.prank(oracle);
-        escrow.confirmArrival(tradeId);
+        escrow.confirmInspectionAvailable(tradeId, 72 hours);
 
         (,,AgroasysEscrow.TradeStatus _status3,,,,,,,,,uint256 _arrivalTimestamp) = escrow.trades(tradeId);
 
@@ -355,7 +355,7 @@ contract FuzzTest is Test {
         uint256 escrowBeforeArrivalConfirmationBalance = usdc.balanceOf(address(escrow));
 
         vm.prank(oracle);
-        escrow.confirmArrival(tradeId);
+        escrow.confirmInspectionAvailable(tradeId, 72 hours);
 
         (,,AgroasysEscrow.TradeStatus _status3,,,,,,,,,uint256 _arrivalTimestamp) = escrow.trades(tradeId);
 
@@ -496,7 +496,7 @@ contract FuzzTest is Test {
         uint256 escrowBeforeArrivalConfirmationBalance = usdc.balanceOf(address(escrow));
 
         vm.prank(oracle);
-        escrow.confirmArrival(tradeId);
+        escrow.confirmInspectionAvailable(tradeId, 72 hours);
 
         (,,AgroasysEscrow.TradeStatus _status3,,,,,,,,,uint256 _arrivalTimestamp) = escrow.trades(tradeId);
 
@@ -601,7 +601,7 @@ contract FuzzTest is Test {
         escrow.releaseFundsStage1(tradeId);
 
         vm.prank(oracle);
-        escrow.confirmArrival(tradeId);
+        escrow.confirmInspectionAvailable(tradeId, 72 hours);
         
         vm.warp(block.timestamp + 72 hours + 1 seconds);
         
@@ -624,7 +624,7 @@ contract FuzzTest is Test {
         escrow.releaseFundsStage1(tradeId);
 
         vm.prank(oracle);
-        escrow.confirmArrival(tradeId);
+        escrow.confirmInspectionAvailable(tradeId, 72 hours);
         
         vm.warp(block.timestamp + 1 hours);
         

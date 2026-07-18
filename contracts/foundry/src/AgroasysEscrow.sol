@@ -319,7 +319,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 settlementSupportFeeAmount
     );
 
-    event ArrivalConfirmed(uint256 indexed tradeId, uint256 arrivalTimestamp);
     event InspectionAvailable(
         uint256 indexed tradeId,
         uint256 inspectionAvailableAt,
@@ -1190,14 +1189,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     /**
-     * Compatibility entry point for a standard 72-hour inspection window.
-     * New integrations should call confirmInspectionAvailable with the order policy.
+     * Single entry point for confirming inspection availability. The caller supplies
+     * the order's inspection window policy (standard 72h or packaged-local 48h).
      */
-    function confirmArrival(uint256 _tradeId) external onlyOracle onlyOracleActive whenNotPaused nonReentrant {
-        _confirmInspectionAvailable(_tradeId, STANDARD_INSPECTION_WINDOW);
-        emit ArrivalConfirmed(_tradeId, trades[_tradeId].arrivalTimestamp);
-    }
-
     function confirmInspectionAvailable(uint256 _tradeId, uint256 _windowSeconds)
         external
         onlyOracle

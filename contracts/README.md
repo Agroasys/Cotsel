@@ -169,8 +169,6 @@ Timelock-based admin addition proposal:
    - Emits: `InspectionAvailable`
    - Access: `onlyOracle`, `onlyOracleActive`, `whenNotPaused`
 
-   `confirmArrival(tradeId)` remains as a compatibility method for in-flight integrations and applies the standard 72-hour policy.
-
 4. **`openDisputeWithAuthorization(tradeId, authorizationNonce, authorizationDeadline, authorizationSignature)`**
    - Buyer opens a dispute within the trade's 48- or 72-hour notice window through a relayed authorization
    - Freezes all remaining funds in escrow
@@ -358,7 +356,6 @@ Timelock-based admin addition proposal:
 - `FundsReleasedStage1(tradeId, supplier, supplierFirstTranche, treasury, logisticsAmount)`: Stage 1 funds released (first tranche + logistics)
 - `PlatformFeesPaidStage1(tradeId, treasury, platformFeesAmount, platformFeeNetAmount, settlementSupportFeeAmount)`: Platform and settlement support fees paid at Stage 1
 - `InspectionAvailable(tradeId, inspectionAvailableAt, inspectionWindowSeconds, inspectionDeadline)`: Goods became inspectable and the 48- or 72-hour notice window started
-- `ArrivalConfirmed(tradeId, arrivalTimestamp)`: Compatibility event emitted by the legacy `confirmArrival` entry point
 - `InspectionAcceptedForFinalRelease(tradeId, acceptedAt)`: Buyer acceptance authorized immediate final release
 - `FinalTrancheReleased(tradeId, supplier, supplierSecondTranche)`: Protected final 40% released after acceptance or the no-dispute deadline
 - `DisputeOpenedByBuyer(tradeId)`: Buyer opened dispute, trade frozen
@@ -421,7 +418,7 @@ Current suites include:
 - `createTradeWithAuthorization`
 - `Complete Flow (Without dispute)`
 - `releaseFundsStage1`
-- `confirmArrival`
+- `confirmInspectionAvailable`
 - `Dispute Flow`
 - `Governance: Oracle Update`
 - `Governance: Add Admin`

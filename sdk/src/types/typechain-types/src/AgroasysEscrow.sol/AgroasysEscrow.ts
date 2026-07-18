@@ -86,7 +86,6 @@ export interface AgroasysEscrowInterface extends Interface {
       | "claimTreasury"
       | "claimableUsdc"
       | "claimsPaused"
-      | "confirmArrival"
       | "confirmInspectionAvailable"
       | "createTradeWithAuthorization"
       | "disableOracleEmergency"
@@ -157,7 +156,6 @@ export interface AgroasysEscrowInterface extends Interface {
       | "AdminAddProposalExpiredCancelled"
       | "AdminAddProposed"
       | "AdminAdded"
-      | "ArrivalConfirmed"
       | "AuthorizationConsumed"
       | "BuyerRefundTransferred"
       | "ClaimableAccrued"
@@ -329,10 +327,6 @@ export interface AgroasysEscrowInterface extends Interface {
   encodeFunctionData(
     functionFragment: "claimsPaused",
     values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "confirmArrival",
-    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "confirmInspectionAvailable",
@@ -717,10 +711,6 @@ export interface AgroasysEscrowInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "confirmArrival",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "confirmInspectionAvailable",
     data: BytesLike
   ): Result;
@@ -1017,22 +1007,6 @@ export namespace AdminAddedEvent {
   export type OutputTuple = [newAdmin: string];
   export interface OutputObject {
     newAdmin: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace ArrivalConfirmedEvent {
-  export type InputTuple = [
-    tradeId: BigNumberish,
-    arrivalTimestamp: BigNumberish
-  ];
-  export type OutputTuple = [tradeId: bigint, arrivalTimestamp: bigint];
-  export interface OutputObject {
-    tradeId: bigint;
-    arrivalTimestamp: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -2035,12 +2009,6 @@ export interface AgroasysEscrow extends BaseContract {
 
   claimsPaused: TypedContractMethod<[], [boolean], "view">;
 
-  confirmArrival: TypedContractMethod<
-    [_tradeId: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
   confirmInspectionAvailable: TypedContractMethod<
     [_tradeId: BigNumberish, _windowSeconds: BigNumberish],
     [void],
@@ -2538,9 +2506,6 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "claimsPaused"
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
-    nameOrSignature: "confirmArrival"
-  ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
-  getFunction(
     nameOrSignature: "confirmInspectionAvailable"
   ): TypedContractMethod<
     [_tradeId: BigNumberish, _windowSeconds: BigNumberish],
@@ -2911,13 +2876,6 @@ export interface AgroasysEscrow extends BaseContract {
     AdminAddedEvent.OutputObject
   >;
   getEvent(
-    key: "ArrivalConfirmed"
-  ): TypedContractEvent<
-    ArrivalConfirmedEvent.InputTuple,
-    ArrivalConfirmedEvent.OutputTuple,
-    ArrivalConfirmedEvent.OutputObject
-  >;
-  getEvent(
     key: "AuthorizationConsumed"
   ): TypedContractEvent<
     AuthorizationConsumedEvent.InputTuple,
@@ -3227,17 +3185,6 @@ export interface AgroasysEscrow extends BaseContract {
       AdminAddedEvent.InputTuple,
       AdminAddedEvent.OutputTuple,
       AdminAddedEvent.OutputObject
-    >;
-
-    "ArrivalConfirmed(uint256,uint256)": TypedContractEvent<
-      ArrivalConfirmedEvent.InputTuple,
-      ArrivalConfirmedEvent.OutputTuple,
-      ArrivalConfirmedEvent.OutputObject
-    >;
-    ArrivalConfirmed: TypedContractEvent<
-      ArrivalConfirmedEvent.InputTuple,
-      ArrivalConfirmedEvent.OutputTuple,
-      ArrivalConfirmedEvent.OutputObject
     >;
 
     "AuthorizationConsumed(address,bytes32,uint256,address,uint256)": TypedContractEvent<

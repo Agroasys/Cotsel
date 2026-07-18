@@ -16,7 +16,6 @@ describe('AgroasysEscrow event schema', function () {
       'AdminAddProposalExpiredCancelled(uint256,address)',
       'AdminAddProposed(uint256,address,address,uint256)',
       'AdminAdded(address)',
-      'ArrivalConfirmed(uint256,uint256)',
       'AuthorizationConsumed(address,bytes32,uint256,address,uint256)',
       'BuyerRefundTransferred(uint256,address,uint256,uint8,address)',
       'ClaimableAccrued(uint256,address,uint256,uint8)',

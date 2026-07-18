@@ -83,7 +83,7 @@ function buildManager(): TriggerManager {
   const sdkClient: TriggerManagerSdkClient = {
     getTrade: jest.fn(),
     releaseFundsStage1: jest.fn(),
-    confirmArrival: jest.fn(),
+    confirmInspectionAvailable: jest.fn(),
     finalizeTrade: jest.fn(),
   } as unknown as TriggerManagerSdkClient;
   return new TriggerManager(sdkClient, 3, 0, undefined, true);

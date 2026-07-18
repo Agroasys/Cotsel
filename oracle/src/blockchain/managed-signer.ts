@@ -198,7 +198,7 @@ export class ManagedSigner extends ethers.AbstractSigner {
   }
 
   // The oracle settlement flow only ever signs transactions: the SDK entry points
-  // (`releaseFundsStage1`, `confirmArrival`, `finalizeAfterDisputeWindow`) all route
+  // (`releaseFundsStage1`, `confirmInspectionAvailable`, `finalizeAfterDisputeWindow`) all route
   // through `contract.connect(signer).<method>()`, i.e. `signTransaction`, and never
   // `signMessage`/`signTypedData`. These throw so any future off-path signing surfaces
   // here immediately rather than silently at settlement time in kms/mpc mode.
