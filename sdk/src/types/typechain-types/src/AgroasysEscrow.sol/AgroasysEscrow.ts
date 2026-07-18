@@ -59,7 +59,6 @@ export interface AgroasysEscrowInterface extends Interface {
       | "ACTION_OPEN_DISPUTE"
       | "ACTION_REFUND_IN_TRANSIT_TIMEOUT"
       | "DISPUTE_PROPOSAL_TTL"
-      | "DISPUTE_WINDOW"
       | "GOVERNANCE_PROPOSAL_TTL"
       | "IN_TRANSIT_TIMEOUT"
       | "LOCK_TIMEOUT"
@@ -172,7 +171,6 @@ export interface AgroasysEscrowInterface extends Interface {
       | "DisputeSolutionProposed"
       | "FinalTrancheReleased"
       | "FundsReleasedStage1"
-      | "FundsReleasedStage2"
       | "GaslessTradeFunded"
       | "InTransitTimeoutRefunded"
       | "InspectionAcceptedForFinalRelease"
@@ -222,10 +220,6 @@ export interface AgroasysEscrowInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "DISPUTE_PROPOSAL_TTL",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "DISPUTE_WINDOW",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -615,10 +609,6 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "DISPUTE_PROPOSAL_TTL",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "DISPUTE_WINDOW",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -1339,34 +1329,6 @@ export namespace FundsReleasedStage1Event {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace FundsReleasedStage2Event {
-  export type InputTuple = [
-    tradeId: BigNumberish,
-    supplier: AddressLike,
-    supplierSecondTranche: BigNumberish,
-    treasury: AddressLike,
-    platformFeesAmount: BigNumberish
-  ];
-  export type OutputTuple = [
-    tradeId: bigint,
-    supplier: string,
-    supplierSecondTranche: bigint,
-    treasury: string,
-    platformFeesAmount: bigint
-  ];
-  export interface OutputObject {
-    tradeId: bigint;
-    supplier: string;
-    supplierSecondTranche: bigint;
-    treasury: string;
-    platformFeesAmount: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
 export namespace GaslessTradeFundedEvent {
   export type InputTuple = [
     tradeId: BigNumberish,
@@ -1945,8 +1907,6 @@ export interface AgroasysEscrow extends BaseContract {
 
   DISPUTE_PROPOSAL_TTL: TypedContractMethod<[], [bigint], "view">;
 
-  DISPUTE_WINDOW: TypedContractMethod<[], [bigint], "view">;
-
   GOVERNANCE_PROPOSAL_TTL: TypedContractMethod<[], [bigint], "view">;
 
   IN_TRANSIT_TIMEOUT: TypedContractMethod<[], [bigint], "view">;
@@ -2469,9 +2429,6 @@ export interface AgroasysEscrow extends BaseContract {
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "DISPUTE_PROPOSAL_TTL"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "DISPUTE_WINDOW"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "GOVERNANCE_PROPOSAL_TTL"
@@ -3052,13 +3009,6 @@ export interface AgroasysEscrow extends BaseContract {
     FundsReleasedStage1Event.OutputObject
   >;
   getEvent(
-    key: "FundsReleasedStage2"
-  ): TypedContractEvent<
-    FundsReleasedStage2Event.InputTuple,
-    FundsReleasedStage2Event.OutputTuple,
-    FundsReleasedStage2Event.OutputObject
-  >;
-  getEvent(
     key: "GaslessTradeFunded"
   ): TypedContractEvent<
     GaslessTradeFundedEvent.InputTuple,
@@ -3431,17 +3381,6 @@ export interface AgroasysEscrow extends BaseContract {
       FundsReleasedStage1Event.InputTuple,
       FundsReleasedStage1Event.OutputTuple,
       FundsReleasedStage1Event.OutputObject
-    >;
-
-    "FundsReleasedStage2(uint256,address,uint256,address,uint256)": TypedContractEvent<
-      FundsReleasedStage2Event.InputTuple,
-      FundsReleasedStage2Event.OutputTuple,
-      FundsReleasedStage2Event.OutputObject
-    >;
-    FundsReleasedStage2: TypedContractEvent<
-      FundsReleasedStage2Event.InputTuple,
-      FundsReleasedStage2Event.OutputTuple,
-      FundsReleasedStage2Event.OutputObject
     >;
 
     "GaslessTradeFunded(uint256,address,bytes32,uint256)": TypedContractEvent<

@@ -30,7 +30,6 @@ describe('AgroasysEscrow event schema', function () {
       'DisputeSolutionProposed(uint256,uint256,uint8,address)',
       'FinalTrancheReleased(uint256,address,uint256)',
       'FundsReleasedStage1(uint256,address,uint256,address,uint256)',
-      'FundsReleasedStage2(uint256,address,uint256,address,uint256)',
       'GaslessTradeFunded(uint256,address,bytes32,uint256)',
       'InTransitTimeoutRefunded(uint256,address,uint256)',
       'InspectionAcceptedForFinalRelease(uint256,uint256)',

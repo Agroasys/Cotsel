@@ -51,8 +51,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     uint256 private constant FIRST_SUPPLIER_TRANCHE_BPS = 6_000;
     uint256 private constant BPS_DENOMINATOR = 10_000;
     uint256 private constant SETTLEMENT_SUPPORT_FEE = 4_000_000;
-    /// @notice Compatibility alias for integrations reading the historical public constant.
-    uint256 public constant DISPUTE_WINDOW = STANDARD_INSPECTION_WINDOW;
     /// @notice Maximum time a trade can remain LOCKED before buyer can cancel for refundable principal.
     uint256 public constant LOCK_TIMEOUT = 7 days;
     /// @notice Maximum time a trade can remain IN_TRANSIT without arrival confirmation before buyer principal refund.
@@ -330,17 +328,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     );
     event InspectionAcceptedForFinalRelease(uint256 indexed tradeId, uint256 acceptedAt);
 
-    // NOTE: Stage 2 now pays supplierSecondTranche ONLY (no treasury payment).
-    // This event is kept as-is for backward compatibility, but is no longer emitted.
-    event FundsReleasedStage2(
-        uint256 indexed tradeId,
-        address indexed supplier,
-        uint256 supplierSecondTranche,
-        address indexed treasury,
-        uint256 platformFeesAmount
-    );
-
-    // Added: explicit final tranche event for Stage 2/finalization
+    // Stage 2 pays supplierSecondTranche ONLY (no treasury payment).
+    // Explicit final tranche event for Stage 2/finalization
     event FinalTrancheReleased(
         uint256 indexed tradeId,
         address indexed supplier,

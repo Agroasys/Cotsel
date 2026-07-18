@@ -137,7 +137,6 @@ Timelock-based admin addition proposal:
 - `governanceTimelock` (uint256): Delay (24h) between approval and execution for governance operations
 - `STANDARD_INSPECTION_WINDOW` (constant uint256): 72-hour ordinary agricultural notice window
 - `PACKAGED_LOCAL_INSPECTION_WINDOW` (constant uint256): 48-hour notice window for explicitly classified packaged-local orders
-- `DISPUTE_WINDOW` (constant uint256): Compatibility alias for the 72-hour standard inspection window
 - `LOCK_TIMEOUT` (constant uint256): Buyer timeout to cancel LOCKED trade
 - `IN_TRANSIT_TIMEOUT` (constant uint256): Buyer timeout to refund principal while IN_TRANSIT
 - `DISPUTE_PROPOSAL_TTL` (constant uint256): Dispute proposal expiry
