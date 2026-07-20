@@ -3,6 +3,7 @@
  */
 import type { Server } from 'http';
 import { Router } from 'express';
+import { Signature, Wallet } from 'ethers';
 import { createInMemoryNonceStore } from '@agroasys/shared-auth';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
@@ -36,6 +37,7 @@ const config: GatewayConfig = {
   rpcReadTimeoutMs: 8000,
   chainId: 31337,
   escrowAddress: '0x0000000000000000000000000000000000000999',
+  usdcAddress: '0x0000000000000000000000000000000000000888',
   enableMutations: false,
   writeAllowlist: [],
   governanceQueueTtlSeconds: 86400,
@@ -87,6 +89,10 @@ async function startServer(
     executeUserAction: () => Promise<GaslessExecutionSubmission>;
     simulateOperatorAction: () => Promise<{ gasEstimate?: bigint | string | number | null }>;
     executeOperatorAction: () => Promise<GaslessExecutionSubmission>;
+    simulateWalletUsdcTransfer: () => Promise<{
+      gasEstimate?: bigint | string | number | null;
+    }>;
+    executeWalletUsdcTransfer: () => Promise<GaslessExecutionSubmission>;
   }> = {},
   serverOptions: Partial<{ includeProtectedRouterBeforeSettlement: boolean }> = {},
 ) {
@@ -127,11 +133,20 @@ async function startServer(
           gasEstimate: 220000n,
         };
       },
+      async executeWalletUsdcTransfer() {
+        return buildConfirmedSubmission(
+          '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        );
+      },
+      async simulateWalletUsdcTransfer() {
+        return { gasEstimate: 110000n };
+      },
       ...executorOverrides,
     },
     {
       chainId: runtimeConfig.chainId,
       escrowAddress: runtimeConfig.escrowAddress,
+      usdcAddress: runtimeConfig.usdcAddress,
       requestMaxTtlSeconds: runtimeConfig.gaslessRequestMaxTtlSeconds ?? 900,
       broadcastPaused: runtimeConfig.gaslessBroadcastPaused,
       signerCustodyMode: runtimeConfig.gaslessSignerCustodyMode,
@@ -335,6 +350,10 @@ describe('gateway settlement routes contract', () => {
     spec,
     '#/components/schemas/SettlementGaslessUserActionExecutionResponse',
   );
+  const validateSponsoredWalletTransferResponse = createSchemaValidator(
+    spec,
+    '#/components/schemas/SponsoredWalletUsdcTransferResponse',
+  );
   const validateEventListResponse = createSchemaValidator(
     spec,
     '#/components/schemas/SettlementExecutionEventListResponse',
@@ -348,6 +367,7 @@ describe('gateway settlement routes contract', () => {
     expect(hasOperation(spec, 'post', '/settlement/gasless-executions/create-trade')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/gasless-executions/user-action')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/gasless-executions/operator-action')).toBe(true);
+    expect(hasOperation(spec, 'post', '/wallet/usdc/gasless-transfers')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/handoffs/{handoffId}/execution-events')).toBe(
       true,
     );
@@ -665,6 +685,101 @@ describe('gateway settlement routes contract', () => {
             severity: 'critical',
           }),
         ]),
+      );
+    } finally {
+      server.close();
+    }
+  });
+
+  test('service-authenticated wallet USDC authorization is relayed once with sponsored receipt evidence', async () => {
+    const executeWalletUsdcTransfer = jest
+      .fn()
+      .mockResolvedValue(
+        buildConfirmedSubmission(
+          '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        ),
+      );
+    const { server, baseUrl } = await startServer({}, { executeWalletUsdcTransfer });
+    try {
+      const wallet = Wallet.createRandom();
+      const value = '12500000';
+      const validBefore = String(Math.floor(Date.now() / 1000) + 600);
+      const nonce = `0x${'ab'.repeat(32)}`;
+      const authorizationSignature = await wallet.signTypedData(
+        {
+          name: 'USD Coin',
+          version: '2',
+          chainId: config.chainId,
+          verifyingContract: config.usdcAddress,
+        },
+        {
+          TransferWithAuthorization: [
+            { name: 'from', type: 'address' },
+            { name: 'to', type: 'address' },
+            { name: 'value', type: 'uint256' },
+            { name: 'validAfter', type: 'uint256' },
+            { name: 'validBefore', type: 'uint256' },
+            { name: 'nonce', type: 'bytes32' },
+          ],
+        },
+        {
+          from: wallet.address,
+          to: '0x2222222222222222222222222222222222222222',
+          value,
+          validAfter: '0',
+          validBefore,
+          nonce,
+        },
+      );
+      const signature = Signature.from(authorizationSignature);
+      const body = {
+        action: 'wallet_usdc_transfer',
+        platformTransferId: 'wallet-transfer-1',
+        chainId: config.chainId,
+        tokenAddress: config.usdcAddress,
+        authorizationDomainName: 'USD Coin',
+        from: wallet.address,
+        to: '0x2222222222222222222222222222222222222222',
+        value,
+        validAfter: '0',
+        validBefore,
+        nonce,
+        v: signature.v,
+        r: signature.r,
+        s: signature.s,
+      };
+      const path = '/api/dashboard-gateway/v1/wallet/usdc/gasless-transfers';
+      const request = () =>
+        fetch(`${baseUrl}/wallet/usdc/gasless-transfers`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'wallet-usdc-transfer-1',
+            'X-Request-Id': 'req-wallet-usdc-transfer',
+            ...withServiceAuth(path, body),
+          },
+          body: JSON.stringify(body),
+        });
+
+      const first = await request();
+      const firstPayload = await first.json();
+      const replay = await request();
+      const replayPayload = await replay.json();
+
+      expect(first.status).toBe(202);
+      expect(replay.status).toBe(202);
+      expect(validateSponsoredWalletTransferResponse(firstPayload)).toBe(true);
+      expect(firstPayload.data).toEqual(
+        expect.objectContaining({
+          platformTransferId: 'wallet-transfer-1',
+          txHash: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+          receipt: expect.objectContaining({ gasUsed: '210000' }),
+        }),
+      );
+      expect(replayPayload).toEqual(firstPayload);
+      expect(executeWalletUsdcTransfer).toHaveBeenCalledTimes(1);
+      expect(executeWalletUsdcTransfer).toHaveBeenCalledWith(
+        expect.objectContaining({ from: wallet.address, value, nonce }),
       );
     } finally {
       server.close();

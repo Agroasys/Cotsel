@@ -29,6 +29,7 @@ export interface GatewayConfig {
   rpcQuorum?: number;
   chainId: number;
   escrowAddress: string;
+  usdcAddress: string;
   settlementRuntimeKey?: SettlementRuntimeKey;
   networkName?: string;
   explorerBaseUrl?: string | null;
@@ -652,6 +653,10 @@ export function loadConfig(): GatewayConfig {
     rpcQuorum: process.env.GATEWAY_RPC_QUORUM ? envNumber('GATEWAY_RPC_QUORUM') : undefined,
     chainId,
     escrowAddress: assertAddress('GATEWAY_ESCROW_ADDRESS', runtime.escrowAddress ?? escrowAddress),
+    usdcAddress: assertAddress(
+      'GATEWAY_USDC_ADDRESS',
+      runtime.usdcAddress ?? env('GATEWAY_USDC_ADDRESS'),
+    ),
     settlementRuntimeKey: runtime.runtimeKey,
     networkName: runtime.networkName,
     explorerBaseUrl: runtime.explorerBaseUrl,

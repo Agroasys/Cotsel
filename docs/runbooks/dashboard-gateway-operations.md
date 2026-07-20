@@ -128,6 +128,34 @@ Safety rules:
 - Approved write operators for later enablement are Aston and `czpyioe`, but `GATEWAY_WRITE_ALLOWLIST`
   must contain the exact local auth principal IDs used by the auth service. Do not guess identifiers.
 
+### Sponsored participant USDC sends
+
+`POST /api/dashboard-gateway/v1/wallet/usdc/gasless-transfers` is a server-to-server ingress used
+only by Agroasys. It uses the same HMAC service authentication, nonce replay protection, mutation
+kill switch, and idempotency store as settlement ingress. It is not a browser route and must never be
+added to the dashboard session-auth surface.
+
+The participant signs an exact EIP-3009 authorization containing the sending wallet, destination,
+amount, one-time nonce, chain, token, and short expiry. Cotsel only supplies the native network gas
+and broadcasts that authorization. Incoming USDC receipts do not call this route and consume no
+sponsored gas.
+
+Agroasys records the sponsorship source as `pooled_settlement_support_fees`. This is pooled treasury
+funding, not a promise that one order's USD 4 support fee is reserved for one transfer. Operators must
+reconcile the returned request ID, transaction hash, gas used, effective gas price, native cost, and
+executor address against the Agroasys transfer record. A successful HTTP response without complete
+receipt evidence is invalid.
+
+Operational controls:
+
+- monitor `GET /api/dashboard-gateway/v1/operations/gasless-relayer/readiness` before enabling sends;
+- use the managed signer path in production and keep raw private keys limited to local/staging use;
+- refill or pause using the thresholds in `gateway-governance-signer-custody.md`;
+- on an ambiguous timeout, retry with the same platform transfer ID and idempotency key; the USDC
+  authorization nonce prevents a second token spend;
+- if broadcast may have succeeded but receipt evidence is unavailable, hold the Agroasys ledger
+  reserve and reconcile on-chain before releasing or retrying with a new authorization.
+
 ## Startup procedure
 
 1. Confirm Node 20 baseline.
