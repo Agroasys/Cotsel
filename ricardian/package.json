@@ -27,12 +27,12 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
-    "@types/node": "^25.6.0",
+    "@types/node": "^26.1.1",
     "@types/pg": "^8.20.0",
     "jest": "^30.4.2",
-    "ts-jest": "^29.4.9",
+    "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
-    "typescript": ">=6.0.2"
+    "typescript": ">=7.0.2"
   },
   "license": "Apache-2.0"
 }
