@@ -80,9 +80,6 @@ export class TradeEvent {
     paidSettlementSupportFee!: bigint | undefined | null
 
     @BigIntColumn_({nullable: true})
-    arrivalTimestamp!: bigint | undefined | null
-
-    @BigIntColumn_({nullable: true})
     inspectionAvailableAt!: bigint | undefined | null
 
     @BigIntColumn_({nullable: true})
