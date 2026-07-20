@@ -187,6 +187,18 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
   });
 
   router.use('/settlement', serviceAuth);
+  router.use('/wallet/usdc/gasless-transfers', (req, _res, next) => {
+    if (!options.config.settlementIngressEnabled) {
+      next(
+        new GatewayError(403, 'FORBIDDEN', 'Settlement ingress is disabled', {
+          reason: 'settlement_ingress_disabled',
+        }),
+      );
+      return;
+    }
+    next();
+  });
+  router.use('/wallet/usdc/gasless-transfers', serviceAuth);
 
   router.post('/settlement/handoffs', idempotency, (req, res, next) =>
     handleRequest(
@@ -476,6 +488,62 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           expiresAt: requireString(body.expiresAt, 'expiresAt'),
           payloadHash: requireString(body.payloadHash, 'payloadHash'),
           tradeId: requireString(body.tradeId, 'tradeId'),
+          requestId: getRequestId(req),
+          sourceApiKeyId: getServiceApiKeyId(req),
+        });
+      },
+      res,
+      next,
+    ),
+  );
+
+  router.post('/wallet/usdc/gasless-transfers', idempotency, (req, res, next) =>
+    handleRequest(
+      async () => {
+        if (!options.config.gaslessExecutionEnabled || !options.gaslessSettlementService) {
+          throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Gasless execution is disabled', {
+            reason: 'gasless_execution_disabled',
+          });
+        }
+        const body = requireObject(req.body, 'body');
+        rejectUnexpectedFields(
+          body,
+          [
+            'action',
+            'platformTransferId',
+            'chainId',
+            'tokenAddress',
+            'authorizationDomainName',
+            'from',
+            'to',
+            'value',
+            'validAfter',
+            'validBefore',
+            'nonce',
+            'v',
+            'r',
+            's',
+          ],
+          'body',
+        );
+        return options.gaslessSettlementService.executeWalletUsdcTransfer({
+          action: requireString(body.action, 'action') as 'wallet_usdc_transfer',
+          platformTransferId: requireString(body.platformTransferId, 'platformTransferId'),
+          chainId: requireInteger(body.chainId, 'chainId'),
+          tokenAddress: requireString(body.tokenAddress, 'tokenAddress'),
+          authorizationDomainName: requireString(
+            body.authorizationDomainName,
+            'authorizationDomainName',
+          ),
+          from: requireString(body.from, 'from'),
+          to: requireString(body.to, 'to'),
+          value: requireString(body.value, 'value'),
+          validAfter: requireString(body.validAfter, 'validAfter'),
+          validBefore: requireString(body.validBefore, 'validBefore'),
+          nonce: requireString(body.nonce, 'nonce'),
+          v: requireInteger(body.v, 'v'),
+          r: requireString(body.r, 'r'),
+          s: requireString(body.s, 's'),
           requestId: getRequestId(req),
           sourceApiKeyId: getServiceApiKeyId(req),
         });

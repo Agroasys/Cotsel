@@ -27,6 +27,7 @@ const config: GatewayConfig = {
   rpcReadTimeoutMs: 8000,
   chainId: 31337,
   escrowAddress: '0x0000000000000000000000000000000000000000',
+  usdcAddress: '0x0000000000000000000000000000000000000888',
   enableMutations: false,
   writeAllowlist: [],
   governanceQueueTtlSeconds: 86400,
