@@ -2,16 +2,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  Contract,
   getAddress,
   Interface,
   isAddress,
   isHexString,
   keccak256,
   NonceManager,
+  Signature,
   TransactionReceipt,
   toUtf8Bytes,
   Wallet,
   ZeroAddress,
+  verifyTypedData,
 } from 'ethers';
 import type { FeeData, Provider, TransactionRequest, TransactionResponse } from 'ethers';
 import { AgroasysEscrow__factory } from '@agroasys/sdk';
@@ -112,6 +115,25 @@ export interface GaslessOperatorActionExecutionInput {
   sourceApiKeyId?: string | null;
 }
 
+export interface GaslessWalletUsdcTransferExecutionInput {
+  action: 'wallet_usdc_transfer';
+  platformTransferId: string;
+  chainId: number;
+  tokenAddress: string;
+  authorizationDomainName: string;
+  from: string;
+  to: string;
+  value: string;
+  validAfter: string;
+  validBefore: string;
+  nonce: string;
+  v: number;
+  r: string;
+  s: string;
+  requestId: string;
+  sourceApiKeyId?: string | null;
+}
+
 type GaslessCreateTradePayload = Omit<
   GaslessCreateTradeExecutionInput,
   'payloadHash' | 'requestId' | 'sourceApiKeyId'
@@ -201,6 +223,12 @@ export interface GaslessSettlementExecutor {
   ): Promise<{ gasEstimate?: bigint | string | number | null }>;
   executeOperatorAction(
     input: GaslessOperatorActionExecutionInput,
+  ): Promise<GaslessExecutionSubmission>;
+  simulateWalletUsdcTransfer(
+    input: GaslessWalletUsdcTransferExecutionInput,
+  ): Promise<{ gasEstimate?: bigint | string | number | null }>;
+  executeWalletUsdcTransfer(
+    input: GaslessWalletUsdcTransferExecutionInput,
   ): Promise<GaslessExecutionSubmission>;
 }
 
@@ -418,6 +446,105 @@ function normalizeOperatorActionInput(
     payloadHash: requireBytes32(input.payloadHash, 'payloadHash'),
     tradeId: requireUint(input.tradeId, 'tradeId'),
   };
+}
+
+function normalizeWalletUsdcTransferInput(
+  input: GaslessWalletUsdcTransferExecutionInput,
+  expectedChainId: number,
+  expectedTokenAddress: string,
+  now: Date,
+  maxAuthorizationTtlSeconds: number,
+): GaslessWalletUsdcTransferExecutionInput {
+  if (input.action !== 'wallet_usdc_transfer') {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'action is not supported');
+  }
+  const normalized = {
+    ...input,
+    platformTransferId: input.platformTransferId.trim(),
+    chainId: requireChainId(input.chainId, expectedChainId),
+    tokenAddress: requireAddress(input.tokenAddress, 'tokenAddress'),
+    authorizationDomainName: input.authorizationDomainName.trim(),
+    from: requireAddress(input.from, 'from'),
+    to: requireAddress(input.to, 'to'),
+    value: requireUint(input.value, 'value'),
+    validAfter: requireUint(input.validAfter, 'validAfter'),
+    validBefore: requireUint(input.validBefore, 'validBefore'),
+    nonce: requireBytes32(input.nonce, 'nonce'),
+    v: requireRecoveryId(input.v, 'v'),
+    r: requireBytes32(input.r, 'r'),
+    s: requireBytes32(input.s, 's'),
+  };
+  if (!normalized.platformTransferId || normalized.platformTransferId.length > 128) {
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      'platformTransferId must contain 1 to 128 characters',
+    );
+  }
+  if (!normalized.authorizationDomainName || normalized.authorizationDomainName.length > 100) {
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      'authorizationDomainName must contain 1 to 100 characters',
+    );
+  }
+  if (normalized.tokenAddress !== getAddress(expectedTokenAddress)) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'tokenAddress is not allowlisted');
+  }
+  const nowSeconds = BigInt(Math.floor(now.getTime() / 1000));
+  if (BigInt(normalized.value) <= 0n) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'value must be positive');
+  }
+  if (BigInt(normalized.validAfter) > nowSeconds || BigInt(normalized.validBefore) <= nowSeconds) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'USDC authorization is not currently valid');
+  }
+  if (BigInt(normalized.validBefore) > nowSeconds + BigInt(maxAuthorizationTtlSeconds)) {
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      'USDC authorization exceeds the maximum sponsored-transfer lifetime',
+    );
+  }
+  const signature = Signature.from({
+    v: normalized.v,
+    r: normalized.r,
+    s: normalized.s,
+  }).serialized;
+  const signer = verifyTypedData(
+    {
+      name: normalized.authorizationDomainName,
+      version: '2',
+      chainId: normalized.chainId,
+      verifyingContract: normalized.tokenAddress,
+    },
+    {
+      TransferWithAuthorization: [
+        { name: 'from', type: 'address' },
+        { name: 'to', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'validAfter', type: 'uint256' },
+        { name: 'validBefore', type: 'uint256' },
+        { name: 'nonce', type: 'bytes32' },
+      ],
+    },
+    {
+      from: normalized.from,
+      to: normalized.to,
+      value: normalized.value,
+      validAfter: normalized.validAfter,
+      validBefore: normalized.validBefore,
+      nonce: normalized.nonce,
+    },
+    signature,
+  );
+  if (getAddress(signer) !== normalized.from) {
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      'USDC authorization signer does not match from',
+    );
+  }
+  return normalized;
 }
 
 function assertAmountsMatchAuthorization(input: GaslessCreateTradeExecutionInput): void {
@@ -654,6 +781,24 @@ function buildUserActionArguments(input: GaslessUserActionExecutionInput) {
   ] as const;
 }
 
+const USDC_AUTHORIZATION_ABI = [
+  'function transferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce,uint8 v,bytes32 r,bytes32 s)',
+] as const;
+
+function buildWalletUsdcTransferArguments(input: GaslessWalletUsdcTransferExecutionInput) {
+  return [
+    input.from,
+    input.to,
+    input.value,
+    input.validAfter,
+    input.validBefore,
+    input.nonce,
+    input.v,
+    input.r,
+    input.s,
+  ] as const;
+}
+
 export function isGaslessNonceDriftError(error: unknown): boolean {
   const code =
     typeof error === 'object' && error !== null && 'code' in error
@@ -700,6 +845,7 @@ export class GaslessSettlementExecutionService {
     private readonly options: {
       chainId: number;
       escrowAddress: string;
+      usdcAddress: string;
       requestMaxTtlSeconds: number;
       broadcastPaused?: boolean;
       signerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
@@ -721,6 +867,41 @@ export class GaslessSettlementExecutionService {
       now?: () => Date;
     },
   ) {}
+
+  async executeWalletUsdcTransfer(input: GaslessWalletUsdcTransferExecutionInput): Promise<{
+    platformTransferId: string;
+    txHash: string;
+    receipt: GaslessExecutionReceipt;
+    requestId: string;
+  }> {
+    const normalized = normalizeWalletUsdcTransferInput(
+      input,
+      this.options.chainId,
+      this.options.usdcAddress,
+      this.options.now?.() ?? new Date(),
+      this.options.requestMaxTtlSeconds,
+    );
+    this.assertBroadcastOpen(normalized.action);
+    this.assertCapacityOpen(normalized.action);
+    await this.executor.simulateWalletUsdcTransfer(normalized);
+    const submission = await this.enqueueBroadcast(() =>
+      this.executor.executeWalletUsdcTransfer(normalized),
+    );
+    if (!submission.receipt) {
+      throw new GatewayError(
+        502,
+        'UPSTREAM_UNAVAILABLE',
+        'Sponsored USDC transfer receipt was not available',
+      );
+    }
+    this.recordExecutionReceipt(submission.receipt);
+    return {
+      platformTransferId: normalized.platformTransferId,
+      txHash: submission.txHash,
+      receipt: submission.receipt,
+      requestId: normalized.requestId,
+    };
+  }
 
   getRelayerReadiness(): GaslessRelayerReadinessSnapshot {
     const alerts: GaslessRelayerReadinessSnapshot['alerts'] = [];
@@ -1494,6 +1675,7 @@ export function createEthersGaslessSettlementExecutor(
     | 'rpcQuorum'
     | 'chainId'
     | 'escrowAddress'
+    | 'usdcAddress'
     | 'gaslessExecutorPrivateKey'
     | 'gaslessSignerCustodyMode'
     | 'gaslessManagedSignerUrl'
@@ -1524,6 +1706,7 @@ export function createEthersGaslessSettlementExecutor(
   });
   const signer = new NonceManager(new Wallet(config.gaslessExecutorPrivateKey, provider));
   const escrow = AgroasysEscrow__factory.connect(config.escrowAddress, signer);
+  const usdc = new Contract(config.usdcAddress, USDC_AUTHORIZATION_ABI, signer);
   const gaslessMaxGasLimit = config.gaslessMaxGasLimit ?? 1_500_000n;
   const gaslessMaxFeePerGasWei = config.gaslessMaxFeePerGasWei ?? 50_000_000_000n;
   const gaslessMaxNativeCostWei = config.gaslessMaxNativeCostWei ?? 100_000_000_000_000_000n;
@@ -1717,6 +1900,25 @@ export function createEthersGaslessSettlementExecutor(
     return gasEstimate;
   }
 
+  async function simulateWalletUsdcTransfer(
+    input: GaslessWalletUsdcTransferExecutionInput,
+  ): Promise<bigint> {
+    await assertSignerBalance();
+    const transfer = usdc.getFunction('transferWithAuthorization');
+    const args = buildWalletUsdcTransferArguments(input);
+    await transfer.staticCall(...args);
+    const gasEstimate = await transfer.estimateGas(...args);
+    if (gasEstimate > gaslessMaxGasLimit) {
+      throw new GatewayError(
+        400,
+        'VALIDATION_ERROR',
+        'Sponsored USDC transfer gas estimate exceeds cap',
+        { gasEstimate: gasEstimate.toString(), gasCap: gaslessMaxGasLimit.toString() },
+      );
+    }
+    return gasEstimate;
+  }
+
   async function broadcastUserAction(
     input: GaslessUserActionExecutionInput,
     gasLimit: bigint,
@@ -1825,6 +2027,26 @@ export function createEthersGaslessSettlementExecutor(
         receipt: await waitForConfirmedReceipt(tx),
       };
     },
+
+    async simulateWalletUsdcTransfer(input) {
+      return { gasEstimate: await simulateWalletUsdcTransfer(input) };
+    },
+
+    async executeWalletUsdcTransfer(input) {
+      const gasEstimate = await simulateWalletUsdcTransfer(input);
+      const feeOverrides = await assertGasSpendCap(gasEstimate);
+      const transfer = usdc.getFunction('transferWithAuthorization');
+      const tx = await withFreshSignerNonce(() =>
+        transfer(...buildWalletUsdcTransferArguments(input), {
+          gasLimit: gasEstimate,
+          ...feeOverrides,
+        }),
+      );
+      return {
+        txHash: tx.hash,
+        receipt: await waitForConfirmedReceipt(tx),
+      };
+    },
   };
 }
 
@@ -1834,6 +2056,7 @@ interface ManagedSignerGaslessConfig {
   rpcQuorum?: number;
   chainId: number;
   escrowAddress: string;
+  usdcAddress: string;
   gaslessSignerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
   gaslessManagedSignerUrl?: string;
   gaslessManagedSignerApiKey?: string;
@@ -1859,7 +2082,11 @@ interface ManagedSignerRequestTransaction {
 
 interface ManagedSignerRequest {
   custodyMode: 'kms' | 'mpc';
-  operation: GaslessCreateTradeExecutionInput['action'] | GaslessUserAction | GaslessOperatorAction;
+  operation:
+    | GaslessCreateTradeExecutionInput['action']
+    | GaslessUserAction
+    | GaslessOperatorAction
+    | GaslessWalletUsdcTransferExecutionInput['action'];
   signerAddress: string;
   transaction: ManagedSignerRequestTransaction;
 }
@@ -2031,6 +2258,7 @@ function createManagedSignerGaslessSettlementExecutor(
     }) as Provider as GaslessManagedProvider);
   const signerTransport = dependencies?.signerTransport ?? createHttpManagedSignerTransport(config);
   const escrowInterface = new Interface(AgroasysEscrow__factory.abi);
+  const usdcInterface = new Interface(USDC_AUTHORIZATION_ABI);
   const gaslessMaxGasLimit = config.gaslessMaxGasLimit ?? 1_500_000n;
   const gaslessMaxFeePerGasWei = config.gaslessMaxFeePerGasWei ?? 50_000_000_000n;
   const gaslessMaxNativeCostWei = config.gaslessMaxNativeCostWei ?? 100_000_000_000_000_000n;
@@ -2122,6 +2350,22 @@ function createManagedSignerGaslessSettlementExecutor(
       chainId: config.chainId,
       value: 0n,
       data: escrowInterface.encodeFunctionData('finalizeAfterDisputeWindow', [input.tradeId]),
+    };
+  }
+
+  function buildWalletUsdcTransferTransaction(
+    input: GaslessWalletUsdcTransferExecutionInput,
+    from: string,
+  ): TransactionRequest {
+    return {
+      from,
+      to: config.usdcAddress,
+      chainId: config.chainId,
+      value: 0n,
+      data: usdcInterface.encodeFunctionData(
+        'transferWithAuthorization',
+        buildWalletUsdcTransferArguments(input),
+      ),
     };
   }
 
@@ -2330,6 +2574,29 @@ function createManagedSignerGaslessSettlementExecutor(
       const feeOverrides = await assertGasSpendCap(gasEstimate);
       const tx = await withFreshManagedNonce(() =>
         broadcastManagedTransaction(input.action, transaction, gasEstimate, feeOverrides),
+      );
+      return {
+        txHash: tx.hash,
+        receipt: await waitForConfirmedReceipt(tx),
+      };
+    },
+
+    async simulateWalletUsdcTransfer(input) {
+      const { executorAddress } = await assertSignerBalance();
+      return {
+        gasEstimate: await simulateTransaction(
+          buildWalletUsdcTransferTransaction(input, executorAddress),
+        ),
+      };
+    },
+
+    async executeWalletUsdcTransfer(input) {
+      const { executorAddress } = await assertSignerBalance();
+      const transaction = buildWalletUsdcTransferTransaction(input, executorAddress);
+      const gasEstimate = await simulateTransaction(transaction);
+      const feeOverrides = await assertGasSpendCap(gasEstimate);
+      const tx = await withFreshManagedNonce(() =>
+        broadcastManagedTransaction('wallet_usdc_transfer', transaction, gasEstimate, feeOverrides),
       );
       return {
         txHash: tx.hash,
