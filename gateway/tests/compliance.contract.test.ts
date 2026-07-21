@@ -132,7 +132,9 @@ async function startServer(options: StartServerOptions = {}) {
         return null;
       }
 
-      const role = options.sessionRole ?? (token === 'session-admin-2' ? 'admin' : 'admin');
+      const role =
+        options.sessionRole ??
+        (token === 'session-admin-2' || token === 'session-admin' ? 'admin' : 'buyer');
       const sessionToken = token || 'session-admin';
       return {
         accountId:

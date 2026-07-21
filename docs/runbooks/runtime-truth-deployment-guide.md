@@ -25,10 +25,11 @@ Active Base-era runtime services in this repo:
 - `reconciliation`
 - `ricardian`
 - `treasury`
-- `notifications`
 - `indexer-pipeline`
 - `indexer-graphql`
 - shared infrastructure: `postgres`, `redis`
+- shared package: `notifications`, embedded into service runtimes rather than
+  deployed as a standalone container
 
 Active contract/runtime target:
 
@@ -52,12 +53,16 @@ Out of active runtime scope:
 | `oracle`           | trade-progression attestation runner      | yes                   | yes                       |
 | `reconciliation`   | drift detection and evidence worker       | yes                   | yes                       |
 | `ricardian`        | document hash / record service            | yes                   | yes                       |
-| `treasury`         | ledger and payout lifecycle service       | yes                   | yes                       |
-| `notifications`    | outbound event delivery hooks             | yes                   | yes                       |
+| `treasury`         | fee evidence and revenue-control service  | yes                   | yes                       |
 | `indexer-pipeline` | chain event ingestion                     | yes                   | yes                       |
 | `indexer-graphql`  | read model / evidence query surface       | yes                   | yes                       |
 | `postgres`         | system of record                          | yes                   | yes                       |
 | `redis`            | nonce/rate-limit support where configured | yes                   | yes                       |
+
+Notification delivery helpers are supplied by the shared `notifications`
+package and wired into the services that emit alerts. Notification wiring is a
+required runtime health check, but `notifications` is not a standalone Compose
+service.
 
 ## Identity and auth boundary
 

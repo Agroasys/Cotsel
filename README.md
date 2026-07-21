@@ -160,7 +160,7 @@ cotsel/
 ├── reconciliation/     # Drift detection and settlement verification
 ├── ricardian/          # Ricardian hash and evidence-linking service
 ├── treasury/           # Settlement evidence, payout eligibility, and treasury operations
-├── notifications/      # Operational notification service
+├── notifications/      # Shared notification routing and delivery library
 ├── auth/               # Session and user-profile service
 ├── sdk/                # External integration SDK
 ├── shared/             # Shared utilities used across services
