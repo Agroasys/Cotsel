@@ -1,22 +1,16 @@
-# Cotsel Target-State System Architecture
+# Cotsel System Architecture
 
-This document is the canonical target-state architecture view for the completed
-Agroasys + Cotsel platform model.
+This is the canonical architecture view for the active Cotsel settlement and
+control subsystem. It treats Agroasys as an upstream integration boundary rather
+than duplicating the entire marketplace architecture inside Cotsel.
 
-It is intentionally disciplined:
+The diagram distinguishes implemented runtime from target or external
+infrastructure. Dashed SQS and EventBridge connections are target durable
+eventing; current gateway, relayer, callback, governance, treasury, and
+reconciliation workflows persist operational evidence in Postgres where
+implemented.
 
-- one target-state diagram only
-- one short current-vs-target note only
-- no speculative container-by-container deployment sheet
-- no treatment of `platform.v1` transitional Supabase ownership as canonical
-
-The stack and infra expectations reflected here come from:
-
-- `docs/architecture/job-and-eventing-strategy.md`
-- `docs/runbooks/dashboard-gateway-operations.md`
-- the reviewed stack/infra source-of-truth docs (`technical stack.pdf`, `INFRA.pdf`)
-
-## Target-State Diagram
+## Architecture Diagram
 
 ```mermaid
 ---
@@ -27,272 +21,277 @@ config:
   theme: default
   look: handDrawn
 ---
-flowchart LR
+flowchart TB
     classDef user fill:#E0F7FA,stroke:#006064,stroke-width:2px,color:#000000,rx:5,ry:5
     classDef frontend fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#000000,rx:5,ry:5
     classDef identity fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#000000,rx:5,ry:5
-    classDef app fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#000000,rx:5,ry:5
+    classDef control fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#000000,rx:5,ry:5
     classDef backend fill:#EDE7F6,stroke:#5E35B1,stroke-width:2px,color:#000000,rx:5,ry:5
     classDef blockchain fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#000000,rx:5,ry:5
     classDef treasury fill:#FFF9C4,stroke:#F57F17,stroke-width:2px,color:#000000,rx:5,ry:5
     classDef storage fill:#CFD8DC,stroke:#455A64,stroke-width:2px,color:#000000,rx:5,ry:5
     classDef external fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#000000,rx:5,ry:5
 
-    subgraph L1["Actors & Access Edge"]
-      direction TB
-      subgraph Actors["Actors & External Boundaries"]
+    subgraph U["Actors"]
         direction TB
-        buyers["Enterprise Buyers"]
-        suppliers["Suppliers / Cooperatives"]
-        admins["Agroasys Admin / Operators"]
-        auditors["External Auditors"]
-        regulators["Regulators / Govt Agencies"]
-        logistics_ext["Logistics / Inspection Providers"]
-        fiat_partners["Fiat On-Ramp / Off-Ramp Partners"]
-        banks["Banking / Treasury Payout Rails"]
-        kyb_provider["KYB / KYC Provider"]
-        kyt_provider["AML / KYT Provider"]
-        sanctions["Sanctions Data<br/>OFAC / UN / local lists"]
-      end
-
-      subgraph Edge["Global Edge & Delivery"]
-        direction TB
-        cf_edge["Cloudflare Edge<br/>DNS + CDN + WAF + DDoS + rate controls"]
-        frontend_hosting["Frontend Hosting<br/>Cloudflare Pages / edge-hosted apps"]
-        alb["AWS ALB / private API ingress"]
-      end
+        Buyer["Enterprise Buyer"]
+        Supplier["Supplier / Cooperative"]
+        Admin["Agroasys Admin / Operator"]
+        Integrator["External Platform Integrator"]
     end
-    class buyers,suppliers,admins user
-    class auditors,regulators,logistics_ext,fiat_partners,banks,kyb_provider,kyt_provider,sanctions external
-    class cf_edge,frontend_hosting,alb frontend
+    class Buyer,Supplier,Admin user
+    class Integrator external
 
-    subgraph L2["Client & Identity Layer"]
-      direction TB
-      subgraph Presentation["Presentation Layer"]
+    subgraph A["Agroasys & Client Boundary"]
         direction TB
-        buyer_app["Agroasys Buyer App<br/>trade creation / checkout"]
-        supplier_app["Agroasys Supplier App<br/>status / evidence / confirmations"]
-        ops_dash["Cotsel-Dash<br/>operator dashboard"]
-        sdk["Agroasys SDK<br/>typed platform + settlement client"]
-        wallet_provider["Web3Auth / Embedded Wallet<br/>EIP-1193 signer"]
-        doc_uploader["Secure Document Uploader"]
-      end
-
-      subgraph Identity["Identity & Access"]
-        direction TB
-        auth_service["Agroasys Auth Service<br/>SSO / sessions / refresh / revoke / RBAC"]
-        shared_auth["shared-auth<br/>service-to-service HMAC auth"]
-        auth_db[("Identity Postgres<br/>profiles + sessions")]
-      end
+        AgroasysApp["Agroasys Platform Web App<br/>trade approval / wallet controls / status"]
+        Dash["Cotsel-Dash<br/>operator control surface"]
+        AdminSigner["Privileged Admin / Hardware Wallet<br/>action-scoped governance signer"]
+        Wallet["Verified Embedded Wallet<br/>EIP-712 / EIP-3009 authorization"]
+        SDK["Cotsel SDK<br/>optional integration client"]
+        AgroasysIdentity["Agroasys Identity Authority<br/>primary user login / role truth"]
+        AgroasysBackend["Agroasys Backend<br/>settlement handoff / callbacks / fee policy"]
+        ParticipantLedger[("Agroasys Participant Ledger<br/>balances / reservations / wallet history")]
+        EvidenceStore[("Agroasys Document & Evidence Store<br/>documents / bounded evidence references")]
     end
-    class buyer_app,supplier_app,ops_dash,sdk,wallet_provider,doc_uploader frontend
-    class auth_service,shared_auth identity
-    class auth_db storage
+    class AgroasysApp,Dash,AdminSigner,Wallet,SDK frontend
+    class AgroasysIdentity identity
+    class AgroasysBackend external
+    class ParticipantLedger,EvidenceStore storage
 
-    subgraph L3["Agroasys Platform Layer"]
-      direction TB
-      subgraph Platform["Agroasys Platform Backend"]
+    subgraph C["Cotsel Access & Control Plane"]
         direction TB
-        api_runtime["Platform API Runtime<br/>NestJS modular monolith"]
-        worker_runtime["Worker Runtime<br/>queue + outbox processors"]
-
-        subgraph PlatformDomains["Core Domain Modules"]
-          direction TB
-          access_admin["Dashboard / Admin / Audit / Reporting"]
-          commerce["Products / Listings / Offers / Orders / Demand"]
-          ops_docs["Documents / Invoice / Logistics / Tracking"]
-          compliance["Compliance Orchestration"]
-          finance["Payments / Wallet / Ledger / Subscription"]
-          settlement_handoff["Settlement Handoff<br/>Ricardian signatures, dispatch,<br/>callbacks, disputes, reconciliation status"]
-          notifications_mod["Notification Orchestration"]
-        end
-      end
-
-      subgraph PlatformData["Platform Data & Eventing"]
-        direction TB
-        ops_db[("Platform Aurora / Postgres")]
-        redis_cache["Redis / BullMQ<br/>non-critical only"]
-        sqs["SQS + DLQs<br/>durable async jobs"]
-        eventbridge["EventBridge<br/>internal domain events"]
-        s3_store[("S3 Object Storage<br/>documents + evidence bundles")]
-        kms["Secrets Manager + KMS"]
-      end
+        CotselAuth["Cotsel Auth Service<br/>trusted exchange / refresh / revoke / profiles"]
+        SharedAuth["shared-auth<br/>HMAC / API-key service authentication"]
+        Gateway["Dashboard Gateway<br/>sessions / handoffs / callbacks / approvals / audit"]
+        Relayer["Gasless Execution / Managed Relayer<br/>bounded EIP-3009 + settlement broadcast"]
+        GovExecutor["Delegated Service Executor<br/>service / system roles only"]
     end
-    class api_runtime,worker_runtime,access_admin,commerce,ops_docs,compliance,finance,settlement_handoff,notifications_mod app
-    class redis_cache,sqs,eventbridge backend
-    class ops_db,s3_store,kms storage
+    class CotselAuth,SharedAuth identity
+    class Gateway,Relayer,GovExecutor control
 
-    subgraph L4["Cotsel Settlement Layer"]
-      direction TB
-      subgraph Cotsel["Cotsel Settlement & Control Subsystem"]
+    subgraph S["Cotsel Settlement Services"]
         direction TB
-        dashboard_gateway["Dashboard Gateway<br/>reads, bundles, governance,<br/>compliance ledgers, audit"]
-        cotsel_auth["Cotsel Auth Boundary"]
-
-        subgraph CotselServices["Settlement Services"]
-          direction TB
-          ricardian_svc["Ricardian Service<br/>canonicalize + hash + retrieval"]
-          oracle_svc["Oracle Service<br/>milestone / evidence triggers<br/>for contract confirmation"]
-          indexer_graphql["Indexer + GraphQL<br/>trade timeline + read models"]
-          reconciler["Reconciliation Worker<br/>scheduled checks + drift / anomaly triggers"]
-          treasury_svc["Treasury Service<br/>release / export only after<br/>milestone + compliance + clean state"]
-          cotsel_notifications["Cotsel Notifications"]
-          gov_executor["Governance Executor<br/>manual override / dispute / stuck-state remediation"]
-        end
-
-        gateway_db[("Cotsel Gateway Postgres")]
-        cotsel_db[("Cotsel Service Postgres")]
-      end
+        RicardianSvc["Ricardian Service<br/>canonical hash / document reference record"]
+        OracleSvc["Oracle Service<br/>validated milestone attestations"]
+        IndexerPipeline["Indexer Pipeline<br/>Base event ingestion"]
+        IndexerGraphQL["Indexer GraphQL<br/>trade timeline / read models"]
+        Reconciler["Reconciliation Worker<br/>read-only tie-out / drift / close blockers"]
+        TreasurySvc["Treasury Service<br/>fee evidence / sweep batches / handoff / close"]
+        Notifications["Shared Notifications Library<br/>routing / cooldown / bounded delivery retries"]
     end
-    class dashboard_gateway,cotsel_auth,ricardian_svc,oracle_svc,indexer_graphql,reconciler,cotsel_notifications,gov_executor backend
-    class treasury_svc treasury
-    class gateway_db,cotsel_db storage
+    class RicardianSvc,OracleSvc,IndexerPipeline,IndexerGraphQL,Reconciler,Notifications backend
+    class TreasurySvc treasury
 
-    subgraph L5["Settlement Chain"]
-      direction TB
-      subgraph Chain["Settlement Layer"]
+    subgraph D["Cotsel Data & Eventing"]
         direction TB
-        rpc_providers["Base RPC Providers<br/>primary + fallback"]
-        escrow_contract["Escrow Smart Contract<br/>settlement + governance + claims"]
-        assets_pallet["USDC on Base"]
-        asset_conversion["Optional buyer gas sponsorship<br/>pilot-bounded only"]
-      end
+        CotselDb[("Cotsel Postgres Cluster<br/>Auth / Gateway / Oracle / Ricardian / Indexer /<br/>Treasury / Reconciliation logical databases<br/>runtime + migration roles / forced RLS")]
+        Redis[("Redis Support<br/>rate limits / nonces / short-lived coordination only")]
+        EventBus["EventBridge<br/>target internal event routing"]
+        Queue["SQS + DLQs<br/>target durable async processing"]
     end
-    class rpc_providers,escrow_contract,assets_pallet,asset_conversion blockchain
+    class CotselDb,Redis storage
+    class EventBus,Queue backend
 
-    buyers --> cf_edge
-    suppliers --> cf_edge
-    admins --> cf_edge
-    auditors --> cf_edge
+    subgraph B["Base Settlement Layer"]
+        direction TB
+        ChainRPC["Base RPC Providers<br/>primary + fallback"]
+        EscrowSC["Agroasys Escrow Contract<br/>60 / 40 settlement / disputes / fee accrual"]
+        USDC["USDC on Base"]
+        NetworkStatus["Base Sepolia: verified pilot<br/>Base mainnet: approval-gated"]
+    end
+    class ChainRPC,EscrowSC,USDC,NetworkStatus blockchain
 
-    cf_edge --> frontend_hosting
-    cf_edge --> alb
-    frontend_hosting --> buyer_app
-    frontend_hosting --> supplier_app
-    frontend_hosting --> ops_dash
-    alb --> api_runtime
+    subgraph E["External Evidence & Execution Boundaries"]
+        direction TB
+        ComplianceIssuer["Approved Compliance Attestation Issuers<br/>KYB / KYT / sanctions references"]
+        LogisticsIssuer["Logistics / Inspection Evidence Issuers"]
+        Bank["Bank / Fiat / Off-ramp Counterparty<br/>external completion truth"]
+        Comms["Email / Chat / Webhook Destinations"]
+    end
+    class ComplianceIssuer,LogisticsIssuer,Bank,Comms external
 
-    buyer_app --> sdk
-    supplier_app --> sdk
-    buyer_app --> wallet_provider
-    supplier_app --> wallet_provider
-    wallet_provider --> sdk
-    sdk --> escrow_contract
-    buyer_app --> doc_uploader
-    supplier_app --> doc_uploader
-    doc_uploader --> ops_docs
-    buyer_app --> api_runtime
-    supplier_app --> api_runtime
-    ops_dash --> api_runtime
-    ops_dash --> dashboard_gateway
+    Buyer --> AgroasysApp
+    Supplier --> AgroasysApp
+    Admin --> Dash
+    Integrator --> SDK
+    AgroasysApp --> Wallet
+    AgroasysApp --> AgroasysBackend
+    Dash --> AgroasysIdentity
+    Dash --> Gateway
+    SDK -.-> Gateway
 
-    api_runtime --> auth_service
-    auth_service --> auth_db
-    auth_service --> kms
-    cotsel_auth --> auth_db
-    shared_auth -.-> dashboard_gateway
-    shared_auth -.-> ricardian_svc
-    shared_auth -.-> oracle_svc
-    shared_auth -.-> treasury_svc
+    AgroasysBackend --> AgroasysIdentity
+    AgroasysBackend --> ParticipantLedger
+    AgroasysBackend --> EvidenceStore
+    ComplianceIssuer -.-> AgroasysBackend
+    LogisticsIssuer -.-> EvidenceStore
 
-    api_runtime --> access_admin
-    api_runtime --> commerce
-    api_runtime --> ops_docs
-    api_runtime --> compliance
-    api_runtime --> finance
-    api_runtime --> settlement_handoff
-    api_runtime --> notifications_mod
+    AgroasysBackend -->|trusted upstream session exchange| CotselAuth
+    CotselAuth --> CotselDb
+    CotselAuth --> Gateway
+    SharedAuth -.-> CotselAuth
+    SharedAuth -.-> Gateway
+    SharedAuth -.-> RicardianSvc
+    SharedAuth -.-> OracleSvc
+    SharedAuth -.-> TreasurySvc
 
-    api_runtime --> ops_db
-    api_runtime --> redis_cache
-    api_runtime --> eventbridge
-    api_runtime --> sqs
-    sqs --> worker_runtime
-    worker_runtime --> settlement_handoff
-    worker_runtime --> notifications_mod
+    AgroasysBackend -->|signed settlement handoff| Gateway
+    Gateway -->|durable settlement callbacks| AgroasysBackend
+    Gateway --> CotselDb
+    Gateway --> IndexerGraphQL
+    Gateway --> RicardianSvc
+    Gateway -.-> OracleSvc
+    Gateway --> TreasurySvc
+    Gateway --> Reconciler
+    Gateway --> GovExecutor
+    Gateway --> Relayer
 
-    access_admin --> ops_db
-    regulators -.-> access_admin
-    auditors -.-> s3_store
-    commerce --> ops_db
-    ops_docs --> ops_db
-    ops_docs --> s3_store
-    ops_docs --> logistics_ext
-    compliance --> ops_db
-    compliance --> kyb_provider
-    compliance --> kyt_provider
-    compliance --> sanctions
-    finance --> ops_db
-    finance --> fiat_partners
-    finance --> banks
-    settlement_handoff --> ops_db
-    settlement_handoff --> s3_store
-    settlement_handoff --> eventbridge
-    settlement_handoff --> sqs
-    settlement_handoff --> dashboard_gateway
-    settlement_handoff --> cotsel_auth
-    notifications_mod --> eventbridge
-    notifications_mod --> sqs
+    Wallet -->|user-signed exact authorization| AgroasysBackend
+    AgroasysBackend -->|service-auth EIP-3009 send package| Gateway
+    Relayer -->|direct participant send| USDC
+    Relayer -->|gasless order funding / actions| EscrowSC
+    USDC -.->|direct receipt / confirmation observation| AgroasysBackend
 
-    dashboard_gateway --> gateway_db
-    dashboard_gateway --> cotsel_auth
-    dashboard_gateway --> indexer_graphql
-    dashboard_gateway --> ricardian_svc
-    dashboard_gateway --> treasury_svc
-    dashboard_gateway --> reconciler
-    dashboard_gateway --> gov_executor
+    EscrowSC --> USDC
+    EscrowSC -.-> IndexerPipeline
+    IndexerPipeline -.-> ChainRPC
+    IndexerPipeline --> CotselDb
+    IndexerPipeline --> IndexerGraphQL
+    IndexerGraphQL --> CotselDb
 
-    ricardian_svc --> s3_store
-    ricardian_svc --> cotsel_db
-    oracle_svc --> cotsel_db
-    logistics_ext -.-> oracle_svc
-    oracle_svc --> escrow_contract
-    indexer_graphql --> cotsel_db
-    indexer_graphql -.-> rpc_providers
-    indexer_graphql --> reconciler
-    indexer_graphql --> treasury_svc
-    escrow_contract --> assets_pallet
-    asset_conversion -.-> assets_pallet
-    escrow_contract -.-> indexer_graphql
-    reconciler --> cotsel_db
-    reconciler -.-> rpc_providers
-    reconciler --> cotsel_notifications
-    treasury_svc --> cotsel_db
-    treasury_svc -.-> banks
-    treasury_svc --> cotsel_notifications
-    cotsel_notifications --> sqs
-    cotsel_notifications --> eventbridge
-    gov_executor -.-> rpc_providers
+    RicardianSvc --> CotselDb
+    OracleSvc --> CotselDb
+    OracleSvc --> EscrowSC
+    Reconciler --> CotselDb
+    Reconciler -.-> ChainRPC
+    Reconciler --> Notifications
+    TreasurySvc --> CotselDb
+    TreasurySvc --> Notifications
+    TreasurySvc -.->|handoff and completion evidence only| Bank
+    OracleSvc --> Notifications
+    Notifications -.-> Comms
+
+    GovExecutor -.->|delegated service actions only| ChainRPC
+    Dash --> AdminSigner
+    AdminSigner -->|human governance sign + broadcast| EscrowSC
+
+    Redis -.-> CotselAuth
+    Redis -.-> Gateway
+    Redis -.-> OracleSvc
+    Redis -.-> TreasurySvc
+
+    Gateway -.-> EventBus
+    OracleSvc -.-> EventBus
+    TreasurySvc -.-> EventBus
+    Reconciler -.-> EventBus
+    EventBus -.-> Queue
+    Queue -.-> Notifications
+
+    NetworkStatus -.-> ChainRPC
 
     linkStyle default stroke:#9aa0a6,stroke-width:1.6px
-
-    linkStyle 0,1,2,3,4,5,6,7,8,9 stroke:#1f77b4,stroke-width:2.6px
-    linkStyle 10,11,12,13,14,15,16,17,18,19,20 stroke:#17becf,stroke-width:2.6px
-    linkStyle 21,22,23,24,25,26,27,28,44,50,51,52,53,62 stroke:#ff7f0e,stroke-width:2.6px
-    linkStyle 29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,45,46,47,48,54,57,58,59,60,63,64 stroke:#2ca02c,stroke-width:2.6px
-    linkStyle 49,55,56,75,88 stroke:#8c564b,stroke-width:2.6px
-    linkStyle 65,66,67,68,69,70,71,72,73,74,77,79,80,84,86,87,89,90,91 stroke:#9467bd,stroke-width:2.6px
-    linkStyle 61,76,78,81,82,83,85,92 stroke:#1565C0,stroke-width:2.8px
+    linkStyle 0,1,2,4,5,6,7,8,32,55 stroke:#2E7D32,stroke-width:2.2px
+    linkStyle 3,12,13,23,36,51,53 stroke:#C62828,stroke-width:2.2px
+    linkStyle 14,15,16,17,18,19,20,21 stroke:#EF6C00,stroke-width:2.2px
+    linkStyle 22,24,25,26,27,28,29,30,31,33,40,41,42,43,44,46,48,49,50,52,57,58,59,60,61,62,63,64,65,66 stroke:#7B1FA2,stroke-width:2.2px
+    linkStyle 34,35,37,38,39,45,47,54,56,67 stroke:#1565C0,stroke-width:2.8px
 ```
 
-## Current vs Target
+## Boundary Rules
 
-- Current repo truth already contains the major Cotsel settlement/control
-  services represented above: auth, gateway, ricardian, oracle, indexer,
-  reconciliation, treasury, notifications, SDK, and shared-auth.
-- Base is the active v1 settlement target-state. Retired legacy settlement
-  references elsewhere in the repo are migration residue or archive material,
-  not active architecture truth.
-- M4 and later operational readiness work must use this Base-only architecture
-  view together with the active Base runbooks. Historical deployment notes are
-  not sufficient for pilot or production decision-making.
-- Transitional `platform.v1` Supabase ownership is not canonical target-state
-  architecture and is intentionally excluded from this diagram.
-- This diagram is a target-state system architecture view. It is not intended
-  to serve as a speculative per-container deployment sheet.
+- Agroasys owns primary identity, fee policy, participant balances, direct
+  receipt discovery, send intents, reservations, wallet history, and participant
+  reconciliation.
+- Cotsel order escrow begins only after explicit buyer payment approval, a valid
+  settlement package, successful contract lock, and reconciliation of that chain
+  state back to Agroasys.
+- Direct participant USDC transfers are separate from order settlement. Cotsel
+  only validates and broadcasts the exact user-signed EIP-3009 authorization; it
+  does not choose the participant, recipient, or amount and does not own the
+  participant ledger.
+- Human privileged governance uses gateway prepare, direct admin-wallet signing
+  and broadcast, then gateway confirm and monitoring. The executor remains only
+  for delegated service or system roles.
+- Contract truth owns settlement execution and treasury fee accrual. Treasury
+  owns sweep, handoff, realization, and close evidence. Gateway owns approval and
+  signing truth. Reconciliation owns tie-out and exception truth. External
+  regulated counterparties own fiat completion truth.
+- Cotsel consumes bounded compliance and logistics attestation references. The
+  repository does not contain direct KYB, KYT, sanctions, banking, or logistics
+  provider execution clients.
+- Redis is support infrastructure only. SQS with DLQs and EventBridge are the
+  durable target; they are not represented as already replacing current
+  Postgres-backed operational records.
+- EIP-7702 account abstraction is parked. Active settlement and sponsored-send
+  paths use EIP-712 and EIP-3009.
+- Base Sepolia has verified pilot evidence. Base mainnet remains gated by the
+  documented go/no-go and rollback approvals.
 
-## Related Documents
+## Canonical Integration Sequences
+
+### Order settlement
+
+1. Agroasys verifies both Ricardian signatures, the accepted logistics quote,
+   buyer-confirmed logistics fee, exact payment package, verified wallet link,
+   policy readiness, and available participant balance.
+2. The buyer selects **Pay now** and signs the backend-issued buyer and
+   EIP-3009 USDC authorizations.
+3. Agroasys persists the settlement intent and reservation, then submits the
+   service-authenticated package to the Cotsel Gateway.
+4. The managed relayer broadcasts the gasless create-trade transaction.
+5. Escrow starts only when the contract lock succeeds and Agroasys reconciles
+   the confirmed `TradeLocked` event. Submission or browser acknowledgement is
+   not settlement truth.
+
+### Direct participant USDC movement
+
+- Incoming USDC is discovered and reconciled by Agroasys; Cotsel is not in the
+  receipt path.
+- For an outgoing direct send, Agroasys owns the intent, reservation, history,
+  ledger posting, and chain reconciliation. Cotsel validates and broadcasts
+  only the exact service-authenticated EIP-3009 authorization.
+- Direct transfers cannot create escrow, satisfy milestones, spend escrowed
+  value, or call order-release functions.
+
+### Release and inspection
+
+1. The verified custody/document milestone reaches Cotsel through the signed
+   Agroasys handoff and Oracle boundary.
+2. Stage 1 transfers the net supplier first tranche based on the 60% gross
+   tranche and accrues treasury-entitled fees separately.
+3. Arrival and receipt make the goods available for the order's immutable
+   inspection policy; receipt alone does not accept quality.
+4. Explicit inspection acceptance or expiry of the notice window without an
+   open dispute authorizes the final 40% supplier release.
+5. A timely dispute holds the final 40% until the governed resolution refunds
+   the buyer or releases the supplier principal.
+6. Indexing, signed callbacks, and reconciliation return execution truth to
+   Agroasys before participant-facing order and ledger state is finalized.
+
+### Human governance
+
+Human privileged governance follows gateway `prepare`, admin review, direct
+admin-wallet sign and broadcast, then gateway `confirm`, monitoring, and
+reconciliation. The delegated executor is not a fallback for human governance;
+it remains limited to intentional service or system roles.
+
+## Runtime Components
+
+The active runtime profile contains `auth`, `gateway`, `oracle`, `ricardian`,
+`treasury`, `reconciliation`, `indexer-pipeline`, `indexer-graphql`, Postgres,
+and Redis. `notifications` is a shared package embedded into service runtimes;
+notification wiring is health-checked but it is not a standalone Compose
+container.
+
+## Sources of Truth
 
 - [`../../README.md`](../../README.md)
-- [`../runbooks/dashboard-gateway-operations.md`](../runbooks/dashboard-gateway-operations.md)
+- [`../runbooks/runtime-truth-deployment-guide.md`](../runbooks/runtime-truth-deployment-guide.md)
+- [`../runbooks/runtime-stack.md`](../runbooks/runtime-stack.md)
+- [`../runbooks/compliance-boundary-kyb-kyt-sanctions.md`](../runbooks/compliance-boundary-kyb-kyt-sanctions.md)
+- [`../adr/adr-0411-human-governance-direct-wallet-signing.md`](../adr/adr-0411-human-governance-direct-wallet-signing.md)
+- [`../adr/adr-0412-treasury-revenue-controls-boundary.md`](../adr/adr-0412-treasury-revenue-controls-boundary.md)
+- [`../adr/adr-0413-agroasys-wallet-rails-and-escrow-start-boundary.md`](../adr/adr-0413-agroasys-wallet-rails-and-escrow-start-boundary.md)
 - [`./job-and-eventing-strategy.md`](./job-and-eventing-strategy.md)
+- [`./eip-7702-account-abstraction-deferral.md`](./eip-7702-account-abstraction-deferral.md)
