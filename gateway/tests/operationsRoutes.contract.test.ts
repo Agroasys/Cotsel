@@ -708,7 +708,7 @@ describe('gateway operations summary route contract', () => {
   });
 
   test('POST /operations/failed-operations/:id/replay requires idempotency before replaying', async () => {
-    const replayedRecord: FailedOperationRecord = {
+    const openOperationTemplate: FailedOperationRecord = {
       failedOperationId: 'failed-op-1',
       operationType: 'settlement-callback',
       operationKey: 'callback-1',
@@ -742,7 +742,7 @@ describe('gateway operations summary route contract', () => {
     const failedOperationStore = {
       list: jest.fn(),
       get: jest.fn().mockResolvedValue({
-        ...replayedRecord,
+        ...openOperationTemplate,
         failureState: 'open',
         lastReplayedAt: null,
       }),
@@ -751,7 +751,7 @@ describe('gateway operations summary route contract', () => {
       markReplayFailed: jest.fn(),
     } as unknown as FailedOperationStore;
     const failedOperationReplayer = {
-      replay: jest.fn().mockResolvedValue(replayedRecord),
+      replay: jest.fn().mockResolvedValue(openOperationTemplate),
     } as unknown as GatewayFailedOperationReplayer;
     const idempotencyStore = {
       get: jest.fn(),
