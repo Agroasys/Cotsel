@@ -28,10 +28,16 @@ overrides:
   lodash: 4.18.1
   serialize-javascript: 7.0.5
   tmp: 0.2.7
-  undici: 6.24.0
+  undici: 6.27.0
+  adm-zip@<0.6.0: 0.6.0
+  form-data@>=4.0.0 <4.0.6: 4.0.6
+  '@babel/core@<=7.29.0': 7.29.6
+  js-yaml@<3.15.0: 3.15.0
+  js-yaml@>=4.0.0 <=4.1.1: 4.2.0
   brace-expansion@>=4 <5.0.6: 5.0.6
   qs: 6.15.2
   uuid@<11.1.1: 11.1.1
+  ws@>=7 <7.5.11: 7.5.11
   ws@>=8 <8.20.1: 8.21.0
   # Dedupe graphql to a single instance. @subsquid/openreader builds the schema
   # while @subsquid/graphql-server merges it; when they resolve different graphql
