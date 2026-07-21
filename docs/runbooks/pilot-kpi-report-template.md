@@ -317,7 +317,7 @@ Attach Hardhat/Foundry baseline output.
 | ------------------------------ | ------------------ | ------------------ | ------- | ----------------------- |
 | `createTradeWithAuthorization` |                    |                    |         | CI run / block explorer |
 | `releaseFundsStage1`           |                    |                    |         | CI run / block explorer |
-| `confirmArrival`               |                    |                    |         | CI run / block explorer |
+| `confirmInspectionAvailable`   |                    |                    |         | CI run / block explorer |
 | `finalizeAfterDisputeWindow`   |                    |                    |         | CI run / block explorer |
 
 ### 2.4 Narrative

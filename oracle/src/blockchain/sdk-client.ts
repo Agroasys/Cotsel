@@ -145,22 +145,6 @@ export class SDKClient {
     };
   }
 
-  async confirmArrival(tradeId: string): Promise<BlockchainResult> {
-    Logger.info('Executing confirmArrival', { tradeId });
-
-    const result = await this.sdk.confirmArrival(tradeId, this.signer);
-
-    Logger.info('Arrival confirmation successful', {
-      tradeId,
-      txHash: result.txHash,
-    });
-
-    return {
-      txHash: result.txHash,
-      blockNumber: result.blockNumber,
-    };
-  }
-
   async confirmInspectionAvailable(
     tradeId: string,
     windowSeconds: number,

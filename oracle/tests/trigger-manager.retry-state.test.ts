@@ -117,7 +117,7 @@ describe('TriggerManager retry and idempotency states', () => {
     const sdkClient: TriggerManagerSdkClient = {
       getTrade: jest.fn(),
       releaseFundsStage1: jest.fn(),
-      confirmArrival: jest.fn(),
+      confirmInspectionAvailable: jest.fn(),
       finalizeTrade: jest.fn(),
     } as unknown as TriggerManagerSdkClient;
 
@@ -188,7 +188,7 @@ describe('TriggerManager retry and idempotency states', () => {
       releaseFundsStage1: jest
         .fn()
         .mockRejectedValue(new Error('timeout while sending transaction')),
-      confirmArrival: jest.fn(),
+      confirmInspectionAvailable: jest.fn(),
       finalizeTrade: jest.fn(),
     } as unknown as TriggerManagerSdkClient;
 
@@ -225,7 +225,7 @@ describe('TriggerManager retry and idempotency states', () => {
       releaseFundsStage1: jest
         .fn()
         .mockRejectedValue(new Error('execution reverted: oracle disabled')),
-      confirmArrival: jest.fn(),
+      confirmInspectionAvailable: jest.fn(),
       finalizeTrade: jest.fn(),
     } as unknown as TriggerManagerSdkClient;
 

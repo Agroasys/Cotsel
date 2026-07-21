@@ -199,19 +199,6 @@ contract Handler is Test {
         releaseStage1Triggered++;
     }
 
-    function confirmArrival(uint96 random_tradeId) public {
-        uint256 tradeCount = escrow.tradeCounter();
-        if (tradeCount==0){
-            return;
-        }
-
-        uint256 tradeId = random_tradeId % tradeCount;
-
-
-        vm.prank(oracle);
-        escrow.confirmArrival(tradeId);
-    }
-
     function confirmInspectionAvailable(uint96 random_tradeId, bool packagedLocal) public {
         uint256 tradeCount = escrow.tradeCounter();
         if (tradeCount==0){
@@ -362,16 +349,15 @@ contract InvariantTest is Test {
 
         targetContract(address(handler));
 
-        bytes4[] memory selectors = new bytes4[](9);
+        bytes4[] memory selectors = new bytes4[](8);
         selectors[0] = Handler.createTrade.selector;
         selectors[1] = Handler.releaseFundsStage1.selector;
-        selectors[2] = Handler.confirmArrival.selector;
-        selectors[3] = Handler.confirmInspectionAvailable.selector;
-        selectors[4] = Handler.finalizeAfterInspectionAcceptance.selector;
-        selectors[5] = Handler.finalizeAfterDisputeWindow.selector;
-        selectors[6] = Handler.openDisputeByBuyer.selector;
-        selectors[7] = Handler.proposeDisputeSolution.selector;
-        selectors[8] = Handler.approveDisputeSolution.selector;
+        selectors[2] = Handler.confirmInspectionAvailable.selector;
+        selectors[3] = Handler.finalizeAfterInspectionAcceptance.selector;
+        selectors[4] = Handler.finalizeAfterDisputeWindow.selector;
+        selectors[5] = Handler.openDisputeByBuyer.selector;
+        selectors[6] = Handler.proposeDisputeSolution.selector;
+        selectors[7] = Handler.approveDisputeSolution.selector;
         
                 
         targetSelector(

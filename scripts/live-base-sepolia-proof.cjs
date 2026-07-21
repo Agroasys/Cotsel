@@ -887,7 +887,9 @@ async function main() {
   const tradeAfterCreate = await escrow.trades(tradeId);
 
   const stage1Receipt = await waitForTx(await escrow.releaseFundsStage1(tradeId));
-  const arrivalReceipt = await waitForTx(await escrow.confirmArrival(tradeId));
+  const arrivalReceipt = await waitForTx(
+    await escrow.confirmInspectionAvailable(tradeId, 72 * 60 * 60),
+  );
 
   const backendRefund = await seedBackendRefundHandoff({
     backendEnv,

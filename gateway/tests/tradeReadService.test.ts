@@ -80,10 +80,10 @@ describe('trade read service', () => {
                   totalAmount: '125000000000',
                 },
                 {
-                  eventName: 'ArrivalConfirmed',
+                  eventName: 'InspectionAvailable',
                   timestamp: '2026-03-07T10:00:00.000Z',
                   txHash: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-                  arrivalTimestamp: '1772877600',
+                  inspectionAvailableAt: '1772877600',
                 },
               ],
             },
@@ -267,10 +267,10 @@ describe('trade read service', () => {
               createdAt: '2026-03-07T09:00:00.000Z',
               events: [
                 {
-                  eventName: 'ArrivalConfirmed',
+                  eventName: 'InspectionAvailable',
                   timestamp: '2026-03-07T10:00:00.000Z',
                   txHash: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-                  arrivalTimestamp: 'invalid-seconds',
+                  inspectionAvailableAt: 'invalid-seconds',
                 },
               ],
             },
@@ -284,7 +284,7 @@ describe('trade read service', () => {
     await expect(service.listTrades()).rejects.toMatchObject({
       code: 'UPSTREAM_UNAVAILABLE',
       statusCode: 502,
-      message: 'Indexer returned invalid event.arrivalTimestamp timestamp',
+      message: 'Indexer returned invalid event.inspectionAvailableAt timestamp',
     });
   });
 

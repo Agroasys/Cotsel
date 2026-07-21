@@ -64,9 +64,6 @@ type TradeEvent @entity {
   paidPlatformFeeNet: BigInt
   paidSettlementSupportFee: BigInt
 
-  # ArrivalConfirmed specific
-  arrivalTimestamp: BigInt
-
   # InspectionAvailable specific
   inspectionAvailableAt: BigInt
   inspectionWindowSeconds: BigInt

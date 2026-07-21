@@ -585,7 +585,9 @@ describe('AgroasysEscrow', function () {
 
       await expect(escrow.connect(admin1).proposeUnpause()).to.be.revertedWith('oracle disabled');
 
-      await expect(escrow.connect(oracle).confirmArrival(0)).to.be.revertedWith('oracle disabled');
+      await expect(
+        escrow.connect(oracle).confirmInspectionAvailable(0, 72 * 3600),
+      ).to.be.revertedWith('oracle disabled');
 
       const newOracle = admin3.address;
       await escrow.connect(admin1).proposeOracleUpdate(newOracle);
@@ -699,10 +701,12 @@ describe('AgroasysEscrow', function () {
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
       await escrow.connect(admin1).pause();
-      await expect(escrow.connect(oracle).confirmArrival(tradeId)).to.be.revertedWith('paused');
+      await expect(
+        escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600),
+      ).to.be.revertedWith('paused');
       await unpauseWithQuorum();
 
-      await escrow.connect(oracle).confirmArrival(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
 
       await escrow.connect(admin1).pause();
       await expect(openDisputeAsBuyer(tradeId)).to.be.revertedWith('paused');
@@ -718,7 +722,7 @@ describe('AgroasysEscrow', function () {
       const { tradeId } = await createDefaultTrade(ethers.id('paused-dispute'));
 
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
-      await escrow.connect(oracle).confirmArrival(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
       await openDisputeAsBuyer(tradeId);
 
       await escrow.connect(admin1).pause();
@@ -925,7 +929,7 @@ describe('AgroasysEscrow', function () {
     it('Should keep treasury at fees-only after dispute REFUND', async function () {
       const { tradeId } = await createDefaultTrade(ethers.id('treasury-dispute-refund'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
-      await escrow.connect(oracle).confirmArrival(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
       await openDisputeAsBuyer(tradeId);
 
       const treasuryAfterStage1 = await escrow.claimableUsdc(treasury.address);
@@ -939,7 +943,7 @@ describe('AgroasysEscrow', function () {
     it('Should keep treasury at fees-only after dispute RESOLVE', async function () {
       const { tradeId } = await createDefaultTrade(ethers.id('treasury-dispute-resolve'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
-      await escrow.connect(oracle).confirmArrival(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
       await openDisputeAsBuyer(tradeId);
 
       const treasuryAfterStage1 = await escrow.claimableUsdc(treasury.address);
@@ -1710,7 +1714,7 @@ describe('AgroasysEscrow', function () {
     it('executes buyer actions only through admins or allowlisted relayers', async function () {
       const { tradeId } = await createGaslessTrade(ethers.id('gasless-action'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
-      await escrow.connect(oracle).confirmArrival(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
 
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
       const deadline = BigInt(blockTimestamp + 3600);
@@ -1795,9 +1799,9 @@ describe('AgroasysEscrow', function () {
       let trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(1); // IN_TRANSIT
 
-      await expect(escrow.connect(oracle).confirmArrival(tradeId)).to.emit(
+      await expect(escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600)).to.emit(
         escrow,
-        'ArrivalConfirmed',
+        'InspectionAvailable',
       );
 
       trade = await escrow.trades(tradeId);
@@ -1858,7 +1862,7 @@ describe('AgroasysEscrow', function () {
     });
   });
 
-  describe('confirmArrival', function () {
+  describe('confirmInspectionAvailable', function () {
     let tradeId: bigint;
 
     beforeEach(async function () {
@@ -1879,10 +1883,10 @@ describe('AgroasysEscrow', function () {
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
     });
 
-    it('Should confirm arrival', async function () {
-      await expect(escrow.connect(oracle).confirmArrival(tradeId)).to.emit(
+    it('Should confirm inspection availability with the standard 72-hour window', async function () {
+      await expect(escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600)).to.emit(
         escrow,
-        'ArrivalConfirmed',
+        'InspectionAvailable',
       );
 
       const trade = await escrow.trades(tradeId);
@@ -1955,15 +1959,17 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should reject if not oracle', async function () {
-      await expect(escrow.connect(buyer).confirmArrival(tradeId)).to.be.revertedWith('only oracle');
+      await expect(
+        escrow.connect(buyer).confirmInspectionAvailable(tradeId, 72 * 3600),
+      ).to.be.revertedWith('only oracle');
     });
 
     it('Should reject if wrong status', async function () {
-      await escrow.connect(oracle).confirmArrival(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
 
-      await expect(escrow.connect(oracle).confirmArrival(tradeId)).to.be.revertedWith(
-        'status must be IN_TRANSIT',
-      );
+      await expect(
+        escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600),
+      ).to.be.revertedWith('status must be IN_TRANSIT');
     });
   });
 
@@ -1990,7 +1996,7 @@ describe('AgroasysEscrow', function () {
 
       tradeId = 0n;
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
-      await escrow.connect(oracle).confirmArrival(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
     });
 
     it('Should allow buyer to open a dispute during the 72-hour notice window', async function () {
@@ -2327,7 +2333,7 @@ describe('AgroasysEscrow', function () {
     it('Should allow dispute approval exactly at dispute TTL boundary', async function () {
       const { tradeId } = await createDefaultTrade(ethers.id('dispute-expiry-boundary-ok'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
-      await escrow.connect(oracle).confirmArrival(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
       await openDisputeAsBuyer(tradeId);
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
 
@@ -2343,7 +2349,7 @@ describe('AgroasysEscrow', function () {
     it('Should reject dispute approval one second after dispute TTL boundary', async function () {
       const { tradeId } = await createDefaultTrade(ethers.id('dispute-expiry-boundary-fail'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
-      await escrow.connect(oracle).confirmArrival(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
       await openDisputeAsBuyer(tradeId);
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
 

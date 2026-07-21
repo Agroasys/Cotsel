@@ -44,7 +44,6 @@ const RECEIPT = {
 
 type MockContractWithSigner = {
   releaseFundsStage1: jest.Mock;
-  confirmArrival: jest.Mock;
   confirmInspectionAvailable: jest.Mock;
   finalizeAfterInspectionAcceptance: jest.Mock;
   finalizeAfterDisputeWindow: jest.Mock;
@@ -76,7 +75,6 @@ function makeSdkUnit(authorizedOracle = '0x1111111111111111111111111111111111111
   const sdk = new OracleSDK(UNIT_CONFIG);
   const contractWithSigner: MockContractWithSigner = {
     releaseFundsStage1: jest.fn(),
-    confirmArrival: jest.fn(),
     confirmInspectionAvailable: jest.fn(),
     finalizeAfterInspectionAcceptance: jest.fn(),
     finalizeAfterDisputeWindow: jest.fn(),
@@ -116,11 +114,13 @@ describe('OracleSDK unit', () => {
     expect(result).toEqual({ txHash: RECEIPT.hash, blockNumber: RECEIPT.blockNumber });
   });
 
-  test('confirmArrival should reject unauthorized oracle signer', async () => {
+  test('confirmInspectionAvailable should reject unauthorized oracle signer', async () => {
     const { sdk, connect } = makeSdkUnit('0x2222222222222222222222222222222222222222');
     const { signer } = makeOracleSigner();
 
-    await expect(sdk.confirmArrival(3n, signer)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(sdk.confirmInspectionAvailable(3n, 72 * 3600, signer)).rejects.toBeInstanceOf(
+      AuthorizationError,
+    );
     expect(connect).not.toHaveBeenCalled();
   });
 
@@ -225,8 +225,8 @@ describeOracleMutationIntegration('OracleSDK mutation integration', () => {
     console.log(`stage 1 released: ${txHash.txHash}`);
   });
 
-  test('should confirm arrival', async () => {
-    const txHash = await oracleSDK.confirmArrival(tradeId, oracleSigner);
+  test('should confirm inspection availability', async () => {
+    const txHash = await oracleSDK.confirmInspectionAvailable(tradeId, 72 * 3600, oracleSigner);
 
     expect(txHash.txHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
 

@@ -231,7 +231,6 @@ settlement gateway.
 | `confirmInspectionAvailable(tradeId, windowSeconds, signer)` | Start an explicit 48- or 72-hour inspection-notice window                            |
 | `finalizeAfterInspectionAcceptance(tradeId, signer)`         | Release final 40% immediately after buyer inspection acceptance                      |
 | `finalizeAfterDisputeWindow(tradeId, signer)`                | Release final 40% after the notice deadline without a dispute                        |
-| `confirmArrival(tradeId, signer)`                            | Legacy compatibility; starts the standard 72-hour policy                             |
 
 ### AdminSDK
 

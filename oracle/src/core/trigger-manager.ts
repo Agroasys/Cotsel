@@ -574,9 +574,9 @@ export class TriggerManager {
       case TriggerType.RELEASE_STAGE_1:
         return await this.sdkClient.releaseFundsStage1(tradeId);
 
+      // CONFIRM_ARRIVAL is retained as an inbound trigger name for upstream callers
+      // (agroasys-backend whitelists it) and maps onto the standard inspection window.
       case TriggerType.CONFIRM_ARRIVAL:
-        return await this.sdkClient.confirmArrival(tradeId);
-
       case TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD:
         return await this.sdkClient.confirmInspectionAvailable(tradeId, 72 * 60 * 60);
 
