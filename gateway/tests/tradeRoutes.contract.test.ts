@@ -5,6 +5,7 @@ import type { Server } from 'http';
 import { Router } from 'express';
 import { createApp } from '../src/app';
 import type { GatewayConfig } from '../src/config/env';
+import { baseTestGatewayConfig } from './support/testConfig';
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createTradeRouter } from '../src/routes/trades';
@@ -16,42 +17,7 @@ import type {
 } from '../src/core/tradeReadService';
 
 const config: GatewayConfig = {
-  port: 3600,
-  dbHost: 'localhost',
-  dbPort: 5432,
-  dbName: 'agroasys_gateway',
-  dbUser: 'postgres',
-  dbPassword: 'postgres',
-  authBaseUrl: 'http://127.0.0.1:3005',
-  authRequestTimeoutMs: 5000,
-  indexerGraphqlUrl: 'http://127.0.0.1:4350/graphql',
-  indexerRequestTimeoutMs: 5000,
-  rpcUrl: 'http://127.0.0.1:8545',
-  rpcFallbackUrls: [],
-  rpcReadTimeoutMs: 8000,
-  chainId: 31337,
-  escrowAddress: '0x0000000000000000000000000000000000000000',
-  usdcAddress: '0x0000000000000000000000000000000000000888',
-  enableMutations: false,
-  writeAllowlist: [],
-  governanceQueueTtlSeconds: 86400,
-  settlementIngressEnabled: false,
-  settlementServiceAuthApiKeysJson: '[]',
-  settlementServiceAuthMaxSkewSeconds: 300,
-  settlementServiceAuthNonceTtlSeconds: 600,
-  settlementCallbackEnabled: false,
-  settlementCallbackRequestTimeoutMs: 5000,
-  settlementCallbackPollIntervalMs: 5000,
-  settlementCallbackMaxAttempts: 8,
-  settlementCallbackInitialBackoffMs: 2000,
-  settlementCallbackMaxBackoffMs: 60000,
-  commitSha: 'abc1234',
-  buildTime: '2026-03-07T00:00:00.000Z',
-  nodeEnv: 'test',
-  corsAllowedOrigins: [],
-  corsAllowNoOrigin: true,
-  rateLimitEnabled: true,
-  allowInsecureDownstreamAuth: true,
+  ...baseTestGatewayConfig,
 };
 
 const tradeFixture: DashboardTradeRecord = {
@@ -235,6 +201,11 @@ describe('gateway trade routes contract', () => {
     try {
       const unauthenticated = await fetch(`${unauthenticatedBaseUrl}/trades`);
       expect(unauthenticated.status).toBe(401);
+
+      const unauthenticatedDetail = await fetch(
+        `${unauthenticatedBaseUrl}/trades/${tradeFixture.id}`,
+      );
+      expect(unauthenticatedDetail.status).toBe(401);
     } finally {
       unauthenticatedServer.close();
     }
@@ -245,6 +216,11 @@ describe('gateway trade routes contract', () => {
         headers: { Authorization: 'Bearer sess-buyer' },
       });
       expect(forbidden.status).toBe(403);
+
+      const forbiddenDetail = await fetch(`${forbiddenBaseUrl}/trades/${tradeFixture.id}`, {
+        headers: { Authorization: 'Bearer sess-buyer' },
+      });
+      expect(forbiddenDetail.status).toBe(403);
     } finally {
       forbiddenServer.close();
     }

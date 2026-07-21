@@ -107,7 +107,7 @@ export class TriggerManager {
       return await this.handleRedrive(latestTrigger, request);
     }
 
-    const existingRequestIdKey = generateIdempotencyKey(actionKey);
+    const existingRequestIdKey = `${actionKey}:${request.requestId}`;
     const existingRequest = await getTriggerByIdempotencyKey(existingRequestIdKey);
 
     if (existingRequest) {
