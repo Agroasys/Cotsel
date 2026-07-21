@@ -382,7 +382,11 @@ export class TriggerManager {
   }
 
   private async createNewTrigger(request: TriggerRequest, actionKey: string): Promise<Trigger> {
-    const idempotencyKey = generateIdempotencyKey(actionKey);
+    // Derive the idempotency key deterministically as `action_key:request_id`
+    // (matching the Trigger.idempotency_key contract) so the pre-insert lookup
+    // in triggerAction() can match a previously stored trigger for the same
+    // request instead of relying solely on the active action_key unique index.
+    const idempotencyKey = `${actionKey}:${request.requestId}`;
 
     const data: CreateTriggerData = {
       actionKey,
