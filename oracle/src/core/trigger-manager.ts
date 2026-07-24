@@ -118,6 +118,15 @@ export class TriggerManager {
       const trade = await this.sdkClient.getTrade(request.tradeId);
       StateValidator.validateTradeState(trade, request.triggerType);
 
+      // Per-trade pause is an admin hold that the contract enforces by reverting
+      // every lifecycle transition. Decline early with a clear reason instead of
+      // submitting a transaction that would revert with "trade paused".
+      if (await this.sdkClient.isTradePaused(request.tradeId)) {
+        throw new ValidationError(
+          `Trade ${request.tradeId} is paused; oracle actions are blocked until an admin resumes it`,
+        );
+      }
+
       if (this.manualApprovalEnabled && !request.isRedrive) {
         const trigger = await this.createNewTrigger(request, actionKey);
         if (trigger.request_id !== request.requestId) {

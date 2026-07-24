@@ -85,6 +85,7 @@ function buildManager(): TriggerManager {
     releaseFundsStage1: jest.fn(),
     confirmInspectionAvailable: jest.fn(),
     finalizeTrade: jest.fn(),
+    isTradePaused: jest.fn().mockResolvedValue(false),
   } as unknown as TriggerManagerSdkClient;
   return new TriggerManager(sdkClient, 3, 0, undefined, true);
 }
@@ -108,6 +109,7 @@ describe('TriggerManager — manual approval gate', () => {
         createdAt: new Date(),
       } satisfies TradeRecord),
       releaseFundsStage1: jest.fn(),
+      isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
 
     const trigger = buildTrigger({ status: TriggerStatus.PENDING });
@@ -150,6 +152,7 @@ describe('TriggerManager — manual approval gate', () => {
         createdAt: new Date(),
       } satisfies TradeRecord),
       releaseFundsStage1: jest.fn().mockResolvedValue({ txHash: '0xabcd', blockNumber: 1 }),
+      isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
 
     (mockCreateTrigger as jest.Mock).mockImplementation(async (input: { requestId: string }) =>
@@ -194,6 +197,7 @@ describe('TriggerManager — manual approval gate', () => {
         createdAt: new Date(),
       } satisfies TradeRecord),
       releaseFundsStage1: jest.fn().mockResolvedValue({ txHash: '0xdeadbeef', blockNumber: 42 }),
+      isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
 
     const manager = new TriggerManager(sdkClient, 3, 0, undefined, true);

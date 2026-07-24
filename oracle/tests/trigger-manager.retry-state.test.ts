@@ -119,6 +119,7 @@ describe('TriggerManager retry and idempotency states', () => {
       releaseFundsStage1: jest.fn(),
       confirmInspectionAvailable: jest.fn(),
       finalizeTrade: jest.fn(),
+      isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
 
     const manager = new TriggerManager(sdkClient, 3, 1);
@@ -153,6 +154,7 @@ describe('TriggerManager retry and idempotency states', () => {
       getTrade: jest.fn(),
       finalizeAfterInspectionAcceptance: jest.fn(),
       finalizeTrade: jest.fn(),
+      isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
     const manager = new TriggerManager(sdkClient, 3, 1, undefined, false, actionLock);
 
@@ -190,6 +192,7 @@ describe('TriggerManager retry and idempotency states', () => {
         .mockRejectedValue(new Error('timeout while sending transaction')),
       confirmInspectionAvailable: jest.fn(),
       finalizeTrade: jest.fn(),
+      isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
 
     const manager = new TriggerManager(sdkClient, 2, 1);
@@ -227,6 +230,7 @@ describe('TriggerManager retry and idempotency states', () => {
         .mockRejectedValue(new Error('execution reverted: oracle disabled')),
       confirmInspectionAvailable: jest.fn(),
       finalizeTrade: jest.fn(),
+      isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
 
     const manager = new TriggerManager(sdkClient, 3, 1);
@@ -243,5 +247,32 @@ describe('TriggerManager retry and idempotency states', () => {
       expect.objectContaining({ status: TriggerStatus.TERMINAL_FAILURE, attempt_count: 1 }),
     );
     expect(mockedIncrementOracleExhaustedRetries).not.toHaveBeenCalled();
+  });
+
+  it('declines to submit and creates no trigger when the trade is admin-paused', async () => {
+    mockedGetLatestTriggerByActionKey.mockResolvedValue(null);
+    mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
+
+    const sdkClient: TriggerManagerSdkClient = {
+      getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
+      releaseFundsStage1: jest.fn(),
+      confirmInspectionAvailable: jest.fn(),
+      finalizeTrade: jest.fn(),
+      isTradePaused: jest.fn().mockResolvedValue(true),
+    } as unknown as TriggerManagerSdkClient;
+
+    const manager = new TriggerManager(sdkClient, 3, 1);
+
+    await expect(
+      manager.executeTrigger({
+        tradeId: '1',
+        requestId: 'req-paused',
+        triggerType: TriggerType.RELEASE_STAGE_1,
+      }),
+    ).rejects.toThrow(/paused/);
+
+    expect(sdkClient.isTradePaused).toHaveBeenCalledWith('1');
+    expect(sdkClient.releaseFundsStage1).not.toHaveBeenCalled();
+    expect(mockedCreateTrigger).not.toHaveBeenCalled();
   });
 });
