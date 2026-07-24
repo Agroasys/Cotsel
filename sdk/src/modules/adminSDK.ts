@@ -227,6 +227,59 @@ export class AdminSDK extends Client {
     }
   }
 
+  /**
+   * Pauses lifecycle transitions for a single trade, scoped to one tradeId. Same intent
+   * as the global pause but leaves every other trade unaffected.
+   */
+  async pauseTrade(tradeId: bigint, adminSigner: ethers.Signer): Promise<GovernanceResult> {
+    await this.verifyAdmin(adminSigner);
+
+    try {
+      const contractWithSigner = this.contract.connect(adminSigner);
+      const tx = await contractWithSigner.pauseTrade(tradeId);
+      const receipt = await tx.wait();
+
+      if (!receipt) {
+        throw new ContractError('Transaction receipt not available');
+      }
+
+      return {
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+      };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      throw new ContractError(`Failed to pause trade: ${message}`, { error: message });
+    }
+  }
+
+  /**
+   * Resumes lifecycle transitions for a previously paused trade.
+   */
+  async unpauseTrade(tradeId: bigint, adminSigner: ethers.Signer): Promise<GovernanceResult> {
+    await this.verifyAdmin(adminSigner);
+
+    try {
+      const contractWithSigner = this.contract.connect(adminSigner);
+      const tx = await contractWithSigner.unpauseTrade(tradeId);
+      const receipt = await tx.wait();
+
+      if (!receipt) {
+        throw new ContractError('Transaction receipt not available');
+      }
+
+      return {
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+      };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      throw new ContractError(`Failed to unpause trade: ${message}`, {
+        error: message,
+      });
+    }
+  }
+
   async claimTreasury(triggerSigner: ethers.Signer): Promise<GovernanceResult> {
     await this.assertSignerCompatibility(triggerSigner);
 
