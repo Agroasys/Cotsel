@@ -190,6 +190,10 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     mapping(uint256 => Trade) public trades;
     uint256 public tradeCounter;
 
+    /// @notice Per-trade emergency switch. When true, lifecycle transitions for that
+    /// trade are blocked, mirroring the global pause but scoped to a single tradeId.
+    mapping(uint256 => bool) public tradePaused;
+
     // buyer-scoped nonce to prevent signature replay and global counter races
     mapping(address => uint256) public authorizationNonces;
 
@@ -467,6 +471,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     );
     event ClaimsPaused(address indexed triggeredBy);
     event ClaimsUnpaused(address indexed triggeredBy);
+    event TradePaused(uint256 indexed tradeId, address indexed triggeredBy);
+    event TradeUnpaused(uint256 indexed tradeId, address indexed triggeredBy);
     event OracleUpdateProposalExpiredCancelled(uint256 indexed proposalId, address indexed cancelledBy);
     event AdminAddProposalExpiredCancelled(uint256 indexed proposalId, address indexed cancelledBy);
 
@@ -535,6 +541,16 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(!claimsPaused, "claims paused");
         _;
     }
+    modifier whenTradeNotPaused(uint256 _tradeId) {
+        _requireTradeNotPaused(_tradeId);
+        _;
+    }
+
+    /// @dev Shared per-trade pause guard; kept as an internal function (not inlined per
+    /// call site) so the check exists once in bytecode. Mirrors `_requireNotPaused`.
+    function _requireTradeNotPaused(uint256 _tradeId) internal view {
+        require(!tradePaused[_tradeId], "trade paused");
+    }
     modifier onlyOracleActive() {
         require(oracleActive, "oracle disabled");
         _;
@@ -583,6 +599,28 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(claimsPaused, "claims not paused");
         claimsPaused = false;
         emit ClaimsUnpaused(msg.sender);
+    }
+
+    /**
+     * @notice Pauses lifecycle transitions for a single trade (per-trade emergency switch).
+     * @dev Same intent as the global pause but scoped to one tradeId; leaves every other
+     * trade unaffected. Does not move funds or change trade status.
+     */
+    function pauseTrade(uint256 _tradeId) external onlyAdmin {
+        require(_tradeId < tradeCounter, "trade not found");
+        require(!tradePaused[_tradeId], "trade already paused");
+        tradePaused[_tradeId] = true;
+        emit TradePaused(_tradeId, msg.sender);
+    }
+
+    /**
+     * @notice Resumes lifecycle transitions for a previously paused trade.
+     */
+    function unpauseTrade(uint256 _tradeId) external onlyAdmin {
+        require(_tradeId < tradeCounter, "trade not found");
+        require(tradePaused[_tradeId], "trade not paused");
+        tradePaused[_tradeId] = false;
+        emit TradeUnpaused(_tradeId, msg.sender);
     }
 
     function setRelayer(address relayer, bool allowed) external onlyAdmin {
@@ -1156,7 +1194,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * - Accrue logistics fee to treasury
      * - Accrue platform fee to treasury
      */
-    function releaseFundsStage1(uint256 _tradeId) external onlyOracle onlyOracleActive whenNotPaused nonReentrant {
+    function releaseFundsStage1(uint256 _tradeId) external onlyOracle onlyOracleActive whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -1197,6 +1235,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         onlyOracle
         onlyOracleActive
         whenNotPaused
+        whenTradeNotPaused(_tradeId)
         nonReentrant
     {
         _confirmInspectionAvailable(_tradeId, _windowSeconds);
@@ -1246,7 +1285,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationNonce,
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
-    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
+    ) external onlyRelayerOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -1277,7 +1316,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * Business rule: Stage 2 pays ONLY remaining supplier principal (supplierSecondTranche).
      * Treasury fees were already collected at Stage 1.
      */
-    function finalizeAfterDisputeWindow(uint256 _tradeId) external onlyOracleOrAdmin whenNotPaused nonReentrant {
+    function finalizeAfterDisputeWindow(uint256 _tradeId) external onlyOracleOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
         _finalizeAfterDisputeWindow(_tradeId);
     }
 
@@ -1286,7 +1325,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationNonce,
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
-    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
+    ) external onlyRelayerOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -1312,6 +1351,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         onlyOracle
         onlyOracleActive
         whenNotPaused
+        whenTradeNotPaused(_tradeId)
         nonReentrant
     {
         require(_tradeId < tradeCounter, "trade not found");
@@ -1347,7 +1387,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationNonce,
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
-    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
+    ) external onlyRelayerOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -1377,7 +1417,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationNonce,
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
-    ) external onlyRelayerOrAdmin whenNotPaused nonReentrant {
+    ) external onlyRelayerOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
         require(_tradeId < tradeCounter, "trade not found");
         Trade storage trade = trades[_tradeId];
 
@@ -1417,6 +1457,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         external
         onlyAdmin
         whenNotPaused
+        whenTradeNotPaused(_tradeId)
         returns (uint256)
     {
         require(_tradeId < tradeCounter, "trade not found");
@@ -1470,6 +1511,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(block.timestamp <= disputeProposalExpiresAt[_proposalId], "proposal expired");
 
         Trade storage trade = trades[proposal.tradeId];
+        _requireTradeNotPaused(proposal.tradeId);
         require(trade.status == TradeStatus.FROZEN, "trade not frozen");
 
         require(!disputeHasApproved[_proposalId][msg.sender], "already approved");
@@ -1532,6 +1574,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(!proposal.executed, "already executed");
         require(!disputeProposalCancelled[_proposalId], "already cancelled");
         require(block.timestamp > disputeProposalExpiresAt[_proposalId], "proposal not expired");
+        _requireTradeNotPaused(proposal.tradeId);
 
         disputeProposalCancelled[_proposalId] = true;
         if (tradeHasActiveDisputeProposal[proposal.tradeId] && tradeActiveDisputeProposalId[proposal.tradeId] == _proposalId)

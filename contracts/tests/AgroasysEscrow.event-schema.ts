@@ -45,6 +45,8 @@ describe('AgroasysEscrow event schema', function () {
       'SupplierPayoutTransferred(uint256,address,uint256,uint8,address)',
       'TradeCancelledAfterLockTimeout(uint256,address,uint256)',
       'TradeLocked(uint256,address,address,uint256,uint256,uint256,uint256,uint256,bytes32)',
+      'TradePaused(uint256,address)',
+      'TradeUnpaused(uint256,address)',
       'TreasuryClaimed(address,address,uint256,address)',
       'TreasuryPayoutAddressUpdateApproved(uint256,address,uint256,uint256)',
       'TreasuryPayoutAddressUpdateProposalExpiredCancelled(uint256,address)',

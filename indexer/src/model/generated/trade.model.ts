@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_, OneToMany as OneToMany_, Relation as Relation_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_, BooleanColumn as BooleanColumn_, OneToMany as OneToMany_, Relation as Relation_} from "@subsquid/typeorm-store"
 import {TradeStatus} from "./_tradeStatus"
 import {TradeEvent} from "./tradeEvent.model"
 import {DisputeProposal} from "./disputeProposal.model"
@@ -58,6 +58,10 @@ export class Trade {
 
     @DateTimeColumn_({nullable: true})
     arrivalTimestamp!: Date | undefined | null
+
+    @Index_()
+    @BooleanColumn_({nullable: false})
+    paused!: boolean
 
     @OneToMany_(() => TradeEvent, e => e.trade)
     events!: Relation_<TradeEvent[]>
