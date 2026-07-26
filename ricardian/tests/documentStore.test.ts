@@ -24,6 +24,7 @@ jest.mock('../src/metrics/counters', () => ({
 
 import { createDocument, getDocument } from '../src/database/documentStore';
 import {
+  DocumentConflictError,
   DocumentIntegrityError,
   DocumentNotFoundError,
   DocumentPersistenceError,
@@ -120,6 +121,15 @@ describe('documentStore.createDocument', () => {
     mockDbCreateHash.mockRejectedValueOnce(new Error('unique constraint violated'));
 
     await expect(createDocument(validInput)).rejects.toBeInstanceOf(DocumentPersistenceError);
+    expect(mockDbCreateHash).toHaveBeenCalledTimes(1);
+  });
+
+  test('preserves immutable-history conflicts for HTTP 409 mapping', async () => {
+    mockDbCreateHash.mockRejectedValueOnce(
+      new DocumentConflictError(validInput.hash, validInput.documentRef),
+    );
+
+    await expect(createDocument(validInput)).rejects.toBeInstanceOf(DocumentConflictError);
     expect(mockDbCreateHash).toHaveBeenCalledTimes(1);
   });
 

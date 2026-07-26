@@ -25,6 +25,7 @@ export function createInMemorySettlementStore(
     ]),
   );
   const events = new Map<string, SettlementExecutionEventRecord[]>();
+  const eventDedupeIndex = new Map<string, string>();
   const deliveries = new Map<string, SettlementCallbackDeliveryRecord>();
 
   const byTrade = (tradeId: string) =>
@@ -115,7 +116,7 @@ export function createInMemorySettlementStore(
       };
     },
 
-    async createExecutionEvent(input) {
+    async recordExecutionEvent(input, callback) {
       const handoff = handoffs.get(input.handoffId);
       if (!handoff) {
         throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', {
@@ -123,8 +124,63 @@ export function createInMemorySettlementStore(
         });
       }
 
+      const dedupeIndexKey = `${input.handoffId}:${input.dedupeKey}`;
+      const existingEventId = eventDedupeIndex.get(dedupeIndexKey);
+      if (existingEventId) {
+        const event = (events.get(input.handoffId) ?? []).find(
+          (candidate) => candidate.eventId === existingEventId,
+        );
+        if (!event) {
+          throw new GatewayError(
+            500,
+            'INTERNAL_ERROR',
+            'Settlement event dedupe index is inconsistent',
+            { handoffId: input.handoffId, eventId: existingEventId },
+          );
+        }
+
+        let callbackDelivery = [...deliveries.values()].find(
+          (delivery) => delivery.eventId === event.eventId,
+        );
+        if (!callbackDelivery) {
+          const now = new Date().toISOString();
+          callbackDelivery = {
+            deliveryId: randomUUID(),
+            handoffId: input.handoffId,
+            eventId: event.eventId,
+            targetUrl: callback.targetUrl,
+            requestBody: structuredClone(callback.buildRequestBody(handoff, event)),
+            status: callback.status,
+            attemptCount: 0,
+            nextAttemptAt: callback.nextAttemptAt,
+            lastAttemptedAt: null,
+            deliveredAt: null,
+            responseStatus: null,
+            lastError: null,
+            requestId: callback.requestId,
+            createdAt: now,
+            updatedAt: now,
+          };
+          deliveries.set(callbackDelivery.deliveryId, callbackDelivery);
+          if (callback.status === 'disabled') {
+            handoffs.set(input.handoffId, {
+              ...handoff,
+              callbackStatus: 'disabled',
+              updatedAt: now,
+            });
+          }
+        }
+
+        return {
+          handoff: structuredClone(handoffs.get(input.handoffId)!),
+          event: structuredClone(event),
+          callbackDelivery: structuredClone(callbackDelivery),
+        };
+      }
+
       validateExecutionTransition(handoff.executionStatus, input.executionStatus, input.eventType);
 
+      const now = new Date().toISOString();
       const event: SettlementExecutionEventRecord = {
         eventId: randomUUID(),
         handoffId: input.handoffId,
@@ -138,14 +194,10 @@ export function createInMemorySettlementStore(
         observedAt: input.observedAt,
         requestId: input.requestId,
         sourceApiKeyId: input.sourceApiKeyId ?? null,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
       };
 
-      const bucket = events.get(input.handoffId) ?? [];
-      bucket.unshift(event);
-      events.set(input.handoffId, bucket);
-
-      handoffs.set(input.handoffId, {
+      const updatedHandoff: SettlementHandoffRecord = {
         ...handoff,
         executionStatus: input.executionStatus,
         reconciliationStatus: input.reconciliationStatus,
@@ -156,45 +208,46 @@ export function createInMemorySettlementStore(
         latestEventType: input.eventType,
         latestEventDetail: input.detail ?? null,
         latestEventAt: input.observedAt,
-        updatedAt: new Date().toISOString(),
-      });
-
-      return structuredClone(event);
-    },
-
-    async listExecutionEvents(handoffId) {
-      return structuredClone(events.get(handoffId) ?? []);
-    },
-
-    async queueCallbackDelivery(input) {
-      const record: SettlementCallbackDeliveryRecord = {
+        updatedAt: now,
+      };
+      const callbackDelivery: SettlementCallbackDeliveryRecord = {
         deliveryId: randomUUID(),
         handoffId: input.handoffId,
-        eventId: input.eventId,
-        targetUrl: input.targetUrl,
-        requestBody: structuredClone(input.requestBody),
-        status: input.status,
+        eventId: event.eventId,
+        targetUrl: callback.targetUrl,
+        requestBody: structuredClone(callback.buildRequestBody(updatedHandoff, event)),
+        status: callback.status,
         attemptCount: 0,
-        nextAttemptAt: input.nextAttemptAt,
+        nextAttemptAt: callback.nextAttemptAt,
         lastAttemptedAt: null,
         deliveredAt: null,
         responseStatus: null,
         lastError: null,
-        requestId: input.requestId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        requestId: callback.requestId,
+        createdAt: now,
+        updatedAt: now,
       };
+      const finalHandoff =
+        callback.status === 'disabled'
+          ? { ...updatedHandoff, callbackStatus: 'disabled' as const }
+          : updatedHandoff;
 
-      deliveries.set(record.deliveryId, record);
-      const handoff = handoffs.get(input.handoffId);
-      if (handoff && input.status === 'disabled') {
-        handoffs.set(input.handoffId, {
-          ...handoff,
-          callbackStatus: 'disabled',
-          updatedAt: new Date().toISOString(),
-        });
-      }
-      return structuredClone(record);
+      const bucket = events.get(input.handoffId) ?? [];
+      bucket.unshift(event);
+      events.set(input.handoffId, bucket);
+      eventDedupeIndex.set(dedupeIndexKey, event.eventId);
+      deliveries.set(callbackDelivery.deliveryId, callbackDelivery);
+      handoffs.set(input.handoffId, finalHandoff);
+
+      return {
+        handoff: structuredClone(finalHandoff),
+        event: structuredClone(event),
+        callbackDelivery: structuredClone(callbackDelivery),
+      };
+    },
+
+    async listExecutionEvents(handoffId) {
+      return structuredClone(events.get(handoffId) ?? []);
     },
 
     async getDueCallbackDeliveries(limit, now) {

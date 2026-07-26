@@ -11,6 +11,7 @@
     "dev": "ts-node src/server.ts",
     "pretest": "npm --prefix ../sdk run build",
     "test": "jest --runInBand",
+    "settlement:activity-db-proof": "ts-node scripts/settlement-activity-database-proof.ts",
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit"
   },

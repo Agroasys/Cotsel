@@ -153,6 +153,21 @@ export interface QueueSettlementCallbackInput {
   nextAttemptAt: string;
 }
 
+export interface PersistSettlementExecutionEventInput extends CreateSettlementExecutionEventInput {
+  dedupeKey: string;
+}
+
+export interface SettlementCallbackPlan {
+  targetUrl: string;
+  requestId: string;
+  status: 'pending' | 'disabled';
+  nextAttemptAt: string;
+  buildRequestBody: (
+    handoff: SettlementHandoffRecord,
+    event: SettlementExecutionEventRecord,
+  ) => Record<string, unknown>;
+}
+
 export interface TradeSettlementProjection {
   handoffId: string;
   platformId: string;
@@ -197,13 +212,15 @@ export interface SettlementStore {
     platformHandoffId: string,
   ): Promise<SettlementHandoffRecord | null>;
   listHandoffs(input: ListSettlementHandoffsInput): Promise<ListSettlementHandoffsResult>;
-  createExecutionEvent(
-    input: CreateSettlementExecutionEventInput,
-  ): Promise<SettlementExecutionEventRecord>;
+  recordExecutionEvent(
+    input: PersistSettlementExecutionEventInput,
+    callback: SettlementCallbackPlan,
+  ): Promise<{
+    handoff: SettlementHandoffRecord;
+    event: SettlementExecutionEventRecord;
+    callbackDelivery: SettlementCallbackDeliveryRecord;
+  }>;
   listExecutionEvents(handoffId: string): Promise<SettlementExecutionEventRecord[]>;
-  queueCallbackDelivery(
-    input: QueueSettlementCallbackInput,
-  ): Promise<SettlementCallbackDeliveryRecord>;
   getCallbackDelivery(deliveryId: string): Promise<SettlementCallbackDeliveryRecord | null>;
   getDueCallbackDeliveries(limit: number, now: string): Promise<SettlementCallbackDeliveryRecord[]>;
   markCallbackDelivering(
@@ -414,9 +431,52 @@ async function cleanupExpiredNonces(pool: Pool): Promise<void> {
   await pool.query('DELETE FROM service_auth_nonces WHERE expires_at < NOW()');
 }
 
+async function getHandoffWithClient(
+  client: PoolClient,
+  handoffId: string,
+  forUpdate = false,
+): Promise<SettlementHandoffRecord | null> {
+  const result = await client.query<SettlementHandoffRow>(
+    `SELECT
+       handoff_id AS "handoffId",
+       platform_id AS "platformId",
+       platform_handoff_id AS "platformHandoffId",
+       trade_id AS "tradeId",
+       phase,
+       settlement_channel AS "settlementChannel",
+       display_currency AS "displayCurrency",
+       display_amount AS "displayAmount",
+       asset_symbol AS "assetSymbol",
+       asset_amount AS "assetAmount",
+       ricardian_hash AS "ricardianHash",
+       external_reference AS "externalReference",
+       metadata,
+       execution_status AS "executionStatus",
+       reconciliation_status AS "reconciliationStatus",
+       callback_status AS "callbackStatus",
+       provider_status AS "providerStatus",
+       tx_hash AS "txHash",
+       latest_event_id AS "latestEventId",
+       latest_event_type AS "latestEventType",
+       latest_event_detail AS "latestEventDetail",
+       latest_event_at AS "latestEventAt",
+       callback_delivered_at AS "callbackDeliveredAt",
+       request_id AS "requestId",
+       source_api_key_id AS "sourceApiKeyId",
+       created_at AS "createdAt",
+       updated_at AS "updatedAt"
+     FROM settlement_handoffs
+     WHERE handoff_id = $1
+     ${forUpdate ? 'FOR UPDATE' : ''}`,
+    [handoffId],
+  );
+
+  return result.rows[0] ? mapHandoffRow(result.rows[0]) : null;
+}
+
 async function createEventWithClient(
   client: PoolClient,
-  input: CreateSettlementExecutionEventInput,
+  input: PersistSettlementExecutionEventInput,
 ): Promise<SettlementExecutionEventRecord> {
   const eventId = randomUUID();
   const insertEvent = await client.query<SettlementExecutionEventRow>(
@@ -432,8 +492,9 @@ async function createEventWithClient(
      metadata,
      observed_at,
      request_id,
-     source_api_key_id
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)
+     source_api_key_id,
+     dedupe_key
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)
      RETURNING
        event_id AS "eventId",
        handoff_id AS "handoffId",
@@ -461,6 +522,7 @@ async function createEventWithClient(
       input.observedAt,
       input.requestId,
       input.sourceApiKeyId ?? null,
+      input.dedupeKey,
     ],
   );
 
@@ -499,6 +561,69 @@ async function createEventWithClient(
   );
 
   return mapEventRow(event);
+}
+
+async function createCallbackDeliveryWithClient(
+  client: PoolClient,
+  input: QueueSettlementCallbackInput,
+): Promise<SettlementCallbackDeliveryRecord> {
+  const deliveryId = randomUUID();
+  const result = await client.query<SettlementCallbackDeliveryRow>(
+    `INSERT INTO settlement_callback_deliveries (
+       delivery_id,
+       handoff_id,
+       event_id,
+       target_url,
+       request_body,
+       status,
+       attempt_count,
+       next_attempt_at,
+       request_id
+     ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, 0, $7, $8)
+     RETURNING
+       delivery_id AS "deliveryId",
+       handoff_id AS "handoffId",
+       event_id AS "eventId",
+       target_url AS "targetUrl",
+       request_body AS "requestBody",
+       status,
+       attempt_count AS "attemptCount",
+       next_attempt_at AS "nextAttemptAt",
+       last_attempted_at AS "lastAttemptedAt",
+       delivered_at AS "deliveredAt",
+       response_status AS "responseStatus",
+       last_error AS "lastError",
+       request_id AS "requestId",
+       created_at AS "createdAt",
+       updated_at AS "updatedAt"`,
+    [
+      deliveryId,
+      input.handoffId,
+      input.eventId,
+      input.targetUrl,
+      JSON.stringify(input.requestBody),
+      input.status,
+      input.nextAttemptAt,
+      input.requestId,
+    ],
+  );
+
+  const delivery = result.rows[0];
+  if (!delivery) {
+    throw new GatewayError(500, 'INTERNAL_ERROR', 'Failed to persist settlement callback delivery');
+  }
+
+  if (input.status === 'disabled') {
+    await client.query(
+      `UPDATE settlement_handoffs
+       SET callback_status = 'disabled',
+           updated_at = NOW()
+       WHERE handoff_id = $1`,
+      [input.handoffId],
+    );
+  }
+
+  return mapDeliveryRow(delivery);
 }
 
 export function createPostgresSettlementStore(pool: Pool): SettlementStore {
@@ -735,37 +860,121 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       };
     },
 
-    async createExecutionEvent(input) {
+    async recordExecutionEvent(input, callback) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const handoffCheck = await client.query<{
-          handoffId: string;
-          executionStatus: SettlementExecutionStatus;
-        }>(
-          `SELECT
-             handoff_id AS "handoffId",
-             execution_status AS "executionStatus"
-           FROM settlement_handoffs
-           WHERE handoff_id = $1
-           FOR UPDATE`,
-          [input.handoffId],
-        );
-        if (!handoffCheck.rows[0]) {
+        const lockedHandoff = await getHandoffWithClient(client, input.handoffId, true);
+        if (!lockedHandoff) {
           throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', {
             handoffId: input.handoffId,
           });
         }
 
+        const existingEventResult = await client.query<SettlementExecutionEventRow>(
+          `SELECT
+             event_id AS "eventId",
+             handoff_id AS "handoffId",
+             event_type AS "eventType",
+             execution_status AS "executionStatus",
+             reconciliation_status AS "reconciliationStatus",
+             provider_status AS "providerStatus",
+             tx_hash AS "txHash",
+             detail,
+             metadata,
+             observed_at AS "observedAt",
+             request_id AS "requestId",
+             source_api_key_id AS "sourceApiKeyId",
+             created_at AS "createdAt"
+           FROM settlement_execution_events
+           WHERE handoff_id = $1 AND dedupe_key = $2
+           LIMIT 1`,
+          [input.handoffId, input.dedupeKey],
+        );
+
+        const existingEventRow = existingEventResult.rows[0];
+        if (existingEventRow) {
+          const event = mapEventRow(existingEventRow);
+          const existingDeliveryResult = await client.query<SettlementCallbackDeliveryRow>(
+            `SELECT
+               delivery_id AS "deliveryId",
+               handoff_id AS "handoffId",
+               event_id AS "eventId",
+               target_url AS "targetUrl",
+               request_body AS "requestBody",
+               status,
+               attempt_count AS "attemptCount",
+               next_attempt_at AS "nextAttemptAt",
+               last_attempted_at AS "lastAttemptedAt",
+               delivered_at AS "deliveredAt",
+               response_status AS "responseStatus",
+               last_error AS "lastError",
+               request_id AS "requestId",
+               created_at AS "createdAt",
+               updated_at AS "updatedAt"
+             FROM settlement_callback_deliveries
+             WHERE event_id = $1
+             ORDER BY created_at ASC
+             LIMIT 1`,
+            [event.eventId],
+          );
+          const existingDeliveryRow = existingDeliveryResult.rows[0];
+          const callbackDelivery = existingDeliveryRow
+            ? mapDeliveryRow(existingDeliveryRow)
+            : await createCallbackDeliveryWithClient(client, {
+                handoffId: lockedHandoff.handoffId,
+                eventId: event.eventId,
+                targetUrl: callback.targetUrl,
+                requestBody: callback.buildRequestBody(lockedHandoff, event),
+                requestId: callback.requestId,
+                status: callback.status,
+                nextAttemptAt: callback.nextAttemptAt,
+              });
+          const currentHandoff =
+            (await getHandoffWithClient(client, input.handoffId)) ?? lockedHandoff;
+          await client.query('COMMIT');
+          return {
+            handoff: currentHandoff,
+            event,
+            callbackDelivery,
+          };
+        }
+
         validateExecutionTransition(
-          handoffCheck.rows[0].executionStatus,
+          lockedHandoff.executionStatus,
           input.executionStatus,
           input.eventType,
         );
 
         const event = await createEventWithClient(client, input);
+        const updatedHandoff = await getHandoffWithClient(client, input.handoffId);
+        if (!updatedHandoff) {
+          throw new GatewayError(
+            500,
+            'INTERNAL_ERROR',
+            'Settlement handoff disappeared after event persistence',
+            { handoffId: input.handoffId },
+          );
+        }
+        const callbackDelivery = await createCallbackDeliveryWithClient(client, {
+          handoffId: updatedHandoff.handoffId,
+          eventId: event.eventId,
+          targetUrl: callback.targetUrl,
+          requestBody: callback.buildRequestBody(updatedHandoff, event),
+          requestId: callback.requestId,
+          status: callback.status,
+          nextAttemptAt: callback.nextAttemptAt,
+        });
+        const finalHandoff =
+          callback.status === 'disabled'
+            ? ((await getHandoffWithClient(client, input.handoffId)) ?? updatedHandoff)
+            : updatedHandoff;
         await client.query('COMMIT');
-        return event;
+        return {
+          handoff: finalHandoff,
+          event,
+          callbackDelivery,
+        };
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;
@@ -797,61 +1006,6 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       );
 
       return result.rows.map(mapEventRow);
-    },
-
-    async queueCallbackDelivery(input) {
-      const deliveryId = randomUUID();
-      const result = await pool.query<SettlementCallbackDeliveryRow>(
-        `INSERT INTO settlement_callback_deliveries (
-           delivery_id,
-           handoff_id,
-           event_id,
-           target_url,
-           request_body,
-           status,
-           attempt_count,
-           next_attempt_at,
-           request_id
-         ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, 0, $7, $8)
-         RETURNING
-           delivery_id AS "deliveryId",
-           handoff_id AS "handoffId",
-           event_id AS "eventId",
-           target_url AS "targetUrl",
-           request_body AS "requestBody",
-           status,
-           attempt_count AS "attemptCount",
-           next_attempt_at AS "nextAttemptAt",
-           last_attempted_at AS "lastAttemptedAt",
-           delivered_at AS "deliveredAt",
-           response_status AS "responseStatus",
-           last_error AS "lastError",
-           request_id AS "requestId",
-           created_at AS "createdAt",
-           updated_at AS "updatedAt"`,
-        [
-          deliveryId,
-          input.handoffId,
-          input.eventId,
-          input.targetUrl,
-          JSON.stringify(input.requestBody),
-          input.status,
-          input.nextAttemptAt,
-          input.requestId,
-        ],
-      );
-
-      if (input.status === 'disabled') {
-        await pool.query(
-          `UPDATE settlement_handoffs
-           SET callback_status = 'disabled',
-               updated_at = NOW()
-           WHERE handoff_id = $1`,
-          [input.handoffId],
-        );
-      }
-
-      return mapDeliveryRow(result.rows[0]);
     },
 
     async getDueCallbackDeliveries(limit, now) {

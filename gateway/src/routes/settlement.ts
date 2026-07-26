@@ -15,6 +15,7 @@ import type {
 import { createServiceAuthMiddleware } from '../core/serviceAuth';
 import { SettlementService } from '../core/settlementService';
 import { OracleSettlementProgressionService } from '../core/oracleSettlementProgressionService';
+import type { RicardianClient } from '../core/ricardianClient';
 import {
   SettlementStore,
   SETTLEMENT_EVENT_TYPES,
@@ -28,6 +29,7 @@ export interface SettlementRouterOptions {
   settlementStore: SettlementStore;
   gaslessSettlementService?: GaslessSettlementExecutionService | null;
   oracleSettlementProgressionService?: OracleSettlementProgressionService | null;
+  ricardianClient?: RicardianClient | null;
   nonceStore: { consume(apiKey: string, nonce: string, ttlSeconds: number): Promise<boolean> };
   idempotencyStore: IdempotencyStore;
   lookupServiceApiKey: (
@@ -243,6 +245,40 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
         });
 
         return handoff;
+      },
+      res,
+      next,
+    ),
+  );
+
+  router.get('/settlement/capabilities', (_req, res) => {
+    res.status(200).json(
+      successResponse({
+        contractVersion: 'settlement_boundary_v1',
+        capabilities: {
+          ricardianDocumentRegistration: Boolean(options.ricardianClient),
+          atomicExecutionEventCallbackOutbox: true,
+          durableOracleExecutionEvents: Boolean(options.oracleSettlementProgressionService),
+        },
+      }),
+    );
+  });
+
+  router.post('/settlement/ricardian-documents', idempotency, (req, res, next) =>
+    handleRequest(
+      async () => {
+        if (!options.ricardianClient) {
+          throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Ricardian service is unavailable');
+        }
+        const body = requireObject(req.body, 'body');
+        rejectUnexpectedFields(body, ['requestId', 'documentRef', 'terms', 'metadata'], 'body');
+
+        return options.ricardianClient.registerDocument({
+          requestId: requireString(body.requestId, 'requestId'),
+          documentRef: requireString(body.documentRef, 'documentRef'),
+          terms: requireObject(body.terms, 'terms'),
+          metadata: optionalMetadata(body.metadata),
+        });
       },
       res,
       next,

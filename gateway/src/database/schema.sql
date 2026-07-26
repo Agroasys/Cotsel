@@ -277,6 +277,7 @@ CREATE TABLE IF NOT EXISTS settlement_execution_events (
     observed_at TIMESTAMP NOT NULL,
     request_id TEXT NOT NULL,
     source_api_key_id TEXT,
+    dedupe_key TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -310,6 +311,9 @@ ALTER TABLE settlement_handoffs
 
 ALTER TABLE settlement_execution_events
     DROP COLUMN IF EXISTS extrinsic_hash;
+
+ALTER TABLE settlement_execution_events
+    ADD COLUMN IF NOT EXISTS dedupe_key TEXT;
 
 DO $$
 BEGIN
@@ -592,4 +596,5 @@ CREATE INDEX IF NOT EXISTS idx_settlement_handoffs_execution_status_updated_at O
 CREATE INDEX IF NOT EXISTS idx_settlement_handoffs_reconciliation_status_updated_at ON settlement_handoffs(reconciliation_status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_settlement_events_handoff_observed_at ON settlement_execution_events(handoff_id, observed_at DESC, event_id DESC);
 CREATE INDEX IF NOT EXISTS idx_settlement_events_event_type_created_at ON settlement_execution_events(event_type, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_settlement_events_handoff_dedupe_key ON settlement_execution_events(handoff_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_settlement_callback_deliveries_status_next_attempt_at ON settlement_callback_deliveries(status, next_attempt_at ASC, created_at ASC);

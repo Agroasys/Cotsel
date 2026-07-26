@@ -3,6 +3,7 @@
  */
 import { GatewayError } from '../errors';
 import type { DownstreamServiceOrchestrator } from './serviceOrchestrator';
+import type { SettlementService } from './settlementService';
 import type { SettlementHandoffRecord, SettlementStore } from './settlementStore';
 
 const ORACLE_PATH_BY_PHASE = {
@@ -29,6 +30,7 @@ export class OracleSettlementProgressionService {
   constructor(
     private readonly settlementStore: SettlementStore,
     private readonly orchestrator: DownstreamServiceOrchestrator,
+    private readonly settlementService: SettlementService,
     private readonly immediateInspectionAcceptanceEnabled = true,
     private readonly now: () => Date = () => new Date(),
   ) {}
@@ -78,6 +80,44 @@ export class OracleSettlementProgressionService {
         { handoffId, phase, upstreamStatus: response.status, oracleStatus },
       );
     }
+
+    const executionStatus = oracleStatus === 'CONFIRMED' ? 'confirmed' : 'submitted';
+    const txHash =
+      typeof body.txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(body.txHash)
+        ? body.txHash
+        : null;
+    if (typeof body.txHash === 'string' && txHash === null) {
+      throw new GatewayError(
+        502,
+        'UPSTREAM_UNAVAILABLE',
+        'Oracle returned an invalid transaction hash',
+        {
+          handoffId,
+          phase,
+          upstreamStatus: response.status,
+        },
+      );
+    }
+
+    await this.settlementService.recordExecutionEvent({
+      handoffId,
+      eventType: executionStatus,
+      executionStatus,
+      reconciliationStatus: handoff.reconciliationStatus,
+      providerStatus: `oracle_${executionStatus}`,
+      txHash,
+      detail: `Oracle ${executionStatus} settlement progression for ${phase}`,
+      metadata: {
+        oraclePath: path,
+        oraclePhase: phase,
+        oracleActionKey: body.actionKey,
+        oracleIdempotencyKey: body.idempotencyKey,
+        oracleBlockNumber: body.blockNumber,
+        oracleIdempotent: body.idempotent === true,
+      },
+      observedAt: this.now().toISOString(),
+      requestId,
+    });
 
     return {
       handoffId,

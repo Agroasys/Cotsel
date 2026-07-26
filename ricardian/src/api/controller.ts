@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { failure, HttpError, requireObject, requireString, success } from '@agroasys/shared-http';
 import { createDocument, getDocument } from '../database/documentStore';
-import { DocumentNotFoundError, DocumentStoreError } from '../errors';
+import { DocumentConflictError, DocumentNotFoundError, DocumentStoreError } from '../errors';
 import { RicardianHashRequest, RicardianHashResponse, RicardianHashRow } from '../types';
 import { buildRicardianHash } from '../utils/hash';
 
@@ -60,6 +60,14 @@ export class RicardianController {
 
         res.status(200).json(success(mapRowToResponse(row)));
       } catch (error: unknown) {
+        if (error instanceof DocumentConflictError) {
+          res.status(409).json({
+            ...failure('Conflict', error.message),
+            code: error.code,
+          });
+          return;
+        }
+
         if (error instanceof DocumentStoreError) {
           res.status(500).json({
             ...failure('DocumentStoreError', error.message),

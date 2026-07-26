@@ -43,6 +43,20 @@ export class DocumentPersistenceError extends DocumentStoreError {
 }
 
 /**
+ * A registration retried an existing hash/document pair with different canonical content.
+ * The historical row is never mutated. Maps to HTTP 409.
+ */
+export class DocumentConflictError extends DocumentStoreError {
+  constructor(hash: string, documentRef: string) {
+    super(
+      `Ricardian registration conflicts with immutable history for ${documentRef} (${hash})`,
+      'DOCUMENT_REGISTRATION_CONFLICT',
+    );
+    this.name = 'DocumentConflictError';
+  }
+}
+
+/**
  * Read operation failed after exhausting retries.
  * Maps to HTTP 500.
  */
