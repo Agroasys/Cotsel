@@ -20,6 +20,7 @@ import {
 } from '../src/core/gaslessSettlementExecutionService';
 import { createCapabilitiesRouter } from '../src/routes/capabilities';
 import { createSettlementRouter } from '../src/routes/settlement';
+import type { RicardianClient } from '../src/core/ricardianClient';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -95,6 +96,7 @@ async function startServer(
     executeWalletUsdcTransfer: () => Promise<GaslessExecutionSubmission>;
   }> = {},
   serverOptions: Partial<{ includeProtectedRouterBeforeSettlement: boolean }> = {},
+  ricardianClient?: RicardianClient,
 ) {
   const runtimeConfig: GatewayConfig = { ...config, ...overrides };
   const settlementStore = createInMemorySettlementStore();
@@ -188,6 +190,7 @@ async function startServer(
       settlementService,
       settlementStore,
       gaslessSettlementService,
+      ricardianClient,
       nonceStore,
       idempotencyStore,
       lookupServiceApiKey: createServiceApiKeyLookup(
@@ -361,6 +364,7 @@ describe('gateway settlement routes contract', () => {
 
   test('OpenAPI spec exposes settlement ingress routes', () => {
     expect(hasOperation(spec, 'post', '/settlement/handoffs')).toBe(true);
+    expect(hasOperation(spec, 'post', '/settlement/ricardian-documents')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/handoffs/{handoffId}/oracle-execution')).toBe(
       true,
     );
@@ -374,6 +378,48 @@ describe('gateway settlement routes contract', () => {
     expect(hasOperation(spec, 'get', '/settlement/handoffs/{handoffId}/execution-events')).toBe(
       true,
     );
+  });
+
+  test('registers server-owned commercial terms through the authenticated Ricardian boundary', async () => {
+    const ricardianClient = {
+      registerDocument: jest.fn().mockResolvedValue({
+        id: 7,
+        requestId: 'order-42-v1',
+        documentRef: 'agroasys-order:42:terms:1',
+        hash: 'a'.repeat(64),
+        rulesVersion: 'RICARDIAN_CANONICAL_V1',
+        canonicalJson: '{}',
+        metadata: { orderId: 42 },
+        createdAt: '2026-07-26T00:00:00.000Z',
+      }),
+    } as unknown as RicardianClient;
+    const { server, baseUrl } = await startServer({}, {}, {}, ricardianClient);
+    const body = {
+      requestId: 'order-42-v1',
+      documentRef: 'agroasys-order:42:terms:1',
+      terms: { total: 1250 },
+      metadata: { orderId: 42 },
+    };
+    const path = '/api/dashboard-gateway/v1/settlement/ricardian-documents';
+
+    try {
+      const response = await fetch(`${baseUrl}/settlement/ricardian-documents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'order-42-v1',
+          ...withServiceAuth(path, body),
+        },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(202);
+      expect(payload.data.hash).toBe('a'.repeat(64));
+      expect(ricardianClient.registerDocument).toHaveBeenCalledWith(body);
+    } finally {
+      server.close();
+    }
   });
 
   test('gasless executor argument builders match escrow call order', () => {

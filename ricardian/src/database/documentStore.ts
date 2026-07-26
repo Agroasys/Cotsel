@@ -1,6 +1,7 @@
 import { createRicardianHash as dbCreateHash, getRicardianHash as dbGetHash } from './queries';
 import { RicardianHashRow } from '../types';
 import {
+  DocumentConflictError,
   DocumentIntegrityError,
   DocumentNotFoundError,
   DocumentPersistenceError,
@@ -88,6 +89,10 @@ export async function createDocument(data: DocumentCreateInput): Promise<Ricardi
   try {
     return await withRetry(() => dbCreateHash(data), 'createDocument');
   } catch (error) {
+    if (error instanceof DocumentConflictError) {
+      throw error;
+    }
+
     incrementDocumentStoreFailure('createDocument', 'DOCUMENT_PERSISTENCE_FAILURE');
     Logger.error('DocumentStore createDocument failed', {
       documentRef: data.documentRef,

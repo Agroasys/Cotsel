@@ -52,6 +52,182 @@ const config: GatewayConfig = {
 };
 
 describe('settlement callback dispatcher', () => {
+  test('keeps 64 handoffs, execution events and callback payloads isolated', async () => {
+    const activityCount = 64;
+    const settlementStore = createInMemorySettlementStore();
+    const settlementService = new SettlementService(config, settlementStore);
+    const activities = Array.from({ length: activityCount }, (_, index) => ({
+      index,
+      platformHandoffId: (20_000 + index).toString(),
+      tradeId: (900_000 + index).toString(),
+      orderId: 10_000 + index,
+      orderReference: `ORD-${(10_000 + index).toString().padStart(6, '0')}`,
+      supplierPayoutUsd: 600 + index + 0.01,
+      treasuryClaimableUsd: 20 + index + 0.02,
+      buyerRefundUsd: index + 0.03,
+      displayAmount: 620 + index * 3 + 0.06,
+      ricardianHash: `0x${(index + 1).toString(16).padStart(64, '0')}`,
+      txHash: `0x${(index + 101).toString(16).padStart(64, '0')}`,
+    }));
+
+    const handoffs = await Promise.all(
+      activities.map((activity) =>
+        settlementService.createHandoff({
+          platformId: 'agroasys-platform',
+          platformHandoffId: activity.platformHandoffId,
+          tradeId: activity.tradeId,
+          phase: 'final_release_after_inspection',
+          settlementChannel: 'cotsel_escrow',
+          displayCurrency: 'USD',
+          displayAmount: activity.displayAmount,
+          ricardianHash: activity.ricardianHash,
+          externalReference: activity.tradeId,
+          metadata: {
+            orderId: activity.orderId,
+            orderReference: activity.orderReference,
+            handoffId: Number(activity.platformHandoffId),
+            supplierPayoutUsd: activity.supplierPayoutUsd,
+            treasuryClaimableUsd: activity.treasuryClaimableUsd,
+            buyerRefundUsd: activity.buyerRefundUsd,
+          },
+          requestId: `req-handoff-capacity-${activity.index}`,
+        }),
+      ),
+    );
+
+    const eventResults = await Promise.all(
+      handoffs.map((handoff, index) =>
+        settlementService.recordExecutionEvent({
+          handoffId: handoff.handoffId,
+          eventType: 'submitted',
+          executionStatus: 'submitted',
+          reconciliationStatus: 'pending',
+          providerStatus: `submitted-${index}`,
+          txHash: activities[index]!.txHash,
+          metadata: {
+            orderId: activities[index]!.orderId,
+            orderReference: activities[index]!.orderReference,
+            handoffId: Number(activities[index]!.platformHandoffId),
+            supplierPayoutUsd: activities[index]!.supplierPayoutUsd,
+            treasuryClaimableUsd: activities[index]!.treasuryClaimableUsd,
+            buyerRefundUsd: activities[index]!.buyerRefundUsd,
+            displayAmount: activities[index]!.displayAmount,
+          },
+          observedAt: new Date(
+            Date.parse('2026-07-26T12:00:00.000Z') + index * 1_000,
+          ).toISOString(),
+          requestId: `req-event-capacity-${index}`,
+        }),
+      ),
+    );
+
+    const retry = await settlementService.recordExecutionEvent({
+      handoffId: handoffs[17]!.handoffId,
+      eventType: 'submitted',
+      executionStatus: 'submitted',
+      reconciliationStatus: 'pending',
+      providerStatus: 'submitted-17',
+      txHash: activities[17]!.txHash,
+      metadata: {
+        orderId: activities[17]!.orderId,
+        orderReference: activities[17]!.orderReference,
+        handoffId: Number(activities[17]!.platformHandoffId),
+        supplierPayoutUsd: activities[17]!.supplierPayoutUsd,
+        treasuryClaimableUsd: activities[17]!.treasuryClaimableUsd,
+        buyerRefundUsd: activities[17]!.buyerRefundUsd,
+        displayAmount: activities[17]!.displayAmount,
+      },
+      observedAt: '2026-07-26T13:17:00.000Z',
+      requestId: 'req-event-capacity-17',
+    });
+
+    expect(retry.event.eventId).toBe(eventResults[17]!.event.eventId);
+    expect(retry.callbackDelivery.deliveryId).toBe(eventResults[17]!.callbackDelivery.deliveryId);
+
+    const listed = await settlementStore.listHandoffs({
+      limit: 100,
+      offset: 0,
+    });
+    const deliveries = await settlementStore.getDueCallbackDeliveries(
+      100,
+      '2100-07-26T14:00:00.000Z',
+    );
+    expect(listed.total).toBe(activityCount);
+    expect(deliveries).toHaveLength(activityCount);
+    expect(new Set(handoffs.map((handoff) => handoff.handoffId)).size).toBe(activityCount);
+    expect(new Set(deliveries.map((delivery) => delivery.deliveryId)).size).toBe(activityCount);
+
+    for (let index = 0; index < activityCount; index += 1) {
+      const activity = activities[index]!;
+      const handoff = handoffs[index]!;
+      const eventResult = eventResults[index]!;
+      const storedHandoff = await settlementStore.getHandoffByPlatformRef(
+        'agroasys-platform',
+        activity.platformHandoffId,
+      );
+      const events = await settlementStore.listExecutionEvents(handoff.handoffId);
+      const delivery = deliveries.find((candidate) => candidate.handoffId === handoff.handoffId);
+
+      expect(storedHandoff).toMatchObject({
+        handoffId: handoff.handoffId,
+        platformHandoffId: activity.platformHandoffId,
+        tradeId: activity.tradeId,
+        displayAmount: activity.displayAmount,
+        ricardianHash: activity.ricardianHash,
+        externalReference: activity.tradeId,
+        txHash: activity.txHash,
+        metadata: {
+          orderId: activity.orderId,
+          orderReference: activity.orderReference,
+          handoffId: Number(activity.platformHandoffId),
+          supplierPayoutUsd: activity.supplierPayoutUsd,
+          treasuryClaimableUsd: activity.treasuryClaimableUsd,
+          buyerRefundUsd: activity.buyerRefundUsd,
+        },
+      });
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        eventId: eventResult.event.eventId,
+        handoffId: handoff.handoffId,
+        txHash: activity.txHash,
+        metadata: {
+          orderId: activity.orderId,
+          orderReference: activity.orderReference,
+          handoffId: Number(activity.platformHandoffId),
+          supplierPayoutUsd: activity.supplierPayoutUsd,
+          treasuryClaimableUsd: activity.treasuryClaimableUsd,
+          buyerRefundUsd: activity.buyerRefundUsd,
+          displayAmount: activity.displayAmount,
+        },
+      });
+      expect(delivery?.requestBody).toMatchObject({
+        eventId: eventResult.event.eventId,
+        handoffId: handoff.handoffId,
+        platformHandoffId: activity.platformHandoffId,
+        tradeId: activity.tradeId,
+        displayAmount: activity.displayAmount,
+        txHash: activity.txHash,
+        metadata: {
+          orderId: activity.orderId,
+          orderReference: activity.orderReference,
+          handoffId: Number(activity.platformHandoffId),
+          supplierPayoutUsd: activity.supplierPayoutUsd,
+          treasuryClaimableUsd: activity.treasuryClaimableUsd,
+          buyerRefundUsd: activity.buyerRefundUsd,
+          event: {
+            orderId: activity.orderId,
+            orderReference: activity.orderReference,
+            handoffId: Number(activity.platformHandoffId),
+            supplierPayoutUsd: activity.supplierPayoutUsd,
+            treasuryClaimableUsd: activity.treasuryClaimableUsd,
+            buyerRefundUsd: activity.buyerRefundUsd,
+            displayAmount: activity.displayAmount,
+          },
+        },
+      });
+    }
+  });
+
   test('deduplicates retries of the same execution event and callback outbox record', async () => {
     const settlementStore = createInMemorySettlementStore();
     const settlementService = new SettlementService(config, settlementStore);

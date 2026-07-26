@@ -1,6 +1,8 @@
 import { pool } from './connection';
 import { RicardianHashRow } from '../types';
 import { createPostgresNonceStore } from '@agroasys/shared-auth';
+import { DocumentConflictError } from '../errors';
+import { isDeepStrictEqual } from 'node:util';
 
 const serviceAuthNonceStore = createPostgresNonceStore({
   tableName: 'ricardian_auth_nonces',
@@ -15,7 +17,7 @@ export async function createRicardianHash(data: {
   canonicalJson: string;
   metadata: Record<string, unknown>;
 }): Promise<RicardianHashRow> {
-  const result = await pool.query<RicardianHashRow>(
+  const inserted = await pool.query<RicardianHashRow>(
     `INSERT INTO ricardian_hashes (
         request_id,
         document_ref,
@@ -25,8 +27,7 @@ export async function createRicardianHash(data: {
         metadata
      ) VALUES ($1, $2, $3, $4, $5, $6::jsonb)
      ON CONFLICT (hash, document_ref)
-     DO UPDATE SET
-       metadata = EXCLUDED.metadata
+     DO NOTHING
      RETURNING *`,
     [
       data.requestId,
@@ -38,7 +39,28 @@ export async function createRicardianHash(data: {
     ],
   );
 
-  return result.rows[0];
+  if (inserted.rows[0]) {
+    return inserted.rows[0];
+  }
+
+  const existing = await pool.query<RicardianHashRow>(
+    `SELECT *
+     FROM ricardian_hashes
+     WHERE hash = $1 AND document_ref = $2
+     LIMIT 1`,
+    [data.hash, data.documentRef],
+  );
+  const row = existing.rows[0];
+  const isIdentical =
+    row?.rules_version === data.rulesVersion &&
+    row.canonical_json === data.canonicalJson &&
+    isDeepStrictEqual(row.metadata, data.metadata);
+
+  if (!row || !isIdentical) {
+    throw new DocumentConflictError(data.hash, data.documentRef);
+  }
+
+  return row;
 }
 
 export async function getRicardianHash(hash: string): Promise<RicardianHashRow | null> {

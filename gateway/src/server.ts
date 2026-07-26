@@ -425,6 +425,7 @@ async function bootstrap(): Promise<void> {
       settlementStore,
       gaslessSettlementService,
       oracleSettlementProgressionService,
+      ricardianClient,
       nonceStore: settlementNonceStore,
       idempotencyStore,
       lookupServiceApiKey: settlementServiceApiKeyLookup,
