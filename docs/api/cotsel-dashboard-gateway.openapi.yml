@@ -738,6 +738,55 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '409':
           $ref: '#/components/responses/ConflictError'
+  /settlement/capabilities:
+    get:
+      tags: [Settlement]
+      summary: Read cross-repository settlement release capabilities
+      description: |
+        Service-authenticated, non-mutating deployment preflight. Agroasys release automation must
+        require ricardianDocumentRegistration before deploying the backend version that makes
+        canonical registration mandatory.
+      operationId: getSettlementCapabilities
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Settlement boundary capability snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, timestamp]
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required: [contractVersion, capabilities]
+                    properties:
+                      contractVersion:
+                        type: string
+                        const: settlement_boundary_v1
+                      capabilities:
+                        type: object
+                        required:
+                          - ricardianDocumentRegistration
+                          - atomicExecutionEventCallbackOutbox
+                          - durableOracleExecutionEvents
+                        properties:
+                          ricardianDocumentRegistration:
+                            type: boolean
+                          atomicExecutionEventCallbackOutbox:
+                            type: boolean
+                          durableOracleExecutionEvents:
+                            type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
   /settlement/ricardian-documents:
     post:
       tags: [Settlement]

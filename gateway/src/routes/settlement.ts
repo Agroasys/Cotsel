@@ -251,6 +251,19 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
     ),
   );
 
+  router.get('/settlement/capabilities', (_req, res) => {
+    res.status(200).json(
+      successResponse({
+        contractVersion: 'settlement_boundary_v1',
+        capabilities: {
+          ricardianDocumentRegistration: Boolean(options.ricardianClient),
+          atomicExecutionEventCallbackOutbox: true,
+          durableOracleExecutionEvents: Boolean(options.oracleSettlementProgressionService),
+        },
+      }),
+    );
+  });
+
   router.post('/settlement/ricardian-documents', idempotency, (req, res, next) =>
     handleRequest(
       async () => {

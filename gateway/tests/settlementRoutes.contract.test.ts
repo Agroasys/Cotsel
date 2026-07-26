@@ -364,6 +364,7 @@ describe('gateway settlement routes contract', () => {
 
   test('OpenAPI spec exposes settlement ingress routes', () => {
     expect(hasOperation(spec, 'post', '/settlement/handoffs')).toBe(true);
+    expect(hasOperation(spec, 'get', '/settlement/capabilities')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/ricardian-documents')).toBe(true);
     expect(hasOperation(spec, 'post', '/settlement/handoffs/{handoffId}/oracle-execution')).toBe(
       true,
@@ -378,6 +379,33 @@ describe('gateway settlement routes contract', () => {
     expect(hasOperation(spec, 'get', '/settlement/handoffs/{handoffId}/execution-events')).toBe(
       true,
     );
+  });
+
+  test('reports settlement release capabilities through service authentication', async () => {
+    const ricardianClient = {
+      registerDocument: jest.fn(),
+    } as unknown as RicardianClient;
+    const { server, baseUrl } = await startServer({}, {}, {}, ricardianClient);
+    const path = '/api/dashboard-gateway/v1/settlement/capabilities';
+
+    try {
+      const response = await fetch(`${baseUrl}/settlement/capabilities`, {
+        headers: { ...withServiceAuth(path, null, 'GET') },
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload.data).toEqual({
+        contractVersion: 'settlement_boundary_v1',
+        capabilities: {
+          ricardianDocumentRegistration: true,
+          atomicExecutionEventCallbackOutbox: true,
+          durableOracleExecutionEvents: false,
+        },
+      });
+    } finally {
+      server.close();
+    }
   });
 
   test('registers server-owned commercial terms through the authenticated Ricardian boundary', async () => {
