@@ -218,6 +218,7 @@ const orchestrator = new ServiceOrchestrator(downstreamServiceRegistry);
 const oracleSettlementProgressionService = new OracleSettlementProgressionService(
   settlementStore,
   orchestrator,
+  settlementService,
   config.immediateInspectionAcceptanceEnabled,
 );
 const treasuryWorkflowService = new TreasuryWorkflowService(orchestrator, auditLogStore);
@@ -424,6 +425,7 @@ async function bootstrap(): Promise<void> {
       settlementStore,
       gaslessSettlementService,
       oracleSettlementProgressionService,
+      ricardianClient,
       nonceStore: settlementNonceStore,
       idempotencyStore,
       lookupServiceApiKey: settlementServiceApiKeyLookup,

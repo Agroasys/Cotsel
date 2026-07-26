@@ -15,6 +15,13 @@ export interface RicardianDocumentRecord {
   createdAt: string;
 }
 
+export interface RicardianDocumentRegistration {
+  requestId: string;
+  documentRef: string;
+  terms: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+}
+
 interface RicardianHashResponse {
   success?: boolean;
   data?: RicardianDocumentRecord;
@@ -117,6 +124,61 @@ export class RicardianClient {
     }
   }
 
+  async registerDocument(input: RicardianDocumentRegistration): Promise<RicardianDocumentRecord> {
+    try {
+      const response = this.orchestrator
+        ? await this.orchestrator.fetch('ricardian', {
+            method: 'POST',
+            path: '/api/ricardian/v1/hash',
+            body: { ...input },
+            readOnly: false,
+            authenticated: true,
+            operation: 'ricardian:registerDocument',
+          })
+        : await this.fetchLegacyRegistration(input);
+      const payload = await parseOptionalJson(response);
+
+      if (response.status === 409) {
+        throw new GatewayError(409, 'CONFLICT', 'Ricardian document conflicts with history', {
+          upstream: 'ricardian',
+          reason: payload?.error ?? null,
+          code: payload?.code ?? null,
+        });
+      }
+
+      if (!response.ok) {
+        throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Ricardian service request failed', {
+          upstream: 'ricardian',
+          status: response.status,
+          reason: payload?.error ?? null,
+          code: payload?.code ?? null,
+        });
+      }
+
+      if (!payload?.success || !isDocumentRecord(payload.data)) {
+        throw new GatewayError(
+          502,
+          'UPSTREAM_UNAVAILABLE',
+          'Ricardian service returned an invalid payload',
+          {
+            upstream: 'ricardian',
+          },
+        );
+      }
+
+      return payload.data;
+    } catch (error) {
+      if (error instanceof GatewayError) {
+        throw error;
+      }
+
+      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Ricardian service request failed', {
+        upstream: 'ricardian',
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   private async fetchLegacy(hash: string): Promise<Response> {
     if (!this.baseUrl) {
       throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Ricardian service is not configured', {
@@ -130,6 +192,37 @@ export class RicardianClient {
     try {
       return await fetch(`${this.baseUrl}/hash/${encodeURIComponent(hash)}`, {
         method: 'GET',
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new GatewayError(504, 'UPSTREAM_UNAVAILABLE', 'Ricardian service request timed out', {
+          upstream: 'ricardian',
+          timeoutMs: this.requestTimeoutMs ?? 5_000,
+        });
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async fetchLegacyRegistration(input: RicardianDocumentRegistration): Promise<Response> {
+    if (!this.baseUrl) {
+      throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Ricardian service is not configured', {
+        upstream: 'ricardian',
+      });
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs ?? 5_000);
+
+    try {
+      return await fetch(`${this.baseUrl}/hash`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
         signal: controller.signal,
       });
     } catch (error) {

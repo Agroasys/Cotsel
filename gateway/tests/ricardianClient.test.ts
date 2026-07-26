@@ -48,4 +48,48 @@ describe('ricardian client', () => {
       message: 'Ricardian service returned an invalid payload',
     });
   });
+
+  test('registers an immutable document through the Ricardian write route', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: jest.fn().mockResolvedValue(
+        JSON.stringify({
+          success: true,
+          data: {
+            id: 7,
+            requestId: 'order-42-v1',
+            documentRef: 'agroasys-order:42:terms:1',
+            hash: 'a'.repeat(64),
+            rulesVersion: 'RICARDIAN_CANONICAL_V1',
+            canonicalJson: '{}',
+            metadata: { orderId: 42 },
+            createdAt: '2026-07-26T00:00:00.000Z',
+          },
+        }),
+      ),
+    });
+
+    const client = new RicardianClient('https://ricardian.example/api/v1', 5000);
+    const document = await client.registerDocument({
+      requestId: 'order-42-v1',
+      documentRef: 'agroasys-order:42:terms:1',
+      terms: { total: 1250 },
+      metadata: { orderId: 42 },
+    });
+
+    expect(document.hash).toBe('a'.repeat(64));
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://ricardian.example/api/v1/hash',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: 'order-42-v1',
+          documentRef: 'agroasys-order:42:terms:1',
+          terms: { total: 1250 },
+          metadata: { orderId: 42 },
+        }),
+      }),
+    );
+  });
 });

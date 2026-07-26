@@ -240,6 +240,22 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.gateway == 'true'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: cotsel_gateway_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d cotsel_gateway_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SETTLEMENT_ACTIVITY_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/cotsel_gateway_test
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -279,6 +295,7 @@ jobs:
 
           run_check gateway-lint pnpm --filter ./gateway run lint
           run_check gateway-openapi-and-unit-tests pnpm --filter ./gateway run test
+          run_check gateway-64-activity-database-proof pnpm --filter ./gateway run settlement:activity-db-proof
           run_check gateway-build pnpm --filter ./gateway run build
 
           if [[ "$fail" -ne 0 ]]; then

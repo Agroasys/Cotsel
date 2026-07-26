@@ -3,6 +3,7 @@
  */
 import { OracleSettlementProgressionService } from '../src/core/oracleSettlementProgressionService';
 import type { DownstreamServiceOrchestrator } from '../src/core/serviceOrchestrator';
+import type { SettlementService } from '../src/core/settlementService';
 import type { SettlementHandoffRecord, SettlementStore } from '../src/core/settlementStore';
 
 const handoff = (phase: string, metadata: Record<string, unknown> = {}) =>
@@ -11,7 +12,13 @@ const handoff = (phase: string, metadata: Record<string, unknown> = {}) =>
     tradeId: '9001',
     phase,
     metadata,
+    reconciliationStatus: 'pending',
   }) as unknown as SettlementHandoffRecord;
+
+const executionRecorder = () =>
+  ({
+    recordExecutionEvent: jest.fn().mockResolvedValue({}),
+  }) as unknown as SettlementService;
 
 describe('OracleSettlementProgressionService', () => {
   it.each([
@@ -36,9 +43,11 @@ describe('OracleSettlementProgressionService', () => {
         }),
       ),
     };
+    const settlementService = executionRecorder();
     const service = new OracleSettlementProgressionService(
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
+      settlementService,
     );
 
     const result = await service.executeHandoff('sth-42', 'req-42');
@@ -55,6 +64,16 @@ describe('OracleSettlementProgressionService', () => {
     );
     expect(result).toMatchObject({ handoffId: 'sth-42', phase, oraclePath: path });
     expect(result.disposition).toBe('submitted');
+    expect(settlementService.recordExecutionEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        handoffId: 'sth-42',
+        eventType: 'submitted',
+        executionStatus: 'submitted',
+        reconciliationStatus: 'pending',
+        providerStatus: 'oracle_submitted',
+        requestId: 'req-42',
+      }),
+    );
   });
 
   it('classifies a converged final release as already completed', async () => {
@@ -77,6 +96,7 @@ describe('OracleSettlementProgressionService', () => {
     const service = new OracleSettlementProgressionService(
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
+      executionRecorder(),
     );
 
     const result = await service.executeHandoff('sth-42', 'req-42');
@@ -87,12 +107,51 @@ describe('OracleSettlementProgressionService', () => {
     });
   });
 
+  it('records confirmed oracle truth without marking it reconciled', async () => {
+    const store = {
+      getHandoff: jest.fn().mockResolvedValue(handoff('final_release_after_notice_deadline')),
+    };
+    const orchestrator = {
+      fetch: jest.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            success: true,
+            status: 'CONFIRMED',
+            txHash: `0x${'b'.repeat(64)}`,
+            blockNumber: 123,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    };
+    const settlementService = executionRecorder();
+    const service = new OracleSettlementProgressionService(
+      store as unknown as SettlementStore,
+      orchestrator as unknown as DownstreamServiceOrchestrator,
+      settlementService,
+    );
+
+    await service.executeHandoff('sth-42', 'req-confirmed');
+
+    expect(settlementService.recordExecutionEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'confirmed',
+        executionStatus: 'confirmed',
+        reconciliationStatus: 'pending',
+        providerStatus: 'oracle_confirmed',
+        txHash: `0x${'b'.repeat(64)}`,
+        metadata: expect.objectContaining({ oracleBlockNumber: 123 }),
+      }),
+    );
+  });
+
   it('fails closed for governed dispute resolution instead of auto-executing it', async () => {
     const store = { getHandoff: jest.fn().mockResolvedValue(handoff('dispute_resolution')) };
     const orchestrator = { fetch: jest.fn() };
     const service = new OracleSettlementProgressionService(
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
+      executionRecorder(),
     );
 
     await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
@@ -110,6 +169,7 @@ describe('OracleSettlementProgressionService', () => {
     const service = new OracleSettlementProgressionService(
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
+      executionRecorder(),
       false,
     );
 
@@ -139,6 +199,7 @@ describe('OracleSettlementProgressionService', () => {
     const service = new OracleSettlementProgressionService(
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
+      executionRecorder(),
       false,
       () => new Date('2026-07-17T08:00:01.000Z'),
     );
@@ -166,6 +227,7 @@ describe('OracleSettlementProgressionService', () => {
     const service = new OracleSettlementProgressionService(
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
+      executionRecorder(),
     );
 
     await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
@@ -189,6 +251,7 @@ describe('OracleSettlementProgressionService', () => {
     const service = new OracleSettlementProgressionService(
       store as unknown as SettlementStore,
       orchestrator as unknown as DownstreamServiceOrchestrator,
+      executionRecorder(),
     );
 
     await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({
@@ -214,6 +277,7 @@ describe('OracleSettlementProgressionService', () => {
       const service = new OracleSettlementProgressionService(
         store as unknown as SettlementStore,
         orchestrator as unknown as DownstreamServiceOrchestrator,
+        executionRecorder(),
       );
 
       await expect(service.executeHandoff('sth-42', 'req-42')).rejects.toMatchObject({

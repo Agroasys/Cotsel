@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { createHash } from 'crypto';
 import { GatewayConfig } from '../config/env';
 import { GatewayError } from '../errors';
 import {
@@ -14,7 +15,6 @@ import {
   SettlementReconciliationStatus,
   SettlementStore,
 } from './settlementStore';
-import { validateExecutionTransition } from './settlementStateMachine';
 
 function parseIsoTimestamp(value: string, field: string): string {
   const timestamp = new Date(value);
@@ -99,63 +99,30 @@ export class SettlementService {
   async recordExecutionEvent(input: CreateSettlementExecutionEventInput): Promise<{
     handoff: SettlementHandoffRecord;
     event: SettlementExecutionEventRecord;
-    callbackDelivery: SettlementCallbackDeliveryRecord | null;
+    callbackDelivery: SettlementCallbackDeliveryRecord;
   }> {
-    const handoff = await this.store.getHandoff(input.handoffId);
-    if (!handoff) {
-      throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', {
-        handoffId: input.handoffId,
-      });
-    }
-
-    validateExecutionTransition(handoff.executionStatus, input.executionStatus, input.eventType);
     const observedAt = parseIsoTimestamp(input.observedAt, 'observedAt');
+    const callbackEnabled = this.shouldQueueCallback();
+    const dedupeKey = createHash('sha256')
+      .update(`${input.handoffId}\n${input.eventType}\n${input.requestId}`)
+      .digest('hex');
 
-    const event = await this.store.createExecutionEvent({
-      ...input,
-      observedAt,
-    });
-
-    const updatedHandoff = await this.store.getHandoff(input.handoffId);
-    if (!updatedHandoff) {
-      throw new GatewayError(
-        500,
-        'INTERNAL_ERROR',
-        'Settlement handoff disappeared after event persistence',
-        {
-          handoffId: input.handoffId,
-        },
-      );
-    }
-
-    let callbackDelivery: SettlementCallbackDeliveryRecord | null = null;
-    if (this.shouldQueueCallback()) {
-      callbackDelivery = await this.store.queueCallbackDelivery({
-        handoffId: updatedHandoff.handoffId,
-        eventId: event.eventId,
-        targetUrl: this.config.settlementCallbackUrl!,
-        requestBody: this.buildCallbackPayload(updatedHandoff, event),
+    return this.store.recordExecutionEvent(
+      {
+        ...input,
+        observedAt,
+        dedupeKey,
+      },
+      {
+        targetUrl: callbackEnabled
+          ? this.config.settlementCallbackUrl!
+          : (this.config.settlementCallbackUrl ?? 'disabled://callback'),
         requestId: input.requestId,
-        status: 'pending',
+        status: callbackEnabled ? 'pending' : 'disabled',
         nextAttemptAt: new Date().toISOString(),
-      });
-    } else {
-      callbackDelivery = await this.store.queueCallbackDelivery({
-        handoffId: updatedHandoff.handoffId,
-        eventId: event.eventId,
-        targetUrl: this.config.settlementCallbackUrl ?? 'disabled://callback',
-        requestBody: this.buildCallbackPayload(updatedHandoff, event),
-        requestId: input.requestId,
-        status: 'disabled',
-        nextAttemptAt: new Date().toISOString(),
-      });
-    }
-
-    return {
-      handoff: updatedHandoff,
-      event,
-      callbackDelivery,
-    };
+        buildRequestBody: (handoff, event) => this.buildCallbackPayload(handoff, event),
+      },
+    );
   }
 
   async listExecutionEvents(handoffId: string): Promise<SettlementExecutionEventRecord[]> {

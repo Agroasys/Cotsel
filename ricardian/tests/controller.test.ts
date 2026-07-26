@@ -4,6 +4,7 @@ import type { RicardianHashRequest } from '../src/types';
 import { buildRicardianHash } from '../src/utils/hash';
 import { createDocument, getDocument } from '../src/database/documentStore';
 import {
+  DocumentConflictError,
   DocumentIntegrityError,
   DocumentNotFoundError,
   DocumentPersistenceError,
@@ -94,6 +95,33 @@ describe('RicardianController.createHash', () => {
       expect.objectContaining({
         success: false,
         code: 'DOCUMENT_PERSISTENCE_FAILURE',
+      }),
+    );
+  });
+
+  test('returns 409 when a registration conflicts with immutable history', async () => {
+    mockedBuildRicardianHash.mockReturnValue({
+      requestId: 'req-1',
+      documentRef: 'doc://trade-1',
+      canonicalJson: '{"ok":true}',
+      hash: 'a'.repeat(64),
+      rulesVersion: 'RICARDIAN_CANONICAL_V1',
+      metadata: {},
+    });
+    mockedCreateDocument.mockRejectedValue(
+      new DocumentConflictError('a'.repeat(64), 'doc://trade-1'),
+    );
+
+    const req = asHashRequest({ documentRef: 'doc://trade-1', terms: { ok: true } });
+    const res = createMockResponse();
+
+    await controller.createHash(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        code: 'DOCUMENT_REGISTRATION_CONFLICT',
       }),
     );
   });

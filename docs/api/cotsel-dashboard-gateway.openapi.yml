@@ -738,6 +738,93 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '409':
           $ref: '#/components/responses/ConflictError'
+  /settlement/capabilities:
+    get:
+      tags: [Settlement]
+      summary: Read cross-repository settlement release capabilities
+      description: |
+        Service-authenticated, non-mutating deployment preflight. Agroasys release automation must
+        require ricardianDocumentRegistration before deploying the backend version that makes
+        canonical registration mandatory.
+      operationId: getSettlementCapabilities
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Settlement boundary capability snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, timestamp]
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required: [contractVersion, capabilities]
+                    properties:
+                      contractVersion:
+                        type: string
+                        const: settlement_boundary_v1
+                      capabilities:
+                        type: object
+                        required:
+                          - ricardianDocumentRegistration
+                          - atomicExecutionEventCallbackOutbox
+                          - durableOracleExecutionEvents
+                        properties:
+                          ricardianDocumentRegistration:
+                            type: boolean
+                          atomicExecutionEventCallbackOutbox:
+                            type: boolean
+                          durableOracleExecutionEvents:
+                            type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /settlement/ricardian-documents:
+    post:
+      tags: [Settlement]
+      summary: Register canonical platform terms with the Ricardian service
+      description: |
+        Service-authenticated and idempotent write boundary used by Agroasys to register its immutable
+        server-side commercial-terms snapshot. The returned digest, rather than a browser-supplied value,
+        becomes the settlement and on-chain Ricardian binding.
+      operationId: registerSettlementRicardianDocument
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementRicardianDocumentRegistrationRequest'
+      responses:
+        '202':
+          description: The immutable Ricardian document was registered or an identical retry was returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementRicardianDocumentRegistrationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
   /settlement/handoffs/{handoffId}/oracle-execution:
     post:
       tags: [Settlement]
@@ -4710,6 +4797,59 @@ components:
           type: object
           additionalProperties: true
         createdAt:
+          type: string
+          format: date-time
+    SettlementRicardianDocumentRegistrationRequest:
+      type: object
+      additionalProperties: false
+      required: [requestId, documentRef, terms, metadata]
+      properties:
+        requestId:
+          type: string
+        documentRef:
+          type: string
+        terms:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+    SettlementRicardianDocumentRegistration:
+      type: object
+      additionalProperties: false
+      required: [id, requestId, documentRef, hash, rulesVersion, canonicalJson, metadata, createdAt]
+      properties:
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+        requestId:
+          type: string
+        documentRef:
+          type: string
+        hash:
+          type: string
+          pattern: '^[a-fA-F0-9]{64}$'
+        rulesVersion:
+          type: string
+        canonicalJson:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    SettlementRicardianDocumentRegistrationResponse:
+      type: object
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SettlementRicardianDocumentRegistration'
+        timestamp:
           type: string
           format: date-time
     RicardianVerification:

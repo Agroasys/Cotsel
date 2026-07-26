@@ -42,7 +42,8 @@ BEGIN
     ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM PUBLIC;
 
     IF runtime_user IS NOT NULL THEN
-        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ricardian_hashes TO %I', runtime_user);
+        EXECUTE format('REVOKE UPDATE, DELETE ON TABLE ricardian_hashes FROM %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT ON TABLE ricardian_hashes TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ricardian_auth_nonces TO %I', runtime_user);
         EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE ricardian_hashes_id_seq TO %I', runtime_user);
     END IF;
@@ -51,9 +52,13 @@ END $$;
 ALTER TABLE ricardian_hashes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ricardian_hashes FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ricardian_hashes_service_isolation ON ricardian_hashes;
-CREATE POLICY ricardian_hashes_service_isolation ON ricardian_hashes
-    FOR ALL
-    USING (current_app_service_name() = 'ricardian')
+DROP POLICY IF EXISTS ricardian_hashes_service_isolation_select ON ricardian_hashes;
+DROP POLICY IF EXISTS ricardian_hashes_service_isolation_insert ON ricardian_hashes;
+CREATE POLICY ricardian_hashes_service_isolation_select ON ricardian_hashes
+    FOR SELECT
+    USING (current_app_service_name() = 'ricardian');
+CREATE POLICY ricardian_hashes_service_isolation_insert ON ricardian_hashes
+    FOR INSERT
     WITH CHECK (current_app_service_name() = 'ricardian');
 
 ALTER TABLE ricardian_auth_nonces ENABLE ROW LEVEL SECURITY;
