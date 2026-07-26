@@ -1255,6 +1255,53 @@ describe('AgroasysEscrow', function () {
       expect(await escrow.authorizationNonces(buyer.address)).to.equal(2);
     });
 
+    it('Should hold and progress 50 independent escrows for one buyer and supplier', async function () {
+      this.timeout(120_000);
+
+      const tradeCount = 50n;
+      await usdc.mint(buyer.address, totalAmount * tradeCount);
+
+      for (let index = 0n; index < tradeCount; index += 1n) {
+        await createTradeWithAuthorizationForTest(
+          supplier.address,
+          totalAmount,
+          logisticsAmount,
+          platformFeesAmount,
+          supplierFirstTranche,
+          supplierSecondTranche,
+          ethers.id(`capacity-trade-${index}`),
+        );
+      }
+
+      expect(await escrow.tradeCounter()).to.equal(tradeCount);
+      expect(await escrow.authorizationNonces(buyer.address)).to.equal(tradeCount);
+      expect(await usdc.balanceOf(await escrow.getAddress())).to.equal(totalAmount * tradeCount);
+
+      const firstTrade = await escrow.trades(0);
+      const lastTrade = await escrow.trades(tradeCount - 1n);
+      expect(firstTrade.buyerAddress).to.equal(buyer.address);
+      expect(lastTrade.buyerAddress).to.equal(buyer.address);
+      expect(firstTrade.ricardianHash).to.equal(ethers.id('capacity-trade-0'));
+      expect(lastTrade.ricardianHash).to.equal(ethers.id('capacity-trade-49'));
+
+      const supplierBefore = await usdc.balanceOf(supplier.address);
+      for (let tradeId = 0n; tradeId < tradeCount; tradeId += 1n) {
+        await escrow.connect(oracle).releaseFundsStage1(tradeId);
+      }
+
+      expect(await usdc.balanceOf(supplier.address)).to.equal(
+        supplierBefore + supplierFirstTranche * tradeCount,
+      );
+      expect(await escrow.claimableUsdc(treasury.address)).to.equal(
+        (logisticsAmount + platformFeesAmount) * tradeCount,
+      );
+      expect(await usdc.balanceOf(await escrow.getAddress())).to.equal(
+        (supplierSecondTranche + logisticsAmount + platformFeesAmount) * tradeCount,
+      );
+      expect((await escrow.trades(0)).status).to.equal(1);
+      expect((await escrow.trades(tradeCount - 1n)).status).to.equal(1);
+    });
+
     it('Should reject invalid signature (wrong signer)', async function () {
       const nonce = await escrow.authorizationNonces(buyer.address);
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;

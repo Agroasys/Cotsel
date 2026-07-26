@@ -52,6 +52,85 @@ const config: GatewayConfig = {
 };
 
 describe('settlement callback dispatcher', () => {
+  test('deduplicates retries of the same execution event and callback outbox record', async () => {
+    const settlementStore = createInMemorySettlementStore();
+    const settlementService = new SettlementService(config, settlementStore);
+    const handoff = await settlementService.createHandoff({
+      platformId: 'agroasys-platform',
+      platformHandoffId: 'handoff-dedupe',
+      tradeId: 'TRD-DEDUPE',
+      phase: 'stage_1',
+      settlementChannel: 'cotsel_escrow',
+      displayCurrency: 'USD',
+      displayAmount: 100,
+      requestId: 'req-handoff-dedupe',
+    });
+    const input = {
+      handoffId: handoff.handoffId,
+      eventType: 'submitted' as const,
+      executionStatus: 'submitted' as const,
+      reconciliationStatus: 'pending' as const,
+      observedAt: '2026-03-11T11:00:00.000Z',
+      requestId: 'req-event-dedupe',
+    };
+
+    const first = await settlementService.recordExecutionEvent(input);
+    const retry = await settlementService.recordExecutionEvent({
+      ...input,
+      observedAt: '2026-03-11T11:00:05.000Z',
+    });
+
+    expect(retry.event.eventId).toBe(first.event.eventId);
+    expect(retry.callbackDelivery.deliveryId).toBe(first.callbackDelivery.deliveryId);
+    await expect(settlementStore.listExecutionEvents(handoff.handoffId)).resolves.toHaveLength(1);
+    await expect(
+      settlementStore.getDueCallbackDeliveries(10, '2100-03-11T11:00:30.000Z'),
+    ).resolves.toHaveLength(1);
+  });
+
+  test('rolls back the execution transition when callback payload creation fails', async () => {
+    const settlementStore = createInMemorySettlementStore();
+    const handoff = await settlementStore.createHandoff({
+      platformId: 'agroasys-platform',
+      platformHandoffId: 'handoff-atomic',
+      tradeId: 'TRD-ATOMIC',
+      phase: 'stage_1',
+      settlementChannel: 'cotsel_escrow',
+      displayCurrency: 'USD',
+      displayAmount: 100,
+      requestId: 'req-handoff-atomic',
+    });
+
+    await expect(
+      settlementStore.recordExecutionEvent(
+        {
+          handoffId: handoff.handoffId,
+          eventType: 'submitted',
+          executionStatus: 'submitted',
+          reconciliationStatus: 'pending',
+          observedAt: '2026-03-11T11:30:00.000Z',
+          requestId: 'req-event-atomic',
+          dedupeKey: 'atomic-dedupe-key',
+        },
+        {
+          targetUrl: config.settlementCallbackUrl!,
+          requestId: 'req-event-atomic',
+          status: 'pending',
+          nextAttemptAt: '2026-03-11T11:30:00.000Z',
+          buildRequestBody: () => {
+            throw new Error('payload serialization failed');
+          },
+        },
+      ),
+    ).rejects.toThrow('payload serialization failed');
+
+    await expect(settlementStore.listExecutionEvents(handoff.handoffId)).resolves.toHaveLength(0);
+    await expect(settlementStore.getHandoff(handoff.handoffId)).resolves.toMatchObject({
+      executionStatus: 'pending',
+      latestEventId: null,
+    });
+  });
+
   test('delivers queued callbacks and marks the handoff callback state as delivered', async () => {
     const settlementStore = createInMemorySettlementStore();
     const settlementService = new SettlementService(config, settlementStore);
