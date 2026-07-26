@@ -118,14 +118,7 @@ export class TriggerManager {
       const trade = await this.sdkClient.getTrade(request.tradeId);
       StateValidator.validateTradeState(trade, request.triggerType);
 
-      // Per-trade pause is an admin hold that the contract enforces by reverting
-      // every lifecycle transition. Decline early with a clear reason instead of
-      // submitting a transaction that would revert with "trade paused".
-      if (await this.sdkClient.isTradePaused(request.tradeId)) {
-        throw new ValidationError(
-          `Trade ${request.tradeId} is paused; oracle actions are blocked until an admin resumes it`,
-        );
-      }
+      await this.assertTradeNotPaused(request.tradeId);
 
       if (this.manualApprovalEnabled && !request.isRedrive) {
         const trigger = await this.createNewTrigger(request, actionKey);
@@ -189,6 +182,19 @@ export class TriggerManager {
     return trigger.status === TriggerStatus.CONFIRMED || trigger.status === TriggerStatus.SUBMITTED;
   }
 
+  // Per-trade pause is an admin hold that the contract enforces by reverting
+  // every lifecycle transition. Decline early with a clear reason instead of
+  // submitting a transaction that would revert with "trade paused". Every path
+  // that ends up calling executeWithRetry (fresh trigger, re-drive, and
+  // post-approval resume) must gate on this.
+  private async assertTradeNotPaused(tradeId: string): Promise<void> {
+    if (await this.sdkClient.isTradePaused(tradeId)) {
+      throw new ValidationError(
+        `Trade ${tradeId} is paused; oracle actions are blocked until an admin resumes it`,
+      );
+    }
+  }
+
   private async handleRedrive(
     exhaustedTrigger: Trigger,
     request: TriggerRequest,
@@ -197,6 +203,12 @@ export class TriggerManager {
       actionKey: exhaustedTrigger.action_key,
       previousAttempts: exhaustedTrigger.attempt_count,
     });
+
+    // Guard before the retry machinery: a re-drive skips the executeTrigger
+    // pause check, so re-assert it here and let the ValidationError propagate
+    // out (the catch below would otherwise treat it as "already executed").
+    await this.assertTradeNotPaused(exhaustedTrigger.trade_id);
+
     incrementOracleRedriveAttempts(exhaustedTrigger.action_key);
 
     try {
@@ -335,6 +347,10 @@ export class TriggerManager {
       if (current && this.isActionAlreadyCompleted(current)) {
         return this.handleExistingTrigger(current, current.action_key);
       }
+
+      // Approval resumes straight into executeWithRetry, bypassing the
+      // executeTrigger pause check, so re-assert the pause here.
+      await this.assertTradeNotPaused(updated.trade_id);
 
       incrementOracleApproved(updated.action_key);
 

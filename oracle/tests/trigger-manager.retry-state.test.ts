@@ -275,4 +275,38 @@ describe('TriggerManager retry and idempotency states', () => {
     expect(sdkClient.releaseFundsStage1).not.toHaveBeenCalled();
     expect(mockedCreateTrigger).not.toHaveBeenCalled();
   });
+
+  it('declines a re-drive when the trade is admin-paused without marking it confirmed', async () => {
+    mockedGetLatestTriggerByActionKey.mockResolvedValue(
+      buildTrigger(TriggerStatus.EXHAUSTED_NEEDS_REDRIVE),
+    );
+
+    const sdkClient: TriggerManagerSdkClient = {
+      getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
+      releaseFundsStage1: jest.fn(),
+      confirmInspectionAvailable: jest.fn(),
+      finalizeTrade: jest.fn(),
+      isTradePaused: jest.fn().mockResolvedValue(true),
+    } as unknown as TriggerManagerSdkClient;
+
+    const manager = new TriggerManager(sdkClient, 3, 1);
+
+    await expect(
+      manager.executeTrigger({
+        tradeId: '1',
+        requestId: 'req-redrive-paused',
+        triggerType: TriggerType.RELEASE_STAGE_1,
+        isRedrive: true,
+      }),
+    ).rejects.toThrow(/paused/);
+
+    expect(sdkClient.isTradePaused).toHaveBeenCalledWith('1');
+    expect(sdkClient.releaseFundsStage1).not.toHaveBeenCalled();
+    expect(mockedCreateTrigger).not.toHaveBeenCalled();
+    // The re-drive catch must not misread the pause as "already executed on-chain".
+    expect(mockedUpdateTrigger).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ status: TriggerStatus.CONFIRMED }),
+    );
+  });
 });
