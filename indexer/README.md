@@ -52,6 +52,23 @@ node -r dotenv/config lib/main.js
 
 ---
 
+## Generated model policy
+
+Files under `src/model/generated/` must remain the direct output of the official `squid-typeorm-codegen` command. Do not hand-edit or post-process generated models. Treat changes to entity or index decorators as schema metadata changes and review them together with the corresponding generated migration.
+
+`@subsquid/typeorm-codegen` 2.4.0 currently emits an unused `Column_` import for entities that do not use the generic column decorator. This produces six known CodeQL findings:
+
+- `overviewSnapshot.model.ts`
+- `systemEvent.model.ts`
+- `oracleEvent.model.ts`
+- `oracleUpdateProposal.model.ts`
+- `adminEvent.model.ts`
+- `adminAddProposal.model.ts`
+
+These findings are tracked upstream in [subsquid/squid-sdk#547](https://github.com/subsquid/squid-sdk/issues/547). They may be dismissed as documented generated-code findings while the upstream issue remains open; do not suppress CodeQL coverage for the rest of the indexer.
+
+---
+
 ## Command reference
 
 | Command                                      | Description                                       |
