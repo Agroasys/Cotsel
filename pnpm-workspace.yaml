@@ -17,12 +17,15 @@ packages:
 linkWorkspacePackages: true
 preferWorkspacePackages: true
 minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  # Security fix for GHSA-mh99-v99m-4gvg. Keep the exception version-specific.
+  - brace-expansion@5.0.8
 overrides:
   '@protobufjs/utf8': 1.1.1
-  axios: 1.16.1
+  axios: 1.18.0
   bn.js: 4.12.3
   cookie: 0.7.0
-  fast-uri: 3.1.2
+  fast-uri: 3.1.4
   follow-redirects: 1.16.0
   js-cookie: 3.0.7
   lodash: 4.18.1
@@ -33,16 +36,22 @@ overrides:
   form-data@>=4.0.0 <4.0.6: 4.0.6
   '@babel/core@<=7.29.0': 7.29.6
   js-yaml@<3.15.0: 3.15.0
-  js-yaml@>=4.0.0 <=4.1.1: 4.2.0
-  brace-expansion@>=4 <5.0.6: 5.0.6
+  js-yaml@>=4.0.0 <4.3.0: 4.3.0
+  # Route every legacy consumer through the patched 5.x implementation.
+  # The package patch preserves the callable CommonJS API expected by 1.x and 2.x consumers.
+  brace-expansion: 5.0.8
   body-parser@>=2 <2.3.0: 2.3.0
   qs: 6.15.2
   uuid@<11.1.1: 11.1.1
   ws@>=7 <7.5.11: 7.5.11
   ws@>=8 <8.20.1: 8.21.0
+  immutable: 4.3.9
   # Dedupe graphql to a single instance. @subsquid/openreader builds the schema
   # while @subsquid/graphql-server merges it; when they resolve different graphql
   # patch versions, cross-instance `instanceof` checks fail and mergeSchemas throws
   # "Unknown type Query". One graphql version keeps the indexer GraphQL API working
   # without patching @subsquid/graphql-server.
   graphql: 15.10.2
+
+patchedDependencies:
+  brace-expansion@5.0.8: patches/brace-expansion@5.0.8.patch
