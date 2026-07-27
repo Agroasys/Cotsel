@@ -56,6 +56,7 @@
     "protocol:health": "node scripts/full-protocol-health-report.mjs",
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs",
+    "security:deps:compat": "node scripts/dependency-compatibility-check.mjs",
     "security:deps:gate": "node scripts/security-deps-gate.mjs",
     "dashboard:route-inventory:check": "node scripts/tests/dashboard-gateway-route-inventory-guard.mjs",
     "shared:boundary:guard": "node scripts/shared-package-boundary-guard.mjs"
@@ -88,13 +89,13 @@
     ]
   },
   "overrides": {
-    "axios": "1.16.1",
+    "axios": "1.18.0",
     "hardhat-gas-reporter": {
-      "axios": "1.16.1"
+      "axios": "1.18.0"
     },
     "@protobufjs/utf8": "1.1.1",
     "cookie": "0.7.0",
-    "fast-uri": "3.1.2",
+    "fast-uri": "3.1.4",
     "follow-redirects": "1.16.0",
     "js-cookie": "3.0.7",
     "lodash": "4.18.1",
@@ -105,11 +106,7 @@
     "form-data@>=4.0.0 <4.0.6": "4.0.6",
     "@babel/core@<=7.29.0": "7.29.6",
     "js-yaml@<3.15.0": "3.15.0",
-    "js-yaml@>=4.0.0 <=4.1.1": "4.2.0",
-    "brace-expansion@^1.1.7": "1.1.14",
-    "brace-expansion@^2.0.1": "2.1.0",
-    "brace-expansion@^2.0.2": "2.1.0",
-    "brace-expansion@>=4 <5.0.5": "5.0.6",
+    "js-yaml@>=4.0.0 <4.3.0": "4.3.0",
     "body-parser@>=2 <2.3.0": "2.3.0",
     "qs": "6.15.2",
     "uuid@<11.1.1": "11.1.1",
@@ -122,7 +119,7 @@
     "@nomicfoundation/hardhat-ignition": "0.15.16",
     "@nomicfoundation/hardhat-ignition-ethers": "0.15.17",
     "handlebars@<4.7.9": "4.7.9",
-    "immutable": "4.3.8",
+    "immutable": "4.3.9",
     "picomatch@<2.3.2": "2.3.2",
     "picomatch@>=4 <4.0.4": "4.0.4",
     "path-to-regexp@<0.1.13": "0.1.13",
