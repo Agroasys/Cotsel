@@ -165,4 +165,7 @@ export class TradeEvent {
 
     @StringColumn_({nullable: true})
     buyerRefundTriggeredBy!: string | undefined | null
+
+    @StringColumn_({nullable: true})
+    pauseTriggeredBy!: string | undefined | null
 }

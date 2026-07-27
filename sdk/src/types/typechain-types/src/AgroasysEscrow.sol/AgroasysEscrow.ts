@@ -122,6 +122,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "oracleUpdateProposals"
       | "pause"
       | "pauseClaims"
+      | "pauseTrade"
       | "paused"
       | "proposeAddAdmin"
       | "proposeDisputeSolution"
@@ -136,6 +137,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "tradeActiveDisputeProposalId"
       | "tradeCounter"
       | "tradeHasActiveDisputeProposal"
+      | "tradePaused"
       | "trades"
       | "treasuryAddress"
       | "treasuryPayoutAddress"
@@ -147,6 +149,7 @@ export interface AgroasysEscrowInterface extends Interface {
       | "unpauseClaims"
       | "unpauseHasApproved"
       | "unpauseProposal"
+      | "unpauseTrade"
       | "usdcToken"
   ): FunctionFragment;
 
@@ -185,6 +188,8 @@ export interface AgroasysEscrowInterface extends Interface {
       | "SupplierPayoutTransferred"
       | "TradeCancelledAfterLockTimeout"
       | "TradeLocked"
+      | "TradePaused"
+      | "TradeUnpaused"
       | "TreasuryClaimed"
       | "TreasuryPayoutAddressUpdateApproved"
       | "TreasuryPayoutAddressUpdateProposalExpiredCancelled"
@@ -482,6 +487,10 @@ export interface AgroasysEscrowInterface extends Interface {
     functionFragment: "pauseClaims",
     values?: undefined
   ): string;
+  encodeFunctionData(
+    functionFragment: "pauseTrade",
+    values: [BigNumberish]
+  ): string;
   encodeFunctionData(functionFragment: "paused", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "proposeAddAdmin",
@@ -536,6 +545,10 @@ export interface AgroasysEscrowInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "tradePaused",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "trades",
     values: [BigNumberish]
   ): string;
@@ -578,6 +591,10 @@ export interface AgroasysEscrowInterface extends Interface {
   encodeFunctionData(
     functionFragment: "unpauseProposal",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "unpauseTrade",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "usdcToken", values?: undefined): string;
 
@@ -845,6 +862,7 @@ export interface AgroasysEscrowInterface extends Interface {
     functionFragment: "pauseClaims",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "pauseTrade", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "paused", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "proposeAddAdmin",
@@ -895,6 +913,10 @@ export interface AgroasysEscrowInterface extends Interface {
     functionFragment: "tradeHasActiveDisputeProposal",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "tradePaused",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "trades", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "treasuryAddress",
@@ -934,6 +956,10 @@ export interface AgroasysEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "unpauseProposal",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "unpauseTrade",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "usdcToken", data: BytesLike): Result;
@@ -1657,6 +1683,32 @@ export namespace TradeLockedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace TradePausedEvent {
+  export type InputTuple = [tradeId: BigNumberish, triggeredBy: AddressLike];
+  export type OutputTuple = [tradeId: bigint, triggeredBy: string];
+  export interface OutputObject {
+    tradeId: bigint;
+    triggeredBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TradeUnpausedEvent {
+  export type InputTuple = [tradeId: BigNumberish, triggeredBy: AddressLike];
+  export type OutputTuple = [tradeId: bigint, triggeredBy: string];
+  export interface OutputObject {
+    tradeId: bigint;
+    triggeredBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace TreasuryClaimedEvent {
   export type InputTuple = [
     treasuryIdentity: AddressLike,
@@ -2211,6 +2263,12 @@ export interface AgroasysEscrow extends BaseContract {
 
   pauseClaims: TypedContractMethod<[], [void], "nonpayable">;
 
+  pauseTrade: TypedContractMethod<
+    [_tradeId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   paused: TypedContractMethod<[], [boolean], "view">;
 
   proposeAddAdmin: TypedContractMethod<
@@ -2279,6 +2337,8 @@ export interface AgroasysEscrow extends BaseContract {
     [boolean],
     "view"
   >;
+
+  tradePaused: TypedContractMethod<[arg0: BigNumberish], [boolean], "view">;
 
   trades: TypedContractMethod<
     [arg0: BigNumberish],
@@ -2372,6 +2432,12 @@ export interface AgroasysEscrow extends BaseContract {
       }
     ],
     "view"
+  >;
+
+  unpauseTrade: TypedContractMethod<
+    [_tradeId: BigNumberish],
+    [void],
+    "nonpayable"
   >;
 
   usdcToken: TypedContractMethod<[], [string], "view">;
@@ -2688,6 +2754,9 @@ export interface AgroasysEscrow extends BaseContract {
     nameOrSignature: "pauseClaims"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "pauseTrade"
+  ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "paused"
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
@@ -2749,6 +2818,9 @@ export interface AgroasysEscrow extends BaseContract {
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "tradeHasActiveDisputeProposal"
+  ): TypedContractMethod<[arg0: BigNumberish], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "tradePaused"
   ): TypedContractMethod<[arg0: BigNumberish], [boolean], "view">;
   getFunction(
     nameOrSignature: "trades"
@@ -2843,6 +2915,9 @@ export interface AgroasysEscrow extends BaseContract {
     ],
     "view"
   >;
+  getFunction(
+    nameOrSignature: "unpauseTrade"
+  ): TypedContractMethod<[_tradeId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "usdcToken"
   ): TypedContractMethod<[], [string], "view">;
@@ -3077,6 +3152,20 @@ export interface AgroasysEscrow extends BaseContract {
     TradeLockedEvent.InputTuple,
     TradeLockedEvent.OutputTuple,
     TradeLockedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TradePaused"
+  ): TypedContractEvent<
+    TradePausedEvent.InputTuple,
+    TradePausedEvent.OutputTuple,
+    TradePausedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TradeUnpaused"
+  ): TypedContractEvent<
+    TradeUnpausedEvent.InputTuple,
+    TradeUnpausedEvent.OutputTuple,
+    TradeUnpausedEvent.OutputObject
   >;
   getEvent(
     key: "TreasuryClaimed"
@@ -3504,6 +3593,28 @@ export interface AgroasysEscrow extends BaseContract {
       TradeLockedEvent.InputTuple,
       TradeLockedEvent.OutputTuple,
       TradeLockedEvent.OutputObject
+    >;
+
+    "TradePaused(uint256,address)": TypedContractEvent<
+      TradePausedEvent.InputTuple,
+      TradePausedEvent.OutputTuple,
+      TradePausedEvent.OutputObject
+    >;
+    TradePaused: TypedContractEvent<
+      TradePausedEvent.InputTuple,
+      TradePausedEvent.OutputTuple,
+      TradePausedEvent.OutputObject
+    >;
+
+    "TradeUnpaused(uint256,address)": TypedContractEvent<
+      TradeUnpausedEvent.InputTuple,
+      TradeUnpausedEvent.OutputTuple,
+      TradeUnpausedEvent.OutputObject
+    >;
+    TradeUnpaused: TypedContractEvent<
+      TradeUnpausedEvent.InputTuple,
+      TradeUnpausedEvent.OutputTuple,
+      TradeUnpausedEvent.OutputObject
     >;
 
     "TreasuryClaimed(address,address,uint256,address)": TypedContractEvent<

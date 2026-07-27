@@ -129,6 +129,10 @@ export class SDKClient {
     return trade;
   }
 
+  async isTradePaused(tradeId: string): Promise<boolean> {
+    return this.sdk.isTradePaused(BigInt(tradeId));
+  }
+
   async releaseFundsStage1(tradeId: string): Promise<BlockchainResult> {
     Logger.info('Executing releaseFundsStage1', { tradeId });
 

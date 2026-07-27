@@ -34,6 +34,8 @@ type MockContractWithSigner = {
   disableOracleEmergency: jest.Mock;
   pauseClaims: jest.Mock;
   unpauseClaims: jest.Mock;
+  pauseTrade: jest.Mock;
+  unpauseTrade: jest.Mock;
   proposeDisputeSolution: jest.Mock;
   approveDisputeSolution: jest.Mock;
   cancelExpiredDisputeProposal: jest.Mock;
@@ -78,6 +80,8 @@ function makeSdkUnit(isAdmin = true) {
     disableOracleEmergency: jest.fn(),
     pauseClaims: jest.fn(),
     unpauseClaims: jest.fn(),
+    pauseTrade: jest.fn(),
+    unpauseTrade: jest.fn(),
     proposeDisputeSolution: jest.fn(),
     approveDisputeSolution: jest.fn(),
     cancelExpiredDisputeProposal: jest.fn(),
@@ -214,6 +218,40 @@ describe('AdminSDK unit', () => {
 
     await expect(sdk.pauseClaims(signer)).rejects.toBeInstanceOf(AuthorizationError);
     await expect(sdk.unpauseClaims(signer)).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  test('pauseTrade should call contract with trade id and return tx result', async () => {
+    const { sdk, contractWithSigner } = makeSdkUnit(true);
+    const signer = makeSigner();
+    mockSuccessCall(contractWithSigner.pauseTrade);
+
+    await expect(sdk.pauseTrade(7n, signer)).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+    });
+    expect(contractWithSigner.pauseTrade).toHaveBeenCalledWith(7n);
+    expect(contractWithSigner.pauseTrade).toHaveBeenCalledTimes(1);
+  });
+
+  test('unpauseTrade should call contract with trade id and return tx result', async () => {
+    const { sdk, contractWithSigner } = makeSdkUnit(true);
+    const signer = makeSigner();
+    mockSuccessCall(contractWithSigner.unpauseTrade);
+
+    await expect(sdk.unpauseTrade(7n, signer)).resolves.toEqual({
+      txHash: RECEIPT.hash,
+      blockNumber: RECEIPT.blockNumber,
+    });
+    expect(contractWithSigner.unpauseTrade).toHaveBeenCalledWith(7n);
+    expect(contractWithSigner.unpauseTrade).toHaveBeenCalledTimes(1);
+  });
+
+  test('pauseTrade and unpauseTrade should reject non-admin signer', async () => {
+    const { sdk } = makeSdkUnit(false);
+    const signer = makeSigner();
+
+    await expect(sdk.pauseTrade(7n, signer)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(sdk.unpauseTrade(7n, signer)).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   test('dispute expiry cancel should call contract with proposal id', async () => {

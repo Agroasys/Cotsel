@@ -85,6 +85,7 @@ function buildManager(): TriggerManager {
     releaseFundsStage1: jest.fn(),
     confirmInspectionAvailable: jest.fn(),
     finalizeTrade: jest.fn(),
+    isTradePaused: jest.fn().mockResolvedValue(false),
   } as unknown as TriggerManagerSdkClient;
   return new TriggerManager(sdkClient, 3, 0, undefined, true);
 }
@@ -108,6 +109,7 @@ describe('TriggerManager — manual approval gate', () => {
         createdAt: new Date(),
       } satisfies TradeRecord),
       releaseFundsStage1: jest.fn(),
+      isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
 
     const trigger = buildTrigger({ status: TriggerStatus.PENDING });
@@ -150,6 +152,7 @@ describe('TriggerManager — manual approval gate', () => {
         createdAt: new Date(),
       } satisfies TradeRecord),
       releaseFundsStage1: jest.fn().mockResolvedValue({ txHash: '0xabcd', blockNumber: 1 }),
+      isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
 
     (mockCreateTrigger as jest.Mock).mockImplementation(async (input: { requestId: string }) =>
@@ -194,6 +197,7 @@ describe('TriggerManager — manual approval gate', () => {
         createdAt: new Date(),
       } satisfies TradeRecord),
       releaseFundsStage1: jest.fn().mockResolvedValue({ txHash: '0xdeadbeef', blockNumber: 42 }),
+      isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
 
     const manager = new TriggerManager(sdkClient, 3, 0, undefined, true);
@@ -203,6 +207,35 @@ describe('TriggerManager — manual approval gate', () => {
     expect(incrementOracleApproved).toHaveBeenCalledWith(approved.action_key);
     expect(result.status).toBe(TriggerStatus.SUBMITTED);
     expect(result.txHash).toBe('0xdeadbeef');
+  });
+
+  it('resumeAfterApproval: declines to submit when the trade is admin-paused', async () => {
+    const approved = buildTrigger({
+      status: TriggerStatus.PENDING,
+      approved_by: 'operator@agroasys',
+      approved_at: new Date(),
+    });
+
+    (mockApproveTrigger as jest.Mock).mockResolvedValue(approved);
+    (mockGetTriggerByIdempotencyKey as jest.Mock).mockResolvedValue(approved);
+
+    const sdkClient: TriggerManagerSdkClient = {
+      getTrade: jest.fn(),
+      releaseFundsStage1: jest.fn(),
+      confirmInspectionAvailable: jest.fn(),
+      finalizeTrade: jest.fn(),
+      isTradePaused: jest.fn().mockResolvedValue(true),
+    } as unknown as TriggerManagerSdkClient;
+
+    const manager = new TriggerManager(sdkClient, 3, 0, undefined, true);
+
+    await expect(
+      manager.resumeAfterApproval(approved.idempotency_key, 'operator@agroasys'),
+    ).rejects.toThrow(/paused/);
+
+    expect(sdkClient.isTradePaused).toHaveBeenCalledWith('1');
+    expect(sdkClient.releaseFundsStage1).not.toHaveBeenCalled();
+    expect(incrementOracleApproved).not.toHaveBeenCalled();
   });
 
   it('resumeAfterApproval: returns current state idempotently when already processed', async () => {

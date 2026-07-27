@@ -97,6 +97,18 @@ export class Client {
     }
   }
 
+  async isTradePaused(tradeId: bigint): Promise<boolean> {
+    try {
+      return await this.contract.tradePaused(tradeId);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      throw new ContractError(`Failed to check tradePaused state: ${message}`, {
+        tradeId: tradeId.toString(),
+        error: message,
+      });
+    }
+  }
+
   async isClaimsPaused(): Promise<boolean> {
     try {
       return await this.contract.claimsPaused();

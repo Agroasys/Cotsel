@@ -791,6 +791,116 @@ describe('AgroasysEscrow', function () {
     });
   });
 
+  describe('Per-Trade Pause', function () {
+    it('Should let admins pause and resume a single trade, emitting events', async function () {
+      const { tradeId } = await createDefaultTrade(ethers.id('trade-pause-basic'));
+
+      expect(await escrow.tradePaused(tradeId)).to.be.false;
+
+      await expect(escrow.connect(admin1).pauseTrade(tradeId))
+        .to.emit(escrow, 'TradePaused')
+        .withArgs(tradeId, admin1.address);
+      expect(await escrow.tradePaused(tradeId)).to.be.true;
+
+      await expect(escrow.connect(admin2).unpauseTrade(tradeId))
+        .to.emit(escrow, 'TradeUnpaused')
+        .withArgs(tradeId, admin2.address);
+      expect(await escrow.tradePaused(tradeId)).to.be.false;
+    });
+
+    it('Should restrict per-trade pause controls to admins', async function () {
+      const { tradeId } = await createDefaultTrade(ethers.id('trade-pause-admin-only'));
+
+      await expect(escrow.connect(buyer).pauseTrade(tradeId)).to.be.revertedWith('only admin');
+      await escrow.connect(admin1).pauseTrade(tradeId);
+      await expect(escrow.connect(buyer).unpauseTrade(tradeId)).to.be.revertedWith('only admin');
+      await escrow.connect(admin2).unpauseTrade(tradeId);
+    });
+
+    it('Should reject pausing an unknown trade and redundant state changes', async function () {
+      const { tradeId } = await createDefaultTrade(ethers.id('trade-pause-guards'));
+
+      await expect(escrow.connect(admin1).pauseTrade(999n)).to.be.revertedWith('trade not found');
+      await expect(escrow.connect(admin1).unpauseTrade(tradeId)).to.be.revertedWith(
+        'trade not paused',
+      );
+
+      await escrow.connect(admin1).pauseTrade(tradeId);
+      await expect(escrow.connect(admin1).pauseTrade(tradeId)).to.be.revertedWith(
+        'trade already paused',
+      );
+    });
+
+    it('Should block lifecycle transitions for a paused trade until it is resumed', async function () {
+      const { tradeId } = await createDefaultTrade(ethers.id('trade-pause-flow'));
+
+      // LOCKED → release blocked while paused, allowed after resume.
+      await escrow.connect(admin1).pauseTrade(tradeId);
+      await expect(escrow.connect(oracle).releaseFundsStage1(tradeId)).to.be.revertedWith(
+        'trade paused',
+      );
+      await escrow.connect(admin1).unpauseTrade(tradeId);
+      await escrow.connect(oracle).releaseFundsStage1(tradeId);
+
+      // IN_TRANSIT → confirm inspection blocked while paused.
+      await escrow.connect(admin1).pauseTrade(tradeId);
+      await expect(
+        escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600),
+      ).to.be.revertedWith('trade paused');
+      await escrow.connect(admin1).unpauseTrade(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
+
+      // ARRIVAL_CONFIRMED → buyer dispute blocked while paused.
+      await escrow.connect(admin1).pauseTrade(tradeId);
+      await expect(openDisputeAsBuyer(tradeId)).to.be.revertedWith('trade paused');
+
+      // Finalization also blocked while paused.
+      await time.increase(72 * 3600 + 1);
+      await expect(escrow.connect(oracle).finalizeAfterDisputeWindow(tradeId)).to.be.revertedWith(
+        'trade paused',
+      );
+    });
+
+    it('Should block dispute propose and approve for a paused trade', async function () {
+      const { tradeId } = await createDefaultTrade(ethers.id('trade-pause-dispute'));
+      await escrow.connect(oracle).releaseFundsStage1(tradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
+      await openDisputeAsBuyer(tradeId);
+
+      await escrow.connect(admin1).pauseTrade(tradeId);
+      await expect(escrow.connect(admin1).proposeDisputeSolution(tradeId, 0)).to.be.revertedWith(
+        'trade paused',
+      );
+      await escrow.connect(admin1).unpauseTrade(tradeId);
+
+      await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
+
+      await escrow.connect(admin1).pauseTrade(tradeId);
+      await expect(escrow.connect(admin2).approveDisputeSolution(0)).to.be.revertedWith(
+        'trade paused',
+      );
+    });
+
+    it('Should only affect the targeted trade, leaving others live', async function () {
+      await createDefaultTrade(ethers.id('trade-pause-isolation-0'));
+      await createDefaultTrade(ethers.id('trade-pause-isolation-1'));
+      const pausedTradeId = 0n;
+      const liveTradeId = 1n;
+
+      await escrow.connect(admin1).pauseTrade(pausedTradeId);
+
+      await expect(escrow.connect(oracle).releaseFundsStage1(pausedTradeId)).to.be.revertedWith(
+        'trade paused',
+      );
+
+      // A different trade keeps progressing normally.
+      await expect(escrow.connect(oracle).releaseFundsStage1(liveTradeId)).to.emit(
+        escrow,
+        'FundsReleasedStage1',
+      );
+    });
+  });
+
   describe('Timeout Escape Hatches', function () {
     it('Should allow buyer to cancel a LOCKED trade after LOCK_TIMEOUT', async function () {
       const { tradeId, totalAmount } = await createDefaultTrade(ethers.id('lock-timeout'));

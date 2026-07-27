@@ -209,6 +209,36 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
               ctx,
             );
             break;
+          case 'TradePaused':
+            overviewSnapshot = await handleTradePaused(
+              decoded,
+              trades,
+              tradeEvents,
+              overviewSnapshot,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'TradeUnpaused':
+            overviewSnapshot = await handleTradeUnpaused(
+              decoded,
+              trades,
+              tradeEvents,
+              overviewSnapshot,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
           case 'InTransitTimeoutRefunded':
             overviewSnapshot = await handleInTransitTimeoutRefunded(
               decoded,
@@ -809,6 +839,7 @@ async function handleTradeLocked(
     supplierSecondTranche,
     ricardianHash,
     createdAt: timestamp,
+    paused: false,
   });
 
   trades.set(tradeId.toString(), trade);
@@ -1134,6 +1165,96 @@ async function handleDisputeOpenedByBuyer(
   );
 
   ctx.log.info(`Trade ${tradeId} frozen - dispute opened by buyer`);
+  return overviewSnapshot;
+}
+
+async function handleTradePaused(
+  log: DecodedEscrowLog,
+  trades: Map<string, Trade>,
+  events: TradeEvent[],
+  overviewSnapshot: OverviewSnapshot,
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [tradeId, triggeredBy] = log.args;
+
+  const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
+
+  if (!trade) {
+    ctx.log.error(`Trade ${tradeId} not found for TradePaused event`);
+    return overviewSnapshot;
+  }
+
+  // Per-trade pause is orthogonal to the LOCKED→…→CLOSED lifecycle, so the
+  // trade status and overview counters are intentionally left unchanged.
+  trade.paused = true;
+  trades.set(tradeId.toString(), trade);
+  overviewSnapshot.lastTradeEventAt = timestamp;
+
+  events.push(
+    new TradeEvent({
+      id: eventId,
+      trade,
+      eventName: 'TradePaused',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      pauseTriggeredBy: triggeredBy.toLowerCase(),
+    }),
+  );
+
+  ctx.log.info(`Trade ${tradeId} paused by ${triggeredBy}`);
+  return overviewSnapshot;
+}
+
+async function handleTradeUnpaused(
+  log: DecodedEscrowLog,
+  trades: Map<string, Trade>,
+  events: TradeEvent[],
+  overviewSnapshot: OverviewSnapshot,
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [tradeId, triggeredBy] = log.args;
+
+  const trade = await getOrLoadTrade(tradeId.toString(), trades, ctx);
+
+  if (!trade) {
+    ctx.log.error(`Trade ${tradeId} not found for TradeUnpaused event`);
+    return overviewSnapshot;
+  }
+
+  trade.paused = false;
+  trades.set(tradeId.toString(), trade);
+  overviewSnapshot.lastTradeEventAt = timestamp;
+
+  events.push(
+    new TradeEvent({
+      id: eventId,
+      trade,
+      eventName: 'TradeUnpaused',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      pauseTriggeredBy: triggeredBy.toLowerCase(),
+    }),
+  );
+
+  ctx.log.info(`Trade ${tradeId} unpaused by ${triggeredBy}`);
   return overviewSnapshot;
 }
 

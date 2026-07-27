@@ -16,6 +16,7 @@ type Trade @entity {
   ricardianHash: String!
   createdAt: DateTime! @index
   arrivalTimestamp: DateTime
+  paused: Boolean! @index
 
   events: [TradeEvent!]! @derivedFrom(field: "trade")
   disputes: [DisputeProposal!]! @derivedFrom(field: "trade")
@@ -116,6 +117,9 @@ type TradeEvent @entity {
   buyerRefundAmount: BigInt
   buyerRefundType: ClaimType
   buyerRefundTriggeredBy: String
+
+  # TradePaused / TradeUnpaused specific
+  pauseTriggeredBy: String
 }
 
 enum ClaimType {
