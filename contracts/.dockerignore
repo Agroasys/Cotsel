@@ -1,0 +1,17 @@
+.env
+.DS_Store
+npm-debug.log*
+*.log
+
+node_modules
+artifacts
+cache
+coverage
+coverage.json
+reports
+typechain
+typechain-types
+
+foundry/cache
+foundry/out
+ignition/deployments/chain-31337
