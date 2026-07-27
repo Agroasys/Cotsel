@@ -56,6 +56,7 @@
     "protocol:health": "node scripts/full-protocol-health-report.mjs",
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs",
+    "security:deps:compat": "node scripts/dependency-compatibility-check.mjs",
     "security:deps:gate": "node scripts/security-deps-gate.mjs",
     "dashboard:route-inventory:check": "node scripts/tests/dashboard-gateway-route-inventory-guard.mjs",
     "shared:boundary:guard": "node scripts/shared-package-boundary-guard.mjs"
@@ -106,10 +107,6 @@
     "@babel/core@<=7.29.0": "7.29.6",
     "js-yaml@<3.15.0": "3.15.0",
     "js-yaml@>=4.0.0 <4.3.0": "4.3.0",
-    "brace-expansion@^1.1.7": "1.1.16",
-    "brace-expansion@^2.0.1": "2.1.2",
-    "brace-expansion@^2.0.2": "2.1.2",
-    "brace-expansion@>=4 <5.0.8": "5.0.8",
     "body-parser@>=2 <2.3.0": "2.3.0",
     "qs": "6.15.2",
     "uuid@<11.1.1": "11.1.1",

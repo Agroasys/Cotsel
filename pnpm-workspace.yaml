@@ -37,10 +37,9 @@ overrides:
   '@babel/core@<=7.29.0': 7.29.6
   js-yaml@<3.15.0: 3.15.0
   js-yaml@>=4.0.0 <4.3.0: 4.3.0
-  brace-expansion@^1.1.7: 1.1.16
-  brace-expansion@^2.0.1: 2.1.2
-  brace-expansion@^2.0.2: 2.1.2
-  brace-expansion@>=4 <5.0.8: 5.0.8
+  # Route every legacy consumer through the patched 5.x implementation.
+  # The package patch preserves the callable CommonJS API expected by 1.x and 2.x consumers.
+  brace-expansion: 5.0.8
   body-parser@>=2 <2.3.0: 2.3.0
   qs: 6.15.2
   uuid@<11.1.1: 11.1.1
@@ -53,3 +52,6 @@ overrides:
   # "Unknown type Query". One graphql version keeps the indexer GraphQL API working
   # without patching @subsquid/graphql-server.
   graphql: 15.10.2
+
+patchedDependencies:
+  brace-expansion@5.0.8: patches/brace-expansion@5.0.8.patch
