@@ -34,7 +34,7 @@ jobs:
           repositories: |
             agroasys-backend
             platform.v1
-            Cotsel-Dash
+            Cotsel.dash
           permission-contents: read
 
       - name: Check out Cotsel
@@ -66,7 +66,7 @@ jobs:
       - name: Check out Cotsel-Dash
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
-          repository: Agroasys/Cotsel-Dash
+          repository: Agroasys/Cotsel.dash
           ref: ${{ steps.manifest.outputs.dashboard_commit }}
           token: ${{ steps.app-token.outputs.token }}
           path: Cotsel-Dash

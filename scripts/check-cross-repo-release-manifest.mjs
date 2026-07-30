@@ -11,7 +11,7 @@ const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const EXPECTED_REPOSITORIES = new Map([
   ['agroasys-backend', 'Agroasys/agroasys-backend'],
   ['platform.v1', 'Agroasys/platform.v1'],
-  ['Cotsel-Dash', 'Agroasys/Cotsel-Dash'],
+  ['Cotsel-Dash', 'Agroasys/Cotsel.dash'],
 ]);
 
 function fail(message) {
