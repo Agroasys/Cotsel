@@ -3,9 +3,6 @@ name: Cross-repository compatibility
 on:
   workflow_call:
     secrets:
-      CI_APP_ID:
-        description: GitHub App ID for cross-repository read access
-        required: true
       CI_APP_PRIVATE_KEY:
         description: GitHub App private key (PEM)
         required: true
@@ -28,7 +25,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ secrets.CI_APP_ID }}
+          client-id: ${{ vars.CI_APP_CLIENT_ID }}
           private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
           owner: Agroasys
           repositories: |
@@ -96,6 +93,10 @@ jobs:
       - name: Install Agroasys backend dependencies
         working-directory: agroasys-backend
         run: pnpm install --frozen-lockfile
+
+      - name: Generate Agroasys backend Prisma client
+        working-directory: agroasys-backend
+        run: pnpm exec prisma generate
 
       - name: Install Cotsel-Dash dependencies
         working-directory: Cotsel-Dash
