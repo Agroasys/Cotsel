@@ -40,6 +40,7 @@
     "treasury"
   ],
   "scripts": {
+    "integration:manifest:check": "node scripts/check-cross-repo-release-manifest.mjs && node --test scripts/tests/cross-repo-release-manifest.test.mjs",
     "build": "pnpm --filter @agroasys/sdk run build",
     "lint": "eslint --max-warnings=0 .",
     "lint:fix": "eslint --max-warnings=0 --fix .",

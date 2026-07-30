@@ -1,0 +1,181 @@
+openapi: 3.1.0
+info:
+  title: Cotsel Settlement Provider Callback Contract
+  version: 1.0.0
+  description: >
+    Versioned outbound callback contract from Cotsel to the Agroasys settlement
+    consumer. Observed reconciliation amounts are provider assertions and must
+    be checked by the consumer against independently read chain evidence.
+paths: {}
+components:
+  schemas:
+    SettlementObservedAmountsV1:
+      type: object
+      additionalProperties: false
+      required:
+        - supplierPayoutUsd
+        - treasuryClaimableUsd
+        - buyerRefundUsd
+      properties:
+        supplierPayoutUsd:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$'
+        treasuryClaimableUsd:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$'
+        buyerRefundUsd:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$'
+    SettlementReconciliationEvidenceV1:
+      type: object
+      additionalProperties: false
+      required:
+        - schemaVersion
+        - observedAmounts
+      properties:
+        schemaVersion:
+          type: string
+          const: cotsel.settlement-observed-amounts.v1
+        observedAmounts:
+          $ref: '#/components/schemas/SettlementObservedAmountsV1'
+    CotselSettlementCallbackV1:
+      type: object
+      additionalProperties: false
+      required:
+        - contractVersion
+        - eventId
+        - handoffId
+        - platformId
+        - platformHandoffId
+        - tradeId
+        - phase
+        - settlementChannel
+        - displayCurrency
+        - displayAmount
+        - executionStatus
+        - reconciliationStatus
+        - callbackStatus
+        - providerStatus
+        - txHash
+        - latestEventType
+        - latestEventDetail
+        - latestEventAt
+        - observedAt
+        - metadata
+      properties:
+        contractVersion:
+          type: string
+          const: cotsel.settlement-callback.v1
+        eventId:
+          type: string
+          minLength: 1
+        handoffId:
+          type: string
+          minLength: 1
+        platformId:
+          type: string
+          minLength: 1
+        platformHandoffId:
+          type: string
+          minLength: 1
+        tradeId:
+          type: string
+          minLength: 1
+        phase:
+          type: string
+          minLength: 1
+        settlementChannel:
+          type: string
+          minLength: 1
+        displayCurrency:
+          type: string
+          minLength: 1
+        displayAmount:
+          type: number
+          minimum: 0
+        executionStatus:
+          type: string
+          enum:
+            - pending
+            - accepted
+            - queued
+            - submitted
+            - confirmed
+            - failed
+            - rejected
+        reconciliationStatus:
+          type: string
+          enum:
+            - pending
+            - matched
+            - drift
+            - unavailable
+        callbackStatus:
+          type: string
+          minLength: 1
+        providerStatus:
+          type:
+            - string
+            - 'null'
+        txHash:
+          oneOf:
+            - type: string
+              pattern: '^0x[a-fA-F0-9]{64}$'
+            - type: 'null'
+        latestEventType:
+          type:
+            - string
+            - 'null'
+        latestEventDetail:
+          type:
+            - string
+            - 'null'
+        latestEventAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        observedAt:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+      allOf:
+        - if:
+            allOf:
+              - not:
+                  properties:
+                    platformHandoffId:
+                      pattern: '^gasless-sponsorship:'
+                  required:
+                    - platformHandoffId
+              - anyOf:
+                  - properties:
+                      reconciliationStatus:
+                        enum:
+                          - matched
+                          - drift
+                    required:
+                      - reconciliationStatus
+                  - properties:
+                      latestEventType:
+                        enum:
+                          - reconciled
+                          - drift_detected
+                    required:
+                      - latestEventType
+          then:
+            properties:
+              tradeId:
+                type: string
+                pattern: '^[0-9]+$'
+              txHash:
+                type: string
+                pattern: '^0x[a-fA-F0-9]{64}$'
+              metadata:
+                required:
+                  - reconciliationEvidence
+                properties:
+                  reconciliationEvidence:
+                    $ref: '#/components/schemas/SettlementReconciliationEvidenceV1'

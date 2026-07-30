@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agroasys.com/schemas/cotsel/release-manifest.v1.json",
+  "title": "Cotsel cross-repository release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "owner",
+    "cotselCommitSource",
+    "repositories",
+    "contracts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "cotsel.release-manifest.v1"
+    },
+    "status": {
+      "enum": ["draft", "baseline", "candidate", "approved"]
+    },
+    "activationBlockers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role"],
+      "properties": {
+        "role": {
+          "const": "Integration Lead"
+        }
+      }
+    },
+    "cotselCommitSource": {
+      "const": "workflow_sha"
+    },
+    "repositories": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "repository", "ref", "commit"],
+        "properties": {
+          "name": {
+            "enum": ["agroasys-backend", "platform.v1", "Cotsel-Dash"]
+          },
+          "repository": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "commit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          }
+        }
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["settlementCallback", "observedAmounts"],
+      "properties": {
+        "settlementCallback": {
+          "const": "cotsel.settlement-callback.v1"
+        },
+        "observedAmounts": {
+          "const": "cotsel.settlement-observed-amounts.v1"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "draft"
+          }
+        }
+      },
+      "then": {
+        "required": ["activationBlockers"]
+      }
+    }
+  ]
+}
