@@ -3,8 +3,11 @@ name: Cross-repository compatibility
 on:
   workflow_call:
     secrets:
-      CROSS_REPO_CHECKOUT_TOKEN:
-        description: Read-only contents token for pinned private sibling repositories
+      CI_APP_ID:
+        description: GitHub App ID for cross-repository read access
+        required: true
+      CI_APP_PRIVATE_KEY:
+        description: GitHub App private key (PEM)
         required: true
   workflow_dispatch:
 
@@ -21,15 +24,18 @@ jobs:
     name: ci/cross-repository-compatibility
     runs-on: ubuntu-latest
     steps:
-      - name: Require private repository checkout credential
-        shell: bash
-        env:
-          CROSS_REPO_CHECKOUT_TOKEN: ${{ secrets.CROSS_REPO_CHECKOUT_TOKEN }}
-        run: |
-          if [[ -z "$CROSS_REPO_CHECKOUT_TOKEN" ]]; then
-            echo "CROSS_REPO_CHECKOUT_TOKEN is required for pinned sibling checkouts." >&2
-            exit 1
-          fi
+      - name: Mint cross-repository read token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+          owner: Agroasys
+          repositories: |
+            agroasys-backend
+            platform.v1
+            Cotsel-Dash
+          permission-contents: read
 
       - name: Check out Cotsel
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -46,7 +52,7 @@ jobs:
         with:
           repository: Agroasys/agroasys-backend
           ref: ${{ steps.manifest.outputs.backend_commit }}
-          token: ${{ secrets.CROSS_REPO_CHECKOUT_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           path: agroasys-backend
 
       - name: Check out platform.v1
@@ -54,7 +60,7 @@ jobs:
         with:
           repository: Agroasys/platform.v1
           ref: ${{ steps.manifest.outputs.platform_commit }}
-          token: ${{ secrets.CROSS_REPO_CHECKOUT_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           path: platform.v1
 
       - name: Check out Cotsel-Dash
@@ -62,7 +68,7 @@ jobs:
         with:
           repository: Agroasys/Cotsel-Dash
           ref: ${{ steps.manifest.outputs.dashboard_commit }}
-          token: ${{ secrets.CROSS_REPO_CHECKOUT_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           path: Cotsel-Dash
 
       - name: Verify pinned checkouts and provider fixture parity
@@ -95,7 +101,7 @@ jobs:
         working-directory: Cotsel-Dash
         run: pnpm install --frozen-lockfile
         env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install platform.v1 dependencies
         working-directory: platform.v1
