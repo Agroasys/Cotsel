@@ -52,6 +52,203 @@ const config: GatewayConfig = {
 };
 
 describe('settlement callback dispatcher', () => {
+  test('rejects extra fields in matched reconciliation evidence before queuing a callback', async () => {
+    const settlementStore = createInMemorySettlementStore();
+    const settlementService = new SettlementService(config, settlementStore);
+    const handoff = await settlementService.createHandoff({
+      platformId: 'agroasys-platform',
+      platformHandoffId: 'handoff-strict-evidence',
+      tradeId: 'TRD-STRICT-EVIDENCE',
+      phase: 'final_release_after_inspection',
+      settlementChannel: 'cotsel_escrow',
+      displayCurrency: 'USD',
+      displayAmount: 100,
+      requestId: 'req-handoff-strict-evidence',
+    });
+
+    expect(() =>
+      settlementService.buildCallbackPayload(
+        {
+          ...handoff,
+          executionStatus: 'confirmed',
+          reconciliationStatus: 'matched',
+        },
+        {
+          eventId: 'event-strict-evidence',
+          handoffId: handoff.handoffId,
+          eventType: 'reconciled',
+          executionStatus: 'confirmed',
+          reconciliationStatus: 'matched',
+          providerStatus: 'matched',
+          txHash: `0x${'1'.repeat(64)}`,
+          detail: null,
+          metadata: {
+            reconciliationEvidence: {
+              schemaVersion: 'cotsel.settlement-observed-amounts.v1',
+              observedAmounts: {
+                supplierPayoutUsd: '95.00',
+                treasuryClaimableUsd: '5.00',
+                buyerRefundUsd: '0.00',
+              },
+              confirmedBy: 'provider-enum',
+            },
+          },
+          observedAt: '2026-07-30T12:00:00.000Z',
+          requestId: 'req-event-strict-evidence',
+          sourceApiKeyId: 'integration-key',
+          createdAt: '2026-07-30T12:00:00.000Z',
+        },
+      ),
+    ).toThrow('metadata.reconciliationEvidence must contain exactly');
+  });
+
+  test('rejects a matched callback that is not bound to a numeric on-chain trade ID', async () => {
+    const settlementStore = createInMemorySettlementStore();
+    const settlementService = new SettlementService(config, settlementStore);
+    const handoff = await settlementService.createHandoff({
+      platformId: 'agroasys-platform',
+      platformHandoffId: 'handoff-invalid-trade-id',
+      tradeId: 'TRD-NOT-ON-CHAIN',
+      phase: 'final_release_after_inspection',
+      settlementChannel: 'cotsel_escrow',
+      displayCurrency: 'USD',
+      displayAmount: 100,
+      requestId: 'req-handoff-invalid-trade-id',
+    });
+
+    expect(() =>
+      settlementService.buildCallbackPayload(
+        {
+          ...handoff,
+          executionStatus: 'confirmed',
+          reconciliationStatus: 'matched',
+        },
+        {
+          eventId: 'event-invalid-trade-id',
+          handoffId: handoff.handoffId,
+          eventType: 'reconciled',
+          executionStatus: 'confirmed',
+          reconciliationStatus: 'matched',
+          providerStatus: 'matched',
+          txHash: `0x${'1'.repeat(64)}`,
+          detail: null,
+          metadata: {
+            reconciliationEvidence: {
+              schemaVersion: 'cotsel.settlement-observed-amounts.v1',
+              observedAmounts: {
+                supplierPayoutUsd: '95.00',
+                treasuryClaimableUsd: '5.00',
+                buyerRefundUsd: '0.00',
+              },
+            },
+          },
+          observedAt: '2026-07-30T12:00:00.000Z',
+          requestId: 'req-event-invalid-trade-id',
+          sourceApiKeyId: 'integration-key',
+          createdAt: '2026-07-30T12:00:00.000Z',
+        },
+      ),
+    ).toThrow('numeric on-chain trade identifier');
+  });
+
+  test('rejects release reconciliation without a canonical transaction hash', async () => {
+    const settlementStore = createInMemorySettlementStore();
+    const settlementService = new SettlementService(config, settlementStore);
+    const handoff = await settlementService.createHandoff({
+      platformId: 'agroasys-platform',
+      platformHandoffId: 'handoff-missing-release-hash',
+      tradeId: '9001',
+      phase: 'final_release_after_inspection',
+      settlementChannel: 'cotsel_escrow',
+      displayCurrency: 'USD',
+      displayAmount: 100,
+      requestId: 'req-handoff-missing-release-hash',
+    });
+
+    expect(() =>
+      settlementService.buildCallbackPayload(
+        {
+          ...handoff,
+          executionStatus: 'confirmed',
+          reconciliationStatus: 'matched',
+          txHash: null,
+        },
+        {
+          eventId: 'event-missing-release-hash',
+          handoffId: handoff.handoffId,
+          eventType: 'reconciled',
+          executionStatus: 'confirmed',
+          reconciliationStatus: 'matched',
+          providerStatus: 'matched',
+          txHash: null,
+          detail: null,
+          metadata: {
+            reconciliationEvidence: {
+              schemaVersion: 'cotsel.settlement-observed-amounts.v1',
+              observedAmounts: {
+                supplierPayoutUsd: '95.00',
+                treasuryClaimableUsd: '5.00',
+                buyerRefundUsd: '0.00',
+              },
+            },
+          },
+          observedAt: '2026-07-30T12:00:00.000Z',
+          requestId: 'req-event-missing-release-hash',
+          sourceApiKeyId: 'integration-key',
+          createdAt: '2026-07-30T12:00:00.000Z',
+        },
+      ),
+    ).toThrow('canonical release transaction hash');
+  });
+
+  test('does not require release evidence for the separately verified gasless trade-lock path', async () => {
+    const settlementStore = createInMemorySettlementStore();
+    const settlementService = new SettlementService(config, settlementStore);
+    const handoff = await settlementService.createHandoff({
+      platformId: 'agroasys-platform',
+      platformHandoffId: 'gasless-sponsorship:sponsor-1',
+      tradeId: 'order:42',
+      phase: 'gasless_create_trade',
+      settlementChannel: 'cotsel_escrow',
+      displayCurrency: 'USD',
+      displayAmount: 100,
+      requestId: 'req-gasless-trade-lock',
+    });
+
+    expect(
+      settlementService.buildCallbackPayload(
+        {
+          ...handoff,
+          executionStatus: 'confirmed',
+          reconciliationStatus: 'matched',
+          txHash: `0x${'1'.repeat(64)}`,
+        },
+        {
+          eventId: 'event-gasless-trade-lock',
+          handoffId: handoff.handoffId,
+          eventType: 'confirmed',
+          executionStatus: 'confirmed',
+          reconciliationStatus: 'matched',
+          providerStatus: 'confirmed',
+          txHash: `0x${'1'.repeat(64)}`,
+          detail: null,
+          metadata: {},
+          observedAt: '2026-07-30T12:00:00.000Z',
+          requestId: 'req-event-gasless-trade-lock',
+          sourceApiKeyId: 'integration-key',
+          createdAt: '2026-07-30T12:00:00.000Z',
+        },
+      ),
+    ).toMatchObject({
+      platformHandoffId: 'gasless-sponsorship:sponsor-1',
+      tradeId: 'order:42',
+      reconciliationStatus: 'matched',
+      metadata: {
+        event: {},
+      },
+    });
+  });
+
   test('keeps 64 handoffs, execution events and callback payloads isolated', async () => {
     const activityCount = 64;
     const settlementStore = createInMemorySettlementStore();

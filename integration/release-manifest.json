@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "cotsel.release-manifest.v1",
+  "status": "candidate",
+  "owner": {
+    "role": "Integration Lead"
+  },
+  "cotselCommitSource": "workflow_sha",
+  "repositories": [
+    {
+      "name": "agroasys-backend",
+      "repository": "Agroasys/agroasys-backend",
+      "ref": "develop",
+      "commit": "a3c0820e714245c55ba3c5d99c712b48064c9d23"
+    },
+    {
+      "name": "platform.v1",
+      "repository": "Agroasys/platform.v1",
+      "ref": "main",
+      "commit": "173463c79b4cade4466489e74b8edca47aea8d26"
+    },
+    {
+      "name": "Cotsel-Dash",
+      "repository": "Agroasys/Cotsel-Dash",
+      "ref": "main",
+      "commit": "56c44104171c8f599fb6f0deeb91177ad5e8cfd9"
+    }
+  ],
+  "contracts": {
+    "settlementCallback": "cotsel.settlement-callback.v1",
+    "observedAmounts": "cotsel.settlement-observed-amounts.v1"
+  }
+}

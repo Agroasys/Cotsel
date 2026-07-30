@@ -210,8 +210,10 @@ flowchart TB
   only validates and broadcasts the exact user-signed EIP-3009 authorization; it
   does not choose the participant, recipient, or amount and does not own the
   participant ledger.
-- Human privileged governance uses gateway prepare, direct admin-wallet signing
-  and broadcast, then gateway confirm and monitoring. The executor remains only
+- Human privileged governance targets gateway prepare, direct admin-wallet
+  signing and broadcast, then gateway confirm and monitoring. This path remains
+  incomplete in the gateway and is tracked by WP-9A; dashboard signing alone is
+  not evidence that the control boundary is complete. The executor remains only
   for delegated service or system roles.
 - Contract truth owns settlement execution and treasury fee accrual. Treasury
   owns sweep, handoff, realization, and close evidence. Gateway owns approval and
@@ -220,9 +222,9 @@ flowchart TB
 - Cotsel consumes bounded compliance and logistics attestation references. The
   repository does not contain direct KYB, KYT, sanctions, banking, or logistics
   provider execution clients.
-- Redis is support infrastructure only. SQS with DLQs and EventBridge are the
-  durable target; they are not represented as already replacing current
-  Postgres-backed operational records.
+- Redis is support infrastructure only. Critical workflows must use an approved
+  Postgres outbox or SQS/DLQ implementation; neither SQS nor EventBridge is
+  represented as deployed by the current repository.
 - EIP-7702 account abstraction is parked. Active settlement and sponsored-send
   paths use EIP-712 and EIP-3009.
 - Base Sepolia has verified pilot evidence. Base mainnet remains gated by the
@@ -271,10 +273,12 @@ flowchart TB
 
 ### Human governance
 
-Human privileged governance follows gateway `prepare`, admin review, direct
+The accepted human-governance target is gateway `prepare`, admin review, direct
 admin-wallet sign and broadcast, then gateway `confirm`, monitoring, and
-reconciliation. The delegated executor is not a fallback for human governance;
-it remains limited to intentional service or system roles.
+reconciliation. Gateway prepare/confirm and intent verification are not yet
+implemented, so this sequence is not current runtime truth. The delegated
+executor is not an approved fallback for human governance; it remains limited
+to intentional service or system roles.
 
 ## Runtime Components
 

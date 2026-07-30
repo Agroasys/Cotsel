@@ -5,6 +5,16 @@
 - Related issue: [#411](https://github.com/Agroasys/Cotsel/issues/411)
 - Supersedes: [Decision: Dashboard gateway governance signing model #215](https://github.com/Agroasys/Cotsel/issues/215)
 
+## Implementation status
+
+This ADR is an accepted target decision, not a completed implementation. As of
+2026-07-30, the Cotsel gateway does not implement the prepare, audit-intent,
+post-broadcast confirm and transaction-verification path described below.
+Cotsel-Dash can construct and broadcast direct-wallet governance transactions,
+but that client-only path does not satisfy the gateway control boundary in this
+ADR. The architecture coverage matrix therefore remains `In Progress`, and
+WP-9A must close the gateway path before production or pilot sign-off.
+
 ## Context
 
 The queued gateway + executor signer model was approved under issue #215 as a workable pilot and compatibility arrangement. It routes human-initiated privileged governance actions through a backend queue, then executes them with an executor signer key (`GATEWAY_EXECUTOR_PRIVATE_KEY`) held by the gateway process.
@@ -139,11 +149,15 @@ Mitigation:
 
 ### Dashboard signing integration
 
-The dashboard must implement wallet-connect governance signing. Until Phase 2 is complete, human operators using the dashboard cannot use the new flow.
+The dashboard must implement wallet-connect governance signing. The presence of
+dashboard signing code is not sufficient by itself: the gateway preparation,
+intent recording and post-broadcast verification phases must also be live for
+the target flow to be complete.
 
 Mitigation:
 
-- Gateway prepare endpoint ships first and can be tested independently via CLI/SDK before the dashboard integration lands.
+- Gateway prepare and confirm endpoints must be tested independently and then
+  in an end-to-end browser flow with the dashboard.
 
 ### Superseded decision
 

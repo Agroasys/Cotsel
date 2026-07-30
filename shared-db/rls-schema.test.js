@@ -69,6 +69,23 @@ function assertSchemaHasRlsPolicies({ serviceName, schemaPath, tables }) {
     assert.match(sql, new RegExp(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;`));
     assert.match(sql, new RegExp(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;`));
     assert.match(sql, new RegExp(`DROP POLICY IF EXISTS ${table}_service_isolation ON ${table};`));
+
+    if (serviceName === 'ricardian' && table === 'ricardian_hashes') {
+      assert.match(
+        sql,
+        new RegExp(
+          `CREATE POLICY ${table}_service_isolation_select ON ${table}[\\s\\S]*FOR SELECT[\\s\\S]*USING \\(current_app_service_name\\(\\) = '${serviceName}'\\)`,
+        ),
+      );
+      assert.match(
+        sql,
+        new RegExp(
+          `CREATE POLICY ${table}_service_isolation_insert ON ${table}[\\s\\S]*FOR INSERT[\\s\\S]*WITH CHECK \\(current_app_service_name\\(\\) = '${serviceName}'\\)`,
+        ),
+      );
+      continue;
+    }
+
     assert.match(
       sql,
       new RegExp(

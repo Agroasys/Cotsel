@@ -22,8 +22,8 @@ run_backend_continuity_contracts() {
   (
     cd "$BACKEND_REPO_DIR"
     pnpm test -- \
-      src/modules/settlement-handoff/services/cotsel-settlement.client.spec.ts \
-      src/modules/settlement-handoff/services/settlement-handoff.service.spec.ts
+      src/modules/fulfillment-settlement/settlement-handoff/services/cotsel-settlement.client.spec.ts \
+      src/modules/fulfillment-settlement/settlement-handoff/services/settlement-handoff.service.spec.ts
   )
 }
 
@@ -40,7 +40,7 @@ run_gateway_continuity_contracts() {
 run_dashboard_connected_contracts() {
   (
     cd "$DASHBOARD_REPO_DIR"
-    npm test -- \
+    pnpm test -- \
       src/test/api-contracts.test.ts \
       src/test/connected-read-adapters.test.ts \
       src/test/connected-governance-adapters.test.ts
