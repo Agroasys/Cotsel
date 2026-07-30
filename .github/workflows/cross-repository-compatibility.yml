@@ -1,6 +1,11 @@
 name: Cross-repository compatibility
 
 on:
+  workflow_call:
+    secrets:
+      CROSS_REPO_CHECKOUT_TOKEN:
+        description: Read-only token for pinned private sibling repositories and packages
+        required: true
   workflow_dispatch:
 
 permissions:

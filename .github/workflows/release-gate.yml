@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   changes:
@@ -409,6 +410,7 @@ jobs:
           run_check pnpm-workspace-command-guard bash scripts/tests/pnpm-workspace-command-guard.sh
           run_check api-gateway-boundary scripts/tests/api-gateway-boundary-guard.sh
           run_check dashboard-gateway-route-inventory node scripts/tests/dashboard-gateway-route-inventory-guard.mjs
+          run_check architecture-coverage-evidence node scripts/tests/architecture-coverage-evidence-guard.mjs
           run_check programmability-governance scripts/tests/programmability-governance-guard.sh
           run_check base-mainnet-governance scripts/tests/base-mainnet-governance-guard.sh
           run_check data-classification-guard node scripts/tests/data-classification-guard.mjs
@@ -1100,6 +1102,11 @@ jobs:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
 
+  cross-repository-compatibility:
+    name: ci/cross-repository-compatibility-call
+    uses: ./.github/workflows/cross-repository-compatibility.yml
+    secrets: inherit
+
   release-gate:
     name: ci/release-gate
     runs-on: ubuntu-latest
@@ -1112,6 +1119,7 @@ jobs:
       - repo-quality
       - shared-packages
       - postgres-recovery-smoke
+      - cross-repository-compatibility
       - runtime-gate
       - auth
       - gateway
@@ -1138,6 +1146,7 @@ jobs:
           results["ci/repo-quality"]="${{ needs.repo-quality.result }}"
           results["ci/shared-packages"]="${{ needs.shared-packages.result }}"
           results["ci/postgres-recovery-smoke"]="${{ needs.postgres-recovery-smoke.result }}"
+          results["ci/cross-repository-compatibility"]="${{ needs.cross-repository-compatibility.result }}"
           results["ci/runtime-gate"]="${{ needs.runtime-gate.result }}"
           results["ci/auth"]="${{ needs.auth.result }}"
           results["ci/gateway"]="${{ needs.gateway.result }}"
