@@ -4,7 +4,7 @@ on:
   workflow_call:
     secrets:
       CROSS_REPO_CHECKOUT_TOKEN:
-        description: Read-only token for pinned private sibling repositories and packages
+        description: Read-only contents token for pinned private sibling repositories
         required: true
   workflow_dispatch:
 
@@ -95,7 +95,7 @@ jobs:
         working-directory: Cotsel-Dash
         run: pnpm install --frozen-lockfile
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.CROSS_REPO_CHECKOUT_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
 
       - name: Install platform.v1 dependencies
         working-directory: platform.v1
