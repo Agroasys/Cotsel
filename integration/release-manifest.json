@@ -10,7 +10,7 @@
       "name": "agroasys-backend",
       "repository": "Agroasys/agroasys-backend",
       "ref": "develop",
-      "commit": "a3c0820e714245c55ba3c5d99c712b48064c9d23"
+      "commit": "7f5ed9201d56f969c39747134d0a2af8961775fb"
     },
     {
       "name": "platform.v1",
@@ -22,7 +22,7 @@
       "name": "Cotsel-Dash",
       "repository": "Agroasys/Cotsel.dash",
       "ref": "main",
-      "commit": "56c44104171c8f599fb6f0deeb91177ad5e8cfd9"
+      "commit": "725f26c59766dd05aa8e67390064f5dadf486c4f"
     }
   ],
   "contracts": {
