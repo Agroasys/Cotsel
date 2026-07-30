@@ -30,16 +30,23 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForPostgres(containerName) {
+async function waitForPostgres(containerName, port) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
+    let pool;
     try {
       docker(['exec', containerName, 'pg_isready', '-U', 'postgres']);
+      pool = await createAdminPool(port);
+      await pool.query('SELECT 1');
       return;
     } catch (error) {
       if (attempt === 29) {
         throw error;
       }
       await sleep(1000);
+    } finally {
+      if (pool) {
+        await pool.end().catch(() => undefined);
+      }
     }
   }
 }
@@ -73,9 +80,19 @@ async function withPostgresContainer(fn) {
   ]);
 
   try {
-    await waitForPostgres(containerName);
     const port = docker(['port', containerName, '5432/tcp']).split(':').pop();
+    await waitForPostgres(containerName, Number.parseInt(port, 10));
     await fn({ containerName, port: Number.parseInt(port, 10) });
+  } catch (error) {
+    try {
+      const containerLogs = docker(['logs', containerName]);
+      if (containerLogs) {
+        console.error(`Postgres test container logs:\n${containerLogs}`);
+      }
+    } catch {
+      // Preserve the original failure when diagnostic log collection fails.
+    }
+    throw error;
   } finally {
     try {
       docker(['rm', '-f', containerName], { stdio: ['ignore', 'ignore', 'ignore'] });
