@@ -1,7 +1,7 @@
 name: Controlled-pilot Cotsel implementation
 description: Define a release-blocking Cotsel, chain, settlement, or reconciliation deliverable.
 title: '[WP-X/Cotsel] '
-labels: ['priority:P0', 'status:backlog']
+labels: ['priority:P0', 'status:backlog', 'programme:controlled-pilot']
 body:
   - type: textarea
     id: outcome

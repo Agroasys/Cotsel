@@ -1,7 +1,7 @@
 name: Controlled-pilot Cotsel defect
 description: Record a verified chain, callback, settlement, or evidence defect that can affect a release gate.
 title: '[Defect] '
-labels: ['bug', 'status:backlog']
+labels: ['bug', 'status:backlog', 'programme:controlled-pilot']
 body:
   - type: textarea
     id: impact
