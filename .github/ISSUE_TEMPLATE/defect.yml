@@ -1,0 +1,61 @@
+name: Controlled-pilot Cotsel defect
+description: Record a verified chain, callback, settlement, or evidence defect that can affect a release gate.
+title: "[Defect] "
+labels: ["bug", "status:backlog"]
+body:
+  - type: textarea
+    id: impact
+    attributes:
+      label: Defect and operational or financial impact
+      description: State the incorrect behavior, affected authoritative records, and risk to the controlled pilot.
+    validations:
+      required: true
+  - type: textarea
+    id: identity
+    attributes:
+      label: Environment and paired-release identity
+      placeholder: "Cotsel version/deployment:\nChain ID and contracts:\nBackend release:\nProvider/RPC/relayer mode:\nEnvironment:"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and evidence
+      description: Provide deterministic steps, test value, expected and actual results, operation and transaction references, callback/trace evidence, and reconciliation output with sensitive data removed.
+    validations:
+      required: true
+  - type: textarea
+    id: impact_map
+    attributes:
+      label: SOW, journey, control, and gate impact
+      description: List requirements, financial records, and evidence invalidated by this defect.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Proposed severity
+      options: [P0, P1, P2, P3]
+    validations:
+      required: true
+  - type: textarea
+    id: containment
+    attributes:
+      label: Containment and safe money state
+      description: State required freeze, retry prohibition, evidence preservation, reconciliation, signer or relayer action, and decision authority.
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Fix, regression coverage, recovery, and rollback
+      description: Define the correction, replay/race/outage tests, data or financial repair, and verified rollback or compensation.
+    validations:
+      required: true
+  - type: textarea
+    id: closure
+    attributes:
+      label: Closure rule
+      description: Name the retest and reconciliation evidence, acceptance owner, and gate reviews that must be reopened or updated.
+    validations:
+      required: true
