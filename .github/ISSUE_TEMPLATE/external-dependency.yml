@@ -1,0 +1,62 @@
+name: Controlled-pilot Cotsel dependency
+description: Track a backend, chain/RPC, provider, signer, environment, finance, or decision dependency.
+title: "[WP-X/External] "
+labels: ["priority:P0", "status:blocked", "type:ops"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Required external outcome
+      description: State what must be delivered or proven before Cotsel readiness work can be accepted.
+    validations:
+      required: true
+  - type: textarea
+    id: owner
+    attributes:
+      label: Owning repository, provider, chain service, or function
+      placeholder: "Owner:\nSystem or repository:\nDelivery surface:\nEscalation path:"
+    validations:
+      required: true
+  - type: textarea
+    id: traceability
+    attributes:
+      label: SOW traceability and gate impact
+      description: List exact rows, work package, journey, and gate blocked by this dependency.
+    validations:
+      required: true
+  - type: textarea
+    id: current_state
+    attributes:
+      label: Current verified state
+      description: Record only current evidence, with date and source.
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Delivery contract and acceptance criteria
+      description: Define deployment or artifact identity, chain and contracts, API/callback schema, authentication, timing/finality, provider mode, limits, test data, negative cases, and rollback behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence the owner must supply
+      description: Name receipts, signatures, deployment and provider identities, traces, reconciliations, approvals, outage tests, and compatibility evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals and authority boundary
+      description: State what the Cotsel team cannot implement or self-accept.
+    validations:
+      required: true
+  - type: textarea
+    id: closure
+    attributes:
+      label: Closure rule
+      description: Name the acceptance owner and paired release to which supplied evidence must belong.
+    validations:
+      required: true
+

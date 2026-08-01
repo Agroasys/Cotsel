@@ -1,0 +1,84 @@
+name: Controlled-pilot Cotsel implementation
+description: Define a release-blocking Cotsel, chain, settlement, or reconciliation deliverable.
+title: "[WP-X/Cotsel] "
+labels: ["priority:P0", "status:backlog"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: State what the candidate deployment will safely and observably prove when this closes.
+    validations:
+      required: true
+  - type: textarea
+    id: traceability
+    attributes:
+      label: SOW traceability
+      description: List exact SOW rows, parent work package, P0 gate, journeys, controls, and failure scenarios.
+    validations:
+      required: true
+  - type: textarea
+    id: current_state
+    attributes:
+      label: Current verified state
+      description: Record the exact code, deployment, contract, chain, relayer, provider, or evidence inspected, with date and uncertainty.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and implementation requirements
+      description: Include service and callback behavior, chain and contract configuration, signing or sponsorship, idempotency, finality, ledger/reconciliation inputs, telemetry, rollout, and rollback where applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: ownership
+    attributes:
+      label: Ownership and acceptance authority
+      placeholder: "Accountable:\nDelivery:\nAcceptance:\nDeputy or escalation:"
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and sequencing
+      description: Link backend contracts, chain/RPC, provider modes, credentials, test value, deployment environment, and parent issues.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Use observable criteria tied to one deployment, chain ID, contract set, provider mode, and paired release.
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
+  - type: textarea
+    id: failures
+    attributes:
+      label: Negative and failure cases
+      description: Include forged or duplicate callback, timeout or unknown transaction result, reordering, wrong chain or contract, nonce or relayer failure, provider/RPC outage, divergence, rollback, and recovery cases that apply.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence required
+      description: Name exact version and deployment identity, contract addresses, transaction or provider receipts, callback records, traces, ledger/reconciliation results, alerts, drills, rollback evidence, and evidence-index links.
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals and authority boundaries
+      description: State what remains frontend-, backend-, provider-, finance-, compliance-, or governance-owned.
+    validations:
+      required: true
+  - type: textarea
+    id: closure
+    attributes:
+      label: Closure rule
+      description: Name the acceptance owner and exact paired release to which the evidence must belong.
+    validations:
+      required: true
+
