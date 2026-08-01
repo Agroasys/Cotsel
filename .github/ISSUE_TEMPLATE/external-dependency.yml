@@ -21,7 +21,13 @@ body:
     id: traceability
     attributes:
       label: SOW traceability and gate impact
-      description: List exact rows, work package, journey, and gate blocked by this dependency.
+      description: Keep the four SOW fields separate for each affected row. Then list the work package, journey, and gate blocked by this dependency.
+      placeholder: |
+        | ID | Required work | Implementation requirement | Acceptance evidence |
+        | --- | --- | --- | --- |
+        | X.1 | ... | ... | ... |
+
+        Blocked work package, journey, and gate: ...
     validations:
       required: true
   - type: textarea

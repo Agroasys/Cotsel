@@ -28,7 +28,13 @@ body:
     id: impact_map
     attributes:
       label: SOW, journey, control, and gate impact
-      description: List requirements, financial records, and evidence invalidated by this defect.
+      description: Keep the four SOW fields separate for each affected row. Then identify the journeys, controls, gates, financial records, and evidence invalidated by this defect.
+      placeholder: |
+        | ID | Required work | Implementation requirement | Acceptance evidence |
+        | --- | --- | --- | --- |
+        | X.1 | ... | ... | ... |
+
+        Invalidated journeys, controls, gates, records, and evidence: ...
     validations:
       required: true
   - type: dropdown
