@@ -1,7 +1,7 @@
 name: Controlled-pilot Cotsel dependency
 description: Track a backend, chain/RPC, provider, signer, environment, finance, or decision dependency.
-title: "[WP-X/External] "
-labels: ["priority:P0", "status:blocked", "type:ops"]
+title: '[WP-X/External] '
+labels: ['priority:P0', 'status:blocked', 'type:ops']
 body:
   - type: textarea
     id: outcome
