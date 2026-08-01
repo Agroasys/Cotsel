@@ -59,4 +59,3 @@ body:
       description: Name the acceptance owner and paired release to which supplied evidence must belong.
     validations:
       required: true
-
