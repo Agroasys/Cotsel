@@ -1,7 +1,7 @@
 name: Controlled-pilot Cotsel implementation
 description: Define a release-blocking Cotsel, chain, settlement, or reconciliation deliverable.
 title: '[WP-X/Cotsel] '
-labels: ['priority:P0', 'status:backlog']
+labels: ['priority:P0', 'status:backlog', 'programme:controlled-pilot']
 body:
   - type: textarea
     id: outcome
@@ -14,7 +14,13 @@ body:
     id: traceability
     attributes:
       label: SOW traceability
-      description: List exact SOW rows, parent work package, P0 gate, journeys, controls, and failure scenarios.
+      description: Keep Required work, Implementation requirement, and Acceptance evidence as separate fields for every exact SOW row. Then identify the parent, gate, journeys, controls, and failure scenarios.
+      placeholder: |
+        | ID | Required work | Implementation requirement | Acceptance evidence |
+        | --- | --- | --- | --- |
+        | X.1 | ... | ... | ... |
+
+        Parent, gate, journeys, controls, and failure scenarios: ...
     validations:
       required: true
   - type: textarea
