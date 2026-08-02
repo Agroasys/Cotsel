@@ -492,7 +492,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         require(_treasuryAddress != address(0), "invalid treasury");
         require(_relayerAddress != address(0), "invalid relayer");
         require(_requiredApprovals >= 2, "required approvals must be >= 2");
-        require(_admins.length >= _requiredApprovals, "not enough admins");
+        // Strictly greater, not equal: the admin set must keep at least one spare signer beyond
+        // the approval threshold. At parity (admins == requiredApprovals) the loss of a single
+        // key permanently disables dispute resolution, unpause, and all governance rotation,
+        // and this contract has no admin-removal or threshold-change path to recover.
+        require(_admins.length > _requiredApprovals, "not enough admins");
 
         usdcToken = IERC20(_usdcToken);
         oracleAddress = _oracleAddress;

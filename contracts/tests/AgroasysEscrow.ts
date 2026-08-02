@@ -480,6 +480,51 @@ describe('AgroasysEscrow', function () {
         ),
       ).to.be.revertedWith('not enough admins');
     });
+
+    it('Should reject an admin set at parity with the approval threshold', async function () {
+      const EscrowFactory = await ethers.getContractFactory('AgroasysEscrow');
+
+      // admins == requiredApprovals leaves no spare signer: losing one key would
+      // permanently disable dispute resolution, unpause and governance rotation.
+      await expect(
+        EscrowFactory.deploy(
+          await usdc.getAddress(),
+          oracle.address,
+          treasury.address,
+          relayer.address,
+          [admin1.address, admin2.address],
+          2,
+        ),
+      ).to.be.revertedWith('not enough admins');
+
+      await expect(
+        EscrowFactory.deploy(
+          await usdc.getAddress(),
+          oracle.address,
+          treasury.address,
+          relayer.address,
+          [admin1.address, admin2.address, admin3.address],
+          3,
+        ),
+      ).to.be.revertedWith('not enough admins');
+    });
+
+    it('Should accept an admin set with at least one spare signer', async function () {
+      const EscrowFactory = await ethers.getContractFactory('AgroasysEscrow');
+
+      const spareEscrow = await EscrowFactory.deploy(
+        await usdc.getAddress(),
+        oracle.address,
+        treasury.address,
+        relayer.address,
+        [admin1.address, admin2.address, admin3.address],
+        2,
+      );
+      await spareEscrow.waitForDeployment();
+
+      expect(await spareEscrow.requiredApprovals()).to.equal(2);
+      expect(await spareEscrow.isAdmin(admin3.address)).to.be.true;
+    });
   });
 
   describe('Emergency Controls', function () {
@@ -510,7 +555,7 @@ describe('AgroasysEscrow', function () {
         oracle.address,
         treasury.address,
         relayer.address,
-        [admin1.address, admin2.address],
+        [admin1.address, admin2.address, admin3.address],
         2,
       );
       await quorumEscrow.waitForDeployment();
