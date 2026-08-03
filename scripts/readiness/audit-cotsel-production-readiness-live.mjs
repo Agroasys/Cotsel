@@ -15,6 +15,8 @@ import {
   titleForWorkPackage,
 } from './cotsel-production-readiness-model.mjs';
 import {
+  expectedProjectFieldNames,
+  expectedProjectSingleSelectOptions,
   invariantProjectFields,
   primaryProjectMetadata,
   supportingProjectMetadata,
@@ -76,6 +78,11 @@ const staticData = await graphql(
             nodes {
               ... on ProjectV2FieldCommon {
                 name
+              }
+              ... on ProjectV2SingleSelectField {
+                options {
+                  name
+                }
               }
             }
           }
@@ -335,29 +342,18 @@ for (const workPackage of packages.workPackages) {
   }
 }
 
-const requiredFields = [
-  'Status',
-  'Work Package',
-  'Programme Track',
-  'Primary Gate',
-  'SOW Class',
-  'SOW ID',
-  'Priority',
-  'Work Type',
-  'Delivery Surface',
-  'Evidence Status',
-  'Target Release ID',
-  'Accountable Owner',
-  'Delivery Owner',
-  'Acceptance Owner',
-  'External Dependency',
-  'Risk',
-  'Blocked Reason',
-  'Target Date',
-];
-const fieldNames = project.fields.nodes.filter(Boolean).map((field) => field.name);
-for (const name of requiredFields) assert.ok(fieldNames.includes(name), `Project field: ${name}`);
+const projectFields = project.fields.nodes.filter(Boolean);
+const fieldNames = projectFields.map((field) => field.name);
+assert.deepEqual([...fieldNames].sort(), [...expectedProjectFieldNames].sort(), 'Project fields');
 assert.ok(!fieldNames.some((name) => /percent|%\s*complete/i.test(name)));
+const projectFieldByName = new Map(projectFields.map((field) => [field.name, field]));
+for (const [fieldName, options] of Object.entries(expectedProjectSingleSelectOptions)) {
+  assert.deepEqual(
+    projectFieldByName.get(fieldName)?.options?.map((option) => option.name),
+    options,
+    `Project options: ${fieldName}`,
+  );
+}
 
 const expectedViews = new Map([
   ['Executive Authorization', ['BOARD_LAYOUT', 'priority:P0 -primary-gate:"Not Applicable"']],
