@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "cotsel.production-readiness.supporting-coverage.v1",
-  "rule": "Each supporting SOW dimension has one primary route. Other issues may contribute evidence but cannot self-accept the dimension.",
+  "schemaVersion": "cotsel.production-readiness.supporting-coverage.v2",
+  "rule": "The coverage contract is the sole authority for supporting-control application. Issue-routed controls have one primaryRoute and optional contributingRoutes. Gate controls apply to candidate-specific reviews with evidenceRoutes. Work-package control-sheet fields apply to every WP parent.",
   "groups": {
     "authorityBoundaries": {
       "expectedCount": 9,
@@ -8,47 +8,56 @@
         {
           "id": "AUTH-01",
           "name": "Primary user identity and roles remain authoritative in Agroasys identity and backend",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "AUTH-02",
           "name": "Participant balances and wallet history remain authoritative in the Agroasys participant ledger",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "AUTH-03",
           "name": "Order payment intent and reservation remain authoritative in the Agroasys backend",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "AUTH-04",
           "name": "Escrow execution and fee accrual remain authoritative in AgroasysEscrow on Base",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "AUTH-05",
           "name": "Operator approval and signing use gateway audit plus signer and chain truth",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "AUTH-06",
           "name": "Canonical Base chain remains authoritative for chain event truth",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "AUTH-07",
           "name": "Treasury entitlement and close require contract plus treasury and reconciliation evidence",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "AUTH-08",
           "name": "Regulated provider or bank remains authoritative for fiat and off-ramp completion",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "AUTH-09",
           "name": "Agroasys backend owns user-visible settlement status using confirmed Cotsel evidence",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         }
       ]
     },
@@ -58,52 +67,62 @@
         {
           "id": "PRES-01",
           "name": "Preserve EIP-712 domain separation and replay-resistant contract authorization",
-          "primaryRoute": "wp1-buyer-acceptance"
+          "primaryRoute": "wp1-buyer-acceptance",
+          "contributingRoutes": ["wp1-contract-deploy"]
         },
         {
           "id": "PRES-02",
           "name": "Preserve SafeERC20, non-reentrancy, checks-effects-interactions, and atomic EIP-3009 funding",
-          "primaryRoute": "wp1-contract-deploy"
+          "primaryRoute": "wp1-contract-deploy",
+          "contributingRoutes": ["wp2-monetary-ingress"]
         },
         {
           "id": "PRES-03",
           "name": "Preserve approved settlement proportions and fee-principal separation",
-          "primaryRoute": "wp1-contract-deploy"
+          "primaryRoute": "wp1-contract-deploy",
+          "contributingRoutes": ["wp2-finality"]
         },
         {
           "id": "PRES-04",
           "name": "Preserve rapid pause while strengthening governed recovery and unpause",
-          "primaryRoute": "wp1-governance"
+          "primaryRoute": "wp1-governance",
+          "contributingRoutes": ["wp1-buyer-acceptance"]
         },
         {
           "id": "PRES-05",
           "name": "Preserve destination-bound and approval-aware treasury controls",
-          "primaryRoute": "wp4-canonical"
+          "primaryRoute": "wp4-makerchecker",
+          "contributingRoutes": ["wp4-canonical", "wp4-ingestion-handoff"]
         },
         {
           "id": "PRES-06",
           "name": "Preserve service authentication, timestamps, nonce replay protection, rotation, and caller allowlists",
-          "primaryRoute": "wp9-privilege"
+          "primaryRoute": "wp9-service-auth",
+          "contributingRoutes": ["wp2-durable-dispatch", "wp9-privilege"]
         },
         {
           "id": "PRES-07",
           "name": "Preserve forced RLS and scoped runtime database sessions while extending least privilege",
-          "primaryRoute": "wp5-roles"
+          "primaryRoute": "wp5-roles",
+          "contributingRoutes": ["wp5-migrations"]
         },
         {
           "id": "PRES-08",
           "name": "Preserve frozen dependency controls while adding complete supply-chain assurance",
-          "primaryRoute": "wp6-supplychain"
+          "primaryRoute": "wp6-supplychain",
+          "contributingRoutes": []
         },
         {
           "id": "PRES-09",
           "name": "Preserve truthful Base Sepolia and mainnet documentation and prove runbooks through drills",
-          "primaryRoute": "wp6-docs"
+          "primaryRoute": "wp6-docs",
+          "contributingRoutes": []
         },
         {
           "id": "PRES-10",
           "name": "Preserve Hardhat, Foundry, fuzz, invariant, and service tests while making critical suites required",
-          "primaryRoute": "wp6-gate"
+          "primaryRoute": "wp6-gate",
+          "contributingRoutes": []
         }
       ]
     },
@@ -113,71 +132,115 @@
         {
           "id": "TEST-01",
           "name": "Static and supply-chain verification",
-          "primaryRoute": "wp6-supplychain"
+          "primaryRoute": "wp6-supplychain",
+          "contributingRoutes": ["wp6-gate", "wp6-images"]
         },
-        { "id": "TEST-02", "name": "Contract verification", "primaryRoute": "wp1-contract-deploy" },
+        {
+          "id": "TEST-02",
+          "name": "Contract verification",
+          "primaryRoute": "wp1-contract-deploy",
+          "contributingRoutes": ["wp6-gate"]
+        },
         {
           "id": "TEST-03",
           "name": "Database migration, rollback, RLS, backup, PITR, and restore verification",
-          "primaryRoute": "wp5-recovery"
+          "primaryRoute": "wp5-recovery",
+          "contributingRoutes": ["wp4-money-export", "wp5-migrations", "wp6-gate"]
         },
         {
           "id": "TEST-04",
           "name": "Service authentication, validation, replay, idempotency, callback, signer, readiness, and safe-error verification",
-          "primaryRoute": "wp6-gate"
+          "primaryRoute": "wp6-gate",
+          "contributingRoutes": [
+            "wp2-finality",
+            "wp2-gateway-broadcast",
+            "wp2-oracle-durability",
+            "wp3-preflight",
+            "wp7-readiness",
+            "wp9-service-auth"
+          ]
         },
         {
           "id": "TEST-05",
           "name": "Failure injection across broadcast, signer, nonce, poison log, reorg, queue, and dependency failure",
-          "primaryRoute": "wp8-drills"
+          "primaryRoute": "wp8-drills",
+          "contributingRoutes": [
+            "wp2-gateway-broadcast",
+            "wp2-oracle-durability",
+            "wp3-poison",
+            "wp3-recon-leases"
+          ]
         },
         {
           "id": "TEST-06",
           "name": "Pinned cross-repository integration verification",
-          "primaryRoute": "wp9-m3"
+          "primaryRoute": "wp9-m3",
+          "contributingRoutes": ["wp6-gate", "wp9-treasury-recovery-journeys", "wp9-user-journeys"]
         },
         {
           "id": "TEST-07",
           "name": "Performance and capacity verification",
-          "primaryRoute": "wp7-iac"
+          "primaryRoute": "wp7-iac",
+          "contributingRoutes": ["wp3-chain-coverage", "wp4-money-export"]
         },
         {
           "id": "TEST-08",
           "name": "Independent security verification",
-          "primaryRoute": "wp10-independent"
+          "primaryRoute": "wp10-independent",
+          "contributingRoutes": []
         },
         {
           "id": "TEST-09",
           "name": "Zero-value and bounded-value pilot rehearsal",
-          "primaryRoute": "wp11-rehearsal"
+          "primaryRoute": "wp11-rehearsal",
+          "contributingRoutes": ["wp9-treasury-recovery-journeys"]
         }
       ]
     },
     "goldenJourneys": {
       "expectedCount": 7,
       "entries": [
-        { "id": "GJ-01", "name": "Login and session exchange", "primaryRoute": "wp9-session" },
-        { "id": "GJ-02", "name": "Wallet and order funding", "primaryRoute": "wp9-user-journeys" },
-        { "id": "GJ-03", "name": "Stage 1 release", "primaryRoute": "wp9-user-journeys" },
+        {
+          "id": "GJ-01",
+          "name": "Login and session exchange",
+          "primaryRoute": "wp9-session",
+          "contributingRoutes": ["wp0-journeys", "wp9-privilege", "wp9-user-journeys"]
+        },
+        {
+          "id": "GJ-02",
+          "name": "Wallet and order funding",
+          "primaryRoute": "wp9-user-journeys",
+          "contributingRoutes": ["wp0-journeys"]
+        },
+        {
+          "id": "GJ-03",
+          "name": "Stage 1 release",
+          "primaryRoute": "wp9-user-journeys",
+          "contributingRoutes": ["wp0-journeys"]
+        },
         {
           "id": "GJ-04",
           "name": "Inspection and final release",
-          "primaryRoute": "wp9-user-journeys"
+          "primaryRoute": "wp9-user-journeys",
+          "contributingRoutes": ["wp0-journeys"]
         },
         {
           "id": "GJ-05",
           "name": "Treasury claim and handoff",
-          "primaryRoute": "wp9-treasury-recovery-journeys"
+          "primaryRoute": "wp9-treasury-recovery-journeys",
+          "contributingRoutes": ["wp0-journeys"]
         },
         {
           "id": "GJ-06",
           "name": "Index, reconcile, and recover",
-          "primaryRoute": "wp9-treasury-recovery-journeys"
+          "primaryRoute": "wp9-treasury-recovery-journeys",
+          "contributingRoutes": ["wp0-journeys"]
         },
         {
           "id": "GJ-07",
           "name": "Incident containment",
-          "primaryRoute": "wp9-treasury-recovery-journeys"
+          "primaryRoute": "wp9-treasury-recovery-journeys",
+          "contributingRoutes": ["wp0-journeys"]
         }
       ]
     },
@@ -187,37 +250,44 @@
         {
           "id": "SEC-01",
           "name": "Use managed identities and KMS, HSM, or MPC for production signers",
-          "primaryRoute": "wp2-oracle-custody"
+          "primaryRoute": "wp2-oracle-custody",
+          "contributingRoutes": ["wp1-role-separation"]
         },
         {
           "id": "SEC-02",
           "name": "Validate signer identity and decode returned transactions against canonical intent",
-          "primaryRoute": "wp2-signer-binding"
+          "primaryRoute": "wp2-signer-binding",
+          "contributingRoutes": []
         },
         {
           "id": "SEC-03",
           "name": "Use private ingress, authenticated services, least-privilege database roles, and origin denial",
-          "primaryRoute": "wp7-network"
+          "primaryRoute": "wp7-network",
+          "contributingRoutes": ["wp1-role-separation", "wp5-roles", "wp7-config"]
         },
         {
           "id": "SEC-04",
           "name": "Enable secret scanning and current code, dependency, container, IaC, and license gates",
-          "primaryRoute": "wp6-supplychain"
+          "primaryRoute": "wp6-supplychain",
+          "contributingRoutes": []
         },
         {
           "id": "SEC-05",
           "name": "Use protected environments, signed artifacts, read-only CI tokens, and audited bypass",
-          "primaryRoute": "wp6-ownership"
+          "primaryRoute": "wp6-ownership",
+          "contributingRoutes": ["wp6-supplychain"]
         },
         {
           "id": "SEC-06",
           "name": "Retain append-only privileged, financial, and configuration audit evidence",
-          "primaryRoute": "wp8-evidence"
+          "primaryRoute": "wp8-evidence",
+          "contributingRoutes": ["wp10-controls", "wp10-errors", "wp9-privilege"]
         },
         {
           "id": "SEC-07",
           "name": "Complete independent contract, API, cloud, and financial-workflow assurance",
-          "primaryRoute": "wp10-independent"
+          "primaryRoute": "wp10-independent",
+          "contributingRoutes": []
         }
       ]
     },
@@ -227,34 +297,50 @@
         {
           "id": "COMP-01",
           "name": "Data inventory and classification",
-          "primaryRoute": "wp10-controls"
+          "primaryRoute": "wp10-controls",
+          "contributingRoutes": ["wp9-ricardian", "wp9-session"]
         },
         {
           "id": "COMP-02",
           "name": "Identity and compliance authority",
-          "primaryRoute": "wp10-controls"
+          "primaryRoute": "wp10-controls",
+          "contributingRoutes": []
         },
         {
           "id": "COMP-03",
           "name": "Privacy rights and immutable financial-record exceptions",
-          "primaryRoute": "wp10-controls"
+          "primaryRoute": "wp10-controls",
+          "contributingRoutes": ["wp9-ricardian"]
         },
-        { "id": "COMP-04", "name": "Telemetry privacy", "primaryRoute": "wp8-observability" },
-        { "id": "COMP-05", "name": "Financial controls", "primaryRoute": "wp4-makerchecker" },
+        {
+          "id": "COMP-04",
+          "name": "Telemetry privacy",
+          "primaryRoute": "wp8-observability",
+          "contributingRoutes": ["wp10-controls", "wp10-errors"]
+        },
+        {
+          "id": "COMP-05",
+          "name": "Financial controls",
+          "primaryRoute": "wp10-controls",
+          "contributingRoutes": ["wp4-ingestion-handoff", "wp4-makerchecker"]
+        },
         {
           "id": "COMP-06",
           "name": "External-provider assurance and authoritative-state mapping",
-          "primaryRoute": "wp4-ingestion-handoff"
+          "primaryRoute": "wp4-ingestion-handoff",
+          "contributingRoutes": ["wp10-controls"]
         },
         {
           "id": "COMP-07",
           "name": "Evidence retention, integrity, legal hold, access audit, and destruction approval",
-          "primaryRoute": "wp8-evidence"
+          "primaryRoute": "wp8-evidence",
+          "contributingRoutes": ["wp10-controls"]
         },
         {
           "id": "COMP-08",
           "name": "Incident and breach decision, notification, and evidence preservation",
-          "primaryRoute": "wp10-controls"
+          "primaryRoute": "wp10-controls",
+          "contributingRoutes": []
         }
       ]
     },
@@ -264,42 +350,50 @@
         {
           "id": "INFRA-01",
           "name": "Private network, approved edge, TLS, WAF, rate controls, and origin denial",
-          "primaryRoute": "wp7-network"
+          "primaryRoute": "wp7-network",
+          "contributingRoutes": ["wp7-iac"]
         },
         {
           "id": "INFRA-02",
           "name": "Immutable non-root compute with resource controls, replicas, and safe rollout",
-          "primaryRoute": "wp6-images"
+          "primaryRoute": "wp6-images",
+          "contributingRoutes": ["wp7-iac"]
         },
         {
           "id": "INFRA-03",
           "name": "Managed HA Postgres, scoped roles, versioned migrations, encryption, PITR, and connection limits",
-          "primaryRoute": "wp5-recovery"
+          "primaryRoute": "wp5-recovery",
+          "contributingRoutes": ["wp5-migrations", "wp5-roles", "wp7-iac", "wp7-network"]
         },
         {
           "id": "INFRA-04",
           "name": "Managed HA support store and durable queue or DLQ with leases, redrive, and backpressure",
-          "primaryRoute": "wp2-durable-dispatch"
+          "primaryRoute": "wp2-durable-dispatch",
+          "contributingRoutes": ["wp7-iac", "wp7-network"]
         },
         {
           "id": "INFRA-05",
           "name": "Primary and fallback RPC with preflight, capacity, circuit breaker, and finality support",
-          "primaryRoute": "wp7-readiness"
+          "primaryRoute": "wp7-readiness",
+          "contributingRoutes": ["wp3-preflight", "wp7-iac"]
         },
         {
           "id": "INFRA-06",
           "name": "Managed secret and signer identity with rotation, revocation, access audit, and no plaintext export",
-          "primaryRoute": "wp2-oracle-custody"
+          "primaryRoute": "wp2-oracle-custody",
+          "contributingRoutes": ["wp1-role-separation", "wp7-config", "wp7-iac"]
         },
         {
           "id": "INFRA-07",
           "name": "Build once, scan, sign, protect promotion, record manifest, and preserve rollback compatibility",
-          "primaryRoute": "wp6-images"
+          "primaryRoute": "wp6-images",
+          "contributingRoutes": ["wp7-iac"]
         },
         {
           "id": "INFRA-08",
           "name": "Central redacted telemetry, SLOs, settlement dashboards, synthetics, and pager routing",
-          "primaryRoute": "wp8-observability"
+          "primaryRoute": "wp8-observability",
+          "contributingRoutes": ["wp7-iac"]
         }
       ]
     },
@@ -309,113 +403,283 @@
         {
           "id": "FAIL-01",
           "name": "Managed signer changes intended transaction",
-          "primaryRoute": "wp2-signer-binding"
+          "primaryRoute": "wp2-signer-binding",
+          "contributingRoutes": ["wp8-drills"]
         },
         {
           "id": "FAIL-02",
           "name": "Broadcast accepted but receipt or hash handling times out",
-          "primaryRoute": "wp2-gateway-broadcast"
+          "primaryRoute": "wp2-gateway-broadcast",
+          "contributingRoutes": ["wp2-oracle-durability", "wp8-drills"]
         },
         {
           "id": "FAIL-03",
           "name": "In-memory worker dies",
-          "primaryRoute": "wp2-durable-dispatch"
+          "primaryRoute": "wp2-durable-dispatch",
+          "contributingRoutes": ["wp8-drills"]
         },
         {
           "id": "FAIL-04",
           "name": "Poison or undecodable chain log",
-          "primaryRoute": "wp3-poison"
+          "primaryRoute": "wp3-poison",
+          "contributingRoutes": ["wp8-drills"]
         },
         {
           "id": "FAIL-05",
           "name": "Chain trade absent from indexer",
-          "primaryRoute": "wp3-chain-coverage"
+          "primaryRoute": "wp3-chain-coverage",
+          "contributingRoutes": ["wp8-drills"]
         },
         {
           "id": "FAIL-06",
           "name": "Chain reorganization or provider disagreement",
-          "primaryRoute": "wp4-canonical"
+          "primaryRoute": "wp4-canonical",
+          "contributingRoutes": ["wp2-finality", "wp8-drills"]
         },
         {
           "id": "FAIL-07",
           "name": "Reconciliation cap leaves later trades untouched",
-          "primaryRoute": "wp3-chain-coverage"
+          "primaryRoute": "wp3-chain-coverage",
+          "contributingRoutes": ["wp3-recon-leases", "wp8-drills"]
         },
         {
           "id": "FAIL-08",
           "name": "Oracle direct early-release call",
-          "primaryRoute": "wp1-buyer-acceptance"
+          "primaryRoute": "wp1-buyer-acceptance",
+          "contributingRoutes": ["wp8-drills"]
         },
         {
           "id": "FAIL-09",
           "name": "Lost or compromised contract administrator",
-          "primaryRoute": "wp1-governance"
+          "primaryRoute": "wp1-governance",
+          "contributingRoutes": ["wp8-drills"]
         },
         {
           "id": "FAIL-10",
           "name": "Treasury ingestion stops while health remains green",
-          "primaryRoute": "wp4-ingestion-handoff"
+          "primaryRoute": "wp4-ingestion-handoff",
+          "contributingRoutes": ["wp8-drills"]
         },
         {
           "id": "FAIL-11",
           "name": "Provider CREATED or FAILED state is treated as handed off",
-          "primaryRoute": "wp4-ingestion-handoff"
+          "primaryRoute": "wp4-ingestion-handoff",
+          "contributingRoutes": ["wp8-drills"]
         },
         {
           "id": "FAIL-12",
           "name": "Duplicate, delayed, or forged callback",
-          "primaryRoute": "wp2-durable-dispatch"
+          "primaryRoute": "wp2-durable-dispatch",
+          "contributingRoutes": ["wp8-drills"]
         },
         {
           "id": "FAIL-13",
           "name": "Startup migration races or fails partially",
-          "primaryRoute": "wp5-migrations"
+          "primaryRoute": "wp5-migrations",
+          "contributingRoutes": ["wp8-drills"]
         },
-        { "id": "FAIL-14", "name": "Backup cannot restore", "primaryRoute": "wp5-recovery" },
+        {
+          "id": "FAIL-14",
+          "name": "Backup cannot restore",
+          "primaryRoute": "wp5-recovery",
+          "contributingRoutes": ["wp8-drills"]
+        },
         {
           "id": "FAIL-15",
           "name": "Wrong chain, contract, or ABI deployed",
-          "primaryRoute": "wp1-contract-deploy"
+          "primaryRoute": "wp1-contract-deploy",
+          "contributingRoutes": ["wp7-config", "wp8-drills"]
         },
         {
           "id": "FAIL-16",
           "name": "RPC or signer provider degrades after user commitment",
-          "primaryRoute": "wp2-oracle-custody"
+          "primaryRoute": "wp7-readiness",
+          "contributingRoutes": ["wp2-oracle-custody", "wp8-drills"]
         },
         {
           "id": "FAIL-17",
           "name": "Sensitive data enters telemetry",
-          "primaryRoute": "wp8-observability"
+          "primaryRoute": "wp8-observability",
+          "contributingRoutes": ["wp8-drills"]
         },
         {
           "id": "FAIL-18",
           "name": "CI aggregate or protected deployment is bypassed",
-          "primaryRoute": "wp6-gate"
+          "primaryRoute": "wp6-gate",
+          "contributingRoutes": ["wp6-ownership", "wp8-drills"]
         },
-        { "id": "FAIL-19", "name": "No alert owner responds", "primaryRoute": "wp8-oncall" }
+        {
+          "id": "FAIL-19",
+          "name": "No alert owner responds",
+          "primaryRoute": "wp8-oncall",
+          "contributingRoutes": ["wp8-drills", "wp8-observability"]
+        }
       ]
     },
     "engineeringGates": {
       "expectedCount": 6,
       "entries": [
-        { "id": "E-0", "name": "Scope and identities", "primaryRoute": "wp0-charter" },
-        { "id": "E-1", "name": "Current contract", "primaryRoute": "wp1-contract-deploy" },
-        { "id": "E-2", "name": "Transaction safety", "primaryRoute": "wp2-gateway-broadcast" },
-        { "id": "E-3", "name": "Data integrity", "primaryRoute": "wp3-chain-coverage" },
-        { "id": "E-4", "name": "Platform", "primaryRoute": "wp7-iac" },
-        { "id": "E-5", "name": "Operations", "primaryRoute": "wp8-drills" }
+        {
+          "id": "E-0",
+          "name": "Scope and identities",
+          "application": {
+            "type": "release-gate",
+            "gate": "E-0"
+          },
+          "evidenceRoutes": ["wp0-charter", "wp0-release-evidence", "wp0-governance"]
+        },
+        {
+          "id": "E-1",
+          "name": "Current contract",
+          "application": {
+            "type": "release-gate",
+            "gate": "E-1"
+          },
+          "evidenceRoutes": [
+            "wp1-contract-deploy",
+            "wp1-buyer-acceptance",
+            "wp1-governance",
+            "wp1-role-separation"
+          ]
+        },
+        {
+          "id": "E-2",
+          "name": "Transaction safety",
+          "application": {
+            "type": "release-gate",
+            "gate": "E-2"
+          },
+          "evidenceRoutes": [
+            "wp2-gateway-broadcast",
+            "wp2-signer-binding",
+            "wp2-durable-dispatch",
+            "wp2-oracle-durability",
+            "wp2-finality",
+            "wp2-oracle-custody"
+          ]
+        },
+        {
+          "id": "E-3",
+          "name": "Data integrity",
+          "application": {
+            "type": "release-gate",
+            "gate": "E-3"
+          },
+          "evidenceRoutes": [
+            "wp3-poison",
+            "wp3-chain-coverage",
+            "wp3-recon-leases",
+            "wp4-canonical",
+            "wp4-ingestion-handoff",
+            "wp4-makerchecker",
+            "wp5-migrations",
+            "wp5-roles",
+            "wp5-recovery"
+          ]
+        },
+        {
+          "id": "E-4",
+          "name": "Platform",
+          "application": {
+            "type": "release-gate",
+            "gate": "E-4"
+          },
+          "evidenceRoutes": [
+            "wp6-images",
+            "wp6-supplychain",
+            "wp6-gate",
+            "wp6-ownership",
+            "wp7-iac",
+            "wp7-network",
+            "wp7-config",
+            "wp7-readiness"
+          ]
+        },
+        {
+          "id": "E-5",
+          "name": "Operations",
+          "application": {
+            "type": "release-gate",
+            "gate": "E-5"
+          },
+          "evidenceRoutes": ["wp8-observability", "wp8-oncall", "wp8-evidence", "wp8-drills"]
+        }
       ]
     },
     "pilotGates": {
       "expectedCount": 7,
       "entries": [
-        { "id": "P-0", "name": "All engineering gates", "primaryRoute": "wp11-rehearsal" },
-        { "id": "P-1", "name": "Cross-repository journeys", "primaryRoute": "wp9-m3" },
-        { "id": "P-2", "name": "Security and compliance", "primaryRoute": "wp10-independent" },
-        { "id": "P-3", "name": "Participant controls", "primaryRoute": "wp11-participants" },
-        { "id": "P-4", "name": "Operational readiness", "primaryRoute": "wp8-drills" },
-        { "id": "P-5", "name": "Fresh rehearsal", "primaryRoute": "wp11-rehearsal" },
-        { "id": "P-6", "name": "Explicit GO", "primaryRoute": "wp11-go-no-go" }
+        {
+          "id": "P-0",
+          "name": "All engineering gates",
+          "application": {
+            "type": "release-gate",
+            "gate": "P-0"
+          },
+          "evidenceRoutes": ["wp11-rehearsal"]
+        },
+        {
+          "id": "P-1",
+          "name": "Cross-repository journeys",
+          "application": {
+            "type": "release-gate",
+            "gate": "P-1"
+          },
+          "evidenceRoutes": [
+            "wp9-m3",
+            "wp9-session",
+            "wp9-service-auth",
+            "wp9-privilege",
+            "wp9-ricardian",
+            "wp9-user-journeys",
+            "wp9-treasury-recovery-journeys"
+          ]
+        },
+        {
+          "id": "P-2",
+          "name": "Security and compliance",
+          "application": {
+            "type": "release-gate",
+            "gate": "P-2"
+          },
+          "evidenceRoutes": ["wp10-controls", "wp10-independent", "wp10-errors"]
+        },
+        {
+          "id": "P-3",
+          "name": "Participant controls",
+          "application": {
+            "type": "release-gate",
+            "gate": "P-3"
+          },
+          "evidenceRoutes": ["wp11-participants"]
+        },
+        {
+          "id": "P-4",
+          "name": "Operational readiness",
+          "application": {
+            "type": "release-gate",
+            "gate": "P-4"
+          },
+          "evidenceRoutes": ["wp8-observability", "wp8-oncall", "wp8-evidence", "wp8-drills"]
+        },
+        {
+          "id": "P-5",
+          "name": "Fresh rehearsal",
+          "application": {
+            "type": "release-gate",
+            "gate": "P-5"
+          },
+          "evidenceRoutes": ["wp11-rehearsal"]
+        },
+        {
+          "id": "P-6",
+          "name": "Explicit GO",
+          "application": {
+            "type": "release-gate",
+            "gate": "P-6"
+          },
+          "evidenceRoutes": ["wp11-go-no-go"]
+        }
       ]
     },
     "mainnetConditions": {
@@ -424,70 +688,120 @@
         {
           "id": "MAINNET-01",
           "name": "Current audited contract",
-          "primaryRoute": "wp12-contract-release"
+          "primaryRoute": "wp12-contract-release",
+          "contributingRoutes": ["wp1-cohort-rollback", "wp12-authority"]
         },
         {
           "id": "MAINNET-02",
           "name": "Protected application release",
-          "primaryRoute": "wp12-contract-release"
+          "primaryRoute": "wp12-contract-release",
+          "contributingRoutes": []
         },
-        { "id": "MAINNET-03", "name": "Financial operations", "primaryRoute": "wp12-operations" },
+        {
+          "id": "MAINNET-03",
+          "name": "Financial operations",
+          "primaryRoute": "wp12-operations",
+          "contributingRoutes": ["wp12-authority"]
+        },
         {
           "id": "MAINNET-04",
           "name": "Capacity and reliability",
-          "primaryRoute": "wp12-operations"
+          "primaryRoute": "wp12-operations",
+          "contributingRoutes": []
         },
         {
           "id": "MAINNET-05",
           "name": "Independent assurance",
-          "primaryRoute": "wp12-assurance-go"
+          "primaryRoute": "wp12-assurance-go",
+          "contributingRoutes": []
         },
-        { "id": "MAINNET-06", "name": "Four-role approval", "primaryRoute": "wp12-assurance-go" }
+        {
+          "id": "MAINNET-06",
+          "name": "Four-role approval",
+          "primaryRoute": "wp12-assurance-go",
+          "contributingRoutes": []
+        }
       ]
     },
     "governanceDecisions": {
       "expectedCount": 7,
       "entries": [
-        { "id": "GOV-01", "name": "Accept work-package scope", "primaryRoute": "wp0-governance" },
+        {
+          "id": "GOV-01",
+          "name": "Accept work-package scope",
+          "primaryRoute": "wp0-governance",
+          "contributingRoutes": []
+        },
         {
           "id": "GOV-02",
           "name": "Approve protocol and security design",
-          "primaryRoute": "wp0-governance"
+          "primaryRoute": "wp0-governance",
+          "contributingRoutes": []
         },
-        { "id": "GOV-03", "name": "Promote to staging", "primaryRoute": "wp0-governance" },
-        { "id": "GOV-04", "name": "Approve external pilot", "primaryRoute": "wp11-go-no-go" },
+        {
+          "id": "GOV-03",
+          "name": "Promote to staging",
+          "primaryRoute": "wp0-governance",
+          "contributingRoutes": []
+        },
+        {
+          "id": "GOV-04",
+          "name": "Approve external pilot",
+          "primaryRoute": "wp11-go-no-go",
+          "contributingRoutes": ["wp0-governance"]
+        },
         {
           "id": "GOV-05",
           "name": "Accept residual security risk",
-          "primaryRoute": "wp0-governance"
+          "primaryRoute": "wp0-governance",
+          "contributingRoutes": []
         },
-        { "id": "GOV-06", "name": "Approve mainnet", "primaryRoute": "wp12-assurance-go" },
-        { "id": "GOV-07", "name": "Expand pilot limits", "primaryRoute": "wp11-go-no-go" }
+        {
+          "id": "GOV-06",
+          "name": "Approve mainnet",
+          "primaryRoute": "wp12-assurance-go",
+          "contributingRoutes": ["wp0-governance", "wp1-cohort-rollback", "wp12-authority"]
+        },
+        {
+          "id": "GOV-07",
+          "name": "Expand pilot limits",
+          "primaryRoute": "wp11-go-no-go",
+          "contributingRoutes": ["wp0-governance"]
+        }
       ]
     },
     "reporting": {
       "expectedCount": 5,
       "entries": [
-        { "id": "REPORT-01", "name": "Weekly blocker register", "primaryRoute": "wp0-governance" },
+        {
+          "id": "REPORT-01",
+          "name": "Weekly blocker register",
+          "primaryRoute": "wp0-governance",
+          "contributingRoutes": ["wp8-oncall"]
+        },
         {
           "id": "REPORT-02",
           "name": "Release manifest for every deployed candidate",
-          "primaryRoute": "wp0-release-evidence"
+          "primaryRoute": "wp0-release-evidence",
+          "contributingRoutes": ["wp8-evidence"]
         },
         {
           "id": "REPORT-03",
           "name": "Daily pilot reconciliation and incident summary",
-          "primaryRoute": "wp11-rehearsal"
+          "primaryRoute": "wp11-rehearsal",
+          "contributingRoutes": ["wp0-governance", "wp11-go-no-go", "wp11-participants"]
         },
         {
           "id": "REPORT-04",
           "name": "Capacity, signer, RPC, queue, indexer, reconciliation, treasury, and support metrics",
-          "primaryRoute": "wp11-go-no-go"
+          "primaryRoute": "wp8-observability",
+          "contributingRoutes": ["wp0-governance", "wp11-go-no-go"]
         },
         {
           "id": "REPORT-05",
           "name": "Decision log for exception, rollback, pause, signer, migration, and limit changes",
-          "primaryRoute": "wp0-governance"
+          "primaryRoute": "wp0-governance",
+          "contributingRoutes": ["wp11-go-no-go"]
         }
       ]
     },
@@ -497,17 +811,20 @@
         {
           "id": "DEC-01",
           "name": "Confirm the authoritative cloud and control plane",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": ["wp7-iac"]
         },
         {
           "id": "DEC-02",
           "name": "Approve pilot participant class, jurisdiction, values, limits, and support model",
-          "primaryRoute": "wp11-participants"
+          "primaryRoute": "wp11-participants",
+          "contributingRoutes": ["wp0-charter"]
         },
         {
           "id": "DEC-03",
           "name": "Approve protocol governance and whether to replace the immutable contract design before mainnet",
-          "primaryRoute": "wp12-authority"
+          "primaryRoute": "wp12-authority",
+          "contributingRoutes": ["wp0-charter"]
         }
       ]
     },
@@ -517,22 +834,26 @@
         {
           "id": "ASSUMPTION-01",
           "name": "Agroasys remains primary end-user identity, order, participant-ledger, and wallet-history authority",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "ASSUMPTION-02",
           "name": "Cotsel remains the Base settlement and control subsystem and Cotsel-Dash remains an operator surface",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "ASSUMPTION-03",
           "name": "Base Sepolia is used for rehearsal and Base mainnet remains separately approval-gated",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "ASSUMPTION-04",
           "name": "External cloud, signer, monitoring, provider, and compliance controls supply auditable evidence",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         }
       ]
     },
@@ -542,53 +863,153 @@
         {
           "id": "EXCLUSION-01",
           "name": "The SOW does not provide legal advice, regulatory classification, financial audit, or certification",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "EXCLUSION-02",
           "name": "The audit did not inspect secrets, production data, private cloud consoles, or provider accounts",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "EXCLUSION-03",
           "name": "The SOW did not itself authorize GitHub, cloud, contract, or production changes",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         }
       ]
     },
     "environments": {
       "expectedCount": 4,
       "entries": [
-        { "id": "ENV-01", "name": "Local and CI verification only", "primaryRoute": "wp0-charter" },
+        {
+          "id": "ENV-01",
+          "name": "Local and CI verification only",
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
+        },
         {
           "id": "ENV-02",
           "name": "Private Base Sepolia staging with no public users or real commercial value",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "ENV-03",
           "name": "Controlled pilot with named users, caps, on-call, support, and stop authority",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         },
         {
           "id": "ENV-04",
           "name": "Base mainnet with separate approval and no assumed promotion from pilot",
-          "primaryRoute": "wp0-charter"
+          "primaryRoute": "wp0-charter",
+          "contributingRoutes": []
         }
       ]
     },
     "workPackageControlSheet": {
       "expectedCount": 9,
       "entries": [
-        { "id": "WPCS-01", "name": "Objective", "primaryRoute": "wp0-governance" },
-        { "id": "WPCS-02", "name": "In scope and out of scope", "primaryRoute": "wp0-governance" },
-        { "id": "WPCS-03", "name": "Owner and reviewers", "primaryRoute": "wp0-governance" },
-        { "id": "WPCS-04", "name": "Dependencies", "primaryRoute": "wp0-governance" },
-        { "id": "WPCS-05", "name": "Implementation", "primaryRoute": "wp0-governance" },
-        { "id": "WPCS-06", "name": "Verification", "primaryRoute": "wp0-governance" },
-        { "id": "WPCS-07", "name": "Acceptance evidence", "primaryRoute": "wp0-release-evidence" },
-        { "id": "WPCS-08", "name": "Rollback and containment", "primaryRoute": "wp0-governance" },
-        { "id": "WPCS-09", "name": "Residual risk", "primaryRoute": "wp0-governance" }
+        {
+          "id": "WPCS-01",
+          "name": "Objective",
+          "application": {
+            "type": "all-work-package-parents"
+          }
+        },
+        {
+          "id": "WPCS-02",
+          "name": "In scope and out of scope",
+          "application": {
+            "type": "all-work-package-parents"
+          }
+        },
+        {
+          "id": "WPCS-03",
+          "name": "Owner and reviewers",
+          "application": {
+            "type": "all-work-package-parents"
+          }
+        },
+        {
+          "id": "WPCS-04",
+          "name": "Dependencies",
+          "application": {
+            "type": "all-work-package-parents"
+          }
+        },
+        {
+          "id": "WPCS-05",
+          "name": "Implementation",
+          "application": {
+            "type": "all-work-package-parents"
+          }
+        },
+        {
+          "id": "WPCS-06",
+          "name": "Verification",
+          "application": {
+            "type": "all-work-package-parents"
+          }
+        },
+        {
+          "id": "WPCS-07",
+          "name": "Acceptance evidence",
+          "application": {
+            "type": "all-work-package-parents"
+          }
+        },
+        {
+          "id": "WPCS-08",
+          "name": "Rollback and containment",
+          "application": {
+            "type": "all-work-package-parents"
+          }
+        },
+        {
+          "id": "WPCS-09",
+          "name": "Residual risk",
+          "application": {
+            "type": "all-work-package-parents"
+          }
+        }
+      ]
+    },
+    "programmeInvariants": {
+      "expectedCount": 5,
+      "entries": [
+        {
+          "id": "PROG-01",
+          "name": "Bind verification to the exact promoted release and configuration",
+          "primaryRoute": "wp0-release-evidence",
+          "contributingRoutes": []
+        },
+        {
+          "id": "PROG-02",
+          "name": "Require detection, stop, recovery authority, and reconciliation before resumption",
+          "primaryRoute": "wp8-drills",
+          "contributingRoutes": []
+        },
+        {
+          "id": "PROG-03",
+          "name": "Forecast only after WP-0 and a measured deployed rehearsal",
+          "primaryRoute": "wp0-governance",
+          "contributingRoutes": []
+        },
+        {
+          "id": "PROG-04",
+          "name": "Accept work by control evidence and dependency state, never by merge or issue state alone",
+          "primaryRoute": "wp0-governance",
+          "contributingRoutes": []
+        },
+        {
+          "id": "PROG-05",
+          "name": "Define the complete golden-journey matrix before implementing cross-repository acceptance",
+          "primaryRoute": "wp0-journeys",
+          "contributingRoutes": ["wp9-m3", "wp9-user-journeys", "wp9-treasury-recovery-journeys"]
+        }
       ]
     }
   }

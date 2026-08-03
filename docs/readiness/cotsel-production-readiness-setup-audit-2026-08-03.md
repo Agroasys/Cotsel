@@ -10,21 +10,21 @@
 
 ## Executive verdict
 
-The programme-control setup is complete and live. The source SOW, requirement routes, supporting controls, work-package definitions, issue hierarchy, assignments, milestones, Project fields and views, issue forms, GitHub App configuration, synchronization workflow, and verification scripts are present and reconciled.
+The initial programme hierarchy and Project configuration were created, but the first setup audit overstated three controls: complete work-package sheets, exact issue-body verification, and exact milestone-description verification. A source-led re-audit also found two unrouted preservation controls, eight primary-route inconsistencies, generic supporting-control rows, asymmetric gate routing, four omitted cross-cutting programme rules, and array-order ownership for reused issues.
 
-This verdict applies only to programme setup. It does not claim that the SOW remediation, engineering rehearsals, controlled-pilot authorization, or Base mainnet authorization is complete. The governing SOW verdict remains **NO-GO** until the applicable release-specific evidence is accepted.
+The repository now contains the version-two repair for those control-plane defects. This document does not claim live completion until the repaired specifications are merged, synchronized to GitHub, and accepted by the full live audit.
 
-The repository and Project are public under the repository-owner decision recorded for this setup. The accidental “CONFIDENTIAL” wording in the supplied document was not treated as an access restriction.
+This audit concerns programme setup only. It does not claim that SOW implementation, engineering rehearsal, controlled-pilot authorization, or Base mainnet authorization has started or completed. The SOW verdict remains **NO-GO**.
 
-## Governing source and completeness baseline
+## Governing source
 
-The source is `Cotsel Production Readiness-SOW.pdf`, dated 2 August 2026. Its SHA-256 checksum is:
+The governing source is `Cotsel Production Readiness-SOW.pdf`, dated 2 August 2026. Its SHA-256 is:
 
 ```text
 775b07a7a44bc5798e0cfe4eb216abb11c81e248356061f4d94b779b3337c8fb
 ```
 
-The source contains 38 pages. The machine-readable source contract records all 58 finding rows:
+The source has 38 pages. The source contract preserves 58 finding rows:
 
 | Priority        | Finding IDs       |  Count |
 | --------------- | ----------------- | -----: |
@@ -33,181 +33,125 @@ The source contains 38 pages. The machine-readable source contract records all 5
 | P2 improvement  | I-01 through I-07 |      7 |
 | **Total**       |                   | **58** |
 
-Each finding preserves four separate fields: **ID**, **Required work**, **Implementation requirement**, and **Acceptance evidence**. The validator proves that every finding appears exactly once in the primary issue-route contract and remains assigned to its SOW work package.
+Each finding retains **ID**, **Required work**, **Implementation requirement**, and **Acceptance evidence** separately. The validator proves that every finding appears once and remains in its SOW work package.
 
-The supporting-coverage contract additionally records 131 unique SOW controls across authority boundaries, preservation rules, test layers, golden journeys, security and compliance controls, infrastructure layers, failure and recovery cases, engineering gates, pilot gates, mainnet conditions, governance decisions, reporting, residual decisions, assumptions, exclusions, environments, and work-package control-sheet requirements.
+## Corrected supporting-control model
 
-## Live issue hierarchy
+The repaired model contains 136 supporting controls:
 
-The hierarchy contains 70 primary programme issues, all in `Agroasys/Cotsel`:
+| Control class                                     |   Count | Application                                           |
+| ------------------------------------------------- | ------: | ----------------------------------------------------- |
+| Issue-routed implementation and decision controls |     114 | One primary route plus explicit evidence contributors |
+| Engineering and pilot gate definitions            |      13 | Candidate-specific release-gate review                |
+| Work-package control-sheet fields                 |       9 | Every WP-0 through WP-12 parent                       |
+| **Total**                                         | **136** |                                                       |
 
-| Level                   | Live issues       |  Count |
-| ----------------------- | ----------------- | -----: |
-| Canonical programme     | #621              |      1 |
-| Work-package parents    | #622 through #634 |     13 |
-| Primary delivery issues | #635 through #690 |     56 |
-| **Total**               |                   | **70** |
+The first 131 controls normalize the SOW's authority, preservation, testing, journey, security, compliance, infrastructure, failure, gate, mainnet, governance, reporting, decision, assumption, exclusion, environment, and work-package tables. Five programme invariants explicitly retain governing prose that the original contract skipped:
 
-The parent-child structure is verified live:
+- Bind verification to the exact promoted release and configuration.
+- Require detection, stop, recovery authority, and reconciliation before resumption.
+- Forecast only after WP-0 and a measured deployed rehearsal.
+- Accept work by control evidence and dependency state, never merge or issue state alone.
+- Define the complete seven-journey matrix before cross-repository acceptance work.
 
-| Work package | Parent | Child issues | Child count |
-| ------------ | -----: | ------------ | ----------: |
-| WP-0         |   #622 | #635–#638    |           4 |
-| WP-1         |   #623 | #639–#643    |           5 |
-| WP-2         |   #624 | #644–#650    |           7 |
-| WP-3         |   #625 | #651–#654    |           4 |
-| WP-4         |   #626 | #655–#658    |           4 |
-| WP-5         |   #627 | #659–#661    |           3 |
-| WP-6         |   #628 | #662–#666    |           5 |
-| WP-7         |   #629 | #667–#670    |           4 |
-| WP-8         |   #630 | #671–#674    |           4 |
-| WP-9         |   #631 | #675–#680    |           6 |
-| WP-10        |   #632 | #681–#683    |           3 |
-| WP-11        |   #633 | #684–#686    |           3 |
-| WP-12        |   #634 | #687–#690    |           4 |
+Supporting rows use source-specific implementation requirements and acceptance evidence. They are disclosed as structured paraphrases where the SOW uses different source columns; they are not described as byte-identical source rows.
 
-Every primary issue contains the required four-column SOW table. Each primary delivery issue also contains Outcome, Governing source and traceability, Current verified state, Protected flow and scope, Ownership, Dependencies, Supporting issues, Implementation requirements, Acceptance criteria, Negative and failure cases, Evidence required, Rollback and containment, Residual risk, Non-goals, and Closure and invalidation rule.
+The coverage contract is the sole routing authority. Route files no longer duplicate control ownership. Contributor rows are rendered separately and state that the contributor cannot self-accept the control.
 
-The live audit confirms that all 70 primary issues have exactly the two authorized assignees: `Astton` and `czpyioe`. No primary issue is assigned to another account.
+## Corrected routing
 
-## Reused supporting issues
+The repair makes the following material corrections:
 
-The Project includes 15 existing Cotsel issues as supporting delivery history or adjacent implementation lanes:
+- `PRES-06` receives a dedicated WP-9 service-authentication issue for shared nonce storage, rotation, caller allowlists, and fail-closed behavior.
+- `PRES-10`, `TEST-05`, `TEST-07`, `SEC-06`, `FAIL-12`, `FAIL-15`, and `REPORT-03` are derived into their declared primary issue tables.
+- `PRES-05` is accepted through maker-checker with canonicality and handoff contributors.
+- `COMP-05` is accepted by the WP-10 control authority with WP-4 implementation contributors.
+- `FAIL-16` is accepted through dependency readiness with signer-custody and drill contributors.
+- `REPORT-04` is accepted through observability with pilot GO consumption.
+- E-0 through E-5 and P-0 through P-6 are release-gate definitions, not implementation-owned controls.
+- WPCS-01 through WPCS-09 apply to all 13 work-package parents, not one WP-0 child.
 
-```text
-#100, #403, #451, #453, #454, #455, #456, #519, #525,
-#592, #593, #594, #595, #613, #614
-```
+## Corrected work-package control sheets
 
-These issues were not duplicated or reparented away from existing programme relationships. They are linked through the primary issue bodies and route contract. Closed supporting issues remain In Review with Partial evidence; they are not treated as Accepted merely because they are closed. All 15 supporting issues are assigned only to `Astton` and `czpyioe`.
+Every work-package contract now supplies the exact nine SOW fields in the required order:
 
-## GitHub Project control model
+1. Objective.
+2. In scope / out of scope.
+3. Owner / reviewers.
+4. Dependencies.
+5. Implementation.
+6. Verification.
+7. Acceptance evidence.
+8. Rollback / containment.
+9. Residual risk.
 
-Project 9 is public, open, linked to `Agroasys/Cotsel`, and contains exactly 85 items: 70 primary programme issues plus 15 supporting issues.
+Primary gate, programme track, milestone, and risk remain useful Project metadata. They appear outside the nine-field control sheet and no longer replace source-required fields.
 
-The Project has 30 fields in total, including GitHub’s default fields and the complete programme-control set:
+Each parent identifies a single accountable owner, required reviewers, exact scope and exclusions, dependency inputs, immutable evidence requirements, incident ownership, rollback compatibility, residual exposure, and bounded-exception authority and expiry.
 
-- Status
-- Work Package
-- Programme Track
-- Primary Gate
-- SOW Class
-- SOW ID
-- Priority
-- Work Type
-- Delivery Surface
-- Evidence Status
-- Target Release ID
-- Accountable Owner
-- Delivery Owner
-- Acceptance Owner
-- External Dependency
-- Risk
-- Blocked Reason
-- Target Date
+## Hierarchy after live synchronization
 
-No percentage-complete field exists. Every one of the 85 items has populated Status, Programme Track, Primary Gate, SOW Class, SOW ID, Priority, Work Type, Delivery Surface, Evidence Status, Accountable Owner, Delivery Owner, Acceptance Owner, External Dependency, and Risk fields. Every item except the programme root has a Work Package value.
+The target managed hierarchy is:
 
-The 13 saved views are:
+| Level                        |  Count |
+| ---------------------------- | -----: |
+| Canonical programme issue    |      1 |
+| Work-package parents         |     13 |
+| Primary delivery issues      |     57 |
+| **Managed programme issues** | **71** |
+| Reused supporting issues     |     15 |
+| **Project items**            | **86** |
 
-| View                          | Layout  | Purpose/filter                       |
-| ----------------------------- | ------- | ------------------------------------ |
-| Executive Authorization       | Board   | P0 work with an applicable gate      |
-| P0 Blockers                   | Table   | SOW P0 blockers                      |
-| Work Packages                 | Board   | Work-package parents                 |
-| Engineering Rehearsal         | Board   | Base Sepolia rehearsal track         |
-| Controlled Pilot Gates        | Board   | Controlled-pilot gate reviews        |
-| Release Candidate             | Table   | Items with a target release ID       |
-| Evidence Review               | Table   | Evidence awaiting acceptance         |
-| Cross-Repository Dependencies | Table   | External dependencies                |
-| Blocked Work                  | Table   | Blocked items                        |
-| Decision Queue                | Board   | Unaccepted decisions                 |
-| P1-P2 Register                | Table   | P1 prerequisites and P2 improvements |
-| Failure and Recovery Coverage | Table   | Failure and recovery controls        |
-| Base Mainnet Register         | Roadmap | Separate mainnet track               |
+WP-9 increases from six to seven children because service authentication is independently assignable and cannot be safely hidden inside privileged-role exchange.
 
-## Milestone reconciliation
+All managed and reused issues remain assigned only to `Astton` and `czpyioe`. All programme work remains in `Agroasys/Cotsel`. Other repositories and providers are evidence and dependency surfaces; Cotsel cannot self-accept their authority.
 
-All ten milestones were reviewed against current open and closed work.
+## Reused-issue ownership
 
-| Milestone    | State after audit | Programme treatment                                                               |
-| ------------ | ----------------- | --------------------------------------------------------------------------------- |
-| Milestone A  | Closed            | Historical PolkaVM work retained for traceability; no current readiness claim     |
-| Milestone B  | Closed            | Historical non-custodial integration retained for traceability                    |
-| Milestone C  | Closed            | Historical pilot planning; explicitly does not authorize the current pilot        |
-| Needs Triage | Open              | Temporary intake only; literal newline escapes removed and routing rule clarified |
-| M0           | Open              | WP-0 scope, authority, release identity, evidence identity, and governance        |
-| M1           | Open              | WP-1 contract runtime, deployment, governance, and role separation                |
-| M2           | Open              | WP-2 through WP-4 transaction, indexing, reconciliation, and treasury integrity   |
-| M3           | Open              | WP-9 cross-repository compatibility and golden journeys                           |
-| M4           | Open              | WP-5 through WP-11 Base Sepolia and controlled-pilot readiness                    |
-| M5           | Open              | WP-12 separate Base mainnet authorization                                         |
+The 15 reused issues now have one explicit `primaryMetadataRoute` and a reviewed contributor list in `cotsel-production-readiness-supporting-issues.json`. Project metadata no longer depends on the first matching route in array order. Existing milestones remain unchanged unless a separate reviewed decision reclassifies them.
 
-The legacy milestone titles remain stable to preserve links and history. Their descriptions and states now distinguish historical completion from current SOW acceptance.
+## Milestone contract
 
-## Reusable issue forms
+The repository now records exact number, title, state, and description for all ten milestones. The live audit deep-compares those four fields. The historical A/B/C weighted-progress workflow no longer overwrites milestone descriptions.
 
-Five Cotsel-specific issue forms are installed:
+## Issue forms
 
-- Production-readiness implementation
-- Production-readiness decision
-- Production-readiness external dependency
-- Production-readiness gate review
-- Production-readiness work package
+The five readiness forms now:
 
-Every form preserves the four required SOW columns. Gate reviews require an exact release identity and reviewer declaration. External-dependency issues state that Cotsel coordination cannot self-accept evidence owned by another authority.
+- assign `Astton` and `czpyioe` at the form level;
+- require source-faithful, control-specific four-column content;
+- prohibit generic implementation and evidence boilerplate;
+- preserve the exact nine-field WP sheet;
+- separate Project metadata from the WP sheet;
+- require gate identifier, approvers, stop condition, rollback, residual risk and invalidation;
+- separate external current state, dependencies, acceptance criteria, evidence supplier and reviewer; and
+- require decision dependencies, blocked work and final decision state.
 
-## Automation and GitHub App
+## Verification contract
 
-The repository variable `READINESS_APP_CLIENT_ID` and repository secret `READINESS_APP_PRIVATE_KEY` are configured for the `agroasys-readiness-project-bot` GitHub App. The private key is not committed or printed.
+The local validator now proves:
 
-The governance workflow:
+- 58 findings with exact B, H and I sequences and one SOW work-package route;
+- 136 unique supporting controls with complete source references and control-specific content;
+- 114 issue-routed controls with one primary route and valid contributors;
+- 13 symmetric release-gate definitions and nine structural WP fields;
+- 57 primary delivery routes and the exact work-package distribution;
+- no obsolete `controlIds` or overloaded route `gate` field;
+- complete WP scope, owner, reviewer, evidence, rollback and residual-risk fields;
+- exact control-sheet labels and metadata separation;
+- explicit reused-issue metadata ownership;
+- exact milestone definitions; and
+- form assignment and required-field integrity.
 
-- uses SHA-pinned checkout and GitHub App token actions;
-- requests Cotsel issue read and organization Project write permissions only;
-- validates the source and route contracts before synchronization;
-- responds to labelled issue creation or reopening, supports manual dry runs, and runs every six hours;
-- adds missing labelled issues to Project 9;
-- fills missing Status, Work Type, and Work Package values;
-- does not convert a closed issue into Accepted evidence; and
-- does not overwrite populated human-controlled Project values.
+Negative tests prove that unknown routes, duplicate contributors, self-contribution, old boilerplate, implementation-owned gates, obsolete route fields, and incomplete WP sheets fail validation.
 
-The current live dry run reports zero pending synchronization actions.
+After live synchronization, the live audit must additionally prove:
 
-## Verification performed
-
-The following checks pass on Node 20:
-
-```text
-pnpm readiness:cotsel:validate
-pnpm readiness:cotsel:audit-live
-pnpm exec eslint --max-warnings=0 scripts/readiness/*cotsel-production-readiness*.mjs
-pnpm exec prettier --check <all changed readiness files>
-```
-
-The local contract validator proves:
-
-- 58 findings with the exact B, H, and I sequences;
-- 58 unique finding routes with no omission or duplication;
-- 56 unique primary issue routes;
-- 13 work packages with the exact 4/5/7/4/4/3/5/4/4/6/3/3/4 child distribution;
-- 131 unique supporting controls with declared group counts; and
-- valid work-package, gate, priority, class, work-type, track, risk, dependency, and delivery-surface values.
-
-The live audit proves:
-
-- 70 exact primary issue titles and bodies;
-- the complete two-level sub-issue hierarchy;
-- exact assignees and current milestones;
-- all 85 Project items and populated control metadata;
-- all 30 Project fields and 13 exact view definitions;
-- all ten reconciled milestone states and descriptions; and
-- the live Project-to-repository link.
+- complete deterministic body equality for all managed issues, with body hashes and first-difference diagnostics;
+- exact hierarchy, milestones, assignees and repository boundary;
+- exact invariant Project metadata while allowing Status, Evidence Status, release ID, blocker and date fields to progress; and
+- complete pagination of managed issues and Project items.
 
 ## Engineering start rule
 
-Engineering delivery starts with WP-0, then proceeds through the explicit dependency sequence. Teams must revalidate the current branch and deployed state before implementing each issue. They must not infer acceptance from historical milestones or supporting issue closure.
-
-Release-specific E-0 through E-5, P-0 through P-6, and mainnet reviews are not created as permanent generic issues. They are instantiated from the gate-review form only when an exact candidate release, evidence index, environment, contract set, provider modes, and rollback target exist.
-
-The programme root closes only after the applicable SOW requirements and controls are implemented, evidence is complete and accepted for one pinned release, the pilot exits under approved criteria, and any requested Base mainnet launch separately satisfies WP-12. Until then, the honest programme verdict remains **NO-GO**.
+Do not begin SOW implementation from the unreconciled issue specifications. Engineering may start only after the repaired contracts merge, all 71 managed bodies synchronize, the new service-authentication issue joins WP-9 and Project 9, invariant Project metadata is updated, and the full live audit passes.

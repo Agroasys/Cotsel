@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "cotsel.production-readiness.milestones.v1",
+  "milestones": [
+    {
+      "number": 1,
+      "title": "Milestone A: PolkaVM Smart Contract Escrow & Ricardian Architecture",
+      "state": "closed",
+      "description": "Historical PolkaVM contract, Ricardian, indexer, SDK, and readiness work. This milestone is complete and retained for traceability. Active production-readiness work is governed by the Base-era M0-M5 milestones and the Cotsel Production Readiness programme."
+    },
+    {
+      "number": 2,
+      "title": "Milestone B: Non-Custodial Integration & Hybrid Split Settlement",
+      "state": "closed",
+      "description": "Historical non-custodial and hybrid settlement integration work. This milestone is complete and retained for traceability. Active settlement remediation and evidence work is governed by the Base-era M0-M5 milestones and the Cotsel Production Readiness programme."
+    },
+    {
+      "number": 3,
+      "title": "Milestone C: Pilot with 1 Buyer + 1 Cooperative & Enforceability Memo",
+      "state": "closed",
+      "description": "Historical pilot-planning and evidence work. This milestone is complete and does not authorize the current controlled pilot. Current pilot authorization is governed by WP-0 through WP-11 and release-specific E-0 through E-5 and P-0 through P-6 gates."
+    },
+    {
+      "number": 4,
+      "title": "Needs Triage",
+      "state": "open",
+      "description": "Temporary routing milestone for open pull requests and issues that cannot be mapped at intake.\n\nAn owner must route each item to M0-M5 or record why it remains in triage."
+    },
+    {
+      "number": 5,
+      "title": "M0 Base Migration Decision and Boundary Freeze",
+      "state": "open",
+      "description": "WP-0 release scope and authority baseline: pilot boundary, system-of-record ownership, release and evidence identity, cloud decision, provider boundaries, RACI, risk acceptance, change control, and dependency-based forecast."
+    },
+    {
+      "number": 6,
+      "title": "M1 Base Contract Runtime and Deployment",
+      "state": "open",
+      "description": "WP-1 protocol and deployment correction: current Base contract, buyer-authorized inspection acceptance, governance rotation and quorum, role separation, canonical deployment, mandatory verification, and contract-cohort rollback."
+    },
+    {
+      "number": 7,
+      "title": "M2 Base Eventing, Reconciliation, and Treasury Safety",
+      "state": "open",
+      "description": "WP-2 through WP-4 financial integrity: durable transaction outcomes, signer binding, durable queues, indexer completeness, bidirectional reconciliation, canonical treasury ingestion, maker-checker controls, and external handoff truth."
+    },
+    {
+      "number": 8,
+      "title": "M3 Backend, Gateway, and Wallet Continuity",
+      "state": "open",
+      "description": "WP-9 cross-repository continuity: pinned Agroasys backend, platform.v1, Cotsel-Dash, Cotsel services, contract and provider identities; hosted compatibility; session, wallet, settlement, callback, status, dispute, treasury, support, and recovery journeys."
+    },
+    {
+      "number": 9,
+      "title": "M4 Base Sepolia Pilot Readiness",
+      "state": "open",
+      "description": "WP-5 through WP-11 Base Sepolia readiness: migration and recovery, build and supply chain, production-like cloud, observability, operations, security and compliance assurance, engineering rehearsals, and controlled-pilot authorization."
+    },
+    {
+      "number": 10,
+      "title": "M5 Base Mainnet Launch and Polkadot Retirement",
+      "state": "open",
+      "description": "WP-12 separate Base mainnet authorization: mainnet contract and application release, signer and provider capacity, treasury and off-ramp controls, cohort rollback, live-money drills, independent assurance, and four-role explicit approval."
+    }
+  ]
+}

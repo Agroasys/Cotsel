@@ -2,6 +2,7 @@ name: Cotsel production-readiness decision
 description: Record a product, protocol, finance, security, compliance, operations, or release decision.
 title: '[WP-X/Decision] '
 labels: ['programme:cotsel-production-readiness', 'status:decision-required', 'type:decision']
+assignees: [Astton, czpyioe]
 body:
   - type: textarea
     id: decision
@@ -13,6 +14,7 @@ body:
     id: requirements
     attributes:
       label: Required work, implementation requirement, and acceptance evidence
+      description: Use source-faithful, decision-specific content. Generic implementation or evidence boilerplate is prohibited.
       value: |
         | ID | Required work | Implementation requirement | Acceptance evidence |
         |---|---|---|---|
@@ -42,10 +44,16 @@ body:
         GitHub assignees: @Astton and @czpyioe
     validations: { required: true }
   - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and blocked work
+      description: Identify upstream decisions, evidence, provider or legal inputs, affected issues, gates, and the containment required while the decision is unresolved.
+    validations: { required: true }
+  - type: textarea
     id: evidence
     attributes:
       label: Decision evidence and downstream actions
-      description: Record approver, date, chosen option, conditions, expiry, affected issues, manifest fields, tests, and gates.
+      description: Record Decision Required, Accepted, or Rejected; approver, date, chosen option, conditions, expiry, affected issues, manifest fields, tests, and gates.
     validations: { required: true }
   - type: textarea
     id: invalidation
