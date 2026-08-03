@@ -1,0 +1,55 @@
+name: Cotsel production-readiness decision
+description: Record a product, protocol, finance, security, compliance, operations, or release decision.
+title: '[WP-X/Decision] '
+labels: ['programme:cotsel-production-readiness', 'status:decision-required', 'type:decision']
+body:
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision required
+      description: State the exact decision, deadline, authority, and work blocked until it is made.
+    validations: { required: true }
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Required work, implementation requirement, and acceptance evidence
+      value: |
+        | ID | Required work | Implementation requirement | Acceptance evidence |
+        |---|---|---|---|
+        |  |  |  |  |
+    validations: { required: true }
+  - type: textarea
+    id: context
+    attributes:
+      label: Verified context and authority boundaries
+      description: Separate verified facts, assumptions, constraints, and matters this authority cannot decide.
+    validations: { required: true }
+  - type: textarea
+    id: options
+    attributes:
+      label: Options and trade-offs
+      description: Describe viable options, security and financial consequences, reversibility, and recommendation.
+    validations: { required: true }
+  - type: textarea
+    id: ownership
+    attributes:
+      label: Decision and delivery ownership
+      value: |
+        Decision authority:
+        Accountable owner:
+        Delivery owner:
+        Acceptance owner:
+        GitHub assignees: @Astton and @czpyioe
+    validations: { required: true }
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Decision evidence and downstream actions
+      description: Record approver, date, chosen option, conditions, expiry, affected issues, manifest fields, tests, and gates.
+    validations: { required: true }
+  - type: textarea
+    id: invalidation
+    attributes:
+      label: Revisit and invalidation rule
+      description: State the changes that invalidate this decision and the containment action while it is unresolved.
+    validations: { required: true }

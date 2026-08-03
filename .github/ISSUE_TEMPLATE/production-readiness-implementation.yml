@@ -1,0 +1,73 @@
+name: Cotsel production-readiness implementation
+description: Deliver one bounded SOW implementation and its release-bound evidence.
+title: '[WP-X/Implementation] '
+labels: ['programme:cotsel-production-readiness', 'status:backlog']
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: State the deployed-path result this issue must make safe, observable, and repeatable.
+    validations: { required: true }
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Required work, implementation requirement, and acceptance evidence
+      description: Preserve every applicable SOW row as a separate table row.
+      value: |
+        | ID | Required work | Implementation requirement | Acceptance evidence |
+        |---|---|---|---|
+        |  |  |  |  |
+    validations: { required: true }
+  - type: textarea
+    id: current_state
+    attributes:
+      label: Current verified state
+      description: Identify inspected source, deployment, chain, configuration, data, provider, and evidence; state uncertainty.
+    validations: { required: true }
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and implementation
+      description: Include runtime, security, data, observability, migration, recovery, documentation, and rollout work.
+    validations: { required: true }
+  - type: textarea
+    id: ownership
+    attributes:
+      label: Ownership and acceptance authority
+      value: |
+        Accountable owner:
+        Delivery owner:
+        Acceptance owner:
+        GitHub assignees: @Astton and @czpyioe
+    validations: { required: true }
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and sequencing
+      description: Link parent, predecessor, cross-repository, chain, signer, provider, infrastructure, and decision dependencies.
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Use observable criteria tied to one immutable release identity and deployed environment.
+    validations: { required: true }
+  - type: textarea
+    id: failures
+    attributes:
+      label: Negative, failure, recovery, and rollback cases
+      description: Include invalid, duplicate, replay, stale, timeout, partial-success, outage, ambiguity, recovery, and rollback cases.
+    validations: { required: true }
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence required
+      description: Name exact artifacts, commands, deployment identities, results, reviewers, and evidence-index entries.
+    validations: { required: true }
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Non-goals, residual risk, and closure rule
+      description: State authority boundaries, remaining risk, acceptance owner, and evidence invalidation triggers.
+    validations: { required: true }

@@ -1,0 +1,478 @@
+{
+  "schemaVersion": "cotsel.production-readiness.sow-source.v1",
+  "source": {
+    "title": "Cotsel Production Readiness and Controlled Pilot Launch",
+    "fileName": "Cotsel Production Readiness-SOW.pdf",
+    "sha256": "775b07a7a44bc5798e0cfe4eb216abb11c81e248356061f4d94b779b3337c8fb",
+    "pageCount": 38,
+    "visuallyInspectedPages": 38,
+    "governingDecision": "NO-GO for external pilot users, real value, and Base mainnet until the applicable gates accept one pinned release."
+  },
+  "columns": ["ID", "Required work", "Implementation requirement", "Acceptance evidence"],
+  "findings": [
+    {
+      "id": "B-01",
+      "priority": "P0",
+      "workPackage": "WP-1",
+      "requiredWork": "Deploy and verify the pinned current Base Sepolia contract",
+      "implementationRequirement": "Deploy the pinned current source to a new isolated Base Sepolia address. Make source verification mandatory. Publish compiler settings, source commit, bytecode and ABI hashes, deployment block, constructor arguments, role addresses, USDC address, and chain ID. Propagate the address atomically to every consumer.",
+      "acceptanceEvidence": "An independent reviewer reproduces the bytecode, verifies every role and address, proves the indexer start block, and completes create, stage 1, inspection, dispute or finalize, treasury claim, and reconciliation against the same deployment."
+    },
+    {
+      "id": "B-02",
+      "priority": "P0",
+      "workPackage": "WP-2",
+      "requiredWork": "Make gateway transaction outcomes durable after broadcast",
+      "implementationRequirement": "Separate broadcast from confirmation. Persist the deterministic transaction hash, sender, nonce, and intent before or atomically with broadcast. Add explicit BROADCAST_UNKNOWN and CONFIRMATION_PENDING states. Retain the idempotency claim until receipt, event, nonce, and contract state resolve the outcome.",
+      "acceptanceEvidence": "Fault injection terminates the process immediately after accepted broadcast for create, user, operator, and wallet actions under raw, KMS, and MPC custody. Restart resolves the original transaction without rebroadcast."
+    },
+    {
+      "id": "B-03",
+      "priority": "P0",
+      "workPackage": "WP-2",
+      "requiredWork": "Bind every managed-signer response to the approved transaction intent",
+      "implementationRequirement": "Decode the returned transaction locally. Compare the canonical intent hash and every permitted field. Reject any difference. Bind signer authorization to a one-time request ID, expected address, chain, contract, and method. Define explicit gas and fee mutation limits.",
+      "acceptanceEvidence": "Negative tests independently alter calldata recipient or amount, chain, nonce, value, transaction type, gas, and fee fields. Every mutation fails before broadcast and the audit record preserves both intended and signed hashes."
+    },
+    {
+      "id": "B-04",
+      "priority": "P0",
+      "workPackage": "WP-2",
+      "requiredWork": "Replace in-process settlement dispatch with a durable work system",
+      "implementationRequirement": "Use a durable database or managed queue with lease ownership, visibility timeout, attempt history, poison handling, restart scanning, and reconciliation. Couple accepted command state transitions and enqueue or outbox records transactionally.",
+      "acceptanceEvidence": "Terminate the process before dequeue, during signing, immediately after broadcast, and during confirmation. Every accepted command reaches one authoritative terminal result or a visible owned exception."
+    },
+    {
+      "id": "B-05",
+      "priority": "P0",
+      "workPackage": "WP-1",
+      "requiredWork": "Require buyer authorization for immediate inspection acceptance",
+      "implementationRequirement": "Add buyer EIP-712 acceptance bound to chain, escrow, trade, action, nonce, and expiry. Remove the Oracle-only entry point. Until the corrected contract is deployed, reject the action inside Oracle for production and mainnet profiles.",
+      "acceptanceEvidence": "Valid buyer intent succeeds once. Missing, replayed, expired, wrong-chain, wrong-contract, wrong-trade, and tampered signatures fail at both Oracle and contract layers."
+    },
+    {
+      "id": "B-06",
+      "priority": "P0",
+      "workPackage": "WP-3",
+      "requiredWork": "Prevent the indexer from silently discarding financial events",
+      "implementationRequirement": "Fail the checkpoint or durably quarantine the complete raw log. Alert critically. Require explicit replay after the ABI, ordering, or handler problem is corrected. Verify contract code, ABI, address, and start block at startup.",
+      "acceptanceEvidence": "Injected malformed logs, ABI drift, out-of-order parents, and handler exceptions never advance silently. Replay produces an identical projection and evidence hash."
+    },
+    {
+      "id": "B-07",
+      "priority": "P0",
+      "workPackage": "WP-3",
+      "requiredWork": "Make reconciliation detect chain records omitted by the indexer",
+      "implementationRequirement": "Use chain-derived identifiers or event ranges as an independent source. Reconcile both directions with persisted keyset cursors and exact safe or finalized block boundaries. Publish coverage completeness.",
+      "acceptanceEvidence": "Tests detect chain-only, indexer-only, and records beyond 1,000. A completed run states the covered trade-ID range, block interval, next cursor, and unresolved drift."
+    },
+    {
+      "id": "B-08",
+      "priority": "P0",
+      "workPackage": "WP-4",
+      "requiredWork": "Prevent treasury from promoting orphaned or non-canonical events",
+      "implementationRequirement": "Ingest only finalized canonical evidence, or retain block hash and canonicality state and propagate rollbacks. Re-verify the successful receipt and exact log identity before export or external handoff.",
+      "acceptanceEvidence": "A reorganization test orphans an ingested fee event. The ledger entry is revoked or blocked and can never become eligible because of height alone."
+    },
+    {
+      "id": "B-09",
+      "priority": "P0",
+      "workPackage": "WP-4",
+      "requiredWork": "Prevent false completion in treasury ingestion and provider handoff",
+      "implementationRequirement": "Create a single-owner durable ingestion worker with watermark and lag alarms. Define an append-only provider state machine. Only verified accepted or submitted provider states may advance handoff. Completion requires authoritative provider or bank evidence plus maker-checker review.",
+      "acceptanceEvidence": "Stopped ingestion fails readiness or blocks export after the threshold. CREATED or FAILED provider responses cannot mark handoff complete. Conflicting callbacks append evidence and raise an exception instead of overwriting history."
+    },
+    {
+      "id": "B-10",
+      "priority": "P0",
+      "workPackage": "WP-5",
+      "requiredWork": "Remove migration credentials and mutable schema execution from runtime services",
+      "implementationRequirement": "Remove migration credentials and startup DDL from long-lived services. Use immutable versioned migrations, a dedicated migration identity and job, advisory locking, transactions, expand and backfill and contract sequencing, and N-1 rollback compatibility.",
+      "acceptanceEvidence": "Production-size migration rehearsal, concurrent-start tests, partial-failure tests, runtime DDL denial, migration ledger evidence, rollback-window compatibility, and recovery proof all pass."
+    },
+    {
+      "id": "B-11",
+      "priority": "P0",
+      "workPackage": "WP-6",
+      "requiredWork": "Prove clean service images are buildable and releasable",
+      "implementationRequirement": "Copy every required workspace and patch input before install. Build each image from a clean context in CI. Use non-root minimal runtime images, pin base digests, scan, generate SBOM and provenance, sign, and publish immutable digests.",
+      "acceptanceEvidence": "All images build from an empty cache, boot together, pass readiness and representative lifecycle probes, contain no unaccepted critical or high finding, and map by signature to the audited commit."
+    },
+    {
+      "id": "B-12",
+      "priority": "P0",
+      "workPackage": "WP-7",
+      "requiredWork": "Define a production-like application platform and protected promotion path",
+      "implementationRequirement": "Define staging and production infrastructure as code, protected environments, managed database and cache, private networking, TLS and WAF, immutable registry promotion, config digest, secret identities, capacity policy, and rollback.",
+      "acceptanceEvidence": "Reviewed plan and apply evidence, protected approval, image manifest, runtime version endpoint, chain and address probes, failure drill, and rollback record are independently reviewable."
+    },
+    {
+      "id": "B-13",
+      "priority": "P0",
+      "workPackage": "WP-5",
+      "requiredWork": "Implement complete backup and recovery for the financial system",
+      "implementationRequirement": "Implement encrypted automated backup and point-in-time recovery for all seven databases, roles, and configuration. Define measured RPO and RTO, immutable off-site retention, restoration order, re-index rules, and chain and ledger reconciliation.",
+      "acceptanceEvidence": "Restore into a clean environment. Verify row counts, hashes, grants, forced RLS, service readiness, indexer replay, gateway idempotency, ledger and chain tie-out, and measured recovery objectives."
+    },
+    {
+      "id": "B-14",
+      "priority": "P0",
+      "workPackage": "WP-2",
+      "requiredWork": "Make production Oracle signer custody fail closed",
+      "implementationRequirement": "Reject raw private keys and HTTP signer transport in the production profile. Require KMS, HSM, or MPC custody, authenticated TLS, a dedicated Oracle identity, address and role attestation, request audit, rotation, and explicit automation policy.",
+      "acceptanceEvidence": "Production startup fails on raw custody, HTTP, missing authentication, role overlap, or wrong address. Rotation, revocation, and signer outage drills preserve safety and evidence."
+    },
+    {
+      "id": "B-15",
+      "priority": "P0",
+      "workPackage": "WP-1",
+      "requiredWork": "Make contract governance recoverable and quorum-controlled",
+      "implementationRequirement": "Implement quorum-controlled and timelocked admin add, remove, replace, and threshold changes. Use membership epochs to invalidate stale approvals. Keep emergency pause rapid, but require quorum and incident approval for unpause.",
+      "acceptanceEvidence": "Compromised-key rotation and quorum-change exercises succeed. One admin cannot resume claims or trades. Stale proposals fail after membership change. Live role attestation proves separation."
+    },
+    {
+      "id": "B-16",
+      "priority": "P0",
+      "workPackage": "WP-6",
+      "requiredWork": "Make the required release gate complete and truthful",
+      "implementationRequirement": "Include every critical check in the aggregate or require it directly. Route shared packages to every transitive consumer. Repair required suites and hosted cross-repository continuity. Ensure skipped or failed critical checks cannot produce a green release gate.",
+      "acceptanceEvidence": "Meta-tests deliberately fail each critical check and prove merge is blocked. Clean main passes the full recursive suite, contract coverage, image build, migration and recovery, and pinned cross-repository contracts."
+    },
+    {
+      "id": "B-17",
+      "priority": "P0",
+      "workPackage": "WP-8",
+      "requiredWork": "Deploy operational monitoring and named incident ownership",
+      "implementationRequirement": "Implement privacy-safe structured logs, metrics, and traces; authoritative transaction, queue, indexer, finality, reconciliation, and treasury dashboards; burn-rate alerts; primary and secondary on-call; synthetics; and incident roles.",
+      "acceptanceEvidence": "Injected incidents page the named owner within the approved objective. One trace links user or order, request, handoff, command, transaction, and reconciliation evidence. Privacy tests prove sensitive values are excluded."
+    },
+    {
+      "id": "B-18",
+      "priority": "P0",
+      "workPackage": "WP-8",
+      "requiredWork": "Retain fresh pilot evidence in an immutable controlled store",
+      "implementationRequirement": "Create an immutable evidence index. Retain signed reports, config digest, release manifest, transaction and explorer links, test logs, approvers, and hashes under documented retention and access policy.",
+      "acceptanceEvidence": "An independent reviewer retrieves the fresh packet, validates hashes and chain evidence, and ties every artifact to the exact release candidate and pilot window."
+    },
+    {
+      "id": "B-19",
+      "priority": "P0",
+      "workPackage": "WP-9",
+      "requiredWork": "Prevent trusted session exchange from creating unrestricted administrator authority",
+      "implementationRequirement": "Do not create or modify privileged roles through general trusted exchange. Pre-provision privileged roles through the audited control plane. Bind any role import key to an explicit maximum role, organization, environment, and capability set. Audit authority changes and revoke sessions that exceed new authority.",
+      "acceptanceEvidence": "A normal exchange key requesting admin or Oracle receives 403. Promotion and demotion use two-person approval, preserve key identity and before and after authority, and immediately invalidate excessive sessions."
+    },
+    {
+      "id": "H-01",
+      "priority": "P1",
+      "workPackage": "WP-2",
+      "requiredWork": "Make Oracle broadcast outcomes durable",
+      "implementationRequirement": "Persist the original transaction identity and an explicit unknown or pending state across retry, process death, exhausted attempts, and redrive.",
+      "acceptanceEvidence": "Process-kill recovery proves no rebroadcast until receipt, event, and contract state resolve the original outcome."
+    },
+    {
+      "id": "H-02",
+      "priority": "P1",
+      "workPackage": "WP-2",
+      "requiredWork": "Unify finality states across gateway, SDK, indexer, Oracle, and treasury",
+      "implementationRequirement": "Define one versioned state model for submitted, confirmed, safe, finalized, reverted, replaced, unknown, and failed outcomes and apply it across all consumers.",
+      "acceptanceEvidence": "Shared state-model tests cover wrong chain, reorganization, tag support, and provider disagreement."
+    },
+    {
+      "id": "H-03",
+      "priority": "P1",
+      "workPackage": "WP-1",
+      "requiredWork": "Enforce role separation in deployment validation",
+      "implementationRequirement": "Reject production or mainnet deployments where Oracle, treasury, relayer, signer, or administrator authorities overlap outside an approved bounded exception.",
+      "acceptanceEvidence": "The production profile rejects overlaps and proves each authority uses approved managed custody."
+    },
+    {
+      "id": "H-04",
+      "priority": "P1",
+      "workPackage": "WP-1",
+      "requiredWork": "Make deployment verification mandatory and compare live code",
+      "implementationRequirement": "Block promotion on wrong bytecode, chain, USDC address, role, constructor input, compiler setting, ABI, or skipped explorer verification.",
+      "acceptanceEvidence": "Wrong bytecode, chain, USDC, role, or skipped verification blocks promotion."
+    },
+    {
+      "id": "H-05",
+      "priority": "P1",
+      "workPackage": "WP-1",
+      "requiredWork": "Remove or repair the stale Ignition deployment path",
+      "implementationRequirement": "Remove the obsolete constructor and hard-coded address path or update it to the canonical reviewed deployment contract.",
+      "acceptanceEvidence": "One canonical deployment mechanism passes a clean local and Base Sepolia rehearsal."
+    },
+    {
+      "id": "H-06",
+      "priority": "P1",
+      "workPackage": "WP-5",
+      "requiredWork": "Create least-privilege indexer and GraphQL database roles",
+      "implementationRequirement": "Replace cluster credentials with scoped runtime and reader identities, deny cross-database access and DDL, and keep ingress private.",
+      "acceptanceEvidence": "Runtime and reader roles cannot access other databases or perform DDL; GraphQL ingress is private."
+    },
+    {
+      "id": "H-07",
+      "priority": "P1",
+      "workPackage": "WP-7",
+      "requiredWork": "Use true readiness instead of static liveness for promotion",
+      "implementationRequirement": "Keep liveness narrow and make readiness fail when required database, RPC, signer, queue, indexer, or provider dependencies cannot safely serve the configured profile.",
+      "acceptanceEvidence": "Fault injection removes traffic on dependency failure while liveness remains a separate signal."
+    },
+    {
+      "id": "H-08",
+      "priority": "P1",
+      "workPackage": "WP-7",
+      "requiredWork": "Harden public and private network topology and high availability",
+      "implementationRequirement": "Expose only approved gateway or auth paths. Keep databases, cache, workers, signers, internal services, and administrative RPC private. Use managed HA dependencies and tested failover.",
+      "acceptanceEvidence": "External scanning exposes only approved paths; managed HA dependencies and failure drills pass."
+    },
+    {
+      "id": "H-09",
+      "priority": "P1",
+      "workPackage": "WP-7",
+      "requiredWork": "Make environment parsing deterministic",
+      "implementationRequirement": "Replace executable shell sourcing and implicit inheritance with strict parsing that rejects unknown keys, duplicate keys, prohibited overrides, and ambiguous precedence.",
+      "acceptanceEvidence": "Strict parsing rejects invalid input and publishes a redacted reviewed config hash."
+    },
+    {
+      "id": "H-10",
+      "priority": "P1",
+      "workPackage": "WP-6",
+      "requiredWork": "Protect the software supply chain and promotion path",
+      "implementationRequirement": "Use read-only default workflow permissions, an action allowlist or SHA pinning, SAST, secret, container, dependency, license, and IaC scans, SBOM, signatures, and provenance.",
+      "acceptanceEvidence": "Every required policy and scan is enforced on the candidate; the SBOM, signature, provenance, and approved exception records are retained."
+    },
+    {
+      "id": "H-11",
+      "priority": "P1",
+      "workPackage": "WP-6",
+      "requiredWork": "Add sensitive-path ownership and stronger approval",
+      "implementationRequirement": "Require two-person or code-owner review for contracts, treasury, authentication, migrations, and workflows. Restrict and audit emergency bypass.",
+      "acceptanceEvidence": "Sensitive-path changes cannot merge without the required independent review, and every emergency bypass produces an auditable record."
+    },
+    {
+      "id": "H-12",
+      "priority": "P1",
+      "workPackage": "WP-1",
+      "requiredWork": "Define contract-cohort rollback",
+      "implementationRequirement": "Pause new intake, operate old and new addresses in bounded cohorts, identify active exposure, and define compatibility and migration controls for non-upgradeable contracts.",
+      "acceptanceEvidence": "Rollback and cohort drills reconcile both contract addresses to zero unexplained exposure."
+    },
+    {
+      "id": "H-13",
+      "priority": "P1",
+      "workPackage": "WP-10",
+      "requiredWork": "Complete privacy and financial-control assurance",
+      "implementationRequirement": "Approve the data map, retention, access, privacy rights and breach process, provider contracts, sanctions, KYB and KYT boundary, financial authority, and maker-checker controls.",
+      "acceptanceEvidence": "Approved controls and tests cover data handling, providers, compliance decisions, financial segregation, reconciliation, evidence custody, and incident duties."
+    },
+    {
+      "id": "H-14",
+      "priority": "P1",
+      "workPackage": "WP-10",
+      "requiredWork": "Complete independent security assurance",
+      "implementationRequirement": "Commission independent smart-contract, API, application, signer, cloud, supply-chain, and financial-workflow assessment against the stable candidate.",
+      "acceptanceEvidence": "Remediation-verified reports cover the contract, APIs, signer, cloud, supply chain, and financial abuse paths with no unaccepted critical or high finding."
+    },
+    {
+      "id": "H-15",
+      "priority": "P1",
+      "workPackage": "WP-4",
+      "requiredWork": "Make treasury maker-checker transitions concurrency-safe",
+      "implementationRequirement": "Use row locks or expected-state predicates so concurrent accounting-period, sweep, payout, and bank-confirmation transitions cannot both succeed.",
+      "acceptanceEvidence": "Two-connection race tests prove exactly one conflicting transition succeeds and one immutable actor chain remains."
+    },
+    {
+      "id": "H-16",
+      "priority": "P1",
+      "workPackage": "WP-4",
+      "requiredWork": "Bind treasury actor identity to the authenticated principal",
+      "implementationRequirement": "Derive actor identity from the authenticated service or operator principal. Verify provider callbacks with native signatures, timestamp, event ID, and replay controls.",
+      "acceptanceEvidence": "Actor mismatch is denied and callback authentication, skew, event-ID, and replay tests pass."
+    },
+    {
+      "id": "H-17",
+      "priority": "P1",
+      "workPackage": "WP-3",
+      "requiredWork": "Lease and recover reconciliation runs",
+      "implementationRequirement": "Add lease ownership, heartbeat, expiry, abandonment detection, alerting, and safe successor claims for RUNNING reconciliation work.",
+      "acceptanceEvidence": "Lease expiry marks abandoned work, alerts the owner, and permits one safe successor without direct SQL repair."
+    },
+    {
+      "id": "H-18",
+      "priority": "P1",
+      "workPackage": "WP-2",
+      "requiredWork": "Lease and reclaim callback deliveries",
+      "implementationRequirement": "Use stable event IDs and expiring delivery leases so a crash after claiming work cannot remove it permanently from retry selection.",
+      "acceptanceEvidence": "A replacement claims the expired lease and the receiver deduplicates the stable event ID."
+    },
+    {
+      "id": "H-19",
+      "priority": "P1",
+      "workPackage": "WP-2",
+      "requiredWork": "Make generic idempotency preserve unknown outcomes",
+      "implementationRequirement": "Lease pending keys, retain reservations across 5xx or lost responses, await durable completion persistence, and reconcile downstream mutations before permitting retry.",
+      "acceptanceEvidence": "Fault injection at every send, response, and persist boundary produces one effect and one eventually authoritative original key."
+    },
+    {
+      "id": "H-20",
+      "priority": "P1",
+      "workPackage": "WP-9",
+      "requiredWork": "Make auth refresh atomic and lineage-bound",
+      "implementationRequirement": "Create the successor and revoke the prior session in one transaction with uniqueness that permits one active successor.",
+      "acceptanceEvidence": "Concurrent refresh and crash tests prove one active session and one successor."
+    },
+    {
+      "id": "H-21",
+      "priority": "P1",
+      "workPackage": "WP-9",
+      "requiredWork": "Hash bearer session credentials and remove raw identity from routine logs",
+      "implementationRequirement": "Store only verifier-safe session material and remove bearer tokens, session identifiers, email, wallet, and account identifiers from routine logs unless explicitly approved and protected.",
+      "acceptanceEvidence": "A database export cannot authenticate and automated log scans find no bearer token or unapproved raw identity."
+    },
+    {
+      "id": "H-22",
+      "priority": "P1",
+      "workPackage": "WP-2",
+      "requiredWork": "Verify Oracle HMAC over the exact received bytes",
+      "implementationRequirement": "Preserve the raw request body and compute the signature over the exact bytes rather than a reserialized JSON representation.",
+      "acceptanceEvidence": "Shared exact-byte vectors pass; any byte change, including whitespace or key order, invalidates the signature."
+    },
+    {
+      "id": "H-23",
+      "priority": "P1",
+      "workPackage": "WP-2",
+      "requiredWork": "Complete Oracle signed-transaction comparison",
+      "implementationRequirement": "Compare signer, chain, destination, calldata, value, nonce, gas limit, transaction type, and fee fields before broadcast. Reject insecure signer transport or missing authentication.",
+      "acceptanceEvidence": "HTTP or unauthenticated configuration fails and each gas, fee, and transaction-type mutation is rejected before broadcast."
+    },
+    {
+      "id": "H-24",
+      "priority": "P1",
+      "workPackage": "WP-4",
+      "requiredWork": "Use canonical monetary types and allocation invariants in treasury",
+      "implementationRequirement": "Replace unconstrained text and floating values with unsigned fixed-point or scaled-integer constraints tied to the authoritative ledger amount.",
+      "acceptanceEvidence": "Noncanonical monetary values are rejected and allocation totals equal eligible ledger amounts."
+    },
+    {
+      "id": "H-25",
+      "priority": "P1",
+      "workPackage": "WP-4",
+      "requiredWork": "Gate revenue realization on fresh reconciliation",
+      "implementationRequirement": "Require an accepted, in-scope, non-stale reconciliation result bound to the exact chain watermark before realization or close.",
+      "acceptanceEvidence": "Missing, stale, drifted, or out-of-scope reconciliation blocks realization; accepted evidence names the exact run and block."
+    },
+    {
+      "id": "H-26",
+      "priority": "P1",
+      "workPackage": "WP-8",
+      "requiredWork": "Make critical notifications durable",
+      "implementationRequirement": "Persist critical notifications in an outbox with retry, deduplication, DLQ, and escalation rather than process-local best effort.",
+      "acceptanceEvidence": "Outage and restart retain the alert; retry, DLQ, or escalation delivers it or pages the duty owner."
+    },
+    {
+      "id": "H-27",
+      "priority": "P1",
+      "workPackage": "WP-9",
+      "requiredWork": "Add tenant authorization to Ricardian retrieval",
+      "implementationRequirement": "Return only a minimal public attestation for generic lookup and require tenant-scoped authorization for complete canonical terms and metadata.",
+      "acceptanceEvidence": "Generic lookup is minimal, full retrieval requires tenant authority, and cross-tenant access fails."
+    },
+    {
+      "id": "H-28",
+      "priority": "P1",
+      "workPackage": "WP-7",
+      "requiredWork": "Make production authentication non-disableable",
+      "implementationRequirement": "Reject any production configuration that disables gateway, treasury, Ricardian, downstream, or service authentication or combines insecure modes.",
+      "acceptanceEvidence": "Production negative-configuration tests reject disabled authentication and insecure downstream combinations."
+    },
+    {
+      "id": "H-29",
+      "priority": "P1",
+      "workPackage": "WP-9",
+      "requiredWork": "Replace standing wildcard administrator authority with explicit grants",
+      "implementationRequirement": "Use explicit, expiring capability, tenant, and environment grants. Prevent staging authority from signing production actions and require review of each privileged grant.",
+      "acceptanceEvidence": "Capability and environment bindings are explicit, expiring, reviewed, and unable to cross environments."
+    },
+    {
+      "id": "H-30",
+      "priority": "P1",
+      "workPackage": "WP-3",
+      "requiredWork": "Validate indexer configuration and financial readiness",
+      "implementationRequirement": "Fail startup on wrong chain, code, address, finality support, start block, sole RPC failure, invalid ranges, or stale checkpoints. Keep liveness distinct from readiness.",
+      "acceptanceEvidence": "Wrong chain, code, address, finality, or start block fails startup; stale checkpoint or dead RPC fails readiness."
+    },
+    {
+      "id": "H-31",
+      "priority": "P1",
+      "workPackage": "WP-2",
+      "requiredWork": "Require a transaction hash for normal Oracle submission states",
+      "implementationRequirement": "Do not represent SUBMITTED or CONFIRMED as normal without a transaction hash. Convert missing identity to an explicit unknown state that polls Oracle and chain truth.",
+      "acceptanceEvidence": "A missing hash becomes an explicit unknown state and is never represented as normal submission."
+    },
+    {
+      "id": "H-32",
+      "priority": "P1",
+      "workPackage": "WP-4",
+      "requiredWork": "Make treasury exports complete and controlled",
+      "implementationRequirement": "Use snapshot or keyset export with a fixed cutoff, continuation, row count, totals, and explicit truncation failure.",
+      "acceptanceEvidence": "Export returns every record exactly once with cutoff, row count, and reconciled totals."
+    },
+    {
+      "id": "I-01",
+      "priority": "P2",
+      "workPackage": "WP-1",
+      "requiredWork": "Add governance proposal epochs and cancellation",
+      "implementationRequirement": "Bind proposals to the active membership and configuration epoch and support governed cancellation.",
+      "acceptanceEvidence": "Stale or cancelled proposals cannot execute after configuration changes."
+    },
+    {
+      "id": "I-02",
+      "priority": "P2",
+      "workPackage": "WP-1",
+      "requiredWork": "Strengthen SDK runtime preflight",
+      "implementationRequirement": "Verify chain, deployed code, contract address, role state, and canonical USDC before use and return explicit failure states.",
+      "acceptanceEvidence": "Chain, code, address, and role preflight tests pass with explicit error states."
+    },
+    {
+      "id": "I-03",
+      "priority": "P2",
+      "workPackage": "WP-6",
+      "requiredWork": "Pin toolchain and images to supported immutable versions",
+      "implementationRequirement": "Define the supported compiler and framework matrix and replace mutable image tags with immutable digests.",
+      "acceptanceEvidence": "The supported toolchain matrix is enforced and every release image is digest-pinned."
+    },
+    {
+      "id": "I-04",
+      "priority": "P2",
+      "workPackage": "WP-6",
+      "requiredWork": "Correct stale runbooks and issue metadata",
+      "implementationRequirement": "Repair invalid commands, duplicated links, obsolete package guidance, stale issue state, and unowned active documentation.",
+      "acceptanceEvidence": "Automated command and link tests pass, documentation owners are named, and issue state matches current truth."
+    },
+    {
+      "id": "I-05",
+      "priority": "P2",
+      "workPackage": "WP-2",
+      "requiredWork": "Remove JavaScript floating-point from settlement amount ingress",
+      "implementationRequirement": "Use scaled integers or canonical decimal strings for all settlement amount parsing, validation, comparison, and persistence.",
+      "acceptanceEvidence": "Scaled-integer or canonical decimal-string values round-trip exactly at boundary and fractional limits."
+    },
+    {
+      "id": "I-06",
+      "priority": "P2",
+      "workPackage": "WP-10",
+      "requiredWork": "Return stable public error codes",
+      "implementationRequirement": "Map internal SQL, RPC, signer, provider, Oracle, and Ricardian failures to stable safe public codes and correlation IDs.",
+      "acceptanceEvidence": "Injected failures reveal no stack, URL, query, secret, or raw provider error and return a correlation ID."
+    },
+    {
+      "id": "I-07",
+      "priority": "P2",
+      "workPackage": "WP-9",
+      "requiredWork": "Bound and unify authentication session lifetime",
+      "implementationRequirement": "Reject negative, zero, or excessive values and use one absolute lifetime policy for login, exchange, and refresh.",
+      "acceptanceEvidence": "Negative, zero, and excessive values fail; login, exchange, and refresh enforce the same absolute lifetime."
+    }
+  ]
+}

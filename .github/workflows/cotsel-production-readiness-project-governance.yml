@@ -1,0 +1,76 @@
+name: Cotsel Production-Readiness Project Governance
+
+on:
+  issues:
+    types: [opened, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Inspect changes without mutating Project 9
+        required: false
+        default: true
+        type: boolean
+  schedule:
+    - cron: '41 */6 * * *'
+
+concurrency:
+  group: cotsel-production-readiness-project-governance
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate GitHub App configuration
+        env:
+          READINESS_APP_CLIENT_ID: ${{ vars.READINESS_APP_CLIENT_ID }}
+          READINESS_APP_PRIVATE_KEY: ${{ secrets.READINESS_APP_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          if [[ -z "$READINESS_APP_CLIENT_ID" ]]; then
+            echo "::error::READINESS_APP_CLIENT_ID is not configured."
+            exit 1
+          fi
+          if [[ -z "$READINESS_APP_PRIVATE_KEY" ]]; then
+            echo "::error::READINESS_APP_PRIVATE_KEY is not configured."
+            exit 1
+          fi
+
+      - name: Check out the governance implementation
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Create least-privilege Project token
+        id: readiness-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.READINESS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.READINESS_APP_PRIVATE_KEY }}
+          owner: Agroasys
+          repositories: Cotsel
+          permission-issues: read
+          permission-organization-projects: write
+
+      - name: Validate source and routing contracts
+        run: node scripts/readiness/validate-cotsel-production-readiness.mjs
+
+      - name: Synchronize Cotsel programme items
+        env:
+          READINESS_PROJECT_TOKEN: ${{ steps.readiness-token.outputs.token }}
+          READINESS_ORGANIZATION: Agroasys
+          READINESS_REPOSITORY: Cotsel
+          READINESS_PROJECT_NUMBER: '9'
+          READINESS_PROGRAMME_LABEL: programme:cotsel-production-readiness
+          REQUESTED_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+        shell: bash
+        run: |
+          if [[ "$REQUESTED_DRY_RUN" == "true" ]]; then
+            node scripts/readiness/sync-cotsel-production-readiness-project.mjs --dry-run
+          else
+            node scripts/readiness/sync-cotsel-production-readiness-project.mjs
+          fi
