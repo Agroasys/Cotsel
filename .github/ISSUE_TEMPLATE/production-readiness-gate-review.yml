@@ -1,0 +1,56 @@
+name: Cotsel release gate review
+description: Accept or reject one engineering, pilot, or mainnet gate for an exact candidate release.
+title: '[Gate/Release ID] '
+labels:
+  [
+    'programme:cotsel-production-readiness',
+    'status:evidence-review',
+    'type:gate-review',
+    'sow:gate',
+  ]
+body:
+  - type: input
+    id: release_id
+    attributes:
+      label: Target release ID
+      description: Exact immutable release-manifest identifier.
+    validations: { required: true }
+  - type: textarea
+    id: identity
+    attributes:
+      label: Candidate identity
+      description: Name source commits, image and artifact digests, contract addresses, deployment block, ABI and bytecode hashes, infrastructure and migration identities, chain, providers, environment, and rollback target.
+    validations: { required: true }
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Required work, implementation requirement, and acceptance evidence
+      value: |
+        | ID | Required work | Implementation requirement | Acceptance evidence |
+        |---|---|---|---|
+        |  |  |  |  |
+    validations: { required: true }
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence index and review
+      description: Link immutable evidence, reproducible commands, failures, recovery, reviewer findings, exceptions, and invalidation triggers.
+    validations: { required: true }
+  - type: textarea
+    id: decision
+    attributes:
+      label: Gate decision
+      value: |
+        Decision: Accepted / Rejected
+        Acceptance authority:
+        Review date:
+        Conditions or waivers:
+        Expiry:
+    validations: { required: true }
+  - type: checkboxes
+    id: declaration
+    attributes:
+      label: Reviewer declaration
+      options:
+        - label: I verified that all evidence belongs to the candidate identity above and that a merge or closed issue was not treated as readiness.
+          required: true

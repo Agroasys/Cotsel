@@ -1,0 +1,47 @@
+name: Cotsel production-readiness work package
+description: Create a parent control issue for a complete SOW work package.
+title: '[WP-X] '
+labels: ['programme:cotsel-production-readiness', 'status:backlog', 'type:work-package']
+body:
+  - type: textarea
+    id: objective
+    attributes: { label: Objective }
+    validations: { required: true }
+  - type: textarea
+    id: control_sheet
+    attributes:
+      label: Work-package control sheet
+      value: |
+        | Control | Definition |
+        |---|---|
+        | Owner |  |
+        | Dependencies |  |
+        | Implementation |  |
+        | Verification |  |
+        | Evidence |  |
+        | Rollback |  |
+        | Residual risk |  |
+        | Primary gate |  |
+        | Programme track |  |
+    validations: { required: true }
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Required work, implementation requirement, and acceptance evidence
+      value: |
+        | ID | Required work | Implementation requirement | Acceptance evidence |
+        |---|---|---|---|
+        |  |  |  |  |
+    validations: { required: true }
+  - type: textarea
+    id: children
+    attributes:
+      label: Child delivery issues and dependencies
+      description: List every child, predecessor, external dependency, finding ID, and supporting control ID.
+    validations: { required: true }
+  - type: textarea
+    id: exit
+    attributes:
+      label: Exit, rollback, residual risk, and invalidation
+      description: Define accepted evidence, authority, containment, remaining risk, and the changes that reopen the package.
+    validations: { required: true }

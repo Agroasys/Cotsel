@@ -1,0 +1,48 @@
+name: Cotsel production-readiness external dependency
+description: Track evidence or delivery owned outside the Cotsel implementation boundary.
+title: '[WP-X/External] '
+labels: ['programme:cotsel-production-readiness', 'status:backlog', 'type:external-dependency']
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Required external outcome
+      description: State what must be supplied and why the Cotsel programme cannot self-accept it.
+    validations: { required: true }
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Required work, implementation requirement, and acceptance evidence
+      value: |
+        | ID | Required work | Implementation requirement | Acceptance evidence |
+        |---|---|---|---|
+        |  |  |  |  |
+    validations: { required: true }
+  - type: textarea
+    id: interface
+    attributes:
+      label: Interface, artifact, and authority boundary
+      description: Name the contract, owner, version, environment, provider mode, repository or system, and source of truth.
+    validations: { required: true }
+  - type: textarea
+    id: ownership
+    attributes:
+      label: Ownership
+      value: |
+        External delivery authority:
+        Cotsel accountable owner:
+        Acceptance owner:
+        GitHub assignees: @Astton and @czpyioe
+    validations: { required: true }
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification, failure cases, and evidence
+      description: Define integration, rejection, timeout, drift, rollback, and recovery tests plus the evidence supplier and reviewer.
+    validations: { required: true }
+  - type: textarea
+    id: closure
+    attributes:
+      label: Closure and invalidation rule
+      description: State that Cotsel coordination cannot self-accept external proof; name the acceptance authority and change triggers.
+    validations: { required: true }

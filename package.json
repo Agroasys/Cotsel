@@ -40,6 +40,8 @@
     "treasury"
   ],
   "scripts": {
+    "readiness:cotsel:validate": "node scripts/readiness/validate-cotsel-production-readiness.mjs",
+    "readiness:cotsel:audit-live": "node scripts/readiness/audit-cotsel-production-readiness-live.mjs",
     "integration:manifest:check": "node scripts/check-cross-repo-release-manifest.mjs && node --test scripts/tests/cross-repo-release-manifest.test.mjs",
     "build": "pnpm --filter @agroasys/sdk run build",
     "lint": "eslint --max-warnings=0 .",
