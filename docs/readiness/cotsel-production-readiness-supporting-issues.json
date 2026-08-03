@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "cotsel.production-readiness.supporting-issues.v1",
+  "rule": "Each reused issue has one explicit Project-metadata route. Other routes are evidence contributions only. Existing issue milestones are preserved unless a separate reviewed change reclassifies them.",
+  "issues": [
+    {
+      "number": 100,
+      "primaryMetadataRoute": "wp6-supplychain",
+      "contributingRoutes": ["wp6-gate"]
+    },
+    {
+      "number": 403,
+      "primaryMetadataRoute": "wp12-authority",
+      "contributingRoutes": ["wp12-contract-release", "wp12-operations", "wp12-assurance-go"]
+    },
+    { "number": 451, "primaryMetadataRoute": "wp7-config", "contributingRoutes": [] },
+    {
+      "number": 453,
+      "primaryMetadataRoute": "wp1-role-separation",
+      "contributingRoutes": ["wp2-oracle-custody", "wp9-session", "wp9-privilege"]
+    },
+    { "number": 454, "primaryMetadataRoute": "wp8-oncall", "contributingRoutes": [] },
+    {
+      "number": 455,
+      "primaryMetadataRoute": "wp1-contract-deploy",
+      "contributingRoutes": ["wp6-supplychain", "wp6-gate", "wp10-independent"]
+    },
+    {
+      "number": 456,
+      "primaryMetadataRoute": "wp0-release-evidence",
+      "contributingRoutes": [
+        "wp6-images",
+        "wp6-supplychain",
+        "wp6-gate",
+        "wp7-iac",
+        "wp8-evidence",
+        "wp12-contract-release"
+      ]
+    },
+    {
+      "number": 519,
+      "primaryMetadataRoute": "wp2-gateway-broadcast",
+      "contributingRoutes": [
+        "wp2-durable-dispatch",
+        "wp2-oracle-durability",
+        "wp4-ingestion-handoff",
+        "wp9-user-journeys",
+        "wp9-treasury-recovery-journeys",
+        "wp11-rehearsal",
+        "wp12-authority",
+        "wp12-operations"
+      ]
+    },
+    {
+      "number": 525,
+      "primaryMetadataRoute": "wp1-role-separation",
+      "contributingRoutes": [
+        "wp2-gateway-broadcast",
+        "wp2-signer-binding",
+        "wp2-durable-dispatch",
+        "wp2-oracle-durability",
+        "wp2-oracle-custody",
+        "wp4-ingestion-handoff",
+        "wp4-makerchecker",
+        "wp8-drills",
+        "wp9-user-journeys",
+        "wp9-treasury-recovery-journeys",
+        "wp10-controls",
+        "wp10-independent",
+        "wp11-rehearsal",
+        "wp12-authority",
+        "wp12-contract-release",
+        "wp12-operations",
+        "wp12-assurance-go"
+      ]
+    },
+    { "number": 592, "primaryMetadataRoute": "wp7-iac", "contributingRoutes": ["wp7-network"] },
+    {
+      "number": 593,
+      "primaryMetadataRoute": "wp8-observability",
+      "contributingRoutes": ["wp10-controls", "wp10-errors"]
+    },
+    {
+      "number": 594,
+      "primaryMetadataRoute": "wp2-finality",
+      "contributingRoutes": [
+        "wp3-poison",
+        "wp3-chain-coverage",
+        "wp4-canonical",
+        "wp4-ingestion-handoff",
+        "wp8-observability",
+        "wp12-operations"
+      ]
+    },
+    {
+      "number": 595,
+      "primaryMetadataRoute": "wp3-chain-coverage",
+      "contributingRoutes": [
+        "wp3-recon-leases",
+        "wp4-canonical",
+        "wp4-ingestion-handoff",
+        "wp5-recovery",
+        "wp8-oncall",
+        "wp8-drills",
+        "wp9-treasury-recovery-journeys",
+        "wp11-rehearsal",
+        "wp12-operations"
+      ]
+    },
+    {
+      "number": 613,
+      "primaryMetadataRoute": "wp0-release-evidence",
+      "contributingRoutes": [
+        "wp1-contract-deploy",
+        "wp3-preflight",
+        "wp6-gate",
+        "wp7-iac",
+        "wp7-config",
+        "wp7-readiness",
+        "wp8-evidence",
+        "wp9-m3",
+        "wp9-session",
+        "wp9-user-journeys",
+        "wp11-rehearsal"
+      ]
+    },
+    {
+      "number": 614,
+      "primaryMetadataRoute": "wp0-journeys",
+      "contributingRoutes": [
+        "wp2-gateway-broadcast",
+        "wp6-gate",
+        "wp8-evidence",
+        "wp9-m3",
+        "wp9-user-journeys",
+        "wp9-treasury-recovery-journeys",
+        "wp11-rehearsal"
+      ]
+    }
+  ]
+}

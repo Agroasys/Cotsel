@@ -174,46 +174,6 @@ jobs:
               --add-label "$status_label" >/dev/null
           }
 
-          milestone_description() {
-            local milestone="$1"
-            local pct="$2"
-            case "$milestone" in
-              1)
-                printf '%s\n' \
-                  "Core protocol and bridge architecture milestone." \
-                  "Includes Escrow contract hardening, Ricardian PDF/hash service, AssetHub interaction modules, indexer/reconciliation foundations, SDK interfaces, and production readiness tests/deployment runbooks." \
-                  "Target outcome: deterministic on-chain lock/release flow with reproducible off-chain state sync." \
-                  "" \
-                  "Historical delivery status (weighted): ${pct}% complete (deliverable issue rollup; source: docs/runbooks/architecture-coverage-matrix.md)." \
-                  "" \
-                  "Note: GitHub milestone bar remains native closed/open ratio and is not configurable."
-                ;;
-              2)
-                printf '%s\n' \
-                  "End-to-end non-custodial settlement milestone." \
-                  "Includes Web3Auth-powered signing UX, unified checkout, oracle-driven release flow, treasury bridge/payout records, and mainnet pilot execution workflows." \
-                  "Target outcome: one buyer lock action drives supplier + treasury split settlement with operational traceability." \
-                  "" \
-                  "Historical delivery status (weighted): ${pct}% complete (deliverable issue rollup; source: docs/runbooks/architecture-coverage-matrix.md)." \
-                  "" \
-                  "Note: GitHub milestone bar remains native closed/open ratio and is not configurable."
-                ;;
-              3)
-                printf '%s\n' \
-                  "Production pilot and legal/operational validation milestone." \
-                  "Includes pilot environment/runbooks, KPI reporting (MPC success, settlement latency, gas profile), legal technical support for enforceability memo, and community-facing demo assets." \
-                  "Target outcome: validated real-world lifecycle and publishable pilot evidence." \
-                  "" \
-                  "Historical delivery status (weighted): ${pct}% complete (deliverable issue rollup; source: docs/runbooks/architecture-coverage-matrix.md)." \
-                  "" \
-                  "Note: GitHub milestone bar remains native closed/open ratio and is not configurable."
-                ;;
-              *)
-                return 1
-                ;;
-            esac
-          }
-
           project_item_id_for_issue() {
             local issue_node_id="$1"
             local cursor=""
@@ -290,8 +250,6 @@ jobs:
             update_gate_issue "$gate" "$pct"
             update_project_gate_fields "$gate" "$pct"
 
-            description="$(milestone_description "$milestone" "$pct")"
-            gh api --method PATCH "/repos/${repo}/milestones/${milestone}" -f description="$description" >/dev/null
           done
 
           echo "Roadmap weighted progress sync completed."

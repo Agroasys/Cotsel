@@ -8,7 +8,15 @@ labels:
     'type:gate-review',
     'sow:gate',
   ]
+assignees: [Astton, czpyioe]
 body:
+  - type: dropdown
+    id: gate_id
+    attributes:
+      label: Gate ID
+      description: Select the exact engineering, pilot, or mainnet authorization being reviewed.
+      options: [E-0, E-1, E-2, E-3, E-4, E-5, P-0, P-1, P-2, P-3, P-4, P-5, P-6, Mainnet]
+    validations: { required: true }
   - type: input
     id: release_id
     attributes:
@@ -25,6 +33,7 @@ body:
     id: requirements
     attributes:
       label: Required work, implementation requirement, and acceptance evidence
+      description: Copy the complete source-faithful gate definition from the validated programme contract. Generic boilerplate is prohibited.
       value: |
         | ID | Required work | Implementation requirement | Acceptance evidence |
         |---|---|---|---|
@@ -35,6 +44,24 @@ body:
     attributes:
       label: Evidence index and review
       description: Link immutable evidence, reproducible commands, failures, recovery, reviewer findings, exceptions, and invalidation triggers.
+    validations: { required: true }
+  - type: textarea
+    id: authority
+    attributes:
+      label: Required approvers and separation of duty
+      description: Name every SOW-required approver, evidence reviewer, delivery owner, and any party prohibited from self-accepting the gate.
+    validations: { required: true }
+  - type: textarea
+    id: stop_condition
+    attributes:
+      label: Stop or no-go condition
+      description: Record the exact SOW stop condition and the containment action while it is present.
+    validations: { required: true }
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback, containment, and residual risk
+      description: Name the rollback target, stop authority, reconciliation requirement, incident owner, remaining exposure, exceptions, compensating controls, and expiry.
     validations: { required: true }
   - type: textarea
     id: decision
@@ -53,4 +80,6 @@ body:
       label: Reviewer declaration
       options:
         - label: I verified that all evidence belongs to the candidate identity above and that a merge or closed issue was not treated as readiness.
+          required: true
+        - label: I will reopen this review if the manifest, artifact, contract, migration, environment, provider mode, evidence, approver, exception, or rollback target changes materially.
           required: true

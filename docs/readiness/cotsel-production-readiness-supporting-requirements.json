@@ -1,0 +1,683 @@
+{
+  "schemaVersion": "cotsel.production-readiness.supporting-requirements.v1",
+  "rule": "Each supporting control combines its coverage-contract name as Required work with source-specific Implementation requirement and Acceptance evidence. These rows normalize SOW prose and tables; they do not claim verbatim transcription where the SOW uses a different column structure.",
+  "groups": {
+    "authorityBoundaries": {
+      "sourceSection": "Section 5 - Architecture, authority and system-of-record boundaries",
+      "sourcePages": [8],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "AUTH-01": {
+          "implementationRequirement": "Accept Agroasys-authenticated session exchange as the identity input, then authorize each Cotsel route against current backend-owned user and role state. Do not treat a frontend profile or unverified token claim as identity or role truth.",
+          "acceptanceEvidence": "A pinned integration run proves valid session exchange and route authorization, and rejects a disabled user, stale role, altered token claim, expired exchange, and revoked session without relying on frontend state."
+        },
+        "AUTH-02": {
+          "implementationRequirement": "Validate and broadcast only the exact participant-authorized transfer, and return immutable execution evidence to Agroasys. Do not calculate or overwrite participant balances or wallet history from Cotsel dashboard projections.",
+          "acceptanceEvidence": "Reconciled journey evidence ties the signed amount, wallet, chain, contract and transaction hash to the Agroasys participant-ledger update and proves that conflicting Cotsel or dashboard calculations cannot change ledger truth."
+        },
+        "AUTH-03": {
+          "implementationRequirement": "Accept only a service-authenticated, idempotent settlement handoff for an Agroasys-owned order reservation. Bind the command to the exact order, amount, chain, contract, nonce and deadline; never infer payment intent from browser acknowledgement.",
+          "acceptanceEvidence": "Contract and journey tests prove one accepted handoff for the pinned reservation and safely reject missing, altered, duplicate, expired, replayed and browser-only payment intents."
+        },
+        "AUTH-04": {
+          "implementationRequirement": "Use canonical AgroasysEscrow execution and emitted Base events as the authority for escrow state and fee accrual. Gateway acceptance, a submitted transaction, or an indexer status cannot independently establish execution or accrual.",
+          "acceptanceEvidence": "Transaction receipts, verified contract events and reconciliation records agree for funding, release and fee accrual, while timeout, reverted, orphaned and unconfirmed transactions remain pending or failed rather than completed."
+        },
+        "AUTH-05": {
+          "implementationRequirement": "Record operator preparation and approval in the gateway, but establish signed action truth by decoding the signer response and reconciling it with the canonical intent and chain result. Never trust an unverified managed-signer response.",
+          "acceptanceEvidence": "Append-only audit records identify the operator and approved intent, signer identity and response, decoded transaction fields, broadcast hash and chain outcome; a signer-mutated transaction is detected and blocked."
+        },
+        "AUTH-06": {
+          "implementationRequirement": "Treat the canonical Base chain as event truth. Make the indexer produce replayable, block-bounded projections and prevent checkpoint advancement when a log is dropped, undecodable, orphaned or associated with the wrong chain or contract.",
+          "acceptanceEvidence": "Pinned-block coverage, poison-log, reorganization and replay evidence proves that every canonical event is projected once or quarantined visibly and that checkpoint state cannot hide a missing event."
+        },
+        "AUTH-07": {
+          "implementationRequirement": "Derive treasury eligibility from finalized canonical contract events, then require fresh treasury and reconciliation evidence before external handoff, realization or close. An unfinalized event or failed handoff row cannot become treasury truth.",
+          "acceptanceEvidence": "A fee-to-close evidence chain includes finality, canonical event identity, reconciliation clearance, maker-checker approval, provider state and close record; reorg and failed-handoff tests prevent false eligibility or completion."
+        },
+        "AUTH-08": {
+          "implementationRequirement": "Model fiat and off-ramp completion as provider- or bank-owned truth. Cotsel may record a bounded request and reference, but it must not treat requested, created, failed or unverified callback states as completed value movement.",
+          "acceptanceEvidence": "Provider contract evidence maps each external state to the Cotsel state machine, authenticates callbacks, retains provider receipts and shows that CREATED, FAILED, duplicate, delayed and conflicting callbacks cannot close a handoff."
+        },
+        "AUTH-09": {
+          "implementationRequirement": "Return signed, idempotent execution callbacks and query results to the Agroasys backend. Allow Agroasys to publish user-visible settlement status only after confirmed Cotsel evidence, chain state and reconciliation agree; do not promote optimistic frontend retries.",
+          "acceptanceEvidence": "A hosted browser-to-backend-to-Cotsel journey proves pending, confirmed, failed and recovered states from the same release, including duplicate callback, delayed confirmation and frontend retry cases without contradictory user-visible truth."
+        }
+      }
+    },
+    "preservationRules": {
+      "sourceSection": "Section 6 - Verified strengths to preserve",
+      "sourcePages": [10],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "PRES-01": {
+          "implementationRequirement": "Keep EIP-712 authorization bound to signer, action, trade, nonce, deadline, chain and verifying contract for every existing and new action. Preserve domain separation and replay resistance across redeployment and consumer updates.",
+          "acceptanceEvidence": "Hardhat and Foundry negative tests reject wrong signer, action, trade, nonce, deadline, chain and verifying contract, and replay tests pass against the pinned contract source, ABI and deployment."
+        },
+        "PRES-02": {
+          "implementationRequirement": "Retain SafeERC20, non-reentrancy, checks-effects-interactions and atomic EIP-3009 funding. Do not add push-payment behavior or a fallback that can leave partial contract or ledger state.",
+          "acceptanceEvidence": "Contract tests, invariants and failure injection prove atomic funding, no reentrant state transition, no partial payment state and safe handling of token failure and non-standard return behavior."
+        },
+        "PRES-03": {
+          "implementationRequirement": "Preserve approved launch proportions and separation of supplier principal from fee accrual. Require an explicit versioned approval and updated economic invariants before any fee, split, rounding or finality change.",
+          "acceptanceEvidence": "The release manifest names the approved economic version, and invariant and boundary tests reconcile supplier principal and fee accrual for minimum, maximum, rounding, staged and final settlement cases."
+        },
+        "PRES-04": {
+          "implementationRequirement": "Keep rapid emergency pause paths while placing recovery and unpause behind stronger quorum, role, epoch and audit controls. A lost or compromised administrator must not create permanent privilege or unsafe unilateral recovery.",
+          "acceptanceEvidence": "Role and governance tests prove authorized emergency pause, rejected unauthorized unpause, quorum-based recovery, administrator replacement, proposal invalidation and an audited incident path."
+        },
+        "PRES-05": {
+          "implementationRequirement": "Retain destination-bound sweep and payout rotation controls, and wrap them with canonical-event eligibility, atomic maker-checker approval and verified external-completion gates.",
+          "acceptanceEvidence": "Treasury tests prove destination binding, two-person approval, finalized eligibility, provider-confirmed handoff and reconciliation-gated close, including wrong destination, concurrent approval, reorg and failed-provider cases."
+        },
+        "PRES-06": {
+          "implementationRequirement": "Retain HMAC or API-key service contracts, timestamp validation and nonce replay protection. Use production-grade shared nonce storage, explicit key rotation and revocation, and fail-closed caller allowlists for every privileged internal path.",
+          "acceptanceEvidence": "Deployed tests prove exact-byte authentication, shared nonce rejection across replicas, expired timestamp rejection, old-key revocation, controlled overlap during rotation, unknown-caller denial and fail-closed behavior when the nonce store or allowlist dependency is unavailable."
+        },
+        "PRES-07": {
+          "implementationRequirement": "Preserve forced RLS and scoped runtime sessions in the six existing service schemas, remove DDL authority from long-lived services, and extend least-privilege roles and session controls to the indexer and GraphQL paths.",
+          "acceptanceEvidence": "Migration and role evidence identifies every database principal, proves runtime DDL denial, RLS isolation and scoped sessions, and includes negative cross-service, indexer and GraphQL access tests after restore."
+        },
+        "PRES-08": {
+          "implementationRequirement": "Keep the frozen pnpm lockfile, minimum package-age policy and time-bounded exception process. Add pinned action and image inputs, current SAST, secret, dependency, license, container, IaC, SBOM, provenance and signing controls without weakening existing thresholds.",
+          "acceptanceEvidence": "Hosted required checks and seeded-failure tests prove lockfile enforcement, package-age and exception expiry, pinned inputs, current scans, SBOM and provenance generation, artifact signing and promotion blocking on an unaccepted result."
+        },
+        "PRES-09": {
+          "implementationRequirement": "Keep documentation explicit about Base Sepolia rehearsal, separate Base mainnet approval and external deployment evidence. Correct stale commands, paths and assumptions, then execute the active runbooks during drills.",
+          "acceptanceEvidence": "Command and link validation plus signed drill records prove that the published deployment, rollback, incident, recovery and reconciliation instructions work on the pinned environment and do not imply an unauthorized launch state."
+        },
+        "PRES-10": {
+          "implementationRequirement": "Retain Hardhat, Foundry fuzz and invariant coverage and the broad service suites. Make every critical suite clean, hosted, required and representative of crash, reorganization, provider failure and recovery on the pinned supported toolchain.",
+          "acceptanceEvidence": "Branch-protection and aggregate-gate evidence shows every named contract and service suite is required and green; a meta-test proves a skipped or failed suite blocks promotion, and fault runs cover crash, reorganization and provider failure."
+        }
+      }
+    },
+    "testLayers": {
+      "sourceSection": "Section 10 - Integrated verification programme",
+      "sourcePages": [28],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "TEST-01": {
+          "implementationRequirement": "Run lint, type checking, formatting, SAST, secret scanning, dependency and license review, image and IaC scanning, SBOM and provenance generation, and action and image pinning against the exact candidate.",
+          "acceptanceEvidence": "Hosted reports identify the release manifest and config digest, contain no unaccepted Critical or High result, and record an owner and expiry for every permitted time-bound exception."
+        },
+        "TEST-02": {
+          "implementationRequirement": "Run Hardhat, Foundry fuzz and invariants, coverage, static analysis, ABI and source parity, deployment rehearsal, gas and size checks, and authorization, governance and finality tests on a supported pinned toolchain.",
+          "acceptanceEvidence": "All required contract suites pass for the exact source and ABI, deployment rehearsal proves bytecode and roles, coverage and gas or size reports are retained, and independent review is complete."
+        },
+        "TEST-03": {
+          "implementationRequirement": "Verify versioned migrations, concurrent execution, rollback compatibility, RLS and grants, destructive-change controls, indexes and query plans, backup, PITR and complete restore using production-size data.",
+          "acceptanceEvidence": "A production-size rehearsal and clean restore pass with migration identity, timing, row and hash checks, role and RLS proof, RPO and RTO measurements, and explicit runtime-DDL denial."
+        },
+        "TEST-04": {
+          "implementationRequirement": "Exercise authentication, validation, HMAC and replay, rate limits, idempotency, callbacks, state machines, signer semantics, readiness and safe errors across every affected service workspace.",
+          "acceptanceEvidence": "The hosted aggregate lists every service suite and proves all pass with no critical suite skipped; negative results demonstrate safe rejection without secret, personal-data or ambiguous financial-state leakage."
+        },
+        "TEST-05": {
+          "implementationRequirement": "Inject crash after broadcast, receipt timeout, provider disagreement, signer outage, nonce conflict, poison log, chain reorganization, queue redrive and database, cache and RPC failure against the deployed candidate.",
+          "acceptanceEvidence": "Fault records prove unknown outcomes remain durable and non-duplicated, every containment signal reaches its owner, authoritative state is resolved before retry, and financial reconciliation passes before resumption."
+        },
+        "TEST-06": {
+          "implementationRequirement": "Pin Agroasys frontend and backend, Cotsel gateway and services, Cotsel-Dash, contract, provider modes and real Base Sepolia identity, then run the hosted M3 compatibility and journey matrix.",
+          "acceptanceEvidence": "A required hosted check binds all repository commits and artifact identities to one manifest and proves the cross-repository contracts without stale checkout, local-only dependency or mock-only financial evidence."
+        },
+        "TEST-07": {
+          "implementationRequirement": "Measure API latency, queue bursts, signer throughput, RPC limits, indexer catch-up, reconciliation beyond 1,000 trades, migration locks and database pools at the approved pilot peak plus reserve.",
+          "acceptanceEvidence": "Signed load reports identify datasets, duration, concurrency, environment and release, meet approved thresholds and reserve, and demonstrate bounded fail-closed overload behavior with recovery."
+        },
+        "TEST-08": {
+          "implementationRequirement": "Independently test authorization, tenant and service isolation, managed signer behavior, API abuse, ingress, dependencies, containers, cloud, secrets and the complete financial workflow after the candidate is stable.",
+          "acceptanceEvidence": "Independent reports identify scope and release, and every finding is remediated and retested or formally accepted by the named authority with compensating control and expiry; no unaccepted Critical or High finding remains."
+        },
+        "TEST-09": {
+          "implementationRequirement": "Run zero-value and then bounded-value creation, stage-one release, inspection, dispute and finalization, treasury claim, provider handoff, callbacks, support and recovery under the approved participant and stop controls.",
+          "acceptanceEvidence": "A signed go or no-go packet contains the exact release identity, participant and limit record, daily zero-critical-drift reconciliation, tested stop conditions, incident outcomes and a retrievable evidence index."
+        }
+      }
+    },
+    "goldenJourneys": {
+      "sourceSection": "Section 10.1 - Golden journey matrix",
+      "sourcePages": [29],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "GJ-01": {
+          "implementationRequirement": "Keep Agroasys authoritative for identity while Cotsel session creation, roles, refresh and revocation reconcile through the trusted exchange. Handle disabled users, role drift, expiry, replay and revocation during an action.",
+          "acceptanceEvidence": "A hosted login flow records backend and Cotsel session identities and proves valid refresh and revoke plus safe rejection of disabled, stale-role, expired, replayed and mid-action-revoked sessions."
+        },
+        "GJ-02": {
+          "implementationRequirement": "Show and bind the exact order, amount, chain and contract; persist the signed intent; broadcast once; and reconcile the confirmed escrow lock. Handle user rejection, expiry, wrong wallet, post-broadcast timeout and RPC disagreement.",
+          "acceptanceEvidence": "Browser, backend, gateway and chain evidence share one correlation identifier and prove one authorization, one durable transaction identity and one reconciled lock across every listed failure variant."
+        },
+        "GJ-03": {
+          "implementationRequirement": "Require authorized Oracle evidence for stage-one release and preserve supplier-principal and fee invariants through event ordering, signer availability and chain reorganization.",
+          "acceptanceEvidence": "The pinned journey ties approved evidence to contract call, receipt, events and reconciled ledger effects, and safely handles duplicate trigger, out-of-order event, unavailable signer and reorganization."
+        },
+        "GJ-04": {
+          "implementationRequirement": "Make buyer acceptance signature or the approved deadline policy authoritative for final release, keep disputes blocking, and reject forged, replayed, late or direct-Oracle bypass attempts.",
+          "acceptanceEvidence": "Contract, service and browser evidence proves valid inspection acceptance and final release, plus rejection or governed handling of forged or replayed acceptance, late dispute, direct Oracle call and wrong policy."
+        },
+        "GJ-05": {
+          "implementationRequirement": "Require finalized canonical fees, fresh reconciliation, two-party approval, provider-owned completion and close evidence for treasury claim and handoff. Preserve pending truth through orphan events, duplicate or failed callbacks, timeout and evidence conflict.",
+          "acceptanceEvidence": "A complete fee-to-close packet ties canonical event, reconciliation, maker-checker identities, provider receipt and close record together and proves containment for every specified failure variant."
+        },
+        "GJ-06": {
+          "implementationRequirement": "Project every event once and reconcile chain, indexer, treasury and Agroasys at a pinned block. Recover deterministically from poison log, missing trade, more than 1,000 trades, checkpoint loss and complete restore.",
+          "acceptanceEvidence": "Block-bounded reports, replay hashes, gap alerts, restored checkpoints and cross-system tie-out prove complete coverage and no unresolved financial drift for the same release and data range."
+        },
+        "GJ-07": {
+          "implementationRequirement": "Operate pause or freeze, alerting, named ownership, user communication, evidence capture and controlled recovery for lost administrator, signer compromise, absent alert owner and rollback with active trades.",
+          "acceptanceEvidence": "Signed incident drills record detection, page and escalation, decision authority, containment time, participant communication, reconciliation, rollback or recovery and approved safe resumption."
+        }
+      }
+    },
+    "securityControls": {
+      "sourceSection": "Section 11.1 - Security control minimum",
+      "sourcePages": [29],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "SEC-01": {
+          "implementationRequirement": "Use managed workload identities and KMS, HSM or MPC for production-capable signers. Prevent export or routine handling of long-lived plaintext private keys and separate authorization from custody.",
+          "acceptanceEvidence": "Signer configuration, access policy and audit evidence proves managed identity, non-exportability, least privilege, rotation and revocation; outage and unauthorized-access drills fail closed."
+        },
+        "SEC-02": {
+          "implementationRequirement": "Authenticate the signer and locally decode every returned transaction. Compare chain, contract, sender, recipient, selector, value, data, nonce and approved intent before broadcast.",
+          "acceptanceEvidence": "Positive comparison and malicious-signer tests prove exact semantic binding, block every altered field before broadcast and retain an append-only intent-to-signature audit trail."
+        },
+        "SEC-03": {
+          "implementationRequirement": "Use private service ingress, authenticated service-to-service traffic, least-privilege database roles and direct-origin denial. Expose only approved edge routes.",
+          "acceptanceEvidence": "External and internal port scans, direct-origin tests, service-auth tests and database negative-access tests prove the intended network and identity boundary in the deployed environment."
+        },
+        "SEC-04": {
+          "implementationRequirement": "Enable secret scanning and push protection and require current code, dependency, container, IaC and license gates for the exact release source and artifacts.",
+          "acceptanceEvidence": "Hosted scan results and seeded detections prove each gate executes and blocks promotion; exceptions include owner, rationale, compensating control and expiry."
+        },
+        "SEC-05": {
+          "implementationRequirement": "Protect deployment environments, promote immutable signed artifacts, use read-only default CI tokens and audit every emergency bypass with independent review and revocation.",
+          "acceptanceEvidence": "Environment rules, token permissions, signature verification, deployment records and bypass meta-tests prove unreviewed or mutable artifacts cannot reach the protected environment."
+        },
+        "SEC-06": {
+          "implementationRequirement": "Retain complete append-only audit evidence for privileged, financial and configuration actions, including actor, authority, before and after state, release identity, correlation identifier and outcome.",
+          "acceptanceEvidence": "Tamper-evident records for representative role, signer, treasury, migration, configuration, pause and exception actions are retrievable, access-audited and reconciled to authoritative system events."
+        },
+        "SEC-07": {
+          "implementationRequirement": "Complete independent contract, API, cloud and financial-workflow assurance on the stable release before real-value or Base mainnet use, then remediate and retest findings.",
+          "acceptanceEvidence": "Independent reports name exact scope and artifact identities and show no unaccepted Critical or High finding; accepted residual findings name authority, compensating control and expiry."
+        }
+      }
+    },
+    "complianceControls": {
+      "sourceSection": "Section 11.2 - Compliance and privacy control minimum",
+      "sourcePages": [30],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "COMP-01": {
+          "implementationRequirement": "Maintain an approved inventory for every processed field that records source, purpose, legal basis, accountable owner, sensitivity, residency, encryption, access, logging and retention.",
+          "acceptanceEvidence": "The versioned data inventory maps fields to services, databases, events, logs and providers and includes reviewer approval, access tests, encryption proof and retention configuration for the pinned environment."
+        },
+        "COMP-02": {
+          "implementationRequirement": "Document and enforce Agroasys identity, KYB, KYT and sanctions authority, issuer assurance, expiry and revocation behavior, override policy and evidence references. Cotsel must consume approved decisions without becoming the compliance authority.",
+          "acceptanceEvidence": "Approved authority mapping and deployed tests prove valid, expired, revoked, overridden and missing compliance states, identify the issuing source and retain the decision evidence used for each permitted action."
+        },
+        "COMP-03": {
+          "implementationRequirement": "Implement approved notice and consent where applicable, access, correction and deletion procedures, immutable financial-record exceptions and a complete audit trail for each privacy-rights decision.",
+          "acceptanceEvidence": "Signed policy decisions and exercised request cases prove data discovery, access, correction, deletion or justified retention, immutable-record exceptions, approver identity and completion evidence."
+        },
+        "COMP-04": {
+          "implementationRequirement": "Use default-deny telemetry schemas, field-level redaction, role-based access, bounded retention and deletion, and a defined privacy-incident path. Do not emit secrets, credentials, personal data or sensitive financial payloads by default.",
+          "acceptanceEvidence": "Schema tests, seeded sensitive-data detections, access review, retention and deletion proof and a privacy-incident drill demonstrate that prohibited fields are blocked or redacted across logs, metrics, traces and alerts."
+        },
+        "COMP-05": {
+          "implementationRequirement": "Record the approved fee-policy authority, enforce maker-checker controls and destination restrictions, reconcile every financial transition, freeze discrepancies and require authoritative close evidence.",
+          "acceptanceEvidence": "Policy approval, role tests and a fee-to-close journey prove two-person control, correct destinations and amounts, discrepancy freeze, reconciliation clearance and an auditable close decision."
+        },
+        "COMP-06": {
+          "implementationRequirement": "Complete provider due diligence and service terms, define authentication and callback security, outage and escalation handling, data-processing obligations and the authoritative mapping for every provider state.",
+          "acceptanceEvidence": "Approved provider dossier, contract mapping and sandbox or controlled-environment tests prove authenticated requests and callbacks, correct state authority, fail-closed outage handling and named escalation ownership."
+        },
+        "COMP-07": {
+          "implementationRequirement": "Store required evidence in a signed or WORM archive with an approved retention schedule, legal-hold process, access audit, integrity verification and authorized destruction workflow.",
+          "acceptanceEvidence": "Archive configuration, immutable object identities, signature or hash verification, retrieval test, legal-hold exercise, access log and destruction-approval test are bound to the evidence index."
+        },
+        "COMP-08": {
+          "implementationRequirement": "Define severity, breach and notification decision authority, regulator and customer duties, evidence-preservation steps and post-incident review. Technical procedures must implement the approved legal and compliance decisions without inventing them.",
+          "acceptanceEvidence": "An approved incident and breach matrix plus a live drill records classification, decision owner, notification decision and timing, preserved evidence, participant communication and post-incident actions."
+        }
+      }
+    },
+    "infrastructureLayers": {
+      "sourceSection": "Section 11.3 - Infrastructure and reliability minimum",
+      "sourcePages": [31],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "INFRA-01": {
+          "implementationRequirement": "Keep databases, caches and services private; expose only approved edge routes; require TLS, WAF and rate controls; and deny direct origin access in the production-like environment.",
+          "acceptanceEvidence": "Reviewed IaC, external and internal port scans, TLS and WAF tests, rate-limit results and a direct-origin denial test identify the exact environment and applied plan."
+        },
+        "INFRA-02": {
+          "implementationRequirement": "Run immutable non-root images with a read-only filesystem where possible, dropped Linux capabilities, resource requests and limits, multiple replicas and a safe rollout strategy.",
+          "acceptanceEvidence": "Image and runtime inspection, security-context checks, resource configuration, replica-failure injection and rollout or rollback drill prove the compute controls for signed image digests."
+        },
+        "INFRA-03": {
+          "implementationRequirement": "Use managed highly available PostgreSQL with scoped roles, a versioned migration job, encryption, point-in-time recovery and enforced connection limits.",
+          "acceptanceEvidence": "Applied configuration, failover record, migration ledger, role and RLS tests, encryption identity, PITR restore and connection-saturation test prove database behavior for the candidate."
+        },
+        "INFRA-04": {
+          "implementationRequirement": "Use a managed highly available support store and durable queues with DLQs for financial work. Implement leases, redrive, duplicate handling, poison-message quarantine and backpressure.",
+          "acceptanceEvidence": "Node-failure, worker-crash, duplicate-delivery, expired-lease, poison-message, redrive and overload tests prove no accepted financial command is lost or unsafely duplicated."
+        },
+        "INFRA-05": {
+          "implementationRequirement": "Configure named primary and fallback RPC providers, chain, code and role preflight, rate and capacity policy, circuit breaking and the finality model used by every service.",
+          "acceptanceEvidence": "Config and readiness records plus provider split, outage, wrong-chain, wrong-code, capacity and recovery tests prove safe behavior and one consistent finality policy."
+        },
+        "INFRA-06": {
+          "implementationRequirement": "Use managed secret identities and KMS, HSM or MPC signer custody with rotation, revocation and access auditing. Prohibit plaintext export and fail startup or readiness on invalid identity.",
+          "acceptanceEvidence": "Redacted configuration, IAM policy, signer and secret identities, access logs and invalid-config, rotation, revocation and outage drills prove fail-closed managed custody."
+        },
+        "INFRA-07": {
+          "implementationRequirement": "Build each artifact once, scan and sign it, promote only its immutable digest through a protected environment, record release, configuration, schema and contract identities, and preserve proven rollback compatibility.",
+          "acceptanceEvidence": "A signed release manifest, scan and signature verification, protected deployment record and successful compatible rollback prove build-once promotion without mutable rebuild."
+        },
+        "INFRA-08": {
+          "implementationRequirement": "Deploy central redacted logs, metrics and traces, approved SLOs, settlement dashboards, synthetic checks and pager routing with complete correlation across user, service, queue, provider and chain steps.",
+          "acceptanceEvidence": "An injected incident produces correlated telemetry, SLO impact, the expected dashboard and page, acknowledgement and escalation receipts, privacy-safe records and retained evidence."
+        }
+      }
+    },
+    "failureRecovery": {
+      "sourceSection": "Section 12 - Failure, abuse, containment and recovery register",
+      "sourcePages": [32, 33, 34],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "FAIL-01": {
+          "implementationRequirement": "Hash the canonical intent, decode and compare every signed field locally and permit one signer request. On mismatch, block broadcast, revoke the signer, inspect affected requests and require rotation and reauthorization.",
+          "acceptanceEvidence": "A managed-signer mutation drill produces an intent-to-signed-hash mismatch alert, no broadcast, signer revocation, scoped request review and an approved reauthorization record."
+        },
+        "FAIL-02": {
+          "implementationRequirement": "Persist hash, sender and nonce before waiting for receipt and retain a durable unknown state. Suppress retry while authoritative nonce, receipt and event state is resolved and reconciled.",
+          "acceptanceEvidence": "A forced timeout after accepted broadcast proves the durable transaction identity survives restart, no second broadcast occurs, discrepancy alerts fire and owner-approved reconciliation precedes resumption."
+        },
+        "FAIL-03": {
+          "implementationRequirement": "Move accepted financial commands to a durable queue or outbox with leases, restart scanning and DLQ handling. Pause intake, reassign expired work and check authoritative outcome before redrive.",
+          "acceptanceEvidence": "Worker termination after acceptance produces queue-age or lease-expiry detection, one safe reassignment, no duplicate financial effect and reconciled completion or quarantine."
+        },
+        "FAIL-04": {
+          "implementationRequirement": "Preflight ABI and code, write projections and checkpoints atomically, and quarantine raw undecodable logs. Stop checkpoint advancement until the cause is corrected, then replay deterministically and reconcile downstream state.",
+          "acceptanceEvidence": "An injected poison log triggers a critical alert, preserves raw evidence, holds the checkpoint, completes deterministic replay after correction and proves downstream reconciliation."
+        },
+        "FAIL-05": {
+          "implementationRequirement": "Enumerate independent chain coverage and compare it bidirectionally with the indexer. Freeze affected flows, backfill or replay the complete range and rerun reconciliation when a chain trade is missing.",
+          "acceptanceEvidence": "A removed projection produces a coverage-gap and cursor-range alert, prevents a false clean report and records complete-range backfill, replay and accepted reconciliation."
+        },
+        "FAIL-06": {
+          "implementationRequirement": "Use a safe finalized-block policy, block-hash canonicality and provider comparison. Revoke orphan eligibility, pause payout, replay and reconcile at a stable block after a reorganization or provider disagreement.",
+          "acceptanceEvidence": "Reorganization and provider-split tests record hash mismatch and depth, remove orphan eligibility, prevent payout, rebuild canonical state and produce a stable-block reconciliation."
+        },
+        "FAIL-07": {
+          "implementationRequirement": "Use keyset cursors, complete-range accounting and an age SLA rather than a fixed cap. Detect uncovered tail exposure, pause expansion, increase capacity and reconcile the backlog before close.",
+          "acceptanceEvidence": "A dataset beyond 1,000 trades proves every record is enumerated, the tail and age metrics detect an induced backlog, and no close occurs until the entire range reconciles."
+        },
+        "FAIL-08": {
+          "implementationRequirement": "Require buyer EIP-712 authorization for inspection acceptance and remove or disable any Oracle-only early-release path. Pause the trade and Oracle, investigate and follow the governed dispute or refund path on bypass attempt.",
+          "acceptanceEvidence": "A direct Oracle early-release attempt is rejected and audited, creates no final supplier tranche, triggers the required containment and preserves the approved dispute or refund outcome."
+        },
+        "FAIL-09": {
+          "implementationRequirement": "Use removable roles, threshold-controlled epochs, timelock and hardware custody for contract administration. On lost or compromised authority, pause, rotate by quorum, invalidate unsafe proposals and complete incident review.",
+          "acceptanceEvidence": "A lost-admin and compromised-admin drill proves emergency pause, quorum rotation, proposal invalidation, restored governance and a signed security review without unilateral unsafe unpause."
+        },
+        "FAIL-10": {
+          "implementationRequirement": "Run treasury ingestion as a scheduled single-owner worker and gate readiness on a freshness watermark. Block export and close, repair the worker and backfill the finalized range when ingestion stops.",
+          "acceptanceEvidence": "A stopped-ingestion drill turns readiness unhealthy, fires lag and missing-event alerts, prevents export or close and records complete finalized-range backfill and reconciliation."
+        },
+        "FAIL-11": {
+          "implementationRequirement": "Use an append-only provider state machine, verified status mapping and maker-checker controls. Never map CREATED or FAILED to handed off; freeze conflicting batches and correct them through an approved exception.",
+          "acceptanceEvidence": "State-transition and provider-reconciliation tests prove CREATED and FAILED remain incomplete, conflicting evidence freezes the batch and an approved correction preserves the full history."
+        },
+        "FAIL-12": {
+          "implementationRequirement": "Authenticate callbacks with signature, timestamp skew and nonce controls; enforce idempotency, monotonic state transitions and authoritative receipt mapping; reject or freeze conflicts and query provider or chain truth before safe replay.",
+          "acceptanceEvidence": "Duplicate, delayed, replayed, forged and conflicting callbacks produce the expected rejection or freeze, discrepancy alerts and one authoritative final state without repeated financial effect."
+        },
+        "FAIL-13": {
+          "implementationRequirement": "Run versioned migrations as a dedicated job with advisory lock, transaction boundaries and expand-and-contract compatibility. Stop rollout on race or partial failure and use only a proven roll-forward, compatible rollback or restore.",
+          "acceptanceEvidence": "Concurrent-start and injected partial-failure tests record one migration owner and ledger, no uncontrolled runtime DDL, bounded lock time and a verified recovery path with intact data."
+        },
+        "FAIL-14": {
+          "implementationRequirement": "Maintain PITR, immutable backups, integrity checks and scheduled restore tests. Block pilot or expansion when restore fails, repair the backup chain and reconcile service, indexer, ledger and chain state before resumption.",
+          "acceptanceEvidence": "A clean-environment restore drill verifies backup identity and hashes, roles and RLS, service readiness, re-indexing, financial tie-out and measured RPO and RTO before an owner authorizes resume."
+        },
+        "FAIL-15": {
+          "implementationRequirement": "Bind the immutable release manifest to chain, contract address, source, bytecode and ABI, and enforce live startup preflight and synthetic checks. Fail startup and block promotion on any mismatch.",
+          "acceptanceEvidence": "Wrong-chain, wrong-address and wrong-ABI tests fail readiness and promotion, while the corrected cohort is redeployed, all consumers are updated and affected state is reconciled."
+        },
+        "FAIL-16": {
+          "implementationRequirement": "Use capacity policy, primary and fallback providers, circuit breaking, durable handoff and no unsafe retry. Show pending truth and pause new commitments until nonce, queue and unknown outcomes are resolved.",
+          "acceptanceEvidence": "RPC and signer degradation drills produce provider-health, nonce-age, queue-age and unknown-outcome alerts, prevent duplicate execution and record controlled recovery and reconciliation before resume."
+        },
+        "FAIL-17": {
+          "implementationRequirement": "Enforce default-deny telemetry schemas, redaction, access control and retention. Restrict access, purge where permitted and enter the approved incident or breach process when sensitive data is detected.",
+          "acceptanceEvidence": "Seeded secrets, personal data and sensitive financial fields are blocked or detected across logs, metrics and traces, and the exercise records containment, permitted purge, evidence preservation and privacy decision."
+        },
+        "FAIL-18": {
+          "implementationRequirement": "Require the complete CI aggregate, protected deployment environment and signed-digest promotion. Block promotion on bypass, review any emergency exception as an incident and revoke the bypass after use.",
+          "acceptanceEvidence": "Aggregate and ruleset meta-tests prove missing or failed required checks cannot promote, and a controlled bypass exercise records approver, reason, artifact, expiry, incident review and revocation."
+        },
+        "FAIL-19": {
+          "implementationRequirement": "Maintain an alert roster, severity model, Incident Commander, deputies and escalation policy. Escalate an unacknowledged alert to the executive duty owner and freeze risky flows when no owner responds.",
+          "acceptanceEvidence": "A no-response drill records page delivery, acknowledgement timeout, escalation, executive decision, risk-flow freeze, recovery ownership and post-incident follow-up."
+        }
+      }
+    },
+    "engineeringGates": {
+      "sourceSection": "Section 13.1 - Private Base Sepolia engineering rehearsal",
+      "sourcePages": [34],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "E-0": {
+          "implementationRequirement": "Freeze the WP-0 scope, prohibit external users and real value, identify the exact release manifest and environment owner, and require Engineering, Product and Finance approval. Stop when scope, chain, contract or ownership is ambiguous.",
+          "acceptanceEvidence": "A candidate-specific E-0 review links the approved WP-0 charter and immutable manifest, confirms no external users or value, names the environment owner and records Engineering Lead, Product and Finance decisions."
+        },
+        "E-1": {
+          "implementationRequirement": "Verify current contract source, bytecode, roles, ABI and address and update every consumer. Stop new testing while an old or unverified address remains active.",
+          "acceptanceEvidence": "A candidate-specific E-1 review records explorer and local bytecode parity, role attestation, ABI hash, address propagation and Protocol, Security and Release approval for the exact deployment."
+        },
+        "E-2": {
+          "implementationRequirement": "Require signer semantic binding, durable queueing, broadcast-unknown recovery and idempotency fault tests across the complete WP-2 transaction path. Stop if an accepted broadcast can become untracked or rebroadcast.",
+          "acceptanceEvidence": "A candidate-specific E-2 review links signer, queue, timeout, restart, nonce, receipt and idempotency evidence and records Gateway, Oracle and Finance approval."
+        },
+        "E-3": {
+          "implementationRequirement": "Require poison-log containment, bidirectional reconciliation, canonical treasury proof and complete migration and restore evidence across WP-3 through WP-5. Stop while event coverage or restored state is incomplete.",
+          "acceptanceEvidence": "A candidate-specific E-3 review links block-bounded coverage, replay, treasury, migration, restore and cross-system reconciliation artifacts and records Data and Treasury approval."
+        },
+        "E-4": {
+          "implementationRequirement": "Require clean signed images, private staging from reviewed IaC, managed dependencies and signer identities, and protected deployment across WP-6 and WP-7. Stop on mutable or manual deployment or a raw production-capable key.",
+          "acceptanceEvidence": "A candidate-specific E-4 review links signed digests, scans, IaC plan and apply, private-network proof, managed dependency and signer identities, deployment record and Platform and Security approval."
+        },
+        "E-5": {
+          "implementationRequirement": "Require deployed telemetry, alerts, owner roster, incident and rollback drills and a retrievable evidence store. Stop when any critical alert lacks an owner or required evidence cannot be retained.",
+          "acceptanceEvidence": "A candidate-specific E-5 review links dashboards, alerts, acknowledgement and escalation receipts, drill records, rollback proof, evidence retrieval and SRE and Operations approval."
+        }
+      }
+    },
+    "pilotGates": {
+      "sourceSection": "Section 13.2 - Controlled external pilot",
+      "sourcePages": [35],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "P-0": {
+          "implementationRequirement": "Require every E-0 through E-5 review to be accepted for the exact same release candidate. Stop when any P0 blocker or expired exception remains.",
+          "acceptanceEvidence": "A candidate-specific P-0 review links all six accepted engineering-gate decisions, verifies identical manifest identity and records Engineering Lead approval with no open P0 or expired exception."
+        },
+        "P-1": {
+          "implementationRequirement": "Require hosted M3 compatibility and the complete buyer, supplier, operator and support matrix for the pinned candidate. Stop on local-only, stale-path or mock-only financial proof.",
+          "acceptanceEvidence": "A candidate-specific P-1 review links the hosted required run and complete journey evidence and records Integration Lead and Product QA approval."
+        },
+        "P-2": {
+          "implementationRequirement": "Require independent assurance and approved privacy, provider, retention, financial, legal and compliance decisions. Stop on any unaccepted Critical or High finding or missing legal or control decision.",
+          "acceptanceEvidence": "A candidate-specific P-2 review links independent reports, remediation retests and approved control records and captures Security, Compliance and Finance decisions."
+        },
+        "P-3": {
+          "implementationRequirement": "Require a named allowlist, applicable consent and training, staffed support contacts, eligibility decisions and transaction and value caps. Stop for an unknown participant, uncapped value or unsupported jurisdiction.",
+          "acceptanceEvidence": "A candidate-specific P-3 review records participants, jurisdiction, eligibility, consent, training, support and caps and captures Pilot Owner, Product and Compliance approval."
+        },
+        "P-4": {
+          "implementationRequirement": "Require staffed on-call, SLO dashboards, synthetics, rollback, pause authority, backup and restore and live containment drills. Stop for an unowned alert, failed restore or unrehearsed containment path.",
+          "acceptanceEvidence": "A candidate-specific P-4 review links roster, dashboards, synthetic results, alert receipts, restore, rollback, pause and incident drills and records Operations Lead and Incident Commander approval."
+        },
+        "P-5": {
+          "implementationRequirement": "Run fresh zero-value and bounded-value lifecycles for the candidate and require no Critical drift plus a retrievable signed evidence packet. Stop on any ledger, chain or provider discrepancy or evidence gap.",
+          "acceptanceEvidence": "A candidate-specific P-5 review links the complete lifecycles, reconciliation, drift result and signed evidence index and records Engineering, Treasury and Pilot Owner approval."
+        },
+        "P-6": {
+          "implementationRequirement": "Record the approved window, release manifest, contract address, caps, owners, evidence links and decision timestamp. Stop when any required role or evidence field is blank.",
+          "acceptanceEvidence": "A candidate-specific P-6 GO record identifies the exact window and release and contains explicit Engineering, Operations, Treasury and Incident Commander decisions with every required field populated."
+        }
+      }
+    },
+    "mainnetConditions": {
+      "sourceSection": "Section 13.3 - Base mainnet",
+      "sourcePages": [36],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "MAINNET-01": {
+          "implementationRequirement": "Deploy and verify mainnet source and bytecode with buyer acceptance, governance rotation and quorum, role separation and the correct USDC and chain configuration.",
+          "acceptanceEvidence": "Mainnet explorer, local bytecode, ABI, role, USDC, chain and authorization evidence is reviewed against the independently assured source and exact deployment."
+        },
+        "MAINNET-02": {
+          "implementationRequirement": "Use production IaC, signed application images, a protected environment, versioned schema, redacted config digest and a tested rollback path for the mainnet release.",
+          "acceptanceEvidence": "The mainnet change record links reviewed IaC, applied plan, signed manifest, protected deployment, schema identity, config digest and successful rollback rehearsal."
+        },
+        "MAINNET-03": {
+          "implementationRequirement": "Approve treasury limits, maker-checker controls and provider or off-ramp contracts, then operate daily reconciliation, exposure freeze and authoritative close procedures.",
+          "acceptanceEvidence": "Approved financial policies, provider agreements, role tests, daily tie-out, discrepancy freeze and end-to-end close records prove production financial operations."
+        },
+        "MAINNET-04": {
+          "implementationRequirement": "Provision primary and fallback RPC, signer throughput, relayer funding, highly available dependencies, approved load capacity, alert coverage and staffed on-call for mainnet.",
+          "acceptanceEvidence": "Mainnet-specific load, failover, signer, RPC, relayer-balance, dependency, alert and on-call drills meet approved peak and reserve thresholds."
+        },
+        "MAINNET-05": {
+          "implementationRequirement": "Complete independent smart-contract, application, cloud and compliance review for the final mainnet candidate and close or formally accept every finding through the named authority.",
+          "acceptanceEvidence": "Independent mainnet reports and remediation retests identify the exact artifacts and show no unaccepted Critical or High finding or missing compliance decision."
+        },
+        "MAINNET-06": {
+          "implementationRequirement": "Require Engineering Lead, Operations Lead, Treasury Owner and Incident Commander to record explicit GO for the exact mainnet release window and first cohort.",
+          "acceptanceEvidence": "A separately signed mainnet approval packet records all four decisions, exact manifest, window, cohort, stop conditions, rollback target and decision timestamp."
+        }
+      }
+    },
+    "governanceDecisions": {
+      "sourceSection": "Section 14 - Governance, reporting and decision cadence",
+      "sourcePages": [36],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "GOV-01": {
+          "implementationRequirement": "Have the Programme Lead accept each work-package scope after Service Owner, Product and Finance review of the complete control sheet and dependency map.",
+          "acceptanceEvidence": "The approved nine-field control sheet records the accountable decision, reviewer identities, scope, dependencies, date and affected release or programme state."
+        },
+        "GOV-02": {
+          "implementationRequirement": "Have the Engineering Lead approve protocol and security design after Protocol, Security and Finance review of the design, threat and abuse analysis and test plan.",
+          "acceptanceEvidence": "A versioned design record links the threat and abuse review and verification plan and records all required reviewer and Engineering Lead decisions."
+        },
+        "GOV-03": {
+          "implementationRequirement": "Allow the Release Owner to promote to staging only after Platform, Security and Data review of the signed manifest, green required gates and protected deployment.",
+          "acceptanceEvidence": "The promotion record ties the signed manifest and required runs to the protected environment and records Release Owner and reviewer approval."
+        },
+        "GOV-04": {
+          "implementationRequirement": "Allow the Pilot Owner to approve an external pilot only after Engineering, Operations, Treasury, Incident Commander and Compliance review of the complete Section 13 GO record.",
+          "acceptanceEvidence": "The release-specific P-6 decision records every required reviewer, exact window, caps, evidence links, stop conditions and explicit Pilot Owner decision."
+        },
+        "GOV-05": {
+          "implementationRequirement": "Allow only the Security authority to accept residual security risk after affected-owner and Finance or Privacy review. Bound every exception by scope, compensating control and expiry.",
+          "acceptanceEvidence": "A signed risk record names the finding, affected release, owner, reviewers, compensating control, expiry, revocation trigger and Security authority decision."
+        },
+        "GOV-06": {
+          "implementationRequirement": "Allow the Executive Launch Authority to approve mainnet only after the four required operational roles and Security and Compliance review the mainnet approval packet and change record.",
+          "acceptanceEvidence": "A separate mainnet decision links every required condition and records Executive, four-role, Security and Compliance approval for the exact release and window."
+        },
+        "GOV-07": {
+          "implementationRequirement": "Allow the Pilot Owner to expand participant or value limits only after Finance, Operations, Product and Compliance review prior-cohort metrics, zero Critical drift and the proposed new caps.",
+          "acceptanceEvidence": "A new change record links cohort results and reconciliation, records the approved participants and caps, and captures all reviewer and Pilot Owner decisions."
+        }
+      }
+    },
+    "reporting": {
+      "sourceSection": "Section 14.1 - Required reporting",
+      "sourcePages": [37],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "REPORT-01": {
+          "implementationRequirement": "Publish a weekly blocker register containing evidence links, owner, status, dependency, residual risk and next decision for every unresolved readiness blocker.",
+          "acceptanceEvidence": "A dated, versioned register is retrievable, contains every required field, reconciles to live Project items and records reviewer acknowledgement and overdue or escalated decisions."
+        },
+        "REPORT-02": {
+          "implementationRequirement": "Create a release manifest for every deployed candidate and prevent evidence reuse across a different commit, artifact digest, contract address, migration, environment, chain, provider mode or config digest without accepted equivalence.",
+          "acceptanceEvidence": "The deployed candidate and every evidence-index item resolve to the same immutable manifest, and a mismatch test rejects stale evidence from another build or environment."
+        },
+        "REPORT-03": {
+          "implementationRequirement": "Publish daily reconciliation and incident summaries during every active controlled-pilot participant window, including unresolved drift, exposure, ownership and stop or resume decisions.",
+          "acceptanceEvidence": "Each pilot day has a timestamped signed report tied to the release and reconciliation range, with incident status, discrepancy ownership, reviewer acceptance and retained evidence link."
+        },
+        "REPORT-04": {
+          "implementationRequirement": "Measure capacity, signer, RPC, queue, indexer, reconciliation, treasury and support behavior against approved thresholds and make breaches visible to the named operational owner.",
+          "acceptanceEvidence": "Dashboards and exported reports identify threshold definitions, release and time range, show each required metric and alert, and record owner review of every breach or capacity exception."
+        },
+        "REPORT-05": {
+          "implementationRequirement": "Maintain a decision log for every exception, rollback, pause or unpause, signer change, migration and pilot-limit change, including authority, rationale, scope and invalidated evidence.",
+          "acceptanceEvidence": "Sampled and live decisions are append-only, trace to the affected release and issue, contain approval and expiry where applicable, and reconcile to deployment, incident and evidence records."
+        }
+      }
+    },
+    "residualDecisions": {
+      "sourceSection": "Section 15 - Assumptions, exclusions and residual decisions",
+      "sourcePages": [37],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "DEC-01": {
+          "implementationRequirement": "Select one authoritative cloud and control plane for the first integrated staging path and record why it is consistent with the upstream Agroasys platform. Do not split the first production-like rehearsal across clouds.",
+          "acceptanceEvidence": "An approved decision record names the cloud, account, region, control owner, network and deployment boundary, rejected alternative and downstream WP-7 obligations."
+        },
+        "DEC-02": {
+          "implementationRequirement": "Approve the pilot participant class, jurisdiction, value and transaction limits and support model before inviting any external participant, then enforce the decision in allowlists, caps and operations.",
+          "acceptanceEvidence": "A signed Product, Compliance, Finance and Pilot Owner record names participants, jurisdiction, limits, eligibility, support contacts and change authority and maps to deployed controls."
+        },
+        "DEC-03": {
+          "implementationRequirement": "Approve the protocol governance model and decide whether the current immutable contract design is replaced before mainnet. Record operational, security, treasury and cohort consequences.",
+          "acceptanceEvidence": "A signed protocol and mainnet decision links the reviewed design, threat analysis, migration or cohort plan, rollback model and required Protocol, Security, Finance and Executive approvals."
+        }
+      }
+    },
+    "assumptions": {
+      "sourceSection": "Section 15 - Assumptions, exclusions and residual decisions",
+      "sourcePages": [37],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "ASSUMPTION-01": {
+          "implementationRequirement": "Design and test every integration on the assumption that Agroasys remains authoritative for end-user identity, orders, participant ledger and wallet history. Record a change decision before altering that boundary.",
+          "acceptanceEvidence": "The approved authority matrix and hosted journeys show Agroasys ownership for each domain and reject any Cotsel or frontend attempt to become local authority."
+        },
+        "ASSUMPTION-02": {
+          "implementationRequirement": "Keep Cotsel as the Base settlement and control subsystem and Cotsel-Dash as an operator surface. Prevent dashboard presentation state from becoming contract, treasury, reconciliation or provider truth.",
+          "acceptanceEvidence": "Architecture and journey evidence maps each Cotsel and dashboard responsibility and proves operator actions resolve through authenticated services and authoritative settlement evidence."
+        },
+        "ASSUMPTION-03": {
+          "implementationRequirement": "Use Base Sepolia only for engineering and pilot rehearsal and keep Base mainnet behind a separate fresh authorization programme. Do not infer mainnet approval from pilot success.",
+          "acceptanceEvidence": "Environment, release and gate records distinguish Sepolia and mainnet chain identities and show no mainnet deployment or promotion without the WP-12 approval packet."
+        },
+        "ASSUMPTION-04": {
+          "implementationRequirement": "Require external cloud, signer, monitoring, provider and compliance owners to supply auditable evidence before acceptance. A Cotsel issue or assignee cannot self-accept an external authority's control.",
+          "acceptanceEvidence": "The evidence index names each external producer, immutable artifact or provider receipt, reviewer and acceptance decision and keeps the related issue open when required external proof is absent."
+        }
+      }
+    },
+    "exclusions": {
+      "sourceSection": "Section 15 - Assumptions, exclusions and residual decisions",
+      "sourcePages": [37],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "EXCLUSION-01": {
+          "implementationRequirement": "Treat the SOW as engineering-readiness guidance, not legal advice, regulatory classification, financial-statement audit or certification. Route those decisions to named legal, compliance and finance authorities.",
+          "acceptanceEvidence": "Programme and gate records identify the external legal, compliance and finance decisions required and contain no claim that repository evidence substitutes for professional approval or certification."
+        },
+        "EXCLUSION-02": {
+          "implementationRequirement": "Do not infer the state of secrets, production data, private cloud consoles or provider accounts from the original audit. Revalidate those surfaces through authorized owners and redacted evidence before acceptance.",
+          "acceptanceEvidence": "Each affected gate links current authorized evidence or records the dependency as unresolved; no secret value or production personal data is copied into issues, logs or the evidence index."
+        },
+        "EXCLUSION-03": {
+          "implementationRequirement": "Do not treat the SOW itself as authorization for GitHub, cloud, contract or production changes. Require the applicable owner, change record, protected environment and gate decision for every mutation.",
+          "acceptanceEvidence": "Change and deployment records identify the independent authorization, reviewer, artifact and environment and prove no production or chain action relied solely on the SOW."
+        }
+      }
+    },
+    "environments": {
+      "sourceSection": "Section 3.3 - Where to start testing on GCP or AWS",
+      "sourcePages": [4, 5],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "ENV-01": {
+          "implementationRequirement": "Use Node 20, a frozen lockfile, all workspaces, PostgreSQL and Redis, Hardhat and Foundry and clean image builds for local and CI unit, contract, schema, build and failure-injection proof. Do not claim deployed or pilot readiness.",
+          "acceptanceEvidence": "A clean hosted run identifies toolchain and dependency versions and produces the complete local or CI evidence set with an explicit non-deployed classification."
+        },
+        "ENV-02": {
+          "implementationRequirement": "Run current-release integration and operational rehearsal in one private Base Sepolia staging control plane with managed database and Redis, KMS or MPC, primary and fallback RPC, protected deployment, monitoring and restore. Prohibit public users and real commercial value.",
+          "acceptanceEvidence": "The environment manifest, IaC, access controls, deployment and restore records identify the exact private staging boundary and prove no public participant or real-value mode is enabled."
+        },
+        "ENV-03": {
+          "implementationRequirement": "Operate the controlled pilot only for named users, bounded value and supervised journeys with all Section 13 gates, allowlists, caps, staffed on-call and support, and incident and rollback authority. Prohibit automatic expansion.",
+          "acceptanceEvidence": "The release-specific GO record, participant and cap register, support roster, daily reports and stop or rollback evidence prove operation remained within the approved boundary."
+        },
+        "ENV-04": {
+          "implementationRequirement": "Treat Base mainnet as production settlement requiring separate approval, independent assurance, a verified current contract, protected release and live drills. Never promote from the pilot by assumption.",
+          "acceptanceEvidence": "A fresh WP-12 packet binds mainnet-specific contract, application, infrastructure, provider, assurance, drill and four-role approval evidence to the exact release and window."
+        }
+      }
+    },
+    "workPackageControlSheet": {
+      "sourceSection": "Section 9.1 - Required work-package control sheet",
+      "sourcePages": [27],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "WPCS-01": {
+          "implementationRequirement": "State one measurable control outcome and the financial or user flow protected by the work package.",
+          "acceptanceEvidence": "Every WP-0 through WP-12 parent contains a non-empty Objective row with a measurable outcome and protected flow."
+        },
+        "WPCS-02": {
+          "implementationRequirement": "Identify exact services, contracts, environments and repositories in scope, plus explicit out-of-scope and deferred work.",
+          "acceptanceEvidence": "Every WP parent contains a non-empty In scope / out of scope row that names the applicable boundaries and deferred work."
+        },
+        "WPCS-03": {
+          "implementationRequirement": "Name one accountable owner and the Security, Finance, Data or Operations reviewers required for the package.",
+          "acceptanceEvidence": "Every WP parent contains a non-empty Owner / reviewers row with one accountable owner and relevant independent reviewers."
+        },
+        "WPCS-04": {
+          "implementationRequirement": "List upstream work packages, provider access, legal decisions and external deployment records required before acceptance.",
+          "acceptanceEvidence": "Every WP parent contains a non-empty Dependencies row that distinguishes accepted, unresolved and external prerequisites."
+        },
+        "WPCS-05": {
+          "implementationRequirement": "Specify the exact code, schema, infrastructure, runbook and operator changes required by the package.",
+          "acceptanceEvidence": "Every WP parent contains a non-empty Implementation row that maps child delivery issues to concrete change surfaces."
+        },
+        "WPCS-06": {
+          "implementationRequirement": "Define positive, negative, fault, recovery, load, privacy and cross-repository tests applicable to the package.",
+          "acceptanceEvidence": "Every WP parent contains a non-empty Verification row and its children map each applicable test class to reproducible evidence."
+        },
+        "WPCS-07": {
+          "implementationRequirement": "Identify immutable artifact paths or URLs, hashes, run identifiers, environment identity and approvers for acceptance.",
+          "acceptanceEvidence": "Every WP parent contains a non-empty Acceptance evidence row and the evidence index supplies the stated immutable identities and approvals for a candidate."
+        },
+        "WPCS-08": {
+          "implementationRequirement": "Define the stop condition, rollback compatibility, residual exposure and incident owner for the package.",
+          "acceptanceEvidence": "Every WP parent contains a non-empty Rollback / containment row and a drill or review proves the stop, rollback and incident-ownership path."
+        },
+        "WPCS-09": {
+          "implementationRequirement": "Name the residual risk, bounded exception, expiry and decision authority; never leave the field blank.",
+          "acceptanceEvidence": "Every WP parent contains a non-empty Residual risk row that records either no approved exception or the bounded exception, expiry and accepting authority."
+        }
+      }
+    },
+    "programmeInvariants": {
+      "sourceSection": "Sections 9, 10, 12 and 14.2 - Cross-cutting programme rules",
+      "sourcePages": [25, 28, 32, 37],
+      "representation": "structured-paraphrase",
+      "entries": {
+        "PROG-01": {
+          "implementationRequirement": "Bind every verification result to the exact artifact later promoted and include the release manifest and redacted configuration digest in every environment report. Invalidate results when the candidate identity changes.",
+          "acceptanceEvidence": "Automated validation proves every evidence-index row resolves to the promoted manifest and environment report, and a changed commit, digest, address, migration, provider mode or config digest rejects stale evidence."
+        },
+        "PROG-02": {
+          "implementationRequirement": "For every failure case, define a detection signal, explicit stop condition, recovery authority and proof that financial state reconciled before service resumed. Prevention alone is insufficient.",
+          "acceptanceEvidence": "The failure register and drill index contain detection, stop, owner, containment, recovery, reconciliation and resume-decision evidence for all 19 minimum cases."
+        },
+        "PROG-03": {
+          "implementationRequirement": "Issue the first forecast only after WP-0 and one deployed vertical rehearsal, estimate packages with named assumptions and dependencies, report a range and confidence, and reforecast after contract, provider, platform or assurance change. Never trade P0 acceptance for a date.",
+          "acceptanceEvidence": "The approved forecast links WP-0 and rehearsal measurements, states assumptions, dependencies, range and confidence, and the decision log records every required reforecast without waiving a P0 condition."
+        },
+        "PROG-04": {
+          "implementationRequirement": "Organize delivery by control outcome, allow parallel work only where dependencies permit and never accept a package from code merge, issue state or narrative alone.",
+          "acceptanceEvidence": "The dependency graph and live Project state show no premature acceptance, and every accepted package links complete release-bound evidence and the named acceptance decision."
+        },
+        "PROG-05": {
+          "implementationRequirement": "Before cross-repository implementation, define the required assertions, authority boundaries, positive path and all listed failure variants for login, funding, stage-one release, inspection and final release, treasury handoff, reconciliation and recovery, and incident containment.",
+          "acceptanceEvidence": "An approved journey specification maps all seven Section 10.1 rows to pinned systems, actors, state authorities, test data, failure variants, evidence producers and acceptance owners without replacing later deployed proof."
+        }
+      }
+    }
+  }
+}

@@ -1,25 +1,31 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
+import crypto from 'node:crypto';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+
+import {
+  controls,
+  milestones as milestoneContract,
+  packages,
+  programmeTitle,
+  routes,
+  source,
+  supportingIssues,
+  titleForWorkPackage,
+} from './cotsel-production-readiness-model.mjs';
+import {
+  invariantProjectFields,
+  primaryProjectMetadata,
+  supportingProjectMetadata,
+} from './cotsel-production-readiness-project-metadata.mjs';
+import { renderBodyForTitle } from './render-cotsel-production-readiness-issue.mjs';
 
 const ORGANIZATION = process.env.READINESS_ORGANIZATION || 'Agroasys';
 const REPOSITORY = process.env.READINESS_REPOSITORY || 'Cotsel';
 const PROJECT_NUMBER = Number(process.env.READINESS_PROJECT_NUMBER || '9');
 const TOKEN = process.env.READINESS_PROJECT_TOKEN || process.env.GH_TOKEN;
 if (!TOKEN) throw new Error('READINESS_PROJECT_TOKEN or GH_TOKEN is required for the live audit.');
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const read = (name) => JSON.parse(fs.readFileSync(path.join(root, 'docs/readiness', name), 'utf8'));
-const routes = read('cotsel-production-readiness-issue-route-contract.json');
-const packages = read('cotsel-production-readiness-work-packages.json');
-const source = read('cotsel-production-readiness-sow-source.json');
-const coverage = read('cotsel-production-readiness-supporting-coverage-contract.json');
-const programmeTitle = '[Programme] Cotsel production readiness and controlled-pilot authorization';
-const requiredTable = '| ID | Required work | Implementation requirement | Acceptance evidence |';
 
 async function github(pathname, options = {}) {
   const response = await fetch(`https://api.github.com${pathname}`, {
@@ -34,8 +40,9 @@ async function github(pathname, options = {}) {
     },
   });
   const payload = await response.json();
-  if (!response.ok)
+  if (!response.ok) {
     throw new Error(`GitHub request failed: ${response.status} ${JSON.stringify(payload)}`);
+  }
   return payload;
 }
 
@@ -44,14 +51,15 @@ async function graphql(query, variables = {}) {
     method: 'POST',
     body: JSON.stringify({ query, variables }),
   });
-  if (payload.errors?.length)
+  if (payload.errors?.length) {
     throw new Error(`GitHub GraphQL failed: ${JSON.stringify(payload.errors)}`);
+  }
   return payload.data;
 }
 
-const data = await graphql(
+const staticData = await graphql(
   `
-    query ($organization: String!, $repository: String!, $projectNumber: Int!, $label: String!) {
+    query ($organization: String!, $projectNumber: Int!) {
       organization(login: $organization) {
         projectV2(number: $projectNumber) {
           id
@@ -80,99 +88,177 @@ const data = await graphql(
               filter
             }
           }
-          items(first: 100) {
+          items(first: 1) {
             totalCount
-            nodes {
-              id
-              content {
-                ... on Issue {
-                  number
-                  title
-                  repository {
-                    nameWithOwner
-                  }
-                  assignees(first: 10) {
-                    nodes {
-                      login
-                    }
-                  }
-                }
-              }
-              fieldValues(first: 40) {
-                nodes {
-                  ... on ProjectV2ItemFieldSingleSelectValue {
-                    name
-                    field {
-                      ... on ProjectV2FieldCommon {
-                        name
-                      }
-                    }
-                  }
-                  ... on ProjectV2ItemFieldTextValue {
-                    text
-                    field {
-                      ... on ProjectV2FieldCommon {
-                        name
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      repository(owner: $organization, name: $repository) {
-        issues(
-          first: 100
-          states: [OPEN, CLOSED]
-          labels: [$label]
-          orderBy: { field: CREATED_AT, direction: ASC }
-        ) {
-          totalCount
-          nodes {
-            id
-            number
-            title
-            body
-            state
-            url
-            assignees(first: 10) {
-              nodes {
-                login
-              }
-            }
-            milestone {
-              title
-            }
-            parent {
-              number
-              title
-            }
-            subIssues(first: 100) {
-              totalCount
-              nodes {
-                number
-                title
-              }
-            }
           }
         }
       }
     }
   `,
-  {
-    organization: ORGANIZATION,
-    repository: REPOSITORY,
-    projectNumber: PROJECT_NUMBER,
-    label: 'programme:cotsel-production-readiness',
-  },
+  { organization: ORGANIZATION, projectNumber: PROJECT_NUMBER },
 );
 
-const issues = data.repository.issues.nodes;
-const project = data.organization.projectV2;
-assert.equal(data.repository.issues.totalCount, 70, 'programme issue count');
-assert.equal(issues.length, 70, 'programme issue page is complete');
+const project = staticData.organization?.projectV2;
+assert.ok(project, `Project ${ORGANIZATION}/${PROJECT_NUMBER} exists`);
+
+async function loadProjectItems(projectId) {
+  const items = [];
+  let cursor = null;
+  do {
+    const data = await graphql(
+      `
+        query ($projectId: ID!, $cursor: String) {
+          node(id: $projectId) {
+            ... on ProjectV2 {
+              items(first: 100, after: $cursor) {
+                pageInfo {
+                  hasNextPage
+                  endCursor
+                }
+                nodes {
+                  id
+                  content {
+                    ... on Issue {
+                      id
+                      number
+                      title
+                      state
+                      repository {
+                        nameWithOwner
+                      }
+                      labels(first: 40) {
+                        nodes {
+                          name
+                        }
+                      }
+                      assignees(first: 10) {
+                        nodes {
+                          login
+                        }
+                      }
+                    }
+                  }
+                  fieldValues(first: 40) {
+                    nodes {
+                      ... on ProjectV2ItemFieldSingleSelectValue {
+                        name
+                        field {
+                          ... on ProjectV2FieldCommon {
+                            name
+                          }
+                        }
+                      }
+                      ... on ProjectV2ItemFieldTextValue {
+                        text
+                        field {
+                          ... on ProjectV2FieldCommon {
+                            name
+                          }
+                        }
+                      }
+                      ... on ProjectV2ItemFieldDateValue {
+                        date
+                        field {
+                          ... on ProjectV2FieldCommon {
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `,
+      { projectId, cursor },
+    );
+    const page = data.node.items;
+    items.push(...page.nodes.filter((item) => item.content?.id));
+    cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+  } while (cursor);
+  return items;
+}
+
+async function loadProgrammeIssues() {
+  const issues = [];
+  let cursor = null;
+  let totalCount = null;
+  do {
+    const data = await graphql(
+      `
+        query ($organization: String!, $repository: String!, $label: String!, $cursor: String) {
+          repository(owner: $organization, name: $repository) {
+            issues(
+              first: 100
+              after: $cursor
+              states: [OPEN, CLOSED]
+              labels: [$label]
+              orderBy: { field: CREATED_AT, direction: ASC }
+            ) {
+              totalCount
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              nodes {
+                id
+                number
+                title
+                body
+                state
+                url
+                labels(first: 40) {
+                  nodes {
+                    name
+                  }
+                }
+                assignees(first: 10) {
+                  nodes {
+                    login
+                  }
+                }
+                milestone {
+                  title
+                }
+                parent {
+                  number
+                  title
+                }
+                subIssues(first: 100) {
+                  totalCount
+                  nodes {
+                    number
+                    title
+                  }
+                }
+              }
+            }
+          }
+        }
+      `,
+      {
+        organization: ORGANIZATION,
+        repository: REPOSITORY,
+        label: 'programme:cotsel-production-readiness',
+        cursor,
+      },
+    );
+    const page = data.repository.issues;
+    totalCount ??= page.totalCount;
+    issues.push(...page.nodes);
+    cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+  } while (cursor);
+  assert.equal(issues.length, totalCount, 'programme issue pagination is complete');
+  return issues;
+}
+
+const [issues, projectItems] = await Promise.all([
+  loadProgrammeIssues(),
+  loadProjectItems(project.id),
+]);
+
 assert.equal(project.title, 'Cotsel Production Readiness and Controlled Pilot');
 assert.equal(project.public, true);
 assert.equal(project.closed, false);
@@ -181,18 +267,39 @@ assert.deepEqual(
   ['Agroasys/Cotsel'],
 );
 
+const expectedPrimaryIssueCount = 1 + packages.workPackages.length + routes.issues.length;
+assert.equal(issues.length, expectedPrimaryIssueCount, 'managed programme issue count');
 const byTitle = new Map(issues.map((issue) => [issue.title, issue]));
 const programme = byTitle.get(programmeTitle);
 assert.ok(programme, 'programme issue exists');
-const expectedTitles = [programmeTitle];
-for (const wp of packages.workPackages) expectedTitles.push(`[${wp.id}] ${wp.title}`);
-expectedTitles.push(...routes.issues.map((route) => route.title));
-assert.equal(new Set(expectedTitles).size, 70, 'expected titles are unique');
-assert.deepEqual(
-  [...byTitle.keys()].sort(),
-  [...expectedTitles].sort(),
-  'live issue titles match route contract',
-);
+const expectedTitles = [
+  programmeTitle,
+  ...packages.workPackages.map(titleForWorkPackage),
+  ...routes.issues.map((route) => route.title),
+];
+assert.equal(new Set(expectedTitles).size, expectedPrimaryIssueCount);
+assert.deepEqual([...byTitle.keys()].sort(), [...expectedTitles].sort(), 'managed issue titles');
+
+function normalizeBody(body) {
+  return String(body).replaceAll('\r\n', '\n').trimEnd();
+}
+
+function bodyMismatchMessage(issue, expected, actual) {
+  const expectedLines = expected.split('\n');
+  const actualLines = actual.split('\n');
+  const index = Array.from(
+    { length: Math.max(expectedLines.length, actualLines.length) },
+    (_, line) => line,
+  ).find((line) => expectedLines[line] !== actualLines[line]);
+  const digest = (value) => crypto.createHash('sha256').update(value).digest('hex');
+  return [
+    `#${issue.number} body differs at line ${(index ?? 0) + 1}`,
+    `expected sha256 ${digest(expected)}`,
+    `actual sha256 ${digest(actual)}`,
+    `expected: ${expectedLines[index] ?? '<EOF>'}`,
+    `actual: ${actualLines[index] ?? '<EOF>'}`,
+  ].join('\n');
+}
 
 for (const issue of issues) {
   assert.deepEqual(
@@ -200,26 +307,26 @@ for (const issue of issues) {
     ['Astton', 'czpyioe'],
     `assignees for #${issue.number}`,
   );
-  assert.ok(
-    issue.body.includes(requiredTable),
-    `four-column SOW table missing from #${issue.number}`,
-  );
   assert.ok(issue.milestone?.title, `milestone missing from #${issue.number}`);
+  const expected = normalizeBody(renderBodyForTitle(issue.title));
+  const actual = normalizeBody(issue.body);
+  assert.ok(expected === actual, bodyMismatchMessage(issue, expected, actual));
 }
 
 assert.equal(programme.parent, null);
-assert.equal(programme.subIssues.totalCount, 13);
-for (const wp of packages.workPackages) {
-  const parentTitle = `[${wp.id}] ${wp.title}`;
+assert.equal(programme.milestone.title, 'M0 Base Migration Decision and Boundary Freeze');
+assert.equal(programme.subIssues.totalCount, packages.workPackages.length);
+for (const workPackage of packages.workPackages) {
+  const parentTitle = titleForWorkPackage(workPackage);
   const parent = byTitle.get(parentTitle);
-  const children = routes.issues.filter((route) => route.wp === wp.id);
-  assert.equal(parent.parent.number, programme.number, `${wp.id} parent link`);
-  assert.equal(parent.milestone.title, wp.milestone, `${wp.id} milestone`);
-  assert.equal(parent.subIssues.totalCount, children.length, `${wp.id} child count`);
+  const children = routes.issues.filter((route) => route.wp === workPackage.id);
+  assert.equal(parent.parent.number, programme.number, `${workPackage.id} parent link`);
+  assert.equal(parent.milestone.title, workPackage.milestone, `${workPackage.id} milestone`);
+  assert.equal(parent.subIssues.totalCount, children.length, `${workPackage.id} child count`);
   assert.deepEqual(
     parent.subIssues.nodes.map((item) => item.title).sort(),
     children.map((item) => item.title).sort(),
-    `${wp.id} child titles`,
+    `${workPackage.id} child titles`,
   );
   for (const route of children) {
     const child = byTitle.get(route.title);
@@ -249,12 +356,8 @@ const requiredFields = [
   'Target Date',
 ];
 const fieldNames = project.fields.nodes.filter(Boolean).map((field) => field.name);
-for (const name of requiredFields)
-  assert.ok(fieldNames.includes(name), `Project field missing: ${name}`);
-assert.ok(
-  !fieldNames.some((name) => /percent|%\s*complete/i.test(name)),
-  'percentage-complete field is prohibited',
-);
+for (const name of requiredFields) assert.ok(fieldNames.includes(name), `Project field: ${name}`);
+assert.ok(!fieldNames.some((name) => /percent|%\s*complete/i.test(name)));
 
 const expectedViews = new Map([
   ['Executive Authorization', ['BOARD_LAYOUT', 'priority:P0 -primary-gate:"Not Applicable"']],
@@ -275,76 +378,74 @@ const expectedViews = new Map([
   ['Base Mainnet Register', ['ROADMAP_LAYOUT', 'programme-track:"Base Mainnet"']],
 ]);
 assert.equal(project.views.totalCount, expectedViews.size);
-for (const view of project.views.nodes)
+for (const view of project.views.nodes) {
   assert.deepEqual([view.layout, view.filter], expectedViews.get(view.name), `view ${view.name}`);
+}
 
-assert.equal(project.items.totalCount, 85, 'Project item count');
-assert.equal(project.items.nodes.length, 85, 'Project item page is complete');
 const expectedProjectNumbers = new Set([
   ...issues.map((issue) => issue.number),
-  ...new Set(routes.issues.flatMap((route) => route.supportingIssues)),
+  ...supportingIssues.issues.map((issue) => issue.number),
 ]);
-assert.equal(expectedProjectNumbers.size, 85);
-const projectItems = project.items.nodes.filter(
-  (item) => item.content?.repository?.nameWithOwner === 'Agroasys/Cotsel',
+assert.equal(project.items.totalCount, expectedProjectNumbers.size);
+const cotselProjectItems = projectItems.filter(
+  (item) => item.content.repository.nameWithOwner === 'Agroasys/Cotsel',
 );
 assert.deepEqual(
-  projectItems.map((item) => item.content.number).sort((a, b) => a - b),
+  cotselProjectItems.map((item) => item.content.number).sort((a, b) => a - b),
   [...expectedProjectNumbers].sort((a, b) => a - b),
-  'Project contains exact primary and supporting issue set',
+  'Project contains exact managed and supporting issue set',
 );
-const requiredPopulated = [
-  'Status',
-  'Programme Track',
-  'Primary Gate',
-  'SOW Class',
-  'SOW ID',
-  'Priority',
-  'Work Type',
-  'Delivery Surface',
-  'Evidence Status',
-  'Accountable Owner',
-  'Delivery Owner',
-  'Acceptance Owner',
-  'External Dependency',
-  'Risk',
-];
-for (const item of projectItems) {
+for (const item of cotselProjectItems) {
   assert.deepEqual(
     item.content.assignees.nodes.map((assignee) => assignee.login).sort(),
     ['Astton', 'czpyioe'],
     `Project item #${item.content.number} assignees`,
   );
+}
+
+const allProjectIssueByNumber = new Map(
+  cotselProjectItems.map((item) => [item.content.number, item.content]),
+);
+const expectedMetadata = primaryProjectMetadata();
+for (const [title, metadata] of supportingProjectMetadata(allProjectIssueByNumber)) {
+  expectedMetadata.set(title, metadata);
+}
+const projectItemByTitle = new Map(cotselProjectItems.map((item) => [item.content.title, item]));
+for (const [title, expected] of expectedMetadata) {
+  const item = projectItemByTitle.get(title);
+  assert.ok(item, `Project item missing: ${title}`);
   const values = new Map(
     item.fieldValues.nodes
       .filter((value) => value.field?.name)
-      .map((value) => [value.field.name, value.name ?? value.text]),
+      .map((value) => [value.field.name, value.name ?? value.text ?? value.date]),
   );
-  for (const field of requiredPopulated)
-    assert.ok(values.get(field), `#${item.content.number} missing ${field}`);
-  if (item.content.number !== programme.number)
-    assert.ok(values.get('Work Package'), `#${item.content.number} missing Work Package`);
+  for (const field of invariantProjectFields) {
+    assert.equal(values.get(field), expected[field], `${title}: ${field}`);
+  }
+  if (expected['Work Package']) {
+    assert.equal(values.get('Work Package'), expected['Work Package'], `${title}: Work Package`);
+  } else {
+    assert.ok(!values.get('Work Package'), `${title}: unexpected Work Package`);
+  }
+  assert.ok(values.get('Status'), `${title}: Status`);
+  assert.ok(values.get('Evidence Status'), `${title}: Evidence Status`);
 }
 
-const milestones = await github(
+const liveMilestones = await github(
   `/repos/${ORGANIZATION}/${REPOSITORY}/milestones?state=all&per_page=100`,
 );
-assert.equal(milestones.length, 10);
-for (const milestone of milestones) {
-  assert.equal(
-    milestone.state,
-    milestone.number <= 3 ? 'closed' : 'open',
-    `milestone ${milestone.number} state`,
-  );
-  assert.ok(milestone.description?.trim(), `milestone ${milestone.number} description`);
-  assert.ok(
-    !milestone.description.includes('\\n'),
-    `milestone ${milestone.number} has literal newline escapes`,
-  );
-}
+const normalizedMilestones = liveMilestones
+  .map((item) => ({
+    number: item.number,
+    title: item.title,
+    state: item.state,
+    description: item.description,
+  }))
+  .sort((a, b) => a.number - b.number);
+assert.deepEqual(normalizedMilestones, milestoneContract.milestones, 'milestone contract');
 
 assert.equal(source.findings.length, 58);
-assert.equal(Object.values(coverage.groups).flatMap((group) => group.entries).length, 131);
+assert.equal(controls.length, 136);
 
 console.log('Live Cotsel production-readiness setup is complete and reconciled.');
 console.log(
@@ -356,13 +457,15 @@ console.log(
       workPackageParents: packages.workPackages.length,
       deliveryIssues: routes.issues.length,
       projectItems: project.items.totalCount,
-      supportingIssues: expectedProjectNumbers.size - issues.length,
+      supportingIssues: supportingIssues.issues.length,
       findings: source.findings.length,
-      supportingControls: Object.values(coverage.groups).flatMap((group) => group.entries).length,
+      supportingControls: controls.length,
       fields: project.fields.totalCount,
       views: project.views.totalCount,
-      milestones: milestones.length,
+      milestones: liveMilestones.length,
       assignees: ['Astton', 'czpyioe'],
+      bodyVerification: 'full deterministic body comparison',
+      milestoneVerification: 'exact title, state, and description comparison',
     },
     null,
     2,

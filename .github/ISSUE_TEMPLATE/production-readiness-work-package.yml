@@ -2,32 +2,41 @@ name: Cotsel production-readiness work package
 description: Create a parent control issue for a complete SOW work package.
 title: '[WP-X] '
 labels: ['programme:cotsel-production-readiness', 'status:backlog', 'type:work-package']
+assignees: [Astton, czpyioe]
 body:
-  - type: textarea
-    id: objective
-    attributes: { label: Objective }
-    validations: { required: true }
   - type: textarea
     id: control_sheet
     attributes:
       label: Work-package control sheet
+      description: Preserve these nine SOW fields in this exact order. Do not substitute Project metadata for a required field.
       value: |
         | Control | Definition |
         |---|---|
-        | Owner |  |
+        | Objective |  |
+        | In scope / out of scope |  |
+        | Owner / reviewers |  |
         | Dependencies |  |
         | Implementation |  |
         | Verification |  |
-        | Evidence |  |
-        | Rollback |  |
+        | Acceptance evidence |  |
+        | Rollback / containment |  |
         | Residual risk |  |
-        | Primary gate |  |
-        | Programme track |  |
+    validations: { required: true }
+  - type: textarea
+    id: programme_metadata
+    attributes:
+      label: Programme metadata
+      value: |
+        Primary gate:
+        Programme track:
+        Milestone:
+        Risk:
     validations: { required: true }
   - type: textarea
     id: requirements
     attributes:
       label: Required work, implementation requirement, and acceptance evidence
+      description: Use source-faithful, control-specific content for every row. Generic implementation or evidence boilerplate is prohibited.
       value: |
         | ID | Required work | Implementation requirement | Acceptance evidence |
         |---|---|---|---|

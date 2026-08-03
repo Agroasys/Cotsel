@@ -1,7 +1,8 @@
 name: Cotsel production-readiness implementation
 description: Deliver one bounded SOW implementation and its release-bound evidence.
 title: '[WP-X/Implementation] '
-labels: ['programme:cotsel-production-readiness', 'status:backlog']
+labels: ['programme:cotsel-production-readiness', 'status:backlog', 'type:implementation']
+assignees: [Astton, czpyioe]
 body:
   - type: textarea
     id: outcome
@@ -13,7 +14,7 @@ body:
     id: requirements
     attributes:
       label: Required work, implementation requirement, and acceptance evidence
-      description: Preserve every applicable SOW row as a separate table row.
+      description: Use source-faithful, control-specific content for every row. Generic implementation or evidence boilerplate is prohibited.
       value: |
         | ID | Required work | Implementation requirement | Acceptance evidence |
         |---|---|---|---|
@@ -28,8 +29,8 @@ body:
   - type: textarea
     id: scope
     attributes:
-      label: Scope and implementation
-      description: Include runtime, security, data, observability, migration, recovery, documentation, and rollout work.
+      label: In scope, out of scope, and implementation
+      description: Name exact services, contracts, environments, repositories and deferred work, then include runtime, security, data, observability, migration, recovery, documentation, and rollout changes.
     validations: { required: true }
   - type: textarea
     id: ownership
@@ -64,6 +65,12 @@ body:
     attributes:
       label: Evidence required
       description: Name exact artifacts, commands, deployment identities, results, reviewers, and evidence-index entries.
+    validations: { required: true }
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback and containment
+      description: Define stop condition, incident owner, rollback compatibility, reconciliation, residual exposure, and safe-resumption authority.
     validations: { required: true }
   - type: textarea
     id: boundaries

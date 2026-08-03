@@ -57,7 +57,9 @@ jobs:
           permission-organization-projects: write
 
       - name: Validate source and routing contracts
-        run: node scripts/readiness/validate-cotsel-production-readiness.mjs
+        run: |
+          node --test scripts/readiness/cotsel-production-readiness-contracts.test.mjs
+          node scripts/readiness/validate-cotsel-production-readiness.mjs
 
       - name: Synchronize Cotsel programme items
         env:
