@@ -3,6 +3,8 @@
 import process from 'node:process';
 
 import {
+  expectedProjectFieldNames,
+  expectedProjectSingleSelectOptions,
   mutableProjectFields,
   primaryProjectMetadata,
   supportingProjectMetadata,
@@ -62,6 +64,10 @@ const data = await graphql(
             }
           }
           items(first: 100) {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
             nodes {
               id
               content {
@@ -115,7 +121,88 @@ const data = await graphql(
 const project = data.organization?.projectV2;
 if (!project) throw new Error(`Project ${ORGANIZATION}/${PROJECT_NUMBER} not found.`);
 
+let itemCursor = project.items.pageInfo.hasNextPage ? project.items.pageInfo.endCursor : null;
+while (itemCursor) {
+  const pageData = await graphql(
+    `
+      query ($projectId: ID!, $cursor: String!) {
+        node(id: $projectId) {
+          ... on ProjectV2 {
+            items(first: 100, after: $cursor) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              nodes {
+                id
+                content {
+                  ... on Issue {
+                    id
+                    number
+                    title
+                    state
+                    url
+                    repository {
+                      nameWithOwner
+                    }
+                    labels(first: 40) {
+                      nodes {
+                        name
+                      }
+                    }
+                  }
+                }
+                fieldValues(first: 40) {
+                  nodes {
+                    ... on ProjectV2ItemFieldSingleSelectValue {
+                      name
+                      field {
+                        ... on ProjectV2FieldCommon {
+                          name
+                        }
+                      }
+                    }
+                    ... on ProjectV2ItemFieldTextValue {
+                      text
+                      field {
+                        ... on ProjectV2FieldCommon {
+                          name
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `,
+    { projectId: project.id, cursor: itemCursor },
+  );
+  const page = pageData.node.items;
+  project.items.nodes.push(...page.nodes);
+  itemCursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+}
+
 const fields = new Map(project.fields.nodes.filter(Boolean).map((field) => [field.name, field]));
+const liveFieldNames = [...fields.keys()].sort();
+const expectedFieldNames = [...expectedProjectFieldNames].sort();
+if (JSON.stringify(liveFieldNames) !== JSON.stringify(expectedFieldNames)) {
+  throw new Error(
+    `Project field contract mismatch. Expected ${JSON.stringify(expectedFieldNames)}, received ${JSON.stringify(liveFieldNames)}.`,
+  );
+}
+for (const [fieldName, expectedOptions] of Object.entries(expectedProjectSingleSelectOptions)) {
+  const field = fields.get(fieldName);
+  if (!field?.options) throw new Error(`Project field is not single-select: ${fieldName}`);
+  const actualOptions = field.options.map((option) => option.name);
+  if (JSON.stringify(actualOptions) !== JSON.stringify(expectedOptions)) {
+    throw new Error(
+      `Project option contract mismatch for ${fieldName}. Expected ${JSON.stringify(expectedOptions)}, received ${JSON.stringify(actualOptions)}.`,
+    );
+  }
+}
 const itemsByTitle = new Map();
 const itemsByNumber = new Map();
 for (const item of project.items.nodes) {
@@ -152,8 +239,15 @@ for (const [title, values] of metadata) {
       .map((value) => [value.field.name, value.name ?? value.text]),
   );
   for (const [fieldName, value] of Object.entries(values)) {
-    if (mutableProgressFields.has(fieldName) && existingValues.get(fieldName)) continue;
-    operations.push({ item, fieldName, value, field: fields.get(fieldName) });
+    const field = fields.get(fieldName);
+    if (!field) throw new Error(`Missing Project field: ${fieldName}`);
+    if (field.options && !field.options.some((option) => option.name === value)) {
+      throw new Error(`Missing Project option: ${fieldName}=${value}`);
+    }
+    const existingValue = existingValues.get(fieldName);
+    if (mutableProgressFields.has(fieldName) && existingValue) continue;
+    if (existingValue === String(value)) continue;
+    operations.push({ item, fieldName, value, field });
   }
 }
 

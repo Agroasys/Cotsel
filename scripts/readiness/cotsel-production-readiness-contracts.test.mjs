@@ -7,6 +7,11 @@ import {
   validateRouteContractShape,
   validateWorkPackageShape,
 } from './cotsel-production-readiness-contract-checks.mjs';
+import {
+  expectedProjectFieldNames,
+  expectedProjectSingleSelectOptions,
+  primaryProjectMetadata,
+} from './cotsel-production-readiness-project-metadata.mjs';
 
 const routeKeys = new Set(['primary', 'contributor']);
 const allowedGates = new Set(['E-0']);
@@ -120,4 +125,24 @@ test('work packages reject a missing SOW control-sheet field', () => {
   workPackage.id = 'WP-0';
   workPackage.reviewers = '';
   assert.throws(() => validateWorkPackageShape(workPackage), /missing reviewers/);
+});
+
+test('Project field contract covers every primary metadata value', () => {
+  assert.equal(expectedProjectFieldNames.length, 30);
+  assert.equal(new Set(expectedProjectFieldNames).size, expectedProjectFieldNames.length);
+  for (const fieldName of Object.keys(expectedProjectSingleSelectOptions)) {
+    assert.ok(
+      expectedProjectFieldNames.includes(fieldName),
+      `${fieldName} exists in Project fields`,
+    );
+  }
+  for (const [title, metadata] of primaryProjectMetadata()) {
+    for (const [fieldName, options] of Object.entries(expectedProjectSingleSelectOptions)) {
+      if (metadata[fieldName] === undefined) continue;
+      assert.ok(
+        options.includes(metadata[fieldName]),
+        `${title}: ${fieldName}=${metadata[fieldName]} exists in Project options`,
+      );
+    }
+  }
 });

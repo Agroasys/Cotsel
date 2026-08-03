@@ -12,7 +12,7 @@
 
 The initial programme hierarchy and Project configuration were created, but the first setup audit overstated three controls: complete work-package sheets, exact issue-body verification, and exact milestone-description verification. A source-led re-audit also found two unrouted preservation controls, eight primary-route inconsistencies, generic supporting-control rows, asymmetric gate routing, four omitted cross-cutting programme rules, and array-order ownership for reused issues.
 
-The repository now contains the version-two repair for those control-plane defects. This document does not claim live completion until the repaired specifications are merged, synchronized to GitHub, and accepted by the full live audit.
+The version-two control-plane repair is merged, synchronized to GitHub, and accepted by the full live audit. The programme setup is complete: 71 managed issues and 15 reused supporting issues are reconciled in Project 9, all managed bodies match the deterministic source-backed renderer, hierarchy and milestones match their contracts, and every Project item is assigned only to `Astton` and `czpyioe`.
 
 This audit concerns programme setup only. It does not claim that SOW implementation, engineering rehearsal, controlled-pilot authorization, or Base mainnet authorization has started or completed. The SOW verdict remains **NO-GO**.
 
@@ -89,9 +89,9 @@ Primary gate, programme track, milestone, and risk remain useful Project metadat
 
 Each parent identifies a single accountable owner, required reviewers, exact scope and exclusions, dependency inputs, immutable evidence requirements, incident ownership, rollback compatibility, residual exposure, and bounded-exception authority and expiry.
 
-## Hierarchy after live synchronization
+## Verified live hierarchy
 
-The target managed hierarchy is:
+The reconciled live hierarchy is:
 
 | Level                        |  Count |
 | ---------------------------- | -----: |
@@ -145,13 +145,27 @@ The local validator now proves:
 
 Negative tests prove that unknown routes, duplicate contributors, self-contribution, old boilerplate, implementation-owned gates, obsolete route fields, and incomplete WP sheets fail validation.
 
-After live synchronization, the live audit must additionally prove:
+The post-synchronization live audit proves:
 
 - complete deterministic body equality for all managed issues, with body hashes and first-difference diagnostics;
 - exact hierarchy, milestones, assignees and repository boundary;
 - exact invariant Project metadata while allowing Status, Evidence Status, release ID, blocker and date fields to progress; and
 - complete pagination of managed issues and Project items.
 
+It also deep-compares the exact 30-field Project schema and every governed single-select option, including the dedicated `Auth/Service` delivery surface required by the WP-9 service-authentication issue. The Project configurator preflights the complete field and option contract before mutation, paginates the item set, preserves populated mutable progress fields, and skips values that already match.
+
+## Live synchronization evidence
+
+The repair was merged through [Agroasys/Cotsel#693](https://github.com/Agroasys/Cotsel/pull/693) after CodeQL, DCO, roadmap policy, dependency security, the complete service matrix, cross-repository compatibility, and the aggregate release gate passed. The live synchronization then:
+
+- created [Agroasys/Cotsel#694](https://github.com/Agroasys/Cotsel/issues/694) as the dedicated `PRES-06` primary route;
+- linked issue #694 beneath WP-9 parent #631 and added it to Project 9;
+- synchronized the deterministic bodies of all 71 managed issues while leaving the 15 reused issue bodies unchanged;
+- applied the invariant metadata contract across all 86 Project items without overwriting populated delivery-progress fields; and
+- passed `pnpm readiness:cotsel:audit-live` with 71 primary issues, 13 parents, 57 delivery issues, 15 reused issues, 58 findings, 136 supporting controls, 30 fields, 13 views, ten milestones, exact body comparison, and exact milestone comparison.
+
+The setup audit does not treat those successful checks or synchronization actions as implementation evidence. They prove only that the work-control system faithfully represents the SOW.
+
 ## Engineering start rule
 
-Do not begin SOW implementation from the unreconciled issue specifications. Engineering may start only after the repaired contracts merge, all 71 managed bodies synchronize, the new service-authentication issue joins WP-9 and Project 9, invariant Project metadata is updated, and the full live audit passes.
+The prerequisite control-plane conditions are now met, so engineering may begin from the reconciled issue specifications. Work must still follow the dependency sequence, produce release-bound evidence, preserve independent acceptance authority, and keep the SOW verdict at **NO-GO** until the applicable candidate-specific gates accept one pinned release. Programme setup completion does not authorize the controlled pilot or Base mainnet.
