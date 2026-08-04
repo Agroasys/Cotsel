@@ -49,7 +49,16 @@ describe('Base deployment config', function () {
         ...validEnv,
         DEPLOY_REQUIRED_APPROVALS: '4',
       }),
-    ).to.throw(/must not exceed the number of admin addresses/);
+    ).to.throw(/must contain more addresses than DEPLOY_REQUIRED_APPROVALS/);
+  });
+
+  it('rejects an admin set at parity with the approval threshold', async function () {
+    expect(() =>
+      loadBaseDeploymentConfig('base-sepolia', 84532, {
+        ...validEnv,
+        DEPLOY_REQUIRED_APPROVALS: '3',
+      }),
+    ).to.throw(/must contain more addresses than DEPLOY_REQUIRED_APPROVALS/);
   });
 
   it('rejects single-admin deployment matrices because governance requires two admins', async function () {

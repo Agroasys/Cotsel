@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-05-04T20:19:09.509Z",
-  "commitSha": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+  "generatedAt": "2026-08-02T22:09:51.267Z",
+  "commitSha": "1f54c7acec55f3f618cbee9f7494dee621b72755",
   "network": {
     "hardhatName": "base-sepolia",
     "runtimeKey": "base-sepolia",
@@ -9,16 +9,18 @@
   },
   "contract": {
     "name": "AgroasysEscrow",
-    "address": "0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
-    "deploymentTxHash": "0x49dbe6d714c9b19901256e55c4407ec4722d55ea9110c1f0866f424e40b55b5d",
-    "explorerAddressUrl": "https://sepolia.basescan.org/address/0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
+    "address": "0x8e1e152167FeD9FF7833156A023fFCa88f243B3d",
+    "deploymentTxHash": "0x2972491842eef29463d16c9e569284c426feba2cf343b17182708442732e7ff7",
+    "explorerAddressUrl": "https://sepolia.basescan.org/address/0x8e1e152167FeD9FF7833156A023fFCa88f243B3d",
     "constructorArguments": {
       "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
       "oracleAddress": "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
       "treasuryAddress": "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
+      "relayerAddress": "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
       "admins": [
         "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
-        "0x20e7E6fC0905E17De2D28E926Ad56324a6844a1D"
+        "0x20e7E6fC0905E17De2D28E926Ad56324a6844a1D",
+        "0x4aF052cB4B3eC7b58322548021bF254Cc4c80b2c"
       ],
       "requiredApprovals": 2
     }
@@ -26,12 +28,12 @@
   "verification": {
     "requested": true,
     "status": "verified",
-    "verificationUrl": "https://sepolia.basescan.org/address/0x54391ad22880B845021D49e79bA7E47bA8CcDDA7#code"
+    "verificationUrl": "https://sepolia.basescan.org/address/0x8e1e152167FeD9FF7833156A023fFCa88f243B3d#code"
   },
   "artifact": {
     "compilerVersion": "0.8.34",
-    "abiSha256": "a9d62d6adf98963f5d010f8636261fdb826408b188dd00f82f0b59afbcc1ff3b",
-    "bytecodeSha256": "066a90e3edf81fe8529c44924be8185da0b36fff972b1fa417848b863123d75a",
-    "deployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a"
+    "abiSha256": "572c473d519c81c67d0fe6fa3174439aca53d17f45b9b8438c196bcf916aaed1",
+    "bytecodeSha256": "b3429757821ff6089d330e2c97f69c0fe8ee489d392cced82c689bb5b76b6909",
+    "deployedBytecodeSha256": "faaa5d4489c4cf0bb774a7be0eabbb7ce7c1bd67603b774fc687af52c316c5b7"
   }
 }

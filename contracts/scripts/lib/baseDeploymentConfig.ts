@@ -209,8 +209,11 @@ export function loadBaseDeploymentConfig(
   assertAdminsDoNotIncludeForbiddenUsers(admins, forbiddenUserWallets);
   assertRelayerDoesNotIncludeForbiddenUsers(relayerAddress, forbiddenUserWallets);
   const requiredApprovals = parsePositiveIntEnv("DEPLOY_REQUIRED_APPROVALS", env);
-  if (requiredApprovals > admins.length) {
-    throw new Error("DEPLOY_REQUIRED_APPROVALS must not exceed the number of admin addresses");
+  if (requiredApprovals >= admins.length) {
+    throw new Error(
+      "DEPLOY_ADMINS must contain more addresses than DEPLOY_REQUIRED_APPROVALS. " +
+        "Deploying at parity means losing one admin key permanently disables governance.",
+    );
   }
 
   const confirmations = parsePositiveIntEnv(
