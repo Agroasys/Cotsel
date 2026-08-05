@@ -44,6 +44,7 @@
     "readiness:cotsel:test": "node --test scripts/readiness/cotsel-production-readiness-contracts.test.mjs",
     "readiness:cotsel:audit-live": "node scripts/readiness/audit-cotsel-production-readiness-live.mjs",
     "integration:manifest:check": "node scripts/check-cross-repo-release-manifest.mjs && node --test scripts/tests/cross-repo-release-manifest.test.mjs",
+    "release:evidence:check": "node --test scripts/tests/release-evidence-binding.test.mjs",
     "build": "pnpm --filter @agroasys/sdk run build",
     "lint": "eslint --max-warnings=0 .",
     "lint:fix": "eslint --max-warnings=0 --fix .",

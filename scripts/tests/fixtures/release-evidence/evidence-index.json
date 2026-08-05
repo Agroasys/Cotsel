@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "cotsel.evidence-index.v1",
+  "candidateId": "cotsel-2026-08-05-fixture",
+  "manifest": {
+    "path": "scripts/tests/fixtures/release-evidence/candidate-manifest.json",
+    "sha256": "7ee026a1e964c288c4db7390c157ed151ee30e925dd22ab8f2a5359e9978e370"
+  },
+  "environmentReport": {
+    "path": "ci-reports/environment-report.json",
+    "sha256": "66d51889f1ac4eeee3064c44ab784d5039216adf53c0b1ae073f1c61a5f4e2e1",
+    "manifestSha256": "7ee026a1e964c288c4db7390c157ed151ee30e925dd22ab8f2a5359e9978e370",
+    "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
+  },
+  "generatedAt": "2026-08-05T10:00:00.000Z",
+  "entries": [
+    {
+      "controlId": "REPORT-02",
+      "route": "wp0-release-evidence",
+      "issue": "https://github.com/Agroasys/Cotsel/issues/636",
+      "artifact": {
+        "uri": "ci-reports/release-evidence-binding.txt",
+        "sha256": "ae45a2f5eb72fdb7566763ebf712aef83d77843563ec2ece9c24e20201585891",
+        "runId": "fixture-run-1"
+      },
+      "producedBy": {
+        "identity": "ci/release-gate",
+        "role": "Release engineering"
+      },
+      "boundIdentity": {
+        "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+        "artifactDigests": [
+          "sha256:0a2b3b297e6065476bdd1df01d4b40191682522c13dd4f932014b917c800a149",
+          "sha256:2568a281b9aa8b6b5092908edfe81ce00452bed10b3617631ec35e184e57bc61",
+          "sha256:1a4bbbd16723882b09a665aceaaf7120a007753d04b5c5caa07d144d255000a7",
+          "sha256:c670dd418c1bd71c900a4ece5b31f788b5deb8a7d0438d9c1eb6a02c49bc9fea"
+        ],
+        "environment": "base-sepolia-staging",
+        "chainId": 84532,
+        "contractAddress": "0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
+        "migrationIdentities": ["indexer@0042_trade_timeline", "treasury@0017_close_packet"],
+        "providerMode": {
+          "fiatOffRamp": "disabled",
+          "signer": "kms",
+          "rpc": "primary-with-fallback"
+        },
+        "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
+      },
+      "reviewer": {
+        "identity": "release-owner@example.invalid",
+        "role": "Release Owner",
+        "decision": "accepted",
+        "reviewedAt": "2026-08-05T11:00:00.000Z"
+      }
+    },
+    {
+      "controlId": "PROG-01",
+      "route": "wp0-release-evidence",
+      "issue": "https://github.com/Agroasys/Cotsel/issues/636",
+      "artifact": {
+        "uri": "ci-reports/environment-report.json",
+        "sha256": "66d51889f1ac4eeee3064c44ab784d5039216adf53c0b1ae073f1c61a5f4e2e1",
+        "runId": "fixture-run-1"
+      },
+      "producedBy": {
+        "identity": "ci/release-gate",
+        "role": "Release engineering"
+      },
+      "boundIdentity": {
+        "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+        "artifactDigests": [
+          "sha256:0a2b3b297e6065476bdd1df01d4b40191682522c13dd4f932014b917c800a149",
+          "sha256:2568a281b9aa8b6b5092908edfe81ce00452bed10b3617631ec35e184e57bc61",
+          "sha256:1a4bbbd16723882b09a665aceaaf7120a007753d04b5c5caa07d144d255000a7",
+          "sha256:c670dd418c1bd71c900a4ece5b31f788b5deb8a7d0438d9c1eb6a02c49bc9fea"
+        ],
+        "environment": "base-sepolia-staging",
+        "chainId": 84532,
+        "contractAddress": "0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
+        "migrationIdentities": ["indexer@0042_trade_timeline", "treasury@0017_close_packet"],
+        "providerMode": {
+          "fiatOffRamp": "disabled",
+          "signer": "kms",
+          "rpc": "primary-with-fallback"
+        },
+        "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
+      },
+      "reviewer": {
+        "identity": "ops-reviewer@example.invalid",
+        "role": "Operations reviewer",
+        "decision": "accepted",
+        "reviewedAt": "2026-08-05T11:05:00.000Z"
+      }
+    }
+  ]
+}

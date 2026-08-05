@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "cotsel.candidate-manifest.v1",
+  "candidateId": "cotsel-2026-08-05-fixture",
+  "status": "candidate",
+  "owner": {
+    "role": "Release Owner"
+  },
+  "createdAt": "2026-08-05T09:00:00.000Z",
+  "environment": {
+    "name": "base-sepolia-staging",
+    "classification": "private-staging",
+    "owner": "Platform Operations",
+    "publicParticipants": false,
+    "realCommercialValue": false
+  },
+  "source": {
+    "repository": "Agroasys/Cotsel",
+    "commit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+    "workflowRunId": "fixture-run-1"
+  },
+  "crossRepositoryManifest": {
+    "path": "integration/release-manifest.json",
+    "schemaVersion": "cotsel.release-manifest.v1",
+    "sha256": "82b76f55d91fba06ade6a837d3cc05a3d527e82a05f9ea222e4e8dfaa41e9955"
+  },
+  "artifacts": [
+    {
+      "name": "gateway",
+      "kind": "container-image",
+      "digest": "sha256:0a2b3b297e6065476bdd1df01d4b40191682522c13dd4f932014b917c800a149"
+    },
+    {
+      "name": "indexer",
+      "kind": "container-image",
+      "digest": "sha256:2568a281b9aa8b6b5092908edfe81ce00452bed10b3617631ec35e184e57bc61"
+    },
+    {
+      "name": "treasury",
+      "kind": "container-image",
+      "digest": "sha256:1a4bbbd16723882b09a665aceaaf7120a007753d04b5c5caa07d144d255000a7"
+    },
+    {
+      "name": "@agroasys/sdk",
+      "kind": "npm-package",
+      "digest": "sha256:c670dd418c1bd71c900a4ece5b31f788b5deb8a7d0438d9c1eb6a02c49bc9fea"
+    }
+  ],
+  "migrations": [
+    {
+      "component": "indexer",
+      "headIdentity": "0042_trade_timeline",
+      "checksumSha256": "8938260e7320d7995ae7421e41606c2addf756371ca7aa7aa52484abd54c81dc"
+    },
+    {
+      "component": "treasury",
+      "headIdentity": "0017_close_packet",
+      "checksumSha256": "ac054cd0e98d229fdabc17560520b2c49743e261662e2756fe271191dfda83b3"
+    }
+  ],
+  "chain": {
+    "name": "Base Sepolia",
+    "chainId": 84532,
+    "finalityConfirmations": 12
+  },
+  "contract": {
+    "name": "AgroasysEscrow",
+    "address": "0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
+    "abiSha256": "a9d62d6adf98963f5d010f8636261fdb826408b188dd00f82f0b59afbcc1ff3b",
+    "deployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a",
+    "compilerVersion": "0.8.34",
+    "deploymentBlock": 32014771,
+    "deploymentTxHash": "0x49dbe6d714c9b19901256e55c4407ec4722d55ea9110c1f0866f424e40b55b5d",
+    "verificationStatus": "verified"
+  },
+  "providerMode": {
+    "fiatOffRamp": "disabled",
+    "signer": "kms",
+    "rpc": "primary-with-fallback"
+  },
+  "configDigest": {
+    "redacted": true,
+    "sha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517",
+    "inventoryPath": "ci-reports/config-inventory.redacted.json"
+  },
+  "rollbackTarget": {
+    "kind": "none",
+    "compatibilityNote": "Fixture candidate. No prior deployed candidate exists to roll back to."
+  }
+}
