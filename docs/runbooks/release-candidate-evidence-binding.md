@@ -55,16 +55,36 @@ following.
   digest. Evidence bound to another build is rejected.
 - The environment report carries the same identity digest and the same redacted configuration
   digest as the manifest (PROG-01).
-- Every entry's `boundIdentity` equals the manifest on all eight dimensions REPORT-02 names:
+- Every entry's `boundIdentity` equals the manifest on all nine dimensions REPORT-02 names:
   `sourceCommit`, `artifactDigests`, `environment`, `chainId`, `contractAddress`,
-  `migrationIdentities`, `providerMode`, `configDigestSha256`.
+  `contractDeployedBytecodeSha256`, `migrationIdentities`, `providerMode`, `configDigestSha256`.
+
+  `contractDeployedBytecodeSha256` is recorded per entry because an address is not an
+  implementation: a proxy upgrade keeps the address by design, and the same source compiled with a
+  different solc version or optimizer setting keeps both the address and the commit. Without it,
+  evidence produced against the old implementation would bind to the new candidate unchallenged.
+  `contractAbiSha256` is not a separate dimension — any ABI difference that changes behaviour
+  changes the deployed bytecode with it, and an ABI difference that leaves the bytecode identical
+  is metadata only.
 
 **Acceptance**
 
 - An entry accepted by its own producer is rejected; acceptance is four-eyes.
+- An equivalence accepted by the producer of the evidence it waives is rejected on the same rule. A
+  waiver is the more consequential decision, so it cannot carry less separation than the acceptance
+  it bypasses. The reviewer of an entry **may** accept its equivalence: evidence produced by one
+  person and waived by another is still two people.
 - A reviewer must hold one of `Release Owner`, `Security reviewer` or `Operations reviewer`.
-- `assertEvidenceIndexComplete` reports any required control with no `accepted` entry. Delivery
-  completion alone leaves a control unaccepted.
+- Every actor identity — `approvals[].identity`, `producedBy.identity`, `reviewer.identity` and
+  `equivalence.acceptedBy` — must be a canonical handle: lowercase, no whitespace, 2 to 64
+  characters, matching `^[a-z0-9][a-z0-9._@/+-]{1,63}$`. Separation of duties is decided by string
+  equality on these fields, so one person must not be nameable as `avitus`, `AvitusI` and
+  `Avitus I`. Use the same handle a person holds in `approvals`.
+- Acceptance is checked only when the required control set is named:
+  `--require-controls REPORT-02,PROG-01` calls `assertEvidenceIndexComplete` and fails closed on
+  any control with no `accepted` entry. Without the flag the command validates **binding only** —
+  an index whose every entry is still `pending` is correctly bound and not accepted, and the
+  summary line reports both counts.
 - Only a `candidate` or `promoted` manifest may bind evidence. A `draft` must name its activation
   blockers; a `superseded` candidate accrues nothing further.
 - `promoted` requires an `approved` decision from all three roles.
@@ -93,7 +113,8 @@ the dimensions, the accepting authority and role, the rationale, and an expiry:
 ```
 
 The validator rejects an expired equivalence, one that covers a dimension that did not actually
-differ, and one that covers a different dimension than the one that drifted.
+differ, one that covers a different dimension than the one that drifted, and one whose `acceptedBy`
+is the producer of the entry.
 
 **Not waivable:** equivalence across the Base mainnet boundary. Rehearsal evidence from Base
 Sepolia can never be carried onto Base mainnet by equivalence — ASSUMPTION-03 and ENV-04 require a
@@ -112,7 +133,18 @@ fresh WP-12 packet.
 5. Produce the redacted configuration inventory and its digest.
 6. Emit the environment report carrying the identity digest and configuration digest.
 7. Append evidence entries as each control produces proof, then have the named reviewer record a
-   decision.
+   decision. The reviewer must not be the producer, and both must use their canonical handle.
+8. Check that the decisions actually landed. The binding check alone does not do this:
+
+   ```bash
+   node scripts/check-release-evidence-binding.mjs \
+     --manifest <candidate-manifest.json> \
+     --index <evidence-index.json> \
+     --require-controls <CONTROL,CONTROL>
+   ```
+
+   Without `--require-controls` the command reports `acceptance not checked`. Read `Evidence index
+valid` as "bound to this candidate", never as "accepted".
 
 Fixtures showing a complete, valid pair are in `scripts/tests/fixtures/release-evidence/`. They are
 test data, not a pinned candidate, and no value in them is release evidence.

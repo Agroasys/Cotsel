@@ -16,6 +16,13 @@ const TX_HASH_PATTERN = /^0x[0-9a-f]{64}$/;
 const ISSUE_PATTERN = /^https:\/\/github\.com\/Agroasys\/[A-Za-z0-9._-]+\/issues\/[0-9]+$/;
 const CONTROL_ID_PATTERN = /^[A-Z][A-Z0-9-]{1,23}$/;
 const ROUTE_PATTERN = /^wp[0-9]{1,2}-[a-z0-9-]+$/;
+/**
+ * Every actor identity — approver, producer, reviewer, equivalence acceptor — is written in one
+ * canonical handle form: lowercase, no whitespace, 2 to 64 characters. Four-eyes separation is
+ * string equality on these fields, so `avitus`, `AvitusI` and `Avitus I` must not be able to name
+ * the same person three ways.
+ */
+const IDENTITY_PATTERN = /^[a-z0-9][a-z0-9._@/+-]{1,63}$/;
 
 const MANIFEST_STATUSES = ['draft', 'candidate', 'promoted', 'superseded'];
 const ENVIRONMENTS = ['local-ci', 'base-sepolia-staging', 'base-mainnet'];
@@ -44,6 +51,13 @@ const BASE_MAINNET_CHAIN_ID = 8453;
 /**
  * The identity dimensions REPORT-02 and PROG-01 name. Evidence may not be reused across any of
  * them without an accepted equivalence.
+ *
+ * `contractDeployedBytecodeSha256` is a dimension in its own right because a contract address is
+ * not an implementation: a proxy upgrade keeps the address, and the same source under a different
+ * compiler or optimizer setting keeps both the address and the commit. Any ABI difference that
+ * changes behaviour changes the deployed bytecode with it, so the bytecode digest also covers
+ * `contractAbiSha256`; an ABI difference that leaves the bytecode identical is metadata only and
+ * cannot change what a run proves.
  */
 export const IDENTITY_DIMENSIONS = [
   'sourceCommit',
@@ -51,6 +65,7 @@ export const IDENTITY_DIMENSIONS = [
   'environment',
   'chainId',
   'contractAddress',
+  'contractDeployedBytecodeSha256',
   'migrationIdentities',
   'providerMode',
   'configDigestSha256',
@@ -401,7 +416,12 @@ export function validateCandidateManifest(manifest) {
         failManifest(`duplicate approval for ${approval.role}`);
       }
       approvalRoles.add(approval.role);
-      requireString(failManifest, approval.identity, `approval ${approval.role} identity`);
+      requireString(
+        failManifest,
+        approval.identity,
+        `approval ${approval.role} identity`,
+        IDENTITY_PATTERN,
+      );
       requireEnum(failManifest, approval.decision, `approval ${approval.role} decision`, [
         'approved',
         'rejected',
@@ -443,6 +463,7 @@ function entryIdentity(boundIdentity) {
     environment: boundIdentity.environment,
     chainId: boundIdentity.chainId,
     contractAddress: boundIdentity.contractAddress.toLowerCase(),
+    contractDeployedBytecodeSha256: boundIdentity.contractDeployedBytecodeSha256,
     migrationIdentities: [...boundIdentity.migrationIdentities].sort(),
     providerMode: normalizeProviderMode(boundIdentity.providerMode),
     configDigestSha256: boundIdentity.configDigestSha256,
@@ -468,6 +489,12 @@ function validateBoundIdentity(boundIdentity, label) {
     `${label} contractAddress`,
     ADDRESS_PATTERN,
   );
+  requireString(
+    failIndex,
+    boundIdentity.contractDeployedBytecodeSha256,
+    `${label} contractDeployedBytecodeSha256`,
+    SHA256_PATTERN,
+  );
   if (
     !Array.isArray(boundIdentity.migrationIdentities) ||
     boundIdentity.migrationIdentities.length === 0
@@ -486,8 +513,24 @@ function validateBoundIdentity(boundIdentity, label) {
   );
 }
 
-function validateEquivalence(equivalence, label, now) {
-  requireString(failIndex, equivalence.acceptedBy, `${label} equivalence acceptedBy`);
+/**
+ * An equivalence is a waiver of the binding rule, so it carries the same separation of duties as
+ * the acceptance it bypasses: the producer of the evidence may not certify that their own stale
+ * evidence still counts. A reviewer may accept an equivalence for evidence someone else produced —
+ * that is still two people.
+ */
+function validateEquivalence(equivalence, entry, label, now) {
+  requireString(
+    failIndex,
+    equivalence.acceptedBy,
+    `${label} equivalence acceptedBy`,
+    IDENTITY_PATTERN,
+  );
+  if (equivalence.acceptedBy === entry.producedBy.identity) {
+    failIndex(
+      `${label} equivalence was accepted by its own producer; four-eyes review is required`,
+    );
+  }
   requireEnum(failIndex, equivalence.role, `${label} equivalence role`, ACCEPTANCE_ROLES);
   requireString(failIndex, equivalence.rationale, `${label} equivalence rationale`);
   requireTimestamp(failIndex, equivalence.expiresAt, `${label} equivalence expiresAt`);
@@ -599,13 +642,23 @@ export function validateEvidenceIndex(index, manifest, options = {}) {
     if (!isPlainObject(entry.producedBy)) {
       failIndex(`${label} producedBy is required`);
     }
-    requireString(failIndex, entry.producedBy.identity, `${label} producedBy identity`);
+    requireString(
+      failIndex,
+      entry.producedBy.identity,
+      `${label} producedBy identity`,
+      IDENTITY_PATTERN,
+    );
     requireString(failIndex, entry.producedBy.role, `${label} producedBy role`);
 
     if (!isPlainObject(entry.reviewer)) {
       failIndex(`${label} reviewer is required`);
     }
-    requireString(failIndex, entry.reviewer.identity, `${label} reviewer identity`);
+    requireString(
+      failIndex,
+      entry.reviewer.identity,
+      `${label} reviewer identity`,
+      IDENTITY_PATTERN,
+    );
     requireEnum(failIndex, entry.reviewer.role, `${label} reviewer role`, ACCEPTANCE_ROLES);
     requireEnum(failIndex, entry.reviewer.decision, `${label} reviewer decision`, REVIEW_DECISIONS);
     requireTimestamp(failIndex, entry.reviewer.reviewedAt, `${label} reviewer reviewedAt`);
@@ -621,7 +674,7 @@ export function validateEvidenceIndex(index, manifest, options = {}) {
       if (!isPlainObject(entry.equivalence)) {
         failIndex(`${label} equivalence must be an object`);
       }
-      accepted = validateEquivalence(entry.equivalence, label, now);
+      accepted = validateEquivalence(entry.equivalence, entry, label, now);
     }
 
     for (const dimension of IDENTITY_DIMENSIONS) {
@@ -710,15 +763,37 @@ function readFlag(args, name) {
   return path.resolve(ROOT_DIR, value);
 }
 
+function readControlListFlag(args, name) {
+  const position = args.indexOf(name);
+  if (position < 0) {
+    return undefined;
+  }
+  const value = args[position + 1];
+  if (!value || value.startsWith('--')) {
+    throw new Error(`${name} requires a comma-separated list of control identities`);
+  }
+  const controlIds = value.split(',').map((controlId) => controlId.trim());
+  for (const controlId of controlIds) {
+    if (!CONTROL_ID_PATTERN.test(controlId)) {
+      throw new Error(`${name} value ${controlId} is not a control identity`);
+    }
+  }
+  return controlIds;
+}
+
 function main() {
   const args = process.argv.slice(2);
   const manifestPath = readFlag(args, '--manifest');
   const indexPath = readFlag(args, '--index');
+  const requiredControlIds = readControlListFlag(args, '--require-controls');
 
   if (!manifestPath) {
     throw new Error(
-      'usage: check-release-evidence-binding.mjs --manifest <candidate-manifest.json> [--index <evidence-index.json>]',
+      'usage: check-release-evidence-binding.mjs --manifest <candidate-manifest.json> [--index <evidence-index.json>] [--require-controls <CONTROL,CONTROL>]',
     );
+  }
+  if (requiredControlIds && !indexPath) {
+    throw new Error('--require-controls also requires --index');
   }
 
   const manifest = readCandidateManifest(manifestPath);
@@ -734,9 +809,24 @@ function main() {
 
   if (indexPath) {
     const index = validateEvidenceIndex(readJsonDocument(indexPath), manifest);
+    // Delivery completion is not acceptance: report accepted entries, not merely bound ones, and
+    // fail before printing anything when a required control has no accepted evidence.
+    if (requiredControlIds) {
+      assertEvidenceIndexComplete(index, requiredControlIds);
+    }
+    const acceptedCount = index.entries.filter(
+      (entry) => entry.reviewer.decision === 'accepted',
+    ).length;
     process.stdout.write(
-      `Evidence index valid; ${index.entries.length} entries bound to ${index.candidateId}\n`,
+      `Evidence index valid; ${index.entries.length} entries bound to ${index.candidateId}, ${acceptedCount} accepted\n`,
     );
+    if (requiredControlIds) {
+      process.stdout.write(`Accepted evidence present for ${requiredControlIds.join(', ')}\n`);
+    } else {
+      process.stdout.write(
+        'Binding checked, acceptance not checked; pass --require-controls to require accepted evidence\n',
+      );
+    }
   }
 }
 

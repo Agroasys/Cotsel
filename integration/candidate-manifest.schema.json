@@ -186,7 +186,7 @@
         "required": ["role", "identity", "decision", "decidedAt"],
         "properties": {
           "role": { "enum": ["Release Owner", "Security reviewer", "Operations reviewer"] },
-          "identity": { "type": "string", "minLength": 1 },
+          "identity": { "$ref": "#/$defs/actorIdentity" },
           "decision": { "enum": ["approved", "rejected"] },
           "decidedAt": { "type": "string", "format": "date-time" }
         }
@@ -221,5 +221,12 @@
       "if": { "properties": { "status": { "const": "promoted" } } },
       "then": { "required": ["approvals"] }
     }
-  ]
+  ],
+  "$defs": {
+    "actorIdentity": {
+      "description": "Canonical actor handle: lowercase, no whitespace, 2 to 64 characters. The evidence index resolves four-eyes separation by string equality on the same form.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._@/+-]{1,63}$"
+    }
+  }
 }

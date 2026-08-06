@@ -37,6 +37,7 @@
         "environment": "base-sepolia-staging",
         "chainId": 84532,
         "contractAddress": "0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
+        "contractDeployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a",
         "migrationIdentities": ["indexer@0042_trade_timeline", "treasury@0017_close_packet"],
         "providerMode": {
           "fiatOffRamp": "disabled",
@@ -76,6 +77,7 @@
         "environment": "base-sepolia-staging",
         "chainId": 84532,
         "contractAddress": "0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
+        "contractDeployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a",
         "migrationIdentities": ["indexer@0042_trade_timeline", "treasury@0017_close_packet"],
         "providerMode": {
           "fiatOffRamp": "disabled",

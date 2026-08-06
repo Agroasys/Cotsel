@@ -124,6 +124,10 @@ const staleMutations = {
   contractAddress: (entry) => {
     entry.boundIdentity.contractAddress = '0x000000000000000000000000000000000000dead';
   },
+  // A proxy upgrade or a different compiler setting moves the implementation under a stable address.
+  contractDeployedBytecodeSha256: (entry) => {
+    entry.boundIdentity.contractDeployedBytecodeSha256 = 'b'.repeat(64);
+  },
   migrationIdentities: (entry) => {
     entry.boundIdentity.migrationIdentities[0] = 'indexer@0041_previous_head';
   },
@@ -265,6 +269,79 @@ test('rejects evidence accepted by its own producer', () => {
     () => validateEvidenceIndex(index, manifest, { now: NOW }),
     /four-eyes review is required/,
   );
+});
+
+test('rejects an equivalence accepted by the producer of the evidence it waives', () => {
+  const manifest = manifestFixture();
+  const index = indexFixture();
+  staleMutations.configDigestSha256(index.entries[0]);
+  index.entries[0].equivalence = {
+    dimensions: ['configDigestSha256'],
+    acceptedBy: index.entries[0].producedBy.identity,
+    role: 'Release Owner',
+    rationale: 'Producer certifying their own stale evidence.',
+    expiresAt: '2026-09-01T00:00:00.000Z',
+  };
+
+  assert.throws(
+    () => validateEvidenceIndex(index, manifest, { now: NOW }),
+    /equivalence was accepted by its own producer; four-eyes review is required/,
+  );
+});
+
+/** A reviewer accepting an equivalence for evidence someone else produced is still two people. */
+test('allows the reviewer of an entry to accept its equivalence', () => {
+  const manifest = manifestFixture();
+  const index = indexFixture();
+  staleMutations.configDigestSha256(index.entries[0]);
+  index.entries[0].equivalence = {
+    dimensions: ['configDigestSha256'],
+    acceptedBy: index.entries[0].reviewer.identity,
+    role: index.entries[0].reviewer.role,
+    rationale: 'Log verbosity only; no settlement, signer or provider setting changed.',
+    expiresAt: '2026-09-01T00:00:00.000Z',
+  };
+
+  assert.doesNotThrow(() => validateEvidenceIndex(index, manifest, { now: NOW }));
+});
+
+/**
+ * Four-eyes separation is string equality on identities, so the identity format is part of the
+ * control: one person must not be able to appear as `avitus`, `AvitusI` and `Avitus I`.
+ */
+test('rejects actor identities outside the canonical handle format', () => {
+  for (const mutate of [
+    (index) => {
+      index.entries[0].producedBy.identity = 'Avitus I';
+    },
+    (index) => {
+      index.entries[0].reviewer.identity = 'ReleaseOwner@Example.invalid';
+    },
+    (index) => {
+      staleMutations.sourceCommit(index.entries[0]);
+      index.entries[0].equivalence = {
+        dimensions: ['sourceCommit'],
+        acceptedBy: 'Release Owner',
+        role: 'Release Owner',
+        rationale: 'Non-canonical acceptor.',
+        expiresAt: '2026-09-01T00:00:00.000Z',
+      };
+    },
+  ]) {
+    const index = indexFixture();
+    mutate(index);
+    assert.throws(
+      () => validateEvidenceIndex(index, manifestFixture(), { now: NOW }),
+      /does not match/,
+    );
+  }
+
+  const manifest = manifestFixture();
+  manifest.status = 'promoted';
+  manifest.approvals = [
+    { role: 'Release Owner', identity: 'Release Owner', decision: 'approved', decidedAt: NOW },
+  ];
+  assert.throws(() => validateCandidateManifest(manifest), /identity does not match/);
 });
 
 test('rejects the same artifact indexed twice for one control', () => {
@@ -442,10 +519,44 @@ test('the validator enforces every required property the published schemas decla
       `removing entry ${property} must be rejected`,
     );
   }
+
+  const boundIdentitySchema = entrySchema.properties.boundIdentity;
+  // A dimension the schema records but the comparison loop ignores would bind nothing.
+  assert.deepEqual([...boundIdentitySchema.required].sort(), [...IDENTITY_DIMENSIONS].sort());
+  assert.deepEqual(
+    [...entrySchema.properties.equivalence.properties.dimensions.items.enum].sort(),
+    [...IDENTITY_DIMENSIONS].sort(),
+  );
+  for (const property of boundIdentitySchema.required) {
+    const index = indexFixture();
+    delete index.entries[0].boundIdentity[property];
+    assert.throws(
+      () => validateEvidenceIndex(index, manifestFixture(), { now: NOW }),
+      /Evidence index invalid/,
+      `removing boundIdentity ${property} must be rejected`,
+    );
+  }
 });
 
+const SCRIPT_PATH = path.join(TESTS_DIR, '../check-release-evidence-binding.mjs');
+
+function runCli(indexPath, ...extra) {
+  return spawnSync(
+    process.execPath,
+    [SCRIPT_PATH, '--manifest', MANIFEST_PATH, '--index', indexPath, ...extra],
+    { encoding: 'utf8' },
+  );
+}
+
+/** Writes an index to a temporary file so the CLI can be exercised against it. */
+function writeIndex(index) {
+  const indexPath = path.join(mkdtempSync(path.join(tmpdir(), 'cotsel-evidence-')), 'index.json');
+  writeFileSync(indexPath, JSON.stringify(index, null, 2));
+  return indexPath;
+}
+
 test('the command-line check passes for a bound pair and fails closed for a stale one', () => {
-  const script = path.join(TESTS_DIR, '../check-release-evidence-binding.mjs');
+  const script = SCRIPT_PATH;
   const run = (indexPath) =>
     spawnSync(process.execPath, [script, '--manifest', MANIFEST_PATH, '--index', indexPath], {
       encoding: 'utf8',
@@ -454,15 +565,49 @@ test('the command-line check passes for a bound pair and fails closed for a stal
   const passed = run(INDEX_PATH);
   assert.equal(passed.status, 0, passed.stderr);
   assert.match(passed.stdout, /Evidence index valid; 2 entries bound to/);
+  assert.match(passed.stdout, /2 accepted/);
+  // Delivery completion is not acceptance: the plain run must say what it did not check.
+  assert.match(passed.stdout, /acceptance not checked/);
 
-  const stalePath = path.join(mkdtempSync(path.join(tmpdir(), 'cotsel-evidence-')), 'index.json');
   const stale = indexFixture();
   staleMutations.sourceCommit(stale.entries[0]);
-  writeFileSync(stalePath, JSON.stringify(stale, null, 2));
 
-  const failed = run(stalePath);
+  const failed = run(writeIndex(stale));
   assert.equal(failed.status, 1);
   assert.match(failed.stderr, /was produced against a different sourceCommit/);
+});
+
+/**
+ * The one command operators run must not report an index of entirely unreviewed entries as good.
+ * Binding is checked always; acceptance only when the required control set is named.
+ */
+test('the command line enforces acceptance when required controls are named', () => {
+  const accepted = runCli(INDEX_PATH, '--require-controls', 'REPORT-02,PROG-01');
+  assert.equal(accepted.status, 0, accepted.stderr);
+  assert.match(accepted.stdout, /Accepted evidence present for REPORT-02, PROG-01/);
+
+  const pending = indexFixture();
+  for (const entry of pending.entries) {
+    entry.reviewer.decision = 'pending';
+  }
+  const pendingPath = writeIndex(pending);
+
+  const unchecked = runCli(pendingPath);
+  assert.equal(unchecked.status, 0, unchecked.stderr);
+  assert.match(unchecked.stdout, /0 accepted/);
+
+  const required = runCli(pendingPath, '--require-controls', 'REPORT-02,PROG-01');
+  assert.equal(required.status, 1);
+  assert.match(required.stderr, /no accepted evidence for REPORT-02, PROG-01/);
+  assert.doesNotMatch(required.stdout, /Evidence index valid/);
+
+  const missingIndex = spawnSync(
+    process.execPath,
+    [SCRIPT_PATH, '--manifest', MANIFEST_PATH, '--require-controls', 'REPORT-02'],
+    { encoding: 'utf8' },
+  );
+  assert.equal(missingIndex.status, 1);
+  assert.match(missingIndex.stderr, /--require-controls also requires --index/);
 });
 
 test('rebinding helper keeps a deliberately changed manifest self-consistent', () => {
