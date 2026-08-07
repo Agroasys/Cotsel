@@ -27,6 +27,13 @@ minimumReleaseAgeExclude:
   - undici@6.28.0
   # Security fix for GHSA-2m8v-j782-fhvr. Keep the exception version-specific.
   - socket.io-parser@4.2.7
+  # Security fix for GHSA-5p4m-2wfm-xmqj, high-severity quadratic CPU consumption in
+  # !!omap resolution. 3.15.1 and 4.3.1 were published 31 July 2026 and are still inside
+  # the 10080-minute window. Listed by bare name because pnpm 10 matches this setting on
+  # package name only: a name@version entry is silently ignored, so the version-specific
+  # entries above do not constrain anything either. The overrides block below is what
+  # actually pins the resolved version.
+  - js-yaml
 overrides:
   '@protobufjs/utf8': 1.1.1
   axios: 1.18.0
@@ -43,8 +50,8 @@ overrides:
   adm-zip@<0.6.0: 0.6.0
   form-data@>=4.0.0 <4.0.6: 4.0.6
   '@babel/core@<=7.29.0': 7.29.6
-  js-yaml@<3.15.0: 3.15.0
-  js-yaml@>=4.0.0 <4.3.0: 4.3.0
+  js-yaml@<3.15.1: 3.15.1
+  js-yaml@>=4.0.0 <4.3.1: 4.3.1
   # Route every legacy consumer through the patched 5.x implementation.
   # The package patch preserves the callable CommonJS API expected by 1.x and 2.x consumers.
   brace-expansion: 5.0.9
