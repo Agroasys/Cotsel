@@ -104,21 +104,61 @@ these values to a specific run. This section records what is pinned today and wh
 | Chain (rehearsal)     | Base Sepolia, chain ID `84532`                                                                                                     |
 | Chain (production)    | Base mainnet, chain ID `8453` — separately gated by WP-12, no deployment authorized                                                |
 | USDC (Base Sepolia)   | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`                                                                                       |
-| Escrow contract       | **Unpinned.** See the note below.                                                                                                  |
+| Escrow contract       | `0xD4Ec15aeD46576675792633A883419A5cdb5cA83` — deployed and verified 2026-08-07. See the note below.                               |
 | Trade states          | `LOCKED=0`, `IN_TRANSIT=1`, `ARRIVAL_CONFIRMED=2`, `FROZEN=3` (`sdk/src/types/trade.ts`)                                           |
 | Cross-repository pins | `integration/release-manifest.json`, status `candidate` — `agroasys-backend@develop`, `platform.v1@main`, `Cotsel.dash@main`       |
 | Callback contracts    | `cotsel.settlement-callback.v1`, `cotsel.settlement-observed-amounts.v1`                                                           |
 | Provider mode         | **Decision required.** Depends on DEC-01 and the WP-11 participant decision. No provider mode may be assumed from a local default. |
 | Cloud and region      | **Decision required.** DEC-01, below.                                                                                              |
 
-**Escrow contract identity is not pinned, and the recorded deployment is stale.** The Base Sepolia deployment
-recorded in `contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json` is
-`0x8e1e152167FeD9FF7833156A023fFCa88f243B3d`, deployed from commit `1f54c7a`. `AgroasysEscrow.sol` has since
-changed on `main` under [PR #618](https://github.com/Agroasys/Cotsel/pull/618) (`13b1410`, admin quorum floor for
-the immutable lock). The deployed bytecode therefore does not match the current source, and the recorded ABI and
-bytecode digests in that report cannot identify a current candidate. Pinning the contract is owned by
-[#639](https://github.com/Agroasys/Cotsel/issues/639). Until it lands, no candidate manifest can be issued and
-no journey can be bound to a contract address.
+### Escrow deployment record
+
+`AgroasysEscrow` was deployed to Base Sepolia from `main` on 2026-08-07. Evidence bundle:
+`contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json`.
+
+| Field                     | Value                                                                |
+| ------------------------- | -------------------------------------------------------------------- |
+| Address                   | `0xD4Ec15aeD46576675792633A883419A5cdb5cA83`                         |
+| Deployment tx             | `0xd39fe0b6eec8d75f44c7e4cd8bc2cf54804a48cab9def60e7752b652581232ae` |
+| Deployment block          | `45176143` (receipt status `1`)                                      |
+| Source commit             | `61bee84`                                                            |
+| Compiler                  | `0.8.34`, evm target `paris`                                         |
+| ABI SHA-256               | `572c473d519c81c67d0fe6fa3174439aca53d17f45b9b8438c196bcf916aaed1`   |
+| Creation bytecode SHA-256 | `b3429757821ff6089d330e2c97f69c0fe8ee489d392cced82c689bb5b76b6909`   |
+| Deployed bytecode SHA-256 | `affa756266c4927ceca1e7d87bdcde5864d84337468cd24ebc1f699cbb29d3ca`   |
+| Basescan verification     | Verified                                                             |
+| Pre-deploy gate           | `contracts` compile clean; 110 Hardhat tests passing                 |
+
+**This deployment supersedes `0x8e1e152167FeD9FF7833156A023fFCa88f243B3d`, but it did not correct a source
+defect.** `contracts/src/AgroasysEscrow.sol` is byte-identical between the previous deployment's commit
+(`1f54c7a`) and `main`; the admin quorum floor from
+[PR #618](https://github.com/Agroasys/Cotsel/pull/618) was already present in the previous deployment. The two
+contracts differ on chain only in the `DOMAIN_SEPARATOR` immutable, which binds `verifyingContract` to the
+contract address and therefore differs for any address. Creation bytecode and ABI digests are identical across
+both.
+
+The previous evidence bundle was nonetheless not usable to identify a candidate: its `bytecodeSha256` was
+recorded from a later compile than the deployment it described, so its artifact digests and its
+`deploymentTxHash` did not describe the same event. The current bundle is machine-generated from the deploy run
+and is internally consistent.
+
+Two consequences follow, and both remain open:
+
+- **Runtime promotion has not been performed.** `GATEWAY_ESCROW_ADDRESS`, `ORACLE_ESCROW_ADDRESS`,
+  `RECONCILIATION_ESCROW_ADDRESS`, `INDEXER_CONTRACT_ADDRESS` and `INDEXER_START_BLOCK` still point at the
+  previous contract. Any trade already locked on `0x8e1e…3B3d` stays there; this is a new deployment, not an
+  upgrade, and no state migrates.
+- **The deployed role set is collapsed.** Oracle, treasury, relayer, admin[0] and the deploying key are all
+  `0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a`. A single key therefore holds oracle attestation, treasury
+  payout, gasless relay and one of three admin approvals. This is the condition
+  [#642](https://github.com/Agroasys/Cotsel/issues/642) exists to remove, and it is inherited from the
+  rehearsal configuration in `env/base-sepolia-deploy.env`, not introduced by this deployment. It is a known
+  gap, not accepted risk.
+
+**This deployment is not acceptance evidence.** It was produced from a workstation, not from a protected
+environment under a release candidate, which the programme's own rules exclude from acceptance. Pinning a
+contract for a candidate remains owned by [#639](https://github.com/Agroasys/Cotsel/issues/639) under the
+E-0 review.
 
 ## 6. Provider and data boundaries
 
