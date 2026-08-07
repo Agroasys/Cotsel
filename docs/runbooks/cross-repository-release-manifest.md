@@ -4,6 +4,8 @@ The Integration Lead is the single accountable owner of the Cotsel cross-reposit
 
 `integration/release-manifest.json` is checked in as `candidate`, not as evidence of production approval. It pins the locally verified Agroasys backend, platform.v1 and Cotsel-Dash commits. Draft and baseline manifests cannot supply workflow checkout outputs. Any repository change requires the Integration Lead to update the corresponding full commit SHA and return the manifest to `candidate`. The hosted compatibility workflow then verifies clean checkouts at those exact commits, compares the Cotsel and Agroasys callback fixtures, runs the Agroasys backend provider contracts, runs the platform.v1 consumer contracts, runs the Cotsel settlement provider contract, and executes the M3 backend/gateway/Cotsel-Dash continuity suite. The result is attached to the release record. Status may change to `approved` only after those checks and the remaining SOW release gates pass for the exact pinned commits.
 
+A candidate manifest binds this file into a single candidate identity by canonical digest, so a pin change here produces a new candidate. See `docs/runbooks/release-candidate-evidence-binding.md`.
+
 Run the local structural check with:
 
 ```bash

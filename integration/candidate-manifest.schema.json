@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agroasys.com/schemas/cotsel/candidate-manifest.v1.json",
+  "title": "Cotsel release candidate manifest",
+  "description": "Immutable identity of one deployable Cotsel candidate. Every evidence-index entry must resolve to exactly one candidate manifest. Implements SOW REPORT-02 and PROG-01 for work package WP-0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "candidateId",
+    "status",
+    "owner",
+    "createdAt",
+    "environment",
+    "source",
+    "crossRepositoryManifest",
+    "artifacts",
+    "migrations",
+    "chain",
+    "contract",
+    "providerMode",
+    "configDigest",
+    "rollbackTarget"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "cotsel.candidate-manifest.v1"
+    },
+    "candidateId": {
+      "description": "Stable identity of this candidate. Never reused, never edited after promotion.",
+      "type": "string",
+      "pattern": "^cotsel-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]{4,16}$"
+    },
+    "status": {
+      "enum": ["draft", "candidate", "promoted", "superseded"]
+    },
+    "activationBlockers": {
+      "description": "Required while status is draft. Names what prevents this candidate from being used.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role"],
+      "properties": {
+        "role": { "const": "Release Owner" }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "supersedes": {
+      "description": "Candidate identity replaced by this one, when applicable.",
+      "type": "string",
+      "pattern": "^cotsel-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]{4,16}$"
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "classification", "owner", "publicParticipants", "realCommercialValue"],
+      "properties": {
+        "name": {
+          "enum": ["local-ci", "base-sepolia-staging", "base-mainnet"]
+        },
+        "classification": {
+          "enum": ["non-deployed", "private-staging", "controlled-pilot", "production"]
+        },
+        "owner": { "type": "string", "minLength": 1 },
+        "publicParticipants": { "type": "boolean" },
+        "realCommercialValue": { "type": "boolean" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "workflowRunId"],
+      "properties": {
+        "repository": { "const": "Agroasys/Cotsel" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "workflowRunId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "crossRepositoryManifest": {
+      "description": "Binds the sibling-repository pins in integration/release-manifest.json to this candidate.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "schemaVersion", "sha256"],
+      "properties": {
+        "path": { "const": "integration/release-manifest.json" },
+        "schemaVersion": { "const": "cotsel.release-manifest.v1" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind", "digest"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["container-image", "npm-package", "contract-bundle"] },
+          "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "migrations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["component", "headIdentity", "checksumSha256"],
+        "properties": {
+          "component": { "type": "string", "minLength": 1 },
+          "headIdentity": { "type": "string", "minLength": 1 },
+          "checksumSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "chain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "chainId", "finalityConfirmations"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "chainId": { "type": "integer", "minimum": 1 },
+        "finalityConfirmations": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "address",
+        "abiSha256",
+        "deployedBytecodeSha256",
+        "compilerVersion",
+        "deploymentBlock",
+        "deploymentTxHash",
+        "verificationStatus"
+      ],
+      "properties": {
+        "name": { "const": "AgroasysEscrow" },
+        "address": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "abiSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "deployedBytecodeSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "compilerVersion": { "type": "string", "minLength": 1 },
+        "deploymentBlock": { "type": "integer", "minimum": 0 },
+        "deploymentTxHash": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" },
+        "verificationStatus": { "enum": ["verified", "unverified"] }
+      }
+    },
+    "providerMode": {
+      "description": "Externally observable provider posture. A change to any field invalidates evidence bound to the previous posture.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fiatOffRamp", "signer", "rpc"],
+      "properties": {
+        "fiatOffRamp": { "enum": ["disabled", "sandbox", "live"] },
+        "signer": { "enum": ["local-key", "kms", "mpc"] },
+        "rpc": { "enum": ["single", "primary-with-fallback"] }
+      }
+    },
+    "configDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["redacted", "sha256", "inventoryPath"],
+      "properties": {
+        "redacted": { "const": true },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "inventoryPath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "approvals": {
+      "description": "Required when status is promoted. All three roles must record a decision.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "identity", "decision", "decidedAt"],
+        "properties": {
+          "role": { "enum": ["Release Owner", "Security reviewer", "Operations reviewer"] },
+          "identity": { "$ref": "#/$defs/actorIdentity" },
+          "decision": { "enum": ["approved", "rejected"] },
+          "decidedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "rollbackTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "compatibilityNote"],
+      "properties": {
+        "kind": { "enum": ["candidate", "none"] },
+        "candidateId": {
+          "type": "string",
+          "pattern": "^cotsel-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]{4,16}$"
+        },
+        "compatibilityNote": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "candidate" } } },
+          "then": { "required": ["candidateId"] }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "draft" } } },
+      "then": { "required": ["activationBlockers"] }
+    },
+    {
+      "if": { "properties": { "status": { "const": "promoted" } } },
+      "then": { "required": ["approvals"] }
+    }
+  ],
+  "$defs": {
+    "actorIdentity": {
+      "description": "Canonical actor handle: lowercase, no whitespace, 2 to 64 characters. The evidence index resolves four-eyes separation by string equality on the same form.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._@/+-]{1,63}$"
+    }
+  }
+}
