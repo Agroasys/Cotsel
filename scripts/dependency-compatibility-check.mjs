@@ -41,7 +41,7 @@ assert.equal(
   'All minimatch versions must resolve one patched brace-expansion',
 );
 const [bracePath] = braceTargets;
-assert.match(bracePath, /brace-expansion@5\.0\.8_patch_hash=/);
+assert.match(bracePath, /brace-expansion@5\.0\.9_patch_hash=/);
 
 const braceExpansion = require(bracePath);
 assert.equal(
@@ -61,5 +61,5 @@ const lengthCapped = braceExpansion('{a,b}'.repeat(1500), { maxLength: 100 });
 assert.ok(lengthCapped.reduce((total, value) => total + value.length, 0) <= 100);
 
 console.log(
-  `Dependency compatibility check passed: minimatch ${minimatchVersions.join(', ')} -> patched brace-expansion 5.0.8`,
+  `Dependency compatibility check passed: minimatch ${minimatchVersions.join(', ')} -> patched brace-expansion 5.0.9`,
 );
