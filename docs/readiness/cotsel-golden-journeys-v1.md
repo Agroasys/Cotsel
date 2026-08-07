@@ -29,10 +29,10 @@ proof owned by WP-9.
 This specification is complete as written, but two WP-0 inputs are still unapproved. Neither blocks drafting;
 both block acceptance.
 
-| Dependency                                                                   | Effect if unresolved                                                                                                                                                                                                             |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [#635](https://github.com/Agroasys/Cotsel/issues/635) `wp0-charter`          | Chain, contract identity, provider mode, participant class and value caps are unfixed. Every "pinned systems" row below inherits its values from the approved charter.                                                           |
-| [#636](https://github.com/Agroasys/Cotsel/issues/636) `wp0-release-evidence` | No release-manifest or evidence-index contract exists yet, so no journey run can be bound to a candidate. `integration/release-manifest.json` currently pins sibling repository commits and two callback contract versions only. |
+| Dependency                                                                   | Effect if unresolved                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [#635](https://github.com/Agroasys/Cotsel/issues/635) `wp0-charter`          | Chain, contract identity, provider mode, participant class and value caps are unfixed. Every "pinned systems" row below inherits its values from the approved charter. Drafted in `docs/readiness/cotsel-release-charter-v1.md`; still unapproved.                   |
+| [#636](https://github.com/Agroasys/Cotsel/issues/636) `wp0-release-evidence` | The candidate-manifest and evidence-index contracts now exist (`integration/candidate-manifest.schema.json`, `integration/evidence-index.schema.json`), but nothing emits a real candidate manifest from a build, so no journey run can yet be bound to a candidate. |
 
 ## Authority boundaries
 
