@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-02T22:09:51.267Z",
-  "commitSha": "1f54c7acec55f3f618cbee9f7494dee621b72755",
+  "generatedAt": "2026-08-07T16:36:20.038Z",
+  "commitSha": "61bee84dba6f700794d29b7a0b486eb0c5aea3f0",
   "network": {
     "hardhatName": "base-sepolia",
     "runtimeKey": "base-sepolia",
@@ -9,9 +9,9 @@
   },
   "contract": {
     "name": "AgroasysEscrow",
-    "address": "0x8e1e152167FeD9FF7833156A023fFCa88f243B3d",
-    "deploymentTxHash": "0x2972491842eef29463d16c9e569284c426feba2cf343b17182708442732e7ff7",
-    "explorerAddressUrl": "https://sepolia.basescan.org/address/0x8e1e152167FeD9FF7833156A023fFCa88f243B3d",
+    "address": "0xD4Ec15aeD46576675792633A883419A5cdb5cA83",
+    "deploymentTxHash": "0xd39fe0b6eec8d75f44c7e4cd8bc2cf54804a48cab9def60e7752b652581232ae",
+    "explorerAddressUrl": "https://sepolia.basescan.org/address/0xD4Ec15aeD46576675792633A883419A5cdb5cA83",
     "constructorArguments": {
       "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
       "oracleAddress": "0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a",
@@ -28,12 +28,12 @@
   "verification": {
     "requested": true,
     "status": "verified",
-    "verificationUrl": "https://sepolia.basescan.org/address/0x8e1e152167FeD9FF7833156A023fFCa88f243B3d#code"
+    "verificationUrl": "https://sepolia.basescan.org/address/0xD4Ec15aeD46576675792633A883419A5cdb5cA83#code"
   },
   "artifact": {
     "compilerVersion": "0.8.34",
     "abiSha256": "572c473d519c81c67d0fe6fa3174439aca53d17f45b9b8438c196bcf916aaed1",
     "bytecodeSha256": "b3429757821ff6089d330e2c97f69c0fe8ee489d392cced82c689bb5b76b6909",
-    "deployedBytecodeSha256": "faaa5d4489c4cf0bb774a7be0eabbb7ce7c1bd67603b774fc687af52c316c5b7"
+    "deployedBytecodeSha256": "affa756266c4927ceca1e7d87bdcde5864d84337468cd24ebc1f699cbb29d3ca"
   }
 }
