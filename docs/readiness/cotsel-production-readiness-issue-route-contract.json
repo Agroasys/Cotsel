@@ -1,9 +1,12 @@
 {
-  "schemaVersion": "cotsel.production-readiness.issue-route.v2",
+  "schemaVersion": "cotsel.production-readiness.issue-route.v3",
   "repository": "Agroasys/Cotsel",
   "projectNumber": 9,
   "programmeLabel": "programme:cotsel-production-readiness",
-  "assignees": ["Astton", "czpyioe"],
+  "workingOwnership": {
+    "allowedParticipants": ["Astton", "czpyioe"],
+    "rule": "Each work package and its child issues have one GitHub assignee. The other participant is the delivery reviewer. Supporting issues inherit the ownership of their primary metadata route."
+  },
   "issues": [
     {
       "key": "wp0-charter",

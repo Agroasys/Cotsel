@@ -12,7 +12,7 @@
 
 The initial programme hierarchy and Project configuration were created, but the first setup audit overstated three controls: complete work-package sheets, exact issue-body verification, and exact milestone-description verification. A source-led re-audit also found two unrouted preservation controls, eight primary-route inconsistencies, generic supporting-control rows, asymmetric gate routing, four omitted cross-cutting programme rules, and array-order ownership for reused issues.
 
-The version-two control-plane repair is merged, synchronized to GitHub, and accepted by the full live audit. The programme setup is complete: 71 managed issues and 15 reused supporting issues are reconciled in Project 9, all managed bodies match the deterministic source-backed renderer, hierarchy and milestones match their contracts, and every Project item is assigned only to `Astton` and `czpyioe`.
+The version-two control-plane repair was merged, synchronized to GitHub, and accepted by the full live audit. At that audit point, 71 managed issues and 15 reused supporting issues were reconciled in Project 9, all managed bodies matched the deterministic source-backed renderer, hierarchy and milestones matched their contracts, and every Project item was assigned jointly to `Astton` and `czpyioe`. The reciprocal single-assignee model introduced after this historical audit supersedes that assignment arrangement.
 
 This audit concerns programme setup only. It does not claim that SOW implementation, engineering rehearsal, controlled-pilot authorization, or Base mainnet authorization has started or completed. The SOW verdict remains **NO-GO**.
 
@@ -104,7 +104,7 @@ The reconciled live hierarchy is:
 
 WP-9 increases from six to seven children because service authentication is independently assignable and cannot be safely hidden inside privileged-role exchange.
 
-All managed and reused issues remain assigned only to `Astton` and `czpyioe`. All programme work remains in `Agroasys/Cotsel`. Other repositories and providers are evidence and dependency surfaces; Cotsel cannot self-accept their authority.
+At setup time, all managed and reused issues were assigned jointly to `Astton` and `czpyioe`. The current source contract instead assigns each work package and its children to one working lead and names the other participant as delivery reviewer; reused issues inherit the working ownership of their primary metadata route. All programme work remains in `Agroasys/Cotsel`. Other repositories and providers are evidence and dependency surfaces; Cotsel cannot self-accept their authority.
 
 ## Reused-issue ownership
 
@@ -118,7 +118,7 @@ The repository now records exact number, title, state, and description for all t
 
 The five readiness forms now:
 
-- assign `Astton` and `czpyioe` at the form level;
+- start unassigned because the work-package choice determines the single working lead and reciprocal reviewer;
 - require source-faithful, control-specific four-column content;
 - prohibit generic implementation and evidence boilerplate;
 - preserve the exact nine-field WP sheet;
@@ -148,7 +148,7 @@ Negative tests prove that unknown routes, duplicate contributors, self-contribut
 The post-synchronization live audit proves:
 
 - complete deterministic body equality for all managed issues, with body hashes and first-difference diagnostics;
-- exact hierarchy, milestones, assignees and repository boundary;
+- exact hierarchy, milestones, source-backed single-assignee ownership and repository boundary;
 - exact invariant Project metadata while allowing Status, Evidence Status, release ID, blocker and date fields to progress; and
 - complete pagination of managed issues and Project items.
 

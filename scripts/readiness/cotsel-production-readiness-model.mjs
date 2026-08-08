@@ -25,6 +25,9 @@ export const supportingIssues = readReadinessJson(
 export const findingById = new Map(source.findings.map((item) => [item.id, item]));
 export const routeByKey = new Map(routes.issues.map((item) => [item.key, item]));
 export const packageById = new Map(packages.workPackages.map((item) => [item.id, item]));
+export const supportingIssueByNumber = new Map(
+  supportingIssues.issues.map((item) => [item.number, item]),
+);
 
 const requirementGroupByControlId = new Map();
 for (const [groupName, group] of Object.entries(requirements.groups)) {
@@ -78,6 +81,39 @@ export function titleForWorkPackage(workPackage) {
 
 export const programmeTitle =
   '[Programme] Cotsel production readiness and controlled-pilot authorization';
+
+function ownershipForWorkPackage(workPackage) {
+  if (!workPackage) return null;
+  return {
+    workPackage: workPackage.id,
+    assignee: workPackage.githubAssignee,
+    reviewer: workPackage.githubReviewer,
+  };
+}
+
+export function githubOwnershipForRoute(route) {
+  return ownershipForWorkPackage(packageById.get(route?.wp));
+}
+
+export function githubOwnershipForTitle(title) {
+  if (title === programmeTitle) {
+    return {
+      workPackage: null,
+      assignee: packages.programmeOwnership.githubAssignee,
+      reviewer: packages.programmeOwnership.githubReviewer,
+    };
+  }
+  const workPackage = packages.workPackages.find(
+    (candidate) => titleForWorkPackage(candidate) === title,
+  );
+  if (workPackage) return ownershipForWorkPackage(workPackage);
+  return githubOwnershipForRoute(routes.issues.find((candidate) => candidate.title === title));
+}
+
+export function githubOwnershipForSupportingIssue(number) {
+  const supportingIssue = supportingIssueByNumber.get(number);
+  return githubOwnershipForRoute(routeByKey.get(supportingIssue?.primaryMetadataRoute));
+}
 
 export const workPackageControlSheetLabels = [
   'Objective',

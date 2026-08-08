@@ -2,7 +2,7 @@ name: Cotsel production-readiness decision
 description: Record a product, protocol, finance, security, compliance, operations, or release decision.
 title: '[WP-X/Decision] '
 labels: ['programme:cotsel-production-readiness', 'status:decision-required', 'type:decision']
-assignees: [Astton, czpyioe]
+assignees: []
 body:
   - type: textarea
     id: decision
@@ -41,7 +41,8 @@ body:
         Accountable owner:
         Delivery owner:
         Acceptance owner:
-        GitHub assignees: @Astton and @czpyioe
+        Working lead / GitHub assignee: select from the parent work package
+        Delivery reviewer: the other participant
     validations: { required: true }
   - type: textarea
     id: dependencies

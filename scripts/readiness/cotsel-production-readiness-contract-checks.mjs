@@ -66,6 +66,8 @@ export function validateWorkPackageShape(workPackage) {
     'outOfScope',
     'owner',
     'reviewers',
+    'githubAssignee',
+    'githubReviewer',
     'dependencies',
     'implementation',
     'verification',
@@ -79,4 +81,9 @@ export function validateWorkPackageShape(workPackage) {
   ]) {
     assert.ok(workPackage[field]?.trim(), `${workPackage.id || '<unknown>'} missing ${field}`);
   }
+  assert.notEqual(
+    workPackage.githubAssignee,
+    workPackage.githubReviewer,
+    `${workPackage.id} working lead cannot review their own delivery`,
+  );
 }

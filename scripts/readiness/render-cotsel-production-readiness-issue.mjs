@@ -9,6 +9,7 @@ import {
   findingById,
   gateControls,
   gateEvidenceControlsForRoute,
+  githubOwnershipForRoute,
   issueRoutedControls,
   packageById,
   packages,
@@ -104,6 +105,7 @@ function bullets(values, fallback = 'None.') {
 
 export function renderRouteBody(route) {
   const workPackage = packageById.get(route.wp);
+  const githubOwnership = githubOwnershipForRoute(route);
   const dependencies = route.dependencies.map((key) => {
     const dependency = routeByKey.get(key);
     return `\`${key}\` - ${dependency.title}`;
@@ -149,12 +151,13 @@ The delivery must be deterministic and idempotent where retries are possible. Bi
 - **Accountable owner:** ${route.accountable}
 - **Delivery owner:** ${route.delivery}
 - **Acceptance owner:** ${route.acceptance}
-- **GitHub assignees:** @Astton and @czpyioe
+- **Working lead / GitHub assignee:** @${githubOwnership.assignee}
+- **Delivery reviewer:** @${githubOwnership.reviewer}
 - **Delivery surface:** ${route.surface}
 - **External dependency:** ${route.external}
 - **Primary Project gate:** ${route.primaryGate}
 
-Role descriptions define decision authority. GitHub assignment coordinates execution and does not permit a delivery owner to self-accept evidence where independent or four-eyes acceptance is required.
+Role descriptions define decision authority. The working lead delivers this issue and the delivery reviewer reviews it. They are deliberately different people; neither GitHub role permits self-acceptance where independent or four-eyes acceptance is required.
 
 ## Dependencies
 
@@ -236,7 +239,7 @@ function workPackageControlSheet(workPackage) {
     ],
     [
       'Owner / reviewers',
-      `**Accountable owner:** ${workPackage.owner}<br>**Required reviewers:** ${workPackage.reviewers}`,
+      `**Accountable owner:** ${workPackage.owner}<br>**Required reviewers:** ${workPackage.reviewers}<br>**Working lead / GitHub assignee:** @${workPackage.githubAssignee}<br>**Delivery reviewer:** @${workPackage.githubReviewer}`,
     ],
     [
       'Dependencies',
@@ -293,6 +296,8 @@ ${workPackageControlSheet(workPackage)}
 | Programme track | ${workPackage.track} |
 | Milestone | ${workPackage.milestone} |
 | Risk | ${workPackage.risk} |
+| Working lead / GitHub assignee | @${workPackage.githubAssignee} |
+| Delivery reviewer | @${workPackage.githubReviewer} |
 
 ## Required-work coverage
 
@@ -357,7 +362,7 @@ ${fourColumnTable(gateRows)}
 
 ## Programme rules
 
-1. All programme and delivery issues live in \`Agroasys/Cotsel\` and are assigned only to @Astton and @czpyioe.
+1. Every work package and child issue has exactly one working lead as its GitHub assignee. The other participant is its delivery reviewer; shared assignment to @Astton and @czpyioe is prohibited.
 2. Cross-repository, cloud, chain, signer, dashboard, backend, frontend and provider work is represented as a delivery surface or external dependency; a Cotsel assignee cannot self-accept evidence owned by another authority.
 3. Implementation complete, evidence complete, evidence accepted and gate accepted are distinct states.
 4. A merge, closed issue, local test or historical milestone is not readiness evidence.
@@ -368,7 +373,9 @@ ${fourColumnTable(gateRows)}
 
 ## Work-package hierarchy
 
-${packages.workPackages.map((workPackage) => `- **${workPackage.id}: ${workPackage.title}** - gate ${workPackage.gate}; track ${workPackage.track}; milestone ${workPackage.milestone}.`).join('\n')}
+Programme coordination is assigned to @${packages.programmeOwnership.githubAssignee} and reviewed by @${packages.programmeOwnership.githubReviewer}.
+
+${packages.workPackages.map((workPackage) => `- **${workPackage.id}: ${workPackage.title}** - working lead @${workPackage.githubAssignee}; delivery reviewer @${workPackage.githubReviewer}; gate ${workPackage.gate}; track ${workPackage.track}; milestone ${workPackage.milestone}.`).join('\n')}
 
 ## Dependency sequence
 

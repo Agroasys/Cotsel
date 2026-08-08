@@ -8,7 +8,7 @@ labels:
     'type:gate-review',
     'sow:gate',
   ]
-assignees: [Astton, czpyioe]
+assignees: []
 body:
   - type: dropdown
     id: gate_id
