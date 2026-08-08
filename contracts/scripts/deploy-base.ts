@@ -180,7 +180,19 @@ async function main(): Promise<void> {
 
   console.log(`Deployment tx     : ${deploymentTx.hash}`);
   console.log(`Confirmations     : ${config.confirmations}`);
-  await deploymentTx.wait(config.confirmations);
+  const deploymentReceipt = await deploymentTx.wait(config.confirmations);
+  if (!deploymentReceipt) {
+    throw new Error(
+      `No receipt for deployment transaction ${deploymentTx.hash}. The evidence bundle cannot record a deployment block without it.`,
+    );
+  }
+
+  if (deploymentReceipt.status !== 1) {
+    throw new Error(
+      `Deployment transaction ${deploymentTx.hash} has receipt status ${deploymentReceipt.status}. A failed deployment produces no evidence bundle.`,
+    );
+  }
+
   await contract.waitForDeployment();
 
   const contractAddress = await contract.getAddress();
@@ -206,6 +218,8 @@ async function main(): Promise<void> {
       name: config.escrowName,
       address: contractAddress,
       deploymentTxHash: deploymentTx.hash,
+      deploymentBlock: deploymentReceipt.blockNumber,
+      deploymentReceiptStatus: deploymentReceipt.status,
       explorerAddressUrl,
       constructorArguments: {
         usdcAddress: config.usdcAddress,
@@ -237,6 +251,7 @@ async function main(): Promise<void> {
   fs.writeFileSync(outputPath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8');
 
   console.log(`Contract address  : ${contractAddress}`);
+  console.log(`Deployment block  : ${deploymentReceipt.blockNumber} (receipt status 1)`);
   console.log(`Explorer URL      : ${explorerAddressUrl}`);
   console.log(`Verification      : ${verificationStatus}`);
   console.log(`Evidence bundle   : ${outputPath}`);
