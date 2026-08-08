@@ -386,7 +386,7 @@ const expectedProjectNumbers = new Set([
   ...issues.map((issue) => issue.number),
   ...supportingIssues.issues.map((issue) => issue.number),
 ]);
-assert.equal(project.items.totalCount, expectedProjectNumbers.size);
+assert.equal(projectItems.length, expectedProjectNumbers.size, 'Project issue item count');
 const cotselProjectItems = projectItems.filter(
   (item) => item.content.repository.nameWithOwner === 'Agroasys/Cotsel',
 );
