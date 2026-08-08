@@ -26,6 +26,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   sync:
@@ -60,7 +61,7 @@ jobs:
           private-key: ${{ secrets.READINESS_APP_PRIVATE_KEY }}
           owner: Agroasys
           repositories: Cotsel
-          permission-issues: write
+          permission-issues: read
           permission-organization-projects: write
 
       - name: Validate source and routing contracts
@@ -71,6 +72,7 @@ jobs:
       - name: Synchronize Cotsel programme items
         env:
           READINESS_PROJECT_TOKEN: ${{ steps.readiness-token.outputs.token }}
+          READINESS_ISSUE_TOKEN: ${{ github.token }}
           READINESS_ORGANIZATION: Agroasys
           READINESS_REPOSITORY: Cotsel
           READINESS_PROJECT_NUMBER: '9'

@@ -11,12 +11,13 @@ const REPOSITORY = process.env.READINESS_REPOSITORY || 'Cotsel';
 const PROJECT_NUMBER = Number(process.env.READINESS_PROJECT_NUMBER || '9');
 const REQUIRED_LABEL =
   process.env.READINESS_PROGRAMME_LABEL || 'programme:cotsel-production-readiness';
-const TOKEN = process.env.READINESS_PROJECT_TOKEN || process.env.GH_TOKEN;
+const PROJECT_TOKEN = process.env.READINESS_PROJECT_TOKEN || process.env.GH_TOKEN;
+const ISSUE_TOKEN = process.env.READINESS_ISSUE_TOKEN || PROJECT_TOKEN;
 const DRY_RUN = process.argv.includes('--dry-run');
 
-if (!TOKEN) {
+if (!PROJECT_TOKEN) {
   console.error(
-    'READINESS_PROJECT_TOKEN is required with Cotsel issue write and organization Project write access.',
+    'READINESS_PROJECT_TOKEN is required with Cotsel issue read and organization Project write access.',
   );
   process.exit(2);
 }
@@ -26,7 +27,7 @@ async function graphql(query, variables = {}) {
     method: 'POST',
     headers: {
       Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${TOKEN}`,
+      Authorization: `Bearer ${PROJECT_TOKEN}`,
       'Content-Type': 'application/json',
       'User-Agent': 'agroasys-cotsel-readiness-project-sync',
       'X-GitHub-Api-Version': '2022-11-28',
@@ -47,7 +48,7 @@ async function github(pathname, options = {}) {
     ...options,
     headers: {
       Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${TOKEN}`,
+      Authorization: `Bearer ${ISSUE_TOKEN}`,
       'Content-Type': 'application/json',
       'User-Agent': 'agroasys-cotsel-readiness-project-sync',
       'X-GitHub-Api-Version': '2022-11-28',
