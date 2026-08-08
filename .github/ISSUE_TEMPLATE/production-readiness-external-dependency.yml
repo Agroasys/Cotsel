@@ -2,7 +2,7 @@ name: Cotsel production-readiness external dependency
 description: Track evidence or delivery owned outside the Cotsel implementation boundary.
 title: '[WP-X/External] '
 labels: ['programme:cotsel-production-readiness', 'status:backlog', 'type:external-dependency']
-assignees: [Astton, czpyioe]
+assignees: []
 body:
   - type: textarea
     id: outcome
@@ -40,7 +40,8 @@ body:
         External delivery authority:
         Cotsel accountable owner:
         Acceptance owner:
-        GitHub assignees: @Astton and @czpyioe
+        Working lead / GitHub assignee: select from the parent work package
+        Delivery reviewer: the other participant
     validations: { required: true }
   - type: textarea
     id: dependencies

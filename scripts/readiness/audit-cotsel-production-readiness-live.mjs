@@ -6,6 +6,8 @@ import process from 'node:process';
 
 import {
   controls,
+  githubOwnershipForSupportingIssue,
+  githubOwnershipForTitle,
   milestones as milestoneContract,
   packages,
   programmeTitle,
@@ -309,9 +311,11 @@ function bodyMismatchMessage(issue, expected, actual) {
 }
 
 for (const issue of issues) {
+  const githubOwnership = githubOwnershipForTitle(issue.title);
+  assert.ok(githubOwnership, `working ownership for #${issue.number}`);
   assert.deepEqual(
     issue.assignees.nodes.map((item) => item.login).sort(),
-    ['Astton', 'czpyioe'],
+    [githubOwnership.assignee],
     `assignees for #${issue.number}`,
   );
   assert.ok(issue.milestone?.title, `milestone missing from #${issue.number}`);
@@ -392,9 +396,13 @@ assert.deepEqual(
   'Project contains exact managed and supporting issue set',
 );
 for (const item of cotselProjectItems) {
+  const githubOwnership =
+    githubOwnershipForTitle(item.content.title) ||
+    githubOwnershipForSupportingIssue(item.content.number);
+  assert.ok(githubOwnership, `working ownership for Project item #${item.content.number}`);
   assert.deepEqual(
     item.content.assignees.nodes.map((assignee) => assignee.login).sort(),
-    ['Astton', 'czpyioe'],
+    [githubOwnership.assignee],
     `Project item #${item.content.number} assignees`,
   );
 }
@@ -459,7 +467,11 @@ console.log(
       fields: project.fields.totalCount,
       views: project.views.totalCount,
       milestones: liveMilestones.length,
-      assignees: ['Astton', 'czpyioe'],
+      workingOwnership: packages.workPackages.map((workPackage) => ({
+        workPackage: workPackage.id,
+        assignee: workPackage.githubAssignee,
+        reviewer: workPackage.githubReviewer,
+      })),
       bodyVerification: 'full deterministic body comparison',
       milestoneVerification: 'exact title, state, and description comparison',
     },

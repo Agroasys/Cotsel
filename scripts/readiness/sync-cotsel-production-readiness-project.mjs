@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
+import {
+  githubOwnershipForSupportingIssue,
+  githubOwnershipForTitle,
+} from './cotsel-production-readiness-model.mjs';
+import { renderBodyForTitle } from './render-cotsel-production-readiness-issue.mjs';
+
 const ORGANIZATION = process.env.READINESS_ORGANIZATION || 'Agroasys';
 const REPOSITORY = process.env.READINESS_REPOSITORY || 'Cotsel';
 const PROJECT_NUMBER = Number(process.env.READINESS_PROJECT_NUMBER || '9');
@@ -10,7 +16,7 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
 if (!TOKEN) {
   console.error(
-    'READINESS_PROJECT_TOKEN is required with Cotsel issue read and organization Project write access.',
+    'READINESS_PROJECT_TOKEN is required with Cotsel issue write and organization Project write access.',
   );
   process.exit(2);
 }
@@ -34,6 +40,25 @@ async function graphql(query, variables = {}) {
     );
   }
   return payload.data;
+}
+
+async function github(pathname, options = {}) {
+  const response = await fetch(`https://api.github.com${pathname}`, {
+    ...options,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${TOKEN}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'agroasys-cotsel-readiness-project-sync',
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...options.headers,
+    },
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(`GitHub request failed: ${response.status} ${JSON.stringify(payload)}`);
+  }
+  return payload;
 }
 
 async function loadProject() {
@@ -91,7 +116,18 @@ async function loadProjectItems(projectId) {
                   content {
                     ... on Issue {
                       id
+                      number
+                      title
                       url
+                      body
+                      repository {
+                        nameWithOwner
+                      }
+                      assignees(first: 10) {
+                        nodes {
+                          login
+                        }
+                      }
                     }
                   }
                   fieldValues(first: 40) {
@@ -132,7 +168,7 @@ async function loadIssues() {
             issues(
               first: 100
               after: $cursor
-              states: OPEN
+              states: [OPEN, CLOSED]
               labels: [$label]
               orderBy: { field: CREATED_AT, direction: ASC }
             ) {
@@ -145,6 +181,12 @@ async function loadIssues() {
                 number
                 title
                 url
+                body
+                assignees(first: 10) {
+                  nodes {
+                    login
+                  }
+                }
                 labels(first: 40) {
                   nodes {
                     name
@@ -246,6 +288,37 @@ function selectedValue(item, fieldName) {
   return item.fieldValues?.nodes.find((value) => value.field?.name === fieldName)?.name;
 }
 
+const normalizedBody = (body) =>
+  String(body || '')
+    .replaceAll('\r\n', '\n')
+    .trimEnd();
+const assigneeLogins = (issue) => issue.assignees.nodes.map((item) => item.login).sort();
+
+async function synchronizeIssueOwnership(issue, ownership, expectedBody) {
+  const expectedAssignees = [ownership.assignee];
+  const bodyChanged =
+    expectedBody !== undefined && normalizedBody(issue.body) !== normalizedBody(expectedBody);
+  const assigneesChanged =
+    JSON.stringify(assigneeLogins(issue)) !== JSON.stringify([...expectedAssignees].sort());
+  if (!bodyChanged && !assigneesChanged) return;
+
+  if (bodyChanged) actions.push(`update ${issue.url} body from governed source`);
+  if (assigneesChanged) {
+    actions.push(
+      `assign ${issue.url} to @${ownership.assignee}; delivery review by @${ownership.reviewer}`,
+    );
+  }
+  if (!DRY_RUN) {
+    await github(`/repos/${ORGANIZATION}/${REPOSITORY}/issues/${issue.number}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        ...(bodyChanged ? { body: expectedBody } : {}),
+        ...(assigneesChanged ? { assignees: expectedAssignees } : {}),
+      }),
+    });
+  }
+}
+
 const project = await loadProject();
 const issues = await loadIssues();
 const projectItems = await loadProjectItems(project.id);
@@ -274,9 +347,22 @@ for (const issue of issues) {
       await setSelect(project.id, item.id, ids.fieldId, ids.optionId);
     }
   }
+
+  const ownership = githubOwnershipForTitle(issue.title);
+  if (ownership) {
+    await synchronizeIssueOwnership(issue, ownership, renderBodyForTitle(issue.title));
+  }
+}
+
+for (const item of projectItems) {
+  const issue = item.content;
+  if (issue.repository.nameWithOwner !== `${ORGANIZATION}/${REPOSITORY}`) continue;
+  if (githubOwnershipForTitle(issue.title)) continue;
+  const ownership = githubOwnershipForSupportingIssue(issue.number);
+  if (ownership) await synchronizeIssueOwnership(issue, ownership);
 }
 
 console.log(
-  `${DRY_RUN ? 'Dry run' : 'Applied'} ${actions.length} actions for ${issues.length} open programme issues in ${project.title}.`,
+  `${DRY_RUN ? 'Dry run' : 'Applied'} ${actions.length} actions for ${issues.length} programme issues in ${project.title}.`,
 );
 for (const action of actions) console.log(action);

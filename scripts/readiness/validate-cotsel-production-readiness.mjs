@@ -91,7 +91,9 @@ for (const finding of source.findings) {
   }
 }
 
-assert.equal(routes.schemaVersion, 'cotsel.production-readiness.issue-route.v2');
+assert.equal(routes.schemaVersion, 'cotsel.production-readiness.issue-route.v3');
+exact(routes.workingOwnership.allowedParticipants, ['Astton', 'czpyioe'], 'GitHub participants');
+assert.ok(routes.workingOwnership.rule.includes('one GitHub assignee'));
 assert.equal(routes.issues.length, 57);
 assert.equal(unique(routes.issues.map((item) => item.key)).size, 57);
 assert.equal(unique(routes.issues.map((item) => item.title)).size, 57);
@@ -113,7 +115,15 @@ exact(
   expectedWps,
   'work package sequence',
 );
-assert.equal(packages.schemaVersion, 'cotsel.production-readiness.work-packages.v2');
+assert.equal(packages.schemaVersion, 'cotsel.production-readiness.work-packages.v3');
+const allowedGithubParticipants = new Set(routes.workingOwnership.allowedParticipants);
+assert.ok(allowedGithubParticipants.has(packages.programmeOwnership.githubAssignee));
+assert.ok(allowedGithubParticipants.has(packages.programmeOwnership.githubReviewer));
+assert.notEqual(
+  packages.programmeOwnership.githubAssignee,
+  packages.programmeOwnership.githubReviewer,
+  'programme working lead cannot review their own delivery',
+);
 for (const [index, wp] of expectedWps.entries()) {
   assert.equal(
     routes.issues.filter((item) => item.wp === wp).length,
@@ -127,6 +137,8 @@ const requiredWorkPackageFields = [
   'outOfScope',
   'owner',
   'reviewers',
+  'githubAssignee',
+  'githubReviewer',
   'dependencies',
   'implementation',
   'verification',
@@ -140,6 +152,8 @@ const requiredWorkPackageFields = [
 ];
 for (const workPackage of packages.workPackages) {
   validateWorkPackageShape(workPackage);
+  assert.ok(allowedGithubParticipants.has(workPackage.githubAssignee));
+  assert.ok(allowedGithubParticipants.has(workPackage.githubReviewer));
   for (const field of requiredWorkPackageFields) {
     assert.ok(workPackage[field]?.trim(), `${workPackage.id} missing ${field}`);
   }
@@ -385,7 +399,7 @@ const forms = [
 ];
 for (const name of forms) {
   const text = fs.readFileSync(path.join(readinessRoot, '.github/ISSUE_TEMPLATE', name), 'utf8');
-  assert.match(text, /^assignees: \[Astton, czpyioe\]$/m, `${name} assignees`);
+  assert.match(text, /^assignees: \[\]$/m, `${name} starts unassigned`);
   assert.ok(
     text.includes('| ID | Required work | Implementation requirement | Acceptance evidence |'),
   );

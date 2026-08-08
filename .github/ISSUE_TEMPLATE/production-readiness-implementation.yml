@@ -2,7 +2,7 @@ name: Cotsel production-readiness implementation
 description: Deliver one bounded SOW implementation and its release-bound evidence.
 title: '[WP-X/Implementation] '
 labels: ['programme:cotsel-production-readiness', 'status:backlog', 'type:implementation']
-assignees: [Astton, czpyioe]
+assignees: []
 body:
   - type: textarea
     id: outcome
@@ -40,7 +40,8 @@ body:
         Accountable owner:
         Delivery owner:
         Acceptance owner:
-        GitHub assignees: @Astton and @czpyioe
+        Working lead / GitHub assignee: select from the parent work package
+        Delivery reviewer: the other participant
     validations: { required: true }
   - type: textarea
     id: dependencies

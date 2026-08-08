@@ -1,12 +1,19 @@
 name: Cotsel Production-Readiness Project Governance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/ISSUE_TEMPLATE/production-readiness-*.yml'
+      - '.github/workflows/cotsel-production-readiness-project-governance.yml'
+      - 'docs/readiness/cotsel-production-readiness-*.json'
+      - 'scripts/readiness/*cotsel-production-readiness*.mjs'
   issues:
     types: [opened, reopened, labeled]
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Inspect changes without mutating Project 9
+        description: Inspect changes without mutating Project 9 or issue ownership
         required: false
         default: true
         type: boolean
@@ -53,7 +60,7 @@ jobs:
           private-key: ${{ secrets.READINESS_APP_PRIVATE_KEY }}
           owner: Agroasys
           repositories: Cotsel
-          permission-issues: read
+          permission-issues: write
           permission-organization-projects: write
 
       - name: Validate source and routing contracts

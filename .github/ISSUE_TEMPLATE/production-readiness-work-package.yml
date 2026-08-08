@@ -2,7 +2,7 @@ name: Cotsel production-readiness work package
 description: Create a parent control issue for a complete SOW work package.
 title: '[WP-X] '
 labels: ['programme:cotsel-production-readiness', 'status:backlog', 'type:work-package']
-assignees: [Astton, czpyioe]
+assignees: []
 body:
   - type: textarea
     id: control_sheet
@@ -31,6 +31,8 @@ body:
         Programme track:
         Milestone:
         Risk:
+        Working lead / GitHub assignee:
+        Delivery reviewer:
     validations: { required: true }
   - type: textarea
     id: requirements

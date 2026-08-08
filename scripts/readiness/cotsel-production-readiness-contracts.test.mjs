@@ -110,6 +110,8 @@ test('work packages reject a missing SOW control-sheet field', () => {
       'outOfScope',
       'owner',
       'reviewers',
+      'githubAssignee',
+      'githubReviewer',
       'dependencies',
       'implementation',
       'verification',
@@ -123,6 +125,8 @@ test('work packages reject a missing SOW control-sheet field', () => {
     ].map((field) => [field, 'defined']),
   );
   workPackage.id = 'WP-0';
+  workPackage.githubAssignee = 'czpyioe';
+  workPackage.githubReviewer = 'Astton';
   workPackage.reviewers = '';
   assert.throws(() => validateWorkPackageShape(workPackage), /missing reviewers/);
 });
