@@ -104,61 +104,57 @@ these values to a specific run. This section records what is pinned today and wh
 | Chain (rehearsal)     | Base Sepolia, chain ID `84532`                                                                                                     |
 | Chain (production)    | Base mainnet, chain ID `8453` — separately gated by WP-12, no deployment authorized                                                |
 | USDC (Base Sepolia)   | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`                                                                                       |
-| Escrow contract       | `0xD4Ec15aeD46576675792633A883419A5cdb5cA83` — deployed and verified 2026-08-07. See the note below.                               |
+| Escrow contract       | **Not pinned.** Currently recorded deployment is `0x8e1e152167FeD9FF7833156A023fFCa88f243B3d`. See the note below.                 |
 | Trade states          | `LOCKED=0`, `IN_TRANSIT=1`, `ARRIVAL_CONFIRMED=2`, `FROZEN=3` (`sdk/src/types/trade.ts`)                                           |
 | Cross-repository pins | `integration/release-manifest.json`, status `candidate` — `agroasys-backend@develop`, `platform.v1@main`, `Cotsel.dash@main`       |
 | Callback contracts    | `cotsel.settlement-callback.v1`, `cotsel.settlement-observed-amounts.v1`                                                           |
+| Participant class     | **Decision required.** DEC-02, below. No participant may be admitted under an assumed class or jurisdiction.                       |
+| Value caps            | **Decision required.** DEC-02, below. Per-trade and aggregate pilot caps. Absent a cap, ENV-03 has no bounded value.               |
 | Provider mode         | **Decision required.** Depends on DEC-01 and the WP-11 participant decision. No provider mode may be assumed from a local default. |
 | Cloud and region      | **Decision required.** DEC-01, below.                                                                                              |
 
-### Escrow deployment record
+### Escrow contract identity
 
-`AgroasysEscrow` was deployed to Base Sepolia from `main` on 2026-08-07. Evidence bundle:
-`contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json`.
+**This charter does not deploy, redeploy or promote a contract, and no contract change is authorized by WP-0.**
+EXCLUSION-03 requires every contract mutation to carry its own owner, change record, protected environment and
+gate decision. Deploying a candidate contract, regenerating its evidence bundle and promoting it across all
+runtime consumers atomically is owned by [#639](https://github.com/Agroasys/Cotsel/issues/639), and no
+deployment performed outside that path may be recorded here as release identity.
 
-| Field                     | Value                                                                |
-| ------------------------- | -------------------------------------------------------------------- |
-| Address                   | `0xD4Ec15aeD46576675792633A883419A5cdb5cA83`                         |
-| Deployment tx             | `0xd39fe0b6eec8d75f44c7e4cd8bc2cf54804a48cab9def60e7752b652581232ae` |
-| Deployment block          | `45176143` (receipt status `1`)                                      |
-| Source commit             | `61bee84`                                                            |
-| Compiler                  | `0.8.34`, evm target `paris`                                         |
-| ABI SHA-256               | `572c473d519c81c67d0fe6fa3174439aca53d17f45b9b8438c196bcf916aaed1`   |
-| Creation bytecode SHA-256 | `b3429757821ff6089d330e2c97f69c0fe8ee489d392cced82c689bb5b76b6909`   |
-| Deployed bytecode SHA-256 | `affa756266c4927ceca1e7d87bdcde5864d84337468cd24ebc1f699cbb29d3ca`   |
-| Basescan verification     | Verified                                                             |
-| Pre-deploy gate           | `contracts` compile clean; 110 Hardhat tests passing                 |
+The deployment recorded in the repository today, and used by every runtime consumer, is:
 
-**This deployment supersedes `0x8e1e152167FeD9FF7833156A023fFCa88f243B3d`, but it did not correct a source
-defect.** `contracts/src/AgroasysEscrow.sol` is byte-identical between the previous deployment's commit
-(`1f54c7a`) and `main`; the admin quorum floor from
-[PR #618](https://github.com/Agroasys/Cotsel/pull/618) was already present in the previous deployment. The two
-contracts differ on chain only in the `DOMAIN_SEPARATOR` immutable, which binds `verifyingContract` to the
-contract address and therefore differs for any address. Creation bytecode and ABI digests are identical across
-both.
+| Field                 | Value                                                                |
+| --------------------- | -------------------------------------------------------------------- |
+| Address               | `0x8e1e152167FeD9FF7833156A023fFCa88f243B3d`                         |
+| Deployment tx         | `0x2972491842eef29463d16c9e569284c426feba2cf343b17182708442732e7ff7` |
+| Source commit         | `1f54c7a`                                                            |
+| Compiler              | `0.8.34`                                                             |
+| Basescan verification | Verified                                                             |
+| Evidence bundle       | `contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json`   |
 
-The previous evidence bundle was nonetheless not usable to identify a candidate: its `bytecodeSha256` was
-recorded from a later compile than the deployment it described, so its artifact digests and its
-`deploymentTxHash` did not describe the same event. The current bundle is machine-generated from the deploy run
-and is internally consistent.
+That bundle is a deployment record, not candidate evidence, and #639 must replace it rather than annotate it.
+Two defects block it from identifying a candidate:
 
-Two consequences follow, and both remain open:
+- **Its artifact digests and its deployment do not describe the same event.** `bytecodeSha256` was recorded
+  from a later compile than the deployment the bundle describes.
+- **It carries no deployment block.** `contract.deploymentBlock` is required by the candidate manifest
+  (`integration/candidate-manifest.schema.json`), is read by the protocol health report, and is the start block
+  for `INDEXER_START_BLOCK`. The deploy script now emits that field and the receipt status from the deployment
+  receipt, so the next controlled deploy produces a bundle that carries them; this one predates that change and
+  cannot be corrected by hand without becoming hand-entered prose.
 
-- **Runtime promotion has not been performed.** `GATEWAY_ESCROW_ADDRESS`, `ORACLE_ESCROW_ADDRESS`,
-  `RECONCILIATION_ESCROW_ADDRESS`, `INDEXER_CONTRACT_ADDRESS` and `INDEXER_START_BLOCK` still point at the
-  previous contract. Any trade already locked on `0x8e1e…3B3d` stays there; this is a new deployment, not an
-  upgrade, and no state migrates.
+Two further conditions hold for whatever contract #639 pins, and both remain open:
+
+- **Promotion is atomic or it has not happened.** `GATEWAY_ESCROW_ADDRESS`, `ORACLE_ESCROW_ADDRESS`,
+  `RECONCILIATION_ESCROW_ADDRESS`, `INDEXER_CONTRACT_ADDRESS` and `INDEXER_START_BLOCK` all move together with
+  the deploy report, or the repository states two different contract identities at once. A redeploy is a new
+  contract, not an upgrade: no state migrates, and trades already locked on the previous address stay there.
 - **The deployed role set is collapsed.** Oracle, treasury, relayer, admin[0] and the deploying key are all
   `0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a`. A single key therefore holds oracle attestation, treasury
   payout, gasless relay and one of three admin approvals. This is the condition
-  [#642](https://github.com/Agroasys/Cotsel/issues/642) exists to remove, and it is inherited from the
-  rehearsal configuration in `env/base-sepolia-deploy.env`, not introduced by this deployment. It is a known
-  gap, not accepted risk.
-
-**This deployment is not acceptance evidence.** It was produced from a workstation, not from a protected
-environment under a release candidate, which the programme's own rules exclude from acceptance. Pinning a
-contract for a candidate remains owned by [#639](https://github.com/Agroasys/Cotsel/issues/639) under the
-E-0 review.
+  [#642](https://github.com/Agroasys/Cotsel/issues/642) exists to remove; it is inherited from the rehearsal
+  configuration in `env/base-sepolia-deploy.env`. It is a known gap, not accepted risk, and it applies to any
+  contract deployed from that configuration.
 
 ## 6. Provider and data boundaries
 
@@ -230,12 +226,18 @@ of duty.
 
 ### Contributed decisions accepted elsewhere
 
-This charter supplies input to two decisions it may not accept itself.
+This charter supplies input to two decisions it may not accept itself. It is not free to be approved without
+them: DEC-02 is accepted by WP-11, but it is an input this charter must carry, so it blocks E-0 as directly as
+DEC-01 does.
 
-| ID     | Decision                                                                                  | Primary acceptance route                                                    |
-| ------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| DEC-02 | Pilot participant class, jurisdiction, values, limits and support model                   | `wp11-participants` — [#684](https://github.com/Agroasys/Cotsel/issues/684) |
-| DEC-03 | Protocol governance, and whether the immutable contract design is replaced before mainnet | `wp12-authority` — [#687](https://github.com/Agroasys/Cotsel/issues/687)    |
+| ID     | Decision                                                                                  | Primary acceptance route                                                    | Blocks this charter                                                                              |
+| ------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| DEC-02 | Pilot participant class, jurisdiction, values, limits and support model                   | `wp11-participants` — [#684](https://github.com/Agroasys/Cotsel/issues/684) | **Yes.** Participant class and value caps are #635 controls; provider mode also derives from it. |
+| DEC-03 | Protocol governance, and whether the immutable contract design is replaced before mainnet | `wp12-authority` — [#687](https://github.com/Agroasys/Cotsel/issues/687)    | No. Gated by WP-12, separately from pilot authorization.                                         |
+
+While DEC-02 is open, ENV-03 stays unauthorized, the participant-class and value-cap rows in Section 5 stay
+**Decision required**, and provider mode cannot be derived. A charter approved without it would fix boundaries
+it has not decided.
 
 ## 8. Coverage
 
@@ -251,10 +253,16 @@ Every control for which #635 is the primary acceptance route, and the section th
 | ENV-03             | 4. Environments         | Specified; **not authorized**, owned by WP-11 |
 | ENV-04             | 4. Environments         | Specified; **not authorized**, owned by WP-12 |
 | DEC-01             | 7. Open decisions       | **Decision required**                         |
+| DEC-02             | 5. and 7.               | **Decision required**, accepted by WP-11      |
 
-Specification is complete for every row. Acceptance is not: the charter cannot be approved while DEC-01 and the
-named authorities are open, because a gate cannot be accepted by an unnamed role and a candidate cannot be built
-for an undecided environment.
+Specification is complete for every row. Acceptance is not. Three things block approval of this charter:
+
+- **DEC-01** — a candidate cannot be built for an undecided cloud and control plane.
+- **DEC-02** — participant class, jurisdiction and value caps are #635 controls and this charter carries them.
+  While they are open, ENV-03 is unbounded and provider mode cannot be derived. WP-11
+  ([#684](https://github.com/Agroasys/Cotsel/issues/684)) accepts the decision; this charter still cannot be
+  approved without its result.
+- **Named authorities** — a gate cannot be accepted by an unnamed role.
 
 ## 9. Approval
 
