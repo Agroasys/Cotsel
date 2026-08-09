@@ -60,6 +60,7 @@ pnpm --filter ./contracts run deploy:base-sepolia
 The deploy script:
 
 - deploys `AgroasysEscrow`
+- reads the deployment receipt and aborts unless its status is `1`
 - waits for deployed bytecode to be visible
 - verifies the contract when `DEPLOY_VERIFY=true`
 - retries transient bytecode-indexing verification failures
@@ -71,6 +72,7 @@ Record these values from stdout:
 
 - `Deployment tx`
 - `Contract address`
+- `Deployment block`
 - `Explorer URL`
 - `Verification`
 - `Evidence bundle`
@@ -82,6 +84,13 @@ reports/deploy/base-sepolia/agroasysescrow-deploy.json
 ```
 
 unless `DEPLOY_EVIDENCE_OUT_DIR` is set.
+
+The bundle records the deployment block and the receipt status as
+`contract.deploymentBlock` and `contract.deploymentReceiptStatus`. Both are read
+from the deployment receipt, never entered by hand. `contract.deploymentBlock` is
+the start block for `INDEXER_START_BLOCK` and for the `contract.deploymentBlock`
+field of a candidate manifest (`integration/candidate-manifest.schema.json`); a
+bundle without it cannot evidence a candidate.
 
 ## Failure Handling
 
