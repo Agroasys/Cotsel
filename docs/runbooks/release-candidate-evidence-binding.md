@@ -69,12 +69,15 @@ following.
 
 **Acceptance**
 
-- An entry accepted by its own producer is rejected; acceptance is four-eyes.
+- An entry accepted by its own producer is rejected; the other named programme participant reviews it.
 - An equivalence accepted by the producer of the evidence it waives is rejected on the same rule. A
   waiver is the more consequential decision, so it cannot carry less separation than the acceptance
   it bypasses. The reviewer of an entry **may** accept its equivalence: evidence produced by one
   person and waived by another is still two people.
 - A reviewer must hold one of `Release Owner`, `Security reviewer` or `Operations reviewer`.
+- For `base-sepolia-staging`, `integration/release-authority-profile.json` binds those roles to
+  `astton` and `czpyioe`. It also requires evidence produced by either person to be reviewed by the
+  other person. The profile permits only named automation identities to produce automated evidence.
 - Every actor identity — `approvals[].identity`, `producedBy.identity`, `reviewer.identity` and
   `equivalence.acceptedBy` — must be a canonical handle: lowercase, no whitespace, 2 to 64
   characters, matching `^[a-z0-9][a-z0-9._@/+-]{1,63}$`. Separation of duties is decided by string
@@ -132,9 +135,14 @@ fresh WP-12 packet.
    `node scripts/check-release-evidence-binding.mjs --manifest <path> --verify-cross-repository`.
 5. Produce the redacted configuration inventory and its digest.
 6. Emit the environment report carrying the identity digest and configuration digest.
-7. Append evidence entries as each control produces proof, then have the named reviewer record a
+7. Confirm `integration/release-authority-profile.json` explicitly permits the target environment.
+   Private Base Sepolia staging uses the named two-person roster. Local CI is non-promotable, and
+   Base mainnet is blocked until WP-12 ([#690](https://github.com/Agroasys/Cotsel/issues/690)) records
+   its separate authority and four-role GO decision. A missing or blocked profile fails closed; no
+   arbitrary pair of handles can promote or bind evidence.
+8. Append evidence entries as each control produces proof, then have the named reviewer record a
    decision. The reviewer must not be the producer, and both must use their canonical handle.
-8. Check that the decisions actually landed. The binding check alone does not do this:
+9. Check that the decisions actually landed. The binding check alone does not do this:
 
    ```bash
    node scripts/check-release-evidence-binding.mjs \

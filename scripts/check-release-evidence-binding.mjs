@@ -18,9 +18,9 @@ const CONTROL_ID_PATTERN = /^[A-Z][A-Z0-9-]{1,23}$/;
 const ROUTE_PATTERN = /^wp[0-9]{1,2}-[a-z0-9-]+$/;
 /**
  * Every actor identity — approver, producer, reviewer, equivalence acceptor — is written in one
- * canonical handle form: lowercase, no whitespace, 2 to 64 characters. Four-eyes separation is
- * string equality on these fields, so `avitus`, `AvitusI` and `Avitus I` must not be able to name
- * the same person three ways.
+ * canonical handle form: lowercase, no whitespace, 2 to 64 characters. The two-person control is
+ * enforced with string equality on these fields, so `avitus`, `AvitusI` and `Avitus I` must not be
+ * able to name the same person three ways.
  */
 const IDENTITY_PATTERN = /^[a-z0-9][a-z0-9._@/+-]{1,63}$/;
 
@@ -35,6 +35,163 @@ const PROVIDER_MODES = {
 };
 const ACCEPTANCE_ROLES = ['Release Owner', 'Security reviewer', 'Operations reviewer'];
 const REVIEW_DECISIONS = ['accepted', 'rejected', 'pending'];
+const AUTHORITY_PROFILE_PATH = path.join(ROOT_DIR, 'integration/release-authority-profile.json');
+const AUTHORITY_PROMOTION_POLICIES = ['named-two-person', 'blocked'];
+
+const AUTHORITY_PROFILE_REGISTRY = JSON.parse(fs.readFileSync(AUTHORITY_PROFILE_PATH, 'utf8'));
+
+function validateNamedTwoPersonAuthorityProfile(profile) {
+  for (const role of ACCEPTANCE_ROLES) {
+    requireString(
+      (message) => {
+        throw new Error(`Release authority profile ${message}`);
+      },
+      profile.approvalRoles?.[role],
+      `approvalRoles.${role}`,
+      IDENTITY_PATTERN,
+    );
+  }
+  const namedIdentities = new Set(Object.values(profile.approvalRoles));
+  if (namedIdentities.size !== 2) {
+    throw new Error('Release authority profile must name exactly two approval identities');
+  }
+  for (const identity of namedIdentities) {
+    const reviewer = profile.evidenceReviewers?.[identity];
+    requireString(
+      (message) => {
+        throw new Error(`Release authority profile ${message}`);
+      },
+      reviewer,
+      `evidenceReviewers.${identity}`,
+      IDENTITY_PATTERN,
+    );
+    if (reviewer === identity || !namedIdentities.has(reviewer)) {
+      throw new Error(
+        `Release authority profile reviewer for ${identity} must be the other named identity`,
+      );
+    }
+  }
+  if (
+    !Array.isArray(profile.automatedEvidenceProducers) ||
+    profile.automatedEvidenceProducers.some((identity) => !IDENTITY_PATTERN.test(identity))
+  ) {
+    throw new Error(
+      'Release authority profile automatedEvidenceProducers must be canonical handles',
+    );
+  }
+}
+
+export function validateAuthorityProfileRegistry(registry) {
+  if (!isPlainObject(registry)) {
+    throw new Error('Release authority profile registry must be an object');
+  }
+  if (registry.schemaVersion !== 'cotsel.release-authority-profiles.v1') {
+    throw new Error('Release authority profile registry has an unsupported schemaVersion');
+  }
+  if (!Array.isArray(registry.profiles)) {
+    throw new Error('Release authority profile registry profiles must be an array');
+  }
+
+  const profilesByEnvironment = new Map();
+  for (const profile of registry.profiles) {
+    if (!isPlainObject(profile)) {
+      throw new Error('Release authority profile must be an object');
+    }
+    requireString(
+      (message) => {
+        throw new Error(`Release authority profile ${message}`);
+      },
+      profile.profileId,
+      'profileId',
+      IDENTITY_PATTERN,
+    );
+    requireEnum(
+      (message) => {
+        throw new Error(`Release authority profile ${message}`);
+      },
+      profile.environment,
+      'environment',
+      ENVIRONMENTS,
+    );
+    requireEnum(
+      (message) => {
+        throw new Error(`Release authority profile ${message}`);
+      },
+      profile.promotionPolicy,
+      'promotionPolicy',
+      AUTHORITY_PROMOTION_POLICIES,
+    );
+    if (profilesByEnvironment.has(profile.environment)) {
+      throw new Error(`Release authority profile registry duplicates ${profile.environment}`);
+    }
+    if (profile.promotionPolicy === 'named-two-person') {
+      validateNamedTwoPersonAuthorityProfile(profile);
+    } else {
+      requireString(
+        (message) => {
+          throw new Error(`Release authority profile ${message}`);
+        },
+        profile.promotionBlocker,
+        'promotionBlocker',
+      );
+    }
+    profilesByEnvironment.set(profile.environment, profile);
+  }
+
+  for (const environment of ENVIRONMENTS) {
+    if (!profilesByEnvironment.has(environment)) {
+      throw new Error(`Release authority profile registry has no profile for ${environment}`);
+    }
+  }
+  return profilesByEnvironment;
+}
+
+const AUTHORITY_PROFILES_BY_ENVIRONMENT = validateAuthorityProfileRegistry(
+  AUTHORITY_PROFILE_REGISTRY,
+);
+
+function authorityProfileForManifest(manifest) {
+  const environment = manifest.environment?.name;
+  const profile = AUTHORITY_PROFILES_BY_ENVIRONMENT.get(environment);
+  if (!profile) {
+    failManifest(`environment ${environment ?? '<missing>'} has no authority profile`);
+  }
+  return profile;
+}
+
+function assertPromotionAllowed(fail, profile) {
+  if (profile.promotionPolicy !== 'named-two-person') {
+    fail(`promotion for ${profile.environment} is blocked: ${profile.promotionBlocker}`);
+  }
+}
+
+function assertEvidenceBindingAllowed(fail, profile) {
+  if (profile.promotionPolicy !== 'named-two-person') {
+    fail(`evidence binding for ${profile.environment} is blocked: ${profile.promotionBlocker}`);
+  }
+}
+
+function requireProfileRoleIdentity(fail, profile, role, identity, label) {
+  const expectedIdentity = profile.approvalRoles[role];
+  if (identity !== expectedIdentity) {
+    fail(`${label} must be ${expectedIdentity} under ${profile.profileId}`);
+  }
+}
+
+function requireRecusedEvidenceReviewer(fail, profile, producerIdentity, reviewerIdentity, label) {
+  const requiredReviewer = profile.evidenceReviewers[producerIdentity];
+  if (requiredReviewer && reviewerIdentity !== requiredReviewer) {
+    fail(`${label} produced by ${producerIdentity} must be reviewed by ${requiredReviewer}`);
+  }
+}
+
+function requireAuthorizedEvidenceProducer(fail, profile, identity, label) {
+  const isNamedParticipant = Object.hasOwn(profile.evidenceReviewers, identity);
+  const isApprovedAutomation = profile.automatedEvidenceProducers.includes(identity);
+  if (!isNamedParticipant && !isApprovedAutomation) {
+    fail(`${label} producer ${identity} is not authorized under ${profile.profileId}`);
+  }
+}
 
 /**
  * Environment classifications each environment may declare. ENV-01 through ENV-04 keep local,
@@ -431,6 +588,8 @@ export function validateCandidateManifest(manifest) {
   }
 
   if (manifest.status === 'promoted') {
+    const authorityProfile = authorityProfileForManifest(manifest);
+    assertPromotionAllowed(failManifest, authorityProfile);
     const approved = new Set(
       (manifest.approvals ?? [])
         .filter((approval) => approval.decision === 'approved')
@@ -439,6 +598,32 @@ export function validateCandidateManifest(manifest) {
     const missing = ACCEPTANCE_ROLES.filter((role) => !approved.has(role));
     if (missing.length > 0) {
       failManifest(`promoted status requires approval from ${missing.join(', ')}`);
+    }
+    const approvingIdentities = new Set(
+      (manifest.approvals ?? [])
+        .filter((approval) => approval.decision === 'approved')
+        .map((approval) => approval.identity),
+    );
+    if (approvingIdentities.size < 2) {
+      failManifest('promoted status requires approval from two distinct identities');
+    }
+  }
+
+  const authorityProfile = authorityProfileForManifest(manifest);
+  if (authorityProfile.promotionPolicy === 'blocked' && manifest.approvals !== undefined) {
+    failManifest(
+      `approval records for ${authorityProfile.environment} are blocked: ${authorityProfile.promotionBlocker}`,
+    );
+  }
+  if (authorityProfile.promotionPolicy === 'named-two-person' && manifest.approvals !== undefined) {
+    for (const approval of manifest.approvals) {
+      requireProfileRoleIdentity(
+        failManifest,
+        authorityProfile,
+        approval.role,
+        approval.identity,
+        `approval ${approval.role} identity`,
+      );
     }
   }
 
@@ -453,6 +638,7 @@ export function assertCandidateBindable(manifest) {
   if (!['candidate', 'promoted'].includes(manifest.status)) {
     failManifest(`status ${manifest.status} cannot bind evidence`);
   }
+  assertEvidenceBindingAllowed(failManifest, authorityProfileForManifest(manifest));
   return manifest;
 }
 
@@ -514,12 +700,11 @@ function validateBoundIdentity(boundIdentity, label) {
 }
 
 /**
- * An equivalence is a waiver of the binding rule, so it carries the same separation of duties as
- * the acceptance it bypasses: the producer of the evidence may not certify that their own stale
- * evidence still counts. A reviewer may accept an equivalence for evidence someone else produced —
- * that is still two people.
+ * An equivalence is a waiver of the binding rule, so the producer of the evidence may not certify
+ * that their own stale evidence still counts. A reviewer may accept an equivalence for evidence
+ * someone else produced — the same two-person control applies.
  */
-function validateEquivalence(equivalence, entry, label, now) {
+function validateEquivalence(equivalence, entry, label, now, authorityProfile) {
   requireString(
     failIndex,
     equivalence.acceptedBy,
@@ -528,10 +713,17 @@ function validateEquivalence(equivalence, entry, label, now) {
   );
   if (equivalence.acceptedBy === entry.producedBy.identity) {
     failIndex(
-      `${label} equivalence was accepted by its own producer; four-eyes review is required`,
+      `${label} equivalence was accepted by its own producer; review by the other participant is required`,
     );
   }
   requireEnum(failIndex, equivalence.role, `${label} equivalence role`, ACCEPTANCE_ROLES);
+  requireProfileRoleIdentity(
+    failIndex,
+    authorityProfile,
+    equivalence.role,
+    equivalence.acceptedBy,
+    `${label} equivalence acceptedBy`,
+  );
   requireString(failIndex, equivalence.rationale, `${label} equivalence rationale`);
   requireTimestamp(failIndex, equivalence.expiresAt, `${label} equivalence expiresAt`);
   if (!Array.isArray(equivalence.dimensions) || equivalence.dimensions.length === 0) {
@@ -555,6 +747,7 @@ export function validateEvidenceIndex(index, manifest, options = {}) {
   const now = options.now ? new Date(options.now) : new Date();
   validateCandidateManifest(manifest);
   assertCandidateBindable(manifest);
+  const authorityProfile = authorityProfileForManifest(manifest);
 
   if (!isPlainObject(index)) {
     failIndex('root must be an object');
@@ -663,8 +856,30 @@ export function validateEvidenceIndex(index, manifest, options = {}) {
     requireEnum(failIndex, entry.reviewer.decision, `${label} reviewer decision`, REVIEW_DECISIONS);
     requireTimestamp(failIndex, entry.reviewer.reviewedAt, `${label} reviewer reviewedAt`);
     if (entry.reviewer.identity === entry.producedBy.identity) {
-      failIndex(`${label} was accepted by its own producer; four-eyes review is required`);
+      failIndex(
+        `${label} was accepted by its own producer; review by the other participant is required`,
+      );
     }
+    requireAuthorizedEvidenceProducer(
+      failIndex,
+      authorityProfile,
+      entry.producedBy.identity,
+      `${label} evidence`,
+    );
+    requireProfileRoleIdentity(
+      failIndex,
+      authorityProfile,
+      entry.reviewer.role,
+      entry.reviewer.identity,
+      `${label} reviewer identity`,
+    );
+    requireRecusedEvidenceReviewer(
+      failIndex,
+      authorityProfile,
+      entry.producedBy.identity,
+      entry.reviewer.identity,
+      `${label} evidence`,
+    );
 
     validateBoundIdentity(entry.boundIdentity, label);
     const actual = entryIdentity(entry.boundIdentity);
@@ -674,7 +889,7 @@ export function validateEvidenceIndex(index, manifest, options = {}) {
       if (!isPlainObject(entry.equivalence)) {
         failIndex(`${label} equivalence must be an object`);
       }
-      accepted = validateEquivalence(entry.equivalence, entry, label, now);
+      accepted = validateEquivalence(entry.equivalence, entry, label, now, authorityProfile);
     }
 
     for (const dimension of IDENTITY_DIMENSIONS) {

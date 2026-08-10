@@ -157,7 +157,7 @@ The delivery must be deterministic and idempotent where retries are possible. Bi
 - **External dependency:** ${route.external}
 - **Primary Project gate:** ${route.primaryGate}
 
-Role descriptions define decision authority. The working lead delivers this issue and the delivery reviewer reviews it. They are deliberately different people; neither GitHub role permits self-acceptance where independent or four-eyes acceptance is required.
+Role descriptions define decision authority. The working lead delivers this issue and the delivery reviewer reviews it. They are deliberately different people; neither GitHub role permits self-acceptance where the two-person programme control requires review by the other participant.
 
 ## Dependencies
 
@@ -179,7 +179,7 @@ Before implementation, revalidate each supporting issue against the current defa
 4. Add automated tests at the lowest useful layer and deployed-path tests at the highest required layer. A mock can prove local logic but cannot replace provider, chain, network, persistence, or cross-repository evidence.
 5. Instrument success, rejection, retry, ambiguity, recovery, and operator action with privacy-safe correlation identifiers.
 6. Update runbooks, configuration inventories, manifests, schemas, and rollback procedures in the same change set.
-7. Produce an evidence bundle that an independent reviewer can reproduce without relying on the implementer's workstation or memory.
+7. Produce an evidence bundle that the other named programme participant can reproduce without relying on the implementer's workstation or memory.
 
 ## Acceptance criteria
 
@@ -243,13 +243,13 @@ function workPackageControlSheet(workPackage) {
     ],
     [
       'Dependencies',
-      `${workPackage.dependencies} Acceptance must also identify required provider access, legal or compliance decisions, and external deployment records, or explicitly record that none apply.`,
+      `${workPackage.dependencies} ${workPackage.dependencyAcceptanceNote || 'Acceptance must also identify required provider access, legal or compliance decisions, and external deployment records, or explicitly record that none apply.'}`,
     ],
     ['Implementation', workPackage.implementation],
     ['Verification', workPackage.verification],
     [
       'Acceptance evidence',
-      `${workPackage.evidence} For a candidate, record immutable paths or URLs, hashes, run IDs, environment identity, approvers, and decision timestamps. Current accepted evidence: none.`,
+      `${workPackage.evidence} ${workPackage.currentAcceptanceEvidence || 'For a candidate, record immutable paths or URLs, hashes, run IDs, environment identity, approvers, and decision timestamps. Current accepted evidence: none.'}`,
     ],
     [
       'Rollback / containment',
@@ -280,7 +280,7 @@ export function renderParentBody(workPackage) {
   );
   return `## Governing source
 
-This parent controls ${workPackage.id} under the **Cotsel Production Readiness and Controlled-Pilot Statement of Work**, dated 2 August 2026, source SHA-256 \`${source.source.sha256}\`. The programme remains **NO-GO** until the applicable release-specific gates accept complete evidence.
+This parent controls ${workPackage.id} under the **Cotsel Production Readiness and Controlled-Pilot Statement of Work**, dated 2 August 2026, source SHA-256 \`${source.source.sha256}\`. This work package records its own completion separately from later candidate-specific release decisions.
 
 ## Work-package control sheet
 
@@ -303,7 +303,7 @@ ${workPackageControlSheet(workPackage)}
 
 | ID | Required work | Implementation requirement | Acceptance evidence |
 |---|---|---|---|
-| ${workPackage.id} | Deliver the complete ${workPackage.title.toLowerCase()} work package. | Complete every child issue, preserve the nine-field control sheet, resolve or formally accept dependencies and residual risks, and keep release-gate acceptance separate from implementation completion. | An accepted release-bound evidence index maps every primary finding and control to reproducible proof, immutable identities, named reviewers and the acceptance decision. |
+| ${workPackage.id} | Deliver the complete ${workPackage.title.toLowerCase()} work package. | ${workPackage.parentImplementationRequirement || 'Complete every child issue, preserve the nine-field control sheet, resolve or formally accept dependencies and residual risks, and keep release-gate acceptance separate from implementation completion.'} | ${workPackage.parentAcceptanceEvidence || 'An accepted release-bound evidence index maps every primary finding and control to reproducible proof, immutable identities, named reviewers and the acceptance decision.'} |
 
 This work package owns ${findingIds.length} finding rows (${findingIds.length ? findingIds.join(', ') : 'none'}) and ${primaryControlIds.length} primary supporting controls (${primaryControlIds.length ? primaryControlIds.join(', ') : 'none'}). It also contributes evidence to ${contributorIds.size} controls accepted elsewhere. WPCS-01 through WPCS-09 apply structurally to this parent and are validated against the exact table above.
 
@@ -313,7 +313,7 @@ ${children.map((item) => `- \`${item.key}\` - ${item.title}`).join('\n')}
 
 ## Exit criterion
 
-The work package exits only when every child is implemented, every primary finding and control has complete evidence from the same pinned release, required contributor evidence is delivered, dependencies are accepted, residual risks are recorded, and the named authority accepts the package. Child closure or code merge alone is insufficient.
+${workPackage.exitCriterion || 'The work package exits only when every child is implemented, every primary finding and control has complete evidence from the same pinned release, required contributor evidence is delivered, dependencies are accepted, residual risks are recorded, and the named authority accepts the package. Child closure or code merge alone is insufficient.'}
 
 ## Change and invalidation rule
 
@@ -364,12 +364,13 @@ ${fourColumnTable(gateRows)}
 
 1. Every work package and child issue has exactly one working lead as its GitHub assignee. The other participant is its delivery reviewer; shared assignment to @Astton and @czpyioe is prohibited.
 2. Cross-repository, cloud, chain, signer, dashboard, backend, frontend and provider work is represented as a delivery surface or external dependency; a Cotsel assignee cannot self-accept evidence owned by another authority.
-3. Implementation complete, evidence complete, evidence accepted and gate accepted are distinct states.
-4. A merge, closed issue, local test or historical milestone is not readiness evidence.
-5. Evidence must bind to one release manifest containing immutable application, contract, configuration, infrastructure, migration, provider, chain and rollback identities.
-6. Material changes invalidate stale evidence and reopen affected work and gates.
-7. Engineering rehearsal and controlled-pilot approval do not authorize Base mainnet. Mainnet requires WP-12 and an explicit four-role GO decision.
-8. Percentage complete is prohibited because it obscures blocked gates and unaccepted evidence.
+3. The programme operates with two named participants. They may hold multiple approval roles, but an evidence producer cannot review or accept their own evidence, and a promoted candidate requires both identities.
+4. Implementation complete, evidence complete, evidence accepted and gate accepted are distinct states.
+5. A merge, closed issue, local test or historical milestone is not readiness evidence.
+6. Evidence must bind to one release manifest containing immutable application, contract, configuration, infrastructure, migration, provider, chain and rollback identities.
+7. Material changes invalidate stale evidence and reopen affected work and gates.
+8. Engineering rehearsal and controlled-pilot approval do not authorize Base mainnet. Mainnet requires WP-12 and explicit approval from its named roles; the two named participants may fulfil more than one role.
+9. Percentage complete is prohibited because it obscures unresolved work and unaccepted evidence.
 
 ## Work-package hierarchy
 

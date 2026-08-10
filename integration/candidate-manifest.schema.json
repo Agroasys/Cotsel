@@ -224,7 +224,7 @@
   ],
   "$defs": {
     "actorIdentity": {
-      "description": "Canonical actor handle: lowercase, no whitespace, 2 to 64 characters. The evidence index resolves four-eyes separation by string equality on the same form.",
+      "description": "Canonical actor handle: lowercase, no whitespace, 2 to 64 characters. A promotion requires two distinct identities; the same identity may hold more than one approval role.",
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9._@/+-]{1,63}$"
     }

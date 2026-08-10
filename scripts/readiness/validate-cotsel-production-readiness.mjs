@@ -157,7 +157,41 @@ for (const workPackage of packages.workPackages) {
   for (const field of requiredWorkPackageFields) {
     assert.ok(workPackage[field]?.trim(), `${workPackage.id} missing ${field}`);
   }
+  for (const field of [
+    'dependencyAcceptanceNote',
+    'currentAcceptanceEvidence',
+    'parentImplementationRequirement',
+    'parentAcceptanceEvidence',
+    'exitCriterion',
+  ]) {
+    if (workPackage[field] !== undefined) {
+      assert.ok(workPackage[field].trim(), `${workPackage.id} empty ${field}`);
+    }
+  }
   const body = renderParentBody(workPackage);
+  for (const field of [
+    'dependencyAcceptanceNote',
+    'currentAcceptanceEvidence',
+    'parentImplementationRequirement',
+    'parentAcceptanceEvidence',
+  ]) {
+    if (workPackage[field] !== undefined) {
+      assert.ok(body.includes(workPackage[field]), `${workPackage.id} renders ${field}`);
+    }
+  }
+  const exitCriterion = body
+    .split('## Exit criterion')[1]
+    .split('## Change and invalidation rule')[0]
+    .trim();
+  if (workPackage.exitCriterion !== undefined) {
+    assert.equal(
+      exitCriterion,
+      workPackage.exitCriterion,
+      `${workPackage.id} custom exit criterion`,
+    );
+  } else {
+    assert.match(exitCriterion, /every primary finding and control has complete evidence/);
+  }
   const sheet = body.split('## Work-package control sheet')[1].split('## Programme metadata')[0];
   const labels = [...sheet.matchAll(/^\| ([^|]+?) \|/gm)]
     .map((match) => match[1].trim())

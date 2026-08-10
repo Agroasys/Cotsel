@@ -47,7 +47,7 @@
         "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
       },
       "reviewer": {
-        "identity": "release-owner@example.invalid",
+        "identity": "astton",
         "role": "Release Owner",
         "decision": "accepted",
         "reviewedAt": "2026-08-05T11:00:00.000Z"
@@ -87,7 +87,7 @@
         "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
       },
       "reviewer": {
-        "identity": "ops-reviewer@example.invalid",
+        "identity": "astton",
         "role": "Operations reviewer",
         "decision": "accepted",
         "reviewedAt": "2026-08-05T11:05:00.000Z"
