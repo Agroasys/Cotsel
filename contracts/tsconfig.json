@@ -5,7 +5,6 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "types": ["node", "mocha"],
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "rootDir": "."
