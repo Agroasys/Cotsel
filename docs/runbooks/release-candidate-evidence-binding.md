@@ -75,6 +75,9 @@ following.
   it bypasses. The reviewer of an entry **may** accept its equivalence: evidence produced by one
   person and waived by another is still two people.
 - A reviewer must hold one of `Release Owner`, `Security reviewer` or `Operations reviewer`.
+- For `base-sepolia-staging`, `integration/release-authority-profile.json` binds those roles to
+  `astton` and `czpyioe`. It also requires evidence produced by either person to be reviewed by the
+  other person. The profile permits only named automation identities to produce automated evidence.
 - Every actor identity — `approvals[].identity`, `producedBy.identity`, `reviewer.identity` and
   `equivalence.acceptedBy` — must be a canonical handle: lowercase, no whitespace, 2 to 64
   characters, matching `^[a-z0-9][a-z0-9._@/+-]{1,63}$`. Separation of duties is decided by string

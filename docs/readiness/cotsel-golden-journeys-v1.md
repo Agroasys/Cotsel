@@ -26,7 +26,7 @@ proof owned by WP-9.
 
 ## Baseline dependencies
 
-This specification inherits the approved internal integration boundary. The entries below identify the work that
+This specification inherits the proposed internal integration boundary. The entries below identify the work that
 will later produce a candidate and journey evidence; they do not prevent approval of this specification itself.
 
 | Dependency                                                                   | Effect if unresolved                                                                                                                                                                        |

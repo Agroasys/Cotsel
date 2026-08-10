@@ -181,8 +181,8 @@ durable settlement state is out of contract; durable leased work is owned by
 
 ### DEC-01 — Authoritative cloud and control plane
 
-**Approved by the Programme Lead for the current baseline. Engineering implementation is reviewed by the
-Engineering Lead.**
+**Approved by the Programme Lead for the current baseline. Engineering and Security review remains pending in
+the linked pull request.**
 
 The first integrated staging path uses the existing Agroasys AWS control plane. It is not split across cloud
 providers and does not introduce a separate personal or Cotsel-owned cloud account.
@@ -201,7 +201,7 @@ WP-7 provisions the platform from reviewed IaC and inherits every value above.
 
 ### Named authorities
 
-**Approved two-person operating model. Owner: @Astton.** The programme has two named participants. They may
+**Two-person operating model proposed for approval. Owner: @Astton.** The programme has two named participants. They may
 hold multiple roles, but an evidence producer never reviews or accepts their own item. The responsibility register
 is owned by [#637](https://github.com/Agroasys/Cotsel/issues/637).
 
@@ -224,7 +224,8 @@ Owner or Operations Reviewer; @Astton produces programme, product, finance or op
 reviews it as Engineering Lead or Security authority. A third participant is not required.
 
 `docs/owners.md` remains the guide for code review by runtime boundary. This register records the two named
-decision-makers and their recusal rule.
+decision-makers and their recusal rule. `integration/release-authority-profile.json` enforces this roster for
+private Base Sepolia candidate approvals and human evidence reviews.
 
 ### Contributed decisions accepted elsewhere
 
@@ -255,8 +256,9 @@ Every control for which #635 is the primary acceptance route, and the section th
 | DEC-01             | 7. Decisions            | Recorded for the existing Agroasys AWS staging control plane                             |
 | DEC-02             | 5. and 7.               | Recorded for two named internal, zero-real-value testers                                 |
 
-The WP-0 specification is complete. The linked pull request records the two-person approval of this charter;
-future work packages supply their own candidate, platform and journey evidence.
+The WP-0 implementation package is ready for two-person approval. The linked pull request does not record final
+acceptance until @czpyioe completes the Engineering and Security review; future work packages supply their own
+candidate, platform and journey evidence.
 
 ## 9. Approval
 

@@ -35,6 +35,91 @@ const PROVIDER_MODES = {
 };
 const ACCEPTANCE_ROLES = ['Release Owner', 'Security reviewer', 'Operations reviewer'];
 const REVIEW_DECISIONS = ['accepted', 'rejected', 'pending'];
+const AUTHORITY_PROFILE_PATH = path.join(ROOT_DIR, 'integration/release-authority-profile.json');
+
+const INTERNAL_BASE_SEPOLIA_AUTHORITY_PROFILE = JSON.parse(
+  fs.readFileSync(AUTHORITY_PROFILE_PATH, 'utf8'),
+);
+
+function validateAuthorityProfile(profile) {
+  if (!isPlainObject(profile)) {
+    throw new Error('Release authority profile must be an object');
+  }
+  if (profile.schemaVersion !== 'cotsel.release-authority-profile.v1') {
+    throw new Error('Release authority profile has an unsupported schemaVersion');
+  }
+  if (profile.environment !== 'base-sepolia-staging') {
+    throw new Error('Release authority profile must bind base-sepolia-staging');
+  }
+  for (const role of ACCEPTANCE_ROLES) {
+    requireString(
+      (message) => {
+        throw new Error(`Release authority profile ${message}`);
+      },
+      profile.approvalRoles?.[role],
+      `approvalRoles.${role}`,
+      IDENTITY_PATTERN,
+    );
+  }
+  const namedIdentities = new Set(Object.values(profile.approvalRoles));
+  if (namedIdentities.size !== 2) {
+    throw new Error('Release authority profile must name exactly two approval identities');
+  }
+  for (const identity of namedIdentities) {
+    const reviewer = profile.evidenceReviewers?.[identity];
+    requireString(
+      (message) => {
+        throw new Error(`Release authority profile ${message}`);
+      },
+      reviewer,
+      `evidenceReviewers.${identity}`,
+      IDENTITY_PATTERN,
+    );
+    if (reviewer === identity || !namedIdentities.has(reviewer)) {
+      throw new Error(
+        `Release authority profile reviewer for ${identity} must be the other named identity`,
+      );
+    }
+  }
+  if (
+    !Array.isArray(profile.automatedEvidenceProducers) ||
+    profile.automatedEvidenceProducers.some((identity) => !IDENTITY_PATTERN.test(identity))
+  ) {
+    throw new Error(
+      'Release authority profile automatedEvidenceProducers must be canonical handles',
+    );
+  }
+}
+
+validateAuthorityProfile(INTERNAL_BASE_SEPOLIA_AUTHORITY_PROFILE);
+
+function authorityProfileForManifest(manifest) {
+  return manifest.environment?.name === INTERNAL_BASE_SEPOLIA_AUTHORITY_PROFILE.environment
+    ? INTERNAL_BASE_SEPOLIA_AUTHORITY_PROFILE
+    : null;
+}
+
+function requireProfileRoleIdentity(fail, profile, role, identity, label) {
+  const expectedIdentity = profile.approvalRoles[role];
+  if (identity !== expectedIdentity) {
+    fail(`${label} must be ${expectedIdentity} under ${profile.profileId}`);
+  }
+}
+
+function requireRecusedEvidenceReviewer(fail, profile, producerIdentity, reviewerIdentity, label) {
+  const requiredReviewer = profile.evidenceReviewers[producerIdentity];
+  if (requiredReviewer && reviewerIdentity !== requiredReviewer) {
+    fail(`${label} produced by ${producerIdentity} must be reviewed by ${requiredReviewer}`);
+  }
+}
+
+function requireAuthorizedEvidenceProducer(fail, profile, identity, label) {
+  const isNamedParticipant = Object.hasOwn(profile.evidenceReviewers, identity);
+  const isApprovedAutomation = profile.automatedEvidenceProducers.includes(identity);
+  if (!isNamedParticipant && !isApprovedAutomation) {
+    fail(`${label} producer ${identity} is not authorized under ${profile.profileId}`);
+  }
+}
 
 /**
  * Environment classifications each environment may declare. ENV-01 through ENV-04 keep local,
@@ -450,6 +535,19 @@ export function validateCandidateManifest(manifest) {
     }
   }
 
+  const authorityProfile = authorityProfileForManifest(manifest);
+  if (authorityProfile && manifest.approvals !== undefined) {
+    for (const approval of manifest.approvals) {
+      requireProfileRoleIdentity(
+        failManifest,
+        authorityProfile,
+        approval.role,
+        approval.identity,
+        `approval ${approval.role} identity`,
+      );
+    }
+  }
+
   return manifest;
 }
 
@@ -526,7 +624,7 @@ function validateBoundIdentity(boundIdentity, label) {
  * that their own stale evidence still counts. A reviewer may accept an equivalence for evidence
  * someone else produced — the same two-person control applies.
  */
-function validateEquivalence(equivalence, entry, label, now) {
+function validateEquivalence(equivalence, entry, label, now, authorityProfile) {
   requireString(
     failIndex,
     equivalence.acceptedBy,
@@ -539,6 +637,15 @@ function validateEquivalence(equivalence, entry, label, now) {
     );
   }
   requireEnum(failIndex, equivalence.role, `${label} equivalence role`, ACCEPTANCE_ROLES);
+  if (authorityProfile) {
+    requireProfileRoleIdentity(
+      failIndex,
+      authorityProfile,
+      equivalence.role,
+      equivalence.acceptedBy,
+      `${label} equivalence acceptedBy`,
+    );
+  }
   requireString(failIndex, equivalence.rationale, `${label} equivalence rationale`);
   requireTimestamp(failIndex, equivalence.expiresAt, `${label} equivalence expiresAt`);
   if (!Array.isArray(equivalence.dimensions) || equivalence.dimensions.length === 0) {
@@ -562,6 +669,7 @@ export function validateEvidenceIndex(index, manifest, options = {}) {
   const now = options.now ? new Date(options.now) : new Date();
   validateCandidateManifest(manifest);
   assertCandidateBindable(manifest);
+  const authorityProfile = authorityProfileForManifest(manifest);
 
   if (!isPlainObject(index)) {
     failIndex('root must be an object');
@@ -674,6 +782,28 @@ export function validateEvidenceIndex(index, manifest, options = {}) {
         `${label} was accepted by its own producer; review by the other participant is required`,
       );
     }
+    if (authorityProfile) {
+      requireAuthorizedEvidenceProducer(
+        failIndex,
+        authorityProfile,
+        entry.producedBy.identity,
+        `${label} evidence`,
+      );
+      requireProfileRoleIdentity(
+        failIndex,
+        authorityProfile,
+        entry.reviewer.role,
+        entry.reviewer.identity,
+        `${label} reviewer identity`,
+      );
+      requireRecusedEvidenceReviewer(
+        failIndex,
+        authorityProfile,
+        entry.producedBy.identity,
+        entry.reviewer.identity,
+        `${label} evidence`,
+      );
+    }
 
     validateBoundIdentity(entry.boundIdentity, label);
     const actual = entryIdentity(entry.boundIdentity);
@@ -683,7 +813,7 @@ export function validateEvidenceIndex(index, manifest, options = {}) {
       if (!isPlainObject(entry.equivalence)) {
         failIndex(`${label} equivalence must be an object`);
       }
-      accepted = validateEquivalence(entry.equivalence, entry, label, now);
+      accepted = validateEquivalence(entry.equivalence, entry, label, now, authorityProfile);
     }
 
     for (const dimension of IDENTITY_DIMENSIONS) {

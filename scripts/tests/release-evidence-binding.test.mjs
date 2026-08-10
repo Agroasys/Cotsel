@@ -55,19 +55,19 @@ test('the candidate identity survives promotion but not an identity change', () 
   promoted.approvals = [
     {
       role: 'Release Owner',
-      identity: 'release-owner@example.invalid',
+      identity: 'astton',
       decision: 'approved',
       decidedAt: NOW,
     },
     {
       role: 'Security reviewer',
-      identity: 'security@example.invalid',
+      identity: 'czpyioe',
       decision: 'approved',
       decidedAt: NOW,
     },
     {
       role: 'Operations reviewer',
-      identity: 'ops@example.invalid',
+      identity: 'astton',
       decision: 'approved',
       decidedAt: NOW,
     },
@@ -161,7 +161,7 @@ for (const [dimension, mutate] of Object.entries(staleMutations)) {
     mutate(index.entries[0]);
     index.entries[0].equivalence = {
       dimensions: [dimension],
-      acceptedBy: 'release-owner@example.invalid',
+      acceptedBy: 'astton',
       role: 'Release Owner',
       rationale: `Reviewed ${dimension} difference and confirmed it cannot affect this control.`,
       expiresAt: '2026-09-01T00:00:00.000Z',
@@ -177,7 +177,7 @@ test('rejects an expired equivalence', () => {
   staleMutations.sourceCommit(index.entries[0]);
   index.entries[0].equivalence = {
     dimensions: ['sourceCommit'],
-    acceptedBy: 'release-owner@example.invalid',
+    acceptedBy: 'astton',
     role: 'Release Owner',
     rationale: 'Documentation-only difference.',
     expiresAt: '2026-08-01T00:00:00.000Z',
@@ -195,7 +195,7 @@ test('rejects an equivalence that covers a different dimension than the one that
   staleMutations.contractAddress(index.entries[0]);
   index.entries[0].equivalence = {
     dimensions: ['sourceCommit'],
-    acceptedBy: 'release-owner@example.invalid',
+    acceptedBy: 'astton',
     role: 'Release Owner',
     rationale: 'Wrong dimension accepted.',
     expiresAt: '2026-09-01T00:00:00.000Z',
@@ -212,7 +212,7 @@ test('rejects an equivalence for a dimension that did not drift', () => {
   const index = indexFixture();
   index.entries[0].equivalence = {
     dimensions: ['providerMode'],
-    acceptedBy: 'release-owner@example.invalid',
+    acceptedBy: 'astton',
     role: 'Release Owner',
     rationale: 'Blanket acceptance attempt.',
     expiresAt: '2026-09-01T00:00:00.000Z',
@@ -230,7 +230,7 @@ test('refuses to carry rehearsal evidence across the Base mainnet boundary', () 
   index.entries[0].boundIdentity.chainId = 8453;
   index.entries[0].equivalence = {
     dimensions: ['chainId'],
-    acceptedBy: 'release-owner@example.invalid',
+    acceptedBy: 'astton',
     role: 'Release Owner',
     rationale: 'Attempt to promote rehearsal proof to mainnet.',
     expiresAt: '2026-09-01T00:00:00.000Z',
@@ -399,13 +399,13 @@ test('requires all three acceptance roles before a candidate is promoted', () =>
   manifest.approvals = [
     {
       role: 'Release Owner',
-      identity: 'release-owner@example.invalid',
+      identity: 'astton',
       decision: 'approved',
       decidedAt: NOW,
     },
     {
       role: 'Security reviewer',
-      identity: 'security@example.invalid',
+      identity: 'czpyioe',
       decision: 'rejected',
       decidedAt: NOW,
     },
@@ -451,6 +451,67 @@ test('requires two distinct identities for promotion while allowing role overlap
   assert.throws(
     () => validateCandidateManifest(onePersonPromotion),
     /requires approval from two distinct identities/,
+  );
+});
+
+test('binds Base Sepolia approval roles to the two named Agroasys authorities', () => {
+  const promoted = manifestFixture();
+  promoted.status = 'promoted';
+  promoted.approvals = [
+    { role: 'Release Owner', identity: 'mallory', decision: 'approved', decidedAt: NOW },
+    { role: 'Security reviewer', identity: 'eve', decision: 'approved', decidedAt: NOW },
+    { role: 'Operations reviewer', identity: 'mallory', decision: 'approved', decidedAt: NOW },
+  ];
+
+  assert.throws(
+    () => validateCandidateManifest(promoted),
+    /approval Release Owner identity must be astton under agroasys-internal-base-sepolia-v1/,
+  );
+});
+
+test('requires Astton and Mathias to review each other’s Base Sepolia evidence', () => {
+  const asttonEvidence = indexFixture();
+  asttonEvidence.entries[0].producedBy = { identity: 'astton', role: 'Programme Lead' };
+  asttonEvidence.entries[0].reviewer = {
+    identity: 'czpyioe',
+    role: 'Security reviewer',
+    decision: 'accepted',
+    reviewedAt: NOW,
+  };
+  assert.doesNotThrow(() => validateEvidenceIndex(asttonEvidence, manifestFixture(), { now: NOW }));
+
+  const mathiasEvidence = indexFixture();
+  mathiasEvidence.entries[0].producedBy = { identity: 'czpyioe', role: 'Engineering Lead' };
+  mathiasEvidence.entries[0].reviewer = {
+    identity: 'astton',
+    role: 'Release Owner',
+    decision: 'accepted',
+    reviewedAt: NOW,
+  };
+  assert.doesNotThrow(() =>
+    validateEvidenceIndex(mathiasEvidence, manifestFixture(), { now: NOW }),
+  );
+
+  const selfReviewed = structuredClone(asttonEvidence);
+  selfReviewed.entries[0].reviewer = {
+    identity: 'astton',
+    role: 'Release Owner',
+    decision: 'accepted',
+    reviewedAt: NOW,
+  };
+  assert.throws(
+    () => validateEvidenceIndex(selfReviewed, manifestFixture(), { now: NOW }),
+    /was accepted by its own producer/,
+  );
+});
+
+test('rejects an unregistered Base Sepolia evidence producer', () => {
+  const index = indexFixture();
+  index.entries[0].producedBy = { identity: 'mallory', role: 'Unknown producer' };
+
+  assert.throws(
+    () => validateEvidenceIndex(index, manifestFixture(), { now: NOW }),
+    /producer mallory is not authorized under agroasys-internal-base-sepolia-v1/,
   );
 });
 

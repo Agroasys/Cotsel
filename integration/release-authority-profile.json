@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "cotsel.release-authority-profile.v1",
+  "profileId": "agroasys-internal-base-sepolia-v1",
+  "environment": "base-sepolia-staging",
+  "approvalRoles": {
+    "Release Owner": "astton",
+    "Security reviewer": "czpyioe",
+    "Operations reviewer": "astton"
+  },
+  "evidenceReviewers": {
+    "astton": "czpyioe",
+    "czpyioe": "astton"
+  },
+  "automatedEvidenceProducers": ["ci/release-gate"]
+}
