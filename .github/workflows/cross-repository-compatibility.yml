@@ -35,7 +35,7 @@ jobs:
           permission-contents: read
 
       - name: Check out Cotsel
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: Cotsel
 
@@ -45,7 +45,7 @@ jobs:
         run: node scripts/check-cross-repo-release-manifest.mjs --github-outputs
 
       - name: Check out Agroasys backend
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: Agroasys/agroasys-backend
           ref: ${{ steps.manifest.outputs.backend_commit }}
@@ -53,7 +53,7 @@ jobs:
           path: agroasys-backend
 
       - name: Check out platform.v1
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: Agroasys/platform.v1
           ref: ${{ steps.manifest.outputs.platform_commit }}
@@ -61,7 +61,7 @@ jobs:
           path: platform.v1
 
       - name: Check out Cotsel-Dash
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: Agroasys/Cotsel.dash
           ref: ${{ steps.manifest.outputs.dashboard_commit }}
