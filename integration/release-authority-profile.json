@@ -1,15 +1,32 @@
 {
-  "schemaVersion": "cotsel.release-authority-profile.v1",
-  "profileId": "agroasys-internal-base-sepolia-v1",
-  "environment": "base-sepolia-staging",
-  "approvalRoles": {
-    "Release Owner": "astton",
-    "Security reviewer": "czpyioe",
-    "Operations reviewer": "astton"
-  },
-  "evidenceReviewers": {
-    "astton": "czpyioe",
-    "czpyioe": "astton"
-  },
-  "automatedEvidenceProducers": ["ci/release-gate"]
+  "schemaVersion": "cotsel.release-authority-profiles.v1",
+  "profiles": [
+    {
+      "profileId": "agroasys-internal-base-sepolia-v1",
+      "environment": "base-sepolia-staging",
+      "promotionPolicy": "named-two-person",
+      "approvalRoles": {
+        "Release Owner": "astton",
+        "Security reviewer": "czpyioe",
+        "Operations reviewer": "astton"
+      },
+      "evidenceReviewers": {
+        "astton": "czpyioe",
+        "czpyioe": "astton"
+      },
+      "automatedEvidenceProducers": ["ci/release-gate"]
+    },
+    {
+      "profileId": "local-ci-non-promotable-v1",
+      "environment": "local-ci",
+      "promotionPolicy": "blocked",
+      "promotionBlocker": "local-ci is non-deployed validation and cannot produce a release candidate"
+    },
+    {
+      "profileId": "base-mainnet-wp12-authority-pending-v1",
+      "environment": "base-mainnet",
+      "promotionPolicy": "blocked",
+      "promotionBlocker": "WP-12 (#690) must record the exact mainnet authority and four-role GO before promotion or evidence binding"
+    }
+  ]
 }

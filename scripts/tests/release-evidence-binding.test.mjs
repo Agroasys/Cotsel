@@ -15,6 +15,7 @@ import {
   candidateIdentityDigest,
   readCandidateManifest,
   readJsonDocument,
+  validateAuthorityProfileRegistry,
   validateCandidateManifest,
   validateEvidenceIndex,
 } from '../check-release-evidence-binding.mjs';
@@ -24,10 +25,47 @@ const ROOT_DIR = path.resolve(TESTS_DIR, '../..');
 const FIXTURE_DIR = path.join(TESTS_DIR, 'fixtures/release-evidence');
 const MANIFEST_PATH = path.join(FIXTURE_DIR, 'candidate-manifest.json');
 const INDEX_PATH = path.join(FIXTURE_DIR, 'evidence-index.json');
+const AUTHORITY_PROFILE_PATH = path.join(ROOT_DIR, 'integration/release-authority-profile.json');
 const NOW = '2026-08-05T12:00:00.000Z';
 
 const manifestFixture = () => structuredClone(readJsonDocument(MANIFEST_PATH));
 const indexFixture = () => structuredClone(readJsonDocument(INDEX_PATH));
+const authorityProfileFixture = () => structuredClone(readJsonDocument(AUTHORITY_PROFILE_PATH));
+
+function promotedApprovals() {
+  return [
+    { role: 'Release Owner', identity: 'astton', decision: 'approved', decidedAt: NOW },
+    { role: 'Security reviewer', identity: 'czpyioe', decision: 'approved', decidedAt: NOW },
+    { role: 'Operations reviewer', identity: 'astton', decision: 'approved', decidedAt: NOW },
+  ];
+}
+
+function asBaseMainnet(manifest) {
+  manifest.environment = {
+    name: 'base-mainnet',
+    classification: 'production',
+    owner: 'Production Operations',
+    publicParticipants: false,
+    realCommercialValue: false,
+  };
+  manifest.chain = {
+    ...manifest.chain,
+    name: 'Base Mainnet',
+    chainId: 8453,
+  };
+  return manifest;
+}
+
+function asLocalCi(manifest) {
+  manifest.environment = {
+    name: 'local-ci',
+    classification: 'non-deployed',
+    owner: 'CI',
+    publicParticipants: false,
+    realCommercialValue: false,
+  };
+  return manifest;
+}
 
 /** Rebinds an index to a manifest after the manifest identity was deliberately changed. */
 function rebind(index, manifest) {
@@ -420,26 +458,7 @@ test('requires all three acceptance roles before a candidate is promoted', () =>
 test('requires two distinct identities for promotion while allowing role overlap', () => {
   const promoted = manifestFixture();
   promoted.status = 'promoted';
-  promoted.approvals = [
-    {
-      role: 'Release Owner',
-      identity: 'astton',
-      decision: 'approved',
-      decidedAt: NOW,
-    },
-    {
-      role: 'Security reviewer',
-      identity: 'czpyioe',
-      decision: 'approved',
-      decidedAt: NOW,
-    },
-    {
-      role: 'Operations reviewer',
-      identity: 'astton',
-      decision: 'approved',
-      decidedAt: NOW,
-    },
-  ];
+  promoted.approvals = promotedApprovals();
 
   assert.doesNotThrow(() => validateCandidateManifest(promoted));
 
@@ -466,6 +485,55 @@ test('binds Base Sepolia approval roles to the two named Agroasys authorities', 
   assert.throws(
     () => validateCandidateManifest(promoted),
     /approval Release Owner identity must be astton under agroasys-internal-base-sepolia-v1/,
+  );
+});
+
+test('requires an explicit authority profile for every manifest environment', () => {
+  const profiles = authorityProfileFixture();
+  profiles.profiles = profiles.profiles.filter((profile) => profile.environment !== 'base-mainnet');
+
+  assert.throws(
+    () => validateAuthorityProfileRegistry(profiles),
+    /has no profile for base-mainnet/,
+  );
+});
+
+test('blocks Base mainnet promotion and evidence binding until WP-12 records its authority', () => {
+  const promoted = asBaseMainnet(manifestFixture());
+  promoted.status = 'promoted';
+  promoted.approvals = promotedApprovals().map((approval) => ({
+    ...approval,
+    identity: approval.identity === 'astton' ? 'name-a' : 'name-b',
+  }));
+
+  assert.throws(
+    () => validateCandidateManifest(promoted),
+    /promotion for base-mainnet is blocked: WP-12 \(#690\)/,
+  );
+
+  const candidate = asBaseMainnet(manifestFixture());
+  assert.doesNotThrow(() => validateCandidateManifest(candidate));
+  assert.throws(
+    () => assertCandidateBindable(candidate),
+    /evidence binding for base-mainnet is blocked: WP-12 \(#690\)/,
+  );
+});
+
+test('blocks local CI promotion and evidence binding', () => {
+  const promoted = asLocalCi(manifestFixture());
+  promoted.status = 'promoted';
+  promoted.approvals = promotedApprovals();
+
+  assert.throws(
+    () => validateCandidateManifest(promoted),
+    /promotion for local-ci is blocked: local-ci is non-deployed validation/,
+  );
+
+  const candidate = asLocalCi(manifestFixture());
+  assert.doesNotThrow(() => validateCandidateManifest(candidate));
+  assert.throws(
+    () => assertCandidateBindable(candidate),
+    /evidence binding for local-ci is blocked: local-ci is non-deployed validation/,
   );
 });
 

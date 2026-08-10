@@ -36,21 +36,11 @@ const PROVIDER_MODES = {
 const ACCEPTANCE_ROLES = ['Release Owner', 'Security reviewer', 'Operations reviewer'];
 const REVIEW_DECISIONS = ['accepted', 'rejected', 'pending'];
 const AUTHORITY_PROFILE_PATH = path.join(ROOT_DIR, 'integration/release-authority-profile.json');
+const AUTHORITY_PROMOTION_POLICIES = ['named-two-person', 'blocked'];
 
-const INTERNAL_BASE_SEPOLIA_AUTHORITY_PROFILE = JSON.parse(
-  fs.readFileSync(AUTHORITY_PROFILE_PATH, 'utf8'),
-);
+const AUTHORITY_PROFILE_REGISTRY = JSON.parse(fs.readFileSync(AUTHORITY_PROFILE_PATH, 'utf8'));
 
-function validateAuthorityProfile(profile) {
-  if (!isPlainObject(profile)) {
-    throw new Error('Release authority profile must be an object');
-  }
-  if (profile.schemaVersion !== 'cotsel.release-authority-profile.v1') {
-    throw new Error('Release authority profile has an unsupported schemaVersion');
-  }
-  if (profile.environment !== 'base-sepolia-staging') {
-    throw new Error('Release authority profile must bind base-sepolia-staging');
-  }
+function validateNamedTwoPersonAuthorityProfile(profile) {
   for (const role of ACCEPTANCE_ROLES) {
     requireString(
       (message) => {
@@ -91,12 +81,94 @@ function validateAuthorityProfile(profile) {
   }
 }
 
-validateAuthorityProfile(INTERNAL_BASE_SEPOLIA_AUTHORITY_PROFILE);
+export function validateAuthorityProfileRegistry(registry) {
+  if (!isPlainObject(registry)) {
+    throw new Error('Release authority profile registry must be an object');
+  }
+  if (registry.schemaVersion !== 'cotsel.release-authority-profiles.v1') {
+    throw new Error('Release authority profile registry has an unsupported schemaVersion');
+  }
+  if (!Array.isArray(registry.profiles)) {
+    throw new Error('Release authority profile registry profiles must be an array');
+  }
+
+  const profilesByEnvironment = new Map();
+  for (const profile of registry.profiles) {
+    if (!isPlainObject(profile)) {
+      throw new Error('Release authority profile must be an object');
+    }
+    requireString(
+      (message) => {
+        throw new Error(`Release authority profile ${message}`);
+      },
+      profile.profileId,
+      'profileId',
+      IDENTITY_PATTERN,
+    );
+    requireEnum(
+      (message) => {
+        throw new Error(`Release authority profile ${message}`);
+      },
+      profile.environment,
+      'environment',
+      ENVIRONMENTS,
+    );
+    requireEnum(
+      (message) => {
+        throw new Error(`Release authority profile ${message}`);
+      },
+      profile.promotionPolicy,
+      'promotionPolicy',
+      AUTHORITY_PROMOTION_POLICIES,
+    );
+    if (profilesByEnvironment.has(profile.environment)) {
+      throw new Error(`Release authority profile registry duplicates ${profile.environment}`);
+    }
+    if (profile.promotionPolicy === 'named-two-person') {
+      validateNamedTwoPersonAuthorityProfile(profile);
+    } else {
+      requireString(
+        (message) => {
+          throw new Error(`Release authority profile ${message}`);
+        },
+        profile.promotionBlocker,
+        'promotionBlocker',
+      );
+    }
+    profilesByEnvironment.set(profile.environment, profile);
+  }
+
+  for (const environment of ENVIRONMENTS) {
+    if (!profilesByEnvironment.has(environment)) {
+      throw new Error(`Release authority profile registry has no profile for ${environment}`);
+    }
+  }
+  return profilesByEnvironment;
+}
+
+const AUTHORITY_PROFILES_BY_ENVIRONMENT = validateAuthorityProfileRegistry(
+  AUTHORITY_PROFILE_REGISTRY,
+);
 
 function authorityProfileForManifest(manifest) {
-  return manifest.environment?.name === INTERNAL_BASE_SEPOLIA_AUTHORITY_PROFILE.environment
-    ? INTERNAL_BASE_SEPOLIA_AUTHORITY_PROFILE
-    : null;
+  const environment = manifest.environment?.name;
+  const profile = AUTHORITY_PROFILES_BY_ENVIRONMENT.get(environment);
+  if (!profile) {
+    failManifest(`environment ${environment ?? '<missing>'} has no authority profile`);
+  }
+  return profile;
+}
+
+function assertPromotionAllowed(fail, profile) {
+  if (profile.promotionPolicy !== 'named-two-person') {
+    fail(`promotion for ${profile.environment} is blocked: ${profile.promotionBlocker}`);
+  }
+}
+
+function assertEvidenceBindingAllowed(fail, profile) {
+  if (profile.promotionPolicy !== 'named-two-person') {
+    fail(`evidence binding for ${profile.environment} is blocked: ${profile.promotionBlocker}`);
+  }
 }
 
 function requireProfileRoleIdentity(fail, profile, role, identity, label) {
@@ -516,6 +588,8 @@ export function validateCandidateManifest(manifest) {
   }
 
   if (manifest.status === 'promoted') {
+    const authorityProfile = authorityProfileForManifest(manifest);
+    assertPromotionAllowed(failManifest, authorityProfile);
     const approved = new Set(
       (manifest.approvals ?? [])
         .filter((approval) => approval.decision === 'approved')
@@ -536,7 +610,12 @@ export function validateCandidateManifest(manifest) {
   }
 
   const authorityProfile = authorityProfileForManifest(manifest);
-  if (authorityProfile && manifest.approvals !== undefined) {
+  if (authorityProfile.promotionPolicy === 'blocked' && manifest.approvals !== undefined) {
+    failManifest(
+      `approval records for ${authorityProfile.environment} are blocked: ${authorityProfile.promotionBlocker}`,
+    );
+  }
+  if (authorityProfile.promotionPolicy === 'named-two-person' && manifest.approvals !== undefined) {
     for (const approval of manifest.approvals) {
       requireProfileRoleIdentity(
         failManifest,
@@ -559,6 +638,7 @@ export function assertCandidateBindable(manifest) {
   if (!['candidate', 'promoted'].includes(manifest.status)) {
     failManifest(`status ${manifest.status} cannot bind evidence`);
   }
+  assertEvidenceBindingAllowed(failManifest, authorityProfileForManifest(manifest));
   return manifest;
 }
 
@@ -637,15 +717,13 @@ function validateEquivalence(equivalence, entry, label, now, authorityProfile) {
     );
   }
   requireEnum(failIndex, equivalence.role, `${label} equivalence role`, ACCEPTANCE_ROLES);
-  if (authorityProfile) {
-    requireProfileRoleIdentity(
-      failIndex,
-      authorityProfile,
-      equivalence.role,
-      equivalence.acceptedBy,
-      `${label} equivalence acceptedBy`,
-    );
-  }
+  requireProfileRoleIdentity(
+    failIndex,
+    authorityProfile,
+    equivalence.role,
+    equivalence.acceptedBy,
+    `${label} equivalence acceptedBy`,
+  );
   requireString(failIndex, equivalence.rationale, `${label} equivalence rationale`);
   requireTimestamp(failIndex, equivalence.expiresAt, `${label} equivalence expiresAt`);
   if (!Array.isArray(equivalence.dimensions) || equivalence.dimensions.length === 0) {
@@ -782,28 +860,26 @@ export function validateEvidenceIndex(index, manifest, options = {}) {
         `${label} was accepted by its own producer; review by the other participant is required`,
       );
     }
-    if (authorityProfile) {
-      requireAuthorizedEvidenceProducer(
-        failIndex,
-        authorityProfile,
-        entry.producedBy.identity,
-        `${label} evidence`,
-      );
-      requireProfileRoleIdentity(
-        failIndex,
-        authorityProfile,
-        entry.reviewer.role,
-        entry.reviewer.identity,
-        `${label} reviewer identity`,
-      );
-      requireRecusedEvidenceReviewer(
-        failIndex,
-        authorityProfile,
-        entry.producedBy.identity,
-        entry.reviewer.identity,
-        `${label} evidence`,
-      );
-    }
+    requireAuthorizedEvidenceProducer(
+      failIndex,
+      authorityProfile,
+      entry.producedBy.identity,
+      `${label} evidence`,
+    );
+    requireProfileRoleIdentity(
+      failIndex,
+      authorityProfile,
+      entry.reviewer.role,
+      entry.reviewer.identity,
+      `${label} reviewer identity`,
+    );
+    requireRecusedEvidenceReviewer(
+      failIndex,
+      authorityProfile,
+      entry.producedBy.identity,
+      entry.reviewer.identity,
+      `${label} evidence`,
+    );
 
     validateBoundIdentity(entry.boundIdentity, label);
     const actual = entryIdentity(entry.boundIdentity);
