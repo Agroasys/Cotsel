@@ -69,7 +69,7 @@ following.
 
 **Acceptance**
 
-- An entry accepted by its own producer is rejected; acceptance is four-eyes.
+- An entry accepted by its own producer is rejected; the other named programme participant reviews it.
 - An equivalence accepted by the producer of the evidence it waives is rejected on the same rule. A
   waiver is the more consequential decision, so it cannot carry less separation than the acceptance
   it bypasses. The reviewer of an entry **may** accept its equivalence: evidence produced by one

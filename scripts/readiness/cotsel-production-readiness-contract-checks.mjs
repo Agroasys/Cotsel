@@ -81,6 +81,17 @@ export function validateWorkPackageShape(workPackage) {
   ]) {
     assert.ok(workPackage[field]?.trim(), `${workPackage.id || '<unknown>'} missing ${field}`);
   }
+  for (const field of [
+    'dependencyAcceptanceNote',
+    'currentAcceptanceEvidence',
+    'parentImplementationRequirement',
+    'parentAcceptanceEvidence',
+    'exitCriterion',
+  ]) {
+    if (workPackage[field] !== undefined) {
+      assert.ok(workPackage[field].trim(), `${workPackage.id} empty ${field}`);
+    }
+  }
   assert.notEqual(
     workPackage.githubAssignee,
     workPackage.githubReviewer,

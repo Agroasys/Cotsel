@@ -4,15 +4,15 @@
 
 | Field             | Value                                                                                                                                                         |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Version           | `1.0-draft.1`                                                                                                                                                 |
-| Status            | Draft for Programme Lead, Product QA, Finance and Operations review. Not approved.                                                                            |
-| Accountable owner | Product and Integration Lead                                                                                                                                  |
-| Delivery owner    | Cotsel, Agroasys, Cotsel-Dash, QA and Operations owners                                                                                                       |
-| Acceptance owner  | Product QA, Finance and Operations authorities                                                                                                                |
+| Version           | `1.0-two-person.1`                                                                                                                                            |
+| Status            | Ready for two-person approval: @Astton reviews product, finance and operations coverage; @czpyioe reviews engineering and security coverage.                  |
+| Accountable owner | Product and Integration Lead @Astton                                                                                                                          |
+| Delivery owner    | Cotsel engineering lead @czpyioe, with Agroasys, Cotsel-Dash and operations evidence routed to their owning work packages                                     |
+| Acceptance owner  | @Astton as Product, Finance and Operations; @czpyioe as Engineering and Security                                                                              |
 | Governing issue   | [#638](https://github.com/Agroasys/Cotsel/issues/638) — `wp0-journeys`                                                                                        |
 | Work package      | [#622](https://github.com/Agroasys/Cotsel/issues/622) WP-0, gate E-0                                                                                          |
 | Governing source  | Cotsel Production Readiness and Controlled-Pilot Statement of Work, 2 August 2026, SHA-256 `775b07a7a44bc5798e0cfe4eb216abb11c81e248356061f4d94b779b3337c8fb` |
-| Programme verdict | **NO-GO**. This document is specification work. It authorizes no release, rehearsal or pilot.                                                                 |
+| Programme verdict | WP-0 journey specification baseline. It does not claim that any journey has already passed.                                                                   |
 
 This document specifies the seven authoritative journeys required by SOW Section 10.1. It defines what must be
 proven and by whom. It is not evidence that any journey currently passes, and it does not replace the deployed
@@ -24,15 +24,15 @@ proof owned by WP-9.
 | ------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | PROG-05 | Define the complete golden-journey matrix before implementing cross-repository acceptance | Before cross-repository implementation, define the required assertions, authority boundaries, positive path and all listed failure variants for login, funding, stage-one release, inspection and final release, treasury handoff, reconciliation and recovery, and incident containment. | An approved journey specification maps all seven Section 10.1 rows to pinned systems, actors, state authorities, test data, failure variants, evidence producers and acceptance owners without replacing later deployed proof. |
 
-## Open dependencies
+## Baseline dependencies
 
-This specification is complete as written, but two WP-0 inputs are still unapproved. Neither blocks drafting;
-both block acceptance.
+This specification inherits the approved internal integration boundary. The entries below identify the work that
+will later produce a candidate and journey evidence; they do not prevent approval of this specification itself.
 
-| Dependency                                                                   | Effect if unresolved                                                                                                                                                                                                                                                 |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [#635](https://github.com/Agroasys/Cotsel/issues/635) `wp0-charter`          | Chain, contract identity, provider mode, participant class and value caps are unfixed. Every "pinned systems" row below inherits its values from the approved charter. Drafted in `docs/readiness/cotsel-release-charter-v1.md`; still unapproved.                   |
-| [#636](https://github.com/Agroasys/Cotsel/issues/636) `wp0-release-evidence` | The candidate-manifest and evidence-index contracts now exist (`integration/candidate-manifest.schema.json`, `integration/evidence-index.schema.json`), but nothing emits a real candidate manifest from a build, so no journey run can yet be bound to a candidate. |
+| Dependency                                                                   | Effect if unresolved                                                                                                                                                                        |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [#635](https://github.com/Agroasys/Cotsel/issues/635) `wp0-charter`          | Supplies the private Base Sepolia, internal-tester, zero-real-value, AWS, signer and provider boundary inherited by each journey.                                                           |
+| [#636](https://github.com/Agroasys/Cotsel/issues/636) `wp0-release-evidence` | Supplies the candidate-manifest and evidence-index contracts (`integration/candidate-manifest.schema.json`, `integration/evidence-index.schema.json`) that later journey runs will bind to. |
 
 ## Authority boundaries
 

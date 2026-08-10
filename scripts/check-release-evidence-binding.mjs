@@ -18,9 +18,9 @@ const CONTROL_ID_PATTERN = /^[A-Z][A-Z0-9-]{1,23}$/;
 const ROUTE_PATTERN = /^wp[0-9]{1,2}-[a-z0-9-]+$/;
 /**
  * Every actor identity — approver, producer, reviewer, equivalence acceptor — is written in one
- * canonical handle form: lowercase, no whitespace, 2 to 64 characters. Four-eyes separation is
- * string equality on these fields, so `avitus`, `AvitusI` and `Avitus I` must not be able to name
- * the same person three ways.
+ * canonical handle form: lowercase, no whitespace, 2 to 64 characters. The two-person control is
+ * enforced with string equality on these fields, so `avitus`, `AvitusI` and `Avitus I` must not be
+ * able to name the same person three ways.
  */
 const IDENTITY_PATTERN = /^[a-z0-9][a-z0-9._@/+-]{1,63}$/;
 
@@ -440,6 +440,14 @@ export function validateCandidateManifest(manifest) {
     if (missing.length > 0) {
       failManifest(`promoted status requires approval from ${missing.join(', ')}`);
     }
+    const approvingIdentities = new Set(
+      (manifest.approvals ?? [])
+        .filter((approval) => approval.decision === 'approved')
+        .map((approval) => approval.identity),
+    );
+    if (approvingIdentities.size < 2) {
+      failManifest('promoted status requires approval from two distinct identities');
+    }
   }
 
   return manifest;
@@ -514,10 +522,9 @@ function validateBoundIdentity(boundIdentity, label) {
 }
 
 /**
- * An equivalence is a waiver of the binding rule, so it carries the same separation of duties as
- * the acceptance it bypasses: the producer of the evidence may not certify that their own stale
- * evidence still counts. A reviewer may accept an equivalence for evidence someone else produced —
- * that is still two people.
+ * An equivalence is a waiver of the binding rule, so the producer of the evidence may not certify
+ * that their own stale evidence still counts. A reviewer may accept an equivalence for evidence
+ * someone else produced — the same two-person control applies.
  */
 function validateEquivalence(equivalence, entry, label, now) {
   requireString(
@@ -528,7 +535,7 @@ function validateEquivalence(equivalence, entry, label, now) {
   );
   if (equivalence.acceptedBy === entry.producedBy.identity) {
     failIndex(
-      `${label} equivalence was accepted by its own producer; four-eyes review is required`,
+      `${label} equivalence was accepted by its own producer; review by the other participant is required`,
     );
   }
   requireEnum(failIndex, equivalence.role, `${label} equivalence role`, ACCEPTANCE_ROLES);
@@ -663,7 +670,9 @@ export function validateEvidenceIndex(index, manifest, options = {}) {
     requireEnum(failIndex, entry.reviewer.decision, `${label} reviewer decision`, REVIEW_DECISIONS);
     requireTimestamp(failIndex, entry.reviewer.reviewedAt, `${label} reviewer reviewedAt`);
     if (entry.reviewer.identity === entry.producedBy.identity) {
-      failIndex(`${label} was accepted by its own producer; four-eyes review is required`);
+      failIndex(
+        `${label} was accepted by its own producer; review by the other participant is required`,
+      );
     }
 
     validateBoundIdentity(entry.boundIdentity, label);

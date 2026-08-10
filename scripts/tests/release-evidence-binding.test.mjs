@@ -267,7 +267,7 @@ test('rejects evidence accepted by its own producer', () => {
 
   assert.throws(
     () => validateEvidenceIndex(index, manifest, { now: NOW }),
-    /four-eyes review is required/,
+    /review by the other participant is required/,
   );
 });
 
@@ -285,7 +285,7 @@ test('rejects an equivalence accepted by the producer of the evidence it waives'
 
   assert.throws(
     () => validateEvidenceIndex(index, manifest, { now: NOW }),
-    /equivalence was accepted by its own producer; four-eyes review is required/,
+    /equivalence was accepted by its own producer; review by the other participant is required/,
   );
 });
 
@@ -306,7 +306,7 @@ test('allows the reviewer of an entry to accept its equivalence', () => {
 });
 
 /**
- * Four-eyes separation is string equality on identities, so the identity format is part of the
+ * The two-person control is string equality on identities, so the identity format is part of the
  * control: one person must not be able to appear as `avitus`, `AvitusI` and `Avitus I`.
  */
 test('rejects actor identities outside the canonical handle format', () => {
@@ -414,6 +414,43 @@ test('requires all three acceptance roles before a candidate is promoted', () =>
   assert.throws(
     () => validateCandidateManifest(manifest),
     /promoted status requires approval from Security reviewer, Operations reviewer/,
+  );
+});
+
+test('requires two distinct identities for promotion while allowing role overlap', () => {
+  const promoted = manifestFixture();
+  promoted.status = 'promoted';
+  promoted.approvals = [
+    {
+      role: 'Release Owner',
+      identity: 'astton',
+      decision: 'approved',
+      decidedAt: NOW,
+    },
+    {
+      role: 'Security reviewer',
+      identity: 'czpyioe',
+      decision: 'approved',
+      decidedAt: NOW,
+    },
+    {
+      role: 'Operations reviewer',
+      identity: 'astton',
+      decision: 'approved',
+      decidedAt: NOW,
+    },
+  ];
+
+  assert.doesNotThrow(() => validateCandidateManifest(promoted));
+
+  const onePersonPromotion = structuredClone(promoted);
+  onePersonPromotion.approvals = onePersonPromotion.approvals.map((approval) => ({
+    ...approval,
+    identity: 'astton',
+  }));
+  assert.throws(
+    () => validateCandidateManifest(onePersonPromotion),
+    /requires approval from two distinct identities/,
   );
 });
 

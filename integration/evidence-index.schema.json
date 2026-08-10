@@ -155,7 +155,7 @@
             }
           },
           "equivalence": {
-            "description": "Accepted reuse of evidence across a named identity dimension. Bounded by scope, authority and expiry. As a waiver of the binding rule it carries the same four-eyes separation as acceptance: acceptedBy may not be the producer of the entry.",
+            "description": "Accepted reuse of evidence across a named identity dimension. Bounded by scope, authority and expiry. As a waiver of the binding rule, acceptedBy may not be the producer of the entry.",
             "type": "object",
             "additionalProperties": false,
             "required": ["dimensions", "acceptedBy", "role", "rationale", "expiresAt"],
@@ -189,7 +189,7 @@
   },
   "$defs": {
     "actorIdentity": {
-      "description": "Canonical actor handle: lowercase, no whitespace, 2 to 64 characters. Four-eyes separation is string equality on these fields, so one person must not be nameable in several forms.",
+      "description": "Canonical actor handle: lowercase, no whitespace, 2 to 64 characters. The two-person control is string equality on these fields, so one person must not be nameable in several forms.",
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9._@/+-]{1,63}$"
     }
