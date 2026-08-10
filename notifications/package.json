@@ -17,6 +17,6 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "typescript": ">=6.0.2"
+    "typescript": ">=6.0.2 <6.1.0"
   }
 }
