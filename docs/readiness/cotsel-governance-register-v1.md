@@ -139,16 +139,19 @@ revocation record that the runbook defers to; it does not restate the binding ru
 
 ## 5. Reporting
 
-| Report           | Cadence                        | Owner          | Artifact                                                |
-| ---------------- | ------------------------------ | -------------- | ------------------------------------------------------- |
-| Blocker register | Weekly, and on any P0 change   | Programme Lead | Not yet published; first edition is due under REPORT-01 |
-| Decision log     | Append-only, on every decision | Programme Lead | `docs/readiness/cotsel-decision-log.md`                 |
+| Report           | Cadence                        | Owner          | Artifact                                           |
+| ---------------- | ------------------------------ | -------------- | -------------------------------------------------- |
+| Blocker register | Weekly, and on any P0 change   | Programme Lead | `docs/readiness/cotsel-weekly-blocker-register.md` |
+| Decision log     | Append-only, on every decision | Programme Lead | `docs/readiness/cotsel-decision-log.md`            |
 
 **REPORT-01 — blocker register.** Every unresolved readiness blocker carries: issue reference, title, owner,
 status, affected gate, dependency, evidence link, residual risk, next decision, decision due date, reviewer
 acknowledgement, and escalation state. The register is dated and versioned per edition, and reconciles to live
 Project 9 items through `scripts/readiness/audit-cotsel-production-readiness-live.mjs`. A blocker whose next
 decision is past its due date is marked overdue and escalated to the accountable owner in the same edition.
+The initial `2026-W33.1` edition is published in
+`docs/readiness/cotsel-weekly-blocker-register.md`. Later editions are appended there; each records its live
+Project 9 snapshot time and does not revise an earlier edition.
 
 **REPORT-05 — decision log.** Append-only. Entries are added, never edited or deleted; a superseded decision is
 corrected by appending a new entry that names the one it supersedes. Every entry carries: sequence, date, type,
@@ -212,7 +215,7 @@ and the section that satisfies it.
 | GOV-02    | 1. Decision rights             | Specified                                                                   |
 | GOV-03    | 1. Decision rights             | Specified; the promotion it governs is owned by WP-7 and WP-9               |
 | GOV-05    | 1. Decision rights, 3. Defects | Specified; no exception is approved at programme setup                      |
-| REPORT-01 | 5. Reporting                   | Rules specified; no edition published yet                                   |
+| REPORT-01 | 5. Reporting                   | Initial `2026-W33.1` edition published; later editions remain weekly        |
 | REPORT-05 | 5. Reporting                   | Specified; log opened in `docs/readiness/cotsel-decision-log.md`            |
 | PROG-03   | 6. Forecasting and acceptance  | Rules specified; no forecast is issued, and neither precondition is yet met |
 | PROG-04   | 6. Forecasting and acceptance  | Specified                                                                   |
