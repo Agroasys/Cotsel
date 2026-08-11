@@ -202,8 +202,9 @@ WP-7 provisions the platform from reviewed IaC and inherits every value above.
 ### Named authorities
 
 **Two-person operating model proposed for approval. Owner: @Astton.** The programme has two named participants. They may
-hold multiple roles, but an evidence producer never reviews or accepts their own item. The responsibility register
-is owned by [#637](https://github.com/Agroasys/Cotsel/issues/637).
+hold multiple roles, but an evidence producer never reviews or accepts their own item. This table is authoritative
+for **who holds which role**. What each role may decide, and the separation-of-duty rule that binds it, is recorded
+in `docs/readiness/cotsel-governance-register-v1.md` ([#637](https://github.com/Agroasys/Cotsel/issues/637)).
 
 | Role                         | Holder   | Deputy   |
 | ---------------------------- | -------- | -------- |
