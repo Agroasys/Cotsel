@@ -162,10 +162,10 @@ test data, not a pinned candidate, and no value in them is release evidence.
 The contracts are complete, but two WP-0 inputs remain unapproved and no candidate can be pinned
 until they land:
 
-| Dependency                                                             | Effect                                                                                                                          |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| [#635](https://github.com/Agroasys/Cotsel/issues/635) `wp0-charter`    | Fixes the environment owner, provider mode, participant class and value caps a real candidate must declare.                     |
-| [#637](https://github.com/Agroasys/Cotsel/issues/637) `wp0-governance` | Supplies the decision log and defect policy that record an equivalence acceptance and its revocation trigger outside this file. |
+| Dependency                                                             | Effect                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [#635](https://github.com/Agroasys/Cotsel/issues/635) `wp0-charter`    | Fixes the environment owner, provider mode, participant class and value caps a real candidate must declare.                                                                                                                                     |
+| [#637](https://github.com/Agroasys/Cotsel/issues/637) `wp0-governance` | Supplies the decision log and defect policy that record an equivalence acceptance and its revocation trigger outside this file: `docs/readiness/cotsel-governance-register-v1.md` §3 and §4, logged in `docs/readiness/cotsel-decision-log.md`. |
 
 The seven journeys specified in `docs/readiness/cotsel-golden-journeys-v1.md`
 ([#638](https://github.com/Agroasys/Cotsel/issues/638)) bind their runs through this contract.

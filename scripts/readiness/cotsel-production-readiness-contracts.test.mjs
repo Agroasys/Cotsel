@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -148,5 +149,32 @@ test('Project field contract covers every primary metadata value', () => {
         `${title}: ${fieldName}=${metadata[fieldName]} exists in Project options`,
       );
     }
+  }
+});
+
+test('the WP-0 governance baseline publishes the initial weekly blocker register', () => {
+  const governanceRegister = readFileSync(
+    new URL('../../docs/readiness/cotsel-governance-register-v1.md', import.meta.url),
+    'utf8',
+  );
+  const blockerRegister = readFileSync(
+    new URL('../../docs/readiness/cotsel-weekly-blocker-register.md', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(governanceRegister, /cotsel-weekly-blocker-register\.md/);
+  assert.match(blockerRegister, /Edition 2026-W33\.1/);
+  for (const requiredField of [
+    'Blocker',
+    'Owner',
+    'Gate and dependency',
+    'Evidence and residual risk',
+    'Next decision and due date',
+    'Reviewer acknowledgement and escalation',
+  ]) {
+    assert.match(blockerRegister, new RegExp(requiredField));
+  }
+  for (const issueNumber of [635, 637, 638, 684, 686, 687, 690]) {
+    assert.match(blockerRegister, new RegExp(`issues/${issueNumber}`));
   }
 });
