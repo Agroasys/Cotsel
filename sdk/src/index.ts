@@ -51,6 +51,7 @@ export * from './types/governance';
 export * from './types/oracle';
 export * from './types/ricardian';
 export * from './types/errors';
+export * from './types/runtimePreflight';
 
 // config
 export * from './config';

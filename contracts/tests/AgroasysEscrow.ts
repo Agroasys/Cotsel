@@ -405,6 +405,7 @@ describe('AgroasysEscrow', function () {
       const deployedBytecodeBytes = (artifact.deployedBytecode.length - 2) / 2;
 
       expect(deployedBytecodeBytes).to.be.at.most(24_576);
+      expect(deployedBytecodeBytes).to.be.at.most(24_000);
     });
 
     it('Should set correct initial values', async function () {
@@ -2665,7 +2666,9 @@ describe('AgroasysEscrow', function () {
 
       await expect(escrow.connect(admin1).executeAdminChange(0))
         .to.emit(escrow, 'AdminAdded')
-        .withArgs(newAdmin);
+        .withArgs(newAdmin)
+        .and.to.emit(escrow, 'AdminChangeExecuted')
+        .withArgs(0, 0, ethers.ZeroAddress, newAdmin, 0);
 
       expect(await escrow.isAdmin(newAdmin)).to.be.true;
     });

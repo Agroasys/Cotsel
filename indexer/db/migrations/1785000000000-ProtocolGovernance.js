@@ -33,6 +33,22 @@ module.exports = class ProtocolGovernance1785000000000 {
   }
 
   async down(db) {
+    const unsafeResult = await db.query(`
+      SELECT COUNT(*)::integer AS "count"
+      FROM "admin_change_proposal"
+      WHERE "kind" <> 0
+         OR "current_admin" IS NOT NULL
+         OR "new_admin" IS NULL
+         OR "new_threshold" <> 0
+         OR "epoch" <> 0
+    `);
+    const [unsafeState] = Array.isArray(unsafeResult) ? unsafeResult : unsafeResult.rows;
+    if (Number(unsafeState?.count ?? 0) > 0) {
+      throw new Error(
+        'ProtocolGovernance rollback is unsafe after non-add governance proposals exist; use a reviewed forward fix',
+      );
+    }
+
     await db.query(`DROP INDEX "public"."idx_admin_change_proposal_kind_c17f9b30"`);
     await db.query(`ALTER TABLE "system_event" DROP COLUMN "new_threshold"`);
     await db.query(`ALTER TABLE "system_event" DROP COLUMN "old_threshold"`);
@@ -52,9 +68,6 @@ module.exports = class ProtocolGovernance1785000000000 {
     await db.query(`ALTER TABLE "admin_change_proposal" DROP COLUMN "new_threshold"`);
     await db.query(`ALTER TABLE "admin_change_proposal" DROP COLUMN "current_admin"`);
     await db.query(`ALTER TABLE "admin_change_proposal" DROP COLUMN "kind"`);
-    await db.query(
-      `UPDATE "admin_change_proposal" SET "new_admin" = '0x0000000000000000000000000000000000000000' WHERE "new_admin" IS NULL`,
-    );
     await db.query(`ALTER TABLE "admin_change_proposal" ALTER COLUMN "new_admin" SET NOT NULL`);
     await db.query(
       `ALTER TABLE "admin_event" RENAME COLUMN "admin_change_proposal_id" TO "admin_add_proposal_id"`,

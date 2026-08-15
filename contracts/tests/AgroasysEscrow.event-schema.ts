@@ -14,6 +14,7 @@ describe('AgroasysEscrow event schema', function () {
     expect(signatures).to.deep.equal([
       'AdminAdded(address)',
       'AdminChangeApproved(uint256,address,uint256,uint256)',
+      'AdminChangeExecuted(uint256,uint8,address,address,uint256)',
       'AdminChangeProposalCancelled(uint256,address)',
       'AdminChangeProposed(uint256,address,uint8,address,address,uint256,uint256,uint256)',
       'AdminRemoved(address)',

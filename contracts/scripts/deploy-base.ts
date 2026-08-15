@@ -2,9 +2,9 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
 import hre, { ethers } from 'hardhat';
 import { loadBaseDeploymentConfig } from './lib/baseDeploymentConfig';
+import { getDeploymentSourceIdentity } from './lib/deploymentSourceIdentity';
 
 function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input).digest('hex');
@@ -35,19 +35,6 @@ function assertDeployerHasNoRuntimeRole(deployerAddress: string, roles: readonly
     throw new Error(
       'The deployment account must not also be an Oracle, treasury, relayer, or admin',
     );
-  }
-}
-
-function getCommitSha(): string {
-  try {
-    return execSync('git rev-parse HEAD', {
-      cwd: path.join(__dirname, '..', '..'),
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .toString('utf8')
-      .trim();
-  } catch {
-    return 'unknown';
   }
 }
 
@@ -160,6 +147,8 @@ async function verifyWithRetries(
 }
 
 async function main(): Promise<void> {
+  const repositoryRoot = path.join(__dirname, '..', '..');
+  const sourceIdentity = getDeploymentSourceIdentity(repositoryRoot);
   const chainId = hre.network.config.chainId ?? null;
   const config = loadBaseDeploymentConfig(hre.network.name, chainId);
   const artifact = await hre.artifacts.readArtifact(config.escrowName);
@@ -173,6 +162,13 @@ async function main(): Promise<void> {
   const immutableReferences = compiledContract.evm.deployedBytecode.immutableReferences ?? {};
   const localRuntimeBytecode = `0x${compiledContract.evm.deployedBytecode.object}`;
   const configuredCompilerVersion = getConfiguredCompilerVersion();
+  const compilerInputSha256 = sha256Hex(JSON.stringify(buildInfo.input));
+  const sourceSha256 = Object.fromEntries(
+    Object.entries(buildInfo.input.sources).map(([sourceName, source]) => [
+      sourceName,
+      sha256Hex(source.content),
+    ]),
+  );
   const [deployer] = await ethers.getSigners();
 
   if (!deployer) {
@@ -295,7 +291,8 @@ async function main(): Promise<void> {
 
   const bundle = {
     generatedAt: new Date().toISOString(),
-    commitSha: getCommitSha(),
+    commitSha: sourceIdentity.commitSha,
+    worktreeClean: sourceIdentity.worktreeClean,
     network: {
       hardhatName: hre.network.name,
       runtimeKey: config.target.runtimeKey,
@@ -327,10 +324,15 @@ async function main(): Promise<void> {
     },
     artifact: {
       compilerVersion: configuredCompilerVersion,
+      compilerLongVersion: buildInfo.solcLongVersion,
+      compilerSettings: buildInfo.input.settings,
+      compilerInputSha256,
+      sourceSha256,
       abiSha256: sha256Hex(JSON.stringify(artifact.abi)),
       bytecodeSha256: sha256Hex(artifact.bytecode),
       localRuntimeBytecodeSha256: sha256Hex(localRuntimeBytecode),
       liveRuntimeBytecodeSha256: sha256Hex(deployedBytecode),
+      normalizedLocalRuntimeBytecodeSha256: sha256Hex(normalizedLocalRuntimeBytecode),
       normalizedRuntimeBytecodeSha256: sha256Hex(normalizedLiveRuntimeBytecode),
       runtimeBytecodeMatches: true,
     },

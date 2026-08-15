@@ -17,6 +17,19 @@ Before execution, create an incident record with:
 
 Do not continue when an address, artifact, role, exposure value, or owner is unknown.
 
+## Implementation prerequisite
+
+The current indexer accepts one `INDEXER_CONTRACT_ADDRESS`. It cannot monitor two active cohorts.
+
+Do not execute a dual-cohort rollback until WP-3 supplies these controls:
+
+- a reviewed list of contract addresses and start blocks;
+- contract-address-qualified trade, proposal, and event identities;
+- independent exposure and reconciliation reports for each address; and
+- monitoring for each address with an unfinished trade or non-zero balance.
+
+Until these controls exist, stop new intake and use a governed forward fix. Do not claim rollback readiness.
+
 ## Containment
 
 1. Stop new trade intake at the gateway and user interface.

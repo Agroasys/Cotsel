@@ -470,6 +470,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 indexed proposalId, address indexed approver, uint256 approvalCount, uint256 requiredApprovals
     );
 
+    event AdminChangeExecuted(
+        uint256 indexed proposalId,
+        AdminChangeKind indexed kind,
+        address currentAdmin,
+        address newAdmin,
+        uint256 newThreshold
+    );
+
     event AdminAdded(address indexed newAdmin);
     event AdminRemoved(address indexed oldAdmin);
     event AdminReplaced(address indexed oldAdmin, address indexed newAdmin);
@@ -1581,7 +1589,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         tradeActiveDisputeProposalId[proposal.tradeId] = 0;
         inTransitSince[proposal.tradeId] = 0;
 
-        address recipient;
+        address recipient = trade.buyerAddress;
         uint256 payoutAmount = trade.supplierSecondTranche;
 
         // NOTE: Platform/logistics fees were already paid at Stage 1 and are not refunded via escrow.
@@ -1794,6 +1802,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             isRelayer[relayer] = allowed;
             emit RelayerUpdated(relayer, allowed, msg.sender);
         }
+        emit AdminChangeExecuted(
+            proposalId, proposal.kind, proposal.currentAdmin, proposal.newAdmin, proposal.newThreshold
+        );
         _advanceGovernanceEpoch();
     }
 

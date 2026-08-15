@@ -56,6 +56,10 @@ Every governance action is signed directly by the admin wallet.
 | Oracle update approval                  | `approveOracleUpdate`                              |
 | Oracle update execute                   | `executeOracleUpdate`                              |
 | Oracle update cancel expired            | `cancelExpiredOracleUpdateProposal`                |
+| Administrator or relayer change propose | `proposeAdminChange`                               |
+| Administrator or relayer change approve | `approveAdminChange`                               |
+| Administrator or relayer change execute | `executeAdminChange`                               |
+| Administrator change cancel expired     | `cancelAdminChangeProposal`                        |
 
 ### Non-governance service roles — executor-backed (separate concern, not governance)
 

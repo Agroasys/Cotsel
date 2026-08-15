@@ -147,6 +147,7 @@ export interface AgroasysEscrowInterface extends Interface {
     nameOrSignatureOrTopic:
       | "AdminAdded"
       | "AdminChangeApproved"
+      | "AdminChangeExecuted"
       | "AdminChangeProposalCancelled"
       | "AdminChangeProposed"
       | "AdminRemoved"
@@ -909,6 +910,34 @@ export namespace AdminChangeApprovedEvent {
     approver: string;
     approvalCount: bigint;
     requiredApprovals: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace AdminChangeExecutedEvent {
+  export type InputTuple = [
+    proposalId: BigNumberish,
+    kind: BigNumberish,
+    currentAdmin: AddressLike,
+    newAdmin: AddressLike,
+    newThreshold: BigNumberish
+  ];
+  export type OutputTuple = [
+    proposalId: bigint,
+    kind: bigint,
+    currentAdmin: string,
+    newAdmin: string,
+    newThreshold: bigint
+  ];
+  export interface OutputObject {
+    proposalId: bigint;
+    kind: bigint;
+    currentAdmin: string;
+    newAdmin: string;
+    newThreshold: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -2926,6 +2955,13 @@ export interface AgroasysEscrow extends BaseContract {
     AdminChangeApprovedEvent.OutputObject
   >;
   getEvent(
+    key: "AdminChangeExecuted"
+  ): TypedContractEvent<
+    AdminChangeExecutedEvent.InputTuple,
+    AdminChangeExecutedEvent.OutputTuple,
+    AdminChangeExecutedEvent.OutputObject
+  >;
+  getEvent(
     key: "AdminChangeProposalCancelled"
   ): TypedContractEvent<
     AdminChangeProposalCancelledEvent.InputTuple,
@@ -3269,6 +3305,17 @@ export interface AgroasysEscrow extends BaseContract {
       AdminChangeApprovedEvent.InputTuple,
       AdminChangeApprovedEvent.OutputTuple,
       AdminChangeApprovedEvent.OutputObject
+    >;
+
+    "AdminChangeExecuted(uint256,uint8,address,address,uint256)": TypedContractEvent<
+      AdminChangeExecutedEvent.InputTuple,
+      AdminChangeExecutedEvent.OutputTuple,
+      AdminChangeExecutedEvent.OutputObject
+    >;
+    AdminChangeExecuted: TypedContractEvent<
+      AdminChangeExecutedEvent.InputTuple,
+      AdminChangeExecutedEvent.OutputTuple,
+      AdminChangeExecutedEvent.OutputObject
     >;
 
     "AdminChangeProposalCancelled(uint256,address)": TypedContractEvent<

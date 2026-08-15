@@ -87,7 +87,11 @@ For `config-only`:
 - escrow addresses are present and consistent across gateway, oracle,
   reconciliation, and indexer
 - USDC addresses are consistent and match Circle Base Sepolia USDC
-- deploy report exists and matches the profile contract/chain
+- the canonical deploy report matches the profile contract and chain
+- deployment receipt, explorer verification, and live bytecode evidence are valid
+- source, compiler, ABI, bytecode, and configuration hashes are present
+- deployer, Oracle, treasury, relayer, and administrator roles are separate
+- live role attestation matches the approved constructor arguments
 
 For `live`:
 

@@ -214,6 +214,10 @@ settlement gateway.
 
 ## Functions
 
+Call `preflightRuntime()` before an SDK instance enters service. Configure `expectedRuntimeRoles`.
+The preflight verifies the chain, contract code, canonical USDC, active Oracle, treasury and payout receivers, administrator set, relayers, and quorum.
+It returns explicit failure codes and does not convert a mismatch into a successful startup.
+
 ### BuyerSDK
 
 | Method                                                                    | Description                                             |
@@ -257,12 +261,12 @@ settlement gateway.
 | `proposeAddAdmin(newAdmin, signer)`                            | Propose adding an administrator                        |
 | `proposeRemoveAdmin(admin, signer)`                            | Propose removing an administrator                      |
 | `proposeReplaceAdmin(current, replacement, signer)`            | Propose atomic administrator replacement               |
-| `proposeApprovalThresholdChange(threshold, signer)`            | Propose a quorum-threshold change                      |
-| `proposeRelayerAdd(relayer, signer)`                           | Propose authorizing a relayer                          |
-| `proposeRelayerRemove(relayer, signer)`                        | Propose revoking a relayer                             |
+| `proposeApprovalThreshold(threshold, signer)`                  | Propose a quorum-threshold change                      |
+| `proposeAddRelayer(relayer, signer)`                           | Propose authorizing a relayer                          |
+| `proposeRemoveRelayer(relayer, signer)`                        | Propose revoking a relayer                             |
 | `approveAdminChange(proposalId, signer)`                       | Approve an administrator, threshold, or relayer change |
 | `executeAdminChange(proposalId, signer)`                       | Execute an approved change after the timelock          |
-| `cancelExpiredAdminChangeProposal(proposalId, signer)`         | Cancel an expired change proposal                      |
+| `cancelAdminChangeProposal(proposalId, signer)`                | Cancel an expired change proposal                      |
 
 ## Auth ownership boundary
 

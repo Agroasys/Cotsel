@@ -26,6 +26,7 @@ import {
   applyTradeTransition,
 } from './overviewAggregate';
 import { buildEvmEventId, compareOrderedEvmEvents } from './eventIdentity';
+import { markGovernanceProposalExecuted } from './governanceProjection';
 import { persistIndexerBatch } from './persistence';
 
 type IndexerContext = DataHandlerContext<Store, Fields>;
@@ -476,6 +477,20 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
             break;
           case 'AdminChangeApproved':
             await handleAdminChangeApproved(
+              decoded,
+              adminChangeProposals,
+              adminEvents,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'AdminChangeExecuted':
+            await handleAdminChangeExecuted(
               decoded,
               adminChangeProposals,
               adminEvents,
@@ -2229,6 +2244,50 @@ async function handleAdminChangeApproved(
   );
 
   ctx.log.info(`Admin change ${proposalId} approved by ${approver}`);
+}
+
+async function handleAdminChangeExecuted(
+  log: DecodedEscrowLog,
+  proposals: Map<string, AdminChangeProposal>,
+  events: AdminEvent[],
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [proposalId, kind, currentAdmin, newAdmin, newThreshold] = log.args;
+  const proposalKey = proposalId.toString();
+
+  let proposal = proposals.get(proposalKey);
+  if (!proposal) {
+    proposal = await ctx.store.get(AdminChangeProposal, proposalKey);
+    if (!proposal) {
+      throw new Error(`Admin change proposal ${proposalId} not found for execution`);
+    }
+  }
+
+  markGovernanceProposalExecuted(proposals, proposalKey, proposal);
+  events.push(
+    new AdminEvent({
+      id: eventId,
+      adminChangeProposal: proposal,
+      eventName: 'AdminChangeExecuted',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      adminChangeKind: Number(kind),
+      currentAdmin: currentAdmin.toLowerCase(),
+      newAdmin: newAdmin.toLowerCase(),
+      newThreshold,
+    }),
+  );
+
+  ctx.log.info(`Admin change ${proposalId} executed`);
 }
 
 async function handleAdminAdded(

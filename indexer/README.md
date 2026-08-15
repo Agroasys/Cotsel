@@ -63,7 +63,7 @@ Files under `src/model/generated/` must remain the direct output of the official
 - `oracleEvent.model.ts`
 - `oracleUpdateProposal.model.ts`
 - `adminEvent.model.ts`
-- `adminAddProposal.model.ts`
+- `adminChangeProposal.model.ts`
 
 These findings are tracked upstream in [subsquid/squid-sdk#547](https://github.com/subsquid/squid-sdk/issues/547). They may be dismissed as documented generated-code findings while the upstream issue remains open; do not suppress CodeQL coverage for the rest of the indexer.
 

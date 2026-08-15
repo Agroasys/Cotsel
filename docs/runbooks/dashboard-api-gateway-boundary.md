@@ -101,6 +101,10 @@ These are existing contract-backed actions and must resolve to a transaction has
 - `approveOracleUpdate()`
 - `executeOracleUpdate()`
 - `cancelExpiredOracleUpdateProposal()`
+- `proposeAdminChange()`
+- `approveAdminChange()`
+- `executeAdminChange()`
+- `cancelAdminChangeProposal()`
 - `proposeTreasuryPayoutAddressUpdate()`
 - `approveTreasuryPayoutAddressUpdate()`
 - `executeTreasuryPayoutAddressUpdate()`

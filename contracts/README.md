@@ -45,6 +45,9 @@ pnpm --dir contracts test
 pnpm --dir contracts test:foundry
 ```
 
+Foundry uses the pinned `forge-std` submodule. It reuses OpenZeppelin from the pnpm installation.
+Run `git submodule update --init --recursive` after a new checkout.
+
 The deployable runtime must remain below the EVM 24,576-byte limit and the repository's 24,000-byte engineering ceiling.
 
 ## Base Sepolia deployment
@@ -68,7 +71,9 @@ DEPLOY_VERIFY=true
 pnpm --dir contracts deploy:base-sepolia
 ```
 
-The deployment script verifies the explorer source and constructor arguments, compares normalized local and live runtime bytecode, attests the token and all runtime roles, and writes the deployment receipt and evidence. Do not propagate an address until an independent reviewer accepts that evidence.
+The deployment script requires a clean Git commit. It records compiler settings and source hashes.
+It verifies the explorer source and constructor arguments. It compares local and live runtime bytecode.
+It also attests the token and all runtime roles. Do not propagate an address before independent acceptance.
 
 ## Rollback
 

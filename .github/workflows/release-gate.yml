@@ -617,11 +617,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '20'
+
+      - name: Setup Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09
+        with:
+          version: v1.5.1
+
+      - name: Install Slither
+        run: |
+          python3 -m venv "$RUNNER_TEMP/slither"
+          "$RUNNER_TEMP/slither/bin/pip" install --disable-pip-version-check slither-analyzer==0.11.6
+          echo "$RUNNER_TEMP/slither/bin" >> "$GITHUB_PATH"
 
       - name: Enable Corepack
         run: corepack enable
@@ -653,6 +666,9 @@ jobs:
           run_check lint "pnpm --filter ./${WORKSPACE} run --if-present lint"
           run_check typecheck "pnpm --filter ./${WORKSPACE} run --if-present typecheck"
           run_check test "pnpm --filter ./${WORKSPACE} run --if-present test"
+          run_check foundry "pnpm --filter ./${WORKSPACE} run test:foundry"
+          run_check slither "cd ${WORKSPACE} && pnpm run compile && slither . --hardhat-ignore-compile --exclude-dependencies --filter-paths 'node_modules|tests|test|mocks' --fail-high --json ../ci-reports/slither.json"
+          run_check coverage "pnpm --filter ./${WORKSPACE} run coverage"
           run_check build "pnpm --filter ./${WORKSPACE} run --if-present build"
 
           if [[ "$fail" -ne 0 ]]; then
@@ -665,6 +681,17 @@ jobs:
         with:
           name: ci-report-${{ env.WORKSPACE }}
           path: ci-reports/${{ env.WORKSPACE }}.txt
+
+      - name: Upload contract security evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ci-contract-security-evidence
+          path: |
+            contracts/coverage/
+            contracts/coverage.json
+            ci-reports/slither.json
+          if-no-files-found: error
 
   sdk:
     name: ci/sdk
@@ -796,6 +823,21 @@ jobs:
     if: needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.indexer == 'true'
     env:
       WORKSPACE: indexer
+      INDEXER_MIGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/cotsel_indexer_test
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: cotsel_indexer_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d cotsel_indexer_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

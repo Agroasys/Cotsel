@@ -227,8 +227,8 @@ flowchart TB
   represented as deployed by the current repository.
 - EIP-7702 account abstraction is parked. Active settlement and sponsored-send
   paths use EIP-712 and EIP-3009.
-- Base Sepolia has verified pilot evidence. Base mainnet remains gated by the
-  documented go/no-go and rollback approvals.
+- Base Sepolia has historical verification evidence only. It has no accepted WP-1 candidate evidence.
+  Base mainnet remains gated by the documented go/no-go and rollback approvals.
 
 ## Canonical Integration Sequences
 

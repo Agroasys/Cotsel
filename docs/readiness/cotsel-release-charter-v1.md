@@ -106,7 +106,7 @@ these values to a specific run. This section records what is pinned today and wh
 | Chain (production)    | Base mainnet, chain ID `8453` — separately gated by WP-12, no deployment authorized                                                  |
 | USDC (Base Sepolia)   | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`                                                                                         |
 | Escrow contract       | **Not pinned.** Currently recorded deployment is `0x8e1e152167FeD9FF7833156A023fFCa88f243B3d`. See the note below.                   |
-| Trade states          | `LOCKED=0`, `IN_TRANSIT=1`, `ARRIVAL_CONFIRMED=2`, `FROZEN=3` (`sdk/src/types/trade.ts`)                                             |
+| Trade states          | `LOCKED=0`, `IN_TRANSIT=1`, `ARRIVAL_CONFIRMED=2`, `FROZEN=3`, `CLOSED=4` (`sdk/src/types/trade.ts`)                                 |
 | Cross-repository pins | `integration/release-manifest.json`, status `candidate` — `agroasys-backend@develop`, `platform.v1@main`, `Cotsel.dash@main`         |
 | Callback contracts    | `cotsel.settlement-callback.v1`, `cotsel.settlement-observed-amounts.v1`                                                             |
 | Participant class     | Two named internal Agroasys test accounts operated by @Astton and @czpyioe. No public or external participants.                      |

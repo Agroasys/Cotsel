@@ -23,6 +23,24 @@ test('ABI decodes unified administrator-change proposals', () => {
   assert.equal(decoded?.args.epoch, 4n);
 });
 
+test('ABI binds administrator-change execution to its proposal', () => {
+  const fragment = contractInterface.getEvent('AdminChangeExecuted');
+  const encoded = contractInterface.encodeEventLog(fragment, [
+    7n,
+    2,
+    '0x2222222222222222222222222222222222222222',
+    '0x3333333333333333333333333333333333333333',
+    0n,
+  ]);
+
+  const decoded = contractInterface.parseLog(encoded);
+  assert.equal(decoded?.name, 'AdminChangeExecuted');
+  assert.equal(decoded?.args.proposalId, 7n);
+  assert.equal(decoded?.args.kind, 2n);
+  assert.equal(decoded?.args.currentAdmin, '0x2222222222222222222222222222222222222222');
+  assert.equal(decoded?.args.newAdmin, '0x3333333333333333333333333333333333333333');
+});
+
 test('ABI decodes scoped recovery with its incident reference and epoch', () => {
   const fragment = contractInterface.getEvent('UnpauseProposed');
   const incidentRef = `0x${'ab'.repeat(32)}`;

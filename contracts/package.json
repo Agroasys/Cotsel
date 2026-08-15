@@ -10,7 +10,7 @@
     "verify:base-sepolia": "npx hardhat verify --network base-sepolia",
     "verify:base-mainnet": "npx hardhat verify --network base-mainnet",
     "test": "hardhat test",
-    "test:foundry": "cd foundry && forge test -vvv",
+    "test:foundry": "cd foundry && openzeppelin_root=$(realpath ../node_modules/@openzeppelin) && forge test -vvv --lib-paths $(realpath ../node_modules) --remappings @openzeppelin/=$openzeppelin_root/",
     "coverage": "hardhat coverage",
     "pretypecheck": "hardhat compile",
     "lint": "eslint --max-warnings=0 .",
