@@ -152,7 +152,6 @@ describe('TriggerManager retry and idempotency states', () => {
     };
     const sdkClient = {
       getTrade: jest.fn(),
-      finalizeAfterInspectionAcceptance: jest.fn(),
       finalizeTrade: jest.fn(),
       isTradePaused: jest.fn().mockResolvedValue(false),
     } as unknown as TriggerManagerSdkClient;
@@ -173,7 +172,43 @@ describe('TriggerManager retry and idempotency states', () => {
     expect(mockedGetLatestTriggerByActionKey).toHaveBeenCalledWith('FINAL_RELEASE:1');
     expect(accepted).toMatchObject({ idempotent: true, txHash: latest.tx_hash });
     expect(deadline).toMatchObject({ idempotent: true, txHash: latest.tx_hash });
-    expect(sdkClient.finalizeAfterInspectionAcceptance).not.toHaveBeenCalled();
+    expect(sdkClient.finalizeTrade).not.toHaveBeenCalled();
+  });
+
+  it('rejects Oracle inspection acceptance instead of broadcasting it', async () => {
+    mockedGetLatestTriggerByActionKey.mockResolvedValue(null);
+    mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
+    mockedCreateTrigger.mockResolvedValue({
+      ...buildTrigger(TriggerStatus.PENDING),
+      action_key: 'FINAL_RELEASE:1',
+      request_id: 'req-buyer-acceptance',
+      idempotency_key: 'FINAL_RELEASE:1:req-buyer-acceptance',
+      trigger_type: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+    });
+    const sdkClient = {
+      getTrade: jest.fn().mockResolvedValue({
+        ...buildTrade(2),
+        arrivalTimestamp: new Date('2026-01-02T00:00:00.000Z'),
+      }),
+      finalizeTrade: jest.fn(),
+      isTradePaused: jest.fn().mockResolvedValue(false),
+    } as unknown as TriggerManagerSdkClient;
+    const manager = new TriggerManager(sdkClient, 3, 1);
+
+    const result = await manager.executeTrigger({
+      tradeId: '1',
+      requestId: 'req-buyer-acceptance',
+      triggerType: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+    });
+
+    expect(result.status).toBe(TriggerStatus.TERMINAL_FAILURE);
+    expect(mockedUpdateTrigger).toHaveBeenCalledWith(
+      'FINAL_RELEASE:1:req-buyer-acceptance',
+      expect.objectContaining({
+        status: TriggerStatus.TERMINAL_FAILURE,
+        last_error: expect.stringMatching(/Buyer authorization is required/),
+      }),
+    );
     expect(sdkClient.finalizeTrade).not.toHaveBeenCalled();
   });
 

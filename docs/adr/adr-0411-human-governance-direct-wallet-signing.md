@@ -42,11 +42,10 @@ Every governance action is signed directly by the admin wallet.
 | Action                                  | Contract method                                    |
 | --------------------------------------- | -------------------------------------------------- |
 | Protocol pause                          | `pause`                                            |
-| Unpause proposal                        | `proposeUnpause`                                   |
+| Scoped unpause proposal                 | `proposeUnpause`                                   |
 | Unpause approval                        | `approveUnpause`                                   |
 | Unpause proposal cancel                 | `cancelUnpauseProposal`                            |
 | Claims pause                            | `pauseClaims`                                      |
-| Claims unpause                          | `unpauseClaims`                                    |
 | Treasury sweep                          | `claimTreasury`                                    |
 | Treasury payout receiver proposal       | `proposeTreasuryPayoutAddressUpdate`               |
 | Treasury payout receiver approval       | `approveTreasuryPayoutAddressUpdate`               |

@@ -38,6 +38,7 @@ const USER_ACTIONS = [
   'cancel_locked_timeout',
   'refund_in_transit_timeout',
   'finalize_after_dispute_window',
+  'finalize_after_inspection_acceptance',
 ] as const;
 const OPERATOR_ACTIONS = ['finalize_after_dispute_window'] as const;
 
@@ -1857,9 +1858,14 @@ export function createEthersGaslessSettlementExecutor(
     } else if (input.action === 'refund_in_transit_timeout') {
       await escrow.refundInTransitAfterTimeoutWithAuthorization.staticCall(...args);
       gasEstimate = await escrow.refundInTransitAfterTimeoutWithAuthorization.estimateGas(...args);
-    } else {
+    } else if (input.action === 'finalize_after_dispute_window') {
       await escrow.finalizeAfterDisputeWindowWithAuthorization.staticCall(...args);
       gasEstimate = await escrow.finalizeAfterDisputeWindowWithAuthorization.estimateGas(...args);
+    } else {
+      await escrow.finalizeAfterInspectionAcceptanceWithAuthorization.staticCall(...args);
+      gasEstimate = await escrow.finalizeAfterInspectionAcceptanceWithAuthorization.estimateGas(
+        ...args,
+      );
     }
 
     if (gasEstimate > gaslessMaxGasLimit) {
@@ -1945,7 +1951,14 @@ export function createEthersGaslessSettlementExecutor(
       });
     }
 
-    return escrow.finalizeAfterDisputeWindowWithAuthorization(...args, {
+    if (input.action === 'finalize_after_dispute_window') {
+      return escrow.finalizeAfterDisputeWindowWithAuthorization(...args, {
+        gasLimit,
+        ...feeOverrides,
+      });
+    }
+
+    return escrow.finalizeAfterInspectionAcceptanceWithAuthorization(...args, {
       gasLimit,
       ...feeOverrides,
     });

@@ -35,7 +35,7 @@ const config: HardhatUserConfig = {
       viaIR: true,
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 1,
       },
     },
   },
@@ -46,7 +46,10 @@ const config: HardhatUserConfig = {
     artifacts: './artifacts',
   },
   networks: {
-    hardhat: {},
+    hardhat: {
+      blockGasLimit: 120_000_000,
+      hardfork: 'cancun',
+    },
     baseSepolia: {
       url: baseSepoliaRpcUrl,
       chainId: 84532,

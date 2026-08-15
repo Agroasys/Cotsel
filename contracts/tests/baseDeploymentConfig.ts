@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { expect } from 'chai';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   getBaseDeploymentTarget,
   loadBaseDeploymentConfig,
@@ -9,13 +11,23 @@ import {
 
 describe('Base deployment config', function () {
   const validEnv = {
-    DEPLOY_ORACLE_ADDRESS: '0x20e7E6fC0905E17De2D28E926Ad56324a6844a1D',
-    DEPLOY_TREASURY_ADDRESS: '0x229C75F0cD13D6ab7621403Bd951a9e43ba53b1e',
+    DEPLOY_ORACLE_ADDRESS: '0x1111111111111111111111111111111111111111',
+    DEPLOY_TREASURY_ADDRESS: '0x2222222222222222222222222222222222222222',
     DEPLOY_RELAYER_ADDRESS: '0x3333333333333333333333333333333333333333',
     DEPLOY_ADMINS:
-      '0x20e7E6fC0905E17De2D28E926Ad56324a6844a1D,0x229C75F0cD13D6ab7621403Bd951a9e43ba53b1e,0x4aF052cB4B3eC7b58322548021bF254Cc4c80b2c',
+      '0x4444444444444444444444444444444444444444,0x5555555555555555555555555555555555555555,0x6666666666666666666666666666666666666666',
     DEPLOY_REQUIRED_APPROVALS: '2',
   };
+
+  it('keeps the Hardhat and Foundry contract sources identical', function () {
+    const hardhatSource = readFileSync(resolve(__dirname, '../src/AgroasysEscrow.sol'), 'utf8');
+    const foundrySource = readFileSync(
+      resolve(__dirname, '../foundry/src/AgroasysEscrow.sol'),
+      'utf8',
+    );
+
+    expect(foundrySource).to.equal(hardhatSource);
+  });
 
   it('returns the official Base deployment target metadata', async function () {
     const target = getBaseDeploymentTarget('base-sepolia');
@@ -65,7 +77,7 @@ describe('Base deployment config', function () {
     expect(() =>
       loadBaseDeploymentConfig('base-sepolia', 84532, {
         ...validEnv,
-        DEPLOY_ADMINS: '0x20e7E6fC0905E17De2D28E926Ad56324a6844a1D',
+        DEPLOY_ADMINS: '0x4444444444444444444444444444444444444444',
         DEPLOY_REQUIRED_APPROVALS: '1',
       }),
     ).to.throw(/must contain at least two admin addresses/);
@@ -76,7 +88,7 @@ describe('Base deployment config', function () {
       loadBaseDeploymentConfig('base-sepolia', 84532, {
         ...validEnv,
         DEPLOY_FORBIDDEN_USER_WALLETS:
-          '0x4aF052cB4B3eC7b58322548021bF254Cc4c80b2c,0x1111111111111111111111111111111111111111',
+          '0x4444444444444444444444444444444444444444,0x7777777777777777777777777777777777777777',
       }),
     ).to.throw(/must not include buyer\/supplier user wallet/);
   });
@@ -85,9 +97,9 @@ describe('Base deployment config', function () {
     expect(() =>
       loadBaseDeploymentConfig('base-sepolia', 84532, {
         ...validEnv,
-        DEPLOY_RELAYER_ADDRESS: '0x1111111111111111111111111111111111111111',
+        DEPLOY_RELAYER_ADDRESS: '0x7777777777777777777777777777777777777777',
         DEPLOY_FORBIDDEN_USER_WALLETS:
-          '0x1111111111111111111111111111111111111111,0x2222222222222222222222222222222222222222',
+          '0x7777777777777777777777777777777777777777,0x8888888888888888888888888888888888888888',
       }),
     ).to.throw(/DEPLOY_RELAYER_ADDRESS must not be buyer\/supplier user wallet/);
   });
@@ -96,5 +108,32 @@ describe('Base deployment config', function () {
     expect(() => loadBaseDeploymentConfig('base-sepolia', 8453, validEnv)).to.throw(
       /requires chainId=84532, received 8453/,
     );
+  });
+
+  it('rejects runtime role overlap', async function () {
+    expect(() =>
+      loadBaseDeploymentConfig('base-sepolia', 84532, {
+        ...validEnv,
+        DEPLOY_RELAYER_ADDRESS: validEnv.DEPLOY_ORACLE_ADDRESS,
+      }),
+    ).to.throw(/must be distinct runtime identities/);
+  });
+
+  it('requires the approved three-admin, two-approval Base Sepolia matrix', async function () {
+    expect(() =>
+      loadBaseDeploymentConfig('base-sepolia', 84532, {
+        ...validEnv,
+        DEPLOY_ADMINS: `${validEnv.DEPLOY_ADMINS},0x9999999999999999999999999999999999999999`,
+      }),
+    ).to.throw(/requires exactly three admins and two approvals/);
+  });
+
+  it('does not allow explorer verification to be disabled', async function () {
+    expect(() =>
+      loadBaseDeploymentConfig('base-sepolia', 84532, {
+        ...validEnv,
+        DEPLOY_VERIFY: 'false',
+      }),
+    ).to.throw(/DEPLOY_VERIFY must remain true/);
   });
 });

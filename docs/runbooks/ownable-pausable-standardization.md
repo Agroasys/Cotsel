@@ -32,7 +32,7 @@ Rationale:
 | Oracle auth (`onlyOracle`, `onlyOracleActive`) | `AgroasysEscrow.sol`                                           | Retain custom                           | Oracle safety semantics unchanged                  |
 | Pause storage + guard                          | `paused` bool + custom `whenNotPaused`                         | Replace with OZ `Pausable`              | Standardized pause internals                       |
 | Pause trigger                                  | `pause()`                                                      | Keep admin entrypoint; call `_pause()`  | Behavior equivalent                                |
-| Unpause with approvals                         | `proposeUnpause/approveUnpause/_executeUnpause`                | Keep flow; call `_unpause()` in execute | Quorum unpause retained                            |
+| Scoped unpause with approvals                  | `proposeUnpause/approveUnpause/_executeUnpause`                | Keep flow; call `_unpause()` in execute | Quorum recovery retains incident and scope binding |
 | Emergency oracle disable                       | `disableOracleEmergency()`                                     | Keep flow; use `_pause()` if needed     | Emergency behavior preserved                       |
 | Timeout payout/cancel escape hatches           | `cancelLockedTradeAfterTimeout`, `refundInTransitAfterTimeout` | Add pause gating                        | Pause now blocks all state-mutating transfer paths |
 

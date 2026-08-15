@@ -25,6 +25,26 @@ function triggerResult(status: TriggerStatus) {
 }
 
 describe('OracleController execution truth', () => {
+  it('retires Oracle inspection acceptance with a buyer-authorization response', async () => {
+    const triggerManager = { executeTrigger: jest.fn() };
+    const controller = new OracleController(triggerManager as never);
+    const recorder = responseRecorder();
+
+    await controller.finalizeAfterInspectionAcceptance(
+      { body: { tradeId: '42', requestId: 'request-42' } } as Request,
+      recorder as unknown as Response<OracleResponse | ErrorResponse>,
+    );
+
+    expect(recorder.status).toHaveBeenCalledWith(410);
+    expect(recorder.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: 'BUYER_AUTHORIZATION_REQUIRED',
+      }),
+    );
+    expect(triggerManager.executeTrigger).not.toHaveBeenCalled();
+  });
+
   it.each([
     [TriggerStatus.TERMINAL_FAILURE, 422],
     [TriggerStatus.EXHAUSTED_NEEDS_REDRIVE, 503],

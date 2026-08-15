@@ -9,7 +9,7 @@ This SDK provides a **type-safe, role-based interface** to the Agroasys smart co
 The SDK is organized into **three role-based modules**:
 
 - **BuyerSDK** - Create gasless settlement authorization packages and buyer/supplier user-action authorization packages
-- **OracleSDK** - Release Stage 1 after custody and document verification, start inspection, and finalize the protected 40% (**Auth verification**)
+- **OracleSDK** - Release Stage 1 after custody and document verification and start the inspection window (**Auth verification**)
 - **AdminSDK** - Solve frozen trades, operate protocol controls, manage treasury payout governance, and propose/approve/execute governance actions (**Auth verification**)
 
 All modules extend a shared **Client** base class, which handles provider initialization and common contract reads.
@@ -229,7 +229,6 @@ settlement gateway.
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `releaseFundsStage1(tradeId, signer)`                        | Release net supplier 60% plus logistics and fees after custody/document verification |
 | `confirmInspectionAvailable(tradeId, windowSeconds, signer)` | Start an explicit 48- or 72-hour inspection-notice window                            |
-| `finalizeAfterInspectionAcceptance(tradeId, signer)`         | Release final 40% immediately after buyer inspection acceptance                      |
 | `finalizeAfterDisputeWindow(tradeId, signer)`                | Release final 40% after the notice deadline without a dispute                        |
 
 ### AdminSDK
@@ -237,12 +236,12 @@ settlement gateway.
 | Method                                                         | Description                                            |
 | -------------------------------------------------------------- | ------------------------------------------------------ |
 | `pause(signer)`                                                | Pause normal protocol operations                       |
-| `proposeUnpause(signer)`                                       | Propose unpause (multi-admin)                          |
-| `approveUnpause(signer)`                                       | Approve unpause proposal                               |
+| `proposeUnpause(scope, tradeId, incidentRef, signer)`          | Propose scoped recovery with an incident reference     |
+| `approveUnpause(signer)`                                       | Approve the active scoped unpause proposal             |
 | `cancelUnpauseProposal(signer)`                                | Cancel active unpause proposal                         |
 | `disableOracleEmergency(signer)`                               | Emergency disable oracle + pause                       |
 | `pauseClaims(signer)`                                          | Pause treasury/partner claims                          |
-| `unpauseClaims(signer)`                                        | Resume treasury/partner claims                         |
+| `proposeClaimsUnpause(incidentRef, signer)`                    | Propose quorum recovery of treasury/partner claims     |
 | `claimTreasury(signer)`                                        | Sweep accrued treasury USDC with treasury/admin signer |
 | `proposeTreasuryPayoutAddressUpdate(address, signer)`          | Propose treasury payout receiver update                |
 | `approveTreasuryPayoutAddressUpdate(id, signer)`               | Approve payout receiver update proposal                |
@@ -255,10 +254,15 @@ settlement gateway.
 | `approveOracleUpdate(proposalId, signer)`                      | Approve oracle update                                  |
 | `executeOracleUpdate(proposalId, signer)`                      | Execute approved oracle update                         |
 | `cancelExpiredOracleUpdateProposal(proposalId, signer)`        | Cancel expired oracle-update proposal                  |
-| `proposeAddAdmin(newAdmin, signer)`                            | Propose adding a new admin                             |
-| `approveAddAdmin(proposalId, signer)`                          | Approve admin-add proposal                             |
-| `executeAddAdmin(proposalId, signer)`                          | Execute approved admin addition                        |
-| `cancelExpiredAddAdminProposal(proposalId, signer)`            | Cancel expired admin-add proposal                      |
+| `proposeAddAdmin(newAdmin, signer)`                            | Propose adding an administrator                        |
+| `proposeRemoveAdmin(admin, signer)`                            | Propose removing an administrator                      |
+| `proposeReplaceAdmin(current, replacement, signer)`            | Propose atomic administrator replacement               |
+| `proposeApprovalThresholdChange(threshold, signer)`            | Propose a quorum-threshold change                      |
+| `proposeRelayerAdd(relayer, signer)`                           | Propose authorizing a relayer                          |
+| `proposeRelayerRemove(relayer, signer)`                        | Propose revoking a relayer                             |
+| `approveAdminChange(proposalId, signer)`                       | Approve an administrator, threshold, or relayer change |
+| `executeAdminChange(proposalId, signer)`                       | Execute an approved change after the timelock          |
+| `cancelExpiredAdminChangeProposal(proposalId, signer)`         | Cancel an expired change proposal                      |
 
 ## Auth ownership boundary
 

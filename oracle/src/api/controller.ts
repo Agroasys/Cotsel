@@ -316,23 +316,16 @@ export class OracleController {
   }
 
   async finalizeAfterInspectionAcceptance(
-    req: Request<RouteParams, unknown, FinalizeAfterInspectionAcceptanceRequest>,
+    _req: Request<RouteParams, unknown, FinalizeAfterInspectionAcceptanceRequest>,
     res: Response<OracleResponse | ErrorResponse>,
   ): Promise<void> {
-    try {
-      const { tradeId, requestId } = parseTriggerBody(req.body);
-      const result = await this.triggerManager.executeTrigger({
-        tradeId,
-        requestId,
-        triggerType: TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
-        requestHash: req.hmacSignature,
-      });
-
-      sendOracleExecutionResult(res, result);
-    } catch (error: unknown) {
-      Logger.error('Controller error in finalizeAfterInspectionAcceptance', error);
-      res.status(resolveStatusCode(error)).json(buildOracleErrorResponse(error));
-    }
+    res.status(410).json({
+      success: false,
+      error: 'BUYER_AUTHORIZATION_REQUIRED',
+      message:
+        'Submit buyer-signed inspection acceptance through the gateway gasless user-action route.',
+      timestamp: new Date().toISOString(),
+    });
   }
 
   async finalizeTrade(

@@ -1,5 +1,5 @@
 import {
-  AdminAddProposal,
+  AdminChangeProposal,
   AdminEvent,
   DisputeEvent,
   DisputeProposal,
@@ -22,7 +22,7 @@ export interface IndexerBatchState {
   disputeEvents: Iterable<DisputeEvent>;
   oracleUpdateProposals: Iterable<OracleUpdateProposal>;
   oracleEvents: Iterable<OracleEvent>;
-  adminAddProposals: Iterable<AdminAddProposal>;
+  adminChangeProposals: Iterable<AdminChangeProposal>;
   adminEvents: Iterable<AdminEvent>;
   systemEvents: Iterable<SystemEvent>;
   overviewSnapshot: OverviewSnapshot;
@@ -45,7 +45,7 @@ export async function persistIndexerBatch(
   await upsertIfPresent(store, state.disputeEvents);
   await upsertIfPresent(store, state.oracleUpdateProposals);
   await upsertIfPresent(store, state.oracleEvents);
-  await upsertIfPresent(store, state.adminAddProposals);
+  await upsertIfPresent(store, state.adminChangeProposals);
   await upsertIfPresent(store, state.adminEvents);
   await upsertIfPresent(store, state.systemEvents);
   await store.upsert([state.overviewSnapshot]);

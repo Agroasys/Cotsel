@@ -91,11 +91,10 @@ Current backend truth in this repo:
 These are existing contract-backed actions and must resolve to a transaction hash / chain event:
 
 - `pause()`
-- `proposeUnpause()`
+- `proposeUnpause(scope, tradeId, incidentRef)`
 - `approveUnpause()`
 - `cancelUnpauseProposal()`
 - `pauseClaims()`
-- `unpauseClaims()`
 - `claimTreasury()`
 - `disableOracleEmergency()`
 - `proposeOracleUpdate()`

@@ -12,19 +12,19 @@ export class Trade {
     @PrimaryColumn_()
     id!: string
 
-    @Index_()
+    @Index_("idx_trade_trade_id_fa202df3")
     @StringColumn_({nullable: false})
     tradeId!: string
 
-    @Index_()
+    @Index_("idx_trade_buyer_aae3567b")
     @StringColumn_({nullable: false})
     buyer!: string
 
-    @Index_()
+    @Index_("idx_trade_supplier_1f1b70c1")
     @StringColumn_({nullable: false})
     supplier!: string
 
-    @Index_()
+    @Index_("idx_trade_status_f6afdbf4")
     @Column_("varchar", {length: 17, nullable: false})
     status!: TradeStatus
 
@@ -52,14 +52,14 @@ export class Trade {
     @StringColumn_({nullable: false})
     ricardianHash!: string
 
-    @Index_()
+    @Index_("idx_trade_created_at_6cf33da0")
     @DateTimeColumn_({nullable: false})
     createdAt!: Date
 
     @DateTimeColumn_({nullable: true})
     arrivalTimestamp!: Date | undefined | null
 
-    @Index_()
+    @Index_("idx_trade_paused_e9985100")
     @BooleanColumn_({nullable: false})
     paused!: boolean
 

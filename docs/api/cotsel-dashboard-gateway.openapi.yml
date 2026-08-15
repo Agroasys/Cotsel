@@ -4194,6 +4194,7 @@ components:
             - cancel_locked_timeout
             - refund_in_transit_timeout
             - finalize_after_dispute_window
+            - finalize_after_inspection_acceptance
         chainId:
           type: integer
           minimum: 1

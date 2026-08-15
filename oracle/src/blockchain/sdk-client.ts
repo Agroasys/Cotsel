@@ -169,22 +169,6 @@ export class SDKClient {
     };
   }
 
-  async finalizeAfterInspectionAcceptance(tradeId: string): Promise<BlockchainResult> {
-    Logger.info('Executing finalizeAfterInspectionAcceptance', { tradeId });
-
-    const result = await this.sdk.finalizeAfterInspectionAcceptance(tradeId, this.signer);
-
-    Logger.info('Inspection acceptance finalization successful', {
-      tradeId,
-      txHash: result.txHash,
-    });
-
-    return {
-      txHash: result.txHash,
-      blockNumber: result.blockNumber,
-    };
-  }
-
   async finalizeTrade(tradeId: string): Promise<BlockchainResult> {
     Logger.info('Executing finalizeTrade', { tradeId });
 

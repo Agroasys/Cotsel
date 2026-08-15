@@ -12,31 +12,31 @@ export class TradeEvent {
     @PrimaryColumn_()
     id!: string
 
-    @Index_()
+    @Index_("idx_trade_event_trade_5f2d11cf")
     @ManyToOne_(() => Trade, {nullable: true})
     trade!: Relation_<Trade>
 
-    @Index_()
+    @Index_("idx_trade_event_event_name_ed475705")
     @StringColumn_({nullable: false})
     eventName!: string
 
-    @Index_()
+    @Index_("idx_trade_event_block_number_06e146bb")
     @IntColumn_({nullable: false})
     blockNumber!: number
 
-    @Index_()
+    @Index_("idx_trade_event_timestamp_7bbb0b43")
     @DateTimeColumn_({nullable: false})
     timestamp!: Date
 
-    @Index_()
+    @Index_("idx_trade_event_tx_hash_b6cbc46a")
     @StringColumn_({nullable: false})
     txHash!: string
 
-    @Index_()
+    @Index_("idx_trade_event_log_index_b2b227e0")
     @IntColumn_({nullable: false})
     logIndex!: number
 
-    @Index_()
+    @Index_("idx_trade_event_transaction_index_42de4e1a")
     @IntColumn_({nullable: false})
     transactionIndex!: number
 

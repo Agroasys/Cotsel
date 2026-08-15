@@ -10,6 +10,34 @@ function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input).digest('hex');
 }
 
+type ImmutableReference = { start: number; length: number };
+
+function normalizeRuntimeBytecode(
+  bytecode: string,
+  immutableReferences: Record<string, ImmutableReference[]>,
+): string {
+  const normalized = bytecode.startsWith('0x') ? bytecode.slice(2) : bytecode;
+  const characters = normalized.split('');
+  for (const references of Object.values(immutableReferences)) {
+    for (const reference of references) {
+      characters.fill('0', reference.start * 2, (reference.start + reference.length) * 2);
+    }
+  }
+  return `0x${characters.join('')}`;
+}
+
+function sameAddress(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
+function assertDeployerHasNoRuntimeRole(deployerAddress: string, roles: readonly string[]): void {
+  if (roles.some((role) => sameAddress(role, deployerAddress))) {
+    throw new Error(
+      'The deployment account must not also be an Oracle, treasury, relayer, or admin',
+    );
+  }
+}
+
 function getCommitSha(): string {
   try {
     return execSync('git rev-parse HEAD', {
@@ -135,6 +163,15 @@ async function main(): Promise<void> {
   const chainId = hre.network.config.chainId ?? null;
   const config = loadBaseDeploymentConfig(hre.network.name, chainId);
   const artifact = await hre.artifacts.readArtifact(config.escrowName);
+  const fullyQualifiedName = `${artifact.sourceName}:${artifact.contractName}`;
+  const buildInfo = await hre.artifacts.getBuildInfo(fullyQualifiedName);
+  const compiledContract =
+    buildInfo?.output.contracts[artifact.sourceName]?.[artifact.contractName];
+  if (!compiledContract) {
+    throw new Error(`Build information is missing for ${fullyQualifiedName}`);
+  }
+  const immutableReferences = compiledContract.evm.deployedBytecode.immutableReferences ?? {};
+  const localRuntimeBytecode = `0x${compiledContract.evm.deployedBytecode.object}`;
   const configuredCompilerVersion = getConfiguredCompilerVersion();
   const [deployer] = await ethers.getSigners();
 
@@ -143,6 +180,12 @@ async function main(): Promise<void> {
       `No deployer account configured for ${hre.network.name}. Set Hardhat vars PRIVATE_KEY/PRIVATE_KEY2.`,
     );
   }
+  assertDeployerHasNoRuntimeRole(deployer.address, [
+    config.oracleAddress,
+    config.treasuryAddress,
+    config.relayerAddress,
+    ...config.admins,
+  ]);
 
   const deployArgs = [
     config.usdcAddress,
@@ -197,6 +240,51 @@ async function main(): Promise<void> {
 
   const contractAddress = await contract.getAddress();
   const deployedBytecode = await waitForDeployedBytecode(contractAddress);
+  const normalizedLocalRuntimeBytecode = normalizeRuntimeBytecode(
+    localRuntimeBytecode,
+    immutableReferences,
+  );
+  const normalizedLiveRuntimeBytecode = normalizeRuntimeBytecode(
+    deployedBytecode,
+    immutableReferences,
+  );
+  if (normalizedLiveRuntimeBytecode !== normalizedLocalRuntimeBytecode) {
+    throw new Error('Live runtime bytecode does not match the reviewed local artifact');
+  }
+
+  const deployedEscrow = new ethers.Contract(contractAddress, artifact.abi, ethers.provider);
+  const observedAdmins = await Promise.all(
+    config.admins.map(async (_admin, index) => String(await deployedEscrow.admins(index))),
+  );
+  const roleAttestation = {
+    usdcAddress: String(await deployedEscrow.usdcToken()),
+    oracleAddress: String(await deployedEscrow.oracleAddress()),
+    treasuryAddress: String(await deployedEscrow.treasuryAddress()),
+    treasuryPayoutAddress: String(await deployedEscrow.treasuryPayoutAddress()),
+    relayerAllowed: Boolean(await deployedEscrow.isRelayer(config.relayerAddress)),
+    admins: observedAdmins,
+    requiredApprovals: Number(await deployedEscrow.requiredApprovals()),
+    governanceEpoch: Number(await deployedEscrow.governanceEpoch()),
+    oracleActive: Boolean(await deployedEscrow.oracleActive()),
+  };
+  const expectedAddresses = [
+    [roleAttestation.usdcAddress, config.usdcAddress],
+    [roleAttestation.oracleAddress, config.oracleAddress],
+    [roleAttestation.treasuryAddress, config.treasuryAddress],
+    [roleAttestation.treasuryPayoutAddress, config.treasuryAddress],
+    ...roleAttestation.admins.map((admin, index) => [admin, config.admins[index]]),
+  ];
+  if (
+    expectedAddresses.some(([observed, expected]) => !sameAddress(observed, expected)) ||
+    !roleAttestation.relayerAllowed ||
+    roleAttestation.requiredApprovals !== config.requiredApprovals ||
+    roleAttestation.governanceEpoch !== 1 ||
+    !roleAttestation.oracleActive
+  ) {
+    throw new Error(
+      'Post-deployment role attestation does not match the approved deployment matrix',
+    );
+  }
   const explorerAddressUrl = `${config.target.explorerBaseUrl}${contractAddress}`;
   const verificationUrl = `${explorerAddressUrl}#code`;
 
@@ -229,6 +317,8 @@ async function main(): Promise<void> {
         admins: config.admins,
         requiredApprovals: config.requiredApprovals,
       },
+      deployerAddress: deployer.address,
+      roleAttestation,
     },
     verification: {
       requested: config.verify,
@@ -239,7 +329,10 @@ async function main(): Promise<void> {
       compilerVersion: configuredCompilerVersion,
       abiSha256: sha256Hex(JSON.stringify(artifact.abi)),
       bytecodeSha256: sha256Hex(artifact.bytecode),
-      deployedBytecodeSha256: sha256Hex(deployedBytecode),
+      localRuntimeBytecodeSha256: sha256Hex(localRuntimeBytecode),
+      liveRuntimeBytecodeSha256: sha256Hex(deployedBytecode),
+      normalizedRuntimeBytecodeSha256: sha256Hex(normalizedLiveRuntimeBytecode),
+      runtimeBytecodeMatches: true,
     },
   };
 

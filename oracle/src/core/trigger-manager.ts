@@ -609,7 +609,9 @@ export class TriggerManager {
         return await this.sdkClient.confirmInspectionAvailable(tradeId, 48 * 60 * 60);
 
       case TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE:
-        return await this.sdkClient.finalizeAfterInspectionAcceptance(tradeId);
+        throw new ValidationError(
+          'Buyer authorization is required; submit inspection acceptance through the gateway user-action route',
+        );
 
       case TriggerType.FINALIZE_TRADE:
         return await this.sdkClient.finalizeTrade(tradeId);

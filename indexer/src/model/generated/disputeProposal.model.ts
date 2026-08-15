@@ -12,37 +12,37 @@ export class DisputeProposal {
     @PrimaryColumn_()
     id!: string
 
-    @Index_()
+    @Index_("idx_dispute_proposal_proposal_id_e74c4594")
     @StringColumn_({nullable: false})
     proposalId!: string
 
-    @Index_()
+    @Index_("idx_dispute_proposal_trade_16d9e52d")
     @ManyToOne_(() => Trade, {nullable: true})
     trade!: Relation_<Trade>
 
-    @Index_()
+    @Index_("idx_dispute_proposal_dispute_status_2630e633")
     @Column_("varchar", {length: 7, nullable: false})
     disputeStatus!: DisputeStatus
 
     @IntColumn_({nullable: false})
     approvalCount!: number
 
-    @Index_()
+    @Index_("idx_dispute_proposal_executed_8525f83b")
     @BooleanColumn_({nullable: false})
     executed!: boolean
 
-    @Index_()
+    @Index_("idx_dispute_proposal_created_at_d96446fa")
     @DateTimeColumn_({nullable: false})
     createdAt!: Date
 
-    @Index_()
+    @Index_("idx_dispute_proposal_proposer_a258daee")
     @StringColumn_({nullable: false})
     proposer!: string
 
     @DateTimeColumn_({nullable: true})
     expiresAt!: Date | undefined | null
 
-    @Index_()
+    @Index_("idx_dispute_proposal_cancelled_d99ab56c")
     @BooleanColumn_({nullable: false})
     cancelled!: boolean
 

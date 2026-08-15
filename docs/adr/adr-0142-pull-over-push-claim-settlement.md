@@ -17,7 +17,7 @@ ADR-0142 originally adopted a pull-over-push settlement model:
 - `claim()` follows checks-effects-interactions and is `nonReentrant`.
 - Claim-path control is split from global protocol pause:
   - `claim()` remains available during global pause.
-  - `pauseClaims()` / `unpauseClaims()` provide dedicated emergency claim freeze.
+  - `pauseClaims()` provides immediate emergency claim freeze; scoped `proposeUnpause()` and `approveUnpause()` provide quorum recovery with an incident reference.
 
 This is no longer the active buyer/supplier payout model.
 

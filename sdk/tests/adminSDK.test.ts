@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { AdminSDK } from '../src/modules/adminSDK';
-import type { ethers } from 'ethers';
+import { ethers } from 'ethers';
 import { DisputeStatus } from '../src/types/dispute';
 import { AuthorizationError, ValidationError } from '../src/types/errors';
 import { TEST_CONFIG, assertRequiredEnv, getAdminSigner, hasRequiredEnv } from './setup';
@@ -33,9 +33,7 @@ type MockContractWithSigner = {
   cancelUnpauseProposal: jest.Mock;
   disableOracleEmergency: jest.Mock;
   pauseClaims: jest.Mock;
-  unpauseClaims: jest.Mock;
   pauseTrade: jest.Mock;
-  unpauseTrade: jest.Mock;
   proposeDisputeSolution: jest.Mock;
   approveDisputeSolution: jest.Mock;
   cancelExpiredDisputeProposal: jest.Mock;
@@ -43,10 +41,10 @@ type MockContractWithSigner = {
   approveOracleUpdate: jest.Mock;
   executeOracleUpdate: jest.Mock;
   cancelExpiredOracleUpdateProposal: jest.Mock;
-  proposeAddAdmin: jest.Mock;
-  approveAddAdmin: jest.Mock;
-  executeAddAdmin: jest.Mock;
-  cancelExpiredAddAdminProposal: jest.Mock;
+  proposeAdminChange: jest.Mock;
+  approveAdminChange: jest.Mock;
+  executeAdminChange: jest.Mock;
+  cancelAdminChangeProposal: jest.Mock;
   claimTreasury: jest.Mock;
   proposeTreasuryPayoutAddressUpdate: jest.Mock;
   approveTreasuryPayoutAddressUpdate: jest.Mock;
@@ -79,9 +77,7 @@ function makeSdkUnit(isAdmin = true) {
     cancelUnpauseProposal: jest.fn(),
     disableOracleEmergency: jest.fn(),
     pauseClaims: jest.fn(),
-    unpauseClaims: jest.fn(),
     pauseTrade: jest.fn(),
-    unpauseTrade: jest.fn(),
     proposeDisputeSolution: jest.fn(),
     approveDisputeSolution: jest.fn(),
     cancelExpiredDisputeProposal: jest.fn(),
@@ -89,10 +85,10 @@ function makeSdkUnit(isAdmin = true) {
     approveOracleUpdate: jest.fn(),
     executeOracleUpdate: jest.fn(),
     cancelExpiredOracleUpdateProposal: jest.fn(),
-    proposeAddAdmin: jest.fn(),
-    approveAddAdmin: jest.fn(),
-    executeAddAdmin: jest.fn(),
-    cancelExpiredAddAdminProposal: jest.fn(),
+    proposeAdminChange: jest.fn(),
+    approveAdminChange: jest.fn(),
+    executeAdminChange: jest.fn(),
+    cancelAdminChangeProposal: jest.fn(),
     claimTreasury: jest.fn(),
     proposeTreasuryPayoutAddressUpdate: jest.fn(),
     approveTreasuryPayoutAddressUpdate: jest.fn(),
@@ -158,7 +154,8 @@ describe('AdminSDK unit', () => {
     mockSuccessCall(contractWithSigner.approveUnpause);
     mockSuccessCall(contractWithSigner.cancelUnpauseProposal);
 
-    await expect(sdk.proposeUnpause(signer)).resolves.toEqual({
+    const incidentRef = ethers.id('unit-global-recovery');
+    await expect(sdk.proposeGlobalUnpause(incidentRef, signer)).resolves.toEqual({
       txHash: RECEIPT.hash,
       blockNumber: RECEIPT.blockNumber,
     });
@@ -171,7 +168,7 @@ describe('AdminSDK unit', () => {
       blockNumber: RECEIPT.blockNumber,
     });
 
-    expect(contractWithSigner.proposeUnpause).toHaveBeenCalledTimes(1);
+    expect(contractWithSigner.proposeUnpause).toHaveBeenCalledWith(0, 0n, incidentRef);
     expect(contractWithSigner.approveUnpause).toHaveBeenCalledTimes(1);
     expect(contractWithSigner.cancelUnpauseProposal).toHaveBeenCalledTimes(1);
   });
@@ -200,24 +197,27 @@ describe('AdminSDK unit', () => {
     expect(contractWithSigner.pauseClaims).toHaveBeenCalledTimes(1);
   });
 
-  test('unpauseClaims should call contract and return tx result', async () => {
+  test('proposeClaimsUnpause should use the governed scope', async () => {
     const { sdk, contractWithSigner } = makeSdkUnit(true);
     const signer = makeSigner();
-    mockSuccessCall(contractWithSigner.unpauseClaims);
+    mockSuccessCall(contractWithSigner.proposeUnpause);
+    const incidentRef = ethers.id('unit-claims-recovery');
 
-    await expect(sdk.unpauseClaims(signer)).resolves.toEqual({
+    await expect(sdk.proposeClaimsUnpause(incidentRef, signer)).resolves.toEqual({
       txHash: RECEIPT.hash,
       blockNumber: RECEIPT.blockNumber,
     });
-    expect(contractWithSigner.unpauseClaims).toHaveBeenCalledTimes(1);
+    expect(contractWithSigner.proposeUnpause).toHaveBeenCalledWith(1, 0n, incidentRef);
   });
 
-  test('pauseClaims and unpauseClaims should reject non-admin signer', async () => {
+  test('pauseClaims and claims recovery should reject non-admin signer', async () => {
     const { sdk } = makeSdkUnit(false);
     const signer = makeSigner();
 
     await expect(sdk.pauseClaims(signer)).rejects.toBeInstanceOf(AuthorizationError);
-    await expect(sdk.unpauseClaims(signer)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(
+      sdk.proposeClaimsUnpause(ethers.id('claims-recovery'), signer),
+    ).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   test('pauseTrade should call contract with trade id and return tx result', async () => {
@@ -233,25 +233,27 @@ describe('AdminSDK unit', () => {
     expect(contractWithSigner.pauseTrade).toHaveBeenCalledTimes(1);
   });
 
-  test('unpauseTrade should call contract with trade id and return tx result', async () => {
+  test('proposeTradeUnpause should call the governed trade scope', async () => {
     const { sdk, contractWithSigner } = makeSdkUnit(true);
     const signer = makeSigner();
-    mockSuccessCall(contractWithSigner.unpauseTrade);
+    mockSuccessCall(contractWithSigner.proposeUnpause);
+    const incidentRef = ethers.id('unit-trade-recovery');
 
-    await expect(sdk.unpauseTrade(7n, signer)).resolves.toEqual({
+    await expect(sdk.proposeTradeUnpause(7n, incidentRef, signer)).resolves.toEqual({
       txHash: RECEIPT.hash,
       blockNumber: RECEIPT.blockNumber,
     });
-    expect(contractWithSigner.unpauseTrade).toHaveBeenCalledWith(7n);
-    expect(contractWithSigner.unpauseTrade).toHaveBeenCalledTimes(1);
+    expect(contractWithSigner.proposeUnpause).toHaveBeenCalledWith(2, 7n, incidentRef);
   });
 
-  test('pauseTrade and unpauseTrade should reject non-admin signer', async () => {
+  test('pauseTrade and trade recovery should reject non-admin signer', async () => {
     const { sdk } = makeSdkUnit(false);
     const signer = makeSigner();
 
     await expect(sdk.pauseTrade(7n, signer)).rejects.toBeInstanceOf(AuthorizationError);
-    await expect(sdk.unpauseTrade(7n, signer)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(
+      sdk.proposeTradeUnpause(7n, ethers.id('trade-recovery'), signer),
+    ).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   test('dispute expiry cancel should call contract with proposal id', async () => {
@@ -270,7 +272,7 @@ describe('AdminSDK unit', () => {
     const { sdk, contractWithSigner } = makeSdkUnit(true);
     const signer = makeSigner();
     mockSuccessCall(contractWithSigner.cancelExpiredOracleUpdateProposal);
-    mockSuccessCall(contractWithSigner.cancelExpiredAddAdminProposal);
+    mockSuccessCall(contractWithSigner.cancelAdminChangeProposal);
 
     await expect(sdk.cancelExpiredOracleUpdateProposal(2n, signer)).resolves.toEqual({
       txHash: RECEIPT.hash,
@@ -282,7 +284,7 @@ describe('AdminSDK unit', () => {
     });
 
     expect(contractWithSigner.cancelExpiredOracleUpdateProposal).toHaveBeenCalledWith(2n);
-    expect(contractWithSigner.cancelExpiredAddAdminProposal).toHaveBeenCalledWith(3n);
+    expect(contractWithSigner.cancelAdminChangeProposal).toHaveBeenCalledWith(3n);
   });
 
   test('treasury sweep should be callable without admin verification', async () => {
@@ -407,10 +409,10 @@ describe('AdminSDK unit', () => {
     });
   });
 
-  test('proposeAddAdmin returns proposal id when receipt contains AdminAddProposed', async () => {
+  test('proposeAddAdmin returns proposal id from the unified change event', async () => {
     const { sdk, contractWithSigner, parseLog } = makeSdkUnit(true);
     const signer = makeSigner();
-    const tx = mockSuccessCall(contractWithSigner.proposeAddAdmin);
+    const tx = mockSuccessCall(contractWithSigner.proposeAdminChange);
     tx.wait.mockResolvedValue({
       ...RECEIPT,
       logs: [
@@ -421,7 +423,7 @@ describe('AdminSDK unit', () => {
       ],
     });
     parseLog.mockReturnValue({
-      name: 'AdminAddProposed',
+      name: 'AdminChangeProposed',
       args: {
         proposalId: 14n,
       },
@@ -434,6 +436,12 @@ describe('AdminSDK unit', () => {
       blockNumber: RECEIPT.blockNumber,
       proposalId: 14n,
     });
+    expect(contractWithSigner.proposeAdminChange).toHaveBeenCalledWith(
+      0,
+      ethers.ZeroAddress,
+      '0x2222222222222222222222222222222222222222',
+      0n,
+    );
   });
 
   test('proposeDisputeSolution should reject unsupported dispute status', async () => {

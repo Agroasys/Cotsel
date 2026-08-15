@@ -194,16 +194,9 @@ describe('AgroasysEscrow - Claim Security', function () {
 
     const selector = lastError.slice(0, 10);
     const reentrancySelector = ethers.id('ReentrancyGuardReentrantCall()').slice(0, 10);
+    const authorizationSelector = ethers.id('EscrowOnlyTreasuryOrAdmin()').slice(0, 10);
 
-    if (selector === '0x08c379a0') {
-      const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
-        ['string'],
-        `0x${lastError.slice(10)}`,
-      );
-      expect(decoded[0]).to.equal('only treasury or admin');
-    } else {
-      expect(selector).to.equal(reentrancySelector);
-    }
+    expect([authorizationSelector, reentrancySelector]).to.include(selector);
 
     expect(await escrow.claimableUsdc(await receiver.getAddress())).to.equal(0);
     expect(await usdc.balanceOf(await receiver.getAddress())).to.equal(

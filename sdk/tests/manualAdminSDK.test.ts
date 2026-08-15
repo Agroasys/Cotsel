@@ -153,7 +153,10 @@ describeIntegration('AdminSDK', () => {
   testAdminMutation('should pause protocol', async () => {
     let wasPaused = await adminSDK.isPaused();
     if (wasPaused) {
-      const unpauseProposal = await adminSDK.proposeUnpause(adminSigner1);
+      const unpauseProposal = await adminSDK.proposeGlobalUnpause(
+        ethers.id('manual-global-recovery'),
+        adminSigner1,
+      );
       expectValidTxHash(unpauseProposal.txHash);
       const unpauseApproval = await adminSDK.approveUnpause(adminSigner2);
       expectValidTxHash(unpauseApproval.txHash);
@@ -168,7 +171,10 @@ describeIntegration('AdminSDK', () => {
   });
 
   testAdminMutation('should propose unpause', async () => {
-    const result = await adminSDK.proposeUnpause(adminSigner1);
+    const result = await adminSDK.proposeGlobalUnpause(
+      ethers.id('manual-global-recovery'),
+      adminSigner1,
+    );
 
     expectValidTxHash(result.txHash);
     const unpauseProposed = await findEventInReceipt(result.txHash, 'UnpauseProposed');
@@ -307,8 +313,13 @@ describeIntegration('AdminSDK', () => {
   testAdminMutation('should pause claims', async () => {
     const initialClaimsPaused = await adminSDK.isClaimsPaused();
     if (initialClaimsPaused) {
-      const unpauseResult = await adminSDK.unpauseClaims(adminSigner1);
+      const unpauseResult = await adminSDK.proposeClaimsUnpause(
+        ethers.id('manual-claims-recovery'),
+        adminSigner1,
+      );
       expectValidTxHash(unpauseResult.txHash);
+      const approval = await adminSDK.approveUnpause(adminSigner2);
+      expectValidTxHash(approval.txHash);
       const isClaimsPausedAfterUnpause = await adminSDK.isClaimsPaused();
       expect(isClaimsPausedAfterUnpause).toBe(false);
     }
@@ -326,8 +337,13 @@ describeIntegration('AdminSDK', () => {
       isClaimsPausedInitially = await adminSDK.isClaimsPaused();
     }
     expect(isClaimsPausedInitially).toBe(true);
-    const result = await adminSDK.unpauseClaims(adminSigner1);
+    const result = await adminSDK.proposeClaimsUnpause(
+      ethers.id('manual-claims-recovery'),
+      adminSigner1,
+    );
     expectValidTxHash(result.txHash);
+    const approval = await adminSDK.approveUnpause(adminSigner2);
+    expectValidTxHash(approval.txHash);
     const isClaimsPaused = await adminSDK.isClaimsPaused();
     expect(isClaimsPaused).toBe(false);
   });

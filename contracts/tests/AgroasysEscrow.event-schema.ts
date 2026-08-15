@@ -12,10 +12,12 @@ describe('AgroasysEscrow event schema', function () {
       .sort();
 
     expect(signatures).to.deep.equal([
-      'AdminAddApproved(uint256,address,uint256,uint256)',
-      'AdminAddProposalExpiredCancelled(uint256,address)',
-      'AdminAddProposed(uint256,address,address,uint256)',
       'AdminAdded(address)',
+      'AdminChangeApproved(uint256,address,uint256,uint256)',
+      'AdminChangeProposalCancelled(uint256,address)',
+      'AdminChangeProposed(uint256,address,uint8,address,address,uint256,uint256,uint256)',
+      'AdminRemoved(address)',
+      'AdminReplaced(address,address)',
       'AuthorizationConsumed(address,bytes32,uint256,address,uint256)',
       'BuyerRefundTransferred(uint256,address,uint256,uint8,address)',
       'ClaimableAccrued(uint256,address,uint256,uint8)',
@@ -30,6 +32,7 @@ describe('AgroasysEscrow event schema', function () {
       'FinalTrancheReleased(uint256,address,uint256)',
       'FundsReleasedStage1(uint256,address,uint256,address,uint256)',
       'GaslessTradeFunded(uint256,address,bytes32,uint256)',
+      'GovernanceEpochAdvanced(uint256)',
       'InTransitTimeoutRefunded(uint256,address,uint256)',
       'InspectionAcceptedForFinalRelease(uint256,uint256)',
       'InspectionAvailable(uint256,uint256,uint256,uint256)',
@@ -42,6 +45,7 @@ describe('AgroasysEscrow event schema', function () {
       'PlatformFeesPaidStage1(uint256,address,uint256,uint256,uint256)',
       'RelayedActionExecuted(address,address,bytes32,uint256)',
       'RelayerUpdated(address,bool,address)',
+      'RequiredApprovalsUpdated(uint256,uint256)',
       'SupplierPayoutTransferred(uint256,address,uint256,uint8,address)',
       'TradeCancelledAfterLockTimeout(uint256,address,uint256)',
       'TradeLocked(uint256,address,address,uint256,uint256,uint256,uint256,uint256,bytes32)',
@@ -54,7 +58,7 @@ describe('AgroasysEscrow event schema', function () {
       'TreasuryPayoutAddressUpdated(address,address)',
       'UnpauseApproved(address,uint256,uint256)',
       'UnpauseProposalCancelled(address)',
-      'UnpauseProposed(address)',
+      'UnpauseProposed(address,uint8,uint256,bytes32,uint256)',
       'Unpaused(address)',
     ]);
   });
