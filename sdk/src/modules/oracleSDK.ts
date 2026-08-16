@@ -93,34 +93,6 @@ export class OracleSDK extends Client {
     }
   }
 
-  async finalizeAfterInspectionAcceptance(
-    tradeId: string | bigint,
-    oracleSigner: ethers.Signer,
-  ): Promise<OracleResult> {
-    await this.verifyOracle(oracleSigner);
-
-    try {
-      const contractWithSigner = this.contract.connect(oracleSigner);
-      const tx = await contractWithSigner.finalizeAfterInspectionAcceptance(tradeId);
-      const receipt = await tx.wait();
-
-      if (!receipt) {
-        throw new ContractError('Transaction receipt not available');
-      }
-
-      return {
-        txHash: receipt.hash,
-        blockNumber: receipt.blockNumber,
-      };
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      throw new ContractError(`Failed to finalize after inspection acceptance: ${message}`, {
-        tradeId: tradeId.toString(),
-        error: message,
-      });
-    }
-  }
-
   async finalizeAfterDisputeWindow(
     tradeId: string | bigint,
     signer: ethers.Signer,

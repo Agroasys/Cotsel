@@ -7,6 +7,17 @@ import { ContractError, getErrorMessage } from './types/errors';
 import { AgroasysEscrow__factory } from './types/typechain-types/factories/src/AgroasysEscrow.sol/AgroasysEscrow__factory';
 import type { AgroasysEscrow } from './types/typechain-types/src/AgroasysEscrow.sol/AgroasysEscrow';
 import { createManagedRpcProvider } from './rpc/failoverProvider';
+import type { RuntimeRoleExpectations } from './config';
+import type { RuntimePreflightFailureCode, RuntimePreflightResult } from './types/runtimePreflight';
+
+const CANONICAL_USDC_BY_CHAIN = new Map<number, string>([
+  [84532, '0x036CbD53842c5426634e7929541eC2318f3dCF7e'],
+  [8453, '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'],
+]);
+
+function sameAddress(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
 
 export class Client {
   protected provider: AbstractProvider;
@@ -19,6 +30,120 @@ export class Client {
       stallTimeoutMs: config.rpcStallTimeoutMs,
     });
     this.contract = AgroasysEscrow__factory.connect(config.escrowAddress, this.provider);
+  }
+
+  async preflightRuntime(
+    expectedRoles: RuntimeRoleExpectations | undefined = this.config.expectedRuntimeRoles,
+  ): Promise<RuntimePreflightResult> {
+    const failureCodes = new Set<RuntimePreflightFailureCode>();
+    const observation: RuntimePreflightResult['observation'] = {
+      chainId: null,
+      escrowAddress: this.config.escrowAddress,
+      codePresent: false,
+      usdcAddress: null,
+      oracleAddress: null,
+      treasuryAddress: null,
+      treasuryPayoutAddress: null,
+      oracleActive: null,
+      requiredApprovals: null,
+    };
+
+    if (!ethers.isAddress(this.config.escrowAddress)) {
+      failureCodes.add('INVALID_CONTRACT_ADDRESS');
+      return { ok: false, failureCodes: [...failureCodes], observation };
+    }
+
+    try {
+      const network = await this.provider.getNetwork();
+      observation.chainId = Number(network.chainId);
+      if (network.chainId !== BigInt(this.config.chainId)) {
+        failureCodes.add('WRONG_CHAIN');
+      }
+
+      const code = await this.provider.getCode(this.config.escrowAddress);
+      observation.codePresent = code !== '0x';
+      if (!observation.codePresent) {
+        failureCodes.add('CONTRACT_CODE_MISSING');
+      }
+    } catch {
+      failureCodes.add('RPC_UNAVAILABLE');
+      return { ok: false, failureCodes: [...failureCodes], observation };
+    }
+
+    if (observation.codePresent) {
+      try {
+        const [
+          usdcAddress,
+          oracleAddress,
+          treasuryAddress,
+          treasuryPayoutAddress,
+          oracleActive,
+          requiredApprovals,
+        ] = await Promise.all([
+          this.contract.usdcToken(),
+          this.contract.oracleAddress(),
+          this.contract.treasuryAddress(),
+          this.contract.treasuryPayoutAddress(),
+          this.contract.oracleActive(),
+          this.contract.requiredApprovals(),
+        ]);
+        observation.usdcAddress = usdcAddress;
+        observation.oracleAddress = oracleAddress;
+        observation.treasuryAddress = treasuryAddress;
+        observation.treasuryPayoutAddress = treasuryPayoutAddress;
+        observation.oracleActive = oracleActive;
+        observation.requiredApprovals = Number(requiredApprovals);
+
+        const canonicalUsdc = CANONICAL_USDC_BY_CHAIN.get(this.config.chainId);
+        if (
+          !sameAddress(usdcAddress, this.config.usdcAddress) ||
+          (canonicalUsdc !== undefined && !sameAddress(usdcAddress, canonicalUsdc))
+        ) {
+          failureCodes.add('WRONG_USDC');
+        }
+
+        if (!expectedRoles) {
+          failureCodes.add('ROLE_EXPECTATIONS_MISSING');
+        } else {
+          const observedAdmins = await Promise.all(
+            expectedRoles.adminAddresses.map((_address, index) => this.contract.admins(index)),
+          );
+          let extraAdminExists = false;
+          try {
+            await this.contract.admins(expectedRoles.adminAddresses.length);
+            extraAdminExists = true;
+          } catch {
+            extraAdminExists = false;
+          }
+          const roleChecks = await Promise.all([
+            ...expectedRoles.adminAddresses.map((address) => this.contract.isAdmin(address)),
+            ...expectedRoles.relayerAddresses.map((address) => this.contract.isRelayer(address)),
+          ]);
+          const rolesMatch =
+            sameAddress(oracleAddress, expectedRoles.oracleAddress) &&
+            sameAddress(treasuryAddress, expectedRoles.treasuryAddress) &&
+            sameAddress(treasuryPayoutAddress, expectedRoles.treasuryPayoutAddress) &&
+            oracleActive &&
+            Number(requiredApprovals) === expectedRoles.requiredApprovals &&
+            observedAdmins.every((address, index) =>
+              sameAddress(address, expectedRoles.adminAddresses[index]),
+            ) &&
+            !extraAdminExists &&
+            roleChecks.every(Boolean);
+          if (!rolesMatch) {
+            failureCodes.add('ROLE_STATE_MISMATCH');
+          }
+        }
+      } catch {
+        failureCodes.add('CONTRACT_READ_FAILED');
+      }
+    }
+
+    return {
+      ok: failureCodes.size === 0,
+      failureCodes: [...failureCodes],
+      observation,
+    };
   }
 
   protected async assertSignerCompatibility(

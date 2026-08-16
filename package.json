@@ -123,8 +123,6 @@
     "@nomicfoundation/hardhat-ethers": "3.1.3",
     "@nomicfoundation/hardhat-verify": "2.1.3",
     "@nomicfoundation/hardhat-network-helpers": "1.1.2",
-    "@nomicfoundation/hardhat-ignition": "0.15.16",
-    "@nomicfoundation/hardhat-ignition-ethers": "0.15.17",
     "handlebars@<4.7.9": "4.7.9",
     "immutable": "4.3.9",
     "picomatch@<2.3.2": "2.3.2",

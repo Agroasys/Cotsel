@@ -8,6 +8,7 @@ import {
   buildStaticProtocolReport,
   normalizeUrl,
   parseEnvContent,
+  validateCandidateDeployReport,
 } from '../lib/full-protocol-health-report.mjs';
 
 function writeJson(filePath, value) {
@@ -85,13 +86,57 @@ test('buildStaticProtocolReport passes for consistent Base Sepolia profile truth
     ].join('\n'),
   );
   writeJson(path.join(root, 'contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json'), {
+    commitSha: 'a'.repeat(40),
+    worktreeClean: true,
     network: { chainId: 84532 },
     contract: {
       address: escrow,
-      deploymentTxHash: '0xabc',
+      deploymentTxHash: `0x${'b'.repeat(64)}`,
       deploymentBlock: 42152846,
+      deploymentReceiptStatus: 1,
+      deployerAddress: '0x9000000000000000000000000000000000000009',
+      constructorArguments: {
+        usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+        oracleAddress: '0x1000000000000000000000000000000000000001',
+        treasuryAddress: '0x2000000000000000000000000000000000000002',
+        relayerAddress: '0x3000000000000000000000000000000000000003',
+        admins: [
+          '0x4000000000000000000000000000000000000004',
+          '0x5000000000000000000000000000000000000005',
+          '0x6000000000000000000000000000000000000006',
+        ],
+        requiredApprovals: 2,
+      },
+      roleAttestation: {
+        usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+        oracleAddress: '0x1000000000000000000000000000000000000001',
+        treasuryAddress: '0x2000000000000000000000000000000000000002',
+        treasuryPayoutAddress: '0x2000000000000000000000000000000000000002',
+        relayerAllowed: true,
+        admins: [
+          '0x4000000000000000000000000000000000000004',
+          '0x5000000000000000000000000000000000000005',
+          '0x6000000000000000000000000000000000000006',
+        ],
+        requiredApprovals: 2,
+        governanceEpoch: 1,
+        oracleActive: true,
+      },
     },
-    verification: { status: 'verified' },
+    verification: { requested: true, status: 'verified' },
+    artifact: {
+      compilerLongVersion: '0.8.34+commit.80d5c536',
+      compilerSettings: { optimizer: { enabled: true, runs: 1 }, viaIR: true },
+      compilerInputSha256: '1'.repeat(64),
+      sourceSha256: { 'src/AgroasysEscrow.sol': '2'.repeat(64) },
+      abiSha256: '3'.repeat(64),
+      bytecodeSha256: '4'.repeat(64),
+      localRuntimeBytecodeSha256: '5'.repeat(64),
+      liveRuntimeBytecodeSha256: '5'.repeat(64),
+      normalizedLocalRuntimeBytecodeSha256: '6'.repeat(64),
+      normalizedRuntimeBytecodeSha256: '6'.repeat(64),
+      runtimeBytecodeMatches: true,
+    },
   });
 
   const report = buildStaticProtocolReport({
@@ -106,6 +151,19 @@ test('buildStaticProtocolReport passes for consistent Base Sepolia profile truth
   assert.equal(report.contracts.escrowAddress, escrow);
   assert.equal(report.services.versions.gateway.version, '1.2.3');
   assert.equal(report.dashHandoff.sessionFileEnv, 'DASHBOARD_GATEWAY_SESSION_FILE');
+});
+
+test('candidate deployment validation rejects legacy evidence', () => {
+  const result = validateCandidateDeployReport({
+    commitSha: 'a'.repeat(40),
+    network: { chainId: 84532 },
+    contract: { address: '0x1000000000000000000000000000000000000001' },
+    verification: { status: 'verified' },
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.failures.includes('deployment_block'));
+  assert.ok(result.failures.includes('role_attestation'));
+  assert.ok(result.failures.includes('artifact_provenance'));
 });
 
 test('buildStaticProtocolReport fails when live mode has no trusted session artifact', () => {

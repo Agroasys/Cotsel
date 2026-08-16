@@ -4,7 +4,12 @@
 import { Client } from '../client';
 import { ethers } from 'ethers';
 import { DisputeStatus, DisputeProposalResult, DisputeResult } from '../types/dispute';
-import { GovernanceProposalResult, GovernanceResult } from '../types/governance';
+import {
+  AdminChangeKind,
+  GovernanceProposalResult,
+  GovernanceResult,
+  PauseScope,
+} from '../types/governance';
 import {
   AuthorizationError,
   ContractError,
@@ -85,12 +90,23 @@ export class AdminSDK extends Client {
     }
   }
 
-  async proposeUnpause(adminSigner: ethers.Signer): Promise<GovernanceResult> {
+  async proposeUnpause(
+    scope: PauseScope,
+    tradeId: bigint,
+    incidentRef: string,
+    adminSigner: ethers.Signer,
+  ): Promise<GovernanceResult> {
     await this.verifyAdmin(adminSigner);
+    if (!ethers.isHexString(incidentRef, 32) || incidentRef === ethers.ZeroHash) {
+      throw new ValidationError('incidentRef must be a non-zero bytes32 incident reference');
+    }
+    if (scope !== PauseScope.TRADE && tradeId !== 0n) {
+      throw new ValidationError('tradeId must be zero unless the trade pause scope is selected');
+    }
 
     try {
       const contractWithSigner = this.contract.connect(adminSigner);
-      const tx = await contractWithSigner.proposeUnpause();
+      const tx = await contractWithSigner.proposeUnpause(scope, tradeId, incidentRef);
       const receipt = await tx.wait();
 
       if (!receipt) {
@@ -107,6 +123,28 @@ export class AdminSDK extends Client {
         error: message,
       });
     }
+  }
+
+  async proposeGlobalUnpause(
+    incidentRef: string,
+    adminSigner: ethers.Signer,
+  ): Promise<GovernanceResult> {
+    return this.proposeUnpause(PauseScope.GLOBAL, 0n, incidentRef, adminSigner);
+  }
+
+  async proposeClaimsUnpause(
+    incidentRef: string,
+    adminSigner: ethers.Signer,
+  ): Promise<GovernanceResult> {
+    return this.proposeUnpause(PauseScope.CLAIMS, 0n, incidentRef, adminSigner);
+  }
+
+  async proposeTradeUnpause(
+    tradeId: bigint,
+    incidentRef: string,
+    adminSigner: ethers.Signer,
+  ): Promise<GovernanceResult> {
+    return this.proposeUnpause(PauseScope.TRADE, tradeId, incidentRef, adminSigner);
   }
 
   async approveUnpause(adminSigner: ethers.Signer): Promise<GovernanceResult> {
@@ -203,30 +241,6 @@ export class AdminSDK extends Client {
     }
   }
 
-  async unpauseClaims(adminSigner: ethers.Signer): Promise<GovernanceResult> {
-    await this.verifyAdmin(adminSigner);
-
-    try {
-      const contractWithSigner = this.contract.connect(adminSigner);
-      const tx = await contractWithSigner.unpauseClaims();
-      const receipt = await tx.wait();
-
-      if (!receipt) {
-        throw new ContractError('Transaction receipt not available');
-      }
-
-      return {
-        txHash: receipt.hash,
-        blockNumber: receipt.blockNumber,
-      };
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      throw new ContractError(`Failed to unpause claims: ${message}`, {
-        error: message,
-      });
-    }
-  }
-
   /**
    * Pauses lifecycle transitions for a single trade, scoped to one tradeId. Same intent
    * as the global pause but leaves every other trade unaffected.
@@ -250,33 +264,6 @@ export class AdminSDK extends Client {
     } catch (error: unknown) {
       const message = getErrorMessage(error);
       throw new ContractError(`Failed to pause trade: ${message}`, { error: message });
-    }
-  }
-
-  /**
-   * Resumes lifecycle transitions for a previously paused trade.
-   */
-  async unpauseTrade(tradeId: bigint, adminSigner: ethers.Signer): Promise<GovernanceResult> {
-    await this.verifyAdmin(adminSigner);
-
-    try {
-      const contractWithSigner = this.contract.connect(adminSigner);
-      const tx = await contractWithSigner.unpauseTrade(tradeId);
-      const receipt = await tx.wait();
-
-      if (!receipt) {
-        throw new ContractError('Transaction receipt not available');
-      }
-
-      return {
-        txHash: receipt.hash,
-        blockNumber: receipt.blockNumber,
-      };
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      throw new ContractError(`Failed to unpause trade: ${message}`, {
-        error: message,
-      });
     }
   }
 
@@ -633,37 +620,121 @@ export class AdminSDK extends Client {
 
   // #################### ADMIN GOVERNANCE ####################
 
-  async proposeAddAdmin(
+  async proposeAdminChange(
+    kind: AdminChangeKind,
+    currentAdmin: string,
     newAdmin: string,
+    newThreshold: bigint,
     adminSigner: ethers.Signer,
   ): Promise<GovernanceProposalResult> {
     await this.verifyAdmin(adminSigner);
-    validateAddress(newAdmin, 'newAdmin');
+    if (
+      kind === AdminChangeKind.ADD ||
+      kind === AdminChangeKind.REPLACE ||
+      kind === AdminChangeKind.RELAYER_ADD
+    ) {
+      validateAddress(newAdmin, 'newAdmin');
+    }
+    if (
+      kind === AdminChangeKind.REMOVE ||
+      kind === AdminChangeKind.REPLACE ||
+      kind === AdminChangeKind.RELAYER_REMOVE
+    ) {
+      validateAddress(currentAdmin, 'currentAdmin');
+    }
 
     try {
       const contractWithSigner = this.contract.connect(adminSigner);
-      const tx = await contractWithSigner.proposeAddAdmin(newAdmin);
-      const receipt = await tx.wait();
-
-      if (!receipt) {
-        throw new ContractError('Transaction receipt not available');
-      }
-
-      return {
-        txHash: receipt.hash,
-        blockNumber: receipt.blockNumber,
-        proposalId: this.extractProposalIdFromReceipt(receipt, 'AdminAddProposed'),
-      };
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      throw new ContractError(`Failed to propose admin addition: ${message}`, {
+      const tx = await contractWithSigner.proposeAdminChange(
+        kind,
+        currentAdmin,
         newAdmin,
+        newThreshold,
+      );
+      const receipt = await tx.wait();
+
+      if (!receipt) {
+        throw new ContractError('Transaction receipt not available');
+      }
+
+      return {
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        proposalId: this.extractProposalIdFromReceipt(receipt, 'AdminChangeProposed'),
+      };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      throw new ContractError(`Failed to propose governed role change: ${message}`, {
+        kind,
+        currentAdmin,
+        newAdmin,
+        newThreshold: newThreshold.toString(),
         error: message,
       });
     }
   }
 
-  async approveAddAdmin(
+  async proposeAddAdmin(newAdmin: string, adminSigner: ethers.Signer) {
+    return this.proposeAdminChange(
+      AdminChangeKind.ADD,
+      ethers.ZeroAddress,
+      newAdmin,
+      0n,
+      adminSigner,
+    );
+  }
+
+  async proposeRemoveAdmin(currentAdmin: string, adminSigner: ethers.Signer) {
+    return this.proposeAdminChange(
+      AdminChangeKind.REMOVE,
+      currentAdmin,
+      ethers.ZeroAddress,
+      0n,
+      adminSigner,
+    );
+  }
+
+  async proposeReplaceAdmin(currentAdmin: string, newAdmin: string, adminSigner: ethers.Signer) {
+    return this.proposeAdminChange(
+      AdminChangeKind.REPLACE,
+      currentAdmin,
+      newAdmin,
+      0n,
+      adminSigner,
+    );
+  }
+
+  async proposeApprovalThreshold(newThreshold: bigint, adminSigner: ethers.Signer) {
+    return this.proposeAdminChange(
+      AdminChangeKind.THRESHOLD,
+      ethers.ZeroAddress,
+      ethers.ZeroAddress,
+      newThreshold,
+      adminSigner,
+    );
+  }
+
+  async proposeAddRelayer(relayer: string, adminSigner: ethers.Signer) {
+    return this.proposeAdminChange(
+      AdminChangeKind.RELAYER_ADD,
+      ethers.ZeroAddress,
+      relayer,
+      0n,
+      adminSigner,
+    );
+  }
+
+  async proposeRemoveRelayer(relayer: string, adminSigner: ethers.Signer) {
+    return this.proposeAdminChange(
+      AdminChangeKind.RELAYER_REMOVE,
+      relayer,
+      ethers.ZeroAddress,
+      0n,
+      adminSigner,
+    );
+  }
+
+  async approveAdminChange(
     proposalId: string | bigint,
     adminSigner: ethers.Signer,
   ): Promise<GovernanceResult> {
@@ -671,7 +742,7 @@ export class AdminSDK extends Client {
 
     try {
       const contractWithSigner = this.contract.connect(adminSigner);
-      const tx = await contractWithSigner.approveAddAdmin(proposalId);
+      const tx = await contractWithSigner.approveAdminChange(proposalId);
       const receipt = await tx.wait();
 
       if (!receipt) {
@@ -684,14 +755,14 @@ export class AdminSDK extends Client {
       };
     } catch (error: unknown) {
       const message = getErrorMessage(error);
-      throw new ContractError(`Failed to approve admin addition: ${message}`, {
+      throw new ContractError(`Failed to approve governed role change: ${message}`, {
         proposalId: proposalId.toString(),
         error: message,
       });
     }
   }
 
-  async executeAddAdmin(
+  async executeAdminChange(
     proposalId: string | bigint,
     adminSigner: ethers.Signer,
   ): Promise<GovernanceResult> {
@@ -699,7 +770,7 @@ export class AdminSDK extends Client {
 
     try {
       const contractWithSigner = this.contract.connect(adminSigner);
-      const tx = await contractWithSigner.executeAddAdmin(proposalId);
+      const tx = await contractWithSigner.executeAdminChange(proposalId);
       const receipt = await tx.wait();
 
       if (!receipt) {
@@ -712,14 +783,14 @@ export class AdminSDK extends Client {
       };
     } catch (error: unknown) {
       const message = getErrorMessage(error);
-      throw new ContractError(`Failed to execute admin addition: ${message}`, {
+      throw new ContractError(`Failed to execute governed role change: ${message}`, {
         proposalId: proposalId.toString(),
         error: message,
       });
     }
   }
 
-  async cancelExpiredAddAdminProposal(
+  async cancelAdminChangeProposal(
     proposalId: string | bigint,
     adminSigner: ethers.Signer,
   ): Promise<GovernanceResult> {
@@ -727,7 +798,7 @@ export class AdminSDK extends Client {
 
     try {
       const contractWithSigner = this.contract.connect(adminSigner);
-      const tx = await contractWithSigner.cancelExpiredAddAdminProposal(proposalId);
+      const tx = await contractWithSigner.cancelAdminChangeProposal(proposalId);
       const receipt = await tx.wait();
 
       if (!receipt) {
@@ -740,10 +811,22 @@ export class AdminSDK extends Client {
       };
     } catch (error: unknown) {
       const message = getErrorMessage(error);
-      throw new ContractError(`Failed to cancel expired admin addition proposal: ${message}`, {
+      throw new ContractError(`Failed to cancel governed role change: ${message}`, {
         proposalId: proposalId.toString(),
         error: message,
       });
     }
+  }
+
+  async approveAddAdmin(proposalId: string | bigint, adminSigner: ethers.Signer) {
+    return this.approveAdminChange(proposalId, adminSigner);
+  }
+
+  async executeAddAdmin(proposalId: string | bigint, adminSigner: ethers.Signer) {
+    return this.executeAdminChange(proposalId, adminSigner);
+  }
+
+  async cancelExpiredAddAdminProposal(proposalId: string | bigint, adminSigner: ethers.Signer) {
+    return this.cancelAdminChangeProposal(proposalId, adminSigner);
   }
 }

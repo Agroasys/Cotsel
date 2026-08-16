@@ -11,12 +11,13 @@ contract address. Existing trades and balances remain on the previous contract.
 ## Preconditions
 
 - The deployer wallet is funded on Base Sepolia.
-- `DEPLOY_ADMINS` contains at least two unique admin addresses.
+- `DEPLOY_ADMINS` contains exactly three unique administrator addresses.
 - `DEPLOY_RELAYER_ADDRESS` is a service-owned gasless execution wallet.
-- `DEPLOY_REQUIRED_APPROVALS` does not exceed the admin count.
+- `DEPLOY_REQUIRED_APPROVALS` is `2`.
 - `BASESCAN_API_KEY` is available when `DEPLOY_VERIFY=true`.
-- The selected oracle, treasury, relayer, and admin addresses have been reviewed for the
-  rehearsal window.
+- The deployer, Oracle, treasury, relayer, and administrator addresses are all different.
+- An independent reviewer approved the role inventory for the rehearsal window.
+- The source commit is clean and contains all generated artifacts.
 
 ## Prepare Env File
 
@@ -64,7 +65,15 @@ The deploy script:
 - waits for deployed bytecode to be visible
 - verifies the contract when `DEPLOY_VERIFY=true`
 - retries transient bytecode-indexing verification failures
+- rejects a dirty or unidentified Git worktree
+- records compiler settings, source hashes, artifact hashes, and live role attestation
 - writes a deploy evidence JSON bundle
+
+The source check excludes generated JSON files under
+`contracts/reports/deploy/`. This exclusion lets an operator run the deploy
+command again after it writes evidence. The check still rejects all other
+tracked or untracked changes. Do not place source files in the deploy-report
+directory.
 
 ## Expected Output
 
@@ -84,6 +93,11 @@ reports/deploy/base-sepolia/agroasysescrow-deploy.json
 ```
 
 unless `DEPLOY_EVIDENCE_OUT_DIR` is set.
+
+Use the default directory for repository evidence. If a custom output directory
+is inside the repository but outside `contracts/reports/deploy/`, the next
+deploy rejects that uncommitted file. Use a directory outside the repository
+when you need a custom location.
 
 The bundle records the deployment block and the receipt status as
 `contract.deploymentBlock` and `contract.deploymentReceiptStatus`. Both are read

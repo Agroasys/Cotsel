@@ -85,35 +85,104 @@ export function sameAddress(left, right) {
 }
 
 export function latestDeployReport(rootDir, runtimeKey = 'base-sepolia') {
-  const reportsDir = path.join(rootDir, 'contracts', 'reports', 'deploy', runtimeKey);
-  if (!fs.existsSync(reportsDir)) return null;
-
-  const candidates = [];
-  const visit = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        visit(fullPath);
-      } else if (entry.isFile() && entry.name.endsWith('-deploy.json')) {
-        const stat = fs.statSync(fullPath);
-        candidates.push({ path: fullPath, mtimeMs: stat.mtimeMs });
-      }
-    }
-  };
-  visit(reportsDir);
-
-  candidates.sort((left, right) => right.mtimeMs - left.mtimeMs);
-  for (const candidate of candidates) {
-    try {
-      return {
-        path: path.relative(rootDir, candidate.path),
-        data: JSON.parse(fs.readFileSync(candidate.path, 'utf8')),
-      };
-    } catch {
-      continue;
-    }
+  const reportPath = path.join(
+    rootDir,
+    'contracts',
+    'reports',
+    'deploy',
+    runtimeKey,
+    'agroasysescrow-deploy.json',
+  );
+  if (!fs.existsSync(reportPath)) return null;
+  try {
+    return {
+      path: path.relative(rootDir, reportPath),
+      data: JSON.parse(fs.readFileSync(reportPath, 'utf8')),
+    };
+  } catch {
+    return null;
   }
-  return null;
+}
+
+function isSha256(value) {
+  return /^[0-9a-f]{64}$/.test(String(value ?? ''));
+}
+
+function isTransactionHash(value) {
+  return /^0x[0-9a-fA-F]{64}$/.test(String(value ?? ''));
+}
+
+export function validateCandidateDeployReport(data) {
+  const failures = [];
+  const contract = data?.contract ?? {};
+  const args = contract.constructorArguments ?? {};
+  const attestation = contract.roleAttestation ?? {};
+  const artifact = data?.artifact ?? {};
+  const verification = data?.verification ?? {};
+
+  if (!/^[0-9a-f]{40}$/.test(String(data?.commitSha ?? '')) || data?.worktreeClean !== true) {
+    failures.push('source_identity');
+  }
+  if (!Number.isSafeInteger(contract.deploymentBlock) || contract.deploymentBlock < 0) {
+    failures.push('deployment_block');
+  }
+  if (contract.deploymentReceiptStatus !== 1 || !isTransactionHash(contract.deploymentTxHash)) {
+    failures.push('deployment_receipt');
+  }
+  if (
+    verification.requested !== true ||
+    !['verified', 'already-verified'].includes(verification.status)
+  ) {
+    failures.push('explorer_verification');
+  }
+  if (
+    !isSha256(artifact.abiSha256) ||
+    !isSha256(artifact.bytecodeSha256) ||
+    !isSha256(artifact.localRuntimeBytecodeSha256) ||
+    !isSha256(artifact.liveRuntimeBytecodeSha256) ||
+    !isSha256(artifact.normalizedLocalRuntimeBytecodeSha256) ||
+    !isSha256(artifact.normalizedRuntimeBytecodeSha256) ||
+    !isSha256(artifact.compilerInputSha256) ||
+    artifact.runtimeBytecodeMatches !== true ||
+    artifact.normalizedLocalRuntimeBytecodeSha256 !== artifact.normalizedRuntimeBytecodeSha256 ||
+    !artifact.compilerLongVersion ||
+    !artifact.compilerSettings ||
+    !artifact.sourceSha256 ||
+    Object.keys(artifact.sourceSha256 ?? {}).length === 0 ||
+    Object.values(artifact.sourceSha256).some((value) => !isSha256(value))
+  ) {
+    failures.push('artifact_provenance');
+  }
+
+  const admins = Array.isArray(args.admins) ? args.admins : [];
+  const roleAddresses = [
+    args.oracleAddress,
+    args.treasuryAddress,
+    args.relayerAddress,
+    ...admins,
+    contract.deployerAddress,
+  ];
+  const normalizedRoles = roleAddresses.filter(isEvmAddress).map((value) => value.toLowerCase());
+  const rolesAreDistinct =
+    roleAddresses.length === normalizedRoles.length &&
+    new Set(normalizedRoles).size === normalizedRoles.length;
+  const attestedAdmins = Array.isArray(attestation.admins) ? attestation.admins : [];
+  const attestationMatches =
+    sameAddress(attestation.usdcAddress, args.usdcAddress) &&
+    sameAddress(attestation.oracleAddress, args.oracleAddress) &&
+    sameAddress(attestation.treasuryAddress, args.treasuryAddress) &&
+    sameAddress(attestation.treasuryPayoutAddress, args.treasuryAddress) &&
+    attestation.relayerAllowed === true &&
+    attestation.requiredApprovals === args.requiredApprovals &&
+    attestation.governanceEpoch === 1 &&
+    attestation.oracleActive === true &&
+    attestedAdmins.length === admins.length &&
+    attestedAdmins.every((admin, index) => sameAddress(admin, admins[index]));
+  if (!rolesAreDistinct || !attestationMatches) {
+    failures.push('role_attestation');
+  }
+
+  return { ok: failures.length === 0, failures };
 }
 
 function reportCheck(checks, name, ok, details = {}) {
@@ -259,6 +328,10 @@ export function buildStaticProtocolReport({
         profileEscrowAddress: canonicalEscrowAddress,
       },
     );
+    const candidateValidation = validateCandidateDeployReport(deployReport.data);
+    reportCheck(checks, 'deploy_report_is_candidate_complete', candidateValidation.ok, {
+      failures: candidateValidation.failures,
+    });
   }
 
   const session = readSessionPosture(rootDir, sessionFile);

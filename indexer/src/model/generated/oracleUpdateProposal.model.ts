@@ -10,29 +10,29 @@ export class OracleUpdateProposal {
     @PrimaryColumn_()
     id!: string
 
-    @Index_()
+    @Index_("idx_oracle_update_proposal_proposal_id_a4c5a58d")
     @StringColumn_({nullable: false})
     proposalId!: string
 
-    @Index_()
+    @Index_("idx_oracle_update_proposal_new_oracle_7daad2be")
     @StringColumn_({nullable: false})
     newOracle!: string
 
     @IntColumn_({nullable: false})
     approvalCount!: number
 
-    @Index_()
+    @Index_("idx_oracle_update_proposal_executed_e995a1e1")
     @BooleanColumn_({nullable: false})
     executed!: boolean
 
-    @Index_()
+    @Index_("idx_oracle_update_proposal_created_at_ef34e33a")
     @DateTimeColumn_({nullable: false})
     createdAt!: Date
 
     @BigIntColumn_({nullable: false})
     eta!: bigint
 
-    @Index_()
+    @Index_("idx_oracle_update_proposal_proposer_e1021ce1")
     @StringColumn_({nullable: false})
     proposer!: string
 
@@ -42,7 +42,7 @@ export class OracleUpdateProposal {
     @DateTimeColumn_({nullable: true})
     expiresAt!: Date | undefined | null
 
-    @Index_()
+    @Index_("idx_oracle_update_proposal_cancelled_b141d19d")
     @BooleanColumn_({nullable: false})
     cancelled!: boolean
 

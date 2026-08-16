@@ -37,6 +37,82 @@ interface IUSDCReceiveWithAuthorization {
  * - Buyer refunds are transferred directly during the refund transaction; buyers never need to claim
  */
 contract AgroasysEscrow is ReentrancyGuard, Pausable {
+    error EscrowAlreadyAdmin();
+    error EscrowAlreadyApproved();
+    error EscrowAlreadyCancelled();
+    error EscrowAlreadyExecuted();
+    error EscrowAlreadyPaused();
+    error EscrowActiveProposalExists();
+    error EscrowArrivalNotSet();
+    error EscrowAuthorizationExpired();
+    error EscrowBadAdmin();
+    error EscrowBadAuthorization();
+    error EscrowBadAuthorizationNonce();
+    error EscrowBreakdownMismatch();
+    error EscrowClaimsAlreadyPaused();
+    error EscrowClaimsNotPaused();
+    error EscrowClaimsPaused();
+    error EscrowDuplicateAdmin();
+    error EscrowInTransitTimeoutNotElapsed();
+    error EscrowInTransitTimestampNotSet();
+    error EscrowInspectionNotAvailable();
+    error EscrowInsufficientAdmins();
+    error EscrowInvalidAdmin();
+    error EscrowInvalidAdminChange();
+    error EscrowInvalidIncidentReference();
+    error EscrowInvalidDisputeStatus();
+    error EscrowInvalidLaunchSettlementSchedule();
+    error EscrowInvalidOracle();
+    error EscrowInvalidRelayer();
+    error EscrowInvalidRoleSeparation();
+    error EscrowInvalidThreshold();
+    error EscrowInvalidToken();
+    error EscrowInvalidTreasury();
+    error EscrowInvalidTreasuryPayoutReceiver();
+    error EscrowInvalidUser();
+    error EscrowLockTimeoutNotElapsed();
+    error EscrowMustBeARRIVALCONFIRMED();
+    error EscrowNoActiveProposal();
+    error EscrowNotEnoughAdmins();
+    error EscrowNotEnoughApprovals();
+    error EscrowMaximumAdminsReached();
+    error EscrowNotPaused();
+    error EscrowNothingTreasuryClaimable();
+    error EscrowOnlyAdmin();
+    error EscrowOnlyOracle();
+    error EscrowOnlyOracleOrAdmin();
+    error EscrowOnlyRelayerOrAdmin();
+    error EscrowOnlyTreasuryOrAdmin();
+    error EscrowOracleDisabled();
+    error EscrowPaused();
+    error EscrowProposalCancelled();
+    error EscrowProposalExpired();
+    error EscrowProposalNotExpired();
+    error EscrowProposalNotFound();
+    error EscrowProposalNotInitialized();
+    error EscrowRequiredApprovalsMustBeAtLeast2();
+    error EscrowRicardianHashRequired();
+    error EscrowSameOracle();
+    error EscrowSameRelayer();
+    error EscrowSameTreasuryPayoutReceiver();
+    error EscrowStatusMustBeINTRANSIT();
+    error EscrowStatusMustBeLOCKED();
+    error EscrowSupplierCannotBeEscrow();
+    error EscrowSupplierRequired();
+    error EscrowStaleGovernanceProposal();
+    error EscrowTimelockNotElapsed();
+    error EscrowTradeAlreadyPaused();
+    error EscrowTradeMustBeFROZEN();
+    error EscrowTradeNotFound();
+    error EscrowTradeNotFrozen();
+    error EscrowTradeNotPaused();
+    error EscrowTradePaused();
+    error EscrowTranchesMustBeGreaterThan0();
+    error EscrowUnsupportedAction();
+    error EscrowUnsupportedInspectionWindow();
+    error EscrowWindowClosed();
+    error EscrowWindowNotElapsed();
+
     using SafeERC20 for IERC20;
 
     // -----------------------------
@@ -59,38 +135,39 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     uint256 public constant DISPUTE_PROPOSAL_TTL = 7 days;
     /// @notice Time-to-live for governance proposals (oracle/admin updates).
     uint256 public constant GOVERNANCE_PROPOSAL_TTL = 7 days;
+    uint256 public constant MAX_ADMINS = 10;
 
-    bytes32 public constant ACTION_CREATE_TRADE = keccak256("CREATE_TRADE");
-    bytes32 public constant ACTION_OPEN_DISPUTE = keccak256("OPEN_DISPUTE");
-    bytes32 public constant ACTION_CANCEL_LOCKED_TIMEOUT = keccak256("CANCEL_LOCKED_TIMEOUT");
-    bytes32 public constant ACTION_REFUND_IN_TRANSIT_TIMEOUT = keccak256("REFUND_IN_TRANSIT_TIMEOUT");
-    bytes32 public constant ACTION_FINALIZE_AFTER_DISPUTE_WINDOW = keccak256("FINALIZE_AFTER_DISPUTE_WINDOW");
+    bytes32 private constant ACTION_CREATE_TRADE = keccak256("CREATE_TRADE");
+    bytes32 private constant ACTION_OPEN_DISPUTE = keccak256("OPEN_DISPUTE");
+    bytes32 private constant ACTION_CANCEL_LOCKED_TIMEOUT = keccak256("CANCEL_LOCKED_TIMEOUT");
+    bytes32 private constant ACTION_REFUND_IN_TRANSIT_TIMEOUT = keccak256("REFUND_IN_TRANSIT_TIMEOUT");
+    bytes32 private constant ACTION_FINALIZE_AFTER_DISPUTE_WINDOW = keccak256("FINALIZE_AFTER_DISPUTE_WINDOW");
+    bytes32 private constant ACTION_FINALIZE_AFTER_INSPECTION_ACCEPTANCE =
+        keccak256("FINALIZE_AFTER_INSPECTION_ACCEPTANCE");
 
-    bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
-        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-    );
+    bytes32 private constant EIP712_DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 private constant CREATE_TRADE_AUTHORIZATION_TYPEHASH = keccak256(
         "CreateTradeAuthorization(address buyer,address supplier,uint256 totalAmount,uint256 logisticsAmount,uint256 platformFeesAmount,uint256 supplierFirstTranche,uint256 supplierSecondTranche,bytes32 ricardianHash,uint256 nonce,uint256 deadline)"
     );
-    bytes32 private constant USER_ACTION_AUTHORIZATION_TYPEHASH = keccak256(
-        "UserActionAuthorization(address user,uint8 action,uint256 tradeId,uint256 nonce,uint256 deadline)"
-    );
+    bytes32 private constant USER_ACTION_AUTHORIZATION_TYPEHASH =
+        keccak256("UserActionAuthorization(address user,uint8 action,uint256 tradeId,uint256 nonce,uint256 deadline)");
     bytes32 private immutable DOMAIN_SEPARATOR;
 
     // -----------------------------
     // Enums / Structs
     // -----------------------------
     enum TradeStatus {
-        LOCKED,            // initial deposit
-        IN_TRANSIT,        // stage1 released (supplier first tranche + logistics fee + platform fee paid)
+        LOCKED, // initial deposit
+        IN_TRANSIT, // stage1 released (supplier first tranche + logistics fee + platform fee paid)
         ARRIVAL_CONFIRMED, // oracle confirms goods are available for inspection; notice window starts
-        FROZEN,            // buyer opened dispute within window
-        CLOSED             // finalized or resolved
+        FROZEN, // buyer opened dispute within window
+        CLOSED // finalized or resolved
     }
 
     enum DisputeStatus {
-        REFUND,  // admin resolution: refund buyer remaining escrowed principal (typically supplierSecondTranche)
-        RESOLVE  // admin resolution: release remaining escrowed principal to supplier (typically supplierSecondTranche)
+        REFUND, // admin resolution: refund buyer remaining escrowed principal (typically supplierSecondTranche)
+        RESOLVE // admin resolution: release remaining escrowed principal to supplier (typically supplierSecondTranche)
     }
 
     enum ClaimType {
@@ -109,7 +186,23 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         OPEN_DISPUTE,
         CANCEL_LOCKED_TIMEOUT,
         REFUND_IN_TRANSIT_TIMEOUT,
-        FINALIZE_AFTER_DISPUTE_WINDOW
+        FINALIZE_AFTER_DISPUTE_WINDOW,
+        FINALIZE_AFTER_INSPECTION_ACCEPTANCE
+    }
+
+    enum PauseScope {
+        GLOBAL,
+        CLAIMS,
+        TRADE
+    }
+
+    enum AdminChangeKind {
+        ADD,
+        REMOVE,
+        REPLACE,
+        THRESHOLD,
+        RELAYER_ADD,
+        RELAYER_REMOVE
     }
 
     struct UsdcAuthorization {
@@ -129,10 +222,10 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         address supplierAddress;
         uint256 totalAmountLocked;
 
-        uint256 logisticsAmount;     // protected until stage1; paid to treasury after custody and document verification
-        uint256 platformFeesAmount;  // protected until stage1; includes buyer/supplier fees and fixed settlement fee
+        uint256 logisticsAmount; // protected until stage1; paid to treasury after custody and document verification
+        uint256 platformFeesAmount; // protected until stage1; includes buyer/supplier fees and fixed settlement fee
 
-        uint256 supplierFirstTranche;  // 60% gross goods tranche less the supplier fee, released at stage1
+        uint256 supplierFirstTranche; // 60% gross goods tranche less the supplier fee, released at stage1
         uint256 supplierSecondTranche; // remaining 40% goods tranche, released at stage2/finalization
 
         uint256 createdAt;
@@ -146,6 +239,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         bool executed;
         uint256 createdAt;
         address proposer;
+        uint256 epoch;
     }
 
     // ---- Governance (timelocked) ----
@@ -157,15 +251,20 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 eta; // execute-after timestamp (timelock)
         address proposer;
         bool emergencyFastTrack; // true if oracle was disabled when proposed
+        uint256 epoch;
     }
 
-    struct AdminAddProposal {
+    struct AdminChangeProposal {
+        AdminChangeKind kind;
+        address currentAdmin;
         address newAdmin;
+        uint256 newThreshold;
         uint256 approvalCount;
         bool executed;
         uint256 createdAt;
         uint256 eta; // execute-after timestamp (timelock)
         address proposer;
+        uint256 epoch;
     }
 
     struct TreasuryPayoutAddressUpdateProposal {
@@ -175,13 +274,18 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 createdAt;
         uint256 eta; // execute-after timestamp (timelock)
         address proposer;
+        uint256 epoch;
     }
 
     struct UnpauseProposal {
+        PauseScope scope;
+        uint256 tradeId;
+        bytes32 incidentRef;
         uint256 approvalCount;
         bool executed;
         uint256 createdAt;
         address proposer;
+        uint256 epoch;
     }
 
     // -----------------------------
@@ -231,6 +335,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     mapping(address => bool) public isAdmin;
     mapping(address => bool) public isRelayer;
     uint256 public requiredApprovals;
+    uint256 public governanceEpoch;
     mapping(address => uint256) public claimableUsdc;
     uint256 public totalClaimableUsdc;
 
@@ -250,13 +355,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     mapping(uint256 => bool) public oracleUpdateProposalCancelled;
     uint256 public oracleUpdateCounter;
 
-    mapping(uint256 => AdminAddProposal) public adminAddProposals;
-    mapping(uint256 => mapping(address => bool)) public adminAddHasApproved;
-    /// @notice Expiration timestamp for each admin-add proposal id.
-    mapping(uint256 => uint256) public adminAddProposalExpiresAt;
-    /// @notice True when an admin-add proposal has been cancelled after expiry.
-    mapping(uint256 => bool) public adminAddProposalCancelled;
-    uint256 public adminAddCounter;
+    mapping(uint256 => AdminChangeProposal) public adminChangeProposals;
+    mapping(uint256 => mapping(address => bool)) private adminChangeHasApproved;
+    mapping(uint256 => uint256) private adminChangeProposalExpiresAt;
+    mapping(uint256 => bool) private adminChangeProposalCancelled;
+    uint256 public adminChangeCounter;
 
     mapping(uint256 => TreasuryPayoutAddressUpdateProposal) public treasuryPayoutAddressUpdateProposals;
     mapping(uint256 => mapping(address => bool)) public treasuryPayoutAddressUpdateHasApproved;
@@ -265,8 +368,6 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     /// @notice True when a treasury-payout-address proposal has been cancelled after expiry.
     mapping(uint256 => bool) public treasuryPayoutAddressUpdateProposalCancelled;
     uint256 public treasuryPayoutAddressUpdateCounter;
-    /// @notice True when a treasury-payout-address update proposal is currently pending (not yet executed or cancelled).
-    bool public hasPendingTreasuryPayoutAddressUpdateProposal;
 
     // -----------------------------
     // Events
@@ -284,26 +385,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     );
 
     event AuthorizationConsumed(
-        address indexed user,
-        bytes32 indexed action,
-        uint256 nonce,
-        address indexed relayer,
-        uint256 deadline
+        address indexed user, bytes32 indexed action, uint256 nonce, address indexed relayer, uint256 deadline
     );
 
-    event RelayedActionExecuted(
-        address indexed relayer,
-        address indexed user,
-        bytes32 indexed action,
-        uint256 tradeId
-    );
+    event RelayedActionExecuted(address indexed relayer, address indexed user, bytes32 indexed action, uint256 tradeId);
     event RelayerUpdated(address indexed relayer, bool allowed, address indexed updatedBy);
 
     event GaslessTradeFunded(
-        uint256 indexed tradeId,
-        address indexed buyer,
-        bytes32 indexed usdcAuthorizationNonce,
-        uint256 amount
+        uint256 indexed tradeId, address indexed buyer, bytes32 indexed usdcAuthorizationNonce, uint256 amount
     );
 
     event FundsReleasedStage1(
@@ -324,45 +413,30 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     );
 
     event InspectionAvailable(
-        uint256 indexed tradeId,
-        uint256 inspectionAvailableAt,
-        uint256 inspectionWindowSeconds,
-        uint256 noticeDeadline
+        uint256 indexed tradeId, uint256 inspectionAvailableAt, uint256 inspectionWindowSeconds, uint256 noticeDeadline
     );
     event InspectionAcceptedForFinalRelease(uint256 indexed tradeId, uint256 acceptedAt);
 
     // Stage 2 pays supplierSecondTranche ONLY (no treasury payment).
     // Explicit final tranche event for Stage 2/finalization
-    event FinalTrancheReleased(
-        uint256 indexed tradeId,
-        address indexed supplier,
-        uint256 supplierSecondTranche
-    );
+    event FinalTrancheReleased(uint256 indexed tradeId, address indexed supplier, uint256 supplierSecondTranche);
 
     event DisputeOpenedByBuyer(uint256 indexed tradeId);
 
     event DisputeSolutionProposed(
-        uint256 indexed proposalId,
-        uint256 indexed tradeId,
-        DisputeStatus disputeStatus,
-        address indexed proposer
+        uint256 indexed proposalId, uint256 indexed tradeId, DisputeStatus disputeStatus, address indexed proposer
     );
 
     event DisputeApproved(
-        uint256 indexed proposalId,
-        address indexed approver,
-        uint256 approvalCount,
-        uint256 requiredApprovals
+        uint256 indexed proposalId, address indexed approver, uint256 approvalCount, uint256 requiredApprovals
     );
 
-    event DisputeFinalized(
-        uint256 indexed proposalId,
-        uint256 indexed tradeId,
-        DisputeStatus disputeStatus
-    );
+    event DisputeFinalized(uint256 indexed proposalId, uint256 indexed tradeId, DisputeStatus disputeStatus);
 
     // ---- Unpause multi-sig events ----
-    event UnpauseProposed(address indexed proposer);
+    event UnpauseProposed(
+        address indexed proposer, PauseScope indexed scope, uint256 indexed tradeId, bytes32 incidentRef, uint256 epoch
+    );
     event UnpauseApproved(address indexed approver, uint256 approvalCount, uint256 requiredApprovals);
     event UnpauseProposalCancelled(address indexed cancelledBy);
 
@@ -376,71 +450,56 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     );
 
     event OracleUpdateApproved(
-        uint256 indexed proposalId,
-        address indexed approver,
-        uint256 approvalCount,
-        uint256 requiredApprovals
+        uint256 indexed proposalId, address indexed approver, uint256 approvalCount, uint256 requiredApprovals
     );
 
-    event OracleUpdated(
-        address indexed oldOracle,
-        address indexed newOracle
-    );
+    event OracleUpdated(address indexed oldOracle, address indexed newOracle);
 
-    event AdminAddProposed(
+    event AdminChangeProposed(
         uint256 indexed proposalId,
         address indexed proposer,
-        address indexed newAdmin,
-        uint256 eta
+        AdminChangeKind kind,
+        address currentAdmin,
+        address newAdmin,
+        uint256 newThreshold,
+        uint256 eta,
+        uint256 epoch
     );
 
-    event AdminAddApproved(
+    event AdminChangeApproved(
+        uint256 indexed proposalId, address indexed approver, uint256 approvalCount, uint256 requiredApprovals
+    );
+
+    event AdminChangeExecuted(
         uint256 indexed proposalId,
-        address indexed approver,
-        uint256 approvalCount,
-        uint256 requiredApprovals
+        AdminChangeKind indexed kind,
+        address currentAdmin,
+        address newAdmin,
+        uint256 newThreshold
     );
 
     event AdminAdded(address indexed newAdmin);
+    event AdminRemoved(address indexed oldAdmin);
+    event AdminReplaced(address indexed oldAdmin, address indexed newAdmin);
+    event RequiredApprovalsUpdated(uint256 oldThreshold, uint256 newThreshold);
+    event GovernanceEpochAdvanced(uint256 indexed newEpoch);
     event TreasuryPayoutAddressUpdateProposed(
-        uint256 indexed proposalId,
-        address indexed proposer,
-        address indexed newPayoutReceiver,
-        uint256 eta
+        uint256 indexed proposalId, address indexed proposer, address indexed newPayoutReceiver, uint256 eta
     );
     event TreasuryPayoutAddressUpdateApproved(
-        uint256 indexed proposalId,
-        address indexed approver,
-        uint256 approvalCount,
-        uint256 requiredApprovals
+        uint256 indexed proposalId, address indexed approver, uint256 approvalCount, uint256 requiredApprovals
     );
-    event TreasuryPayoutAddressUpdated(
-        address indexed oldPayoutReceiver,
-        address indexed newPayoutReceiver
-    );
+    event TreasuryPayoutAddressUpdated(address indexed oldPayoutReceiver, address indexed newPayoutReceiver);
     event TreasuryPayoutAddressUpdateProposalExpiredCancelled(uint256 indexed proposalId, address indexed cancelledBy);
     event TreasuryClaimed(
-        address indexed treasuryIdentity,
-        address indexed payoutReceiver,
-        uint256 amount,
-        address triggeredBy
+        address indexed treasuryIdentity, address indexed payoutReceiver, uint256 amount, address triggeredBy
     );
 
     event OracleDisabledEmergency(address indexed by, address indexed previousOracle);
-    event TradeCancelledAfterLockTimeout(
-        uint256 indexed tradeId,
-        address indexed buyer,
-        uint256 refundedAmount
-    );
-    event InTransitTimeoutRefunded(
-        uint256 indexed tradeId,
-        address indexed buyer,
-        uint256 refundedAmount
-    );
+    event TradeCancelledAfterLockTimeout(uint256 indexed tradeId, address indexed buyer, uint256 refundedAmount);
+    event InTransitTimeoutRefunded(uint256 indexed tradeId, address indexed buyer, uint256 refundedAmount);
     event DisputeProposalExpiredCancelled(
-        uint256 indexed proposalId,
-        uint256 indexed tradeId,
-        address indexed cancelledBy
+        uint256 indexed proposalId, uint256 indexed tradeId, address indexed cancelledBy
     );
     event DisputePayout(
         uint256 indexed tradeId,
@@ -449,12 +508,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 amount,
         DisputeStatus payoutType
     );
-    event ClaimableAccrued(
-        uint256 indexed tradeId,
-        address indexed recipient,
-        uint256 amount,
-        ClaimType claimType
-    );
+    event ClaimableAccrued(uint256 indexed tradeId, address indexed recipient, uint256 amount, ClaimType claimType);
     event SupplierPayoutTransferred(
         uint256 indexed tradeId,
         address indexed supplier,
@@ -463,18 +517,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         address indexed triggeredBy
     );
     event BuyerRefundTransferred(
-        uint256 indexed tradeId,
-        address indexed buyer,
-        uint256 amount,
-        ClaimType claimType,
-        address indexed triggeredBy
+        uint256 indexed tradeId, address indexed buyer, uint256 amount, ClaimType claimType, address indexed triggeredBy
     );
     event ClaimsPaused(address indexed triggeredBy);
     event ClaimsUnpaused(address indexed triggeredBy);
     event TradePaused(uint256 indexed tradeId, address indexed triggeredBy);
     event TradeUnpaused(uint256 indexed tradeId, address indexed triggeredBy);
     event OracleUpdateProposalExpiredCancelled(uint256 indexed proposalId, address indexed cancelledBy);
-    event AdminAddProposalExpiredCancelled(uint256 indexed proposalId, address indexed cancelledBy);
+    event AdminChangeProposalCancelled(uint256 indexed proposalId, address indexed cancelledBy);
 
     // -----------------------------
     // Constructor / Modifiers
@@ -487,16 +537,21 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         address[] memory _admins,
         uint256 _requiredApprovals
     ) {
-        require(_usdcToken != address(0), "invalid token");
-        require(_oracleAddress != address(0), "invalid oracle");
-        require(_treasuryAddress != address(0), "invalid treasury");
-        require(_relayerAddress != address(0), "invalid relayer");
-        require(_requiredApprovals >= 2, "required approvals must be >= 2");
+        if (!(_usdcToken != address(0))) revert EscrowInvalidToken();
+        if (!(_oracleAddress != address(0))) revert EscrowInvalidOracle();
+        if (!(_treasuryAddress != address(0))) revert EscrowInvalidTreasury();
+        if (!(_relayerAddress != address(0))) revert EscrowInvalidRelayer();
+        if (
+            _oracleAddress == _treasuryAddress || _oracleAddress == _relayerAddress
+                || _treasuryAddress == _relayerAddress
+        ) revert EscrowInvalidRoleSeparation();
+        if (!(_requiredApprovals >= 2)) revert EscrowRequiredApprovalsMustBeAtLeast2();
         // Strictly greater, not equal: the admin set must keep at least one spare signer beyond
         // the approval threshold. At parity (admins == requiredApprovals) the loss of a single
         // key permanently disables dispute resolution, unpause, and all governance rotation,
         // and this contract has no admin-removal or threshold-change path to recover.
-        require(_admins.length > _requiredApprovals, "not enough admins");
+        if (!(_admins.length > _requiredApprovals)) revert EscrowNotEnoughAdmins();
+        if (_admins.length > MAX_ADMINS) revert EscrowMaximumAdminsReached();
 
         usdcToken = IERC20(_usdcToken);
         oracleAddress = _oracleAddress;
@@ -507,8 +562,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
 
         for (uint256 i = 0; i < _admins.length; i++) {
             address admin = _admins[i];
-            require(admin != address(0), "bad admin");
-            require(!isAdmin[admin], "duplicate admin");
+            if (!(admin != address(0))) revert EscrowBadAdmin();
+            if (!(!isAdmin[admin])) revert EscrowDuplicateAdmin();
+            if (admin == _oracleAddress || admin == _treasuryAddress || admin == _relayerAddress) {
+                revert EscrowInvalidRoleSeparation();
+            }
             admins.push(admin);
             isAdmin[admin] = true;
         }
@@ -516,33 +574,34 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         // Timelock for sensitive governance operations (oracle/admin updates).
         // Can be changed in future versions if needed; keeping minimal for now.
         governanceTimelock = 24 hours;
+        governanceEpoch = 1;
         oracleActive = true;
         DOMAIN_SEPARATOR = _buildDomainSeparator();
         emit RelayerUpdated(_relayerAddress, true, msg.sender);
     }
 
     modifier onlyAdmin() {
-        require(isAdmin[msg.sender], "only admin");
+        if (!(isAdmin[msg.sender])) revert EscrowOnlyAdmin();
         _;
     }
 
     modifier onlyTreasuryOrAdmin() {
-        require(msg.sender == treasuryAddress || isAdmin[msg.sender], "only treasury or admin");
+        if (!(msg.sender == treasuryAddress || isAdmin[msg.sender])) revert EscrowOnlyTreasuryOrAdmin();
         _;
     }
 
     modifier onlyRelayerOrAdmin() {
-        require(isAdmin[msg.sender] || isRelayer[msg.sender], "only relayer or admin");
+        if (!(isAdmin[msg.sender] || isRelayer[msg.sender])) revert EscrowOnlyRelayerOrAdmin();
         _;
     }
 
     modifier onlyOracle() {
-        require(msg.sender == oracleAddress, "only oracle");
+        if (!(msg.sender == oracleAddress)) revert EscrowOnlyOracle();
         _;
     }
 
     modifier whenClaimsNotPaused() {
-        require(!claimsPaused, "claims paused");
+        if (!(!claimsPaused)) revert EscrowClaimsPaused();
         _;
     }
     modifier whenTradeNotPaused(uint256 _tradeId) {
@@ -553,37 +612,37 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     /// @dev Shared per-trade pause guard; kept as an internal function (not inlined per
     /// call site) so the check exists once in bytecode. Mirrors `_requireNotPaused`.
     function _requireTradeNotPaused(uint256 _tradeId) internal view {
-        require(!tradePaused[_tradeId], "trade paused");
+        if (!(!tradePaused[_tradeId])) revert EscrowTradePaused();
     }
     modifier onlyOracleActive() {
-        require(oracleActive, "oracle disabled");
+        if (!(oracleActive)) revert EscrowOracleDisabled();
         _;
     }
 
     modifier onlyOracleOrAdmin() {
         bool callerIsOracle = msg.sender == oracleAddress;
-        require(callerIsOracle || isAdmin[msg.sender], "only oracle or admin");
+        if (!(callerIsOracle || isAdmin[msg.sender])) revert EscrowOnlyOracleOrAdmin();
         if (callerIsOracle) {
-            require(oracleActive, "oracle disabled");
+            if (!(oracleActive)) revert EscrowOracleDisabled();
         }
         _;
     }
 
     /// @dev Keep backwards-compatible revert messages for existing consumers/tests.
     function _requireNotPaused() internal view override {
-        require(!paused(), "paused");
+        if (!(!paused())) revert EscrowPaused();
     }
 
     /// @dev Keep backwards-compatible revert messages for existing consumers/tests.
     function _requirePaused() internal view override {
-        require(paused(), "not paused");
+        if (!(paused())) revert EscrowNotPaused();
     }
 
     /**
      * @notice Pauses normal protocol operations for emergency containment.
      */
     function pause() external onlyAdmin {
-        require(!paused(), "already paused");
+        if (!(!paused())) revert EscrowAlreadyPaused();
         _pause();
     }
 
@@ -591,18 +650,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * @notice Pauses claim withdrawals while keeping global pause policy independent.
      */
     function pauseClaims() external onlyAdmin {
-        require(!claimsPaused, "claims already paused");
+        if (!(!claimsPaused)) revert EscrowClaimsAlreadyPaused();
         claimsPaused = true;
         emit ClaimsPaused(msg.sender);
-    }
-
-    /**
-     * @notice Unpauses claim withdrawals.
-     */
-    function unpauseClaims() external onlyAdmin {
-        require(claimsPaused, "claims not paused");
-        claimsPaused = false;
-        emit ClaimsUnpaused(msg.sender);
     }
 
     /**
@@ -611,51 +661,41 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * trade unaffected. Does not move funds or change trade status.
      */
     function pauseTrade(uint256 _tradeId) external onlyAdmin {
-        require(_tradeId < tradeCounter, "trade not found");
-        require(!tradePaused[_tradeId], "trade already paused");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
+        if (!(!tradePaused[_tradeId])) revert EscrowTradeAlreadyPaused();
         tradePaused[_tradeId] = true;
         emit TradePaused(_tradeId, msg.sender);
     }
 
     /**
-     * @notice Resumes lifecycle transitions for a previously paused trade.
+     * @notice Propose recovery for one paused scope. Pause remains immediate; recovery requires quorum.
      */
-    function unpauseTrade(uint256 _tradeId) external onlyAdmin {
-        require(_tradeId < tradeCounter, "trade not found");
-        require(tradePaused[_tradeId], "trade not paused");
-        tradePaused[_tradeId] = false;
-        emit TradeUnpaused(_tradeId, msg.sender);
-    }
+    function proposeUnpause(PauseScope scope, uint256 tradeId, bytes32 incidentRef) external onlyAdmin returns (bool) {
+        if (incidentRef == bytes32(0)) revert EscrowInvalidIncidentReference();
+        _validatePausedScope(scope, tradeId);
 
-    function setRelayer(address relayer, bool allowed) external onlyAdmin {
-        require(relayer != address(0), "invalid relayer");
-        isRelayer[relayer] = allowed;
-        emit RelayerUpdated(relayer, allowed, msg.sender);
-    }
-
-    /**
-     * @notice Propose unpausing the protocol (requires multi-sig approval).
-     */
-    function proposeUnpause() external onlyAdmin returns (bool) {
-        require(paused(), "not paused");
-        require(oracleActive, "oracle disabled");
-
-        // Cancel any existing unpause proposal
         if (hasActiveUnpauseProposal) {
+            bool staleOrExpired = unpauseProposal.epoch != governanceEpoch
+                || block.timestamp > unpauseProposal.createdAt + GOVERNANCE_PROPOSAL_TTL;
+            if (!staleOrExpired) revert EscrowActiveProposalExists();
             _cancelUnpauseProposal();
         }
 
         unpauseProposal = UnpauseProposal({
+            scope: scope,
+            tradeId: tradeId,
+            incidentRef: incidentRef,
             approvalCount: 1,
             executed: false,
             createdAt: block.timestamp,
-            proposer: msg.sender
+            proposer: msg.sender,
+            epoch: governanceEpoch
         });
 
         unpauseHasApproved[msg.sender] = true;
         hasActiveUnpauseProposal = true;
 
-        emit UnpauseProposed(msg.sender);
+        emit UnpauseProposed(msg.sender, scope, tradeId, incidentRef, governanceEpoch);
         emit UnpauseApproved(msg.sender, 1, governanceApprovals());
 
         return true;
@@ -665,10 +705,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * @notice Approve the unpause proposal.
      */
     function approveUnpause() external onlyAdmin {
-        require(paused(), "not paused");
-        require(hasActiveUnpauseProposal, "no active proposal");
-        require(!unpauseProposal.executed, "already executed");
-        require(!unpauseHasApproved[msg.sender], "already approved");
+        if (!(hasActiveUnpauseProposal)) revert EscrowNoActiveProposal();
+        if (!(!unpauseProposal.executed)) revert EscrowAlreadyExecuted();
+        if (unpauseProposal.epoch != governanceEpoch) revert EscrowStaleGovernanceProposal();
+        _validatePausedScope(unpauseProposal.scope, unpauseProposal.tradeId);
+        if (!(!unpauseHasApproved[msg.sender])) revert EscrowAlreadyApproved();
 
         unpauseHasApproved[msg.sender] = true;
         unpauseProposal.approvalCount++;
@@ -684,8 +725,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * @notice Cancel the current unpause proposal.
      */
     function cancelUnpauseProposal() external onlyAdmin {
-        require(hasActiveUnpauseProposal, "no active proposal");
-        require(!unpauseProposal.executed, "already executed");
+        if (!(hasActiveUnpauseProposal)) revert EscrowNoActiveProposal();
+        if (!(!unpauseProposal.executed)) revert EscrowAlreadyExecuted();
+        bool staleOrExpired = unpauseProposal.epoch != governanceEpoch
+            || block.timestamp > unpauseProposal.createdAt + GOVERNANCE_PROPOSAL_TTL;
+        if (msg.sender != unpauseProposal.proposer && !staleOrExpired) revert EscrowActiveProposalExists();
 
         _cancelUnpauseProposal();
     }
@@ -704,13 +748,21 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function _executeUnpause() internal {
-        require(!unpauseProposal.executed, "already executed");
-        require(unpauseProposal.approvalCount >= governanceApprovals(), "not enough approvals");
-
+        if (!(!unpauseProposal.executed)) revert EscrowAlreadyExecuted();
+        if (unpauseProposal.epoch != governanceEpoch) revert EscrowStaleGovernanceProposal();
+        if (!(unpauseProposal.approvalCount >= governanceApprovals())) revert EscrowNotEnoughApprovals();
 
         unpauseProposal.executed = true;
         hasActiveUnpauseProposal = false;
-        _unpause();
+        if (unpauseProposal.scope == PauseScope.GLOBAL) {
+            _unpause();
+        } else if (unpauseProposal.scope == PauseScope.CLAIMS) {
+            claimsPaused = false;
+            emit ClaimsUnpaused(msg.sender);
+        } else {
+            tradePaused[unpauseProposal.tradeId] = false;
+            emit TradeUnpaused(unpauseProposal.tradeId, msg.sender);
+        }
 
         // Clear approvals
         address[] memory adminList = admins;
@@ -719,11 +771,23 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         }
     }
 
+    function _validatePausedScope(PauseScope scope, uint256 tradeId) internal view {
+        if (scope == PauseScope.GLOBAL) {
+            if (!(paused())) revert EscrowNotPaused();
+            if (!(oracleActive)) revert EscrowOracleDisabled();
+        } else if (scope == PauseScope.CLAIMS) {
+            if (!(claimsPaused)) revert EscrowClaimsNotPaused();
+        } else {
+            if (!(tradeId < tradeCounter)) revert EscrowTradeNotFound();
+            if (!(tradePaused[tradeId])) revert EscrowTradeNotPaused();
+        }
+    }
+
     /**
      * @notice Emergency kill switch to disable oracle-triggered transitions and pause protocol.
      */
     function disableOracleEmergency() external onlyAdmin {
-        require(oracleActive, "oracle disabled");
+        if (!(oracleActive)) revert EscrowOracleDisabled();
         oracleActive = false;
         if (!paused()) {
             _pause();
@@ -744,7 +808,10 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         if (action == SponsoredAction.CANCEL_LOCKED_TIMEOUT) return ACTION_CANCEL_LOCKED_TIMEOUT;
         if (action == SponsoredAction.REFUND_IN_TRANSIT_TIMEOUT) return ACTION_REFUND_IN_TRANSIT_TIMEOUT;
         if (action == SponsoredAction.FINALIZE_AFTER_DISPUTE_WINDOW) return ACTION_FINALIZE_AFTER_DISPUTE_WINDOW;
-        revert("unsupported action");
+        if (action == SponsoredAction.FINALIZE_AFTER_INSPECTION_ACCEPTANCE) {
+            return ACTION_FINALIZE_AFTER_INSPECTION_ACCEPTANCE;
+        }
+        revert EscrowUnsupportedAction();
     }
 
     function _buildDomainSeparator() internal view returns (bytes32) {
@@ -768,9 +835,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function _requireAuthorization(address user, uint256 nonce, uint256 deadline) internal view {
-        require(user != address(0), "invalid user");
-        require(block.timestamp <= deadline, "authorization expired");
-        require(nonce == authorizationNonces[user], "bad authorization nonce");
+        if (!(user != address(0))) revert EscrowInvalidUser();
+        if (!(block.timestamp <= deadline)) revert EscrowAuthorizationExpired();
+        if (!(nonce == authorizationNonces[user])) revert EscrowBadAuthorizationNonce();
     }
 
     function _consumeAuthorization(address user, SponsoredAction action, uint256 nonce, uint256 deadline) internal {
@@ -838,7 +905,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             deadline,
             signature
         );
-        require(signer == buyer, "bad authorization");
+        if (!(signer == buyer)) revert EscrowBadAuthorization();
         _consumeAuthorization(buyer, SponsoredAction.CREATE_TRADE, nonce, deadline);
     }
 
@@ -852,18 +919,10 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     ) internal {
         _requireAuthorization(user, nonce, deadline);
 
-        bytes32 structHash = keccak256(
-            abi.encode(
-                USER_ACTION_AUTHORIZATION_TYPEHASH,
-                user,
-                uint8(action),
-                tradeId,
-                nonce,
-                deadline
-            )
-        );
+        bytes32 structHash =
+            keccak256(abi.encode(USER_ACTION_AUTHORIZATION_TYPEHASH, user, uint8(action), tradeId, nonce, deadline));
         address signer = ECDSA.recover(_hashTypedDataV4(structHash), signature);
-        require(signer == user, "bad authorization");
+        if (!(signer == user)) revert EscrowBadAuthorization();
         _consumeAuthorization(user, action, nonce, deadline);
     }
 
@@ -876,17 +935,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 supplierSecondTranche,
         bytes32 ricardianHash
     ) internal view {
-        require(ricardianHash != bytes32(0), "ricardian hash required");
-        require(supplier != address(0), "supplier required");
-        require(supplier != address(this), "supplier cannot be escrow");
+        if (!(ricardianHash != bytes32(0))) revert EscrowRicardianHashRequired();
+        if (!(supplier != address(0))) revert EscrowSupplierRequired();
+        if (!(supplier != address(this))) revert EscrowSupplierCannotBeEscrow();
 
-        uint256 totalExpected = logisticsAmount
-            + platformFeesAmount
-            + supplierFirstTranche
-            + supplierSecondTranche;
+        uint256 totalExpected = logisticsAmount + platformFeesAmount + supplierFirstTranche + supplierSecondTranche;
 
-        require(totalAmount == totalExpected, "breakdown mismatch");
-        require(supplierFirstTranche > 0 && supplierSecondTranche > 0, "tranches must be > 0");
+        if (!(totalAmount == totalExpected)) revert EscrowBreakdownMismatch();
+        if (!(supplierFirstTranche > 0 && supplierSecondTranche > 0)) revert EscrowTranchesMustBeGreaterThan0();
     }
 
     function _storeTrade(
@@ -988,11 +1044,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             _supplierSecondTranche,
             _ricardianHash
         );
-        _validateLaunchSettlementSchedule(
-            _platformFeesAmount,
-            _supplierFirstTranche,
-            _supplierSecondTranche
-        );
+        _validateLaunchSettlementSchedule(_platformFeesAmount, _supplierFirstTranche, _supplierSecondTranche);
 
         _verifyCreateTradeAuthorization(
             _buyer,
@@ -1019,17 +1071,18 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             _ricardianHash
         );
 
-        IUSDCReceiveWithAuthorization(address(usdcToken)).receiveWithAuthorization(
-            _buyer,
-            address(this),
-            _totalAmount,
-            _usdcAuthorization.validAfter,
-            _usdcAuthorization.validBefore,
-            _usdcAuthorization.nonce,
-            _usdcAuthorization.v,
-            _usdcAuthorization.r,
-            _usdcAuthorization.s
-        );
+        IUSDCReceiveWithAuthorization(address(usdcToken))
+            .receiveWithAuthorization(
+                _buyer,
+                address(this),
+                _totalAmount,
+                _usdcAuthorization.validAfter,
+                _usdcAuthorization.validBefore,
+                _usdcAuthorization.nonce,
+                _usdcAuthorization.v,
+                _usdcAuthorization.r,
+                _usdcAuthorization.s
+            );
 
         emit GaslessTradeFunded(newTradeId, _buyer, _usdcAuthorization.nonce, _totalAmount);
         emit RelayedActionExecuted(msg.sender, _buyer, ACTION_CREATE_TRADE, newTradeId);
@@ -1043,28 +1096,19 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 supplierSecondTranche
     ) internal pure {
         uint256 netSupplierPayout = supplierFirstTranche + supplierSecondTranche;
-        uint256 maximumGoodsCandidate = Math.mulDiv(
-            netSupplierPayout,
-            BPS_DENOMINATOR,
-            BPS_DENOMINATOR - SUPPLIER_PLATFORM_FEE_BPS
-        );
+        uint256 maximumGoodsCandidate =
+            Math.mulDiv(netSupplierPayout, BPS_DENOMINATOR, BPS_DENOMINATOR - SUPPLIER_PLATFORM_FEE_BPS);
 
         bool valid = _matchesLaunchSettlementSchedule(
-            maximumGoodsCandidate,
-            platformFeesAmount,
-            supplierFirstTranche,
-            supplierSecondTranche
+            maximumGoodsCandidate, platformFeesAmount, supplierFirstTranche, supplierSecondTranche
         );
         if (!valid && maximumGoodsCandidate > 0) {
             valid = _matchesLaunchSettlementSchedule(
-                maximumGoodsCandidate - 1,
-                platformFeesAmount,
-                supplierFirstTranche,
-                supplierSecondTranche
+                maximumGoodsCandidate - 1, platformFeesAmount, supplierFirstTranche, supplierSecondTranche
             );
         }
 
-        require(valid, "invalid launch settlement schedule");
+        if (!(valid)) revert EscrowInvalidLaunchSettlementSchedule();
     }
 
     function _matchesLaunchSettlementSchedule(
@@ -1075,17 +1119,11 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     ) internal pure returns (bool) {
         uint256 buyerFee = Math.mulDiv(goodsAmount, BUYER_PLATFORM_FEE_BPS, BPS_DENOMINATOR);
         uint256 supplierFee = Math.mulDiv(goodsAmount, SUPPLIER_PLATFORM_FEE_BPS, BPS_DENOMINATOR);
-        uint256 firstTrancheGross = Math.mulDiv(
-            goodsAmount,
-            FIRST_SUPPLIER_TRANCHE_BPS,
-            BPS_DENOMINATOR
-        );
+        uint256 firstTrancheGross = Math.mulDiv(goodsAmount, FIRST_SUPPLIER_TRANCHE_BPS, BPS_DENOMINATOR);
 
-        return
-            firstTrancheGross >= supplierFee &&
-            supplierFirstTranche == firstTrancheGross - supplierFee &&
-            supplierSecondTranche == goodsAmount - firstTrancheGross &&
-            platformFeesAmount == buyerFee + supplierFee + SETTLEMENT_SUPPORT_FEE;
+        return firstTrancheGross >= supplierFee && supplierFirstTranche == firstTrancheGross - supplierFee
+            && supplierSecondTranche == goodsAmount - firstTrancheGross
+            && platformFeesAmount == buyerFee + supplierFee + SETTLEMENT_SUPPORT_FEE;
     }
 
     function _accrueClaimable(uint256 _tradeId, address _recipient, uint256 _amount, ClaimType _claimType) internal {
@@ -1128,12 +1166,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         platformFeeNetAmount = _platformFeesAmount - settlementSupportFeeAmount;
     }
 
-    function _transferSupplierPayout(
-        uint256 _tradeId,
-        address _supplier,
-        uint256 _amount,
-        ClaimType _claimType
-    ) internal {
+    function _transferSupplierPayout(uint256 _tradeId, address _supplier, uint256 _amount, ClaimType _claimType)
+        internal
+    {
         if (_amount == 0) {
             return;
         }
@@ -1142,12 +1177,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         emit SupplierPayoutTransferred(_tradeId, _supplier, _amount, _claimType, msg.sender);
     }
 
-    function _transferBuyerRefund(
-        uint256 _tradeId,
-        address _buyer,
-        uint256 _amount,
-        ClaimType _claimType
-    ) internal {
+    function _transferBuyerRefund(uint256 _tradeId, address _buyer, uint256 _amount, ClaimType _claimType) internal {
         if (_amount == 0) {
             return;
         }
@@ -1157,13 +1187,13 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function nonRefundableFeeAmount(uint256 _tradeId) public view returns (uint256) {
-        require(_tradeId < tradeCounter, "trade not found");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
         return _nonRefundableFeeAmount(trade);
     }
 
     function buyerRefundableAmount(uint256 _tradeId) public view returns (uint256) {
-        require(_tradeId < tradeCounter, "trade not found");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
         return _buyerRefundablePrincipalAmount(trade);
     }
@@ -1174,10 +1204,10 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      */
     function claimTreasury() external onlyTreasuryOrAdmin whenClaimsNotPaused nonReentrant {
         uint256 amount = claimableUsdc[treasuryAddress];
-        require(amount > 0, "nothing treasury claimable");
+        if (!(amount > 0)) revert EscrowNothingTreasuryClaimable();
 
         address payoutReceiver = treasuryPayoutAddress;
-        require(payoutReceiver != address(0), "invalid treasury payout receiver");
+        if (!(payoutReceiver != address(0))) revert EscrowInvalidTreasuryPayoutReceiver();
 
         claimableUsdc[treasuryAddress] = 0;
         totalClaimableUsdc -= amount;
@@ -1198,11 +1228,18 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * - Accrue logistics fee to treasury
      * - Accrue platform fee to treasury
      */
-    function releaseFundsStage1(uint256 _tradeId) external onlyOracle onlyOracleActive whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
-        require(_tradeId < tradeCounter, "trade not found");
+    function releaseFundsStage1(uint256 _tradeId)
+        external
+        onlyOracle
+        onlyOracleActive
+        whenNotPaused
+        whenTradeNotPaused(_tradeId)
+        nonReentrant
+    {
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
 
-        require(trade.status == TradeStatus.LOCKED, "status must be LOCKED");
+        if (!(trade.status == TradeStatus.LOCKED)) revert EscrowStatusMustBeLOCKED();
 
         trade.status = TradeStatus.IN_TRANSIT;
         inTransitSince[_tradeId] = block.timestamp;
@@ -1212,21 +1249,13 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         _accrueClaimable(_tradeId, treasuryAddress, trade.platformFeesAmount, ClaimType.STAGE1_PLATFORM_FEE);
 
         emit FundsReleasedStage1(
-            _tradeId,
-            trade.supplierAddress,
-            trade.supplierFirstTranche,
-            treasuryAddress,
-            trade.logisticsAmount
+            _tradeId, trade.supplierAddress, trade.supplierFirstTranche, treasuryAddress, trade.logisticsAmount
         );
 
         (uint256 platformFeeNetAmount, uint256 settlementSupportFeeAmount) =
             _splitPlatformFeeComponents(trade.platformFeesAmount);
         emit PlatformFeesPaidStage1(
-            _tradeId,
-            treasuryAddress,
-            trade.platformFeesAmount,
-            platformFeeNetAmount,
-            settlementSupportFeeAmount
+            _tradeId, treasuryAddress, trade.platformFeesAmount, platformFeeNetAmount, settlementSupportFeeAmount
         );
     }
 
@@ -1246,14 +1275,13 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function _confirmInspectionAvailable(uint256 _tradeId, uint256 _windowSeconds) internal {
-        require(_tradeId < tradeCounter, "trade not found");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
 
-        require(trade.status == TradeStatus.IN_TRANSIT, "status must be IN_TRANSIT");
-        require(
-            _windowSeconds == STANDARD_INSPECTION_WINDOW || _windowSeconds == PACKAGED_LOCAL_INSPECTION_WINDOW,
-            "unsupported inspection window"
-        );
+        if (!(trade.status == TradeStatus.IN_TRANSIT)) revert EscrowStatusMustBeINTRANSIT();
+        if (!(_windowSeconds == STANDARD_INSPECTION_WINDOW || _windowSeconds == PACKAGED_LOCAL_INSPECTION_WINDOW)) {
+            revert EscrowUnsupportedInspectionWindow();
+        }
 
         trade.status = TradeStatus.ARRIVAL_CONFIRMED;
         trade.arrivalTimestamp = block.timestamp;
@@ -1261,17 +1289,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         inTransitSince[_tradeId] = 0;
 
         emit InspectionAvailable(
-            _tradeId,
-            trade.arrivalTimestamp,
-            _windowSeconds,
-            trade.arrivalTimestamp + _windowSeconds
+            _tradeId, trade.arrivalTimestamp, _windowSeconds, trade.arrivalTimestamp + _windowSeconds
         );
     }
 
     function inspectionDeadline(uint256 _tradeId) public view returns (uint256) {
-        require(_tradeId < tradeCounter, "trade not found");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
-        require(trade.arrivalTimestamp > 0, "inspection not available");
+        if (!(trade.arrivalTimestamp > 0)) revert EscrowInspectionNotAvailable();
         return trade.arrivalTimestamp + _inspectionWindow(_tradeId);
     }
 
@@ -1290,7 +1315,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
     ) external onlyRelayerOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
-        require(_tradeId < tradeCounter, "trade not found");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
 
         _verifyUserActionAuthorization(
@@ -1302,9 +1327,9 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             _authorizationSignature
         );
 
-        require(trade.status == TradeStatus.ARRIVAL_CONFIRMED, "must be ARRIVAL_CONFIRMED");
-        require(trade.arrivalTimestamp > 0, "arrival not set");
-        require(block.timestamp <= inspectionDeadline(_tradeId), "window closed");
+        if (!(trade.status == TradeStatus.ARRIVAL_CONFIRMED)) revert EscrowMustBeARRIVALCONFIRMED();
+        if (!(trade.arrivalTimestamp > 0)) revert EscrowArrivalNotSet();
+        if (!(block.timestamp <= inspectionDeadline(_tradeId))) revert EscrowWindowClosed();
 
         trade.status = TradeStatus.FROZEN;
 
@@ -1320,7 +1345,13 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * Business rule: Stage 2 pays ONLY remaining supplier principal (supplierSecondTranche).
      * Treasury fees were already collected at Stage 1.
      */
-    function finalizeAfterDisputeWindow(uint256 _tradeId) external onlyOracleOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
+    function finalizeAfterDisputeWindow(uint256 _tradeId)
+        external
+        onlyOracleOrAdmin
+        whenNotPaused
+        whenTradeNotPaused(_tradeId)
+        nonReentrant
+    {
         _finalizeAfterDisputeWindow(_tradeId);
     }
 
@@ -1330,7 +1361,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
     ) external onlyRelayerOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
-        require(_tradeId < tradeCounter, "trade not found");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
 
         _verifyUserActionAuthorization(
@@ -1350,29 +1381,39 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * Releases the final tranche immediately after Agroasys records the buyer's explicit
      * acceptance that the inspected goods meet the agreed terms.
      */
-    function finalizeAfterInspectionAcceptance(uint256 _tradeId)
-        external
-        onlyOracle
-        onlyOracleActive
-        whenNotPaused
-        whenTradeNotPaused(_tradeId)
-        nonReentrant
-    {
-        require(_tradeId < tradeCounter, "trade not found");
+    function finalizeAfterInspectionAcceptanceWithAuthorization(
+        uint256 _tradeId,
+        uint256 _authorizationNonce,
+        uint256 _authorizationDeadline,
+        bytes memory _authorizationSignature
+    ) external onlyRelayerOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
-        require(trade.status == TradeStatus.ARRIVAL_CONFIRMED, "must be ARRIVAL_CONFIRMED");
+        if (!(trade.status == TradeStatus.ARRIVAL_CONFIRMED)) revert EscrowMustBeARRIVALCONFIRMED();
+
+        _verifyUserActionAuthorization(
+            trade.buyerAddress,
+            SponsoredAction.FINALIZE_AFTER_INSPECTION_ACCEPTANCE,
+            _tradeId,
+            _authorizationNonce,
+            _authorizationDeadline,
+            _authorizationSignature
+        );
 
         _releaseFinalTranche(_tradeId, trade);
         emit InspectionAcceptedForFinalRelease(_tradeId, block.timestamp);
+        emit RelayedActionExecuted(
+            msg.sender, trade.buyerAddress, ACTION_FINALIZE_AFTER_INSPECTION_ACCEPTANCE, _tradeId
+        );
     }
 
     function _finalizeAfterDisputeWindow(uint256 _tradeId) internal {
-        require(_tradeId < tradeCounter, "trade not found");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
 
-        require(trade.status == TradeStatus.ARRIVAL_CONFIRMED, "must be ARRIVAL_CONFIRMED");
-        require(trade.arrivalTimestamp > 0, "arrival not set");
-        require(block.timestamp > inspectionDeadline(_tradeId), "window not elapsed");
+        if (!(trade.status == TradeStatus.ARRIVAL_CONFIRMED)) revert EscrowMustBeARRIVALCONFIRMED();
+        if (!(trade.arrivalTimestamp > 0)) revert EscrowArrivalNotSet();
+        if (!(block.timestamp > inspectionDeadline(_tradeId))) revert EscrowWindowNotElapsed();
 
         _releaseFinalTranche(_tradeId, trade);
     }
@@ -1392,7 +1433,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
     ) external onlyRelayerOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
-        require(_tradeId < tradeCounter, "trade not found");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
 
         _verifyUserActionAuthorization(
@@ -1404,8 +1445,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             _authorizationSignature
         );
 
-        require(trade.status == TradeStatus.LOCKED, "status must be LOCKED");
-        require(block.timestamp > trade.createdAt + LOCK_TIMEOUT, "lock timeout not elapsed");
+        if (!(trade.status == TradeStatus.LOCKED)) revert EscrowStatusMustBeLOCKED();
+        if (!(block.timestamp > trade.createdAt + LOCK_TIMEOUT)) revert EscrowLockTimeoutNotElapsed();
 
         uint256 buyerRefundAmount = trade.totalAmountLocked;
         trade.status = TradeStatus.CLOSED;
@@ -1422,7 +1463,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         uint256 _authorizationDeadline,
         bytes memory _authorizationSignature
     ) external onlyRelayerOrAdmin whenNotPaused whenTradeNotPaused(_tradeId) nonReentrant {
-        require(_tradeId < tradeCounter, "trade not found");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
 
         _verifyUserActionAuthorization(
@@ -1434,20 +1475,17 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             _authorizationSignature
         );
 
-        require(trade.status == TradeStatus.IN_TRANSIT, "status must be IN_TRANSIT");
+        if (!(trade.status == TradeStatus.IN_TRANSIT)) revert EscrowStatusMustBeINTRANSIT();
 
         uint256 transitStart = inTransitSince[_tradeId];
-        require(transitStart > 0, "in-transit timestamp not set");
-        require(block.timestamp > transitStart + IN_TRANSIT_TIMEOUT, "in-transit timeout not elapsed");
+        if (!(transitStart > 0)) revert EscrowInTransitTimestampNotSet();
+        if (!(block.timestamp > transitStart + IN_TRANSIT_TIMEOUT)) revert EscrowInTransitTimeoutNotElapsed();
 
         trade.status = TradeStatus.CLOSED;
         inTransitSince[_tradeId] = 0;
 
         _transferBuyerRefund(
-            _tradeId,
-            trade.buyerAddress,
-            trade.supplierSecondTranche,
-            ClaimType.IN_TRANSIT_TIMEOUT_BUYER_REFUND
+            _tradeId, trade.buyerAddress, trade.supplierSecondTranche, ClaimType.IN_TRANSIT_TIMEOUT_BUYER_REFUND
         );
 
         emit InTransitTimeoutRefunded(_tradeId, trade.buyerAddress, trade.supplierSecondTranche);
@@ -1464,14 +1502,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         whenTradeNotPaused(_tradeId)
         returns (uint256)
     {
-        require(_tradeId < tradeCounter, "trade not found");
+        if (!(_tradeId < tradeCounter)) revert EscrowTradeNotFound();
         Trade storage trade = trades[_tradeId];
 
-        require(trade.status == TradeStatus.FROZEN, "trade not frozen");
+        if (!(trade.status == TradeStatus.FROZEN)) revert EscrowTradeNotFrozen();
 
         if (tradeHasActiveDisputeProposal[_tradeId]) {
             uint256 activeProposalId = tradeActiveDisputeProposalId[_tradeId];
-            bool activeExpired = block.timestamp > disputeProposalExpiresAt[activeProposalId];
+            bool activeExpired = block.timestamp > disputeProposalExpiresAt[activeProposalId]
+                || disputeProposals[activeProposalId].epoch != governanceEpoch;
 
             if (activeExpired && !disputeProposalCancelled[activeProposalId]) {
                 disputeProposalCancelled[activeProposalId] = true;
@@ -1479,7 +1518,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
                 tradeActiveDisputeProposalId[_tradeId] = 0;
                 emit DisputeProposalExpiredCancelled(activeProposalId, _tradeId, msg.sender);
             } else {
-                revert("active proposal exists");
+                revert EscrowActiveProposalExists();
             }
         }
 
@@ -1492,7 +1531,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             approvalCount: 1,
             executed: false,
             createdAt: block.timestamp,
-            proposer: msg.sender
+            proposer: msg.sender,
+            epoch: governanceEpoch
         });
 
         disputeHasApproved[proposalId][msg.sender] = true;
@@ -1506,19 +1546,20 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function approveDisputeSolution(uint256 _proposalId) external onlyAdmin whenNotPaused nonReentrant {
-        require(_proposalId < disputeCounter, "proposal not found");
+        if (!(_proposalId < disputeCounter)) revert EscrowProposalNotFound();
 
         DisputeProposal storage proposal = disputeProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!disputeProposalCancelled[_proposalId], "proposal cancelled");
-        require(block.timestamp <= disputeProposalExpiresAt[_proposalId], "proposal expired");
+        if (!(proposal.createdAt > 0)) revert EscrowProposalNotInitialized();
+        if (!(!proposal.executed)) revert EscrowAlreadyExecuted();
+        if (!(!disputeProposalCancelled[_proposalId])) revert EscrowProposalCancelled();
+        if (!(block.timestamp <= disputeProposalExpiresAt[_proposalId])) revert EscrowProposalExpired();
+        if (proposal.epoch != governanceEpoch) revert EscrowStaleGovernanceProposal();
 
         Trade storage trade = trades[proposal.tradeId];
         _requireTradeNotPaused(proposal.tradeId);
-        require(trade.status == TradeStatus.FROZEN, "trade not frozen");
+        if (!(trade.status == TradeStatus.FROZEN)) revert EscrowTradeNotFrozen();
 
-        require(!disputeHasApproved[_proposalId][msg.sender], "already approved");
+        if (!(!disputeHasApproved[_proposalId][msg.sender])) revert EscrowAlreadyApproved();
 
         disputeHasApproved[_proposalId][msg.sender] = true;
         proposal.approvalCount++;
@@ -1533,13 +1574,14 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     function _executeDispute(uint256 _proposalId) internal {
         DisputeProposal storage proposal = disputeProposals[_proposalId];
 
-        require(!proposal.executed, "already executed");
-        require(!disputeProposalCancelled[_proposalId], "proposal cancelled");
-        require(block.timestamp <= disputeProposalExpiresAt[_proposalId], "proposal expired");
-        require(proposal.approvalCount >= requiredApprovals, "not enough approvals");
+        if (!(!proposal.executed)) revert EscrowAlreadyExecuted();
+        if (!(!disputeProposalCancelled[_proposalId])) revert EscrowProposalCancelled();
+        if (!(block.timestamp <= disputeProposalExpiresAt[_proposalId])) revert EscrowProposalExpired();
+        if (proposal.epoch != governanceEpoch) revert EscrowStaleGovernanceProposal();
+        if (!(proposal.approvalCount >= requiredApprovals)) revert EscrowNotEnoughApprovals();
 
         Trade storage trade = trades[proposal.tradeId];
-        require(trade.status == TradeStatus.FROZEN, "trade must be FROZEN");
+        if (!(trade.status == TradeStatus.FROZEN)) revert EscrowTradeMustBeFROZEN();
 
         proposal.executed = true;
         trade.status = TradeStatus.CLOSED;
@@ -1547,7 +1589,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
         tradeActiveDisputeProposalId[proposal.tradeId] = 0;
         inTransitSince[proposal.tradeId] = 0;
 
-        address recipient;
+        address recipient = trade.buyerAddress;
         uint256 payoutAmount = trade.supplierSecondTranche;
 
         // NOTE: Platform/logistics fees were already paid at Stage 1 and are not refunded via escrow.
@@ -1560,7 +1602,7 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             recipient = trade.supplierAddress;
             _transferSupplierPayout(proposal.tradeId, recipient, payoutAmount, ClaimType.DISPUTE_RESOLVE_SUPPLIER);
         } else {
-            revert("invalid dispute status");
+            revert EscrowInvalidDisputeStatus();
         }
 
         emit DisputePayout(proposal.tradeId, _proposalId, recipient, payoutAmount, proposal.disputeStatus);
@@ -1571,18 +1613,20 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * @notice Cancels an expired dispute proposal to unblock replacement proposals.
      */
     function cancelExpiredDisputeProposal(uint256 _proposalId) external onlyAdmin whenNotPaused {
-        require(_proposalId < disputeCounter, "proposal not found");
+        if (!(_proposalId < disputeCounter)) revert EscrowProposalNotFound();
 
         DisputeProposal storage proposal = disputeProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!disputeProposalCancelled[_proposalId], "already cancelled");
-        require(block.timestamp > disputeProposalExpiresAt[_proposalId], "proposal not expired");
+        if (!(proposal.createdAt > 0)) revert EscrowProposalNotInitialized();
+        if (!(!proposal.executed)) revert EscrowAlreadyExecuted();
+        if (!(!disputeProposalCancelled[_proposalId])) revert EscrowAlreadyCancelled();
+        if (!(block.timestamp > disputeProposalExpiresAt[_proposalId])) revert EscrowProposalNotExpired();
         _requireTradeNotPaused(proposal.tradeId);
 
         disputeProposalCancelled[_proposalId] = true;
-        if (tradeHasActiveDisputeProposal[proposal.tradeId] && tradeActiveDisputeProposalId[proposal.tradeId] == _proposalId)
-        {
+        if (
+            tradeHasActiveDisputeProposal[proposal.tradeId]
+                && tradeActiveDisputeProposalId[proposal.tradeId] == _proposalId
+        ) {
             tradeHasActiveDisputeProposal[proposal.tradeId] = false;
             tradeActiveDisputeProposalId[proposal.tradeId] = 0;
         }
@@ -1604,9 +1648,10 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * @return proposalId The ID of the created proposal.
      */
     function proposeOracleUpdate(address _newOracle) external onlyAdmin returns (uint256) {
-        require(_newOracle != address(0), "invalid oracle");
-        require(_newOracle != oracleAddress, "same oracle");
-        require(admins.length >= governanceApprovals(), "insufficient admins");
+        if (!(_newOracle != address(0))) revert EscrowInvalidOracle();
+        if (!(_newOracle != oracleAddress)) revert EscrowSameOracle();
+        _requireServiceRoleAvailable(_newOracle);
+        if (!(admins.length >= governanceApprovals())) revert EscrowInsufficientAdmins();
 
         uint256 proposalId = oracleUpdateCounter;
         oracleUpdateCounter++;
@@ -1622,7 +1667,8 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             createdAt: block.timestamp,
             eta: eta,
             proposer: msg.sender,
-            emergencyFastTrack: emergencyFastTrack
+            emergencyFastTrack: emergencyFastTrack,
+            epoch: governanceEpoch
         });
 
         oracleUpdateHasApproved[proposalId][msg.sender] = true;
@@ -1635,14 +1681,15 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function approveOracleUpdate(uint256 _proposalId) external onlyAdmin {
-        require(_proposalId < oracleUpdateCounter, "proposal not found");
+        if (!(_proposalId < oracleUpdateCounter)) revert EscrowProposalNotFound();
 
         OracleUpdateProposal storage proposal = oracleUpdateProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!oracleUpdateProposalCancelled[_proposalId], "proposal cancelled");
-        require(block.timestamp <= oracleUpdateProposalExpiresAt[_proposalId], "proposal expired");
-        require(!oracleUpdateHasApproved[_proposalId][msg.sender], "already approved");
+        if (!(proposal.createdAt > 0)) revert EscrowProposalNotInitialized();
+        if (!(!proposal.executed)) revert EscrowAlreadyExecuted();
+        if (!(!oracleUpdateProposalCancelled[_proposalId])) revert EscrowProposalCancelled();
+        if (!(block.timestamp <= oracleUpdateProposalExpiresAt[_proposalId])) revert EscrowProposalExpired();
+        if (proposal.epoch != governanceEpoch) revert EscrowStaleGovernanceProposal();
+        if (!(!oracleUpdateHasApproved[_proposalId][msg.sender])) revert EscrowAlreadyApproved();
 
         oracleUpdateHasApproved[_proposalId][msg.sender] = true;
         proposal.approvalCount++;
@@ -1651,21 +1698,23 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function executeOracleUpdate(uint256 _proposalId) external onlyAdmin {
-        require(_proposalId < oracleUpdateCounter, "proposal not found");
+        if (!(_proposalId < oracleUpdateCounter)) revert EscrowProposalNotFound();
 
         OracleUpdateProposal storage proposal = oracleUpdateProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!oracleUpdateProposalCancelled[_proposalId], "proposal cancelled");
-        require(block.timestamp <= oracleUpdateProposalExpiresAt[_proposalId], "proposal expired");
-        require(proposal.approvalCount >= governanceApprovals(), "not enough approvals");
-        require(block.timestamp >= proposal.eta, "timelock not elapsed");
+        if (!(proposal.createdAt > 0)) revert EscrowProposalNotInitialized();
+        if (!(!proposal.executed)) revert EscrowAlreadyExecuted();
+        if (!(!oracleUpdateProposalCancelled[_proposalId])) revert EscrowProposalCancelled();
+        if (!(block.timestamp <= oracleUpdateProposalExpiresAt[_proposalId])) revert EscrowProposalExpired();
+        if (proposal.epoch != governanceEpoch) revert EscrowStaleGovernanceProposal();
+        if (!(proposal.approvalCount >= governanceApprovals())) revert EscrowNotEnoughApprovals();
+        if (!(block.timestamp >= proposal.eta)) revert EscrowTimelockNotElapsed();
 
         proposal.executed = true;
 
         address oldOracle = oracleAddress;
         oracleAddress = proposal.newOracle;
         oracleActive = true;
+        _advanceGovernanceEpoch();
 
         emit OracleUpdated(oldOracle, proposal.newOracle);
     }
@@ -1674,106 +1723,189 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * @notice Cancels an expired oracle update proposal.
      */
     function cancelExpiredOracleUpdateProposal(uint256 _proposalId) external onlyAdmin {
-        require(_proposalId < oracleUpdateCounter, "proposal not found");
+        if (!(_proposalId < oracleUpdateCounter)) revert EscrowProposalNotFound();
 
         OracleUpdateProposal storage proposal = oracleUpdateProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!oracleUpdateProposalCancelled[_proposalId], "already cancelled");
-        require(block.timestamp > oracleUpdateProposalExpiresAt[_proposalId], "proposal not expired");
+        if (!(proposal.createdAt > 0)) revert EscrowProposalNotInitialized();
+        if (!(!proposal.executed)) revert EscrowAlreadyExecuted();
+        if (!(!oracleUpdateProposalCancelled[_proposalId])) revert EscrowAlreadyCancelled();
+        if (!(block.timestamp > oracleUpdateProposalExpiresAt[_proposalId])) revert EscrowProposalNotExpired();
 
         oracleUpdateProposalCancelled[_proposalId] = true;
 
         emit OracleUpdateProposalExpiredCancelled(_proposalId, msg.sender);
     }
 
-    function proposeAddAdmin(address _newAdmin) external onlyAdmin returns (uint256) {
-        require(_newAdmin != address(0), "invalid admin");
-        require(!isAdmin[_newAdmin], "already admin");
-        require(admins.length >= governanceApprovals(), "insufficient admins");
+    function proposeAdminChange(AdminChangeKind kind, address currentAdmin, address newAdmin, uint256 newThreshold)
+        external
+        onlyAdmin
+        returns (uint256)
+    {
+        _validateAdminChange(kind, currentAdmin, newAdmin, newThreshold);
 
-        uint256 proposalId = adminAddCounter;
-        adminAddCounter++;
-
-        adminAddProposals[proposalId] = AdminAddProposal({
-            newAdmin: _newAdmin,
+        uint256 proposalId = adminChangeCounter++;
+        uint256 eta = block.timestamp + governanceTimelock;
+        adminChangeProposals[proposalId] = AdminChangeProposal({
+            kind: kind,
+            currentAdmin: currentAdmin,
+            newAdmin: newAdmin,
+            newThreshold: newThreshold,
             approvalCount: 1,
             executed: false,
             createdAt: block.timestamp,
-            eta: block.timestamp + governanceTimelock,
-            proposer: msg.sender
+            eta: eta,
+            proposer: msg.sender,
+            epoch: governanceEpoch
         });
+        adminChangeHasApproved[proposalId][msg.sender] = true;
+        adminChangeProposalExpiresAt[proposalId] = block.timestamp + GOVERNANCE_PROPOSAL_TTL;
 
-        adminAddHasApproved[proposalId][msg.sender] = true;
-        adminAddProposalExpiresAt[proposalId] = block.timestamp + GOVERNANCE_PROPOSAL_TTL;
-
-        emit AdminAddProposed(proposalId, msg.sender, _newAdmin, adminAddProposals[proposalId].eta);
-        emit AdminAddApproved(proposalId, msg.sender, 1, governanceApprovals());
-
+        emit AdminChangeProposed(
+            proposalId, msg.sender, kind, currentAdmin, newAdmin, newThreshold, eta, governanceEpoch
+        );
+        emit AdminChangeApproved(proposalId, msg.sender, 1, governanceApprovals());
         return proposalId;
     }
 
-    function approveAddAdmin(uint256 _proposalId) external onlyAdmin {
-        require(_proposalId < adminAddCounter, "proposal not found");
-
-        AdminAddProposal storage proposal = adminAddProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!adminAddProposalCancelled[_proposalId], "proposal cancelled");
-        require(block.timestamp <= adminAddProposalExpiresAt[_proposalId], "proposal expired");
-        require(!adminAddHasApproved[_proposalId][msg.sender], "already approved");
-
-        adminAddHasApproved[_proposalId][msg.sender] = true;
+    function approveAdminChange(uint256 proposalId) external onlyAdmin {
+        AdminChangeProposal storage proposal = _activeAdminChange(proposalId);
+        if (adminChangeHasApproved[proposalId][msg.sender]) revert EscrowAlreadyApproved();
+        adminChangeHasApproved[proposalId][msg.sender] = true;
         proposal.approvalCount++;
-
-        emit AdminAddApproved(_proposalId, msg.sender, proposal.approvalCount, governanceApprovals());
+        emit AdminChangeApproved(proposalId, msg.sender, proposal.approvalCount, governanceApprovals());
     }
 
-    function executeAddAdmin(uint256 _proposalId) external onlyAdmin {
-        require(_proposalId < adminAddCounter, "proposal not found");
-
-        AdminAddProposal storage proposal = adminAddProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!adminAddProposalCancelled[_proposalId], "proposal cancelled");
-        require(block.timestamp <= adminAddProposalExpiresAt[_proposalId], "proposal expired");
-        require(proposal.approvalCount >= governanceApprovals(), "not enough approvals");
-        require(block.timestamp >= proposal.eta, "timelock not elapsed");
-
-        // Re-check target is still valid at execution time
-        require(proposal.newAdmin != address(0), "invalid admin");
-        require(!isAdmin[proposal.newAdmin], "already admin");
-
+    function executeAdminChange(uint256 proposalId) external onlyAdmin {
+        AdminChangeProposal storage proposal = _activeAdminChange(proposalId);
+        if (proposal.approvalCount < governanceApprovals()) revert EscrowNotEnoughApprovals();
+        if (block.timestamp < proposal.eta) revert EscrowTimelockNotElapsed();
+        _validateAdminChange(proposal.kind, proposal.currentAdmin, proposal.newAdmin, proposal.newThreshold);
         proposal.executed = true;
 
-        admins.push(proposal.newAdmin);
-        isAdmin[proposal.newAdmin] = true;
-
-        emit AdminAdded(proposal.newAdmin);
+        if (proposal.kind == AdminChangeKind.ADD) {
+            admins.push(proposal.newAdmin);
+            isAdmin[proposal.newAdmin] = true;
+            emit AdminAdded(proposal.newAdmin);
+        } else if (proposal.kind == AdminChangeKind.REMOVE) {
+            _removeAdmin(proposal.currentAdmin);
+            emit AdminRemoved(proposal.currentAdmin);
+        } else if (proposal.kind == AdminChangeKind.REPLACE) {
+            _replaceAdmin(proposal.currentAdmin, proposal.newAdmin);
+            emit AdminReplaced(proposal.currentAdmin, proposal.newAdmin);
+        } else if (proposal.kind == AdminChangeKind.THRESHOLD) {
+            uint256 oldThreshold = requiredApprovals;
+            requiredApprovals = proposal.newThreshold;
+            emit RequiredApprovalsUpdated(oldThreshold, proposal.newThreshold);
+        } else {
+            bool allowed = proposal.kind == AdminChangeKind.RELAYER_ADD;
+            address relayer = allowed ? proposal.newAdmin : proposal.currentAdmin;
+            isRelayer[relayer] = allowed;
+            emit RelayerUpdated(relayer, allowed, msg.sender);
+        }
+        emit AdminChangeExecuted(
+            proposalId, proposal.kind, proposal.currentAdmin, proposal.newAdmin, proposal.newThreshold
+        );
+        _advanceGovernanceEpoch();
     }
 
-    /**
-     * @notice Cancels an expired admin-add proposal.
-     */
-    function cancelExpiredAddAdminProposal(uint256 _proposalId) external onlyAdmin {
-        require(_proposalId < adminAddCounter, "proposal not found");
+    function cancelAdminChangeProposal(uint256 proposalId) external onlyAdmin {
+        AdminChangeProposal storage proposal = adminChangeProposals[proposalId];
+        if (proposal.createdAt == 0) revert EscrowProposalNotInitialized();
+        if (proposal.executed) revert EscrowAlreadyExecuted();
+        if (adminChangeProposalCancelled[proposalId]) revert EscrowAlreadyCancelled();
+        if (block.timestamp <= adminChangeProposalExpiresAt[proposalId]) revert EscrowProposalNotExpired();
+        adminChangeProposalCancelled[proposalId] = true;
+        emit AdminChangeProposalCancelled(proposalId, msg.sender);
+    }
 
-        AdminAddProposal storage proposal = adminAddProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!adminAddProposalCancelled[_proposalId], "already cancelled");
-        require(block.timestamp > adminAddProposalExpiresAt[_proposalId], "proposal not expired");
+    function _activeAdminChange(uint256 proposalId) internal view returns (AdminChangeProposal storage proposal) {
+        if (proposalId >= adminChangeCounter) revert EscrowProposalNotFound();
+        proposal = adminChangeProposals[proposalId];
+        if (proposal.createdAt == 0) revert EscrowProposalNotInitialized();
+        if (proposal.executed) revert EscrowAlreadyExecuted();
+        if (adminChangeProposalCancelled[proposalId]) revert EscrowProposalCancelled();
+        if (block.timestamp > adminChangeProposalExpiresAt[proposalId]) revert EscrowProposalExpired();
+        if (proposal.epoch != governanceEpoch) revert EscrowStaleGovernanceProposal();
+    }
 
-        adminAddProposalCancelled[_proposalId] = true;
+    function _validateAdminChange(AdminChangeKind kind, address currentAdmin, address newAdmin, uint256 newThreshold)
+        internal
+        view
+    {
+        if (kind == AdminChangeKind.ADD || kind == AdminChangeKind.REPLACE) {
+            if (newAdmin == address(0)) revert EscrowInvalidAdmin();
+            if (isAdmin[newAdmin]) revert EscrowAlreadyAdmin();
+            _requireServiceRoleAvailable(newAdmin);
+        }
+        if (kind == AdminChangeKind.ADD && admins.length >= MAX_ADMINS) revert EscrowMaximumAdminsReached();
+        if (kind == AdminChangeKind.REMOVE || kind == AdminChangeKind.REPLACE) {
+            if (!isAdmin[currentAdmin]) revert EscrowInvalidAdmin();
+        }
+        if (kind == AdminChangeKind.REMOVE && admins.length - 1 <= requiredApprovals) {
+            revert EscrowNotEnoughAdmins();
+        }
+        if (kind == AdminChangeKind.THRESHOLD) {
+            if (newThreshold < 2 || newThreshold >= admins.length || newThreshold == requiredApprovals) {
+                revert EscrowInvalidThreshold();
+            }
+        } else if (newThreshold != 0) {
+            revert EscrowInvalidAdminChange();
+        }
+        if (kind == AdminChangeKind.RELAYER_ADD) {
+            if (newAdmin == address(0)) revert EscrowInvalidRelayer();
+            if (isRelayer[newAdmin]) revert EscrowSameRelayer();
+            _requireServiceRoleAvailable(newAdmin);
+        } else if (kind == AdminChangeKind.RELAYER_REMOVE) {
+            if (!isRelayer[currentAdmin]) revert EscrowInvalidRelayer();
+        }
+    }
 
-        emit AdminAddProposalExpiredCancelled(_proposalId, msg.sender);
+    function _removeAdmin(address oldAdmin) internal {
+        isAdmin[oldAdmin] = false;
+        unpauseHasApproved[oldAdmin] = false;
+        uint256 length = admins.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (admins[i] == oldAdmin) {
+                admins[i] = admins[length - 1];
+                admins.pop();
+                return;
+            }
+        }
+        revert EscrowInvalidAdmin();
+    }
+
+    function _replaceAdmin(address oldAdmin, address newAdmin) internal {
+        uint256 length = admins.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (admins[i] == oldAdmin) {
+                admins[i] = newAdmin;
+                isAdmin[oldAdmin] = false;
+                isAdmin[newAdmin] = true;
+                unpauseHasApproved[oldAdmin] = false;
+                unpauseHasApproved[newAdmin] = false;
+                return;
+            }
+        }
+        revert EscrowInvalidAdmin();
+    }
+
+    function _requireServiceRoleAvailable(address account) internal view {
+        if (
+            account == oracleAddress || account == treasuryAddress || account == treasuryPayoutAddress
+                || isAdmin[account] || isRelayer[account]
+        ) revert EscrowInvalidRoleSeparation();
+    }
+
+    function _advanceGovernanceEpoch() internal {
+        governanceEpoch++;
+        emit GovernanceEpochAdvanced(governanceEpoch);
     }
 
     function proposeTreasuryPayoutAddressUpdate(address _newPayoutReceiver) external onlyAdmin returns (uint256) {
-        require(_newPayoutReceiver != address(0), "invalid treasury payout receiver");
-        require(_newPayoutReceiver != treasuryPayoutAddress, "same treasury payout receiver");
-        require(admins.length >= governanceApprovals(), "insufficient admins");
-        require(!hasPendingTreasuryPayoutAddressUpdateProposal, "proposal already pending");
+        if (!(_newPayoutReceiver != address(0))) revert EscrowInvalidTreasuryPayoutReceiver();
+        if (!(_newPayoutReceiver != treasuryPayoutAddress)) revert EscrowSameTreasuryPayoutReceiver();
+        _requireServiceRoleAvailable(_newPayoutReceiver);
+        if (!(admins.length >= governanceApprovals())) revert EscrowInsufficientAdmins();
 
         uint256 proposalId = treasuryPayoutAddressUpdateCounter;
         treasuryPayoutAddressUpdateCounter++;
@@ -1784,28 +1916,33 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
             executed: false,
             createdAt: block.timestamp,
             eta: block.timestamp + governanceTimelock,
-            proposer: msg.sender
+            proposer: msg.sender,
+            epoch: governanceEpoch
         });
 
         treasuryPayoutAddressUpdateHasApproved[proposalId][msg.sender] = true;
         treasuryPayoutAddressUpdateProposalExpiresAt[proposalId] = block.timestamp + GOVERNANCE_PROPOSAL_TTL;
-        hasPendingTreasuryPayoutAddressUpdateProposal = true;
 
-        emit TreasuryPayoutAddressUpdateProposed(proposalId, msg.sender, _newPayoutReceiver, block.timestamp + governanceTimelock);
+        emit TreasuryPayoutAddressUpdateProposed(
+            proposalId, msg.sender, _newPayoutReceiver, block.timestamp + governanceTimelock
+        );
         emit TreasuryPayoutAddressUpdateApproved(proposalId, msg.sender, 1, governanceApprovals());
 
         return proposalId;
     }
 
     function approveTreasuryPayoutAddressUpdate(uint256 _proposalId) external onlyAdmin {
-        require(_proposalId < treasuryPayoutAddressUpdateCounter, "proposal not found");
+        if (!(_proposalId < treasuryPayoutAddressUpdateCounter)) revert EscrowProposalNotFound();
 
         TreasuryPayoutAddressUpdateProposal storage proposal = treasuryPayoutAddressUpdateProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!treasuryPayoutAddressUpdateProposalCancelled[_proposalId], "proposal cancelled");
-        require(block.timestamp <= treasuryPayoutAddressUpdateProposalExpiresAt[_proposalId], "proposal expired");
-        require(!treasuryPayoutAddressUpdateHasApproved[_proposalId][msg.sender], "already approved");
+        if (!(proposal.createdAt > 0)) revert EscrowProposalNotInitialized();
+        if (!(!proposal.executed)) revert EscrowAlreadyExecuted();
+        if (!(!treasuryPayoutAddressUpdateProposalCancelled[_proposalId])) revert EscrowProposalCancelled();
+        if (!(block.timestamp <= treasuryPayoutAddressUpdateProposalExpiresAt[_proposalId])) {
+            revert EscrowProposalExpired();
+        }
+        if (proposal.epoch != governanceEpoch) revert EscrowStaleGovernanceProposal();
+        if (!(!treasuryPayoutAddressUpdateHasApproved[_proposalId][msg.sender])) revert EscrowAlreadyApproved();
 
         treasuryPayoutAddressUpdateHasApproved[_proposalId][msg.sender] = true;
         proposal.approvalCount++;
@@ -1814,22 +1951,25 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
     }
 
     function executeTreasuryPayoutAddressUpdate(uint256 _proposalId) external onlyAdmin {
-        require(_proposalId < treasuryPayoutAddressUpdateCounter, "proposal not found");
+        if (!(_proposalId < treasuryPayoutAddressUpdateCounter)) revert EscrowProposalNotFound();
 
         TreasuryPayoutAddressUpdateProposal storage proposal = treasuryPayoutAddressUpdateProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!treasuryPayoutAddressUpdateProposalCancelled[_proposalId], "proposal cancelled");
-        require(block.timestamp <= treasuryPayoutAddressUpdateProposalExpiresAt[_proposalId], "proposal expired");
-        require(proposal.approvalCount >= governanceApprovals(), "not enough approvals");
-        require(block.timestamp >= proposal.eta, "timelock not elapsed");
-        require(proposal.newPayoutReceiver != address(0), "invalid treasury payout receiver");
+        if (!(proposal.createdAt > 0)) revert EscrowProposalNotInitialized();
+        if (!(!proposal.executed)) revert EscrowAlreadyExecuted();
+        if (!(!treasuryPayoutAddressUpdateProposalCancelled[_proposalId])) revert EscrowProposalCancelled();
+        if (!(block.timestamp <= treasuryPayoutAddressUpdateProposalExpiresAt[_proposalId])) {
+            revert EscrowProposalExpired();
+        }
+        if (proposal.epoch != governanceEpoch) revert EscrowStaleGovernanceProposal();
+        if (!(proposal.approvalCount >= governanceApprovals())) revert EscrowNotEnoughApprovals();
+        if (!(block.timestamp >= proposal.eta)) revert EscrowTimelockNotElapsed();
+        if (!(proposal.newPayoutReceiver != address(0))) revert EscrowInvalidTreasuryPayoutReceiver();
 
         proposal.executed = true;
-        hasPendingTreasuryPayoutAddressUpdateProposal = false;
 
         address oldPayoutReceiver = treasuryPayoutAddress;
         treasuryPayoutAddress = proposal.newPayoutReceiver;
+        _advanceGovernanceEpoch();
 
         emit TreasuryPayoutAddressUpdated(oldPayoutReceiver, proposal.newPayoutReceiver);
     }
@@ -1838,16 +1978,17 @@ contract AgroasysEscrow is ReentrancyGuard, Pausable {
      * @notice Cancels an expired treasury-payout-address update proposal.
      */
     function cancelExpiredTreasuryPayoutAddressUpdateProposal(uint256 _proposalId) external onlyAdmin {
-        require(_proposalId < treasuryPayoutAddressUpdateCounter, "proposal not found");
+        if (!(_proposalId < treasuryPayoutAddressUpdateCounter)) revert EscrowProposalNotFound();
 
         TreasuryPayoutAddressUpdateProposal storage proposal = treasuryPayoutAddressUpdateProposals[_proposalId];
-        require(proposal.createdAt > 0, "proposal not initialized");
-        require(!proposal.executed, "already executed");
-        require(!treasuryPayoutAddressUpdateProposalCancelled[_proposalId], "already cancelled");
-        require(block.timestamp > treasuryPayoutAddressUpdateProposalExpiresAt[_proposalId], "proposal not expired");
+        if (!(proposal.createdAt > 0)) revert EscrowProposalNotInitialized();
+        if (!(!proposal.executed)) revert EscrowAlreadyExecuted();
+        if (!(!treasuryPayoutAddressUpdateProposalCancelled[_proposalId])) revert EscrowAlreadyCancelled();
+        if (!(block.timestamp > treasuryPayoutAddressUpdateProposalExpiresAt[_proposalId])) {
+            revert EscrowProposalNotExpired();
+        }
 
         treasuryPayoutAddressUpdateProposalCancelled[_proposalId] = true;
-        hasPendingTreasuryPayoutAddressUpdateProposal = false;
 
         emit TreasuryPayoutAddressUpdateProposalExpiredCancelled(_proposalId, msg.sender);
     }

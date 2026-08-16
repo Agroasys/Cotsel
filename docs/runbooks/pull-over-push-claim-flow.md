@@ -81,7 +81,7 @@ Operational consequence:
   - Global `paused` blocks protocol mutation paths (trade creation, stage transitions, dispute execution, timeout flows).
   - Direct buyer/supplier payout paths are blocked by global pause because they are protocol mutation paths.
   - `claimTreasury()` remains available during global pause unless dedicated `claimsPaused` is enabled.
-  - Dedicated `claimsPaused` controls (`pauseClaims()` / `unpauseClaims()`) can freeze treasury sweeps during claim-path incidents.
+  - Dedicated `claimsPaused` controls freeze treasury sweeps immediately with `pauseClaims()` and recover them only through scoped quorum unpause.
 - Incident decision matrix:
   - Use `pause()` for protocol mutation incidents.
   - Use `pauseClaims()` only for treasury claim/accounting/token-transfer incidents.
@@ -121,7 +121,9 @@ const proposal = await adminSDK.proposeTreasuryPayoutAddressUpdate(newReceiver, 
 await adminSDK.approveTreasuryPayoutAddressUpdate(proposal.proposalId!, admin2Signer);
 // wait governance timelock
 await adminSDK.executeTreasuryPayoutAddressUpdate(proposal.proposalId!, admin1Signer);
-await adminSDK.unpauseClaims(admin1Signer);
+const incidentRef = '0x...'; // bytes32 reference to the retained incident record
+await adminSDK.proposeClaimsUnpause(incidentRef, admin1Signer);
+await adminSDK.approveUnpause(admin2Signer);
 ```
 
 3. Verify rotation on-chain:
@@ -133,7 +135,8 @@ cast call <ESCROW_ADDRESS> "treasuryPayoutAddress()(address)"
 4. Unfreeze claim path:
 
 ```bash
-cast send <ESCROW_ADDRESS> "unpauseClaims()" --private-key "$ADMIN_KEY"
+cast send <ESCROW_ADDRESS> "proposeUnpause(uint8,uint256,bytes32)" 1 0 <INCIDENT_REF> --private-key "$ADMIN1_KEY"
+cast send <ESCROW_ADDRESS> "approveUnpause()" --private-key "$ADMIN2_KEY"
 ```
 
 ## Operator Verification

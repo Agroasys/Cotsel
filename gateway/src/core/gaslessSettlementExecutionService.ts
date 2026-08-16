@@ -38,6 +38,7 @@ const USER_ACTIONS = [
   'cancel_locked_timeout',
   'refund_in_transit_timeout',
   'finalize_after_dispute_window',
+  'finalize_after_inspection_acceptance',
 ] as const;
 const OPERATOR_ACTIONS = ['finalize_after_dispute_window'] as const;
 
@@ -779,6 +780,32 @@ function buildUserActionArguments(input: GaslessUserActionExecutionInput) {
     input.userAuthorization.deadline,
     input.userAuthorization.signature,
   ] as const;
+}
+
+function getUserActionFunctionName(
+  action: GaslessUserAction,
+):
+  | 'openDisputeWithAuthorization'
+  | 'cancelLockedTradeAfterTimeoutWithAuthorization'
+  | 'refundInTransitAfterTimeoutWithAuthorization'
+  | 'finalizeAfterDisputeWindowWithAuthorization'
+  | 'finalizeAfterInspectionAcceptanceWithAuthorization' {
+  switch (action) {
+    case 'open_dispute':
+      return 'openDisputeWithAuthorization';
+    case 'cancel_locked_timeout':
+      return 'cancelLockedTradeAfterTimeoutWithAuthorization';
+    case 'refund_in_transit_timeout':
+      return 'refundInTransitAfterTimeoutWithAuthorization';
+    case 'finalize_after_dispute_window':
+      return 'finalizeAfterDisputeWindowWithAuthorization';
+    case 'finalize_after_inspection_acceptance':
+      return 'finalizeAfterInspectionAcceptanceWithAuthorization';
+    default: {
+      const unsupportedAction: never = action;
+      throw new Error(`Unsupported gasless user action: ${String(unsupportedAction)}`);
+    }
+  }
 }
 
 const USDC_AUTHORIZATION_ABI = [
@@ -1857,9 +1884,14 @@ export function createEthersGaslessSettlementExecutor(
     } else if (input.action === 'refund_in_transit_timeout') {
       await escrow.refundInTransitAfterTimeoutWithAuthorization.staticCall(...args);
       gasEstimate = await escrow.refundInTransitAfterTimeoutWithAuthorization.estimateGas(...args);
-    } else {
+    } else if (input.action === 'finalize_after_dispute_window') {
       await escrow.finalizeAfterDisputeWindowWithAuthorization.staticCall(...args);
       gasEstimate = await escrow.finalizeAfterDisputeWindowWithAuthorization.estimateGas(...args);
+    } else {
+      await escrow.finalizeAfterInspectionAcceptanceWithAuthorization.staticCall(...args);
+      gasEstimate = await escrow.finalizeAfterInspectionAcceptanceWithAuthorization.estimateGas(
+        ...args,
+      );
     }
 
     if (gasEstimate > gaslessMaxGasLimit) {
@@ -1945,7 +1977,14 @@ export function createEthersGaslessSettlementExecutor(
       });
     }
 
-    return escrow.finalizeAfterDisputeWindowWithAuthorization(...args, {
+    if (input.action === 'finalize_after_dispute_window') {
+      return escrow.finalizeAfterDisputeWindowWithAuthorization(...args, {
+        gasLimit,
+        ...feeOverrides,
+      });
+    }
+
+    return escrow.finalizeAfterInspectionAcceptanceWithAuthorization(...args, {
       gasLimit,
       ...feeOverrides,
     });
@@ -2322,14 +2361,7 @@ function createManagedSignerGaslessSettlementExecutor(
     from: string,
   ): TransactionRequest {
     const args = buildUserActionArguments(input);
-    const functionName =
-      input.action === 'open_dispute'
-        ? 'openDisputeWithAuthorization'
-        : input.action === 'cancel_locked_timeout'
-          ? 'cancelLockedTradeAfterTimeoutWithAuthorization'
-          : input.action === 'refund_in_transit_timeout'
-            ? 'refundInTransitAfterTimeoutWithAuthorization'
-            : 'finalizeAfterDisputeWindowWithAuthorization';
+    const functionName = getUserActionFunctionName(input.action);
 
     return {
       from,

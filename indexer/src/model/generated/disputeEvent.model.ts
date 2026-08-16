@@ -11,31 +11,31 @@ export class DisputeEvent {
     @PrimaryColumn_()
     id!: string
 
-    @Index_()
+    @Index_("idx_dispute_event_dispute_51561e78")
     @ManyToOne_(() => DisputeProposal, {nullable: true})
     dispute!: Relation_<DisputeProposal>
 
-    @Index_()
+    @Index_("idx_dispute_event_event_name_5647f7a0")
     @StringColumn_({nullable: false})
     eventName!: string
 
-    @Index_()
+    @Index_("idx_dispute_event_block_number_eafe21bc")
     @IntColumn_({nullable: false})
     blockNumber!: number
 
-    @Index_()
+    @Index_("idx_dispute_event_timestamp_766954f2")
     @DateTimeColumn_({nullable: false})
     timestamp!: Date
 
-    @Index_()
+    @Index_("idx_dispute_event_tx_hash_435c2a5f")
     @StringColumn_({nullable: false})
     txHash!: string
 
-    @Index_()
+    @Index_("idx_dispute_event_log_index_0f874e5c")
     @IntColumn_({nullable: false})
     logIndex!: number
 
-    @Index_()
+    @Index_("idx_dispute_event_transaction_index_167c7794")
     @IntColumn_({nullable: false})
     transactionIndex!: number
 

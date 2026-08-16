@@ -10,7 +10,7 @@
     "verify:base-sepolia": "npx hardhat verify --network base-sepolia",
     "verify:base-mainnet": "npx hardhat verify --network base-mainnet",
     "test": "hardhat test",
-    "test:foundry": "cd foundry && forge test -vvv",
+    "test:foundry": "cd foundry && openzeppelin_root=$(realpath ../node_modules/@openzeppelin) && forge test -vvv --lib-paths $(realpath ../node_modules) --remappings @openzeppelin/=$openzeppelin_root/",
     "coverage": "hardhat coverage",
     "pretypecheck": "hardhat compile",
     "lint": "eslint --max-warnings=0 .",
@@ -19,8 +19,6 @@
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.2",
     "@nomicfoundation/hardhat-ethers": "3.1.3",
-    "@nomicfoundation/hardhat-ignition": "0.15.16",
-    "@nomicfoundation/hardhat-ignition-ethers": "0.15.17",
     "@nomicfoundation/hardhat-network-helpers": "1.1.2",
     "@nomicfoundation/hardhat-toolbox": "^6.1.2",
     "@nomicfoundation/hardhat-verify": "2.1.3",

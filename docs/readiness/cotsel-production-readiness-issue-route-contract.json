@@ -110,7 +110,14 @@
       "delivery": "Contract and SDK engineers",
       "acceptance": "Independent Protocol, Security, and Release reviewers",
       "supportingIssues": [455, 613],
-      "dependencies": ["wp0-charter", "wp0-release-evidence"],
+      "dependencies": [
+        "wp0-charter",
+        "wp0-release-evidence",
+        "wp1-buyer-acceptance",
+        "wp1-governance",
+        "wp1-role-separation",
+        "wp1-cohort-rollback"
+      ],
       "primaryGate": "E-1"
     },
     {
@@ -131,7 +138,7 @@
       "delivery": "Contract and Oracle engineers",
       "acceptance": "Independent Protocol and Security reviewers",
       "supportingIssues": [],
-      "dependencies": ["wp1-contract-deploy"],
+      "dependencies": ["wp0-charter", "wp0-release-evidence"],
       "primaryGate": "E-1"
     },
     {
@@ -179,8 +186,8 @@
     {
       "key": "wp1-cohort-rollback",
       "wp": "WP-1",
-      "title": "[WP-1/Rollback] Define and rehearse contract-cohort rollback",
-      "outcome": "Provide a safe rollback model for non-upgradeable contracts with active funds by bounding cohorts, stopping intake, preserving compatibility, and reconciling both addresses.",
+      "title": "[WP-1/Rollback] Define contract-cohort rollback",
+      "outcome": "Define a safe rollback model for non-upgradeable contracts with active funds by bounding cohorts, stopping intake, preserving compatibility, and reconciling both addresses. The live drill remains a downstream WP-8 and WP-11 acceptance activity against a deployed release candidate.",
       "findingIds": ["H-12"],
       "milestone": "M1 Base Contract Runtime and Deployment",
       "priority": "P1",
@@ -194,7 +201,7 @@
       "delivery": "Protocol, Indexer, Reconciliation, and Release engineers",
       "acceptance": "Finance and Operations authorities",
       "supportingIssues": [],
-      "dependencies": ["wp1-contract-deploy", "wp3-chain-coverage", "wp4-canonical"],
+      "dependencies": ["wp0-charter", "wp0-release-evidence"],
       "primaryGate": "E-1"
     },
     {

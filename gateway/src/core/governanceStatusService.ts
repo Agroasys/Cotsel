@@ -41,10 +41,14 @@ export interface GovernanceProposalState {
 }
 
 interface UnpauseProposal {
+  scope: bigint;
+  tradeId: bigint;
+  incidentRef: string;
   approvalCount: bigint;
   executed: boolean;
   createdAt: bigint;
   proposer: string;
+  epoch: bigint;
 }
 
 interface OracleUpdateProposal {
@@ -125,7 +129,7 @@ const ESCROW_GOVERNANCE_READ_ABI = [
   'function requiredApprovals() view returns (uint256)',
   'function hasActiveUnpauseProposal() view returns (bool)',
   'function unpauseHasApproved(address account) view returns (bool)',
-  'function unpauseProposal() view returns (uint256 approvalCount, bool executed, uint256 createdAt, address proposer)',
+  'function unpauseProposal() view returns (uint8 scope, uint256 tradeId, bytes32 incidentRef, uint256 approvalCount, bool executed, uint256 createdAt, address proposer, uint256 epoch)',
   'function oracleUpdateCounter() view returns (uint256)',
   'function oracleUpdateHasApproved(uint256 proposalId, address account) view returns (bool)',
   'function oracleUpdateProposals(uint256 proposalId) view returns (address newOracle, uint256 approvalCount, bool executed, uint256 createdAt, uint256 eta, address proposer, bool emergencyFastTrack)',

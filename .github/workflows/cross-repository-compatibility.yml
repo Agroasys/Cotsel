@@ -90,6 +90,15 @@ jobs:
         working-directory: Cotsel
         run: pnpm install --frozen-lockfile
 
+      - name: Pack the Cotsel SDK candidate
+        working-directory: Cotsel
+        run: |
+          mkdir -p "$RUNNER_TEMP/cotsel-sdk"
+          sdk_tarball_name="$(npm pack ./sdk --pack-destination "$RUNNER_TEMP/cotsel-sdk" --silent | tail -n 1)"
+          sdk_tarball="$RUNNER_TEMP/cotsel-sdk/$sdk_tarball_name"
+          test -f "$sdk_tarball"
+          echo "COTSEL_SDK_TARBALL=$sdk_tarball" >> "$GITHUB_ENV"
+
       - name: Install Agroasys backend dependencies
         working-directory: agroasys-backend
         run: pnpm install --frozen-lockfile
@@ -100,9 +109,15 @@ jobs:
 
       - name: Install Cotsel-Dash dependencies
         working-directory: Cotsel-Dash
-        run: pnpm install --frozen-lockfile
+        run: |
+          npm pkg set "dependencies.@agroasys/sdk=file:$COTSEL_SDK_TARBALL"
+          pnpm install --no-frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Typecheck Cotsel-Dash against the SDK candidate
+        working-directory: Cotsel-Dash
+        run: pnpm run typecheck
 
       - name: Install platform.v1 dependencies
         working-directory: platform.v1

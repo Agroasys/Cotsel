@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-import { getAddress, isAddress } from "ethers";
+import { getAddress, isAddress } from 'ethers';
 
-export type BaseDeploymentNetworkName = "base-sepolia" | "base-mainnet";
+export type BaseDeploymentNetworkName = 'base-sepolia' | 'base-mainnet';
 
 interface BaseDeploymentTarget {
-  readonly runtimeKey: "base-sepolia" | "base-mainnet";
+  readonly runtimeKey: 'base-sepolia' | 'base-mainnet';
   readonly networkName: string;
   readonly chainId: number;
   readonly explorerBaseUrl: string;
@@ -13,7 +13,7 @@ interface BaseDeploymentTarget {
 
 export interface BaseDeploymentConfig {
   readonly target: BaseDeploymentTarget;
-  readonly escrowName: "AgroasysEscrow";
+  readonly escrowName: 'AgroasysEscrow';
   readonly usdcAddress: string;
   readonly oracleAddress: string;
   readonly treasuryAddress: string;
@@ -26,19 +26,19 @@ export interface BaseDeploymentConfig {
 }
 
 const BASE_DEPLOYMENT_TARGETS: Record<BaseDeploymentNetworkName, BaseDeploymentTarget> = {
-  "base-sepolia": {
-    runtimeKey: "base-sepolia",
-    networkName: "Base Sepolia",
+  'base-sepolia': {
+    runtimeKey: 'base-sepolia',
+    networkName: 'Base Sepolia',
     chainId: 84532,
-    explorerBaseUrl: "https://sepolia.basescan.org/address/",
-    officialUsdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    explorerBaseUrl: 'https://sepolia.basescan.org/address/',
+    officialUsdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
   },
-  "base-mainnet": {
-    runtimeKey: "base-mainnet",
-    networkName: "Base Mainnet",
+  'base-mainnet': {
+    runtimeKey: 'base-mainnet',
+    networkName: 'Base Mainnet',
     chainId: 8453,
-    explorerBaseUrl: "https://basescan.org/address/",
-    officialUsdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    explorerBaseUrl: 'https://basescan.org/address/',
+    officialUsdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   },
 };
 
@@ -62,11 +62,11 @@ function parseBooleanEnv(name: string, env: NodeJS.ProcessEnv, fallback: boolean
     return fallback;
   }
 
-  if (value.toLowerCase() === "true") {
+  if (value.toLowerCase() === 'true') {
     return true;
   }
 
-  if (value.toLowerCase() === "false") {
+  if (value.toLowerCase() === 'false') {
     return false;
   }
 
@@ -104,24 +104,24 @@ function parseAddressEnv(name: string, env: NodeJS.ProcessEnv): string {
 }
 
 function parseAdminList(env: NodeJS.ProcessEnv): string[] {
-  const raw = requiredEnv("DEPLOY_ADMINS", env);
+  const raw = requiredEnv('DEPLOY_ADMINS', env);
   const admins = raw
-    .split(",")
+    .split(',')
     .map((value) => value.trim())
     .filter((value) => value.length > 0)
     .map((value, index) => parseAddress(`DEPLOY_ADMINS[${index}]`, value));
 
   if (admins.length === 0) {
-    throw new Error("DEPLOY_ADMINS must contain at least one admin address");
+    throw new Error('DEPLOY_ADMINS must contain at least one admin address');
   }
 
   if (admins.length < 2) {
-    throw new Error("DEPLOY_ADMINS must contain at least two admin addresses");
+    throw new Error('DEPLOY_ADMINS must contain at least two admin addresses');
   }
 
   const unique = new Set(admins);
   if (unique.size !== admins.length) {
-    throw new Error("DEPLOY_ADMINS must not contain duplicate addresses");
+    throw new Error('DEPLOY_ADMINS must not contain duplicate addresses');
   }
 
   return admins;
@@ -134,7 +134,7 @@ function parseOptionalAddressList(name: string, env: NodeJS.ProcessEnv): string[
   }
 
   return raw
-    .split(",")
+    .split(',')
     .map((value) => value.trim())
     .filter((value) => value.length > 0)
     .map((value, index) => parseAddress(`${name}[${index}]`, value));
@@ -150,12 +150,15 @@ function assertAdminsDoNotIncludeForbiddenUsers(admins: string[], forbiddenUsers
   if (forbiddenAdmin) {
     throw new Error(
       `DEPLOY_ADMINS must not include buyer/supplier user wallet ${forbiddenAdmin}. ` +
-        "Use service-owned admin wallets for dispute and governance approvals.",
+        'Use service-owned admin wallets for dispute and governance approvals.',
     );
   }
 }
 
-function assertRelayerDoesNotIncludeForbiddenUsers(relayerAddress: string, forbiddenUsers: string[]): void {
+function assertRelayerDoesNotIncludeForbiddenUsers(
+  relayerAddress: string,
+  forbiddenUsers: string[],
+): void {
   if (forbiddenUsers.length === 0) {
     return;
   }
@@ -166,13 +169,28 @@ function assertRelayerDoesNotIncludeForbiddenUsers(relayerAddress: string, forbi
   if (forbiddenRelayer) {
     throw new Error(
       `DEPLOY_RELAYER_ADDRESS must not be buyer/supplier user wallet ${forbiddenRelayer}. ` +
-        "Use a service-owned relayer wallet for sponsored settlement execution.",
+        'Use a service-owned relayer wallet for sponsored settlement execution.',
+    );
+  }
+}
+
+function assertRuntimeRolesAreDistinct(
+  oracleAddress: string,
+  treasuryAddress: string,
+  relayerAddress: string,
+  admins: string[],
+): void {
+  const roles = [oracleAddress, treasuryAddress, relayerAddress, ...admins];
+  const normalized = roles.map((address) => address.toLowerCase());
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error(
+      'Oracle, treasury, relayer, and administrator addresses must be distinct runtime identities',
     );
   }
 }
 
 export function getBaseDeploymentTarget(networkName: string): BaseDeploymentTarget {
-  if (networkName !== "base-sepolia" && networkName !== "base-mainnet") {
+  if (networkName !== 'base-sepolia' && networkName !== 'base-mainnet') {
     throw new Error(
       `Unsupported Base deployment network "${networkName}". Expected base-sepolia or base-mainnet`,
     );
@@ -188,12 +206,14 @@ export function loadBaseDeploymentConfig(
 ): BaseDeploymentConfig {
   const target = getBaseDeploymentTarget(networkName);
   if (chainId !== undefined && chainId !== null && chainId !== target.chainId) {
-    throw new Error(`Network ${networkName} requires chainId=${target.chainId}, received ${chainId}`);
+    throw new Error(
+      `Network ${networkName} requires chainId=${target.chainId}, received ${chainId}`,
+    );
   }
 
-  const configuredUsdcAddress = optionalEnv("DEPLOY_USDC_ADDRESS", env);
+  const configuredUsdcAddress = optionalEnv('DEPLOY_USDC_ADDRESS', env);
   if (configuredUsdcAddress) {
-    const normalizedConfiguredUsdc = parseAddress("DEPLOY_USDC_ADDRESS", configuredUsdcAddress);
+    const normalizedConfiguredUsdc = parseAddress('DEPLOY_USDC_ADDRESS', configuredUsdcAddress);
     if (normalizedConfiguredUsdc !== target.officialUsdcAddress) {
       throw new Error(
         `DEPLOY_USDC_ADDRESS must match the official ${target.networkName} USDC address ${target.officialUsdcAddress}`,
@@ -201,30 +221,44 @@ export function loadBaseDeploymentConfig(
     }
   }
 
-  const oracleAddress = parseAddressEnv("DEPLOY_ORACLE_ADDRESS", env);
-  const treasuryAddress = parseAddressEnv("DEPLOY_TREASURY_ADDRESS", env);
-  const relayerAddress = parseAddressEnv("DEPLOY_RELAYER_ADDRESS", env);
+  const oracleAddress = parseAddressEnv('DEPLOY_ORACLE_ADDRESS', env);
+  const treasuryAddress = parseAddressEnv('DEPLOY_TREASURY_ADDRESS', env);
+  const relayerAddress = parseAddressEnv('DEPLOY_RELAYER_ADDRESS', env);
   const admins = parseAdminList(env);
-  const forbiddenUserWallets = parseOptionalAddressList("DEPLOY_FORBIDDEN_USER_WALLETS", env);
+  if (admins.length > 10) {
+    throw new Error('DEPLOY_ADMINS must not contain more than 10 addresses');
+  }
+  assertRuntimeRolesAreDistinct(oracleAddress, treasuryAddress, relayerAddress, admins);
+  const forbiddenUserWallets = parseOptionalAddressList('DEPLOY_FORBIDDEN_USER_WALLETS', env);
   assertAdminsDoNotIncludeForbiddenUsers(admins, forbiddenUserWallets);
   assertRelayerDoesNotIncludeForbiddenUsers(relayerAddress, forbiddenUserWallets);
-  const requiredApprovals = parsePositiveIntEnv("DEPLOY_REQUIRED_APPROVALS", env);
+  const requiredApprovals = parsePositiveIntEnv('DEPLOY_REQUIRED_APPROVALS', env);
   if (requiredApprovals >= admins.length) {
     throw new Error(
-      "DEPLOY_ADMINS must contain more addresses than DEPLOY_REQUIRED_APPROVALS. " +
-        "Deploying at parity means losing one admin key permanently disables governance.",
+      'DEPLOY_ADMINS must contain more addresses than DEPLOY_REQUIRED_APPROVALS. ' +
+        'Deploying at parity means losing one admin key permanently disables governance.',
+    );
+  }
+  if (target.runtimeKey === 'base-sepolia' && (admins.length !== 3 || requiredApprovals !== 2)) {
+    throw new Error(
+      'The approved Base Sepolia WP-1 matrix requires exactly three admins and two approvals',
     );
   }
 
+  const verify = parseBooleanEnv('DEPLOY_VERIFY', env, true);
+  if (!verify) {
+    throw new Error('DEPLOY_VERIFY must remain true for the canonical Base deployment path');
+  }
+
   const confirmations = parsePositiveIntEnv(
-    "DEPLOY_CONFIRMATIONS",
+    'DEPLOY_CONFIRMATIONS',
     env,
-    target.runtimeKey === "base-mainnet" ? 2 : 1,
+    target.runtimeKey === 'base-mainnet' ? 2 : 1,
   );
 
   return {
     target,
-    escrowName: "AgroasysEscrow",
+    escrowName: 'AgroasysEscrow',
     usdcAddress: target.officialUsdcAddress,
     oracleAddress,
     treasuryAddress,
@@ -232,7 +266,8 @@ export function loadBaseDeploymentConfig(
     admins,
     requiredApprovals,
     confirmations,
-    verify: parseBooleanEnv("DEPLOY_VERIFY", env, false),
-    evidenceOutDir: optionalEnv("DEPLOY_EVIDENCE_OUT_DIR", env) ?? `reports/deploy/${target.runtimeKey}`,
+    verify,
+    evidenceOutDir:
+      optionalEnv('DEPLOY_EVIDENCE_OUT_DIR', env) ?? `reports/deploy/${target.runtimeKey}`,
   };
 }

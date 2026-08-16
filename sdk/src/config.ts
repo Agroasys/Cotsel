@@ -16,4 +16,14 @@ export interface Config {
   // contracts
   escrowAddress: string;
   usdcAddress: string;
+  expectedRuntimeRoles?: RuntimeRoleExpectations;
+}
+
+export interface RuntimeRoleExpectations {
+  oracleAddress: string;
+  treasuryAddress: string;
+  treasuryPayoutAddress: string;
+  relayerAddresses: string[];
+  adminAddresses: string[];
+  requiredApprovals: number;
 }

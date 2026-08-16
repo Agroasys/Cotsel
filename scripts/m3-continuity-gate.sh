@@ -43,7 +43,8 @@ run_dashboard_connected_contracts() {
     pnpm test -- \
       src/test/api-contracts.test.ts \
       src/test/connected-read-adapters.test.ts \
-      src/test/connected-governance-adapters.test.ts
+      src/test/connected-governance-adapters.test.ts \
+      src/test/sdk-v2-governance-compatibility.test.ts
   )
 }
 

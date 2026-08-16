@@ -10,31 +10,31 @@ export class OracleEvent {
     @PrimaryColumn_()
     id!: string
 
-    @Index_()
+    @Index_("idx_oracle_event_oracle_update_acb2c06d")
     @ManyToOne_(() => OracleUpdateProposal, {nullable: true})
     oracleUpdate!: Relation_<OracleUpdateProposal> | undefined | null
 
-    @Index_()
+    @Index_("idx_oracle_event_event_name_66cd5669")
     @StringColumn_({nullable: false})
     eventName!: string
 
-    @Index_()
+    @Index_("idx_oracle_event_block_number_4bdd2c01")
     @IntColumn_({nullable: false})
     blockNumber!: number
 
-    @Index_()
+    @Index_("idx_oracle_event_timestamp_7eebae27")
     @DateTimeColumn_({nullable: false})
     timestamp!: Date
 
-    @Index_()
+    @Index_("idx_oracle_event_tx_hash_170d28bd")
     @StringColumn_({nullable: false})
     txHash!: string
 
-    @Index_()
+    @Index_("idx_oracle_event_log_index_5a7e5b92")
     @IntColumn_({nullable: false})
     logIndex!: number
 
-    @Index_()
+    @Index_("idx_oracle_event_transaction_index_74b17c2d")
     @IntColumn_({nullable: false})
     transactionIndex!: number
 

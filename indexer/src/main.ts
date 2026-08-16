@@ -10,7 +10,7 @@ import {
   DisputeEvent,
   OracleUpdateProposal,
   OracleEvent,
-  AdminAddProposal,
+  AdminChangeProposal,
   AdminEvent,
   SystemEvent,
   OverviewSnapshot,
@@ -26,6 +26,7 @@ import {
   applyTradeTransition,
 } from './overviewAggregate';
 import { buildEvmEventId, compareOrderedEvmEvents } from './eventIdentity';
+import { markGovernanceProposalExecuted } from './governanceProjection';
 import { persistIndexerBatch } from './persistence';
 
 type IndexerContext = DataHandlerContext<Store, Fields>;
@@ -57,7 +58,7 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
   const disputeEvents: DisputeEvent[] = [];
   const oracleUpdateProposals: Map<string, OracleUpdateProposal> = new Map();
   const oracleEvents: OracleEvent[] = [];
-  const adminAddProposals: Map<string, AdminAddProposal> = new Map();
+  const adminChangeProposals: Map<string, AdminChangeProposal> = new Map();
   const adminEvents: AdminEvent[] = [];
   const systemEvents: SystemEvent[] = [];
   let overviewSnapshot = await getOrLoadOverviewSnapshot(ctx);
@@ -460,10 +461,10 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
             break;
 
           // Admin events
-          case 'AdminAddProposed':
-            await handleAdminAddProposed(
+          case 'AdminChangeProposed':
+            await handleAdminChangeProposed(
               decoded,
-              adminAddProposals,
+              adminChangeProposals,
               adminEvents,
               eventId,
               block,
@@ -474,10 +475,24 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
               ctx,
             );
             break;
-          case 'AdminAddApproved':
-            await handleAdminAddApproved(
+          case 'AdminChangeApproved':
+            await handleAdminChangeApproved(
               decoded,
-              adminAddProposals,
+              adminChangeProposals,
+              adminEvents,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'AdminChangeExecuted':
+            await handleAdminChangeExecuted(
+              decoded,
+              adminChangeProposals,
               adminEvents,
               eventId,
               block,
@@ -501,10 +516,36 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
               ctx,
             );
             break;
-          case 'AdminAddProposalExpiredCancelled':
-            await handleAdminAddProposalExpiredCancelled(
+          case 'AdminRemoved':
+            await handleAdminRemoved(
               decoded,
-              adminAddProposals,
+              adminEvents,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'AdminReplaced':
+            await handleAdminReplaced(
+              decoded,
+              adminEvents,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'AdminChangeProposalCancelled':
+            await handleAdminChangeProposalCancelled(
+              decoded,
+              adminChangeProposals,
               adminEvents,
               eventId,
               block,
@@ -699,6 +740,32 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
               ctx,
             );
             break;
+          case 'RequiredApprovalsUpdated':
+            await handleRequiredApprovalsUpdated(
+              decoded,
+              systemEvents,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
+          case 'GovernanceEpochAdvanced':
+            await handleGovernanceEpochAdvanced(
+              decoded,
+              systemEvents,
+              eventId,
+              block,
+              timestamp,
+              txHash,
+              logIndex,
+              transactionIndex,
+              ctx,
+            );
+            break;
           case 'ClaimableAccrued':
             overviewSnapshot = await handleClaimableAccrued(
               decoded,
@@ -732,14 +799,14 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
     disputeEvents,
     oracleUpdateProposals: oracleUpdateProposals.values(),
     oracleEvents,
-    adminAddProposals: adminAddProposals.values(),
+    adminChangeProposals: adminChangeProposals.values(),
     adminEvents,
     systemEvents,
     overviewSnapshot,
   });
 
   ctx.log.info(
-    `Processed ${trades.size} trades, ${tradeEvents.length} trade events, ${disputeProposals.size} dispute proposals, ${disputeEvents.length} dispute events, ${oracleUpdateProposals.size} oracle proposals, ${oracleEvents.length} oracle events, ${adminAddProposals.size} admin proposals, ${adminEvents.length} admin events, ${systemEvents.length} system events`,
+    `Processed ${trades.size} trades, ${tradeEvents.length} trade events, ${disputeProposals.size} dispute proposals, ${disputeEvents.length} dispute events, ${oracleUpdateProposals.size} oracle proposals, ${oracleEvents.length} oracle events, ${adminChangeProposals.size} admin proposals, ${adminEvents.length} admin events, ${systemEvents.length} system events`,
   );
 }
 
@@ -2075,9 +2142,9 @@ async function handleOracleDisabledEmergency(
 
 // ########################### admin events ##########################
 
-async function handleAdminAddProposed(
+async function handleAdminChangeProposed(
   log: DecodedEscrowLog,
-  proposals: Map<string, AdminAddProposal>,
+  proposals: Map<string, AdminChangeProposal>,
   events: AdminEvent[],
   eventId: string,
   block: IndexerBlock,
@@ -2087,19 +2154,23 @@ async function handleAdminAddProposed(
   transactionIndex: number,
   ctx: IndexerContext,
 ) {
-  const [proposalId, proposer, newAdmin, eta] = log.args;
+  const [proposalId, proposer, kind, currentAdmin, newAdmin, newThreshold, eta, epoch] = log.args;
 
   const expiresAt = new Date(timestamp.getTime() + PROPOSAL_TTL_MS);
 
-  const proposal = new AdminAddProposal({
+  const proposal = new AdminChangeProposal({
     id: proposalId.toString(),
     proposalId: proposalId.toString(),
+    kind: Number(kind),
+    currentAdmin: currentAdmin.toLowerCase(),
     newAdmin: newAdmin.toLowerCase(),
+    newThreshold,
     approvalCount: 1,
     executed: false,
     createdAt: timestamp,
     eta,
     proposer: proposer.toLowerCase(),
+    epoch,
     expiresAt,
     cancelled: false,
   });
@@ -2109,25 +2180,29 @@ async function handleAdminAddProposed(
   events.push(
     new AdminEvent({
       id: eventId,
-      adminAddProposal: proposal,
-      eventName: 'AdminAddProposed',
+      adminChangeProposal: proposal,
+      eventName: 'AdminChangeProposed',
       blockNumber: block.header.height,
       timestamp,
       txHash,
       logIndex,
       transactionIndex,
-      proposedAdmin: newAdmin.toLowerCase(),
+      adminChangeKind: Number(kind),
+      currentAdmin: currentAdmin.toLowerCase(),
+      newAdmin: newAdmin.toLowerCase(),
+      newThreshold,
+      governanceEpoch: epoch,
       eta,
       proposer: proposer.toLowerCase(),
     }),
   );
 
-  ctx.log.info(`Admin add proposed: ${proposalId} to add ${newAdmin}`);
+  ctx.log.info(`Admin change proposed: ${proposalId} kind ${kind}`);
 }
 
-async function handleAdminAddApproved(
+async function handleAdminChangeApproved(
   log: DecodedEscrowLog,
-  proposals: Map<string, AdminAddProposal>,
+  proposals: Map<string, AdminChangeProposal>,
   events: AdminEvent[],
   eventId: string,
   block: IndexerBlock,
@@ -2141,9 +2216,9 @@ async function handleAdminAddApproved(
 
   let proposal = proposals.get(proposalId.toString());
   if (!proposal) {
-    proposal = await ctx.store.get(AdminAddProposal, proposalId.toString());
+    proposal = await ctx.store.get(AdminChangeProposal, proposalId.toString());
     if (!proposal) {
-      ctx.log.error(`Admin add proposal ${proposalId} not found`);
+      ctx.log.error(`Admin change proposal ${proposalId} not found`);
       return;
     }
     proposals.set(proposalId.toString(), proposal);
@@ -2155,8 +2230,8 @@ async function handleAdminAddApproved(
   events.push(
     new AdminEvent({
       id: eventId,
-      adminAddProposal: proposal,
-      eventName: 'AdminAddApproved',
+      adminChangeProposal: proposal,
+      eventName: 'AdminChangeApproved',
       blockNumber: block.header.height,
       timestamp,
       txHash,
@@ -2168,7 +2243,51 @@ async function handleAdminAddApproved(
     }),
   );
 
-  ctx.log.info(`Admin add ${proposalId} approved by ${approver}`);
+  ctx.log.info(`Admin change ${proposalId} approved by ${approver}`);
+}
+
+async function handleAdminChangeExecuted(
+  log: DecodedEscrowLog,
+  proposals: Map<string, AdminChangeProposal>,
+  events: AdminEvent[],
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [proposalId, kind, currentAdmin, newAdmin, newThreshold] = log.args;
+  const proposalKey = proposalId.toString();
+
+  let proposal = proposals.get(proposalKey);
+  if (!proposal) {
+    proposal = await ctx.store.get(AdminChangeProposal, proposalKey);
+    if (!proposal) {
+      throw new Error(`Admin change proposal ${proposalId} not found for execution`);
+    }
+  }
+
+  markGovernanceProposalExecuted(proposals, proposalKey, proposal);
+  events.push(
+    new AdminEvent({
+      id: eventId,
+      adminChangeProposal: proposal,
+      eventName: 'AdminChangeExecuted',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      adminChangeKind: Number(kind),
+      currentAdmin: currentAdmin.toLowerCase(),
+      newAdmin: newAdmin.toLowerCase(),
+      newThreshold,
+    }),
+  );
+
+  ctx.log.info(`Admin change ${proposalId} executed`);
 }
 
 async function handleAdminAdded(
@@ -2187,7 +2306,7 @@ async function handleAdminAdded(
   events.push(
     new AdminEvent({
       id: eventId,
-      adminAddProposal: null,
+      adminChangeProposal: null,
       eventName: 'AdminAdded',
       blockNumber: block.header.height,
       timestamp,
@@ -2201,9 +2320,66 @@ async function handleAdminAdded(
   ctx.log.info(`Admin added: ${newAdmin}`);
 }
 
-async function handleAdminAddProposalExpiredCancelled(
+async function handleAdminRemoved(
   log: DecodedEscrowLog,
-  proposals: Map<string, AdminAddProposal>,
+  events: AdminEvent[],
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [oldAdmin] = log.args;
+  events.push(
+    new AdminEvent({
+      id: eventId,
+      adminChangeProposal: null,
+      eventName: 'AdminRemoved',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      removedAdmin: oldAdmin.toLowerCase(),
+    }),
+  );
+  ctx.log.info(`Admin removed: ${oldAdmin}`);
+}
+
+async function handleAdminReplaced(
+  log: DecodedEscrowLog,
+  events: AdminEvent[],
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [oldAdmin, newAdmin] = log.args;
+  events.push(
+    new AdminEvent({
+      id: eventId,
+      adminChangeProposal: null,
+      eventName: 'AdminReplaced',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      oldAdmin: oldAdmin.toLowerCase(),
+      replacementAdmin: newAdmin.toLowerCase(),
+    }),
+  );
+  ctx.log.info(`Admin replaced: ${oldAdmin} with ${newAdmin}`);
+}
+
+async function handleAdminChangeProposalCancelled(
+  log: DecodedEscrowLog,
+  proposals: Map<string, AdminChangeProposal>,
   events: AdminEvent[],
   eventId: string,
   block: IndexerBlock,
@@ -2217,9 +2393,9 @@ async function handleAdminAddProposalExpiredCancelled(
 
   let proposal = proposals.get(proposalId.toString());
   if (!proposal) {
-    proposal = await ctx.store.get(AdminAddProposal, proposalId.toString());
+    proposal = await ctx.store.get(AdminChangeProposal, proposalId.toString());
     if (!proposal) {
-      ctx.log.error(`Admin add proposal ${proposalId} not found`);
+      ctx.log.error(`Admin change proposal ${proposalId} not found`);
       return;
     }
     proposals.set(proposalId.toString(), proposal);
@@ -2231,8 +2407,8 @@ async function handleAdminAddProposalExpiredCancelled(
   events.push(
     new AdminEvent({
       id: eventId,
-      adminAddProposal: proposal,
-      eventName: 'AdminAddProposalExpiredCancelled',
+      adminChangeProposal: proposal,
+      eventName: 'AdminChangeProposalCancelled',
       blockNumber: block.header.height,
       timestamp,
       txHash,
@@ -2242,7 +2418,7 @@ async function handleAdminAddProposalExpiredCancelled(
     }),
   );
 
-  ctx.log.info(`Admin add proposal ${proposalId} expired and cancelled by ${cancelledBy}`);
+  ctx.log.info(`Admin change proposal ${proposalId} cancelled by ${cancelledBy}`);
 }
 
 // ########################### system events ##########################
@@ -2287,7 +2463,7 @@ async function handleUnpauseProposed(
   transactionIndex: number,
   ctx: IndexerContext,
 ) {
-  const [triggeredBy] = log.args;
+  const [proposer, scope, tradeId, incidentRef, epoch] = log.args;
 
   events.push(
     new SystemEvent({
@@ -2298,11 +2474,15 @@ async function handleUnpauseProposed(
       txHash,
       logIndex,
       transactionIndex,
-      triggeredBy: triggeredBy.toLowerCase(),
+      triggeredBy: proposer.toLowerCase(),
+      pauseScope: Number(scope),
+      pauseTradeId: tradeId,
+      incidentRef,
+      governanceEpoch: epoch,
     }),
   );
 
-  ctx.log.info(`Unpause proposed by ${triggeredBy}`);
+  ctx.log.info(`Scoped unpause proposed by ${proposer} for scope ${scope}`);
 }
 
 async function handleUnpauseApproved(
@@ -2316,7 +2496,7 @@ async function handleUnpauseApproved(
   transactionIndex: number,
   ctx: IndexerContext,
 ) {
-  const [triggeredBy, approvalCount, requiredApprovals] = log.args;
+  const [approver, approvalCount, requiredApprovals] = log.args;
 
   events.push(
     new SystemEvent({
@@ -2327,13 +2507,13 @@ async function handleUnpauseApproved(
       txHash,
       logIndex,
       transactionIndex,
-      triggeredBy: triggeredBy.toLowerCase(),
+      triggeredBy: approver.toLowerCase(),
       approvalCount: Number(approvalCount),
       requiredApprovals: Number(requiredApprovals),
     }),
   );
 
-  ctx.log.info(`Unpause approved by ${triggeredBy} (${approvalCount}/${requiredApprovals})`);
+  ctx.log.info(`Unpause approved by ${approver} (${approvalCount}/${requiredApprovals})`);
 }
 
 async function handleUnpauseProposalCancelled(
@@ -2347,7 +2527,7 @@ async function handleUnpauseProposalCancelled(
   transactionIndex: number,
   ctx: IndexerContext,
 ) {
-  const [triggeredBy] = log.args;
+  const [cancelledBy] = log.args;
 
   events.push(
     new SystemEvent({
@@ -2358,11 +2538,11 @@ async function handleUnpauseProposalCancelled(
       txHash,
       logIndex,
       transactionIndex,
-      triggeredBy: triggeredBy.toLowerCase(),
+      triggeredBy: cancelledBy.toLowerCase(),
     }),
   );
 
-  ctx.log.info(`Unpause proposal cancelled by ${triggeredBy}`);
+  ctx.log.info(`Unpause proposal cancelled by ${cancelledBy}`);
 }
 
 async function handleUnpaused(
@@ -2376,7 +2556,7 @@ async function handleUnpaused(
   transactionIndex: number,
   ctx: IndexerContext,
 ) {
-  const [triggeredBy] = log.args;
+  const [account] = log.args;
 
   events.push(
     new SystemEvent({
@@ -2387,11 +2567,11 @@ async function handleUnpaused(
       txHash,
       logIndex,
       transactionIndex,
-      triggeredBy: triggeredBy.toLowerCase(),
+      triggeredBy: account.toLowerCase(),
     }),
   );
 
-  ctx.log.info(`System unpaused by ${triggeredBy}`);
+  ctx.log.info(`System unpaused by ${account}`);
 }
 
 async function handleAuthorizationConsumed(
@@ -2457,6 +2637,61 @@ async function handleRelayerUpdated(
   );
 
   ctx.log.info(`Relayer ${relayer} ${allowed ? 'allowed' : 'revoked'} by ${updatedBy}`);
+}
+
+async function handleRequiredApprovalsUpdated(
+  log: DecodedEscrowLog,
+  events: SystemEvent[],
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [oldThreshold, newThreshold] = log.args;
+  events.push(
+    new SystemEvent({
+      id: eventId,
+      eventName: 'RequiredApprovalsUpdated',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      oldThreshold,
+      newThreshold,
+    }),
+  );
+  ctx.log.info(`Required approvals updated from ${oldThreshold} to ${newThreshold}`);
+}
+
+async function handleGovernanceEpochAdvanced(
+  log: DecodedEscrowLog,
+  events: SystemEvent[],
+  eventId: string,
+  block: IndexerBlock,
+  timestamp: Date,
+  txHash: string,
+  logIndex: number,
+  transactionIndex: number,
+  ctx: IndexerContext,
+) {
+  const [newEpoch] = log.args;
+  events.push(
+    new SystemEvent({
+      id: eventId,
+      eventName: 'GovernanceEpochAdvanced',
+      blockNumber: block.header.height,
+      timestamp,
+      txHash,
+      logIndex,
+      transactionIndex,
+      governanceEpoch: newEpoch,
+    }),
+  );
+  ctx.log.info(`Governance epoch advanced to ${newEpoch}`);
 }
 
 // ########################### claim events ##########################

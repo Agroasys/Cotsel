@@ -18,6 +18,8 @@ describe('AgroasysEscrow', function () {
   let admin1: SignerWithAddress;
   let admin2: SignerWithAddress;
   let admin3: SignerWithAddress;
+  let operator1: SignerWithAddress;
+  let operator2: SignerWithAddress;
 
   async function createSignature(
     signer: SignerWithAddress,
@@ -261,7 +263,8 @@ describe('AgroasysEscrow', function () {
       | 'openDisputeWithAuthorization'
       | 'cancelLockedTradeAfterTimeoutWithAuthorization'
       | 'refundInTransitAfterTimeoutWithAuthorization'
-      | 'finalizeAfterDisputeWindowWithAuthorization',
+      | 'finalizeAfterDisputeWindowWithAuthorization'
+      | 'finalizeAfterInspectionAcceptanceWithAuthorization',
     relayerSigner: SignerWithAddress = admin1,
   ) {
     const nonce = await escrow.authorizationNonces(signer.address);
@@ -309,6 +312,15 @@ describe('AgroasysEscrow', function () {
     );
   }
 
+  async function finalizeAfterInspectionAcceptanceAsBuyer(tradeId: bigint) {
+    return executeUserActionWithAuthorization(
+      tradeId,
+      5,
+      buyer,
+      'finalizeAfterInspectionAcceptanceWithAuthorization',
+    );
+  }
+
   async function createDefaultTrade(ricardianHash: string = ethers.id('trade-hash')) {
     const totalAmount = ethers.parseUnits('106004', 6);
     const logisticsAmount = ethers.parseUnits('5000', 6);
@@ -343,7 +355,17 @@ describe('AgroasysEscrow', function () {
   }
 
   async function unpauseWithQuorum() {
-    await escrow.connect(admin1).proposeUnpause();
+    await escrow.connect(admin1).proposeUnpause(0, 0, ethers.id('global-recovery'));
+    await escrow.connect(admin2).approveUnpause();
+  }
+
+  async function unpauseClaimsWithQuorum() {
+    await escrow.connect(admin1).proposeUnpause(1, 0, ethers.id('claims-recovery'));
+    await escrow.connect(admin2).approveUnpause();
+  }
+
+  async function unpauseTradeWithQuorum(tradeId: bigint) {
+    await escrow.connect(admin1).proposeUnpause(2, tradeId, ethers.id(`trade-${tradeId}-recovery`));
     await escrow.connect(admin2).approveUnpause();
   }
 
@@ -355,7 +377,7 @@ describe('AgroasysEscrow', function () {
   }
 
   beforeEach(async function () {
-    [buyer, supplier, treasury, oracle, relayer, admin1, admin2, admin3] =
+    [buyer, supplier, treasury, oracle, relayer, admin1, admin2, admin3, operator1, operator2] =
       await ethers.getSigners();
 
     const USDCFactory = await ethers.getContractFactory('MockUSDC');
@@ -378,11 +400,12 @@ describe('AgroasysEscrow', function () {
   });
 
   describe('Deployment', function () {
-    it('Keeps deployed bytecode within the EVM contract-size limit', async function () {
+    it('Keeps deployed bytecode within the EVM contract-size limit @skip-on-coverage', async function () {
       const artifact = await artifacts.readArtifact('AgroasysEscrow');
       const deployedBytecodeBytes = (artifact.deployedBytecode.length - 2) / 2;
 
       expect(deployedBytecodeBytes).to.be.at.most(24_576);
+      expect(deployedBytecodeBytes).to.be.at.most(24_000);
     });
 
     it('Should set correct initial values', async function () {
@@ -412,7 +435,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address],
           1,
         ),
-      ).to.be.revertedWith('invalid token');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidToken');
 
       await expect(
         EscrowFactory.deploy(
@@ -423,7 +446,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address],
           1,
         ),
-      ).to.be.revertedWith('invalid oracle');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidOracle');
 
       await expect(
         EscrowFactory.deploy(
@@ -434,7 +457,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address],
           1,
         ),
-      ).to.be.revertedWith('invalid treasury');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidTreasury');
 
       await expect(
         EscrowFactory.deploy(
@@ -445,7 +468,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address],
           1,
         ),
-      ).to.be.revertedWith('invalid relayer');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidRelayer');
 
       await expect(
         EscrowFactory.deploy(
@@ -456,7 +479,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address],
           0,
         ),
-      ).to.be.revertedWith('required approvals must be >= 2');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowRequiredApprovalsMustBeAtLeast2');
 
       await expect(
         EscrowFactory.deploy(
@@ -467,7 +490,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address],
           1,
         ),
-      ).to.be.revertedWith('required approvals must be >= 2');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowRequiredApprovalsMustBeAtLeast2');
 
       await expect(
         EscrowFactory.deploy(
@@ -478,7 +501,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address, admin2.address],
           3,
         ),
-      ).to.be.revertedWith('not enough admins');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowNotEnoughAdmins');
     });
 
     it('Should reject an admin set at parity with the approval threshold', async function () {
@@ -495,7 +518,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address, admin2.address],
           2,
         ),
-      ).to.be.revertedWith('not enough admins');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowNotEnoughAdmins');
 
       await expect(
         EscrowFactory.deploy(
@@ -506,7 +529,7 @@ describe('AgroasysEscrow', function () {
           [admin1.address, admin2.address, admin3.address],
           3,
         ),
-      ).to.be.revertedWith('not enough admins');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowNotEnoughAdmins');
     });
 
     it('Should accept an admin set with at least one spare signer', async function () {
@@ -535,9 +558,11 @@ describe('AgroasysEscrow', function () {
         .to.emit(escrow, 'Paused')
         .withArgs(admin1.address);
 
-      await expect(escrow.connect(oracle).releaseFundsStage1(tradeId)).to.be.revertedWith('paused');
+      await expect(
+        escrow.connect(oracle).releaseFundsStage1(tradeId),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowPaused');
 
-      await escrow.connect(admin1).proposeUnpause();
+      await escrow.connect(admin1).proposeUnpause(0, 0, ethers.id('test-recovery'));
       await expect(escrow.connect(admin2).approveUnpause())
         .to.emit(escrow, 'Unpaused')
         .withArgs(admin2.address);
@@ -564,7 +589,7 @@ describe('AgroasysEscrow', function () {
         .to.emit(quorumEscrow, 'Paused')
         .withArgs(admin1.address);
 
-      await expect(quorumEscrow.connect(admin1).proposeUnpause())
+      await expect(quorumEscrow.connect(admin1).proposeUnpause(0, 0, ethers.id('test-recovery')))
         .to.emit(quorumEscrow, 'UnpauseApproved')
         .withArgs(admin1.address, 1, 2);
 
@@ -605,17 +630,23 @@ describe('AgroasysEscrow', function () {
       expect(await usdc.balanceOf(buyer.address)).to.equal(buyerBalBefore + totalAmount);
       expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
 
-      await expect(escrow.connect(admin2).unpauseClaims())
+      await escrow.connect(admin1).proposeUnpause(1, 0, ethers.id('claims-refund-recovery'));
+      await expect(escrow.connect(admin2).approveUnpause())
         .to.emit(escrow, 'ClaimsUnpaused')
         .withArgs(admin2.address);
       expect(await escrow.claimsPaused()).to.equal(false);
     });
 
     it('Should restrict claim freeze controls to admins', async function () {
-      await expect(escrow.connect(buyer).pauseClaims()).to.be.revertedWith('only admin');
+      await expect(escrow.connect(buyer).pauseClaims()).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowOnlyAdmin',
+      );
       await escrow.connect(admin1).pauseClaims();
-      await expect(escrow.connect(buyer).unpauseClaims()).to.be.revertedWith('only admin');
-      await escrow.connect(admin2).unpauseClaims();
+      await expect(
+        escrow.connect(buyer).proposeUnpause(1, 0, ethers.id('unauthorized-claims-recovery')),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyAdmin');
+      await unpauseClaimsWithQuorum();
     });
 
     it('Should disable oracle in emergency and require governance recovery before unpause', async function () {
@@ -628,13 +659,15 @@ describe('AgroasysEscrow', function () {
       expect(await escrow.oracleActive()).to.be.false;
       expect(await escrow.paused()).to.be.true;
 
-      await expect(escrow.connect(admin1).proposeUnpause()).to.be.revertedWith('oracle disabled');
+      await expect(
+        escrow.connect(admin1).proposeUnpause(0, 0, ethers.id('test-recovery')),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOracleDisabled');
 
       await expect(
         escrow.connect(oracle).confirmInspectionAvailable(0, 72 * 3600),
-      ).to.be.revertedWith('oracle disabled');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOracleDisabled');
 
-      const newOracle = admin3.address;
+      const newOracle = operator1.address;
       await escrow.connect(admin1).proposeOracleUpdate(newOracle);
       await escrow.connect(admin2).approveOracleUpdate(0);
       await time.increase(24 * 3600 + 1);
@@ -652,41 +685,71 @@ describe('AgroasysEscrow', function () {
 
       await escrow.connect(admin1).disableOracleEmergency();
 
-      await expect(escrow.connect(oracle).releaseFundsStage1(tradeId)).to.be.revertedWith(
-        'oracle disabled',
-      );
+      await expect(
+        escrow.connect(oracle).releaseFundsStage1(tradeId),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOracleDisabled');
 
-      const newOracle = admin3.address;
+      const newOracle = operator1.address;
       await escrow.connect(admin1).proposeOracleUpdate(newOracle);
       await escrow.connect(admin2).approveOracleUpdate(0);
       await time.increase(24 * 3600 + 1);
       await escrow.connect(admin1).executeOracleUpdate(0);
       await unpauseWithQuorum();
 
-      await expect(escrow.connect(oracle).releaseFundsStage1(tradeId)).to.be.revertedWith(
-        'only oracle',
-      );
+      await expect(
+        escrow.connect(oracle).releaseFundsStage1(tradeId),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyOracle');
 
-      await expect(escrow.connect(admin3).releaseFundsStage1(tradeId)).to.emit(
+      await expect(escrow.connect(operator1).releaseFundsStage1(tradeId)).to.emit(
         escrow,
         'FundsReleasedStage1',
       );
     });
 
     it('Should reject pause and emergency controls from non-admin callers', async function () {
-      await expect(escrow.connect(buyer).pause()).to.be.revertedWith('only admin');
+      await expect(escrow.connect(buyer).pause()).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowOnlyAdmin',
+      );
 
-      await expect(escrow.connect(buyer).disableOracleEmergency()).to.be.revertedWith('only admin');
+      await expect(escrow.connect(buyer).disableOracleEmergency()).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowOnlyAdmin',
+      );
 
       await escrow.connect(admin1).pause();
 
-      await expect(escrow.connect(buyer).proposeUnpause()).to.be.revertedWith('only admin');
+      await expect(
+        escrow.connect(buyer).proposeUnpause(0, 0, ethers.id('test-recovery')),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyAdmin');
 
-      await escrow.connect(admin1).proposeUnpause();
+      await escrow.connect(admin1).proposeUnpause(0, 0, ethers.id('test-recovery'));
 
-      await expect(escrow.connect(buyer).approveUnpause()).to.be.revertedWith('only admin');
+      await expect(escrow.connect(buyer).approveUnpause()).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowOnlyAdmin',
+      );
 
-      await expect(escrow.connect(buyer).cancelUnpauseProposal()).to.be.revertedWith('only admin');
+      await expect(escrow.connect(buyer).cancelUnpauseProposal()).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowOnlyAdmin',
+      );
+    });
+
+    it('prevents one administrator from replacing or cancelling another active recovery proposal', async function () {
+      await escrow.connect(admin1).pause();
+      await escrow.connect(admin1).proposeUnpause(0, 0, ethers.id('incident-primary'));
+
+      await expect(
+        escrow.connect(admin3).proposeUnpause(0, 0, ethers.id('incident-replacement')),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowActiveProposalExists');
+      await expect(escrow.connect(admin3).cancelUnpauseProposal()).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowActiveProposalExists',
+      );
+
+      await escrow.connect(admin2).approveUnpause();
+      expect(await escrow.paused()).to.be.false;
     });
   });
 
@@ -733,14 +796,16 @@ describe('AgroasysEscrow', function () {
           deadline,
           signature,
         ),
-      ).to.be.revertedWith('paused');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowPaused');
     });
 
     it('Should block release, confirm, open dispute, and finalize while paused', async function () {
       const { tradeId } = await createDefaultTrade(ethers.id('paused-flow'));
 
       await escrow.connect(admin1).pause();
-      await expect(escrow.connect(oracle).releaseFundsStage1(tradeId)).to.be.revertedWith('paused');
+      await expect(
+        escrow.connect(oracle).releaseFundsStage1(tradeId),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowPaused');
       await unpauseWithQuorum();
 
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
@@ -748,19 +813,25 @@ describe('AgroasysEscrow', function () {
       await escrow.connect(admin1).pause();
       await expect(
         escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600),
-      ).to.be.revertedWith('paused');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowPaused');
       await unpauseWithQuorum();
 
       await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
 
       await escrow.connect(admin1).pause();
-      await expect(openDisputeAsBuyer(tradeId)).to.be.revertedWith('paused');
+      await expect(openDisputeAsBuyer(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowPaused',
+      );
       await unpauseWithQuorum();
 
       await time.increase(24 * 3600 + 1);
 
       await escrow.connect(admin1).pause();
-      await expect(finalizeAfterDisputeWindowAsSupplier(tradeId)).to.be.revertedWith('paused');
+      await expect(finalizeAfterDisputeWindowAsSupplier(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowPaused',
+      );
     });
 
     it('Should block dispute propose/approve while paused', async function () {
@@ -771,29 +842,32 @@ describe('AgroasysEscrow', function () {
       await openDisputeAsBuyer(tradeId);
 
       await escrow.connect(admin1).pause();
-      await expect(escrow.connect(admin1).proposeDisputeSolution(tradeId, 0)).to.be.revertedWith(
-        'paused',
-      );
+      await expect(
+        escrow.connect(admin1).proposeDisputeSolution(tradeId, 0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowPaused');
       await unpauseWithQuorum();
 
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
 
       await escrow.connect(admin1).pause();
-      await expect(escrow.connect(admin2).approveDisputeSolution(0)).to.be.revertedWith('paused');
+      await expect(escrow.connect(admin2).approveDisputeSolution(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowPaused',
+      );
     });
 
     it('Should allow governance recovery paths while paused', async function () {
       await escrow.connect(admin1).pause();
 
-      await escrow.connect(admin1).proposeOracleUpdate(admin3.address);
+      await escrow.connect(admin1).proposeOracleUpdate(operator1.address);
       await escrow.connect(admin2).approveOracleUpdate(0);
       await time.increase(24 * 3600 + 1);
       await expect(escrow.connect(admin1).executeOracleUpdate(0)).to.emit(escrow, 'OracleUpdated');
 
-      await escrow.connect(admin1).proposeAddAdmin(buyer.address);
-      await escrow.connect(admin2).approveAddAdmin(0);
+      await escrow.connect(admin1).proposeAdminChange(0, ethers.ZeroAddress, buyer.address, 0);
+      await escrow.connect(admin2).approveAdminChange(0);
       await time.increase(24 * 3600 + 1);
-      await expect(escrow.connect(admin1).executeAddAdmin(0))
+      await expect(escrow.connect(admin1).executeAdminChange(0))
         .to.emit(escrow, 'AdminAdded')
         .withArgs(buyer.address);
 
@@ -804,11 +878,9 @@ describe('AgroasysEscrow', function () {
         .to.emit(escrow, 'OracleUpdateProposalExpiredCancelled')
         .withArgs(1, admin2.address);
 
-      await escrow.connect(admin1).proposeAddAdmin(treasury.address);
-      await time.increase(governanceTtl + 1n);
-      await expect(escrow.connect(admin2).cancelExpiredAddAdminProposal(1))
-        .to.emit(escrow, 'AdminAddProposalExpiredCancelled')
-        .withArgs(1, admin2.address);
+      await expect(
+        escrow.connect(admin1).proposeAdminChange(0, ethers.ZeroAddress, treasury.address, 0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidRoleSeparation');
 
       expect(await escrow.paused()).to.be.true;
     });
@@ -820,7 +892,10 @@ describe('AgroasysEscrow', function () {
 
       await escrow.connect(admin1).pause();
 
-      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith('paused');
+      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowPaused',
+      );
     });
 
     it('Should block IN_TRANSIT timeout refund while paused', async function () {
@@ -832,7 +907,10 @@ describe('AgroasysEscrow', function () {
 
       await escrow.connect(admin1).pause();
 
-      await expect(refundInTransitAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith('paused');
+      await expect(refundInTransitAfterTimeoutAsBuyer(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowPaused',
+      );
     });
   });
 
@@ -847,7 +925,8 @@ describe('AgroasysEscrow', function () {
         .withArgs(tradeId, admin1.address);
       expect(await escrow.tradePaused(tradeId)).to.be.true;
 
-      await expect(escrow.connect(admin2).unpauseTrade(tradeId))
+      await escrow.connect(admin1).proposeUnpause(2, tradeId, ethers.id('trade-pause-recovery'));
+      await expect(escrow.connect(admin2).approveUnpause())
         .to.emit(escrow, 'TradeUnpaused')
         .withArgs(tradeId, admin2.address);
       expect(await escrow.tradePaused(tradeId)).to.be.false;
@@ -856,23 +935,32 @@ describe('AgroasysEscrow', function () {
     it('Should restrict per-trade pause controls to admins', async function () {
       const { tradeId } = await createDefaultTrade(ethers.id('trade-pause-admin-only'));
 
-      await expect(escrow.connect(buyer).pauseTrade(tradeId)).to.be.revertedWith('only admin');
+      await expect(escrow.connect(buyer).pauseTrade(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowOnlyAdmin',
+      );
       await escrow.connect(admin1).pauseTrade(tradeId);
-      await expect(escrow.connect(buyer).unpauseTrade(tradeId)).to.be.revertedWith('only admin');
-      await escrow.connect(admin2).unpauseTrade(tradeId);
+      await expect(
+        escrow.connect(buyer).proposeUnpause(2, tradeId, ethers.id('unauthorized-trade-recovery')),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyAdmin');
+      await unpauseTradeWithQuorum(tradeId);
     });
 
     it('Should reject pausing an unknown trade and redundant state changes', async function () {
       const { tradeId } = await createDefaultTrade(ethers.id('trade-pause-guards'));
 
-      await expect(escrow.connect(admin1).pauseTrade(999n)).to.be.revertedWith('trade not found');
-      await expect(escrow.connect(admin1).unpauseTrade(tradeId)).to.be.revertedWith(
-        'trade not paused',
+      await expect(escrow.connect(admin1).pauseTrade(999n)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowTradeNotFound',
       );
+      await expect(
+        escrow.connect(admin1).proposeUnpause(2, tradeId, ethers.id('not-paused-trade')),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowTradeNotPaused');
 
       await escrow.connect(admin1).pauseTrade(tradeId);
-      await expect(escrow.connect(admin1).pauseTrade(tradeId)).to.be.revertedWith(
-        'trade already paused',
+      await expect(escrow.connect(admin1).pauseTrade(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowTradeAlreadyPaused',
       );
     });
 
@@ -881,29 +969,32 @@ describe('AgroasysEscrow', function () {
 
       // LOCKED → release blocked while paused, allowed after resume.
       await escrow.connect(admin1).pauseTrade(tradeId);
-      await expect(escrow.connect(oracle).releaseFundsStage1(tradeId)).to.be.revertedWith(
-        'trade paused',
-      );
-      await escrow.connect(admin1).unpauseTrade(tradeId);
+      await expect(
+        escrow.connect(oracle).releaseFundsStage1(tradeId),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowTradePaused');
+      await unpauseTradeWithQuorum(tradeId);
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
       // IN_TRANSIT → confirm inspection blocked while paused.
       await escrow.connect(admin1).pauseTrade(tradeId);
       await expect(
         escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600),
-      ).to.be.revertedWith('trade paused');
-      await escrow.connect(admin1).unpauseTrade(tradeId);
+      ).to.be.revertedWithCustomError(escrow, 'EscrowTradePaused');
+      await unpauseTradeWithQuorum(tradeId);
       await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
 
       // ARRIVAL_CONFIRMED → buyer dispute blocked while paused.
       await escrow.connect(admin1).pauseTrade(tradeId);
-      await expect(openDisputeAsBuyer(tradeId)).to.be.revertedWith('trade paused');
+      await expect(openDisputeAsBuyer(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowTradePaused',
+      );
 
       // Finalization also blocked while paused.
       await time.increase(72 * 3600 + 1);
-      await expect(escrow.connect(oracle).finalizeAfterDisputeWindow(tradeId)).to.be.revertedWith(
-        'trade paused',
-      );
+      await expect(
+        escrow.connect(oracle).finalizeAfterDisputeWindow(tradeId),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowTradePaused');
     });
 
     it('Should block dispute propose and approve for a paused trade', async function () {
@@ -913,16 +1004,17 @@ describe('AgroasysEscrow', function () {
       await openDisputeAsBuyer(tradeId);
 
       await escrow.connect(admin1).pauseTrade(tradeId);
-      await expect(escrow.connect(admin1).proposeDisputeSolution(tradeId, 0)).to.be.revertedWith(
-        'trade paused',
-      );
-      await escrow.connect(admin1).unpauseTrade(tradeId);
+      await expect(
+        escrow.connect(admin1).proposeDisputeSolution(tradeId, 0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowTradePaused');
+      await unpauseTradeWithQuorum(tradeId);
 
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
 
       await escrow.connect(admin1).pauseTrade(tradeId);
-      await expect(escrow.connect(admin2).approveDisputeSolution(0)).to.be.revertedWith(
-        'trade paused',
+      await expect(escrow.connect(admin2).approveDisputeSolution(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowTradePaused',
       );
     });
 
@@ -934,9 +1026,9 @@ describe('AgroasysEscrow', function () {
 
       await escrow.connect(admin1).pauseTrade(pausedTradeId);
 
-      await expect(escrow.connect(oracle).releaseFundsStage1(pausedTradeId)).to.be.revertedWith(
-        'trade paused',
-      );
+      await expect(
+        escrow.connect(oracle).releaseFundsStage1(pausedTradeId),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowTradePaused');
 
       // A different trade keeps progressing normally.
       await expect(escrow.connect(oracle).releaseFundsStage1(liveTradeId)).to.emit(
@@ -996,8 +1088,9 @@ describe('AgroasysEscrow', function () {
       const lockTimeout = await escrow.LOCK_TIMEOUT();
       await time.increase(lockTimeout - 1n);
 
-      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith(
-        'lock timeout not elapsed',
+      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowLockTimeoutNotElapsed',
       );
     });
 
@@ -1009,8 +1102,9 @@ describe('AgroasysEscrow', function () {
       const inTransitTimeout = await escrow.IN_TRANSIT_TIMEOUT();
       await time.increase(inTransitTimeout - 1n);
 
-      await expect(refundInTransitAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith(
-        'in-transit timeout not elapsed',
+      await expect(refundInTransitAfterTimeoutAsBuyer(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowInTransitTimeoutNotElapsed',
       );
     });
 
@@ -1022,8 +1116,9 @@ describe('AgroasysEscrow', function () {
 
       await cancelLockedTradeAfterTimeoutAsBuyer(tradeId);
 
-      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith(
-        'status must be LOCKED',
+      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowStatusMustBeLOCKED',
       );
     });
 
@@ -1037,8 +1132,9 @@ describe('AgroasysEscrow', function () {
 
       await refundInTransitAfterTimeoutAsBuyer(tradeId);
 
-      await expect(refundInTransitAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith(
-        'status must be IN_TRANSIT',
+      await expect(refundInTransitAfterTimeoutAsBuyer(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowStatusMustBeINTRANSIT',
       );
     });
   });
@@ -1148,8 +1244,9 @@ describe('AgroasysEscrow', function () {
       const buyerAfterRefund = await usdc.balanceOf(buyer.address);
 
       expect(buyerAfterRefund).to.be.gt(buyerBefore);
-      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWith(
-        'status must be LOCKED',
+      await expect(cancelLockedTradeAfterTimeoutAsBuyer(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowStatusMustBeLOCKED',
       );
       expect(await usdc.balanceOf(buyer.address)).to.equal(buyerAfterRefund);
       expect(await escrow.claimableUsdc(buyer.address)).to.equal(0);
@@ -1163,20 +1260,20 @@ describe('AgroasysEscrow', function () {
       );
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
-      await rotateTreasuryPayoutReceiver(admin3.address);
+      await rotateTreasuryPayoutReceiver(operator2.address);
 
       const expectedTreasuryClaimable = logisticsAmount + platformFeesAmount;
       const callerBefore = await usdc.balanceOf(admin1.address);
-      const receiverBefore = await usdc.balanceOf(admin3.address);
+      const receiverBefore = await usdc.balanceOf(operator2.address);
       const supplierClaimableBefore = await escrow.claimableUsdc(supplier.address);
       const buyerClaimableBefore = await escrow.claimableUsdc(buyer.address);
 
       await expect(escrow.connect(admin1).claimTreasury())
         .to.emit(escrow, 'TreasuryClaimed')
-        .withArgs(treasury.address, admin3.address, expectedTreasuryClaimable, admin1.address);
+        .withArgs(treasury.address, operator2.address, expectedTreasuryClaimable, admin1.address);
 
       expect(await usdc.balanceOf(admin1.address)).to.equal(callerBefore);
-      expect(await usdc.balanceOf(admin3.address)).to.equal(
+      expect(await usdc.balanceOf(operator2.address)).to.equal(
         receiverBefore + expectedTreasuryClaimable,
       );
       expect(await escrow.claimableUsdc(treasury.address)).to.equal(0);
@@ -1189,14 +1286,16 @@ describe('AgroasysEscrow', function () {
       const { tradeId } = await createDefaultTrade(ethers.id('treasury-sweep-access-control'));
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
-      await expect(escrow.connect(buyer).claimTreasury()).to.be.revertedWith(
-        'only treasury or admin',
+      await expect(escrow.connect(buyer).claimTreasury()).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowOnlyTreasuryOrAdmin',
       );
     });
 
     it('Should reject treasury sweep when no treasury claimable exists', async function () {
-      await expect(escrow.connect(treasury).claimTreasury()).to.be.revertedWith(
-        'nothing treasury claimable',
+      await expect(escrow.connect(treasury).claimTreasury()).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowNothingTreasuryClaimable',
       );
     });
 
@@ -1222,7 +1321,10 @@ describe('AgroasysEscrow', function () {
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
       await escrow.connect(admin1).pauseClaims();
-      await expect(escrow.connect(treasury).claimTreasury()).to.be.revertedWith('claims paused');
+      await expect(escrow.connect(treasury).claimTreasury()).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowClaimsPaused',
+      );
     });
   });
 
@@ -1338,7 +1440,7 @@ describe('AgroasysEscrow', function () {
           ethers.parseUnits('595', 6),
           ethers.id('invalid-launch-accounting'),
         ),
-      ).to.be.revertedWith('invalid launch settlement schedule');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidLaunchSettlementSchedule');
     });
 
     it('Should create multiple trades with incrementing nonces', async function () {
@@ -1530,7 +1632,7 @@ describe('AgroasysEscrow', function () {
           deadline,
           signature,
         ),
-      ).to.be.revertedWith('bad authorization');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
     });
 
     it('Should reject replay signature', async function () {
@@ -1592,7 +1694,7 @@ describe('AgroasysEscrow', function () {
           deadline,
           signature,
         ),
-      ).to.be.revertedWith('bad authorization nonce'); // got rejected because of the nonce
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorizationNonce'); // got rejected because of the nonce
     });
 
     it('Should reject with invalid parameters (zero addresses, bad hash, mismatched amounts)', async function () {
@@ -1613,7 +1715,7 @@ describe('AgroasysEscrow', function () {
           deadline,
           '0x00',
         ),
-      ).to.be.revertedWith('supplier required');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowSupplierRequired');
 
       await expect(
         createTradeWithAuthorizationForTest(
@@ -1628,7 +1730,7 @@ describe('AgroasysEscrow', function () {
           deadline,
           '0x00',
         ),
-      ).to.be.revertedWith('supplier cannot be escrow');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowSupplierCannotBeEscrow');
 
       await expect(
         createTradeWithAuthorizationForTest(
@@ -1643,7 +1745,7 @@ describe('AgroasysEscrow', function () {
           deadline,
           '0x00',
         ),
-      ).to.be.revertedWith('ricardian hash required');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowRicardianHashRequired');
 
       const wrongTotal = ethers.parseUnits('100000', 6);
       await expect(
@@ -1659,7 +1761,7 @@ describe('AgroasysEscrow', function () {
           deadline,
           '0x00',
         ),
-      ).to.be.revertedWith('breakdown mismatch');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBreakdownMismatch');
     });
 
     it('Should reject with bad nonce', async function () {
@@ -1693,7 +1795,7 @@ describe('AgroasysEscrow', function () {
           deadline,
           signature,
         ),
-      ).to.be.revertedWith('bad authorization nonce');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorizationNonce');
     });
 
     it('Should reject expired signature', async function () {
@@ -1727,7 +1829,7 @@ describe('AgroasysEscrow', function () {
           expiredDeadline,
           signature,
         ),
-      ).to.be.revertedWith('authorization expired');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowAuthorizationExpired');
     });
 
     it('rejects create-trade signatures from the wrong EIP-712 chain domain', async function () {
@@ -1766,7 +1868,7 @@ describe('AgroasysEscrow', function () {
           deadline,
           signature,
         ),
-      ).to.be.revertedWith('bad authorization');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
     });
 
     it('rejects create-trade signatures from the wrong EIP-712 verifying contract domain', async function () {
@@ -1804,7 +1906,7 @@ describe('AgroasysEscrow', function () {
           deadline,
           signature,
         ),
-      ).to.be.revertedWith('bad authorization');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
     });
   });
 
@@ -1897,7 +1999,7 @@ describe('AgroasysEscrow', function () {
         .to.emit(escrow, 'AuthorizationConsumed')
         .withArgs(
           buyer.address,
-          await escrow.ACTION_CREATE_TRADE(),
+          ethers.id('CREATE_TRADE'),
           0n,
           admin1.address,
           prepared.authDeadline,
@@ -1907,7 +2009,7 @@ describe('AgroasysEscrow', function () {
         .withArgs(0n, buyer.address, prepared.tokenNonce, totalAmount);
       await expect(tx)
         .to.emit(escrow, 'RelayedActionExecuted')
-        .withArgs(admin1.address, buyer.address, await escrow.ACTION_CREATE_TRADE(), 0n);
+        .withArgs(admin1.address, buyer.address, ethers.id('CREATE_TRADE'), 0n);
 
       const trade = await escrow.trades(0);
       expect(trade.buyerAddress).to.equal(buyer.address);
@@ -1923,8 +2025,9 @@ describe('AgroasysEscrow', function () {
       const prepared = await prepareGaslessTrade(ethers.id('gasless-replay'));
       await submitPreparedGaslessTrade(prepared);
 
-      await expect(submitPreparedGaslessTrade(prepared)).to.be.revertedWith(
-        'bad authorization nonce',
+      await expect(submitPreparedGaslessTrade(prepared)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowBadAuthorizationNonce',
       );
     });
 
@@ -1947,7 +2050,7 @@ describe('AgroasysEscrow', function () {
             prepared.authorizationSignature,
             prepared.usdcAuthorization,
           ),
-      ).to.be.revertedWith('breakdown mismatch');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBreakdownMismatch');
 
       expect(await usdc.authorizationState(buyer.address, prepared.tokenNonce)).to.equal(false);
     });
@@ -1958,7 +2061,7 @@ describe('AgroasysEscrow', function () {
       await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
 
       const blockTimestamp = (await ethers.provider.getBlock('latest'))!.timestamp;
-      const deadline = BigInt(blockTimestamp + 3600);
+      const deadline = BigInt(blockTimestamp + 48 * 3600);
       const nonce = await escrow.getAuthorizationNonce(buyer.address);
       const signature = await signUserActionAuthorization(buyer, {
         user: buyer.address,
@@ -1970,17 +2073,20 @@ describe('AgroasysEscrow', function () {
 
       await expect(
         escrow.connect(buyer).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
-      ).to.be.revertedWith('only relayer or admin');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyRelayerOrAdmin');
 
-      await expect(escrow.connect(admin1).setRelayer(supplier.address, true))
+      await escrow.connect(admin1).proposeAdminChange(4, ethers.ZeroAddress, operator2.address, 0);
+      await escrow.connect(admin2).approveAdminChange(0);
+      await time.increase(24 * 3600 + 1);
+      await expect(escrow.connect(admin1).executeAdminChange(0))
         .to.emit(escrow, 'RelayerUpdated')
-        .withArgs(supplier.address, true, admin1.address);
+        .withArgs(operator2.address, true, admin1.address);
 
       await expect(
-        escrow.connect(supplier).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
+        escrow.connect(operator2).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
       )
         .to.emit(escrow, 'RelayedActionExecuted')
-        .withArgs(supplier.address, buyer.address, await escrow.ACTION_OPEN_DISPUTE(), tradeId);
+        .withArgs(operator2.address, buyer.address, ethers.id('OPEN_DISPUTE'), tradeId);
 
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(3);
@@ -2089,17 +2195,18 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should reject if not oracle', async function () {
-      await expect(escrow.connect(buyer).releaseFundsStage1(tradeId)).to.be.revertedWith(
-        'only oracle',
+      await expect(escrow.connect(buyer).releaseFundsStage1(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowOnlyOracle',
       );
     });
 
     it('Should reject if wrong status', async function () {
       await escrow.connect(oracle).releaseFundsStage1(tradeId);
 
-      await expect(escrow.connect(oracle).releaseFundsStage1(tradeId)).to.be.revertedWith(
-        'status must be LOCKED',
-      );
+      await expect(
+        escrow.connect(oracle).releaseFundsStage1(tradeId),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowStatusMustBeLOCKED');
     });
   });
 
@@ -2155,14 +2262,14 @@ describe('AgroasysEscrow', function () {
     it('Should reject arbitrary inspection windows', async function () {
       await expect(
         escrow.connect(oracle).confirmInspectionAvailable(tradeId, 12 * 3600),
-      ).to.be.revertedWith('unsupported inspection window');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowUnsupportedInspectionWindow');
     });
 
     it('Should release the final tranche immediately after inspection acceptance', async function () {
       const supplierBefore = await usdc.balanceOf(supplier.address);
       await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
 
-      await expect(escrow.connect(oracle).finalizeAfterInspectionAcceptance(tradeId))
+      await expect(finalizeAfterInspectionAcceptanceAsBuyer(tradeId))
         .to.emit(escrow, 'InspectionAcceptedForFinalRelease')
         .and.to.emit(escrow, 'FinalTrancheReleased');
 
@@ -2171,6 +2278,84 @@ describe('AgroasysEscrow', function () {
       expect(await usdc.balanceOf(supplier.address)).to.equal(
         supplierBefore + trade.supplierSecondTranche,
       );
+    });
+
+    it('rejects Oracle bypass and invalid buyer inspection authorizations', async function () {
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
+
+      const legacyCall = new ethers.Interface([
+        'function finalizeAfterInspectionAcceptance(uint256 tradeId)',
+      ]).encodeFunctionData('finalizeAfterInspectionAcceptance', [tradeId]);
+      await expect(oracle.sendTransaction({ to: await escrow.getAddress(), data: legacyCall })).to
+        .be.reverted;
+
+      const nonce = await escrow.authorizationNonces(buyer.address);
+      const now = BigInt((await ethers.provider.getBlock('latest'))!.timestamp);
+      const deadline = now + 3600n;
+      const wrongSigner = await signUserActionAuthorization(supplier, {
+        user: buyer.address,
+        action: 5,
+        tradeId,
+        nonce,
+        deadline,
+      });
+
+      await expect(
+        escrow
+          .connect(admin1)
+          .finalizeAfterInspectionAcceptanceWithAuthorization(
+            tradeId,
+            nonce,
+            deadline,
+            wrongSigner,
+          ),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
+
+      const expired = await signUserActionAuthorization(buyer, {
+        user: buyer.address,
+        action: 5,
+        tradeId,
+        nonce,
+        deadline: now - 1n,
+      });
+      await expect(
+        escrow
+          .connect(admin1)
+          .finalizeAfterInspectionAcceptanceWithAuthorization(tradeId, nonce, now - 1n, expired),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowAuthorizationExpired');
+
+      const wrongDomain = await signUserActionAuthorization(
+        buyer,
+        { user: buyer.address, action: 5, tradeId, nonce, deadline },
+        { chainId: 84532n },
+      );
+      await expect(
+        escrow
+          .connect(admin1)
+          .finalizeAfterInspectionAcceptanceWithAuthorization(
+            tradeId,
+            nonce,
+            deadline,
+            wrongDomain,
+          ),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
+
+      const valid = await signUserActionAuthorization(buyer, {
+        user: buyer.address,
+        action: 5,
+        tradeId,
+        nonce,
+        deadline,
+      });
+      await escrow
+        .connect(admin1)
+        .finalizeAfterInspectionAcceptanceWithAuthorization(tradeId, nonce, deadline, valid);
+
+      await expect(
+        escrow
+          .connect(admin1)
+          .finalizeAfterInspectionAcceptanceWithAuthorization(tradeId, nonce, deadline, valid),
+      ).to.be.reverted;
     });
 
     it('Should let the active oracle release the final tranche after the notice deadline', async function () {
@@ -2194,15 +2379,15 @@ describe('AgroasysEscrow', function () {
       await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
       await time.increase(72 * 3600 + 1);
 
-      await expect(escrow.connect(buyer).finalizeAfterDisputeWindow(tradeId)).to.be.revertedWith(
-        'only oracle or admin',
-      );
+      await expect(
+        escrow.connect(buyer).finalizeAfterDisputeWindow(tradeId),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyOracleOrAdmin');
     });
 
     it('Should reject if not oracle', async function () {
       await expect(
         escrow.connect(buyer).confirmInspectionAvailable(tradeId, 72 * 3600),
-      ).to.be.revertedWith('only oracle');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyOracle');
     });
 
     it('Should reject if wrong status', async function () {
@@ -2210,7 +2395,7 @@ describe('AgroasysEscrow', function () {
 
       await expect(
         escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600),
-      ).to.be.revertedWith('status must be IN_TRANSIT');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowStatusMustBeINTRANSIT');
     });
   });
 
@@ -2250,7 +2435,10 @@ describe('AgroasysEscrow', function () {
     it('Should reject a dispute after the 72-hour notice window', async function () {
       await time.increase(72 * 3600 + 1);
 
-      await expect(openDisputeAsBuyer(tradeId)).to.be.revertedWith('window closed');
+      await expect(openDisputeAsBuyer(tradeId)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowWindowClosed',
+      );
     });
 
     it('Should reject dispute authorization from non-buyer', async function () {
@@ -2267,7 +2455,7 @@ describe('AgroasysEscrow', function () {
 
       await expect(
         escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
-      ).to.be.revertedWith('bad authorization');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
     });
 
     it('rejects user-action signatures from the wrong EIP-712 chain domain', async function () {
@@ -2289,7 +2477,7 @@ describe('AgroasysEscrow', function () {
 
       await expect(
         escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
-      ).to.be.revertedWith('bad authorization');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
     });
 
     it('rejects user-action signatures from the wrong EIP-712 verifying contract domain', async function () {
@@ -2310,7 +2498,7 @@ describe('AgroasysEscrow', function () {
 
       await expect(
         escrow.connect(admin1).openDisputeWithAuthorization(tradeId, nonce, deadline, signature),
-      ).to.be.revertedWith('bad authorization');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
     });
 
     it('Should refund buyer after dispute REFUND resolution', async function () {
@@ -2358,17 +2546,18 @@ describe('AgroasysEscrow', function () {
     it('Should reject dispute proposal from non-admin', async function () {
       await openDisputeAsBuyer(tradeId);
 
-      await expect(escrow.connect(buyer).proposeDisputeSolution(tradeId, 0)).to.be.revertedWith(
-        'only admin',
-      );
+      await expect(
+        escrow.connect(buyer).proposeDisputeSolution(tradeId, 0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyAdmin');
     });
 
     it('Should reject dispute approval from non-admin', async function () {
       await openDisputeAsBuyer(tradeId);
       await escrow.connect(admin1).proposeDisputeSolution(tradeId, 0);
 
-      await expect(escrow.connect(buyer).approveDisputeSolution(0)).to.be.revertedWith(
-        'only admin',
+      await expect(escrow.connect(buyer).approveDisputeSolution(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowOnlyAdmin',
       );
     });
 
@@ -2379,8 +2568,9 @@ describe('AgroasysEscrow', function () {
       const ttl = await escrow.DISPUTE_PROPOSAL_TTL();
       await time.increase(ttl + 1n);
 
-      await expect(escrow.connect(admin2).approveDisputeSolution(0)).to.be.revertedWith(
-        'proposal expired',
+      await expect(escrow.connect(admin2).approveDisputeSolution(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowProposalExpired',
       );
 
       await expect(escrow.connect(admin2).cancelExpiredDisputeProposal(0))
@@ -2409,7 +2599,7 @@ describe('AgroasysEscrow', function () {
 
   describe('Governance: Oracle Update', function () {
     it('Should update oracle with timelock', async function () {
-      const newOracle = admin3.address;
+      const newOracle = operator1.address;
 
       await escrow.connect(admin1).proposeOracleUpdate(newOracle);
 
@@ -2425,38 +2615,41 @@ describe('AgroasysEscrow', function () {
     });
 
     it('Should reject execution before timelock', async function () {
-      const newOracle = admin3.address;
+      const newOracle = operator1.address;
 
       await escrow.connect(admin1).proposeOracleUpdate(newOracle);
       await escrow.connect(admin2).approveOracleUpdate(0);
 
-      await expect(escrow.connect(admin1).executeOracleUpdate(0)).to.be.revertedWith(
-        'timelock not elapsed',
+      await expect(escrow.connect(admin1).executeOracleUpdate(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowTimelockNotElapsed',
       );
     });
 
     it('Should reject oracle update from non-admin', async function () {
-      await expect(escrow.connect(buyer).proposeOracleUpdate(admin3.address)).to.be.revertedWith(
-        'only admin',
-      );
+      await expect(
+        escrow.connect(buyer).proposeOracleUpdate(operator1.address),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyAdmin');
     });
 
     it('Should reject execution after proposal expiry and allow cancel', async function () {
-      await escrow.connect(admin1).proposeOracleUpdate(admin3.address);
+      await escrow.connect(admin1).proposeOracleUpdate(operator1.address);
 
       const ttl = await escrow.GOVERNANCE_PROPOSAL_TTL();
       await time.increase(ttl + 1n);
 
-      await expect(escrow.connect(admin1).executeOracleUpdate(0)).to.be.revertedWith(
-        'proposal expired',
+      await expect(escrow.connect(admin1).executeOracleUpdate(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowProposalExpired',
       );
 
       await expect(escrow.connect(admin2).cancelExpiredOracleUpdateProposal(0))
         .to.emit(escrow, 'OracleUpdateProposalExpiredCancelled')
         .withArgs(0, admin2.address);
 
-      await expect(escrow.connect(admin1).executeOracleUpdate(0)).to.be.revertedWith(
-        'proposal cancelled',
+      await expect(escrow.connect(admin1).executeOracleUpdate(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowProposalCancelled',
       );
     });
   });
@@ -2465,62 +2658,153 @@ describe('AgroasysEscrow', function () {
     it('Should add new admin with timelock', async function () {
       const newAdmin = buyer.address;
 
-      await escrow.connect(admin1).proposeAddAdmin(newAdmin);
+      await escrow.connect(admin1).proposeAdminChange(0, ethers.ZeroAddress, newAdmin, 0);
 
-      await escrow.connect(admin2).approveAddAdmin(0);
+      await escrow.connect(admin2).approveAdminChange(0);
 
       await time.increase(24 * 3600 + 1);
 
-      await expect(escrow.connect(admin1).executeAddAdmin(0))
+      await expect(escrow.connect(admin1).executeAdminChange(0))
         .to.emit(escrow, 'AdminAdded')
-        .withArgs(newAdmin);
+        .withArgs(newAdmin)
+        .and.to.emit(escrow, 'AdminChangeExecuted')
+        .withArgs(0, 0, ethers.ZeroAddress, newAdmin, 0);
 
       expect(await escrow.isAdmin(newAdmin)).to.be.true;
     });
 
     it('Should reject add admin from non-admin', async function () {
-      await expect(escrow.connect(buyer).proposeAddAdmin(buyer.address)).to.be.revertedWith(
-        'only admin',
-      );
+      await expect(
+        escrow.connect(buyer).proposeAdminChange(0, ethers.ZeroAddress, buyer.address, 0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyAdmin');
     });
 
     it('Should reject execution after proposal expiry and allow cancel', async function () {
-      await escrow.connect(admin1).proposeAddAdmin(buyer.address);
+      await escrow.connect(admin1).proposeAdminChange(0, ethers.ZeroAddress, buyer.address, 0);
 
       const ttl = await escrow.GOVERNANCE_PROPOSAL_TTL();
       await time.increase(ttl + 1n);
 
-      await expect(escrow.connect(admin1).executeAddAdmin(0)).to.be.revertedWith(
-        'proposal expired',
+      await expect(escrow.connect(admin1).executeAdminChange(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowProposalExpired',
       );
 
-      await expect(escrow.connect(admin2).cancelExpiredAddAdminProposal(0))
-        .to.emit(escrow, 'AdminAddProposalExpiredCancelled')
+      await expect(escrow.connect(admin2).cancelAdminChangeProposal(0))
+        .to.emit(escrow, 'AdminChangeProposalCancelled')
         .withArgs(0, admin2.address);
 
-      await expect(escrow.connect(admin1).executeAddAdmin(0)).to.be.revertedWith(
-        'proposal cancelled',
+      await expect(escrow.connect(admin1).executeAdminChange(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowProposalCancelled',
       );
+    });
+  });
+
+  describe('Governance: recoverable authority', function () {
+    async function approveAndExecuteAdminChange(proposalId: bigint | number) {
+      await escrow.connect(admin2).approveAdminChange(proposalId);
+      await time.increase(24 * 3600 + 1);
+      return escrow.connect(admin1).executeAdminChange(proposalId);
+    }
+
+    it('atomically replaces a lost administrator and advances the governance epoch', async function () {
+      const epoch = await escrow.governanceEpoch();
+      await escrow.connect(admin1).proposeAdminChange(2, admin3.address, operator1.address, 0);
+
+      await expect(approveAndExecuteAdminChange(0))
+        .to.emit(escrow, 'AdminReplaced')
+        .withArgs(admin3.address, operator1.address)
+        .and.to.emit(escrow, 'GovernanceEpochAdvanced')
+        .withArgs(epoch + 1n);
+
+      expect(await escrow.isAdmin(admin3.address)).to.be.false;
+      expect(await escrow.isAdmin(operator1.address)).to.be.true;
+    });
+
+    it('changes quorum only while preserving a spare administrator', async function () {
+      await escrow.connect(admin1).proposeAdminChange(0, ethers.ZeroAddress, operator1.address, 0);
+      await approveAndExecuteAdminChange(0);
+
+      await escrow.connect(admin1).proposeAdminChange(3, ethers.ZeroAddress, ethers.ZeroAddress, 3);
+      await approveAndExecuteAdminChange(1);
+      expect(await escrow.requiredApprovals()).to.equal(3);
+
+      await expect(
+        escrow.connect(admin1).proposeAdminChange(1, operator1.address, ethers.ZeroAddress, 0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowNotEnoughAdmins');
+    });
+
+    it('rotates relayers through the same quorum and timelock policy', async function () {
+      await escrow.connect(admin1).proposeAdminChange(4, ethers.ZeroAddress, operator2.address, 0);
+      await expect(approveAndExecuteAdminChange(0))
+        .to.emit(escrow, 'RelayerUpdated')
+        .withArgs(operator2.address, true, admin1.address);
+      expect(await escrow.isRelayer(operator2.address)).to.be.true;
+
+      await escrow.connect(admin1).proposeAdminChange(5, operator2.address, ethers.ZeroAddress, 0);
+      await expect(approveAndExecuteAdminChange(1))
+        .to.emit(escrow, 'RelayerUpdated')
+        .withArgs(operator2.address, false, admin1.address);
+      expect(await escrow.isRelayer(operator2.address)).to.be.false;
+    });
+
+    it('invalidates proposals approved under an older governance epoch', async function () {
+      await escrow.connect(admin1).proposeOracleUpdate(operator1.address);
+      await escrow.connect(admin1).proposeAdminChange(0, ethers.ZeroAddress, buyer.address, 0);
+      await approveAndExecuteAdminChange(0);
+
+      await expect(escrow.connect(admin2).approveOracleUpdate(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowStaleGovernanceProposal',
+      );
+    });
+
+    it('rejects service-role overlap and requires an incident reference for recovery', async function () {
+      await expect(
+        escrow.connect(admin1).proposeAdminChange(0, ethers.ZeroAddress, treasury.address, 0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidRoleSeparation');
+
+      await escrow.connect(admin1).pauseClaims();
+      await expect(
+        escrow.connect(admin1).proposeUnpause(1, 0, ethers.ZeroHash),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidIncidentReference');
+
+      await escrow.connect(admin1).proposeUnpause(1, 0, ethers.id('incident-2026-08-15'));
+      expect(await escrow.claimsPaused()).to.be.true;
+      await escrow.connect(admin2).approveUnpause();
+      expect(await escrow.claimsPaused()).to.be.false;
+    });
+
+    it('prevents an unrelated administrator from cancelling an active authority change', async function () {
+      await escrow.connect(admin1).proposeAdminChange(2, admin3.address, operator1.address, 0);
+
+      await expect(
+        escrow.connect(admin3).cancelAdminChangeProposal(0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowProposalNotExpired');
+
+      await approveAndExecuteAdminChange(0);
+      expect(await escrow.isAdmin(operator1.address)).to.be.true;
     });
   });
 
   describe('Governance: Treasury Payout Receiver', function () {
     it('Should rotate treasury payout receiver with quorum and timelock', async function () {
-      const newReceiver = admin3.address;
+      const newReceiver = operator2.address;
 
       await expect(
         escrow.connect(buyer).proposeTreasuryPayoutAddressUpdate(newReceiver),
-      ).to.be.revertedWith('only admin');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyAdmin');
 
       await escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(newReceiver);
-      await expect(escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0)).to.be.revertedWith(
-        'not enough approvals',
-      );
+      await expect(
+        escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowNotEnoughApprovals');
 
       await escrow.connect(admin2).approveTreasuryPayoutAddressUpdate(0);
-      await expect(escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0)).to.be.revertedWith(
-        'timelock not elapsed',
-      );
+      await expect(
+        escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowTimelockNotElapsed');
 
       await time.increase(24 * 3600 + 1);
       await expect(escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0))
@@ -2533,39 +2817,39 @@ describe('AgroasysEscrow', function () {
     it('Should reject invalid treasury payout receiver update proposals', async function () {
       await expect(
         escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(ethers.ZeroAddress),
-      ).to.be.revertedWith('invalid treasury payout receiver');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowInvalidTreasuryPayoutReceiver');
 
       await expect(
         escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(treasury.address),
-      ).to.be.revertedWith('same treasury payout receiver');
+      ).to.be.revertedWithCustomError(escrow, 'EscrowSameTreasuryPayoutReceiver');
     });
 
     it('Should reject execution after proposal expiry and allow cancel', async function () {
-      await escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(admin3.address);
+      await escrow.connect(admin1).proposeTreasuryPayoutAddressUpdate(operator2.address);
       await escrow.connect(admin2).approveTreasuryPayoutAddressUpdate(0);
 
       const ttl = await escrow.GOVERNANCE_PROPOSAL_TTL();
       await time.increase(ttl + 1n);
 
-      await expect(escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0)).to.be.revertedWith(
-        'proposal expired',
-      );
+      await expect(
+        escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowProposalExpired');
 
       await expect(escrow.connect(admin2).cancelExpiredTreasuryPayoutAddressUpdateProposal(0))
         .to.emit(escrow, 'TreasuryPayoutAddressUpdateProposalExpiredCancelled')
         .withArgs(0, admin2.address);
 
-      await expect(escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0)).to.be.revertedWith(
-        'proposal cancelled',
-      );
+      await expect(
+        escrow.connect(admin1).executeTreasuryPayoutAddressUpdate(0),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowProposalCancelled');
     });
 
     it('Should keep trade signature flow valid after payout receiver rotation', async function () {
-      await rotateTreasuryPayoutReceiver(admin3.address);
+      await rotateTreasuryPayoutReceiver(operator2.address);
       const { tradeId } = await createDefaultTrade(ethers.id('sig-valid-after-payout-rotation'));
       const trade = await escrow.trades(tradeId);
       expect(trade.status).to.equal(0); // LOCKED
-      expect(await escrow.treasuryPayoutAddress()).to.equal(admin3.address);
+      expect(await escrow.treasuryPayoutAddress()).to.equal(operator2.address);
       expect(await escrow.treasuryAddress()).to.equal(treasury.address);
     });
   });
@@ -2598,13 +2882,14 @@ describe('AgroasysEscrow', function () {
       const ttl = await escrow.DISPUTE_PROPOSAL_TTL();
       await time.setNextBlockTimestamp(proposal.createdAt + ttl + 1n);
 
-      await expect(escrow.connect(admin2).approveDisputeSolution(0)).to.be.revertedWith(
-        'proposal expired',
+      await expect(escrow.connect(admin2).approveDisputeSolution(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowProposalExpired',
       );
     });
 
     it('Should allow oracle governance execution exactly at governance TTL boundary', async function () {
-      await escrow.connect(admin1).proposeOracleUpdate(admin3.address);
+      await escrow.connect(admin1).proposeOracleUpdate(operator1.address);
       await escrow.connect(admin2).approveOracleUpdate(0);
 
       const expiresAt = await escrow.oracleUpdateProposalExpiresAt(0);
@@ -2612,42 +2897,46 @@ describe('AgroasysEscrow', function () {
 
       await expect(escrow.connect(admin1).executeOracleUpdate(0))
         .to.emit(escrow, 'OracleUpdated')
-        .withArgs(oracle.address, admin3.address);
+        .withArgs(oracle.address, operator1.address);
     });
 
     it('Should reject oracle governance execution one second after governance TTL boundary', async function () {
-      await escrow.connect(admin1).proposeOracleUpdate(admin3.address);
+      await escrow.connect(admin1).proposeOracleUpdate(operator1.address);
       await escrow.connect(admin2).approveOracleUpdate(0);
 
       const expiresAt = await escrow.oracleUpdateProposalExpiresAt(0);
       await time.setNextBlockTimestamp(expiresAt + 1n);
 
-      await expect(escrow.connect(admin1).executeOracleUpdate(0)).to.be.revertedWith(
-        'proposal expired',
+      await expect(escrow.connect(admin1).executeOracleUpdate(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowProposalExpired',
       );
     });
 
     it('Should allow add-admin governance execution exactly at governance TTL boundary', async function () {
-      await escrow.connect(admin1).proposeAddAdmin(buyer.address);
-      await escrow.connect(admin2).approveAddAdmin(0);
+      await escrow.connect(admin1).proposeAdminChange(0, ethers.ZeroAddress, buyer.address, 0);
+      await escrow.connect(admin2).approveAdminChange(0);
 
-      const expiresAt = await escrow.adminAddProposalExpiresAt(0);
+      const proposal = await escrow.adminChangeProposals(0);
+      const expiresAt = proposal.createdAt + (await escrow.GOVERNANCE_PROPOSAL_TTL());
       await time.setNextBlockTimestamp(expiresAt);
 
-      await expect(escrow.connect(admin1).executeAddAdmin(0))
+      await expect(escrow.connect(admin1).executeAdminChange(0))
         .to.emit(escrow, 'AdminAdded')
         .withArgs(buyer.address);
     });
 
     it('Should reject add-admin governance execution one second after governance TTL boundary', async function () {
-      await escrow.connect(admin1).proposeAddAdmin(buyer.address);
-      await escrow.connect(admin2).approveAddAdmin(0);
+      await escrow.connect(admin1).proposeAdminChange(0, ethers.ZeroAddress, buyer.address, 0);
+      await escrow.connect(admin2).approveAdminChange(0);
 
-      const expiresAt = await escrow.adminAddProposalExpiresAt(0);
+      const proposal = await escrow.adminChangeProposals(0);
+      const expiresAt = proposal.createdAt + (await escrow.GOVERNANCE_PROPOSAL_TTL());
       await time.setNextBlockTimestamp(expiresAt + 1n);
 
-      await expect(escrow.connect(admin1).executeAddAdmin(0)).to.be.revertedWith(
-        'proposal expired',
+      await expect(escrow.connect(admin1).executeAdminChange(0)).to.be.revertedWithCustomError(
+        escrow,
+        'EscrowProposalExpired',
       );
     });
   });

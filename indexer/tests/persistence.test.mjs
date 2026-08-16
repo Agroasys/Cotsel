@@ -18,7 +18,7 @@ test('persistIndexerBatch uses idempotent upserts for replay-safe writes', async
     disputeEvents: [{ id: 'dispute-event-1' }],
     oracleUpdateProposals: [{ id: 'oracle-proposal-1' }],
     oracleEvents: [{ id: 'oracle-event-1' }],
-    adminAddProposals: [{ id: 'admin-proposal-1' }],
+    adminChangeProposals: [{ id: 'admin-proposal-1' }],
     adminEvents: [{ id: 'admin-event-1' }],
     systemEvents: [{ id: 'system-event-1' }],
     overviewSnapshot: { id: 'overview' },

@@ -129,6 +129,7 @@ export enum SponsoredAction {
   CANCEL_LOCKED_TIMEOUT = 2,
   REFUND_IN_TRANSIT_TIMEOUT = 3,
   FINALIZE_AFTER_DISPUTE_WINDOW = 4,
+  FINALIZE_AFTER_INSPECTION_ACCEPTANCE = 5,
 }
 
 export interface GaslessCreateTradeAuthorization {
@@ -171,7 +172,8 @@ export type GaslessUserAction =
   | 'open_dispute'
   | 'cancel_locked_timeout'
   | 'refund_in_transit_timeout'
-  | 'finalize_after_dispute_window';
+  | 'finalize_after_dispute_window'
+  | 'finalize_after_inspection_acceptance';
 
 export interface GaslessExecutionAuthorizationFields {
   nonce: string;

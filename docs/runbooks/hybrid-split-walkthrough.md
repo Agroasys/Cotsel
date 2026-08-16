@@ -154,12 +154,11 @@ If not:
 
 After goods become available for inspection, the oracle records the order's 48-
 or 72-hour notice policy. The final 40% can be released immediately through
-`finalizeAfterInspectionAcceptance` when buyer-signed on-chain acceptance is
-enabled. Until that mainnet security upgrade is enabled, an early acceptance is
-recorded but the gateway fails the immediate oracle path closed; at the exact
-notice deadline, the durable handoff is remapped or replaced by Agroasys with a
-deadline-fallback handoff and `finalizeAfterDisputeWindow` releases the final
-40% automatically when no dispute is active.
+`finalizeAfterInspectionAcceptanceWithAuthorization` after the gateway submits
+the buyer's EIP-712 authorization. The Oracle path fails closed for immediate
+acceptance. At the exact notice deadline, the durable handoff is remapped or
+replaced by Agroasys with a deadline-fallback handoff and
+`finalizeAfterDisputeWindow` releases the final 40% when no dispute is active.
 
 Expected result:
 

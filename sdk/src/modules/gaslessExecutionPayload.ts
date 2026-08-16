@@ -48,6 +48,8 @@ export function sponsoredActionToGaslessAction(
       return 'refund_in_transit_timeout';
     case SponsoredAction.FINALIZE_AFTER_DISPUTE_WINDOW:
       return 'finalize_after_dispute_window';
+    case SponsoredAction.FINALIZE_AFTER_INSPECTION_ACCEPTANCE:
+      return 'finalize_after_inspection_acceptance';
     default:
       throw new ValidationError('Unsupported gasless user action', { action });
   }
