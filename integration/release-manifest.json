@@ -22,7 +22,7 @@
       "name": "Cotsel-Dash",
       "repository": "Agroasys/Cotsel.dash",
       "ref": "codex/wp1-scoped-unpause-sdk-v2",
-      "commit": "63c672e572f3975844f60e2a8a5b62c55abc6402"
+      "commit": "48333eadabe0bfb62d85cb8bfbab829a84663abc"
     }
   ],
   "contracts": {
