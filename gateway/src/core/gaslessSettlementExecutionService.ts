@@ -782,6 +782,32 @@ function buildUserActionArguments(input: GaslessUserActionExecutionInput) {
   ] as const;
 }
 
+function getUserActionFunctionName(
+  action: GaslessUserAction,
+):
+  | 'openDisputeWithAuthorization'
+  | 'cancelLockedTradeAfterTimeoutWithAuthorization'
+  | 'refundInTransitAfterTimeoutWithAuthorization'
+  | 'finalizeAfterDisputeWindowWithAuthorization'
+  | 'finalizeAfterInspectionAcceptanceWithAuthorization' {
+  switch (action) {
+    case 'open_dispute':
+      return 'openDisputeWithAuthorization';
+    case 'cancel_locked_timeout':
+      return 'cancelLockedTradeAfterTimeoutWithAuthorization';
+    case 'refund_in_transit_timeout':
+      return 'refundInTransitAfterTimeoutWithAuthorization';
+    case 'finalize_after_dispute_window':
+      return 'finalizeAfterDisputeWindowWithAuthorization';
+    case 'finalize_after_inspection_acceptance':
+      return 'finalizeAfterInspectionAcceptanceWithAuthorization';
+    default: {
+      const unsupportedAction: never = action;
+      throw new Error(`Unsupported gasless user action: ${String(unsupportedAction)}`);
+    }
+  }
+}
+
 const USDC_AUTHORIZATION_ABI = [
   'function transferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce,uint8 v,bytes32 r,bytes32 s)',
 ] as const;
@@ -2335,14 +2361,7 @@ function createManagedSignerGaslessSettlementExecutor(
     from: string,
   ): TransactionRequest {
     const args = buildUserActionArguments(input);
-    const functionName =
-      input.action === 'open_dispute'
-        ? 'openDisputeWithAuthorization'
-        : input.action === 'cancel_locked_timeout'
-          ? 'cancelLockedTradeAfterTimeoutWithAuthorization'
-          : input.action === 'refund_in_transit_timeout'
-            ? 'refundInTransitAfterTimeoutWithAuthorization'
-            : 'finalizeAfterDisputeWindowWithAuthorization';
+    const functionName = getUserActionFunctionName(input.action);
 
     return {
       from,

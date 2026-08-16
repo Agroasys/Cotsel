@@ -15,11 +15,22 @@ export function getDeploymentSourceIdentity(repositoryRoot: string): DeploymentS
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     }).trim();
-    status = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {
-      cwd: repositoryRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim();
+    status = execFileSync(
+      'git',
+      [
+        'status',
+        '--porcelain',
+        '--untracked-files=all',
+        '--',
+        '.',
+        ':(glob,exclude)contracts/reports/deploy/**/*.json',
+      ],
+      {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    ).trim();
   } catch {
     throw new Error('Deployment requires a readable Git commit and worktree status');
   }

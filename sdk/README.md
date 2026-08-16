@@ -4,6 +4,25 @@
 
 This SDK provides a **type-safe, role-based interface** to the Agroasys smart contract.
 
+## Version 2 Governance Migration
+
+Version 2 introduces the scoped, quorum-controlled unpause API. This change is
+not backward compatible with version 1:
+
+- Replace `proposeUnpause(signer)` with `proposeGlobalUnpause(incidentRef, signer)`.
+- Replace `unpauseClaims(signer)` with `proposeClaimsUnpause(incidentRef, signer)`.
+- Use `proposeTradeUnpause(tradeId, incidentRef, signer)` for one trade.
+- Have a different administrator call `approveUnpause(signer)` to complete the proposal.
+
+`incidentRef` must be a non-zero `bytes32` value that maps to an incident or
+change record. Do not invent a reference in application code. Derive it from a
+required operator ticket or incident identifier and retain that identifier in
+the audit record.
+
+Version 2 does not expose immediate unpause methods. This is intentional. A
+single administrator can pause the protocol, but recovery requires a scoped
+proposal and a second approval.
+
 ## Architecture
 
 The SDK is organized into **three role-based modules**:

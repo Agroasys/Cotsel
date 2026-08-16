@@ -69,6 +69,12 @@ The deploy script:
 - records compiler settings, source hashes, artifact hashes, and live role attestation
 - writes a deploy evidence JSON bundle
 
+The source check excludes generated JSON files under
+`contracts/reports/deploy/`. This exclusion lets an operator run the deploy
+command again after it writes evidence. The check still rejects all other
+tracked or untracked changes. Do not place source files in the deploy-report
+directory.
+
 ## Expected Output
 
 Record these values from stdout:
@@ -87,6 +93,11 @@ reports/deploy/base-sepolia/agroasysescrow-deploy.json
 ```
 
 unless `DEPLOY_EVIDENCE_OUT_DIR` is set.
+
+Use the default directory for repository evidence. If a custom output directory
+is inside the repository but outside `contracts/reports/deploy/`, the next
+deploy rejects that uncommitted file. Use a directory outside the repository
+when you need a custom location.
 
 The bundle records the deployment block and the receipt status as
 `contract.deploymentBlock` and `contract.deploymentReceiptStatus`. Both are read

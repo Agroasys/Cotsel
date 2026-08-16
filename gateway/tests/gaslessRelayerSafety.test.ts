@@ -5,12 +5,16 @@ import { GatewayConfig } from '../src/config/env';
 import {
   type GaslessCreateTradeExecutionInput,
   type GaslessExecutionSubmission,
+  type GaslessUserAction,
+  type GaslessUserActionExecutionInput,
   createEthersGaslessSettlementExecutor,
   GaslessSettlementExecutionService,
   testExports as gaslessSettlementExecutionTestExports,
 } from '../src/core/gaslessSettlementExecutionService';
 import { SettlementService } from '../src/core/settlementService';
 import { createInMemorySettlementStore, type SettlementStore } from '../src/core/settlementStore';
+import { AgroasysEscrow__factory } from '@agroasys/sdk';
+import { Interface } from 'ethers';
 import type { FeeData, TransactionRequest, TransactionResponse } from 'ethers';
 
 const config: GatewayConfig = {
@@ -171,6 +175,35 @@ function buildCreateTradeInput(handoffId: string, label: string): GaslessCreateT
   };
 }
 
+function buildUserActionInput(
+  action: GaslessUserAction,
+  label: string,
+): GaslessUserActionExecutionInput {
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const authorizationDeadline = Math.floor(Date.now() / 1000) + 10 * 60;
+  const payload = {
+    action,
+    handoffId: `handoff-${label}`,
+    chainId: config.chainId,
+    contractAddress: config.escrowAddress,
+    expiresAt,
+    userAddress: '0x0000000000000000000000000000000000000200',
+    tradeId: '17',
+    userAuthorization: {
+      nonce: '0',
+      deadline: authorizationDeadline.toString(),
+      signature:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    },
+  };
+
+  return {
+    ...payload,
+    payloadHash: gaslessSettlementExecutionTestExports.createPayloadHash(payload),
+    requestId: `gasless-${label}`,
+  };
+}
+
 function createService(
   settlementService: SettlementService,
   store: SettlementStore,
@@ -269,6 +302,7 @@ function createFakeManagedSignerDependencies(options?: {
           transaction: {
             nonce: number;
             chainId: number;
+            data: string;
             gasLimit: string;
             maxFeePerGasWei?: string;
           };
@@ -392,6 +426,45 @@ describe('gasless relayer safety controls', () => {
       '0xsignedmanagedtransaction',
     );
   });
+
+  test.each([
+    ['open_dispute', 'openDisputeWithAuthorization'],
+    ['cancel_locked_timeout', 'cancelLockedTradeAfterTimeoutWithAuthorization'],
+    ['refund_in_transit_timeout', 'refundInTransitAfterTimeoutWithAuthorization'],
+    ['finalize_after_dispute_window', 'finalizeAfterDisputeWindowWithAuthorization'],
+    ['finalize_after_inspection_acceptance', 'finalizeAfterInspectionAcceptanceWithAuthorization'],
+  ] as const)(
+    'managed custody executor encodes %s with %s',
+    async (action, expectedFunctionName) => {
+      const dependencies = createFakeManagedSignerDependencies();
+      const executor =
+        gaslessSettlementExecutionTestExports.createManagedSignerGaslessSettlementExecutor(
+          {
+            rpcUrl: config.rpcUrl,
+            rpcFallbackUrls: config.rpcFallbackUrls,
+            chainId: config.chainId,
+            escrowAddress: config.escrowAddress,
+            usdcAddress: config.usdcAddress,
+            gaslessSignerCustodyMode: 'kms',
+            gaslessManagedSignerUrl: 'https://signer.example.test',
+            gaslessMaxGasLimit: 1_500_000n,
+            gaslessMaxFeePerGasWei: 10n,
+            gaslessMaxNativeCostWei: 10_000_000n,
+            gaslessMinExecutorBalanceWei: 10n,
+          },
+          dependencies,
+        );
+
+      await executor.executeUserAction(buildUserActionInput(action, action));
+
+      const signedRequest = dependencies.signerTransport.signTransaction.mock.calls[0][0];
+      const escrowInterface = new Interface(AgroasysEscrow__factory.abi);
+      expect(escrowInterface.parseTransaction({ data: signedRequest.transaction.data })?.name).toBe(
+        expectedFunctionName,
+      );
+      expect(signedRequest.operation).toBe(action);
+    },
+  );
 
   test('managed custody executor retries with a fresh nonce after nonce drift', async () => {
     const dependencies = createFakeManagedSignerDependencies({
