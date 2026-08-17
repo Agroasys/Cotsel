@@ -25,7 +25,7 @@
     "ethers": "^6.17.0",
     "express": "^5.2.1",
     "helmet": "^8.3.0",
-    "pg": "^8.22.0"
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -33,7 +33,7 @@
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.6.0",
-    "@types/pg": "^8.20.0",
+    "@types/pg": "^8.21.0",
     "ajv": "^8.20.0",
     "jest": "^30.4.2",
     "js-yaml": "^5.2.3",
