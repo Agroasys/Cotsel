@@ -66,11 +66,11 @@
   },
   "devDependencies": {
     "dotenv": "^17.4.2",
-    "@web3auth/modal": "^10.16.0",
+    "@web3auth/modal": "^11.4.0",
     "@types/jest": "^30.0.0",
-    "@types/node": "25.6.0",
+    "@types/node": "26.2.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
-    "typescript": ">=6.0.2 <6.1.0"
+    "typescript": ">=6.0.2 <7.1.0"
   }
 }
