@@ -45,7 +45,8 @@ terraform -chdir=infra/terraform/staging-platform validate
 ```
 
 The pull-request workflow also scans the root for High and Critical Terraform
-misconfiguration findings.
+misconfiguration findings. Pull-request jobs receive no AWS identity. Live
+plans run only through a manual dispatch from `main`.
 
 ## Apply prerequisites
 
@@ -56,7 +57,7 @@ Do not apply this root until all of the following are true:
 3. The protected Cotsel GitHub deployment environment and AWS OIDC role exist.
 4. The reviewed plan contains no replacement or deletion of shared Agroasys resources.
 5. The monthly AWS budget and alert recipients are approved.
-6. A different person approves the exact plan that the protected job applies.
+6. A different person dispatches the exact plan that the protected job applies.
 
 After apply, record the workflow run, plan hash, state serial, non-secret output
 ARNs, reviewer, and timestamp. An apply is foundation evidence only; it does not

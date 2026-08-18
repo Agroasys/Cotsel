@@ -23,20 +23,24 @@ the platform boundary for WP-7. It does not accept WP-7 or authorize a release.
 ## Plan
 
 1. Run the pull-request Terraform validation and security jobs.
-2. Create a speculative plan with the staging apply role.
-3. Check the account, region, state key, additions, changes, and deletions.
-4. Stop if the plan changes an Agroasys resource outside the Cotsel state root.
-5. Save the plan as an immutable workflow artifact.
-6. Record its SHA-256 digest and request independent approval.
+2. Merge the reviewed Terraform change into `main`.
+3. Dispatch the `plan` action from `main`.
+4. Supply the reviewed `ap-south-1` origin certificate ARN.
+5. Check the account, region, state key, additions, changes, and deletions.
+6. Stop if the plan changes a shared Agroasys resource.
+7. Record the S3 object version and SHA-256 digest.
+8. Request independent approval before the plan is 24 hours old.
 
 ## Apply
 
-1. Use the protected staging environment.
-2. Download the approved plan artifact from the producing workflow run.
-3. Verify its SHA-256 digest.
-4. Apply that plan without regenerating it.
-5. Record the run ID, source commit, plan digest, state serial, reviewer, and
-   non-secret output ARNs.
+1. Dispatch the `apply` action from the same `main` commit.
+2. Supply the approved plan run ID.
+3. Supply the approved S3 object version ID.
+4. Use a different person from the plan dispatcher.
+5. Approve the protected `staging` environment deployment.
+6. Verify the plan metadata and SHA-256 digest.
+7. Apply the verified plan without regeneration.
+8. Record the run ID, source commit, plan digest, state serial, reviewer, and non-secret output ARNs.
 
 ## Verification
 
