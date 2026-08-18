@@ -1,0 +1,57 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/terraform.yml'
+      - 'infra/terraform/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/terraform.yml'
+      - 'infra/terraform/**'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: terraform/validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.15.0
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive infra/terraform
+
+      - name: Initialize without remote state
+        run: terraform -chdir=infra/terraform/staging-platform init -backend=false
+
+      - name: Validate configuration
+        run: terraform -chdir=infra/terraform/staging-platform validate
+
+  security:
+    name: terraform/security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Scan Terraform configuration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: config
+          scan-ref: infra/terraform
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          hide-progress: true
+          format: table
