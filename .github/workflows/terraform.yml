@@ -172,6 +172,15 @@ jobs:
         id: store
         run: |
           set -euo pipefail
+          VERSIONING_STATUS=$(aws s3api get-bucket-versioning \
+            --bucket "$STATE_BUCKET" \
+            --query Status \
+            --output text)
+          test "$VERSIONING_STATUS" = "Enabled" || {
+            echo "State bucket versioning is not enabled; the saved plan cannot be immutable." >&2
+            exit 1
+          }
+
           PLAN_SHA256=$(sha256sum tfplan | cut -d ' ' -f 1)
           VERSION=$(aws s3api put-object \
             --bucket "$STATE_BUCKET" \
@@ -180,6 +189,10 @@ jobs:
             --metadata "action=plan,root=$ROOT,repository=$GITHUB_REPOSITORY,workflow-path=.github/workflows/terraform.yml,run-id=$GITHUB_RUN_ID,run-attempt=$GITHUB_RUN_ATTEMPT,head-sha=$GITHUB_SHA,ref=$GITHUB_REF,actor=$GITHUB_TRIGGERING_ACTOR,plan-sha256=$PLAN_SHA256" \
             --query VersionId \
             --output text)
+          test -n "$VERSION" && test "$VERSION" != "null" && test "$VERSION" != "None" || {
+            echo "S3 did not return a usable version ID; the saved plan is not immutable." >&2
+            exit 1
+          }
           aws s3api put-object \
             --bucket "$STATE_BUCKET" \
             --key "plans/cotsel-staging-platform/$GITHUB_RUN_ID.txt" \
@@ -242,7 +255,10 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$PLAN_RUN_ID" || { echo "plan_run_id is required for apply." >&2; exit 1; }
-          test -n "$PLAN_VERSION_ID" || { echo "plan_version_id is required for apply." >&2; exit 1; }
+          test -n "$PLAN_VERSION_ID" && test "$PLAN_VERSION_ID" != "null" && test "$PLAN_VERSION_ID" != "None" || {
+            echo "A non-null plan_version_id is required for apply." >&2
+            exit 1
+          }
 
           RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PLAN_RUN_ID")
           read -r NAME PATH_ EVENT BRANCH STATUS ACTOR SHA CREATED ATTEMPT <<<"$(
@@ -293,6 +309,15 @@ jobs:
           PLAN_VERSION_ID: ${{ github.event.inputs.plan_version_id }}
         run: |
           set -euo pipefail
+          VERSIONING_STATUS=$(aws s3api get-bucket-versioning \
+            --bucket "$STATE_BUCKET" \
+            --query Status \
+            --output text)
+          test "$VERSIONING_STATUS" = "Enabled" || {
+            echo "State bucket versioning is not enabled; refusing to fetch an unpinned plan." >&2
+            exit 1
+          }
+
           HEAD=$(aws s3api head-object \
             --bucket "$STATE_BUCKET" \
             --key "plans/cotsel-staging-platform/$PLAN_RUN_ID.tfplan" \

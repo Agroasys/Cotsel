@@ -28,8 +28,10 @@ the platform boundary for WP-7. It does not accept WP-7 or authorize a release.
 4. Supply the reviewed `ap-south-1` origin certificate ARN.
 5. Check the account, region, state key, additions, changes, and deletions.
 6. Stop if the plan changes a shared Agroasys resource.
-7. Record the S3 object version and SHA-256 digest.
-8. Request independent approval before the plan is 24 hours old.
+7. Confirm the state bucket reports versioning status `Enabled`; the workflow
+   must fail before upload if it is disabled or suspended.
+8. Record the non-null S3 object version and SHA-256 digest.
+9. Request independent approval before the plan is 24 hours old.
 
 ## Apply
 
