@@ -10,6 +10,8 @@ import { calculateGaslessExecutorCapacityPolicy } from '../core/gaslessExecutorC
 
 dotenv.config();
 
+const PRE_CONTRACT_SENTINEL_ADDRESS = '0x0000000000000000000000000000000000000000';
+
 export interface GatewayConfig {
   port: number;
   dbHost: string;
@@ -33,6 +35,7 @@ export interface GatewayConfig {
   settlementRuntimeKey?: SettlementRuntimeKey;
   networkName?: string;
   explorerBaseUrl?: string | null;
+  contractAddressRequired: boolean;
   operatorSignerEnvironment?: string;
   enableMutations: boolean;
   writeAllowlist: string[];
@@ -232,7 +235,14 @@ export function loadConfig(): GatewayConfig {
   const buildTime = process.env.GATEWAY_BUILD_TIME?.trim() || new Date().toISOString();
   const authBaseUrl = env('GATEWAY_AUTH_BASE_URL').replace(/\/$/, '');
   const indexerGraphqlUrl = env('GATEWAY_INDEXER_GRAPHQL_URL').replace(/\/$/, '');
-  const escrowAddress = assertAddress('GATEWAY_ESCROW_ADDRESS', env('GATEWAY_ESCROW_ADDRESS'));
+  const contractAddressRequired = envBool('GATEWAY_CONTRACT_ADDRESS_REQUIRED', true);
+  const rawEscrowAddress = optionalEnv('GATEWAY_ESCROW_ADDRESS');
+  if (contractAddressRequired) {
+    assert(rawEscrowAddress, 'GATEWAY_ESCROW_ADDRESS is missing');
+  }
+  const escrowAddress = rawEscrowAddress
+    ? assertAddress('GATEWAY_ESCROW_ADDRESS', rawEscrowAddress)
+    : null;
   const runtime = resolveSettlementRuntime({
     runtimeKey: optionalEnv('GATEWAY_SETTLEMENT_RUNTIME'),
     rpcUrl: optionalEnv('GATEWAY_RPC_URL'),
@@ -245,6 +255,13 @@ export function loadConfig(): GatewayConfig {
   const rpcUrl = runtime.rpcUrl;
   const rpcFallbackUrls = runtime.rpcFallbackUrls;
   const chainId = runtime.chainId;
+  const resolvedEscrowAddress = runtime.escrowAddress ?? escrowAddress;
+  if (contractAddressRequired) {
+    assert(resolvedEscrowAddress, 'GATEWAY_ESCROW_ADDRESS is missing');
+  }
+  const effectiveEscrowAddress = resolvedEscrowAddress
+    ? assertAddress('GATEWAY_ESCROW_ADDRESS', resolvedEscrowAddress)
+    : PRE_CONTRACT_SENTINEL_ADDRESS;
   const writeAllowlist = parseAllowlist(process.env.GATEWAY_WRITE_ALLOWLIST);
   const enableMutations = envBool('GATEWAY_ENABLE_MUTATIONS', false);
   const settlementIngressEnabled = envBool('GATEWAY_SETTLEMENT_INGRESS_ENABLED', false);
@@ -532,6 +549,20 @@ export function loadConfig(): GatewayConfig {
     !immediateInspectionAcceptanceEnabled || (nodeEnv !== 'production' && chainId !== 8453),
     'GATEWAY_IMMEDIATE_INSPECTION_ACCEPTANCE_ENABLED cannot be enabled in production until buyer-signed on-chain acceptance is implemented',
   );
+  if (!contractAddressRequired) {
+    assert(
+      nodeEnv !== 'production',
+      'GATEWAY_CONTRACT_ADDRESS_REQUIRED=false is allowed only outside production',
+    );
+    assert(
+      !enableMutations,
+      'GATEWAY_CONTRACT_ADDRESS_REQUIRED=false requires GATEWAY_ENABLE_MUTATIONS=false',
+    );
+    assert(
+      !gaslessExecutionEnabled,
+      'GATEWAY_CONTRACT_ADDRESS_REQUIRED=false requires GATEWAY_GASLESS_EXECUTION_ENABLED=false',
+    );
+  }
 
   if (settlementCallbackEnabled) {
     assert(
@@ -652,7 +683,7 @@ export function loadConfig(): GatewayConfig {
     rpcReadTimeoutMs: envNumber('GATEWAY_RPC_READ_TIMEOUT_MS', 8000),
     rpcQuorum: process.env.GATEWAY_RPC_QUORUM ? envNumber('GATEWAY_RPC_QUORUM') : undefined,
     chainId,
-    escrowAddress: assertAddress('GATEWAY_ESCROW_ADDRESS', runtime.escrowAddress ?? escrowAddress),
+    escrowAddress: effectiveEscrowAddress,
     usdcAddress: assertAddress(
       'GATEWAY_USDC_ADDRESS',
       runtime.usdcAddress ?? env('GATEWAY_USDC_ADDRESS'),
@@ -660,6 +691,7 @@ export function loadConfig(): GatewayConfig {
     settlementRuntimeKey: runtime.runtimeKey,
     networkName: runtime.networkName,
     explorerBaseUrl: runtime.explorerBaseUrl,
+    contractAddressRequired,
     operatorSignerEnvironment,
     enableMutations,
     writeAllowlist,

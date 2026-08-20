@@ -114,6 +114,68 @@ describe('gateway runtime env config', () => {
     );
   });
 
+  test('allows staging pre-contract startup without accepting an escrow address', () => {
+    withEnv(
+      {
+        NODE_ENV: 'staging',
+        GATEWAY_CONTRACT_ADDRESS_REQUIRED: 'false',
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_ESCROW_ADDRESS: undefined,
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        const config = loadConfig();
+
+        expect(config.contractAddressRequired).toBe(false);
+        expect(config.escrowAddress).toBe('0x0000000000000000000000000000000000000000');
+        expect(config.usdcAddress).toBe('0x036CbD53842c5426634e7929541eC2318f3dCF7e');
+        expect(config.enableMutations).toBe(false);
+        expect(config.gaslessExecutionEnabled).toBe(false);
+      },
+    );
+  });
+
+  test('rejects pre-contract startup when mutations are enabled', () => {
+    withEnv(
+      {
+        NODE_ENV: 'staging',
+        GATEWAY_CONTRACT_ADDRESS_REQUIRED: 'false',
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_ESCROW_ADDRESS: undefined,
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_ENABLE_MUTATIONS: 'true',
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'GATEWAY_CONTRACT_ADDRESS_REQUIRED=false requires GATEWAY_ENABLE_MUTATIONS=false',
+        );
+      },
+    );
+  });
+
+  test('rejects pre-contract startup in production', () => {
+    withEnv(
+      {
+        NODE_ENV: 'production',
+        GATEWAY_CONTRACT_ADDRESS_REQUIRED: 'false',
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_ESCROW_ADDRESS: undefined,
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        expect(() => loadConfig()).toThrow(
+          'GATEWAY_CONTRACT_ADDRESS_REQUIRED=false is allowed only outside production',
+        );
+      },
+    );
+  });
+
   test('uses canonical checksum addresses when runtime is inferred from explicit chain id', () => {
     withEnv(
       {
