@@ -29,6 +29,15 @@ on:
         description: Required for apply. S3 version ID shown by the plan run.
         required: false
         type: string
+      owner_break_glass_apply:
+        description: Allow the repository owner to apply their own approved plan. Requires a reason.
+        required: false
+        default: false
+        type: boolean
+      owner_break_glass_reason:
+        description: Required when owner_break_glass_apply is true.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -41,6 +50,7 @@ env:
   ROOT: staging-platform
   STATE_BUCKET: agroasys-tfstate-655177116834
   TF_VERSION: 1.15.8
+  OWNER_BREAK_GLASS_ACTORS: Astton
 
 concurrency:
   group: terraform-staging-platform-${{ github.event_name }}-${{ github.ref }}
@@ -218,7 +228,7 @@ jobs:
             printf '| plan_run_id | `%s` |\n' "$GITHUB_RUN_ID"
             printf '| plan_version_id | `%s` |\n\n' "$PLAN_VERSION"
             printf 'Saved plan SHA-256: `%s`.\n\n' "$PLAN_SHA256"
-            printf '%s\n\n' 'A different person must dispatch apply within 24 hours.'
+            printf '%s\n\n' 'A different person must dispatch apply within 24 hours unless an authorized owner break-glass apply is explicitly recorded.'
             printf '%s\n' '```'
             tail -c 60000 plan.txt
             printf '%s\n' '```'
@@ -246,6 +256,8 @@ jobs:
         id: approved_plan
         env:
           GH_TOKEN: ${{ github.token }}
+          OWNER_BREAK_GLASS_APPLY: ${{ github.event.inputs.owner_break_glass_apply }}
+          OWNER_BREAK_GLASS_REASON: ${{ github.event.inputs.owner_break_glass_reason }}
           PLAN_RUN_ID: ${{ github.event.inputs.plan_run_id }}
           PLAN_VERSION_ID: ${{ github.event.inputs.plan_version_id }}
         run: |
@@ -268,16 +280,33 @@ jobs:
           test "$BRANCH" = "main" || { echo "Run $PLAN_RUN_ID was on $BRANCH." >&2; exit 1; }
           test "$STATUS" = "success" || { echo "Run $PLAN_RUN_ID did not succeed." >&2; exit 1; }
           test "$SHA" = "$GITHUB_SHA" || { echo "Plan commit $SHA differs from apply commit $GITHUB_SHA." >&2; exit 1; }
-          test "$ACTOR" != "$GITHUB_TRIGGERING_ACTOR" || {
-            echo "$GITHUB_TRIGGERING_ACTOR cannot plan and apply the same change." >&2
-            exit 1
-          }
+          BREAK_GLASS="false"
+          if test "$ACTOR" = "$GITHUB_TRIGGERING_ACTOR"; then
+            test "$OWNER_BREAK_GLASS_APPLY" = "true" || {
+              echo "$GITHUB_TRIGGERING_ACTOR cannot plan and apply the same change without owner_break_glass_apply=true." >&2
+              exit 1
+            }
+            case ",$OWNER_BREAK_GLASS_ACTORS," in
+              *,"$GITHUB_TRIGGERING_ACTOR",*) ;;
+              *)
+                echo "$GITHUB_TRIGGERING_ACTOR is not authorized for owner break-glass apply." >&2
+                exit 1
+                ;;
+            esac
+            REASON_LENGTH=$(printf '%s' "$OWNER_BREAK_GLASS_REASON" | wc -c | tr -d ' ')
+            test "$REASON_LENGTH" -ge 20 || {
+              echo "owner_break_glass_reason must explain why same-actor apply is necessary." >&2
+              exit 1
+            }
+            BREAK_GLASS="true"
+          fi
 
           AGE=$(( $(date -u +%s) - $(date -u -d "$CREATED" +%s) ))
           test "$AGE" -lt 86400 || { echo "The approved plan is older than 24 hours." >&2; exit 1; }
 
           echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
           echo "attempt=$ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "break_glass=$BREAK_GLASS" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -346,6 +375,8 @@ jobs:
         working-directory: .
         env:
           APPLY_RESULT: ${{ job.status }}
+          BREAK_GLASS: ${{ steps.approved_plan.outputs.break_glass }}
+          OWNER_BREAK_GLASS_REASON: ${{ github.event.inputs.owner_break_glass_reason }}
           PLAN_RUN_ID: ${{ github.event.inputs.plan_run_id }}
           PLAN_VERSION_ID: ${{ github.event.inputs.plan_version_id }}
         run: |
@@ -358,4 +389,8 @@ jobs:
             printf '| Plan run | `%s` |\n' "$PLAN_RUN_ID"
             printf '| Plan version | `%s` |\n' "$PLAN_VERSION_ID"
             printf '| Applied by | `%s` |\n' "$GITHUB_TRIGGERING_ACTOR"
+            printf '| Owner break-glass | `%s` |\n' "$BREAK_GLASS"
+            if test "$BREAK_GLASS" = "true"; then
+              printf '| Break-glass reason | `%s` |\n' "$OWNER_BREAK_GLASS_REASON"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
