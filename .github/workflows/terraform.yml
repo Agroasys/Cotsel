@@ -21,6 +21,10 @@ on:
         description: Required for plan. ACM certificate ARN for the private origin.
         required: false
         type: string
+      gateway_image_tag:
+        description: Required for plan. Immutable gateway image tag, normally the 40-character Git SHA.
+        required: false
+        type: string
       plan_run_id:
         description: Required for apply. Run ID of the approved plan.
         required: false
@@ -123,9 +127,14 @@ jobs:
       - name: Require the origin certificate
         env:
           ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
+          GATEWAY_IMAGE_TAG: ${{ github.event.inputs.gateway_image_tag }}
         run: |
           test -n "$ORIGIN_CERTIFICATE_ARN" || {
             echo "origin_certificate_arn is required for plan." >&2
+            exit 1
+          }
+          test -n "$GATEWAY_IMAGE_TAG" || {
+            echo "gateway_image_tag is required for plan." >&2
             exit 1
           }
 
@@ -156,6 +165,7 @@ jobs:
         working-directory: infra/terraform/staging-platform
         env:
           ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
+          GATEWAY_IMAGE_TAG: ${{ github.event.inputs.gateway_image_tag }}
         run: |
           set -euo pipefail
           terraform plan \
@@ -164,7 +174,8 @@ jobs:
             -no-color \
             -out=tfplan \
             -var="account_id=$AWS_ACCOUNT_ID" \
-            -var="origin_certificate_arn=$ORIGIN_CERTIFICATE_ARN"
+            -var="origin_certificate_arn=$ORIGIN_CERTIFICATE_ARN" \
+            -var="gateway_image_tag=$GATEWAY_IMAGE_TAG"
           terraform show -no-color tfplan > plan.txt
           terraform show -json tfplan > plan.json
 

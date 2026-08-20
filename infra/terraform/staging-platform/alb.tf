@@ -46,12 +46,7 @@ resource "aws_lb_listener" "gateway" {
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 
   default_action {
-    type = "fixed-response"
-
-    fixed_response {
-      content_type = "application/json"
-      message_body = jsonencode({ error = "runtime_not_promoted" })
-      status_code  = "503"
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.gateway.arn
   }
 }

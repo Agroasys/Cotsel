@@ -55,6 +55,41 @@ variable "origin_certificate_arn" {
   }
 }
 
+variable "gateway_image_tag" {
+  description = "Immutable Git commit SHA image tag for the Cotsel gateway container."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{40}$", var.gateway_image_tag))
+    error_message = "gateway_image_tag must be a 40-character lowercase Git commit SHA."
+  }
+}
+
+variable "gateway_desired_count" {
+  description = "Number of Cotsel gateway tasks to run in staging."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.gateway_desired_count >= 1 && var.gateway_desired_count <= 2
+    error_message = "gateway_desired_count must be 1 or 2 for the current staging runtime."
+  }
+}
+
+variable "service_role_permissions_boundary_arn" {
+  description = "Permissions boundary required for Cotsel staging ECS task and execution roles."
+  type        = string
+  default     = "arn:aws:iam::655177116834:policy/agroasys-cotsel-staging-service-role-boundary"
+
+  validation {
+    condition = can(regex(
+      "^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:policy/agroasys-cotsel-staging-service-role-boundary$",
+      var.service_role_permissions_boundary_arn,
+    ))
+    error_message = "service_role_permissions_boundary_arn must be the Cotsel staging service role boundary policy ARN."
+  }
+}
+
 variable "log_retention_days" {
   description = "CloudWatch retention for staging service logs."
   type        = number
