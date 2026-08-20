@@ -26,6 +26,7 @@ export function createPool(config: GatewayConfig, mode: PoolMode = 'runtime'): P
     max: mode === 'migration' ? 4 : 20,
     idleTimeoutMillis: mode === 'migration' ? 5000 : 30000,
     connectionTimeoutMillis: 2000,
+    sslMode: config.dbSslMode,
   });
 
   pool.on('connect', () => {

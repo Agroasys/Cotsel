@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 
 export type PostgresConnectionRole = 'runtime' | 'migration';
+export type PostgresSslMode = 'disable' | 'require' | 'verify-full';
 
 export interface BuildSessionOptionsInput {
   serviceName: string;
@@ -17,6 +18,7 @@ export interface ServicePoolConfig extends BuildSessionOptionsInput {
   max?: number;
   idleTimeoutMillis?: number;
   connectionTimeoutMillis?: number;
+  sslMode?: PostgresSslMode;
 }
 
 export interface MigrationCredentialConfig {
@@ -27,6 +29,9 @@ export interface MigrationCredentialConfig {
 }
 
 export function buildSessionOptions(input: BuildSessionOptionsInput): string;
+export function resolvePostgresSslConfig(
+  mode?: PostgresSslMode,
+): false | { rejectUnauthorized: boolean };
 export function resolveMigrationCredentials(config: MigrationCredentialConfig): {
   user: string;
   password: string;

@@ -6,6 +6,7 @@ locals {
     { name = "DB_HOST", value = local.postgres_host },
     { name = "DB_NAME", value = "cotsel_gateway" },
     { name = "DB_PORT", value = "5432" },
+    { name = "DB_SSL_MODE", value = "require" },
     { name = "GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH", value = "true" },
     { name = "GATEWAY_AUTH_BASE_URL", value = "http://127.0.0.1:3005" },
     { name = "GATEWAY_COMMIT_SHA", value = var.gateway_image_tag },

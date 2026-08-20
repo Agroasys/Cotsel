@@ -10,6 +10,7 @@ const BASE_ENV: Record<string, string> = {
   DB_NAME: 'gateway',
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
+  DB_SSL_MODE: 'disable',
   DB_MIGRATION_USER: '',
   DB_MIGRATION_PASSWORD: '',
   GATEWAY_AUTH_BASE_URL: 'http://127.0.0.1:4100',
@@ -110,6 +111,37 @@ describe('gateway runtime env config', () => {
         expect(config.rpcUrl).toBe('https://sepolia.base.org');
         expect(config.explorerBaseUrl).toBe('https://sepolia-explorer.base.org/tx/');
         expect(config.escrowAddress).toBe('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+      },
+    );
+  });
+
+  test('parses explicit database SSL mode', () => {
+    withEnv(
+      {
+        DB_SSL_MODE: 'require',
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+      },
+      () => {
+        const { loadConfig } = loadConfigModule();
+        expect(loadConfig().dbSslMode).toBe('require');
+      },
+    );
+  });
+
+  test('rejects unsupported database SSL mode', () => {
+    withEnv(
+      {
+        DB_SSL_MODE: 'prefer',
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+      },
+      () => {
+        expect(() => loadConfigModule().loadConfig()).toThrow(
+          'DB_SSL_MODE must be one of disable, require, or verify-full',
+        );
       },
     );
   });

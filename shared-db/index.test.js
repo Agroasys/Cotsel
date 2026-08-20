@@ -3,7 +3,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildSessionOptions, resolveMigrationCredentials } = require('./index');
+const {
+  buildSessionOptions,
+  resolveMigrationCredentials,
+  resolvePostgresSslConfig,
+} = require('./index');
 
 test('buildSessionOptions pins service session settings', () => {
   const options = buildSessionOptions({
@@ -43,4 +47,18 @@ test('resolveMigrationCredentials falls back to runtime credentials when migrati
       password: 'app_pass',
     },
   );
+});
+
+test('resolvePostgresSslConfig disables SSL by default', () => {
+  assert.equal(resolvePostgresSslConfig(), false);
+  assert.equal(resolvePostgresSslConfig('disable'), false);
+});
+
+test('resolvePostgresSslConfig supports encrypted RDS connections', () => {
+  assert.deepEqual(resolvePostgresSslConfig('require'), { rejectUnauthorized: false });
+  assert.deepEqual(resolvePostgresSslConfig('verify-full'), { rejectUnauthorized: true });
+});
+
+test('resolvePostgresSslConfig rejects unknown modes', () => {
+  assert.throws(() => resolvePostgresSslConfig('prefer'), /Unsupported Postgres SSL mode/);
 });

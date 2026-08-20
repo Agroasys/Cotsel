@@ -36,6 +36,19 @@ function resolveMigrationCredentials(config) {
   };
 }
 
+function resolvePostgresSslConfig(mode = 'disable') {
+  switch (mode) {
+    case 'disable':
+      return false;
+    case 'require':
+      return { rejectUnauthorized: false };
+    case 'verify-full':
+      return { rejectUnauthorized: true };
+    default:
+      throw new Error(`Unsupported Postgres SSL mode: ${mode}`);
+  }
+}
+
 function createServicePool({
   serviceName,
   connectionRole = 'runtime',
@@ -48,6 +61,7 @@ function createServicePool({
   max = 20,
   idleTimeoutMillis = 30000,
   connectionTimeoutMillis = 2000,
+  sslMode = 'disable',
 }) {
   return new Pool({
     host,
@@ -58,6 +72,7 @@ function createServicePool({
     max,
     idleTimeoutMillis,
     connectionTimeoutMillis,
+    ssl: resolvePostgresSslConfig(sslMode),
     application_name: `${serviceName}-${connectionRole}`,
     options: buildSessionOptions({
       serviceName,
@@ -69,6 +84,7 @@ function createServicePool({
 
 module.exports = {
   buildSessionOptions,
+  resolvePostgresSslConfig,
   resolveMigrationCredentials,
   createServicePool,
 };

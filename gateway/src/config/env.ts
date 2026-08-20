@@ -21,6 +21,7 @@ export interface GatewayConfig {
   dbPassword: string;
   dbMigrationUser?: string;
   dbMigrationPassword?: string;
+  dbSslMode: 'disable' | 'require' | 'verify-full';
   authBaseUrl: string;
   authRequestTimeoutMs: number;
   indexerGraphqlUrl: string;
@@ -199,6 +200,15 @@ function parseUrlList(raw: string | undefined): string[] {
     .map((value) => value.replace(/\/$/, ''));
 }
 
+function parseDbSslMode(value: string | undefined): GatewayConfig['dbSslMode'] {
+  const mode = value?.trim() || 'disable';
+  assert(
+    mode === 'disable' || mode === 'require' || mode === 'verify-full',
+    'DB_SSL_MODE must be one of disable, require, or verify-full',
+  );
+  return mode;
+}
+
 function assertAddress(name: string, value: string): string {
   assert(isAddress(value), `${name} must be a valid EVM address`);
   return getAddress(value);
@@ -355,6 +365,7 @@ export function loadConfig(): GatewayConfig {
     process.env.GATEWAY_RICARDIAN_SERVICE_API_SECRET?.trim() || undefined;
   const dbMigrationUser = process.env.DB_MIGRATION_USER?.trim() || undefined;
   const dbMigrationPassword = process.env.DB_MIGRATION_PASSWORD?.trim() || undefined;
+  const dbSslMode = parseDbSslMode(process.env.DB_SSL_MODE);
   const operatorSignerEnvironment =
     process.env.GATEWAY_OPERATOR_SIGNER_ENVIRONMENT?.trim() || nodeEnv;
   const allowInsecureDownstreamAuth = envBool(
@@ -674,6 +685,7 @@ export function loadConfig(): GatewayConfig {
     dbPassword: env('DB_PASSWORD'),
     dbMigrationUser,
     dbMigrationPassword,
+    dbSslMode,
     authBaseUrl,
     authRequestTimeoutMs: envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000),
     indexerGraphqlUrl,
