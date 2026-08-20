@@ -101,9 +101,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    defaults:
-      run:
-        working-directory: infra/terraform/staging-platform
     steps:
       - name: Refuse non-main plans
         if: github.ref != 'refs/heads/main'
@@ -138,12 +135,15 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Initialize
+        working-directory: infra/terraform/staging-platform
         run: terraform init -input=false -lockfile=readonly
 
       - name: Validate
+        working-directory: infra/terraform/staging-platform
         run: terraform validate -no-color
 
       - name: Plan
+        working-directory: infra/terraform/staging-platform
         env:
           ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
         run: |
@@ -159,17 +159,20 @@ jobs:
           terraform show -json tfplan > plan.json
 
       - name: Apply destructive-change policy
+        working-directory: infra/terraform/staging-platform
         run: node ../scripts/check-destructive-changes.mjs < plan.json
 
       - name: Test saved-plan metadata validation
+        working-directory: infra/terraform/staging-platform
         run: node ../scripts/plan-metadata-selftest.mjs
 
       - name: Remove rendered plan JSON
         if: always()
-        run: rm -f plan.json
+        run: rm -f infra/terraform/staging-platform/plan.json
 
       - name: Store the exact plan
         id: store
+        working-directory: infra/terraform/staging-platform
         run: |
           set -euo pipefail
           VERSIONING_STATUS=$(aws s3api get-bucket-versioning \
@@ -201,6 +204,7 @@ jobs:
           echo "sha256=$PLAN_SHA256" >> "$GITHUB_OUTPUT"
 
       - name: Record approval inputs
+        working-directory: infra/terraform/staging-platform
         env:
           PLAN_SHA256: ${{ steps.store.outputs.sha256 }}
           PLAN_VERSION: ${{ steps.store.outputs.version }}
@@ -234,9 +238,6 @@ jobs:
       actions: read
       contents: read
       id-token: write
-    defaults:
-      run:
-        working-directory: infra/terraform/staging-platform
     steps:
       - name: Refuse non-main applies
         if: github.ref != 'refs/heads/main'
@@ -299,9 +300,11 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Initialize
+        working-directory: infra/terraform/staging-platform
         run: terraform init -input=false -lockfile=readonly
 
       - name: Verify and fetch the approved plan
+        working-directory: infra/terraform/staging-platform
         env:
           PLAN_ACTOR: ${{ steps.approved_plan.outputs.actor }}
           PLAN_ATTEMPT: ${{ steps.approved_plan.outputs.attempt }}
@@ -340,6 +343,7 @@ jobs:
           echo "$PLAN_SHA256  tfplan" | sha256sum --check --strict
 
       - name: Apply
+        working-directory: infra/terraform/staging-platform
         run: terraform apply -input=false -no-color -lock-timeout=5m -auto-approve tfplan
 
       - name: Record apply result
