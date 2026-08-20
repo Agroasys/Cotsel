@@ -55,6 +55,7 @@ const config: GatewayConfig = {
   corsAllowedOrigins: [],
   corsAllowNoOrigin: true,
   rateLimitEnabled: false,
+  contractAddressRequired: true,
   allowInsecureDownstreamAuth: true,
 };
 
