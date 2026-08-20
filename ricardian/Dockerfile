@@ -4,6 +4,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches patches
 COPY auth/package.json auth/package.json
 COPY contracts/package.json contracts/package.json
 COPY gateway/package.json gateway/package.json
@@ -36,6 +37,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches patches
 COPY auth/package.json auth/package.json
 COPY contracts/package.json contracts/package.json
 COPY gateway/package.json gateway/package.json
