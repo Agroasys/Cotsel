@@ -38,8 +38,9 @@ settlement-infrastructure plan. It deliberately records no secret values.
   - `GATEWAY_SETTLEMENT_CALLBACK_URL`
   - `GATEWAY_SETTLEMENT_CALLBACK_API_KEY`
   - `GATEWAY_SETTLEMENT_CALLBACK_API_SECRET`
-- `shared-auth/src/serviceAuth.js` requires
-  `GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON` to be a JSON array.
+- `shared-auth/src/serviceAuth.js` accepts
+  `GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON` as either a JSON array or one
+  singleton JSON object.
 - Each API-key record must contain `id`, `secret`, and `active`.
 - `active` must be a boolean value, not a string.
 - The HMAC canonical string is:
@@ -150,26 +151,27 @@ written by Terraform.
 | Backend to Cotsel gateway                   | `/agroasys/staging/cotsel/gateway-settlement-ingress`  | `arn:aws:secretsmanager:ap-south-1:655177116834:secret:/agroasys/staging/cotsel/gateway-settlement-ingress-mO4FwK`  | `agroasys-backend-staging-v1` |
 | Cotsel gateway to backend callback receiver | `/agroasys/staging/cotsel/gateway-settlement-callback` | `arn:aws:secretsmanager:ap-south-1:655177116834:secret:/agroasys/staging/cotsel/gateway-settlement-callback-4ccaJW` | `cotsel-gateway-staging-v1`   |
 
-### Required value shape
+### Value shape written on 2026-08-20
 
-The gateway ingress credential must render to:
-
-```json
-[
-  {
-    "id": "agroasys-backend-staging-v1",
-    "secret": "<generated secret>",
-    "active": true
-  }
-]
-```
-
-The callback credential must provide:
+The gateway ingress credential is a singleton JSON object:
 
 ```json
 {
-  "apiKey": "cotsel-gateway-staging-v1",
-  "apiSecret": "<generated secret>"
+  "id": "agroasys-backend-staging-v1",
+  "secret": "<generated secret>",
+  "active": true
+}
+```
+
+The gateway parser also remains backward compatible with the previous JSON array
+shape.
+
+The callback credential is a singleton JSON object:
+
+```json
+{
+  "id": "cotsel-gateway-staging-v1",
+  "secret": "<generated secret>"
 }
 ```
 
@@ -177,11 +179,17 @@ The same secret value must not be reused across these two directions.
 
 ### Batch status
 
-Partially complete.
+Complete for credential creation.
 
-The secret containers and identifiers exist. The actual cryptographic secret
-values must be generated and written through the approved bootstrap/rotation
-path after the Cotsel runtime root defines how ECS injects them.
+The secret containers exist. Independent cryptographic values were generated
+outside Terraform and written as initial `AWSCURRENT` versions through AWS
+Secrets Manager. The secret values were not printed, committed, or placed in
+Terraform state.
+
+| Secret name                                            | Version ID                             | Status                        |
+| ------------------------------------------------------ | -------------------------------------- | ----------------------------- |
+| `/agroasys/staging/cotsel/gateway-settlement-ingress`  | `31afa1f6-d03c-4374-99b9-e20061725aa8` | Initial `AWSCURRENT` written. |
+| `/agroasys/staging/cotsel/gateway-settlement-callback` | `c216efa4-8fb8-49ef-a9fe-5c2bbf7b641e` | Initial `AWSCURRENT` written. |
 
 ## Task E implementation map
 

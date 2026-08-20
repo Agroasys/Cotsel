@@ -45,6 +45,8 @@ function createRequest(overrides = {}) {
 test('parseServiceApiKeys validates active and trims values', () => {
   const keys = parseServiceApiKeys('[{"id":" gateway ","secret":" top-secret ","active":true}]');
   assert.deepEqual(keys, [{ id: 'gateway', secret: 'top-secret', active: true }]);
+  const singleton = parseServiceApiKeys('{"id":" gateway ","secret":" top-secret ","active":true}');
+  assert.deepEqual(singleton, [{ id: 'gateway', secret: 'top-secret', active: true }]);
   assert.throws(
     () => parseServiceApiKeys('[{"id":"a","secret":"b","active":"yes"}]'),
     /active must be a boolean/,

@@ -156,11 +156,9 @@ function parseServiceApiKeys(raw) {
     throw new Error('API_KEYS_JSON must be valid JSON');
   }
 
-  if (!Array.isArray(parsed)) {
-    throw new Error('API_KEYS_JSON must be an array');
-  }
+  const records = Array.isArray(parsed) ? parsed : [parsed];
 
-  return parsed.map((entry, index) => {
+  return records.map((entry, index) => {
     if (!entry || typeof entry !== 'object') {
       throw new Error(`API_KEYS_JSON[${index}] must be an object`);
     }
