@@ -210,23 +210,18 @@ jobs:
           PLAN_VERSION: ${{ steps.store.outputs.version }}
         run: |
           {
-            echo "### Terraform plan for `staging-platform`"
-            echo
-            echo "Commit `$GITHUB_SHA`, planned by `$GITHUB_TRIGGERING_ACTOR`."
-            echo
-            echo "| Apply input | Value |"
-            echo "| --- | --- |"
-            echo "| action | `apply` |"
-            echo "| plan_run_id | `$GITHUB_RUN_ID` |"
-            echo "| plan_version_id | `$PLAN_VERSION` |"
-            echo
-            echo "Saved plan SHA-256: `$PLAN_SHA256`."
-            echo
-            echo "A different person must dispatch apply within 24 hours."
-            echo
-            echo '```'
+            printf '%s\n\n' '### Terraform plan for `staging-platform`'
+            printf 'Commit `%s`, planned by `%s`.\n\n' "$GITHUB_SHA" "$GITHUB_TRIGGERING_ACTOR"
+            printf '%s\n' '| Apply input | Value |'
+            printf '%s\n' '| --- | --- |'
+            printf '| action | `%s` |\n' 'apply'
+            printf '| plan_run_id | `%s` |\n' "$GITHUB_RUN_ID"
+            printf '| plan_version_id | `%s` |\n\n' "$PLAN_VERSION"
+            printf 'Saved plan SHA-256: `%s`.\n\n' "$PLAN_SHA256"
+            printf '%s\n\n' 'A different person must dispatch apply within 24 hours.'
+            printf '%s\n' '```'
             tail -c 60000 plan.txt
-            echo '```'
+            printf '%s\n' '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
   dispatch-apply:
@@ -355,13 +350,12 @@ jobs:
           PLAN_VERSION_ID: ${{ github.event.inputs.plan_version_id }}
         run: |
           {
-            echo "### Terraform apply attempt"
-            echo
-            echo "| Field | Value |"
-            echo "| --- | --- |"
-            echo "| Result | `$APPLY_RESULT` |"
-            echo "| Commit | `$GITHUB_SHA` |"
-            echo "| Plan run | `$PLAN_RUN_ID` |"
-            echo "| Plan version | `$PLAN_VERSION_ID` |"
-            echo "| Applied by | `$GITHUB_TRIGGERING_ACTOR` |"
+            printf '%s\n\n' '### Terraform apply attempt'
+            printf '%s\n' '| Field | Value |'
+            printf '%s\n' '| --- | --- |'
+            printf '| Result | `%s` |\n' "$APPLY_RESULT"
+            printf '| Commit | `%s` |\n' "$GITHUB_SHA"
+            printf '| Plan run | `%s` |\n' "$PLAN_RUN_ID"
+            printf '| Plan version | `%s` |\n' "$PLAN_VERSION_ID"
+            printf '| Applied by | `%s` |\n' "$GITHUB_TRIGGERING_ACTOR"
           } >> "$GITHUB_STEP_SUMMARY"
