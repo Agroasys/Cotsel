@@ -21,7 +21,7 @@ export interface GatewayConfig {
   dbPassword: string;
   dbMigrationUser?: string;
   dbMigrationPassword?: string;
-  dbSslMode: 'disable' | 'require' | 'verify-full';
+  dbSslMode?: 'disable' | 'require' | 'verify-full';
   authBaseUrl: string;
   authRequestTimeoutMs: number;
   indexerGraphqlUrl: string;
