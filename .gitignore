@@ -15,4 +15,10 @@ reports/pilot-rehearsal/*
 .husky/_
 .DS_Store
 
+# Terraform provider binaries and local plans are never source artifacts.
+**/.terraform/*
+*.tfplan
+crash.log
+crash.*.log
+
 reports/licenses

@@ -1,0 +1,363 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/terraform.yml'
+      - 'infra/terraform/**'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Plan stores a reviewable plan. Apply executes that exact plan.
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+      origin_certificate_arn:
+        description: Required for plan. ACM certificate ARN for the private origin.
+        required: false
+        type: string
+      plan_run_id:
+        description: Required for apply. Run ID of the approved plan.
+        required: false
+        type: string
+      plan_version_id:
+        description: Required for apply. S3 version ID shown by the plan run.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  AWS_ACCOUNT_ID: '655177116834'
+  AWS_REGION: eu-north-1
+  APPLY_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-terraform-apply
+  PLAN_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-terraform-plan-dispatch
+  ROOT: staging-platform
+  STATE_BUCKET: agroasys-tfstate-655177116834
+  TF_VERSION: 1.15.8
+
+concurrency:
+  group: terraform-staging-platform-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: terraform/validate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive infra/terraform
+
+      - name: Initialize without remote state
+        run: terraform -chdir=infra/terraform/staging-platform init -backend=false -input=false -lockfile=readonly
+
+      - name: Validate configuration
+        run: terraform -chdir=infra/terraform/staging-platform validate -no-color
+
+      - name: Test destructive-change policy
+        run: node infra/terraform/scripts/destructive-change-selftest.mjs
+
+      - name: Test saved-plan metadata validation
+        run: node infra/terraform/scripts/plan-metadata-selftest.mjs
+
+  security:
+    name: terraform/security
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Scan Terraform configuration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: config
+          scan-ref: infra/terraform
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          hide-progress: true
+          format: table
+
+  dispatch-plan:
+    name: terraform/plan
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'plan'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/terraform/staging-platform
+    steps:
+      - name: Refuse non-main plans
+        if: github.ref != 'refs/heads/main'
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          echo "Plans for apply run from main only. This dispatch used $DISPATCH_REF." >&2
+          exit 1
+
+      - name: Require the origin certificate
+        env:
+          ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
+        run: |
+          test -n "$ORIGIN_CERTIFICATE_ARN" || {
+            echo "origin_certificate_arn is required for plan." >&2
+            exit 1
+          }
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Assume the main-branch plan role
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b
+        with:
+          role-to-assume: ${{ env.PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Initialize
+        run: terraform init -input=false -lockfile=readonly
+
+      - name: Validate
+        run: terraform validate -no-color
+
+      - name: Plan
+        env:
+          ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
+        run: |
+          set -euo pipefail
+          terraform plan \
+            -input=false \
+            -lock-timeout=5m \
+            -no-color \
+            -out=tfplan \
+            -var="account_id=$AWS_ACCOUNT_ID" \
+            -var="origin_certificate_arn=$ORIGIN_CERTIFICATE_ARN"
+          terraform show -no-color tfplan > plan.txt
+          terraform show -json tfplan > plan.json
+
+      - name: Apply destructive-change policy
+        run: node ../scripts/check-destructive-changes.mjs < plan.json
+
+      - name: Test saved-plan metadata validation
+        run: node ../scripts/plan-metadata-selftest.mjs
+
+      - name: Remove rendered plan JSON
+        if: always()
+        run: rm -f plan.json
+
+      - name: Store the exact plan
+        id: store
+        run: |
+          set -euo pipefail
+          VERSIONING_STATUS=$(aws s3api get-bucket-versioning \
+            --bucket "$STATE_BUCKET" \
+            --query Status \
+            --output text)
+          test "$VERSIONING_STATUS" = "Enabled" || {
+            echo "State bucket versioning is not enabled; the saved plan cannot be immutable." >&2
+            exit 1
+          }
+
+          PLAN_SHA256=$(sha256sum tfplan | cut -d ' ' -f 1)
+          VERSION=$(aws s3api put-object \
+            --bucket "$STATE_BUCKET" \
+            --key "plans/cotsel-staging-platform/$GITHUB_RUN_ID.tfplan" \
+            --body tfplan \
+            --metadata "action=plan,root=$ROOT,repository=$GITHUB_REPOSITORY,workflow-path=.github/workflows/terraform.yml,run-id=$GITHUB_RUN_ID,run-attempt=$GITHUB_RUN_ATTEMPT,head-sha=$GITHUB_SHA,ref=$GITHUB_REF,actor=$GITHUB_TRIGGERING_ACTOR,plan-sha256=$PLAN_SHA256" \
+            --query VersionId \
+            --output text)
+          test -n "$VERSION" && test "$VERSION" != "null" && test "$VERSION" != "None" || {
+            echo "S3 did not return a usable version ID; the saved plan is not immutable." >&2
+            exit 1
+          }
+          aws s3api put-object \
+            --bucket "$STATE_BUCKET" \
+            --key "plans/cotsel-staging-platform/$GITHUB_RUN_ID.txt" \
+            --body plan.txt >/dev/null
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256=$PLAN_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Record approval inputs
+        env:
+          PLAN_SHA256: ${{ steps.store.outputs.sha256 }}
+          PLAN_VERSION: ${{ steps.store.outputs.version }}
+        run: |
+          {
+            echo "### Terraform plan for `staging-platform`"
+            echo
+            echo "Commit `$GITHUB_SHA`, planned by `$GITHUB_TRIGGERING_ACTOR`."
+            echo
+            echo "| Apply input | Value |"
+            echo "| --- | --- |"
+            echo "| action | `apply` |"
+            echo "| plan_run_id | `$GITHUB_RUN_ID` |"
+            echo "| plan_version_id | `$PLAN_VERSION` |"
+            echo
+            echo "Saved plan SHA-256: `$PLAN_SHA256`."
+            echo
+            echo "A different person must dispatch apply within 24 hours."
+            echo
+            echo '```'
+            tail -c 60000 plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  dispatch-apply:
+    name: terraform/apply
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/terraform/staging-platform
+    steps:
+      - name: Refuse non-main applies
+        if: github.ref != 'refs/heads/main'
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          echo "Apply runs from main only. This dispatch used $DISPATCH_REF." >&2
+          exit 1
+
+      - name: Validate the approved plan run
+        id: approved_plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAN_RUN_ID: ${{ github.event.inputs.plan_run_id }}
+          PLAN_VERSION_ID: ${{ github.event.inputs.plan_version_id }}
+        run: |
+          set -euo pipefail
+          test -n "$PLAN_RUN_ID" || { echo "plan_run_id is required for apply." >&2; exit 1; }
+          test -n "$PLAN_VERSION_ID" && test "$PLAN_VERSION_ID" != "null" && test "$PLAN_VERSION_ID" != "None" || {
+            echo "A non-null plan_version_id is required for apply." >&2
+            exit 1
+          }
+
+          RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PLAN_RUN_ID")
+          read -r NAME PATH_ EVENT BRANCH STATUS ACTOR SHA CREATED ATTEMPT <<<"$(
+            echo "$RUN" |
+              jq -r '[.name, .path, .event, .head_branch, .conclusion, .triggering_actor.login, .head_sha, .created_at, .run_attempt] | @tsv'
+          )"
+
+          test "$NAME" = "Terraform" || { echo "Run $PLAN_RUN_ID belongs to $NAME." >&2; exit 1; }
+          test "$PATH_" = ".github/workflows/terraform.yml" || { echo "Run $PLAN_RUN_ID came from $PATH_." >&2; exit 1; }
+          test "$EVENT" = "workflow_dispatch" || { echo "Run $PLAN_RUN_ID was triggered by $EVENT." >&2; exit 1; }
+          test "$BRANCH" = "main" || { echo "Run $PLAN_RUN_ID was on $BRANCH." >&2; exit 1; }
+          test "$STATUS" = "success" || { echo "Run $PLAN_RUN_ID did not succeed." >&2; exit 1; }
+          test "$SHA" = "$GITHUB_SHA" || { echo "Plan commit $SHA differs from apply commit $GITHUB_SHA." >&2; exit 1; }
+          test "$ACTOR" != "$GITHUB_TRIGGERING_ACTOR" || {
+            echo "$GITHUB_TRIGGERING_ACTOR cannot plan and apply the same change." >&2
+            exit 1
+          }
+
+          AGE=$(( $(date -u +%s) - $(date -u -d "$CREATED" +%s) ))
+          test "$AGE" -lt 86400 || { echo "The approved plan is older than 24 hours." >&2; exit 1; }
+
+          echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
+          echo "attempt=$ATTEMPT" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Assume the protected apply role
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b
+        with:
+          role-to-assume: ${{ env.APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Initialize
+        run: terraform init -input=false -lockfile=readonly
+
+      - name: Verify and fetch the approved plan
+        env:
+          PLAN_ACTOR: ${{ steps.approved_plan.outputs.actor }}
+          PLAN_ATTEMPT: ${{ steps.approved_plan.outputs.attempt }}
+          PLAN_RUN_ID: ${{ github.event.inputs.plan_run_id }}
+          PLAN_VERSION_ID: ${{ github.event.inputs.plan_version_id }}
+        run: |
+          set -euo pipefail
+          VERSIONING_STATUS=$(aws s3api get-bucket-versioning \
+            --bucket "$STATE_BUCKET" \
+            --query Status \
+            --output text)
+          test "$VERSIONING_STATUS" = "Enabled" || {
+            echo "State bucket versioning is not enabled; refusing to fetch an unpinned plan." >&2
+            exit 1
+          }
+
+          HEAD=$(aws s3api head-object \
+            --bucket "$STATE_BUCKET" \
+            --key "plans/cotsel-staging-platform/$PLAN_RUN_ID.tfplan" \
+            --version-id "$PLAN_VERSION_ID")
+
+          PLAN_SHA256=$(printf '%s' "$HEAD" |
+            EXPECTED_ROOT="$ROOT" \
+            EXPECTED_REPOSITORY="$GITHUB_REPOSITORY" \
+            EXPECTED_RUN_ID="$PLAN_RUN_ID" \
+            EXPECTED_RUN_ATTEMPT="$PLAN_ATTEMPT" \
+            EXPECTED_HEAD_SHA="$GITHUB_SHA" \
+            EXPECTED_ACTOR="$PLAN_ACTOR" \
+            node ../scripts/verify-plan-metadata.mjs)
+
+          aws s3api get-object \
+            --bucket "$STATE_BUCKET" \
+            --key "plans/cotsel-staging-platform/$PLAN_RUN_ID.tfplan" \
+            --version-id "$PLAN_VERSION_ID" \
+            tfplan >/dev/null
+          echo "$PLAN_SHA256  tfplan" | sha256sum --check --strict
+
+      - name: Apply
+        run: terraform apply -input=false -no-color -lock-timeout=5m -auto-approve tfplan
+
+      - name: Record apply result
+        if: always()
+        working-directory: .
+        env:
+          APPLY_RESULT: ${{ job.status }}
+          PLAN_RUN_ID: ${{ github.event.inputs.plan_run_id }}
+          PLAN_VERSION_ID: ${{ github.event.inputs.plan_version_id }}
+        run: |
+          {
+            echo "### Terraform apply attempt"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Result | `$APPLY_RESULT` |"
+            echo "| Commit | `$GITHUB_SHA` |"
+            echo "| Plan run | `$PLAN_RUN_ID` |"
+            echo "| Plan version | `$PLAN_VERSION_ID` |"
+            echo "| Applied by | `$GITHUB_TRIGGERING_ACTOR` |"
+          } >> "$GITHUB_STEP_SUMMARY"

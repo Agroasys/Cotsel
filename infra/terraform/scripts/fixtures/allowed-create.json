@@ -1,0 +1,9 @@
+{
+  "resource_changes": [
+    {
+      "address": "aws_ecr_repository.service[\"gateway\"]",
+      "type": "aws_ecr_repository",
+      "change": { "actions": ["create"] }
+    }
+  ]
+}
