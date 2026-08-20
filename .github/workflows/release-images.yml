@@ -1,0 +1,201 @@
+name: Release Images
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  PUSH_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-github-ecr-push
+
+concurrency:
+  group: release-images-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build/${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth
+            repository: cotsel/auth
+            dockerfile: auth/Dockerfile
+            local_tag: cotsel-auth
+          - service: gateway
+            repository: cotsel/gateway
+            dockerfile: gateway/Dockerfile
+            local_tag: cotsel-gateway
+          - service: indexer-graphql
+            repository: cotsel/indexer-graphql
+            dockerfile: indexer/Dockerfile
+            local_tag: cotsel-indexer-graphql
+          - service: indexer-pipeline
+            repository: cotsel/indexer-pipeline
+            dockerfile: indexer/Dockerfile
+            local_tag: cotsel-indexer-pipeline
+          - service: oracle
+            repository: cotsel/oracle
+            dockerfile: oracle/Dockerfile
+            local_tag: cotsel-oracle
+          - service: reconciliation
+            repository: cotsel/reconciliation
+            dockerfile: reconciliation/Dockerfile
+            local_tag: cotsel-reconciliation
+          - service: ricardian
+            repository: cotsel/ricardian
+            dockerfile: ricardian/Dockerfile
+            local_tag: cotsel-ricardian
+          - service: treasury
+            repository: cotsel/treasury
+            dockerfile: treasury/Dockerfile
+            local_tag: cotsel-treasury
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Decide whether this build publishes
+        id: kind
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+
+      - name: Assume the Cotsel image-publish role
+        if: steps.kind.outputs.publish == 'true'
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b
+        with:
+          role-to-assume: ${{ env.PUSH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        if: steps.kind.outputs.publish == 'true'
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
+
+      - name: Reuse an existing image for this commit
+        id: existing
+        if: steps.kind.outputs.publish == 'true'
+        env:
+          ECR_REPOSITORY: ${{ matrix.repository }}
+        run: |
+          set -euo pipefail
+          DIGEST=$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids "imageTag=$GITHUB_SHA" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text 2>/dev/null || true)
+          if [ -n "$DIGEST" ] && [ "$DIGEST" != "None" ]; then
+            echo "Commit $GITHUB_SHA is already published for $ECR_REPOSITORY as $DIGEST."
+            echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push
+        id: build
+        if: steps.kind.outputs.publish == 'true' && steps.existing.outputs.digest == ''
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: runtime
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/${{ matrix.repository }}:${{ github.sha }}
+          provenance: false
+
+      - name: Build without publishing
+        if: steps.kind.outputs.publish != 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: runtime
+          push: false
+          load: true
+          tags: ${{ matrix.local_tag }}:${{ github.sha }}
+          provenance: false
+
+      - name: Settle artifact identity
+        id: identity
+        env:
+          BUILT: ${{ steps.build.outputs.digest }}
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ matrix.repository }}
+          LOCAL_TAG: ${{ matrix.local_tag }}
+          PUBLISH: ${{ steps.kind.outputs.publish }}
+          REUSED: ${{ steps.existing.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ "$PUBLISH" != "true" ]; then
+            echo "reference=${LOCAL_TAG}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "digest=" >> "$GITHUB_OUTPUT"
+            echo "Candidate image for ${ECR_REPOSITORY}; not published."
+            exit 0
+          fi
+
+          DIGEST="${REUSED:-$BUILT}"
+          if [ -z "$DIGEST" ]; then
+            echo "No digest from either the existing image or the build." >&2
+            exit 1
+          fi
+
+          REFERENCE="${ECR_REGISTRY}/${ECR_REPOSITORY}@${DIGEST}"
+          echo "reference=$REFERENCE" >> "$GITHUB_OUTPUT"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Image identity: $REFERENCE"
+
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: image
+          image-ref: ${{ steps.identity.outputs.reference }}
+          format: json
+          output: scan-image-${{ matrix.service }}.json
+          severity: HIGH,CRITICAL
+          exit-code: '0'
+          hide-progress: true
+
+      - name: Record image evidence
+        env:
+          DIGEST: ${{ steps.identity.outputs.digest }}
+          REFERENCE: ${{ steps.identity.outputs.reference }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const out = {
+              service: process.env.SERVICE,
+              sourceCommit: process.env.GITHUB_SHA,
+              imageReference: process.env.REFERENCE,
+              imageDigest: process.env.DIGEST || null,
+              published: Boolean(process.env.DIGEST),
+              workflowRunId: process.env.GITHUB_RUN_ID,
+            };
+            fs.writeFileSync(`release-image-${out.service}.json`, `${JSON.stringify(out, null, 2)}\n`);
+          '
+
+      - name: Upload image evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          if-no-files-found: error
+          name: cotsel-image-${{ matrix.service }}-${{ github.sha }}
+          path: |
+            release-image-${{ matrix.service }}.json
+            scan-image-${{ matrix.service }}.json
+          retention-days: 90
