@@ -17,7 +17,7 @@ locals {
     { name = "GATEWAY_INDEXER_GRAPHQL_URL", value = "http://127.0.0.1:4350/graphql" },
     { name = "GATEWAY_RATE_LIMIT_ENABLED", value = "false" },
     { name = "GATEWAY_SETTLEMENT_CALLBACK_ENABLED", value = "true" },
-    { name = "GATEWAY_SETTLEMENT_CALLBACK_URL", value = "https://backend.agroasys.com/api/v1/settlement-handoffs/cotsel/callbacks/execution-events" },
+    { name = "GATEWAY_SETTLEMENT_CALLBACK_URL", value = "https://api.staging.agroasys.com/api/v1/settlement-handoffs/cotsel/callbacks/execution-events" },
     { name = "GATEWAY_SETTLEMENT_INGRESS_ENABLED", value = "true" },
     { name = "GATEWAY_SETTLEMENT_RUNTIME", value = "base-sepolia" },
     { name = "GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS", value = "300" },
