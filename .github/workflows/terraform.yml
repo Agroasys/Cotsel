@@ -21,6 +21,10 @@ on:
         description: Required for plan. ACM certificate ARN for the private origin.
         required: false
         type: string
+      edge_certificate_arn:
+        description: Required for plan. us-east-1 ACM certificate ARN for the public CloudFront edge.
+        required: false
+        type: string
       gateway_image_tag:
         description: Required for plan. Immutable gateway image tag, normally the 40-character Git SHA.
         required: false
@@ -126,11 +130,16 @@ jobs:
 
       - name: Require the origin certificate
         env:
+          EDGE_CERTIFICATE_ARN: ${{ github.event.inputs.edge_certificate_arn }}
           ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
           GATEWAY_IMAGE_TAG: ${{ github.event.inputs.gateway_image_tag }}
         run: |
           test -n "$ORIGIN_CERTIFICATE_ARN" || {
             echo "origin_certificate_arn is required for plan." >&2
+            exit 1
+          }
+          test -n "$EDGE_CERTIFICATE_ARN" || {
+            echo "edge_certificate_arn is required for plan." >&2
             exit 1
           }
           test -n "$GATEWAY_IMAGE_TAG" || {
@@ -164,6 +173,7 @@ jobs:
       - name: Plan
         working-directory: infra/terraform/staging-platform
         env:
+          EDGE_CERTIFICATE_ARN: ${{ github.event.inputs.edge_certificate_arn }}
           ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
           GATEWAY_IMAGE_TAG: ${{ github.event.inputs.gateway_image_tag }}
         run: |
@@ -174,6 +184,7 @@ jobs:
             -no-color \
             -out=tfplan \
             -var="account_id=$AWS_ACCOUNT_ID" \
+            -var="edge_certificate_arn=$EDGE_CERTIFICATE_ARN" \
             -var="origin_certificate_arn=$ORIGIN_CERTIFICATE_ARN" \
             -var="gateway_image_tag=$GATEWAY_IMAGE_TAG"
           terraform show -no-color tfplan > plan.txt

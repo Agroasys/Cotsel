@@ -43,7 +43,7 @@ variable "state_bucket_region" {
 }
 
 variable "origin_certificate_arn" {
-  description = "ACM certificate in ap-south-1 for the private CloudFront-to-ALB origin hostname."
+  description = "ACM certificate in ap-south-1 for the CloudFront-to-ALB origin hostname."
   type        = string
 
   validation {
@@ -52,6 +52,30 @@ variable "origin_certificate_arn" {
       var.origin_certificate_arn,
     ))
     error_message = "origin_certificate_arn must identify an ap-south-1 ACM certificate."
+  }
+}
+
+variable "edge_certificate_arn" {
+  description = "ACM certificate in us-east-1 for the public CloudFront gateway hostname."
+  type        = string
+
+  validation {
+    condition = can(regex(
+      "^arn:(aws|aws-us-gov|aws-cn):acm:us-east-1:[0-9]{12}:certificate/[0-9a-f-]+$",
+      var.edge_certificate_arn,
+    ))
+    error_message = "edge_certificate_arn must identify a us-east-1 ACM certificate for CloudFront."
+  }
+}
+
+variable "public_gateway_domain_name" {
+  description = "Canonical public staging hostname for the Cotsel gateway edge."
+  type        = string
+  default     = "cotsel.sys.agroasys.com"
+
+  validation {
+    condition     = var.public_gateway_domain_name == "cotsel.sys.agroasys.com"
+    error_message = "The Cotsel staging gateway hostname must remain cotsel.sys.agroasys.com."
   }
 }
 

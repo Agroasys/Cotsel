@@ -10,8 +10,9 @@ existing Agroasys staging boundary. It does not deploy a release candidate.
 - Terraform state: `s3://agroasys-tfstate-655177116834/cotsel/staging-platform/terraform.tfstate`.
 - Network and managed data dependencies: read from the Agroasys
   `staging-network` and `staging-data` state roots.
-- Public ingress: none. The ALB is internal and admits only the AWS-managed
-  CloudFront origin prefix list.
+- Public ingress: `cotsel.sys.agroasys.com` terminates at CloudFront. CloudFront
+  reaches the private ALB through a VPC origin; the ALB remains internal and
+  admits only the AWS-managed CloudFront origin prefix list.
 - Runtime promotion: intentionally absent until signed image digests, database
   migration identity, configuration digest, Base Sepolia RPC pair, managed
   signer, and the contract record from #639 are pinned.
@@ -53,12 +54,16 @@ plans run only through a manual dispatch from `main`.
 Do not apply this root until all of the following are true:
 
 1. `staging-network` and `staging-data` have been applied in `ap-south-1`.
-2. A validated `ap-south-1` ACM certificate exists for the private origin hostname.
-3. The protected Cotsel GitHub deployment environment and AWS OIDC role exist.
-4. The reviewed plan contains no replacement or deletion of shared Agroasys resources.
-5. The monthly AWS budget and alert recipients are approved.
-6. A different person dispatches the exact plan that the protected job applies.
+2. A validated `ap-south-1` ACM certificate exists for the ALB origin hostname.
+3. A validated `us-east-1` ACM certificate exists for
+   `cotsel.sys.agroasys.com` so CloudFront can serve the public alias.
+4. The protected Cotsel GitHub deployment environment and AWS OIDC role exist.
+5. The reviewed plan contains no replacement or deletion of shared Agroasys resources.
+6. The monthly AWS budget and alert recipients are approved.
+7. A different person dispatches the exact plan that the protected job applies.
 
 After apply, record the workflow run, plan hash, state serial, non-secret output
-ARNs, reviewer, and timestamp. An apply is foundation evidence only; it does not
-close #667 or authorize a candidate.
+ARNs, CloudFront distribution domain, reviewer, and timestamp. Then update the
+external DNS record for `cotsel.sys.agroasys.com` to the CloudFront distribution
+domain and run the live HMAC proof set. An apply is foundation evidence only; it
+does not close #667 or authorize a candidate.
