@@ -61,16 +61,12 @@ resource "aws_cloudfront_origin_request_policy" "gateway_hmac" {
 
     headers {
       items = [
-        "Accept",
-        "Authorization",
         "Content-Type",
-        "Host",
         "Idempotency-Key",
         "X-Agroasys-Nonce",
         "X-Agroasys-Signature",
         "X-Agroasys-Timestamp",
         "X-Api-Key",
-        "X-Correlation-Id",
         "X-Nonce",
         "X-Request-Id",
         "X-Signature",
