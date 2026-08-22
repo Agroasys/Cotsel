@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 
 const {
   buildSessionOptions,
+  createServicePool,
   resolveMigrationCredentials,
   resolvePostgresSslConfig,
 } = require('./index');
@@ -61,4 +62,38 @@ test('resolvePostgresSslConfig supports encrypted RDS connections', () => {
 
 test('resolvePostgresSslConfig rejects unknown modes', () => {
   assert.throws(() => resolvePostgresSslConfig('prefer'), /Unsupported Postgres SSL mode/);
+});
+
+test('createServicePool honors DB_SSL_MODE when sslMode is not passed', async () => {
+  const previousDbSslMode = process.env.DB_SSL_MODE;
+  const previousPgSslMode = process.env.PGSSLMODE;
+  process.env.DB_SSL_MODE = 'require';
+  delete process.env.PGSSLMODE;
+
+  const pool = createServicePool({
+    serviceName: 'gateway',
+    host: 'localhost',
+    port: 5432,
+    database: 'cotsel',
+    user: 'runtime_user',
+    password: 'runtime_password',
+  });
+
+  try {
+    assert.deepEqual(pool.options.ssl, { rejectUnauthorized: false });
+  } finally {
+    await pool.end();
+
+    if (previousDbSslMode === undefined) {
+      delete process.env.DB_SSL_MODE;
+    } else {
+      process.env.DB_SSL_MODE = previousDbSslMode;
+    }
+
+    if (previousPgSslMode === undefined) {
+      delete process.env.PGSSLMODE;
+    } else {
+      process.env.PGSSLMODE = previousPgSslMode;
+    }
+  }
 });

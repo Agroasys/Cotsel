@@ -61,7 +61,7 @@ function createServicePool({
   max = 20,
   idleTimeoutMillis = 30000,
   connectionTimeoutMillis = 2000,
-  sslMode = 'disable',
+  sslMode = process.env.DB_SSL_MODE || process.env.PGSSLMODE,
 }) {
   return new Pool({
     host,
