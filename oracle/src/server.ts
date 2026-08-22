@@ -158,7 +158,7 @@ async function bootstrap() {
       Logger.info('Oracle service started', {
         port: config.port,
         environment: process.env.NODE_ENV || 'development',
-        oracleAddress: config.escrowAddress,
+        escrowAddress: config.escrowAddress,
         indexerGraphqlUrl: config.indexerGraphqlUrl,
       });
     });
