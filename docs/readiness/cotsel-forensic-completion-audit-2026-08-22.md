@@ -1136,19 +1136,36 @@ records.
   group therefore contain a usable credential.
 - The exposed value is not reproduced in this ledger. Rotation is mandatory;
   deleting the logs would destroy audit evidence without revoking the key.
-- A narrow indexer root-sink sanitizer was added locally. It replaces every
+- A narrow indexer root-sink sanitizer is committed on draft PR `#714`. It
+  replaces every
   configured primary/fallback endpoint with its origin plus `[redacted]`
   recursively, including nested error objects and stacks, while preserving
   method, block, error class and other operational fields.
 - New regression tests prove configured tokens and query credentials are absent
   from nested serialized records and from the installed root sink's actual
   stderr output. Indexer typecheck, lint, build and all 28 runnable tests pass;
-  two pre-existing database migration tests remain skipped.
-- This source repair is not yet deployed and the provider credentials are not
-  yet rotated. The MetaMask/Infura dashboard requires an interactive owner login.
-  The issue remains an active blocker until both provider keys are rotated,
-  Secrets Manager is updated without printing values, the fixed image is
-  deployed and fresh provider-error records are proven redacted.
+  two pre-existing database migration tests remain skipped. All hosted PR checks,
+  including DCO, CodeQL, release gates and release-image jobs, pass at the
+  current head; the fix is intentionally not yet merged or deployed.
+- A replacement Alchemy app named
+  `Agroasys Cotsel - Base Sepolia Fallback v2` was created with Base enabled and
+  only the Node API active. The new endpoint independently returned chain ID
+  `0x14a34`; consecutive block reads advanced from `45835267` to `45835268`.
+- The replacement endpoint was written to the existing fallback Secrets Manager
+  object through process stdin, not command arguments or Terraform state. AWS
+  created version `9b95d75d-cfd7-4dae-9cdc-891b34d0089b` as `AWSCURRENT`. A
+  fresh read through Secrets Manager returned `0x14a34` and block `45835288`,
+  and matched the just-created endpoint without printing it.
+- The original Alchemy app remains active as rollback material. No ECS task has
+  been restarted, so the live revision still holds its start-time copy of the
+  previous fallback value. The Infura free plan permits one API key and offers
+  no in-place regeneration; safe primary rotation therefore requires a
+  controlled Alchemy-backed cutover followed by explicit approval to permanently
+  delete and recreate the exposed Infura key.
+- The issue remains an active blocker until PR `#714` is merged and deployed,
+  live consumers are restarted on the new fallback, the old Alchemy credential
+  is revoked, Infura is rotated, and fresh provider-error records are proven
+  redacted.
 
 ### Contract-address correction during the audit
 
