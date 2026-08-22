@@ -1,3 +1,4 @@
+import './secureLogger';
 import type { BlockData, DataHandlerContext } from '@subsquid/evm-processor';
 import { TypeormDatabase } from '@subsquid/typeorm-store';
 import type { Store } from '@subsquid/typeorm-store';
