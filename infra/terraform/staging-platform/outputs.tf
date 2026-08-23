@@ -49,6 +49,21 @@ output "gateway_runtime" {
   }
 }
 
+output "private_runtime" {
+  description = "Private Treasury and Ricardian runtime metadata. Desired count remains zero until database bootstrap evidence is accepted."
+  value = {
+    for name, service in aws_ecs_service.private_runtime : name => {
+      desired_count      = service.desired_count
+      execution_role_arn = aws_iam_role.private_runtime_execution[name].arn
+      service_arn        = service.id
+      service_name       = service.name
+      task_family        = aws_ecs_task_definition.private_runtime[name].family
+      task_revision      = aws_ecs_task_definition.private_runtime[name].revision
+      task_role_arn      = aws_iam_role.private_runtime_task[name].arn
+    }
+  }
+}
+
 output "indexer_migration_runtime" {
   description = "Strict-TLS one-off indexer migration task metadata. Contains no secret values."
   value = {

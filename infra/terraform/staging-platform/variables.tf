@@ -164,6 +164,28 @@ variable "gateway_desired_count" {
   }
 }
 
+variable "ricardian_desired_count" {
+  description = "Number of Cotsel Ricardian tasks to run in staging. Keep zero until the database bootstrap evidence is accepted."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.ricardian_desired_count >= 0 && var.ricardian_desired_count <= 1
+    error_message = "ricardian_desired_count must be 0 or 1 for the staged cutover."
+  }
+}
+
+variable "treasury_desired_count" {
+  description = "Number of Cotsel Treasury tasks to run in staging. Keep zero until the database bootstrap evidence is accepted."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.treasury_desired_count >= 0 && var.treasury_desired_count <= 1
+    error_message = "treasury_desired_count must be 0 or 1 for the staged cutover."
+  }
+}
+
 variable "service_role_permissions_boundary_arn" {
   description = "Permissions boundary required for Cotsel staging ECS task and execution roles."
   type        = string
