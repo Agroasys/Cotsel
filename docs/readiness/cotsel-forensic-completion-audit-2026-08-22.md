@@ -1645,3 +1645,62 @@ Status: **PARTIALLY VERIFIED**.
   RPC fallback/both-unavailable/wrong-chain, indexer lag, and reconciliation
   drift. The lack of a recipient is an ownership decision, not a reason to add
   an unactioned alert topic.
+
+## Batch 16 — Security-control verification
+
+Status: **PARTIALLY VERIFIED**.
+
+- The active AWS task definitions use Secrets Manager references, not plaintext
+  secret values. Current task execution roles have the narrow resource access
+  described in Batch 5; application task roles do not retrieve those injected
+  secrets. The backend-to-gateway and gateway-to-backend credentials remain
+  separate identities.
+- The GCP audit rechecked every user-managed service-account key in both
+  accessible historical projects. Neither default Compute Engine service
+  account has a user-managed key. The backend repository had an unreferenced
+  `GCP_SA_KEY` Actions secret; it was removed on 2026-08-23 after confirming no
+  current source workflow references it. The `GCE_INSTANCE_NAME`,
+  `GCE_INSTANCE_ZONE`, and `GCP_PROJECT_ID` secret names remain as non-secret
+  legacy metadata until the GCP decommission decision.
+- A redacted `gitleaks` scan of current `main` found a fixed, well-known
+  Hardhat private-key fixture and one secret-shaped idempotency fixture. PR
+  #725 removes both without changing production signing behavior; its own scan
+  leaves only the eight false-positive literal JSON property names `key` in the
+  readiness route contract. Historical scan results cannot be erased by a
+  forward-only source correction.
+- GitHub Advanced Security secret scanning and push protection are enabled for
+  Cotsel. GitHub reports this feature unavailable for the backend and
+  Cotsel-Dash repositories; repository-level secret scanning is therefore a
+  **BLOCKED platform control** there, not a passing result.
+- A historically disclosed managed-RPC credential must be rotated at the
+  provider, replaced in AWS Secrets Manager through the approved secret-entry
+  path, and then proved in the live Fargate runtime before the old credential
+  is revoked. Base Sepolia does not remove the need to protect provider
+  credentials or preserve reproducible incident history.
+
+## Batch 17 — Migration parity and residual-dependency audit
+
+Status: **NOT IMPLEMENTED as an AWS cutover; BLOCKED / UNKNOWN for
+decommission**.
+
+- Current DNS confirms only `cotsel.sys.agroasys.com` has migrated to AWS
+  CloudFront and the internal AWS origin. `cotsel.agroasys.com` still resolves
+  directly to the Cotsel GCP VM. `backend.agroasys.com` and
+  `ops.agroasys.com` still resolve directly to the Agroasys GCP VM.
+- The source repositories contain no active current-branch GCP provider URL,
+  Cloud Run, Cloud SQL, Pub/Sub, or service-account configuration outside
+  historical documentation. This does not prove migration: live external DNS
+  and the two GCP Compose estates remain active runtime dependencies.
+- GCP retains authoritative-looking PostgreSQL, Redis, indexer, reconciliation,
+  dashboard, treasury, Ricardian, and backend workloads with local image and
+  working-tree provenance. AWS runs only a fresh controlled staging subset;
+  state parity and cutover integrity are not established.
+- No GCP workload, disk, snapshot, address, firewall rule, or DNS record was
+  disabled or deleted. Their disposition remains **INTENTIONALLY RETAINED FOR
+  ROLLBACK**, not `MIGRATED` or `READY TO DECOMMISSION`.
+- A valid migration decision must select either a controlled data migration or
+  an explicit fresh-staging cutover. It must then freeze GCP writers, export and
+  reconcile state where required, prove AWS acceptance, move dashboard/backend
+  DNS and third-party callbacks, observe the rollback window, rotate residual
+  credentials, and only then produce a decommission packet. No safe shortcut
+  exists while public traffic and current settlement records remain on GCP.
