@@ -1241,6 +1241,47 @@ CloudWatch error records.
   corrected hosted scan passes. Dockerfile text or a successful application
   unit test alone does not close it.
 
+### Release gate passed; first immutable promotion failed and rolled back
+
+- PR [#718](https://github.com/Agroasys/Cotsel/pull/718) merged the fail-closed
+  image gate and runtime hardening as
+  `0ccc11dc7954c28e8a977d46b08f6ebec904af11`. No independent review was
+  submitted; the administrator merge is integration evidence, not independent
+  release acceptance.
+- Main Release Images run
+  [`32632281872`](https://github.com/Agroasys/Cotsel/actions/runs/32632281872)
+  published all eight service images from that exact commit. Every image had
+  zero HIGH/CRITICAL findings with an available fix. The complete reports for
+  Debian-based services retain the visible vendor-unfixed findings described
+  above.
+- ECR tag and manifest inspection matched each published evidence artifact to
+  its repository digest before promotion. Task definition revision `:15`
+  pinned the six active containers to those exact digests, set the gateway
+  build identity to `0ccc11d...`, and added the required indexer chain ID.
+- The first revision `:15` task
+  `f244d2da11b04faabdd89950f22be217` pulled all six intended digests but exited.
+  Redacted CloudWatch startup evidence proved two independent runtime-contract
+  defects: auth, oracle and reconciliation ignored `DB_SSL_MODE` and attempted
+  unencrypted PostgreSQL connections; the indexer GraphQL task override invoked
+  `pnpm`, which the hardened image intentionally removes.
+- Revision `:14` was restored immediately. ECS reached `1/1/0`, target
+  `10.40.136.126:3600` returned `healthy`, and
+  `GET https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1/healthz`
+  returned HTTP `200` at `2026-08-23T10:14:51.957Z`.
+- PR [#719](https://github.com/Agroasys/Cotsel/pull/719) now carries the forward
+  repair. It validates a single Postgres SSL mode contract for every shared
+  runtime/migration pool, applies it to reconciliation reporting and treasury's
+  reconciliation reader, and starts GraphQL through the package's direct Node
+  entrypoint. Invalid legacy values fail closed. Repository-wide typecheck,
+  lint, changed-file formatting and dependency security gates pass; focused
+  configuration/database tests pass. The local protocol-health report remains
+  red for the pre-existing missing chain/address inputs and incomplete
+  historical deployment provenance, which this repair does not conceal.
+- Revision `:15` is failed deployment evidence only. It is not accepted staging
+  runtime truth. A new release digest set and a new task-definition revision
+  must pass task, target-health, startup-log and public-health verification
+  before promotion can be considered successful.
+
 ### Contract-address correction during the audit
 
 An intermediate audit note transcribed the ECS address as `0xB594B33e...`, which
