@@ -1746,3 +1746,78 @@ Status: **PARTIALLY VERIFIED**.
 - No cost optimization was applied. Removing infrastructure before the GCP
   migration and live AWS proof would trade a small visible cost for an
   unbounded recovery risk.
+
+## Batch 20 — Fresh live staging proof
+
+Status: **PARTIALLY VERIFIED**.
+
+- On 2026-08-23, `GET
+https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1/healthz` returned
+  HTTP `200`. The response body SHA-256 was
+  `b828b9220e37f7a09bdcce711e1ba33b1c9d24f5be0481e5757d214b01e98f83`.
+  ECS simultaneously reported gateway revision `:18` at `1/1/0`, rollout
+  `COMPLETED`; backend revision `:5` reported `2/2/0`, rollout `COMPLETED`.
+- A non-printing primary-RPC check retrieved its value from current AWS Secrets
+  Manager reference
+  `/agroasys/staging/cotsel/rpc-base-sepolia-primary`. It returned chain
+  `0x14a34`, current block `0x2bbd341`, and `24,417` runtime-code bytes at the
+  candidate escrow address. This is fresh managed-primary and candidate-code
+  evidence.
+- The prior real-private-Fargate forced-primary-outage result remains evidence
+  that the current selector can choose the independent fallback. It is not a
+  substitute for a new complete end-to-end settlement rehearsal after every
+  remaining remediation.
+- No new signed backend-to-Cotsel request, tampered-signature rejection,
+  persistent replay exercise, or real authenticated callback was performed in
+  this batch. Backend PR #569 is not merged or deployed, and a controlled live
+  settlement fixture has not been identified. Fabricating an HTTP request or a
+  database row would not prove the live boundary.
+- No controlled candidate-contract trade has been observed by the indexer or
+  reconciled by the live AWS reconciliation worker. Gateway mutation and
+  gasless execution remain disabled in staging. Therefore the full settlement
+  path, oracle write, indexer fact, reconciliation fact, and callback evidence
+  remain unproven.
+
+## Batch 21 — GCP decommission readiness
+
+Status: **BLOCKED**.
+
+The GCP VMs remain active public runtime and state stores, and the GCP dashboard
+and backend DNS records still receive direct traffic. AWS has no validated
+treasury, Ricardian, dashboard, or state-migration equivalent. No workload or
+state resource meets the prerequisites for disablement, credential revocation,
+or deletion. The correct current disposition is retained rollback estate, not
+decommission candidate.
+
+## Batch 22 — Second-pass audit
+
+Status: **NOT YET ELIGIBLE**.
+
+An independent second pass must occur after the remediations in #570, #571,
+#724, #725 and #569 have reached their applicable merge/deploy gates, the RPC
+credential has been rotated, alert delivery is routed, and a controlled
+settlement fixture produces current cross-service evidence. Running the same
+checks now would only re-report known, intentionally unclosed gaps.
+
+## Batch 23 — Issue, runbook, and evidence reconciliation
+
+Status: **PARTIALLY VERIFIED**.
+
+This audit document, the deployment provenance packet, and the existing
+runbooks now distinguish verified runtime facts from candidates, migrations,
+and acceptance decisions. Issue #639 remains open and correctly preserves the
+independent acceptance boundary. The final runbook update must wait for the
+actual selected GCP migration method, final alert recipient, rotated provider
+identity, and #639 decision; recording invented values now would create the
+undocumented-knowledge problem this audit is intended to remove.
+
+## Batch 24 — Final completion gate
+
+Status: **NOT COMPLETE**.
+
+The system is more accurately inventoried and several defects are remediated in
+review, but the critical completion questions cannot yet all be answered with
+live evidence. In particular, migration parity, deployed service-auth proofs,
+persistent cross-instance replay proof, callback proof, a post-rotation
+fallback exercise, accepted contract decision, controlled indexer/reconciliation
+event, operator-routed alerts, and a clean second pass remain open.
