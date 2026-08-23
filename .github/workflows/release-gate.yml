@@ -228,6 +228,7 @@ jobs:
           run_check repo-lint pnpm run lint
           run_check repo-format-check pnpm run format:check:full
           run_check repo-typecheck pnpm run typecheck
+          run_check source-file-size pnpm run quality:file-size:check
           run_check release-evidence-binding pnpm run release:evidence:check
 
           if [[ "$fail" -ne 0 ]]; then
