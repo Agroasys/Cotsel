@@ -619,6 +619,41 @@ documents still contain compromised public identities as active-looking role
 assignments. No role, policy, secret, KMS key, task definition, signer, or
 repository setting was changed during this audit batch.
 
+### 2026-08-23 live IAM and task-wiring recheck
+
+Status: **REMEDIATED AND PARTIALLY VERIFIED**. This recheck supersedes the
+revision-specific evidence above. It does not accept the remaining rotation,
+review, or operational-coverage gaps.
+
+- ECS reports `cotsel-staging-gateway:18` as `PRIMARY` and `COMPLETED`, with
+  one desired and one running task. ECS reports `agroasys-staging-api:5` as
+  `PRIMARY` and `COMPLETED`, with two desired and two running tasks.
+- Revision 18 injects 38 named Secrets Manager values through
+  `secrets.valueFrom`. The gateway receives the settlement ingress and callback
+  credentials separately. The backend API receives both Cotsel-direction
+  credentials separately. The rendered task definitions contain no sensitive
+  value in the plaintext environment lists.
+- The Cotsel execution role has an inline allow-list for the 16 exact startup
+  secret ARNs and its Cotsel KMS key. The Cotsel application task role has no
+  inline or attached policy. The backend execution role can read only the
+  backend database and app-config secret ARNs. The backend API task role has no
+  Secrets Manager permission.
+- The Cotsel execution role necessarily reads the startup secrets for all six
+  containers because ECS resolves all container `valueFrom` references with the
+  task execution role. This is a task-level boundary, not a per-container IAM
+  boundary. The current single-task design cannot reduce that scope without
+  separating the containers into independently defined tasks.
+- GitHub secret scanning and push protection are enabled for `Agroasys/Cotsel`.
+  GitHub returns `422 Secret scanning is not available for this repository` for
+  the private backend and Cotsel-Dash repositories. Their repository-supported
+  verified secret scans remain the active control. This limitation is recorded
+  as a GitHub product or organization blocker, not as passing native scanning.
+- Backend PR #569 replaces command-line secret documents in
+  `bootstrap-secrets.sh` with stdin for the local JSON composer and AWS CLI
+  write. It also adds the missing callback nonce validation and negative
+  regression cases. The change is open, independently reviewed pending, and
+  not deployed. It must not be cited as runtime proof before merge and rollout.
+
 ## Batch 6 — Service-to-service authentication audit
 
 Status: **PARTIALLY VERIFIED**. Both live directions use compatible HMAC-SHA256
