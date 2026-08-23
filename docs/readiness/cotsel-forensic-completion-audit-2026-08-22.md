@@ -1183,7 +1183,7 @@ CloudWatch error records.
   revoked, Infura is rotated, the wrong-chain correction is merged and deployed,
   and a controlled outage/recovery exercise proves the final runtime behavior.
 
-### Wrong-chain remediation in progress
+### Wrong-chain remediation merged; deployment withheld
 
 - The shared SDK startup probe now accepts an expected chain ID and rejects a
   responsive endpoint on another chain. Gateway, oracle, reconciliation and
@@ -1198,8 +1198,48 @@ CloudWatch error records.
 - Repository-wide typecheck, lint and formatting pass. SDK tests pass `3/3`.
   Indexer tests pass `30/30` runnable tests; the same two database migration
   tests remain skipped because no migration test database is configured.
-- This remediation is not yet merged or deployed. Live revision 14 still uses
-  the pre-remediation startup selector.
+- PR `#717` was squash-merged as
+  `b8050e1c086d0349db15c2e758728ebb4bceffc5`. CI Release Gate and CodeQL
+  passed for that exact merge commit. The PR required independent review and
+  had no submitted review; its admin merge is repository integration only, not
+  independent release acceptance.
+- Live revision 14 still uses the pre-remediation startup selector. Promotion
+  of the merged image set was withheld after the release-image audit below
+  proved that the image vulnerability job was fail-open.
+
+### Release-image security gate finding and remediation
+
+- The Release Images workflow scanned final images for HIGH and CRITICAL
+  vulnerabilities with Trivy but set `exit-code: '0'`. A green image job
+  therefore proved that a report was produced, not that the image met the
+  vulnerability threshold.
+- The gateway scan artifact for merge commit `b8050e1...` contains 43
+  HIGH/CRITICAL findings, including one CRITICAL finding. The vulnerable paths
+  are predominantly npm and Corepack/pnpm caches that are unnecessary at
+  runtime; Alpine runtime packages also require the available OpenSSL update.
+  Identifiers and counts are recorded here without reproducing provider
+  credentials or other secret material.
+- No image from `b8050e1...` was promoted to ECS after this finding. The current
+  remediation removes package managers, package-manager caches and compiler
+  toolchains from final runtime images, upgrades Alpine security packages,
+  applies available Debian security updates, updates the pinned pnpm build tool
+  to `10.34.4`, retains a complete HIGH/CRITICAL evidence report, and adds a
+  second Trivy gate that returns non-zero for every HIGH/CRITICAL finding with
+  an available fix. Unfixed vendor findings remain visible in the complete
+  report rather than being misrepresented as remediated.
+- Local final-image verification used Trivy `0.68.2`. The rebuilt auth runtime
+  uses Node `20.20.2`, loads its production dependencies, contains none of npm,
+  Corepack, pnpm, Python, Make or g++, and has zero HIGH/CRITICAL findings that
+  Trivy classifies as fixable. Its complete report retains 30 Debian findings:
+  26 HIGH and four CRITICAL, all classified as `affected`, `fix_deferred` or
+  `will_not_fix` rather than fixed. A previously rebuilt gateway runtime had
+  zero HIGH/CRITICAL findings after the substantive cleanup. A repeat gateway
+  build after the final explicit Yarn-directory removal was interrupted first
+  by a local Colima transport EOF and then by a stalled Alpine package download;
+  that incomplete repeat is not counted as passing evidence.
+- This finding is **MISCONFIGURED** until every release image is rebuilt and the
+  corrected hosted scan passes. Dockerfile text or a successful application
+  unit test alone does not close it.
 
 ### Contract-address correction during the audit
 
@@ -1217,7 +1257,8 @@ source/artifact provenance and independent acceptance.
 Provider independence, secret references, Base Sepolia identity, current block
 access, contract reads, address convergence, the restricted Alchemy AWS egress
 path and deployed log containment are VERIFIED. Real startup rotation is also
-VERIFIED. Batch 11 remains incomplete because final credential revocation is
-pending, the wrong-chain correction is not deployed, the indexer lacks runtime
-provider switching, fallback activation is not alarmed and no controlled
-post-remediation outage/recovery exercise exists.
+VERIFIED. Batch 11 remains incomplete because the corrected images have not yet
+passed the now-fail-closed security gate or been deployed, final credential
+revocation is pending, the indexer lacks runtime provider switching, fallback
+activation is not alarmed and no controlled post-remediation outage/recovery
+exercise exists.

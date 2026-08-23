@@ -1,7 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
+RUN corepack enable && corepack prepare pnpm@10.34.4 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches patches
@@ -34,7 +34,9 @@ FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
+RUN apk upgrade --no-cache \
+  && corepack enable \
+  && corepack prepare pnpm@10.34.4 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches patches
@@ -54,7 +56,14 @@ COPY shared-http/package.json shared-http/package.json
 COPY treasury/package.json treasury/package.json
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
-  && pnpm store prune
+  && pnpm store prune \
+  && corepack disable \
+  && rm -rf /root/.cache/node/corepack \
+    /opt/yarn-v* \
+    /usr/local/lib/node_modules/corepack \
+    /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/corepack /usr/local/bin/npm /usr/local/bin/npx \
+    /usr/local/bin/pnpm /usr/local/bin/pnpx
 
 COPY --from=builder /app/ricardian/dist /app/ricardian/dist
 COPY --from=builder /app/ricardian/src/database/schema.sql /app/ricardian/src/database/schema.sql

@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
+RUN corepack enable && corepack prepare pnpm@10.34.4 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches patches
@@ -21,6 +21,7 @@ COPY shared-http/package.json shared-http/package.json
 COPY treasury/package.json treasury/package.json
 
 RUN apt-get update \
+  && apt-get upgrade -y --no-install-recommends \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
@@ -38,7 +39,7 @@ FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
+RUN corepack enable && corepack prepare pnpm@10.34.4 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches patches
@@ -58,11 +59,21 @@ COPY shared-http/package.json shared-http/package.json
 COPY treasury/package.json treasury/package.json
 
 RUN apt-get update \
+  && apt-get upgrade -y --no-install-recommends \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
-  && pnpm store prune
+  && pnpm store prune \
+  && corepack disable \
+  && rm -rf /root/.cache/node/corepack \
+    /opt/yarn-v* \
+    /usr/local/lib/node_modules/corepack \
+    /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/corepack /usr/local/bin/npm /usr/local/bin/npx \
+    /usr/local/bin/pnpm /usr/local/bin/pnpx \
+  && apt-get purge -y --auto-remove python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/shared-auth /app/shared-auth
 COPY --from=builder /app/shared-db /app/shared-db

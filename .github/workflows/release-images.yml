@@ -160,7 +160,7 @@ jobs:
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "Image identity: $REFERENCE"
 
-      - name: Scan the image
+      - name: Record the complete image vulnerability report
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: image
@@ -171,7 +171,20 @@ jobs:
           exit-code: '0'
           hide-progress: true
 
+      - name: Reject fixable high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: image
+          image-ref: ${{ steps.identity.outputs.reference }}
+          format: json
+          output: scan-fixable-image-${{ matrix.service }}.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          hide-progress: true
+
       - name: Record image evidence
+        if: always()
         env:
           DIGEST: ${{ steps.identity.outputs.digest }}
           REFERENCE: ${{ steps.identity.outputs.reference }}
@@ -191,6 +204,7 @@ jobs:
           '
 
       - name: Upload image evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           if-no-files-found: error
@@ -198,4 +212,5 @@ jobs:
           path: |
             release-image-${{ matrix.service }}.json
             scan-image-${{ matrix.service }}.json
+            scan-fixable-image-${{ matrix.service }}.json
           retention-days: 90

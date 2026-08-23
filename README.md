@@ -122,7 +122,7 @@ Active buyer and supplier settlement paths are direct-transfer paths: supplier s
 **Services and runtime**
 
 - Service logic: TypeScript on Node.js `>=20 <23`
-- Package manager: pnpm `10.29.2`
+- Package manager: pnpm `10.34.4`
 - Infrastructure: Docker and Docker Compose
 - Storage: Postgres for indexed, gateway, auth, reconciliation, and treasury operational views
 - Shared runtime support: Redis-backed rate limiting and nonce storage where configured; Redis is not settlement truth
