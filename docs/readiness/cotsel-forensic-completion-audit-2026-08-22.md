@@ -1528,3 +1528,120 @@ Remaining required work:
 4. Replace restart-mediated indexer recovery with a supported in-process
    provider switch or a separately deployed leader-safe indexer service before
    claiming continuous failover or zero-downtime rolling deployment.
+
+## Batch 12 — Base contract deployment truth
+
+Status: **PARTIALLY VERIFIED**.
+
+The candidate deployment is real, source-verified, and currently coherent with
+the deployed AWS configuration. It is not accepted staging truth because the
+independent decision required by issue #639 is still absent.
+
+- The canonical deployment bundle records source commit
+  `1b3c64051e3fa29f8f148b24f5ec2537964407d1`, Base Sepolia chain `84532`,
+  contract `0xB594Cd561F28daBD771f9b358CF2bc731d14EDBd`, transaction
+  `0xb6af9e63a64fbbdc3f3294bf35c749c59b77a09a12b9f8df3dd4b90b3cfad5df`, and
+  deployment block `45807259`.
+- The existing clean-room provenance packet independently rebuilt that source,
+  matched the creation input to the on-chain transaction, retrieved non-empty
+  runtime bytecode, and recorded ABI, creation-bytecode, and runtime-bytecode
+  hashes. It also recorded the explorer source-verification result and live
+  role reads. See
+  `docs/readiness/base-sepolia-deployment-provenance-audit-2026-08-23.md`.
+- A fresh managed-primary-RPC recheck during this forensic pass returned
+  `eth_chainId = 0x14a34`, a successful receipt at block `45807259`, and
+  `24,417` bytes of code at the configured address. Direct reads returned the
+  recorded USDC, oracle, treasury, relayer, three administrator addresses,
+  required approvals `2`, and unpaused state.
+- Issue [#639](https://github.com/Agroasys/Cotsel/issues/639) remains open,
+  labelled `status:backlog` and `priority:P0`. Its acceptance criteria require
+  a reproducible full contract gate, real controlled-flow evidence, address
+  propagation, and an explicit independent Protocol, Security, and Release
+  reviewer decision. No such `ACCEPTED` decision is recorded.
+- The original deployment bundle did not record the deployer's clean worktree
+  or the complete normalized compiler/source/role-attestation manifest at
+  broadcast time. The later clean-room audit proves artifact and transaction
+  equivalence; it cannot retroactively prove that missing contemporaneous
+  operator condition.
+
+**Result:** this is a verified deployment candidate with substantial provenance
+evidence, not an accepted release. No downstream test may describe it as the
+canonical staging contract until #639 receives the required independent
+decision.
+
+## Batch 13 — Contract-address convergence audit
+
+Status: **VERIFIED for the active AWS runtime; PARTIALLY VERIFIED for the full
+migration estate**.
+
+- Current ECS task definition `cotsel-staging-gateway:18` uses
+  `0xB594Cd561F28daBD771f9b358CF2bc731d14EDBd` consistently in gateway, oracle,
+  reconciliation, and indexer configuration. The indexer start block is
+  `45807259`, the deployment block from the candidate bundle.
+- All four services use chain `84532` and the evidenced Base Sepolia USDC
+  address `0x036CbD53842c5426634e7929541eC2318f3dCF7e`. This corrected a prior
+  audit transcription error; it did not mask a live split-brain runtime.
+- The active backend does not own a direct Cotsel escrow address. Its boundary
+  is the signed gateway integration, which is the correct separation for this
+  current deployment.
+- The GCP Cotsel VM remains a separate, active Compose estate. Its deployed
+  configuration and database are not proven to have converged to the AWS
+  candidate contract, so no statement about global address convergence is
+  justified while that workload remains live.
+- A non-active runtime example still contains a historical start-block value.
+  It cannot affect the revision-18 task, but it is documentation/configuration
+  debt and must be corrected or explicitly marked historical before a future
+  operator can rely on it.
+
+## Batch 14 — Indexer and reconciliation audit
+
+Status: **PARTIALLY VERIFIED**.
+
+- The current ECS indexer selects a managed Base Sepolia provider, verifies
+  chain `84532`, resumes from the configured deployment block, and continues
+  advancing at the network head. It is therefore live against the configured
+  candidate address, not merely installed.
+- The reconciliation container runs on its one-minute schedule and completes
+  successfully. Current logs report zero indexed trades and zero detected
+  drifts, which verifies daemon liveness only.
+- Current GCP indexes and reconciliation tables contain historical state, while
+  AWS has no demonstrated controlled candidate-contract trade. No live evidence
+  proves an actual candidate-contract event has been decoded, persisted,
+  replayed idempotently, reconciled against operations, or surfaced as a safe
+  negative drift.
+- The full controlled settlement rehearsal required by #639 remains open. It
+  must use the candidate address, collect chain/log/correlation evidence, prove
+  indexer and reconciliation behavior, and be independently reviewed. Creating
+  synthetic database rows would not close this requirement.
+
+## Batch 15 — Observability and alerting audit
+
+Status: **PARTIALLY VERIFIED**.
+
+- All active Cotsel application log groups retain logs for 30 days. Revision
+  `:18` startup, primary provider selection, and reconciliation cycles are
+  observable through CloudWatch. The active ECS service and ALB target are
+  healthy.
+- The account has no SNS topics in `ap-south-1`, no composite alarms, and no
+  Cotsel-specific CloudWatch metric alarms. The current backend RDS, Redis,
+  SQS, and task-count alarms have zero `AlarmActions`; the only actioned alarms
+  are ECS autoscaling policies. An alarm without a routed operator destination
+  is not an incident-control path.
+- Every configured FIFO primary queue and DLQ currently has zero visible,
+  delayed, and in-flight messages. Primary queues use 300-second visibility,
+  14-day retention, and five receives before their dedicated DLQ. This verifies
+  configuration and idle state, not a current-revision delivery/redrive
+  rehearsal.
+- During this audit, the backend worker was corrected in PR
+  [#571](https://github.com/Agroasys/agroasys-backend/pull/571): an unsupported
+  critical SQS job no longer gets deleted after receipt. It now fails delivery
+  so the existing retry and DLQ policy can retain evidence. The change is
+  tested and awaiting hosted checks and independent review; it is not deployed
+  evidence yet.
+- Required remediation remains: define an approved staging incident recipient
+  or paging integration, create the topic/subscription and targeted Cotsel
+  metric alarms through IaC, validate delivery with a controlled test, and add
+  explicit observability for callback authentication failures, nonce replays,
+  RPC fallback/both-unavailable/wrong-chain, indexer lag, and reconciliation
+  drift. The lack of a recipient is an ownership decision, not a reason to add
+  an unactioned alert topic.
