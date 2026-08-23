@@ -38,8 +38,17 @@ locals {
     export PGHOST='${local.postgres_host}'
     export PGPORT='5432'
     export PGSSLMODE='verify-full'
+    export PGSSLROOTCERT='/tmp/aws-rds-global-bundle.pem'
     export PGUSER="$${MASTER_USERNAME}"
     export PGPASSWORD="$${MASTER_PASSWORD}"
+
+    # The bootstrap image is the upstream PostgreSQL image, so it does not
+    # contain AWS RDS roots. Fetch the same pinned public bundle used by the
+    # Cotsel runtime images before any database connection is attempted.
+    umask 077
+    trap 'rm -f "$${PGSSLROOTCERT}"' EXIT HUP INT TERM
+    wget --quiet -O "$${PGSSLROOTCERT}" 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem'
+    printf '%s  %s\n' 'e5bb2084ccf45087bda1c9bffdea0eb15ee67f0b91646106e466714f9de3c7e3' "$${PGSSLROOTCERT}" | sha256sum -c -s
 
     psql --dbname postgres --set ON_ERROR_STOP=1 <<SQL
     SELECT format('CREATE ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS', 'cotsel_ricardian_migrator')

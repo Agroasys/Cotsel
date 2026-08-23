@@ -14,6 +14,7 @@ const dockerfiles = [
 
 const bundleUrl = 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem';
 const bundleChecksum = 'sha256:e5bb2084ccf45087bda1c9bffdea0eb15ee67f0b91646106e466714f9de3c7e3';
+const bundleDigest = bundleChecksum.slice('sha256:'.length);
 const bundlePath = '/app/aws-rds-global-bundle.pem';
 
 for (const dockerfile of dockerfiles) {
@@ -33,3 +34,13 @@ for (const dockerfile of dockerfiles) {
     assert.doesNotMatch(runtimeSource, /NODE_TLS_REJECT_UNAUTHORIZED/);
   });
 }
+
+test('the database bootstrap verifies the pinned AWS RDS bundle before psql connects', async () => {
+  const source = await readFile('infra/terraform/staging-platform/database-bootstrap.tf', 'utf8');
+
+  assert.ok(source.includes(bundleUrl));
+  assert.ok(source.includes(bundleDigest));
+  assert.match(source, /export PGSSLMODE='verify-full'/);
+  assert.match(source, /export PGSSLROOTCERT='\/tmp\/aws-rds-global-bundle\.pem'/);
+  assert.match(source, /sha256sum -c -s/);
+});
