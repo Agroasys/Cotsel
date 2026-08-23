@@ -1775,11 +1775,24 @@ https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1/healthz` returned
   that the current selector can choose the independent fallback. It is not a
   substitute for a new complete end-to-end settlement rehearsal after every
   remaining remediation.
-- No new signed backend-to-Cotsel request, tampered-signature rejection,
-  persistent replay exercise, or real authenticated callback was performed in
-  this batch. Backend PR #569 is not merged or deployed, and a controlled live
-  settlement fixture has not been identified. Fabricating an HTTP request or a
-  database row would not prove the live boundary.
+- At `2026-08-23T14:44:34Z`, the repository's existing read-only backend
+  gateway smoke ran using the current ECS-injected credential source without
+  printing its credential. It returned HTTP `200` for the signed gateway read.
+  A second controlled probe against the same non-mutating gateway capability
+  route returned HTTP `200` for a valid signature, HTTP `401` with
+  `AUTH_INVALID_SIGNATURE` after signature tampering, HTTP `200` for the first
+  nonce use, and HTTP `401` with `AUTH_NONCE_REPLAY` for the exact replay.
+- At the same time, a deliberately invalid empty-object callback body reached
+  backend DTO validation with HTTP `400` after valid callback authentication.
+  A tampered callback signature returned HTTP `401`; the first use of a fresh
+  callback nonce again reached validation with HTTP `400`; and its replay
+  returned HTTP `401`. The empty-object probe created no callback record and
+  did not claim callback-delivery success. It proves the deployed backend
+  callback authentication and shared nonce boundary only.
+- Backend PR #569 is not merged or deployed. A controlled live settlement
+  fixture has not been identified. The remaining real-callback proof must be
+  emitted by Cotsel's callback sender during a controlled fixture, rather than
+  by a direct probe.
 - No controlled candidate-contract trade has been observed by the indexer or
   reconciled by the live AWS reconciliation worker. Gateway mutation and
   gasless execution remain disabled in staging. Therefore the full settlement
@@ -1825,7 +1838,9 @@ Status: **NOT COMPLETE**.
 
 The system is more accurately inventoried and several defects are remediated in
 review, but the critical completion questions cannot yet all be answered with
-live evidence. In particular, migration parity, deployed service-auth proofs,
-persistent cross-instance replay proof, callback proof, a post-rotation
-fallback exercise, accepted contract decision, controlled indexer/reconciliation
-event, operator-routed alerts, and a clean second pass remain open.
+live evidence. In particular, migration parity, persistent cross-instance
+replay proof, a real Cotsel-sender callback, a post-rotation fallback exercise,
+accepted contract decision, controlled indexer/reconciliation event,
+operator-routed alerts, and a clean second pass remain open. The current
+non-mutating ingress and callback authentication probes reduce, but do not
+eliminate, those completion gaps.
