@@ -8,6 +8,8 @@ locals {
     "indexer-pipeline",
     "oracle",
     "reconciliation",
+    "ricardian",
+    "treasury",
   ])
 
   runtime_images = {

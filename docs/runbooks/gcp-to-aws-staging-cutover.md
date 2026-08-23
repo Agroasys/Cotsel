@@ -59,6 +59,23 @@ Complete these conditions before a data or DNS cutover.
 
 ## Phase 1: establish AWS runtime parity
 
+### Stage 1: create the private runtime definitions
+
+Deploy the Treasury and Ricardian ECS definitions with desired count `0`.
+Keep both services stopped until database roles, secret versions, and source-data
+evidence are ready. This prevents a new service from creating empty AWS state
+or accepting requests before the controlled import.
+
+Each service must have a separate ECS execution role. Each role can read only
+its own runtime secret, migration secret, and gateway authentication secret.
+The service task role must not read Secrets Manager. The task must use private
+subnets, the internal-service security group, and the data-client security
+group.
+
+Use private service discovery only after the controlled start gate. Do not add
+the Treasury or Ricardian URL to the gateway before both services have passed
+their database, authentication, and health checks.
+
 1. Build immutable images from reviewed commits.
 2. Record each image digest and source commit in the release evidence packet.
 3. Deploy the missing AWS workloads behind private networking.
