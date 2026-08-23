@@ -194,17 +194,17 @@ The remaining Batch 1 blockers are external to these code corrections:
 
 ### Live workload and data inventory
 
-| Surface       | Current AWS truth                                                                                                                                                                                                   | Classification                                                                          |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Backend ECS   | Cluster `agroasys-staging`: API desired/running `2/2`; five workers each `1/1`; all private Fargate tasks use digest `sha256:f46b8c...`                                                                             | VERIFIED                                                                                |
-| Cotsel ECS    | Cluster `cotsel-staging`: one private Fargate task at task definition `:13` with gateway, auth, oracle, indexer pipeline, indexer GraphQL, and reconciliation containers                                            | VERIFIED as runtime existence                                                           |
-| Target health | Both backend API targets and the single Cotsel gateway target are healthy                                                                                                                                           | VERIFIED for load-balancer health only                                                  |
-| PostgreSQL    | `agroasys-staging`, PostgreSQL 16.13, private, encrypted, Multi-AZ, seven-day backups, deletion protection enabled                                                                                                  | VERIFIED                                                                                |
-| Redis         | `agroasys-staging`, two nodes, Multi-AZ/failover, TLS and at-rest encryption enabled, no Redis auth token, restricted to the data-client security group                                                             | PARTIALLY VERIFIED; runtime TLS and replay behavior remain to be tested                 |
-| Queues        | Three FIFO queues plus FIFO DLQs for compliance callbacks, reconciliation, and settlement callbacks; 300-second visibility, five receives before DLQ, 14-day retention, SQS-managed encryption; all currently empty | VERIFIED as queue configuration                                                         |
-| EventBridge   | No custom rule was returned on the default event bus                                                                                                                                                                | VERIFIED                                                                                |
-| S3 documents  | KMS encrypted, versioned, public access blocked, access logging enabled, but currently contains zero objects                                                                                                        | VERIFIED; migration parity remains unproven                                             |
-| ECR           | Backend repositories exist in both `eu-north-1` and `ap-south-1`; eight KMS-encrypted Cotsel repositories exist in `ap-south-1`; immutable tags and scan-on-push are enabled                                        | VERIFIED; the old regional backend repository requires a consumer/decommission decision |
+| Surface       | Current AWS truth                                                                                                                                                                                                                         | Classification                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Backend ECS   | Cluster `agroasys-staging`: API desired/running `2/2`; five workers each `1/1`; all private Fargate tasks use digest `sha256:f46b8c...`                                                                                                   | VERIFIED                                                                                |
+| Cotsel ECS    | Cluster `cotsel-staging`: one private Fargate task at task definition `:18` with gateway, auth, oracle, indexer pipeline, indexer GraphQL, and reconciliation containers; running task `a0ab82de...` is healthy and the service is steady | VERIFIED as current runtime existence                                                   |
+| Target health | Both backend API targets and the single Cotsel gateway target are healthy                                                                                                                                                                 | VERIFIED for load-balancer health only                                                  |
+| PostgreSQL    | `agroasys-staging`, PostgreSQL 16.13, private, encrypted, Multi-AZ, seven-day backups, deletion protection enabled                                                                                                                        | VERIFIED                                                                                |
+| Redis         | `agroasys-staging`, two nodes, Multi-AZ/failover, TLS and at-rest encryption enabled, no Redis auth token, restricted to the data-client security group                                                                                   | PARTIALLY VERIFIED; runtime TLS and replay behavior remain to be tested                 |
+| Queues        | Three FIFO queues plus FIFO DLQs for compliance callbacks, reconciliation, and settlement callbacks; 300-second visibility, five receives before DLQ, 14-day retention, SQS-managed encryption; all currently empty                       | VERIFIED as queue configuration                                                         |
+| EventBridge   | No custom rule was returned on the default event bus                                                                                                                                                                                      | VERIFIED                                                                                |
+| S3 documents  | KMS encrypted, versioned, public access blocked, access logging enabled, but currently contains zero objects                                                                                                                              | VERIFIED; migration parity remains unproven                                             |
+| ECR           | Backend repositories exist in both `eu-north-1` and `ap-south-1`; eight KMS-encrypted Cotsel repositories exist in `ap-south-1`; immutable tags and scan-on-push are enabled                                                              | VERIFIED; the old regional backend repository requires a consumer/decommission decision |
 
 ### Network and edge findings
 
@@ -226,9 +226,8 @@ The remaining Batch 1 blockers are external to these code corrections:
 
 ### Runtime and IaC drift
 
-A live, read-only Terraform plan was run from Cotsel `main` against the current
-state and account. It returned exit code `2` with `0 to add, 2 to change, 0 to
-destroy`. Applying it would:
+A historical read-only Terraform plan from Cotsel `main` returned exit code `2`
+with `0 to add, 2 to change, 0 to destroy`. Applying it would:
 
 1. change the ECS service from live task definition `:13` back to tracked task
    definition `:4`; and
@@ -236,8 +235,13 @@ destroy`. Applying it would:
    reconciliation images, logs, RPC secrets, database secrets, oracle signer,
    and service-auth secrets.
 
-This proves the live release was installed outside the current declarative root
-and that the current canonical Terraform apply is unsafe. No apply was run.
+This proved that the live release had been installed outside the declarative
+root and that applying unmodified `main` was unsafe. PR #724 now reconstructs
+revision 18. Its reviewed local plan contains four additions, two changes, one
+immutable task-definition replacement, and no delete-only resource. The
+rendered six-container configuration matches revision 18 after removing
+AWS-added defaults. It remains unapplied pending independent review, merge, and
+the protected saved-plan workflow. No local apply was run.
 
 ### Security and operational control gaps
 
@@ -254,19 +258,21 @@ and that the current canonical Terraform apply is unsafe. No apply was run.
 - The live gateway has mutations and gasless execution disabled. That is a
   fail-closed posture, but it means the full settlement-execution path has not
   been demonstrated by the deployed configuration.
-- Four Cotsel service containers still disable TLS certificate verification for
-  PostgreSQL; this remains a live remediation item.
+- Revision 18 now uses strict PostgreSQL certificate verification for every
+  database consumer and no longer sets `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+- Every revision 18 image is pinned to an exact digest from successful main
+  Release Images run `32637944870`.
 
 ### Batch 2 conclusion
 
-The AWS footprint and active staging architecture are now identified, but the
-batch is PARTIALLY VERIFIED rather than complete. The decisive blockers are the
-unsafe Terraform/runtime drift, exposed RPC credentials awaiting provider
-rotation, missing operator notification paths, disabled database certificate
-verification, and incomplete provenance for several Cotsel images. IAM policy
-semantics and secret-reader boundaries are deferred to the dedicated Batch 5
-audit. No AWS resource was created, modified, disabled, or deleted in this
-batch.
+The AWS footprint and active staging architecture are identified, but the batch
+is PARTIALLY VERIFIED rather than complete. Revision 18 fixes database TLS and
+pins every image to a successful main release. The remaining blockers are PR
+#724's independent review and protected apply, disclosed RPC credentials awaiting
+provider-side rotation, missing operator notification paths, absent account-level
+security services, and unresolved GCP migration parity. IAM policy semantics and
+secret-reader boundaries are covered by Batch 5. No AWS resource was created,
+modified, disabled, or deleted during this refreshed inventory.
 
 ## Batch 3 — GCP inventory and migration disposition
 
