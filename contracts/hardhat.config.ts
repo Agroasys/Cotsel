@@ -23,10 +23,51 @@ const pk1 = optionalVar('PRIVATE_KEY');
 const pk2 = optionalVar('PRIVATE_KEY2');
 const deployerAccounts = [pk1, pk2].filter(Boolean) as string[];
 
-const baseSepoliaRpcUrl = optionalVar('BASE_SEPOLIA_RPC_URL') ?? 'https://sepolia.base.org';
-const baseMainnetRpcUrl = optionalVar('BASE_MAINNET_RPC_URL') ?? 'https://mainnet.base.org';
-const etherscanApiKey =
-  optionalVar('ETHERSCAN_API_KEY') ?? optionalVar('BASESCAN_API_KEY') ?? 'PLACEHOLDER';
+function requestedNetwork(): string | undefined {
+  const networkFlag = process.argv.indexOf('--network');
+  return networkFlag >= 0 ? process.argv[networkFlag + 1] : undefined;
+}
+
+function managedRpcUrl(variable: string, networkAliases: string[]): string | undefined {
+  const value = optionalVar(variable);
+  if (!value && networkAliases.includes(requestedNetwork() ?? '')) {
+    throw new Error(
+      `${variable} is required for ${requestedNetwork()}. ` +
+        'Canonical Base network commands must not silently use a public RPC endpoint.',
+    );
+  }
+  return value;
+}
+
+const baseSepoliaRpcUrl = managedRpcUrl('BASE_SEPOLIA_RPC_URL', ['baseSepolia', 'base-sepolia']);
+const baseMainnetRpcUrl = managedRpcUrl('BASE_MAINNET_RPC_URL', ['base', 'base-mainnet']);
+const etherscanApiKey = optionalVar('ETHERSCAN_API_KEY') ?? optionalVar('BASESCAN_API_KEY') ?? '';
+
+const baseNetworks: HardhatUserConfig['networks'] = {};
+if (baseSepoliaRpcUrl) {
+  baseNetworks.baseSepolia = {
+    url: baseSepoliaRpcUrl,
+    chainId: 84532,
+    accounts: deployerAccounts,
+  };
+  baseNetworks['base-sepolia'] = {
+    url: baseSepoliaRpcUrl,
+    chainId: 84532,
+    accounts: deployerAccounts,
+  };
+}
+if (baseMainnetRpcUrl) {
+  baseNetworks.base = {
+    url: baseMainnetRpcUrl,
+    chainId: 8453,
+    accounts: deployerAccounts,
+  };
+  baseNetworks['base-mainnet'] = {
+    url: baseMainnetRpcUrl,
+    chainId: 8453,
+    accounts: deployerAccounts,
+  };
+}
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -50,26 +91,7 @@ const config: HardhatUserConfig = {
       blockGasLimit: 120_000_000,
       hardfork: 'cancun',
     },
-    baseSepolia: {
-      url: baseSepoliaRpcUrl,
-      chainId: 84532,
-      accounts: deployerAccounts,
-    },
-    'base-sepolia': {
-      url: baseSepoliaRpcUrl,
-      chainId: 84532,
-      accounts: deployerAccounts,
-    },
-    base: {
-      url: baseMainnetRpcUrl,
-      chainId: 8453,
-      accounts: deployerAccounts,
-    },
-    'base-mainnet': {
-      url: baseMainnetRpcUrl,
-      chainId: 8453,
-      accounts: deployerAccounts,
-    },
+    ...baseNetworks,
   },
   etherscan: {
     apiKey: etherscanApiKey,

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { getAddress, isAddress } from 'ethers';
+import path from 'node:path';
 
 export type BaseDeploymentNetworkName = 'base-sepolia' | 'base-mainnet';
 
@@ -249,6 +250,11 @@ export function loadBaseDeploymentConfig(
   if (!verify) {
     throw new Error('DEPLOY_VERIFY must remain true for the canonical Base deployment path');
   }
+  if (!optionalEnv('BASESCAN_API_KEY', env) && !optionalEnv('ETHERSCAN_API_KEY', env)) {
+    throw new Error(
+      'BASESCAN_API_KEY or ETHERSCAN_API_KEY is required before the canonical deployment broadcasts',
+    );
+  }
 
   const confirmations = parsePositiveIntEnv(
     'DEPLOY_CONFIRMATIONS',
@@ -268,6 +274,7 @@ export function loadBaseDeploymentConfig(
     confirmations,
     verify,
     evidenceOutDir:
-      optionalEnv('DEPLOY_EVIDENCE_OUT_DIR', env) ?? `reports/deploy/${target.runtimeKey}`,
+      optionalEnv('DEPLOY_EVIDENCE_OUT_DIR', env) ??
+      path.resolve(__dirname, '..', '..', 'reports', 'deploy', target.runtimeKey),
   };
 }

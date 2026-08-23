@@ -3,6 +3,25 @@
 Status: in progress. This document records current evidence. It does not accept
 the staging release or close Cotsel issue #639.
 
+Continuation baseline — 2026-08-23:
+
+- current Cotsel `main`: `015497fc451756c70ff8292b247b068b7464b3a7`;
+- current live ECS task definition: `cotsel-staging-gateway:18`;
+- current six-container release is pinned to exact ECR digests produced by main
+  Release Images run `32637944870`;
+- database TLS verification is enabled with the AWS RDS CA bundle;
+- the indexer validates chain ID and block availability and has an ECS container
+  restart policy with a 60-second restart-attempt period;
+- the managed primary/fallback RPC exercise selected the independent fallback
+  successfully under a forced-primary outage; and
+- PR #724 now contains the reviewed Terraform reconstruction required to
+  reconcile live revision 18 with IaC. It is not applied or accepted while the
+  PR remains under independent review.
+
+These later facts supersede only time-sensitive runtime identifiers below. The
+earlier findings remain preserved as the audit trail of what was discovered and
+why remediation was required.
+
 ## Batch 0 — reconstruction ledger
 
 ### Repositories and change surfaces
@@ -114,14 +133,40 @@ evidence, and an unperformed GCP migration disposition audit.
 
 ### Batch 1 conclusion
 
-Repository and runtime configuration are not currently reproducible from the
-canonical source paths. The highest-risk defects are exposed live RPC
-credentials and Terraform that can roll the live six-container task back to a
-pre-contract single-container definition. Contract evidence is split across two
-paths, so canonical health/release tooling still evaluates the historical
-deployment. No remediation has been applied yet; provider credential rotation
-is the only immediate security remediation and requires the signed-in provider
-consoles.
+Status: **REMEDIATED AND PARTIALLY VERIFIED**.
+
+The following repository defects were corrected in PR #724:
+
+- Terraform reconstructs the exact six-container revision 18 configuration,
+  image digests, secret references, strict database TLS, deployment circuit
+  breaker, and indexer restart policy.
+- The current deployment evidence replaces the historical bundle at the
+  canonical `contracts/reports/deploy/base-sepolia` path; no duplicate root
+  report is introduced.
+- A clean-room build from source commit `1b3c640...` reproduced the ABI and
+  creation-bytecode hashes. The resulting deployment input exactly matched the
+  live transaction, and the live runtime bytecode hash matched the bundle.
+- The deployment evidence default is now anchored to the contracts workspace,
+  independent of the caller's working directory.
+- Canonical Base network commands fail closed when the managed RPC input is
+  absent, and the deployment config requires an explorer API key before any
+  broadcast.
+- `.env.runtime.example` no longer supplies a stale indexer block, insecure
+  downstream-auth default, or secret-like Oracle example credentials.
+
+The remaining Batch 1 blockers are external to these code corrections:
+
+- PR #724 requires independent review, merge, protected Terraform plan/apply,
+  and post-apply drift verification.
+- Issue #639 still requires an explicit independent `ACCEPTED` or `REJECTED`
+  decision; verified provenance is not self-acceptance. The original deploy
+  script did not record the current `worktreeClean` and full attestation fields,
+  so the current protocol-health validator correctly retains a legacy evidence
+  failure instead of treating the later audit as proof of the operator's
+  broadcast-time working-tree state.
+- The Infura credential disclosed before this audit still requires provider-side
+  rotation and revocation. The Alchemy secret was changed on 2026-08-23, but its
+  provider-side revocation must still be evidenced.
 
 ## Batch 2 — AWS inventory and IaC drift
 
@@ -1339,3 +1384,77 @@ repair has not yet passed hosted checks and live verified-TLS promotion, final
 credential revocation is pending, the indexer lacks runtime provider switching,
 fallback activation is not alarmed and no controlled post-remediation
 outage/recovery exercise exists.
+
+### 2026-08-23 live promotion and forced-failover addendum
+
+Status: **REMEDIATED AND PARTIALLY VERIFIED**. The certificate-trust and
+provider-selection corrections are now live, and the independent fallback was
+exercised from the real private Fargate network. This closes the live TLS and
+controlled startup-failover evidence gaps. It does not close credential
+rotation, alerting, runtime IaC drift, or the indexer's lack of in-process
+provider switching.
+
+- PR [#720](https://github.com/Agroasys/Cotsel/pull/720) merged the pinned AWS
+  RDS global trust bundle as commit
+  `15a2afd6509e1a980ff38b0b583ea9665246b5a3`. Main CI, CodeQL and Release
+  Images completed successfully for that exact merge commit.
+- The first strict-TLS candidate, task definition revision `:17`, started all
+  services and passed target health, but the indexer later exited after Infura
+  returned JSON-RPC `-32001 resource not found` for a valid recent block.
+  Independent later retrieval of that block proved a transient provider
+  data-plane failure. The essential indexer exit stopped the bundled six-
+  container task, so the service was rolled back to revision `:14`.
+- PR [#721](https://github.com/Agroasys/Cotsel/pull/721) requires the indexer
+  startup selector to verify `eth_chainId`, `eth_blockNumber` and an
+  `eth_getBlockByNumber` read before accepting a provider. It includes the exact
+  `-32001` regression and wrong-chain/fail-closed coverage. Every hosted check
+  passed on head `3d8274407f1f9ab1f5e4986747365c72c55f0d57`; the PR was
+  squash-merged as `015497fc451756c70ff8292b247b068b7464b3a7`. The admin merge
+  is repository integration evidence, not independent release acceptance.
+- Main Release Images run
+  [`32637944870`](https://github.com/Agroasys/Cotsel/actions/runs/32637944870)
+  published and scanned the exact merge images. The active six runtime images
+  are pinned by digest in ECS revision `cotsel-staging-gateway:18`; the gateway
+  records source commit `015497f...`.
+- Revision `:18` contains 38 Secrets Manager references, no plaintext
+  secret-like environment values, no `NODE_TLS_REJECT_UNAUTHORIZED` override,
+  and `verify-full` for every PostgreSQL client surface. The indexer pipeline
+  has its ECS container restart policy enabled with a 60-second restart-attempt
+  period, so a later non-zero provider exit can restart and rerun provider
+  selection without destroying the entire task.
+- The single-task deployment was intentionally serialized with
+  `maximumPercent=100` and `minimumHealthyPercent=0`. This avoided a second
+  Subsquid processor concurrently updating the same status table; a prior
+  overlapping rollout had failed with the processor's foreign-writer assertion.
+  The resulting brief staging interruption is recorded and is not
+  misrepresented as zero-downtime availability.
+- Active task `a0ab82de082f4ab4be1b337d19494841` reached `HEALTHY` and remained
+  running beyond the earlier delayed-failure window. ECS reported revision
+  `:18` deployment `COMPLETED`, desired/running/pending `1/1/0`, target
+  `10.40.131.9:3600` healthy, and the public health route returned HTTP `200`.
+  The exact current task streams contained no new error/warning match at the
+  sustained check.
+- The indexer selected the primary redacted host
+  `https://base-sepolia.infura.io`, confirmed chain `84532`, resumed from block
+  `45859201`, caught up and continued advancing at the current head.
+- A one-off Fargate proof used the exact deployed indexer digest in the same
+  private subnets and security groups. It supplied an intentionally unreachable
+  non-secret primary and received only the AWS-stored fallback secret. The
+  shipped selector returned a redacted structured event identifying the
+  Alchemy host as selected, with two endpoints checked, reachability true and
+  chain ID `84532`; the proof exited `0`. The temporary smoke task definition
+  was then deregistered.
+
+Remaining required work:
+
+1. Merge and apply the independently reviewed PR #724 Terraform reconstruction,
+   then prove the resulting plan and runtime are semantically equal to revision 18.
+2. Rotate/revoke the historically exposed Infura credential and retire the old
+   Alchemy credential after the rollback decision. Secret existence is not
+   rotation evidence.
+3. Add actionable, routed primary-failure/fallback/both-unavailable/wrong-chain
+   signals. The redacted structured selection event alone is evidence, not an
+   alarm.
+4. Replace restart-mediated indexer recovery with a supported in-process
+   provider switch or a separately deployed leader-safe indexer service before
+   claiming continuous failover or zero-downtime rolling deployment.

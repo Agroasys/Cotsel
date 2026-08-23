@@ -3,7 +3,7 @@
  */
 import { expect } from 'chai';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import {
   getBaseDeploymentTarget,
   loadBaseDeploymentConfig,
@@ -17,6 +17,7 @@ describe('Base deployment config', function () {
     DEPLOY_ADMINS:
       '0x4444444444444444444444444444444444444444,0x5555555555555555555555555555555555555555,0x6666666666666666666666666666666666666666',
     DEPLOY_REQUIRED_APPROVALS: '2',
+    BASESCAN_API_KEY: 'test-only-key',
   };
 
   it('keeps the Hardhat and Foundry contract sources identical', function () {
@@ -44,6 +45,8 @@ describe('Base deployment config', function () {
     expect(config.requiredApprovals).to.equal(2);
     expect(config.admins).to.have.length(3);
     expect(config.confirmations).to.equal(1);
+    expect(isAbsolute(config.evidenceOutDir)).to.equal(true);
+    expect(config.evidenceOutDir).to.equal(resolve(__dirname, '../reports/deploy/base-sepolia'));
   });
 
   it('rejects unofficial USDC addresses for Base runtime deployments', async function () {
@@ -135,5 +138,20 @@ describe('Base deployment config', function () {
         DEPLOY_VERIFY: 'false',
       }),
     ).to.throw(/DEPLOY_VERIFY must remain true/);
+  });
+
+  it('requires an explorer API key before deployment', async function () {
+    const { BASESCAN_API_KEY: _removed, ...withoutExplorerKey } = validEnv;
+    expect(() => loadBaseDeploymentConfig('base-sepolia', 84532, withoutExplorerKey)).to.throw(
+      /BASESCAN_API_KEY or ETHERSCAN_API_KEY is required/,
+    );
+  });
+
+  it('preserves an explicit evidence output directory', async function () {
+    const config = loadBaseDeploymentConfig('base-sepolia', 84532, {
+      ...validEnv,
+      DEPLOY_EVIDENCE_OUT_DIR: '/tmp/cotsel-deployment-evidence',
+    });
+    expect(config.evidenceOutDir).to.equal('/tmp/cotsel-deployment-evidence');
   });
 });
