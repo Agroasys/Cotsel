@@ -15,6 +15,7 @@ export interface IndexerConfig {
   gatewayUrl: string | null;
   rpcEndpoint: string;
   rpcFallbackEndpoints: string[];
+  chainId: number;
   startBlock: number;
   rateLimit: number;
   rpcCapacity: number | null;
@@ -92,6 +93,7 @@ export function loadConfig(): IndexerConfig {
       gatewayUrl: optionalEnv('GATEWAY_URL'),
       rpcEndpoint: validateEnv('RPC_ENDPOINT'),
       rpcFallbackEndpoints: parseUrlList(process.env.RPC_FALLBACK_ENDPOINTS),
+      chainId: validateEnvNumber('CHAIN_ID'),
       startBlock: validateEnvNumber('START_BLOCK'),
       rateLimit: validateEnvNumber('RATE_LIMIT'),
       rpcCapacity: optionalEnvNumber('RPC_CAPACITY'),

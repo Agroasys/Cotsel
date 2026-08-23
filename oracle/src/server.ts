@@ -73,7 +73,9 @@ async function bootstrap() {
       rpcUrl: redactRpcUrlForLogs(config.rpcUrl),
       fallbackRpcUrls: config.rpcFallbackUrls.map(redactRpcUrlForLogs),
     });
-    await assertRpcEndpointsReachable([config.rpcUrl, ...config.rpcFallbackUrls]);
+    await assertRpcEndpointsReachable([config.rpcUrl, ...config.rpcFallbackUrls], {
+      expectedChainId: config.chainId,
+    });
 
     const sdkClient = new SDKClient(
       config.rpcUrl,

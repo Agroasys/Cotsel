@@ -1065,11 +1065,12 @@ this audit batch.
 Status: **PARTIALLY VERIFIED; CRITICAL CREDENTIAL ROTATION IN PROGRESS**. Both
 managed providers independently returned Base Sepolia chain ID `0x14a34`, an
 advancing/current block and the same deployed runtime bytecode for the evidenced
-contract. ECS revision 13 injects the two Secrets Manager references into the
+contract. ECS revision 14 injects the two Secrets Manager references into the
 actual chain consumers. Real indexer startup selected the fallback after the
-primary failed. Runtime failover and wrong-chain handling remain incomplete,
-and an authenticated primary RPC URL was found in historical CloudWatch error
-records.
+primary failed. A follow-up correction now rejects wrong-chain and unavailable
+endpoints at startup, but it is not deployed yet. Runtime failover remains
+incomplete, and an authenticated primary RPC URL was found in historical
+CloudWatch error records.
 
 ### Provider and secret truth
 
@@ -1136,7 +1137,8 @@ records.
   group therefore contain a usable credential.
 - The exposed value is not reproduced in this ledger. Rotation is mandatory;
   deleting the logs would destroy audit evidence without revoking the key.
-- A narrow indexer root-sink sanitizer is committed on draft PR `#714`. It
+- A narrow indexer root-sink sanitizer was merged through PR `#714` at merge
+  commit `17269f8e95018b806a82f0cc75ae2eed034c3a01`. It
   replaces every
   configured primary/fallback endpoint with its origin plus `[redacted]`
   recursively, including nested error objects and stacks, while preserving
@@ -1145,8 +1147,9 @@ records.
   from nested serialized records and from the installed root sink's actual
   stderr output. Indexer typecheck, lint, build and all 28 runnable tests pass;
   two pre-existing database migration tests remain skipped. All hosted PR checks,
-  including DCO, CodeQL, release gates and release-image jobs, pass at the
-  current head; the fix is intentionally not yet merged or deployed.
+  including DCO, CodeQL, release gates and release-image jobs, passed at the
+  merged head. Release Images run `32624904509` and CI Release Gate run
+  `32624904637` both succeeded for the exact merge commit.
 - A replacement Alchemy app named
   `Agroasys Cotsel - Base Sepolia Fallback v2` was created with Base enabled and
   only the Node API active. The new endpoint independently returned chain ID
@@ -1156,16 +1159,47 @@ records.
   created version `9b95d75d-cfd7-4dae-9cdc-891b34d0089b` as `AWSCURRENT`. A
   fresh read through Secrets Manager returned `0x14a34` and block `45835288`,
   and matched the just-created endpoint without printing it.
-- The original Alchemy app remains active as rollback material. No ECS task has
-  been restarted, so the live revision still holds its start-time copy of the
-  previous fallback value. The Infura free plan permits one API key and offers
+- The replacement Alchemy app now allows only the two Cotsel staging NAT egress
+  addresses. An isolated Fargate probe ran in the same private subnets and
+  security groups as the service. It exited `0`, returned chain ID `0x14a34`,
+  and observed blocks advance from `45850896` to `45850898`. The probe emitted
+  no endpoint or credential.
+- ECS revision `cotsel-staging-gateway:14` pins the indexer images to the exact
+  release digests for merge commit `17269f8e95018b806a82f0cc75ae2eed034c3a01`.
+  Running task `a6829b7869444015829fb60492724d47` is healthy, its ALB target is
+  healthy, and the public gateway health endpoint returns HTTP `200`. Fresh
+  indexer logs show advancing Base Sepolia heads and redact authenticated RPC
+  paths.
+- The ECS deployment controller now uses `minimumHealthyPercent=0` and
+  `maximumPercent=100`. This prevents two Subsquid processors from updating the
+  same status table during a single-task deployment. This manual runtime change
+  must be reconciled into IaC before the audit can accept drift remediation.
+- The original Alchemy app remains active as rollback material. The Infura free
+  plan permits one API key and offers
   no in-place regeneration; safe primary rotation therefore requires a
   controlled Alchemy-backed cutover followed by explicit approval to permanently
   delete and recreate the exposed Infura key.
-- The issue remains an active blocker until PR `#714` is merged and deployed,
-  live consumers are restarted on the new fallback, the old Alchemy credential
-  is revoked, Infura is rotated, and fresh provider-error records are proven
-  redacted.
+- The issue remains an active blocker until the old Alchemy credential is
+  revoked, Infura is rotated, the wrong-chain correction is merged and deployed,
+  and a controlled outage/recovery exercise proves the final runtime behavior.
+
+### Wrong-chain remediation in progress
+
+- The shared SDK startup probe now accepts an expected chain ID and rejects a
+  responsive endpoint on another chain. Gateway, oracle, reconciliation and
+  treasury pass their configured chain ID into that probe.
+- The indexer now requires `CHAIN_ID`, selects only an endpoint that returns the
+  configured chain, and fails closed when no endpoint passes. It emits
+  `rpc.primary_selected` or `rpc.fallback_selected` without credential-bearing
+  URL paths.
+- New SDK tests prove correct-chain acceptance, wrong-chain rejection with URL
+  redaction, and correct-chain fallback after a wrong-chain primary. New indexer
+  tests prove fallback selection and fail-closed behavior.
+- Repository-wide typecheck, lint and formatting pass. SDK tests pass `3/3`.
+  Indexer tests pass `30/30` runnable tests; the same two database migration
+  tests remain skipped because no migration test database is configured.
+- This remediation is not yet merged or deployed. Live revision 14 still uses
+  the pre-remediation startup selector.
 
 ### Contract-address correction during the audit
 
@@ -1181,8 +1215,9 @@ source/artifact provenance and independent acceptance.
 ### Batch 11 conclusion
 
 Provider independence, secret references, Base Sepolia identity, current block
-access, contract reads and address convergence are VERIFIED. Real startup
-rotation is also VERIFIED. Batch 11 remains incomplete because credential
-rotation/deployment containment is active, wrong-chain startup validation is
-fail-open, the indexer lacks runtime provider switching, fallback activation is
-not alarmed and no controlled post-remediation outage/recovery exercise exists.
+access, contract reads, address convergence, the restricted Alchemy AWS egress
+path and deployed log containment are VERIFIED. Real startup rotation is also
+VERIFIED. Batch 11 remains incomplete because final credential revocation is
+pending, the wrong-chain correction is not deployed, the indexer lacks runtime
+provider switching, fallback activation is not alarmed and no controlled
+post-remediation outage/recovery exercise exists.

@@ -9,6 +9,11 @@
  */
 const DEFAULT_RPC_TIMEOUT_MS = 3000;
 
+export interface RpcReachabilityOptions {
+  timeoutMs?: number;
+  expectedChainId?: number;
+}
+
 interface JsonRpcSuccess {
   jsonrpc: string;
   result?: string;
@@ -47,8 +52,11 @@ function getErrorMessage(error: unknown): string {
 
 export async function assertRpcEndpointReachable(
   rpcUrl: string,
-  timeoutMs: number = DEFAULT_RPC_TIMEOUT_MS,
+  options: number | RpcReachabilityOptions = {},
 ): Promise<void> {
+  const timeoutMs =
+    typeof options === 'number' ? options : (options.timeoutMs ?? DEFAULT_RPC_TIMEOUT_MS);
+  const expectedChainId = typeof options === 'number' ? undefined : options.expectedChainId;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -92,6 +100,19 @@ export async function assertRpcEndpointReachable(
     if (!payload.result) {
       throw new Error('Missing eth_chainId result');
     }
+
+    let actualChainId: bigint;
+    try {
+      actualChainId = BigInt(payload.result);
+    } catch {
+      throw new Error('Invalid eth_chainId result');
+    }
+
+    if (expectedChainId !== undefined && actualChainId !== BigInt(expectedChainId)) {
+      throw new Error(
+        `Wrong chain: expected ${expectedChainId}, received ${actualChainId.toString()}`,
+      );
+    }
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(formatRpcFailureMessage(rpcUrl, `Timeout after ${timeoutMs}ms`));
@@ -111,7 +132,7 @@ export async function assertRpcEndpointReachable(
  */
 export async function assertRpcEndpointsReachable(
   rpcUrls: string[],
-  timeoutMs: number = DEFAULT_RPC_TIMEOUT_MS,
+  options: number | RpcReachabilityOptions = {},
 ): Promise<void> {
   if (rpcUrls.length === 1) {
     console.warn(
@@ -125,7 +146,7 @@ export async function assertRpcEndpointsReachable(
 
   for (const rpcUrl of rpcUrls) {
     try {
-      await assertRpcEndpointReachable(rpcUrl, timeoutMs);
+      await assertRpcEndpointReachable(rpcUrl, options);
     } catch (error) {
       failures.push(error instanceof Error ? error.message : String(error));
     }
@@ -137,7 +158,7 @@ export async function assertRpcEndpointsReachable(
 }
 
 export interface ReachableRpcEndpointSelection {
-  /** The endpoint to use: the first reachable one, else the first configured one. */
+  /** The first configured endpoint that passed validation. */
   url: string;
   /** Whether the selected endpoint actually answered the probe. */
   reachable: boolean;
@@ -148,13 +169,12 @@ export interface ReachableRpcEndpointSelection {
 /**
  * Pick the first reachable endpoint from an ordered (priority) list. Used by
  * consumers that take a single endpoint (e.g. the Subsquid indexer) and cannot
- * use ethers FallbackProvider. Never throws: if none answer it returns the
- * primary so the caller's own retry/recovery can take over rather than
- * crash-looping.
+ * use ethers FallbackProvider. Returns the first endpoint that passes the
+ * configured reachability and chain checks.
  */
 export async function selectReachableRpcEndpoint(
   rpcUrls: string[],
-  timeoutMs: number = DEFAULT_RPC_TIMEOUT_MS,
+  options: number | RpcReachabilityOptions = {},
 ): Promise<ReachableRpcEndpointSelection> {
   if (rpcUrls.length === 0) {
     throw new Error('selectReachableRpcEndpoint requires at least one RPC endpoint');
@@ -164,7 +184,7 @@ export async function selectReachableRpcEndpoint(
   for (const url of rpcUrls) {
     checked += 1;
     try {
-      await assertRpcEndpointReachable(url, timeoutMs);
+      await assertRpcEndpointReachable(url, options);
       return { url, reachable: true, checked };
     } catch {
       // try the next endpoint in priority order
