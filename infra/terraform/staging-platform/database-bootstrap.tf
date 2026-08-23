@@ -149,7 +149,6 @@ data "aws_iam_policy_document" "database_bootstrap_execution" {
     resources = [
       local.data_kms_key_arn,
       aws_kms_key.platform.arn,
-      local.postgres_master_secret_kms_arn,
     ]
   }
 }

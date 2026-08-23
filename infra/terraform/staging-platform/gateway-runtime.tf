@@ -30,8 +30,10 @@ resource "aws_ecs_service" "gateway" {
   launch_type     = "FARGATE"
   # Keep the authenticated settlement boundary available while ECS replaces a
   # task. A single desired task with a 0% minimum allows an avoidable outage.
-  deployment_maximum_percent         = 200
-  deployment_minimum_healthy_percent = 100
+  # Keep the bundled gateway rollout serialized. The task also runs the
+  # indexer pipeline, so overlapping revisions can process the same stream.
+  deployment_maximum_percent         = 100
+  deployment_minimum_healthy_percent = 0
   health_check_grace_period_seconds  = 120
 
   deployment_circuit_breaker {
