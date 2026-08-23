@@ -76,6 +76,34 @@ Use private service discovery only after the controlled start gate. Do not add
 the Treasury or Ricardian URL to the gateway before both services have passed
 their database, authentication, and health checks.
 
+### Stage 2: write initial secrets and bootstrap database access
+
+Do not enter secret values in Terraform, task definitions, issue comments, or
+chat. Use `scripts/bootstrap-aws-treasury-ricardian-secrets.sh` from a
+non-traced administrator shell. The script creates the first version only. It
+refuses to replace an existing current version.
+
+AWS cannot atomically write all six secret versions. If a write fails after a
+previous write succeeds, inspect each version stage. Do not replace an existing
+version. Use `COTSEL_ALLOW_PARTIAL_RECOVERY=true` only to create missing initial
+versions after the metadata review confirms that no service has started.
+
+1. Confirm the six target secrets have no `AWSCURRENT` version.
+2. Run the script with `AWS_REGION=ap-south-1`.
+3. Record only the secret ARNs and creation times.
+4. Apply the reviewed database-bootstrap task definition.
+5. Run the exact reviewed task without command or environment overrides.
+6. Verify the task exit code is `0` and inspect the redacted log stream.
+7. Query the new databases with migration and runtime credentials through the
+   approved private path.
+8. Prove runtime roles cannot create schemas or read the other service database.
+
+The bootstrap task reads the RDS master secret and four service database
+secrets. It creates only `cotsel_ricardian` and `cotsel_treasury`, their
+migration roles, their runtime roles, and least-privilege database grants. The
+task does not write secret versions and does not start a service. Do not run it
+with command overrides.
+
 1. Build immutable images from reviewed commits.
 2. Record each image digest and source commit in the release evidence packet.
 3. Deploy the missing AWS workloads behind private networking.

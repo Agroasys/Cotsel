@@ -74,6 +74,15 @@ output "indexer_migration_runtime" {
   }
 }
 
+output "database_bootstrap_runtime" {
+  description = "One-off Cotsel database bootstrap task metadata. Run only through the controlled cutover procedure."
+  value = {
+    execution_role_arn = aws_iam_role.database_bootstrap_execution.arn
+    task_family        = aws_ecs_task_definition.database_bootstrap.family
+    task_revision      = aws_ecs_task_definition.database_bootstrap.revision
+  }
+}
+
 output "runtime_dependencies" {
   description = "Non-secret managed dependency coordinates consumed by the runtime root."
   value = {
