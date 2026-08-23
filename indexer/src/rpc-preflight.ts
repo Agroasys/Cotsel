@@ -9,6 +9,15 @@
  */
 const DEFAULT_RPC_TIMEOUT_MS = 3000;
 
+interface JsonRpcResponse {
+  jsonrpc?: string;
+  result?: unknown;
+  error?: {
+    code?: number;
+    message?: string;
+  };
+}
+
 export function redactRpcUrlForLogs(rpcUrl: string): string {
   try {
     const parsed = new URL(rpcUrl);
@@ -18,11 +27,12 @@ export function redactRpcUrlForLogs(rpcUrl: string): string {
   }
 }
 
-async function isRpcEndpointReachable(
+async function callRpc(
   rpcUrl: string,
-  expectedChainId: number,
+  method: string,
+  params: unknown[],
   timeoutMs: number,
-): Promise<boolean> {
+): Promise<unknown> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -30,28 +40,69 @@ async function isRpcEndpointReachable(
     const response = await fetch(rpcUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }),
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
       signal: controller.signal,
     });
 
     if (!response.ok) {
-      return false;
+      throw new Error(`HTTP ${response.status}`);
     }
 
-    const payload = (await response.json()) as { jsonrpc?: string; result?: string };
-    if (payload?.jsonrpc !== '2.0' || typeof payload.result !== 'string') {
-      return false;
+    const payload = (await response.json()) as JsonRpcResponse;
+    if (payload?.jsonrpc !== '2.0') {
+      throw new Error('Invalid JSON-RPC response');
     }
 
-    try {
-      return BigInt(payload.result) === BigInt(expectedChainId);
-    } catch {
-      return false;
+    if (payload.error) {
+      throw new Error(
+        `RPC error ${payload.error.code ?? 'UNKNOWN'}: ${payload.error.message ?? 'Unknown error'}`,
+      );
     }
-  } catch {
-    return false;
+
+    if (!Object.prototype.hasOwnProperty.call(payload, 'result')) {
+      throw new Error('Missing JSON-RPC result');
+    }
+
+    return payload.result;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function isRpcEndpointReachable(
+  rpcUrl: string,
+  expectedChainId: number,
+  timeoutMs: number,
+): Promise<boolean> {
+  try {
+    const chainIdResult = await callRpc(rpcUrl, 'eth_chainId', [], timeoutMs);
+    if (typeof chainIdResult !== 'string' || BigInt(chainIdResult) !== BigInt(expectedChainId)) {
+      return false;
+    }
+
+    const blockNumberResult = await callRpc(rpcUrl, 'eth_blockNumber', [], timeoutMs);
+    if (typeof blockNumberResult !== 'string') {
+      return false;
+    }
+
+    const head = BigInt(blockNumberResult);
+    const probeHeight = head > 0n ? head - 1n : head;
+    const probeBlockNumber = `0x${probeHeight.toString(16)}`;
+    const blockResult = await callRpc(
+      rpcUrl,
+      'eth_getBlockByNumber',
+      [probeBlockNumber, false],
+      timeoutMs,
+    );
+
+    if (!blockResult || typeof blockResult !== 'object') {
+      return false;
+    }
+
+    const returnedNumber = (blockResult as { number?: unknown }).number;
+    return typeof returnedNumber === 'string' && BigInt(returnedNumber) === probeHeight;
+  } catch {
+    return false;
   }
 }
 
@@ -63,7 +114,8 @@ export interface ReachableRpcEndpointSelection {
 
 /**
  * Pick the first endpoint from an ordered priority list that returns the
- * expected chain ID. Fail closed when none passes validation.
+ * expected chain ID and serves a representative block. Fail closed when none
+ * passes validation.
  */
 export async function selectReachableRpcEndpoint(
   rpcUrls: string[],
