@@ -1757,6 +1757,14 @@ https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1/healthz` returned
   `b828b9220e37f7a09bdcce711e1ba33b1c9d24f5be0481e5757d214b01e98f83`.
   ECS simultaneously reported gateway revision `:18` at `1/1/0`, rollout
   `COMPLETED`; backend revision `:5` reported `2/2/0`, rollout `COMPLETED`.
+- A follow-up check at `2026-08-23T14:40:10Z` again returned HTTP `200` with
+  body SHA-256
+  `9de18c000dd7a04e56b28b4e2f6da9b11c62bd5a1490cb8ab486990f07800b66`.
+  The body is not treated as a fixed response contract. At that time the
+  gateway remained `1/1/0` on task definition `cotsel-staging-gateway:18`,
+  the API remained `2/2/0` on `agroasys-staging-api:5`, and the settlement
+  worker was `1/1/0` on `agroasys-staging-settlement-worker:5`; all three
+  primary rollouts reported `COMPLETED`.
 - A non-printing primary-RPC check retrieved its value from current AWS Secrets
   Manager reference
   `/agroasys/staging/cotsel/rpc-base-sepolia-primary`. It returned chain
