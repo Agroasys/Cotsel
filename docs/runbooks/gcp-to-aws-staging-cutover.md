@@ -37,6 +37,22 @@ Treat the GCP database records as authoritative until the cutover gate accepts
 their AWS replacement. Do not infer migration completion from running ECS
 tasks, DNS records, or matching resource names.
 
+## Observed migration baseline
+
+The following redacted, aggregate-only inventory was collected on 2026-08-23
+from the live GCP and AWS private runtimes. `estimated rows` is PostgreSQL's
+`pg_stat_user_tables.n_live_tup` total, so it is a comparison signal rather
+than a substitute for the required export/restore checksum gate.
+
+| Domain           | GCP source                                                                                                                                                             | AWS target                                                                                                                                             | Disposition                                                                      |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Cotsel gateway   | `agroasys_gateway`: 13 public tables, approximately 90 estimated rows                                                                                                  | `cotsel_gateway`: 12 public tables, approximately 21 estimated rows                                                                                    | **Not parity-proven.** Schema and aggregate totals differ.                       |
+| Agroasys backend | `agroasys_backend`: 87 public tables, approximately 2,042 estimated rows; sampled tables include 72 users, 49 business accounts, 25 ledger transactions, and 23 orders | `agroasys`: 98 public tables, approximately 118 estimated rows; sampled tables include 1 user, 0 business accounts, 0 ledger transactions, and 1 order | **Not parity-proven.** The AWS database is not a migrated copy of the GCP state. |
+
+This baseline is a hard stop for GCP writer disablement, DNS cutover, and
+decommission. Perform the Phase 2 export/restore and full parity procedure
+before changing that disposition.
+
 ## Preconditions
 
 Complete these conditions before a data or DNS cutover.
