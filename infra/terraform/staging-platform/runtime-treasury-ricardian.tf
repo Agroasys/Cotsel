@@ -231,9 +231,9 @@ resource "aws_ecs_service" "private_runtime" {
   }
 
   service_registries {
-    registry_arn   = aws_service_discovery_service.runtime[each.key].arn
-    container_name = each.key
-    container_port = each.value.container_port
+    # runtime uses an A record. ECS derives the task address from awsvpc mode;
+    # container_name and container_port are valid only for SRV registrations.
+    registry_arn = aws_service_discovery_service.runtime[each.key].arn
   }
 
   depends_on = [
