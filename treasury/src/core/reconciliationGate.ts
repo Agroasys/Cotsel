@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { resolvePostgresSslConfig } from '@agroasys/shared-db';
 import { config } from '../config';
 import { ReconciliationGateStatus } from '../types';
 
@@ -69,6 +70,7 @@ export class ReconciliationGateService {
             database: config.reconciliationDb.name,
             user: config.reconciliationDb.user,
             password: config.reconciliationDb.password,
+            ssl: resolvePostgresSslConfig(config.reconciliationDb.sslMode),
             max: 2,
           })
         : null);

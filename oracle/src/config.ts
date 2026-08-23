@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { ethers } from 'ethers';
 import { parseAllowedOrigins } from '@agroasys/shared-edge';
+import { parsePostgresSslMode } from '@agroasys/shared-db';
 import { resolveSettlementRuntime } from '@agroasys/sdk';
 import { OracleConfig } from './types';
 
@@ -188,6 +189,7 @@ export function loadConfig(): OracleConfig {
       dbName: validateEnv('DB_NAME'),
       dbUser: validateEnv('DB_USER'),
       dbPassword: validateEnv('DB_PASSWORD'),
+      dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
       dbMigrationUser,
       dbMigrationPassword,
 

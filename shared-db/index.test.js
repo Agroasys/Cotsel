@@ -5,9 +5,20 @@ const assert = require('node:assert/strict');
 
 const {
   buildSessionOptions,
+  parsePostgresSslMode,
   resolveMigrationCredentials,
   resolvePostgresSslConfig,
 } = require('./index');
+
+test('parsePostgresSslMode accepts supported modes and rejects ambiguous values', () => {
+  assert.equal(parsePostgresSslMode(undefined), 'disable');
+  assert.equal(parsePostgresSslMode(' require '), 'require');
+  assert.equal(parsePostgresSslMode('verify-full'), 'verify-full');
+  assert.throws(
+    () => parsePostgresSslMode('no-verify'),
+    /DB_SSL_MODE must be one of disable, require, or verify-full/,
+  );
+});
 
 test('buildSessionOptions pins service session settings', () => {
   const options = buildSessionOptions({

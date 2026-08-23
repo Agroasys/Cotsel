@@ -1,3 +1,5 @@
+import type { PostgresSslMode } from '@agroasys/shared-db';
+
 export interface OracleConfig {
   nodeEnv: string;
   // server
@@ -34,6 +36,7 @@ export interface OracleConfig {
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbSslMode: PostgresSslMode;
   dbMigrationUser?: string;
   dbMigrationPassword?: string;
 

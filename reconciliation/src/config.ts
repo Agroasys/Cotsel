@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
+import { parsePostgresSslMode, type PostgresSslMode } from '@agroasys/shared-db';
 import { normalizeAddressOrThrow } from './utils/address';
 
 dotenv.config();
@@ -15,6 +16,7 @@ export interface ReconciliationConfig {
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbSslMode: PostgresSslMode;
   dbMigrationUser?: string;
   dbMigrationPassword?: string;
   rpcUrl: string;
@@ -161,6 +163,7 @@ export function loadConfig(): ReconciliationConfig {
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
+    dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
     dbMigrationUser: optionalEnv('DB_MIGRATION_USER'),
     dbMigrationPassword: optionalEnv('DB_MIGRATION_PASSWORD'),
     rpcUrl: runtime.rpcUrl,

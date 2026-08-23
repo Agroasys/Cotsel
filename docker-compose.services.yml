@@ -215,7 +215,7 @@ services:
         condition: service_completed_successfully
       indexer-migrate:
         condition: service_completed_successfully
-    command: ['pnpm', 'exec', 'squid-graphql-server', '--no-squid-status']
+    command: ['node', 'node_modules/@subsquid/graphql-server/bin/run.js', '--no-squid-status']
     ports:
       - '${INDEXER_GRAPHQL_PORT:-4350}:${INDEXER_GRAPHQL_PORT:-4350}'
     healthcheck:

@@ -6,6 +6,7 @@ const BASE_ENV: Record<string, string> = {
   DB_NAME: 'agroasys_ricardian',
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
+  DB_SSL_MODE: 'disable',
   DB_MIGRATION_USER: '',
   DB_MIGRATION_PASSWORD: '',
   AUTH_ENABLED: 'false',
@@ -103,6 +104,19 @@ describe('ricardian nonce store config', () => {
     withEnv({ DB_MIGRATION_USER: 'ricardian_migrator', DB_MIGRATION_PASSWORD: undefined }, () => {
       expect(() => loadConfigModule()).toThrow(
         'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
+      );
+    });
+  });
+
+  test('Postgres SSL mode is explicit and validated', () => {
+    withEnv({ DB_SSL_MODE: 'require' }, () => {
+      const { loadConfig } = loadConfigModule();
+      expect(loadConfig().dbSslMode).toBe('require');
+    });
+
+    withEnv({ DB_SSL_MODE: 'no-verify' }, () => {
+      expect(() => loadConfigModule()).toThrow(
+        'DB_SSL_MODE must be one of disable, require, or verify-full',
       );
     });
   });

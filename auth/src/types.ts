@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { PostgresSslMode } from '@agroasys/shared-db';
+
 export type UserRole = 'buyer' | 'supplier' | 'admin' | 'oracle';
 export type AdminActorType = 'service_auth' | 'system';
 export const OPERATOR_CAPABILITIES = [
@@ -120,6 +122,7 @@ export interface AuthConfig {
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbSslMode: PostgresSslMode;
   dbMigrationUser?: string;
   dbMigrationPassword?: string;
   sessionTtlSeconds: number;

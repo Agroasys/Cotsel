@@ -4,6 +4,7 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { parseAllowedOrigins } from '@agroasys/shared-edge';
+import { parsePostgresSslMode } from '@agroasys/shared-db';
 import { AuthConfig } from './types';
 
 dotenv.config();
@@ -115,6 +116,7 @@ export function loadConfig(): AuthConfig {
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
+    dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
     dbMigrationUser,
     dbMigrationPassword,
     sessionTtlSeconds: envNumber('SESSION_TTL_SECONDS', 3600),

@@ -36,6 +36,14 @@ function resolveMigrationCredentials(config) {
   };
 }
 
+function parsePostgresSslMode(value, fallback = 'disable') {
+  const mode = value?.trim() || fallback;
+  if (mode === 'disable' || mode === 'require' || mode === 'verify-full') {
+    return mode;
+  }
+  throw new Error('DB_SSL_MODE must be one of disable, require, or verify-full');
+}
+
 function resolvePostgresSslConfig(mode = 'disable') {
   switch (mode) {
     case 'disable':
@@ -84,6 +92,7 @@ function createServicePool({
 
 module.exports = {
   buildSessionOptions,
+  parsePostgresSslMode,
   resolvePostgresSslConfig,
   resolveMigrationCredentials,
   createServicePool,

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createServicePool } from '@agroasys/shared-db';
+import { createServicePool, parsePostgresSslMode } from '@agroasys/shared-db';
 import { Pool } from 'pg';
 import { projectTreasuryAccountingState } from '@agroasys/sdk';
 import {
@@ -298,6 +298,7 @@ async function main(): Promise<void> {
   const dbPassword = requiredEnv('DB_PASSWORD');
   const reconciliationDbName = requiredEnv('DB_NAME');
   const treasuryDbName = optionalEnv('TREASURY_DB_NAME');
+  const dbSslMode = parsePostgresSslMode(process.env.DB_SSL_MODE);
 
   const reconciliationPool = createServicePool({
     serviceName: RECONCILIATION_SERVICE_NAME,
@@ -308,6 +309,7 @@ async function main(): Promise<void> {
     database: reconciliationDbName,
     user: dbUser,
     password: dbPassword,
+    sslMode: dbSslMode,
     max: 2,
     idleTimeoutMillis: 5000,
     connectionTimeoutMillis: 5000,
@@ -335,6 +337,7 @@ async function main(): Promise<void> {
       const treasuryDbPort = numberEnv('TREASURY_DB_PORT', dbPort);
       const treasuryDbUser = optionalEnv('TREASURY_DB_USER') || dbUser;
       const treasuryDbPassword = optionalEnv('TREASURY_DB_PASSWORD') || dbPassword;
+      const treasuryDbSslMode = parsePostgresSslMode(process.env.TREASURY_DB_SSL_MODE, dbSslMode);
 
       const activeTreasuryPool = createServicePool({
         serviceName: TREASURY_SERVICE_NAME,
@@ -345,6 +348,7 @@ async function main(): Promise<void> {
         database: treasuryDbName,
         user: treasuryDbUser,
         password: treasuryDbPassword,
+        sslMode: treasuryDbSslMode,
         max: 2,
         idleTimeoutMillis: 5000,
         connectionTimeoutMillis: 5000,
