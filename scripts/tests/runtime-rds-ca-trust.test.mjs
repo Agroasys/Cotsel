@@ -44,3 +44,19 @@ test('the database bootstrap verifies the pinned AWS RDS bundle before psql conn
   assert.match(source, /export PGSSLROOTCERT='\/tmp\/aws-rds-global-bundle\.pem'/);
   assert.match(source, /sha256sum -c -s/);
 });
+
+test('the database bootstrap sets default privileges as each migration role', async () => {
+  const source = await readFile('infra/terraform/staging-platform/database-bootstrap.tf', 'utf8');
+
+  assert.doesNotMatch(source, /ALTER DEFAULT PRIVILEGES FOR ROLE/);
+  assert.match(source, /export PGUSER="\$\$\{RICARDIAN_MIGRATION_USERNAME\}"/);
+  assert.match(source, /export PGUSER="\$\$\{TREASURY_MIGRATION_USERNAME\}"/);
+  assert.match(
+    source,
+    /ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cotsel_ricardian_runtime/,
+  );
+  assert.match(
+    source,
+    /ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cotsel_treasury_runtime/,
+  );
+});
