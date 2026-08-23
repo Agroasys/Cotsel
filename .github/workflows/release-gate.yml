@@ -415,6 +415,7 @@ jobs:
           run_check programmability-governance scripts/tests/programmability-governance-guard.sh
           run_check base-mainnet-governance scripts/tests/base-mainnet-governance-guard.sh
           run_check data-classification-guard node scripts/tests/data-classification-guard.mjs
+          run_check runtime-rds-ca-trust node --test scripts/tests/runtime-rds-ca-trust.test.mjs
           run_check monitoring-baseline-validator node scripts/monitoring-baseline-validate.mjs --runbook docs/runbooks/monitoring-alerting-baseline.md --out ci-reports/monitoring-baseline-validation.json
 
           if [[ "$fail" -ne 0 ]]; then
