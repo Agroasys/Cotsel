@@ -53,6 +53,24 @@ This baseline is a hard stop for GCP writer disablement, DNS cutover, and
 decommission. Perform the Phase 2 export/restore and full parity procedure
 before changing that disposition.
 
+### Legacy GCP administration control
+
+On 2026-08-23 the audit found public `0.0.0.0/0` SSH and RDP allow rules in
+both legacy GCP projects. This was an active exposure, so it was remediated
+before proceeding with the ordinary audit sequence:
+
+- `allow-iap-ssh` allows TCP 22 only from Google IAP
+  (`35.235.240.0/20`) at priority 900;
+- `deny-public-admin-ports` denies TCP 22 and TCP 3389 from
+  `0.0.0.0/0` at priority 1000; and
+- Google IAP SSH remained usable while direct public SSH became unreachable
+  for both `server-1` and `cotsel-staging`; HTTP remained reachable.
+
+These are manual, temporary GCP controls, not a substitute for AWS migration.
+They must remain recorded in the migration ledger until the two legacy projects
+are decommissioned or their firewall configuration is brought under approved
+infrastructure-as-code management.
+
 ## Preconditions
 
 Complete these conditions before a data or DNS cutover.
