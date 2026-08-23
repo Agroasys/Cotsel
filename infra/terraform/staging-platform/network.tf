@@ -19,11 +19,14 @@ data "terraform_remote_state" "data" {
 }
 
 locals {
-  vpc_id                 = data.terraform_remote_state.network.outputs.vpc_id
-  private_subnet_ids     = data.terraform_remote_state.network.outputs.private_subnet_ids
-  data_client_sg_id      = data.terraform_remote_state.data.outputs.client_security_group_id
-  postgres_endpoint      = data.terraform_remote_state.data.outputs.postgres_endpoint
-  redis_primary_endpoint = data.terraform_remote_state.data.outputs.redis_primary_endpoint
+  vpc_id                         = data.terraform_remote_state.network.outputs.vpc_id
+  private_subnet_ids             = data.terraform_remote_state.network.outputs.private_subnet_ids
+  data_client_sg_id              = data.terraform_remote_state.data.outputs.client_security_group_id
+  data_kms_key_arn               = data.terraform_remote_state.data.outputs.kms_key_arn
+  postgres_master_secret_arn     = data.terraform_remote_state.data.outputs.master_secret_arn
+  postgres_master_secret_kms_arn = data.terraform_remote_state.data.outputs.master_secret_kms_key_arn
+  postgres_endpoint              = data.terraform_remote_state.data.outputs.postgres_endpoint
+  redis_primary_endpoint         = data.terraform_remote_state.data.outputs.redis_primary_endpoint
 }
 
 resource "aws_security_group" "gateway" {
