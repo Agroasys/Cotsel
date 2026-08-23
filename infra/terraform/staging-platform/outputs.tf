@@ -36,15 +36,26 @@ output "gateway_edge" {
 }
 
 output "gateway_runtime" {
-  description = "Gateway ECS runtime metadata. Contains no secret values."
+  description = "Bundled Cotsel ECS runtime metadata. Contains no secret values."
   value = {
     execution_role_arn = aws_iam_role.gateway_execution.arn
+    image_digests      = { for service, image in data.aws_ecr_image.release : service => image.image_digest }
     image_tag          = var.gateway_image_tag
     service_arn        = aws_ecs_service.gateway.id
     service_name       = aws_ecs_service.gateway.name
     task_family        = aws_ecs_task_definition.gateway.family
     task_revision      = aws_ecs_task_definition.gateway.revision
     task_role_arn      = aws_iam_role.gateway_task.arn
+  }
+}
+
+output "indexer_migration_runtime" {
+  description = "Strict-TLS one-off indexer migration task metadata. Contains no secret values."
+  value = {
+    execution_role_arn = aws_iam_role.indexer_migration_execution.arn
+    image_digest       = data.aws_ecr_image.release["indexer-pipeline"].image_digest
+    task_family        = aws_ecs_task_definition.indexer_migration.family
+    task_revision      = aws_ecs_task_definition.indexer_migration.revision
   }
 }
 

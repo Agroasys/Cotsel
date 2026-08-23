@@ -13,9 +13,13 @@ existing Agroasys staging boundary. It does not deploy a release candidate.
 - Public ingress: `cotsel.sys.agroasys.com` terminates at CloudFront. CloudFront
   reaches the private ALB through a VPC origin; the ALB remains internal and
   admits only the AWS-managed CloudFront origin prefix list.
-- Runtime promotion: intentionally absent until signed image digests, database
-  migration identity, configuration digest, Base Sepolia RPC pair, managed
-  signer, and the contract record from #639 are pinned.
+- Runtime: one private Fargate task bundles the gateway, auth, indexer pipeline,
+  indexer GraphQL server, oracle, and reconciliation worker. Terraform resolves
+  the reviewed commit tag for each service to its ECR digest before it creates a
+  task definition.
+- Deployment: the service uses a serialized `100/0` rollout because two bundled
+  indexer processors cannot safely write the same status table concurrently.
+  This causes a short staging interruption during task replacement.
 
 ## Secret handling
 
@@ -28,14 +32,27 @@ Task E uses these two identities:
 - `/agroasys/staging/cotsel/gateway-settlement-ingress`
 - `/agroasys/staging/cotsel/gateway-settlement-callback`
 
-The first stores the Agroasys-to-Cotsel API key set used to render
+The first stores the Agroasys-to-Cotsel API key set used to populate
 `GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON`. The second stores the distinct
 Cotsel-to-Agroasys callback key and secret. They must not share a credential.
 
 Database runtime and migration identities are also separate for every database
 owner. Each service-auth boundary and each managed signer has its own secret
-identity. A task role receives only the ARNs required for that service; the
-runtime delivery root enforces that mapping when task definitions are added.
+identity. ECS injects the selected secret values before container startup, so
+the task execution role can read only the required secret ARNs. The application
+task role does not receive `secretsmanager:GetSecretValue`.
+
+The oracle signer secret already exists at
+`/agroasys/staging/base-sepolia/wallet-oracle`. Terraform reads its identity but
+does not read or manage its value.
+
+The indexer schema migration runs as a separate one-off ECS task. Its execution
+role can pull only the indexer image, write only the indexer log group, and read
+only the indexer migration credential. The long-running runtime role cannot read
+that migration credential.
+
+Follow [`docs/runbooks/staging-indexer-migration.md`](../../../docs/runbooks/staging-indexer-migration.md)
+to run and verify the one-off migration without exposing credentials.
 
 ## Validation
 
@@ -61,6 +78,13 @@ Do not apply this root until all of the following are true:
 5. The reviewed plan contains no replacement or deletion of shared Agroasys resources.
 6. The monthly AWS budget and alert recipients are approved.
 7. A different person dispatches the exact plan that the protected job applies.
+
+The plan dispatch also requires these non-secret release coordinates:
+
+- reviewed Base Sepolia escrow address;
+- escrow deployment block used by the indexer;
+- reviewed Base Sepolia USDC address;
+- one commit SHA whose immutable ECR tag exists in all six runtime repositories.
 
 After apply, record the workflow run, plan hash, state serial, non-secret output
 ARNs, CloudFront distribution domain, reviewer, and timestamp. Then update the
