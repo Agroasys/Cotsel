@@ -29,6 +29,10 @@ export interface MigrationCredentialConfig {
 }
 
 export function buildSessionOptions(input: BuildSessionOptionsInput): string;
+export function parsePostgresSslMode(
+  value: string | undefined,
+  fallback?: PostgresSslMode,
+): PostgresSslMode;
 export function resolvePostgresSslConfig(
   mode?: PostgresSslMode,
 ): false | { rejectUnauthorized: boolean };

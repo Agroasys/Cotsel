@@ -13,6 +13,7 @@ const BASE_ENV: Record<string, string> = {
   DB_NAME: 'agroasys_reconciliation',
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
+  DB_SSL_MODE: 'disable',
   DB_MIGRATION_USER: '',
   DB_MIGRATION_PASSWORD: '',
   RPC_URL: 'http://127.0.0.1:8545',
@@ -131,4 +132,18 @@ test('migration credentials must be configured as a complete pair', () => {
       );
     },
   );
+});
+
+test('Postgres SSL mode is explicit and validated', () => {
+  withEnv({ DB_SSL_MODE: 'require' }, () => {
+    const { loadConfig } = loadConfigModule();
+    assert.equal(loadConfig().dbSslMode, 'require');
+  });
+
+  withEnv({ DB_SSL_MODE: 'no-verify' }, () => {
+    assert.throws(
+      () => loadConfigModule(),
+      /DB_SSL_MODE must be one of disable, require, or verify-full/,
+    );
+  });
 });

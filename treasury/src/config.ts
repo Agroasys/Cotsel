@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { parseAllowedOrigins } from '@agroasys/shared-edge';
+import { parsePostgresSslMode, type PostgresSslMode } from '@agroasys/shared-db';
 import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
 import { parseServiceApiKeys, ServiceApiKey } from './auth/serviceAuth';
 
@@ -16,6 +17,7 @@ export interface TreasuryConfig {
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbSslMode: PostgresSslMode;
   dbMigrationUser?: string;
   dbMigrationPassword?: string;
   indexerGraphqlUrl: string;
@@ -48,6 +50,7 @@ export interface TreasuryConfig {
     name: string;
     user: string;
     password: string;
+    sslMode: PostgresSslMode;
   } | null;
   reconciliationMaxAgeSeconds: number;
   reconciliationMaxRunningRunAgeSeconds: number;
@@ -233,6 +236,7 @@ export function loadConfig(): TreasuryConfig {
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
+    dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
     dbMigrationUser,
     dbMigrationPassword,
     indexerGraphqlUrl: env('INDEXER_GRAPHQL_URL'),
@@ -268,6 +272,10 @@ export function loadConfig(): TreasuryConfig {
           name: reconciliationDbName,
           user: optionalEnv('RECONCILIATION_DB_USER') || env('DB_USER'),
           password: optionalEnv('RECONCILIATION_DB_PASSWORD') || env('DB_PASSWORD'),
+          sslMode: parsePostgresSslMode(
+            process.env.RECONCILIATION_DB_SSL_MODE,
+            parsePostgresSslMode(process.env.DB_SSL_MODE),
+          ),
         }
       : null,
     reconciliationMaxAgeSeconds: envNumber('RECONCILIATION_MAX_AGE_SECONDS', 900),

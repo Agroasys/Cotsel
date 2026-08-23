@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { parseAllowedOrigins } from '@agroasys/shared-edge';
+import { parsePostgresSslMode, type PostgresSslMode } from '@agroasys/shared-db';
 import { parseServiceApiKeys, ServiceApiKey } from './auth/serviceAuth';
 
 dotenv.config();
@@ -15,6 +16,7 @@ export interface RicardianConfig {
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  dbSslMode: PostgresSslMode;
   dbMigrationUser?: string;
   dbMigrationPassword?: string;
   authEnabled: boolean;
@@ -135,6 +137,7 @@ export function loadConfig(): RicardianConfig {
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
+    dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
     dbMigrationUser,
     dbMigrationPassword,
     authEnabled,
