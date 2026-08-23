@@ -1704,3 +1704,45 @@ decommission**.
   DNS and third-party callbacks, observe the rollback window, rotate residual
   credentials, and only then produce a decommission packet. No safe shortcut
   exists while public traffic and current settlement records remain on GCP.
+
+## Batch 18 — Remediation of verified gaps
+
+Status: **PARTIALLY REMEDIATED**.
+
+The following fixes are committed, pushed, and separately reviewable. They are
+not described as deployed until their hosted checks, independent review, merge,
+and post-deployment verification are complete.
+
+| Finding                                                   | Remediation                                                                                                                                    | Current evidence                                                                                           | Remaining gate                                                                  |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Unsupported critical SQS jobs were acknowledged and lost  | Backend PR [#571](https://github.com/Agroasys/agroasys-backend/pull/571) fails the message so the existing retry/DLQ policy retains it         | Focused test, lint, typecheck, secret scan, queue-safety and hosted checks pass                            | Independent review and deployment to the critical worker                        |
+| Fixed secret-shaped test values obscured secret scanning  | Cotsel PR [#725](https://github.com/Agroasys/Cotsel/pull/725) generates ephemeral contract-test accounts in CI and removes fixed test fixtures | Focused Oracle tests, typecheck, lint, formatting, workflow YAML validation and redacted scan pass locally | Hosted checks and independent review                                            |
+| Runtime was manually ahead of Terraform                   | Cotsel PR [#724](https://github.com/Agroasys/Cotsel/pull/724) reconstructs revision-18 runtime ownership and carries this audit evidence       | Terraform/security checks pass on the current head; no unreviewed local apply was run                      | Independent review, protected saved-plan apply, and post-apply semantic recheck |
+| PR plan would propose deletion of the governed apply role | Backend PR [#570](https://github.com/Agroasys/agroasys-backend/pull/570) sets the pre-existing role variable for pull-request plans            | Current head has 23 passing checks and no failing check                                                    | Independent review and merge, then rerun #569's bootstrap plan                  |
+| Legacy unused GCP service-account secret                  | Removed backend Actions secret `GCP_SA_KEY`                                                                                                    | No source workflow reference and both GCP projects have zero user-managed service-account keys             | Keep non-secret legacy instance metadata until GCP retirement                   |
+
+Backend PR [#569](https://github.com/Agroasys/agroasys-backend/pull/569) remains
+blocked only by its bootstrap plan's planned governed-role deletion. That
+failure is correctly prevented by policy and is addressed by #570; it must be
+rerun only after #570 merges. Its application-level HMAC and secret-bootstrap
+changes are not live evidence until then.
+
+## Batch 19 — Efficiency and unnecessary-resource audit
+
+Status: **PARTIALLY VERIFIED**.
+
+- No unattached Elastic IP, available EBS volume, empty target group, or
+  non-available NAT gateway was found in the active `ap-south-1` AWS account.
+  The two NAT gateways and their fixed egress addresses are required for the
+  current two-AZ private Fargate design.
+- Cotsel `ricardian` and `treasury` CloudWatch log groups currently receive no
+  logs because those services have no AWS runtime replacement. They are
+  **STALE / LEGACY candidates**, not safe deletion targets: the active GCP
+  Cotsel VM still runs both services.
+- The historical `eu-north-1` backend ECR repository and scheduled-deletion
+  secret versions remain **READY FOR A CONSUMER DECISION**, not removal. This
+  audit has not proven their absence from every rollback or historical release
+  path.
+- No cost optimization was applied. Removing infrastructure before the GCP
+  migration and live AWS proof would trade a small visible cost for an
+  unbounded recovery risk.
