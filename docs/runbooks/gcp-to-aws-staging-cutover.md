@@ -132,7 +132,8 @@ versions after the metadata review confirms that no service has started.
    approved private path.
 8. Prove runtime roles cannot create schemas or read the other service database.
 
-The bootstrap task reads the RDS master secret and four service database
+The bootstrap task verifies the pinned public AWS RDS root bundle before it
+opens a `verify-full` PostgreSQL connection. It reads the RDS master secret and four service database
 secrets. It creates only `cotsel_ricardian` and `cotsel_treasury`, their
 migration roles, their runtime roles, and least-privilege database grants. The
 task does not write secret versions and does not start a service. Do not run it
