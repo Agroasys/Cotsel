@@ -22,7 +22,7 @@ function fixtureRepo() {
     path.join(root, 'package.json'),
     JSON.stringify({
       name: '@agroasys/cotsel',
-      packageManager: 'pnpm@10.29.2',
+      packageManager: 'pnpm@10.34.4',
       workspaces: ['gateway', 'auth'],
     }),
   );
