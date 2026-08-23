@@ -1268,19 +1268,55 @@ CloudWatch error records.
   `10.40.136.126:3600` returned `healthy`, and
   `GET https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1/healthz`
   returned HTTP `200` at `2026-08-23T10:14:51.957Z`.
-- PR [#719](https://github.com/Agroasys/Cotsel/pull/719) now carries the forward
-  repair. It validates a single Postgres SSL mode contract for every shared
+- PR [#719](https://github.com/Agroasys/Cotsel/pull/719) merged the forward
+  repair as `3af401d5530b5c0d46171df9db7373690e252f15`. It validates a single
+  Postgres SSL mode contract for every shared
   runtime/migration pool, applies it to reconciliation reporting and treasury's
   reconciliation reader, and starts GraphQL through the package's direct Node
   entrypoint. Invalid legacy values fail closed. Repository-wide typecheck,
   lint, changed-file formatting and dependency security gates pass; focused
   configuration/database tests pass. The local protocol-health report remains
   red for the pre-existing missing chain/address inputs and incomplete
-  historical deployment provenance, which this repair does not conceal.
+  historical deployment provenance, which this repair does not conceal. The
+  exact PR head passed all 31 hosted checks and had no unresolved review thread.
+  No independent review was submitted; the administrator merge is repository
+  integration evidence only, not release acceptance.
 - Revision `:15` is failed deployment evidence only. It is not accepted staging
   runtime truth. A new release digest set and a new task-definition revision
   must pass task, target-health, startup-log and public-health verification
   before promotion can be considered successful.
+
+### Certificate-verification promotion failed closed and rolled back
+
+- Main Release Images run
+  [`32634461820`](https://github.com/Agroasys/Cotsel/actions/runs/32634461820)
+  published all eight images from merge commit `3af401d...`. Every image build
+  and fixable HIGH/CRITICAL vulnerability gate passed. The workflow evidence
+  digests were independently matched to the `3af401d...` ECR tags before use.
+- Task definition revision `:16` pinned the six deployed containers to those
+  immutable digests, used direct Node startup for indexer GraphQL, removed
+  `NODE_TLS_REJECT_UNAUTHORIZED=0`, and requested encrypted PostgreSQL transport.
+  Its rendered definition contained 38 Secrets Manager references and no
+  plaintext secret-like environment value.
+- Task `1086869a99954551a0ff4277c4b6a967` pulled all six intended digests and
+  started indexer GraphQL successfully, but the indexer pipeline exited `1` and
+  ECS stopped the task with `EssentialContainerExited`. CloudWatch stream
+  `/agroasys/cotsel/staging/indexer-pipeline` /
+  `ecs/indexer-pipeline/1086869a99954551a0ff4277c4b6a967` records
+  `SELF_SIGNED_CERT_IN_CHAIN` at event timestamp `1787482453354`. The stricter
+  client correctly refused to trust a certificate chain absent from the image;
+  this is failed deployment evidence, not accepted runtime.
+- The service was immediately restored to task definition `:14`. ECS is steady
+  at `1/1/0`, target `10.40.133.157:3600` is healthy, and the public health
+  route returned HTTP `200`. Rollback task
+  `7011e59f2746437a8a336bef288e361e` is the active task.
+- RDS instance `agroasys-staging` uses CA `rds-ca-rsa2048-g1`. The narrow forward
+  repair installs AWS's global RDS root bundle into every runtime image using a
+  pinned SHA-256 and exposes it to Node through `NODE_EXTRA_CA_CERTS`. A real
+  local indexer runtime build succeeded; its bundle SHA-256 is
+  `e5bb2084ccf45087bda1c9bffdea0eb15ee67f0b91646106e466714f9de3c7e3`.
+  A release-gate contract test covers all seven runtime Dockerfiles and forbids
+  reintroducing `NODE_TLS_REJECT_UNAUTHORIZED`.
 
 ### Contract-address correction during the audit
 
@@ -1298,8 +1334,8 @@ source/artifact provenance and independent acceptance.
 Provider independence, secret references, Base Sepolia identity, current block
 access, contract reads, address convergence, the restricted Alchemy AWS egress
 path and deployed log containment are VERIFIED. Real startup rotation is also
-VERIFIED. Batch 11 remains incomplete because the corrected images have not yet
-passed the now-fail-closed security gate or been deployed, final credential
-revocation is pending, the indexer lacks runtime provider switching, fallback
-activation is not alarmed and no controlled post-remediation outage/recovery
-exercise exists.
+VERIFIED. Batch 11 remains incomplete because the certificate-trust forward
+repair has not yet passed hosted checks and live verified-TLS promotion, final
+credential revocation is pending, the indexer lacks runtime provider switching,
+fallback activation is not alarmed and no controlled post-remediation
+outage/recovery exercise exists.
