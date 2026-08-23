@@ -89,10 +89,12 @@ Record these values from stdout:
 The evidence bundle defaults to:
 
 ```text
-reports/deploy/base-sepolia/agroasysescrow-deploy.json
+contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json
 ```
 
-unless `DEPLOY_EVIDENCE_OUT_DIR` is set.
+unless `DEPLOY_EVIDENCE_OUT_DIR` is set. The default is anchored to the
+`contracts` workspace and is identical whether the command is launched from
+the repository root or from inside `contracts`.
 
 Use the default directory for repository evidence. If a custom output directory
 is inside the repository but outside `contracts/reports/deploy/`, the next

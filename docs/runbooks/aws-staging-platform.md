@@ -78,3 +78,7 @@ tokens, full connection strings, or customer data in evidence.
 
 GCP decommissioning is a separate destructive change. It requires explicit
 approval after AWS evidence is independently accepted.
+
+Use the [GCP to AWS staging cutover](gcp-to-aws-staging-cutover.md) procedure
+to establish state parity, perform the controlled traffic cutover, and prepare
+decommission evidence.

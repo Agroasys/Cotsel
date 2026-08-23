@@ -80,12 +80,76 @@ variable "public_gateway_domain_name" {
 }
 
 variable "gateway_image_tag" {
-  description = "Immutable Git commit SHA image tag for the Cotsel gateway container."
+  description = "Immutable Git commit SHA image tag shared by the bundled Cotsel runtime containers."
   type        = string
 
   validation {
     condition     = can(regex("^[0-9a-f]{40}$", var.gateway_image_tag))
     error_message = "gateway_image_tag must be a 40-character lowercase Git commit SHA."
+  }
+}
+
+variable "base_sepolia_escrow_address" {
+  description = "Reviewed Base Sepolia escrow deployment consumed by the staging runtime."
+  type        = string
+
+  validation {
+    condition = (
+      can(regex("^0x[0-9a-fA-F]{40}$", var.base_sepolia_escrow_address)) &&
+      lower(var.base_sepolia_escrow_address) != "0x0000000000000000000000000000000000000000"
+    )
+    error_message = "base_sepolia_escrow_address must be a non-zero EVM address."
+  }
+}
+
+variable "base_sepolia_contract_start_block" {
+  description = "Deployment block from which the Base Sepolia indexer starts."
+  type        = number
+
+  validation {
+    condition = (
+      var.base_sepolia_contract_start_block >= 1 &&
+      floor(var.base_sepolia_contract_start_block) == var.base_sepolia_contract_start_block
+    )
+    error_message = "base_sepolia_contract_start_block must be a positive integer."
+  }
+}
+
+variable "base_sepolia_usdc_address" {
+  description = "Reviewed Base Sepolia USDC address consumed by the staging runtime."
+  type        = string
+
+  validation {
+    condition = (
+      can(regex("^0x[0-9a-fA-F]{40}$", var.base_sepolia_usdc_address)) &&
+      lower(var.base_sepolia_usdc_address) != "0x0000000000000000000000000000000000000000"
+    )
+    error_message = "base_sepolia_usdc_address must be a non-zero EVM address."
+  }
+}
+
+variable "backend_settlement_callback_url" {
+  description = "Canonical Agroasys staging callback endpoint for Cotsel execution events."
+  type        = string
+  default     = "https://api.staging.agroasys.com/api/v1/settlement-handoffs/cotsel/callbacks/execution-events"
+
+  validation {
+    condition = (
+      var.backend_settlement_callback_url ==
+      "https://api.staging.agroasys.com/api/v1/settlement-handoffs/cotsel/callbacks/execution-events"
+    )
+    error_message = "backend_settlement_callback_url must remain the canonical direct staging callback URL."
+  }
+}
+
+variable "oracle_wallet_secret_name" {
+  description = "Existing Secrets Manager identity for the controlled Base Sepolia oracle signer."
+  type        = string
+  default     = "/agroasys/staging/base-sepolia/wallet-oracle"
+
+  validation {
+    condition     = var.oracle_wallet_secret_name == "/agroasys/staging/base-sepolia/wallet-oracle"
+    error_message = "oracle_wallet_secret_name must identify the controlled staging oracle wallet."
   }
 }
 

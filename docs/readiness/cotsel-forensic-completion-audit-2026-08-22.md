@@ -3,6 +3,25 @@
 Status: in progress. This document records current evidence. It does not accept
 the staging release or close Cotsel issue #639.
 
+Continuation baseline — 2026-08-23:
+
+- current Cotsel `main`: `015497fc451756c70ff8292b247b068b7464b3a7`;
+- current live ECS task definition: `cotsel-staging-gateway:18`;
+- current six-container release is pinned to exact ECR digests produced by main
+  Release Images run `32637944870`;
+- database TLS verification is enabled with the AWS RDS CA bundle;
+- the indexer validates chain ID and block availability and has an ECS container
+  restart policy with a 60-second restart-attempt period;
+- the managed primary/fallback RPC exercise selected the independent fallback
+  successfully under a forced-primary outage; and
+- PR #724 now contains the reviewed Terraform reconstruction required to
+  reconcile live revision 18 with IaC. It is not applied or accepted while the
+  PR remains under independent review.
+
+These later facts supersede only time-sensitive runtime identifiers below. The
+earlier findings remain preserved as the audit trail of what was discovered and
+why remediation was required.
+
 ## Batch 0 — reconstruction ledger
 
 ### Repositories and change surfaces
@@ -99,29 +118,63 @@ evidence, and an unperformed GCP migration disposition audit.
 
 ### Findings
 
-| Finding                                                                            | Evidence                                                                                                                                                                                                                               | Classification                        | Required remediation                                                                                                                                     |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The accepted-candidate deployment report is outside the canonical path             | PR #713 adds `reports/deploy/base-sepolia/agroasysescrow-deploy.json`; runtime and release tooling read `contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json`, which still contains the historical `0x8e1e...` deployment | MISCONFIGURED                         | Move the new evidence to the canonical `contracts/reports` path, remove the duplicate root report, and rerun evidence consumers.                         |
-| Deployment evidence output depends on process working directory                    | `baseDeploymentConfig.ts` defaults to relative `reports/deploy/<runtime>` while `deploymentSourceIdentity.ts` excludes only `contracts/reports/deploy/**/*.json`                                                                       | MISCONFIGURED                         | Anchor the evidence path to the contracts workspace/repository contract and add a regression test for invocation from the repository root and workspace. |
-| Cotsel Terraform can regress the current live runtime                              | `gateway-runtime.tf` declares one gateway container, pre-contract mode, no RPC or accepted contract values; live revision `:13` has six containers, RPCs, accepted contract, oracle, indexer, and reconciliation                       | MISCONFIGURED                         | Reconstruct revision `:13` declaratively and review a no-regression Terraform plan before any apply.                                                     |
-| Canonical repository documentation still marks the contract unpinned               | Release charter and golden journeys reference the historical canonical report and an unpinned address while ECS uses `0xB594...`                                                                                                       | STALE / LEGACY                        | Update only after provenance and independent acceptance are proven.                                                                                      |
-| The runtime example carries a stale indexer start block                            | `.env.runtime.example` uses `41078828`; the candidate deployment and live ECS use block `45807259`                                                                                                                                     | STALE / LEGACY                        | Replace the example with an explicit placeholder or the accepted block only after acceptance; do not permit it to act as runtime truth.                  |
-| Canonical Hardhat networks silently fall back to public RPC endpoints              | `contracts/hardhat.config.ts` defaults Base Sepolia and Base mainnet RPCs to public endpoints when managed RPC variables are missing                                                                                                   | MISCONFIGURED for governed deployment | Make canonical deployment fail closed when the managed RPC input is absent while preserving an explicit local/read-only diagnostic path if needed.       |
-| Historical Polkadot identity remains only in schema migrations                     | Active package manifests contain no Polkadot dependency; remaining references are schema/migration history, including removal of legacy extrinsic identity fields                                                                      | VERIFIED as historical                | Preserve migration history; do not delete it as active configuration cleanup.                                                                            |
-| Previously shared RPC credentials are still the live secret versions               | The current task definition reads the Infura and Alchemy secret ARNs created during the prior session, and no later rotation is recorded after the authenticated URLs were disclosed                                                   | MISCONFIGURED — credential exposure   | Rotate both provider credentials, update secret versions, force a new task revision, validate primary/fallback, then revoke the disclosed provider keys. |
-| Previously disclosed test-wallet keys do not control the candidate deployment      | AWS public wallet addresses match the candidate oracle, treasury, relayer, and three admin roles; they differ from the three public wallets whose test keys were disclosed previously                                                  | VERIFIED for the candidate role set   | Retain the candidate wallets in approved storage and still complete IAM, log, Git-history, and on-chain role verification.                               |
-| Backend contains a hard-coded historical escrow address in a database-proof script | `scripts/settlement-activity-database-proof.ts` pins `0xd2FB...`; runtime smoke configuration is otherwise environment-driven                                                                                                          | STALE / LEGACY tooling                | Parameterize or retire the proof script after confirming it is not used by active CI/runtime.                                                            |
+| Finding                                                                            | Evidence                                                                                                                                                                                                                                     | Classification                      | Required remediation                                                                                                                                     |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The accepted-candidate deployment report is outside the canonical path             | PR #713 adds `reports/deploy/base-sepolia/agroasysescrow-deploy.json`; runtime and release tooling read `contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json`, which still contains the historical `0x8e1e...` deployment       | MISCONFIGURED                       | Move the new evidence to the canonical `contracts/reports` path, remove the duplicate root report, and rerun evidence consumers.                         |
+| Deployment evidence output depends on process working directory                    | `baseDeploymentConfig.ts` defaults to relative `reports/deploy/<runtime>` while `deploymentSourceIdentity.ts` excludes only `contracts/reports/deploy/**/*.json`                                                                             | MISCONFIGURED                       | Anchor the evidence path to the contracts workspace/repository contract and add a regression test for invocation from the repository root and workspace. |
+| Cotsel Terraform can regress the current live runtime                              | `gateway-runtime.tf` declares one gateway container, pre-contract mode, no RPC or accepted contract values; live revision `:13` has six containers, RPCs, accepted contract, oracle, indexer, and reconciliation                             | MISCONFIGURED                       | Reconstruct revision `:13` declaratively and review a no-regression Terraform plan before any apply.                                                     |
+| Canonical repository documentation still marks the contract unpinned               | Release charter and golden journeys reference the historical canonical report and an unpinned address while ECS uses `0xB594...`                                                                                                             | STALE / LEGACY                      | Update only after provenance and independent acceptance are proven.                                                                                      |
+| Initial runtime example carried a stale indexer start block                        | `origin/main` `.env.runtime.example` uses `41078828`; the candidate deployment and live ECS use block `45807259`                                                                                                                             | REMEDIATED in PR #724               | PR #724 replaces the example value with an explicit blank. Merge it before treating the template as non-authoritative.                                   |
+| Initial canonical Hardhat networks could fall back to public RPC endpoints         | The audited baseline defaulted Base Sepolia and Base mainnet RPCs to public endpoints when managed RPC variables were missing                                                                                                                | REMEDIATED in PR #724               | PR #724 fails canonical Base network commands when the managed RPC input is absent. Merge it before treating the deployment path as fail-closed.         |
+| Historical Polkadot identity remains only in schema migrations                     | Active package manifests contain no Polkadot dependency; remaining references are schema/migration history, including removal of legacy extrinsic identity fields                                                                            | VERIFIED as historical              | Preserve migration history; do not delete it as active configuration cleanup.                                                                            |
+| Previously shared RPC credentials are still the live secret versions               | The current task definition reads the Infura and Alchemy secret ARNs created during the prior session, and no later rotation is recorded after the authenticated URLs were disclosed                                                         | MISCONFIGURED — credential exposure | Rotate both provider credentials, update secret versions, force a new task revision, validate primary/fallback, then revoke the disclosed provider keys. |
+| Previously disclosed test-wallet keys do not control the candidate deployment      | AWS public wallet addresses match the candidate oracle, treasury, relayer, and three admin roles; they differ from the three public wallets whose test keys were disclosed previously                                                        | VERIFIED for the candidate role set | Retain the candidate wallets in approved storage and still complete IAM, log, Git-history, and on-chain role verification.                               |
+| Backend contains a hard-coded historical escrow address in a database-proof script | `scripts/settlement-activity-database-proof.ts` pins `0xd2FB...`; runtime smoke configuration is otherwise environment-driven                                                                                                                | REMEDIATED in backend PR #568       | Review and merge PR #568, which replaces real deployment and wallet values with explicitly synthetic database/test fixtures.                             |
+| Backend does not enforce the agreed 500-line source limit                          | A fresh `origin/develop` inventory found 64 code, test, script, and workflow candidates above 500 lines; 14 exceed 1,000 lines. The largest is a 6,177-line settlement-handoff specification. No source-line guard exists in the repository. | NOT IMPLEMENTED                     | Add a no-growth guard, then split oversized production files and tests by real responsibility without changing behavior.                                 |
 
 ### Batch 1 conclusion
 
-Repository and runtime configuration are not currently reproducible from the
-canonical source paths. The highest-risk defects are exposed live RPC
-credentials and Terraform that can roll the live six-container task back to a
-pre-contract single-container definition. Contract evidence is split across two
-paths, so canonical health/release tooling still evaluates the historical
-deployment. No remediation has been applied yet; provider credential rotation
-is the only immediate security remediation and requires the signed-in provider
-consoles.
+Status: **REMEDIATED AND PARTIALLY VERIFIED**.
+
+The following repository defects were corrected in PR #724:
+
+- Terraform reconstructs the exact six-container revision 18 configuration,
+  image digests, secret references, strict database TLS, deployment circuit
+  breaker, and indexer restart policy.
+- The current deployment evidence replaces the historical bundle at the
+  canonical `contracts/reports/deploy/base-sepolia` path; no duplicate root
+  report is introduced.
+- A clean-room build from source commit `1b3c640...` reproduced the ABI and
+  creation-bytecode hashes. The resulting deployment input exactly matched the
+  live transaction, and the live runtime bytecode hash matched the bundle.
+- The deployment evidence default is now anchored to the contracts workspace,
+  independent of the caller's working directory.
+- Canonical Base network commands fail closed when the managed RPC input is
+  absent, and the deployment config requires an explorer API key before any
+  broadcast.
+- `.env.runtime.example` no longer supplies a stale indexer block, insecure
+  downstream-auth default, or secret-like Oracle example credentials.
+- Backend PR #568 removes the historical real contract and wallet values from
+  the database-only settlement proof and related unit fixtures. Targeted tests,
+  lint, formatting, and type checking passed on its exact head.
+
+The remaining Batch 1 blockers are external to these code corrections:
+
+- PR #724 requires independent review, merge, protected Terraform plan/apply,
+  and post-apply drift verification.
+- Issue #639 still requires an explicit independent `ACCEPTED` or `REJECTED`
+  decision; verified provenance is not self-acceptance. The original deploy
+  script did not record the current `worktreeClean` and full attestation fields,
+  so the current protocol-health validator correctly retains a legacy evidence
+  failure instead of treating the later audit as proof of the operator's
+  broadcast-time working-tree state.
+- The Infura credential disclosed before this audit still requires provider-side
+  rotation and revocation. The Alchemy secret was changed on 2026-08-23, but its
+  provider-side revocation must still be evidenced.
+- Backend is not compliant with the agreed 500-line source policy. The current
+  inventory contains 64 oversized candidates, including 14 above 1,000 lines.
+  This is an explicit Batch 18 remediation item, not a hidden exception or a
+  reason to destabilize financial code during the evidence audit.
 
 ## Batch 2 — AWS inventory and IaC drift
 
@@ -141,17 +194,17 @@ consoles.
 
 ### Live workload and data inventory
 
-| Surface       | Current AWS truth                                                                                                                                                                                                   | Classification                                                                          |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Backend ECS   | Cluster `agroasys-staging`: API desired/running `2/2`; five workers each `1/1`; all private Fargate tasks use digest `sha256:f46b8c...`                                                                             | VERIFIED                                                                                |
-| Cotsel ECS    | Cluster `cotsel-staging`: one private Fargate task at task definition `:13` with gateway, auth, oracle, indexer pipeline, indexer GraphQL, and reconciliation containers                                            | VERIFIED as runtime existence                                                           |
-| Target health | Both backend API targets and the single Cotsel gateway target are healthy                                                                                                                                           | VERIFIED for load-balancer health only                                                  |
-| PostgreSQL    | `agroasys-staging`, PostgreSQL 16.13, private, encrypted, Multi-AZ, seven-day backups, deletion protection enabled                                                                                                  | VERIFIED                                                                                |
-| Redis         | `agroasys-staging`, two nodes, Multi-AZ/failover, TLS and at-rest encryption enabled, no Redis auth token, restricted to the data-client security group                                                             | PARTIALLY VERIFIED; runtime TLS and replay behavior remain to be tested                 |
-| Queues        | Three FIFO queues plus FIFO DLQs for compliance callbacks, reconciliation, and settlement callbacks; 300-second visibility, five receives before DLQ, 14-day retention, SQS-managed encryption; all currently empty | VERIFIED as queue configuration                                                         |
-| EventBridge   | No custom rule was returned on the default event bus                                                                                                                                                                | VERIFIED                                                                                |
-| S3 documents  | KMS encrypted, versioned, public access blocked, access logging enabled, but currently contains zero objects                                                                                                        | VERIFIED; migration parity remains unproven                                             |
-| ECR           | Backend repositories exist in both `eu-north-1` and `ap-south-1`; eight KMS-encrypted Cotsel repositories exist in `ap-south-1`; immutable tags and scan-on-push are enabled                                        | VERIFIED; the old regional backend repository requires a consumer/decommission decision |
+| Surface       | Current AWS truth                                                                                                                                                                                                                         | Classification                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Backend ECS   | Cluster `agroasys-staging`: API desired/running `2/2`; five workers each `1/1`; all private Fargate tasks use digest `sha256:f46b8c...`                                                                                                   | VERIFIED                                                                                |
+| Cotsel ECS    | Cluster `cotsel-staging`: one private Fargate task at task definition `:18` with gateway, auth, oracle, indexer pipeline, indexer GraphQL, and reconciliation containers; running task `a0ab82de...` is healthy and the service is steady | VERIFIED as current runtime existence                                                   |
+| Target health | Both backend API targets and the single Cotsel gateway target are healthy                                                                                                                                                                 | VERIFIED for load-balancer health only                                                  |
+| PostgreSQL    | `agroasys-staging`, PostgreSQL 16.13, private, encrypted, Multi-AZ, seven-day backups, deletion protection enabled                                                                                                                        | VERIFIED                                                                                |
+| Redis         | `agroasys-staging`, two nodes, Multi-AZ/failover, TLS and at-rest encryption enabled, no Redis auth token, restricted to the data-client security group                                                                                   | PARTIALLY VERIFIED; runtime TLS and replay behavior remain to be tested                 |
+| Queues        | Three FIFO queues plus FIFO DLQs for compliance callbacks, reconciliation, and settlement callbacks; 300-second visibility, five receives before DLQ, 14-day retention, SQS-managed encryption; all currently empty                       | VERIFIED as queue configuration                                                         |
+| EventBridge   | No custom rule was returned on the default event bus                                                                                                                                                                                      | VERIFIED                                                                                |
+| S3 documents  | KMS encrypted, versioned, public access blocked, access logging enabled, but currently contains zero objects                                                                                                                              | VERIFIED; migration parity remains unproven                                             |
+| ECR           | Backend repositories exist in both `eu-north-1` and `ap-south-1`; eight KMS-encrypted Cotsel repositories exist in `ap-south-1`; immutable tags and scan-on-push are enabled                                                              | VERIFIED; the old regional backend repository requires a consumer/decommission decision |
 
 ### Network and edge findings
 
@@ -173,9 +226,8 @@ consoles.
 
 ### Runtime and IaC drift
 
-A live, read-only Terraform plan was run from Cotsel `main` against the current
-state and account. It returned exit code `2` with `0 to add, 2 to change, 0 to
-destroy`. Applying it would:
+A historical read-only Terraform plan from Cotsel `main` returned exit code `2`
+with `0 to add, 2 to change, 0 to destroy`. Applying it would:
 
 1. change the ECS service from live task definition `:13` back to tracked task
    definition `:4`; and
@@ -183,8 +235,13 @@ destroy`. Applying it would:
    reconciliation images, logs, RPC secrets, database secrets, oracle signer,
    and service-auth secrets.
 
-This proves the live release was installed outside the current declarative root
-and that the current canonical Terraform apply is unsafe. No apply was run.
+This proved that the live release had been installed outside the declarative
+root and that applying unmodified `main` was unsafe. PR #724 now reconstructs
+revision 18. Its reviewed local plan contains four additions, two changes, one
+immutable task-definition replacement, and no delete-only resource. The
+rendered six-container configuration matches revision 18 after removing
+AWS-added defaults. It remains unapplied pending independent review, merge, and
+the protected saved-plan workflow. No local apply was run.
 
 ### Security and operational control gaps
 
@@ -201,21 +258,27 @@ and that the current canonical Terraform apply is unsafe. No apply was run.
 - The live gateway has mutations and gasless execution disabled. That is a
   fail-closed posture, but it means the full settlement-execution path has not
   been demonstrated by the deployed configuration.
-- Four Cotsel service containers still disable TLS certificate verification for
-  PostgreSQL; this remains a live remediation item.
+- Revision 18 now uses strict PostgreSQL certificate verification for every
+  database consumer and no longer sets `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+- Every revision 18 image is pinned to an exact digest from successful main
+  Release Images run `32637944870`.
 
 ### Batch 2 conclusion
 
-The AWS footprint and active staging architecture are now identified, but the
-batch is PARTIALLY VERIFIED rather than complete. The decisive blockers are the
-unsafe Terraform/runtime drift, exposed RPC credentials awaiting provider
-rotation, missing operator notification paths, disabled database certificate
-verification, and incomplete provenance for several Cotsel images. IAM policy
-semantics and secret-reader boundaries are deferred to the dedicated Batch 5
-audit. No AWS resource was created, modified, disabled, or deleted in this
-batch.
+The AWS footprint and active staging architecture are identified, but the batch
+is PARTIALLY VERIFIED rather than complete. Revision 18 fixes database TLS and
+pins every image to a successful main release. The remaining blockers are PR
+#724's independent review and protected apply, disclosed RPC credentials awaiting
+provider-side rotation, missing operator notification paths, absent account-level
+security services, and unresolved GCP migration parity. IAM policy semantics and
+secret-reader boundaries are covered by Batch 5. No AWS resource was created,
+modified, disabled, or deleted during this refreshed inventory.
 
 ## Batch 3 — GCP inventory and migration disposition
+
+Status: **PARTIALLY VERIFIED**. Live inventory was refreshed on 2026-08-23; both
+projects still contain active, stateful workloads and therefore neither project
+is ready for decommission.
 
 ### Projects, identities, and resource model
 
@@ -235,24 +298,28 @@ batch.
   separately permits ports 80 and 443 from the Internet. The Agroasys project's
   rule named `default-allow-ssh` unexpectedly also permits 80 and 443 in addition
   to 22.
-- Backend GitHub Actions still stores secrets named `GCP_PROJECT_ID`,
-  `GCP_SA_KEY`, `GCE_INSTANCE_NAME`, and `GCE_INSTANCE_ZONE`. Current `develop`
-  workflows and application source do not reference them. Because the GCP
-  service accounts have no current user-managed keys, `GCP_SA_KEY` is a stale
-  credential candidate, but it has not been deleted pending the later credential
-  and rollback audit.
+- The 2026-08-23 refresh reconfirmed both VMs as `RUNNING`. `server-1` is an
+  `e2-standard-2` in `us-central1-f` with external address `34.172.10.248`;
+  `cotsel-staging` is an `e2-standard-2` in `us-central1-a` with reserved address
+  `34.10.181.103`. Neither VM has deletion protection enabled.
+- Backend GitHub Actions retains non-secret legacy metadata named
+  `GCP_PROJECT_ID`, `GCE_INSTANCE_NAME`, and `GCE_INSTANCE_ZONE`. Current
+  `develop` workflows and application source do not reference them.
+  `GCP_SA_KEY` was removed on 2026-08-23 after the credential and rollback
+  audit confirmed both accessible GCP projects have no user-managed
+  service-account keys.
 
 ### Live GCP workloads and state
 
-| Resource                                                              | Current purpose and evidence                                                                                                                                                                                                                                                                                                                                                          | AWS target status                                                                                                                                                        | Disposition                                                                                                |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `agroasys-1/server-1`                                                 | Public `e2-standard-2` VM in `us-central1-f`; runs backend, PostgreSQL, Redis, and Mailhog containers. `backend.agroasys.com` and `ops.agroasys.com` resolve to its external IP. Backend produced 1,368 log lines in the sampled hour. The deployed Git checkout is dirty and uses a local `backend-ag:latest` image without a registry digest.                                       | AWS backend ECS, RDS, Redis, and mail configuration exist, but the public GCP hostnames and state parity have not moved or been proven.                                  | **BLOCKED / UNKNOWN**                                                                                      |
-| `agroasys-1/instance-20260408-102022`                                 | Attached 45 GiB balanced persistent boot disk. Docker volumes include active PostgreSQL and Redis data plus several large anonymous volumes. Fourteen current daily disk snapshots were found.                                                                                                                                                                                        | AWS RDS and Redis exist; database/cache parity and rollback requirements are unproven.                                                                                   | **BLOCKED / UNKNOWN**                                                                                      |
-| `hale-yew-472207-r2/cotsel-staging`                                   | Public `e2-standard-2` VM in `us-central1-a`; runs gateway, auth, oracle, treasury, reconciliation, two indexer containers, Ricardian, PostgreSQL, and Redis. `cotsel.agroasys.com` still serves its dashboard. Gateway, oracle, and reconciliation produced logs during the sampled hour. Containers come from two different dirty local Cotsel checkouts and local `latest` images. | AWS runs gateway, auth, oracle, reconciliation, and indexer in one ECS task. AWS does not currently run treasury or Ricardian. State and behavioral parity are unproven. | **BLOCKED / UNKNOWN**                                                                                      |
-| `hale-yew-472207-r2/cotsel-staging` disk and `cotsel-static-ip`       | Attached 50 GiB balanced boot disk, static public IP, 233 MiB PostgreSQL Docker volume and 53 MiB Redis volume. Nineteen snapshots exist, including five for a predecessor disk and fourteen current daily snapshots.                                                                                                                                                                 | AWS RDS/Redis exist, but data parity, active writers, and rollback dependencies remain unproven.                                                                         | **BLOCKED / UNKNOWN**                                                                                      |
-| `cotsel.sys.agroasys.com` ingress                                     | Public DNS now resolves to AWS CloudFront and the AWS health route returns 200. The GCP Caddy virtual host remains configured but is no longer the public DNS origin.                                                                                                                                                                                                                 | AWS CloudFront, internal ALB, and private ECS target are live.                                                                                                           | **MIGRATED** for public DNS/ingress only; the old GCP route is **STALE / LEGACY** until host decommission. |
-| `cotsel.agroasys.com` dashboard                                       | Public DNS resolves directly to the Cotsel GCP VM and returns HTTP 200. Its deployed browser bundle calls AWS `cotsel.sys.agroasys.com`, but also calls GCP-hosted `ops.agroasys.com`.                                                                                                                                                                                                | No validated AWS Cotsel-Dash deployment was found.                                                                                                                       | **BLOCKED / UNKNOWN**                                                                                      |
-| Default VPCs, firewall rules, default service accounts, and snapshots | Support the still-live VMs and their rollback posture. They are not standalone migration successes.                                                                                                                                                                                                                                                                                   | AWS equivalents exist only for portions of the workload.                                                                                                                 | **INTENTIONALLY RETAINED** until workload/state migration and decommission gates pass.                     |
+| Resource                                                              | Current purpose and evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | AWS target status                                                                                                                                                        | Disposition                                                                                                |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `agroasys-1/server-1`                                                 | Public `e2-standard-2` VM in `us-central1-f`; runs backend, PostgreSQL, Redis, and Mailhog containers. `backend.agroasys.com` and `ops.agroasys.com` resolve to its external IP. The 2026-08-23 refresh found all four containers healthy, host ports 3000/5432/6379/8025 bound on all interfaces, source commit `4241163551f2a38f3c4d7da2f02cc61968ef358f`, 23 dirty working-tree entries, a bind-mounted checkout, and a local `backend-ag:latest` image without release provenance.                                                                                                                                 | AWS backend ECS, RDS, Redis, and mail configuration exist, but the public GCP hostnames and state parity have not moved or been proven.                                  | **BLOCKED / UNKNOWN**                                                                                      |
+| `agroasys-1/instance-20260408-102022`                                 | Attached 45 GiB balanced persistent boot disk. Docker volumes include active PostgreSQL and Redis data plus several large anonymous volumes. Fourteen current daily disk snapshots were found.                                                                                                                                                                                                                                                                                                                                                                                                                         | AWS RDS and Redis exist; database/cache parity and rollback requirements are unproven.                                                                                   | **BLOCKED / UNKNOWN**                                                                                      |
+| `hale-yew-472207-r2/cotsel-staging`                                   | Public `e2-standard-2` VM in `us-central1-a`; runs gateway, auth, oracle, treasury, reconciliation, two indexer containers, Ricardian, PostgreSQL, and Redis. `cotsel.agroasys.com` still serves its dashboard. The 2026-08-23 refresh found all ten containers healthy. Runtime images are locally built from two different Cotsel checkouts: `/home/agroasys/Cotsel` at `854d6b2b...` with 11 dirty entries and `/home/agroasys/Cotsel-mainline` at `d1f3bf17...` with one dirty entry. The dashboard checkout is on feature branch `feat/governance-signing-monitoring-ux` at `362ef576...` with two dirty entries. | AWS runs gateway, auth, oracle, reconciliation, and indexer in one ECS task. AWS does not currently run treasury or Ricardian. State and behavioral parity are unproven. | **BLOCKED / UNKNOWN**                                                                                      |
+| `hale-yew-472207-r2/cotsel-staging` disk and `cotsel-static-ip`       | Attached 50 GiB balanced boot disk, static public IP, 233 MiB PostgreSQL Docker volume and 53 MiB Redis volume. Nineteen snapshots exist, including five for a predecessor disk and fourteen current daily snapshots.                                                                                                                                                                                                                                                                                                                                                                                                  | AWS RDS/Redis exist, but data parity, active writers, and rollback dependencies remain unproven.                                                                         | **BLOCKED / UNKNOWN**                                                                                      |
+| `cotsel.sys.agroasys.com` ingress                                     | Public DNS now resolves to AWS CloudFront and the AWS health route returns 200. The GCP Caddy virtual host remains configured but is no longer the public DNS origin.                                                                                                                                                                                                                                                                                                                                                                                                                                                  | AWS CloudFront, internal ALB, and private ECS target are live.                                                                                                           | **MIGRATED** for public DNS/ingress only; the old GCP route is **STALE / LEGACY** until host decommission. |
+| `cotsel.agroasys.com` dashboard                                       | Public DNS resolves directly to the Cotsel GCP VM and returns HTTP 200. Its deployed browser bundle calls AWS `cotsel.sys.agroasys.com`, but also calls GCP-hosted `ops.agroasys.com`.                                                                                                                                                                                                                                                                                                                                                                                                                                 | No validated AWS Cotsel-Dash deployment was found.                                                                                                                       | **BLOCKED / UNKNOWN**                                                                                      |
+| Default VPCs, firewall rules, default service accounts, and snapshots | Support the still-live VMs and their rollback posture. They are not standalone migration successes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | AWS equivalents exist only for portions of the workload.                                                                                                                 | **INTENTIONALLY RETAINED** until workload/state migration and decommission gates pass.                     |
 
 ### External dependency truth
 
@@ -274,6 +341,12 @@ but backend/operations, Cotsel-Dash, treasury, Ricardian, PostgreSQL, Redis, dis
 snapshots, and rollback state remain on live GCP VMs. No resource has been
 deleted or disabled. Batch 4 must determine database/state parity and whether
 either GCP VM still accepts writes that are absent from AWS.
+
+The 2026-08-23 refresh additionally proves that both GCP stacks remain active
+runtimes rather than passive rollback images. Their persistent disks, daily
+snapshots, locally built images, dirty source trees, Caddy routes, databases, and
+caches are current operational dependencies. This finding prohibits treating
+either project as `READY TO DECOMMISSION`.
 
 ## Batch 4 — stateful data migration verification
 
@@ -300,6 +373,13 @@ GCP Cotsel indexer/reconciliation databases remain active writers.
   writes. `overview_snapshot.last_indexed_at` and the latest reconciliation run
   advanced during this audit on 2026-08-22. This is not a dormant rollback
   database.
+- A second read-only sample on 2026-08-23 reconfirmed active writes:
+  `overview_snapshot.last_indexed_at` reached `2026-08-23 14:02:48+00`; the
+  reconciliation database reached 157,234 runs and 308,995 run/trade rows, with
+  the latest run starting at `2026-08-23 14:04:12.969232` and completing at
+  `2026-08-23 14:04:13.196276`. Gateway state remained non-empty with 25
+  execution events, 25 callback deliveries, nine handoffs, and one retained
+  service-auth nonce.
 - GCP Redis is also live: Agroasys has nine keys and Cotsel has two expiring
   keys. Both use AOF and successful RDB snapshots, but each is a single local
   Redis master with no replica.
@@ -538,6 +618,41 @@ argument rule, repository secret scanning is disabled, and current operational
 documents still contain compromised public identities as active-looking role
 assignments. No role, policy, secret, KMS key, task definition, signer, or
 repository setting was changed during this audit batch.
+
+### 2026-08-23 live IAM and task-wiring recheck
+
+Status: **REMEDIATED AND PARTIALLY VERIFIED**. This recheck supersedes the
+revision-specific evidence above. It does not accept the remaining rotation,
+review, or operational-coverage gaps.
+
+- ECS reports `cotsel-staging-gateway:18` as `PRIMARY` and `COMPLETED`, with
+  one desired and one running task. ECS reports `agroasys-staging-api:5` as
+  `PRIMARY` and `COMPLETED`, with two desired and two running tasks.
+- Revision 18 injects 38 named Secrets Manager values through
+  `secrets.valueFrom`. The gateway receives the settlement ingress and callback
+  credentials separately. The backend API receives both Cotsel-direction
+  credentials separately. The rendered task definitions contain no sensitive
+  value in the plaintext environment lists.
+- The Cotsel execution role has an inline allow-list for the 16 exact startup
+  secret ARNs and its Cotsel KMS key. The Cotsel application task role has no
+  inline or attached policy. The backend execution role can read only the
+  backend database and app-config secret ARNs. The backend API task role has no
+  Secrets Manager permission.
+- The Cotsel execution role necessarily reads the startup secrets for all six
+  containers because ECS resolves all container `valueFrom` references with the
+  task execution role. This is a task-level boundary, not a per-container IAM
+  boundary. The current single-task design cannot reduce that scope without
+  separating the containers into independently defined tasks.
+- GitHub secret scanning and push protection are enabled for `Agroasys/Cotsel`.
+  GitHub returns `422 Secret scanning is not available for this repository` for
+  the private backend and Cotsel-Dash repositories. Their repository-supported
+  verified secret scans remain the active control. This limitation is recorded
+  as a GitHub product or organization blocker, not as passing native scanning.
+- Backend PR #569 replaces command-line secret documents in
+  `bootstrap-secrets.sh` with stdin for the local JSON composer and AWS CLI
+  write. It also adds the missing callback nonce validation and negative
+  regression cases. The change is open, independently reviewed pending, and
+  not deployed. It must not be cited as runtime proof before merge and rollout.
 
 ## Batch 6 — Service-to-service authentication audit
 
@@ -1339,3 +1454,393 @@ repair has not yet passed hosted checks and live verified-TLS promotion, final
 credential revocation is pending, the indexer lacks runtime provider switching,
 fallback activation is not alarmed and no controlled post-remediation
 outage/recovery exercise exists.
+
+### 2026-08-23 live promotion and forced-failover addendum
+
+Status: **REMEDIATED AND PARTIALLY VERIFIED**. The certificate-trust and
+provider-selection corrections are now live, and the independent fallback was
+exercised from the real private Fargate network. This closes the live TLS and
+controlled startup-failover evidence gaps. It does not close credential
+rotation, alerting, runtime IaC drift, or the indexer's lack of in-process
+provider switching.
+
+- PR [#720](https://github.com/Agroasys/Cotsel/pull/720) merged the pinned AWS
+  RDS global trust bundle as commit
+  `15a2afd6509e1a980ff38b0b583ea9665246b5a3`. Main CI, CodeQL and Release
+  Images completed successfully for that exact merge commit.
+- The first strict-TLS candidate, task definition revision `:17`, started all
+  services and passed target health, but the indexer later exited after Infura
+  returned JSON-RPC `-32001 resource not found` for a valid recent block.
+  Independent later retrieval of that block proved a transient provider
+  data-plane failure. The essential indexer exit stopped the bundled six-
+  container task, so the service was rolled back to revision `:14`.
+- PR [#721](https://github.com/Agroasys/Cotsel/pull/721) requires the indexer
+  startup selector to verify `eth_chainId`, `eth_blockNumber` and an
+  `eth_getBlockByNumber` read before accepting a provider. It includes the exact
+  `-32001` regression and wrong-chain/fail-closed coverage. Every hosted check
+  passed on head `3d8274407f1f9ab1f5e4986747365c72c55f0d57`; the PR was
+  squash-merged as `015497fc451756c70ff8292b247b068b7464b3a7`. The admin merge
+  is repository integration evidence, not independent release acceptance.
+- Main Release Images run
+  [`32637944870`](https://github.com/Agroasys/Cotsel/actions/runs/32637944870)
+  published and scanned the exact merge images. The active six runtime images
+  are pinned by digest in ECS revision `cotsel-staging-gateway:18`; the gateway
+  records source commit `015497f...`.
+- Revision `:18` contains 38 Secrets Manager references, no plaintext
+  secret-like environment values, no `NODE_TLS_REJECT_UNAUTHORIZED` override,
+  and `verify-full` for every PostgreSQL client surface. The indexer pipeline
+  has its ECS container restart policy enabled with a 60-second restart-attempt
+  period, so a later non-zero provider exit can restart and rerun provider
+  selection without destroying the entire task.
+- The single-task deployment was intentionally serialized with
+  `maximumPercent=100` and `minimumHealthyPercent=0`. This avoided a second
+  Subsquid processor concurrently updating the same status table; a prior
+  overlapping rollout had failed with the processor's foreign-writer assertion.
+  The resulting brief staging interruption is recorded and is not
+  misrepresented as zero-downtime availability.
+- Active task `a0ab82de082f4ab4be1b337d19494841` reached `HEALTHY` and remained
+  running beyond the earlier delayed-failure window. ECS reported revision
+  `:18` deployment `COMPLETED`, desired/running/pending `1/1/0`, target
+  `10.40.131.9:3600` healthy, and the public health route returned HTTP `200`.
+  The exact current task streams contained no new error/warning match at the
+  sustained check.
+- The indexer selected the primary redacted host
+  `https://base-sepolia.infura.io`, confirmed chain `84532`, resumed from block
+  `45859201`, caught up and continued advancing at the current head.
+- A one-off Fargate proof used the exact deployed indexer digest in the same
+  private subnets and security groups. It supplied an intentionally unreachable
+  non-secret primary and received only the AWS-stored fallback secret. The
+  shipped selector returned a redacted structured event identifying the
+  Alchemy host as selected, with two endpoints checked, reachability true and
+  chain ID `84532`; the proof exited `0`. The temporary smoke task definition
+  was then deregistered.
+
+Remaining required work:
+
+1. Merge and apply the independently reviewed PR #724 Terraform reconstruction,
+   then prove the resulting plan and runtime are semantically equal to revision 18.
+2. Rotate/revoke the historically exposed Infura credential and retire the old
+   Alchemy credential after the rollback decision. Secret existence is not
+   rotation evidence.
+3. Add actionable, routed primary-failure/fallback/both-unavailable/wrong-chain
+   signals. The redacted structured selection event alone is evidence, not an
+   alarm.
+4. Replace restart-mediated indexer recovery with a supported in-process
+   provider switch or a separately deployed leader-safe indexer service before
+   claiming continuous failover or zero-downtime rolling deployment.
+
+## Batch 12 — Base contract deployment truth
+
+Status: **PARTIALLY VERIFIED**.
+
+The candidate deployment is real, source-verified, and currently coherent with
+the deployed AWS configuration. It is not accepted staging truth because the
+independent decision required by issue #639 is still absent.
+
+- The canonical deployment bundle records source commit
+  `1b3c64051e3fa29f8f148b24f5ec2537964407d1`, Base Sepolia chain `84532`,
+  contract `0xB594Cd561F28daBD771f9b358CF2bc731d14EDBd`, transaction
+  `0xb6af9e63a64fbbdc3f3294bf35c749c59b77a09a12b9f8df3dd4b90b3cfad5df`, and
+  deployment block `45807259`.
+- The existing clean-room provenance packet independently rebuilt that source,
+  matched the creation input to the on-chain transaction, retrieved non-empty
+  runtime bytecode, and recorded ABI, creation-bytecode, and runtime-bytecode
+  hashes. It also recorded the explorer source-verification result and live
+  role reads. See
+  `docs/readiness/base-sepolia-deployment-provenance-audit-2026-08-23.md`.
+- A fresh managed-primary-RPC recheck during this forensic pass returned
+  `eth_chainId = 0x14a34`, a successful receipt at block `45807259`, and
+  `24,417` bytes of code at the configured address. Direct reads returned the
+  recorded USDC, oracle, treasury, relayer, three administrator addresses,
+  required approvals `2`, and unpaused state.
+- Issue [#639](https://github.com/Agroasys/Cotsel/issues/639) remains open,
+  labelled `status:backlog` and `priority:P0`. Its acceptance criteria require
+  a reproducible full contract gate, real controlled-flow evidence, address
+  propagation, and an explicit independent Protocol, Security, and Release
+  reviewer decision. No such `ACCEPTED` decision is recorded.
+- The original deployment bundle did not record the deployer's clean worktree
+  or the complete normalized compiler/source/role-attestation manifest at
+  broadcast time. The later clean-room audit proves artifact and transaction
+  equivalence; it cannot retroactively prove that missing contemporaneous
+  operator condition.
+
+**Result:** this is a verified deployment candidate with substantial provenance
+evidence, not an accepted release. No downstream test may describe it as the
+canonical staging contract until #639 receives the required independent
+decision.
+
+## Batch 13 — Contract-address convergence audit
+
+Status: **VERIFIED for the active AWS runtime; PARTIALLY VERIFIED for the full
+migration estate**.
+
+- Current ECS task definition `cotsel-staging-gateway:18` uses
+  `0xB594Cd561F28daBD771f9b358CF2bc731d14EDBd` consistently in gateway, oracle,
+  reconciliation, and indexer configuration. The indexer start block is
+  `45807259`, the deployment block from the candidate bundle.
+- All four services use chain `84532` and the evidenced Base Sepolia USDC
+  address `0x036CbD53842c5426634e7929541eC2318f3dCF7e`. This corrected a prior
+  audit transcription error; it did not mask a live split-brain runtime.
+- The active backend does not own a direct Cotsel escrow address. Its boundary
+  is the signed gateway integration, which is the correct separation for this
+  current deployment.
+- The GCP Cotsel VM remains a separate, active Compose estate. Its deployed
+  configuration and database are not proven to have converged to the AWS
+  candidate contract, so no statement about global address convergence is
+  justified while that workload remains live.
+- A non-active runtime example still contains a historical start-block value.
+  It cannot affect the revision-18 task, but it is documentation/configuration
+  debt and must be corrected or explicitly marked historical before a future
+  operator can rely on it.
+
+## Batch 14 — Indexer and reconciliation audit
+
+Status: **PARTIALLY VERIFIED**.
+
+- The current ECS indexer selects a managed Base Sepolia provider, verifies
+  chain `84532`, resumes from the configured deployment block, and continues
+  advancing at the network head. It is therefore live against the configured
+  candidate address, not merely installed.
+- The reconciliation container runs on its one-minute schedule and completes
+  successfully. Current logs report zero indexed trades and zero detected
+  drifts, which verifies daemon liveness only.
+- Current GCP indexes and reconciliation tables contain historical state, while
+  AWS has no demonstrated controlled candidate-contract trade. No live evidence
+  proves an actual candidate-contract event has been decoded, persisted,
+  replayed idempotently, reconciled against operations, or surfaced as a safe
+  negative drift.
+- The full controlled settlement rehearsal required by #639 remains open. It
+  must use the candidate address, collect chain/log/correlation evidence, prove
+  indexer and reconciliation behavior, and be independently reviewed. Creating
+  synthetic database rows would not close this requirement.
+
+## Batch 15 — Observability and alerting audit
+
+Status: **PARTIALLY VERIFIED**.
+
+- All active Cotsel application log groups retain logs for 30 days. Revision
+  `:18` startup, primary provider selection, and reconciliation cycles are
+  observable through CloudWatch. The active ECS service and ALB target are
+  healthy.
+- The account has no SNS topics in `ap-south-1`, no composite alarms, and no
+  Cotsel-specific CloudWatch metric alarms. The current backend RDS, Redis,
+  SQS, and task-count alarms have zero `AlarmActions`; the only actioned alarms
+  are ECS autoscaling policies. An alarm without a routed operator destination
+  is not an incident-control path.
+- Every configured FIFO primary queue and DLQ currently has zero visible,
+  delayed, and in-flight messages. Primary queues use 300-second visibility,
+  14-day retention, and five receives before their dedicated DLQ. This verifies
+  configuration and idle state, not a current-revision delivery/redrive
+  rehearsal.
+- During this audit, the backend worker was corrected in PR
+  [#571](https://github.com/Agroasys/agroasys-backend/pull/571): an unsupported
+  critical SQS job no longer gets deleted after receipt. It now fails delivery
+  so the existing retry and DLQ policy can retain evidence. The change is
+  tested and awaiting hosted checks and independent review; it is not deployed
+  evidence yet.
+- Required remediation remains: define an approved staging incident recipient
+  or paging integration, create the topic/subscription and targeted Cotsel
+  metric alarms through IaC, validate delivery with a controlled test, and add
+  explicit observability for callback authentication failures, nonce replays,
+  RPC fallback/both-unavailable/wrong-chain, indexer lag, and reconciliation
+  drift. The lack of a recipient is an ownership decision, not a reason to add
+  an unactioned alert topic.
+
+## Batch 16 — Security-control verification
+
+Status: **PARTIALLY VERIFIED**.
+
+- The active AWS task definitions use Secrets Manager references, not plaintext
+  secret values. Current task execution roles have the narrow resource access
+  described in Batch 5; application task roles do not retrieve those injected
+  secrets. The backend-to-gateway and gateway-to-backend credentials remain
+  separate identities.
+- The GCP audit rechecked every user-managed service-account key in both
+  accessible historical projects. Neither default Compute Engine service
+  account has a user-managed key. The backend repository had an unreferenced
+  `GCP_SA_KEY` Actions secret; it was removed on 2026-08-23 after confirming no
+  current source workflow references it. The `GCE_INSTANCE_NAME`,
+  `GCE_INSTANCE_ZONE`, and `GCP_PROJECT_ID` secret names remain as non-secret
+  legacy metadata until the GCP decommission decision.
+- A redacted `gitleaks` scan of current `main` found a fixed, well-known
+  Hardhat private-key fixture and one secret-shaped idempotency fixture. PR
+  #725 removes both without changing production signing behavior; its own scan
+  leaves only the eight false-positive literal JSON property names `key` in the
+  readiness route contract. Historical scan results cannot be erased by a
+  forward-only source correction.
+- GitHub Advanced Security secret scanning and push protection are enabled for
+  Cotsel. GitHub reports this feature unavailable for the backend and
+  Cotsel-Dash repositories; repository-level secret scanning is therefore a
+  **BLOCKED platform control** there, not a passing result.
+- A historically disclosed managed-RPC credential must be rotated at the
+  provider, replaced in AWS Secrets Manager through the approved secret-entry
+  path, and then proved in the live Fargate runtime before the old credential
+  is revoked. Base Sepolia does not remove the need to protect provider
+  credentials or preserve reproducible incident history.
+
+## Batch 17 — Migration parity and residual-dependency audit
+
+Status: **NOT IMPLEMENTED as an AWS cutover; BLOCKED / UNKNOWN for
+decommission**.
+
+- Current DNS confirms only `cotsel.sys.agroasys.com` has migrated to AWS
+  CloudFront and the internal AWS origin. `cotsel.agroasys.com` still resolves
+  directly to the Cotsel GCP VM. `backend.agroasys.com` and
+  `ops.agroasys.com` still resolve directly to the Agroasys GCP VM.
+- The source repositories contain no active current-branch GCP provider URL,
+  Cloud Run, Cloud SQL, Pub/Sub, or service-account configuration outside
+  historical documentation. This does not prove migration: live external DNS
+  and the two GCP Compose estates remain active runtime dependencies.
+- GCP retains authoritative-looking PostgreSQL, Redis, indexer, reconciliation,
+  dashboard, treasury, Ricardian, and backend workloads with local image and
+  working-tree provenance. AWS runs only a fresh controlled staging subset;
+  state parity and cutover integrity are not established.
+- No GCP workload, disk, snapshot, address, firewall rule, or DNS record was
+  disabled or deleted. Their disposition remains **INTENTIONALLY RETAINED FOR
+  ROLLBACK**, not `MIGRATED` or `READY TO DECOMMISSION`.
+- A valid migration decision must select either a controlled data migration or
+  an explicit fresh-staging cutover. It must then freeze GCP writers, export and
+  reconcile state where required, prove AWS acceptance, move dashboard/backend
+  DNS and third-party callbacks, observe the rollback window, rotate residual
+  credentials, and only then produce a decommission packet. No safe shortcut
+  exists while public traffic and current settlement records remain on GCP.
+
+## Batch 18 — Remediation of verified gaps
+
+Status: **PARTIALLY REMEDIATED**.
+
+The following fixes are committed, pushed, and separately reviewable. They are
+not described as deployed until their hosted checks, independent review, merge,
+and post-deployment verification are complete.
+
+| Finding                                                   | Remediation                                                                                                                                    | Current evidence                                                                                           | Remaining gate                                                                  |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Unsupported critical SQS jobs were acknowledged and lost  | Backend PR [#571](https://github.com/Agroasys/agroasys-backend/pull/571) fails the message so the existing retry/DLQ policy retains it         | Focused test, lint, typecheck, secret scan, queue-safety and hosted checks pass                            | Independent review and deployment to the critical worker                        |
+| Fixed secret-shaped test values obscured secret scanning  | Cotsel PR [#725](https://github.com/Agroasys/Cotsel/pull/725) generates ephemeral contract-test accounts in CI and removes fixed test fixtures | Focused Oracle tests, typecheck, lint, formatting, workflow YAML validation and redacted scan pass locally | Hosted checks and independent review                                            |
+| Runtime was manually ahead of Terraform                   | Cotsel PR [#724](https://github.com/Agroasys/Cotsel/pull/724) reconstructs revision-18 runtime ownership and carries this audit evidence       | Terraform/security checks pass on the current head; no unreviewed local apply was run                      | Independent review, protected saved-plan apply, and post-apply semantic recheck |
+| PR plan would propose deletion of the governed apply role | Backend PR [#570](https://github.com/Agroasys/agroasys-backend/pull/570) sets the pre-existing role variable for pull-request plans            | Current head has 23 passing checks and no failing check                                                    | Independent review and merge, then rerun #569's bootstrap plan                  |
+| Legacy unused GCP service-account secret                  | Removed backend Actions secret `GCP_SA_KEY`                                                                                                    | No source workflow reference and both GCP projects have zero user-managed service-account keys             | Keep non-secret legacy instance metadata until GCP retirement                   |
+
+Backend PR [#569](https://github.com/Agroasys/agroasys-backend/pull/569) remains
+blocked only by its bootstrap plan's planned governed-role deletion. That
+failure is correctly prevented by policy and is addressed by #570; it must be
+rerun only after #570 merges. Its application-level HMAC and secret-bootstrap
+changes are not live evidence until then.
+
+## Batch 19 — Efficiency and unnecessary-resource audit
+
+Status: **PARTIALLY VERIFIED**.
+
+- No unattached Elastic IP, available EBS volume, empty target group, or
+  non-available NAT gateway was found in the active `ap-south-1` AWS account.
+  The two NAT gateways and their fixed egress addresses are required for the
+  current two-AZ private Fargate design.
+- Cotsel `ricardian` and `treasury` CloudWatch log groups currently receive no
+  logs because those services have no AWS runtime replacement. They are
+  **STALE / LEGACY candidates**, not safe deletion targets: the active GCP
+  Cotsel VM still runs both services.
+- The historical `eu-north-1` backend ECR repository and scheduled-deletion
+  secret versions remain **READY FOR A CONSUMER DECISION**, not removal. This
+  audit has not proven their absence from every rollback or historical release
+  path.
+- No cost optimization was applied. Removing infrastructure before the GCP
+  migration and live AWS proof would trade a small visible cost for an
+  unbounded recovery risk.
+
+## Batch 20 — Fresh live staging proof
+
+Status: **PARTIALLY VERIFIED**.
+
+- On 2026-08-23, `GET
+https://cotsel.sys.agroasys.com/api/dashboard-gateway/v1/healthz` returned
+  HTTP `200`. The response body SHA-256 was
+  `b828b9220e37f7a09bdcce711e1ba33b1c9d24f5be0481e5757d214b01e98f83`.
+  ECS simultaneously reported gateway revision `:18` at `1/1/0`, rollout
+  `COMPLETED`; backend revision `:5` reported `2/2/0`, rollout `COMPLETED`.
+- A follow-up check at `2026-08-23T14:40:10Z` again returned HTTP `200` with
+  body SHA-256
+  `9de18c000dd7a04e56b28b4e2f6da9b11c62bd5a1490cb8ab486990f07800b66`.
+  The body is not treated as a fixed response contract. At that time the
+  gateway remained `1/1/0` on task definition `cotsel-staging-gateway:18`,
+  the API remained `2/2/0` on `agroasys-staging-api:5`, and the settlement
+  worker was `1/1/0` on `agroasys-staging-settlement-worker:5`; all three
+  primary rollouts reported `COMPLETED`.
+- A non-printing primary-RPC check retrieved its value from current AWS Secrets
+  Manager reference
+  `/agroasys/staging/cotsel/rpc-base-sepolia-primary`. It returned chain
+  `0x14a34`, current block `0x2bbd341`, and `24,417` runtime-code bytes at the
+  candidate escrow address. This is fresh managed-primary and candidate-code
+  evidence.
+- The prior real-private-Fargate forced-primary-outage result remains evidence
+  that the current selector can choose the independent fallback. It is not a
+  substitute for a new complete end-to-end settlement rehearsal after every
+  remaining remediation.
+- At `2026-08-23T14:44:34Z`, the repository's existing read-only backend
+  gateway smoke ran using the current ECS-injected credential source without
+  printing its credential. It returned HTTP `200` for the signed gateway read.
+  A second controlled probe against the same non-mutating gateway capability
+  route returned HTTP `200` for a valid signature, HTTP `401` with
+  `AUTH_INVALID_SIGNATURE` after signature tampering, HTTP `200` for the first
+  nonce use, and HTTP `401` with `AUTH_NONCE_REPLAY` for the exact replay.
+- At the same time, a deliberately invalid empty-object callback body reached
+  backend DTO validation with HTTP `400` after valid callback authentication.
+  A tampered callback signature returned HTTP `401`; the first use of a fresh
+  callback nonce again reached validation with HTTP `400`; and its replay
+  returned HTTP `401`. The empty-object probe created no callback record and
+  did not claim callback-delivery success. It proves the deployed backend
+  callback authentication and shared nonce boundary only.
+- Backend PR #569 is not merged or deployed. A controlled live settlement
+  fixture has not been identified. The remaining real-callback proof must be
+  emitted by Cotsel's callback sender during a controlled fixture, rather than
+  by a direct probe.
+- No controlled candidate-contract trade has been observed by the indexer or
+  reconciled by the live AWS reconciliation worker. Gateway mutation and
+  gasless execution remain disabled in staging. Therefore the full settlement
+  path, oracle write, indexer fact, reconciliation fact, and callback evidence
+  remain unproven.
+
+## Batch 21 — GCP decommission readiness
+
+Status: **BLOCKED**.
+
+The GCP VMs remain active public runtime and state stores, and the GCP dashboard
+and backend DNS records still receive direct traffic. AWS has no validated
+treasury, Ricardian, dashboard, or state-migration equivalent. No workload or
+state resource meets the prerequisites for disablement, credential revocation,
+or deletion. The correct current disposition is retained rollback estate, not
+decommission candidate.
+
+## Batch 22 — Second-pass audit
+
+Status: **NOT YET ELIGIBLE**.
+
+An independent second pass must occur after the remediations in #570, #571,
+#724, #725 and #569 have reached their applicable merge/deploy gates, the RPC
+credential has been rotated, alert delivery is routed, and a controlled
+settlement fixture produces current cross-service evidence. Running the same
+checks now would only re-report known, intentionally unclosed gaps.
+
+## Batch 23 — Issue, runbook, and evidence reconciliation
+
+Status: **PARTIALLY VERIFIED**.
+
+This audit document, the deployment provenance packet, and the existing
+runbooks now distinguish verified runtime facts from candidates, migrations,
+and acceptance decisions. Issue #639 remains open and correctly preserves the
+independent acceptance boundary. The final runbook update must wait for the
+actual selected GCP migration method, final alert recipient, rotated provider
+identity, and #639 decision; recording invented values now would create the
+undocumented-knowledge problem this audit is intended to remove.
+
+## Batch 24 — Final completion gate
+
+Status: **NOT COMPLETE**.
+
+The system is more accurately inventoried and several defects are remediated in
+review, but the critical completion questions cannot yet all be answered with
+live evidence. In particular, migration parity, persistent cross-instance
+replay proof, a real Cotsel-sender callback, a post-rotation fallback exercise,
+accepted contract decision, controlled indexer/reconciliation event,
+operator-routed alerts, and a clean second pass remain open. The current
+non-mutating ingress and callback authentication probes reduce, but do not
+eliminate, those completion gaps.

@@ -26,7 +26,19 @@ on:
         required: false
         type: string
       gateway_image_tag:
-        description: Required for plan. Immutable gateway image tag, normally the 40-character Git SHA.
+        description: Required for plan. Immutable bundled-runtime image tag, normally the 40-character Git SHA.
+        required: false
+        type: string
+      base_sepolia_escrow_address:
+        description: Required for plan. Reviewed Base Sepolia escrow deployment address.
+        required: false
+        type: string
+      base_sepolia_contract_start_block:
+        description: Required for plan. Deployment block used by the indexer.
+        required: false
+        type: string
+      base_sepolia_usdc_address:
+        description: Required for plan. Reviewed Base Sepolia USDC address.
         required: false
         type: string
       plan_run_id:
@@ -133,6 +145,9 @@ jobs:
           EDGE_CERTIFICATE_ARN: ${{ github.event.inputs.edge_certificate_arn }}
           ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
           GATEWAY_IMAGE_TAG: ${{ github.event.inputs.gateway_image_tag }}
+          BASE_SEPOLIA_ESCROW_ADDRESS: ${{ github.event.inputs.base_sepolia_escrow_address }}
+          BASE_SEPOLIA_CONTRACT_START_BLOCK: ${{ github.event.inputs.base_sepolia_contract_start_block }}
+          BASE_SEPOLIA_USDC_ADDRESS: ${{ github.event.inputs.base_sepolia_usdc_address }}
         run: |
           test -n "$ORIGIN_CERTIFICATE_ARN" || {
             echo "origin_certificate_arn is required for plan." >&2
@@ -144,6 +159,18 @@ jobs:
           }
           test -n "$GATEWAY_IMAGE_TAG" || {
             echo "gateway_image_tag is required for plan." >&2
+            exit 1
+          }
+          test -n "$BASE_SEPOLIA_ESCROW_ADDRESS" || {
+            echo "base_sepolia_escrow_address is required for plan." >&2
+            exit 1
+          }
+          test -n "$BASE_SEPOLIA_CONTRACT_START_BLOCK" || {
+            echo "base_sepolia_contract_start_block is required for plan." >&2
+            exit 1
+          }
+          test -n "$BASE_SEPOLIA_USDC_ADDRESS" || {
+            echo "base_sepolia_usdc_address is required for plan." >&2
             exit 1
           }
 
@@ -176,6 +203,9 @@ jobs:
           EDGE_CERTIFICATE_ARN: ${{ github.event.inputs.edge_certificate_arn }}
           ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
           GATEWAY_IMAGE_TAG: ${{ github.event.inputs.gateway_image_tag }}
+          BASE_SEPOLIA_ESCROW_ADDRESS: ${{ github.event.inputs.base_sepolia_escrow_address }}
+          BASE_SEPOLIA_CONTRACT_START_BLOCK: ${{ github.event.inputs.base_sepolia_contract_start_block }}
+          BASE_SEPOLIA_USDC_ADDRESS: ${{ github.event.inputs.base_sepolia_usdc_address }}
         run: |
           set -euo pipefail
           terraform plan \
@@ -186,7 +216,10 @@ jobs:
             -var="account_id=$AWS_ACCOUNT_ID" \
             -var="edge_certificate_arn=$EDGE_CERTIFICATE_ARN" \
             -var="origin_certificate_arn=$ORIGIN_CERTIFICATE_ARN" \
-            -var="gateway_image_tag=$GATEWAY_IMAGE_TAG"
+            -var="gateway_image_tag=$GATEWAY_IMAGE_TAG" \
+            -var="base_sepolia_escrow_address=$BASE_SEPOLIA_ESCROW_ADDRESS" \
+            -var="base_sepolia_contract_start_block=$BASE_SEPOLIA_CONTRACT_START_BLOCK" \
+            -var="base_sepolia_usdc_address=$BASE_SEPOLIA_USDC_ADDRESS"
           terraform show -no-color tfplan > plan.txt
           terraform show -json tfplan > plan.json
 

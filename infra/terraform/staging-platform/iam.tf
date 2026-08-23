@@ -41,42 +41,55 @@ resource "aws_iam_role" "gateway_task" {
 
 data "aws_iam_policy_document" "gateway_execution" {
   statement {
-    sid       = "GetGatewayImageAuthorization"
+    sid       = "GetRuntimeImageAuthorization"
     effect    = "Allow"
     actions   = ["ecr:GetAuthorizationToken"]
     resources = ["*"]
   }
 
   statement {
-    sid    = "PullGatewayImage"
+    sid    = "PullRuntimeImages"
     effect = "Allow"
     actions = [
       "ecr:BatchCheckLayerAvailability",
       "ecr:BatchGetImage",
       "ecr:GetDownloadUrlForLayer",
     ]
-    resources = [aws_ecr_repository.service["gateway"].arn]
+    resources = [for service in local.runtime_services : aws_ecr_repository.service[service].arn]
   }
 
   statement {
-    sid    = "WriteGatewayLogs"
+    sid    = "WriteRuntimeLogs"
     effect = "Allow"
     actions = [
       "logs:CreateLogStream",
       "logs:PutLogEvents",
     ]
-    resources = ["${aws_cloudwatch_log_group.service["gateway"].arn}:*"]
+    resources = [
+      for service in local.runtime_services : "${aws_cloudwatch_log_group.service[service].arn}:*"
+    ]
   }
 
   statement {
-    sid     = "ReadGatewayStartupSecrets"
+    sid     = "ReadRuntimeStartupSecrets"
     effect  = "Allow"
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
       aws_secretsmanager_secret.platform["database/gateway/migration"].arn,
       aws_secretsmanager_secret.platform["database/gateway/runtime"].arn,
+      aws_secretsmanager_secret.platform["database/indexer/runtime"].arn,
+      aws_secretsmanager_secret.platform["database/oracle/migration"].arn,
+      aws_secretsmanager_secret.platform["database/oracle/runtime"].arn,
+      aws_secretsmanager_secret.platform["database/reconciliation/migration"].arn,
+      aws_secretsmanager_secret.platform["database/reconciliation/runtime"].arn,
+      aws_secretsmanager_secret.platform["database/auth/migration"].arn,
+      aws_secretsmanager_secret.platform["database/auth/runtime"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-callback"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-ingress"].arn,
+      aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn,
+      aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn,
+      aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn,
+      data.aws_secretsmanager_secret.oracle_wallet.arn,
     ]
   }
 
