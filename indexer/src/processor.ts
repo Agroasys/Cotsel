@@ -60,28 +60,27 @@ if (config.prometheusPort !== null) {
 }
 
 /**
- * Select the first reachable RPC endpoint from the configured priority list
- * (primary + fallbacks) and point the processor at it. Never throws: if none
- * answer, it keeps the primary so Subsquid's own retry can recover rather than
- * crash-looping the indexer.
+ * Select the first RPC endpoint on the configured chain and point the processor
+ * at it. Fail closed if no endpoint returns the expected chain ID.
  */
 export async function applyReachableRpcEndpoint(): Promise<{ url: string; reachable: boolean }> {
   const endpoints = [config.rpcEndpoint, ...config.rpcFallbackEndpoints];
-  if (endpoints.length === 1) {
-    return { url: config.rpcEndpoint, reachable: true };
-  }
-
-  const selection = await selectReachableRpcEndpoint(endpoints, config.rpcRequestTimeoutMs ?? 3000);
+  const selection = await selectReachableRpcEndpoint(
+    endpoints,
+    config.chainId,
+    config.rpcRequestTimeoutMs ?? 3000,
+  );
   processor.setRpcEndpoint(rpcEndpointSettings(selection.url));
   console.log(
     JSON.stringify({
-      level: selection.reachable ? 'info' : 'warn',
+      level: selection.checked > 1 ? 'warn' : 'info',
       service: 'indexer',
-      message: selection.reachable
-        ? 'Selected reachable RPC endpoint'
-        : 'No RPC endpoint answered preflight; using primary and relying on retry',
+      eventType: selection.checked > 1 ? 'rpc.fallback_selected' : 'rpc.primary_selected',
+      message:
+        selection.checked > 1 ? 'Selected fallback RPC endpoint' : 'Selected primary RPC endpoint',
       rpcUrl: redactRpcUrlForLogs(selection.url),
       checked: selection.checked,
+      chainId: config.chainId,
     }),
   );
   return { url: selection.url, reachable: selection.reachable };

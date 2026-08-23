@@ -18,7 +18,11 @@ export function redactRpcUrlForLogs(rpcUrl: string): string {
   }
 }
 
-async function isRpcEndpointReachable(rpcUrl: string, timeoutMs: number): Promise<boolean> {
+async function isRpcEndpointReachable(
+  rpcUrl: string,
+  expectedChainId: number,
+  timeoutMs: number,
+): Promise<boolean> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -35,7 +39,15 @@ async function isRpcEndpointReachable(rpcUrl: string, timeoutMs: number): Promis
     }
 
     const payload = (await response.json()) as { jsonrpc?: string; result?: string };
-    return payload?.jsonrpc === '2.0' && typeof payload.result === 'string';
+    if (payload?.jsonrpc !== '2.0' || typeof payload.result !== 'string') {
+      return false;
+    }
+
+    try {
+      return BigInt(payload.result) === BigInt(expectedChainId);
+    } catch {
+      return false;
+    }
   } catch {
     return false;
   } finally {
@@ -50,12 +62,12 @@ export interface ReachableRpcEndpointSelection {
 }
 
 /**
- * Pick the first reachable endpoint from an ordered (priority) list. Never
- * throws: if none answer it returns the primary so Subsquid's own retry can
- * recover rather than crash-looping the indexer.
+ * Pick the first endpoint from an ordered priority list that returns the
+ * expected chain ID. Fail closed when none passes validation.
  */
 export async function selectReachableRpcEndpoint(
   rpcUrls: string[],
+  expectedChainId: number,
   timeoutMs: number = DEFAULT_RPC_TIMEOUT_MS,
 ): Promise<ReachableRpcEndpointSelection> {
   if (rpcUrls.length === 0) {
@@ -65,10 +77,12 @@ export async function selectReachableRpcEndpoint(
   let checked = 0;
   for (const url of rpcUrls) {
     checked += 1;
-    if (await isRpcEndpointReachable(url, timeoutMs)) {
+    if (await isRpcEndpointReachable(url, expectedChainId, timeoutMs)) {
       return { url, reachable: true, checked };
     }
   }
 
-  return { url: rpcUrls[0], reachable: false, checked };
+  throw new Error(
+    `No configured RPC endpoint returned expected chain ID ${expectedChainId} after ${checked} checks`,
+  );
 }

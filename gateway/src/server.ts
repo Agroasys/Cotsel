@@ -387,7 +387,9 @@ async function bootstrap(): Promise<void> {
     rpcUrl: redactRpcUrlForLogs(config.rpcUrl),
     fallbackRpcUrls: config.rpcFallbackUrls.map(redactRpcUrlForLogs),
   });
-  await assertRpcEndpointsReachable([config.rpcUrl, ...config.rpcFallbackUrls]);
+  await assertRpcEndpointsReachable([config.rpcUrl, ...config.rpcFallbackUrls], {
+    expectedChainId: config.chainId,
+  });
 
   Logger.info('Initializing gateway database');
   await testConnection(pool);
