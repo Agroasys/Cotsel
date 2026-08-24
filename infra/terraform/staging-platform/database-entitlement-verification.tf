@@ -95,9 +95,9 @@ resource "aws_cloudwatch_log_group" "database_entitlement_verification" {
 }
 
 resource "aws_iam_role" "database_entitlement_verification_execution" {
-  name                 = "${local.name_prefix}-database-entitlement-verification-execution"
+  name                 = "${local.name_prefix}-db-verifier"
   assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-  permissions_boundary = var.database_bootstrap_permissions_boundary_arn
+  permissions_boundary = var.database_entitlement_verification_permissions_boundary_arn
 
   tags = {
     Environment = var.environment
@@ -144,7 +144,7 @@ data "aws_iam_policy_document" "database_entitlement_verification_execution" {
 }
 
 resource "aws_iam_role_policy" "database_entitlement_verification_execution" {
-  name   = "${local.name_prefix}-database-entitlement-verification-execution"
+  name   = "${local.name_prefix}-db-verifier"
   role   = aws_iam_role.database_entitlement_verification_execution.id
   policy = data.aws_iam_policy_document.database_entitlement_verification_execution.json
 }

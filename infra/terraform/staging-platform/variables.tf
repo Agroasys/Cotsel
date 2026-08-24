@@ -214,6 +214,20 @@ variable "database_bootstrap_permissions_boundary_arn" {
   }
 }
 
+variable "database_entitlement_verification_permissions_boundary_arn" {
+  description = "Permissions boundary required for the one-off Cotsel staging database entitlement verifier execution role."
+  type        = string
+  default     = "arn:aws:iam::655177116834:policy/agroasys-cotsel-staging-db-entitlement-verification-boundary"
+
+  validation {
+    condition = can(regex(
+      "^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:policy/agroasys-cotsel-staging-db-entitlement-verification-boundary$",
+      var.database_entitlement_verification_permissions_boundary_arn,
+    ))
+    error_message = "database_entitlement_verification_permissions_boundary_arn must be the dedicated Cotsel staging database entitlement verifier boundary policy ARN."
+  }
+}
+
 variable "log_retention_days" {
   description = "CloudWatch retention for staging service logs."
   type        = number

@@ -73,5 +73,9 @@ test('the entitlement verifier is private, strict-TLS, and tests the live role b
   assert.match(source, /CREATE SCHEMA \$\$\{probe_schema\}/);
   assert.match(source, /Runtime role unexpectedly created schema/);
   assert.match(source, /Runtime role unexpectedly connected to/);
+  assert.match(
+    source,
+    /permissions_boundary = var\.database_entitlement_verification_permissions_boundary_arn/,
+  );
   assert.doesNotMatch(source, /MASTER_PASSWORD|MASTER_USERNAME/);
 });
