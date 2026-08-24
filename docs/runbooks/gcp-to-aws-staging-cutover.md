@@ -132,6 +132,14 @@ versions after the metadata review confirms that no service has started.
    approved private path.
 8. Prove runtime roles cannot create schemas or read the other service database.
 
+Use the dedicated entitlement-verification task for steps 7 and 8. The task
+uses only the four Treasury and Ricardian migration/runtime credentials. It
+connects from private subnets with `verify-full` TLS. It tests migration schema
+creation in a rolled-back transaction. It verifies runtime own-database access.
+It verifies runtime schema creation and cross-database connection are denied.
+The task writes only pass/fail evidence to its encrypted CloudWatch log group.
+Do not use task command or environment overrides.
+
 The bootstrap task verifies the pinned public AWS RDS root bundle before it
 opens a `verify-full` PostgreSQL connection. It reads the RDS master secret and four service database
 secrets. It creates only `cotsel_ricardian` and `cotsel_treasury`, their

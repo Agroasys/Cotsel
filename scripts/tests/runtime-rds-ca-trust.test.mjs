@@ -60,3 +60,18 @@ test('the database bootstrap sets default privileges as each migration role', as
     /ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cotsel_treasury_runtime/,
   );
 });
+
+test('the entitlement verifier is private, strict-TLS, and tests the live role boundary', async () => {
+  const source = await readFile(
+    'infra/terraform/staging-platform/database-entitlement-verification.tf',
+    'utf8',
+  );
+
+  assert.ok(source.includes(bundleUrl));
+  assert.ok(source.includes(bundleDigest));
+  assert.match(source, /export PGSSLMODE='verify-full'/);
+  assert.match(source, /CREATE SCHEMA \$\$\{probe_schema\}/);
+  assert.match(source, /Runtime role unexpectedly created schema/);
+  assert.match(source, /Runtime role unexpectedly connected to/);
+  assert.doesNotMatch(source, /MASTER_PASSWORD|MASTER_USERNAME/);
+});
