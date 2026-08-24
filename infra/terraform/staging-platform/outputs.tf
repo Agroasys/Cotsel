@@ -83,6 +83,15 @@ output "database_bootstrap_runtime" {
   }
 }
 
+output "database_entitlement_verification_runtime" {
+  description = "One-off private task that proves Treasury and Ricardian migration and runtime database entitlements without exposing credentials."
+  value = {
+    execution_role_arn = aws_iam_role.database_entitlement_verification_execution.arn
+    task_family        = aws_ecs_task_definition.database_entitlement_verification.family
+    task_revision      = aws_ecs_task_definition.database_entitlement_verification.revision
+  }
+}
+
 output "runtime_dependencies" {
   description = "Non-secret managed dependency coordinates consumed by the runtime root."
   value = {
