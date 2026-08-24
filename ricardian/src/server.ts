@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { createCorsOptions } from '@agroasys/shared-edge';
+import { shouldAutoMigrateDatabase } from '@agroasys/shared-db';
 import { config } from './config';
 import { RicardianController } from './api/controller';
 import { createRouter } from './api/routes';
@@ -14,7 +15,16 @@ import { createRicardianNonceStore } from './auth/nonceStore';
 
 async function bootstrap(): Promise<void> {
   await testConnection();
-  await runMigrations();
+  if (
+    shouldAutoMigrateDatabase({
+      nodeEnv: process.env.NODE_ENV,
+      rawValue: process.env.DB_AUTO_MIGRATE,
+    })
+  ) {
+    await runMigrations();
+  } else {
+    Logger.info('Automatic database migration is disabled for ricardian runtime');
+  }
 
   const app = express();
   const controller = new RicardianController();

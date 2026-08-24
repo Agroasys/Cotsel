@@ -74,6 +74,18 @@ output "indexer_migration_runtime" {
   }
 }
 
+output "service_migration_runtimes" {
+  description = "Strict-TLS one-off migration task metadata for service databases. Contains no secret values."
+  value = {
+    for service, task in aws_ecs_task_definition.service_migration : service => {
+      execution_role_arn  = aws_iam_role.service_migration_execution[service].arn
+      task_definition_arn = task.arn
+      task_family         = task.family
+      task_revision       = task.revision
+    }
+  }
+}
+
 output "database_bootstrap_runtime" {
   description = "One-off Cotsel database bootstrap task metadata. Run only through the controlled cutover procedure."
   value = {

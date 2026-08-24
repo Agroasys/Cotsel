@@ -2,6 +2,7 @@ locals {
   gateway_environment = [
     { name = "AWS_REGION", value = var.region },
     { name = "DB_HOST", value = local.postgres_host },
+    { name = "DB_AUTO_MIGRATE", value = "false" },
     { name = "DB_NAME", value = "cotsel_gateway" },
     { name = "DB_PORT", value = "5432" },
     { name = "DB_SSL_MODE", value = "verify-full" },
@@ -33,8 +34,6 @@ locals {
   ]
 
   gateway_secrets = [
-    { name = "DB_MIGRATION_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/gateway/migration"].arn}:password::" },
-    { name = "DB_MIGRATION_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/gateway/migration"].arn}:username::" },
     { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/gateway/runtime"].arn}:password::" },
     { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/gateway/runtime"].arn}:username::" },
     { name = "GATEWAY_ORACLE_SERVICE_API_KEY", valueFrom = "${aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn}:id::" },
@@ -73,6 +72,7 @@ locals {
     { name = "AUTH_CORS_ALLOW_NO_ORIGIN", value = "false" },
     { name = "AUTH_RATE_LIMIT_ENABLED", value = "false" },
     { name = "DB_HOST", value = local.postgres_host },
+    { name = "DB_AUTO_MIGRATE", value = "false" },
     { name = "DB_NAME", value = "cotsel_auth" },
     { name = "DB_PORT", value = "5432" },
     { name = "DB_SSL_MODE", value = "verify-full" },
@@ -86,8 +86,6 @@ locals {
   ]
 
   auth_secrets = [
-    { name = "DB_MIGRATION_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/auth/migration"].arn}:password::" },
-    { name = "DB_MIGRATION_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/auth/migration"].arn}:username::" },
     { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/auth/runtime"].arn}:password::" },
     { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/auth/runtime"].arn}:username::" },
   ]

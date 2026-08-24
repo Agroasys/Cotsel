@@ -14,6 +14,7 @@
   "files": [
     "index.js",
     "index.d.ts",
+    "migrate.js",
     "index.test.js",
     "rls-schema.test.js",
     "postgres-rls.integration.test.js"

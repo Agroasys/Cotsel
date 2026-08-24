@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import type { Request, Response, NextFunction } from 'express';
 import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
+import { shouldAutoMigrateDatabase } from '@agroasys/shared-db';
 import { config } from './config';
 import { createRouter } from './api/routes';
 import { TreasuryController } from './api/controller';
@@ -23,7 +24,16 @@ type ServiceAuthRequest = Request & {
 
 async function bootstrap(): Promise<void> {
   await testConnection();
-  await runMigrations();
+  if (
+    shouldAutoMigrateDatabase({
+      nodeEnv: process.env.NODE_ENV,
+      rawValue: process.env.DB_AUTO_MIGRATE,
+    })
+  ) {
+    await runMigrations();
+  } else {
+    Logger.info('Automatic database migration is disabled for treasury runtime');
+  }
 
   if (config.rpcUrl) {
     Logger.info('Validating RPC endpoints for treasury startup', {

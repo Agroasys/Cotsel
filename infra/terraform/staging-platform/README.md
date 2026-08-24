@@ -55,13 +55,17 @@ The oracle signer secret already exists at
 `/agroasys/staging/base-sepolia/wallet-oracle`. Terraform reads its identity but
 does not read or manage its value.
 
-The indexer schema migration runs as a separate one-off ECS task. Its execution
-role can pull only the indexer image, write only the indexer log group, and read
-only the indexer migration credential. The long-running runtime role cannot read
-that migration credential.
+Every service schema migration runs as a separate one-off ECS task. Each
+execution role can pull only its service image, write only its service log
+group, and read only its service migration credential. Long-running execution
+roles cannot read migration credentials, and production containers must set
+`DB_AUTO_MIGRATE` explicitly. The managed staging runtimes set it to `false`.
 
 Follow [`docs/runbooks/staging-indexer-migration.md`](../../../docs/runbooks/staging-indexer-migration.md)
-to run and verify the one-off migration without exposing credentials.
+for the indexer and
+[`docs/runbooks/staging-service-migrations.md`](../../../docs/runbooks/staging-service-migrations.md)
+for the other service databases. Run and verify required migrations before
+deploying the corresponding long-running revision.
 
 ## Validation
 

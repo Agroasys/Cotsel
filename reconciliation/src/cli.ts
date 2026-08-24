@@ -1,4 +1,5 @@
 import { config } from './config';
+import { shouldAutoMigrateDatabase } from '@agroasys/shared-db';
 import { Logger } from './utils/logger';
 import { closeConnection, testConnection } from './database/connection';
 import { runMigrations } from './database/migrations';
@@ -36,7 +37,16 @@ async function bootstrap(): Promise<void> {
   });
 
   await testConnection();
-  await runMigrations();
+  if (
+    shouldAutoMigrateDatabase({
+      nodeEnv: process.env.NODE_ENV,
+      rawValue: process.env.DB_AUTO_MIGRATE,
+    })
+  ) {
+    await runMigrations();
+  } else {
+    Logger.info('Automatic database migration is disabled for reconciliation runtime');
+  }
 
   Logger.info('Validating RPC endpoint for reconciliation startup', {
     rpcUrl: redactRpcUrlForLogs(config.rpcUrl),

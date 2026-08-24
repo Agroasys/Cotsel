@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
 import { WebhookNotifier } from '@agroasys/notifications';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
+import { shouldAutoMigrateDatabase } from '@agroasys/shared-db';
 import { config } from './config';
 import { createRouter } from './api/routes';
 import { OracleController } from './api/controller';
@@ -25,7 +26,16 @@ let requestRateLimiterClose: (() => Promise<void>) | undefined;
 async function initializeDatabase(): Promise<void> {
   Logger.info('Initializing database...');
   await testConnection();
-  await runMigrations();
+  if (
+    shouldAutoMigrateDatabase({
+      nodeEnv: process.env.NODE_ENV,
+      rawValue: process.env.DB_AUTO_MIGRATE,
+    })
+  ) {
+    await runMigrations();
+  } else {
+    Logger.info('Automatic database migration is disabled for oracle runtime');
+  }
   Logger.info('Database initialized');
 }
 

@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { Router } from 'express';
 import { createHttpRateLimiter } from '@agroasys/shared-edge';
+import { shouldAutoMigrateDatabase } from '@agroasys/shared-db';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
 import { runMigrations } from './database/migrations';
 import { createPool, closeConnection, testConnection } from './database/index';
@@ -393,11 +394,20 @@ async function bootstrap(): Promise<void> {
 
   Logger.info('Initializing gateway database');
   await testConnection(pool);
-  const migrationPool = createPool(config, 'migration');
-  try {
-    await runMigrations(migrationPool);
-  } finally {
-    await closeConnection(migrationPool);
+  if (
+    shouldAutoMigrateDatabase({
+      nodeEnv: process.env.NODE_ENV,
+      rawValue: process.env.DB_AUTO_MIGRATE,
+    })
+  ) {
+    const migrationPool = createPool(config, 'migration');
+    try {
+      await runMigrations(migrationPool);
+    } finally {
+      await closeConnection(migrationPool);
+    }
+  } else {
+    Logger.info('Automatic database migration is disabled for gateway runtime');
   }
   const requestRateLimiter = await createHttpRateLimiter({
     enabled: config.rateLimitEnabled,

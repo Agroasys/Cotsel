@@ -8,6 +8,7 @@ const {
   parsePostgresSslMode,
   resolveMigrationCredentials,
   resolvePostgresSslConfig,
+  shouldAutoMigrateDatabase,
 } = require('./index');
 
 test('parsePostgresSslMode accepts supported modes and rejects ambiguous values', () => {
@@ -57,6 +58,23 @@ test('resolveMigrationCredentials falls back to runtime credentials when migrati
       user: 'app_user',
       password: 'app_pass',
     },
+  );
+});
+
+test('shouldAutoMigrateDatabase requires an explicit production decision', () => {
+  assert.throws(
+    () => shouldAutoMigrateDatabase({ nodeEnv: 'production', rawValue: undefined }),
+    /DB_AUTO_MIGRATE must be set explicitly/,
+  );
+  assert.equal(shouldAutoMigrateDatabase({ nodeEnv: 'production', rawValue: 'false' }), false);
+  assert.equal(shouldAutoMigrateDatabase({ nodeEnv: 'production', rawValue: 'true' }), true);
+});
+
+test('shouldAutoMigrateDatabase preserves local behavior and rejects invalid values', () => {
+  assert.equal(shouldAutoMigrateDatabase({ nodeEnv: 'development', rawValue: undefined }), true);
+  assert.throws(
+    () => shouldAutoMigrateDatabase({ nodeEnv: 'staging', rawValue: 'sometimes' }),
+    /DB_AUTO_MIGRATE must be true or false/,
   );
 });
 

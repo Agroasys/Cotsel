@@ -40,4 +40,8 @@ export function resolveMigrationCredentials(config: MigrationCredentialConfig): 
   user: string;
   password: string;
 };
+export function shouldAutoMigrateDatabase(input: {
+  nodeEnv: string | undefined;
+  rawValue: string | undefined;
+}): boolean;
 export function createServicePool(config: ServicePoolConfig): Pool;
