@@ -102,6 +102,12 @@ Do not treat it as interchangeable with the shared-auth HMAC/API-key contract un
 
 Both services now default to enabled auth in production mode and reject `NONCE_STORE=inmemory` in production.
 
+Their `/health` and `/ready` endpoints remain unauthenticated liveness/readiness
+paths for ECS. They do not prove service authentication. The gateway uses each
+service's protected `/auth-check` endpoint for the operational downstream
+probe; a successful probe proves the gateway generated an accepted shared-auth
+HMAC request through the private service-discovery path.
+
 ## Header-level expectations
 
 ### Shared-auth HMAC/API-key pattern

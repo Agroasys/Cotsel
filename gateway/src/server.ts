@@ -157,7 +157,7 @@ const downstreamServiceRegistry = createDownstreamServiceRegistry([
     name: 'Treasury',
     source: 'treasury_http',
     baseUrl: config.treasuryBaseUrl,
-    healthPath: '/api/treasury/v1/health',
+    healthPath: '/api/treasury/v1/auth-check',
     auth: config.treasuryServiceApiSecret
       ? {
           mode: 'shared_hmac',
@@ -188,7 +188,7 @@ const downstreamServiceRegistry = createDownstreamServiceRegistry([
     name: 'Ricardian Engine',
     source: 'ricardian_http',
     baseUrl: config.ricardianBaseUrl,
-    healthPath: '/api/ricardian/v1/health',
+    healthPath: '/api/ricardian/v1/auth-check',
     auth: config.ricardianServiceApiSecret
       ? {
           mode: 'shared_hmac',

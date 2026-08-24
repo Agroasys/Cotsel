@@ -101,6 +101,24 @@ resource "aws_vpc_security_group_ingress_rule" "services_from_services" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_egress_rule" "gateway_to_ricardian" {
+  security_group_id            = aws_security_group.gateway.id
+  description                  = "Authenticated private HTTP calls from the gateway to Ricardian."
+  referenced_security_group_id = aws_security_group.internal_services.id
+  from_port                    = 3100
+  to_port                      = 3100
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "gateway_to_treasury" {
+  security_group_id            = aws_security_group.gateway.id
+  description                  = "Authenticated private HTTP calls from the gateway to Treasury."
+  referenced_security_group_id = aws_security_group.internal_services.id
+  from_port                    = 3200
+  to_port                      = 3200
+  ip_protocol                  = "tcp"
+}
+
 # Cotsel currently needs HTTPS egress for Base RPC and the reciprocal Agroasys
 # callback. Destination restriction is added after the two managed RPC endpoints
 # and the callback edge addresses are pinned. VPC flow logs remain the detection

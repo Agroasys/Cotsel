@@ -51,6 +51,15 @@ export function createRouter(
     options.authMiddleware,
     options.mutationAuthMiddleware,
   ].filter(Boolean) as RequestHandler[];
+
+  router.get('/auth-check', ...protectedMiddlewares, (_req, res) => {
+    res.status(200).json({
+      success: true,
+      service: 'treasury',
+      authenticated: true,
+    });
+  });
+
   router.get(
     '/reconciliation/control-summary',
     ...protectedMiddlewares,

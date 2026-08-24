@@ -120,6 +120,33 @@ describe('service orchestrator', () => {
     expect(headers['X-Nonce']).toBeDefined();
   });
 
+  test('uses configured service auth for protected health probes', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, text: async () => '' } as Response);
+    global.fetch = fetchMock;
+
+    const orchestrator = new ServiceOrchestrator(
+      createDownstreamServiceRegistry([
+        createContract({ healthPath: '/api/treasury/v1/auth-check' }),
+      ]),
+    );
+
+    await orchestrator.probeHealth('treasury', {
+      requestId: 'health-req-123',
+      correlationId: 'health-corr-123',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://treasury.example/api/treasury/v1/auth-check');
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers['x-agroasys-timestamp']).toBeDefined();
+    expect(headers['x-agroasys-nonce']).toBeDefined();
+    expect(headers['x-agroasys-signature']).toBeDefined();
+    expect(headers['x-request-id']).toBe('health-req-123');
+    expect(headers['x-correlation-id']).toBe('health-corr-123');
+  });
+
   test('honors retry limits and fails closed for mutations', async () => {
     const fetchMock = jest
       .fn()

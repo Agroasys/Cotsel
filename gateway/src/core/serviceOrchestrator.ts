@@ -318,7 +318,7 @@ export class ServiceOrchestrator implements DownstreamServiceOrchestrator {
       method: 'GET',
       path: service.healthPath,
       readOnly: true,
-      authenticated: false,
+      authenticated: service.auth.mode !== 'none',
       requestContext,
       operation: `${service.key}:health`,
     });
