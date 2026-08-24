@@ -38,7 +38,6 @@ test('every non-indexer schema has a dedicated one-off migration task', async ()
 test('production service startup makes auto-migration an explicit decision', async () => {
   const serviceEntrypoints = [
     'auth/src/server.ts',
-    'gateway/src/server.ts',
     'oracle/src/server.ts',
     'reconciliation/src/cli.ts',
     'ricardian/src/server.ts',
@@ -50,4 +49,10 @@ test('production service startup makes auto-migration an explicit decision', asy
     assert.match(source, /shouldAutoMigrateDatabase/);
     assert.match(source, /rawValue: process\.env\.DB_AUTO_MIGRATE/);
   }
+
+  const gatewayEntrypoint = await readFile('gateway/src/server.ts', 'utf8');
+  const gatewayMigrationPolicy = await readFile('gateway/src/database/autoMigrate.ts', 'utf8');
+  assert.match(gatewayEntrypoint, /migrateGatewayDatabaseIfEnabled\(config\)/);
+  assert.match(gatewayMigrationPolicy, /shouldAutoMigrateDatabase/);
+  assert.match(gatewayMigrationPolicy, /rawValue: process\.env\.DB_AUTO_MIGRATE/);
 });

@@ -419,7 +419,6 @@ jobs:
           run_check runtime-rds-ca-trust node --test scripts/tests/runtime-rds-ca-trust.test.mjs
           run_check runtime-migration-boundary node --test scripts/tests/runtime-migration-boundary.test.mjs
           run_check monitoring-baseline-validator node scripts/monitoring-baseline-validate.mjs --runbook docs/runbooks/monitoring-alerting-baseline.md --out ci-reports/monitoring-baseline-validation.json
-
           if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi
