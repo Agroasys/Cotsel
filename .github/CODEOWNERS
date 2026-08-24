@@ -1,0 +1,4 @@
+# Settlement and infrastructure changes use the two-person programme control.
+# GitHub excludes the pull-request author from approving their own change, so
+# either programme owner must obtain approval from the other owner.
+* @Astton @czpyioe
