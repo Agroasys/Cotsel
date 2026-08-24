@@ -1,6 +1,7 @@
 {
-  "generatedAt": "2026-08-22T07:13:30.736Z",
-  "commitSha": "1b3c64051e3fa29f8f148b24f5ec2537964407d1",
+  "generatedAt": "2026-08-24T18:52:11.896Z",
+  "commitSha": "6052ed389e885fce3711be0794c8df0df6fe6d95",
+  "worktreeClean": true,
   "network": {
     "hardhatName": "base-sepolia",
     "runtimeKey": "base-sepolia",
@@ -9,11 +10,11 @@
   },
   "contract": {
     "name": "AgroasysEscrow",
-    "address": "0xB594Cd561F28daBD771f9b358CF2bc731d14EDBd",
-    "deploymentTxHash": "0xb6af9e63a64fbbdc3f3294bf35c749c59b77a09a12b9f8df3dd4b90b3cfad5df",
-    "deploymentBlock": 45807259,
+    "address": "0x95021c0fD0C69BB5Cb991832476B646857632e5d",
+    "deploymentTxHash": "0xe38c4dd37d2cdf465bb8c61a0801d5d63d0c228067f99e143f63d11e0afae5ca",
+    "deploymentBlock": 45914609,
     "deploymentReceiptStatus": 1,
-    "explorerAddressUrl": "https://sepolia.basescan.org/address/0xB594Cd561F28daBD771f9b358CF2bc731d14EDBd",
+    "explorerAddressUrl": "https://sepolia.basescan.org/address/0x95021c0fD0C69BB5Cb991832476B646857632e5d",
     "constructorArguments": {
       "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
       "oracleAddress": "0x440b6efe3f4E0A59A9F199f97C9E4cd9368A178B",
@@ -25,17 +26,83 @@
         "0x13F9507b51A883B1302B555F9530C0F2d1b5bB8f"
       ],
       "requiredApprovals": 2
+    },
+    "deployerAddress": "0xB0A1d8f64E2451165a93A6F99dD0d0Fb5d5D8806",
+    "roleAttestation": {
+      "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "oracleAddress": "0x440b6efe3f4E0A59A9F199f97C9E4cd9368A178B",
+      "treasuryAddress": "0xc6d7c73f5a23B6b681e0fd95F30A1f38A64BE4bc",
+      "treasuryPayoutAddress": "0xc6d7c73f5a23B6b681e0fd95F30A1f38A64BE4bc",
+      "relayerAllowed": true,
+      "admins": [
+        "0x0817fe4A674a57af87E39d0CD341b2b5F0158599",
+        "0xcB1296C7149289CF1Bd0B84ce6D8c0F608E041cD",
+        "0x13F9507b51A883B1302B555F9530C0F2d1b5bB8f"
+      ],
+      "requiredApprovals": 2,
+      "governanceEpoch": 1,
+      "oracleActive": true
     }
   },
   "verification": {
     "requested": true,
     "status": "verified",
-    "verificationUrl": "https://sepolia.basescan.org/address/0xB594Cd561F28daBD771f9b358CF2bc731d14EDBd#code"
+    "verificationUrl": "https://sepolia.basescan.org/address/0x95021c0fD0C69BB5Cb991832476B646857632e5d#code"
   },
   "artifact": {
     "compilerVersion": "0.8.34",
-    "abiSha256": "572c473d519c81c67d0fe6fa3174439aca53d17f45b9b8438c196bcf916aaed1",
-    "bytecodeSha256": "b3429757821ff6089d330e2c97f69c0fe8ee489d392cced82c689bb5b76b6909",
-    "deployedBytecodeSha256": "60a861277ecc63e5b0b08001c8db174677c61d3fe00d82eb33e124d369ee41cc"
+    "compilerLongVersion": "0.8.34+commit.80d5c536",
+    "compilerSettings": {
+      "viaIR": true,
+      "optimizer": {
+        "enabled": true,
+        "runs": 1
+      },
+      "evmVersion": "paris",
+      "outputSelection": {
+        "*": {
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ],
+          "": [
+            "ast"
+          ]
+        }
+      }
+    },
+    "compilerInputSha256": "068206dfc9a1bc35ad36753789fe35fc79fba99f72edd21d3a7743289b7b4572",
+    "sourceSha256": {
+      "@openzeppelin/contracts/interfaces/draft-IERC6093.sol": "fa7068f56bc180571a6095be6eaef06d51dbe81e30cb128397d993c9599ecc30",
+      "@openzeppelin/contracts/interfaces/IERC1363.sol": "9c3a75a925a6dac9e88b03cddc58d42fe3131b0aaaad84408521f3f7af2f991b",
+      "@openzeppelin/contracts/interfaces/IERC165.sol": "dfb3f56fa928a7c6cae41a7ce2c86b9210fa18d33fa26389099d66a0fa790368",
+      "@openzeppelin/contracts/interfaces/IERC20.sol": "0158e2d3e0e28bedd99eec13dcf1a8aa3a70a5b7e4bb2ad709609c95fcc740d1",
+      "@openzeppelin/contracts/token/ERC20/ERC20.sol": "50f34ae16a067a41c2c1091445d11d63788e54c717677cb6d6b0e4cdea2ad21d",
+      "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol": "0b7132f17d14d1d84b41b0bb429be62dafdff00fd3470f68724d8018eb07f57a",
+      "@openzeppelin/contracts/token/ERC20/IERC20.sol": "01b6f5c4fa45fd38822b286ecef6daf983d27306dd6362496fa71b3e4600b72c",
+      "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol": "c2394cb2a327f234711da34884947f4aa0f6dd2791d1d6303a0c7acfaf81bca3",
+      "@openzeppelin/contracts/utils/Context.sol": "847fda5460fee70f56f4200f59b82ae622bb03c79c77e67af010e31b7e2cc5b6",
+      "@openzeppelin/contracts/utils/cryptography/ECDSA.sol": "ba7c2d314fcd61c9783e0b3f0c664d004b76b408fda6a84edc8267d17c5012d6",
+      "@openzeppelin/contracts/utils/introspection/IERC165.sol": "9055c2994b37dea1a41b7b7926dcb510f05dbe2540b0aafc5fbee9558fffd0ca",
+      "@openzeppelin/contracts/utils/math/Math.sol": "bdfdbe133991c0c78042957ff5cd97167926fcaf6d15664f3835a076cb066457",
+      "@openzeppelin/contracts/utils/math/SafeCast.sol": "5779bc848bde39f1ad7bc02b4f708a0040888e0083b1a33f119cd94639350134",
+      "@openzeppelin/contracts/utils/Panic.sol": "270fc8401c1a13fae6a7a4a2dd6e381b95d658896701e51f0d3e2688acab3dec",
+      "@openzeppelin/contracts/utils/Pausable.sol": "2c26130748f06552c65ca74d89eaf78c9324a3cbac3ba6fdbadaa8beba0cb0b4",
+      "@openzeppelin/contracts/utils/ReentrancyGuard.sol": "94e409e8f6e3184236651a6cc2b1a6a3ea0f0a25eb85b71e524ad5791bb2fbc8",
+      "@openzeppelin/contracts/utils/StorageSlot.sol": "75704538dcb223239280c6726d9a31cf769a7816718517c997fc7d63bdb70778",
+      "src/AgroasysEscrow.sol": "e7654e678ad0081e57e01eea8907a6886cd82f73297d894d8cc567508bd21fe4",
+      "src/MockUSDC.sol": "2e22993701e83ac3601de6b1a7c91354a399ad28f322d21a24295d0349d8e551",
+      "src/test/ClaimSecurityFixtures.sol": "c1a9a13311bb883587ae7f316484321f2aa54311f92efcf0d4434ce748e8444a"
+    },
+    "abiSha256": "4384792054d99e2063cd133c62c22aea3916982d5d9c29d2c168217e6e552277",
+    "bytecodeSha256": "3f0acaa9810bcaa1d64796333936c105fdc00ccc7aadc78a5f2108761f9cd0a8",
+    "localRuntimeBytecodeSha256": "9554685d6655a4cf70417ce40c754e039948b15720a9294f1e3ad435accd049f",
+    "liveRuntimeBytecodeSha256": "bde3a3b0ecaa507ee09f0dbb61957875b768da56f5386acb2fa30bc7f678b134",
+    "normalizedLocalRuntimeBytecodeSha256": "9554685d6655a4cf70417ce40c754e039948b15720a9294f1e3ad435accd049f",
+    "normalizedRuntimeBytecodeSha256": "9554685d6655a4cf70417ce40c754e039948b15720a9294f1e3ad435accd049f",
+    "runtimeBytecodeMatches": true
   }
 }
