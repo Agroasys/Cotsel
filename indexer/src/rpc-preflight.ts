@@ -18,6 +18,13 @@ interface JsonRpcResponse {
   };
 }
 
+class RpcChainIdMismatchError extends Error {
+  constructor(expectedChainId: number, actualChainId: bigint) {
+    super(`Wrong chain: expected ${expectedChainId}, received ${actualChainId.toString()}`);
+    this.name = 'RpcChainIdMismatchError';
+  }
+}
+
 export function redactRpcUrlForLogs(rpcUrl: string): string {
   try {
     const parsed = new URL(rpcUrl);
@@ -69,40 +76,55 @@ async function callRpc(
   }
 }
 
-async function isRpcEndpointReachable(
+async function assertRpcEndpointReachable(
   rpcUrl: string,
   expectedChainId: number,
   timeoutMs: number,
-): Promise<boolean> {
+): Promise<void> {
+  const chainIdResult = await callRpc(rpcUrl, 'eth_chainId', [], timeoutMs);
+  if (typeof chainIdResult !== 'string') {
+    throw new Error('Invalid eth_chainId result');
+  }
+
+  let actualChainId: bigint;
   try {
-    const chainIdResult = await callRpc(rpcUrl, 'eth_chainId', [], timeoutMs);
-    if (typeof chainIdResult !== 'string' || BigInt(chainIdResult) !== BigInt(expectedChainId)) {
-      return false;
-    }
-
-    const blockNumberResult = await callRpc(rpcUrl, 'eth_blockNumber', [], timeoutMs);
-    if (typeof blockNumberResult !== 'string') {
-      return false;
-    }
-
-    const head = BigInt(blockNumberResult);
-    const probeHeight = head > 0n ? head - 1n : head;
-    const probeBlockNumber = `0x${probeHeight.toString(16)}`;
-    const blockResult = await callRpc(
-      rpcUrl,
-      'eth_getBlockByNumber',
-      [probeBlockNumber, false],
-      timeoutMs,
-    );
-
-    if (!blockResult || typeof blockResult !== 'object') {
-      return false;
-    }
-
-    const returnedNumber = (blockResult as { number?: unknown }).number;
-    return typeof returnedNumber === 'string' && BigInt(returnedNumber) === probeHeight;
+    actualChainId = BigInt(chainIdResult);
   } catch {
-    return false;
+    throw new Error('Invalid eth_chainId result');
+  }
+
+  if (actualChainId !== BigInt(expectedChainId)) {
+    throw new RpcChainIdMismatchError(expectedChainId, actualChainId);
+  }
+
+  const blockNumberResult = await callRpc(rpcUrl, 'eth_blockNumber', [], timeoutMs);
+  if (typeof blockNumberResult !== 'string') {
+    throw new Error('Invalid eth_blockNumber result');
+  }
+
+  let head: bigint;
+  try {
+    head = BigInt(blockNumberResult);
+  } catch {
+    throw new Error('Invalid eth_blockNumber result');
+  }
+
+  const probeHeight = head > 0n ? head - 1n : head;
+  const probeBlockNumber = `0x${probeHeight.toString(16)}`;
+  const blockResult = await callRpc(
+    rpcUrl,
+    'eth_getBlockByNumber',
+    [probeBlockNumber, false],
+    timeoutMs,
+  );
+
+  if (!blockResult || typeof blockResult !== 'object') {
+    throw new Error('Invalid eth_getBlockByNumber result');
+  }
+
+  const returnedNumber = (blockResult as { number?: unknown }).number;
+  if (typeof returnedNumber !== 'string' || BigInt(returnedNumber) !== probeHeight) {
+    throw new Error('eth_getBlockByNumber returned an unexpected block');
   }
 }
 
@@ -110,12 +132,15 @@ export interface ReachableRpcEndpointSelection {
   url: string;
   reachable: boolean;
   checked: number;
+  selectedIndex: number;
 }
 
 /**
  * Pick the first endpoint from an ordered priority list that returns the
- * expected chain ID and serves a representative block. Fail closed when none
- * passes validation.
+ * expected chain ID and serves a representative block. Validate every
+ * configured endpoint before selecting the first valid one so a wrong-chain
+ * fallback cannot be hidden by a healthy primary. Fail closed when none passes
+ * validation.
  */
 export async function selectReachableRpcEndpoint(
   rpcUrls: string[],
@@ -126,15 +151,29 @@ export async function selectReachableRpcEndpoint(
     throw new Error('selectReachableRpcEndpoint requires at least one RPC endpoint');
   }
 
+  let selected: ReachableRpcEndpointSelection | null = null;
   let checked = 0;
-  for (const url of rpcUrls) {
+  const failures: string[] = [];
+
+  for (const [index, url] of rpcUrls.entries()) {
     checked += 1;
-    if (await isRpcEndpointReachable(url, expectedChainId, timeoutMs)) {
-      return { url, reachable: true, checked };
+    try {
+      await assertRpcEndpointReachable(url, expectedChainId, timeoutMs);
+      selected ??= { url, reachable: true, checked, selectedIndex: index };
+    } catch (error) {
+      if (error instanceof RpcChainIdMismatchError) {
+        throw error;
+      }
+
+      failures.push(error instanceof Error ? error.message : String(error));
     }
   }
 
+  if (selected) {
+    return { ...selected, checked };
+  }
+
   throw new Error(
-    `No configured RPC endpoint returned expected chain ID ${expectedChainId} after ${checked} checks`,
+    `No configured RPC endpoint passed chain and block validation for chain ${expectedChainId}. ${failures[0]}`,
   );
 }

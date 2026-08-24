@@ -57,16 +57,32 @@ function rpcServer({ chainId = '0x14a34', blockNumber = '0x64', blockError = nul
   });
 }
 
-test('selects the correct-chain fallback after a wrong-chain primary', async () => {
+test('fails closed when any configured endpoint returns the wrong chain', async () => {
   const primary = rpcServer({ chainId: '0x1' });
   const fallback = rpcServer();
   const primaryUrl = await listen(primary);
   const fallbackUrl = await listen(fallback);
   try {
-    const selection = await selectReachableRpcEndpoint([primaryUrl, fallbackUrl], 84532, 300);
-    assert.equal(selection.url, fallbackUrl);
-    assert.equal(selection.checked, 2);
-    assert.equal(selection.reachable, true);
+    await assert.rejects(
+      () => selectReachableRpcEndpoint([primaryUrl, fallbackUrl], 84532, 300),
+      /Wrong chain: expected 84532, received 1/,
+    );
+  } finally {
+    await close(primary);
+    await close(fallback);
+  }
+});
+
+test('fails closed when a healthy primary masks a wrong-chain fallback', async () => {
+  const primary = rpcServer();
+  const fallback = rpcServer({ chainId: '0x1' });
+  const primaryUrl = await listen(primary);
+  const fallbackUrl = await listen(fallback);
+  try {
+    await assert.rejects(
+      () => selectReachableRpcEndpoint([primaryUrl, fallbackUrl], 84532, 300),
+      /Wrong chain: expected 84532, received 1/,
+    );
   } finally {
     await close(primary);
     await close(fallback);
@@ -97,7 +113,7 @@ test('fails closed when every endpoint is unavailable or on the wrong chain', as
   try {
     await assert.rejects(
       () => selectReachableRpcEndpoint([wrongChainUrl], 84532, 300),
-      /No configured RPC endpoint returned expected chain ID 84532/,
+      /Wrong chain: expected 84532, received 1/,
     );
   } finally {
     await close(wrongChain);
