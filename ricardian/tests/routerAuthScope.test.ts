@@ -71,4 +71,24 @@ describe('ricardian router auth scope', () => {
       }),
     );
   });
+
+  test('authenticated probe rejects unsigned callers and accepts the service identity', async () => {
+    const unauthenticated = await fetch(`${baseUrl}/api/ricardian/v1/auth-check`);
+    expect(unauthenticated.status).toBe(401);
+
+    const authenticated = await fetch(`${baseUrl}/api/ricardian/v1/auth-check`, {
+      headers: {
+        'x-test-auth': 'ok',
+      },
+    });
+
+    expect(authenticated.status).toBe(200);
+    await expect(authenticated.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        service: 'ricardian',
+        authenticated: true,
+      }),
+    );
+  });
 });

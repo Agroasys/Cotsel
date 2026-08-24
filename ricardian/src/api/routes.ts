@@ -53,6 +53,14 @@ export function createRouter(
     options.rateLimitMiddleware,
   ].filter(Boolean) as RequestHandler[];
 
+  router.get('/auth-check', ...readMiddlewares, (_req, res) => {
+    res.status(200).json({
+      success: true,
+      service: 'ricardian',
+      authenticated: true,
+    });
+  });
+
   router.post('/hash', ...writeMiddlewares, controller.createHash.bind(controller));
   router.get('/hash/:hash', ...readMiddlewares, controller.getHash.bind(controller));
 

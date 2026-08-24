@@ -36,6 +36,15 @@ The first stores the Agroasys-to-Cotsel API key set used to populate
 `GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON`. The second stores the distinct
 Cotsel-to-Agroasys callback key and secret. They must not share a credential.
 
+The independent `gateway-to-treasury-auth` and `gateway-to-ricardian-auth`
+secrets each hold one JSON object with `id`, `secret`, and boolean `active`
+fields. The private service receives the full object as `API_KEYS_JSON`; ECS
+injects only `id` and `secret` into the gateway for its signing client. Do not
+store these singleton credentials as an array: the service parser accepts an
+array for rotation, but ECS JSON-key injection into the gateway requires an
+object. Add a separate, explicitly supported rotation mapping before changing
+this representation.
+
 Database runtime and migration identities are also separate for every database
 owner. Each service-auth boundary and each managed signer has its own secret
 identity. ECS injects the selected secret values before container startup, so
