@@ -2,56 +2,70 @@
 
 ## Purpose
 
-Move Agroasys and Cotsel staging to AWS as the sole authoritative runtime.
+Establish an isolated AWS staging lane for Agroasys and Cotsel.
 
 This procedure does not authorize production traffic, real-value settlement, or
 Base mainnet activity. It does not delete GCP resources. It defines the
-evidence required before the team can remove GCP from the staging request path.
+evidence required before AWS becomes accepted staging truth or GCP is removed
+from a request path.
 
 ## Decision
 
-Use AWS as the target staging platform. Do not perform a lift-and-shift or an
-immediate DNS swap.
+On 2026-08-24, the programme selected an explicit **fresh AWS staging**
+cutover. AWS is a new Base Sepolia rehearsal lane. It is not a raw copy of the
+historical GCP staging estate.
 
-GCP remains the authoritative staging state source until the AWS target has
-passed data-parity, runtime, authentication, callback, Base Sepolia, and
-reconciliation checks. During the approved rollback period, retain GCP as a
-controlled recovery estate. Do not allow both estates to accept writes after
-cutover.
+Do not export or restore GCP application, ledger, settlement, callback,
+indexer, reconciliation, queue, cache, session, or replay records into the AWS
+lane. These records were created against different schemas and historical
+contract configurations. A bulk restore would make later settlement evidence
+ambiguous.
+
+Keep GCP as the authoritative record for its historical lane and as a retained
+recovery estate. AWS can become authoritative only for new AWS staging facts
+after its own runtime, authentication, callback, Base Sepolia, contract,
+indexer, and reconciliation gates pass.
+
+Do not route a user-facing GCP hostname to an empty AWS database. Do not allow
+either lane to consume the other lane's settlement events, callbacks, queues,
+or Redis state. A later public-traffic move requires a separate approved
+source-data disposition and cutover decision.
 
 ## Current boundary
 
 The forensic audit recorded the following current state on 2026-08-23:
 
-| Capability                                            | Current GCP state                                                      | Current AWS state                                                           | Cutover disposition                                                         |
-| ----------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Agroasys API and operational UI                       | Public backend VM serves `backend.agroasys.com` and `ops.agroasys.com` | ECS API and workers run privately                                           | Provision and validate AWS public edge before DNS cutover                   |
-| Cotsel dashboard                                      | Public VM serves `cotsel.agroasys.com`                                 | No validated Cotsel-Dash runtime                                            | Build, deploy, and validate a dedicated AWS dashboard target                |
-| Cotsel gateway, auth, oracle, indexer, reconciliation | Ten-container VM includes live state and local images                  | Six containers run in one ECS task                                          | Complete runtime and state parity before cutover                            |
-| Cotsel treasury and Ricardian services                | Active on the Cotsel VM                                                | No AWS runtime replacement                                                  | Provision, test, and include in the coordinated release                     |
-| PostgreSQL                                            | Local databases contain current backend and Cotsel state               | Private AWS databases exist but are not data-parity proven                  | Controlled export, restore, and reconciliation required                     |
-| Redis                                                 | Local Redis instances provide short-lived state                        | Private AWS Redis exists                                                    | Recreate short-lived replay/cache state; do not copy it as settlement truth |
-| Public Cotsel system gateway                          | Direct GCP route is retained for dashboard dependencies                | `cotsel.sys.agroasys.com` reaches the AWS private origin through CloudFront | Retain as the proven AWS gateway route                                      |
+| Capability                                            | Current GCP state                                                      | Current AWS state                                                           | Cutover disposition                                                            |
+| ----------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Agroasys API and operational UI                       | Public backend VM serves `backend.agroasys.com` and `ops.agroasys.com` | ECS API and workers run privately                                           | Keep historical users and records in GCP until a separate public-data decision |
+| Cotsel dashboard                                      | Public VM serves `cotsel.agroasys.com`                                 | No validated Cotsel-Dash runtime                                            | Build a separate AWS dashboard. Do not point it at empty legacy data.          |
+| Cotsel gateway, auth, oracle, indexer, reconciliation | Ten-container VM includes live state and local images                  | Six containers run in one ECS task                                          | Prove a clean AWS lane. Do not import historical execution or chain state.     |
+| Cotsel treasury and Ricardian services                | Active on the Cotsel VM                                                | No AWS runtime replacement                                                  | Provision private AWS services with new AWS-only state.                        |
+| PostgreSQL                                            | Local databases contain current backend and Cotsel state               | Private AWS databases exist but are not data-parity proven                  | Retain GCP as historical evidence. Keep AWS schema and records clean.          |
+| Redis                                                 | Local Redis instances provide short-lived state                        | Private AWS Redis exists                                                    | Recreate short-lived replay/cache state; do not copy it as settlement truth    |
+| Public Cotsel system gateway                          | Direct GCP route is retained for dashboard dependencies                | `cotsel.sys.agroasys.com` reaches the AWS private origin through CloudFront | Retain as the proven AWS gateway route                                         |
 
-Treat the GCP database records as authoritative until the cutover gate accepts
-their AWS replacement. Do not infer migration completion from running ECS
-tasks, DNS records, or matching resource names.
+Treat GCP records as authoritative only for the historical GCP lane. Treat
+AWS records as authoritative only for accepted AWS staging activity. Do not
+infer a migration, data equivalence, or public-traffic authorization from
+running ECS tasks, DNS records, or matching resource names.
 
 ## Observed migration baseline
 
 The following redacted, aggregate-only inventory was collected on 2026-08-23
 from the live GCP and AWS private runtimes. `estimated rows` is PostgreSQL's
-`pg_stat_user_tables.n_live_tup` total, so it is a comparison signal rather
-than a substitute for the required export/restore checksum gate.
+`pg_stat_user_tables.n_live_tup` total. This inventory proves the lanes are
+materially different. It is preservation evidence, not a migration claim.
 
 | Domain           | GCP source                                                                                                                                                             | AWS target                                                                                                                                             | Disposition                                                                      |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | Cotsel gateway   | `agroasys_gateway`: 13 public tables, approximately 90 estimated rows                                                                                                  | `cotsel_gateway`: 12 public tables, approximately 21 estimated rows                                                                                    | **Not parity-proven.** Schema and aggregate totals differ.                       |
 | Agroasys backend | `agroasys_backend`: 87 public tables, approximately 2,042 estimated rows; sampled tables include 72 users, 49 business accounts, 25 ledger transactions, and 23 orders | `agroasys`: 98 public tables, approximately 118 estimated rows; sampled tables include 1 user, 0 business accounts, 0 ledger transactions, and 1 order | **Not parity-proven.** The AWS database is not a migrated copy of the GCP state. |
 
-This baseline is a hard stop for GCP writer disablement, DNS cutover, and
-decommission. Perform the Phase 2 export/restore and full parity procedure
-before changing that disposition.
+This baseline is a hard stop for GCP writer disablement, public DNS cutover,
+and decommission. It does not block proof of the isolated AWS staging lane.
+Do not perform a full export/restore unless a later approved decision requires
+historical GCP state to move into AWS.
 
 ### Legacy GCP administration control
 
@@ -87,18 +101,20 @@ Complete these conditions before a data or DNS cutover.
 7. Schedule a maintenance window and name a cutover operator and independent
    verifier.
 8. Create current GCP snapshots and verify the restoration procedure before
-   changing writers.
+   changing GCP writers or public traffic.
 9. Publish a rollback decision rule. Do not use a time-based DNS rollback after
    an irreversible chain event without first reconciling that event.
+10. For any selected reference data, approve a field-level mapping, source,
+    target, validation query, and owner before copying it.
 
 ## Phase 1: establish AWS runtime parity
 
 ### Stage 1: create the private runtime definitions
 
 Deploy the Treasury and Ricardian ECS definitions with desired count `0`.
-Keep both services stopped until database roles, secret versions, and source-data
-evidence are ready. This prevents a new service from creating empty AWS state
-or accepting requests before the controlled import.
+Keep both services stopped until database roles, secret versions, and AWS-lane
+evidence are ready. This prevents a new service from accepting requests before
+the controlled AWS start gate.
 
 Each service must have a separate ECS execution role. Each role can read only
 its own runtime secret, migration secret, and gateway authentication secret.
@@ -163,35 +179,36 @@ with command overrides.
 Stop if any workload starts with a historical contract address, public RPC
 endpoint, GCP database host, or plaintext credential.
 
-## Phase 2: prepare and prove data parity
+## Phase 2: preserve GCP state and establish AWS-lane boundaries
 
-1. Put the AWS target in a non-writing validation mode.
-2. Capture non-destructive source metrics from every GCP PostgreSQL database:
-   schema version, table counts, key financial and settlement aggregates,
-   minimum and maximum timestamps, constraints, indexes, and representative
-   checksums.
-3. Take an approved GCP database snapshot before export.
-4. Export PostgreSQL through a controlled private administration path.
-5. Restore into the matching AWS database with the expected roles, grants,
-   extensions, migrations, and row-level security policies.
-6. Run the same source and target metric set. Investigate every mismatch before
-   enabling AWS writers.
-7. Verify that append-only ledger, settlement, callback, audit, and
-   reconciliation records preserve stable identifiers and referential
-   integrity.
-8. Inventory GCP object storage, if any, and copy only required artifacts with
-   object-count and checksum verification.
-9. Drain or explicitly retire durable GCP queues. Do not copy messages blindly;
-   preserve idempotency and prove that no GCP publisher remains active.
-10. Recreate Redis cache and nonce data from the approved runtime configuration.
-    Redis is not the migration authority for settlement records.
+1. Capture non-destructive GCP metrics and current snapshots before any GCP
+   writer, DNS, or resource change.
+2. Classify every GCP resource as `MIGRATED`, `INTENTIONALLY RETAINED`,
+   `READY TO DECOMMISSION`, or `BLOCKED / UNKNOWN`.
+3. Confirm every AWS service uses AWS database, Redis, queue, object-storage,
+   secret, and callback endpoints. Reject GCP endpoint configuration.
+4. Copy only an explicitly approved non-financial reference record. The mapping
+   must name the source, target, owner, validation query, and rollback action.
+5. Do not copy ledger, settlement, callback, indexer, reconciliation, queue,
+   session, cache, nonce, or replay records into AWS.
+6. Create AWS database schemas through their reviewed migrations. Do not use a
+   GCP database dump as a schema or data bootstrap.
+7. Inventory GCP objects and preserve required evidence artifacts. Copy an
+   artifact only after checksum validation and documented data ownership.
+8. Drain or explicitly retain GCP durable queues. Do not copy messages into
+   AWS. Preserve idempotency evidence and identify every active publisher.
+9. Recreate AWS Redis cache and replay state from approved runtime
+   configuration. Redis is not settlement migration authority.
+10. Record the source inventory, selected reference-data mappings, and AWS
+    isolation checks in a redacted evidence packet.
 
-Record source and target values in a redacted migration evidence packet. Do not
-store connection strings, credentials, customer data, or full callback bodies.
+Do not store connection strings, credentials, customer data, or full callback
+bodies in the evidence packet.
 
 ## Phase 3: readiness rehearsal
 
-Before moving public traffic, verify the current AWS deployment.
+Before treating AWS as an accepted clean staging lane, verify the current AWS
+deployment.
 
 1. Confirm Cotsel gateway, API, worker, dashboard, treasury, Ricardian,
    oracle, indexer, and reconciliation readiness.
@@ -203,19 +220,31 @@ Before moving public traffic, verify the current AWS deployment.
    fallback selection and recovery to primary.
 6. Confirm every active contract consumer uses the independently accepted #639
    address and start block.
-7. Run a narrow controlled settlement rehearsal. Verify gateway, oracle,
-   indexer, callback, ledger, and reconciliation evidence without using real
-   commercial value.
+7. Run a narrow controlled settlement rehearsal with new AWS-only test facts.
+   Verify gateway, oracle, indexer, callback, ledger, and reconciliation
+   evidence without real commercial value.
 8. Confirm alarms route to an operator and that queue/DLQ, indexer lag,
    callback-auth, replay, RPC, and database failure signals are actionable.
 
-The independent verifier must accept this packet before the traffic cutover.
+The independent verifier must accept this packet before AWS becomes accepted
+staging truth. This acceptance does not move user-facing GCP traffic.
 
-## Phase 4: controlled cutover
+## Phase 4: future public-traffic cutover
+
+The fresh-staging decision does not authorize this phase. Before moving any
+current public GCP hostname, the programme must choose and approve one of these
+paths:
+
+- a governed historical-data migration with full reconciliation; or
+- a managed retirement of the public GCP product surface with explicit user and
+  record-retention handling.
+
+Do not use an empty AWS database as a substitute for either path.
 
 1. Announce the maintenance window and stop new GCP-originated settlement
    commitments.
-2. Confirm the final GCP source snapshot and the final AWS parity report.
+2. Confirm the final GCP source snapshot and the approved source-data
+   disposition.
 3. Disable GCP application writers in a controlled order. Keep database
    snapshots available.
 4. Promote the AWS release using its approved immutable image digests.
@@ -227,7 +256,7 @@ The independent verifier must accept this packet before the traffic cutover.
 8. Verify DNS, TLS, origin controls, and direct-origin restrictions.
 9. Run the complete post-cutover rehearsal against the deployed AWS revisions.
 10. Record the cutover time, release identities, DNS changes, source snapshot,
-    parity evidence, and verifier decision.
+    source-data disposition, and verifier decision.
 
 Do not re-enable GCP writers after an AWS chain or callback event without a
 specific reconciliation decision. A simple DNS rollback is not sufficient once
@@ -271,8 +300,9 @@ Revoke credentials only after consumers have moved. Delete state last.
 
 The final migration packet must contain non-secret references for:
 
-- source and target database schema and aggregate comparison;
-- source snapshots and restore validation;
+- GCP source inventory, AWS clean-lane baseline, and any approved
+  reference-data mapping;
+- source snapshots and selected reference-data validation;
 - immutable image digests and task-definition revisions;
 - AWS secret ARNs and IAM policy references;
 - public DNS and edge-origin checks;
