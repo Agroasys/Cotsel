@@ -63,6 +63,7 @@
     "security:deps": "node scripts/security-deps-report.mjs",
     "security:deps:compat": "node scripts/dependency-compatibility-check.mjs",
     "security:deps:gate": "node scripts/security-deps-gate.mjs",
+    "quality:file-size:check": "node scripts/source-line-limit.mjs",
     "dashboard:route-inventory:check": "node scripts/tests/dashboard-gateway-route-inventory-guard.mjs",
     "shared:boundary:guard": "node scripts/shared-package-boundary-guard.mjs"
   },
