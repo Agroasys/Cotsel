@@ -56,3 +56,13 @@ test('production service startup makes auto-migration an explicit decision', asy
   assert.match(gatewayMigrationPolicy, /shouldAutoMigrateDatabase/);
   assert.match(gatewayMigrationPolicy, /rawValue: process\.env\.DB_AUTO_MIGRATE/);
 });
+
+test('long-running task definitions register replacements before deregistration', async () => {
+  for (const file of [
+    'infra/terraform/staging-platform/gateway-runtime.tf',
+    'infra/terraform/staging-platform/runtime-treasury-ricardian.tf',
+  ]) {
+    const source = await readFile(file, 'utf8');
+    assert.match(source, /lifecycle\s*{\s*create_before_destroy\s*=\s*true\s*}/, file);
+  }
+});

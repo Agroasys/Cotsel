@@ -199,6 +199,10 @@ resource "aws_ecs_task_definition" "private_runtime" {
       }
     },
   ])
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_ecs_service" "private_runtime" {
