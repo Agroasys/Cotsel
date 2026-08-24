@@ -81,18 +81,32 @@ locals {
     REVOKE CREATE ON SCHEMA public FROM PUBLIC;
     GRANT USAGE, CREATE ON SCHEMA public TO cotsel_ricardian_migrator;
     GRANT USAGE ON SCHEMA public TO cotsel_ricardian_runtime;
-    ALTER DEFAULT PRIVILEGES FOR ROLE cotsel_ricardian_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cotsel_ricardian_runtime;
-    ALTER DEFAULT PRIVILEGES FOR ROLE cotsel_ricardian_migrator IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO cotsel_ricardian_runtime;
     SQL
 
+    # PostgreSQL only lets the object-creating role set its default privileges.
+    # Connect as each migrator so future migrations grant the runtime role access.
+    export PGUSER="$${RICARDIAN_MIGRATION_USERNAME}"
+    export PGPASSWORD="$${RICARDIAN_MIGRATION_PASSWORD}"
+    psql --dbname cotsel_ricardian --set ON_ERROR_STOP=1 <<SQL
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cotsel_ricardian_runtime;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO cotsel_ricardian_runtime;
+    SQL
+
+    export PGUSER="$${MASTER_USERNAME}"
+    export PGPASSWORD="$${MASTER_PASSWORD}"
     psql --dbname cotsel_treasury --set ON_ERROR_STOP=1 <<SQL
     REVOKE ALL ON DATABASE cotsel_treasury FROM PUBLIC;
     GRANT CONNECT ON DATABASE cotsel_treasury TO cotsel_treasury_migrator, cotsel_treasury_runtime;
     REVOKE CREATE ON SCHEMA public FROM PUBLIC;
     GRANT USAGE, CREATE ON SCHEMA public TO cotsel_treasury_migrator;
     GRANT USAGE ON SCHEMA public TO cotsel_treasury_runtime;
-    ALTER DEFAULT PRIVILEGES FOR ROLE cotsel_treasury_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cotsel_treasury_runtime;
-    ALTER DEFAULT PRIVILEGES FOR ROLE cotsel_treasury_migrator IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO cotsel_treasury_runtime;
+    SQL
+
+    export PGUSER="$${TREASURY_MIGRATION_USERNAME}"
+    export PGPASSWORD="$${TREASURY_MIGRATION_PASSWORD}"
+    psql --dbname cotsel_treasury --set ON_ERROR_STOP=1 <<SQL
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cotsel_treasury_runtime;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO cotsel_treasury_runtime;
     SQL
 
     unset MASTER_PASSWORD RICARDIAN_MIGRATION_PASSWORD RICARDIAN_RUNTIME_PASSWORD TREASURY_MIGRATION_PASSWORD TREASURY_RUNTIME_PASSWORD
