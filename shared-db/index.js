@@ -36,6 +36,28 @@ function resolveMigrationCredentials(config) {
   };
 }
 
+function shouldAutoMigrateDatabase({ nodeEnv, rawValue }) {
+  const normalized = rawValue?.trim().toLowerCase();
+
+  if (normalized === 'true') {
+    return true;
+  }
+
+  if (normalized === 'false') {
+    return false;
+  }
+
+  if (normalized) {
+    throw new Error('DB_AUTO_MIGRATE must be true or false');
+  }
+
+  if (nodeEnv === 'production') {
+    throw new Error('DB_AUTO_MIGRATE must be set explicitly when NODE_ENV=production');
+  }
+
+  return true;
+}
+
 function parsePostgresSslMode(value, fallback = 'disable') {
   const mode = value?.trim() || fallback;
   if (mode === 'disable' || mode === 'require' || mode === 'verify-full') {
@@ -95,5 +117,6 @@ module.exports = {
   parsePostgresSslMode,
   resolvePostgresSslConfig,
   resolveMigrationCredentials,
+  shouldAutoMigrateDatabase,
   createServicePool,
 };

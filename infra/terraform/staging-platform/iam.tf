@@ -75,14 +75,10 @@ data "aws_iam_policy_document" "gateway_execution" {
     effect  = "Allow"
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
-      aws_secretsmanager_secret.platform["database/gateway/migration"].arn,
       aws_secretsmanager_secret.platform["database/gateway/runtime"].arn,
       aws_secretsmanager_secret.platform["database/indexer/runtime"].arn,
-      aws_secretsmanager_secret.platform["database/oracle/migration"].arn,
       aws_secretsmanager_secret.platform["database/oracle/runtime"].arn,
-      aws_secretsmanager_secret.platform["database/reconciliation/migration"].arn,
       aws_secretsmanager_secret.platform["database/reconciliation/runtime"].arn,
-      aws_secretsmanager_secret.platform["database/auth/migration"].arn,
       aws_secretsmanager_secret.platform["database/auth/runtime"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-callback"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-ingress"].arn,

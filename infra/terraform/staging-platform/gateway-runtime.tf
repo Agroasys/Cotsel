@@ -20,6 +20,10 @@ resource "aws_ecs_task_definition" "gateway" {
     local.oracle_container,
     local.reconciliation_container,
   ])
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_ecs_service" "gateway" {

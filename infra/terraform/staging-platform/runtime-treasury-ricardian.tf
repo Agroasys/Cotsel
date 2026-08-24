@@ -7,7 +7,6 @@ locals {
       health_path    = "/api/ricardian/v1/health"
       log_prefix     = "ricardian"
       secret_arns = [
-        aws_secretsmanager_secret.platform["database/ricardian/migration"].arn,
         aws_secretsmanager_secret.platform["database/ricardian/runtime"].arn,
         aws_secretsmanager_secret.platform["gateway-to-ricardian-auth"].arn,
       ]
@@ -19,7 +18,6 @@ locals {
       health_path    = "/api/treasury/v1/health"
       log_prefix     = "treasury"
       secret_arns = [
-        aws_secretsmanager_secret.platform["database/treasury/migration"].arn,
         aws_secretsmanager_secret.platform["database/treasury/runtime"].arn,
         aws_secretsmanager_secret.platform["gateway-to-treasury-auth"].arn,
       ]
@@ -32,6 +30,7 @@ locals {
       { name = "AUTH_MAX_SKEW_SECONDS", value = "300" },
       { name = "AUTH_NONCE_TTL_SECONDS", value = "600" },
       { name = "DB_HOST", value = local.postgres_host },
+      { name = "DB_AUTO_MIGRATE", value = "false" },
       { name = "DB_NAME", value = local.private_runtime_services.ricardian.db_name },
       { name = "DB_PORT", value = "5432" },
       { name = "DB_SSL_MODE", value = "verify-full" },
@@ -47,6 +46,7 @@ locals {
       { name = "AUTH_MAX_SKEW_SECONDS", value = "300" },
       { name = "AUTH_NONCE_TTL_SECONDS", value = "600" },
       { name = "DB_HOST", value = local.postgres_host },
+      { name = "DB_AUTO_MIGRATE", value = "false" },
       { name = "DB_NAME", value = local.private_runtime_services.treasury.db_name },
       { name = "DB_PORT", value = "5432" },
       { name = "DB_SSL_MODE", value = "verify-full" },
@@ -67,15 +67,11 @@ locals {
   private_runtime_secrets = {
     ricardian = [
       { name = "API_KEYS_JSON", valueFrom = aws_secretsmanager_secret.platform["gateway-to-ricardian-auth"].arn },
-      { name = "DB_MIGRATION_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/ricardian/migration"].arn}:password::" },
-      { name = "DB_MIGRATION_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/ricardian/migration"].arn}:username::" },
       { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/ricardian/runtime"].arn}:password::" },
       { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/ricardian/runtime"].arn}:username::" },
     ]
     treasury = [
       { name = "API_KEYS_JSON", valueFrom = aws_secretsmanager_secret.platform["gateway-to-treasury-auth"].arn },
-      { name = "DB_MIGRATION_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/treasury/migration"].arn}:password::" },
-      { name = "DB_MIGRATION_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/treasury/migration"].arn}:username::" },
       { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/treasury/runtime"].arn}:password::" },
       { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/treasury/runtime"].arn}:username::" },
     ]
@@ -203,6 +199,10 @@ resource "aws_ecs_task_definition" "private_runtime" {
       }
     },
   ])
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_ecs_service" "private_runtime" {
