@@ -459,6 +459,26 @@ database copy should be performed: importing those split-brain records into the
 new contract lane without a governed reconciliation procedure would corrupt the
 meaning of staging evidence.
 
+### 2026-08-24 decision: explicit fresh AWS staging
+
+Status: **REMEDIATED AND PARTIALLY VERIFIED**. The programme selected the
+fresh AWS staging path. This resolves the migration-disposition ambiguity. It
+does not prove AWS runtime acceptance or authorize GCP decommission.
+
+- Preserve the GCP databases, disks, snapshots, queues, caches, and historical
+  evidence. GCP remains the record for the legacy lane.
+- Do not restore GCP application, ledger, settlement, callback, indexer,
+  reconciliation, queue, session, cache, nonce, or replay records into AWS.
+- Treat AWS as a clean Base Sepolia rehearsal lane. It can receive only new AWS
+  staging facts after the relevant runtime gates pass.
+- Permit a non-financial reference-data copy only after a documented field-level
+  mapping names the source, target, owner, validation, and rollback action.
+- Do not move a public GCP hostname to an empty AWS database. A future
+  public-traffic decision requires either governed historical-data migration or
+  explicit product-surface retirement.
+
+The companion cutover runbook is the operative procedure for this decision.
+
 The safe disposition is:
 
 1. record and approve AWS as an intentionally clean staging initialization;
@@ -1698,12 +1718,13 @@ decommission**.
 - No GCP workload, disk, snapshot, address, firewall rule, or DNS record was
   disabled or deleted. Their disposition remains **INTENTIONALLY RETAINED FOR
   ROLLBACK**, not `MIGRATED` or `READY TO DECOMMISSION`.
-- A valid migration decision must select either a controlled data migration or
-  an explicit fresh-staging cutover. It must then freeze GCP writers, export and
-  reconcile state where required, prove AWS acceptance, move dashboard/backend
-  DNS and third-party callbacks, observe the rollback window, rotate residual
-  credentials, and only then produce a decommission packet. No safe shortcut
-  exists while public traffic and current settlement records remain on GCP.
+- The 2026-08-24 fresh-staging decision permits AWS rehearsal proof without a
+  GCP bulk restore. It does not authorize GCP writer freeze, public DNS moves,
+  or decommission. Those actions still require a separate approved
+  historical-data migration or product-surface retirement, followed by AWS
+  acceptance, a rollback observation window, credential rotation, and a
+  decommission packet. No safe shortcut exists while public traffic and current
+  settlement records remain on GCP.
 
 ## Batch 18 — Remediation of verified gaps
 
