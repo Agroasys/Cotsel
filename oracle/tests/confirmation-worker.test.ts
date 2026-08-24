@@ -26,7 +26,7 @@ type SdkClientLike = ConstructorParameters<typeof ConfirmationWorker>[1];
 
 function makeTrigger(overrides: Partial<TriggerLike> = {}): TriggerLike {
   return {
-    idempotency_key: 'idem-1234567890abcdef1234567890abcdef',
+    idempotency_key: 'test-idempotency-key',
     action_key: 'RELEASE_STAGE_1:1',
     request_id: 'req-1',
     tx_hash: '0x1111111111111111111111111111111111111111111111111111111111111111',

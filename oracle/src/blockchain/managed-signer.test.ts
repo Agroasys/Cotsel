@@ -1,9 +1,8 @@
 import { ethers } from 'ethers';
 import { ManagedSigner } from './managed-signer';
 
-// Well-known Hardhat account #1; its address is SIGNER_ADDRESS.
-const SIGNER_PRIVATE_KEY = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
-const SIGNER_ADDRESS = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+const testSigner = ethers.Wallet.createRandom();
+const SIGNER_ADDRESS = testSigner.address;
 const OTHER_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 
 // AbstractSigner requires a provider reference but the managed signer only reaches it
@@ -53,7 +52,7 @@ describe('ManagedSigner', () => {
       maxFeePerGas: 2_000_000_000n,
       maxPriorityFeePerGas: 1_000_000_000n,
     };
-    const signedTransaction = await new ethers.Wallet(SIGNER_PRIVATE_KEY).signTransaction(request);
+    const signedTransaction = await testSigner.signTransaction(request);
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ signerAddress: SIGNER_ADDRESS }))
       .mockResolvedValueOnce(jsonResponse({ signerAddress: SIGNER_ADDRESS, signedTransaction }));
@@ -88,7 +87,7 @@ describe('ManagedSigner', () => {
   test('rejects a signed transaction whose contents do not match the request', async () => {
     // The service returns a validly signed transaction, but one that pays a
     // different recipient than we asked it to sign.
-    const tamperedSignedTransaction = await new ethers.Wallet(SIGNER_PRIVATE_KEY).signTransaction({
+    const tamperedSignedTransaction = await testSigner.signTransaction({
       chainId: 84532,
       to: SIGNER_ADDRESS,
       value: 0n,
