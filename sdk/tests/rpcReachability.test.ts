@@ -1,5 +1,9 @@
 import { createServer, type Server } from 'node:http';
-import { assertRpcEndpointReachable, assertRpcEndpointsReachable } from '../src/rpc/reachability';
+import {
+  assertRpcEndpointReachable,
+  assertRpcEndpointsReachable,
+  selectReachableRpcEndpoint,
+} from '../src/rpc/reachability';
 
 function listen(server: Server): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -56,7 +60,7 @@ describe('RPC startup reachability', () => {
     }
   });
 
-  test('passes when a wrong-chain primary is followed by a correct-chain fallback', async () => {
+  test('fails closed when any configured endpoint returns the wrong chain', async () => {
     const primary = rpcServer('0x1');
     const fallback = rpcServer('0x14a34');
     const primaryUrl = await listen(primary);
@@ -64,7 +68,38 @@ describe('RPC startup reachability', () => {
     try {
       await expect(
         assertRpcEndpointsReachable([primaryUrl, fallbackUrl], { expectedChainId: 84532 }),
+      ).rejects.toThrow('Wrong chain: expected 84532, received 1');
+    } finally {
+      await close(primary);
+      await close(fallback);
+    }
+  });
+
+  test('uses a correct-chain fallback when the primary is unavailable', async () => {
+    const fallback = rpcServer('0x14a34');
+    const fallbackUrl = await listen(fallback);
+    const unreachablePrimaryUrl = 'http://127.0.0.1:1';
+    try {
+      await expect(
+        assertRpcEndpointsReachable([unreachablePrimaryUrl, fallbackUrl], {
+          expectedChainId: 84532,
+          timeoutMs: 300,
+        }),
       ).resolves.toBeUndefined();
+    } finally {
+      await close(fallback);
+    }
+  });
+
+  test('fails closed when a healthy primary masks a wrong-chain fallback', async () => {
+    const primary = rpcServer('0x14a34');
+    const fallback = rpcServer('0x1');
+    const primaryUrl = await listen(primary);
+    const fallbackUrl = await listen(fallback);
+    try {
+      await expect(
+        selectReachableRpcEndpoint([primaryUrl, fallbackUrl], { expectedChainId: 84532 }),
+      ).rejects.toThrow('Wrong chain: expected 84532, received 1');
     } finally {
       await close(primary);
       await close(fallback);

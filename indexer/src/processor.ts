@@ -73,11 +73,13 @@ export async function applyReachableRpcEndpoint(): Promise<{ url: string; reacha
   processor.setRpcEndpoint(rpcEndpointSettings(selection.url));
   console.log(
     JSON.stringify({
-      level: selection.checked > 1 ? 'warn' : 'info',
+      level: selection.selectedIndex > 0 ? 'warn' : 'info',
       service: 'indexer',
-      eventType: selection.checked > 1 ? 'rpc.fallback_selected' : 'rpc.primary_selected',
+      eventType: selection.selectedIndex > 0 ? 'rpc.fallback_selected' : 'rpc.primary_selected',
       message:
-        selection.checked > 1 ? 'Selected fallback RPC endpoint' : 'Selected primary RPC endpoint',
+        selection.selectedIndex > 0
+          ? 'Selected fallback RPC endpoint'
+          : 'Selected primary RPC endpoint',
       rpcUrl: redactRpcUrlForLogs(selection.url),
       checked: selection.checked,
       chainId: config.chainId,

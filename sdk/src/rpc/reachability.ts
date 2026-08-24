@@ -14,6 +14,13 @@ export interface RpcReachabilityOptions {
   expectedChainId?: number;
 }
 
+class RpcChainIdMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RpcChainIdMismatchError';
+  }
+}
+
 interface JsonRpcSuccess {
   jsonrpc: string;
   result?: string;
@@ -44,6 +51,12 @@ function formatRpcFailureMessage(rpcUrl: string, reason: string): string {
   const redactedRpcUrl = redactRpcUrlForLogs(rpcUrl);
   const safeReason = sanitizeReason(reason, rpcUrl);
   return `RPC endpoint is not reachable at startup (RPC_URL=${redactedRpcUrl}). Start a JSON-RPC node or update RPC_URL. Reason: ${safeReason}`;
+}
+
+function formatRpcChainMismatchMessage(rpcUrl: string, reason: string): string {
+  const redactedRpcUrl = redactRpcUrlForLogs(rpcUrl);
+  const safeReason = sanitizeReason(reason, rpcUrl);
+  return `RPC endpoint returned an unexpected chain ID at startup (RPC_URL=${redactedRpcUrl}). Reason: ${safeReason}`;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -109,11 +122,15 @@ export async function assertRpcEndpointReachable(
     }
 
     if (expectedChainId !== undefined && actualChainId !== BigInt(expectedChainId)) {
-      throw new Error(
+      throw new RpcChainIdMismatchError(
         `Wrong chain: expected ${expectedChainId}, received ${actualChainId.toString()}`,
       );
     }
   } catch (error: unknown) {
+    if (error instanceof RpcChainIdMismatchError) {
+      throw new RpcChainIdMismatchError(formatRpcChainMismatchMessage(rpcUrl, error.message));
+    }
+
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(formatRpcFailureMessage(rpcUrl, `Timeout after ${timeoutMs}ms`));
     }
@@ -125,10 +142,12 @@ export async function assertRpcEndpointReachable(
 }
 
 /**
- * Pass when at least one configured endpoint answers. Throws only when every
- * endpoint fails — a single dead endpoint never blocks startup. Emits a warning
- * (never throws) when no fallback is configured, since that silently disables
- * RPC rotation.
+ * Pass when at least one configured endpoint on the expected chain answers.
+ * A single unavailable endpoint never blocks startup when a valid fallback is
+ * available. Any endpoint returning the wrong chain fails startup so a
+ * configuration error cannot be hidden by a fallback. Emits a warning (never
+ * throws) when no fallback is configured, since that silently disables RPC
+ * rotation.
  */
 export async function assertRpcEndpointsReachable(
   rpcUrls: string[],
@@ -148,6 +167,10 @@ export async function assertRpcEndpointsReachable(
     try {
       await assertRpcEndpointReachable(rpcUrl, options);
     } catch (error) {
+      if (error instanceof RpcChainIdMismatchError) {
+        throw error;
+      }
+
       failures.push(error instanceof Error ? error.message : String(error));
     }
   }
@@ -162,7 +185,7 @@ export interface ReachableRpcEndpointSelection {
   url: string;
   /** Whether the selected endpoint actually answered the probe. */
   reachable: boolean;
-  /** Number of endpoints probed before a reachable one was found (or all). */
+  /** Number of configured endpoints probed during validation. */
   checked: number;
 }
 
@@ -170,7 +193,9 @@ export interface ReachableRpcEndpointSelection {
  * Pick the first reachable endpoint from an ordered (priority) list. Used by
  * consumers that take a single endpoint (e.g. the Subsquid indexer) and cannot
  * use ethers FallbackProvider. Returns the first endpoint that passes the
- * configured reachability and chain checks.
+ * configured reachability and chain checks, but validates every configured
+ * endpoint before returning. A wrong-chain endpoint is a configuration error
+ * and must not be hidden by a healthy endpoint earlier in the list.
  */
 export async function selectReachableRpcEndpoint(
   rpcUrls: string[],
@@ -181,15 +206,26 @@ export async function selectReachableRpcEndpoint(
   }
 
   let checked = 0;
+  let selected: ReachableRpcEndpointSelection | null = null;
+  const failures: string[] = [];
+
   for (const url of rpcUrls) {
     checked += 1;
     try {
       await assertRpcEndpointReachable(url, options);
-      return { url, reachable: true, checked };
-    } catch {
-      // try the next endpoint in priority order
+      selected ??= { url, reachable: true, checked };
+    } catch (error) {
+      if (error instanceof RpcChainIdMismatchError) {
+        throw error;
+      }
+
+      failures.push(error instanceof Error ? error.message : String(error));
     }
   }
 
-  return { url: rpcUrls[0], reachable: false, checked };
+  if (selected) {
+    return { ...selected, checked };
+  }
+
+  throw new Error(`All configured RPC endpoints failed startup validation. ${failures[0]}`);
 }
