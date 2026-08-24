@@ -30,7 +30,7 @@
     "sdk/src/types/typechain-types/"
   ],
   "legacyBaseline": {
-    ".github/workflows/release-gate.yml": 1238,
+    ".github/workflows/release-gate.yml": 1243,
     "auth/src/database/queries.ts": 984,
     "auth/tests/adminControls.integration.test.ts": 667,
     "contracts/foundry/test/AgroasysEscrowFuzz.t.sol": 890,
