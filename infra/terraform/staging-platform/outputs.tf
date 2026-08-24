@@ -92,6 +92,15 @@ output "database_entitlement_verification_runtime" {
   }
 }
 
+output "database_parity_verification_runtime" {
+  description = "One-off private task that reports aggregate-only AWS Cotsel database parity metrics without exposing credentials or source records."
+  value = {
+    execution_role_arn = aws_iam_role.database_parity_verification_execution.arn
+    task_family        = aws_ecs_task_definition.database_parity_verification.family
+    task_revision      = aws_ecs_task_definition.database_parity_verification.revision
+  }
+}
+
 output "runtime_dependencies" {
   description = "Non-secret managed dependency coordinates consumed by the runtime root."
   value = {
