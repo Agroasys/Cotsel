@@ -174,14 +174,20 @@ resource "aws_ecs_task_definition" "private_runtime" {
     operating_system_family = "LINUX"
   }
 
+  volume {
+    name = "tmp"
+  }
+
   container_definitions = jsonencode([
     {
-      name         = each.key
-      image        = local.runtime_images[each.key]
-      essential    = true
-      environment  = local.private_runtime_environment[each.key]
-      secrets      = local.private_runtime_secrets[each.key]
-      portMappings = [{ containerPort = each.value.container_port, hostPort = each.value.container_port, protocol = "tcp" }]
+      name                   = each.key
+      image                  = local.runtime_images[each.key]
+      essential              = true
+      readonlyRootFilesystem = true
+      mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
+      environment            = local.private_runtime_environment[each.key]
+      secrets                = local.private_runtime_secrets[each.key]
+      portMappings           = [{ containerPort = each.value.container_port, hostPort = each.value.container_port, protocol = "tcp" }]
       healthCheck = {
         command     = ["CMD-SHELL", "node -e 'const p=process.env.PORT||${each.value.container_port};fetch(\"http://127.0.0.1:\"+p+\"${each.value.health_path}\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'"]
         interval    = 30
