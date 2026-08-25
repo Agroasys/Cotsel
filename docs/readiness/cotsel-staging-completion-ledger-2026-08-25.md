@@ -49,12 +49,12 @@ An implementation merge is not release acceptance. A successful workflow is not 
 
 These identities were queried from GitHub on `2026-08-25`.
 
-| Repository                  | Current default branch | Current default head                       | Classification | Release relationship                                           |
-| --------------------------- | ---------------------- | ------------------------------------------ | -------------- | -------------------------------------------------------------- |
-| `Agroasys/Cotsel`           | `main`                 | `34251f874d5f983111b97827ca986ac8b1ce3d39` | VERIFIED       | The current ECS images still come from its parent `6052ed...`. |
-| `Agroasys/agroasys-backend` | `develop`              | `b9e04ea3ac48105accc260f7b8c85ccb927fba1f` | VERIFIED       | Produces an undeployed backend candidate image.                |
-| `Agroasys/Cotsel.dash`      | `main`                 | `93273b52d958441317f2e8f86f26ae3971340a19` | VERIFIED       | Not deployed through the planned AWS dashboard path.           |
-| `Agroasys/platform.v1`      | `main`                 | `2f72921d9e4416240cfd427683b997d5cd6c566f` | VERIFIED       | The browser session bridge remains a declared dependency.      |
+| Repository                  | Current default branch | Current default head                       | Classification | Release relationship                                         |
+| --------------------------- | ---------------------- | ------------------------------------------ | -------------- | ------------------------------------------------------------ |
+| `Agroasys/Cotsel`           | `main`                 | `481c4d9d128b712ba4a08b628aa65451a620516e` | VERIFIED       | The current ECS images still come from ancestor `6052ed...`. |
+| `Agroasys/agroasys-backend` | `develop`              | `b9e04ea3ac48105accc260f7b8c85ccb927fba1f` | VERIFIED       | Produces an undeployed backend candidate image.              |
+| `Agroasys/Cotsel.dash`      | `main`                 | `93273b52d958441317f2e8f86f26ae3971340a19` | VERIFIED       | Not deployed through the planned AWS dashboard path.         |
+| `Agroasys/platform.v1`      | `main`                 | `2f72921d9e4416240cfd427683b997d5cd6c566f` | VERIFIED       | The browser session bridge remains a declared dependency.    |
 
 The checked-in `integration/release-manifest.json` pins older commits. Classify it as `STALE / LEGACY` for this programme candidate.
 
@@ -62,13 +62,13 @@ Do not promote that manifest. Update it only after all candidate commits and dep
 
 ### Programme change gates
 
-| Repository and PR      | Exact head                                 | Gate state                                                                                                   | Classification     | Required action                                                   |
-| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------ | ----------------------------------------------------------------- |
-| `Cotsel#748`           | `44840a8f34c4838ec0b30ded584ba94b54694ba2` | `AvitusI` approved this exact head. GitHub created squash commit `34251f874d5f983111b97827ca986ac8b1ce3d39`. | VERIFIED           | Review the resulting Terraform plan separately.                   |
-| `Cotsel#746`           | `f0e955b5db1d365a7aff1548040ec086745c5427` | DCO-safe refresh is running; contract acceptance remains absent.                                             | BLOCKED            | Obtain exact-head record review and separate contract acceptance. |
-| `Cotsel#749`           | `c4e9aef3986abfae52c9347303a6230323080b8d` | Rebased on `main`; the full exact-head release matrix and counterpart review are pending.                    | BLOCKED            | Require every check to pass and obtain exact-head review.         |
-| `agroasys-backend#591` | `b6a0368eb03fe9962fcb6484ece1f0926071df92` | Refreshed checks pass; no independent review exists.                                                         | BLOCKED            | Obtain counterpart review before merge.                           |
-| `agroasys-backend#592` | `82d732aad061a9e262ca00e62960a5f02e3d4210` | Stacked after `#591`; current-base proof is absent.                                                          | PARTIALLY VERIFIED | Refresh only after `#591` merges.                                 |
+| Repository and PR      | Exact head                                 | Gate state                                                                                                   | Classification     | Required action                                             |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------ | ----------------------------------------------------------- |
+| `Cotsel#748`           | `44840a8f34c4838ec0b30ded584ba94b54694ba2` | `AvitusI` approved this exact head. GitHub created squash commit `34251f874d5f983111b97827ca986ac8b1ce3d39`. | VERIFIED           | Review the resulting Terraform plan separately.             |
+| `Cotsel#746`           | `f0e955b5db1d365a7aff1548040ec086745c5427` | All checks passed; `AvitusI` approved exact head; squash merge `f81d53526b5d9e874d3ea13e7ba5fd1f62e3a7b1`.   | PARTIALLY VERIFIED | Obtain the separate contract acceptance decision on `#639`. |
+| `Cotsel#749`           | `b81ade574897be925cb4a0dc5005dfbd37ae872c` | Full matrix passed; `AvitusI` approved exact head; squash merge `481c4d9d128b712ba4a08b628aa65451a620516e`.  | VERIFIED           | Generate and review one combined protected Terraform plan.  |
+| `agroasys-backend#591` | `b6a0368eb03fe9962fcb6484ece1f0926071df92` | Refreshed checks pass; no independent review exists.                                                         | BLOCKED            | Obtain counterpart review before merge.                     |
+| `agroasys-backend#592` | `82d732aad061a9e262ca00e62960a5f02e3d4210` | Stacked after `#591`; current-base proof is absent.                                                          | PARTIALLY VERIFIED | Refresh only after `#591` merges.                           |
 
 ## Actor and authority record
 
@@ -76,7 +76,8 @@ Do not promote that manifest. Update it only after all candidate commits and dep
 | ------------------------------- | -------------------------------------------- | ------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------- | ----------------------------- | ---------------------------------- |
 | Cotsel Terraform plan and apply | `Aston.S` initiated the protected workflows. | Counterpart review is required for follow-up changes.               | Agroasys administrator | `agroasys-cotsel-terraform-apply/GitHubActions`             | Counterpart operator          | PARTIALLY VERIFIED                 |
 | Cotsel PR `#748`                | Last pusher is recorded by GitHub.           | `AvitusI` approved head `44840a8f34c4838ec0b30ded584ba94b54694ba2`. | Agroasys administrator | Squash merged as `34251f874d5f983111b97827ca986ac8b1ce3d39` | Independent counterpart       | VERIFIED for implementation review |
-| Cotsel PRs `#746` and `#749`    | Last pushers are recorded by GitHub.         | `AvitusI` is requested.                                             | Agroasys administrator | Not applied                                                 | Independent counterpart       | BLOCKED                            |
+| Cotsel PR `#746`                | Last pusher is recorded by GitHub.           | `AvitusI` approved head `f0e955b5db1d365a7aff1548040ec086745c5427`. | Agroasys administrator | Squash merged as `f81d53526b5d9e874d3ea13e7ba5fd1f62e3a7b1` | Contract authority on `#639`  | PARTIALLY VERIFIED                 |
+| Cotsel PR `#749`                | Last pusher is recorded by GitHub.           | `AvitusI` approved head `b81ade574897be925cb4a0dc5005dfbd37ae872c`. | Agroasys administrator | Squash merged as `481c4d9d128b712ba4a08b628aa65451a620516e` | Independent counterpart       | VERIFIED for implementation review |
 | Backend merge `#590`            | Repository author and administrator          | No counterpart acceptance is recorded here.                         | Agroasys administrator | GitHub merge workflow                                       | Counterpart release authority | PARTIALLY VERIFIED                 |
 | Dash merge `#202`               | Repository author and administrator          | No counterpart acceptance is recorded here.                         | Agroasys administrator | GitHub merge workflow                                       | Counterpart release authority | PARTIALLY VERIFIED                 |
 
@@ -360,13 +361,16 @@ Classify GCP decommission readiness as `BLOCKED / UNKNOWN`.
 
 Phase 1 is `PARTIALLY VERIFIED`. The live baseline is recorded, but Cloudflare control-plane evidence remains open.
 
-Phase 2 is `PARTIALLY VERIFIED`. PR `#748` has exact-head approval. Other sensitive PRs remain blocked.
+Phase 2 is `PARTIALLY VERIFIED`. PRs `#746`, `#748`, and `#749` have
+exact-head counterpart review and are merged. Contract acceptance on `#639`
+remains separate and blocked.
 
 Phase 3 database entitlements are `VERIFIED`.
 
 Phase 3 Ricardian rollout remains the next runtime gate. The prior Ricardian-only
-plan is superseded. Complete `#749`, produce and review one combined plan, and use
-counterpart apply. Validate the gateway before Ricardian.
+plan is superseded. Produce and review one combined plan from merge
+`481c4d9d128b712ba4a08b628aa65451a620516e`, and use counterpart apply. Validate
+the gateway before Ricardian.
 
 Do not start Treasury before Ricardian passes its runtime and replay gates.
 
