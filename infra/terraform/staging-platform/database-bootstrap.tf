@@ -195,12 +195,18 @@ resource "aws_ecs_task_definition" "database_bootstrap" {
     operating_system_family = "LINUX"
   }
 
+  volume {
+    name = "tmp"
+  }
+
   container_definitions = jsonencode([
     {
-      name      = "database-bootstrap"
-      image     = "public.ecr.aws/docker/library/postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"
-      essential = true
-      command   = ["/bin/sh", "-ec", local.database_bootstrap_command]
+      name                   = "database-bootstrap"
+      image                  = "public.ecr.aws/docker/library/postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"
+      essential              = true
+      readonlyRootFilesystem = true
+      mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
+      command                = ["/bin/sh", "-ec", local.database_bootstrap_command]
       secrets = [
         { name = "MASTER_PASSWORD", valueFrom = "${local.postgres_master_secret_arn}:password::" },
         { name = "MASTER_USERNAME", valueFrom = "${local.postgres_master_secret_arn}:username::" },
