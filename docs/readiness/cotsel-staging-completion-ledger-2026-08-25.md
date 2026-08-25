@@ -62,13 +62,13 @@ Do not promote that manifest. Update it only after all candidate commits and dep
 
 ### Programme change gates
 
-| Repository and PR      | Exact head                                 | Gate state                                                                                                   | Classification     | Required action                                                                 |
-| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------------------------------------- |
-| `Cotsel#748`           | `44840a8f34c4838ec0b30ded584ba94b54694ba2` | `AvitusI` approved this exact head. GitHub created squash commit `34251f874d5f983111b97827ca986ac8b1ce3d39`. | VERIFIED           | Review the resulting Terraform plan separately.                                 |
-| `Cotsel#746`           | `c74531b1325d3484ac2d03b3b63cf8f64e1106ce` | Checks pass; contract acceptance is absent.                                                                  | BLOCKED            | Obtain independent contract review and an explicit decision.                    |
-| `Cotsel#749`           | `781ec65c122ef13408cfd3f81bb5966710432fa5` | Rebased on `main`; counterpart review and full main-base checks are absent.                                  | BLOCKED            | Refresh after this ledger merges, run all checks, and obtain exact-head review. |
-| `agroasys-backend#591` | `b6a0368eb03fe9962fcb6484ece1f0926071df92` | Refreshed checks pass; no independent review exists.                                                         | BLOCKED            | Obtain counterpart review before merge.                                         |
-| `agroasys-backend#592` | `82d732aad061a9e262ca00e62960a5f02e3d4210` | Stacked after `#591`; current-base proof is absent.                                                          | PARTIALLY VERIFIED | Refresh only after `#591` merges.                                               |
+| Repository and PR      | Exact head                                 | Gate state                                                                                                   | Classification     | Required action                                              |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------------------ |
+| `Cotsel#748`           | `44840a8f34c4838ec0b30ded584ba94b54694ba2` | `AvitusI` approved this exact head. GitHub created squash commit `34251f874d5f983111b97827ca986ac8b1ce3d39`. | VERIFIED           | Review the resulting Terraform plan separately.              |
+| `Cotsel#746`           | `c74531b1325d3484ac2d03b3b63cf8f64e1106ce` | Checks pass; contract acceptance is absent.                                                                  | BLOCKED            | Obtain independent contract review and an explicit decision. |
+| `Cotsel#749`           | `c4e9aef3986abfae52c9347303a6230323080b8d` | Rebased on `main`; the full exact-head release matrix and counterpart review are pending.                    | BLOCKED            | Require every check to pass and obtain exact-head review.    |
+| `agroasys-backend#591` | `b6a0368eb03fe9962fcb6484ece1f0926071df92` | Refreshed checks pass; no independent review exists.                                                         | BLOCKED            | Obtain counterpart review before merge.                      |
+| `agroasys-backend#592` | `82d732aad061a9e262ca00e62960a5f02e3d4210` | Stacked after `#591`; current-base proof is absent.                                                          | PARTIALLY VERIFIED | Refresh only after `#591` merges.                            |
 
 ## Actor and authority record
 
