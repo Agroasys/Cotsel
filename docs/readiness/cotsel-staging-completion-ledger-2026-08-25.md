@@ -18,6 +18,11 @@ AWS account: `655177116834`.
 
 This ledger does not approve a release. It records current evidence and blocks unproved claims.
 
+Programme gate: [#751](https://github.com/Agroasys/Cotsel/issues/751).
+
+Governing final-acceptance protocol:
+`cotsel-forensic-completion-audit-protocol-v1.md`.
+
 Do not put secret values, private keys, authenticated RPC URLs, tokens, cookies, or customer data in this file.
 
 ## Evidence rules
@@ -57,13 +62,13 @@ Do not promote that manifest. Update it only after all candidate commits and dep
 
 ### Programme change gates
 
-| Repository and PR      | Exact head                                 | Gate state                                                                                                   | Classification     | Required action                                                 |
-| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------ | --------------------------------------------------------------- |
-| `Cotsel#748`           | `44840a8f34c4838ec0b30ded584ba94b54694ba2` | `AvitusI` approved this exact head. GitHub created squash commit `34251f874d5f983111b97827ca986ac8b1ce3d39`. | VERIFIED           | Review the resulting Terraform plan separately.                 |
-| `Cotsel#746`           | `c74531b1325d3484ac2d03b3b63cf8f64e1106ce` | Checks pass; contract acceptance is absent.                                                                  | BLOCKED            | Obtain independent contract review and an explicit decision.    |
-| `Cotsel#749`           | `b85a8446df68952a62b3302d1cfe0290d8471729` | Stacked on `#748`; counterpart review is absent.                                                             | BLOCKED            | Rebase on `main` after `#748`, rerun checks, and obtain review. |
-| `agroasys-backend#591` | `b6a0368eb03fe9962fcb6484ece1f0926071df92` | Refreshed checks pass; no independent review exists.                                                         | BLOCKED            | Obtain counterpart review before merge.                         |
-| `agroasys-backend#592` | `82d732aad061a9e262ca00e62960a5f02e3d4210` | Stacked after `#591`; current-base proof is absent.                                                          | PARTIALLY VERIFIED | Refresh only after `#591` merges.                               |
+| Repository and PR      | Exact head                                 | Gate state                                                                                                   | Classification     | Required action                                                                 |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------------------------------------- |
+| `Cotsel#748`           | `44840a8f34c4838ec0b30ded584ba94b54694ba2` | `AvitusI` approved this exact head. GitHub created squash commit `34251f874d5f983111b97827ca986ac8b1ce3d39`. | VERIFIED           | Review the resulting Terraform plan separately.                                 |
+| `Cotsel#746`           | `c74531b1325d3484ac2d03b3b63cf8f64e1106ce` | Checks pass; contract acceptance is absent.                                                                  | BLOCKED            | Obtain independent contract review and an explicit decision.                    |
+| `Cotsel#749`           | `781ec65c122ef13408cfd3f81bb5966710432fa5` | Rebased on `main`; counterpart review and full main-base checks are absent.                                  | BLOCKED            | Refresh after this ledger merges, run all checks, and obtain exact-head review. |
+| `agroasys-backend#591` | `b6a0368eb03fe9962fcb6484ece1f0926071df92` | Refreshed checks pass; no independent review exists.                                                         | BLOCKED            | Obtain counterpart review before merge.                                         |
+| `agroasys-backend#592` | `82d732aad061a9e262ca00e62960a5f02e3d4210` | Stacked after `#591`; current-base proof is absent.                                                          | PARTIALLY VERIFIED | Refresh only after `#591` merges.                                               |
 
 ## Actor and authority record
 
@@ -79,32 +84,38 @@ Administrator authority did not waive settlement or release acceptance.
 
 ## Terraform and infrastructure identity
 
-| Field                          | Current evidence                                                   | Classification |
-| ------------------------------ | ------------------------------------------------------------------ | -------------- |
-| Cotsel root                    | `infra/terraform/staging-platform`                                 | VERIFIED       |
-| State bucket                   | `agroasys-tfstate-655177116834`                                    | VERIFIED       |
-| State key                      | `cotsel/staging-platform/terraform.tfstate`                        | VERIFIED       |
-| State bucket region            | `eu-north-1`                                                       | VERIFIED       |
-| Workload region                | `ap-south-1`                                                       | VERIFIED       |
-| State version ID               | `_2uIORjYJYV68PpwV3uLQ0PJxvItNDJ8`                                 | VERIFIED       |
-| State serial                   | `29`                                                               | VERIFIED       |
-| State lineage                  | `e8ef49f4-e48e-9ee9-6a1b-0885633d264e`                             | VERIFIED       |
-| State update                   | `2026-08-25T10:23:25Z`                                             | VERIFIED       |
-| Reviewed plan run              | GitHub Actions run `32835524840`                                   | VERIFIED       |
-| Exact-plan apply run           | GitHub Actions run `32835741862`                                   | VERIFIED       |
-| Ricardian rollout plan run     | GitHub Actions run `32851990204`                                   | VERIFIED       |
-| Ricardian rollout plan version | `StRkE7Iro3fU1Uhpxwy5WXCwmLYDCsQJ`                                 | VERIFIED       |
-| Ricardian rollout plan SHA-256 | `88fd16fc344c577677e3c813070f48fc68a84393ee6a54f86342e6bc2e5e1eb0` | VERIFIED       |
+| Field                          | Current evidence                                                    | Classification |
+| ------------------------------ | ------------------------------------------------------------------- | -------------- |
+| Cotsel root                    | `infra/terraform/staging-platform`                                  | VERIFIED       |
+| State bucket                   | `agroasys-tfstate-655177116834`                                     | VERIFIED       |
+| State key                      | `cotsel/staging-platform/terraform.tfstate`                         | VERIFIED       |
+| State bucket region            | `eu-north-1`                                                        | VERIFIED       |
+| Workload region                | `ap-south-1`                                                        | VERIFIED       |
+| State version ID               | `_2uIORjYJYV68PpwV3uLQ0PJxvItNDJ8`                                  | VERIFIED       |
+| State serial                   | `29`                                                                | VERIFIED       |
+| State lineage                  | `e8ef49f4-e48e-9ee9-6a1b-0885633d264e`                              | VERIFIED       |
+| State update                   | `2026-08-25T10:23:25Z`                                              | VERIFIED       |
+| Reviewed plan run              | GitHub Actions run `32835524840`                                    | VERIFIED       |
+| Exact-plan apply run           | GitHub Actions run `32835741862`                                    | VERIFIED       |
+| Ricardian-only plan run        | GitHub Actions run `32851990204`; not applied; superseded by `#749` | STALE / LEGACY |
+| Ricardian rollout plan version | `StRkE7Iro3fU1Uhpxwy5WXCwmLYDCsQJ`                                  | VERIFIED       |
+| Ricardian rollout plan SHA-256 | `88fd16fc344c577677e3c813070f48fc68a84393ee6a54f86342e6bc2e5e1eb0`  | VERIFIED       |
 
 The local `agroasys` AWS profile defaults to `eu-north-1`. Classify this as `MISCONFIGURED` for workload commands.
 
 Use an explicit `--region ap-south-1` for every workload query. Do not change the shared profile without a consumer check.
 
-The Ricardian rollout plan has `0` additions, `1` in-place change, and `0` destroys.
+The superseded Ricardian-only plan has `0` additions, `1` in-place change, and `0` destroys.
 
-Its only change is `cotsel-staging-ricardian.desired_count: 0 -> 1`.
+Its only change is `cotsel-staging-ricardian.desired_count: 0 -> 1`. It was not
+applied and must not be applied because `#749` changes the same task-definition
+surface. Let the saved-plan artifact expire.
 
-The plan actor is `Astton`. A different actor must dispatch its apply.
+After `#749` merges, create one new combined protected plan. It may include the
+reviewed read-only-root-filesystem changes and Ricardian desired count `0 -> 1`.
+It must keep Treasury at zero. Stop on any unrelated IAM, secret, database,
+network, image, contract, RPC, or destructive change. A different actor must
+dispatch the reviewed combined plan's apply.
 
 A new no-change refresh plan remains required after the rollout. Classify drift closure as `PARTIALLY VERIFIED`.
 
@@ -331,19 +342,19 @@ Classify GCP decommission readiness as `BLOCKED / UNKNOWN`.
 
 ## Claims versus evidence
 
-| Claim                                                | Direct evidence                                                                                              | Classification     | Remaining gate                                                        |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------ | --------------------------------------------------------------------- |
-| Cotsel AWS infrastructure is reproducible.           | Terraform root, state identity, reviewed plan, apply run, ECS definitions, and immutable digests are pinned. | PARTIALLY VERIFIED | Run a post-ledger no-change refresh plan.                             |
-| Database roles enforce the private-service boundary. | A fresh no-override verifier task exited successfully.                                                       | VERIFIED           | Repeat after any role or schema change.                               |
-| Ricardian is ready for runtime acceptance.           | Image, task definition, IAM, migration, database grants, and private network are pinned.                     | PARTIALLY VERIFIED | Merge and apply `#748`, then run signed health and replay tests.      |
-| Treasury is ready for runtime acceptance.            | Image, task definition, IAM, grants, and private network are pinned.                                         | PARTIALLY VERIFIED | Run Treasury migration after Ricardian acceptance.                    |
-| Backend runtime is current.                          | API and worker tasks use two older digests.                                                                  | MISCONFIGURED      | Deploy one reviewed digest to all intended services.                  |
-| Cotsel-Dash runs through AWS.                        | No dashboard distribution exists; public dashboard DNS points to GCP.                                        | NOT IMPLEMENTED    | Complete Phase 5.                                                     |
-| Both RPC providers are ready.                        | Primary passes; fallback `AWSCURRENT` returns `403`.                                                         | MISCONFIGURED      | Approve rotation and prove failover, recovery, and alarms.            |
-| A staging contract is accepted.                      | Two candidates exist; neither has an independent acceptance decision.                                        | BLOCKED            | Accept one candidate or deploy and accept a replacement.              |
-| All consumers use the accepted address.              | No accepted address exists.                                                                                  | NOT IMPLEMENTED    | Accept one candidate, then converge every consumer.                   |
-| Operator alerts reach a person.                      | Alarms target an SNS topic with zero subscriptions.                                                          | MISCONFIGURED      | Confirm and test a real recipient.                                    |
-| GCP is ready to decommission.                        | Both VMs and their state remain active and retained.                                                         | BLOCKED            | Complete AWS acceptance, traffic checks, backup checks, and approval. |
+| Claim                                                | Direct evidence                                                                                              | Classification     | Remaining gate                                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------------------------------------- |
+| Cotsel AWS infrastructure is reproducible.           | Terraform root, state identity, reviewed plan, apply run, ECS definitions, and immutable digests are pinned. | PARTIALLY VERIFIED | Run a post-ledger no-change refresh plan.                                       |
+| Database roles enforce the private-service boundary. | A fresh no-override verifier task exited successfully.                                                       | VERIFIED           | Repeat after any role or schema change.                                         |
+| Ricardian is ready for runtime acceptance.           | Image, task definition, IAM, migration, database grants, and private network are pinned.                     | PARTIALLY VERIFIED | Merge `#749`, apply one combined plan, then run signed health and replay tests. |
+| Treasury is ready for runtime acceptance.            | Image, task definition, IAM, grants, and private network are pinned.                                         | PARTIALLY VERIFIED | Run Treasury migration after Ricardian acceptance.                              |
+| Backend runtime is current.                          | API and worker tasks use two older digests.                                                                  | MISCONFIGURED      | Deploy one reviewed digest to all intended services.                            |
+| Cotsel-Dash runs through AWS.                        | No dashboard distribution exists; public dashboard DNS points to GCP.                                        | NOT IMPLEMENTED    | Complete Phase 5.                                                               |
+| Both RPC providers are ready.                        | Primary passes; fallback `AWSCURRENT` returns `403`.                                                         | MISCONFIGURED      | Approve rotation and prove failover, recovery, and alarms.                      |
+| A staging contract is accepted.                      | Two candidates exist; neither has an independent acceptance decision.                                        | BLOCKED            | Accept one candidate or deploy and accept a replacement.                        |
+| All consumers use the accepted address.              | No accepted address exists.                                                                                  | NOT IMPLEMENTED    | Accept one candidate, then converge every consumer.                             |
+| Operator alerts reach a person.                      | Alarms target an SNS topic with zero subscriptions.                                                          | MISCONFIGURED      | Confirm and test a real recipient.                                              |
+| GCP is ready to decommission.                        | Both VMs and their state remain active and retained.                                                         | BLOCKED            | Complete AWS acceptance, traffic checks, backup checks, and approval.           |
 
 ## Current execution gate
 
@@ -353,7 +364,9 @@ Phase 2 is `PARTIALLY VERIFIED`. PR `#748` has exact-head approval. Other sensit
 
 Phase 3 database entitlements are `VERIFIED`.
 
-Phase 3 Ricardian rollout is the next runtime gate. The exact plan is reviewed and waits for counterpart apply.
+Phase 3 Ricardian rollout remains the next runtime gate. The prior Ricardian-only
+plan is superseded. Complete `#749`, produce and review one combined plan, and use
+counterpart apply. Validate the gateway before Ricardian.
 
 Do not start Treasury before Ricardian passes its runtime and replay gates.
 
