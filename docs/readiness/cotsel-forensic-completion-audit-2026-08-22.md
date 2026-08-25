@@ -3,6 +3,25 @@
 Status: in progress. This document records current evidence. It does not accept
 the staging release or close Cotsel issue #639.
 
+Continuation baseline — 2026-08-25:
+
+- current Cotsel `main`: `6052ed389e885fce3711be0794c8df0df6fe6d95`;
+- current live ECS task definition: `cotsel-staging-gateway:20`;
+- PR #746 contains the current-main Base Sepolia candidate evidence and has 31
+  successful checks, but GitHub still requires independent approval;
+- issue #639 has no independent `ACCEPTED` or `REJECTED` decision;
+- the official Terraform plan from run `32771177377` was not applied and must
+  not be used after its 24-hour validity window;
+- deletion protection is enabled on both retained GCP VMs;
+- boot-disk auto-delete is disabled on both retained GCP VMs; and
+- targeted external probes found only ports 80 and 443 reachable on both GCP
+  addresses. SSH, PostgreSQL, Redis, Mailhog, backend, and Cotsel service ports
+  were blocked or closed.
+
+These controls preserve the current rollback estate. They do not prove AWS
+migration parity, authorize runtime promotion, or make a GCP resource ready for
+decommission.
+
 Continuation baseline — 2026-08-23:
 
 - current Cotsel `main`: `015497fc451756c70ff8292b247b068b7464b3a7`;
@@ -276,7 +295,7 @@ modified, disabled, or deleted during this refreshed inventory.
 
 ## Batch 3 — GCP inventory and migration disposition
 
-Status: **PARTIALLY VERIFIED**. Live inventory was refreshed on 2026-08-23; both
+Status: **PARTIALLY VERIFIED**. Live inventory was refreshed on 2026-08-25; both
 projects still contain active, stateful workloads and therefore neither project
 is ready for decommission.
 
@@ -294,14 +313,18 @@ is ready for decommission.
   The service accounts have no user-managed key objects, but each default
   service account holds project-level `Editor`. The VM access scopes are narrower
   than that IAM role, but the project role remains unnecessarily broad.
-- Both default VPCs retain Internet-wide SSH and ICMP rules. The Cotsel project
-  separately permits ports 80 and 443 from the Internet. The Agroasys project's
-  rule named `default-allow-ssh` unexpectedly also permits 80 and 443 in addition
-  to 22.
-- The 2026-08-23 refresh reconfirmed both VMs as `RUNNING`. `server-1` is an
+- Both default VPCs retain lower-priority Internet-wide SSH rules. A priority
+  1000 deny rule blocks public TCP 22 and TCP 3389. A priority 900 rule permits
+  TCP 22 only through Google Identity-Aware Proxy. The projects permit public
+  HTTP and HTTPS for the active legacy application paths.
+- Targeted probes from outside GCP confirmed ports 80 and 443 reachable on both
+  VMs. The probes found TCP 22, 5432, and 6379 blocked or closed. They also found
+  Mailhog, backend, and published Cotsel service ports blocked or closed.
+- The 2026-08-25 refresh reconfirmed both VMs as `RUNNING`. `server-1` is an
   `e2-standard-2` in `us-central1-f` with external address `34.172.10.248`;
   `cotsel-staging` is an `e2-standard-2` in `us-central1-a` with reserved address
-  `34.10.181.103`. Neither VM has deletion protection enabled.
+  `34.10.181.103`. Both VMs have deletion protection enabled, and both boot
+  disks have auto-delete disabled.
 - Backend GitHub Actions retains non-secret legacy metadata named
   `GCP_PROJECT_ID`, `GCE_INSTANCE_NAME`, and `GCE_INSTANCE_ZONE`. Current
   `develop` workflows and application source do not reference them.
@@ -311,15 +334,15 @@ is ready for decommission.
 
 ### Live GCP workloads and state
 
-| Resource                                                              | Current purpose and evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | AWS target status                                                                                                                                                        | Disposition                                                                                                |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `agroasys-1/server-1`                                                 | Public `e2-standard-2` VM in `us-central1-f`; runs backend, PostgreSQL, Redis, and Mailhog containers. `backend.agroasys.com` and `ops.agroasys.com` resolve to its external IP. The 2026-08-23 refresh found all four containers healthy, host ports 3000/5432/6379/8025 bound on all interfaces, source commit `4241163551f2a38f3c4d7da2f02cc61968ef358f`, 23 dirty working-tree entries, a bind-mounted checkout, and a local `backend-ag:latest` image without release provenance.                                                                                                                                 | AWS backend ECS, RDS, Redis, and mail configuration exist, but the public GCP hostnames and state parity have not moved or been proven.                                  | **BLOCKED / UNKNOWN**                                                                                      |
-| `agroasys-1/instance-20260408-102022`                                 | Attached 45 GiB balanced persistent boot disk. Docker volumes include active PostgreSQL and Redis data plus several large anonymous volumes. Fourteen current daily disk snapshots were found.                                                                                                                                                                                                                                                                                                                                                                                                                         | AWS RDS and Redis exist; database/cache parity and rollback requirements are unproven.                                                                                   | **BLOCKED / UNKNOWN**                                                                                      |
-| `hale-yew-472207-r2/cotsel-staging`                                   | Public `e2-standard-2` VM in `us-central1-a`; runs gateway, auth, oracle, treasury, reconciliation, two indexer containers, Ricardian, PostgreSQL, and Redis. `cotsel.agroasys.com` still serves its dashboard. The 2026-08-23 refresh found all ten containers healthy. Runtime images are locally built from two different Cotsel checkouts: `/home/agroasys/Cotsel` at `854d6b2b...` with 11 dirty entries and `/home/agroasys/Cotsel-mainline` at `d1f3bf17...` with one dirty entry. The dashboard checkout is on feature branch `feat/governance-signing-monitoring-ux` at `362ef576...` with two dirty entries. | AWS runs gateway, auth, oracle, reconciliation, and indexer in one ECS task. AWS does not currently run treasury or Ricardian. State and behavioral parity are unproven. | **BLOCKED / UNKNOWN**                                                                                      |
-| `hale-yew-472207-r2/cotsel-staging` disk and `cotsel-static-ip`       | Attached 50 GiB balanced boot disk, static public IP, 233 MiB PostgreSQL Docker volume and 53 MiB Redis volume. Nineteen snapshots exist, including five for a predecessor disk and fourteen current daily snapshots.                                                                                                                                                                                                                                                                                                                                                                                                  | AWS RDS/Redis exist, but data parity, active writers, and rollback dependencies remain unproven.                                                                         | **BLOCKED / UNKNOWN**                                                                                      |
-| `cotsel.sys.agroasys.com` ingress                                     | Public DNS now resolves to AWS CloudFront and the AWS health route returns 200. The GCP Caddy virtual host remains configured but is no longer the public DNS origin.                                                                                                                                                                                                                                                                                                                                                                                                                                                  | AWS CloudFront, internal ALB, and private ECS target are live.                                                                                                           | **MIGRATED** for public DNS/ingress only; the old GCP route is **STALE / LEGACY** until host decommission. |
-| `cotsel.agroasys.com` dashboard                                       | Public DNS resolves directly to the Cotsel GCP VM and returns HTTP 200. Its deployed browser bundle calls AWS `cotsel.sys.agroasys.com`, but also calls GCP-hosted `ops.agroasys.com`.                                                                                                                                                                                                                                                                                                                                                                                                                                 | No validated AWS Cotsel-Dash deployment was found.                                                                                                                       | **BLOCKED / UNKNOWN**                                                                                      |
-| Default VPCs, firewall rules, default service accounts, and snapshots | Support the still-live VMs and their rollback posture. They are not standalone migration successes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | AWS equivalents exist only for portions of the workload.                                                                                                                 | **INTENTIONALLY RETAINED** until workload/state migration and decommission gates pass.                     |
+| Resource                                                              | Current purpose and evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | AWS target status                                                                                                                                                        | Disposition                                                                                                |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `agroasys-1/server-1`                                                 | Public `e2-standard-2` VM in `us-central1-f`; runs backend, PostgreSQL, Redis, and Mailhog containers. `backend.agroasys.com` and `ops.agroasys.com` resolve to its external IP. The 2026-08-25 refresh found all four containers healthy. Docker binds ports 3000/5432/6379/8025 on all host interfaces, but targeted external probes found them blocked or closed. The checkout remains dirty and the local `backend-ag:latest` image lacks release provenance. Deletion protection is enabled and boot-disk auto-delete is disabled.                                                                                             | AWS backend ECS, RDS, Redis, and mail configuration exist, but the public GCP hostnames and state parity have not moved or been proven.                                  | **BLOCKED / UNKNOWN**                                                                                      |
+| `agroasys-1/instance-20260408-102022`                                 | Attached 45 GiB balanced persistent boot disk. Docker volumes include active PostgreSQL and Redis data plus several large anonymous volumes. Fourteen current daily disk snapshots were found.                                                                                                                                                                                                                                                                                                                                                                                                                                      | AWS RDS and Redis exist; database/cache parity and rollback requirements are unproven.                                                                                   | **BLOCKED / UNKNOWN**                                                                                      |
+| `hale-yew-472207-r2/cotsel-staging`                                   | Public `e2-standard-2` VM in `us-central1-a`; runs gateway, auth, oracle, treasury, reconciliation, two indexer containers, Ricardian, PostgreSQL, and Redis. `cotsel.agroasys.com` still serves its dashboard. The 2026-08-25 refresh found all ten containers healthy. Docker binds gateway, auth, oracle, treasury, indexer GraphQL, Ricardian, PostgreSQL, and Redis ports on all host interfaces, but targeted external probes found them blocked or closed. Runtime images still come from local, dirty checkouts without immutable release provenance. Deletion protection is enabled and boot-disk auto-delete is disabled. | AWS runs gateway, auth, oracle, reconciliation, and indexer in one ECS task. AWS does not currently run treasury or Ricardian. State and behavioral parity are unproven. | **BLOCKED / UNKNOWN**                                                                                      |
+| `hale-yew-472207-r2/cotsel-staging` disk and `cotsel-static-ip`       | Attached 50 GiB balanced boot disk, static public IP, 233 MiB PostgreSQL Docker volume and 53 MiB Redis volume. Nineteen snapshots exist, including five for a predecessor disk and fourteen current daily snapshots.                                                                                                                                                                                                                                                                                                                                                                                                               | AWS RDS/Redis exist, but data parity, active writers, and rollback dependencies remain unproven.                                                                         | **BLOCKED / UNKNOWN**                                                                                      |
+| `cotsel.sys.agroasys.com` ingress                                     | Public DNS now resolves to AWS CloudFront and the AWS health route returns 200. The GCP Caddy virtual host remains configured but is no longer the public DNS origin.                                                                                                                                                                                                                                                                                                                                                                                                                                                               | AWS CloudFront, internal ALB, and private ECS target are live.                                                                                                           | **MIGRATED** for public DNS/ingress only; the old GCP route is **STALE / LEGACY** until host decommission. |
+| `cotsel.agroasys.com` dashboard                                       | Public DNS resolves directly to the Cotsel GCP VM and returns HTTP 200. Its deployed browser bundle calls AWS `cotsel.sys.agroasys.com`, but also calls GCP-hosted `ops.agroasys.com`.                                                                                                                                                                                                                                                                                                                                                                                                                                              | No validated AWS Cotsel-Dash deployment was found.                                                                                                                       | **BLOCKED / UNKNOWN**                                                                                      |
+| Default VPCs, firewall rules, default service accounts, and snapshots | Support the still-live VMs and their rollback posture. They are not standalone migration successes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | AWS equivalents exist only for portions of the workload.                                                                                                                 | **INTENTIONALLY RETAINED** until workload/state migration and decommission gates pass.                     |
 
 ### External dependency truth
 
@@ -1835,11 +1858,20 @@ decommission candidate.
 
 Status: **NOT YET ELIGIBLE**.
 
-An independent second pass must occur after the remediations in #570, #571,
-#724, #725 and #569 have reached their applicable merge/deploy gates, the RPC
-credential has been rotated, alert delivery is routed, and a controlled
-settlement fixture produces current cross-service evidence. Running the same
-checks now would only re-report known, intentionally unclosed gaps.
+An independent second pass must occur after these current gates pass:
+
+- PR #746 receives independent approval and merges with all checks successful;
+- issue #639 records an independent contract acceptance decision;
+- a fresh official Terraform plan is reviewed and applied within its validity
+  window;
+- the deployed ECS revision passes authentication, replay, RPC failover,
+  contract convergence, indexer, reconciliation, and callback exercises;
+- Cotsel-Dash receives independent infrastructure approval, issued TLS, and a
+  confirmed operator alert destination; and
+- a controlled settlement fixture produces current cross-service evidence.
+
+Running the full second pass before these gates would only re-report known,
+intentionally unclosed gaps.
 
 ## Batch 23 — Issue, runbook, and evidence reconciliation
 
@@ -1848,20 +1880,21 @@ Status: **PARTIALLY VERIFIED**.
 This audit document, the deployment provenance packet, and the existing
 runbooks now distinguish verified runtime facts from candidates, migrations,
 and acceptance decisions. Issue #639 remains open and correctly preserves the
-independent acceptance boundary. The final runbook update must wait for the
-actual selected GCP migration method, final alert recipient, rotated provider
-identity, and #639 decision; recording invented values now would create the
-undocumented-knowledge problem this audit is intended to remove.
+independent acceptance boundary. The GCP cutover runbook records the selected
+fresh-AWS-lane decision, rollback-state protection, and verified external
+firewall behavior. Final runtime identifiers and alert routing must wait for
+the actual protected apply, confirmed notification destination, and #639
+decision. Recording intended values now would create false operational truth.
 
 ## Batch 24 — Final completion gate
 
 Status: **NOT COMPLETE**.
 
 The system is more accurately inventoried and several defects are remediated in
-review, but the critical completion questions cannot yet all be answered with
-live evidence. In particular, migration parity, persistent cross-instance
-replay proof, a real Cotsel-sender callback, a post-rotation fallback exercise,
-accepted contract decision, controlled indexer/reconciliation event,
-operator-routed alerts, and a clean second pass remain open. The current
-non-mutating ingress and callback authentication probes reduce, but do not
-eliminate, those completion gaps.
+source or review, but the critical completion questions cannot yet all be
+answered with live evidence. PR #746 and issue #639 still require independent
+decisions. The current Terraform plan remains unapplied. Cotsel-Dash lacks an
+issued certificate, independent infrastructure approval, and a confirmed alert
+subscriber. Persistent cross-task replay proof, a real Cotsel-sender callback,
+post-deployment RPC failover, controlled indexer and reconciliation evidence,
+operator-routed alarms, migration parity, and a clean second pass remain open.
