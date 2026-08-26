@@ -3,6 +3,31 @@
 Status: in progress. This document records current evidence. It does not accept
 the staging release or close Cotsel issue #639.
 
+Continuation baseline — 2026-08-26:
+
+- source baseline used for this refresh:
+  `136e0447b8d5b5121b97f50d91581b4e5db6f1c6`;
+- live ECS remains `cotsel-staging-gateway:21` at `1/1/0`; Ricardian remains
+  `0/0/0` on revision `:3`; Treasury remains `0/0/0` on revision `:3`;
+- PR #746 merged as `f81d53526b5d9e874d3ea13e7ba5fd1f62e3a7b1` and
+  records candidate `0x95021c0fD0C69BB5Cb991832476B646857632e5d`;
+- issue #639 contains an independent technical reconstruction of that candidate
+  but still lacks the required explicit `ACCEPTED` or `REJECTED — <reasons>`
+  decision;
+- PR #749 merged as `481c4d9d128b712ba4a08b628aa65451a620516e`
+  and adds read-only ECS root filesystems with isolated `/tmp` volumes;
+- PR #750 merged as `136e0447b8d5b5121b97f50d91581b4e5db6f1c6`
+  and preserves the governing completion protocol and redacted ledger; and
+- Terraform plan run `32876228301`, S3 version
+  `uTz9nStUYKsIz05bAl63A0C5EOPYzKVB`, SHA-256
+  `1abd27853488d89bf28b70c397e878f74b209d2c86205c4c0a87c20662fc467d`
+  was not applied and is now **STALE / LEGACY** because it is bound to prior
+  main `481c4d9d128b712ba4a08b628aa65451a620516e`.
+
+Do not apply any earlier saved plan. A new plan must be generated only from the
+final current `main`, reviewed, and applied by a different actor within its
+validity window. These facts do not accept a contract or start Treasury.
+
 Continuation baseline — 2026-08-25:
 
 - current Cotsel `main`: `6052ed389e885fce3711be0794c8df0df6fe6d95`;
@@ -1576,6 +1601,13 @@ Remaining required work:
 
 Status: **PARTIALLY VERIFIED**.
 
+Update on 2026-08-26: the evidence below describes the historical
+`0xB594Cd561F28daBD771f9b358CF2bc731d14EDBd` runtime lane. The later
+`0x95021c0fD0C69BB5Cb991832476B646857632e5d` candidate has separate evidence
+and independent reconstruction in PR #746 and issue #639, but it has not been
+explicitly accepted or promoted. Neither address may be inferred as accepted
+from this section.
+
 The candidate deployment is real, source-verified, and currently coherent with
 the deployed AWS configuration. It is not accepted staging truth because the
 independent decision required by issue #639 is still absent.
@@ -1860,10 +1892,9 @@ Status: **NOT YET ELIGIBLE**.
 
 An independent second pass must occur after these current gates pass:
 
-- PR #746 receives independent approval and merges with all checks successful;
 - issue #639 records an independent contract acceptance decision;
-- a fresh official Terraform plan is reviewed and applied within its validity
-  window;
+- a fresh official Terraform plan from the then-current `main` is reviewed and
+  applied by a different actor within its validity window;
 - the deployed ECS revision passes authentication, replay, RPC failover,
   contract convergence, indexer, reconciliation, and callback exercises;
 - Cotsel-Dash receives independent infrastructure approval, issued TLS, and a
@@ -1892,8 +1923,9 @@ Status: **NOT COMPLETE**.
 
 The system is more accurately inventoried and several defects are remediated in
 source or review, but the critical completion questions cannot yet all be
-answered with live evidence. PR #746 and issue #639 still require independent
-decisions. The current Terraform plan remains unapplied. Cotsel-Dash lacks an
+answered with live evidence. PR #746 is merged, but issue #639 still lacks its
+explicit decision.
+The latest Terraform plan was not applied and is now stale. Cotsel-Dash lacks an
 issued certificate, independent infrastructure approval, and a confirmed alert
 subscriber. Persistent cross-task replay proof, a real Cotsel-sender callback,
 post-deployment RPC failover, controlled indexer and reconciliation evidence,
