@@ -162,12 +162,18 @@ resource "aws_ecs_task_definition" "database_entitlement_verification" {
     operating_system_family = "LINUX"
   }
 
+  volume {
+    name = "tmp"
+  }
+
   container_definitions = jsonencode([
     {
-      name      = "database-entitlement-verification"
-      image     = "public.ecr.aws/docker/library/postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"
-      essential = true
-      command   = ["/bin/sh", "-ec", local.database_entitlement_verification_command]
+      name                   = "database-entitlement-verification"
+      image                  = "public.ecr.aws/docker/library/postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"
+      essential              = true
+      readonlyRootFilesystem = true
+      mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
+      command                = ["/bin/sh", "-ec", local.database_entitlement_verification_command]
       secrets = [
         { name = "RICARDIAN_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:password::" },
         { name = "RICARDIAN_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:username::" },

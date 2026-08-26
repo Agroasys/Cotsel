@@ -1,8 +1,9 @@
 # Base Sepolia deployment provenance audit — 2026-08-23
 
-Status: independently reproduced deployment evidence; issue #639 still requires
-an explicit independent reviewer decision before this address becomes accepted
-staging truth.
+Status: historical deployment candidate. This address was never accepted by
+issue #639 and was superseded by the current-main deployment candidate recorded
+in `base-sepolia-current-main-deployment-evidence-2026-08-24.md`. Do not promote
+this historical address into new runtime configuration.
 
 ## Scope and safety
 

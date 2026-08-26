@@ -61,6 +61,19 @@ group, and read only its service migration credential. Long-running execution
 roles cannot read migration credentials, and production containers must set
 `DB_AUTO_MIGRATE` explicitly. The managed staging runtimes set it to `false`.
 
+Every runtime, migration, bootstrap, and verifier container has a read-only root
+filesystem. Each container receives only an ephemeral writable `/tmp` mount.
+The six containers in the bundled gateway task use separate volumes so one
+service cannot read another service's temporary files.
+
+The indexer migration task executes the migration binary already present in
+the immutable image. It does not invoke a removed package-manager shim or
+download tooling at runtime.
+
+Run each one-off task without command overrides. After deployment, confirm task
+health, indexer progress, reconciliation progress, and the absence of filesystem
+write errors before retiring the preceding task revisions.
+
 Follow [`docs/runbooks/staging-indexer-migration.md`](../../../docs/runbooks/staging-indexer-migration.md)
 for the indexer and
 [`docs/runbooks/staging-service-migrations.md`](../../../docs/runbooks/staging-service-migrations.md)

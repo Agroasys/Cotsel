@@ -165,9 +165,9 @@ variable "gateway_desired_count" {
 }
 
 variable "ricardian_desired_count" {
-  description = "Number of Cotsel Ricardian tasks to run in staging. Keep zero until the database bootstrap evidence is accepted."
+  description = "Number of Cotsel Ricardian tasks to run in staging after database bootstrap and entitlement verification."
   type        = number
-  default     = 0
+  default     = 1
 
   validation {
     condition     = var.ricardian_desired_count >= 0 && var.ricardian_desired_count <= 1

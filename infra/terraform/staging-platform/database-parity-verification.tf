@@ -196,12 +196,18 @@ resource "aws_ecs_task_definition" "database_parity_verification" {
     operating_system_family = "LINUX"
   }
 
+  volume {
+    name = "tmp"
+  }
+
   container_definitions = jsonencode([
     {
-      name      = "database-parity-verification"
-      image     = "public.ecr.aws/docker/library/postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"
-      essential = true
-      command   = ["/bin/sh", "-ec", local.database_parity_verification_command]
+      name                   = "database-parity-verification"
+      image                  = "public.ecr.aws/docker/library/postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"
+      essential              = true
+      readonlyRootFilesystem = true
+      mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
+      command                = ["/bin/sh", "-ec", local.database_parity_verification_command]
       secrets = flatten([
         for service_name, service in local.database_parity_verification_services : [
           {

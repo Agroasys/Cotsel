@@ -50,12 +50,14 @@ locals {
   ]
 
   gateway_container = {
-    name         = "gateway"
-    image        = local.runtime_images["gateway"]
-    essential    = true
-    portMappings = [{ containerPort = 3600, hostPort = 3600, protocol = "tcp" }]
-    environment  = local.gateway_environment
-    secrets      = local.gateway_secrets
+    name                   = "gateway"
+    image                  = local.runtime_images["gateway"]
+    essential              = true
+    readonlyRootFilesystem = true
+    mountPoints            = [{ sourceVolume = "gateway-tmp", containerPath = "/tmp", readOnly = false }]
+    portMappings           = [{ containerPort = 3600, hostPort = 3600, protocol = "tcp" }]
+    environment            = local.gateway_environment
+    secrets                = local.gateway_secrets
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -91,12 +93,14 @@ locals {
   ]
 
   auth_container = {
-    name         = "auth"
-    image        = local.runtime_images["auth"]
-    essential    = true
-    portMappings = [{ containerPort = 3005, hostPort = 3005, protocol = "tcp" }]
-    environment  = local.auth_environment
-    secrets      = local.auth_secrets
+    name                   = "auth"
+    image                  = local.runtime_images["auth"]
+    essential              = true
+    readonlyRootFilesystem = true
+    mountPoints            = [{ sourceVolume = "auth-tmp", containerPath = "/tmp", readOnly = false }]
+    portMappings           = [{ containerPort = 3005, hostPort = 3005, protocol = "tcp" }]
+    environment            = local.auth_environment
+    secrets                = local.auth_secrets
     healthCheck = {
       command     = ["CMD-SHELL", "node -e \"const p=process.env.PORT||3005;fetch(\\\"http://127.0.0.1:\\\"+p+\\\"/api/auth/v1/health\\\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval    = 30
