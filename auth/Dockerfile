@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS builder
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.34.4 --activate
@@ -35,7 +35,7 @@ COPY shared-http shared-http
 
 RUN pnpm --filter auth run build
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 

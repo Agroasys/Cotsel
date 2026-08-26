@@ -20,7 +20,7 @@
   },
   "license": "Apache-2.0",
   "engines": {
-    "node": ">=20 <23",
+    "node": ">=22 <23",
     "npm": ">=10 <12"
   },
   "workspaces": [
@@ -45,6 +45,7 @@
     "readiness:cotsel:audit-live": "node scripts/readiness/audit-cotsel-production-readiness-live.mjs",
     "integration:manifest:check": "node scripts/check-cross-repo-release-manifest.mjs && node --test scripts/tests/cross-repo-release-manifest.test.mjs",
     "release:evidence:check": "node --test scripts/tests/release-evidence-binding.test.mjs",
+    "release:supply-chain:check": "node scripts/check-supply-chain-policy.mjs && node --test scripts/tests/supply-chain-policy.test.mjs",
     "build": "pnpm --filter @agroasys/sdk run build",
     "lint": "eslint --max-warnings=0 .",
     "lint:fix": "eslint --max-warnings=0 --fix .",

@@ -1,4 +1,5 @@
 node_modules
+.pnpm-store/
 # Single runtime env file is never committed; only its template is tracked.
 .env*
 !.env.runtime.example

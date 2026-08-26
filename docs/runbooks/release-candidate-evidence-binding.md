@@ -157,6 +157,81 @@ valid` as "bound to this candidate", never as "accepted".
 Fixtures showing a complete, valid pair are in `scripts/tests/fixtures/release-evidence/`. They are
 test data, not a pinned candidate, and no value in them is release evidence.
 
+## Release image supply-chain evidence
+
+Audience: release, security, and platform operators.
+
+Outcome: verify that each release image comes from the recorded source and contains a signed SBOM.
+
+The release workflow publishes images only for a push to `main`. Pull requests build and scan the
+same Dockerfiles, but they do not publish images or create release attestations.
+
+The publishing job must produce these records for every service image:
+
+- an immutable ECR image digest;
+- a fixable high and critical vulnerability scan;
+- an SPDX 2.3 JSON SBOM;
+- a signed SLSA build-provenance attestation;
+- a signed SBOM attestation;
+- the Sigstore bundles for both attestations; and
+- JSON output proving that the workflow verified both signatures.
+
+The repository policy check fails when an external action, Docker base image, Compose image, or CI
+service image uses a mutable reference. It also requires Node `22.23.2` in the release toolchain.
+Run it locally with:
+
+```bash
+corepack pnpm run release:supply-chain:check
+```
+
+Before verification, complete these prerequisites:
+
+- Authenticate the GitHub CLI.
+- Authenticate to the applicable ECR registry with pull-only access.
+- Get the exact source commit and image digest.
+
+After a successful `main` build, download the workflow evidence. Then verify the published digest
+independently. Do not put registry credentials in the command or evidence record.
+
+```bash
+gh run download <release-images-run-id> \
+  --repo Agroasys/Cotsel \
+  --dir <evidence-directory>
+
+gh attestation verify \
+  'oci://<registry>/<repository>@sha256:<image-digest>' \
+  --repo Agroasys/Cotsel \
+  --cert-identity \
+    'https://github.com/Agroasys/Cotsel/.github/workflows/release-images.yml@refs/heads/main' \
+  --source-ref refs/heads/main \
+  --source-digest <source-commit> \
+  --deny-self-hosted-runners
+
+gh attestation verify \
+  'oci://<registry>/<repository>@sha256:<image-digest>' \
+  --repo Agroasys/Cotsel \
+  --cert-identity \
+    'https://github.com/Agroasys/Cotsel/.github/workflows/release-images.yml@refs/heads/main' \
+  --source-ref refs/heads/main \
+  --source-digest <source-commit> \
+  --predicate-type https://spdx.dev/Document/v2.3 \
+  --deny-self-hosted-runners
+```
+
+Record the source commit, producing run ID, repository, image digest, attestation IDs, and artifact
+checksums in the candidate evidence. Do not record authenticated registry URLs, tokens, or the ECR
+login password.
+
+Digest updates are deliberate release changes. Use this procedure:
+
+1. Resolve the new upstream digest.
+2. Verify the image publisher and target platform.
+3. Update all governed references together.
+4. Run the full release matrix.
+5. Obtain exact-head review.
+
+Do not replace a digest with a floating tag.
+
 ## Open dependencies
 
 The contracts are complete, but two WP-0 inputs remain unapproved and no candidate can be pinned
