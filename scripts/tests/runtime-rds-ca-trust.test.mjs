@@ -16,11 +16,13 @@ const bundleUrl = 'https://truststore.pki.rds.amazonaws.com/global/global-bundle
 const bundleChecksum = 'sha256:e5bb2084ccf45087bda1c9bffdea0eb15ee67f0b91646106e466714f9de3c7e3';
 const bundleDigest = bundleChecksum.slice('sha256:'.length);
 const bundlePath = '/app/aws-rds-global-bundle.pem';
+const runtimeStagePattern =
+  /^FROM node:22-(?:bookworm-slim|alpine)@sha256:[a-f0-9]{64} AS runtime$/m;
 
 for (const dockerfile of dockerfiles) {
   test(`${dockerfile} installs the pinned AWS RDS trust bundle`, async () => {
     const source = await readFile(dockerfile, 'utf8');
-    const runtimeStage = /^FROM node:20-(?:bookworm-slim|alpine) AS runtime$/m.exec(source);
+    const runtimeStage = runtimeStagePattern.exec(source);
 
     assert.ok(runtimeStage, `${dockerfile} must declare the expected runtime stage`);
     const runtimeSource = source.slice(runtimeStage.index);
