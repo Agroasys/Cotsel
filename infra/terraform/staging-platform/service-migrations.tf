@@ -115,12 +115,18 @@ resource "aws_ecs_task_definition" "service_migration" {
     operating_system_family = "LINUX"
   }
 
+  volume {
+    name = "tmp"
+  }
+
   container_definitions = jsonencode([
     {
-      name      = "${each.key}-migrate"
-      image     = local.runtime_images[each.key]
-      essential = true
-      command   = ["node", "shared-db/migrate.js"]
+      name                   = "${each.key}-migrate"
+      image                  = local.runtime_images[each.key]
+      essential              = true
+      readonlyRootFilesystem = true
+      mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
+      command                = ["node", "shared-db/migrate.js"]
       environment = [
         { name = "DB_HOST", value = local.postgres_host },
         { name = "DB_NAME", value = each.value.database },

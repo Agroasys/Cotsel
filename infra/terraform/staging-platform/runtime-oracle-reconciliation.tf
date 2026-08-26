@@ -40,12 +40,14 @@ locals {
   ]
 
   oracle_container = {
-    name         = "oracle"
-    image        = local.runtime_images["oracle"]
-    essential    = true
-    portMappings = [{ containerPort = 3001, hostPort = 3001, protocol = "tcp" }]
-    environment  = local.oracle_environment
-    secrets      = local.oracle_secrets
+    name                   = "oracle"
+    image                  = local.runtime_images["oracle"]
+    essential              = true
+    readonlyRootFilesystem = true
+    mountPoints            = [{ sourceVolume = "oracle-tmp", containerPath = "/tmp", readOnly = false }]
+    portMappings           = [{ containerPort = 3001, hostPort = 3001, protocol = "tcp" }]
+    environment            = local.oracle_environment
+    secrets                = local.oracle_secrets
     healthCheck = {
       command     = ["CMD-SHELL", "node -e 'const p=process.env.PORT||3001;fetch(\"http://127.0.0.1:\"+p+\"/api/oracle/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'"]
       interval    = 30
@@ -97,13 +99,15 @@ locals {
   ]
 
   reconciliation_container = {
-    name         = "reconciliation"
-    image        = local.runtime_images["reconciliation"]
-    essential    = true
-    command      = ["node", "reconciliation/dist/cli.js", "daemon"]
-    portMappings = [{ containerPort = 9090, hostPort = 9090, protocol = "tcp" }]
-    environment  = local.reconciliation_environment
-    secrets      = local.reconciliation_secrets
+    name                   = "reconciliation"
+    image                  = local.runtime_images["reconciliation"]
+    essential              = true
+    readonlyRootFilesystem = true
+    mountPoints            = [{ sourceVolume = "reconciliation-tmp", containerPath = "/tmp", readOnly = false }]
+    command                = ["node", "reconciliation/dist/cli.js", "daemon"]
+    portMappings           = [{ containerPort = 9090, hostPort = 9090, protocol = "tcp" }]
+    environment            = local.reconciliation_environment
+    secrets                = local.reconciliation_secrets
     healthCheck = {
       command     = ["CMD-SHELL", "node -e 'const p=process.env.RECONCILIATION_HEALTH_PORT||9090;fetch(\"http://127.0.0.1:\"+p+\"/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'"]
       interval    = 30

@@ -85,6 +85,21 @@ They must remain recorded in the migration ledger until the two legacy projects
 are decommissioned or their firewall configuration is brought under approved
 infrastructure-as-code management.
 
+On 2026-08-25, the audit added reversible state-protection controls:
+
+- deletion protection is enabled on `agroasys-1/server-1`;
+- deletion protection is enabled on `hale-yew-472207-r2/cotsel-staging`;
+- boot-disk auto-delete is disabled on both VMs; and
+- both VMs remain `RUNNING`.
+
+Targeted probes from outside GCP confirmed the effective ingress boundary.
+Ports 80 and 443 were reachable on both addresses. TCP 22, PostgreSQL, Redis,
+Mailhog, backend, and published Cotsel service ports were blocked or closed.
+
+Docker still binds several internal service ports to all host interfaces. Treat
+those bindings as defense-in-depth debt. Do not change them until the rollback
+lane has a reviewed deployment and recovery procedure.
+
 ## Preconditions
 
 Complete these conditions before a data or DNS cutover.

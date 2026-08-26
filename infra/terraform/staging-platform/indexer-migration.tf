@@ -72,13 +72,19 @@ resource "aws_ecs_task_definition" "indexer_migration" {
     operating_system_family = "LINUX"
   }
 
+  volume {
+    name = "tmp"
+  }
+
   container_definitions = jsonencode([
     {
-      name             = "indexer-migrate"
-      image            = local.runtime_images["indexer-pipeline"]
-      essential        = true
-      workingDirectory = "/app/indexer"
-      command          = ["pnpm", "exec", "squid-typeorm-migration", "apply"]
+      name                   = "indexer-migrate"
+      image                  = local.runtime_images["indexer-pipeline"]
+      essential              = true
+      readonlyRootFilesystem = true
+      mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
+      workingDirectory       = "/app/indexer"
+      command                = ["./node_modules/.bin/squid-typeorm-migration", "apply"]
       environment = [
         { name = "DB_HOST", value = local.postgres_host },
         { name = "DB_NAME", value = "cotsel_indexer" },

@@ -26,11 +26,13 @@ locals {
   ]
 
   indexer_pipeline_container = {
-    name        = "indexer-pipeline"
-    image       = local.runtime_images["indexer-pipeline"]
-    essential   = true
-    environment = local.indexer_pipeline_environment
-    secrets     = local.indexer_pipeline_secrets
+    name                   = "indexer-pipeline"
+    image                  = local.runtime_images["indexer-pipeline"]
+    essential              = true
+    readonlyRootFilesystem = true
+    mountPoints            = [{ sourceVolume = "indexer-pipeline-tmp", containerPath = "/tmp", readOnly = false }]
+    environment            = local.indexer_pipeline_environment
+    secrets                = local.indexer_pipeline_secrets
     restartPolicy = {
       enabled              = true
       restartAttemptPeriod = 60
@@ -60,14 +62,16 @@ locals {
   ]
 
   indexer_graphql_container = {
-    name             = "indexer-graphql"
-    image            = local.runtime_images["indexer-graphql"]
-    essential        = true
-    workingDirectory = "/app/indexer"
-    command          = ["node", "node_modules/@subsquid/graphql-server/bin/run.js", "--no-squid-status"]
-    portMappings     = [{ containerPort = 4350, hostPort = 4350, protocol = "tcp" }]
-    environment      = local.indexer_graphql_environment
-    secrets          = local.indexer_graphql_secrets
+    name                   = "indexer-graphql"
+    image                  = local.runtime_images["indexer-graphql"]
+    essential              = true
+    readonlyRootFilesystem = true
+    mountPoints            = [{ sourceVolume = "indexer-graphql-tmp", containerPath = "/tmp", readOnly = false }]
+    workingDirectory       = "/app/indexer"
+    command                = ["node", "node_modules/@subsquid/graphql-server/bin/run.js", "--no-squid-status"]
+    portMappings           = [{ containerPort = 4350, hostPort = 4350, protocol = "tcp" }]
+    environment            = local.indexer_graphql_environment
+    secrets                = local.indexer_graphql_secrets
     healthCheck = {
       command     = ["CMD-SHELL", "node -e \"const p=process.env.GQL_PORT||4350;fetch(\\\"http://127.0.0.1:\\\"+p+\\\"/graphql\\\",{method:\\\"POST\\\",headers:{\\\"Content-Type\\\":\\\"application/json\\\"},body:JSON.stringify({query:\\\"{ __typename }\\\"})}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval    = 30
