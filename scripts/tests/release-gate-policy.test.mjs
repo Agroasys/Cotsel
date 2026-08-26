@@ -152,12 +152,22 @@ test('command preserves a report when the needs payload is invalid', () => {
   }
 });
 
-test('workflow delegates every required job result to the policy evaluator', () => {
+test('workflow delegates exactly every required job result to the policy evaluator', () => {
   const workflowPath = fileURLToPath(
     new URL('../../.github/workflows/release-gate.yml', import.meta.url),
   );
   const workflow = fs.readFileSync(workflowPath, 'utf8');
   const releaseGate = workflow.slice(workflow.indexOf('  release-gate:'));
+  const needsBlock = releaseGate.slice(
+    releaseGate.indexOf('    needs:'),
+    releaseGate.indexOf('    steps:'),
+  );
+  const wiredJobs = needsBlock
+    .split('\n')
+    .filter((line) => line.startsWith('      - '))
+    .map((line) => line.slice('      - '.length))
+    .sort();
+  const evaluatedJobs = RELEASE_GATE_CHECKS.map(({ job }) => job).sort();
 
   assert.match(releaseGate, /if: always\(\)/);
   assert.match(releaseGate, /RELEASE_GATE_NEEDS_JSON: \$\{\{ toJSON\(needs\) \}\}/);
@@ -165,11 +175,9 @@ test('workflow delegates every required job result to the policy evaluator', () 
     releaseGate,
     /run: node scripts\/evaluate-release-gate\.mjs --report ci-reports\/release-gate\.txt/,
   );
-  for (const { job } of RELEASE_GATE_CHECKS) {
-    assert.match(
-      releaseGate,
-      new RegExp(`\\n      - ${job}\\n`),
-      `${job} must be in release-gate.needs`,
-    );
-  }
+  assert.deepEqual(
+    wiredJobs,
+    evaluatedJobs,
+    'release-gate.needs and RELEASE_GATE_CHECKS must contain the same jobs',
+  );
 });
