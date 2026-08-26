@@ -9,15 +9,15 @@ Read-only worker that compares indexed trade state to on-chain trade state and p
 - Drift persistence in Postgres (`reconcile_runs`, `reconcile_drifts`)
 - Severity classification (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`)
 - CLI entrypoints:
-  - `npm run reconcile:once`
-  - `npm run reconcile:daemon`
+  - `pnpm run reconcile:once`
+  - `pnpm run reconcile:daemon`
 
 ## Run
 
 ```bash
 cp .env.example .env
-npm install
-npm run reconcile:once
+pnpm install --frozen-lockfile
+pnpm run reconcile:once
 ```
 
 Daemon mode is disabled by default. Set `RECONCILIATION_ENABLED=true` to run continuously.
@@ -29,7 +29,7 @@ Reconciliation requires a reachable `RPC_URL` at startup and fails fast with a c
 After building, run:
 
 ```bash
-npm run healthcheck
+pnpm run healthcheck
 ```
 
 Reconciliation is a worker process (no HTTP server), so readiness is exposed through process startup + healthcheck command rather than `/ready`.

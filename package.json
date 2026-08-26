@@ -47,6 +47,7 @@
     "release:evidence:check": "node --test scripts/tests/release-evidence-binding.test.mjs",
     "release:supply-chain:check": "node scripts/check-supply-chain-policy.mjs && node --test scripts/tests/supply-chain-policy.test.mjs",
     "release:gate:check": "node --test scripts/tests/release-gate-policy.test.mjs",
+    "docs:integrity:check": "node --test scripts/tests/documentation-integrity.test.mjs",
     "build": "pnpm --filter @agroasys/sdk run build",
     "lint": "eslint --max-warnings=0 .",
     "lint:fix": "eslint --max-warnings=0 --fix .",

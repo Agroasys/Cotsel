@@ -224,7 +224,7 @@ through the relayer/gateway.
 Deterministic compatibility harness:
 
 ```bash
-npm run -w sdk test -- --runTestsByPath tests/web3AuthSignerCompatibility.test.ts
+pnpm --filter ./sdk run test -- --runTestsByPath tests/web3AuthSignerCompatibility.test.ts
 ```
 
 The harness proves that an EIP-1193/embedded-wallet signer can pass through the
@@ -301,9 +301,9 @@ Production integrations should follow this boundary:
 Integration tests require the `.env` values below. If required values are missing, the SDK integration suites are skipped.
 
 ```
-npm run test:buyer
-npm run test:oracle
-npm run test:admin
+pnpm run test:buyer
+pnpm run test:oracle
+pnpm run test:admin
 ```
 
 ## Environment Variables

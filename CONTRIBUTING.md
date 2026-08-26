@@ -46,8 +46,8 @@ If your change touches any guarded area, document impact and rollback plan in th
 
 ## Prerequisites
 
-- Node.js 20.x
-- npm 10+
+- Node.js 22.23.2
+- pnpm 10.34.4 through Corepack
 - Docker + Docker Compose (for infra/runtime checks)
 
 ## Setup
@@ -55,7 +55,9 @@ If your change touches any guarded area, document impact and rollback plan in th
 ```bash
 git clone https://github.com/Agroasys/Cotsel.git
 cd Cotsel
-npm ci
+corepack enable
+corepack prepare pnpm@10.34.4 --activate
+pnpm install --frozen-lockfile
 ```
 
 For local contracts checks, set test private key variables as needed by Hardhat:
@@ -98,38 +100,38 @@ Run checks for each changed workspace.
 ### Common
 
 ```bash
-npm run lint
+pnpm run lint
 ```
 
 ### Workspace checks (examples)
 
 ```bash
-npm run -w contracts lint
-npm run -w contracts compile
-npm run -w contracts test
+pnpm --filter ./contracts run lint
+pnpm --filter ./contracts run compile
+pnpm --filter ./contracts run test
 
-npm run -w sdk lint
-npm run -w sdk test
-npm run -w sdk build
+pnpm --filter ./sdk run lint
+pnpm --filter ./sdk run test
+pnpm --filter ./sdk run build
 
-npm run -w oracle lint
-npm run -w oracle test
-npm run -w oracle build
+pnpm --filter ./oracle run lint
+pnpm --filter ./oracle run test
+pnpm --filter ./oracle run build
 
-npm run -w indexer lint
-npm run -w indexer build
+pnpm --filter ./indexer run lint
+pnpm --filter ./indexer run build
 
-npm run -w reconciliation lint
-npm run -w reconciliation test
-npm run -w reconciliation build
+pnpm --filter ./reconciliation run lint
+pnpm --filter ./reconciliation run test
+pnpm --filter ./reconciliation run build
 
-npm run -w ricardian lint
-npm run -w ricardian test
-npm run -w ricardian build
+pnpm --filter ./ricardian run lint
+pnpm --filter ./ricardian run test
+pnpm --filter ./ricardian run build
 
-npm run -w treasury lint
-npm run -w treasury test
-npm run -w treasury build
+pnpm --filter ./treasury run lint
+pnpm --filter ./treasury run test
+pnpm --filter ./treasury run build
 ```
 
 Use `--if-present` where needed if a workspace does not define a script in your branch context.

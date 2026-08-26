@@ -51,8 +51,10 @@ Authoritative dependencies:
 - Postgres: gateway ledgers and idempotency/audit persistence
 - Failed-operation replay: `node scripts/gateway-dead-letter-workflow.mjs list|replay`
 - Auth service: bearer-session validation
-- Chain RPC: governance prepare verification, direct-sign confirm verification, and monitoring reads
-- Executor process: optional only for delegated/service-role governance paths that still intentionally use executor execution
+- Chain RPC: read-only governance status and settlement operations implemented by
+  the current gateway
+- Governance mutation and executor processes: not implemented; see the blocked
+  status later in this runbook
 
 ## Required configuration
 
@@ -67,9 +69,9 @@ Minimum gateway env contract:
 - `GATEWAY_CHAIN_ID`
 - `GATEWAY_EXPLORER_BASE_URL`
 - `GATEWAY_ESCROW_ADDRESS`
+- `GATEWAY_USDC_ADDRESS`
 - `GATEWAY_ENABLE_MUTATIONS`
 - `GATEWAY_WRITE_ALLOWLIST`
-- `GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS`
 - `GATEWAY_COMMIT_SHA`
 - `GATEWAY_BUILD_TIME`
 - `GATEWAY_INDEXER_REQUEST_TIMEOUT_MS`
@@ -102,12 +104,6 @@ Gateway-owned downstream policy knobs:
 When optional probe URLs are not set, the operations summary endpoint returns deterministic `unavailable`
 for the corresponding service with a stable explanatory detail.
 
-Executor-only env:
-
-- `GATEWAY_USDC_ADDRESS`
-- `GATEWAY_EXECUTOR_PRIVATE_KEY`
-- `GATEWAY_EXECUTOR_TIMEOUT_MS`
-
 Runtime notes:
 
 - `GATEWAY_SETTLEMENT_RUNTIME` is the canonical selector for active Base v1 runtimes.
@@ -124,7 +120,7 @@ Safety rules:
 - If `GATEWAY_ENABLE_MUTATIONS=false`, all gateway mutation routes must reject writes.
 - If `GATEWAY_WRITE_ALLOWLIST` is empty, mutations must reject writes even when enabled.
 - The gateway process must never hold the human governance signer key.
-- `GATEWAY_EXECUTOR_PRIVATE_KEY` is an approved local/staging bootstrap path only, not a steady-state production custody model.
+- No governance executor secret is part of the supported current runtime.
 - Approved write operators for later enablement are Aston and `czpyioe`, but `GATEWAY_WRITE_ALLOWLIST`
   must contain the exact local auth principal IDs used by the auth service. Do not guess identifiers.
 
@@ -158,7 +154,7 @@ Operational controls:
 
 ## Startup procedure
 
-1. Confirm Node 20 baseline.
+1. Confirm the Node 22.23.2 baseline.
 2. Confirm Postgres database exists for `GATEWAY_DB_NAME`.
 3. Start gateway service.
 4. Run migrations on startup.
@@ -167,7 +163,8 @@ Operational controls:
 Example local commands:
 
 ```bash
-nvm use 20
+corepack enable
+corepack prepare pnpm@10.34.4 --activate
 pnpm install --frozen-lockfile
 scripts/cotsel.sh up
 scripts/cotsel.sh health
@@ -304,9 +301,13 @@ Escalation:
 
 ## Governance direct-sign procedure
 
-Human privileged governance does not execute inline and does not route through the executor by default.
+**BLOCKED / NOT IMPLEMENTED.** The flow below is the accepted target from
+ADR-0411, not a current operator procedure. Current repository truth has no
+gateway governance mutation routes, action store, prepare/confirm endpoints, or
+cleanup command. Do not infer execution support from the read-only governance
+status route.
 
-Flow:
+Target flow:
 
 1. Gateway validates authz and payload.
 2. Gateway derives a deterministic `intentKey` from governance category, contract method, and relevant parameters.
@@ -318,26 +319,16 @@ Flow:
 8. Gateway records `broadcast` or `broadcast_pending_verification` and starts backend monitoring.
 9. Operators verify tx hash, verification state, monitoring state, and chain event depth.
 
-Prepared actions may still expire and be marked `stale`. Cleanup remains valid:
-
-```bash
-node gateway/scripts/governance-cleanup.mjs --dry-run
-node gateway/scripts/governance-cleanup.mjs --apply
-```
-
-Cleanup only marks expired prepared actions as `stale` and appends an audit record.
+The owning work package must implement and accept the action store, expiry,
+cleanup, confirmation, monitoring, idempotency, and audit behavior before this
+becomes executable guidance.
 
 ## Delegated/service-role executor procedure
 
-Executor-backed governance remains allowed only for delegated/service/system flows that intentionally retain executor execution.
-
-For those flows:
-
-```bash
-pnpm --filter ./gateway run execute:governance-action -- <actionId>
-```
-
-Use `docs/runbooks/gateway-governance-signer-custody.md` when that executor path is actually in scope.
+No delegated governance executor or package command exists in current repository
+truth. Do not use an old checkout, manual contract call, or direct database write
+as a substitute. Use `docs/runbooks/gateway-governance-signer-custody.md` for the
+controls that a future implementation must satisfy.
 
 ## Rollback procedure
 
@@ -345,17 +336,10 @@ If gateway behavior regresses after deploy:
 
 1. Set `GATEWAY_ENABLE_MUTATIONS=false`.
 2. Redeploy or restart gateway with the safe config.
-3. Stop any executor invocation for delegated/service-role actions until the release is assessed.
-4. Inspect active governance actions:
-
-```bash
-export DASHBOARD_GATEWAY_LOCAL_BASE_URL="${DASHBOARD_GATEWAY_LOCAL_BASE_URL:-<local dashboard gateway base>}"
-curl -fsS -H "Authorization: Bearer <session>" \
-  "${DASHBOARD_GATEWAY_LOCAL_BASE_URL}/governance/actions?status=prepared"
-```
-
-5. Revert the release if required.
-6. Capture request IDs, action IDs, tx hashes, and database audit evidence before retrying execution.
+3. Keep governance mutation paths blocked until the release is assessed.
+4. Revert the release if required.
+5. Capture request IDs and available runtime evidence before retrying any
+   supported operation. Do not fabricate governance action evidence.
 
 ## Verification checklist
 

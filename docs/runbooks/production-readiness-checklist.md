@@ -45,7 +45,9 @@ Purpose:
 - Emergency rotation procedure is documented and tested in non-production first.
 - Shared test/dev keys are never reused for production environments.
 - Gateway governance signer custody is defined in `docs/runbooks/gateway-governance-signer-custody.md`.
-- Production governance execution must use managed signer custody; raw `GATEWAY_EXECUTOR_PRIVATE_KEY` env injection is staging-only unless a time-boxed exception is approved and rotated immediately after use.
+- Gateway governance mutation is currently blocked because the accepted
+  direct-sign prepare/confirm path is not implemented. A future executor-backed
+  service path must use managed custody and must not introduce a raw-key fallback.
 
 ### Inspection-settlement signer authority
 
@@ -160,7 +162,7 @@ Purpose:
 
 ## Verification Before Marking Ready
 
-- Node parity checks run under Node 20.
+- Node parity checks run under Node 22.23.2.
 - Workspace validation passes: lint, typecheck, and tests.
 - Profile checks pass for local and staging release-gate paths.
 - Repo-local proof is not sufficient by itself for a production-candidate
