@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS builder
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS builder
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.34.4 --activate
@@ -20,10 +20,7 @@ COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
 COPY treasury/package.json treasury/package.json
 
-RUN apt-get update \
-  && apt-get upgrade -y --no-install-recommends \
-  && apt-get install -y --no-install-recommends python3 make g++ \
-  && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache --virtual .build-deps python3 make g++
 
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
@@ -38,7 +35,7 @@ RUN pnpm --filter @agroasys/sdk run build \
   && pnpm --filter @agroasys/notifications run build \
   && pnpm --filter oracle run build
 
-FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS runtime
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
@@ -47,7 +44,9 @@ ADD --checksum=sha256:e5bb2084ccf45087bda1c9bffdea0eb15ee67f0b91646106e466714f9d
   /app/aws-rds-global-bundle.pem
 ENV NODE_EXTRA_CA_CERTS=/app/aws-rds-global-bundle.pem
 
-RUN corepack enable && corepack prepare pnpm@10.34.4 --activate
+RUN apk upgrade --no-cache \
+  && corepack enable \
+  && corepack prepare pnpm@10.34.4 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches patches
@@ -66,12 +65,8 @@ COPY shared-edge/package.json shared-edge/package.json
 COPY shared-http/package.json shared-http/package.json
 COPY treasury/package.json treasury/package.json
 
-RUN apt-get update \
-  && apt-get upgrade -y --no-install-recommends \
-  && apt-get install -y --no-install-recommends python3 make g++ \
-  && rm -rf /var/lib/apt/lists/*
-
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+  && pnpm install --frozen-lockfile --prod --ignore-scripts \
   && pnpm store prune \
   && corepack disable \
   && rm -rf /root/.cache/node/corepack \
@@ -80,8 +75,7 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
     /usr/local/lib/node_modules/npm \
   && rm -f /usr/local/bin/corepack /usr/local/bin/npm /usr/local/bin/npx \
     /usr/local/bin/pnpm /usr/local/bin/pnpx \
-  && apt-get purge -y --auto-remove python3 make g++ \
-  && rm -rf /var/lib/apt/lists/*
+  && apk del .build-deps
 
 COPY --from=builder /app/notifications/dist /app/notifications/dist
 COPY --from=builder /app/sdk/dist /app/sdk/dist
@@ -91,8 +85,7 @@ COPY --from=builder /app/shared-http /app/shared-http
 COPY --from=builder /app/oracle/dist /app/oracle/dist
 COPY --from=builder /app/oracle/src/database/schema.sql /app/oracle/src/database/schema.sql
 
-RUN groupadd --system agro \
-  && useradd --system --gid agro --create-home agro \
+RUN addgroup -S agro && adduser -S agro -G agro \
   && chown -R agro:agro /app
 
 USER agro

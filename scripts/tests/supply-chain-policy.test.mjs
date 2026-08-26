@@ -48,9 +48,15 @@ test('release workflow requires signed provenance and SBOM controls', () => {
     'provenance: mode=max',
     'sbom: true',
     'format: spdx-json',
+    'severity: HIGH,CRITICAL',
+    "exit-code: '1'",
     'uses: actions/attest@0123456789abcdef0123456789abcdef01234567',
     'gh attestation verify',
   ].join('\n');
   assert.equal(releaseWorkflowViolations(complete).length, 0);
   assert.ok(releaseWorkflowViolations(complete.replace('sbom: true', '')).length > 0);
+  assert.match(
+    releaseWorkflowViolations(`${complete}\nignore-unfixed: true`)[0],
+    /must not bypass the gate/u,
+  );
 });
