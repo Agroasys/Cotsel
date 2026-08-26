@@ -12,6 +12,21 @@ resource "aws_ecs_task_definition" "gateway" {
     operating_system_family = "LINUX"
   }
 
+  dynamic "volume" {
+    for_each = toset([
+      "auth",
+      "gateway",
+      "indexer-graphql",
+      "indexer-pipeline",
+      "oracle",
+      "reconciliation",
+    ])
+
+    content {
+      name = "${volume.value}-tmp"
+    }
+  }
+
   container_definitions = jsonencode([
     local.gateway_container,
     local.auth_container,
