@@ -1,6 +1,12 @@
 {
   "generatedAt": "2026-08-22T07:13:30.736Z",
   "commitSha": "1b3c64051e3fa29f8f148b24f5ec2537964407d1",
+  "disposition": {
+    "status": "historical-unaccepted-evidence",
+    "runtimePromotionAuthorized": false,
+    "acceptanceIssue": 639,
+    "laterCandidateAddress": "0x95021c0fD0C69BB5Cb991832476B646857632e5d"
+  },
   "network": {
     "hardhatName": "base-sepolia",
     "runtimeKey": "base-sepolia",

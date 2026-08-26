@@ -1,12 +1,19 @@
 # Base Sepolia staging runtime evidence — 2026-08-22
 
-Status: evidence packet prepared; independent review still required before this
-deployment becomes accepted staging truth.
+Status: **historical, unaccepted evidence**. This packet records the runtime
+observed on 2026-08-22. It must not be used as current deployment authority,
+runtime configuration, or contract acceptance.
+
+The later candidate `0x95021c0fD0C69BB5Cb991832476B646857632e5d`
+has separate evidence in PR #746 and issue #639. Neither this historical packet
+nor the later candidate becomes accepted staging truth without the explicit
+issue #639 acceptance decision.
 
 ## Scope
 
-This records the current evidence for Cotsel issue #639 after wiring the
-staging runtime to the newly deployed Base Sepolia contract.
+This records the evidence captured for Cotsel issue #639 after the staging
+runtime was wired to the Base Sepolia contract on 2026-08-22. Runtime and
+repository identifiers below are a point-in-time snapshot.
 
 This document intentionally excludes:
 
@@ -124,7 +131,7 @@ Post-deployment read checks:
 - relayer allowed: `true`
 - all three configured admins active: `true`
 
-## Runtime convergence evidence
+## Historical runtime convergence snapshot
 
 AWS account:
 
@@ -201,16 +208,19 @@ Secret-bearing settings observed in ECS secret references include:
 - database credentials
 - oracle private-key reference
 
-## Repository changes in this branch
+## Original branch history
 
-Runtime repair commits:
+The original PR branch also contained these runtime repair commits:
 
 - `7575398 fix(shared-db): honor Postgres SSL mode`
 - `1049672 fix(docker): include pnpm patches in service images`
 - `47016df fix(oracle): label escrow address in startup logs`
 
-The final oracle change fixes misleading startup metadata so the service logs
-the configured escrow address as `escrowAddress`, not `oracleAddress`.
+Those code commits are not carried by the refreshed evidence-only branch.
+Current `main` already contains the later fail-closed database SSL parser,
+explicit per-service SSL configuration, startup chain validation, migration
+controls, and the corrected `escrowAddress` log field. Reapplying the older
+commits would regress those controls.
 
 Validation performed for these commits:
 
@@ -221,9 +231,11 @@ Validation performed for these commits:
 
 ## Remaining acceptance gate
 
-This evidence does not itself accept the deployment as canonical staging truth.
+This evidence did not accept the deployment as canonical staging truth, and the
+deployment was never independently accepted.
 
-Issue #639 still requires an independent reviewer to compare:
+Issue #639 owns the independent acceptance decision for the selected candidate.
+For this historical deployment, the unresolved review dimensions were:
 
 1. approved source commit
 2. compiled artifact
@@ -237,7 +249,7 @@ Issue #639 still requires an independent reviewer to compare:
 10. downstream service configuration
 11. indexer/reconciliation state
 
-The reviewer must explicitly return either:
+Any selected candidate must receive an explicit decision of:
 
 - `ACCEPTED`
 - `REJECTED — <reasons>`
