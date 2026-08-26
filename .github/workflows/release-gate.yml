@@ -1182,58 +1182,18 @@ jobs:
       - ricardian
       - treasury
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '20'
+
       - name: Evaluate required checks
-        shell: bash
-        run: |
-          mkdir -p ci-reports
-          report="ci-reports/release-gate.txt"
-
-          declare -A results
-          results["ci/changes"]="${{ needs.changes.result }}"
-          results["ci/dependency-security"]="${{ needs.dependency-security.result }}"
-          results["ci/docs-profile-guard"]="${{ needs.docs-profile-guard.result }}"
-          results["ci/env-profile-regression"]="${{ needs.env-profile-regression.result }}"
-          results["ci/repo-quality"]="${{ needs.repo-quality.result }}"
-          results["ci/shared-packages"]="${{ needs.shared-packages.result }}"
-          results["ci/postgres-recovery-smoke"]="${{ needs.postgres-recovery-smoke.result }}"
-          results["ci/cross-repository-compatibility"]="${{ needs.cross-repository-compatibility.result }}"
-          results["ci/runtime-gate"]="${{ needs.runtime-gate.result }}"
-          results["ci/auth"]="${{ needs.auth.result }}"
-          results["ci/gateway"]="${{ needs.gateway.result }}"
-          results["ci/contracts"]="${{ needs.contracts.result }}"
-          results["ci/sdk"]="${{ needs.sdk.result }}"
-          results["ci/oracle"]="${{ needs.oracle.result }}"
-          results["ci/indexer"]="${{ needs.indexer.result }}"
-          results["ci/notifications"]="${{ needs.notifications.result }}"
-          results["ci/reconciliation"]="${{ needs.reconciliation.result }}"
-          results["ci/ricardian"]="${{ needs.ricardian.result }}"
-          results["ci/treasury"]="${{ needs.treasury.result }}"
-
-          failed=0
-          for check in "${!results[@]}"; do
-            status="${results[$check]}"
-            echo "$check => $status" | tee -a "$report"
-            if [[ "$check" == "ci/changes" ]]; then
-              if [[ "$status" != "success" ]]; then
-                failed=1
-              fi
-            elif [[ "$status" != "success" && "$status" != "skipped" ]]; then
-              failed=1
-            fi
-          done
-
-          {
-            echo "## Release Gate Summary"
-            echo ""
-            for check in "${!results[@]}"; do
-              printf -- '- `%s`: %s\n' "$check" "${results[$check]}"
-            done
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if [[ "$failed" -ne 0 ]]; then
-            echo "release-gate failed" | tee -a "$report"
-            exit 1
-          fi
+        env:
+          RELEASE_GATE_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/evaluate-release-gate.mjs --report ci-reports/release-gate.txt
 
       - name: Upload release gate report
         if: always()
