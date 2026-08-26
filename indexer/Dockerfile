@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS builder
 WORKDIR /app
 
 RUN apt-get update \
@@ -30,7 +30,7 @@ COPY indexer indexer
 
 RUN pnpm --filter indexer run build
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
@@ -78,6 +78,12 @@ COPY --from=builder /app/indexer/package.json /app/indexer/package.json
 COPY --from=builder /app/indexer/lib /app/indexer/lib
 COPY --from=builder /app/indexer/db /app/indexer/db
 COPY --from=builder /app/indexer/schema.graphql /app/indexer/schema.graphql
+
+RUN groupadd --system agro \
+  && useradd --system --gid agro --create-home agro \
+  && chown -R agro:agro /app
+
+USER agro
 
 WORKDIR /app/indexer
 
