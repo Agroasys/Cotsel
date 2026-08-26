@@ -78,13 +78,21 @@ export function releaseWorkflowViolations(contents) {
     ['provenance: mode=max', 'BuildKit provenance'],
     ['sbom: true', 'BuildKit SBOM'],
     ['format: spdx-json', 'SPDX SBOM generation'],
+    ['severity: HIGH,CRITICAL', 'High and Critical image scanning'],
+    ["exit-code: '1'", 'blocking image vulnerability threshold'],
     ['uses: actions/attest@', 'signed GitHub attestation'],
     ['gh attestation verify', 'signed attestation verification'],
   ];
 
-  return requiredControls.flatMap(([needle, label]) =>
+  const violations = requiredControls.flatMap(([needle, label]) =>
     contents.includes(needle) ? [] : [`release-images.yml: missing ${label}`],
   );
+  if (contents.includes('ignore-unfixed: true')) {
+    violations.push(
+      'release-images.yml: unfixed High or Critical findings must not bypass the gate',
+    );
+  }
+  return violations;
 }
 
 export function repositoryViolations(root) {
@@ -124,9 +132,20 @@ export function repositoryViolations(root) {
   const releaseWorkflow = readFileSync(join(workflowDirectory, 'release-images.yml'), 'utf8');
   violations.push(...releaseWorkflowViolations(releaseWorkflow));
 
-  const indexerDockerfile = readFileSync(join(root, 'indexer', 'Dockerfile'), 'utf8');
-  if (!/^USER agro$/mu.test(indexerDockerfile)) {
-    violations.push('indexer/Dockerfile: runtime must use USER agro');
+  const runtimeServices = [
+    'auth',
+    'gateway',
+    'indexer',
+    'oracle',
+    'reconciliation',
+    'ricardian',
+    'treasury',
+  ];
+  for (const service of runtimeServices) {
+    const dockerfile = readFileSync(join(root, service, 'Dockerfile'), 'utf8');
+    if (!/^USER agro$/mu.test(dockerfile)) {
+      violations.push(`${service}/Dockerfile: runtime must use USER agro`);
+    }
   }
 
   return violations;
