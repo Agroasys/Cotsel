@@ -12,8 +12,6 @@ const BASE_ENV: Record<string, string> = {
   DB_NAME: 'oracle',
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
-  DB_MIGRATION_USER: '',
-  DB_MIGRATION_PASSWORD: '',
   INDEXER_GRAPHQL_URL: 'https://indexer.example.com/graphql',
   INDEXER_GQL_TIMEOUT_MS: '10000',
   RETRY_ATTEMPTS: '3',

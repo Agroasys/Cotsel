@@ -78,7 +78,7 @@ COPY --from=builder /app/shared-db /app/shared-db
 COPY --from=builder /app/shared-edge /app/shared-edge
 COPY --from=builder /app/shared-http /app/shared-http
 COPY --from=builder /app/treasury/dist /app/treasury/dist
-COPY --from=builder /app/treasury/src/database/schema.sql /app/treasury/src/database/schema.sql
+COPY --from=builder /app/treasury/src/database/migrations /app/treasury/src/database/migrations
 
 RUN addgroup -S agro && adduser -S agro -G agro \
   && chown -R agro:agro /app

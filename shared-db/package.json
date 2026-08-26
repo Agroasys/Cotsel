@@ -6,7 +6,7 @@
   "types": "index.d.ts",
   "scripts": {
     "lint": "eslint --max-warnings=0 .",
-    "test": "node --test index.test.js rls-schema.test.js postgres-rls.integration.test.js"
+    "test": "node --test index.test.js migrationRunner.test.js migration-runner.integration.test.js rls-schema.test.js postgres-rls.integration.test.js"
   },
   "dependencies": {
     "pg": "^8.22.0"
@@ -15,6 +15,9 @@
     "index.js",
     "index.d.ts",
     "migrate.js",
+    "migrationRunner.js",
+    "migrationRunner.test.js",
+    "migration-runner.integration.test.js",
     "index.test.js",
     "rls-schema.test.js",
     "postgres-rls.integration.test.js"

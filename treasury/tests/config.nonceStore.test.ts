@@ -7,8 +7,6 @@ const BASE_ENV: Record<string, string> = {
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
   DB_SSL_MODE: 'disable',
-  DB_MIGRATION_USER: '',
-  DB_MIGRATION_PASSWORD: '',
   INDEXER_GRAPHQL_URL: 'http://localhost:4350/graphql',
   TREASURY_INGEST_BATCH_SIZE: '100',
   TREASURY_INGEST_MAX_EVENTS: '2000',
@@ -96,14 +94,6 @@ describe('treasury nonce store config', () => {
   test('redis mode requires REDIS_URL', () => {
     withEnv({ NODE_ENV: 'production', NONCE_STORE: 'redis', REDIS_URL: '' }, () => {
       expect(() => loadConfigModule()).toThrow('REDIS_URL is required when NONCE_STORE=redis');
-    });
-  });
-
-  test('migration credentials must be configured as a pair', () => {
-    withEnv({ DB_MIGRATION_USER: 'treasury_migrator', DB_MIGRATION_PASSWORD: undefined }, () => {
-      expect(() => loadConfigModule()).toThrow(
-        'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
-      );
     });
   });
 

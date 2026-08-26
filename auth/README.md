@@ -35,9 +35,9 @@ It is **separate** from `shared-auth`, which handles service-to-service HMAC aut
 │   │   └── sessionStore.ts              # UserSession store interface + Postgres impl
 │   ├── database
 │   │   ├── connection.ts                # pg Pool
-│   │   ├── migrations.ts                # schema.sql runner
+│   │   ├── migrations
+│   │   │   └── 0001_baseline.sql        # ordered, checksum-bound baseline
 │   │   ├── queries.ts                   # raw SQL helpers
-│   │   └── schema.sql                   # user_profiles, user_sessions, trusted nonces
 │   ├── metrics
 │   │   └── counters.ts                  # In-process event counters
 │   ├── middleware

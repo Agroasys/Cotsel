@@ -174,7 +174,7 @@ test(
 
         try {
           const schema = fs.readFileSync(
-            path.resolve(__dirname, '../reconciliation/src/database/schema.sql'),
+            path.resolve(__dirname, '../reconciliation/src/database/migrations/0001_baseline.sql'),
             'utf8',
           );
           await migrationPool.query(schema);

@@ -11,8 +11,6 @@ const BASE_ENV: Record<string, string> = {
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
   DB_SSL_MODE: 'disable',
-  DB_MIGRATION_USER: '',
-  DB_MIGRATION_PASSWORD: '',
   GATEWAY_AUTH_BASE_URL: 'http://127.0.0.1:4100',
   GATEWAY_INDEXER_GRAPHQL_URL: 'http://127.0.0.1:4350/graphql',
   GATEWAY_ESCROW_ADDRESS: '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
@@ -463,24 +461,6 @@ describe('gateway runtime env config', () => {
         const { loadConfig } = loadConfigModule();
         expect(() => loadConfig()).toThrow(
           'GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI must be >= GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI when both are set',
-        );
-      },
-    );
-  });
-
-  test('migration credentials must be configured as a pair', () => {
-    withEnv(
-      {
-        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
-        GATEWAY_RPC_URL: undefined,
-        GATEWAY_CHAIN_ID: undefined,
-        DB_MIGRATION_USER: 'gateway_migrator',
-        DB_MIGRATION_PASSWORD: undefined,
-      },
-      () => {
-        const { loadConfig } = loadConfigModule();
-        expect(() => loadConfig()).toThrow(
-          'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
         );
       },
     );

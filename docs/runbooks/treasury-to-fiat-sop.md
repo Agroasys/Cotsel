@@ -86,7 +86,7 @@ These states are operational evidence states for payout follow-through. They do 
 Treasury source of truth:
 
 - `treasury/src/types.ts`
-- `treasury/src/database/schema.sql`
+- `treasury/src/database/migrations/0001_baseline.sql`
 - `treasury/src/database/queries.ts`
 - `POST /api/treasury/v1/internal/deposits`
 
@@ -122,7 +122,7 @@ Deterministic failure classes:
 Treasury source of truth:
 
 - `treasury/src/core/bankPayout.ts`
-- `treasury/src/database/schema.sql`
+- `treasury/src/database/migrations/0001_baseline.sql`
 - `treasury/src/database/queries.ts`
 - `POST /api/treasury/v1/internal/entries/:entryId/bank-confirmation`
 

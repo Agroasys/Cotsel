@@ -10,6 +10,12 @@ migration runbook.
 Long-running tasks cannot retrieve migration credentials and do not run schema
 DDL. A successful migration does not deploy or accept a release.
 
+Each release image contains an ordered migration directory. Files must use the
+format `NNNN_lowercase_description.sql`. The runner records the SHA-256 digest
+of every applied file in `cotsel_schema_migrations`, rejects changed or missing
+history, and serializes same-service jobs with a Postgres advisory lock. Each
+migration file and its ledger record commit in one transaction.
+
 ## Preconditions
 
 1. Confirm AWS account `655177116834` and region `ap-south-1`.
@@ -19,8 +25,11 @@ DDL. A successful migration does not deploy or accept a release.
    position exists before schema-changing work.
 5. Review the exact schema change, forward-fix procedure, expected lock scope,
    and compatibility with the currently running image.
-6. Confirm no migration task for the same service is running.
-7. Do not supply credentials, environment variables, or commands as task
+6. Record the expected ordered migration IDs and SHA-256 digests from the exact
+   release artifact. Never edit an already-applied migration; add a new file.
+7. Confirm no migration task for the same service is running. The database lock
+   is a second safety boundary, not a substitute for operator coordination.
+8. Do not supply credentials, environment variables, or commands as task
    overrides.
 
 ## Resolve non-secret coordinates
@@ -72,26 +81,35 @@ The request must contain no `overrides` object. Record the returned task ARN.
    ```
 
 3. Confirm the single migration container exited `0`.
-4. Inspect the `migrate` log stream in the service CloudWatch log group and
-   confirm the success marker names the expected service.
+4. Inspect the `migrate` log stream in the service CloudWatch log group. Confirm
+   the success marker names the expected service and lists the expected
+   migration IDs and digests. Treat a checksum mismatch, missing applied file,
+   lock timeout, or statement timeout as a hard failure.
 5. Confirm CloudTrail `RunTask` evidence has no command or environment
    overrides.
-6. Run the service-specific schema/entitlement check, then deploy the matching
+6. Query the ledger through the migration verifier identity and confirm its
+   ordered IDs and digests match the release artifact. The runtime identity must
+   be unable to read or write the ledger.
+7. Run the service-specific schema/entitlement check, then deploy the matching
    long-running image revision.
-7. Confirm the runtime task definition contains `DB_AUTO_MIGRATE=false`, no
+8. Confirm the runtime task definition contains `DB_AUTO_MIGRATE=false`, no
    `DB_MIGRATION_*` secrets, and only the runtime database secret ARN.
-8. Prove startup, health, and a representative authenticated read.
+9. Prove startup, health, and a representative authenticated read.
 
 ## Failure handling
 
 Do not blindly retry. Preserve the task ARN, revision, exit code, redacted log
-stream, and database recovery position. Determine whether any statement
-committed before the failure. Use the reviewed forward-fix or restore procedure,
-reconcile schema state, and obtain a fresh review before another attempt.
+stream, database recovery position, and ledger state. A failed migration file is
+rolled back with its ledger write, but earlier files from the same run may have
+committed. Determine the last recorded migration identity, use a reviewed
+forward-fix or restore procedure, reconcile schema state, and obtain a fresh
+review before another attempt. Never delete or rewrite a ledger row to force a
+retry.
 
 ## Evidence record
 
 Record the service, source commit, image digest, task definition revision, task
 ARN, database recovery position, UTC timestamps, exit code, redacted log stream,
-post-migration schema identity, operator, and independent reviewer. Never record
-database credentials, connection strings, or secret values.
+ordered migration IDs and SHA-256 digests, post-migration schema identity,
+operator, and independent reviewer. Never record database credentials,
+connection strings, or secret values.

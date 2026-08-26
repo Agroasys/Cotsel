@@ -8,12 +8,12 @@ const path = require('node:path');
 const schemaExpectations = [
   {
     serviceName: 'auth',
-    schemaPath: path.resolve(__dirname, '../auth/src/database/schema.sql'),
+    schemaPath: path.resolve(__dirname, '../auth/src/database/migrations/0001_baseline.sql'),
     tables: ['user_profiles', 'user_sessions', 'trusted_session_exchange_nonces'],
   },
   {
     serviceName: 'gateway',
-    schemaPath: path.resolve(__dirname, '../gateway/src/database/schema.sql'),
+    schemaPath: path.resolve(__dirname, '../gateway/src/database/migrations/0001_baseline.sql'),
     tables: [
       'idempotency_keys',
       'audit_log',
@@ -31,7 +31,7 @@ const schemaExpectations = [
   },
   {
     serviceName: 'treasury',
-    schemaPath: path.resolve(__dirname, '../treasury/src/database/schema.sql'),
+    schemaPath: path.resolve(__dirname, '../treasury/src/database/migrations/0001_baseline.sql'),
     tables: [
       'treasury_ledger_entries',
       'payout_lifecycle_events',
@@ -44,17 +44,20 @@ const schemaExpectations = [
   },
   {
     serviceName: 'oracle',
-    schemaPath: path.resolve(__dirname, '../oracle/src/database/schema.sql'),
+    schemaPath: path.resolve(__dirname, '../oracle/src/database/migrations/0001_baseline.sql'),
     tables: ['oracle_triggers', 'oracle_hmac_nonces'],
   },
   {
     serviceName: 'reconciliation',
-    schemaPath: path.resolve(__dirname, '../reconciliation/src/database/schema.sql'),
+    schemaPath: path.resolve(
+      __dirname,
+      '../reconciliation/src/database/migrations/0001_baseline.sql',
+    ),
     tables: ['reconcile_runs', 'reconcile_drifts', 'reconcile_run_trades'],
   },
   {
     serviceName: 'ricardian',
-    schemaPath: path.resolve(__dirname, '../ricardian/src/database/schema.sql'),
+    schemaPath: path.resolve(__dirname, '../ricardian/src/database/migrations/0001_baseline.sql'),
     tables: ['ricardian_hashes', 'ricardian_auth_nonces'],
   },
 ];

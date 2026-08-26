@@ -1,34 +1,34 @@
 locals {
   service_migrations = {
     auth = {
-      database     = "cotsel_auth"
-      runtime_user = "cotsel_auth_app"
-      schema_path  = "/app/auth/dist/database/schema.sql"
+      database            = "cotsel_auth"
+      runtime_user        = "cotsel_auth_app"
+      migration_directory = "/app/auth/src/database/migrations"
     }
     gateway = {
-      database     = "cotsel_gateway"
-      runtime_user = "cotsel_gateway_runtime"
-      schema_path  = "/app/gateway/dist/database/schema.sql"
+      database            = "cotsel_gateway"
+      runtime_user        = "cotsel_gateway_runtime"
+      migration_directory = "/app/gateway/src/database/migrations"
     }
     oracle = {
-      database     = "cotsel_oracle"
-      runtime_user = "cotsel_oracle_app"
-      schema_path  = "/app/oracle/dist/database/schema.sql"
+      database            = "cotsel_oracle"
+      runtime_user        = "cotsel_oracle_app"
+      migration_directory = "/app/oracle/src/database/migrations"
     }
     reconciliation = {
-      database     = "cotsel_reconciliation"
-      runtime_user = "cotsel_reconciliation_app"
-      schema_path  = "/app/reconciliation/src/database/schema.sql"
+      database            = "cotsel_reconciliation"
+      runtime_user        = "cotsel_reconciliation_app"
+      migration_directory = "/app/reconciliation/src/database/migrations"
     }
     ricardian = {
-      database     = "cotsel_ricardian"
-      runtime_user = "cotsel_ricardian_runtime"
-      schema_path  = "/app/ricardian/src/database/schema.sql"
+      database            = "cotsel_ricardian"
+      runtime_user        = "cotsel_ricardian_runtime"
+      migration_directory = "/app/ricardian/src/database/migrations"
     }
     treasury = {
-      database     = "cotsel_treasury"
-      runtime_user = "cotsel_treasury_runtime"
-      schema_path  = "/app/treasury/src/database/schema.sql"
+      database            = "cotsel_treasury"
+      runtime_user        = "cotsel_treasury_runtime"
+      migration_directory = "/app/treasury/src/database/migrations"
     }
   }
 }
@@ -133,8 +133,10 @@ resource "aws_ecs_task_definition" "service_migration" {
         { name = "DB_PORT", value = "5432" },
         { name = "DB_RUNTIME_USER", value = each.value.runtime_user },
         { name = "DB_SSL_MODE", value = "verify-full" },
-        { name = "MIGRATION_SCHEMA_PATH", value = each.value.schema_path },
+        { name = "MIGRATION_DIRECTORY", value = each.value.migration_directory },
+        { name = "MIGRATION_LOCK_TIMEOUT_MS", value = "60000" },
         { name = "MIGRATION_SERVICE_NAME", value = each.key },
+        { name = "MIGRATION_STATEMENT_TIMEOUT_MS", value = "300000" },
         { name = "NODE_ENV", value = "production" },
         { name = "PGSSLMODE", value = "verify-full" },
       ]

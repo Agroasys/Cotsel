@@ -77,7 +77,7 @@ RUN apk add --no-cache --virtual .build-deps python3 make g++ \
   && apk del .build-deps
 
 COPY --from=builder /app/gateway/dist /app/gateway/dist
-COPY --from=builder /app/gateway/src/database/schema.sql /app/gateway/src/database/schema.sql
+COPY --from=builder /app/gateway/src/database/migrations /app/gateway/src/database/migrations
 COPY --from=builder /app/sdk/dist /app/sdk/dist
 COPY --from=builder /app/shared-auth /app/shared-auth
 COPY --from=builder /app/shared-db /app/shared-db

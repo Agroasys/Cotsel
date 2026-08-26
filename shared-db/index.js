@@ -19,45 +19,6 @@ function buildSessionOptions({ serviceName, connectionRole, runtimeDbUser }) {
   return settings.join(' ');
 }
 
-function resolveMigrationCredentials(config) {
-  const migrationUser = config.dbMigrationUser;
-  const migrationPassword = config.dbMigrationPassword;
-
-  if (migrationUser && migrationPassword) {
-    return {
-      user: migrationUser,
-      password: migrationPassword,
-    };
-  }
-
-  return {
-    user: config.dbUser,
-    password: config.dbPassword,
-  };
-}
-
-function shouldAutoMigrateDatabase({ nodeEnv, rawValue }) {
-  const normalized = rawValue?.trim().toLowerCase();
-
-  if (normalized === 'true') {
-    return true;
-  }
-
-  if (normalized === 'false') {
-    return false;
-  }
-
-  if (normalized) {
-    throw new Error('DB_AUTO_MIGRATE must be true or false');
-  }
-
-  if (nodeEnv === 'production') {
-    throw new Error('DB_AUTO_MIGRATE must be set explicitly when NODE_ENV=production');
-  }
-
-  return true;
-}
-
 function parsePostgresSslMode(value, fallback = 'disable') {
   const mode = value?.trim() || fallback;
   if (mode === 'disable' || mode === 'require' || mode === 'verify-full') {
@@ -116,7 +77,5 @@ module.exports = {
   buildSessionOptions,
   parsePostgresSslMode,
   resolvePostgresSslConfig,
-  resolveMigrationCredentials,
-  shouldAutoMigrateDatabase,
   createServicePool,
 };

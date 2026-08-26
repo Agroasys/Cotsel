@@ -123,8 +123,6 @@ export interface AuthConfig {
   dbUser: string;
   dbPassword: string;
   dbSslMode: PostgresSslMode;
-  dbMigrationUser?: string;
-  dbMigrationPassword?: string;
   sessionTtlSeconds: number;
   corsAllowedOrigins: string[];
   corsAllowNoOrigin: boolean;

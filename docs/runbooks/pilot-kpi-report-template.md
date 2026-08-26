@@ -42,7 +42,7 @@ Where `total_settled_triggers` = all triggers with a terminal status: `CONFIRMED
 
 **Baseline target**: 100% for pilot window.
 
-**Data source**: `oracle_triggers` table — `oracle/src/database/schema.sql`.
+**Data source**: `oracle_triggers` table — `oracle/src/database/migrations/0001_baseline.sql`.
 
 **Query**:
 
@@ -212,7 +212,7 @@ and the fraction of pilot trades that completed with zero CRITICAL drift.
 **Baseline target**: clean_trade_rate ≥ 98 %; zero recurring CRITICAL drifts for the same
 `(trade_id, mismatch_code)` across more than two consecutive runs.
 
-**Data source**: `reconcile_runs` + `reconcile_drifts` — `reconciliation/src/database/schema.sql`.
+**Data source**: `reconcile_runs` + `reconcile_drifts` — `reconciliation/src/database/migrations/0001_baseline.sql`.
 
 **Query A — run health summary** (includes `clean_trade_rate`):
 

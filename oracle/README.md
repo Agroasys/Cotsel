@@ -24,9 +24,9 @@ Secure oracle service that automates blockchain transactions in the Agroasys eco
 │   │   └── trigger-manager.ts
 │   ├── database
 │   │   ├── connection.ts
-│   │   ├── migrations.ts
+│   │   ├── migrations
+│   │   │   └── 0001_baseline.sql
 │   │   ├── queries.ts
-│   │   └── schema.sql
 │   ├── middleware
 │   │   └── middleware.ts
 │   ├── server.ts

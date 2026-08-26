@@ -21,13 +21,6 @@ export interface ServicePoolConfig extends BuildSessionOptionsInput {
   sslMode?: PostgresSslMode;
 }
 
-export interface MigrationCredentialConfig {
-  dbUser: string;
-  dbPassword: string;
-  dbMigrationUser?: string;
-  dbMigrationPassword?: string;
-}
-
 export function buildSessionOptions(input: BuildSessionOptionsInput): string;
 export function parsePostgresSslMode(
   value: string | undefined,
@@ -36,12 +29,4 @@ export function parsePostgresSslMode(
 export function resolvePostgresSslConfig(
   mode?: PostgresSslMode,
 ): false | { rejectUnauthorized: boolean };
-export function resolveMigrationCredentials(config: MigrationCredentialConfig): {
-  user: string;
-  password: string;
-};
-export function shouldAutoMigrateDatabase(input: {
-  nodeEnv: string | undefined;
-  rawValue: string | undefined;
-}): boolean;
 export function createServicePool(config: ServicePoolConfig): Pool;

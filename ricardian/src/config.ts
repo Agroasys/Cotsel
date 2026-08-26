@@ -17,8 +17,6 @@ export interface RicardianConfig {
   dbUser: string;
   dbPassword: string;
   dbSslMode: PostgresSslMode;
-  dbMigrationUser?: string;
-  dbMigrationPassword?: string;
   authEnabled: boolean;
   apiKeys: ServiceApiKey[];
   hmacSecret?: string;
@@ -101,8 +99,6 @@ export function loadConfig(): RicardianConfig {
   const hmacSecret = process.env.HMAC_SECRET?.trim();
   const nonceStore = resolveNonceStoreMode(nodeEnv);
   const nonceRedisUrl = process.env.REDIS_URL?.trim() || undefined;
-  const dbMigrationUser = process.env.DB_MIGRATION_USER?.trim() || undefined;
-  const dbMigrationPassword = process.env.DB_MIGRATION_PASSWORD?.trim() || undefined;
   const authNonceTtlSeconds = envNumber('AUTH_NONCE_TTL_SECONDS', 600);
   const nonceTtlSeconds = process.env.NONCE_TTL_SECONDS
     ? envNumber('NONCE_TTL_SECONDS')
@@ -122,11 +118,6 @@ export function loadConfig(): RicardianConfig {
   if (nonceStore === 'redis') {
     assert(nonceRedisUrl, 'REDIS_URL is required when NONCE_STORE=redis');
   }
-  assert(
-    Boolean(dbMigrationUser) === Boolean(dbMigrationPassword),
-    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
-  );
-
   const rateLimitEnabled = envBool('RATE_LIMIT_ENABLED', true);
 
   const config: RicardianConfig = {
@@ -138,8 +129,6 @@ export function loadConfig(): RicardianConfig {
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
     dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
-    dbMigrationUser,
-    dbMigrationPassword,
     authEnabled,
     apiKeys,
     hmacSecret,

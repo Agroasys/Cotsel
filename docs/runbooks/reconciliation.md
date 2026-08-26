@@ -134,7 +134,7 @@ Failure interpretation:
 
 Treasury deposit evidence source of truth:
 
-- `treasury/src/database/schema.sql`
+- `treasury/src/database/migrations/0001_baseline.sql`
 - `treasury/src/database/queries.ts`
 - `docs/runbooks/treasury-to-fiat-sop.md#fiat-ramp-deposit-contract`
 
@@ -160,7 +160,7 @@ Operator rules:
 Bank confirmation source of truth:
 
 - `treasury/src/core/bankPayout.ts`
-- `treasury/src/database/schema.sql`
+- `treasury/src/database/migrations/0001_baseline.sql`
 - `treasury/src/database/queries.ts`
 - `docs/runbooks/treasury-to-fiat-sop.md#bank-payout-confirmation-contract`
 

@@ -38,7 +38,10 @@ async function main(): Promise<void> {
   const pool = new Pool({ connectionString: databaseUrl, max: 24 });
 
   try {
-    const schema = await readFile(resolve(process.cwd(), 'src/database/schema.sql'), 'utf8');
+    const schema = await readFile(
+      resolve(process.cwd(), 'src/database/migrations/0001_baseline.sql'),
+      'utf8',
+    );
     await pool.query(schema);
     const store = createPostgresSettlementStore(pool);
 

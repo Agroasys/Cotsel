@@ -114,7 +114,8 @@ async function withPostgres(fn: (pool: Pool) => Promise<void>): Promise<void> {
     });
     try {
       await pool.query("SET app.service_name = 'auth'");
-      const schema = fs.readFileSync(path.resolve(__dirname, '../src/database/schema.sql'), 'utf8');
+      const schemaPath = '../src/database/migrations/0001_baseline.sql';
+      const schema = fs.readFileSync(path.resolve(__dirname, schemaPath), 'utf8');
       await pool.query(schema);
       await fn(pool);
     } finally {
@@ -128,7 +129,6 @@ async function withPostgres(fn: (pool: Pool) => Promise<void>): Promise<void> {
     }
   }
 }
-
 function signedHeaders(input: {
   method: string;
   path: string;

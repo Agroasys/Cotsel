@@ -37,15 +37,19 @@ Migration roles are used only during schema bootstrap and migrations. They are
 allowed to create/alter objects in the target service database schema and grant
 runtime access to the corresponding runtime role.
 
-The canonical environment variables are:
+Long-running services receive only:
 
 - `DB_USER`
 - `DB_PASSWORD`
-- `DB_MIGRATION_USER`
-- `DB_MIGRATION_PASSWORD`
 
-In the compose examples, these are wired from service-specific variables such as
-`AUTH_DB_RUNTIME_USER` / `AUTH_DB_MIGRATION_USER`.
+Dedicated one-off migration jobs receive `DB_USER` and `DB_PASSWORD` from the
+service migration identity, plus `DB_RUNTIME_USER` so grants can target the
+runtime identity. Long-running task definitions must not receive migration
+credentials or permission to retrieve migration secrets.
+
+In the compose bootstrap, service-specific variables such as
+`AUTH_DB_RUNTIME_USER` and `AUTH_DB_MIGRATION_USER` create the distinct roles.
+They are then wired only into their corresponding runtime or migration service.
 
 ## Session settings contract
 
@@ -137,8 +141,8 @@ The compose bootstrap does not make runtime roles owners of the schema.
 2. Grant each pair access only to its own database.
 3. Grant `USAGE` on the target schema to the runtime role.
 4. Grant `USAGE, CREATE` on the target schema to the migration role.
-5. Run schema migrations with the migration role while setting
-   `app.runtime_db_user` to the runtime role.
+5. Run ordered, checksum-bound schema migrations with the migration role while
+   setting `app.runtime_db_user` to the runtime role.
 6. Run services with runtime credentials only.
 7. Verify that cross-service reads fail and missing `app.service_name` fails.
 

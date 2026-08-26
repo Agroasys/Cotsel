@@ -1,6 +1,8 @@
 import express from 'express';
+import fs from 'node:fs';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import path from 'node:path';
 import { Pool } from 'pg';
 
 type TreasuryQueries = typeof import('../src/database/queries');
@@ -10,6 +12,25 @@ type TreasuryRoutesModule = typeof import('../src/api/routes');
 
 const runPostgresIntegrationTests = process.env.TREASURY_POSTGRES_TESTS === 'true';
 const describePostgres = runPostgresIntegrationTests ? describe : describe.skip;
+
+async function applyTreasurySchema(): Promise<void> {
+  const migrationPool = new Pool({
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: Number(process.env.DB_PORT || 5432),
+    database: process.env.DB_NAME,
+    user: process.env.DB_MIGRATION_USER || process.env.DB_USER || 'postgres',
+    password: process.env.DB_MIGRATION_PASSWORD || process.env.DB_PASSWORD || 'postgres',
+  });
+  try {
+    const migration = fs.readFileSync(
+      path.resolve(__dirname, '../src/database/migrations/0001_baseline.sql'),
+      'utf8',
+    );
+    await migrationPool.query(migration);
+  } finally {
+    await migrationPool.end();
+  }
+}
 
 async function createFreshTreasuryDatabase() {
   const dbName = `treasury_bridge_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -67,8 +88,7 @@ describePostgres('treasury partner handoff persistence (postgres)', () => {
       process.env.INDEXER_GRAPHQL_URL || 'http://127.0.0.1:3100/graphql';
 
     jest.resetModules();
-    const migrations = await import('../src/database/migrations');
-    await migrations.runMigrations();
+    await applyTreasurySchema();
     queries = await import('../src/database/queries');
     connection = await import('../src/database/connection');
   });
@@ -197,8 +217,7 @@ describePostgres('treasury partner handoff routes (postgres)', () => {
       process.env.INDEXER_GRAPHQL_URL || 'http://127.0.0.1:3100/graphql';
 
     jest.resetModules();
-    const migrations = await import('../src/database/migrations');
-    await migrations.runMigrations();
+    await applyTreasurySchema();
     queries = await import('../src/database/queries');
     connection = await import('../src/database/connection');
     ({ TreasuryController: TreasuryControllerCtor } = await import('../src/api/controller'));

@@ -4,14 +4,12 @@ import helmet from 'helmet';
 import { createCorsOptions, createHttpRateLimiter } from '@agroasys/shared-edge';
 import { WebhookNotifier } from '@agroasys/notifications';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
-import { shouldAutoMigrateDatabase } from '@agroasys/shared-db';
 import { config } from './config';
 import { createRouter } from './api/routes';
 import { OracleController } from './api/controller';
 import { errorHandler } from './middleware/middleware';
 import { Logger } from './utils/logger';
 import { testConnection, closeConnection, pool } from './database/connection';
-import { runMigrations } from './database/migrations';
 import { TriggerManager } from './core/trigger-manager';
 import { createPostgresOracleActionLock } from './core/oracle-action-lock';
 import { SDKClient } from './blockchain/sdk-client';
@@ -26,16 +24,6 @@ let requestRateLimiterClose: (() => Promise<void>) | undefined;
 async function initializeDatabase(): Promise<void> {
   Logger.info('Initializing database...');
   await testConnection();
-  if (
-    shouldAutoMigrateDatabase({
-      nodeEnv: process.env.NODE_ENV,
-      rawValue: process.env.DB_AUTO_MIGRATE,
-    })
-  ) {
-    await runMigrations();
-  } else {
-    Logger.info('Automatic database migration is disabled for oracle runtime');
-  }
   Logger.info('Database initialized');
 }
 

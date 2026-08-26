@@ -93,7 +93,7 @@ evidence is not polluted by unsupported Node 25 warnings.
 - `auth/src/core/profileStore.ts`
 - `auth/src/core/sessionService.ts`
 - `auth/src/database/queries.ts`
-- `auth/src/database/schema.sql`
+- `auth/src/database/migrations/0001_baseline.sql`
 - `auth/src/httpSecurity.ts`
 - `auth/src/metrics/counters.ts`
 - `auth/src/middleware/middleware.ts`
