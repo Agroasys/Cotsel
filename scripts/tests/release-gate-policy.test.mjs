@@ -181,3 +181,27 @@ test('workflow delegates exactly every required job result to the policy evaluat
     'release-gate.needs and RELEASE_GATE_CHECKS must contain the same jobs',
   );
 });
+
+test('shared package changes select every transitive consumer through the full shared matrix', () => {
+  const workflowPath = fileURLToPath(
+    new URL('../../.github/workflows/release-gate.yml', import.meta.url),
+  );
+  const workflow = fs.readFileSync(workflowPath, 'utf8');
+  const sharedFilter = workflow.slice(
+    workflow.indexOf('            shared:'),
+    workflow.indexOf('            contracts:'),
+  );
+
+  for (const workspace of ['shared-auth', 'shared-db', 'shared-edge', 'shared-http']) {
+    assert.match(sharedFilter, new RegExp(`- '${workspace}/\\*\\*'`));
+  }
+
+  const needs = makeNeeds({ selected: ['shared'] });
+  for (const { job, label } of RELEASE_GATE_CHECKS) {
+    if (job === 'changes') continue;
+    needs[job].result = 'skipped';
+    const result = evaluateReleaseGateNeeds(needs);
+    assert.equal(result.passed, false, `${label} must run for a shared package change`);
+    needs[job].result = 'success';
+  }
+});

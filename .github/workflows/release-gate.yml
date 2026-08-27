@@ -64,7 +64,9 @@ jobs:
               - '.prettierignore'
               - '.husky/**'
               - '.github/workflows/**'
+              - 'shared-auth/**'
               - 'shared-db/**'
+              - 'shared-edge/**'
               - 'shared-http/**'
               - 'README.md'
               - 'CONTRIBUTING.md'
@@ -1188,7 +1190,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Evaluate required checks
         env:
