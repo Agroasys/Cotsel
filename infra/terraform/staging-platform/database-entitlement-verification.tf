@@ -2,6 +2,12 @@ locals {
   database_entitlement_verification_command = <<-COMMAND
     set -eu
 
+    : "$${INDEXER_MIGRATION_USERNAME:?INDEXER_MIGRATION_USERNAME is required}"
+    : "$${INDEXER_MIGRATION_PASSWORD:?INDEXER_MIGRATION_PASSWORD is required}"
+    : "$${INDEXER_RUNTIME_USERNAME:?INDEXER_RUNTIME_USERNAME is required}"
+    : "$${INDEXER_RUNTIME_PASSWORD:?INDEXER_RUNTIME_PASSWORD is required}"
+    : "$${INDEXER_READER_USERNAME:?INDEXER_READER_USERNAME is required}"
+    : "$${INDEXER_READER_PASSWORD:?INDEXER_READER_PASSWORD is required}"
     : "$${RICARDIAN_MIGRATION_USERNAME:?RICARDIAN_MIGRATION_USERNAME is required}"
     : "$${RICARDIAN_MIGRATION_PASSWORD:?RICARDIAN_MIGRATION_PASSWORD is required}"
     : "$${RICARDIAN_RUNTIME_USERNAME:?RICARDIAN_RUNTIME_USERNAME is required}"
@@ -11,6 +17,9 @@ locals {
     : "$${TREASURY_RUNTIME_USERNAME:?TREASURY_RUNTIME_USERNAME is required}"
     : "$${TREASURY_RUNTIME_PASSWORD:?TREASURY_RUNTIME_PASSWORD is required}"
 
+    [ "$${INDEXER_MIGRATION_USERNAME}" = 'cotsel_indexer_migrator' ]
+    [ "$${INDEXER_RUNTIME_USERNAME}" = 'cotsel_indexer_app' ]
+    [ "$${INDEXER_READER_USERNAME}" = 'cotsel_indexer_reader' ]
     [ "$${RICARDIAN_MIGRATION_USERNAME}" = 'cotsel_ricardian_migrator' ]
     [ "$${RICARDIAN_RUNTIME_USERNAME}" = 'cotsel_ricardian_runtime' ]
     [ "$${TREASURY_MIGRATION_USERNAME}" = 'cotsel_treasury_migrator' ]
@@ -63,6 +72,95 @@ locals {
       fi
     }
 
+    verify_indexer() {
+      export PGUSER="$${INDEXER_MIGRATION_USERNAME}"
+      export PGPASSWORD="$${INDEXER_MIGRATION_PASSWORD}"
+
+      database_owner="$(psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align <<'SQL'
+    SELECT owner_row.rolname
+    FROM pg_database database_row
+    JOIN pg_roles owner_row ON owner_row.oid = database_row.datdba
+    WHERE database_row.datname = 'cotsel_indexer';
+    SQL
+    )"
+      [ "$${database_owner}" = 'cotsel_indexer_migrator' ] || {
+        printf '%s\n' "Indexer database owner is $${database_owner}, not the migration role." >&2
+        exit 1
+      }
+
+      unexpected_schema_owner_count="$(psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align <<'SQL'
+    SELECT count(*)
+    FROM pg_namespace namespace_row
+    JOIN pg_roles owner_row ON owner_row.oid = namespace_row.nspowner
+    WHERE namespace_row.nspname IN ('public', 'squid_processor')
+      AND owner_row.rolname <> current_user;
+    SQL
+    )"
+      [ "$${unexpected_schema_owner_count}" = '0' ] || {
+        printf '%s\n' "Indexer has $${unexpected_schema_owner_count} schema(s) outside migration-role ownership." >&2
+        exit 1
+      }
+
+      unexpected_owner_count="$(psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align <<'SQL'
+    SELECT count(*)
+    FROM pg_class object_row
+    JOIN pg_namespace namespace_row ON namespace_row.oid = object_row.relnamespace
+    JOIN pg_roles owner_row ON owner_row.oid = object_row.relowner
+    WHERE namespace_row.nspname IN ('public', 'squid_processor')
+      AND object_row.relkind IN ('r', 'p', 'S', 'v', 'm')
+      AND owner_row.rolname <> current_user;
+    SQL
+    )"
+      [ "$${unexpected_owner_count}" = '0' ] || {
+        printf '%s\n' "Indexer has $${unexpected_owner_count} object(s) outside migration-role ownership." >&2
+        exit 1
+      }
+
+      psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet >/dev/null <<SQL
+    BEGIN;
+    CREATE TABLE public.cotsel_indexer_entitlement_probe (id bigint PRIMARY KEY);
+    ROLLBACK;
+    SQL
+
+      export PGUSER="$${INDEXER_RUNTIME_USERNAME}"
+      export PGPASSWORD="$${INDEXER_RUNTIME_PASSWORD}"
+      psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null
+      psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'UPDATE public.migrations SET name = name WHERE false' >/dev/null
+      if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet >/dev/null 2>&1 <<'SQL'
+    BEGIN;
+    CREATE TABLE public.cotsel_runtime_ddl_probe (id bigint);
+    ROLLBACK;
+    SQL
+      then
+        printf '%s\n' 'Indexer runtime role unexpectedly created a table.' >&2
+        exit 1
+      fi
+
+      export PGUSER="$${INDEXER_READER_USERNAME}"
+      export PGPASSWORD="$${INDEXER_READER_PASSWORD}"
+      psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1 FROM public.migrations LIMIT 1' >/dev/null
+      if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'UPDATE public.migrations SET name = name WHERE false' >/dev/null 2>&1; then
+        printf '%s\n' 'Indexer GraphQL reader unexpectedly updated a table.' >&2
+        exit 1
+      fi
+      if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet >/dev/null 2>&1 <<'SQL'
+    BEGIN;
+    CREATE TABLE public.cotsel_reader_ddl_probe (id bigint);
+    ROLLBACK;
+    SQL
+      then
+        printf '%s\n' 'Indexer GraphQL reader unexpectedly created a table.' >&2
+        exit 1
+      fi
+
+      for denied_database in cotsel_ricardian cotsel_treasury; do
+        if psql --dbname "$${denied_database}" --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
+          printf '%s\n' "Indexer GraphQL reader unexpectedly connected to $${denied_database}." >&2
+          exit 1
+        fi
+      done
+    }
+
     verify_service \
       'cotsel_ricardian' \
       'cotsel_treasury' \
@@ -78,8 +176,24 @@ locals {
       "$${TREASURY_RUNTIME_USERNAME}" \
       "$${TREASURY_RUNTIME_PASSWORD}"
 
+    verify_indexer
+
+    export PGUSER="$${RICARDIAN_RUNTIME_USERNAME}"
+    export PGPASSWORD="$${RICARDIAN_RUNTIME_PASSWORD}"
+    if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
+      printf '%s\n' 'Ricardian runtime unexpectedly connected to the indexer database.' >&2
+      exit 1
+    fi
+    export PGUSER="$${TREASURY_RUNTIME_USERNAME}"
+    export PGPASSWORD="$${TREASURY_RUNTIME_PASSWORD}"
+    if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
+      printf '%s\n' 'Treasury runtime unexpectedly connected to the indexer database.' >&2
+      exit 1
+    fi
+
+    unset INDEXER_MIGRATION_PASSWORD INDEXER_RUNTIME_PASSWORD INDEXER_READER_PASSWORD
     unset RICARDIAN_MIGRATION_PASSWORD RICARDIAN_RUNTIME_PASSWORD TREASURY_MIGRATION_PASSWORD TREASURY_RUNTIME_PASSWORD
-    printf '%s\n' 'Cotsel Treasury and Ricardian database entitlement verification passed.'
+    printf '%s\n' 'Cotsel Indexer, Treasury, and Ricardian database entitlement verification passed.'
   COMMAND
 }
 
@@ -175,6 +289,12 @@ resource "aws_ecs_task_definition" "database_entitlement_verification" {
       mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
       command                = ["/bin/sh", "-ec", local.database_entitlement_verification_command]
       secrets = [
+        { name = "INDEXER_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.migration_secret}:password::" },
+        { name = "INDEXER_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.migration_secret}:username::" },
+        { name = "INDEXER_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:password::" },
+        { name = "INDEXER_RUNTIME_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:username::" },
+        { name = "INDEXER_READER_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:reader_password::" },
+        { name = "INDEXER_READER_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:reader_username::" },
         { name = "RICARDIAN_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:password::" },
         { name = "RICARDIAN_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:username::" },
         { name = "RICARDIAN_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.runtime_secret}:password::" },

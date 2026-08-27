@@ -54,6 +54,37 @@ test('long-running Cotsel services cannot receive migration credentials', async 
     assert.doesNotMatch(serviceBlock, /DB_MIGRATION_(?:USER|PASSWORD)/, service);
   }
   assert.doesNotMatch(gatewayIam, /database\/[^"]+\/migration/);
+  const indexerCompose = await readFile('docker-compose.indexer.yml', 'utf8');
+  const indexerServiceBlocks = [
+    ...indexerCompose.matchAll(
+      /^ {2}([a-z0-9-]+):\n([\s\S]*?)(?=^ {2}[a-z0-9-]+:|^volumes:|(?![\s\S]))/gm,
+    ),
+  ];
+
+  for (const [, service, body] of indexerServiceBlocks) {
+    if (service === 'indexer-migrate') continue;
+    assert.doesNotMatch(body, /DB_MIGRATION_(?:USER|PASSWORD)/, service);
+  }
+
+  const indexerMigration = indexerServiceBlocks.find(([, service]) => service === 'indexer-migrate');
+  assert.ok(indexerMigration, 'indexer-migrate must exist');
+  assert.match(indexerMigration[2], /DB_USER: '\$\{INDEXER_DB_MIGRATION_USER\}'/);
+  assert.match(indexerMigration[2], /node', 'migrate\.js/);
+});
+
+test('indexer pipeline and GraphQL use distinct non-migration identities', async () => {
+  const runtime = await readFile('infra/terraform/staging-platform/runtime-indexer.tf', 'utf8');
+  assert.doesNotMatch(runtime, /database\/indexer\/migration/);
+  assert.match(runtime, /indexer_pipeline_secrets[\s\S]*:username::/);
+  assert.match(runtime, /indexer_graphql_secrets[\s\S]*:reader_username::/);
+  assert.match(runtime, /indexer_graphql_secrets[\s\S]*:reader_password::/);
+
+  const migration = await readFile('infra/terraform/staging-platform/indexer-migration.tf', 'utf8');
+  assert.match(migration, /database\/indexer\/migration/);
+  assert.doesNotMatch(migration, /task_role_arn/);
+
+  const entrypoint = await readFile('indexer/src/main.ts', 'utf8');
+  assert.match(entrypoint, /new TypeormDatabase\(\{ initializeStateSchema: false \}\)/);
 });
 
 test('every non-indexer schema has a dedicated one-off migration task', async () => {
@@ -208,6 +239,28 @@ test('long-running service startup cannot execute schema migrations', async () =
     assert.doesNotMatch(source, /createMigrationPool/);
     assert.doesNotMatch(source, /resolveMigrationCredentials/);
   }
+
+  const gatewayEntrypoint = await readFile('gateway/src/server.ts', 'utf8');
+  assert.doesNotMatch(gatewayEntrypoint, /migrateGatewayDatabaseIfEnabled/);
+  assert.doesNotMatch(gatewayEntrypoint, /runMigrations/);
+
+  const operatorWorkflow = await readFile('scripts/gateway-dead-letter-workflow.mjs', 'utf8');
+  assert.doesNotMatch(operatorWorkflow, /runMigrations/);
+});
+
+test('runtime evidence queries do not use the Postgres administrator for indexer data', async () => {
+  const source = await readFile('scripts/runtime-gate.sh', 'utf8');
+  const helper = await readFile('scripts/run-indexer-psql.sh', 'utf8');
+
+  assert.match(source, /INDEXER_DB_RUNTIME_USER/);
+  assert.match(source, /INDEXER_DB_READER_USER/);
+  assert.match(source, /scripts\/run-indexer-psql\.sh INDEXER_DB_RUNTIME_PASSWORD/);
+  assert.match(source, /scripts\/run-indexer-psql\.sh INDEXER_DB_READER_PASSWORD/);
+  assert.doesNotMatch(source, /psql -U "\$\{POSTGRES_USER\}" -d "\$\{INDEXER_DB_NAME\}"/);
+  assert.match(helper, /INDEXER_DB_RUNTIME_PASSWORD \| INDEXER_DB_READER_PASSWORD/);
+  assert.match(helper, /IFS= read -r PGPASSWORD/);
+  assert.doesNotMatch(helper, /echo\s+"\$\{password\}"/);
+  assert.doesNotMatch(helper, /set -x/);
 });
 
 test('long-running task definitions register replacements before deregistration', async () => {

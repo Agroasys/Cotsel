@@ -1,5 +1,6 @@
 include:
   - docker-compose.migrations.yml
+  - docker-compose.indexer.yml
 
 services:
   postgres:
@@ -55,6 +56,12 @@ services:
       ORACLE_DB_RUNTIME_PASSWORD: '${ORACLE_DB_RUNTIME_PASSWORD}'
       ORACLE_DB_MIGRATION_USER: '${ORACLE_DB_MIGRATION_USER}'
       ORACLE_DB_MIGRATION_PASSWORD: '${ORACLE_DB_MIGRATION_PASSWORD}'
+      INDEXER_DB_RUNTIME_USER: '${INDEXER_DB_RUNTIME_USER}'
+      INDEXER_DB_RUNTIME_PASSWORD: '${INDEXER_DB_RUNTIME_PASSWORD}'
+      INDEXER_DB_MIGRATION_USER: '${INDEXER_DB_MIGRATION_USER}'
+      INDEXER_DB_MIGRATION_PASSWORD: '${INDEXER_DB_MIGRATION_PASSWORD}'
+      INDEXER_DB_READER_USER: '${INDEXER_DB_READER_USER}'
+      INDEXER_DB_READER_PASSWORD: '${INDEXER_DB_READER_PASSWORD}'
       GATEWAY_DB_RUNTIME_USER: '${GATEWAY_DB_RUNTIME_USER}'
       GATEWAY_DB_RUNTIME_PASSWORD: '${GATEWAY_DB_RUNTIME_PASSWORD}'
       GATEWAY_DB_MIGRATION_USER: '${GATEWAY_DB_MIGRATION_USER}'
@@ -86,9 +93,9 @@ services:
           fi
           exists="$$(psql -h postgres -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -Atqc "SELECT 1 FROM pg_roles WHERE rolname = '$$role_name'")"
           if [ "$${exists}" = "1" ]; then
-            psql -h postgres -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -c "ALTER ROLE \"$$role_name\" WITH LOGIN PASSWORD '$$escaped_role_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION;"
+            psql -h postgres -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -c "ALTER ROLE \"$$role_name\" WITH LOGIN PASSWORD '$$escaped_role_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;"
           else
-            psql -h postgres -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -c "CREATE ROLE \"$$role_name\" WITH LOGIN PASSWORD '$$escaped_role_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION;"
+            psql -h postgres -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -c "CREATE ROLE \"$$role_name\" WITH LOGIN PASSWORD '$$escaped_role_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;"
           fi
         }
         configure_db_access() {
@@ -102,6 +109,27 @@ services:
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "REVOKE CREATE ON SCHEMA public FROM PUBLIC;"
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE ON SCHEMA public TO \"$$runtime_user\";"
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE, CREATE ON SCHEMA public TO \"$$migration_user\";"
+        }
+        configure_indexer_db_access() {
+          db="$$1"
+          runtime_user="$$2"
+          migration_user="$$3"
+          reader_user="$$4"
+          configure_db_access "$$db" "$$runtime_user" "$$migration_user"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT CONNECT ON DATABASE \"$$db\" TO \"$$reader_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE ON SCHEMA public TO \"$$reader_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "BEGIN; GRANT \"$$runtime_user\", \"$$migration_user\" TO CURRENT_USER; REASSIGN OWNED BY \"$$runtime_user\" TO \"$$migration_user\"; ALTER SCHEMA public OWNER TO \"$$migration_user\"; CREATE SCHEMA IF NOT EXISTS squid_processor AUTHORIZATION \"$$migration_user\"; ALTER SCHEMA squid_processor OWNER TO \"$$migration_user\"; ALTER DATABASE \"$$db\" OWNER TO \"$$migration_user\"; REVOKE \"$$runtime_user\", \"$$migration_user\" FROM CURRENT_USER; COMMIT;"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"$$runtime_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"$$reader_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO \"$$runtime_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "REVOKE ALL ON SCHEMA squid_processor FROM PUBLIC;"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE, CREATE ON SCHEMA squid_processor TO \"$$migration_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE ON SCHEMA squid_processor TO \"$$runtime_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA squid_processor TO \"$$runtime_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"$$migration_user\" IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"$$runtime_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"$$migration_user\" IN SCHEMA public GRANT SELECT ON TABLES TO \"$$reader_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"$$migration_user\" IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO \"$$runtime_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"$$migration_user\" IN SCHEMA squid_processor GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"$$runtime_user\";"
         }
         ensure_db "$${AUTH_DB_NAME}"
         ensure_db "$${RICARDIAN_DB_NAME}"
@@ -120,6 +148,9 @@ services:
         ensure_role "$${RECONCILIATION_DB_MIGRATION_USER}" "$${RECONCILIATION_DB_MIGRATION_PASSWORD}"
         ensure_role "$${ORACLE_DB_RUNTIME_USER}" "$${ORACLE_DB_RUNTIME_PASSWORD}"
         ensure_role "$${ORACLE_DB_MIGRATION_USER}" "$${ORACLE_DB_MIGRATION_PASSWORD}"
+        ensure_role "$${INDEXER_DB_RUNTIME_USER}" "$${INDEXER_DB_RUNTIME_PASSWORD}"
+        ensure_role "$${INDEXER_DB_MIGRATION_USER}" "$${INDEXER_DB_MIGRATION_PASSWORD}"
+        ensure_role "$${INDEXER_DB_READER_USER}" "$${INDEXER_DB_READER_PASSWORD}"
         ensure_role "$${GATEWAY_DB_RUNTIME_USER}" "$${GATEWAY_DB_RUNTIME_PASSWORD}"
         ensure_role "$${GATEWAY_DB_MIGRATION_USER}" "$${GATEWAY_DB_MIGRATION_PASSWORD}"
         configure_db_access "$${AUTH_DB_NAME}" "$${AUTH_DB_RUNTIME_USER}" "$${AUTH_DB_MIGRATION_USER}"
@@ -127,6 +158,7 @@ services:
         configure_db_access "$${TREASURY_DB_NAME}" "$${TREASURY_DB_RUNTIME_USER}" "$${TREASURY_DB_MIGRATION_USER}"
         configure_db_access "$${RECONCILIATION_DB_NAME}" "$${RECONCILIATION_DB_RUNTIME_USER}" "$${RECONCILIATION_DB_MIGRATION_USER}"
         configure_db_access "$${ORACLE_DB_NAME}" "$${ORACLE_DB_RUNTIME_USER}" "$${ORACLE_DB_MIGRATION_USER}"
+        configure_indexer_db_access "$${INDEXER_DB_NAME}" "$${INDEXER_DB_RUNTIME_USER}" "$${INDEXER_DB_MIGRATION_USER}" "$${INDEXER_DB_READER_USER}"
         configure_db_access "$${GATEWAY_DB_NAME}" "$${GATEWAY_DB_RUNTIME_USER}" "$${GATEWAY_DB_MIGRATION_USER}"
 
   redis:
@@ -143,101 +175,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  indexer-migrate:
-    profiles: ['runtime']
-    build:
-      context: .
-      dockerfile: indexer/Dockerfile
-    environment:
-      DB_HOST: postgres
-      DB_PORT: '5432'
-      DB_NAME: '${INDEXER_DB_NAME}'
-      DB_USER: '${POSTGRES_USER}'
-      DB_PASSWORD: '${POSTGRES_PASSWORD}'
-      DB_PASS: '${POSTGRES_PASSWORD}'
-    depends_on:
-      postgres-init:
-        condition: service_completed_successfully
-    command: ['pnpm', 'exec', 'squid-typeorm-migration', 'apply']
-
-  indexer-pipeline:
-    profiles: ['runtime']
-    restart: unless-stopped
-    build:
-      context: .
-      dockerfile: indexer/Dockerfile
-    environment:
-      DB_HOST: postgres
-      DB_PORT: '5432'
-      DB_NAME: '${INDEXER_DB_NAME}'
-      DB_USER: '${POSTGRES_USER}'
-      DB_PASSWORD: '${POSTGRES_PASSWORD}'
-      DB_PASS: '${POSTGRES_PASSWORD}'
-      GATEWAY_URL: '${INDEXER_GATEWAY_URL}'
-      RPC_ENDPOINT: '${INDEXER_RPC_ENDPOINT}'
-      RPC_FALLBACK_ENDPOINTS: '${INDEXER_RPC_FALLBACK_ENDPOINTS:-}'
-      START_BLOCK: '${INDEXER_START_BLOCK}'
-      RATE_LIMIT: '${INDEXER_RATE_LIMIT}'
-      RPC_CAPACITY: '${INDEXER_RPC_CAPACITY:-}'
-      RPC_MAX_BATCH_CALL_SIZE: '${INDEXER_RPC_MAX_BATCH_CALL_SIZE:-}'
-      RPC_REQUEST_TIMEOUT_MS: '${INDEXER_RPC_REQUEST_TIMEOUT_MS:-}'
-      RPC_RETRY_ATTEMPTS: '${INDEXER_RPC_RETRY_ATTEMPTS:-}'
-      RPC_HEAD_POLL_INTERVAL_MS: '${INDEXER_RPC_HEAD_POLL_INTERVAL_MS:-}'
-      RPC_INGEST_DISABLED: '${INDEXER_RPC_INGEST_DISABLED:-false}'
-      SUBSQUID_EVM_RPC_SPLIT_SIZE: '${INDEXER_RPC_BLOCK_SPLIT_SIZE:-10}'
-      FINALITY_CONFIRMATION_BLOCKS: '${FINALITY_CONFIRMATION_BLOCKS}'
-      CONTRACT_ADDRESS: '${INDEXER_CONTRACT_ADDRESS}'
-      GRAPHQL_PORT: '${INDEXER_GRAPHQL_PORT}'
-    depends_on:
-      postgres-init:
-        condition: service_completed_successfully
-      indexer-migrate:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ['CMD-SHELL', "cat /proc/1/cmdline | tr '\\0' ' ' | grep -q 'lib/main.js'"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
-  indexer-graphql:
-    profiles: ['runtime']
-    build:
-      context: .
-      dockerfile: indexer/Dockerfile
-    environment:
-      DB_HOST: postgres
-      DB_PORT: '5432'
-      DB_NAME: '${INDEXER_DB_NAME}'
-      DB_USER: '${POSTGRES_USER}'
-      DB_PASSWORD: '${POSTGRES_PASSWORD}'
-      DB_PASS: '${POSTGRES_PASSWORD}'
-      GQL_PORT: '${INDEXER_GRAPHQL_PORT}'
-    depends_on:
-      postgres-init:
-        condition: service_completed_successfully
-      indexer-migrate:
-        condition: service_completed_successfully
-    command: ['node', 'node_modules/@subsquid/graphql-server/bin/run.js', '--no-squid-status']
-    ports:
-      - '${INDEXER_GRAPHQL_PORT:-4350}:${INDEXER_GRAPHQL_PORT:-4350}'
-    healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - |
-          const p = process.env.GQL_PORT || '4350';
-          fetch('http://127.0.0.1:' + p + '/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: '{ __typename }' }),
-          })
-            .then((response) => process.exit(response.ok ? 0 : 1))
-            .catch(() => process.exit(1));
-      interval: 10s
-      timeout: 5s
-      retries: 8
 
   ricardian:
     profiles: ['runtime']

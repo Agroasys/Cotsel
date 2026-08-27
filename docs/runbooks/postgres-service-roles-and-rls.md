@@ -14,17 +14,18 @@ This model applies to the service-owned operational databases for:
 
 - `auth`
 - `gateway`
+- `indexer`
 - `oracle`
 - `reconciliation`
 - `ricardian`
 - `treasury`
 
-It does not currently apply to the indexer database. The indexer stores derived
-chain mirror data and remains outside the Phase 3 sensitive-table scope.
+The indexer stores derived chain data. Its tables remain outside the current
+actor-aware RLS scope, but SQL grants and database isolation apply to it.
 
 ## Role model
 
-Each service gets two distinct Postgres login roles:
+Each operational service gets two distinct Postgres login roles:
 
 - runtime role
 - migration role
@@ -41,6 +42,15 @@ Long-running production services receive only runtime credentials. Dedicated
 one-off migration tasks receive migration credentials through ECS secret
 injection.
 
+The indexer gets three login roles:
+
+- `cotsel_indexer_migrator` owns `public` and `squid_processor` objects.
+- `cotsel_indexer_app` reads and writes projections and processor state.
+- `cotsel_indexer_reader` reads only published `public` projections.
+
+The GraphQL reader cannot access `squid_processor`. The indexer runtime cannot
+create or alter schemas, tables, or other database objects.
+
 Long-running service containers use only these database variables:
 
 - `DB_USER`
@@ -49,6 +59,10 @@ Long-running service containers use only these database variables:
 Dedicated migration jobs use `DB_USER` and `DB_PASSWORD` from their migration
 secret. Compose initializes these identities from service-specific runtime and
 migration variables.
+
+The indexer migration creates the Subsquid processor-state schema. The patched
+store starts with `initializeStateSchema: false`. This setting prevents
+long-running startup from performing hidden DDL.
 
 Production schema changes must run through a reviewed, dedicated migration task.
 Long-running service code does not parse migration credentials or execute DDL.
@@ -135,6 +149,13 @@ This is the current mapping:
 - `USAGE` on `public` for runtime roles
 - `USAGE, CREATE` on `public` for migration roles
 
+For the indexer, it also provisions:
+
+- a read-only GraphQL role;
+- migration ownership of `public` and `squid_processor` objects;
+- runtime DML on projections and processor state;
+- reader `SELECT` on `public` projections only.
+
 The compose bootstrap does not make runtime roles owners of the schema.
 
 ## Production rollout steps
@@ -151,6 +172,7 @@ The compose bootstrap does not make runtime roles owners of the schema.
 10. Verify the schema and service health.
 11. Run services with runtime credentials only.
 12. Verify cross-service and untagged-session access fails.
+13. Run the private database entitlement verifier after every indexer restore.
 
 ## Versioned migration contract
 
@@ -193,8 +215,17 @@ Phase 3 is not considered complete unless all of the following are true:
   - correct role plus missing `app.service_name` fails
   - unrelated role fails
 
-The Docker-backed proof for those cases lives in
-`shared-db/postgres-rls.integration.test.js`.
+Indexer validation must also prove:
+
+- the migration role owns all `public` and `squid_processor` objects;
+- the runtime can update projections and processor checkpoints without DDL;
+- the GraphQL role can read projections but cannot write or access processor state;
+- both long-running roles cannot connect to unrelated service databases;
+- a clean restore retains the same grants and ownership.
+
+The Docker-backed actor-RLS proof lives in
+`shared-db/postgres-rls.integration.test.js`. The indexer role, ownership, and
+processor-state proof lives in `indexer/tests/processorStateEntitlements.test.mjs`.
 
 ## What this does not solve
 
@@ -206,5 +237,5 @@ It also does not implement per-user or per-admin row ownership policies. If
 actor-aware CRUD policy is needed later, that must be treated as a separate
 design and migration program.
 
-It also does not finish treasury/off-ramp backlog or indexer data governance.
-Those remain separate workstreams.
+It also does not finish treasury/off-ramp backlog or actor-aware indexer data
+governance. Those remain separate workstreams.

@@ -51,6 +51,7 @@ test('the database bootstrap sets default privileges as each migration role', as
   assert.doesNotMatch(source, /ALTER DEFAULT PRIVILEGES FOR ROLE/);
   assert.match(source, /export PGUSER="\$\$\{RICARDIAN_MIGRATION_USERNAME\}"/);
   assert.match(source, /export PGUSER="\$\$\{TREASURY_MIGRATION_USERNAME\}"/);
+  assert.match(source, /export PGUSER="\$\$\{INDEXER_MIGRATION_USERNAME\}"/);
   assert.match(
     source,
     /ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cotsel_ricardian_runtime/,
@@ -58,6 +59,35 @@ test('the database bootstrap sets default privileges as each migration role', as
   assert.match(
     source,
     /ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cotsel_treasury_runtime/,
+  );
+  assert.match(
+    source,
+    /ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO cotsel_indexer_reader/,
+  );
+  assert.match(source, /REASSIGN OWNED BY cotsel_indexer_app TO cotsel_indexer_migrator/);
+  assert.match(source, /ALTER DATABASE cotsel_indexer OWNER TO cotsel_indexer_migrator/);
+  assert.match(source, /ALTER SCHEMA squid_processor OWNER TO cotsel_indexer_migrator/);
+});
+
+test('the database bootstrap passes role passwords through psql variables', async () => {
+  const source = await readFile('infra/terraform/staging-platform/database-bootstrap.tf', 'utf8');
+
+  for (const credential of [
+    'INDEXER_MIGRATION_PASSWORD',
+    'INDEXER_RUNTIME_PASSWORD',
+    'INDEXER_READER_PASSWORD',
+    'RICARDIAN_MIGRATION_PASSWORD',
+    'RICARDIAN_RUNTIME_PASSWORD',
+    'TREASURY_MIGRATION_PASSWORD',
+    'TREASURY_RUNTIME_PASSWORD',
+  ]) {
+    assert.match(source, new RegExp(`\\\\getenv [a-z_]+ ${credential}`));
+  }
+
+  assert.doesNotMatch(source, /ALTER ROLE[^\n]+PASSWORD '\$\$\{/);
+  assert.match(
+    source,
+    /ALTER ROLE cotsel_indexer_reader LOGIN PASSWORD :'indexer_reader_password'/,
   );
 });
 
@@ -73,6 +103,10 @@ test('the entitlement verifier is private, strict-TLS, and tests the live role b
   assert.match(source, /CREATE SCHEMA \$\$\{probe_schema\}/);
   assert.match(source, /Runtime role unexpectedly created schema/);
   assert.match(source, /Runtime role unexpectedly connected to/);
+  assert.match(source, /Indexer GraphQL reader unexpectedly updated a table/);
+  assert.match(source, /Indexer GraphQL reader unexpectedly connected to/);
+  assert.match(source, /Indexer database owner is/);
+  assert.match(source, /schema\(s\) outside migration-role ownership/);
   assert.match(
     source,
     /permissions_boundary = var\.database_entitlement_verification_permissions_boundary_arn/,

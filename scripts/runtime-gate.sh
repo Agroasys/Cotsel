@@ -122,9 +122,9 @@ PY
 }
 
 get_indexer_head_from_db() {
-  validate_identifier "POSTGRES_USER" "${POSTGRES_USER:-}" || return 1
+  validate_identifier "INDEXER_DB_RUNTIME_USER" "${INDEXER_DB_RUNTIME_USER:-}" || return 1
   validate_identifier "INDEXER_DB_NAME" "${INDEXER_DB_NAME:-}" || return 1
-  run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -Atc '
+  COTSEL_COMPOSE_FILE="$COMPOSE_FILE" COTSEL_COMPOSE_PROFILE="$PROFILE" scripts/run-indexer-psql.sh INDEXER_DB_RUNTIME_PASSWORD "${INDEXER_DB_RUNTIME_USER}" "${INDEXER_DB_NAME}" -Atc '
     SELECT COALESCE(
       (SELECT height FROM squid_processor.hot_block ORDER BY height DESC LIMIT 1),
       (SELECT height FROM squid_processor.status WHERE id = 0),
@@ -762,7 +762,7 @@ ORDER BY block_number DESC
 LIMIT 5;
 SQL
 )"
-CORRELATION_ROWS="$(run_with_prefixed_stderr "indexer_correlation_query" run_compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${INDEXER_DB_NAME}" -A -F "${RECONCILIATION_SUMMARY_FIELD_DELIM}" -tc "${CORRELATION_SQL}" || true)"
+CORRELATION_ROWS="$(COTSEL_COMPOSE_FILE="$COMPOSE_FILE" COTSEL_COMPOSE_PROFILE="$PROFILE" run_with_prefixed_stderr "indexer_correlation_query" scripts/run-indexer-psql.sh INDEXER_DB_READER_PASSWORD "${INDEXER_DB_READER_USER:-}" "${INDEXER_DB_NAME}" -A -F "${RECONCILIATION_SUMMARY_FIELD_DELIM}" -tc "${CORRELATION_SQL}" || true)"
 echo "correlation snapshot (indexer + reconciliation context):"
 if [[ -n "$CORRELATION_ROWS" ]]; then
   while IFS="${RECONCILIATION_SUMMARY_FIELD_DELIM}" read -r TRADE_ID TX_HASH; do
