@@ -25,12 +25,9 @@ function markdownFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
-      if (entryPath === path.join(repositoryRoot, 'docs', 'readiness')) {
-        return [];
-      }
       return markdownFiles(entryPath);
     }
-    if (!entry.isFile() || !entry.name.endsWith('.md') || entry.name.includes('closeout')) {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) {
       return [];
     }
     return [entryPath];
@@ -122,6 +119,42 @@ test('documented pnpm scripts and supported toolchain match package manifests', 
   }
 
   assert.deepEqual(invalidCommands, []);
+});
+
+test('operator documentation does not present the retired npm toolchain as current', () => {
+  const operatorDocuments = [
+    path.join(repositoryRoot, 'README.md'),
+    path.join(repositoryRoot, 'CONTRIBUTING.md'),
+    ...serviceReadmes.map((file) => path.join(repositoryRoot, file)),
+    ...markdownFiles(path.join(repositoryRoot, 'docs', 'runbooks')),
+    ...markdownFiles(path.join(repositoryRoot, 'docs', 'security')),
+  ];
+  const staleCommands = [];
+
+  for (const file of operatorDocuments) {
+    const markdown = fs.readFileSync(file, 'utf8');
+    const isHistorical = markdown.includes(
+      '**HISTORICAL EVIDENCE — DO NOT USE AS A CURRENT PROCEDURE.**',
+    );
+    if (path.basename(file).includes('closeout')) {
+      assert.equal(
+        isHistorical,
+        true,
+        `${path.relative(repositoryRoot, file)} must identify itself as historical evidence`,
+      );
+    }
+    if (isHistorical) continue;
+
+    for (const match of markdown.matchAll(
+      /^\s*(?:npm (?:ci|install|run|test|audit|ls)\b|nvm use 20(?:\b|\.))/gmu,
+    )) {
+      staleCommands.push(
+        `${path.relative(repositoryRoot, file)}:${markdown.slice(0, match.index).split('\n').length}`,
+      );
+    }
+  }
+
+  assert.deepEqual(staleCommands, []);
 });
 
 test('active runbooks do not present unimplemented gateway governance as executable', () => {

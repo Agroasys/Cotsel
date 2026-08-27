@@ -1,5 +1,9 @@
 # Maintainability Hardening Closeout
 
+> **HISTORICAL EVIDENCE — DO NOT USE AS A CURRENT PROCEDURE.** This dated
+> closeout preserves the state and conclusions of its original hardening pass.
+> Use the active runbooks and current repository/runtime evidence for operations.
+
 Snapshot date: 2026-04-28
 
 ## Purpose

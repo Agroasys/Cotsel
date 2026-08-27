@@ -1,5 +1,10 @@
 # Production Hardening Controls Closeout
 
+> **HISTORICAL EVIDENCE — DO NOT USE AS A CURRENT PROCEDURE.** This record
+> preserves the commands and conclusions from the former Node 20/npm hardening
+> pass. Current operator and contributor procedures use the pinned Node/pnpm
+> toolchain and the active runbooks. Do not replay commands from this closeout.
+
 ## Scope
 
 This closeout covers the production-hardening control pass on branch
