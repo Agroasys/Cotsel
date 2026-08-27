@@ -50,13 +50,44 @@ test('release workflow requires signed provenance and SBOM controls', () => {
     'format: spdx-json',
     'severity: HIGH,CRITICAL',
     "exit-code: '1'",
-    'uses: actions/attest@0123456789abcdef0123456789abcdef01234567',
     'gh attestation verify',
+    'node scripts/resolve-release-image-provenance.mjs',
+    'producingWorkflowRunUri',
+    'verificationWorkflowRunId',
+    'imageReused',
+    '- name: Attest image provenance',
+    "  if: steps.kind.outputs.publish == 'true' && steps.build.outputs.digest != ''",
+    '  uses: actions/attest@0123456789abcdef0123456789abcdef01234567',
+    '- name: Attest image SBOM',
+    "  if: steps.kind.outputs.publish == 'true'",
+    '  uses: actions/attest@0123456789abcdef0123456789abcdef01234567',
+    '- name: Preserve signed provenance bundle',
+    "  if: steps.kind.outputs.publish == 'true' && steps.build.outputs.digest != ''",
+    '  run: cp bundle evidence',
+    '- name: Next step',
   ].join('\n');
   assert.equal(releaseWorkflowViolations(complete).length, 0);
   assert.ok(releaseWorkflowViolations(complete.replace('sbom: true', '')).length > 0);
   assert.match(
     releaseWorkflowViolations(`${complete}\nignore-unfixed: true`)[0],
     /must not bypass the gate/u,
+  );
+  assert.match(
+    releaseWorkflowViolations(
+      complete.replace(
+        "if: steps.kind.outputs.publish == 'true' && steps.build.outputs.digest != ''",
+        "if: steps.kind.outputs.publish == 'true'",
+      ),
+    ).join('\n'),
+    /Attest image provenance must run only for a newly built image/u,
+  );
+  assert.match(
+    releaseWorkflowViolations(
+      complete.replace(
+        "- name: Attest image SBOM\n  if: steps.kind.outputs.publish == 'true'",
+        "- name: Attest image SBOM\n  if: steps.kind.outputs.publish == 'false'",
+      ),
+    ).join('\n'),
+    /must attest its SBOM/u,
   );
 });

@@ -188,7 +188,7 @@ jobs:
 
       - name: Attest image provenance
         id: provenance
-        if: steps.kind.outputs.publish == 'true'
+        if: steps.kind.outputs.publish == 'true' && steps.build.outputs.digest != ''
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ steps.identity.outputs.name }}
@@ -205,15 +205,22 @@ jobs:
           sbom-path: sbom-${{ matrix.service }}.spdx.json
           push-to-registry: true
 
-      - name: Preserve signed attestation bundles
-        if: steps.kind.outputs.publish == 'true'
+      - name: Preserve signed provenance bundle
+        if: steps.kind.outputs.publish == 'true' && steps.build.outputs.digest != ''
         env:
           PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
-          SBOM_BUNDLE: ${{ steps.sbom_attestation.outputs.bundle-path }}
           SERVICE: ${{ matrix.service }}
         run: |
           set -euo pipefail
           cp "$PROVENANCE_BUNDLE" "provenance-${SERVICE}.sigstore.json"
+
+      - name: Preserve signed SBOM bundle
+        if: steps.kind.outputs.publish == 'true'
+        env:
+          SBOM_BUNDLE: ${{ steps.sbom_attestation.outputs.bundle-path }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
           cp "$SBOM_BUNDLE" "sbom-attestation-${SERVICE}.sigstore.json"
 
       - name: Verify signed image attestations
@@ -243,12 +250,25 @@ jobs:
             --format json \
             > "sbom-attestation-verification-${SERVICE}.json"
 
+      - name: Resolve producing workflow identity
+        id: producing
+        if: steps.kind.outputs.publish == 'true'
+        env:
+          BUILT: ${{ steps.build.outputs.digest }}
+          PROVENANCE_VERIFICATION: attestation-verification-${{ matrix.service }}.json
+        run: |
+          set -euo pipefail
+          node scripts/resolve-release-image-provenance.mjs
+
       - name: Record image evidence
         if: always()
         env:
           DIGEST: ${{ steps.identity.outputs.digest }}
+          IMAGE_REUSED: ${{ steps.producing.outputs.image_reused }}
           PROVENANCE_ATTESTATION_ID: ${{ steps.provenance.outputs.attestation-id }}
           PROVENANCE_ATTESTATION_URL: ${{ steps.provenance.outputs.attestation-url }}
+          PRODUCING_RUN_ID: ${{ steps.producing.outputs.producing_run_id }}
+          PRODUCING_RUN_URI: ${{ steps.producing.outputs.producing_run_uri }}
           REFERENCE: ${{ steps.identity.outputs.reference }}
           SBOM_ATTESTATION_ID: ${{ steps.sbom_attestation.outputs.attestation-id }}
           SBOM_ATTESTATION_URL: ${{ steps.sbom_attestation.outputs.attestation-url }}
@@ -262,11 +282,14 @@ jobs:
               imageReference: process.env.REFERENCE,
               imageDigest: process.env.DIGEST || null,
               published: Boolean(process.env.DIGEST),
+              imageReused: process.env.IMAGE_REUSED === "true",
+              workflowRunId: process.env.PRODUCING_RUN_ID || null,
+              producingWorkflowRunUri: process.env.PRODUCING_RUN_URI || null,
+              verificationWorkflowRunId: process.env.GITHUB_RUN_ID,
               provenanceAttestationId: process.env.PROVENANCE_ATTESTATION_ID || null,
               provenanceAttestationUrl: process.env.PROVENANCE_ATTESTATION_URL || null,
               sbomAttestationId: process.env.SBOM_ATTESTATION_ID || null,
               sbomAttestationUrl: process.env.SBOM_ATTESTATION_URL || null,
-              workflowRunId: process.env.GITHUB_RUN_ID,
             };
             fs.writeFileSync(`release-image-${out.service}.json`, `${JSON.stringify(out, null, 2)}\n`);
           '

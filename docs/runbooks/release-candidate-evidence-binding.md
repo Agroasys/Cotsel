@@ -166,6 +166,12 @@ Outcome: verify that each release image comes from the recorded source and conta
 The release workflow publishes images only for a push to `main`. Pull requests build and scan the
 same Dockerfiles, but they do not publish images or create release attestations.
 
+A retry may reuse an image already published for the exact source commit. It must not create fresh
+build provenance for an image that the retry did not build. The retry verifies the existing signed
+provenance against the exact main workflow identity and source digest, carries the certificate's
+immutable producing-run URI into the evidence record, and creates and verifies a fresh signed SBOM
+for the current scan. More than one eligible producing-run URI is an ambiguity and fails closed.
+
 The publishing job must produce these records for every service image:
 
 - an immutable ECR image digest;
