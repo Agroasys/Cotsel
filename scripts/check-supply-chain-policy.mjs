@@ -82,6 +82,10 @@ export function releaseWorkflowViolations(contents) {
     ["exit-code: '1'", 'blocking image vulnerability threshold'],
     ['uses: actions/attest@', 'signed GitHub attestation'],
     ['gh attestation verify', 'signed attestation verification'],
+    ['node scripts/resolve-release-image-provenance.mjs', 'producing workflow identity extraction'],
+    ['producingWorkflowRunUri', 'producing workflow evidence'],
+    ['verificationWorkflowRunId', 'verification workflow evidence'],
+    ['imageReused', 'image reuse evidence'],
   ];
 
   const violations = requiredControls.flatMap(([needle, label]) =>
@@ -91,6 +95,26 @@ export function releaseWorkflowViolations(contents) {
     violations.push(
       'release-images.yml: unfixed High or Critical findings must not bypass the gate',
     );
+  }
+  const newBuildAttestationCondition =
+    "if: steps.kind.outputs.publish == 'true' && steps.build.outputs.digest != ''";
+  const stepBlock = (name) => {
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    return contents.match(
+      new RegExp(`(?:^|\\n)\\s*- name: ${escapedName}\\n([\\s\\S]*?)(?=\\n\\s*- name:|$)`, 'u'),
+    )?.[1];
+  };
+  for (const step of ['Attest image provenance', 'Preserve signed provenance bundle']) {
+    if (!stepBlock(step)?.includes(newBuildAttestationCondition)) {
+      violations.push(`release-images.yml: ${step} must run only for a newly built image`);
+    }
+  }
+  const sbomAttestation = stepBlock('Attest image SBOM');
+  if (
+    !sbomAttestation?.includes("if: steps.kind.outputs.publish == 'true'") ||
+    !sbomAttestation.includes('uses: actions/attest@')
+  ) {
+    violations.push('release-images.yml: every published image verification must attest its SBOM');
   }
   return violations;
 }
