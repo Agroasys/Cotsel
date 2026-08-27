@@ -34,92 +34,7 @@ locals {
     }
   }
 
-  database_parity_verification_command = <<-COMMAND
-    set -eu
-    set -o pipefail
-
-    : "$${AUTH_RUNTIME_USERNAME:?AUTH_RUNTIME_USERNAME is required}"
-    : "$${AUTH_RUNTIME_PASSWORD:?AUTH_RUNTIME_PASSWORD is required}"
-    : "$${GATEWAY_RUNTIME_USERNAME:?GATEWAY_RUNTIME_USERNAME is required}"
-    : "$${GATEWAY_RUNTIME_PASSWORD:?GATEWAY_RUNTIME_PASSWORD is required}"
-    : "$${INDEXER_RUNTIME_USERNAME:?INDEXER_RUNTIME_USERNAME is required}"
-    : "$${INDEXER_RUNTIME_PASSWORD:?INDEXER_RUNTIME_PASSWORD is required}"
-    : "$${ORACLE_RUNTIME_USERNAME:?ORACLE_RUNTIME_USERNAME is required}"
-    : "$${ORACLE_RUNTIME_PASSWORD:?ORACLE_RUNTIME_PASSWORD is required}"
-    : "$${RECONCILIATION_RUNTIME_USERNAME:?RECONCILIATION_RUNTIME_USERNAME is required}"
-    : "$${RECONCILIATION_RUNTIME_PASSWORD:?RECONCILIATION_RUNTIME_PASSWORD is required}"
-    : "$${RICARDIAN_RUNTIME_USERNAME:?RICARDIAN_RUNTIME_USERNAME is required}"
-    : "$${RICARDIAN_RUNTIME_PASSWORD:?RICARDIAN_RUNTIME_PASSWORD is required}"
-    : "$${TREASURY_RUNTIME_USERNAME:?TREASURY_RUNTIME_USERNAME is required}"
-    : "$${TREASURY_RUNTIME_PASSWORD:?TREASURY_RUNTIME_PASSWORD is required}"
-
-    export PGHOST='${local.postgres_host}'
-    export PGPORT='5432'
-    export PGSSLMODE='verify-full'
-    export PGSSLROOTCERT='/tmp/aws-rds-global-bundle.pem'
-
-    umask 077
-    trap 'rm -f "$${PGSSLROOTCERT}"' EXIT HUP INT TERM
-    wget --quiet -O "$${PGSSLROOTCERT}" 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem'
-    printf '%s  %s\n' 'e5bb2084ccf45087bda1c9bffdea0eb15ee67f0b91646106e466714f9de3c7e3' "$${PGSSLROOTCERT}" | sha256sum -c -s
-
-    collect_database() {
-      service_name="$${1}"
-      database_name="$${2}"
-      runtime_username="$${3}"
-      runtime_password="$${4}"
-
-      export PGUSER="$${runtime_username}"
-      export PGPASSWORD="$${runtime_password}"
-
-      read -r server_version public_tables estimated_rows public_indexes public_constraints extension_count <<EOF
-    $(psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator ' ' <<'SQL'
-    SELECT current_setting('server_version_num'),
-           (SELECT count(*)
-            FROM information_schema.tables
-            WHERE table_schema = 'public'),
-           (SELECT coalesce(sum(n_live_tup), 0)
-            FROM pg_stat_user_tables
-            WHERE schemaname = 'public'),
-           (SELECT count(*)
-            FROM pg_indexes
-            WHERE schemaname = 'public'),
-           (SELECT count(*)
-            FROM pg_constraint constraint_row
-            JOIN pg_namespace namespace_row
-              ON namespace_row.oid = constraint_row.connamespace
-            WHERE namespace_row.nspname = 'public'),
-           (SELECT count(*) FROM pg_extension);
-    SQL
-    )
-    EOF
-
-      schema_sha256="$(pg_dump \
-        --dbname "$${database_name}" \
-        --schema-only \
-        --no-owner \
-        --no-privileges \
-        --no-comments \
-        --restrict-key='cotselverify' \
-        | sha256sum \
-        | awk '{print $1}')"
-
-      printf '%s\n' \
-        "DATABASE_PARITY_METRIC service=$${service_name} database=$${database_name} server_version=$${server_version} public_tables=$${public_tables} estimated_rows=$${estimated_rows} public_indexes=$${public_indexes} public_constraints=$${public_constraints} extensions=$${extension_count} schema_sha256=$${schema_sha256}"
-    }
-
-    collect_database 'auth' 'cotsel_auth' "$${AUTH_RUNTIME_USERNAME}" "$${AUTH_RUNTIME_PASSWORD}"
-    collect_database 'gateway' 'cotsel_gateway' "$${GATEWAY_RUNTIME_USERNAME}" "$${GATEWAY_RUNTIME_PASSWORD}"
-    collect_database 'indexer' 'cotsel_indexer' "$${INDEXER_RUNTIME_USERNAME}" "$${INDEXER_RUNTIME_PASSWORD}"
-    collect_database 'oracle' 'cotsel_oracle' "$${ORACLE_RUNTIME_USERNAME}" "$${ORACLE_RUNTIME_PASSWORD}"
-    collect_database 'reconciliation' 'cotsel_reconciliation' "$${RECONCILIATION_RUNTIME_USERNAME}" "$${RECONCILIATION_RUNTIME_PASSWORD}"
-    collect_database 'ricardian' 'cotsel_ricardian' "$${RICARDIAN_RUNTIME_USERNAME}" "$${RICARDIAN_RUNTIME_PASSWORD}"
-    collect_database 'treasury' 'cotsel_treasury' "$${TREASURY_RUNTIME_USERNAME}" "$${TREASURY_RUNTIME_PASSWORD}"
-
-    unset AUTH_RUNTIME_PASSWORD GATEWAY_RUNTIME_PASSWORD INDEXER_RUNTIME_PASSWORD ORACLE_RUNTIME_PASSWORD
-    unset RECONCILIATION_RUNTIME_PASSWORD RICARDIAN_RUNTIME_PASSWORD TREASURY_RUNTIME_PASSWORD
-    printf '%s\n' 'Cotsel AWS database parity metrics collection passed.'
-  COMMAND
+  database_parity_verification_command = file("${path.module}/../../../scripts/postgres-recovery-manifest.sh")
 }
 
 resource "aws_cloudwatch_log_group" "database_parity_verification" {
@@ -208,6 +123,9 @@ resource "aws_ecs_task_definition" "database_parity_verification" {
       readonlyRootFilesystem = true
       mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
       command                = ["/bin/sh", "-ec", local.database_parity_verification_command]
+      environment = [
+        { name = "COTSEL_POSTGRES_HOST", value = local.postgres_host },
+      ]
       secrets = flatten([
         for service_name, service in local.database_parity_verification_services : [
           {

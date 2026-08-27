@@ -181,12 +181,17 @@ Release-gate-aligned validation paths:
 - `scripts/runtime-gate.sh`
 - `pnpm run protocol:health -- --profile runtime --mode config-only`
 - `scripts/postgres-backup-restore-smoke.sh`
+- `scripts/audit-aws-postgres-recovery.sh`
+- `scripts/compare-postgres-recovery-manifests.mjs`
 - `scripts/notifications-gate.sh runtime`
 - `pnpm run pilot:rehearsal --window-id <window-id> --config-only`
 
 ## Rehearsal truth
 
 Repo-local hardening proof and a real environment rehearsal are not the same thing.
+
+The local Postgres smoke script does not replace the live AWS PITR procedure in
+`docs/runbooks/postgres-backup-restore-recovery.md`.
 
 - repo-local proof means the workspace checks, release-gate-aligned scripts, and
   config-only rehearsal path all pass

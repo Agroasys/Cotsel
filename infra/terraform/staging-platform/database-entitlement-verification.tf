@@ -16,6 +16,7 @@ locals {
     : "$${TREASURY_MIGRATION_PASSWORD:?TREASURY_MIGRATION_PASSWORD is required}"
     : "$${TREASURY_RUNTIME_USERNAME:?TREASURY_RUNTIME_USERNAME is required}"
     : "$${TREASURY_RUNTIME_PASSWORD:?TREASURY_RUNTIME_PASSWORD is required}"
+    : "$${COTSEL_POSTGRES_HOST:?COTSEL_POSTGRES_HOST is required}"
 
     [ "$${INDEXER_MIGRATION_USERNAME}" = 'cotsel_indexer_migrator' ]
     [ "$${INDEXER_RUNTIME_USERNAME}" = 'cotsel_indexer_app' ]
@@ -25,7 +26,7 @@ locals {
     [ "$${TREASURY_MIGRATION_USERNAME}" = 'cotsel_treasury_migrator' ]
     [ "$${TREASURY_RUNTIME_USERNAME}" = 'cotsel_treasury_runtime' ]
 
-    export PGHOST='${local.postgres_host}'
+    export PGHOST="$${COTSEL_POSTGRES_HOST}"
     export PGPORT='5432'
     export PGSSLMODE='verify-full'
     export PGSSLROOTCERT='/tmp/aws-rds-global-bundle.pem'
@@ -319,6 +320,9 @@ resource "aws_ecs_task_definition" "database_entitlement_verification" {
       readonlyRootFilesystem = true
       mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
       command                = ["/bin/sh", "-ec", local.database_entitlement_verification_command]
+      environment = [
+        { name = "COTSEL_POSTGRES_HOST", value = local.postgres_host },
+      ]
       secrets = [
         { name = "INDEXER_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.migration_secret}:password::" },
         { name = "INDEXER_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.migration_secret}:username::" },
