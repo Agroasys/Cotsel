@@ -106,6 +106,9 @@ jobs:
       - name: Test saved-plan metadata validation
         run: node infra/terraform/scripts/plan-metadata-selftest.mjs
 
+      - name: Test origin-lockdown controls
+        run: node infra/terraform/scripts/origin-lockdown-selftest.mjs
+
   security:
     name: terraform/security
     if: github.event_name == 'pull_request'

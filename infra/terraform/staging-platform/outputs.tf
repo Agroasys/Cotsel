@@ -32,6 +32,11 @@ output "gateway_edge" {
     distribution_status   = aws_cloudfront_distribution.gateway.status
     origin_request_policy = aws_cloudfront_origin_request_policy.gateway_hmac.id
     vpc_origin_id         = aws_cloudfront_vpc_origin.gateway.id
+    web_acl_arn           = aws_wafv2_web_acl.gateway.arn
+    waf_enforcement = {
+      blocking = concat(var.blocking_rule_groups, ["RateLimit"])
+      counting = [for group in var.managed_rule_groups : group if !contains(var.blocking_rule_groups, group)]
+    }
   }
 }
 
