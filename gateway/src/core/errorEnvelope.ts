@@ -44,7 +44,10 @@ export function createGatewayErrorEnvelope(
 ): GatewayErrorEnvelopeV1 {
   if (error instanceof GatewayError) {
     const failureClass = classifyGatewayErrorCode(error);
-    const retryable = failureClass === 'infrastructure';
+    const outcome = error.details?.outcome;
+    const financialOutcomePending =
+      outcome === 'broadcast_unknown' || outcome === 'confirmation_pending';
+    const retryable = failureClass === 'infrastructure' && !financialOutcomePending;
     return {
       statusCode: error.statusCode,
       code: error.code,

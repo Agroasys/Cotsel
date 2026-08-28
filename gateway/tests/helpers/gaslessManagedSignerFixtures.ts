@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Wallet } from 'ethers';
+import { keccak256, Wallet } from 'ethers';
 import type { FeeData, TransactionRequest, TransactionResponse } from 'ethers';
 import type { GatewayConfig } from '../../src/config/env';
 import {
@@ -177,20 +177,14 @@ export function createFakeManagedSignerDependencies(options?: {
   const maxFeePerGasWei = options?.maxFeePerGasWei ?? 1n;
   const receiptAvailable = options?.receiptAvailable ?? true;
   let nextNonce = options?.nonceStart ?? 7;
-  const txResponse = {
-    hash: '0x9999999999999999999999999999999999999999999999999999999999999999',
-    wait: async () =>
-      receiptAvailable
-        ? {
-            status: 1,
-            blockNumber: 98765,
-            gasUsed: 210000n,
-            gasPrice: 1n,
-          }
-        : null,
-  } as unknown as TransactionResponse;
-
   const recordValidationEvidence = jest.fn();
+  const recordTransactionOutcome = {
+    recordPrepared: jest.fn(async () => undefined),
+    markBroadcastUnknown: jest.fn(async () => undefined),
+    markConfirmationPending: jest.fn(async () => undefined),
+    markConfirmed: jest.fn(async () => undefined),
+    markReverted: jest.fn(async () => undefined),
+  };
 
   return {
     provider: {
@@ -215,7 +209,19 @@ export function createFakeManagedSignerDependencies(options?: {
         if (failure) {
           throw failure;
         }
-        return txResponse;
+        return {
+          hash: keccak256(_signedTransaction),
+          wait: async () =>
+            receiptAvailable
+              ? {
+                  status: 1,
+                  blockNumber: 98765,
+                  blockHash: '0x8888888888888888888888888888888888888888888888888888888888888888',
+                  gasUsed: 210000n,
+                  gasPrice: 1n,
+                }
+              : null,
+        } as unknown as TransactionResponse;
       }),
     },
     signerTransport: {
@@ -251,5 +257,6 @@ export function createFakeManagedSignerDependencies(options?: {
       }),
     },
     recordValidationEvidence,
+    recordTransactionOutcome,
   };
 }

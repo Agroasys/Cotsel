@@ -1,35 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isGaslessNonceDriftError } from '../src/core/gaslessSettlementExecutionService';
 
-describe('gasless relayer nonce drift handling', () => {
-  it('classifies provider nonce drift errors as retryable relayer nonce drift', () => {
-    expect(
-      isGaslessNonceDriftError(
-        Object.assign(new Error('nonce too low'), {
-          code: 'NONCE_EXPIRED',
-        }),
-      ),
-    ).toBe(true);
-    expect(isGaslessNonceDriftError(new Error('nonce has already been used'))).toBe(true);
-    expect(isGaslessNonceDriftError(new Error('replacement fee too low'))).toBe(true);
-    expect(isGaslessNonceDriftError(new Error('execution reverted'))).toBe(false);
-  });
-
-  it('resets the nonce manager before sponsored create, user, and operator broadcasts', () => {
+describe('gasless relayer nonce safety', () => {
+  it('signs once and routes every raw transaction through persisted broadcast identity', () => {
     const source = readFileSync(
       join(__dirname, '../src/core/gaslessRawPrivateKeyExecutor.ts'),
       'utf8',
     );
 
-    expect(source).toContain('async function withFreshSignerNonce');
-    expect(source).toMatch(/signer\.reset\(\);[\s\S]*return await operation\(\);/);
-    expect(source).toContain(
-      'withFreshSignerNonce(() =>\n        escrow.createTradeWithAuthorization',
-    );
-    expect(source).toContain('withFreshSignerNonce(() =>\n        broadcastUserAction');
-    expect(source).toContain(
-      'withFreshSignerNonce(() =>\n        escrow.finalizeAfterDisputeWindow',
-    );
+    expect(source).not.toContain('NonceManager');
+    expect(source).not.toContain('withFreshSignerNonce');
+    expect(source).not.toContain('signer.reset()');
+    expect(source).toContain('const signedTransaction = await signer.signTransaction(transaction)');
+    expect(source).toContain('return broadcastPersistedGaslessTransaction(');
+    expect(source.match(/await signAndBroadcast\(/g)).toHaveLength(4);
   });
 });
