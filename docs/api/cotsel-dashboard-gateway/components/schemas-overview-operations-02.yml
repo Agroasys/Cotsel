@@ -1,0 +1,180 @@
+components:
+  schemas:
+    GaslessRelayerReadinessSnapshot:
+      type: object
+      required:
+        - enabled
+        - state
+        - generatedAt
+      properties:
+        enabled:
+          type: boolean
+        paused:
+          type: boolean
+        state:
+          type: string
+          enum:
+            - ready
+            - paused
+            - degraded
+            - blocked
+            - disabled
+        generatedAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        signerCustodyMode:
+          type: string
+          enum:
+            - raw_private_key
+            - kms
+            - mpc
+        activeExecutionPath:
+          type: object
+          required:
+            - chainId
+            - escrowAddress
+            - rpcFallbackCount
+          properties:
+            chainId:
+              type: integer
+            escrowAddress:
+              type: string
+            rpcFallbackCount:
+              type: integer
+              minimum: 0
+        controls:
+          type: object
+          required:
+            - gasLimitCap
+            - maxFeePerGasWei
+            - maxNativeCostWei
+            - minExecutorBalanceWei
+            - lowBalanceAlertWei
+            - stuckQueueThresholdMs
+            - receiptTimeoutMs
+            - repeatedFailureAlertThreshold
+          properties:
+            gasLimitCap:
+              type: string
+            maxFeePerGasWei:
+              type: string
+            maxNativeCostWei:
+              type: string
+            minExecutorBalanceWei:
+              type: string
+            lowBalanceAlertWei:
+              type: string
+            stuckQueueThresholdMs:
+              type: integer
+              minimum: 1000
+            receiptTimeoutMs:
+              type: integer
+              minimum: 1000
+            repeatedFailureAlertThreshold:
+              type: integer
+              minimum: 1
+        capacityPolicy:
+          type: object
+          required:
+            - targetTransactionsPerDay
+            - averageTransactionsPerHour
+            - burstTransactionsPerHour
+            - burstMultiplierBasisPoints
+            - safetyMarginBasisPoints
+            - maxCostPerTxWei
+            - requiredBurstHourBalanceWei
+            - configuredMinExecutorBalanceWei
+            - configuredLowBalanceAlertWei
+            - floorMeetsPolicy
+            - lowBalanceAlertProtectsPolicy
+            - failClosed
+          properties:
+            targetTransactionsPerDay:
+              type: integer
+              minimum: 1
+            averageTransactionsPerHour:
+              type: integer
+              minimum: 1
+            burstTransactionsPerHour:
+              type: integer
+              minimum: 1
+            burstMultiplierBasisPoints:
+              type: integer
+              minimum: 1
+            safetyMarginBasisPoints:
+              type: integer
+              minimum: 10000
+            maxCostPerTxWei:
+              type: string
+            requiredBurstHourBalanceWei:
+              type: string
+            configuredMinExecutorBalanceWei:
+              type: string
+            configuredLowBalanceAlertWei:
+              type: string
+            floorMeetsPolicy:
+              type: boolean
+            lowBalanceAlertProtectsPolicy:
+              type: boolean
+            failClosed:
+              type: boolean
+        executorBalanceWei:
+          type: string
+          nullable: true
+        queue:
+          type: object
+          required:
+            - pending
+            - active
+            - lastQueueWaitMs
+            - lastSubmissionAt
+          properties:
+            pending:
+              type: integer
+              minimum: 0
+            active:
+              type: integer
+              minimum: 0
+            lastQueueWaitMs:
+              type: integer
+              nullable: true
+              minimum: 0
+            lastSubmissionAt:
+              type: string
+              format: date-time
+              nullable: true
+        alerts:
+          type: array
+          items:
+            type: object
+            required:
+              - code
+              - severity
+              - detail
+            properties:
+              code:
+                type: string
+              severity:
+                $ref: '#/components/schemas/OperationsIncidentSeverity'
+              detail:
+                type: string
+        recentFailureCount:
+          type: integer
+          minimum: 0
+    GaslessRelayerReadinessResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/GaslessRelayerReadinessSnapshot'
+        timestamp:
+          type: string
+          format: date-time

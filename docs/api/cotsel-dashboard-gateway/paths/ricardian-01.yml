@@ -1,0 +1,32 @@
+paths:
+  /ricardian/{tradeId}:
+    get:
+      tags:
+        - Ricardian
+      summary: Get Ricardian document retrieval payload for a trade
+      description: |
+        Read-through dashboard contract for Ricardian retrieval. The gateway resolves the trade,
+        uses the authoritative Ricardian hash, retrieves the document from the Ricardian service,
+        and returns verification-oriented metadata.
+      operationId: getRicardianDocument
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/TradeId'
+      responses:
+        '200':
+          description: Ricardian retrieval payload with freshness and verification metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RicardianDocumentResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'

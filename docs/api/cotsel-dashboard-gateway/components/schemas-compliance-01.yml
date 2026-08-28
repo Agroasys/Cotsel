@@ -1,0 +1,380 @@
+components:
+  schemas:
+    AttestationStatus:
+      type: string
+      enum:
+        - active
+        - revoked
+        - expired
+        - unknown
+      description: |
+        Canonical reference-state values for externally issued attestations.
+        Verification freshness and outage handling are defined by the compliance
+        runbooks and are intentionally separate from this schema-only status contract.
+    AttestationIssuerRef:
+      type: object
+      required:
+        - id
+        - kind
+      properties:
+        id:
+          type: string
+          description: Stable identifier for the issuer or integrating system.
+        kind:
+          type: string
+          enum:
+            - provider
+            - service
+            - operator
+            - partner
+          description: Issuer class for the attestation boundary.
+        displayName:
+          type: string
+          nullable: true
+          description: Optional operator-facing label for the issuer.
+    AttestationSubjectRef:
+      type: object
+      required:
+        - type
+        - reference
+      properties:
+        type:
+          type: string
+          description: Scoped subject class such as `business`, `wallet`, `trade`, or `shipment`.
+        reference:
+          type: string
+          description: Stable bounded subject reference. Must not contain raw PII or full provider dossiers.
+    AttestationReference:
+      type: object
+      description: |
+        Canonical off-chain attestation reference contract for operator surfaces.
+        This schema intentionally carries only reference metadata and not the raw
+        attestation payload. Verification freshness and outage interpretation are
+        defined operationally in `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`.
+      required:
+        - attestationId
+        - attestationType
+        - status
+        - issuer
+        - subjectRef
+        - issuedAt
+        - providerRef
+        - evidenceRef
+      properties:
+        attestationId:
+          type: string
+          description: Stable identifier for the attestation in the issuing or integrating system.
+        attestationType:
+          type: string
+          description: Bounded attestation category such as `kyb`, `kyt`, `sanctions_clearance`, or `inspection`.
+        status:
+          $ref: '#/components/schemas/AttestationStatus'
+        issuer:
+          $ref: '#/components/schemas/AttestationIssuerRef'
+        subjectRef:
+          $ref: '#/components/schemas/AttestationSubjectRef'
+        issuedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        providerRef:
+          type: string
+          description: Provider or issuer lookup reference used for revalidation.
+        evidenceRef:
+          type: string
+          description: Immutable evidence bundle or document reference linked to the attestation.
+        referenceHash:
+          type: string
+          nullable: true
+          description: Optional digest of the external attestation statement or evidence bundle.
+    AttestationAvailability:
+      type: string
+      enum:
+        - available
+        - degraded
+        - unavailable
+    AttestationFreshnessState:
+      type: string
+      enum:
+        - current
+        - stale
+        - expired
+        - unknown
+    ComplianceDecisionType:
+      type: string
+      enum:
+        - KYB
+        - KYT
+        - SANCTIONS
+    ComplianceDecisionResult:
+      type: string
+      enum:
+        - ALLOW
+        - DENY
+      description: |
+        Result states are intentionally limited to the policy-defined enforcement outcomes in
+        `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`.
+
+        Emergency override is represented as `result=ALLOW` together with `reasonCode=CMP_OVERRIDE_ACTIVE`
+        and the override audit fields below. Provider unavailability and unknown outcomes remain fail-closed
+        as `result=DENY`.
+    ComplianceBlockState:
+      type: string
+      enum:
+        - not_blocked
+        - blocked
+        - resume_pending
+    ComplianceDecisionCreateRequest:
+      type: object
+      required:
+        - tradeId
+        - decisionType
+        - result
+        - reasonCode
+        - provider
+        - providerRef
+        - subjectId
+        - subjectType
+        - correlationId
+        - audit
+      properties:
+        tradeId:
+          type: string
+        decisionType:
+          $ref: '#/components/schemas/ComplianceDecisionType'
+        result:
+          $ref: '#/components/schemas/ComplianceDecisionResult'
+        reasonCode:
+          type: string
+          description: Stable code such as `CMP_PROVIDER_UNAVAILABLE` or `CMP_SANCTIONS_MATCH`.
+        provider:
+          type: string
+        providerRef:
+          type: string
+        subjectId:
+          type: string
+        subjectType:
+          type: string
+        riskLevel:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+            - critical
+        overrideWindowEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Used when `reasonCode=CMP_OVERRIDE_ACTIVE` to record the approved override window.
+        correlationId:
+          type: string
+        attestation:
+          $ref: '#/components/schemas/AttestationReference'
+        audit:
+          $ref: '#/components/schemas/MutationAuditInput'
+    ComplianceDecision:
+      type: object
+      required:
+        - decisionId
+        - tradeId
+        - decisionType
+        - result
+        - reasonCode
+        - provider
+        - providerRef
+        - subjectId
+        - subjectType
+        - correlationId
+        - decidedAt
+        - audit
+      properties:
+        decisionId:
+          type: string
+        tradeId:
+          type: string
+        decisionType:
+          $ref: '#/components/schemas/ComplianceDecisionType'
+        result:
+          $ref: '#/components/schemas/ComplianceDecisionResult'
+        reasonCode:
+          type: string
+        provider:
+          type: string
+        providerRef:
+          type: string
+        subjectId:
+          type: string
+        subjectType:
+          type: string
+        riskLevel:
+          type: string
+          nullable: true
+        correlationId:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+        overrideWindowEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+        blockState:
+          $ref: '#/components/schemas/ComplianceBlockState'
+        attestation:
+          $ref: '#/components/schemas/AttestationReference'
+        audit:
+          $ref: '#/components/schemas/MutationAuditRecord'
+    ComplianceDecisionResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ComplianceDecision'
+        timestamp:
+          type: string
+          format: date-time
+    ComplianceDecisionListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ComplianceDecision'
+            nextCursor:
+              type: string
+              nullable: true
+        timestamp:
+          type: string
+          format: date-time
+    ComplianceTradeStatus:
+      type: object
+      required:
+        - tradeId
+        - currentResult
+        - oracleProgressionBlocked
+        - latestDecisionId
+        - updatedAt
+      properties:
+        tradeId:
+          type: string
+        currentResult:
+          $ref: '#/components/schemas/ComplianceDecisionResult'
+        oracleProgressionBlocked:
+          type: boolean
+        blockState:
+          $ref: '#/components/schemas/ComplianceBlockState'
+        latestDecisionId:
+          type: string
+        latestReasonCode:
+          type: string
+        latestProvider:
+          type: string
+        latestCorrelationId:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    ComplianceTradeStatusResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ComplianceTradeStatus'
+        timestamp:
+          type: string
+          format: date-time
+    ComplianceTradeAttestationStatus:
+      type: object
+      required:
+        - tradeId
+        - decisionId
+        - decisionType
+        - complianceResult
+        - availability
+        - freshness
+        - verifiedAt
+        - updatedAt
+        - attestation
+      properties:
+        tradeId:
+          type: string
+        decisionId:
+          type: string
+        decisionType:
+          $ref: '#/components/schemas/ComplianceDecisionType'
+        complianceResult:
+          $ref: '#/components/schemas/ComplianceDecisionResult'
+        reasonCode:
+          type: string
+        availability:
+          $ref: '#/components/schemas/AttestationAvailability'
+        freshness:
+          $ref: '#/components/schemas/AttestationFreshnessState'
+        degradedReason:
+          type: string
+          nullable: true
+        verifiedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        attestation:
+          $ref: '#/components/schemas/AttestationReference'
+    ComplianceTradeAttestationStatusResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ComplianceTradeAttestationStatus'
+        timestamp:
+          type: string
+          format: date-time
+    ComplianceOperationalControlRequest:
+      type: object
+      required:
+        - reasonCode
+        - audit
+      properties:
+        reasonCode:
+          type: string
+        audit:
+          $ref: '#/components/schemas/MutationAuditInput'
+        decisionId:
+          type: string
+          nullable: true
+          description: Associated decision record when one exists.

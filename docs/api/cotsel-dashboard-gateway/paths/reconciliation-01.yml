@@ -1,0 +1,75 @@
+paths:
+  /reconciliation:
+    get:
+      tags:
+        - Reconciliation
+      summary: List reconciliation handoff records for dashboard consumers
+      description: |
+        Operator read surface for reconciliation summaries and drift review. This contract is derived
+        from the gateway settlement ledger and current trade-linked settlement projection.
+      operationId: listReconciliation
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: tradeId
+          in: query
+          schema:
+            type: string
+        - name: reconciliationStatus
+          in: query
+          schema:
+            $ref: '#/components/schemas/SettlementReconciliationStatus'
+        - name: executionStatus
+          in: query
+          schema:
+            $ref: '#/components/schemas/SettlementExecutionStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Reconciliation handoff summaries with deterministic pagination and freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /reconciliation/handoffs/{handoffId}:
+    get:
+      tags:
+        - Reconciliation
+      summary: Get reconciliation detail for a settlement handoff
+      description: |
+        Returns the settlement handoff, its trade-linked projection, execution event history, and
+        freshness metadata for operator drift investigation workflows.
+      operationId: getReconciliationHandoff
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: handoffId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reconciliation handoff detail payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationDetailResponse'

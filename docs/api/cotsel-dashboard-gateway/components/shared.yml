@@ -1,0 +1,113 @@
+components:
+  securitySchemes:
+    sessionBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: session-id
+      description: |
+        Session bearer token issued by the in-repo auth service.
+
+        Production path:
+        - trusted upstream session exchange via `/api/auth/v1/session/exchange/agroasys`
+
+        Repo evidence:
+        - `auth/src/api/controller.ts`
+        - `auth/src/middleware/middleware.ts`
+        - `auth/README.md`
+
+        The gateway must resolve the session subject and enforce endpoint-level role policy. Governance and compliance mutations require operator/admin authorization.
+  parameters:
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Client-generated request identifier for end-to-end traceability. Gateway should generate one if absent.
+    XCorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Stable correlation identifier linking dashboard actions to downstream service logs, trade events, and incident artifacts.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+      description: Required for all mutation endpoints to deduplicate repeated operator intent.
+    TradeId:
+      name: tradeId
+      in: path
+      required: true
+      schema:
+        type: string
+    SettlementHandoffId:
+      name: handoffId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Cotsel trade identifier used across chain events, indexer evidence, and operator workflows.
+    AccountingPeriodId:
+      name: periodId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    BatchId:
+      name: batchId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    EntryId:
+      name: entryId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    BadRequestError:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnauthorizedError:
+      description: Authentication failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ForbiddenError:
+      description: Authenticated subject lacks required role or scope.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFoundError:
+      description: Requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConflictError:
+      description: Request conflicts with current state or prior idempotent request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UpstreamUnavailableError:
+      description: Required execution dependency is unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

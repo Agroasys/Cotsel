@@ -1,0 +1,410 @@
+components:
+  schemas:
+    SettlementExecutionStatus:
+      type: string
+      enum:
+        - pending
+        - accepted
+        - queued
+        - submitted
+        - confirmed
+        - failed
+        - rejected
+    SettlementReconciliationStatus:
+      type: string
+      enum:
+        - pending
+        - matched
+        - drift
+        - unavailable
+    SettlementCallbackStatus:
+      type: string
+      enum:
+        - pending
+        - delivered
+        - failed
+        - dead_letter
+        - disabled
+    SettlementEventType:
+      type: string
+      enum:
+        - accepted
+        - queued
+        - simulation_completed
+        - submitted
+        - confirmed
+        - failed
+        - rejected
+        - reconciled
+        - drift_detected
+    SettlementHandoff:
+      type: object
+      required:
+        - handoffId
+        - platformId
+        - platformHandoffId
+        - tradeId
+        - phase
+        - settlementChannel
+        - displayCurrency
+        - displayAmount
+        - assetSymbol
+        - assetAmount
+        - ricardianHash
+        - externalReference
+        - metadata
+        - executionStatus
+        - reconciliationStatus
+        - callbackStatus
+        - providerStatus
+        - txHash
+        - latestEventType
+        - latestEventDetail
+        - latestEventAt
+        - callbackDeliveredAt
+        - requestId
+        - sourceApiKeyId
+        - createdAt
+        - updatedAt
+      properties:
+        handoffId:
+          type: string
+        platformId:
+          type: string
+        platformHandoffId:
+          type: string
+        tradeId:
+          type: string
+        phase:
+          type: string
+        settlementChannel:
+          type: string
+        displayCurrency:
+          type: string
+        displayAmount:
+          type: number
+        assetSymbol:
+          type:
+            - string
+            - 'null'
+        assetAmount:
+          type:
+            - number
+            - 'null'
+        ricardianHash:
+          type:
+            - string
+            - 'null'
+        externalReference:
+          type:
+            - string
+            - 'null'
+        metadata:
+          type: object
+          additionalProperties: true
+        executionStatus:
+          $ref: '#/components/schemas/SettlementExecutionStatus'
+        reconciliationStatus:
+          $ref: '#/components/schemas/SettlementReconciliationStatus'
+        callbackStatus:
+          $ref: '#/components/schemas/SettlementCallbackStatus'
+        providerStatus:
+          type:
+            - string
+            - 'null'
+        txHash:
+          type:
+            - string
+            - 'null'
+          description: Canonical EVM transaction hash when available.
+        latestEventType:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementEventType'
+        latestEventDetail:
+          type:
+            - string
+            - 'null'
+        latestEventAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        callbackDeliveredAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        requestId:
+          type: string
+        sourceApiKeyId:
+          type:
+            - string
+            - 'null'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SettlementExecutionEvent:
+      type: object
+      required:
+        - eventId
+        - handoffId
+        - eventType
+        - executionStatus
+        - reconciliationStatus
+        - providerStatus
+        - txHash
+        - detail
+        - metadata
+        - observedAt
+        - requestId
+        - sourceApiKeyId
+        - createdAt
+      properties:
+        eventId:
+          type: string
+        handoffId:
+          type: string
+        eventType:
+          $ref: '#/components/schemas/SettlementEventType'
+        executionStatus:
+          $ref: '#/components/schemas/SettlementExecutionStatus'
+        reconciliationStatus:
+          $ref: '#/components/schemas/SettlementReconciliationStatus'
+        providerStatus:
+          type:
+            - string
+            - 'null'
+        txHash:
+          type:
+            - string
+            - 'null'
+          description: Canonical EVM transaction hash when available.
+        detail:
+          type:
+            - string
+            - 'null'
+        metadata:
+          type: object
+          additionalProperties: true
+        observedAt:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        sourceApiKeyId:
+          type:
+            - string
+            - 'null'
+        createdAt:
+          type: string
+          format: date-time
+    SettlementCallbackDelivery:
+      type: object
+      required:
+        - deliveryId
+        - handoffId
+        - eventId
+        - targetUrl
+        - requestBody
+        - status
+        - attemptCount
+        - nextAttemptAt
+        - lastAttemptedAt
+        - deliveredAt
+        - responseStatus
+        - lastError
+        - requestId
+        - createdAt
+        - updatedAt
+      properties:
+        deliveryId:
+          type: string
+        handoffId:
+          type: string
+        eventId:
+          type: string
+        targetUrl:
+          type: string
+        requestBody:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum:
+            - pending
+            - delivering
+            - delivered
+            - failed
+            - dead_letter
+            - disabled
+        attemptCount:
+          type: integer
+          minimum: 0
+        nextAttemptAt:
+          type: string
+          format: date-time
+        lastAttemptedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        deliveredAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        responseStatus:
+          type:
+            - integer
+            - 'null'
+        lastError:
+          type:
+            - string
+            - 'null'
+        requestId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SettlementHandoffCreateRequest:
+      type: object
+      required:
+        - platformId
+        - platformHandoffId
+        - tradeId
+        - phase
+        - settlementChannel
+        - displayCurrency
+        - displayAmount
+      properties:
+        platformId:
+          type: string
+        platformHandoffId:
+          type: string
+        tradeId:
+          type: string
+        phase:
+          type: string
+        settlementChannel:
+          type: string
+        displayCurrency:
+          type: string
+        displayAmount:
+          type: number
+        assetSymbol:
+          type: string
+        assetAmount:
+          type: number
+        ricardianHash:
+          type: string
+        externalReference:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+    SettlementExecutionEventCreateRequest:
+      type: object
+      required:
+        - eventType
+        - executionStatus
+        - reconciliationStatus
+        - observedAt
+      properties:
+        eventType:
+          $ref: '#/components/schemas/SettlementEventType'
+        executionStatus:
+          $ref: '#/components/schemas/SettlementExecutionStatus'
+        reconciliationStatus:
+          $ref: '#/components/schemas/SettlementReconciliationStatus'
+        providerStatus:
+          type: string
+        txHash:
+          type: string
+          description: Canonical EVM transaction hash when available.
+        detail:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        observedAt:
+          type: string
+          format: date-time
+    SettlementGaslessBuyerAuthorization:
+      type: object
+      required:
+        - nonce
+        - deadline
+        - signature
+      properties:
+        nonce:
+          type: string
+          pattern: ^[0-9]+$
+        deadline:
+          type: string
+          pattern: ^[0-9]+$
+        signature:
+          type: string
+          pattern: ^0x[0-9a-fA-F]+$
+    SettlementGaslessUserAuthorization:
+      type: object
+      required:
+        - nonce
+        - deadline
+        - signature
+      properties:
+        nonce:
+          type: string
+          pattern: ^[0-9]+$
+        deadline:
+          type: string
+          pattern: ^[0-9]+$
+        signature:
+          type: string
+          pattern: ^0x[0-9a-fA-F]+$
+    SettlementGaslessUsdcAuthorization:
+      type: object
+      required:
+        - from
+        - to
+        - value
+        - validAfter
+        - validBefore
+        - nonce
+        - v
+        - r
+        - s
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        value:
+          type: string
+          pattern: ^[0-9]+$
+        validAfter:
+          type: string
+          pattern: ^[0-9]+$
+        validBefore:
+          type: string
+          pattern: ^[0-9]+$
+        nonce:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        v:
+          type: integer
+          enum:
+            - 27
+            - 28
+        r:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        s:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$

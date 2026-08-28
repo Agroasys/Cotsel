@@ -64,6 +64,9 @@
     "security:deps:compat": "node scripts/dependency-compatibility-check.mjs",
     "security:deps:gate": "node scripts/security-deps-gate.mjs",
     "quality:file-size:check": "node scripts/source-line-limit.mjs",
+    "openapi:dashboard:bundle": "pnpm --filter gateway run openapi:bundle",
+    "openapi:dashboard:check": "pnpm --filter gateway run openapi:check",
+    "openapi:dashboard:index": "pnpm --filter gateway run openapi:index",
     "dashboard:route-inventory:check": "node scripts/tests/dashboard-gateway-route-inventory-guard.mjs",
     "shared:boundary:guard": "node scripts/shared-package-boundary-guard.mjs"
   },

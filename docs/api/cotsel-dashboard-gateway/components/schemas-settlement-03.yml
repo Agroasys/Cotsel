@@ -1,0 +1,115 @@
+components:
+  schemas:
+    SettlementExecutionEventMutationPayload:
+      type: object
+      required:
+        - handoff
+        - event
+        - callbackDelivery
+      properties:
+        handoff:
+          $ref: '#/components/schemas/SettlementHandoff'
+        event:
+          $ref: '#/components/schemas/SettlementExecutionEvent'
+        callbackDelivery:
+          $ref: '#/components/schemas/SettlementCallbackDelivery'
+    SettlementExecutionEventMutationResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SettlementExecutionEventMutationPayload'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementExecutionEventListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SettlementExecutionEvent'
+        timestamp:
+          type: string
+          format: date-time
+    SettlementRicardianDocumentRegistrationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - requestId
+        - documentRef
+        - terms
+        - metadata
+      properties:
+        requestId:
+          type: string
+        documentRef:
+          type: string
+        terms:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+    SettlementRicardianDocumentRegistration:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - requestId
+        - documentRef
+        - hash
+        - rulesVersion
+        - canonicalJson
+        - metadata
+        - createdAt
+      properties:
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+        requestId:
+          type: string
+        documentRef:
+          type: string
+        hash:
+          type: string
+          pattern: ^[a-fA-F0-9]{64}$
+        rulesVersion:
+          type: string
+        canonicalJson:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    SettlementRicardianDocumentRegistrationResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/SettlementRicardianDocumentRegistration'
+        timestamp:
+          type: string
+          format: date-time

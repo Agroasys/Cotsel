@@ -5,14 +5,18 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc && npm run copy-files",
-    "prebuild": "npm --prefix ../sdk run build",
-    "copy-files": "mkdir -p dist/database/schema dist/openapi && cp src/database/schema.sql dist/database/ && cp src/database/schema/*.sql dist/database/schema/ && cp ../docs/api/cotsel-dashboard-gateway.openapi.yml ../docs/api/cotsel-settlement-provider.openapi.yml dist/openapi/",
+    "prebuild": "npm run openapi:check && npm run openapi:bundle && npm --prefix ../sdk run build",
+    "copy-files": "mkdir -p dist/database/schema dist/openapi && cp src/database/schema.sql dist/database/ && cp src/database/schema/*.sql dist/database/schema/ && cp .generated/openapi/cotsel-dashboard-gateway.openapi.yml ../docs/api/cotsel-settlement-provider.openapi.yml dist/openapi/",
     "start": "node dist/server.js",
+    "predev": "npm run openapi:check && npm run openapi:bundle",
     "dev": "ts-node src/server.ts",
-    "pretest": "npm --prefix ../sdk run build",
+    "pretest": "npm run openapi:check && npm run openapi:bundle && npm --prefix ../sdk run build",
     "test": "jest --runInBand",
     "settlement:activity-db-proof": "ts-node scripts/settlement-activity-database-proof.ts",
     "lint": "eslint --max-warnings=0 .",
+    "openapi:bundle": "node scripts/openapi/dashboard-gateway-spec.mjs --write-bundle",
+    "openapi:check": "node scripts/openapi/dashboard-gateway-spec.mjs --check",
+    "openapi:index": "node scripts/openapi/dashboard-gateway-spec.mjs --write-index",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

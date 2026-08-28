@@ -1,0 +1,240 @@
+paths:
+  /treasury/sweep-batches/{batchId}/match-execution:
+    post:
+      tags:
+        - Treasury
+      summary: Match approved sweep batch to authoritative on-chain treasury claim evidence
+      description: |
+        Matches an approved treasury sweep batch to indexed `TreasuryClaimed` evidence using the
+        provided transaction hash. The batch only transitions to `EXECUTED` when the indexed claim
+        evidence matches the expected payout receiver and allocated amount for the batch.
+        Requires an approved `treasury_execute` operator signer binding in the active gateway
+        environment.
+      operationId: matchTreasurySweepBatchExecution
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySweepBatchExecutionSignerRequest'
+      responses:
+        '200':
+          description: Sweep batch marked executed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/sweep-batches/{batchId}/external-handoff:
+    post:
+      tags:
+        - Treasury
+      summary: Record external execution handoff evidence for a sweep batch
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_execute`
+        operator signer binding in the active gateway environment.
+      operationId: recordTreasuryExternalHandoff
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryPartnerHandoffSignerRequest'
+      responses:
+        '200':
+          description: External execution handoff recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryPartnerHandoffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/sweep-batches/{batchId}/partner-handoff:
+    post:
+      deprecated: true
+      tags:
+        - Treasury
+      summary: Legacy-compatible alias for recording external execution handoff evidence
+      description: |
+        Compatibility path retained for existing clients. The treasury model is external-execution handoff evidence, not a provider-owned treasury workflow. This route remains signer-required and uses the same `treasury_execute` authorization policy as the canonical external-handoff endpoint.
+      operationId: recordTreasuryPartnerHandoffLegacy
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryPartnerHandoffSignerRequest'
+      responses:
+        '200':
+          description: External execution handoff recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryPartnerHandoffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/sweep-batches/{batchId}/close:
+    post:
+      tags:
+        - Treasury
+      summary: Close sweep batch after realization evidence is complete
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_close`
+        operator signer binding in the active gateway environment.
+      operationId: closeTreasurySweepBatch
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySignerAuditOnlyRequest'
+      responses:
+        '200':
+          description: Sweep batch closed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/entries/accounting:
+    get:
+      tags:
+        - Treasury
+      summary: List treasury accounting projections across fee ledger entries
+      operationId: listTreasuryEntryAccounting
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: accountingState
+          in: query
+          schema:
+            $ref: '#/components/schemas/TreasuryAccountingState'
+        - name: accountingPeriodId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: sweepBatchId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: tradeId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Treasury accounting projections for fee ledger entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryEntryAccountingListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/entries/{entryId}/accounting:
+    get:
+      tags:
+        - Treasury
+      summary: Get treasury accounting projection for a ledger entry
+      operationId: getTreasuryEntryAccounting
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/EntryId'
+      responses:
+        '200':
+          description: Current accounting projection for the treasury ledger entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryEntryAccountingResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /treasury/entries/{entryId}/realizations:
+    post:
+      tags:
+        - Treasury
+      summary: Record treasury revenue realization for a ledger entry
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_close`
+        operator signer binding in the active gateway environment.
+      operationId: createTreasuryEntryRealization
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/EntryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryEntryRealizationSignerRequest'
+      responses:
+        '201':
+          description: Revenue realization recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryRevenueRealizationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'

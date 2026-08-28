@@ -1,0 +1,69 @@
+components:
+  schemas:
+    TreasurySweepBatchExecutionSignerRequest:
+      type: object
+      required:
+        - signerWallet
+        - matchedSweepTxHash
+        - audit
+      properties:
+        signerWallet:
+          type: string
+        matchedSweepTxHash:
+          type: string
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasuryPartnerHandoffSignerRequest:
+      description: |
+        Compatibility-named request schema for recording external execution handoff evidence on signer-required routes. Field names remain partner-prefixed for stable client compatibility.
+      type: object
+      required:
+        - signerWallet
+        - partnerName
+        - partnerReference
+        - handoffStatus
+        - audit
+      properties:
+        signerWallet:
+          type: string
+        partnerName:
+          type: string
+          description: Compatibility field for the external execution counterparty identifier.
+        partnerReference:
+          type: string
+          description: Compatibility field for the external execution reference supplied by the counterparty.
+        handoffStatus:
+          $ref: '#/components/schemas/TreasuryPartnerHandoffStatus'
+        evidenceReference:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasuryEntryRealizationSignerRequest:
+      type: object
+      required:
+        - signerWallet
+        - accountingPeriodId
+        - audit
+      properties:
+        signerWallet:
+          type: string
+        accountingPeriodId:
+          type: integer
+          minimum: 1
+        sweepBatchId:
+          type: integer
+          minimum: 1
+          nullable: true
+        partnerHandoffId:
+          type: integer
+          minimum: 1
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'

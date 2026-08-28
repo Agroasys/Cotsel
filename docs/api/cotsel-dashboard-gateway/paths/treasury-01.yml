@@ -1,0 +1,437 @@
+paths:
+  /treasury:
+    get:
+      tags:
+        - Treasury
+      summary: Get treasury state and sweep visibility snapshot
+      description: |
+        Operator read surface for current treasury state. This snapshot is derived from chain RPC
+        governance reads and makes claim/sweep visibility explicit for dashboard consumers.
+      operationId: getTreasury
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Treasury snapshot with explicit sweep visibility and freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySnapshotResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/accounting-periods:
+    get:
+      tags:
+        - Treasury
+      summary: List treasury accounting periods
+      description: |
+        Read-only treasury close surface. Returns accounting periods tracked by the treasury
+        evidence layer so operators can review which close windows are open, pending close, or closed.
+      operationId: listTreasuryAccountingPeriods
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/TreasuryAccountingPeriodStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Accounting periods visible to treasury operators.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryAccountingPeriodListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      tags:
+        - Treasury
+      summary: Create treasury accounting period
+      operationId: createTreasuryAccountingPeriod
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCreateAccountingPeriodRequest'
+      responses:
+        '201':
+          description: Accounting period created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryAccountingPeriodResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/accounting-periods/{periodId}/request-close:
+    post:
+      tags:
+        - Treasury
+      summary: Request accounting period close
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_close`
+        operator signer binding in the active gateway environment.
+      operationId: requestTreasuryAccountingPeriodClose
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/AccountingPeriodId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySignerAuditOnlyRequest'
+      responses:
+        '200':
+          description: Accounting period moved to pending close.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryAccountingPeriodResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/accounting-periods/{periodId}/rollforward:
+    get:
+      tags:
+        - Treasury
+      summary: Get treasury accounting period rollforward
+      description: |
+        Returns the deterministic treasury rollforward for a single accounting period using
+        persisted treasury evidence, matched on-chain claim evidence, and reconciliation truth.
+      operationId: getTreasuryAccountingPeriodRollforward
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/AccountingPeriodId'
+      responses:
+        '200':
+          description: Treasury accounting period rollforward.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryPeriodRollforwardResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /treasury/accounting-periods/{periodId}/close-packet:
+    get:
+      tags:
+        - Treasury
+      summary: Get treasury accounting period close packet
+      description: |
+        Returns the finance close packet for a treasury accounting period, including rollforward,
+        batch trace evidence, reconciliation summary, and blocking vs warning close issues.
+      operationId: getTreasuryAccountingPeriodClosePacket
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/AccountingPeriodId'
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum:
+              - json
+              - markdown
+            default: json
+      responses:
+        '200':
+          description: Treasury accounting period close packet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryAccountingPeriodClosePacketResponse'
+            text/markdown:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /treasury/accounting-periods/{periodId}/close:
+    post:
+      tags:
+        - Treasury
+      summary: Close accounting period
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_close`
+        operator signer binding in the active gateway environment.
+      operationId: closeTreasuryAccountingPeriod
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/AccountingPeriodId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySignerAuditOnlyRequest'
+      responses:
+        '200':
+          description: Accounting period closed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryAccountingPeriodResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/sweep-batches:
+    get:
+      tags:
+        - Treasury
+      summary: List treasury sweep batches
+      operationId: listTreasurySweepBatches
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: accountingPeriodId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/TreasurySweepBatchStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Sweep batches with accounting period linkage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      tags:
+        - Treasury
+      summary: Create treasury sweep batch
+      operationId: createTreasurySweepBatch
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCreateSweepBatchRequest'
+      responses:
+        '201':
+          description: Sweep batch created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/sweep-batches/{batchId}:
+    get:
+      tags:
+        - Treasury
+      summary: Get treasury sweep batch detail
+      operationId: getTreasurySweepBatch
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      responses:
+        '200':
+          description: Sweep batch detail, entry projections, and external execution handoff evidence.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchDetailResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /treasury/sweep-batches/{batchId}/trace:
+    get:
+      tags:
+        - Treasury
+      summary: Get treasury sweep batch trace
+      description: |
+        Returns the full batch trace from ledger entries through matched on-chain treasury claim
+        evidence and external execution handoff evidence.
+      operationId: getTreasurySweepBatchTrace
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      responses:
+        '200':
+          description: Treasury sweep batch trace report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryBatchTraceReportResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /treasury/sweep-batches/{batchId}/entries:
+    post:
+      tags:
+        - Treasury
+      summary: Allocate ledger entry to sweep batch
+      operationId: addTreasurySweepBatchEntry
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySweepBatchEntryAllocationRequest'
+      responses:
+        '201':
+          description: Ledger entry allocated to batch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchEntryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/sweep-batches/{batchId}/request-approval:
+    post:
+      tags:
+        - Treasury
+      summary: Request sweep batch approval
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_approve`
+        operator signer binding in the active gateway environment.
+      operationId: requestTreasurySweepBatchApproval
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySignerAuditOnlyRequest'
+      responses:
+        '200':
+          description: Sweep batch moved to pending approval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /treasury/sweep-batches/{batchId}/approve:
+    post:
+      tags:
+        - Treasury
+      summary: Approve sweep batch
+      description: |
+        Signer-required privileged treasury action. Requires an approved `treasury_approve`
+        operator signer binding in the active gateway environment.
+      operationId: approveTreasurySweepBatch
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySignerAuditOnlyRequest'
+      responses:
+        '200':
+          description: Sweep batch approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySweepBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'

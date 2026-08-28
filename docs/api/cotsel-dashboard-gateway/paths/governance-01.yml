@@ -1,0 +1,21 @@
+paths:
+  /governance/status:
+    get:
+      tags:
+        - Governance
+      summary: Current protocol governance status
+      operationId: getGovernanceStatus
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Snapshot of on-chain governance-relevant status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceStatusResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'

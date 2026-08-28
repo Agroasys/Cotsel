@@ -1,0 +1,247 @@
+components:
+  schemas:
+    EvidenceLink:
+      type: object
+      required:
+        - kind
+        - uri
+      properties:
+        kind:
+          type: string
+          enum:
+            - runbook
+            - incident
+            - ticket
+            - tx
+            - event
+            - document
+            - log
+            - dashboard
+            - other
+        uri:
+          type: string
+        note:
+          type: string
+    EvidenceBundleGenerateRequest:
+      type: object
+      required:
+        - tradeId
+      properties:
+        tradeId:
+          type: string
+    EvidenceBundleGeneratedBy:
+      type: object
+      required:
+        - userId
+        - walletAddress
+        - role
+      properties:
+        userId:
+          type: string
+        walletAddress:
+          type: string
+          nullable: true
+        role:
+          type: string
+    EvidenceBundleArtifactReference:
+      type: object
+      required:
+        - artifactId
+        - type
+        - title
+        - format
+        - href
+        - available
+        - digest
+      properties:
+        artifactId:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        format:
+          type: string
+        href:
+          type: string
+          nullable: true
+        available:
+          type: boolean
+        digest:
+          type: string
+          nullable: true
+        unavailableReason:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+    EvidenceBundleEvidenceReference:
+      type: object
+      required:
+        - sourceType
+        - sourceId
+        - kind
+        - uri
+        - capturedAt
+        - actorRole
+        - actorWallet
+      properties:
+        sourceType:
+          type: string
+          enum:
+            - compliance_decision
+            - oracle_progression_block
+        sourceId:
+          type: string
+        kind:
+          type: string
+          enum:
+            - runbook
+            - incident
+            - ticket
+            - tx
+            - event
+            - document
+            - log
+            - dashboard
+            - other
+        uri:
+          type: string
+        note:
+          type: string
+        capturedAt:
+          type: string
+          format: date-time
+        actorRole:
+          type: string
+        actorWallet:
+          type: string
+    EvidenceBundleTradeSummary:
+      type: object
+      required:
+        - id
+        - status
+        - createdAt
+        - updatedAt
+        - ricardianHash
+        - complianceStatus
+        - settlementHandoffId
+      properties:
+        id:
+          type: string
+        status:
+          $ref: '#/components/schemas/TradeStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        ricardianHash:
+          type: string
+          nullable: true
+        complianceStatus:
+          type: string
+          enum:
+            - pass
+            - fail
+            - unavailable
+        settlementHandoffId:
+          type: string
+          nullable: true
+    EvidenceBundleManifest:
+      type: object
+      required:
+        - bundleId
+        - tradeId
+        - manifestDigest
+        - generatedAt
+        - generatedBy
+        - signed
+        - signature
+        - sourceFreshAt
+        - queriedAt
+        - available
+        - trade
+        - artifactReferences
+        - evidenceReferences
+      properties:
+        bundleId:
+          type: string
+        tradeId:
+          type: string
+        manifestDigest:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        generatedBy:
+          $ref: '#/components/schemas/EvidenceBundleGeneratedBy'
+        signed:
+          type: boolean
+          const: false
+        signature:
+          type: string
+          nullable: true
+        sourceFreshAt:
+          type: string
+          format: date-time
+          nullable: true
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+        degradedReason:
+          type: string
+        trade:
+          $ref: '#/components/schemas/EvidenceBundleTradeSummary'
+        artifactReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceBundleArtifactReference'
+        evidenceReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceBundleEvidenceReference'
+    EvidenceBundleResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/EvidenceBundleManifest'
+        timestamp:
+          type: string
+          format: date-time
+    EvidenceBundleListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required:
+            - items
+            - generatedAt
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/EvidenceBundleManifest'
+            generatedAt:
+              type: string
+              format: date-time
+        timestamp:
+          type: string
+          format: date-time

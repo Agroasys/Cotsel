@@ -1,0 +1,449 @@
+paths:
+  /settlement/handoffs:
+    post:
+      tags:
+        - Settlement
+      summary: Ingest a platform settlement handoff
+      description: |
+        Service-authenticated ingress contract for platform backends to register a settlement handoff with Cotsel.
+        This route is not intended for operator sessions; it is authenticated using service-auth HMAC headers and
+        requires an `Idempotency-Key` header.
+      operationId: createSettlementHandoff
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementHandoffCreateRequest'
+      responses:
+        '202':
+          description: Settlement handoff accepted into the Cotsel orchestration boundary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementHandoffResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /settlement/capabilities:
+    get:
+      tags:
+        - Settlement
+      summary: Read cross-repository settlement release capabilities
+      description: |
+        Service-authenticated, non-mutating deployment preflight. Agroasys release automation must
+        require ricardianDocumentRegistration before deploying the backend version that makes
+        canonical registration mandatory.
+      operationId: getSettlementCapabilities
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Settlement boundary capability snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                  - timestamp
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required:
+                      - contractVersion
+                      - capabilities
+                    properties:
+                      contractVersion:
+                        type: string
+                        const: settlement_boundary_v1
+                      capabilities:
+                        type: object
+                        required:
+                          - ricardianDocumentRegistration
+                          - atomicExecutionEventCallbackOutbox
+                          - durableOracleExecutionEvents
+                        properties:
+                          ricardianDocumentRegistration:
+                            type: boolean
+                          atomicExecutionEventCallbackOutbox:
+                            type: boolean
+                          durableOracleExecutionEvents:
+                            type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /settlement/ricardian-documents:
+    post:
+      tags:
+        - Settlement
+      summary: Register canonical platform terms with the Ricardian service
+      description: |
+        Service-authenticated and idempotent write boundary used by Agroasys to register its immutable
+        server-side commercial-terms snapshot. The returned digest, rather than a browser-supplied value,
+        becomes the settlement and on-chain Ricardian binding.
+      operationId: registerSettlementRicardianDocument
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementRicardianDocumentRegistrationRequest'
+      responses:
+        '202':
+          description: The immutable Ricardian document was registered or an identical retry was returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementRicardianDocumentRegistrationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /settlement/handoffs/{handoffId}/oracle-execution:
+    post:
+      tags:
+        - Settlement
+      summary: Progress an accepted handoff through the authoritative oracle
+      description: |
+        Service-authenticated, idempotent execution step used after handoff ingress. The gateway maps the stored
+        settlement phase to the matching oracle command. It supports custody-and-document release, standard or
+        packaged-local inspection availability, buyer inspection acceptance, and notice-deadline finalization.
+        Governed dispute resolutions are deliberately rejected and must follow their administrative workflow.
+        The stored trade identifier must be a numeric on-chain Cotsel trade id.
+      operationId: executeSettlementHandoffOracleProgression
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/SettlementHandoffId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '202':
+          description: The oracle accepted the settlement progression command.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementOracleProgressionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /settlement/gasless-executions/create-trade:
+    post:
+      tags:
+        - Settlement
+      summary: Execute a backend-authorized gasless create-trade request
+      description: |
+        Service-authenticated Cotsel execution boundary for gasless escrow funding. The platform backend remains
+        the source of truth for policy and handoff eligibility, while Cotsel validates the submitted signed payload,
+        simulates the allowlisted contract call, signs/broadcasts with the configured executor key, and records
+        accepted/queued/simulation/submitted settlement lifecycle events.
+      operationId: createGaslessTradeExecution
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionRequest'
+      responses:
+        '202':
+          description: Gasless create-trade execution submitted by Cotsel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /dashboard-settlement/gasless-executions/create-trade:
+    post:
+      tags:
+        - Settlement
+      summary: Submit a buyer-signed gasless create-trade package from the dashboard
+      description: |
+        Dashboard-authenticated submission boundary for Cotsel-Dash operator or integration
+        rehearsal flows. The browser submits only the buyer-signed gasless authorization package
+        created by the SDK. It must not include service-auth headers, service-auth API keys, or
+        service-auth secrets. The gateway validates the operator session, write posture,
+        idempotency, gasless readiness, and payload shape before dispatching to the existing
+        server-side gasless execution service.
+      operationId: submitDashboardGaslessCreateTradeExecution
+      security:
+        - sessionBearer: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionRequest'
+      responses:
+        '202':
+          description: Dashboard gasless create-trade package accepted for sponsored execution.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /settlement/gasless-executions/user-action:
+    post:
+      tags:
+        - Settlement
+      summary: Execute a backend-authorized gasless user action
+      description: |
+        Service-authenticated Cotsel execution boundary for gasless escrow user actions after trade creation.
+        Supported actions are open dispute, cancel locked timeout, refund in-transit timeout, and finalize after
+        dispute window. Cotsel validates the signed user-action payload, simulates the allowlisted contract call,
+        signs/broadcasts with the configured executor key, and records settlement lifecycle events.
+      operationId: createGaslessUserActionExecution
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementGaslessUserActionExecutionRequest'
+      responses:
+        '202':
+          description: Gasless user-action execution submitted by Cotsel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementGaslessUserActionExecutionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /settlement/gasless-executions/operator-action:
+    post:
+      tags:
+        - Settlement
+      summary: Execute a service-owned gasless settlement action
+      description: |
+        Service-authenticated Cotsel execution boundary for settlement actions that do not require a buyer or
+        supplier wallet signature. The retained action is finalize after dispute window; Cotsel validates the
+        backend-approved payload, simulates the allowlisted contract call, signs/broadcasts with the configured
+        executor key, and records settlement lifecycle events.
+      operationId: createGaslessOperatorActionExecution
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionRequest'
+      responses:
+        '202':
+          description: Gasless operator-action execution submitted by Cotsel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /wallet/usdc/gasless-transfers:
+    post:
+      tags:
+        - Settlement
+      summary: Relay an exact user-authorized USDC wallet transfer
+      description: |
+        Service-authenticated sponsorship boundary for outgoing Agroasys wallet transfers. Cotsel accepts only
+        the configured chain and USDC token, verifies the EIP-3009 TransferWithAuthorization signer and expiry,
+        simulates the exact call, and pays the native network fee from the managed relayer. It does not own the
+        Agroasys wallet ledger or initiate transfers without the user's exact authorization.
+      operationId: createSponsoredWalletUsdcTransfer
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SponsoredWalletUsdcTransferRequest'
+      responses:
+        '202':
+          description: The sponsored USDC transfer was confirmed and receipt evidence was returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsoredWalletUsdcTransferResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /settlement/handoffs/{handoffId}/execution-events:
+    get:
+      tags:
+        - Settlement
+      summary: List settlement execution events for a handoff
+      operationId: listSettlementExecutionEvents
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/SettlementHandoffId'
+      responses:
+        '200':
+          description: Settlement execution events for the handoff.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementExecutionEventListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      tags:
+        - Settlement
+      summary: Ingest execution or reconciliation truth for a settlement handoff
+      description: |
+        Service-authenticated mutation for authoritative execution and reconciliation truth coming back into the
+        Cotsel gateway boundary. Every accepted event produces a durable callback-delivery record for the configured
+        platform backend when callback delivery is enabled.
+      operationId: createSettlementExecutionEvent
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/SettlementHandoffId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementExecutionEventCreateRequest'
+      responses:
+        '202':
+          description: Execution or reconciliation event accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementExecutionEventMutationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
