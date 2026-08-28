@@ -1,3 +1,11 @@
+import { randomUUID } from 'crypto';
+import {
+  buildManagedSignerIntentHash,
+  ManagedSignerValidationAuditRecord,
+  ManagedSignerValidationError,
+  ManagedSignerTransactionIntent,
+  validateManagedSignerResponse,
+} from '@agroasys/sdk';
 import { ethers } from 'ethers';
 
 export type SignerCustodyMode = 'raw_private_key' | 'kms' | 'mpc';
@@ -7,23 +15,20 @@ export interface ManagedSignerOptions {
   custodyMode: 'kms' | 'mpc';
   apiKey?: string;
   requestTimeoutMs?: number;
+  requestIdFactory?: () => string;
+  recordValidationEvidence?: (record: ManagedSignerValidationAuditRecord) => Promise<void> | void;
 }
 
-interface ManagedSignerRequestTransaction {
-  chainId: number;
-  to: string;
-  data: string;
-  value: string;
-  nonce: number;
-  gasLimit: string;
-  maxFeePerGasWei?: string;
-  maxPriorityFeePerGasWei?: string;
-  gasPriceWei?: string;
-}
+type ManagedSignerRequestTransaction = Omit<
+  ManagedSignerTransactionIntent,
+  'requestId' | 'signerAddress'
+>;
 
 interface ManagedSignerResponse {
   signerAddress?: unknown;
   signedTransaction?: unknown;
+  requestId?: unknown;
+  intentHash?: unknown;
 }
 
 // The oracle signs settlement attestations only; the managed signer service owns
@@ -32,57 +37,16 @@ const SIGNER_NAME = 'oracle';
 const OPERATION = 'oracle_settlement';
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
 
-function isHexTransaction(value: unknown): value is string {
-  return typeof value === 'string' && /^0x[a-fA-F0-9]+$/.test(value);
-}
-
-// Case-insensitive, checksum-normalized address comparison that never throws on
-// malformed input (so a bad value is rejected with a clear error instead of a raw
-// ethers parse throw).
-function addressMatches(candidate: unknown, expected: string): boolean {
-  return (
-    typeof candidate === 'string' &&
-    ethers.isAddress(candidate) &&
-    ethers.getAddress(candidate) === ethers.getAddress(expected)
-  );
-}
-
-// Defense in depth: never broadcast a signature we cannot tie back to the exact
-// transaction we asked to sign. A compromised or MITM'd signer could otherwise
-// return a valid signature over a *different* transaction, and we'd happily
-// broadcast it. Parse the signed payload, recover the sender, and assert it and
-// the core fields match what we sent.
-function assertSignedTransactionMatches(
-  signedTransaction: string,
-  signerAddress: string,
-  request: ManagedSignerRequestTransaction,
-): void {
-  let parsed: ethers.Transaction;
-  try {
-    parsed = ethers.Transaction.from(signedTransaction);
-  } catch {
-    throw new Error('Managed signer returned an unparseable signed transaction');
-  }
-
-  if (!addressMatches(parsed.from, signerAddress)) {
-    throw new Error('Managed signer returned a transaction signed by an unexpected address');
-  }
-
-  const recipientMatches = parsed.to !== null && addressMatches(parsed.to, request.to);
-  if (
-    !recipientMatches ||
-    Number(parsed.chainId) !== request.chainId ||
-    parsed.nonce !== request.nonce ||
-    parsed.value !== BigInt(request.value) ||
-    (parsed.data ?? '0x').toLowerCase() !== request.data.toLowerCase()
-  ) {
-    throw new Error(
-      'Managed signer returned a transaction that does not match the signing request',
-    );
-  }
-}
-
 function serializeTransaction(tx: ethers.TransactionRequest): ManagedSignerRequestTransaction {
+  const type =
+    tx.type === null || tx.type === undefined
+      ? tx.maxFeePerGas !== null && tx.maxFeePerGas !== undefined
+        ? 2
+        : 0
+      : Number(tx.type);
+  if (type !== 0 && type !== 2) {
+    throw new Error('Managed signer only permits legacy or EIP-1559 transactions');
+  }
   return {
     chainId: Number(tx.chainId),
     to: String(tx.to),
@@ -90,6 +54,7 @@ function serializeTransaction(tx: ethers.TransactionRequest): ManagedSignerReque
     value: tx.value === undefined || tx.value === null ? '0' : BigInt(tx.value).toString(),
     nonce: Number(tx.nonce),
     gasLimit: BigInt(tx.gasLimit ?? 0n).toString(),
+    type,
     ...(tx.maxFeePerGas !== undefined && tx.maxFeePerGas !== null
       ? { maxFeePerGasWei: BigInt(tx.maxFeePerGas).toString() }
       : {}),
@@ -114,6 +79,7 @@ export class ManagedSigner extends ethers.AbstractSigner {
   private readonly addressUrl: string;
   private readonly headers: Record<string, string>;
   private readonly requestTimeoutMs: number;
+  private readonly requestIdFactory: () => string;
 
   constructor(
     private readonly options: ManagedSignerOptions,
@@ -124,6 +90,7 @@ export class ManagedSigner extends ethers.AbstractSigner {
     this.signerUrl = `${base}/api/signers/${SIGNER_NAME}/sign-transaction`;
     this.addressUrl = `${base}/api/signers/${SIGNER_NAME}/address`;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.requestIdFactory = options.requestIdFactory ?? randomUUID;
     this.headers = {
       Accept: 'application/json',
       ...(options.apiKey ? { Authorization: `Bearer ${options.apiKey}` } : {}),
@@ -160,9 +127,18 @@ export class ManagedSigner extends ethers.AbstractSigner {
   async signTransaction(tx: ethers.TransactionRequest): Promise<string> {
     const signerAddress = await this.getAddress();
     const requestTransaction = serializeTransaction(tx);
+    const requestId = this.requestIdFactory();
+    const intent: ManagedSignerTransactionIntent = {
+      requestId,
+      signerAddress,
+      ...requestTransaction,
+    };
+    const intentHash = buildManagedSignerIntentHash(intent);
     const body = {
       custodyMode: this.options.custodyMode,
       operation: OPERATION,
+      requestId,
+      intentHash,
       signerAddress,
       transaction: requestTransaction,
     };
@@ -180,21 +156,31 @@ export class ManagedSigner extends ethers.AbstractSigner {
     }
 
     const payload = (await response.json()) as ManagedSignerResponse;
-    // Early, cheap check when the service echoes the signer address; malformed or
-    // mismatched values are rejected here rather than throwing a raw parse error.
-    if (
-      payload.signerAddress !== undefined &&
-      !addressMatches(payload.signerAddress, signerAddress)
-    ) {
-      throw new Error('Managed signer returned an unexpected signer address');
-    }
-    if (!isHexTransaction(payload.signedTransaction)) {
-      throw new Error('Managed signer returned an invalid signed transaction');
+    try {
+      const evidence = validateManagedSignerResponse(payload, intent);
+      await this.options.recordValidationEvidence?.({
+        ...evidence,
+        outcome: 'accepted',
+      });
+    } catch (error) {
+      if (error instanceof ManagedSignerValidationError) {
+        await this.options.recordValidationEvidence?.({
+          requestId: error.requestId,
+          intentHash: error.intentHash,
+          ...(error.signedTransactionHash
+            ? { signedTransactionHash: error.signedTransactionHash }
+            : {}),
+          signerAddress,
+          nonce: requestTransaction.nonce,
+          transactionType: requestTransaction.type,
+          outcome: 'rejected',
+          failureReason: error.reason,
+        });
+      }
+      throw error;
     }
 
-    assertSignedTransactionMatches(payload.signedTransaction, signerAddress, requestTransaction);
-
-    return payload.signedTransaction;
+    return payload.signedTransaction as string;
   }
 
   // The oracle settlement flow only ever signs transactions: the SDK entry points

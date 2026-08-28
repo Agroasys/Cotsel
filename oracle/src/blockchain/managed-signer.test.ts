@@ -17,6 +17,15 @@ function jsonResponse(body: unknown, ok = true, status = 200): Response {
   } as unknown as Response;
 }
 
+function echoSigningRequest(init: RequestInit, body: Record<string, unknown>): Response {
+  const request = JSON.parse(String(init.body)) as { requestId: string; intentHash: string };
+  return jsonResponse({
+    ...body,
+    requestId: request.requestId,
+    intentHash: request.intentHash,
+  });
+}
+
 describe('ManagedSigner', () => {
   const fetchMock = jest.fn();
 
@@ -42,6 +51,7 @@ describe('ManagedSigner', () => {
   });
 
   test('delegates transaction signing and returns the signed payload', async () => {
+    const recordValidationEvidence = jest.fn();
     const request = {
       chainId: 84532,
       to: OTHER_ADDRESS,
@@ -55,9 +65,11 @@ describe('ManagedSigner', () => {
     const signedTransaction = await testSigner.signTransaction(request);
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ signerAddress: SIGNER_ADDRESS }))
-      .mockResolvedValueOnce(jsonResponse({ signerAddress: SIGNER_ADDRESS, signedTransaction }));
+      .mockImplementationOnce((_url, init: RequestInit) =>
+        echoSigningRequest(init, { signerAddress: SIGNER_ADDRESS, signedTransaction }),
+      );
     const signer = new ManagedSigner(
-      { url: 'https://signer.internal', custodyMode: 'kms' },
+      { url: 'https://signer.internal', custodyMode: 'kms', recordValidationEvidence },
       provider,
     );
 
@@ -70,6 +82,8 @@ describe('ManagedSigner', () => {
     expect(body).toMatchObject({
       custodyMode: 'kms',
       operation: 'oracle_settlement',
+      requestId: expect.any(String),
+      intentHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
       signerAddress: SIGNER_ADDRESS,
       transaction: {
         chainId: 84532,
@@ -80,11 +94,24 @@ describe('ManagedSigner', () => {
         gasLimit: '100000',
         maxFeePerGasWei: '2000000000',
         maxPriorityFeePerGasWei: '1000000000',
+        type: 2,
       },
     });
+    expect(recordValidationEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: body.requestId,
+        intentHash: body.intentHash,
+        signedTransactionHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+        signerAddress: SIGNER_ADDRESS,
+        nonce: 7,
+        transactionType: 2,
+        outcome: 'accepted',
+      }),
+    );
   });
 
   test('rejects a signed transaction whose contents do not match the request', async () => {
+    const recordValidationEvidence = jest.fn();
     // The service returns a validly signed transaction, but one that pays a
     // different recipient than we asked it to sign.
     const tamperedSignedTransaction = await testSigner.signTransaction({
@@ -98,14 +125,14 @@ describe('ManagedSigner', () => {
     });
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ signerAddress: SIGNER_ADDRESS }))
-      .mockResolvedValueOnce(
-        jsonResponse({
+      .mockImplementationOnce((_url, init: RequestInit) =>
+        echoSigningRequest(init, {
           signerAddress: SIGNER_ADDRESS,
           signedTransaction: tamperedSignedTransaction,
         }),
       );
     const signer = new ManagedSigner(
-      { url: 'https://signer.internal', custodyMode: 'kms' },
+      { url: 'https://signer.internal', custodyMode: 'kms', recordValidationEvidence },
       provider,
     );
 
@@ -119,16 +146,24 @@ describe('ManagedSigner', () => {
         maxFeePerGas: 2_000_000_000n,
         maxPriorityFeePerGas: 1_000_000_000n,
       }),
-    ).rejects.toThrow(
-      'Managed signer returned a transaction that does not match the signing request',
+    ).rejects.toThrow('Managed signer changed the approved transaction recipient');
+    expect(recordValidationEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'rejected',
+        failureReason: 'recipient',
+        signedTransactionHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+      }),
     );
   });
 
   test('rejects a signed transaction from an unexpected signer address', async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ signerAddress: SIGNER_ADDRESS }))
-      .mockResolvedValueOnce(
-        jsonResponse({ signerAddress: OTHER_ADDRESS, signedTransaction: '0xdeadbeef' }),
+      .mockImplementationOnce((_url, init: RequestInit) =>
+        echoSigningRequest(init, {
+          signerAddress: OTHER_ADDRESS,
+          signedTransaction: '0xdeadbeef',
+        }),
       );
     const signer = new ManagedSigner(
       { url: 'https://signer.internal', custodyMode: 'kms' },
@@ -136,22 +171,39 @@ describe('ManagedSigner', () => {
     );
 
     await expect(
-      signer.signTransaction({ chainId: 84532, to: OTHER_ADDRESS, nonce: 1, gasLimit: 21000n }),
-    ).rejects.toThrow('Managed signer returned an unexpected signer address');
+      signer.signTransaction({
+        chainId: 84532,
+        to: OTHER_ADDRESS,
+        nonce: 1,
+        gasLimit: 21000n,
+        gasPrice: 1n,
+      }),
+    ).rejects.toMatchObject({ reason: 'response_signer' });
   });
 
   test('rejects a non-hex signed transaction', async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ signerAddress: SIGNER_ADDRESS }))
-      .mockResolvedValueOnce(jsonResponse({ signedTransaction: 'not-hex' }));
+      .mockImplementationOnce((_url, init: RequestInit) =>
+        echoSigningRequest(init, {
+          signerAddress: SIGNER_ADDRESS,
+          signedTransaction: 'not-hex',
+        }),
+      );
     const signer = new ManagedSigner(
       { url: 'https://signer.internal', custodyMode: 'kms' },
       provider,
     );
 
     await expect(
-      signer.signTransaction({ chainId: 84532, to: OTHER_ADDRESS, nonce: 1, gasLimit: 21000n }),
-    ).rejects.toThrow('Managed signer returned an invalid signed transaction');
+      signer.signTransaction({
+        chainId: 84532,
+        to: OTHER_ADDRESS,
+        nonce: 1,
+        gasLimit: 21000n,
+        gasPrice: 1n,
+      }),
+    ).rejects.toMatchObject({ reason: 'response_format' });
   });
 
   test('surfaces a signing endpoint failure', async () => {
@@ -164,7 +216,48 @@ describe('ManagedSigner', () => {
     );
 
     await expect(
-      signer.signTransaction({ chainId: 84532, to: OTHER_ADDRESS, nonce: 1, gasLimit: 21000n }),
+      signer.signTransaction({
+        chainId: 84532,
+        to: OTHER_ADDRESS,
+        nonce: 1,
+        gasLimit: 21000n,
+        gasPrice: 1n,
+      }),
     ).rejects.toThrow('Managed signer rejected transaction signing request (status 503)');
+  });
+
+  test('rejects a response that is not bound to the one-time request and intent', async () => {
+    const recordValidationEvidence = jest.fn();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ signerAddress: SIGNER_ADDRESS }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          signerAddress: SIGNER_ADDRESS,
+          requestId: 'different-request',
+          intentHash: `0x${'0'.repeat(64)}`,
+          signedTransaction: '0xdeadbeef',
+        }),
+      );
+    const signer = new ManagedSigner(
+      { url: 'https://signer.internal', custodyMode: 'kms', recordValidationEvidence },
+      provider,
+    );
+
+    await expect(
+      signer.signTransaction({
+        chainId: 84532,
+        to: OTHER_ADDRESS,
+        nonce: 1,
+        gasLimit: 21000n,
+        gasPrice: 1n,
+      }),
+    ).rejects.toMatchObject({ reason: 'response_request_id' });
+    expect(recordValidationEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'rejected',
+        failureReason: 'response_request_id',
+        signedTransactionHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+      }),
+    );
   });
 });

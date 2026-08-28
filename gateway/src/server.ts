@@ -39,6 +39,7 @@ import {
   GaslessSettlementExecutionService,
 } from './core/gaslessSettlementExecutionService';
 import { createPostgresGaslessRelayerBroadcastLock } from './core/gaslessRelayerBroadcastLock';
+import { createPostgresManagedSignerValidationRecorder } from './core/managedSignerAuditStore';
 import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { IndexerGraphqlClient } from './core/indexerGraphqlClient';
@@ -76,6 +77,7 @@ const authSessionClient = createAuthSessionClient(config);
 const accessLogStore = createPostgresAccessLogStore(pool);
 const accessLogService = new AccessLogService(accessLogStore);
 const auditLogStore = createPostgresAuditLogStore(pool);
+const managedSignerValidationRecorder = createPostgresManagedSignerValidationRecorder(pool);
 const auditFeedStore = createPostgresAuditFeedStore(pool);
 const complianceStore = createPostgresComplianceStore(pool);
 const complianceWriteStore = createPostgresComplianceWriteStore(pool, complianceStore);
@@ -96,7 +98,9 @@ const gaslessSettlementService = config.gaslessExecutionEnabled
   ? new GaslessSettlementExecutionService(
       settlementService,
       settlementStore,
-      createEthersGaslessSettlementExecutor(config),
+      createEthersGaslessSettlementExecutor(config, {
+        recordValidationEvidence: managedSignerValidationRecorder,
+      }),
       {
         chainId: config.chainId,
         escrowAddress: config.escrowAddress,
