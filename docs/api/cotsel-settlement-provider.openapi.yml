@@ -99,8 +99,12 @@ components:
             - pending
             - accepted
             - queued
+            - broadcast_unknown
+            - confirmation_pending
             - submitted
             - confirmed
+            - reverted
+            - replaced
             - failed
             - rejected
         reconciliationStatus:

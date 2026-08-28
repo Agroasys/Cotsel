@@ -16,7 +16,13 @@ import type {
   GaslessUserActionExecutionInput,
   GaslessWalletUsdcTransferExecutionInput,
 } from './gaslessExecutionTypes';
-import { isGaslessNonceDriftError } from './gaslessRelayerRuntime';
+import {
+  broadcastPersistedGaslessTransaction,
+  GaslessTransactionOutcomePendingError,
+  GaslessTransactionRevertedError,
+  persistGaslessTerminalOutcome,
+} from './gaslessTransactionLifecycle';
+import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutcomeStore';
 import {
   buildCreateTradeArguments,
   buildUserActionArguments,
@@ -51,6 +57,7 @@ export function createManagedSignerGaslessSettlementExecutor(
     provider?: GaslessManagedProvider;
     signerTransport?: ManagedSignerTransport;
     recordValidationEvidence?: ManagedSignerValidationRecorder;
+    recordTransactionOutcome: GaslessTransactionOutcomeRecorder;
   },
 ): GaslessSettlementExecutor {
   const configuredCustodyMode = config.gaslessSignerCustodyMode;
@@ -66,6 +73,14 @@ export function createManagedSignerGaslessSettlementExecutor(
       quorum: config.rpcQuorum,
     }) as Provider as GaslessManagedProvider);
   const signerTransport = dependencies?.signerTransport ?? createHttpManagedSignerTransport(config);
+  if (!dependencies?.recordTransactionOutcome) {
+    throw new GatewayError(
+      503,
+      'UPSTREAM_UNAVAILABLE',
+      'Gasless transaction outcome persistence is not configured',
+    );
+  }
+  const transactionOutcomeRecorder = dependencies.recordTransactionOutcome;
   const escrowInterface = new Interface(AgroasysEscrow__factory.abi);
   const usdcInterface = new Interface(USDC_AUTHORIZATION_ABI);
   const gaslessMaxGasLimit = config.gaslessMaxGasLimit ?? 1_500_000n;
@@ -243,28 +258,39 @@ export function createManagedSignerGaslessSettlementExecutor(
   async function waitForConfirmedReceipt(
     tx: TransactionResponse,
   ): Promise<GaslessExecutionReceipt> {
-    const receipt = await tx.wait(1, gaslessReceiptTimeoutMs);
-    if (!receipt) {
-      throw new GatewayError(
-        502,
-        'UPSTREAM_UNAVAILABLE',
-        'Gasless transaction receipt was not available',
-        {
-          txHash: tx.hash,
-        },
+    let receipt;
+    try {
+      receipt = await tx.wait(1, gaslessReceiptTimeoutMs);
+    } catch {
+      throw new GaslessTransactionOutcomePendingError(
+        tx.hash,
+        'confirmation_pending',
+        'Gasless transaction confirmation requires reconciliation',
       );
     }
+    if (!receipt) {
+      throw new GaslessTransactionOutcomePendingError(
+        tx.hash,
+        'confirmation_pending',
+        'Gasless transaction confirmation requires reconciliation',
+      );
+    }
+    const outcome = {
+      blockNumber: BigInt(receipt.blockNumber).toString(),
+      blockHash: receipt.blockHash,
+      gasUsed: BigInt(receipt.gasUsed ?? 0n).toString(),
+      effectiveGasPriceWei: BigInt(receipt.gasPrice ?? 0n).toString(),
+    };
     if (receipt.status !== 1) {
-      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Gasless transaction reverted on-chain', {
-        txHash: tx.hash,
-        blockNumber: receipt.blockNumber,
-      });
+      await persistGaslessTerminalOutcome(transactionOutcomeRecorder, tx.hash, 'reverted', outcome);
+      throw new GaslessTransactionRevertedError(tx.hash, outcome.blockNumber);
     }
 
     const { executorAddress } = await assertSignerBalance();
     const executorBalance = await provider.getBalance(executorAddress);
     const gasUsed = BigInt(receipt.gasUsed ?? 0n);
     const effectiveGasPriceWei = BigInt(receipt.gasPrice ?? 0n);
+    await persistGaslessTerminalOutcome(transactionOutcomeRecorder, tx.hash, 'confirmed', outcome);
 
     return {
       txHash: tx.hash,
@@ -279,7 +305,11 @@ export function createManagedSignerGaslessSettlementExecutor(
 
   async function broadcastManagedTransaction(
     operation: ManagedSignerRequest['operation'],
-    context: { applicationRequestId: string; resourceId: string },
+    context: {
+      applicationRequestId: string;
+      resourceType: 'settlement_handoff' | 'platform_transfer';
+      resourceId: string;
+    },
     transaction: TransactionRequest,
     gasEstimate: bigint,
     feeOverrides: {
@@ -318,20 +348,16 @@ export function createManagedSignerGaslessSettlementExecutor(
       { operation, ...context },
       dependencies?.recordValidationEvidence,
     );
-    return provider.broadcastTransaction(signedTransaction);
-  }
-
-  async function withFreshManagedNonce(
-    operation: () => Promise<TransactionResponse>,
-  ): Promise<TransactionResponse> {
-    try {
-      return await operation();
-    } catch (error) {
-      if (!isGaslessNonceDriftError(error)) {
-        throw error;
-      }
-      return operation();
-    }
+    return broadcastPersistedGaslessTransaction(
+      signedTransaction,
+      {
+        ...context,
+        operation,
+        intentHash,
+      },
+      transactionOutcomeRecorder,
+      (signed) => provider.broadcastTransaction(signed),
+    );
   }
 
   return {
@@ -347,14 +373,16 @@ export function createManagedSignerGaslessSettlementExecutor(
       const transaction = buildCreateTradeTransaction(input, executorAddress);
       const gasEstimate = await simulateTransaction(transaction);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await withFreshManagedNonce(() =>
-        broadcastManagedTransaction(
-          'create_trade',
-          { applicationRequestId: input.requestId, resourceId: input.handoffId },
-          transaction,
-          gasEstimate,
-          feeOverrides,
-        ),
+      const tx = await broadcastManagedTransaction(
+        'create_trade',
+        {
+          applicationRequestId: input.requestId,
+          resourceType: 'settlement_handoff',
+          resourceId: input.handoffId,
+        },
+        transaction,
+        gasEstimate,
+        feeOverrides,
       );
       return {
         txHash: tx.hash,
@@ -374,14 +402,16 @@ export function createManagedSignerGaslessSettlementExecutor(
       const transaction = buildUserActionTransaction(input, executorAddress);
       const gasEstimate = await simulateTransaction(transaction);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await withFreshManagedNonce(() =>
-        broadcastManagedTransaction(
-          input.action,
-          { applicationRequestId: input.requestId, resourceId: input.handoffId },
-          transaction,
-          gasEstimate,
-          feeOverrides,
-        ),
+      const tx = await broadcastManagedTransaction(
+        input.action,
+        {
+          applicationRequestId: input.requestId,
+          resourceType: 'settlement_handoff',
+          resourceId: input.handoffId,
+        },
+        transaction,
+        gasEstimate,
+        feeOverrides,
       );
       return {
         txHash: tx.hash,
@@ -403,14 +433,16 @@ export function createManagedSignerGaslessSettlementExecutor(
       const transaction = buildOperatorActionTransaction(input, executorAddress);
       const gasEstimate = await simulateTransaction(transaction);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await withFreshManagedNonce(() =>
-        broadcastManagedTransaction(
-          input.action,
-          { applicationRequestId: input.requestId, resourceId: input.handoffId },
-          transaction,
-          gasEstimate,
-          feeOverrides,
-        ),
+      const tx = await broadcastManagedTransaction(
+        input.action,
+        {
+          applicationRequestId: input.requestId,
+          resourceType: 'settlement_handoff',
+          resourceId: input.handoffId,
+        },
+        transaction,
+        gasEstimate,
+        feeOverrides,
       );
       return {
         txHash: tx.hash,
@@ -432,14 +464,16 @@ export function createManagedSignerGaslessSettlementExecutor(
       const transaction = buildWalletUsdcTransferTransaction(input, executorAddress);
       const gasEstimate = await simulateTransaction(transaction);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await withFreshManagedNonce(() =>
-        broadcastManagedTransaction(
-          'wallet_usdc_transfer',
-          { applicationRequestId: input.requestId, resourceId: input.platformTransferId },
-          transaction,
-          gasEstimate,
-          feeOverrides,
-        ),
+      const tx = await broadcastManagedTransaction(
+        'wallet_usdc_transfer',
+        {
+          applicationRequestId: input.requestId,
+          resourceType: 'platform_transfer',
+          resourceId: input.platformTransferId,
+        },
+        transaction,
+        gasEstimate,
+        feeOverrides,
       );
       return {
         txHash: tx.hash,

@@ -3,7 +3,13 @@
  */
 import type { NextFunction, Request, Response } from 'express';
 import { GatewayError } from '../errors';
-import { buildRequestFingerprint, IdempotencyStore } from '../core/idempotencyStore';
+import {
+  buildRequestFingerprint,
+  IdempotencyFinancialOutcome,
+  IdempotencyStore,
+} from '../core/idempotencyStore';
+import { Logger } from '../logging/logger';
+import { errorResponse } from '../responses';
 import { resolveGatewayActorKey } from './auth';
 
 export interface IdempotencyRequestState {
@@ -11,6 +17,53 @@ export interface IdempotencyRequestState {
   actorId: string;
   endpoint: string;
   requestFingerprint: string;
+}
+
+interface IdempotencyResponseFinalizer {
+  finalized: boolean;
+  complete(status: number, body: unknown): Promise<void>;
+  release(): Promise<void>;
+  hold(): void;
+}
+
+function responseFinalizer(res: Response): IdempotencyResponseFinalizer | null {
+  const value = res.locals.idempotencyResponseFinalizer as unknown;
+  if (!value || typeof value !== 'object') return null;
+  return value as IdempotencyResponseFinalizer;
+}
+
+export async function persistIdempotentResponse(
+  res: Response,
+  status: number,
+  body: unknown,
+): Promise<void> {
+  const finalizer = responseFinalizer(res);
+  if (!finalizer) return;
+  res.status(status);
+  res.type('application/json');
+  await finalizer.complete(status, body);
+}
+
+export async function persistIdempotentError(
+  res: Response,
+  status: number,
+  body: unknown,
+): Promise<void> {
+  const finalizer = responseFinalizer(res);
+  if (!finalizer) return;
+  if (hasUnresolvedFinancialOutcome(body)) {
+    finalizer.hold();
+    return;
+  }
+  if (hasTerminalFinancialFailure(body)) {
+    await persistIdempotentResponse(res, status, body);
+    return;
+  }
+  if (status >= 500) {
+    await finalizer.release();
+    return;
+  }
+  await persistIdempotentResponse(res, status, body);
 }
 
 function resolveActorId(req: Request): string {
@@ -74,6 +127,68 @@ function replayHeaders(res: Response): Record<string, string> {
   return snapshot;
 }
 
+function hasUnresolvedFinancialOutcome(body: unknown): boolean {
+  const outcome = financialOutcomeFromErrorBody(body);
+  return outcome === 'broadcast_unknown' || outcome === 'confirmation_pending';
+}
+
+function hasTerminalFinancialFailure(body: unknown): boolean {
+  return financialOutcomeFromErrorBody(body) === 'reverted';
+}
+
+function financialOutcomeFromErrorBody(body: unknown): unknown {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  const error = (body as { error?: unknown }).error;
+  if (!error || typeof error !== 'object' || Array.isArray(error)) return false;
+  const details = (error as { details?: unknown }).details;
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return false;
+  return (details as { outcome?: unknown }).outcome;
+}
+
+function financialOutcomeResponse(
+  req: Request,
+  outcome: IdempotencyFinancialOutcome,
+): { statusCode: number; body: Record<string, unknown> } {
+  const details = {
+    transactionHash: outcome.transactionHash,
+    outcome: outcome.outcomeStatus,
+    resourceType: outcome.resourceType,
+    resourceId: outcome.resourceId,
+    operation: outcome.operation,
+    chainId: outcome.chainId,
+    recovered: true,
+    rebroadcastAllowed: false,
+  };
+  if (outcome.outcomeStatus === 'reverted') {
+    return {
+      statusCode: 502,
+      body: errorResponse(
+        req.requestContext,
+        'UPSTREAM_UNAVAILABLE',
+        'Gasless transaction reverted on-chain',
+        details,
+      ),
+    };
+  }
+
+  return {
+    statusCode: 202,
+    body: {
+      success: true,
+      data: {
+        requestId: outcome.requestId,
+        ...details,
+        outcomeStatus: outcome.outcomeStatus,
+      },
+      timestamp: new Date().toISOString(),
+    },
+  };
+}
+
+function isTerminalFinancialOutcome(outcome: IdempotencyFinancialOutcome): boolean {
+  return outcome.outcomeStatus === 'confirmed' || outcome.outcomeStatus === 'reverted';
+}
+
 export function createIdempotencyMiddleware(store: IdempotencyStore) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const idempotencyKey = req.header('Idempotency-Key')?.trim();
@@ -132,6 +247,28 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
         return;
       }
 
+      const financialOutcome = await store.getFinancialOutcome(existing.requestId);
+      if (financialOutcome) {
+        const scope = { actorId, endpoint, idempotencyKey };
+        const replay = financialOutcomeResponse(req, financialOutcome);
+        if (isTerminalFinancialOutcome(financialOutcome)) {
+          await store.complete(
+            scope,
+            {
+              responseStatus: replay.statusCode,
+              responseHeaders: { 'content-type': 'application/json; charset=utf-8' },
+              responseBody: replay.body,
+            },
+            existing.requestId,
+          );
+        }
+        await store.markReplay(scope);
+        res.setHeader('x-idempotent-replay', 'true');
+        res.setHeader('x-financial-outcome-recovery', 'true');
+        res.status(replay.statusCode).json(replay.body);
+        return;
+      }
+
       next(
         new GatewayError(
           409,
@@ -155,32 +292,136 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
     const originalJson = res.json.bind(res);
     const originalSend = res.send.bind(res);
     let responseBody: unknown = null;
+    let responseSendStarted = false;
+    let durableSendInProgress = false;
+    const scope = { actorId, endpoint, idempotencyKey };
+    const leaseOwnerRequestId = reservation.record.requestId;
+    let leaseRenewalRunning = false;
+    const leaseRenewalTimer = setInterval(
+      () => {
+        if (leaseRenewalRunning) return;
+        leaseRenewalRunning = true;
+        void store
+          .renewLease(scope, leaseOwnerRequestId)
+          .then((renewed) => {
+            if (!renewed) {
+              Logger.error('Idempotency lease ownership was lost before response completion', {
+                requestId: leaseOwnerRequestId,
+                endpoint,
+              });
+            }
+          })
+          .catch((error) => {
+            Logger.error('Idempotency lease renewal failed', {
+              requestId: leaseOwnerRequestId,
+              endpoint,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          })
+          .finally(() => {
+            leaseRenewalRunning = false;
+          });
+      },
+      Math.max(1_000, Math.floor(store.leaseDurationMs / 3)),
+    );
+    leaseRenewalTimer.unref();
+    const stopLeaseRenewal = (): void => clearInterval(leaseRenewalTimer);
+    res.once('finish', stopLeaseRenewal);
+    res.once('close', stopLeaseRenewal);
+    const finalizer: IdempotencyResponseFinalizer = {
+      finalized: false,
+      async complete(status, body) {
+        await store.complete(
+          scope,
+          {
+            responseStatus: status,
+            responseHeaders: replayHeaders(res),
+            responseBody: body,
+          },
+          leaseOwnerRequestId,
+        );
+        this.finalized = true;
+      },
+      async release() {
+        await store.releasePending(scope, leaseOwnerRequestId);
+        this.finalized = true;
+      },
+      hold() {
+        this.finalized = true;
+      },
+    };
+    res.locals.idempotencyResponseFinalizer = finalizer;
+
+    const finalizeBeforeSend = async (status: number, body: unknown): Promise<void> => {
+      if (finalizer.finalized) return;
+      if (status >= 400) {
+        await persistIdempotentError(res, status, body);
+        return;
+      }
+      await persistIdempotentResponse(res, status, body);
+    };
+
+    const sendAfterDurableFinalization = async (
+      kind: 'json' | 'send',
+      body: unknown,
+    ): Promise<void> => {
+      responseBody = kind === 'json' ? body : normalizeBody(body);
+      try {
+        await finalizeBeforeSend(res.statusCode, responseBody);
+      } catch (error) {
+        Logger.error('Failed to persist idempotency state before sending response', {
+          requestId: leaseOwnerRequestId,
+          endpoint,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        finalizer.hold();
+        res.status(503);
+        responseBody = errorResponse(
+          req.requestContext,
+          'UPSTREAM_UNAVAILABLE',
+          'Durable request state is unavailable',
+        );
+        kind = 'json';
+        body = responseBody;
+      }
+
+      durableSendInProgress = true;
+      if (kind === 'json') originalJson(body);
+      else originalSend(body);
+    };
 
     res.json = ((body: unknown) => {
-      responseBody = body;
-      return originalJson(body);
+      if (durableSendInProgress) return originalJson(body);
+      if (responseSendStarted) return res;
+      responseSendStarted = true;
+      void sendAfterDurableFinalization('json', body);
+      return res;
     }) as Response['json'];
 
     res.send = ((body: unknown) => {
-      if (responseBody === null) {
-        responseBody = normalizeBody(body);
-      }
-      return originalSend(body);
+      if (durableSendInProgress) return originalSend(body);
+      if (responseSendStarted) return res;
+      responseSendStarted = true;
+      void sendAfterDurableFinalization('send', body);
+      return res;
     }) as Response['send'];
 
     res.on('finish', () => {
+      if (finalizer.finalized) return;
       if (res.statusCode >= 500) {
-        void store.releasePending({ actorId, endpoint, idempotencyKey });
+        if (hasUnresolvedFinancialOutcome(responseBody)) return;
+        void store.releasePending(scope, leaseOwnerRequestId);
         return;
       }
 
       void store.complete(
-        { actorId, endpoint, idempotencyKey },
+        scope,
         {
           responseStatus: res.statusCode,
           responseHeaders: replayHeaders(res),
           responseBody,
         },
+        leaseOwnerRequestId,
       );
     });
 

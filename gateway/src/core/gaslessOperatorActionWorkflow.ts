@@ -3,6 +3,7 @@
  */
 import { GatewayError } from '../errors';
 import { serializeGasEstimate } from './gaslessExecutionEvidence';
+import { recordGaslessExecutionFailure } from './gaslessExecutionFailure';
 import type {
   GaslessCreateTradeExecutionResult,
   GaslessOperatorActionExecutionInput,
@@ -165,25 +166,17 @@ export async function executeOperatorActionWorkflow(
       txHash: execution.txHash,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown gasless execution failure';
-    await context.settlementService.recordExecutionEvent({
-      handoffId: normalized.handoffId,
-      eventType: 'failed',
-      executionStatus: 'failed',
-      reconciliationStatus: accepted.handoff.reconciliationStatus,
-      providerStatus: 'gasless_operator_broadcast_failed',
-      detail: message,
-      metadata: {
+    return recordGaslessExecutionFailure(
+      context,
+      {
+        handoffId: normalized.handoffId,
+        reconciliationStatus: accepted.handoff.reconciliationStatus,
         action: normalized.action,
         payloadHash: normalized.payloadHash,
-        userAuthorizationRequired: false,
+        requestId: normalized.requestId,
+        sourceApiKeyId: normalized.sourceApiKeyId,
       },
-      observedAt: new Date().toISOString(),
-      requestId: normalized.requestId,
-      sourceApiKeyId: normalized.sourceApiKeyId,
-    });
-    throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Gasless operator execution failed', {
-      reason: message,
-    });
+      error,
+    );
   }
 }
