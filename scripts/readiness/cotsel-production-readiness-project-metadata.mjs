@@ -166,7 +166,7 @@ export function primaryProjectMetadata() {
     'Work Type': 'Programme',
     'Delivery Surface': 'Programme/Governance',
     'SOW Class': 'Control',
-    'SOW ID': 'Programme; 58 findings; 136 supporting controls',
+    'SOW ID': 'Programme; 58 findings; 139 supporting controls',
     'Accountable Owner': 'Programme Lead',
     'Delivery Owner': 'Cotsel engineering leads',
     'Acceptance Owner': 'Engineering, Product, Finance, Operations, and launch authorities',

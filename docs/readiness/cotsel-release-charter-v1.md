@@ -23,6 +23,12 @@ controls ([#637](https://github.com/Agroasys/Cotsel/issues/637)) and the golden 
 It records the decisions for the current two-person internal integration. Future deployment and journey evidence is
 recorded by the work package that produces it; this charter does not manufacture that evidence early.
 
+## Cross-repository control reconciliation
+
+The [Agroasys security and infrastructure reconciliation addendum](https://github.com/Agroasys/agroasys-backend/blob/develop/docs/readiness/security-infrastructure-control-reconciliation-v1.md) preserves historical control objectives while fixing the current AWS-only edge and private Base Sepolia rehearsal baseline. It does not authorize a Cloudflare cutover, a new Region, real-value operation, or mainnet activity.
+
+The addendum requires scoped reconciliation containment, governed resumption, immutable Ricardian version lineage, and phishing-resistant production access. Cotsel routes these obligations through WP-1, WP-3, WP-4, WP-6 through WP-10. Candidate evidence remains owned by the applicable work package and acceptance authority.
+
 ## What this charter fixes and what it does not
 
 | In scope                                                                                                                                                                                                         | Out of scope                                                                                                                                                                     |

@@ -46,10 +46,10 @@ const expectedFindings = [
 const expectedRouteCounts = [4, 5, 7, 4, 4, 3, 5, 4, 4, 7, 3, 3, 4];
 const expectedCoverageCounts = {
   authorityBoundaries: 9,
-  preservationRules: 10,
+  preservationRules: 12,
   testLayers: 9,
   goldenJourneys: 7,
-  securityControls: 7,
+  securityControls: 8,
   complianceControls: 8,
   infrastructureLayers: 8,
   failureRecovery: 19,
@@ -219,8 +219,8 @@ for (const [groupName, expectedCount] of Object.entries(expectedCoverageCounts))
   assert.ok(requirementGroup.sourcePages?.length, `${groupName} missing source pages`);
   assert.equal(requirementGroup.representation, 'structured-paraphrase');
 }
-assert.equal(controls.length, 136);
-assert.equal(unique(controls.map((item) => item.id)).size, 136);
+assert.equal(controls.length, 139);
+assert.equal(unique(controls.map((item) => item.id)).size, 139);
 exact(
   controls.map((item) => item.id).sort(),
   Object.values(requirements.groups)
@@ -265,7 +265,7 @@ for (const control of issueRoutedControls) {
     assert.notEqual(route, control.primaryRoute, `${control.id} primary repeated as contributor`);
   }
 }
-assert.equal(issueRoutedControls.length, 114);
+assert.equal(issueRoutedControls.length, 117);
 assert.equal(gateControls.length, 13);
 assert.equal(workPackageSheetControls.length, 9);
 exact(
@@ -292,9 +292,12 @@ const expectedPrimaryRoutes = new Map([
   ['PRES-05', 'wp4-makerchecker'],
   ['PRES-06', 'wp9-service-auth'],
   ['PRES-10', 'wp6-gate'],
+  ['PRES-11', 'wp3-recon-leases'],
+  ['PRES-12', 'wp9-ricardian'],
   ['TEST-05', 'wp8-drills'],
   ['TEST-07', 'wp7-iac'],
   ['SEC-06', 'wp8-evidence'],
+  ['SEC-08', 'wp6-ownership'],
   ['COMP-05', 'wp10-controls'],
   ['FAIL-12', 'wp2-durable-dispatch'],
   ['FAIL-15', 'wp1-contract-deploy'],
@@ -455,7 +458,7 @@ console.log(
     {
       findings: 58,
       primaryIssues: 57,
-      supportingControls: 136,
+      supportingControls: 139,
       issueRoutedControls: issueRoutedControls.length,
       releaseGateDefinitions: gateControls.length,
       structuralWorkPackageFields: workPackageSheetControls.length,
