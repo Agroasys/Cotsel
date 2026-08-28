@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "root": "root.yml",
+  "paths": [
+    "paths/system-01.yml",
+    "paths/auth-01.yml",
+    "paths/access-logs-01.yml",
+    "paths/settings-01.yml",
+    "paths/approvals-01.yml",
+    "paths/overview-01.yml",
+    "paths/operations-01.yml",
+    "paths/trades-01.yml",
+    "paths/reconciliation-01.yml",
+    "paths/ricardian-01.yml",
+    "paths/evidence-01.yml",
+    "paths/settlement-01.yml",
+    "paths/governance-01.yml",
+    "paths/treasury-01.yml",
+    "paths/treasury-02.yml",
+    "paths/compliance-01.yml"
+  ],
+  "components": [
+    "components/shared.yml",
+    "components/schemas-common-01.yml",
+    "components/schemas-overview-operations-01.yml",
+    "components/schemas-overview-operations-02.yml",
+    "components/schemas-evidence-01.yml",
+    "components/schemas-access-settings-01.yml",
+    "components/schemas-approvals-01.yml",
+    "components/schemas-trades-01.yml",
+    "components/schemas-settlement-01.yml",
+    "components/schemas-settlement-02.yml",
+    "components/schemas-settlement-03.yml",
+    "components/schemas-reconciliation-01.yml",
+    "components/schemas-ricardian-01.yml",
+    "components/schemas-governance-01.yml",
+    "components/schemas-treasury-01.yml",
+    "components/schemas-treasury-02.yml",
+    "components/schemas-treasury-03.yml",
+    "components/schemas-treasury-04.yml",
+    "components/schemas-compliance-01.yml"
+  ]
+}

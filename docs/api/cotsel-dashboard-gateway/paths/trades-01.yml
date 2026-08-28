@@ -1,0 +1,75 @@
+paths:
+  /trades:
+    get:
+      tags:
+        - Trades
+      summary: List dashboard trade records
+      description: |
+        Indexer-backed dashboard trade registry. This surface is read-only and combines:
+        - indexed trade lifecycle state from `indexer/schema.graphql`
+        - indexed trade-event history for timeline rendering
+        - current gateway compliance ledger status, when available
+
+        Amounts are normalized to display-scale USDC values for dashboard rendering. The response
+        also includes indexer freshness metadata so clients can distinguish:
+        - healthy historical reads with current indexer parity
+        - historical reads from a stale indexer watermark
+        - upstream unavailability
+      operationId: listTrades
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Trade registry records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /trades/{tradeId}:
+    get:
+      tags:
+        - Trades
+      summary: Get trade detail by trade id
+      description: |
+        Returns the same trade freshness metadata as the list route so clients can surface indexer
+        parity and stale-watermark state on detail views.
+      operationId: getTrade
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/TradeId'
+      responses:
+        '200':
+          description: Trade detail record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
