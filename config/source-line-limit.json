@@ -69,7 +69,6 @@
     "sdk/tests/adminSDK.test.ts": 502,
     "treasury/src/api/controller.ts": 1406,
     "treasury/src/core/closeReporting.ts": 562,
-    "treasury/src/database/queries.ts": 2076,
     "treasury/src/database/schema.sql": 528,
     "treasury/src/types.ts": 548,
     "treasury/tests/adminBridgeRouteSafety.test.ts": 1208,
