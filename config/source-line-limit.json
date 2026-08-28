@@ -33,7 +33,6 @@
     ".github/workflows/release-gate.yml": 1243,
     "auth/src/database/queries.ts": 984,
     "auth/tests/adminControls.integration.test.ts": 667,
-    "contracts/foundry/test/AgroasysEscrowFuzz.t.sol": 890,
     "contracts/src/AgroasysEscrow.sol": 2002,
     "docker-compose.services.yml": 625,
     "gateway/src/config/env.ts": 794,
