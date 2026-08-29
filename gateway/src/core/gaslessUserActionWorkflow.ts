@@ -20,6 +20,7 @@ import {
 } from './gaslessRequestNormalization';
 import type { GaslessWorkflowContext } from './gaslessWorkflowContext';
 import type { SettlementExecutionEventRecord } from './settlementStore';
+import { projectPersistedGaslessTransaction } from './gaslessTransactionLifecycle';
 
 export async function executeUserActionWorkflow(
   context: GaslessWorkflowContext,
@@ -104,68 +105,70 @@ export async function executeUserActionWorkflow(
     const execution = await context.enqueueBroadcast(() =>
       context.executor.executeUserAction(normalized),
     );
-    const submitted = await context.settlementService.recordExecutionEvent({
-      handoffId: normalized.handoffId,
-      eventType: 'submitted',
-      executionStatus: 'submitted',
-      reconciliationStatus: simulationEvent.handoff.reconciliationStatus,
-      providerStatus: 'gasless_broadcast_submitted',
-      txHash: execution.txHash,
-      detail: `Gasless ${normalized.action} transaction submitted by Cotsel.`,
-      metadata: {
-        action: normalized.action,
-        authorizationNonce: normalized.userAuthorization.nonce,
-        payloadHash: normalized.payloadHash,
-        chainId: normalized.chainId,
-        contractAddress: normalized.contractAddress,
-        userAddress: normalized.userAddress,
-        tradeId: normalized.tradeId,
-      },
-      observedAt: new Date().toISOString(),
-      requestId: normalized.requestId,
-      sourceApiKeyId: normalized.sourceApiKeyId,
-    });
-    let finalHandoff = submitted.handoff;
-    let confirmedEvent: SettlementExecutionEventRecord | undefined;
-
-    if (execution.receipt) {
-      context.recordExecutionReceipt(execution.receipt);
-      const confirmed = await context.settlementService.recordExecutionEvent({
+    return await projectPersistedGaslessTransaction(execution.txHash, async () => {
+      const submitted = await context.settlementService.recordExecutionEvent({
         handoffId: normalized.handoffId,
-        eventType: 'confirmed',
-        executionStatus: 'confirmed',
-        reconciliationStatus: submitted.handoff.reconciliationStatus,
-        providerStatus: 'gasless_receipt_confirmed',
+        eventType: 'submitted',
+        executionStatus: 'submitted',
+        reconciliationStatus: simulationEvent.handoff.reconciliationStatus,
+        providerStatus: 'gasless_broadcast_submitted',
         txHash: execution.txHash,
-        detail: `Gasless ${normalized.action} transaction confirmed on-chain.`,
-        metadata: context.buildConfirmedExecutionMetadata(
-          normalized.action,
-          normalized.payloadHash,
-          execution.receipt,
-          {
-            chainId: normalized.chainId,
-            contractAddress: normalized.contractAddress,
-            userAddress: normalized.userAddress,
-            tradeId: normalized.tradeId,
-          },
-        ),
+        detail: `Gasless ${normalized.action} transaction submitted by Cotsel.`,
+        metadata: {
+          action: normalized.action,
+          authorizationNonce: normalized.userAuthorization.nonce,
+          payloadHash: normalized.payloadHash,
+          chainId: normalized.chainId,
+          contractAddress: normalized.contractAddress,
+          userAddress: normalized.userAddress,
+          tradeId: normalized.tradeId,
+        },
         observedAt: new Date().toISOString(),
         requestId: normalized.requestId,
         sourceApiKeyId: normalized.sourceApiKeyId,
       });
-      finalHandoff = confirmed.handoff;
-      confirmedEvent = confirmed.event;
-    }
+      let finalHandoff = submitted.handoff;
+      let confirmedEvent: SettlementExecutionEventRecord | undefined;
 
-    return {
-      handoff: finalHandoff,
-      acceptedEvent: accepted.event,
-      queuedEvent: queued.event,
-      simulationEvent: simulationEvent.event,
-      submittedEvent: submitted.event,
-      confirmedEvent,
-      txHash: execution.txHash,
-    };
+      if (execution.receipt) {
+        context.recordExecutionReceipt(execution.receipt);
+        const confirmed = await context.settlementService.recordExecutionEvent({
+          handoffId: normalized.handoffId,
+          eventType: 'confirmed',
+          executionStatus: 'confirmed',
+          reconciliationStatus: submitted.handoff.reconciliationStatus,
+          providerStatus: 'gasless_receipt_confirmed',
+          txHash: execution.txHash,
+          detail: `Gasless ${normalized.action} transaction confirmed on-chain.`,
+          metadata: context.buildConfirmedExecutionMetadata(
+            normalized.action,
+            normalized.payloadHash,
+            execution.receipt,
+            {
+              chainId: normalized.chainId,
+              contractAddress: normalized.contractAddress,
+              userAddress: normalized.userAddress,
+              tradeId: normalized.tradeId,
+            },
+          ),
+          observedAt: new Date().toISOString(),
+          requestId: normalized.requestId,
+          sourceApiKeyId: normalized.sourceApiKeyId,
+        });
+        finalHandoff = confirmed.handoff;
+        confirmedEvent = confirmed.event;
+      }
+
+      return {
+        handoff: finalHandoff,
+        acceptedEvent: accepted.event,
+        queuedEvent: queued.event,
+        simulationEvent: simulationEvent.event,
+        submittedEvent: submitted.event,
+        confirmedEvent,
+        txHash: execution.txHash,
+      };
+    });
   } catch (error) {
     return recordGaslessExecutionFailure(
       context,

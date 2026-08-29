@@ -3,7 +3,10 @@
  */
 import { Transaction, Wallet } from 'ethers';
 import type { TransactionResponse } from 'ethers';
-import { broadcastPersistedGaslessTransaction } from '../src/core/gaslessTransactionLifecycle';
+import {
+  broadcastPersistedGaslessTransaction,
+  projectPersistedGaslessTransaction,
+} from '../src/core/gaslessTransactionLifecycle';
 
 const wallet = new Wallet('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
 
@@ -100,5 +103,20 @@ describe('gasless signed transaction persistence boundary', () => {
     });
     expect(broadcast).toHaveBeenCalledTimes(1);
     expect(recorder.markBroadcastUnknown).toHaveBeenCalledWith(parsed.hash, 'TIMEOUT');
+  });
+
+  test('keeps a confirmed transaction pending when handoff projection fails', async () => {
+    const persistedTransactionHash = `0x${'d'.repeat(64)}`;
+    const project = jest.fn(async () => {
+      throw new Error('settlement event persistence failed');
+    });
+
+    await expect(
+      projectPersistedGaslessTransaction(persistedTransactionHash, project),
+    ).rejects.toMatchObject({
+      outcome: 'confirmation_pending',
+      transactionHash: persistedTransactionHash,
+    });
+    expect(project).toHaveBeenCalledTimes(1);
   });
 });

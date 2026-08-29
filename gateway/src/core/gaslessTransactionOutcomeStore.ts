@@ -59,6 +59,7 @@ export interface GaslessTransactionOutcomeRecorder {
 
 export interface GaslessTransactionOutcomeStore extends GaslessTransactionOutcomeRecorder {
   listRecoveryCandidates(limit: number): Promise<GaslessTransactionOutcomeRecord[]>;
+  markRecoveryAttempted(transactionHash: string): Promise<void>;
   markProjectionApplied(
     transactionHash: string,
     status: GaslessTransactionOutcomeStatus,
@@ -234,7 +235,7 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
              'broadcast_pending', 'broadcast_unknown', 'confirmation_pending'
            )
             OR projected_outcome_status IS DISTINCT FROM outcome_status
-         ORDER BY updated_at ASC
+         ORDER BY COALESCE(last_reconciliation_attempt_at, created_at) ASC
          LIMIT $1`,
         [limit],
       );
@@ -244,6 +245,17 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
         nonce: Number(row.nonce),
         updatedAt: row.updatedAt.toISOString(),
       }));
+    },
+    async markRecoveryAttempted(transactionHash) {
+      await pool.query(
+        `UPDATE gasless_transaction_outcomes
+         SET last_reconciliation_attempt_at = NOW()
+         WHERE transaction_hash = $1
+           AND outcome_status IN (
+             'broadcast_pending', 'broadcast_unknown', 'confirmation_pending'
+           )`,
+        [transactionHash],
+      );
     },
     async markProjectionApplied(transactionHash, status) {
       const result = await pool.query(

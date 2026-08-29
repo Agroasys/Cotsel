@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS gasless_transaction_outcomes (
     block_hash VARCHAR(66) CHECK (block_hash IS NULL OR block_hash ~ '^0x[0-9a-f]{64}$'),
     gas_used NUMERIC(78, 0),
     effective_gas_price_wei NUMERIC(78, 0),
+    last_reconciliation_attempt_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     UNIQUE (application_request_id, operation, resource_type, resource_id),
@@ -117,6 +118,9 @@ CREATE TABLE IF NOT EXISTS gasless_transaction_outcomes (
         OR (transaction_type = 2 AND max_fee_per_gas_wei IS NOT NULL)
     )
 );
+
+ALTER TABLE gasless_transaction_outcomes
+    ADD COLUMN IF NOT EXISTS last_reconciliation_attempt_at TIMESTAMP;
 
 CREATE TABLE IF NOT EXISTS gasless_transaction_outcome_events (
     outcome_event_id BIGSERIAL PRIMARY KEY,
@@ -138,7 +142,10 @@ CREATE TABLE IF NOT EXISTS gasless_transaction_outcome_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_gasless_transaction_outcomes_unresolved
-    ON gasless_transaction_outcomes(outcome_status, updated_at)
+    ON gasless_transaction_outcomes(
+        outcome_status,
+        COALESCE(last_reconciliation_attempt_at, created_at)
+    )
     WHERE outcome_status IN ('broadcast_pending', 'broadcast_unknown', 'confirmation_pending');
 CREATE INDEX IF NOT EXISTS idx_gasless_transaction_outcomes_resource
     ON gasless_transaction_outcomes(resource_type, resource_id, created_at DESC);
