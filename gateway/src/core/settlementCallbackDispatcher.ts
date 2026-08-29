@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import { randomUUID } from 'crypto';
 import { GatewayConfig } from '../config/env';
 import { Logger } from '../logging/logger';
 import { SettlementStore } from './settlementStore';
@@ -11,6 +12,7 @@ interface CallbackDispatcherOptions {
   fetchImpl?: typeof fetch;
   now?: () => Date;
   failedOperationWorkflow?: GatewayErrorHandlerWorkflow;
+  workerId?: string;
 }
 
 function computeBackoffMs(
@@ -26,6 +28,8 @@ export class SettlementCallbackDispatcher {
   private readonly fetchImpl: typeof fetch;
   private readonly now: () => Date;
   private readonly failedOperationWorkflow?: GatewayErrorHandlerWorkflow;
+  private readonly workerId: string;
+  private readonly leaseDurationMs: number;
   private timer: NodeJS.Timeout | null = null;
   private running = false;
 
@@ -37,6 +41,8 @@ export class SettlementCallbackDispatcher {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.now = options.now ?? (() => new Date());
     this.failedOperationWorkflow = options.failedOperationWorkflow;
+    this.workerId = options.workerId ?? randomUUID();
+    this.leaseDurationMs = Math.max(30_000, this.config.settlementCallbackRequestTimeoutMs * 2);
   }
 
   start(): void {
@@ -86,8 +92,15 @@ export class SettlementCallbackDispatcher {
   }
 
   private async processDelivery(deliveryId: string): Promise<void> {
-    const attemptedAt = this.now().toISOString();
-    const delivery = await this.store.markCallbackDelivering(deliveryId, attemptedAt);
+    const attemptedAtDate = this.now();
+    const attemptedAt = attemptedAtDate.toISOString();
+    const leaseExpiresAt = new Date(attemptedAtDate.getTime() + this.leaseDurationMs).toISOString();
+    const delivery = await this.store.markCallbackDelivering(
+      deliveryId,
+      this.workerId,
+      attemptedAt,
+      leaseExpiresAt,
+    );
     if (!delivery) {
       return;
     }
@@ -117,11 +130,20 @@ export class SettlementCallbackDispatcher {
       });
 
       if (response.ok) {
-        await this.store.markCallbackDelivered(
+        const completed = await this.store.markCallbackDelivered(
           deliveryId,
+          this.workerId,
           this.now().toISOString(),
           response.status,
         );
+        if (!completed) {
+          Logger.warn('Settlement callback completion ignored after lease ownership changed', {
+            deliveryId,
+            handoffId: delivery.handoffId,
+            eventId: delivery.eventId,
+          });
+          return;
+        }
         Logger.info('Settlement callback delivered', {
           deliveryId,
           handoffId: delivery.handoffId,
@@ -156,13 +178,21 @@ export class SettlementCallbackDispatcher {
         ),
     ).toISOString();
 
-    await this.store.markCallbackFailed(delivery.deliveryId, {
+    const updated = await this.store.markCallbackFailed(delivery.deliveryId, this.workerId, {
       attemptedAt: this.now().toISOString(),
       responseStatus,
       errorMessage: message,
       nextAttemptAt,
       deadLetter,
     });
+    if (!updated) {
+      Logger.warn('Settlement callback failure ignored after lease ownership changed', {
+        deliveryId: delivery.deliveryId,
+        handoffId: delivery.handoffId,
+        eventId: delivery.eventId,
+      });
+      return;
+    }
 
     Logger.warn('Settlement callback delivery failed', {
       deliveryId: delivery.deliveryId,
