@@ -75,6 +75,15 @@ export class GaslessTransactionOutcomeReconciler {
             outcomeStatus: record.outcomeStatus,
             error: error instanceof Error ? error.message : String(error),
           });
+        } finally {
+          try {
+            await this.store.markRecoveryAttempted(record.transactionHash);
+          } catch (error) {
+            Logger.error('Failed to rotate gasless transaction recovery candidate', {
+              transactionHash: record.transactionHash,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }
       }
     } finally {

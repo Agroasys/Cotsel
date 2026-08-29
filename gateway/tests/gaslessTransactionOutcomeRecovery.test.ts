@@ -46,6 +46,7 @@ function createDependencies(record: GaslessTransactionOutcomeRecord) {
     markConfirmationPending: jest.fn(async () => undefined),
     markConfirmed: jest.fn(async () => undefined),
     markReverted: jest.fn(async () => undefined),
+    markRecoveryAttempted: jest.fn(async () => undefined),
     markProjectionApplied: jest.fn(async () => undefined),
   } satisfies GaslessTransactionOutcomeStore;
   const provider = {
@@ -100,6 +101,7 @@ describe('gasless transaction outcome restart recovery', () => {
       'confirmed',
     );
     expect(dependencies.provider.getTransaction).not.toHaveBeenCalled();
+    expect(dependencies.store.markRecoveryAttempted).toHaveBeenCalledWith(transactionHash);
   });
 
   test('keeps a visible unknown state when a prepared hash is absent from the provider', async () => {
@@ -234,5 +236,6 @@ describe('gasless transaction outcome restart recovery', () => {
     expect(dependencies.store.markBroadcastUnknown).not.toHaveBeenCalled();
     expect(dependencies.observer.onBroadcastUnknown).not.toHaveBeenCalled();
     expect(dependencies.store.markProjectionApplied).not.toHaveBeenCalled();
+    expect(dependencies.store.markRecoveryAttempted).toHaveBeenCalledWith(transactionHash);
   });
 });

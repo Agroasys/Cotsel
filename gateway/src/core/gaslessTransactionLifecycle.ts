@@ -164,6 +164,25 @@ export function isGaslessTransactionRevertedError(
   return error instanceof GaslessTransactionRevertedError;
 }
 
+export async function projectPersistedGaslessTransaction<T>(
+  transactionHash: string,
+  project: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await project();
+  } catch (error) {
+    Logger.error('Failed to project a durable gasless transaction outcome', {
+      transactionHash,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new GaslessTransactionOutcomePendingError(
+      transactionHash,
+      'confirmation_pending',
+      'Gasless transaction outcome projection requires reconciliation',
+    );
+  }
+}
+
 export async function persistGaslessTerminalOutcome(
   recorder: GaslessTransactionOutcomeRecorder,
   transactionHash: string,
