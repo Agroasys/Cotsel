@@ -110,6 +110,8 @@ export interface SettlementCallbackDeliveryRecord {
   deliveredAt: string | null;
   responseStatus: number | null;
   lastError: string | null;
+  leaseOwner: string | null;
+  leaseExpiresAt: string | null;
   requestId: string;
   createdAt: string;
   updatedAt: string;
@@ -228,15 +230,19 @@ export interface SettlementStore {
   getDueCallbackDeliveries(limit: number, now: string): Promise<SettlementCallbackDeliveryRecord[]>;
   markCallbackDelivering(
     deliveryId: string,
+    leaseOwner: string,
     attemptedAt: string,
+    leaseExpiresAt: string,
   ): Promise<SettlementCallbackDeliveryRecord | null>;
   markCallbackDelivered(
     deliveryId: string,
+    leaseOwner: string,
     completedAt: string,
     responseStatus: number,
-  ): Promise<void>;
+  ): Promise<boolean>;
   markCallbackFailed(
     deliveryId: string,
+    leaseOwner: string,
     update: {
       attemptedAt: string;
       responseStatus?: number | null;
@@ -244,7 +250,7 @@ export interface SettlementStore {
       nextAttemptAt: string;
       deadLetter: boolean;
     },
-  ): Promise<void>;
+  ): Promise<boolean>;
   requeueCallbackDelivery(
     deliveryId: string,
     nextAttemptAt: string,

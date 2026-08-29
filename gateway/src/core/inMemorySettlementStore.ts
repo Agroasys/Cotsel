@@ -157,6 +157,8 @@ export function createInMemorySettlementStore(
             deliveredAt: null,
             responseStatus: null,
             lastError: null,
+            leaseOwner: null,
+            leaseExpiresAt: null,
             requestId: callback.requestId,
             createdAt: now,
             updatedAt: now,
@@ -223,6 +225,8 @@ export function createInMemorySettlementStore(
         deliveredAt: null,
         responseStatus: null,
         lastError: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
         requestId: callback.requestId,
         createdAt: now,
         updatedAt: now,
@@ -254,10 +258,17 @@ export function createInMemorySettlementStore(
       return [...deliveries.values()]
         .filter(
           (delivery) =>
-            (delivery.status === 'pending' || delivery.status === 'failed') &&
-            delivery.nextAttemptAt <= now,
+            ((delivery.status === 'pending' || delivery.status === 'failed') &&
+              delivery.nextAttemptAt <= now) ||
+            (delivery.status === 'delivering' &&
+              delivery.leaseExpiresAt !== null &&
+              delivery.leaseExpiresAt <= now),
         )
-        .sort((left, right) => left.nextAttemptAt.localeCompare(right.nextAttemptAt))
+        .sort((left, right) =>
+          (left.leaseExpiresAt ?? left.nextAttemptAt).localeCompare(
+            right.leaseExpiresAt ?? right.nextAttemptAt,
+          ),
+        )
         .slice(0, limit)
         .map((delivery) => structuredClone(delivery));
     },
@@ -267,9 +278,16 @@ export function createInMemorySettlementStore(
       return delivery ? structuredClone(delivery) : null;
     },
 
-    async markCallbackDelivering(deliveryId, attemptedAt) {
+    async markCallbackDelivering(deliveryId, leaseOwner, attemptedAt, leaseExpiresAt) {
       const delivery = deliveries.get(deliveryId);
-      if (!delivery || (delivery.status !== 'pending' && delivery.status !== 'failed')) {
+      const ready =
+        delivery &&
+        (((delivery.status === 'pending' || delivery.status === 'failed') &&
+          delivery.nextAttemptAt <= attemptedAt) ||
+          (delivery.status === 'delivering' &&
+            delivery.leaseExpiresAt !== null &&
+            delivery.leaseExpiresAt <= attemptedAt));
+      if (!delivery || !ready) {
         return null;
       }
 
@@ -278,16 +296,18 @@ export function createInMemorySettlementStore(
         status: 'delivering' as const,
         attemptCount: delivery.attemptCount + 1,
         lastAttemptedAt: attemptedAt,
+        leaseOwner,
+        leaseExpiresAt,
         updatedAt: new Date().toISOString(),
       };
       deliveries.set(deliveryId, next);
       return structuredClone(next);
     },
 
-    async markCallbackDelivered(deliveryId, completedAt, responseStatus) {
+    async markCallbackDelivered(deliveryId, leaseOwner, completedAt, responseStatus) {
       const delivery = deliveries.get(deliveryId);
-      if (!delivery) {
-        return;
+      if (!delivery || delivery.status !== 'delivering' || delivery.leaseOwner !== leaseOwner) {
+        return false;
       }
 
       deliveries.set(deliveryId, {
@@ -295,6 +315,8 @@ export function createInMemorySettlementStore(
         status: 'delivered',
         deliveredAt: completedAt,
         responseStatus,
+        leaseOwner: null,
+        leaseExpiresAt: null,
         updatedAt: new Date().toISOString(),
       });
       const handoff = handoffs.get(delivery.handoffId);
@@ -306,12 +328,13 @@ export function createInMemorySettlementStore(
           updatedAt: new Date().toISOString(),
         });
       }
+      return true;
     },
 
-    async markCallbackFailed(deliveryId, update) {
+    async markCallbackFailed(deliveryId, leaseOwner, update) {
       const delivery = deliveries.get(deliveryId);
-      if (!delivery) {
-        return;
+      if (!delivery || delivery.status !== 'delivering' || delivery.leaseOwner !== leaseOwner) {
+        return false;
       }
 
       deliveries.set(deliveryId, {
@@ -320,6 +343,8 @@ export function createInMemorySettlementStore(
         responseStatus: update.responseStatus ?? null,
         lastError: update.errorMessage,
         nextAttemptAt: update.nextAttemptAt,
+        leaseOwner: null,
+        leaseExpiresAt: null,
         updatedAt: new Date().toISOString(),
       });
       const handoff = handoffs.get(delivery.handoffId);
@@ -330,6 +355,7 @@ export function createInMemorySettlementStore(
           updatedAt: new Date().toISOString(),
         });
       }
+      return true;
     },
 
     async requeueCallbackDelivery(deliveryId, nextAttemptAt) {
@@ -342,6 +368,8 @@ export function createInMemorySettlementStore(
         ...delivery,
         status: 'pending' as const,
         nextAttemptAt,
+        leaseOwner: null,
+        leaseExpiresAt: null,
         updatedAt: new Date().toISOString(),
       };
       deliveries.set(deliveryId, next);
