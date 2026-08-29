@@ -16,7 +16,10 @@ import type {
   OperationsSummarySnapshot,
 } from '../src/core/operationsSummaryService';
 import type { FailedOperationRecord, FailedOperationStore } from '../src/core/failedOperationStore';
-import type { IdempotencyStore } from '../src/core/idempotencyStore';
+import {
+  createInMemoryIdempotencyStore,
+  type IdempotencyStore,
+} from '../src/core/idempotencyStore';
 import type { OperatorCapability } from '../src/core/authSessionClient';
 
 const config: GatewayConfig = {
@@ -58,6 +61,12 @@ const config: GatewayConfig = {
   contractAddressRequired: true,
   allowInsecureDownstreamAuth: true,
 };
+
+function createObservedIdempotencyStore(): IdempotencyStore {
+  const store = createInMemoryIdempotencyStore();
+  jest.spyOn(store, 'createPending');
+  return store;
+}
 
 const operationsFixture: OperationsSummarySnapshot = {
   state: 'degraded',
@@ -464,13 +473,7 @@ describe('gateway operations summary route contract', () => {
     const failedOperationReplayer = {
       replay: jest.fn(),
     } as unknown as GatewayFailedOperationReplayer;
-    const idempotencyStore = {
-      get: jest.fn(),
-      createPending: jest.fn(),
-      complete: jest.fn(),
-      releasePending: jest.fn(),
-      markReplay: jest.fn(),
-    } as unknown as IdempotencyStore;
+    const idempotencyStore = createObservedIdempotencyStore();
     const writeConfig = {
       ...config,
       enableMutations: true,
@@ -548,29 +551,7 @@ describe('gateway operations summary route contract', () => {
     const failedOperationReplayer = {
       replay: jest.fn(),
     } as unknown as GatewayFailedOperationReplayer;
-    const idempotencyStore = {
-      get: jest.fn(),
-      createPending: jest.fn().mockResolvedValue({
-        created: true,
-        record: {
-          idempotencyKey: 'replay-2',
-          actorId: 'user:uid-admin',
-          endpoint: '/operations/failed-operations/:failedOperationId/replay',
-          requestMethod: 'POST',
-          requestPath: '/api/dashboard-gateway/v1/operations/failed-operations/failed-op-2/replay',
-          requestFingerprint: 'hash',
-          requestId: 'req-replay-2',
-          responseStatus: null,
-          responseHeaders: {},
-          responseBody: null,
-          completedAt: null,
-          createdAt: '2026-03-12T00:00:00.000Z',
-        },
-      }),
-      complete: jest.fn().mockResolvedValue(undefined),
-      releasePending: jest.fn().mockResolvedValue(undefined),
-      markReplay: jest.fn().mockResolvedValue(undefined),
-    } as unknown as IdempotencyStore;
+    const idempotencyStore = createObservedIdempotencyStore();
     const writeConfig = {
       ...config,
       enableMutations: true,
@@ -647,30 +628,7 @@ describe('gateway operations summary route contract', () => {
     const failedOperationReplayer = {
       replay: jest.fn(),
     } as unknown as GatewayFailedOperationReplayer;
-    const idempotencyStore = {
-      get: jest.fn(),
-      createPending: jest.fn().mockResolvedValue({
-        created: true,
-        record: {
-          idempotencyKey: 'replay-already-replayed',
-          actorId: 'user:uid-admin',
-          endpoint: '/operations/failed-operations/:failedOperationId/replay',
-          requestMethod: 'POST',
-          requestPath:
-            '/api/dashboard-gateway/v1/operations/failed-operations/failed-op-replayed/replay',
-          requestFingerprint: 'hash',
-          requestId: 'req-replay-already-replayed',
-          responseStatus: null,
-          responseHeaders: {},
-          responseBody: null,
-          completedAt: null,
-          createdAt: '2026-03-12T00:00:00.000Z',
-        },
-      }),
-      complete: jest.fn().mockResolvedValue(undefined),
-      releasePending: jest.fn().mockResolvedValue(undefined),
-      markReplay: jest.fn().mockResolvedValue(undefined),
-    } as unknown as IdempotencyStore;
+    const idempotencyStore = createObservedIdempotencyStore();
     const writeConfig = {
       ...config,
       enableMutations: true,
@@ -754,29 +712,7 @@ describe('gateway operations summary route contract', () => {
     const failedOperationReplayer = {
       replay: jest.fn().mockResolvedValue(openOperationTemplate),
     } as unknown as GatewayFailedOperationReplayer;
-    const idempotencyStore = {
-      get: jest.fn(),
-      createPending: jest.fn().mockResolvedValue({
-        created: true,
-        record: {
-          idempotencyKey: 'replay-1',
-          actorId: 'user:uid-admin',
-          endpoint: '/operations/failed-operations/:failedOperationId/replay',
-          requestMethod: 'POST',
-          requestPath: '/api/dashboard-gateway/v1/operations/failed-operations/failed-op-1/replay',
-          requestFingerprint: 'hash',
-          requestId: 'req-replay-1',
-          responseStatus: null,
-          responseHeaders: {},
-          responseBody: null,
-          completedAt: null,
-          createdAt: '2026-03-12T00:00:00.000Z',
-        },
-      }),
-      complete: jest.fn().mockResolvedValue(undefined),
-      releasePending: jest.fn().mockResolvedValue(undefined),
-      markReplay: jest.fn().mockResolvedValue(undefined),
-    } as unknown as IdempotencyStore;
+    const idempotencyStore = createObservedIdempotencyStore();
     const writeConfig = {
       ...config,
       enableMutations: true,
