@@ -35,7 +35,7 @@ describe('dashboard gateway OpenAPI bundle', () => {
     expect(bundle.startsWith('# GENERATED FILE. DO NOT EDIT DIRECTLY.')).toBe(true);
 
     const spec = loadOpenApiSpec();
-    expect(Object.keys(spec.paths)).toHaveLength(60);
-    expect(Object.keys(spec.components?.schemas ?? {})).toHaveLength(207);
+    expect(Object.keys(spec.paths)).toHaveLength(62);
+    expect(Object.keys(spec.components?.schemas ?? {})).toHaveLength(212);
   });
 });

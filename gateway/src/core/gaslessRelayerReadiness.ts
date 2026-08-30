@@ -4,6 +4,7 @@
 import { getAddress } from 'ethers';
 import { calculateGaslessExecutorCapacityPolicy } from './gaslessExecutorCapacityPolicy';
 import type { GaslessRelayerReadinessSnapshot } from './gaslessExecutionTypes';
+import type { GaslessCommandQueueStats } from './gaslessCommandStore';
 
 interface GaslessRelayerReadinessContext {
   options: {
@@ -34,6 +35,7 @@ interface GaslessRelayerReadinessContext {
   lastSubmissionAt: string | null;
   lastExecutorBalanceWei: bigint | null;
   repeatedFailureCount: number;
+  durableQueue: GaslessCommandQueueStats;
 }
 
 export function buildGaslessRelayerReadiness(
@@ -48,11 +50,15 @@ export function buildGaslessRelayerReadiness(
   const maxFeePerGasWei = context.options.maxFeePerGasWei ?? 50_000_000_000n;
   const maxNativeCostWei = context.options.maxNativeCostWei ?? 100_000_000_000_000_000n;
   const minExecutorBalanceWei = context.options.minExecutorBalanceWei ?? 0n;
-  const oldestPendingBroadcastQueuedAtMs = context.pendingBroadcastQueuedAtMs[0] ?? null;
+  const durableOldestPendingAtMs = context.durableQueue.oldestPendingAt
+    ? Date.parse(context.durableQueue.oldestPendingAt)
+    : null;
+  const oldestPendingBroadcastQueuedAtMs =
+    context.pendingBroadcastQueuedAtMs[0] ?? durableOldestPendingAtMs;
   const currentPendingQueueWaitMs =
     oldestPendingBroadcastQueuedAtMs === null
       ? null
-      : Date.now() - oldestPendingBroadcastQueuedAtMs;
+      : (context.options.now?.() ?? new Date()).getTime() - oldestPendingBroadcastQueuedAtMs;
   const observableQueueWaitMs = Math.max(
     context.lastQueueWaitMs ?? 0,
     currentPendingQueueWaitMs ?? 0,
@@ -78,11 +84,28 @@ export function buildGaslessRelayerReadiness(
     });
   }
 
-  if (context.pendingBroadcasts > 0 && observableQueueWaitMs >= stuckQueueThresholdMs) {
+  const pendingCommands = Math.max(context.pendingBroadcasts, context.durableQueue.pending);
+  if (pendingCommands > 0 && observableQueueWaitMs >= stuckQueueThresholdMs) {
     alerts.push({
       code: 'gasless_queue_stuck',
       severity: 'high',
       detail: 'Gasless relayer queue wait time exceeded the stuck-queue threshold.',
+    });
+  }
+
+  if (context.durableQueue.expiredLeases > 0) {
+    alerts.push({
+      code: 'gasless_command_lease_expired',
+      severity: 'high',
+      detail: 'One or more durable gasless command leases expired before completion.',
+    });
+  }
+
+  if (context.durableQueue.deadLetter > 0) {
+    alerts.push({
+      code: 'gasless_command_dead_letter',
+      severity: 'critical',
+      detail: 'One or more durable gasless commands require operator review.',
     });
   }
 
@@ -174,8 +197,11 @@ export function buildGaslessRelayerReadiness(
     capacityPolicy,
     executorBalanceWei: context.lastExecutorBalanceWei?.toString() ?? null,
     queue: {
-      pending: context.pendingBroadcasts,
-      active: context.activeBroadcasts,
+      pending: pendingCommands,
+      active: Math.max(context.activeBroadcasts, context.durableQueue.leased),
+      awaitingOutcome: context.durableQueue.outcomePending,
+      deadLetter: context.durableQueue.deadLetter,
+      expiredLeases: context.durableQueue.expiredLeases,
       lastQueueWaitMs: currentPendingQueueWaitMs ?? context.lastQueueWaitMs,
       lastSubmissionAt: context.lastSubmissionAt,
     },

@@ -3,14 +3,17 @@
  */
 import type { NextFunction, Request, Response } from 'express';
 import { GatewayError } from '../errors';
-import {
-  buildRequestFingerprint,
-  IdempotencyFinancialOutcome,
-  IdempotencyStore,
-} from '../core/idempotencyStore';
+import { buildRequestFingerprint, IdempotencyStore } from '../core/idempotencyStore';
 import { Logger } from '../logging/logger';
 import { errorResponse } from '../responses';
 import { resolveGatewayActorKey } from './auth';
+import {
+  financialOutcomeResponse,
+  gaslessCommandResponse,
+  hasTerminalFinancialFailure,
+  hasUnresolvedFinancialOutcome,
+  isTerminalFinancialOutcome,
+} from './idempotencyRecoveryResponses';
 
 export interface IdempotencyRequestState {
   idempotencyKey: string;
@@ -127,68 +130,6 @@ function replayHeaders(res: Response): Record<string, string> {
   return snapshot;
 }
 
-function hasUnresolvedFinancialOutcome(body: unknown): boolean {
-  const outcome = financialOutcomeFromErrorBody(body);
-  return outcome === 'broadcast_unknown' || outcome === 'confirmation_pending';
-}
-
-function hasTerminalFinancialFailure(body: unknown): boolean {
-  return financialOutcomeFromErrorBody(body) === 'reverted';
-}
-
-function financialOutcomeFromErrorBody(body: unknown): unknown {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
-  const error = (body as { error?: unknown }).error;
-  if (!error || typeof error !== 'object' || Array.isArray(error)) return false;
-  const details = (error as { details?: unknown }).details;
-  if (!details || typeof details !== 'object' || Array.isArray(details)) return false;
-  return (details as { outcome?: unknown }).outcome;
-}
-
-function financialOutcomeResponse(
-  req: Request,
-  outcome: IdempotencyFinancialOutcome,
-): { statusCode: number; body: Record<string, unknown> } {
-  const details = {
-    transactionHash: outcome.transactionHash,
-    outcome: outcome.outcomeStatus,
-    resourceType: outcome.resourceType,
-    resourceId: outcome.resourceId,
-    operation: outcome.operation,
-    chainId: outcome.chainId,
-    recovered: true,
-    rebroadcastAllowed: false,
-  };
-  if (outcome.outcomeStatus === 'reverted') {
-    return {
-      statusCode: 502,
-      body: errorResponse(
-        req.requestContext,
-        'UPSTREAM_UNAVAILABLE',
-        'Gasless transaction reverted on-chain',
-        details,
-      ),
-    };
-  }
-
-  return {
-    statusCode: 202,
-    body: {
-      success: true,
-      data: {
-        requestId: outcome.requestId,
-        ...details,
-        outcomeStatus: outcome.outcomeStatus,
-      },
-      timestamp: new Date().toISOString(),
-    },
-  };
-}
-
-function isTerminalFinancialOutcome(outcome: IdempotencyFinancialOutcome): boolean {
-  return outcome.outcomeStatus === 'confirmed' || outcome.outcomeStatus === 'reverted';
-}
-
 export function createIdempotencyMiddleware(store: IdempotencyStore) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const idempotencyKey = req.header('Idempotency-Key')?.trim();
@@ -265,6 +206,28 @@ export function createIdempotencyMiddleware(store: IdempotencyStore) {
         await store.markReplay(scope);
         res.setHeader('x-idempotent-replay', 'true');
         res.setHeader('x-financial-outcome-recovery', 'true');
+        res.status(replay.statusCode).json(replay.body);
+        return;
+      }
+
+      const gaslessCommand = await store.getGaslessCommand(existing.requestId);
+      if (gaslessCommand) {
+        const scope = { actorId, endpoint, idempotencyKey };
+        const replay = gaslessCommandResponse(req, gaslessCommand);
+        if (replay.terminal) {
+          await store.complete(
+            scope,
+            {
+              responseStatus: replay.statusCode,
+              responseHeaders: { 'content-type': 'application/json; charset=utf-8' },
+              responseBody: replay.body,
+            },
+            existing.requestId,
+          );
+        }
+        await store.markReplay(scope);
+        res.setHeader('x-idempotent-replay', 'true');
+        res.setHeader('x-durable-command-recovery', 'true');
         res.status(replay.statusCode).json(replay.body);
         return;
       }

@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { GatewayError } from '../errors';
+import { createGaslessCommandIntentKey, type GaslessCommandRecord } from './gaslessCommandStore';
 import { serializeGasEstimate } from './gaslessExecutionEvidence';
 import { recordGaslessExecutionFailure } from './gaslessExecutionFailure';
 import type {
@@ -19,12 +20,16 @@ import {
 } from './gaslessRequestNormalization';
 import type { GaslessWorkflowContext } from './gaslessWorkflowContext';
 import type { SettlementExecutionEventRecord } from './settlementStore';
-import { projectPersistedGaslessTransaction } from './gaslessTransactionLifecycle';
+import {
+  isGaslessTransactionOutcomePendingError,
+  isGaslessTransactionRevertedError,
+  projectPersistedGaslessTransaction,
+} from './gaslessTransactionLifecycle';
 
 export async function executeOperatorActionWorkflow(
   context: GaslessWorkflowContext,
-
   input: GaslessOperatorActionExecutionInput,
+  command?: GaslessCommandRecord,
 ): Promise<GaslessCreateTradeExecutionResult> {
   const now = context.now();
   const normalized = normalizeOperatorActionInput({
@@ -44,26 +49,61 @@ export async function executeOperatorActionWorkflow(
     });
   }
 
-  const accepted = await context.settlementService.recordExecutionEvent({
-    handoffId: normalized.handoffId,
-    eventType: 'accepted',
-    executionStatus: 'accepted',
-    reconciliationStatus: handoff.reconciliationStatus,
-    providerStatus: 'gasless_operator_request_accepted',
-    detail: `Gasless operator ${normalized.action} request accepted by Cotsel execution service.`,
-    metadata: {
-      action: normalized.action,
-      chainId: normalized.chainId,
-      contractAddress: normalized.contractAddress,
-      expiresAt: normalized.expiresAt,
-      payloadHash: normalized.payloadHash,
-      tradeId: normalized.tradeId,
-      userAuthorizationRequired: false,
-    },
-    observedAt: new Date().toISOString(),
-    requestId: normalized.requestId,
-    sourceApiKeyId: normalized.sourceApiKeyId,
-  });
+  if (!command) {
+    const { requestId: _requestId, sourceApiKeyId: _sourceApiKeyId, ...intentPayload } = normalized;
+    const recorded = await context.settlementService.recordExecutionEvent(
+      {
+        handoffId: normalized.handoffId,
+        eventType: 'accepted',
+        executionStatus: 'accepted',
+        reconciliationStatus: handoff.reconciliationStatus,
+        providerStatus: 'gasless_operator_request_accepted',
+        detail: `Gasless operator ${normalized.action} request accepted by Cotsel execution service.`,
+        metadata: {
+          action: normalized.action,
+          chainId: normalized.chainId,
+          contractAddress: normalized.contractAddress,
+          expiresAt: normalized.expiresAt,
+          payloadHash: normalized.payloadHash,
+          tradeId: normalized.tradeId,
+          userAuthorizationRequired: false,
+        },
+        observedAt: context.now().toISOString(),
+        requestId: normalized.requestId,
+        sourceApiKeyId: normalized.sourceApiKeyId,
+      },
+      {
+        applicationRequestId: normalized.requestId,
+        intentKey: createGaslessCommandIntentKey(intentPayload),
+        resourceType: 'settlement_handoff',
+        resourceId: normalized.handoffId,
+        operation: normalized.action,
+        payload: normalized as unknown as Record<string, unknown>,
+        maxAttempts: context.commandMaxAttempts,
+        maxQueueDepth: context.commandMaxPending,
+        nextAttemptAt: context.now().toISOString(),
+      },
+    );
+    if (!recorded.command) {
+      throw new GatewayError(500, 'INTERNAL_ERROR', 'Accepted gasless command was not persisted');
+    }
+    return context.dispatchCommand<GaslessCreateTradeExecutionResult>(recorded.command);
+  }
+
+  if (
+    command.applicationRequestId !== normalized.requestId ||
+    command.resourceId !== normalized.handoffId ||
+    command.operation !== normalized.action
+  ) {
+    throw new GatewayError(500, 'INTERNAL_ERROR', 'Gasless command request binding is invalid');
+  }
+  const acceptedEvent = (await context.store.listExecutionEvents(normalized.handoffId)).find(
+    (event) => event.eventType === 'accepted' && event.requestId === normalized.requestId,
+  );
+  if (!acceptedEvent) {
+    throw new GatewayError(500, 'INTERNAL_ERROR', 'Gasless command acceptance event is missing');
+  }
+  const accepted = { handoff, event: acceptedEvent };
 
   try {
     const queued = await context.settlementService.recordExecutionEvent({
@@ -102,7 +142,7 @@ export async function executeOperatorActionWorkflow(
       sourceApiKeyId: normalized.sourceApiKeyId,
     });
 
-    const execution = await context.enqueueBroadcast(() =>
+    const execution = await context.runBroadcast(normalized.requestId, () =>
       context.executor.executeOperatorAction(normalized),
     );
     return await projectPersistedGaslessTransaction(execution.txHash, async () => {
@@ -169,17 +209,23 @@ export async function executeOperatorActionWorkflow(
       };
     });
   } catch (error) {
-    return recordGaslessExecutionFailure(
-      context,
-      {
-        handoffId: normalized.handoffId,
-        reconciliationStatus: accepted.handoff.reconciliationStatus,
-        action: normalized.action,
-        payloadHash: normalized.payloadHash,
-        requestId: normalized.requestId,
-        sourceApiKeyId: normalized.sourceApiKeyId,
-      },
-      error,
-    );
+    if (
+      isGaslessTransactionOutcomePendingError(error) ||
+      isGaslessTransactionRevertedError(error)
+    ) {
+      return recordGaslessExecutionFailure(
+        context,
+        {
+          handoffId: normalized.handoffId,
+          reconciliationStatus: accepted.handoff.reconciliationStatus,
+          action: normalized.action,
+          payloadHash: normalized.payloadHash,
+          requestId: normalized.requestId,
+          sourceApiKeyId: normalized.sourceApiKeyId,
+        },
+        error,
+      );
+    }
+    throw error;
   }
 }

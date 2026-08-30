@@ -63,12 +63,39 @@ export interface GaslessTransactionOutcomeRecorder {
 }
 
 export interface GaslessTransactionOutcomeStore extends GaslessTransactionOutcomeRecorder {
+  getByApplicationRequestId(
+    applicationRequestId: string,
+  ): Promise<GaslessTransactionOutcomeRecord | null>;
   listRecoveryCandidates(limit: number): Promise<GaslessTransactionOutcomeRecord[]>;
   markRecoveryAttempted(transactionHash: string): Promise<void>;
   markProjectionApplied(
     transactionHash: string,
     status: GaslessTransactionOutcomeStatus,
   ): Promise<void>;
+}
+
+interface GaslessTransactionOutcomeRow {
+  transactionHash: string;
+  applicationRequestId: string;
+  resourceType: GaslessTransactionIdentity['resourceType'];
+  resourceId: string;
+  operation: string;
+  chainId: string;
+  signerAddress: string;
+  nonce: string;
+  transactionType: number;
+  destinationAddress: string;
+  valueWei: string;
+  gasLimit: string;
+  maxFeePerGasWei: string | null;
+  maxPriorityFeePerGasWei: string | null;
+  gasPriceWei: string | null;
+  calldataHash: string;
+  intentHash: string;
+  outcomeStatus: GaslessTransactionOutcomeStatus;
+  projectedOutcomeStatus: GaslessTransactionOutcomeStatus | null;
+  failureCode: string | null;
+  updatedAt: Date;
 }
 
 function normalizeFailureCode(error: unknown): string {
@@ -86,6 +113,35 @@ export function gaslessBroadcastFailureCode(error: unknown): string {
 export function createPostgresGaslessTransactionOutcomeRecorder(
   pool: Pool,
 ): GaslessTransactionOutcomeStore {
+  const mapOutcomeRow = (row: GaslessTransactionOutcomeRow): GaslessTransactionOutcomeRecord => ({
+    ...row,
+    chainId: Number(row.chainId),
+    nonce: Number(row.nonce),
+    updatedAt: row.updatedAt.toISOString(),
+  });
+
+  const outcomeColumns = `
+    transaction_hash AS "transactionHash",
+    application_request_id AS "applicationRequestId",
+    resource_type AS "resourceType",
+    resource_id AS "resourceId",
+    operation,
+    chain_id AS "chainId",
+    signer_address AS "signerAddress",
+    transaction_nonce AS nonce,
+    transaction_type AS "transactionType",
+    destination_address AS "destinationAddress",
+    value_wei AS "valueWei",
+    gas_limit AS "gasLimit",
+    max_fee_per_gas_wei AS "maxFeePerGasWei",
+    max_priority_fee_per_gas_wei AS "maxPriorityFeePerGasWei",
+    gas_price_wei AS "gasPriceWei",
+    calldata_hash AS "calldataHash",
+    intent_hash AS "intentHash",
+    outcome_status AS "outcomeStatus",
+    projected_outcome_status AS "projectedOutcomeStatus",
+    failure_code AS "failureCode",
+    updated_at AS "updatedAt"`;
   function allowedCurrentStatuses(status: GaslessTransactionOutcomeStatus): string[] {
     if (status === 'broadcast_unknown') {
       return ['broadcast_pending', 'broadcast_unknown', 'confirmation_pending'];
@@ -210,54 +266,23 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
   }
 
   return {
+    async getByApplicationRequestId(applicationRequestId) {
+      const result = await pool.query<GaslessTransactionOutcomeRow>(
+        `SELECT ${outcomeColumns}
+         FROM gasless_transaction_outcomes
+         WHERE application_request_id = $1
+         ORDER BY created_at DESC
+         LIMIT 2`,
+        [applicationRequestId],
+      );
+      if (result.rows.length > 1) {
+        throw new Error(`Multiple gasless outcomes found for request ${applicationRequestId}`);
+      }
+      return result.rows[0] ? mapOutcomeRow(result.rows[0]) : null;
+    },
     async listRecoveryCandidates(limit) {
-      const result = await pool.query<{
-        transactionHash: string;
-        applicationRequestId: string;
-        resourceType: GaslessTransactionIdentity['resourceType'];
-        resourceId: string;
-        operation: string;
-        chainId: string;
-        signerAddress: string;
-        nonce: string;
-        transactionType: number;
-        destinationAddress: string;
-        valueWei: string;
-        gasLimit: string;
-        maxFeePerGasWei: string | null;
-        maxPriorityFeePerGasWei: string | null;
-        gasPriceWei: string | null;
-        calldataHash: string;
-        intentHash: string;
-        observedTransactionHash: string | null;
-        outcomeStatus: GaslessTransactionOutcomeStatus;
-        projectedOutcomeStatus: GaslessTransactionOutcomeStatus | null;
-        failureCode: string | null;
-        updatedAt: Date;
-      }>(
-        `SELECT
-           transaction_hash AS "transactionHash",
-           application_request_id AS "applicationRequestId",
-           resource_type AS "resourceType",
-           resource_id AS "resourceId",
-           operation,
-           chain_id AS "chainId",
-           signer_address AS "signerAddress",
-           transaction_nonce AS nonce,
-           transaction_type AS "transactionType",
-           destination_address AS "destinationAddress",
-           value_wei AS "valueWei",
-           gas_limit AS "gasLimit",
-           max_fee_per_gas_wei AS "maxFeePerGasWei",
-           max_priority_fee_per_gas_wei AS "maxPriorityFeePerGasWei",
-           gas_price_wei AS "gasPriceWei",
-           calldata_hash AS "calldataHash",
-           intent_hash AS "intentHash",
-           observed_transaction_hash AS "observedTransactionHash",
-           outcome_status AS "outcomeStatus",
-           projected_outcome_status AS "projectedOutcomeStatus",
-           failure_code AS "failureCode",
-           updated_at AS "updatedAt"
+      const result = await pool.query<GaslessTransactionOutcomeRow>(
+        `SELECT ${outcomeColumns}
          FROM gasless_transaction_outcomes
          WHERE outcome_status IN (
              'broadcast_pending', 'broadcast_unknown', 'confirmation_pending'
@@ -267,12 +292,7 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
          LIMIT $1`,
         [limit],
       );
-      return result.rows.map((row) => ({
-        ...row,
-        chainId: Number(row.chainId),
-        nonce: Number(row.nonce),
-        updatedAt: row.updatedAt.toISOString(),
-      }));
+      return result.rows.map(mapOutcomeRow);
     },
     async markRecoveryAttempted(transactionHash) {
       await pool.query(

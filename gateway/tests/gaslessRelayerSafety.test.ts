@@ -9,6 +9,9 @@ import {
 } from '../src/core/gaslessSettlementExecutionService';
 import { SettlementService } from '../src/core/settlementService';
 import { createInMemorySettlementStore, type SettlementStore } from '../src/core/settlementStore';
+import type { GaslessCommandStore } from '../src/core/gaslessCommandStore';
+import { createInMemoryGaslessTransactionOutcomeStore } from '../src/core/inMemoryGaslessTransactionOutcomeStore';
+import type { GaslessTransactionOutcomeStore } from '../src/core/gaslessTransactionOutcomeStore';
 import { buildCreateTradeInput, config } from './helpers/gaslessManagedSignerFixtures';
 
 function buildConfirmedSubmission(
@@ -86,16 +89,17 @@ async function createHandoff(store: SettlementStore, label: string): Promise<str
 
 function createService(
   settlementService: SettlementService,
-  store: SettlementStore,
+  store: SettlementStore & GaslessCommandStore,
   overrides: Partial<{
     executeCreateTrade: (
       input: GaslessCreateTradeExecutionInput,
     ) => Promise<GaslessExecutionSubmission>;
     simulateCreateTrade: () => Promise<{ gasEstimate?: bigint }>;
-    options: Partial<ConstructorParameters<typeof GaslessSettlementExecutionService>[3]>;
+    transactionOutcomeStore: GaslessTransactionOutcomeStore;
+    options: Partial<ConstructorParameters<typeof GaslessSettlementExecutionService>[4]>;
   }>,
 ): GaslessSettlementExecutionService {
-  const defaultOptions: ConstructorParameters<typeof GaslessSettlementExecutionService>[3] = {
+  const defaultOptions: ConstructorParameters<typeof GaslessSettlementExecutionService>[4] = {
     chainId: config.chainId,
     escrowAddress: config.escrowAddress,
     usdcAddress: config.usdcAddress,
@@ -115,6 +119,10 @@ function createService(
     stuckQueueThresholdMs: 1,
     receiptTimeoutMs: 1000,
     repeatedFailureAlertThreshold: 1,
+    commandRetryInitialMs: 5,
+    commandRetryMaxMs: 10,
+    commandWaitTimeoutMs: 1_000,
+    commandMaxAttempts: 2,
   };
 
   return new GaslessSettlementExecutionService(
@@ -149,6 +157,7 @@ function createService(
           '100',
         ),
     },
+    overrides.transactionOutcomeStore ?? createInMemoryGaslessTransactionOutcomeStore(),
     {
       ...defaultOptions,
       ...(overrides.options ?? {}),
@@ -256,7 +265,7 @@ describe('gasless relayer safety controls', () => {
     await second;
   });
 
-  test('failed broadcasts do not poison nonce queue recovery for later submissions', async () => {
+  test('transient broadcast failure is retried durably without poisoning later submissions', async () => {
     const store = createInMemorySettlementStore();
     const settlementService = new SettlementService(config, store);
     let attempts = 0;
@@ -276,15 +285,12 @@ describe('gasless relayer safety controls', () => {
     const failedHandoffId = await createHandoff(store, 'e');
     const recoveredHandoffId = await createHandoff(store, 'f');
 
-    await expectGatewayError(
-      service.executeCreateTrade(buildCreateTradeInput(failedHandoffId, 'e')),
-      {
-        statusCode: 502,
-        code: 'UPSTREAM_UNAVAILABLE',
-        message: 'Gasless execution failed',
-      },
+    const retried = await service.executeCreateTrade(buildCreateTradeInput(failedHandoffId, 'e'));
+    expect(retried.txHash).toBe(
+      '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
     );
-    expect(service.getRelayerReadiness().recentFailureCount).toBe(1);
+    expect(attempts).toBe(2);
+    expect(service.getRelayerReadiness().recentFailureCount).toBe(0);
 
     const recovered = await service.executeCreateTrade(
       buildCreateTradeInput(recoveredHandoffId, 'f'),
@@ -294,6 +300,53 @@ describe('gasless relayer safety controls', () => {
       '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
     );
     expect(service.getRelayerReadiness().recentFailureCount).toBe(0);
+  });
+
+  test('never rebroadcasts when the application request already has a persisted transaction', async () => {
+    const store = createInMemorySettlementStore();
+    const settlementService = new SettlementService(config, store);
+    const transactionOutcomeStore = createInMemoryGaslessTransactionOutcomeStore();
+    const executeCreateTrade = jest.fn(async () =>
+      buildConfirmedSubmission(`0x${'9'.repeat(64)}`, '100'),
+    );
+    const handoffId = await createHandoff(store, 'persisted-outcome');
+    const input = buildCreateTradeInput(handoffId, 'a');
+    const transactionHash = `0x${'8'.repeat(64)}`;
+    await transactionOutcomeStore.recordPrepared({
+      transactionHash,
+      applicationRequestId: input.requestId,
+      resourceType: 'settlement_handoff',
+      resourceId: handoffId,
+      operation: 'create_trade',
+      chainId: config.chainId,
+      signerAddress: '0x1111111111111111111111111111111111111111',
+      nonce: 7,
+      transactionType: 2,
+      destinationAddress: config.escrowAddress,
+      valueWei: '0',
+      gasLimit: '210000',
+      maxFeePerGasWei: '1',
+      maxPriorityFeePerGasWei: '1',
+      gasPriceWei: null,
+      calldataHash: `0x${'7'.repeat(64)}`,
+      intentHash: `0x${'6'.repeat(64)}`,
+    });
+    const service = createService(settlementService, store, {
+      executeCreateTrade,
+      transactionOutcomeStore,
+    });
+
+    await expectGatewayError(service.executeCreateTrade(input), {
+      statusCode: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: 'Durable gasless command is awaiting transaction reconciliation',
+    });
+
+    expect(executeCreateTrade).not.toHaveBeenCalled();
+    await expect(store.getByApplicationRequestId(input.requestId)).resolves.toMatchObject({
+      status: 'outcome_pending',
+      transactionHash,
+    });
   });
 
   test('shared broadcast lock serializes broadcasts across gateway service instances', async () => {
@@ -376,7 +429,7 @@ describe('gasless relayer safety controls', () => {
     expect(readiness.state).toBe('ready');
   });
 
-  test('service-level RPC broadcast failure does not block subsequent successful broadcasts', async () => {
+  test('service-level RPC failure retries the same command before accepting later work', async () => {
     const store = createInMemorySettlementStore();
     const settlementService = new SettlementService(config, store);
     let callCount = 0;
@@ -396,16 +449,12 @@ describe('gasless relayer safety controls', () => {
     const failHandoffId = await createHandoff(store, '3');
     const recoverHandoffId = await createHandoff(store, '4');
 
-    // First broadcast fails with a connection error.
-    await expectGatewayError(
-      service.executeCreateTrade(buildCreateTradeInput(failHandoffId, '3')),
-      {
-        statusCode: 502,
-        code: 'UPSTREAM_UNAVAILABLE',
-        message: 'Gasless execution failed',
-      },
+    const retried = await service.executeCreateTrade(buildCreateTradeInput(failHandoffId, '3'));
+    expect(retried.txHash).toBe(
+      '0xabababababababababababababababababababababababababababababababab',
     );
-    expect(service.getRelayerReadiness().recentFailureCount).toBe(1);
+    expect(callCount).toBe(2);
+    expect(service.getRelayerReadiness().recentFailureCount).toBe(0);
 
     // Second broadcast succeeds via fallback (simulates FallbackProvider recovery).
     const result = await service.executeCreateTrade(buildCreateTradeInput(recoverHandoffId, '4'));

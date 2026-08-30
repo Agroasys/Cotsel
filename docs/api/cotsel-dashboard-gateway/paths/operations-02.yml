@@ -1,0 +1,75 @@
+paths:
+  /operations/gasless-relayer/dead-letters:
+    get:
+      tags:
+        - Operations
+      summary: List durable gasless commands that require operator review
+      description: |
+        Returns bounded command metadata without the stored financial payload or execution result.
+        The oldest dead-lettered commands are returned first.
+      operationId: listGaslessCommandDeadLetters
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 100
+      responses:
+        '200':
+          description: Bounded list of durable gasless command exceptions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GaslessCommandDeadLetterListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'
+  /operations/gasless-relayer/dead-letters/{commandId}/redrive:
+    post:
+      tags:
+        - Operations
+      summary: Authorize one additional attempt for a dead-lettered gasless command
+      description: |
+        Moves one dead-lettered command back to pending after operator authorization. The command
+        cannot be redriven when a transaction identity exists. The worker revalidates the stored
+        intent and checks durable chain outcome state before any signing or broadcast attempt.
+      operationId: redriveGaslessCommandDeadLetter
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: commandId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: The command is pending for one controlled additional attempt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GaslessCommandRedriveResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableError'

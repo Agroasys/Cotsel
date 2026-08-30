@@ -73,6 +73,10 @@ paths:
     $ref: ./cotsel-dashboard-gateway/paths/operations-01.yml#/paths/~1operations
   /operations/gasless-relayer/readiness:
     $ref: ./cotsel-dashboard-gateway/paths/operations-01.yml#/paths/~1operations~1gasless-relayer~1readiness
+  /operations/gasless-relayer/dead-letters:
+    $ref: ./cotsel-dashboard-gateway/paths/operations-02.yml#/paths/~1operations~1gasless-relayer~1dead-letters
+  /operations/gasless-relayer/dead-letters/{commandId}/redrive:
+    $ref: ./cotsel-dashboard-gateway/paths/operations-02.yml#/paths/~1operations~1gasless-relayer~1dead-letters~1{commandId}~1redrive
   /trades:
     $ref: ./cotsel-dashboard-gateway/paths/trades-01.yml#/paths/~1trades
   /trades/{tradeId}:
@@ -216,6 +220,9 @@ components:
     OperationsSummaryResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-overview-operations-01.yml#/components/schemas/OperationsSummaryResponse}
     GaslessRelayerReadinessSnapshot: {$ref: ./cotsel-dashboard-gateway/components/schemas-overview-operations-02.yml#/components/schemas/GaslessRelayerReadinessSnapshot}
     GaslessRelayerReadinessResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-overview-operations-02.yml#/components/schemas/GaslessRelayerReadinessResponse}
+    GaslessCommandDeadLetter: {$ref: ./cotsel-dashboard-gateway/components/schemas-gasless-command-01.yml#/components/schemas/GaslessCommandDeadLetter}
+    GaslessCommandDeadLetterListResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-gasless-command-01.yml#/components/schemas/GaslessCommandDeadLetterListResponse}
+    GaslessCommandRedriveResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-gasless-command-01.yml#/components/schemas/GaslessCommandRedriveResponse}
     EvidenceLink: {$ref: ./cotsel-dashboard-gateway/components/schemas-evidence-01.yml#/components/schemas/EvidenceLink}
     EvidenceBundleGenerateRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-evidence-01.yml#/components/schemas/EvidenceBundleGenerateRequest}
     EvidenceBundleGeneratedBy: {$ref: ./cotsel-dashboard-gateway/components/schemas-evidence-01.yml#/components/schemas/EvidenceBundleGeneratedBy}

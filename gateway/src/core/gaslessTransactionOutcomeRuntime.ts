@@ -6,6 +6,7 @@ import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import type { GatewayConfig } from '../config/gatewayConfig';
 import type { SettlementService } from './settlementService';
 import type { SettlementStore } from './settlementStore';
+import type { GaslessCommandStore } from './gaslessCommandStore';
 import { GaslessSettlementOutcomeObserver } from './gaslessSettlementOutcomeObserver';
 import { GaslessTransactionOutcomeReconciler } from './gaslessTransactionOutcomeReconciler';
 import {
@@ -22,7 +23,7 @@ export interface GaslessTransactionOutcomeRuntime {
 export function createGaslessTransactionOutcomeRuntime(
   config: GatewayConfig,
   pool: Pool,
-  settlementStore: SettlementStore,
+  settlementStore: SettlementStore & GaslessCommandStore,
   settlementService: SettlementService,
 ): GaslessTransactionOutcomeRuntime {
   const recorder = createPostgresGaslessTransactionOutcomeRecorder(pool);
@@ -33,7 +34,7 @@ export function createGaslessTransactionOutcomeRuntime(
           chainId: config.chainId,
           quorum: config.rpcQuorum,
         }),
-        new GaslessSettlementOutcomeObserver(settlementStore, settlementService),
+        new GaslessSettlementOutcomeObserver(settlementStore, settlementService, settlementStore),
         config.gaslessOutcomeReconciliationIntervalMs ?? 5_000,
       )
     : null;

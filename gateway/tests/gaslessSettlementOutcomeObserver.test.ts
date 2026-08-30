@@ -8,6 +8,7 @@ import type {
   SettlementStore,
 } from '../src/core/settlementStore';
 import { GaslessSettlementOutcomeObserver } from '../src/core/gaslessSettlementOutcomeObserver';
+import type { GaslessCommandStore } from '../src/core/gaslessCommandStore';
 import type { GaslessTransactionOutcomeRecord } from '../src/core/gaslessTransactionOutcomeStore';
 
 const OUTCOME: GaslessTransactionOutcomeRecord = {
@@ -52,6 +53,7 @@ function createObserver(initialStatus: SettlementExecutionStatus) {
   const observer = new GaslessSettlementOutcomeObserver(
     { getHandoff } as unknown as SettlementStore,
     { recordExecutionEvent } as unknown as SettlementService,
+    { resolveTransactionOutcome: jest.fn(async () => true) } as unknown as GaslessCommandStore,
     () => new Date('2026-08-28T00:00:01.000Z'),
   );
   return { observer, recordExecutionEvent };

@@ -45,6 +45,25 @@ export class GaslessTransactionRevertedError extends GatewayError {
   }
 }
 
+export class GaslessPersistedOutcomeError extends GatewayError {
+  constructor(
+    public readonly transactionHash: string,
+    public readonly outcomeStatus:
+      | 'broadcast_pending'
+      | 'broadcast_unknown'
+      | 'confirmation_pending'
+      | 'confirmed'
+      | 'reverted',
+  ) {
+    super(503, 'UPSTREAM_UNAVAILABLE', 'Gasless transaction already has a durable outcome', {
+      transactionHash,
+      outcome: outcomeStatus,
+      rebroadcastAllowed: false,
+    });
+    this.name = 'GaslessPersistedOutcomeError';
+  }
+}
+
 function requireSignedTransactionIdentity(
   signedTransaction: string,
   context: GaslessTransactionContext,
@@ -168,6 +187,12 @@ export function isGaslessTransactionRevertedError(
   error: unknown,
 ): error is GaslessTransactionRevertedError {
   return error instanceof GaslessTransactionRevertedError;
+}
+
+export function isGaslessPersistedOutcomeError(
+  error: unknown,
+): error is GaslessPersistedOutcomeError {
+  return error instanceof GaslessPersistedOutcomeError;
 }
 
 export async function projectPersistedGaslessTransaction<T>(

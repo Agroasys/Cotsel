@@ -2,7 +2,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createInMemoryIdempotencyStore } from '../src/core/idempotencyStore';
-import type { IdempotencyFinancialOutcome, IdempotencyStore } from '../src/core/idempotencyStore';
+import type {
+  IdempotencyFinancialOutcome,
+  IdempotencyGaslessCommand,
+  IdempotencyStore,
+} from '../src/core/idempotencyStore';
 import { startIdempotencyTestServer } from './helpers/idempotencyTestServer';
 
 describe('gateway idempotency middleware', () => {
@@ -303,6 +307,86 @@ describe('gateway idempotency middleware', () => {
       expect(third.status).toBe(502);
       expect(third.headers.get('x-idempotent-replay')).toBe('true');
       expect(thirdPayload).toEqual(secondPayload);
+      expect(getExecutionCount()).toBe(1);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('recovers a durable command without releasing or re-executing its idempotency key', async () => {
+    const baseStore = createInMemoryIdempotencyStore();
+    let commandStatus: IdempotencyGaslessCommand['status'] = 'pending';
+    const command: IdempotencyGaslessCommand = {
+      requestId: 'durable-command-request',
+      commandId: 'durable-command-1',
+      resourceType: 'settlement_handoff',
+      resourceId: 'handoff-durable-command',
+      operation: 'create_trade',
+      status: commandStatus,
+      transactionHash: null,
+      result: null,
+      lastErrorCode: null,
+    };
+    const store: IdempotencyStore = {
+      ...baseStore,
+      async getGaslessCommand(requestId) {
+        return requestId === command.requestId
+          ? {
+              ...command,
+              status: commandStatus,
+              result:
+                commandStatus === 'completed'
+                  ? { txHash: `0x${'d'.repeat(64)}`, recovered: true }
+                  : null,
+            }
+          : null;
+      },
+      async releasePending(scope, leaseOwnerRequestId) {
+        if (leaseOwnerRequestId === command.requestId) return;
+        await baseStore.releasePending(scope, leaseOwnerRequestId);
+      },
+    };
+    const { server, baseUrl, getExecutionCount, setFailOnce } =
+      await startIdempotencyTestServer(store);
+
+    try {
+      const headers = {
+        'content-type': 'application/json',
+        'Idempotency-Key': 'idem-durable-command-recovery',
+        'x-test-actor': 'admin',
+        'x-request-id': command.requestId,
+      };
+      const body = JSON.stringify({ durableCommand: true });
+      setFailOnce();
+
+      const first = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const second = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const secondPayload = await second.json();
+
+      commandStatus = 'completed';
+      const third = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const thirdPayload = await third.json();
+      const fourth = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const fourthPayload = await fourth.json();
+
+      expect(first.status).toBe(500);
+      expect(second.status).toBe(202);
+      expect(second.headers.get('x-durable-command-recovery')).toBe('true');
+      expect(secondPayload.data).toEqual(
+        expect.objectContaining({
+          commandId: command.commandId,
+          commandStatus: 'pending',
+          rebroadcastAllowed: false,
+        }),
+      );
+      expect(third.status).toBe(202);
+      expect(third.headers.get('x-durable-command-recovery')).toBe('true');
+      expect(thirdPayload.data).toEqual(
+        expect.objectContaining({ txHash: `0x${'d'.repeat(64)}`, recovered: true }),
+      );
+      expect(fourth.status).toBe(202);
+      expect(fourth.headers.get('x-idempotent-replay')).toBe('true');
+      expect(fourthPayload).toEqual(thirdPayload);
       expect(getExecutionCount()).toBe(1);
     } finally {
       server.close();
