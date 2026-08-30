@@ -24,6 +24,10 @@ import {
 } from './gaslessTransactionLifecycle';
 import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutcomeStore';
 import {
+  logGaslessSigningCompleted,
+  logGaslessSigningStarted,
+} from './gaslessTransactionTelemetry';
+import {
   buildCreateTradeArguments,
   buildUserActionArguments,
   buildWalletUsdcTransferArguments,
@@ -334,6 +338,8 @@ export function createManagedSignerGaslessSettlementExecutor(
       ...serializedTransaction,
     };
     const intentHash = buildManagedSignerIntentHash(intent);
+    const transactionContext = { ...context, operation };
+    logGaslessSigningStarted(transactionContext, custodyMode);
     const signerResponse = await signerTransport.signTransaction({
       custodyMode,
       operation,
@@ -342,6 +348,7 @@ export function createManagedSignerGaslessSettlementExecutor(
       intentHash,
       transaction: serializedTransaction,
     });
+    logGaslessSigningCompleted(transactionContext, custodyMode);
     const signedTransaction = await validateManagedSignerForBroadcast(
       signerResponse,
       intent,
@@ -350,11 +357,7 @@ export function createManagedSignerGaslessSettlementExecutor(
     );
     return broadcastPersistedGaslessTransaction(
       signedTransaction,
-      {
-        ...context,
-        operation,
-        intentHash,
-      },
+      { ...transactionContext, intentHash },
       transactionOutcomeRecorder,
       (signed) => provider.broadcastTransaction(signed),
     );

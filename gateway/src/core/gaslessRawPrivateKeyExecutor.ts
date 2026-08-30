@@ -23,6 +23,10 @@ import {
 } from './gaslessTransactionLifecycle';
 import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutcomeStore';
 import {
+  logGaslessSigningCompleted,
+  logGaslessSigningStarted,
+} from './gaslessTransactionTelemetry';
+import {
   buildCreateTradeArguments,
   buildUserActionArguments,
   buildWalletUsdcTransferArguments,
@@ -304,15 +308,18 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
       gasLimit,
       ...feeOverrides,
     };
+    const context = {
+      applicationRequestId: input.requestId,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId,
+      operation: input.operation,
+    };
+    logGaslessSigningStarted(context, 'raw_private_key');
     const signedTransaction = await signer.signTransaction(transaction);
+    logGaslessSigningCompleted(context, 'raw_private_key');
     return broadcastPersistedGaslessTransaction(
       signedTransaction,
-      {
-        applicationRequestId: input.requestId,
-        resourceType: input.resourceType,
-        resourceId: input.resourceId,
-        operation: input.operation,
-      },
+      context,
       transactionOutcomeRecorder,
       (signed) => provider.broadcastTransaction(signed),
     );

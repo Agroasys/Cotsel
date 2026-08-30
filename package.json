@@ -58,6 +58,7 @@
     "pilot:rehearsal": "bash scripts/base-sepolia-pilot-validation.sh",
     "gasless:capacity": "node scripts/gasless-relayer-capacity-rehearsal.mjs",
     "gasless:failure-evidence": "node scripts/gasless-failure-evidence.mjs",
+    "wp2:durability-evidence:check": "node --test scripts/tests/wp2-durability-rehearsal.test.mjs",
     "protocol:health": "node scripts/full-protocol-health-report.mjs",
     "licenses:report": "node scripts/generate-license-report.mjs",
     "security:deps": "node scripts/security-deps-report.mjs",

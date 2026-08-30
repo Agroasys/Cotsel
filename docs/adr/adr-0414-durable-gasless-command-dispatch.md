@@ -96,6 +96,8 @@ Rejected. HTTP idempotency cannot recover an accepted closure that disappeared w
 - Local and PostgreSQL tests are prerequisites. Issue #646 remains open until deployed crash,
   duplicate, lease-expiry, poison, redrive, overload, and reconciliation exercises pass against one
   pinned candidate.
+- `docs/runbooks/wp2-durable-command-rehearsal.md` defines the deployed exercise and containment
+  procedure. `scripts/check-wp2-durability-rehearsal.mjs` rejects incomplete or stale reports.
 
 ## Rollback
 

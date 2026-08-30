@@ -11,6 +11,11 @@ import type {
   GaslessTransactionOutcomeRecorder,
 } from './gaslessTransactionOutcomeStore';
 import { gaslessBroadcastFailureCode } from './gaslessTransactionOutcomeStore';
+import {
+  logGaslessBroadcastResponse,
+  logGaslessConfirmationPending,
+  logGaslessIdentityPersisted,
+} from './gaslessTransactionTelemetry';
 
 export interface GaslessTransactionContext {
   applicationRequestId: string;
@@ -113,10 +118,12 @@ export async function broadcastPersistedGaslessTransaction(
 ): Promise<TransactionResponse> {
   const identity = requireSignedTransactionIdentity(signedTransaction, context);
   await recorder.recordPrepared(identity);
+  logGaslessIdentityPersisted(identity);
 
   let response: TransactionResponse;
   try {
     response = await broadcast(signedTransaction);
+    logGaslessBroadcastResponse(identity, response.hash);
   } catch (error) {
     try {
       await recorder.markBroadcastUnknown(
@@ -162,6 +169,7 @@ export async function broadcastPersistedGaslessTransaction(
 
   try {
     await recorder.markConfirmationPending(identity.transactionHash);
+    logGaslessConfirmationPending(identity);
   } catch (persistenceError) {
     Logger.error('Failed to persist gasless confirmation-pending transition', {
       transactionHash: identity.transactionHash,
