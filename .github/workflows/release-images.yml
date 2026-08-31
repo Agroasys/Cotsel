@@ -117,7 +117,7 @@ jobs:
           target: runtime
           push: true
           tags: ${{ steps.ecr.outputs.registry }}/${{ matrix.repository }}:${{ github.sha }}
-          provenance: false
+          provenance: mode=max
 
       - name: Build without publishing
         if: steps.kind.outputs.publish != 'true'
@@ -160,6 +160,32 @@ jobs:
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "Image identity: $REFERENCE"
 
+      - name: Generate SPDX image SBOM
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26
+        with:
+          image: ${{ steps.identity.outputs.reference }}
+          format: spdx-json
+          output-file: sbom-image-${{ matrix.service }}.spdx.json
+          upload-artifact: false
+
+      - name: Install Cosign
+        if: steps.kind.outputs.publish == 'true'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+        with:
+          cosign-release: v3.0.6
+
+      - name: Sign and verify the published image digest
+        if: steps.kind.outputs.publish == 'true'
+        env:
+          IMAGE_REFERENCE: ${{ steps.identity.outputs.reference }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "$IMAGE_REFERENCE"
+          cosign verify \
+            --certificate-identity "https://github.com/Agroasys/Cotsel/.github/workflows/release-images.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$IMAGE_REFERENCE" > "signature-image-${{ matrix.service }}.json"
+
       - name: Record the complete image vulnerability report
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
@@ -189,15 +215,26 @@ jobs:
           DIGEST: ${{ steps.identity.outputs.digest }}
           REFERENCE: ${{ steps.identity.outputs.reference }}
           SERVICE: ${{ matrix.service }}
+          PUBLISHED: ${{ steps.kind.outputs.publish }}
         run: |
           node -e '
+            const crypto = require("node:crypto");
             const fs = require("node:fs");
+            const sbomPath = `sbom-image-${process.env.SERVICE}.spdx.json`;
+            const signaturePath = `signature-image-${process.env.SERVICE}.json`;
+            const sbomSha256 = fs.existsSync(sbomPath)
+              ? crypto.createHash("sha256").update(fs.readFileSync(sbomPath)).digest("hex")
+              : null;
+            const published = process.env.PUBLISHED === "true";
             const out = {
               service: process.env.SERVICE,
               sourceCommit: process.env.GITHUB_SHA,
               imageReference: process.env.REFERENCE,
               imageDigest: process.env.DIGEST || null,
-              published: Boolean(process.env.DIGEST),
+              published,
+              buildProvenance: published ? "mode=max" : null,
+              sbom: fs.existsSync(sbomPath) ? { path: sbomPath, sha256: sbomSha256 } : null,
+              signatureVerified: published ? fs.existsSync(signaturePath) : null,
               workflowRunId: process.env.GITHUB_RUN_ID,
             };
             fs.writeFileSync(`release-image-${out.service}.json`, `${JSON.stringify(out, null, 2)}\n`);
@@ -211,6 +248,8 @@ jobs:
           name: cotsel-image-${{ matrix.service }}-${{ github.sha }}
           path: |
             release-image-${{ matrix.service }}.json
+            sbom-image-${{ matrix.service }}.spdx.json
+            signature-image-${{ matrix.service }}.json
             scan-image-${{ matrix.service }}.json
             scan-fixable-image-${{ matrix.service }}.json
           retention-days: 90
