@@ -19,8 +19,6 @@ export interface GatewayConfig {
   dbName: string;
   dbUser: string;
   dbPassword: string;
-  dbMigrationUser?: string;
-  dbMigrationPassword?: string;
   dbSslMode?: 'disable' | 'require' | 'verify-full';
   authBaseUrl: string;
   authRequestTimeoutMs: number;
@@ -363,8 +361,6 @@ export function loadConfig(): GatewayConfig {
   const ricardianServiceApiKey = process.env.GATEWAY_RICARDIAN_SERVICE_API_KEY?.trim() || undefined;
   const ricardianServiceApiSecret =
     process.env.GATEWAY_RICARDIAN_SERVICE_API_SECRET?.trim() || undefined;
-  const dbMigrationUser = process.env.DB_MIGRATION_USER?.trim() || undefined;
-  const dbMigrationPassword = process.env.DB_MIGRATION_PASSWORD?.trim() || undefined;
   const dbSslMode = parseDbSslMode(process.env.DB_SSL_MODE);
   const operatorSignerEnvironment =
     process.env.GATEWAY_OPERATOR_SIGNER_ENVIRONMENT?.trim() || nodeEnv;
@@ -416,10 +412,6 @@ export function loadConfig(): GatewayConfig {
   }
   assert(envNumber('PORT', 3600) > 0, 'PORT must be > 0');
   assert(envNumber('DB_PORT', 5432) > 0, 'DB_PORT must be > 0');
-  assert(
-    Boolean(dbMigrationUser) === Boolean(dbMigrationPassword),
-    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
-  );
   assert(chainId > 0, 'GATEWAY_CHAIN_ID must be > 0');
   assert(
     envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000) >= 1000,
@@ -683,8 +675,6 @@ export function loadConfig(): GatewayConfig {
     dbName: env('DB_NAME'),
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
-    dbMigrationUser,
-    dbMigrationPassword,
     dbSslMode,
     authBaseUrl,
     authRequestTimeoutMs: envNumber('GATEWAY_AUTH_REQUEST_TIMEOUT_MS', 5000),

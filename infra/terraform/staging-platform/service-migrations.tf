@@ -1,34 +1,34 @@
 locals {
   service_migrations = {
     auth = {
-      database     = "cotsel_auth"
-      runtime_user = "cotsel_auth_app"
-      schema_path  = "/app/auth/dist/database/schema.sql"
+      database      = "cotsel_auth"
+      runtime_user  = "cotsel_auth_app"
+      manifest_path = "/app/auth/dist/database/migrations.json"
     }
     gateway = {
-      database     = "cotsel_gateway"
-      runtime_user = "cotsel_gateway_runtime"
-      schema_path  = "/app/gateway/dist/database/schema.sql"
+      database      = "cotsel_gateway"
+      runtime_user  = "cotsel_gateway_runtime"
+      manifest_path = "/app/gateway/dist/database/migrations.json"
     }
     oracle = {
-      database     = "cotsel_oracle"
-      runtime_user = "cotsel_oracle_app"
-      schema_path  = "/app/oracle/dist/database/schema.sql"
+      database      = "cotsel_oracle"
+      runtime_user  = "cotsel_oracle_app"
+      manifest_path = "/app/oracle/dist/database/migrations.json"
     }
     reconciliation = {
-      database     = "cotsel_reconciliation"
-      runtime_user = "cotsel_reconciliation_app"
-      schema_path  = "/app/reconciliation/src/database/schema.sql"
+      database      = "cotsel_reconciliation"
+      runtime_user  = "cotsel_reconciliation_app"
+      manifest_path = "/app/reconciliation/src/database/migrations.json"
     }
     ricardian = {
-      database     = "cotsel_ricardian"
-      runtime_user = "cotsel_ricardian_runtime"
-      schema_path  = "/app/ricardian/src/database/schema.sql"
+      database      = "cotsel_ricardian"
+      runtime_user  = "cotsel_ricardian_runtime"
+      manifest_path = "/app/ricardian/src/database/migrations.json"
     }
     treasury = {
-      database     = "cotsel_treasury"
-      runtime_user = "cotsel_treasury_runtime"
-      schema_path  = "/app/treasury/src/database/schema.sql"
+      database      = "cotsel_treasury"
+      runtime_user  = "cotsel_treasury_runtime"
+      manifest_path = "/app/treasury/src/database/migrations.json"
     }
   }
 }
@@ -133,8 +133,10 @@ resource "aws_ecs_task_definition" "service_migration" {
         { name = "DB_PORT", value = "5432" },
         { name = "DB_RUNTIME_USER", value = each.value.runtime_user },
         { name = "DB_SSL_MODE", value = "verify-full" },
-        { name = "MIGRATION_SCHEMA_PATH", value = each.value.schema_path },
+        { name = "MIGRATION_LOCK_TIMEOUT_MS", value = "30000" },
+        { name = "MIGRATION_MANIFEST_PATH", value = each.value.manifest_path },
         { name = "MIGRATION_SERVICE_NAME", value = each.key },
+        { name = "MIGRATION_STATEMENT_TIMEOUT_MS", value = "300000" },
         { name = "NODE_ENV", value = "production" },
         { name = "PGSSLMODE", value = "verify-full" },
       ]

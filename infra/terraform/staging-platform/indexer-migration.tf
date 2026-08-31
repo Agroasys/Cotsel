@@ -84,12 +84,14 @@ resource "aws_ecs_task_definition" "indexer_migration" {
       readonlyRootFilesystem = true
       mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
       workingDirectory       = "/app/indexer"
-      command                = ["./node_modules/.bin/squid-typeorm-migration", "apply"]
+      command                = ["node", "migrate.js"]
       environment = [
         { name = "DB_HOST", value = local.postgres_host },
         { name = "DB_NAME", value = "cotsel_indexer" },
         { name = "DB_PORT", value = "5432" },
         { name = "DB_SSL_MODE", value = "verify-full" },
+        { name = "MIGRATION_LOCK_TIMEOUT_MS", value = "30000" },
+        { name = "MIGRATION_STATEMENT_TIMEOUT_MS", value = "300000" },
         { name = "PGSSLMODE", value = "verify-full" },
       ]
       secrets = [

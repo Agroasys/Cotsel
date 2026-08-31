@@ -17,8 +17,6 @@ export interface ReconciliationConfig {
   dbUser: string;
   dbPassword: string;
   dbSslMode: PostgresSslMode;
-  dbMigrationUser?: string;
-  dbMigrationPassword?: string;
   rpcUrl: string;
   rpcFallbackUrls: string[];
   rpcQuorum?: number;
@@ -164,8 +162,6 @@ export function loadConfig(): ReconciliationConfig {
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
     dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
-    dbMigrationUser: optionalEnv('DB_MIGRATION_USER'),
-    dbMigrationPassword: optionalEnv('DB_MIGRATION_PASSWORD'),
     rpcUrl: runtime.rpcUrl,
     rpcFallbackUrls: runtime.rpcFallbackUrls,
     rpcQuorum: optionalEnv('RPC_QUORUM') ? envNumber('RPC_QUORUM') : undefined,
@@ -200,12 +196,6 @@ export function loadConfig(): ReconciliationConfig {
     config.notificationsRequestTimeoutMs >= 1000,
     'NOTIFICATIONS_REQUEST_TIMEOUT_MS must be >= 1000',
   );
-  assert(
-    (!config.dbMigrationUser && !config.dbMigrationPassword) ||
-      (config.dbMigrationUser && config.dbMigrationPassword),
-    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
-  );
-
   return config;
 }
 

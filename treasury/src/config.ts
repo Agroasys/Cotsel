@@ -18,8 +18,6 @@ export interface TreasuryConfig {
   dbUser: string;
   dbPassword: string;
   dbSslMode: PostgresSslMode;
-  dbMigrationUser?: string;
-  dbMigrationPassword?: string;
   indexerGraphqlUrl: string;
   indexerGraphqlRequestTimeoutMs: number;
   ingestBatchSize: number;
@@ -197,13 +195,6 @@ export function loadConfig(): TreasuryConfig {
       })
     : null;
   const reconciliationDbName = optionalEnv('RECONCILIATION_DB_NAME');
-  const dbMigrationUser = optionalEnv('DB_MIGRATION_USER');
-  const dbMigrationPassword = optionalEnv('DB_MIGRATION_PASSWORD');
-  assert(
-    Boolean(dbMigrationUser) === Boolean(dbMigrationPassword),
-    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
-  );
-
   if (authEnabled) {
     assert(
       apiKeys.length > 0 || Boolean(hmacSecret),
@@ -237,8 +228,6 @@ export function loadConfig(): TreasuryConfig {
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
     dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
-    dbMigrationUser,
-    dbMigrationPassword,
     indexerGraphqlUrl: env('INDEXER_GRAPHQL_URL'),
     indexerGraphqlRequestTimeoutMs,
     ingestBatchSize: envNumber('TREASURY_INGEST_BATCH_SIZE', 100),

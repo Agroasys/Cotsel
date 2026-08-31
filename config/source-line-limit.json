@@ -52,7 +52,6 @@
     "gateway/src/server.ts": 588,
     "gateway/tests/authMiddleware.test.ts": 517,
     "gateway/tests/compliance.contract.test.ts": 731,
-    "gateway/tests/configEnv.test.ts": 516,
     "gateway/tests/gaslessRelayerSafety.test.ts": 872,
     "gateway/tests/operationsRoutes.contract.test.ts": 825,
     "gateway/tests/settlementCallbackDispatcher.test.ts": 656,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -18,6 +18,10 @@ export function countSourceLines(content) {
 export function isExcluded(file, config) {
   if (config.excludedPaths.includes(file)) return true;
   return config.excludedPrefixes.some((prefix) => file.startsWith(prefix));
+}
+
+export function existingTrackedFiles(root, trackedFiles) {
+  return trackedFiles.filter((file) => existsSync(path.join(root, file)));
 }
 
 function validateConfig(config) {
@@ -116,7 +120,10 @@ export function run(argv = process.argv.slice(2)) {
     cwd: options.root,
     encoding: 'utf8',
   });
-  const trackedFiles = trackedOutput.split('\0').filter(Boolean);
+  const trackedFiles = existingTrackedFiles(
+    options.root,
+    trackedOutput.split('\0').filter(Boolean),
+  );
   const result = evaluateTrackedSources({ root: options.root, config, trackedFiles });
 
   if (result.violations.length > 0) {
