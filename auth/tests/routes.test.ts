@@ -2,6 +2,7 @@ import { SessionService } from '../src/core/sessionService';
 import { SessionController } from '../src/api/controller';
 import { createRouter } from '../src/api/routes';
 import { AdminController } from '../src/api/adminController';
+import express from 'express';
 
 type RouterLayer = {
   route?: {
@@ -53,6 +54,49 @@ describe('auth router', () => {
     const router = createRouter(createSessionController(), sessionService);
 
     expect(listRoutes(router)).not.toContain('POST /session/exchange/agroasys');
+  });
+
+  test('readiness fails closed without a configured database check', async () => {
+    const app = express();
+    app.use(createRouter(createSessionController(), sessionService));
+    const server = app.listen(0);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('Test server did not expose a TCP port');
+      }
+      const response = await fetch(`http://127.0.0.1:${address.port}/ready`);
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({ ready: false });
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
+  test('readiness succeeds only after its database check succeeds', async () => {
+    const readinessCheck = jest.fn().mockResolvedValue(undefined);
+    const app = express();
+    app.use(createRouter(createSessionController(), sessionService, { readinessCheck }));
+    const server = app.listen(0);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('Test server did not expose a TCP port');
+      }
+      const response = await fetch(`http://127.0.0.1:${address.port}/ready`);
+      expect(response.status).toBe(200);
+      expect(readinessCheck).toHaveBeenCalledTimes(1);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
   });
 
   test('mounts session exchange route when enabled', () => {

@@ -8,6 +8,7 @@ const { createServicePool, parsePostgresSslMode } = require('./index');
 const MIGRATION_VERSION_PATTERN = /^\d{12,14}$/;
 const MIGRATION_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+const POSTGRES_IDENTIFIER_PATTERN = /^[a-z_][a-z0-9_]{0,62}$/;
 
 function requiredEnv(name) {
   const value = process.env[name]?.trim();
@@ -31,6 +32,13 @@ function positiveIntegerEnv(name) {
 
 function sha256(content) {
   return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+function quotePostgresIdentifier(identifier, name) {
+  if (!POSTGRES_IDENTIFIER_PATTERN.test(identifier)) {
+    throw new Error(`${name} must be a lowercase PostgreSQL identifier`);
+  }
+  return `"${identifier}"`;
 }
 
 function loadMigrationManifest(manifestPath) {
@@ -83,8 +91,118 @@ function loadMigrationManifest(manifestPath) {
 
     seenVersions.add(version);
     previousVersion = version;
-    return { version, name, file, checksum: actualChecksum, sql, baseline };
+    return {
+      version,
+      name,
+      file,
+      absolutePath: migrationPath,
+      checksum: actualChecksum,
+      sql,
+      baseline,
+    };
   });
+}
+
+function validateAppliedMigrations(migrations, appliedRows, serviceName, requireAll) {
+  const migrationsByVersion = new Map(
+    migrations.map((migration) => [migration.version, migration]),
+  );
+
+  for (const applied of appliedRows) {
+    const declared = migrationsByVersion.get(applied.version);
+    if (!declared) {
+      throw new Error(`Applied migration ${applied.version} is missing from the manifest`);
+    }
+    if (applied.name !== declared.name || applied.checksum.trim() !== declared.checksum) {
+      throw new Error(`Applied migration ${applied.version} does not match the immutable manifest`);
+    }
+  }
+
+  for (const [index, applied] of appliedRows.entries()) {
+    const expected = migrations[index];
+    if (!expected || applied.version !== expected.version) {
+      throw new Error(
+        `${serviceName} migration history is not an ordered manifest prefix; migration ${expected?.version ?? applied.version} is missing before ${applied.version}`,
+      );
+    }
+  }
+
+  if (requireAll && appliedRows.length !== migrations.length) {
+    const appliedVersions = new Set(appliedRows.map((migration) => migration.version));
+    const pending = migrations.find((migration) => !appliedVersions.has(migration.version));
+    throw new Error(
+      `${serviceName} schema is not current; migration ${pending?.version ?? 'history'} is missing`,
+    );
+  }
+}
+
+async function findExistingApplicationObject(client) {
+  const result = await client.query(`
+    WITH application_objects AS (
+      SELECT 'relation'::text AS object_type, c.relname::text AS object_name
+      FROM pg_catalog.pg_class c
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f', 'c')
+        AND c.relname <> 'cotsel_schema_migrations'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_depend d
+          WHERE d.classid = 'pg_catalog.pg_class'::regclass
+            AND d.objid = c.oid
+            AND d.deptype = 'e'
+        )
+      UNION ALL
+      SELECT 'function', p.proname
+      FROM pg_catalog.pg_proc p
+      JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_depend d
+          WHERE d.classid = 'pg_catalog.pg_proc'::regclass
+            AND d.objid = p.oid
+            AND d.deptype = 'e'
+        )
+      UNION ALL
+      SELECT 'type', t.typname
+      FROM pg_catalog.pg_type t
+      JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+      WHERE n.nspname = 'public'
+        AND t.typtype IN ('d', 'e', 'r', 'm')
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_depend d
+          WHERE d.classid = 'pg_catalog.pg_type'::regclass
+            AND d.objid = t.oid
+            AND d.deptype = 'e'
+        )
+    )
+    SELECT object_type, object_name
+    FROM application_objects
+    ORDER BY object_type, object_name
+    LIMIT 1
+  `);
+  return result.rows[0];
+}
+
+async function assertMigrationHistory({ pool, serviceName, manifestPath }) {
+  const migrations = loadMigrationManifest(manifestPath);
+  const ledgerResult = await pool.query(
+    `SELECT to_regclass('public.cotsel_schema_migrations')::text AS ledger`,
+  );
+  if (!ledgerResult.rows[0]?.ledger) {
+    throw new Error(`${serviceName} schema migration ledger is missing`);
+  }
+
+  const appliedResult = await pool.query(
+    `SELECT version, name, checksum
+     FROM cotsel_schema_migrations
+     WHERE service_name = $1
+     ORDER BY version`,
+    [serviceName],
+  );
+  validateAppliedMigrations(migrations, appliedResult.rows, serviceName, true);
 }
 
 async function rollbackQuietly(client) {
@@ -100,10 +218,12 @@ async function runVersionedMigrations({
   pool,
   serviceName,
   manifestPath,
+  runtimeDbUser,
   lockTimeoutMs = 30000,
   statementTimeoutMs = 300000,
 }) {
   const migrations = loadMigrationManifest(manifestPath);
+  const quotedRuntimeDbUser = quotePostgresIdentifier(runtimeDbUser, 'DB_RUNTIME_USER');
   const validatedLockTimeoutMs = positiveInteger(lockTimeoutMs, 'MIGRATION_LOCK_TIMEOUT_MS');
   const validatedStatementTimeoutMs = positiveInteger(
     statementTimeoutMs,
@@ -119,6 +239,18 @@ async function runVersionedMigrations({
     await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [lockIdentity]);
     lockAcquired = true;
 
+    const ledgerResult = await client.query(
+      `SELECT to_regclass('public.cotsel_schema_migrations')::text AS ledger`,
+    );
+    if (!ledgerResult.rows[0]?.ledger && migrations[0].baseline) {
+      const existingObject = await findExistingApplicationObject(client);
+      if (existingObject) {
+        throw new Error(
+          `Baseline migration ${migrations[0].version} requires an empty public schema; found ${existingObject.object_type} ${existingObject.object_name}; stop and create a reviewed adoption design`,
+        );
+      }
+    }
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS cotsel_schema_migrations (
         service_name TEXT NOT NULL,
@@ -130,7 +262,6 @@ async function runVersionedMigrations({
         PRIMARY KEY (service_name, version)
       )
     `);
-
     const appliedResult = await client.query(
       `SELECT version, name, checksum
        FROM cotsel_schema_migrations
@@ -138,43 +269,27 @@ async function runVersionedMigrations({
        ORDER BY version`,
       [serviceName],
     );
-    const migrationsByVersion = new Map(
-      migrations.map((migration) => [migration.version, migration]),
-    );
+    validateAppliedMigrations(migrations, appliedResult.rows, serviceName, false);
 
-    for (const applied of appliedResult.rows) {
-      const declared = migrationsByVersion.get(applied.version);
-      if (!declared) {
-        throw new Error(`Applied migration ${applied.version} is missing from the manifest`);
-      }
-      if (applied.name !== declared.name || applied.checksum.trim() !== declared.checksum) {
+    const appliedVersions = new Set(appliedResult.rows.map((migration) => migration.version));
+    const pendingBaseline = migrations.find(
+      (migration) => migration.baseline && !appliedVersions.has(migration.version),
+    );
+    if (pendingBaseline) {
+      const existingObject = await findExistingApplicationObject(client);
+      if (existingObject) {
         throw new Error(
-          `Applied migration ${applied.version} does not match the immutable manifest`,
+          `Baseline migration ${pendingBaseline.version} requires an empty public schema; found ${existingObject.object_type} ${existingObject.object_name}; stop and create a reviewed adoption design`,
         );
       }
     }
 
-    const appliedVersions = new Set(appliedResult.rows.map((migration) => migration.version));
+    await client.query(`GRANT SELECT ON TABLE cotsel_schema_migrations TO ${quotedRuntimeDbUser}`);
     const appliedNow = [];
 
     for (const migration of migrations) {
       if (appliedVersions.has(migration.version)) {
         continue;
-      }
-
-      if (migration.baseline) {
-        const existingObjects = await client.query(
-          `SELECT 1
-           FROM pg_catalog.pg_tables
-           WHERE schemaname = 'public'
-             AND tablename <> 'cotsel_schema_migrations'
-           LIMIT 1`,
-        );
-        if (existingObjects.rows.length > 0) {
-          throw new Error(
-            `Baseline migration ${migration.version} requires an empty public schema; stop and create a reviewed adoption design`,
-          );
-        }
       }
 
       const startedAt = Date.now();
@@ -240,6 +355,7 @@ async function main() {
       pool,
       serviceName,
       manifestPath: requiredEnv('MIGRATION_MANIFEST_PATH'),
+      runtimeDbUser: requiredEnv('DB_RUNTIME_USER'),
       lockTimeoutMs: process.env.MIGRATION_LOCK_TIMEOUT_MS || 30000,
       statementTimeoutMs: process.env.MIGRATION_STATEMENT_TIMEOUT_MS || 300000,
     });
@@ -261,11 +377,15 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertMigrationHistory,
+  findExistingApplicationObject,
   loadMigrationManifest,
   main,
   positiveInteger,
   positiveIntegerEnv,
+  quotePostgresIdentifier,
   requiredEnv,
   runVersionedMigrations,
   sha256,
+  validateAppliedMigrations,
 };

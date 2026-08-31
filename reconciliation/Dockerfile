@@ -79,8 +79,6 @@ COPY --from=builder /app/notifications/dist /app/notifications/dist
 COPY --from=builder /app/sdk/dist /app/sdk/dist
 COPY --from=builder /app/shared-db /app/shared-db
 COPY --from=builder /app/reconciliation/dist /app/reconciliation/dist
-COPY --from=builder /app/reconciliation/src/database/schema.sql /app/reconciliation/src/database/schema.sql
-COPY --from=builder /app/reconciliation/src/database/migrations.json /app/reconciliation/src/database/migrations.json
 
 RUN addgroup -S agro && adduser -S agro -G agro \
   && chown -R agro:agro /app

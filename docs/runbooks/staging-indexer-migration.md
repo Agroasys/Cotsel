@@ -13,8 +13,10 @@ This procedure does not deploy the long-running runtime or accept a release.
 2. Apply the reviewed `staging-platform` Terraform plan through the protected workflow.
 3. Confirm the plan created `cotsel-staging-indexer-migrate`.
 4. Confirm the database backup and forward-fix plan are approved.
-5. Stop if another indexer migration task is running.
-6. Do not pass credentials through command arguments or task overrides.
+5. Confirm each applied TypeORM migration has a recorded SHA-256 checksum.
+6. Stop if an applied migration has no checksum.
+7. Stop if another indexer migration task is running.
+8. Do not pass credentials through command arguments or task overrides.
 
 ## Resolve non-secret runtime coordinates
 
@@ -75,15 +77,22 @@ Record the returned task ARN. Do not reuse an older task-definition revision.
 3. Confirm `indexer-migrate` exited with code `0`.
 4. Inspect the `migrate` stream in `/agroasys/cotsel/staging/indexer-pipeline`.
 5. Confirm logs contain no credential or connection-string values.
-6. Confirm the indexer runtime starts and reports the expected migration head.
+6. Confirm the applied row count equals the reviewed manifest count.
+7. Confirm each applied row contains a 64-character checksum.
+8. Confirm each checksum matches `indexer/db/migrations.json`.
+9. Run the same migration task again.
+10. Confirm the second task reports no pending migration.
+11. Confirm the indexer runtime starts and reports the expected migration head.
 
 ## Failure handling
 
 1. Do not rerun automatically after an unknown failure.
 2. Preserve the task ARN, stopped reason, exit code, and redacted log stream.
 3. Confirm whether the migration is transactional and safe to retry.
-4. Use the approved forward-fix or restore procedure.
-5. Reconcile database state before restarting the indexer runtime.
+4. Do not infer checksums for existing unchecksummed history.
+5. Create a reviewed adoption design for unchecksummed history.
+6. Use the approved forward-fix or restore procedure.
+7. Reconcile database state before restarting the indexer runtime.
 
 ## Evidence
 

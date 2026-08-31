@@ -1,8 +1,11 @@
 import { createServicePool } from '@agroasys/shared-db';
+import { assertMigrationHistory } from '@agroasys/shared-db/migrate';
+import path from 'node:path';
 import { config } from '../config';
 import { Logger } from '../utils/logger';
 
 const SERVICE_NAME = 'oracle';
+const MIGRATION_MANIFEST_PATH = path.resolve(__dirname, 'migrations.json');
 
 export const pool = createServicePool({
   serviceName: SERVICE_NAME,
@@ -30,6 +33,11 @@ pool.on('error', (err: Error) => {
 export async function testConnection(): Promise<void> {
   try {
     const result = await pool.query('SELECT NOW() as current_time');
+    await assertMigrationHistory({
+      pool,
+      serviceName: SERVICE_NAME,
+      manifestPath: MIGRATION_MANIFEST_PATH,
+    });
     Logger.info('Database connection test successful', {
       currentTime: result.rows[0].current_time,
     });

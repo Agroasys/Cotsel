@@ -15,6 +15,7 @@
     "index.js",
     "index.d.ts",
     "migrate.js",
+    "migrate.d.ts",
     "migrate.test.js",
     "migrate.postgres.integration.test.js",
     "postgres-test-support.js",

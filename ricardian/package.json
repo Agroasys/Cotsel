@@ -4,7 +4,8 @@
   "private": true,
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy-files",
+    "copy-files": "mkdir -p dist/database && cp src/database/schema.sql src/database/migrations.json dist/database/",
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
     "test": "jest --runInBand",
