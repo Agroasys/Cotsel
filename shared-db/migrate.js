@@ -35,7 +35,7 @@ function sha256(content) {
 }
 
 function quotePostgresIdentifier(identifier, name) {
-  if (!POSTGRES_IDENTIFIER_PATTERN.test(identifier)) {
+  if (typeof identifier !== 'string' || !POSTGRES_IDENTIFIER_PATTERN.test(identifier)) {
     throw new Error(`${name} must be a lowercase PostgreSQL identifier`);
   }
   return `"${identifier}"`;
