@@ -11,10 +11,13 @@ services:
       DB_USER: '${INDEXER_DB_MIGRATION_USER}'
       DB_PASSWORD: '${INDEXER_DB_MIGRATION_PASSWORD}'
       DB_PASS: '${INDEXER_DB_MIGRATION_PASSWORD}'
+      DB_SSL_MODE: disable
+      MIGRATION_LOCK_TIMEOUT_MS: '30000'
+      MIGRATION_STATEMENT_TIMEOUT_MS: '300000'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
-    command: ['./node_modules/.bin/squid-typeorm-migration', 'apply']
+    command: ['node', 'migrate.js']
 
   indexer-pipeline:
     profiles: ['runtime']

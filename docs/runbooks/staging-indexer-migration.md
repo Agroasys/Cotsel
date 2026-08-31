@@ -10,23 +10,18 @@ This procedure does not deploy the long-running runtime or accept a release.
 ## Preconditions
 
 1. Confirm AWS account `655177116834` and region `ap-south-1`.
-2. Generate and approve the saved `staging-platform` Terraform plan. Do not apply it yet.
-3. Confirm the plan creates `cotsel-staging-indexer-migrate` and does not start Treasury.
+2. Confirm the reader-secret prerequisite was applied from its reviewed Terraform plan.
+3. Confirm the dedicated reader secret has an `AWSCURRENT` version with only
+   `username` and `password` keys. Do not read or record the values.
 4. Confirm the database backup and forward-fix plan are approved.
 5. Confirm each applied TypeORM migration has a recorded SHA-256 checksum.
 6. Stop if an applied migration has no checksum.
 7. Stop if another indexer migration task is running.
 8. Do not pass credentials through command arguments or task overrides.
-9. Confirm the reader-credential change is independently approved.
-10. From the repository root, add the reader fields before a service can use the new task definition:
-
-```bash
-AWS_PROFILE=agroasys \
-AWS_REGION=ap-south-1 \
-COTSEL_CONFIRM_INDEXER_READER_SECRET_UPDATE=ADD_COTSEL_INDEXER_READER \
-  scripts/add-aws-indexer-reader-credential.sh
-```
-
+9. Generate and approve the saved `staging-platform` Terraform plan. Do not
+   apply it before the reader-secret prerequisite is complete.
+10. Confirm the plan creates `cotsel-staging-indexer-migrate` and does not start
+    Treasury.
 11. Apply the exact approved saved Terraform plan through the protected workflow.
 12. Run the exact database bootstrap task without command overrides.
 13. Confirm the bootstrap task exited with code `0`.

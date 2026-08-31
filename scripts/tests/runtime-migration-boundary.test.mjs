@@ -66,7 +66,9 @@ test('long-running Cotsel services cannot receive migration credentials', async 
     assert.doesNotMatch(body, /DB_MIGRATION_(?:USER|PASSWORD)/, service);
   }
 
-  const indexerMigration = indexerServiceBlocks.find(([, service]) => service === 'indexer-migrate');
+  const indexerMigration = indexerServiceBlocks.find(
+    ([, service]) => service === 'indexer-migrate',
+  );
   assert.ok(indexerMigration, 'indexer-migrate must exist');
   assert.match(indexerMigration[2], /DB_USER: '\$\{INDEXER_DB_MIGRATION_USER\}'/);
   assert.match(indexerMigration[2], /node', 'migrate\.js/);
@@ -76,8 +78,8 @@ test('indexer pipeline and GraphQL use distinct non-migration identities', async
   const runtime = await readFile('infra/terraform/staging-platform/runtime-indexer.tf', 'utf8');
   assert.doesNotMatch(runtime, /database\/indexer\/migration/);
   assert.match(runtime, /indexer_pipeline_secrets[\s\S]*:username::/);
-  assert.match(runtime, /indexer_graphql_secrets[\s\S]*:reader_username::/);
-  assert.match(runtime, /indexer_graphql_secrets[\s\S]*:reader_password::/);
+  assert.match(runtime, /indexer_graphql_secrets[\s\S]*database\/indexer\/reader/);
+  assert.doesNotMatch(runtime, /indexer_graphql_secrets[\s\S]*database\/indexer\/runtime/);
 
   const migration = await readFile('infra/terraform/staging-platform/indexer-migration.tf', 'utf8');
   assert.match(migration, /database\/indexer\/migration/);

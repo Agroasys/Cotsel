@@ -5,7 +5,7 @@ locals {
       migration_role   = "cotsel_indexer_migrator"
       migration_secret = aws_secretsmanager_secret.platform["database/indexer/migration"].arn
       reader_role      = "cotsel_indexer_reader"
-      reader_secret    = aws_secretsmanager_secret.platform["database/indexer/runtime"].arn
+      reader_secret    = aws_secretsmanager_secret.platform["database/indexer/reader"].arn
       runtime_role     = "cotsel_indexer_app"
       runtime_secret   = aws_secretsmanager_secret.platform["database/indexer/runtime"].arn
     }
@@ -240,6 +240,7 @@ data "aws_iam_policy_document" "database_bootstrap_execution" {
       [local.postgres_master_secret_arn],
       [for service in values(local.database_bootstrap_services) : service.migration_secret],
       [for service in values(local.database_bootstrap_services) : service.runtime_secret],
+      [local.database_bootstrap_services.indexer.reader_secret],
     )
   }
 
@@ -292,8 +293,8 @@ resource "aws_ecs_task_definition" "database_bootstrap" {
         { name = "INDEXER_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.migration_secret}:username::" },
         { name = "INDEXER_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:password::" },
         { name = "INDEXER_RUNTIME_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:username::" },
-        { name = "INDEXER_READER_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:reader_password::" },
-        { name = "INDEXER_READER_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:reader_username::" },
+        { name = "INDEXER_READER_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:password::" },
+        { name = "INDEXER_READER_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:username::" },
         { name = "RICARDIAN_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:password::" },
         { name = "RICARDIAN_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:username::" },
         { name = "RICARDIAN_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.runtime_secret}:password::" },

@@ -56,9 +56,9 @@ locals {
   ]
 
   indexer_graphql_secrets = [
-    { name = "DB_PASS", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/runtime"].arn}:reader_password::" },
-    { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/runtime"].arn}:reader_password::" },
-    { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/runtime"].arn}:reader_username::" },
+    { name = "DB_PASS", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/reader"].arn}:password::" },
+    { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/reader"].arn}:password::" },
+    { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/reader"].arn}:username::" },
   ]
 
   indexer_graphql_container = {

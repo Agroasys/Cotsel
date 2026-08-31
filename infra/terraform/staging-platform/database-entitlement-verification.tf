@@ -241,12 +241,15 @@ data "aws_iam_policy_document" "database_entitlement_verification_execution" {
     sid     = "ReadOnlyEntitlementVerificationSecrets"
     effect  = "Allow"
     actions = ["secretsmanager:GetSecretValue"]
-    resources = flatten([
-      for service in values(local.database_bootstrap_services) : [
-        service.migration_secret,
-        service.runtime_secret,
-      ]
-    ])
+    resources = concat(
+      flatten([
+        for service in values(local.database_bootstrap_services) : [
+          service.migration_secret,
+          service.runtime_secret,
+        ]
+      ]),
+      [local.database_bootstrap_services.indexer.reader_secret],
+    )
   }
 
   statement {
@@ -293,8 +296,8 @@ resource "aws_ecs_task_definition" "database_entitlement_verification" {
         { name = "INDEXER_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.migration_secret}:username::" },
         { name = "INDEXER_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:password::" },
         { name = "INDEXER_RUNTIME_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:username::" },
-        { name = "INDEXER_READER_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:reader_password::" },
-        { name = "INDEXER_READER_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:reader_username::" },
+        { name = "INDEXER_READER_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:password::" },
+        { name = "INDEXER_READER_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:username::" },
         { name = "RICARDIAN_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:password::" },
         { name = "RICARDIAN_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:username::" },
         { name = "RICARDIAN_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.runtime_secret}:password::" },
