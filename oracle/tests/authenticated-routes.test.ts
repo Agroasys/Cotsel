@@ -4,6 +4,7 @@ import { Server } from 'http';
 import { createRouter } from '../src/api/routes';
 import { generateRequestHash } from '../src/utils/crypto';
 import { consumeHmacNonce } from '../src/database/queries';
+import { captureRawJsonBody } from '../src/middleware/middleware';
 
 jest.mock('../src/config', () => ({
   config: {
@@ -24,11 +25,12 @@ function createSignedHeaders(
     signature?: string;
     nonce?: string;
     authorization?: string;
+    rawBody?: string;
   },
 ) {
   const timestamp = overrides?.timestamp ?? Date.now().toString();
   const authorization = overrides?.authorization ?? 'Bearer test-api-key';
-  const bodyText = JSON.stringify(body);
+  const bodyText = overrides?.rawBody ?? JSON.stringify(body);
   const signature =
     overrides?.signature ?? generateRequestHash(timestamp, bodyText, 'test-hmac-secret');
 
@@ -83,7 +85,7 @@ describe('oracle authenticated routes', () => {
     jest.clearAllMocks();
 
     const app = express();
-    app.use(express.json());
+    app.use(express.json({ verify: captureRawJsonBody }));
     app.use('/api/oracle', createRouter(controller as never));
 
     await new Promise<void>((resolve) => {
@@ -198,9 +200,52 @@ describe('oracle authenticated routes', () => {
     await expect(response.json()).resolves.toEqual(
       expect.objectContaining({
         error: 'Unauthorized',
-        message: 'Invalid HMAC signature',
+        message: 'Invalid request authentication',
       }),
     );
+  });
+
+  test('JSON key reordering invalidates the exact-byte signature', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const payload = { tradeId: 'trade-order', requestId: 'req-order' };
+    const signedBody = JSON.stringify(payload);
+    const reorderedBody = JSON.stringify({
+      requestId: payload.requestId,
+      tradeId: payload.tradeId,
+    });
+
+    const response = await fetch(`${baseUrl}/api/oracle/release-stage1`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, {
+        nonce: 'oracle-key-order',
+        rawBody: signedBody,
+      }),
+      body: reorderedBody,
+    });
+
+    expect(response.status).toBe(401);
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(controller.releaseStage1).not.toHaveBeenCalled();
+  });
+
+  test('JSON whitespace changes invalidate the exact-byte signature', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const payload = { tradeId: 'trade-space', requestId: 'req-space' };
+    const compactBody = JSON.stringify(payload);
+    const spacedBody = JSON.stringify(payload, null, 2);
+
+    const response = await fetch(`${baseUrl}/api/oracle/release-stage1`, {
+      method: 'POST',
+      headers: createSignedHeaders(payload, {
+        nonce: 'oracle-whitespace',
+        rawBody: compactBody,
+      }),
+      body: spacedBody,
+    });
+
+    expect(response.status).toBe(401);
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(controller.releaseStage1).not.toHaveBeenCalled();
   });
 
   test('stale timestamp is rejected at the route boundary', async () => {
@@ -221,7 +266,7 @@ describe('oracle authenticated routes', () => {
     await expect(response.json()).resolves.toEqual(
       expect.objectContaining({
         error: 'Unauthorized',
-        message: expect.stringContaining('Request timestamp too old'),
+        message: 'Invalid request authentication',
       }),
     );
   });
@@ -249,7 +294,7 @@ describe('oracle authenticated routes', () => {
     mockConsumeHmacNonce.mockResolvedValue(true);
 
     const response = await fetch(`${baseUrl}/api/oracle/triggers?status=pending_approval`, {
-      headers: createSignedHeaders({}, { nonce: 'oracle-trigger-list' }),
+      headers: createSignedHeaders({}, { nonce: 'oracle-trigger-list', rawBody: '' }),
     });
 
     expect(response.status).toBe(200);
