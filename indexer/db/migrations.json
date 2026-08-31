@@ -101,6 +101,12 @@
       "name": "protocol_governance",
       "file": "migrations/1785000000000-ProtocolGovernance.js",
       "sha256": "1f072cffd280500cf682aefb2bbd3c3d58ae42e475e4b8c71a0b46eb01a9153c"
+    },
+    {
+      "version": "1785100000000",
+      "name": "processor_state_schema",
+      "file": "migrations/1785100000000-ProcessorStateSchema.js",
+      "sha256": "1f2c08fa1b4cab464d08acb5d3271e1e9d81f6015569c6244aa6c35783da1459"
     }
   ]
 }

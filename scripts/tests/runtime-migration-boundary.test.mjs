@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -80,6 +80,9 @@ test('indexer pipeline and GraphQL use distinct non-migration identities', async
   assert.match(runtime, /indexer_pipeline_secrets[\s\S]*:username::/);
   assert.match(runtime, /indexer_graphql_secrets[\s\S]*database\/indexer\/reader/);
   assert.doesNotMatch(runtime, /indexer_graphql_secrets[\s\S]*database\/indexer\/runtime/);
+
+  const gatewayIam = await readFile('infra/terraform/staging-platform/iam.tf', 'utf8');
+  assert.match(gatewayIam, /database\/indexer\/reader/);
 
   const migration = await readFile('infra/terraform/staging-platform/indexer-migration.tf', 'utf8');
   assert.match(migration, /database\/indexer\/migration/);
@@ -165,7 +168,12 @@ test('indexer migration job validates history and serializes TypeORM execution',
   assert.match(runner, /pg_advisory_lock/);
   assert.match(runner, /checksum CHAR\(64\)/);
   assert.match(runner, /reviewed adoption design/);
-  assert.equal(manifest.migrations.length, 17);
+  const migrationFiles = (await readdir('indexer/db/migrations'))
+    .filter((file) => /^\d{13}-.*\.js$/.test(file))
+    .map((file) => `migrations/${file}`)
+    .sort();
+  assert.deepEqual(manifest.migrations.map((migration) => migration.file).sort(), migrationFiles);
+  assert.equal(manifest.migrations.length, 18);
 });
 
 test('runtime readiness requires the exact applied migration history', async () => {

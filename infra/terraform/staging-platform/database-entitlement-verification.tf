@@ -35,6 +35,42 @@ locals {
     wget --quiet -O "$${PGSSLROOTCERT}" 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem'
     printf '%s  %s\n' 'e5bb2084ccf45087bda1c9bffdea0eb15ee67f0b91646106e466714f9de3c7e3' "$${PGSSLROOTCERT}" | sha256sum -c -s
 
+    verify_restricted_role() {
+      database_name="$${1}"
+      role_name="$${2}"
+      restricted_role_count="$(psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align <<'SQL'
+    SELECT count(*)
+    FROM pg_roles role_row
+    WHERE role_row.rolname = current_user
+      AND role_row.rolcanlogin
+      AND NOT role_row.rolsuper
+      AND NOT role_row.rolinherit
+      AND NOT role_row.rolcreaterole
+      AND NOT role_row.rolcreatedb
+      AND NOT role_row.rolreplication
+      AND NOT role_row.rolbypassrls
+      AND NOT EXISTS (
+        SELECT 1
+        FROM pg_auth_members membership_row
+        WHERE membership_row.member = role_row.oid
+      );
+    SQL
+    )"
+      [ "$${restricted_role_count}" = '1' ] || {
+        printf '%s\n' "Database role $${role_name} has unexpected attributes or membership." >&2
+        exit 1
+      }
+    }
+
+    verify_connection_denied() {
+      database_name="$${1}"
+      role_name="$${2}"
+      if psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
+        printf '%s\n' "Database role $${role_name} unexpectedly connected to $${database_name}." >&2
+        exit 1
+      fi
+    }
+
     verify_service() {
       database_name="$${1}"
       other_database_name="$${2}"
@@ -51,10 +87,14 @@ locals {
     CREATE SCHEMA $${probe_schema};
     ROLLBACK;
     SQL
+      verify_restricted_role "$${database_name}" "$${migration_username}"
+      verify_connection_denied "$${other_database_name}" "$${migration_username}"
+      verify_connection_denied 'cotsel_indexer' "$${migration_username}"
 
       export PGUSER="$${runtime_username}"
       export PGPASSWORD="$${runtime_password}"
       psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null
+      verify_restricted_role "$${database_name}" "$${runtime_username}"
 
       if psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet >/dev/null 2>&1 <<SQL
     BEGIN;
@@ -66,10 +106,8 @@ locals {
         exit 1
       fi
 
-      if psql --dbname "$${other_database_name}" --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
-        printf '%s\n' "Runtime role unexpectedly connected to $${other_database_name}." >&2
-        exit 1
-      fi
+      verify_connection_denied "$${other_database_name}" "$${runtime_username}"
+      verify_connection_denied 'cotsel_indexer' "$${runtime_username}"
     }
 
     verify_indexer() {
@@ -121,10 +159,14 @@ locals {
     CREATE TABLE public.cotsel_indexer_entitlement_probe (id bigint PRIMARY KEY);
     ROLLBACK;
     SQL
+      verify_restricted_role 'cotsel_indexer' "$${INDEXER_MIGRATION_USERNAME}"
+      verify_connection_denied 'cotsel_ricardian' "$${INDEXER_MIGRATION_USERNAME}"
+      verify_connection_denied 'cotsel_treasury' "$${INDEXER_MIGRATION_USERNAME}"
 
       export PGUSER="$${INDEXER_RUNTIME_USERNAME}"
       export PGPASSWORD="$${INDEXER_RUNTIME_PASSWORD}"
       psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null
+      verify_restricted_role 'cotsel_indexer' "$${INDEXER_RUNTIME_USERNAME}"
       psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'UPDATE public.migrations SET name = name WHERE false' >/dev/null
       if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet >/dev/null 2>&1 <<'SQL'
     BEGIN;
@@ -135,10 +177,13 @@ locals {
         printf '%s\n' 'Indexer runtime role unexpectedly created a table.' >&2
         exit 1
       fi
+      verify_connection_denied 'cotsel_ricardian' "$${INDEXER_RUNTIME_USERNAME}"
+      verify_connection_denied 'cotsel_treasury' "$${INDEXER_RUNTIME_USERNAME}"
 
       export PGUSER="$${INDEXER_READER_USERNAME}"
       export PGPASSWORD="$${INDEXER_READER_PASSWORD}"
       psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1 FROM public.migrations LIMIT 1' >/dev/null
+      verify_restricted_role 'cotsel_indexer' "$${INDEXER_READER_USERNAME}"
       if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'UPDATE public.migrations SET name = name WHERE false' >/dev/null 2>&1; then
         printf '%s\n' 'Indexer GraphQL reader unexpectedly updated a table.' >&2
         exit 1
@@ -153,12 +198,8 @@ locals {
         exit 1
       fi
 
-      for denied_database in cotsel_ricardian cotsel_treasury; do
-        if psql --dbname "$${denied_database}" --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
-          printf '%s\n' "Indexer GraphQL reader unexpectedly connected to $${denied_database}." >&2
-          exit 1
-        fi
-      done
+      verify_connection_denied 'cotsel_ricardian' "$${INDEXER_READER_USERNAME}"
+      verify_connection_denied 'cotsel_treasury' "$${INDEXER_READER_USERNAME}"
     }
 
     verify_service \
@@ -177,19 +218,6 @@ locals {
       "$${TREASURY_RUNTIME_PASSWORD}"
 
     verify_indexer
-
-    export PGUSER="$${RICARDIAN_RUNTIME_USERNAME}"
-    export PGPASSWORD="$${RICARDIAN_RUNTIME_PASSWORD}"
-    if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
-      printf '%s\n' 'Ricardian runtime unexpectedly connected to the indexer database.' >&2
-      exit 1
-    fi
-    export PGUSER="$${TREASURY_RUNTIME_USERNAME}"
-    export PGPASSWORD="$${TREASURY_RUNTIME_PASSWORD}"
-    if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
-      printf '%s\n' 'Treasury runtime unexpectedly connected to the indexer database.' >&2
-      exit 1
-    fi
 
     unset INDEXER_MIGRATION_PASSWORD INDEXER_RUNTIME_PASSWORD INDEXER_READER_PASSWORD
     unset RICARDIAN_MIGRATION_PASSWORD RICARDIAN_RUNTIME_PASSWORD TREASURY_MIGRATION_PASSWORD TREASURY_RUNTIME_PASSWORD

@@ -102,9 +102,9 @@ test('the entitlement verifier is private, strict-TLS, and tests the live role b
   assert.match(source, /export PGSSLMODE='verify-full'/);
   assert.match(source, /CREATE SCHEMA \$\$\{probe_schema\}/);
   assert.match(source, /Runtime role unexpectedly created schema/);
-  assert.match(source, /Runtime role unexpectedly connected to/);
   assert.match(source, /Indexer GraphQL reader unexpectedly updated a table/);
-  assert.match(source, /Indexer GraphQL reader unexpectedly connected to/);
+  assert.match(source, /has unexpected attributes or membership/);
+  assert.match(source, /unexpectedly connected to/);
   assert.match(source, /Indexer database owner is/);
   assert.match(source, /schema\(s\) outside migration-role ownership/);
   assert.match(

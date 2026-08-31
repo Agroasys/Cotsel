@@ -119,18 +119,25 @@ locals {
     BEGIN;
     GRANT cotsel_indexer_app, cotsel_indexer_migrator TO CURRENT_USER;
     REVOKE ALL ON DATABASE cotsel_indexer FROM PUBLIC;
+    REVOKE ALL ON DATABASE cotsel_indexer FROM cotsel_indexer_app, cotsel_indexer_reader;
     GRANT CONNECT ON DATABASE cotsel_indexer TO cotsel_indexer_migrator, cotsel_indexer_app, cotsel_indexer_reader;
     REASSIGN OWNED BY cotsel_indexer_app TO cotsel_indexer_migrator;
     REVOKE CREATE ON SCHEMA public FROM PUBLIC;
     ALTER SCHEMA public OWNER TO cotsel_indexer_migrator;
+    REVOKE ALL ON SCHEMA public FROM cotsel_indexer_app, cotsel_indexer_reader;
     GRANT USAGE, CREATE ON SCHEMA public TO cotsel_indexer_migrator;
     GRANT USAGE ON SCHEMA public TO cotsel_indexer_app, cotsel_indexer_reader;
     CREATE SCHEMA IF NOT EXISTS squid_processor AUTHORIZATION cotsel_indexer_migrator;
     ALTER SCHEMA squid_processor OWNER TO cotsel_indexer_migrator;
     ALTER DATABASE cotsel_indexer OWNER TO cotsel_indexer_migrator;
     REVOKE ALL ON SCHEMA squid_processor FROM PUBLIC;
+    REVOKE ALL ON SCHEMA squid_processor FROM cotsel_indexer_app, cotsel_indexer_reader;
     GRANT USAGE, CREATE ON SCHEMA squid_processor TO cotsel_indexer_migrator;
     GRANT USAGE ON SCHEMA squid_processor TO cotsel_indexer_app;
+    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM cotsel_indexer_app, cotsel_indexer_reader;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM cotsel_indexer_app, cotsel_indexer_reader;
+    REVOKE ALL ON ALL TABLES IN SCHEMA squid_processor FROM cotsel_indexer_app, cotsel_indexer_reader;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA squid_processor FROM cotsel_indexer_app, cotsel_indexer_reader;
     GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO cotsel_indexer_app;
     GRANT SELECT ON ALL TABLES IN SCHEMA public TO cotsel_indexer_reader;
     GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO cotsel_indexer_app;
@@ -143,6 +150,10 @@ locals {
     export PGUSER="$${INDEXER_MIGRATION_USERNAME}"
     export PGPASSWORD="$${INDEXER_MIGRATION_PASSWORD}"
     psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 <<SQL
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM cotsel_indexer_app, cotsel_indexer_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM cotsel_indexer_app, cotsel_indexer_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA squid_processor REVOKE ALL ON TABLES FROM cotsel_indexer_app, cotsel_indexer_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA squid_processor REVOKE ALL ON SEQUENCES FROM cotsel_indexer_app, cotsel_indexer_reader;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cotsel_indexer_app;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO cotsel_indexer_reader;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO cotsel_indexer_app;

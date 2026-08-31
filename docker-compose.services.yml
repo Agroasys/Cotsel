@@ -116,16 +116,42 @@ services:
           migration_user="$$3"
           reader_user="$$4"
           configure_db_access "$$db" "$$runtime_user" "$$migration_user"
-          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT CONNECT ON DATABASE \"$$db\" TO \"$$reader_user\";"
-          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE ON SCHEMA public TO \"$$reader_user\";"
-          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "BEGIN; GRANT \"$$runtime_user\", \"$$migration_user\" TO CURRENT_USER; REASSIGN OWNED BY \"$$runtime_user\" TO \"$$migration_user\"; ALTER SCHEMA public OWNER TO \"$$migration_user\"; CREATE SCHEMA IF NOT EXISTS squid_processor AUTHORIZATION \"$$migration_user\"; ALTER SCHEMA squid_processor OWNER TO \"$$migration_user\"; ALTER DATABASE \"$$db\" OWNER TO \"$$migration_user\"; REVOKE \"$$runtime_user\", \"$$migration_user\" FROM CURRENT_USER; COMMIT;"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "REVOKE ALL ON DATABASE \"$$db\" FROM \"$$runtime_user\", \"$$reader_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT CONNECT ON DATABASE \"$$db\" TO \"$$runtime_user\", \"$$reader_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" <<SQL
+        BEGIN;
+        GRANT "$$runtime_user", "$$migration_user" TO CURRENT_USER;
+        REASSIGN OWNED BY "$$runtime_user" TO "$$migration_user";
+        ALTER SCHEMA public OWNER TO "$$migration_user";
+        CREATE SCHEMA IF NOT EXISTS squid_processor AUTHORIZATION "$$migration_user";
+        ALTER SCHEMA squid_processor OWNER TO "$$migration_user";
+        ALTER DATABASE "$$db" OWNER TO "$$migration_user";
+        REVOKE ALL ON SCHEMA public FROM "$$runtime_user", "$$reader_user";
+        REVOKE ALL ON SCHEMA squid_processor FROM PUBLIC, "$$runtime_user", "$$reader_user";
+        REVOKE ALL ON ALL TABLES IN SCHEMA public FROM "$$runtime_user", "$$reader_user";
+        REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM "$$runtime_user", "$$reader_user";
+        REVOKE ALL ON ALL TABLES IN SCHEMA squid_processor FROM "$$runtime_user", "$$reader_user";
+        REVOKE ALL ON ALL SEQUENCES IN SCHEMA squid_processor FROM "$$runtime_user", "$$reader_user";
+        REVOKE "$$runtime_user", "$$migration_user" FROM CURRENT_USER;
+        COMMIT;
+        SQL
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE ON SCHEMA public TO \"$$runtime_user\", \"$$reader_user\";"
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"$$runtime_user\";"
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"$$reader_user\";"
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO \"$$runtime_user\";"
-          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "REVOKE ALL ON SCHEMA squid_processor FROM PUBLIC;"
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE, CREATE ON SCHEMA squid_processor TO \"$$migration_user\";"
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT USAGE ON SCHEMA squid_processor TO \"$$runtime_user\";"
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA squid_processor TO \"$$runtime_user\";"
+          psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" <<SQL
+        ALTER DEFAULT PRIVILEGES FOR ROLE "$$migration_user" IN SCHEMA public
+          REVOKE ALL ON TABLES FROM "$$runtime_user", "$$reader_user";
+        ALTER DEFAULT PRIVILEGES FOR ROLE "$$migration_user" IN SCHEMA public
+          REVOKE ALL ON SEQUENCES FROM "$$runtime_user", "$$reader_user";
+        ALTER DEFAULT PRIVILEGES FOR ROLE "$$migration_user" IN SCHEMA squid_processor
+          REVOKE ALL ON TABLES FROM "$$runtime_user", "$$reader_user";
+        ALTER DEFAULT PRIVILEGES FOR ROLE "$$migration_user" IN SCHEMA squid_processor
+          REVOKE ALL ON SEQUENCES FROM "$$runtime_user", "$$reader_user";
+        SQL
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"$$migration_user\" IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"$$runtime_user\";"
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"$$migration_user\" IN SCHEMA public GRANT SELECT ON TABLES TO \"$$reader_user\";"
           psql -h postgres -U "$${POSTGRES_USER}" -d "$$db" -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"$$migration_user\" IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO \"$$runtime_user\";"
