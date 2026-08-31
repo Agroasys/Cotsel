@@ -1,0 +1,11 @@
+{
+  "migrations": [
+    {
+      "version": "202608310001",
+      "name": "baseline",
+      "file": "schema.sql",
+      "sha256": "fa72abe23e5f92f59d22f6b7c8d6e285a86ac700e3b8f4eeccb9e17ec2c80458",
+      "baseline": true
+    }
+  ]
+}

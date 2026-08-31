@@ -1,0 +1,106 @@
+{
+  "migrations": [
+    {
+      "version": "1771180205323",
+      "name": "data",
+      "file": "migrations/1771180205323-Data.js",
+      "sha256": "f17c92a0ecc5ef086ee27bf2fae5d53052ad3f939b63a38186a808c0f8d7868e"
+    },
+    {
+      "version": "1771815600000",
+      "name": "event_hash_separation",
+      "file": "migrations/1771815600000-EventHashSeparation.js",
+      "sha256": "938cd93bdfff9f726213e6c623a32cc64b11f00063e4e10739da9ead31b7d5be"
+    },
+    {
+      "version": "1772284878012",
+      "name": "data",
+      "file": "migrations/1772284878012-Data.js",
+      "sha256": "6a43b77d1330b4459cd7b525d600c85dfd6115097ab6290308468d2d78d3e805"
+    },
+    {
+      "version": "1772299200000",
+      "name": "system_event_treasury_fields",
+      "file": "migrations/1772299200000-SystemEventTreasuryFields.js",
+      "sha256": "e0f13420d91d42783ca097074e09ee5c63e43bd8f48425d1b5372f85d50135ce"
+    },
+    {
+      "version": "1772910000000",
+      "name": "overview_snapshot",
+      "file": "migrations/1772910000000-OverviewSnapshot.js",
+      "sha256": "40add065fecaa93f4bea2dddc6c4f1f185b5f4ee42dc9ed91ffe50f3d52bbf94"
+    },
+    {
+      "version": "1774031059140",
+      "name": "data",
+      "file": "migrations/1774031059140-Data.js",
+      "sha256": "f53c57b03141b8c10c17829c81540d5bf03bd0de99dacb87535f800e37dab7bc"
+    },
+    {
+      "version": "1774989000000",
+      "name": "add_event_log_ordering_columns",
+      "file": "migrations/1774989000000-AddEventLogOrderingColumns.js",
+      "sha256": "400f6fe08a8972d95692c6cf518cc309c3795ea7ad750ca70a25abd6996d10a8"
+    },
+    {
+      "version": "1774990200000",
+      "name": "relax_event_extrinsic_index_nullability",
+      "file": "migrations/1774990200000-RelaxEventExtrinsicIndexNullability.js",
+      "sha256": "f0b46d254e9b34908ac7241ca70119774f9b1d56f24115965132c806d55effa2"
+    },
+    {
+      "version": "1776000000000",
+      "name": "drop_legacy_event_identity_fields",
+      "file": "migrations/1776000000000-DropLegacyEventIdentityFields.js",
+      "sha256": "d68744d48040eb996596f749159b79ac9a68827d4f2ee54ef432b1089afb3796"
+    },
+    {
+      "version": "1777000000000",
+      "name": "gasless_execution_event_fields",
+      "file": "migrations/1777000000000-GaslessExecutionEventFields.js",
+      "sha256": "8fcd357c5f3e567f1a84ba8e847a88bb244502e0adabdb6167b3b18830f7ffc6"
+    },
+    {
+      "version": "1777100000000",
+      "name": "support_fee_data_plane_fields",
+      "file": "migrations/1777100000000-SupportFeeDataPlaneFields.js",
+      "sha256": "fd33e357984c761d24bd6cded589001652bba6e9b63543fbc2d637385106df7c"
+    },
+    {
+      "version": "1777200000000",
+      "name": "buyer_refund_event_fields",
+      "file": "migrations/1777200000000-BuyerRefundEventFields.js",
+      "sha256": "4f2388ebbfd7aa07c7c2ddcb18c4c6d2ce14f74ecaad74d05307f96652d22a1e"
+    },
+    {
+      "version": "1780127074814",
+      "name": "data",
+      "file": "migrations/1780127074814-Data.js",
+      "sha256": "ab9a6a6a941c467388b80ccd218d0c061fd2beb55414f351b6c1a63832e01426"
+    },
+    {
+      "version": "1784042818000",
+      "name": "inspection_event_fields",
+      "file": "migrations/1784042818000-InspectionEventFields.js",
+      "sha256": "1620a2b66ad36613cbc175136b111e9b64fca0a8cea3f3e63be9bfcbc0fc68a1"
+    },
+    {
+      "version": "1784580542957",
+      "name": "data",
+      "file": "migrations/1784580542957-Data.js",
+      "sha256": "5cc4dcc7b4c563c2dadc55b4b25070986bd879f2982692edf7e983061e20aeb2"
+    },
+    {
+      "version": "1784908010586",
+      "name": "data",
+      "file": "migrations/1784908010586-Data.js",
+      "sha256": "30924f7e7acee7e1b23b252bcf11642f75ee38d0e76ca8ec7ebf08c5749c9d7a"
+    },
+    {
+      "version": "1785000000000",
+      "name": "protocol_governance",
+      "file": "migrations/1785000000000-ProtocolGovernance.js",
+      "sha256": "1f072cffd280500cf682aefb2bbd3c3d58ae42e475e4b8c71a0b46eb01a9153c"
+    }
+  ]
+}

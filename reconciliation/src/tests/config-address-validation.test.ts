@@ -14,8 +14,6 @@ const BASE_ENV: Record<string, string> = {
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
   DB_SSL_MODE: 'disable',
-  DB_MIGRATION_USER: '',
-  DB_MIGRATION_PASSWORD: '',
   RPC_URL: 'http://127.0.0.1:8545',
   CHAIN_ID: '31337',
   ESCROW_ADDRESS: '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
@@ -118,18 +116,6 @@ test('container-safe indexer URL check allows service DNS names when enabled', (
       const { loadConfig } = loadConfigModule();
       const config = loadConfig();
       assert.equal(config.indexerGraphqlUrl, 'http://indexer-graphql:4350/graphql');
-    },
-  );
-});
-
-test('migration credentials must be configured as a complete pair', () => {
-  withEnv(
-    { DB_MIGRATION_USER: 'reconciliation_migrator', DB_MIGRATION_PASSWORD: undefined },
-    () => {
-      assert.throws(
-        () => loadConfigModule(),
-        /DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together/,
-      );
     },
   );
 });

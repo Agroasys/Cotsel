@@ -19,8 +19,10 @@ DDL. A successful migration does not deploy or accept a release.
    position exists before schema-changing work.
 5. Review the exact schema change, forward-fix procedure, expected lock scope,
    and compatibility with the currently running image.
-6. Confirm no migration task for the same service is running.
-7. Do not supply credentials, environment variables, or commands as task
+6. Confirm a baseline migration targets an empty `public` schema.
+7. Stop the rollout if a baseline targets a populated schema.
+8. Confirm no migration task for the same service is running.
+9. Do not supply credentials, environment variables, or commands as task
    overrides.
 
 ## Resolve non-secret coordinates
@@ -78,16 +80,15 @@ The request must contain no `overrides` object. Record the returned task ARN.
    overrides.
 6. Run the service-specific schema/entitlement check, then deploy the matching
    long-running image revision.
-7. Confirm the runtime task definition contains `DB_AUTO_MIGRATE=false`, no
-   `DB_MIGRATION_*` secrets, and only the runtime database secret ARN.
-8. Prove startup, health, and a representative authenticated read.
+7. Confirm the runtime task definition has no migration secret ARN.
+8. Confirm the runtime application image contains no startup migration path.
+9. Prove startup, health, and a representative authenticated read.
 
 ## Failure handling
 
 Do not blindly retry. Preserve the task ARN, revision, exit code, redacted log
-stream, and database recovery position. Determine whether any statement
-committed before the failure. Use the reviewed forward-fix or restore procedure,
-reconcile schema state, and obtain a fresh review before another attempt.
+stream, and database recovery position. Baseline failures on populated schemas
+require a new reviewed adoption design. Use a reviewed forward fix or restore.
 
 ## Evidence record
 

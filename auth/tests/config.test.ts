@@ -9,8 +9,6 @@ const BASE_ENV: Record<string, string> = {
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
   DB_SSL_MODE: 'disable',
-  DB_MIGRATION_USER: '',
-  DB_MIGRATION_PASSWORD: '',
   SESSION_TTL_SECONDS: '3600',
 };
 
@@ -56,21 +54,6 @@ describe('auth config', () => {
       const config = loadConfig();
       expect(config.corsAllowNoOrigin).toBe(false);
     });
-  });
-
-  test('migration credentials must be configured as a pair', () => {
-    withEnv(
-      {
-        DB_MIGRATION_USER: 'auth_migrator',
-        DB_MIGRATION_PASSWORD: undefined,
-      },
-      () => {
-        const { loadConfig } = loadConfigModule();
-        expect(() => loadConfig()).toThrow(
-          'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
-        );
-      },
-    );
   });
 
   test('Postgres SSL mode is explicit and validated', () => {

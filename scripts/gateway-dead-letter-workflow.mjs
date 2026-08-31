@@ -5,7 +5,6 @@ const require = createRequire(import.meta.url);
 require('ts-node/register/transpile-only');
 
 const { loadConfig } = require('../gateway/src/config/env');
-const { runMigrations } = require('../gateway/src/database/migrations');
 const { createPool, closeConnection } = require('../gateway/src/database/index');
 const { createPostgresFailedOperationStore } = require('../gateway/src/core/failedOperationStore');
 const { createPostgresGovernanceActionStore } = require('../gateway/src/core/governanceStore');
@@ -25,8 +24,6 @@ async function main() {
   const pool = createPool(config);
 
   try {
-    await runMigrations(pool);
-
     const failedOperationStore = createPostgresFailedOperationStore(pool);
     const governanceActionStore = createPostgresGovernanceActionStore(pool);
     const governanceWriteStore = createPostgresGovernanceWriteStore(pool, governanceActionStore);

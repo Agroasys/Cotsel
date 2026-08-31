@@ -6,7 +6,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { countSourceLines, evaluateTrackedSources, isExcluded } from '../source-line-limit.mjs';
+import {
+  countSourceLines,
+  evaluateTrackedSources,
+  existingTrackedFiles,
+  isExcluded,
+} from '../source-line-limit.mjs';
 
 function createFixture(files) {
   const root = mkdtempSync(path.join(tmpdir(), 'cotsel-source-line-limit-'));
@@ -34,6 +39,13 @@ test('counts a final unterminated line', () => {
   assert.equal(countSourceLines('one\ntwo'), 2);
   assert.equal(countSourceLines('one\ntwo\n'), 2);
   assert.equal(countSourceLines(''), 0);
+});
+
+test('ignores deleted working-tree paths during an in-progress refactor', () => {
+  const root = createFixture({ 'src/present.ts': '1\n' });
+  assert.deepEqual(existingTrackedFiles(root, ['src/present.ts', 'src/deleted.ts']), [
+    'src/present.ts',
+  ]);
 });
 
 test('rejects a new oversized source file', () => {

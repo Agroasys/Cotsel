@@ -92,9 +92,6 @@ export function loadConfig(): OracleConfig {
     const retryDelay = validateEnvNumber('RETRY_DELAY', 1000);
     const hmacNonceTtlSeconds = validateEnvNumber('HMAC_NONCE_TTL_SECONDS', 600);
     const manualApprovalEnabled = validateEnvBool('ORACLE_MANUAL_APPROVAL_ENABLED', false);
-    const dbMigrationUser = optionalEnv('DB_MIGRATION_USER');
-    const dbMigrationPassword = optionalEnv('DB_MIGRATION_PASSWORD');
-
     const oracleSignerCustodyMode = parseSignerCustodyMode(process.env.ORACLE_SIGNER_CUSTODY_MODE);
     const oracleManagedSignerUrl = optionalEnv('ORACLE_MANAGED_SIGNER_URL')?.replace(/\/+$/, '');
     const oracleManagedSignerApiKey = optionalEnv('ORACLE_MANAGED_SIGNER_API_KEY');
@@ -129,11 +126,6 @@ export function loadConfig(): OracleConfig {
         'NOTIFICATIONS_WEBHOOK_URL is required when NOTIFICATIONS_ENABLED=true',
       );
     }
-    assert(
-      Boolean(dbMigrationUser) === Boolean(dbMigrationPassword),
-      'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
-    );
-
     assert(
       indexerGraphqlRequestTimeoutMs >= 1000 && indexerGraphqlRequestTimeoutMs <= 60000,
       'INDEXER_GQL_TIMEOUT_MS must be between 1000 and 60000',
@@ -193,8 +185,6 @@ export function loadConfig(): OracleConfig {
       dbUser: validateEnv('DB_USER'),
       dbPassword: validateEnv('DB_PASSWORD'),
       dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
-      dbMigrationUser,
-      dbMigrationPassword,
 
       // indexer graphql api
       indexerGraphqlUrl: validateEnvUrl('INDEXER_GRAPHQL_URL'),

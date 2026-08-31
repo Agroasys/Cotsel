@@ -5,7 +5,6 @@ locals {
   oracle_environment = [
     { name = "CHAIN_ID", value = tostring(local.base_sepolia_chain_id) },
     { name = "DB_HOST", value = local.postgres_host },
-    { name = "DB_AUTO_MIGRATE", value = "false" },
     { name = "DB_NAME", value = "cotsel_oracle" },
     { name = "DB_PORT", value = "5432" },
     { name = "DB_SSL_MODE", value = "verify-full" },
@@ -68,7 +67,6 @@ locals {
   reconciliation_environment = [
     { name = "CHAIN_ID", value = tostring(local.base_sepolia_chain_id) },
     { name = "DB_HOST", value = local.postgres_host },
-    { name = "DB_AUTO_MIGRATE", value = "false" },
     { name = "DB_NAME", value = "cotsel_reconciliation" },
     { name = "DB_PORT", value = "5432" },
     { name = "DB_SSL_MODE", value = "verify-full" },

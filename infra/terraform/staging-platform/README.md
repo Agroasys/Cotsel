@@ -58,8 +58,8 @@ does not read or manage its value.
 Every service schema migration runs as a separate one-off ECS task. Each
 execution role can pull only its service image, write only its service log
 group, and read only its service migration credential. Long-running execution
-roles cannot read migration credentials, and production containers must set
-`DB_AUTO_MIGRATE` explicitly. The managed staging runtimes set it to `false`.
+roles cannot read migration credentials. Long-running services do not execute
+schema migrations.
 
 Every runtime, migration, bootstrap, and verifier container has a read-only root
 filesystem. Each container receives only an ephemeral writable `/tmp` mount.

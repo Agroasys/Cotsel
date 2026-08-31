@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc && npm run copy-files",
     "prebuild": "npm --prefix ../sdk run build",
-    "copy-files": "mkdir -p dist/database/schema dist/openapi && cp src/database/schema.sql dist/database/ && cp src/database/schema/*.sql dist/database/schema/ && cp ../docs/api/cotsel-dashboard-gateway.openapi.yml ../docs/api/cotsel-settlement-provider.openapi.yml dist/openapi/",
+    "copy-files": "mkdir -p dist/database dist/openapi && cp src/database/schema.sql src/database/migrations.json dist/database/ && cp ../docs/api/cotsel-dashboard-gateway.openapi.yml ../docs/api/cotsel-settlement-provider.openapi.yml dist/openapi/",
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
     "pretest": "npm --prefix ../sdk run build",
