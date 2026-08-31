@@ -79,12 +79,14 @@ test(
             pool: migrationPool,
             serviceName: 'reconciliation',
             manifestPath: path.resolve(__dirname, '../reconciliation/src/database/migrations.json'),
+            runtimeDbUser: 'reconciliation_runtime',
           });
           assert.equal(migrationResult.applied.length, 1);
           const replayResult = await runVersionedMigrations({
             pool: migrationPool,
             serviceName: 'reconciliation',
             manifestPath: path.resolve(__dirname, '../reconciliation/src/database/migrations.json'),
+            runtimeDbUser: 'reconciliation_runtime',
           });
           assert.equal(replayResult.applied.length, 0);
         } finally {

@@ -85,6 +85,10 @@ test('PostgreSQL role identifiers are validated before interpolation', () => {
     () => quotePostgresIdentifier('runtime; DROP ROLE postgres', 'DB_RUNTIME_USER'),
     /lowercase PostgreSQL identifier/,
   );
+  assert.throws(
+    () => quotePostgresIdentifier(undefined, 'DB_RUNTIME_USER'),
+    /lowercase PostgreSQL identifier/,
+  );
 });
 
 test('migration manifest rejects modified SQL', (t) => {
