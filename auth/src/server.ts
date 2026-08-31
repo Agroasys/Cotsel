@@ -169,6 +169,7 @@ async function bootstrap(): Promise<void> {
     ? new AdminController(createAdminService(profileStore, config.adminBreakGlassMaxTtlSeconds))
     : undefined;
   const router = createRouter(sessionController, sessionService, {
+    readinessCheck: testConnection,
     trustedSessionExchangeMiddleware,
     adminController,
     adminControlMiddleware,

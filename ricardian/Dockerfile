@@ -71,8 +71,6 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
     /usr/local/bin/pnpm /usr/local/bin/pnpx
 
 COPY --from=builder /app/ricardian/dist /app/ricardian/dist
-COPY --from=builder /app/ricardian/src/database/schema.sql /app/ricardian/src/database/schema.sql
-COPY --from=builder /app/ricardian/src/database/migrations.json /app/ricardian/src/database/migrations.json
 COPY --from=builder /app/shared-auth /app/shared-auth
 COPY --from=builder /app/shared-db /app/shared-db
 COPY --from=builder /app/shared-edge /app/shared-edge

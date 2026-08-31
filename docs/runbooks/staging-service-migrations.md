@@ -82,7 +82,9 @@ The request must contain no `overrides` object. Record the returned task ARN.
    long-running image revision.
 7. Confirm the runtime task definition has no migration secret ARN.
 8. Confirm the runtime application image contains no startup migration path.
-9. Prove startup, health, and a representative authenticated read.
+9. Confirm the runtime role can read only its migration ledger rows.
+10. Prove startup fails when the expected ledger row is missing or changed.
+11. Prove startup, health, and a representative authenticated read.
 
 ## Failure handling
 

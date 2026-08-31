@@ -18,17 +18,17 @@ locals {
     reconciliation = {
       database      = "cotsel_reconciliation"
       runtime_user  = "cotsel_reconciliation_app"
-      manifest_path = "/app/reconciliation/src/database/migrations.json"
+      manifest_path = "/app/reconciliation/dist/database/migrations.json"
     }
     ricardian = {
       database      = "cotsel_ricardian"
       runtime_user  = "cotsel_ricardian_runtime"
-      manifest_path = "/app/ricardian/src/database/migrations.json"
+      manifest_path = "/app/ricardian/dist/database/migrations.json"
     }
     treasury = {
       database      = "cotsel_treasury"
       runtime_user  = "cotsel_treasury_runtime"
-      manifest_path = "/app/treasury/src/database/migrations.json"
+      manifest_path = "/app/treasury/dist/database/migrations.json"
     }
   }
 }

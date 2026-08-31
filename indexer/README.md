@@ -15,7 +15,7 @@ docker compose up -d db
 
 # Compile then apply existing migrations
 pnpm run build
-pnpm exec squid-typeorm-migration apply
+node migrate.js
 ```
 
 ---
@@ -34,8 +34,8 @@ pnpm run build
 # 3. Generate a new incremental migration
 pnpm exec squid-typeorm-migration generate
 
-# 4. Apply it
-pnpm exec squid-typeorm-migration apply
+# 4. Apply it through the checksum-enforcing wrapper
+node migrate.js
 
 # 5. Restart
 node -r dotenv/config lib/main.js
@@ -75,7 +75,7 @@ These findings are tracked upstream in [subsquid/squid-sdk#547](https://github.c
 | -------------------------------------------- | ------------------------------------------------- |
 | `pnpm exec squid-typeorm-codegen`            | Regenerate TypeORM entities from `schema.graphql` |
 | `pnpm exec squid-typeorm-migration generate` | Generate a new incremental migration              |
-| `pnpm exec squid-typeorm-migration apply`    | Apply pending migrations                          |
+| `node migrate.js`                            | Validate and apply pending migrations             |
 | `pnpm run build`                             | Compile TypeScript                                |
 | `pnpm run typecheck`                         | Type-check without compiling                      |
 | `pnpm run lint`                              | Run linter                                        |

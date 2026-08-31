@@ -166,6 +166,10 @@ The shared migration runner:
 - rolls back a failed migration without recording it
 - rejects missing or modified applied migrations
 - applies bounded lock and statement timeouts
+- grants the runtime role read-only access to the migration ledger
+
+Runtime readiness validates every declared version, name, and checksum against
+the ledger. The service does not start when the ledger is missing or stale.
 
 Never modify an applied SQL file. Add a later migration instead. Use
 expand-and-contract changes while the previous application revision remains a

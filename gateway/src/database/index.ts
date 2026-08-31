@@ -2,9 +2,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createServicePool } from '@agroasys/shared-db';
+import { assertMigrationHistory } from '@agroasys/shared-db/migrate';
+import path from 'node:path';
 import { Pool } from 'pg';
 import { GatewayConfig } from '../config/env';
 import { Logger } from '../logging/logger';
+
+const MIGRATION_MANIFEST_PATH = path.resolve(__dirname, 'migrations.json');
 
 export function createPool(config: GatewayConfig): Pool {
   const pool = createServicePool({
@@ -35,6 +39,11 @@ export function createPool(config: GatewayConfig): Pool {
 
 export async function testConnection(pool: Pool): Promise<void> {
   await pool.query('SELECT NOW() AS current_time');
+  await assertMigrationHistory({
+    pool,
+    serviceName: 'gateway',
+    manifestPath: MIGRATION_MANIFEST_PATH,
+  });
 }
 
 export async function closeConnection(pool: Pool): Promise<void> {

@@ -90,6 +90,8 @@ test('dedicated migration runner locks, checksums, journals, and rolls back', as
   assert.match(source, /await client\.query\('BEGIN'\)/);
   assert.match(source, /await client\.query\('COMMIT'\)/);
   assert.match(source, /rollbackQuietly/);
+  assert.match(source, /GRANT SELECT ON TABLE cotsel_schema_migrations/);
+  assert.match(source, /WITH application_objects/);
 });
 
 test('indexer migration job validates history and serializes TypeORM execution', async () => {
@@ -102,7 +104,52 @@ test('indexer migration job validates history and serializes TypeORM execution',
   assert.match(terraform, /MIGRATION_STATEMENT_TIMEOUT_MS/);
   assert.match(runner, /loadMigrationManifest/);
   assert.match(runner, /pg_advisory_lock/);
+  assert.match(runner, /checksum CHAR\(64\)/);
+  assert.match(runner, /reviewed adoption design/);
   assert.equal(manifest.migrations.length, 17);
+});
+
+test('runtime readiness requires the exact applied migration history', async () => {
+  const connectionFiles = [
+    'auth/src/database/connection.ts',
+    'gateway/src/database/index.ts',
+    'oracle/src/database/connection.ts',
+    'reconciliation/src/database/connection.ts',
+    'ricardian/src/database/connection.ts',
+    'treasury/src/database/connection.ts',
+  ];
+  for (const file of connectionFiles) {
+    const source = await readFile(file, 'utf8');
+    assert.match(source, /assertMigrationHistory/, file);
+    assert.match(source, /migrations\.json/, file);
+  }
+
+  const authRoutes = await readFile('auth/src/api/routes.ts', 'utf8');
+  const authServer = await readFile('auth/src/server.ts', 'utf8');
+  assert.match(authRoutes, /await options\.readinessCheck\(\)/);
+  assert.match(authRoutes, /status\(503\)/);
+  assert.match(authServer, /readinessCheck: testConnection/);
+});
+
+test('every service image and migration task use the built immutable manifest', async () => {
+  const services = ['auth', 'gateway', 'oracle', 'reconciliation', 'ricardian', 'treasury'];
+  const terraform = await readFile(
+    'infra/terraform/staging-platform/service-migrations.tf',
+    'utf8',
+  );
+
+  for (const service of services) {
+    const packageJson = JSON.parse(await readFile(`${service}/package.json`, 'utf8'));
+    const dockerfile = await readFile(`${service}/Dockerfile`, 'utf8');
+    assert.match(packageJson.scripts.build, /copy-files/, service);
+    assert.match(packageJson.scripts['copy-files'], /dist\/database/, service);
+    assert.match(dockerfile, new RegExp(`/app/${service}/dist`), service);
+    assert.match(
+      terraform,
+      new RegExp(`manifest_path = "/app/${service}/dist/database/migrations\\.json"`),
+      service,
+    );
+  }
 });
 
 test('long-running service startup cannot execute schema migrations', async () => {

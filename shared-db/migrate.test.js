@@ -5,7 +5,13 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { loadMigrationManifest, runVersionedMigrations, sha256 } = require('./migrate');
+const {
+  assertMigrationHistory,
+  loadMigrationManifest,
+  quotePostgresIdentifier,
+  runVersionedMigrations,
+  sha256,
+} = require('./migrate');
 
 function createManifest(sql = 'CREATE TABLE example (id INTEGER PRIMARY KEY);') {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cotsel-migration-'));
@@ -29,7 +35,12 @@ function createManifest(sql = 'CREATE TABLE example (id INTEGER PRIMARY KEY);') 
   return { directory, manifestPath, migrationPath };
 }
 
-function createPool({ appliedRows = [], failSql = false, hasExistingTables = false } = {}) {
+function createPool({
+  appliedRows = [],
+  failSql = false,
+  existingObject,
+  ledgerExists = false,
+} = {}) {
   const calls = [];
   const client = {
     async query(sql, parameters) {
@@ -37,8 +48,11 @@ function createPool({ appliedRows = [], failSql = false, hasExistingTables = fal
       if (sql.includes('FROM cotsel_schema_migrations')) {
         return { rows: appliedRows };
       }
-      if (sql.includes('FROM pg_catalog.pg_tables')) {
-        return { rows: hasExistingTables ? [{ '?column?': 1 }] : [] };
+      if (sql.includes("to_regclass('public.cotsel_schema_migrations')")) {
+        return { rows: [{ ledger: ledgerExists ? 'cotsel_schema_migrations' : null }] };
+      }
+      if (sql.includes('WITH application_objects')) {
+        return { rows: existingObject ? [existingObject] : [] };
       }
       if (failSql && sql.startsWith('CREATE TABLE example')) {
         throw new Error('injected migration failure');
@@ -55,9 +69,23 @@ function createPool({ appliedRows = [], failSql = false, hasExistingTables = fal
       async connect() {
         return client;
       },
+      async query(sql, parameters) {
+        return client.query(sql, parameters);
+      },
     },
   };
 }
+
+test('PostgreSQL role identifiers are validated before interpolation', () => {
+  assert.equal(
+    quotePostgresIdentifier('cotsel_gateway_runtime', 'DB_RUNTIME_USER'),
+    '"cotsel_gateway_runtime"',
+  );
+  assert.throws(
+    () => quotePostgresIdentifier('runtime; DROP ROLE postgres', 'DB_RUNTIME_USER'),
+    /lowercase PostgreSQL identifier/,
+  );
+});
 
 test('migration manifest rejects modified SQL', (t) => {
   const fixture = createManifest();
@@ -79,6 +107,7 @@ test('versioned runner locks, applies transactionally, and records the checksum'
     pool,
     serviceName: 'gateway',
     manifestPath: fixture.manifestPath,
+    runtimeDbUser: 'cotsel_gateway_runtime',
   });
 
   assert.equal(result.declared, 1);
@@ -110,6 +139,7 @@ test('versioned runner skips an identical applied migration', async (t) => {
     pool,
     serviceName: 'gateway',
     manifestPath: fixture.manifestPath,
+    runtimeDbUser: 'cotsel_gateway_runtime',
   });
 
   assert.equal(result.applied.length, 0);
@@ -126,6 +156,7 @@ test('versioned runner rolls back a partial failure without recording it', async
       pool,
       serviceName: 'gateway',
       manifestPath: fixture.manifestPath,
+      runtimeDbUser: 'cotsel_gateway_runtime',
     }),
     /injected migration failure/,
   );
@@ -147,6 +178,7 @@ test('versioned runner rejects ledger drift before executing DDL', async (t) => 
       pool,
       serviceName: 'gateway',
       manifestPath: fixture.manifestPath,
+      runtimeDbUser: 'cotsel_gateway_runtime',
     }),
     /does not match the immutable manifest/,
   );
@@ -154,20 +186,111 @@ test('versioned runner rejects ledger drift before executing DDL', async (t) => 
   assert.ok(!calls.some(({ sql }) => sql === 'BEGIN'));
 });
 
-test('baseline migration refuses a populated schema before executing DDL', async (t) => {
+test('versioned runner rejects a non-prefix applied history before executing DDL', async (t) => {
   const fixture = createManifest();
   t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
-  const { calls, pool } = createPool({ hasExistingTables: true });
+  const manifest = JSON.parse(fs.readFileSync(fixture.manifestPath, 'utf8'));
+  const laterVersion = '202608310002';
+  const laterSql = 'CREATE TABLE later_example (id INTEGER PRIMARY KEY);';
+  fs.writeFileSync(path.join(fixture.directory, `${laterVersion}.sql`), laterSql);
+  manifest.migrations.push({
+    version: laterVersion,
+    name: 'later_example',
+    file: `${laterVersion}.sql`,
+    sha256: sha256(laterSql),
+  });
+  fs.writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
+
+  const { calls, pool } = createPool({
+    appliedRows: [
+      {
+        version: laterVersion,
+        name: 'later_example',
+        checksum: sha256(laterSql),
+      },
+    ],
+    ledgerExists: true,
+  });
 
   await assert.rejects(
     runVersionedMigrations({
       pool,
       serviceName: 'gateway',
       manifestPath: fixture.manifestPath,
+      runtimeDbUser: 'cotsel_gateway_runtime',
+    }),
+    /history is not an ordered manifest prefix/,
+  );
+
+  assert.ok(!calls.some(({ sql }) => sql === 'BEGIN'));
+});
+
+test('baseline migration refuses any application object before creating its ledger', async (t) => {
+  const fixture = createManifest();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  const { calls, pool } = createPool({
+    existingObject: { object_type: 'function', object_name: 'legacy_writer' },
+  });
+
+  await assert.rejects(
+    runVersionedMigrations({
+      pool,
+      serviceName: 'gateway',
+      manifestPath: fixture.manifestPath,
+      runtimeDbUser: 'cotsel_gateway_runtime',
     }),
     /requires an empty public schema/,
   );
 
   assert.ok(!calls.some(({ sql }) => sql === 'BEGIN'));
+  assert.ok(
+    !calls.some(({ sql }) => sql.includes('CREATE TABLE IF NOT EXISTS cotsel_schema_migrations')),
+  );
   assert.ok(!calls.some(({ sql }) => sql.includes('INSERT INTO cotsel_schema_migrations')));
+});
+
+test('runtime history check rejects a missing ledger', async (t) => {
+  const fixture = createManifest();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  const { pool } = createPool();
+
+  await assert.rejects(
+    assertMigrationHistory({
+      pool,
+      serviceName: 'gateway',
+      manifestPath: fixture.manifestPath,
+    }),
+    /schema migration ledger is missing/,
+  );
+});
+
+test('runtime history check rejects a pending migration', async (t) => {
+  const fixture = createManifest();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  const { pool } = createPool({ ledgerExists: true });
+
+  await assert.rejects(
+    assertMigrationHistory({
+      pool,
+      serviceName: 'gateway',
+      manifestPath: fixture.manifestPath,
+    }),
+    /schema is not current/,
+  );
+});
+
+test('runtime history check accepts the exact immutable manifest', async (t) => {
+  const fixture = createManifest();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  const checksum = sha256('CREATE TABLE example (id INTEGER PRIMARY KEY);');
+  const { pool } = createPool({
+    ledgerExists: true,
+    appliedRows: [{ version: '202608310001', name: 'baseline', checksum }],
+  });
+
+  await assertMigrationHistory({
+    pool,
+    serviceName: 'gateway',
+    manifestPath: fixture.manifestPath,
+  });
 });
