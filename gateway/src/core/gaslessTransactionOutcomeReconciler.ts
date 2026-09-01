@@ -129,6 +129,30 @@ export class GaslessTransactionOutcomeReconciler {
       return;
     }
 
+    const observedTransactionHash = record.observedTransactionHash;
+    if (
+      observedTransactionHash &&
+      observedTransactionHash.toLowerCase() !== record.transactionHash.toLowerCase()
+    ) {
+      const observedReceipt = await this.provider.getTransactionReceipt(observedTransactionHash);
+      const observedTransaction = observedReceipt
+        ? null
+        : await this.provider.getTransaction(observedTransactionHash);
+      if (observedReceipt || observedTransaction) {
+        const failureCode = observedReceipt
+          ? 'RECOVERY_OBSERVED_HASH_HAS_RECEIPT'
+          : 'RECOVERY_OBSERVED_HASH_IS_PENDING';
+        await this.projectBroadcastUnknown(record, failureCode);
+        Logger.error('Provider-returned transaction hash requires independent investigation', {
+          transactionHash: record.transactionHash,
+          observedTransactionHash,
+          applicationRequestId: record.applicationRequestId,
+          failureCode,
+        });
+        return;
+      }
+    }
+
     const [confirmedSignerNonce, pendingSignerNonce] = await Promise.all([
       this.provider.getTransactionCount(record.signerAddress, 'latest'),
       this.provider.getTransactionCount(record.signerAddress, 'pending'),
@@ -140,8 +164,33 @@ export class GaslessTransactionOutcomeReconciler {
           ? 'RECOVERY_SIGNER_NONCE_PENDING_PAST_TRANSACTION'
           : 'RECOVERY_TRANSACTION_NOT_FOUND';
 
+    await this.projectBroadcastUnknown(record, failureCode);
+
+    Logger.warn('Gasless transaction remains unresolved without rebroadcast', {
+      transactionHash: record.transactionHash,
+      applicationRequestId: record.applicationRequestId,
+      previousOutcomeStatus: record.outcomeStatus,
+      failureCode,
+      confirmedSignerNonce,
+      pendingSignerNonce,
+      transactionNonce: record.nonce,
+    });
+  }
+
+  private async projectBroadcastUnknown(
+    record: GaslessTransactionOutcomeRecord,
+    failureCode: string,
+  ): Promise<void> {
     if (record.outcomeStatus !== 'broadcast_unknown' || record.failureCode !== failureCode) {
-      await this.store.markBroadcastUnknown(record.transactionHash, failureCode);
+      if (record.observedTransactionHash) {
+        await this.store.markBroadcastUnknown(
+          record.transactionHash,
+          failureCode,
+          record.observedTransactionHash,
+        );
+      } else {
+        await this.store.markBroadcastUnknown(record.transactionHash, failureCode);
+      }
       const unknownRecord = {
         ...record,
         outcomeStatus: 'broadcast_unknown' as const,
@@ -156,15 +205,5 @@ export class GaslessTransactionOutcomeReconciler {
     if (record.projectedOutcomeStatus !== 'broadcast_unknown') {
       await this.store.markProjectionApplied(record.transactionHash, 'broadcast_unknown');
     }
-
-    Logger.warn('Gasless transaction remains unresolved without rebroadcast', {
-      transactionHash: record.transactionHash,
-      applicationRequestId: record.applicationRequestId,
-      previousOutcomeStatus: record.outcomeStatus,
-      failureCode,
-      confirmedSignerNonce,
-      pendingSignerNonce,
-      transactionNonce: record.nonce,
-    });
   }
 }

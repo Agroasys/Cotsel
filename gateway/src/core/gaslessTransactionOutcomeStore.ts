@@ -36,6 +36,7 @@ export interface GaslessTransactionIdentity {
 }
 
 export interface GaslessTransactionOutcomeRecord extends GaslessTransactionIdentity {
+  observedTransactionHash: string | null;
   outcomeStatus: GaslessTransactionOutcomeStatus;
   projectedOutcomeStatus: GaslessTransactionOutcomeStatus | null;
   failureCode: string | null;
@@ -51,7 +52,11 @@ export interface GaslessConfirmedOutcome {
 
 export interface GaslessTransactionOutcomeRecorder {
   recordPrepared(identity: GaslessTransactionIdentity): Promise<void>;
-  markBroadcastUnknown(transactionHash: string, failureCode: string): Promise<void>;
+  markBroadcastUnknown(
+    transactionHash: string,
+    failureCode: string,
+    observedTransactionHash?: string,
+  ): Promise<void>;
   markConfirmationPending(transactionHash: string): Promise<void>;
   markConfirmed(transactionHash: string, outcome: GaslessConfirmedOutcome): Promise<void>;
   markReverted(transactionHash: string, outcome: GaslessConfirmedOutcome): Promise<void>;
@@ -97,7 +102,10 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
   async function transition(
     transactionHash: string,
     status: GaslessTransactionOutcomeStatus,
-    details: Partial<GaslessConfirmedOutcome> & { failureCode?: string } = {},
+    details: Partial<GaslessConfirmedOutcome> & {
+      failureCode?: string;
+      observedTransactionHash?: string;
+    } = {},
   ): Promise<void> {
     const result = await pool.query(
       `WITH updated AS (
@@ -111,22 +119,28 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
              block_hash = COALESCE($5, block_hash),
              gas_used = COALESCE($6, gas_used),
              effective_gas_price_wei = COALESCE($7, effective_gas_price_wei),
+             observed_transaction_hash = COALESCE($8, observed_transaction_hash),
              updated_at = NOW()
          WHERE transaction_hash = $1
-           AND outcome_status = ANY($8::varchar[])
+           AND outcome_status = ANY($9::varchar[])
            AND (
              outcome_status IS DISTINCT FROM $2::varchar
              OR (
                $2::varchar = 'broadcast_unknown'
-               AND failure_code IS DISTINCT FROM $3
+               AND (
+                 failure_code IS DISTINCT FROM $3
+                 OR observed_transaction_hash IS DISTINCT FROM
+                    COALESCE($8, observed_transaction_hash)
+               )
              )
            )
          RETURNING transaction_hash
        )
        INSERT INTO gasless_transaction_outcome_events (
-         transaction_hash, outcome_status, failure_code, block_number, block_hash
+         transaction_hash, outcome_status, failure_code, block_number, block_hash,
+         observed_transaction_hash
        )
-       SELECT transaction_hash, $2::varchar, $3, $4, $5 FROM updated
+       SELECT transaction_hash, $2::varchar, $3, $4, $5, $8 FROM updated
        RETURNING transaction_hash`,
       [
         transactionHash,
@@ -136,6 +150,7 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
         details.blockHash ?? null,
         details.gasUsed ?? null,
         details.effectiveGasPriceWei ?? null,
+        details.observedTransactionHash ?? null,
         allowedCurrentStatuses(status),
       ],
     );
@@ -147,6 +162,7 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
         blockHash: string | null;
         gasUsed: string | null;
         effectiveGasPriceWei: string | null;
+        observedTransactionHash: string | null;
       }>(
         `SELECT
            outcome_status AS "outcomeStatus",
@@ -154,7 +170,8 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
            block_number AS "blockNumber",
            block_hash AS "blockHash",
            gas_used AS "gasUsed",
-           effective_gas_price_wei AS "effectiveGasPriceWei"
+           effective_gas_price_wei AS "effectiveGasPriceWei",
+           observed_transaction_hash AS "observedTransactionHash"
          FROM gasless_transaction_outcomes
          WHERE transaction_hash = $1`,
         [transactionHash],
@@ -162,13 +179,22 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
       const existing = current.rows[0];
       const sameFailureCode =
         status !== 'broadcast_unknown' || existing?.failureCode === (details.failureCode ?? null);
+      const sameObservedTransactionHash =
+        status !== 'broadcast_unknown' ||
+        details.observedTransactionHash === undefined ||
+        (existing?.observedTransactionHash ?? null) === (details.observedTransactionHash ?? null);
       const sameTerminalOutcome =
         (status !== 'confirmed' && status !== 'reverted') ||
         (existing?.blockNumber === (details.blockNumber ?? null) &&
           existing?.blockHash === (details.blockHash ?? null) &&
           existing?.gasUsed === (details.gasUsed ?? null) &&
           existing?.effectiveGasPriceWei === (details.effectiveGasPriceWei ?? null));
-      if (existing?.outcomeStatus === status && sameFailureCode && sameTerminalOutcome) {
+      if (
+        existing?.outcomeStatus === status &&
+        sameFailureCode &&
+        sameObservedTransactionHash &&
+        sameTerminalOutcome
+      ) {
         return;
       }
       throw new Error(`Invalid gasless transaction outcome transition for ${transactionHash}`);
@@ -203,6 +229,7 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
         gasPriceWei: string | null;
         calldataHash: string;
         intentHash: string;
+        observedTransactionHash: string | null;
         outcomeStatus: GaslessTransactionOutcomeStatus;
         projectedOutcomeStatus: GaslessTransactionOutcomeStatus | null;
         failureCode: string | null;
@@ -226,6 +253,7 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
            gas_price_wei AS "gasPriceWei",
            calldata_hash AS "calldataHash",
            intent_hash AS "intentHash",
+           observed_transaction_hash AS "observedTransactionHash",
            outcome_status AS "outcomeStatus",
            projected_outcome_status AS "projectedOutcomeStatus",
            failure_code AS "failureCode",
@@ -324,8 +352,11 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
         client.release();
       }
     },
-    async markBroadcastUnknown(transactionHash, failureCode) {
-      await transition(transactionHash, 'broadcast_unknown', { failureCode });
+    async markBroadcastUnknown(transactionHash, failureCode, observedTransactionHash) {
+      await transition(transactionHash, 'broadcast_unknown', {
+        failureCode,
+        observedTransactionHash,
+      });
     },
     async markConfirmationPending(transactionHash) {
       await transition(transactionHash, 'confirmation_pending');

@@ -105,6 +105,29 @@ describe('gasless signed transaction persistence boundary', () => {
     expect(recorder.markBroadcastUnknown).toHaveBeenCalledWith(parsed.hash, 'TIMEOUT');
   });
 
+  test('preserves a provider-returned hash that differs from the signed transaction', async () => {
+    const signed = await signedTransaction();
+    const parsed = Transaction.from(signed);
+    const observedTransactionHash = `0x${'e'.repeat(64)}`;
+    const recorder = createRecorder();
+    const broadcast = jest.fn(
+      async () => ({ hash: observedTransactionHash }) as TransactionResponse,
+    );
+
+    await expect(
+      broadcastPersistedGaslessTransaction(signed, context, recorder, broadcast),
+    ).rejects.toMatchObject({
+      outcome: 'broadcast_unknown',
+      transactionHash: parsed.hash,
+    });
+    expect(recorder.markBroadcastUnknown).toHaveBeenCalledWith(
+      parsed.hash,
+      'BROADCAST_HASH_MISMATCH',
+      observedTransactionHash,
+    );
+    expect(recorder.markConfirmationPending).not.toHaveBeenCalled();
+  });
+
   test('keeps a confirmed transaction pending when handoff projection fails', async () => {
     const persistedTransactionHash = `0x${'d'.repeat(64)}`;
     const project = jest.fn(async () => {
