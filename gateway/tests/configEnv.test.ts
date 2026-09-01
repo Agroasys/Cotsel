@@ -302,7 +302,7 @@ describe('gateway runtime env config', () => {
     );
   });
 
-  test('production managed gasless custody requires https signer URL and API key', () => {
+  test('managed gasless custody rejects insecure signer transport', () => {
     withEnv(
       {
         NODE_ENV: 'production',
@@ -320,7 +320,7 @@ describe('gateway runtime env config', () => {
       () => {
         const { loadConfig } = loadConfigModule();
         expect(() => loadConfig()).toThrow(
-          'Production managed gasless signer custody requires an https GATEWAY_GASLESS_MANAGED_SIGNER_URL',
+          'Managed gasless signer custody requires an https GATEWAY_GASLESS_MANAGED_SIGNER_URL',
         );
       },
     );

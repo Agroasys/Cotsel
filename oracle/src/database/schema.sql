@@ -68,6 +68,26 @@ CREATE TABLE IF NOT EXISTS oracle_hmac_nonces (
 CREATE INDEX IF NOT EXISTS idx_oracle_hmac_nonces_expires_at
 ON oracle_hmac_nonces(expires_at);
 
+CREATE TABLE IF NOT EXISTS managed_signer_validation_audit (
+    request_id VARCHAR(128) PRIMARY KEY,
+    intent_hash VARCHAR(66) NOT NULL CHECK (intent_hash ~ '^0x[0-9a-f]{64}$'),
+    signed_transaction_hash VARCHAR(66)
+        CHECK (signed_transaction_hash IS NULL OR signed_transaction_hash ~ '^0x[0-9a-f]{64}$'),
+    signer_address VARCHAR(42) NOT NULL CHECK (signer_address ~ '^0x[0-9A-Fa-f]{40}$'),
+    transaction_nonce BIGINT NOT NULL CHECK (transaction_nonce >= 0),
+    transaction_type SMALLINT NOT NULL CHECK (transaction_type IN (0, 2)),
+    outcome VARCHAR(16) NOT NULL CHECK (outcome IN ('accepted', 'rejected')),
+    failure_reason VARCHAR(64),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CHECK (
+        (outcome = 'accepted' AND signed_transaction_hash IS NOT NULL AND failure_reason IS NULL)
+        OR (outcome = 'rejected' AND failure_reason IS NOT NULL)
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_managed_signer_validation_audit_created_at
+ON managed_signer_validation_audit(created_at DESC);
+
 
 DO $$
 BEGIN
@@ -142,6 +162,7 @@ BEGIN
     IF runtime_user IS NOT NULL THEN
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE oracle_triggers TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE oracle_hmac_nonces TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT ON TABLE managed_signer_validation_audit TO %I', runtime_user);
         EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE oracle_triggers_id_seq TO %I', runtime_user);
     END IF;
 END $$;
@@ -158,6 +179,14 @@ ALTER TABLE oracle_hmac_nonces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE oracle_hmac_nonces FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS oracle_hmac_nonces_service_isolation ON oracle_hmac_nonces;
 CREATE POLICY oracle_hmac_nonces_service_isolation ON oracle_hmac_nonces
+    FOR ALL
+    USING (current_app_service_name() = 'oracle')
+    WITH CHECK (current_app_service_name() = 'oracle');
+
+ALTER TABLE managed_signer_validation_audit ENABLE ROW LEVEL SECURITY;
+ALTER TABLE managed_signer_validation_audit FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS managed_signer_validation_audit_service_isolation ON managed_signer_validation_audit;
+CREATE POLICY managed_signer_validation_audit_service_isolation ON managed_signer_validation_audit
     FOR ALL
     USING (current_app_service_name() = 'oracle')
     WITH CHECK (current_app_service_name() = 'oracle');

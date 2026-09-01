@@ -108,9 +108,12 @@ export function loadConfig(): OracleConfig {
         'ORACLE_MANAGED_SIGNER_URL is required when ORACLE_SIGNER_CUSTODY_MODE is kms or mpc',
       );
       assert(
-        oracleManagedSignerUrl.startsWith('http://') ||
-          oracleManagedSignerUrl.startsWith('https://'),
-        'ORACLE_MANAGED_SIGNER_URL must be an absolute http(s) URL',
+        oracleManagedSignerUrl.startsWith('https://'),
+        'Managed Oracle signer custody requires an https ORACLE_MANAGED_SIGNER_URL',
+      );
+      assert(
+        oracleManagedSignerApiKey,
+        'Managed Oracle signer custody requires ORACLE_MANAGED_SIGNER_API_KEY',
       );
       // Only meaningful in managed-signer (kms/mpc) mode; the timeout is unused otherwise.
       assert(

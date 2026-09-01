@@ -33,6 +33,19 @@ export {
 } from './modules/serviceAuth';
 export { createManagedRpcProvider } from './rpc/failoverProvider';
 export {
+  buildManagedSignerIntentHash,
+  ManagedSignerValidationError,
+  validateManagedSignerResponse,
+  validateManagedSignerTransaction,
+} from './managedSignerIntent';
+export type {
+  ManagedSignerTransactionIntent,
+  ManagedSignerResponsePayload,
+  ManagedSignerValidationAuditRecord,
+  ManagedSignerValidationFailureReason,
+  ManagedSignerValidationEvidence,
+} from './managedSignerIntent';
+export {
   assertRpcEndpointReachable,
   assertRpcEndpointsReachable,
   redactRpcUrlForLogs,

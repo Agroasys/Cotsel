@@ -34,7 +34,18 @@ function createOracleSigner(
   }
 
   return new ManagedSigner(
-    { ...signerConfig.managedSigner, custodyMode: signerConfig.custodyMode },
+    {
+      ...signerConfig.managedSigner,
+      custodyMode: signerConfig.custodyMode,
+      recordValidationEvidence: async (evidence) => {
+        await signerConfig.managedSigner?.recordValidationEvidence?.(evidence);
+        if (evidence.outcome === 'accepted') {
+          Logger.info('Managed signer transaction validated', { ...evidence });
+        } else {
+          Logger.warn('Managed signer transaction rejected before broadcast', { ...evidence });
+        }
+      },
+    },
     provider,
   );
 }

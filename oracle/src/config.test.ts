@@ -154,16 +154,33 @@ describe('oracle signer custody', () => {
     });
   });
 
-  test('kms custody rejects a non-http managed signer url', () => {
+  test('kms custody rejects an insecure managed signer url', () => {
     withEnv(
       {
         ORACLE_SIGNER_CUSTODY_MODE: 'kms',
         ORACLE_PRIVATE_KEY: undefined,
-        ORACLE_MANAGED_SIGNER_URL: 'ftp://signer.internal',
+        ORACLE_MANAGED_SIGNER_URL: 'http://signer.internal',
+        ORACLE_MANAGED_SIGNER_API_KEY: 'signer-token',
       },
       () => {
         expect(() => loadConfigModule().loadConfig()).toThrow(
-          'ORACLE_MANAGED_SIGNER_URL must be an absolute http(s) URL',
+          'Managed Oracle signer custody requires an https ORACLE_MANAGED_SIGNER_URL',
+        );
+      },
+    );
+  });
+
+  test('kms custody rejects missing managed signer authentication', () => {
+    withEnv(
+      {
+        ORACLE_SIGNER_CUSTODY_MODE: 'kms',
+        ORACLE_PRIVATE_KEY: undefined,
+        ORACLE_MANAGED_SIGNER_URL: 'https://signer.internal',
+        ORACLE_MANAGED_SIGNER_API_KEY: undefined,
+      },
+      () => {
+        expect(() => loadConfigModule().loadConfig()).toThrow(
+          'Managed Oracle signer custody requires ORACLE_MANAGED_SIGNER_API_KEY',
         );
       },
     );

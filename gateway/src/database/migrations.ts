@@ -20,5 +20,14 @@ export async function runMigrations(pool: Pool): Promise<void> {
   }
 
   const sql = fs.readFileSync(schemaPath, 'utf8');
-  await pool.query(sql);
+  const fragmentsDirectory = path.join(path.dirname(schemaPath), 'schema');
+  const fragments = fs.existsSync(fragmentsDirectory)
+    ? fs
+        .readdirSync(fragmentsDirectory)
+        .filter((entry) => entry.endsWith('.sql'))
+        .sort()
+        .map((entry) => fs.readFileSync(path.join(fragmentsDirectory, entry), 'utf8'))
+    : [];
+
+  await pool.query([sql, ...fragments].join('\n'));
 }

@@ -18,6 +18,7 @@ import { SDKClient } from './blockchain/sdk-client';
 import { IndexerClient } from './blockchain/indexer-client';
 import { ConfirmationWorker } from './worker/confirmation-worker';
 import { oracleRateLimitPolicy } from './httpSecurity';
+import { createPostgresManagedSignerAuditStore } from './database/managed-signer-audit-store';
 
 let confirmationWorker: ConfirmationWorker;
 let indexerClient: IndexerClient;
@@ -87,6 +88,7 @@ async function bootstrap() {
       expectedChainId: config.chainId,
     });
 
+    const managedSignerAuditStore = createPostgresManagedSignerAuditStore(pool);
     const sdkClient = new SDKClient(
       config.rpcUrl,
       config.rpcFallbackUrls,
@@ -98,6 +100,7 @@ async function bootstrap() {
               url: config.oracleManagedSignerUrl,
               apiKey: config.oracleManagedSignerApiKey,
               requestTimeoutMs: config.oracleManagedSignerRequestTimeoutMs,
+              recordValidationEvidence: (record) => managedSignerAuditStore.append(record),
             }
           : undefined,
       },

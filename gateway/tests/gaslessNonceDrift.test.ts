@@ -18,7 +18,7 @@ describe('gasless relayer nonce drift handling', () => {
 
   it('resets the nonce manager before sponsored create, user, and operator broadcasts', () => {
     const source = readFileSync(
-      join(__dirname, '../src/core/gaslessSettlementExecutionService.ts'),
+      join(__dirname, '../src/core/gaslessRawPrivateKeyExecutor.ts'),
       'utf8',
     );
 
