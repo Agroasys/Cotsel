@@ -1,0 +1,49 @@
+paths:
+  /healthz:
+    get:
+      tags:
+        - System
+      summary: Liveness probe
+      security: []
+      operationId: getHealthz
+      responses:
+        '200':
+          description: Process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /readyz:
+    get:
+      tags:
+        - System
+      summary: Readiness probe
+      security: []
+      operationId: getReadyz
+      responses:
+        '200':
+          description: Dependencies are ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyResponse'
+        '503':
+          description: Dependencies are not ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyResponse'
+  /version:
+    get:
+      tags:
+        - System
+      summary: Build and revision metadata
+      security: []
+      operationId: getVersion
+      responses:
+        '200':
+          description: Version metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'

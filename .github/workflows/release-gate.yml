@@ -91,9 +91,7 @@ jobs:
               - 'treasury/**'
             gateway:
               - 'gateway/**'
-              - 'docs/api/cotsel-dashboard-gateway.openapi.yml'
-              - 'docs/api/cotsel-settlement-provider.openapi.yml'
-              - 'docs/api/fixtures/cotsel-settlement-callback.v1.json'
+              - 'docs/api/**'
               - 'docs/runbooks/dashboard-api-gateway-boundary.md'
               - 'docs/runbooks/dashboard-gateway-operations.md'
             auth:

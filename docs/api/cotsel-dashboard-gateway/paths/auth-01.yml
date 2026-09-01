@@ -1,0 +1,31 @@
+paths:
+  /auth/capabilities:
+    get:
+      tags:
+        - Auth
+      summary: Authenticated operator capability snapshot
+      description: |
+        Returns the backend-authoritative route and action capabilities for the current authenticated
+        session so Cotsel-Dash can gate operator pages and controls from gateway truth.
+
+        This route authenticates any valid session and does not require `operator:read`. Non-admin
+        sessions therefore receive a successful response with empty gateway roles and all operator
+        capabilities set to `false`.
+
+        Write capabilities are derived from the existing gateway policy:
+        - auth role `admin` maps to `operator:read` and `operator:write`
+        - mutations also require `GATEWAY_ENABLE_MUTATIONS=true`
+        - mutations additionally require the authenticated session to match `GATEWAY_WRITE_ALLOWLIST`
+      operationId: getOperatorCapabilities
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Backend capability snapshot for the authenticated session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorCapabilitiesResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'

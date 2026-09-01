@@ -1,0 +1,330 @@
+components:
+  schemas:
+    TradeStatus:
+      type: string
+      enum:
+        - locked
+        - stage_1
+        - stage_2
+        - completed
+        - disputed
+    TradeComplianceStatus:
+      type: string
+      enum:
+        - pass
+        - fail
+        - unavailable
+    TradeTimelineEvent:
+      type: object
+      required:
+        - stage
+        - timestamp
+        - actor
+      properties:
+        stage:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        actor:
+          type: string
+        txHash:
+          type: string
+          nullable: true
+          description: Canonical EVM transaction hash when available.
+        explorerUrl:
+          type: string
+          nullable: true
+          description: Canonical chain explorer link derived from `txHash` when available.
+        detail:
+          type: string
+    Trade:
+      type: object
+      required:
+        - id
+        - buyer
+        - supplier
+        - amount
+        - currency
+        - status
+        - createdAt
+        - updatedAt
+        - ricardianHash
+        - platformFee
+        - platformFeesTotal
+        - settlementSupportFee
+        - logisticsAmount
+        - timeline
+        - complianceStatus
+        - settlement
+      properties:
+        id:
+          type: string
+        buyer:
+          type: string
+        supplier:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+          const: USDC
+        status:
+          $ref: '#/components/schemas/TradeStatus'
+        txHash:
+          type: string
+          nullable: true
+          description: Canonical EVM transaction hash for the trade lock when available.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        ricardianHash:
+          type: string
+        platformFee:
+          type: number
+          description: Platform fee net of the fixed settlement support fee.
+        platformFeesTotal:
+          type: number
+          description: Gross platform fee amount emitted by the escrow contract.
+        settlementSupportFee:
+          type: number
+          description: Fixed settlement support fee component in USDC.
+        logisticsAmount:
+          type: number
+        timeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeTimelineEvent'
+        complianceStatus:
+          $ref: '#/components/schemas/TradeComplianceStatus'
+        settlement:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TradeSettlementState'
+    TradeSettlementState:
+      type: object
+      required:
+        - handoffId
+        - platformId
+        - platformHandoffId
+        - phase
+        - settlementChannel
+        - displayCurrency
+        - displayAmount
+        - executionStatus
+        - reconciliationStatus
+        - callbackStatus
+        - providerStatus
+        - txHash
+        - externalReference
+        - latestEventType
+        - latestEventDetail
+        - latestEventAt
+        - callbackDeliveredAt
+        - createdAt
+        - updatedAt
+      properties:
+        handoffId:
+          type: string
+        platformId:
+          type: string
+        platformHandoffId:
+          type: string
+        phase:
+          type: string
+        settlementChannel:
+          type: string
+        displayCurrency:
+          type: string
+        displayAmount:
+          type: number
+        executionStatus:
+          $ref: '#/components/schemas/SettlementExecutionStatus'
+        reconciliationStatus:
+          $ref: '#/components/schemas/SettlementReconciliationStatus'
+        callbackStatus:
+          $ref: '#/components/schemas/SettlementCallbackStatus'
+        providerStatus:
+          type:
+            - string
+            - 'null'
+        txHash:
+          type:
+            - string
+            - 'null'
+          description: Canonical EVM transaction hash for the latest settlement execution reference.
+        explorerUrl:
+          type:
+            - string
+            - 'null'
+          description: Canonical chain explorer link derived from `txHash` when available.
+        externalReference:
+          type:
+            - string
+            - 'null'
+        latestEventType:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementEventType'
+        latestEventDetail:
+          type:
+            - string
+            - 'null'
+        latestEventAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        callbackDeliveredAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TradeResponse:
+      type: object
+      required:
+        - success
+        - data
+        - freshness
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/Trade'
+        freshness:
+          $ref: '#/components/schemas/TradeReadFreshness'
+        timestamp:
+          type: string
+          format: date-time
+    TradeListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - freshness
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trade'
+        freshness:
+          $ref: '#/components/schemas/TradeReadFreshness'
+        timestamp:
+          type: string
+          format: date-time
+    TradeReadFreshness:
+      allOf:
+        - $ref: '#/components/schemas/GatewayReadFreshness'
+        - type: object
+          required:
+            - source
+            - state
+            - queriedAt
+            - sourceFreshAt
+            - available
+            - lastProcessedBlock
+            - lastTradeEventAt
+          properties:
+            source:
+              type: string
+              enum:
+                - indexer_graphql
+            state:
+              type: string
+              enum:
+                - current
+                - stale
+                - unavailable
+            lastProcessedBlock:
+              anyOf:
+                - type: string
+                - type: 'null'
+              description: Last indexer block watermark used to assemble the trade snapshot.
+            lastTradeEventAt:
+              anyOf:
+                - type: string
+                  format: date-time
+                - type: 'null'
+              description: Timestamp of the most recent trade event reflected in the snapshot.
+    TradeEvidenceFreshness:
+      type: object
+      required:
+        - source
+        - sourceFreshAt
+        - queriedAt
+        - available
+      properties:
+        source:
+          type: string
+          enum:
+            - gateway_ledgers
+        sourceFreshAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+        degradedReason:
+          type: string
+    TradeEvidencePayload:
+      type: object
+      required:
+        - tradeId
+        - ricardianHash
+        - settlement
+        - complianceDecisions
+        - governanceActions
+        - freshness
+      properties:
+        tradeId:
+          type: string
+        ricardianHash:
+          type: string
+        settlement:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TradeSettlementState'
+        complianceDecisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComplianceDecision'
+        governanceActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceAction'
+        freshness:
+          $ref: '#/components/schemas/TradeEvidenceFreshness'
+    TradeEvidenceResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TradeEvidencePayload'
+        timestamp:
+          type: string
+          format: date-time

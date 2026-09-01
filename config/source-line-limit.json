@@ -18,7 +18,7 @@
     ".yaml",
     ".yml"
   ],
-  "excludedPaths": ["docs/api/cotsel-dashboard-gateway.openapi.yml", "pnpm-lock.yaml"],
+  "excludedPaths": ["pnpm-lock.yaml"],
   "excludedPrefixes": [
     "contracts/artifacts/",
     "contracts/cache/",
