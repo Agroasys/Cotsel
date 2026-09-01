@@ -84,7 +84,7 @@ These public dashboard endpoints are not copied into `.env.runtime`. That env fi
 ## Prerequisites
 
 - Docker Engine + Compose plugin installed.
-- Node 20 available for local parity checks.
+- Node 22.23.2 available for local parity checks.
 - Repository root env files present.
 
 ## Procedure

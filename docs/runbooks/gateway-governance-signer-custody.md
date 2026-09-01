@@ -4,7 +4,9 @@
 >
 > [ADR-0411](../adr/adr-0411-human-governance-direct-wallet-signing.md) supersedes the queued executor as the long-term target for **human privileged governance**. That ADR is the authoritative decision record for the governance signing model.
 >
-> This runbook remains the operational procedure for the **executor signer** only for **delegated/service/system flows** that intentionally remain executor-backed. It is no longer the operator procedure for normal human privileged governance.
+> This runbook records the custody requirements for a future **executor signer**
+> used by explicitly delegated service flows. It is not currently an executable
+> procedure and is not the procedure for human privileged governance.
 >
 > For the target human governance signing model, see:
 >
@@ -12,18 +14,32 @@
 
 ## Purpose and scope
 
-Define the approved signer-custody boundary for gateway-governed protocol actions and the operator procedures required before any governance executor action is run.
+Define the approved signer-custody boundary that must exist before any delegated
+service executor can be implemented or used.
 
-This runbook applies to:
+## Current implementation status
 
-- `gateway/src/executor/adminSdkGovernanceChainExecutor.ts`
-- `pnpm --filter ./gateway run execute:governance-action -- <actionId>`
-- delegated/service execution (oracle attestation, automated maintenance) — remains executor-backed permanently
+**BLOCKED / NOT IMPLEMENTED.** Current repository truth contains no governance
+mutation route, governance action store, governance executor implementation, or
+`execute:governance-action` package script. The gateway exposes read-only
+governance status only. Therefore:
+
+- operators must not attempt a human or delegated governance mutation through
+  the gateway;
+- no undocumented command, direct database write, raw contract call, or old VM
+  checkout is an approved substitute;
+- emergency governance remains blocked until its owning work package implements
+  and accepts a real path; and
+- this document must be updated and drilled against the deployed artifact before
+  it becomes an executable procedure.
+
+The target boundaries below are design requirements. They are not evidence that
+a runtime path exists.
 
 This runbook does not change protocol quorum rules. It defines how the executor signer is sourced, approved, rotated, and used safely.
 
 This runbook does **not** apply to the normal human governance flow for admins.
-That flow is now:
+That target flow is:
 
 1. authenticated admin session
 2. gateway `prepare`
@@ -45,32 +61,27 @@ Automation-governance source of truth:
 
 ## Current code boundary
 
-Current executor code loads a raw `GATEWAY_EXECUTOR_PRIVATE_KEY` and instantiates an `ethers.Wallet` directly inside `adminSdkGovernanceChainExecutor.ts`.
-
-That boundary is now scoped to delegated/service execution only. Human privileged governance is handled by the direct-sign admin flow and must not be routed through the executor as the normal path.
-
-Interpretation for the executor boundary during migration:
-
-- local development and deterministic staging validation may use `GATEWAY_EXECUTOR_PRIVATE_KEY`
-- production readiness must not rely on a long-lived raw environment private key managed like a convenience secret
-- the gateway API process must never hold the signer key; only the isolated executor invocation may access signer material
-- no smart-wallet or paymaster shortcut is an approved replacement for this signer boundary in delegated/service execution
+No governance executor exists in the current gateway. A future delegated-service
+executor must keep the gateway API process separate from signer authority and
+must use an isolated, auditable signing boundary. No buyer wallet, paymaster, raw
+environment key, or manual contract call is an approved shortcut.
 
 Gasless settlement execution now supports managed signer custody through `GATEWAY_GASLESS_MANAGED_SIGNER_URL` when `GATEWAY_GASLESS_SIGNER_CUSTODY_MODE` is `kms` or `mpc`. Production gasless execution must use that managed signer path; raw private-key gasless custody is not an allowed production mode.
 
 ## Approved custody models
 
-### Local and CI validation
+### Local and CI validation of a future implementation
 
 - Ephemeral test key allowed.
 - Key scope is non-production only.
 - Key may be environment injected for the duration of the test run.
 
-### Staging and pilot validation
+### Staging and pilot validation of a future implementation
 
-- `GATEWAY_EXECUTOR_PRIVATE_KEY` is allowed only for isolated staging or pilot environments with named operator ownership.
-- Key must be distinct from local/dev keys and rotated on any operator change or suspected exposure.
-- Access must be limited to the executor host/session used for the approved validation window.
+- Use only the custody mechanism approved by the owning work package.
+- Do not introduce `GATEWAY_EXECUTOR_PRIVATE_KEY` as an undocumented runtime
+  fallback.
+- Limit access to the isolated executor identity and accepted validation window.
 
 ### Production
 
@@ -81,14 +92,15 @@ Gasless settlement execution now supports managed signer custody through `GATEWA
 
 ## Approval and execution procedure
 
-Before running `execute:governance-action`, operators must record:
+There is no approved execution command in the current repository. Before this
+section can become executable, the owning work package must provide and accept:
 
-- `actionId`
-- `intentKey`
-- expected contract method
-- target admin signer address
-- linked incident/change record
-- approver identities and time of approval
+- a server-authorized action identity and idempotency binding;
+- the exact method, chain, contract, arguments, and expected signer;
+- a managed custody identity that is separate from the API task;
+- linked change or incident approval;
+- durable audit, transaction, confirmation, and reconciliation evidence; and
+- negative tests for stale, duplicate, unauthorized, and ambiguous outcomes.
 
 Required approvals:
 
@@ -96,14 +108,8 @@ Required approvals:
 - emergency disable path: Incident Commander plus Service Owner
 - recovery or unpause path: protocol quorum evidence plus Incident Commander approval to resume
 
-Execution steps:
-
-1. Verify the queued action details from the gateway API and confirm the signer address expected by the queued action.
-2. Verify the signer source matches the approved custody model for the environment and is not a buyer-facing AA/sponsorship path.
-3. Start a bounded executor session with only the env vars required for that action.
-4. Run `pnpm --filter ./gateway run execute:governance-action -- <actionId>`.
-5. Capture resulting `txHash`, `blockNumber`, `requestId`, and audit log row.
-6. End the session and remove any temporary secret material from the shell/session context.
+Until those conditions pass, stop and route the need to the owning work package.
+Do not fabricate an action row or transaction to complete a drill.
 
 ## Rotation and revocation
 
@@ -201,15 +207,10 @@ Refill the gasless executor wallet when any of the following conditions are obse
 
 1. Identify the approved funding source address. Only pre-approved treasury or operations wallets may send ETH to the executor. The approved funding addresses must be documented in the team's access control records.
 
-2. Transfer native ETH to the executor address:
-
-   ```bash
-   cast send <executor-address> --value <amount-in-wei> \
-     --rpc-url <rpc-url> \
-     --private-key <funding-wallet-key>
-   ```
-
-   Or use the approved multisig/treasury workflow if the funding source is a multisig.
+2. Transfer native ETH through the approved treasury multisig or managed
+   operations signer. Verify the displayed destination, chain ID, and amount
+   before approval. Do not place a private key in a command, shell history,
+   environment file, ticket, or runbook evidence.
 
 3. Record the following for the refill:
    - funding source address

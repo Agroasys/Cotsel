@@ -6,17 +6,17 @@ Define short-term dependency vulnerability posture and remediation workflow with
 
 ## Current Baseline
 
-- Release-blocking target: no **Critical** or **High** vulnerabilities in the
+- Release-blocking target: no vulnerability findings at any severity in the
   production dependency tree.
-- Moderate/Low production findings and dev-toolchain findings are tracked and
-  remediated in targeted, low-risk changes.
-- `npm ls --all` must remain healthy (no dependency graph breakage).
+- Development-toolchain findings are tracked and remediated in targeted,
+  low-risk changes or accepted only through an owned, expiring allowlist entry.
+- `pnpm list --depth Infinity` must remain healthy (no dependency graph breakage).
 
 ## Remediation Rules
 
 1. Prefer patch/minor upgrades with small lockfile churn.
 2. Use overrides only when necessary, with explicit rationale in PR description.
-3. Do not use `npm audit fix --force` in routine remediation.
+3. Do not use forced audit remediation in routine changes.
 4. Avoid major toolchain/framework migrations as part of vulnerability triage.
 5. When a fix requires major upgrades, open a tracked issue and schedule it to a milestone.
 
@@ -25,26 +25,26 @@ Define short-term dependency vulnerability posture and remediation workflow with
 Run:
 
 ```bash
-npm run security:deps
+pnpm run security:deps
 ```
 
 This command is **non-enforcing** and reports:
 
-- `npm audit --omit=dev --json` summary
-- `npm audit --json` summary
-- `npm ls --all` exit status
+- `pnpm audit --prod --json` summary
+- `pnpm audit --json` summary
+- `pnpm list --depth Infinity` exit status
 
 ## Release-Blocking Gate
 
 Run:
 
 ```bash
-npm run security:deps:gate
+pnpm run security:deps:gate
 ```
 
 This command is enforcing. It fails when production dependency audit output
-contains High or Critical advisories, or when `npm ls --all` reports an invalid
-dependency graph. The release gate runs this command in
+contains any advisory, when an unapproved development advisory exists, or when
+`pnpm list --depth Infinity` reports an invalid dependency graph. The release gate runs this command in
 `.github/workflows/release-gate.yml` under `ci/dependency-security`.
 
 Do not bypass this gate by masking advisories, forcing incompatible overrides,

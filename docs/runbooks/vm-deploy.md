@@ -1,6 +1,12 @@
 # Cotsel VM Deployment
 
-How to deploy all Cotsel services on a fresh VM.  
+> **STALE / LEGACY for shared staging.** This procedure is retained for isolated
+> local or disposable VM validation only. The accepted AWS staging architecture
+> uses reviewed Terraform, immutable images, and ECS task definitions. Do not
+> deploy staging from a VM checkout or use this runbook to modify the retained
+> GCP rollback estate.
+
+How to run all Cotsel services on an isolated validation VM.
 One env file. One command. The script either passes completely or fails with a clear error.
 
 ## Prerequisites

@@ -1,5 +1,9 @@
 # Operational Readiness Gap Closeout
 
+> **HISTORICAL EVIDENCE — DO NOT USE AS A CURRENT PROCEDURE.** This dated
+> closeout preserves the state and conclusions of its original gap review. Use
+> the active work-package issues, runbooks, and current runtime evidence.
+
 Snapshot date: 2026-04-28
 
 ## Purpose
