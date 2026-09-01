@@ -60,6 +60,10 @@ async function run(): Promise<void> {
       tx_hash: transactionHash,
       outcome_status: 'broadcast_pending',
     });
+    assert.deepEqual(
+      (await store.listRecoveryCandidates(100)).map((candidate) => candidate.transactionHash),
+      [transactionHash],
+    );
 
     await store.markBroadcastUnknown(transactionHash, 'TIMEOUT');
     const unknown = await pool.query(
@@ -75,6 +79,10 @@ async function run(): Promise<void> {
       outcome_status: 'broadcast_unknown',
       failure_code: 'TIMEOUT',
     });
+    assert.deepEqual(
+      (await store.listRecoveryCandidates(100)).map((candidate) => candidate.transactionHash),
+      [transactionHash],
+    );
 
     await store.markConfirmationPending(transactionHash, 1234);
     const submitted = await pool.query(
@@ -90,12 +98,17 @@ async function run(): Promise<void> {
       block_number: '1234',
       outcome_status: 'confirmation_pending',
     });
+    assert.deepEqual(
+      (await store.listRecoveryCandidates(100)).map((candidate) => candidate.transactionHash),
+      [transactionHash],
+    );
 
     process.stdout.write(
       JSON.stringify({
         result: 'VERIFIED',
         chainId: 84532,
         transitions: ['BROADCAST_PENDING', 'BROADCAST_UNKNOWN', 'SUBMITTED'],
+        recoveryStatuses: ['broadcast_pending', 'broadcast_unknown', 'confirmation_pending'],
       }) + '\n',
     );
   } finally {

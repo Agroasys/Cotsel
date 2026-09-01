@@ -124,9 +124,11 @@ CREATE TABLE IF NOT EXISTS oracle_transaction_outcomes (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_oracle_transaction_outcomes_recovery
+DROP INDEX IF EXISTS idx_oracle_transaction_outcomes_recovery;
+
+CREATE INDEX IF NOT EXISTS idx_oracle_transaction_outcomes_recovery_v2
 ON oracle_transaction_outcomes(outcome_status, updated_at)
-WHERE outcome_status IN ('broadcast_pending', 'broadcast_unknown');
+WHERE outcome_status IN ('broadcast_pending', 'broadcast_unknown', 'confirmation_pending');
 
 
 DO $$

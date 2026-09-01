@@ -242,7 +242,9 @@ export function createPostgresOracleTransactionOutcomeStore(
     async listRecoveryCandidates(limit) {
       const result = await pool.query(
         `SELECT * FROM oracle_transaction_outcomes
-         WHERE outcome_status IN ('broadcast_pending', 'broadcast_unknown')
+         WHERE outcome_status IN (
+           'broadcast_pending', 'broadcast_unknown', 'confirmation_pending'
+         )
          ORDER BY updated_at ASC
          LIMIT $1`,
         [limit],
