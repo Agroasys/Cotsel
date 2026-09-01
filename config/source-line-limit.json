@@ -35,7 +35,6 @@
     "auth/tests/adminControls.integration.test.ts": 667,
     "contracts/foundry/test/AgroasysEscrowFuzz.t.sol": 890,
     "contracts/src/AgroasysEscrow.sol": 2002,
-    "contracts/tests/AgroasysEscrow.ts": 2943,
     "docker-compose.services.yml": 625,
     "gateway/src/config/env.ts": 794,
     "gateway/src/core/complianceService.ts": 810,
