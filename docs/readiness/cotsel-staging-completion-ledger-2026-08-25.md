@@ -8,6 +8,11 @@ Scope: the current AWS staging lane, retained GCP lanes, and their release candi
 
 Outcome: provide reproducible, redacted evidence for each required completion gate.
 
+Current-state supersession records are append-only. For the active GCP lane as
+observed on 31 August 2026, read
+[`cotsel-gcp-legacy-baseline-2026-08-31.md`](cotsel-gcp-legacy-baseline-2026-08-31.md)
+before relying on the historical observations below.
+
 Overall status: **PARTIALLY VERIFIED**.
 
 Observation date: `2026-08-25`.
