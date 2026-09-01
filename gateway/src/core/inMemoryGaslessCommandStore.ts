@@ -2,7 +2,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'crypto';
-import { GaslessCommandCapacityError } from './gaslessCommandStore';
+import {
+  GaslessCommandCapacityError,
+  GaslessCommandIdentityConflictError,
+} from './gaslessCommandStore';
 import type {
   CreateGaslessCommandInput,
   GaslessCommandRecord,
@@ -42,8 +45,9 @@ export function createInMemoryGaslessCommandState(): InMemoryGaslessCommandState
         existing.resourceId !== input.resourceId ||
         existing.operation !== input.operation
       ) {
-        throw new Error(
-          'Gasless command identity is already bound to a different financial intent',
+        throw new GaslessCommandIdentityConflictError(
+          input.applicationRequestId,
+          'intent_mismatch',
         );
       }
       return { record: clone(existing), insert: false };

@@ -126,22 +126,57 @@ describeWithPostgres('Postgres gasless command store', () => {
         intentKey: 'f'.repeat(64),
         resourceId: 'different-handoff',
       }),
-    ).rejects.toThrow('different financial intent');
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
+      details: {
+        applicationRequestId: input.applicationRequestId,
+        reason: 'intent_mismatch',
+      },
+    });
   });
 
-  test('serializes capacity admission across concurrent writers', async () => {
+  test('deduplicates concurrent enqueue of the same financial intent', async () => {
+    const input = commandInput('concurrent-identity');
+    const [first, second] = await Promise.all([enqueue(input), enqueue(input)]);
+
+    expect(second.commandId).toBe(first.commandId);
+    const persisted = await pool.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM gasless_commands WHERE application_request_id = $1',
+      [input.applicationRequestId],
+    );
+    expect(persisted.rows[0]?.count).toBe('1');
+  });
+
+  test('returns a conflict when request and intent identities resolve to different commands', async () => {
+    const requestIdentity = commandInput('ambiguous-request');
+    const intentIdentity = commandInput('ambiguous-intent');
+    await enqueue(requestIdentity);
+    await enqueue(intentIdentity);
+
+    await expect(
+      enqueue({
+        ...requestIdentity,
+        intentKey: intentIdentity.intentKey,
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
+      details: {
+        applicationRequestId: requestIdentity.applicationRequestId,
+        reason: 'ambiguous_identity',
+      },
+    });
+  });
+
+  test('rejects intake when the visible queue depth already reaches the soft limit', async () => {
     const first = { ...commandInput('capacity-a'), maxQueueDepth: 1 };
     const second = { ...commandInput('capacity-b'), maxQueueDepth: 1 };
-    const results = await Promise.allSettled([enqueue(first), enqueue(second)]);
+    await enqueue(first);
 
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    const rejected = results.find((result) => result.status === 'rejected');
-    expect(rejected).toMatchObject({
-      status: 'rejected',
-      reason: expect.objectContaining({
-        statusCode: 503,
-        code: 'UPSTREAM_UNAVAILABLE',
-      }),
+    await expect(enqueue(second)).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
     });
   });
 

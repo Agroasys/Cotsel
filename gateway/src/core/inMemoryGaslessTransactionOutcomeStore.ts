@@ -26,13 +26,18 @@ export function createInMemoryGaslessTransactionOutcomeStore(): GaslessTransacti
   function update(
     transactionHash: string,
     outcomeStatus: GaslessTransactionOutcomeStatus,
-    details: { failureCode?: string | null; confirmation?: GaslessConfirmedOutcome } = {},
+    details: {
+      failureCode?: string | null;
+      observedTransactionHash?: string;
+      confirmation?: GaslessConfirmedOutcome;
+    } = {},
   ): void {
     const current = requireRecord(transactionHash);
     records.set(transactionHash.toLowerCase(), {
       ...current,
       outcomeStatus,
       failureCode: details.failureCode ?? current.failureCode,
+      observedTransactionHash: details.observedTransactionHash ?? current.observedTransactionHash,
       confirmation: details.confirmation ?? current.confirmation,
       updatedAt: new Date().toISOString(),
     });
@@ -61,14 +66,15 @@ export function createInMemoryGaslessTransactionOutcomeStore(): GaslessTransacti
       records.set(key, {
         ...structuredClone(identity),
         outcomeStatus: 'broadcast_pending',
+        observedTransactionHash: null,
         projectedOutcomeStatus: null,
         failureCode: null,
         updatedAt: now,
         lastReconciliationAttemptAt: null,
       });
     },
-    async markBroadcastUnknown(transactionHash, failureCode) {
-      update(transactionHash, 'broadcast_unknown', { failureCode });
+    async markBroadcastUnknown(transactionHash, failureCode, observedTransactionHash) {
+      update(transactionHash, 'broadcast_unknown', { failureCode, observedTransactionHash });
     },
     async markConfirmationPending(transactionHash) {
       update(transactionHash, 'confirmation_pending');

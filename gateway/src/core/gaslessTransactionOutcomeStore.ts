@@ -92,6 +92,7 @@ interface GaslessTransactionOutcomeRow {
   gasPriceWei: string | null;
   calldataHash: string;
   intentHash: string;
+  observedTransactionHash: string | null;
   outcomeStatus: GaslessTransactionOutcomeStatus;
   projectedOutcomeStatus: GaslessTransactionOutcomeStatus | null;
   failureCode: string | null;
@@ -138,6 +139,7 @@ export function createPostgresGaslessTransactionOutcomeRecorder(
     gas_price_wei AS "gasPriceWei",
     calldata_hash AS "calldataHash",
     intent_hash AS "intentHash",
+    observed_transaction_hash AS "observedTransactionHash",
     outcome_status AS "outcomeStatus",
     projected_outcome_status AS "projectedOutcomeStatus",
     failure_code AS "failureCode",

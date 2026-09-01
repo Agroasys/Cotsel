@@ -3,7 +3,10 @@
  */
 import { randomUUID } from 'crypto';
 import type { PoolClient } from 'pg';
-import { GaslessCommandCapacityError } from './gaslessCommandStore';
+import {
+  GaslessCommandCapacityError,
+  GaslessCommandIdentityConflictError,
+} from './gaslessCommandStore';
 import type {
   CreateGaslessCommandInput,
   GaslessCommandRecord,
@@ -68,12 +71,31 @@ export function mapGaslessCommand(row: GaslessCommandRow): GaslessCommandRecord 
   };
 }
 
-export async function createGaslessCommandWithClient(
+function resolveExistingCommand(
+  rows: GaslessCommandRow[],
+  input: CreateGaslessCommandInput,
+): GaslessCommandRecord | null {
+  if (rows.length === 0) return null;
+  if (rows.length !== 1) {
+    throw new GaslessCommandIdentityConflictError(input.applicationRequestId, 'ambiguous_identity');
+  }
+  const existing = rows[0];
+  if (
+    existing.intentKey !== input.intentKey ||
+    existing.resourceType !== input.resourceType ||
+    existing.resourceId !== input.resourceId ||
+    existing.operation !== input.operation
+  ) {
+    throw new GaslessCommandIdentityConflictError(input.applicationRequestId, 'intent_mismatch');
+  }
+  return mapGaslessCommand(existing);
+}
+
+async function findCommandByIdentity(
   client: PoolClient,
   input: CreateGaslessCommandInput,
-): Promise<GaslessCommandRecord> {
-  await client.query(`SELECT pg_advisory_xact_lock(hashtext('gasless-command-capacity'))`);
-  const existingResult = await client.query<GaslessCommandRow>(
+): Promise<GaslessCommandRecord | null> {
+  const result = await client.query<GaslessCommandRow>(
     `SELECT ${GASLESS_COMMAND_COLUMNS}
      FROM gasless_commands
      WHERE application_request_id = $1 OR intent_key = $2
@@ -81,21 +103,15 @@ export async function createGaslessCommandWithClient(
      LIMIT 2`,
     [input.applicationRequestId, input.intentKey],
   );
-  if (existingResult.rows.length > 0) {
-    if (existingResult.rows.length !== 1) {
-      throw new Error('Conflicting gasless command identities require operator review');
-    }
-    const existing = existingResult.rows[0];
-    if (
-      existing.intentKey !== input.intentKey ||
-      existing.resourceType !== input.resourceType ||
-      existing.resourceId !== input.resourceId ||
-      existing.operation !== input.operation
-    ) {
-      throw new Error('Gasless command identity is already bound to a different financial intent');
-    }
-    return mapGaslessCommand(existing);
-  }
+  return resolveExistingCommand(result.rows, input);
+}
+
+export async function createGaslessCommandWithClient(
+  client: PoolClient,
+  input: CreateGaslessCommandInput,
+): Promise<GaslessCommandRecord> {
+  const existing = await findCommandByIdentity(client, input);
+  if (existing) return existing;
   const capacity = await client.query<{ activeCount: string }>(
     `SELECT COUNT(*)::text AS "activeCount"
      FROM gasless_commands
@@ -125,5 +141,7 @@ export async function createGaslessCommandWithClient(
   );
   const inserted = result.rows[0];
   if (inserted) return mapGaslessCommand(inserted);
-  throw new Error('Gasless command insert lost its serialized capacity lock');
+  const concurrent = await findCommandByIdentity(client, input);
+  if (concurrent) return concurrent;
+  throw new GaslessCommandIdentityConflictError(input.applicationRequestId, 'concurrent_conflict');
 }

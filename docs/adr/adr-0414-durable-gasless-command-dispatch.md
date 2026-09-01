@@ -36,8 +36,11 @@ Multi-AZ deployment.
    replacement. The transaction-outcome reconciler owns the original hash until it is terminal.
 7. Startup and periodic scans reclaim expired leases. A process-local wake-up may reduce latency,
    but it is not the durability mechanism.
-8. Intake fails closed when the configured pending-work limit is reached. Readiness and logs expose
-   pending count, oldest age, expired leases, dead-letter count, and retry activity.
+8. Intake applies the configured pending-work limit as a soft admission guard. Work already visible
+   at the limit is rejected, while a small overshoot equal to concurrent admission may occur. This
+   avoids holding a fleet-wide transaction lock across the enclosing settlement transaction. The
+   command identity constraints remain hard invariants. Readiness and logs expose pending count,
+   oldest age, expired leases, dead-letter count, and retry activity.
 9. The HTTP request may wait for the current worker. If the connection or process is lost, a retry
    with the same idempotency key resolves the durable command or transaction outcome. It must not
    create another command or transaction.

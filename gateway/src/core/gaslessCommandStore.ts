@@ -26,6 +26,19 @@ export class GaslessCommandCapacityError extends GatewayError {
   }
 }
 
+export class GaslessCommandIdentityConflictError extends GatewayError {
+  constructor(
+    applicationRequestId: string,
+    reason: 'ambiguous_identity' | 'intent_mismatch' | 'concurrent_conflict',
+  ) {
+    super(409, 'CONFLICT', 'Gasless command identity conflicts with an existing financial intent', {
+      applicationRequestId,
+      reason,
+    });
+    this.name = 'GaslessCommandIdentityConflictError';
+  }
+}
+
 export interface CreateGaslessCommandInput {
   applicationRequestId: string;
   intentKey: string;

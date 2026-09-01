@@ -32,6 +32,7 @@
     "components/schemas-trades-01.yml",
     "components/schemas-settlement-01.yml",
     "components/schemas-settlement-02.yml",
+    "components/schemas-settlement-recovery-01.yml",
     "components/schemas-settlement-03.yml",
     "components/schemas-reconciliation-01.yml",
     "components/schemas-ricardian-01.yml",

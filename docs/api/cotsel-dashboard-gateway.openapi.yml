@@ -299,6 +299,8 @@ components:
     SponsoredWalletUsdcTransferResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SponsoredWalletUsdcTransferResponse}
     SettlementHandoffResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SettlementHandoffResponse}
     SettlementOracleProgressionResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SettlementOracleProgressionResponse}
+    GaslessFinancialOutcomeRecoveryResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-recovery-01.yml#/components/schemas/GaslessFinancialOutcomeRecoveryResponse}
+    GaslessDurableCommandRecoveryResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-recovery-01.yml#/components/schemas/GaslessDurableCommandRecoveryResponse}
     SettlementExecutionEventMutationPayload: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-03.yml#/components/schemas/SettlementExecutionEventMutationPayload}
     SettlementExecutionEventMutationResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-03.yml#/components/schemas/SettlementExecutionEventMutationResponse}
     SettlementExecutionEventListResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-03.yml#/components/schemas/SettlementExecutionEventListResponse}
