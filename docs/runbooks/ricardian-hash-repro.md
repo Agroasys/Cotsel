@@ -118,11 +118,13 @@ Controller behavior source: `ricardian/src/api/controller.ts`.
 
 ## Backup/Restore And Legal-Evidence Retrieval
 
-Ricardian hash records are stored in the `ricardian_hashes` Postgres table. Backup and restore are covered by the shared Postgres recovery runbook and smoke test:
+Ricardian hash records are stored in the `ricardian_hashes` Postgres table.
+Backup and restore are covered by the shared AWS Postgres recovery runbook:
 
 - Runbook: `docs/runbooks/postgres-backup-restore-recovery.md`
-- Smoke test script: `scripts/postgres-backup-restore-smoke.sh`
-- Recovery evidence artifacts: `reports/postgres-recovery/`
+- Live control audit: `scripts/audit-aws-postgres-recovery.sh`
+- Manifest comparator: `scripts/compare-postgres-recovery-manifests.mjs`
+- Local mechanics test only: `scripts/postgres-backup-restore-smoke.sh`
 
 For legal/audit retrieval scenarios (e.g. dispute review or regulatory inquiry), the complete integrity chain is:
 

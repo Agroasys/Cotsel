@@ -113,12 +113,20 @@ Purpose:
 
 - Postgres backups are scheduled, retained by policy, and restoration is periodically tested.
 - Ricardian/legal document storage backup and restore path is documented and tested.
-- Postgres recovery drill evidence is produced via `scripts/postgres-backup-restore-smoke.sh` and stored under `reports/postgres-recovery/`.
+- Audit live AWS backup controls with `scripts/audit-aws-postgres-recovery.sh`.
+- Produce seven-database source and restored-target manifests through the
+  registered ECS verifier task and compare them with
+  `scripts/compare-postgres-recovery-manifests.mjs`.
+- Treat `scripts/postgres-backup-restore-smoke.sh` only as a local logical
+  dump/restore mechanics test. It is not PITR or financial recovery evidence.
 
 ### Postgres recovery drill cadence
 
-- Pilot cadence: run backup/restore smoke at least weekly and archive the generated JSON/log artifacts.
-- Post-pilot cadence: run at least monthly and additionally after schema migrations with non-trivial risk.
+- Run the local backup/restore smoke in the release gate.
+- Schedule the live PITR drill from the approved recovery objectives and run it
+  after schema or infrastructure changes that invalidate recovery evidence.
+- Do not claim a cadence until the accountable owners approve the RPO/RTO and
+  drill policy in `Agroasys/agroasys-backend#516`.
 - Runbook source of truth: `docs/runbooks/postgres-backup-restore-recovery.md`.
 
 ### Logging and correlation
