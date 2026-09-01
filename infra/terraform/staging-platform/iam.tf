@@ -76,6 +76,7 @@ data "aws_iam_policy_document" "gateway_execution" {
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
       aws_secretsmanager_secret.platform["database/gateway/runtime"].arn,
+      aws_secretsmanager_secret.platform["database/indexer/reader"].arn,
       aws_secretsmanager_secret.platform["database/indexer/runtime"].arn,
       aws_secretsmanager_secret.platform["database/oracle/runtime"].arn,
       aws_secretsmanager_secret.platform["database/reconciliation/runtime"].arn,

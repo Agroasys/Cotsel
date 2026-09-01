@@ -10,13 +10,21 @@ This procedure does not deploy the long-running runtime or accept a release.
 ## Preconditions
 
 1. Confirm AWS account `655177116834` and region `ap-south-1`.
-2. Apply the reviewed `staging-platform` Terraform plan through the protected workflow.
-3. Confirm the plan created `cotsel-staging-indexer-migrate`.
+2. Confirm the reader-secret prerequisite was applied from its reviewed Terraform plan.
+3. Confirm the dedicated reader secret has an `AWSCURRENT` version with only
+   `username` and `password` keys. Do not read or record the values.
 4. Confirm the database backup and forward-fix plan are approved.
 5. Confirm each applied TypeORM migration has a recorded SHA-256 checksum.
 6. Stop if an applied migration has no checksum.
 7. Stop if another indexer migration task is running.
 8. Do not pass credentials through command arguments or task overrides.
+9. Generate and approve the saved `staging-platform` Terraform plan. Do not
+   apply it before the reader-secret prerequisite is complete.
+10. Confirm the plan creates `cotsel-staging-indexer-migrate` and does not start
+    Treasury.
+11. Apply the exact approved saved Terraform plan through the protected workflow.
+12. Run the exact database bootstrap task without command overrides.
+13. Confirm the bootstrap task exited with code `0`.
 
 ## Resolve non-secret runtime coordinates
 
@@ -83,6 +91,16 @@ Record the returned task ARN. Do not reuse an older task-definition revision.
 9. Run the same migration task again.
 10. Confirm the second task reports no pending migration.
 11. Confirm the indexer runtime starts and reports the expected migration head.
+12. Run the exact `database-entitlement-verification` task without overrides.
+13. Confirm the verifier reports all indexer ownership and denial checks as passed.
+14. Confirm `indexer-pipeline` uses `cotsel_indexer_app`.
+15. Confirm `indexer-graphql` uses `cotsel_indexer_reader`.
+16. Confirm neither container receives the migration secret.
+17. Confirm GraphQL has no public load-balancer route or public IP.
+18. Restart the indexer and confirm processor state resumes without DDL errors.
+
+After a restore, repeat Steps 12 through 18. A successful restore does not prove
+that ownership, default privileges, or cross-database isolation were retained.
 
 ## Failure handling
 
@@ -93,6 +111,7 @@ Record the returned task ARN. Do not reuse an older task-definition revision.
 5. Create a reviewed adoption design for unchecksummed history.
 6. Use the approved forward-fix or restore procedure.
 7. Reconcile database state before restarting the indexer runtime.
+8. Stop if the runtime attempts schema DDL or any object is not migration-owned.
 
 ## Evidence
 

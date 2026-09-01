@@ -813,7 +813,7 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
 
 async function bootstrap(): Promise<void> {
   await applyReachableRpcEndpoint();
-  await processor.run(new TypeormDatabase(), processBatch);
+  await processor.run(new TypeormDatabase({ initializeStateSchema: false }), processBatch);
 }
 
 void bootstrap();

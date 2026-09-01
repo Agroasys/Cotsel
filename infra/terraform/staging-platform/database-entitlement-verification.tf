@@ -2,6 +2,12 @@ locals {
   database_entitlement_verification_command = <<-COMMAND
     set -eu
 
+    : "$${INDEXER_MIGRATION_USERNAME:?INDEXER_MIGRATION_USERNAME is required}"
+    : "$${INDEXER_MIGRATION_PASSWORD:?INDEXER_MIGRATION_PASSWORD is required}"
+    : "$${INDEXER_RUNTIME_USERNAME:?INDEXER_RUNTIME_USERNAME is required}"
+    : "$${INDEXER_RUNTIME_PASSWORD:?INDEXER_RUNTIME_PASSWORD is required}"
+    : "$${INDEXER_READER_USERNAME:?INDEXER_READER_USERNAME is required}"
+    : "$${INDEXER_READER_PASSWORD:?INDEXER_READER_PASSWORD is required}"
     : "$${RICARDIAN_MIGRATION_USERNAME:?RICARDIAN_MIGRATION_USERNAME is required}"
     : "$${RICARDIAN_MIGRATION_PASSWORD:?RICARDIAN_MIGRATION_PASSWORD is required}"
     : "$${RICARDIAN_RUNTIME_USERNAME:?RICARDIAN_RUNTIME_USERNAME is required}"
@@ -11,6 +17,9 @@ locals {
     : "$${TREASURY_RUNTIME_USERNAME:?TREASURY_RUNTIME_USERNAME is required}"
     : "$${TREASURY_RUNTIME_PASSWORD:?TREASURY_RUNTIME_PASSWORD is required}"
 
+    [ "$${INDEXER_MIGRATION_USERNAME}" = 'cotsel_indexer_migrator' ]
+    [ "$${INDEXER_RUNTIME_USERNAME}" = 'cotsel_indexer_app' ]
+    [ "$${INDEXER_READER_USERNAME}" = 'cotsel_indexer_reader' ]
     [ "$${RICARDIAN_MIGRATION_USERNAME}" = 'cotsel_ricardian_migrator' ]
     [ "$${RICARDIAN_RUNTIME_USERNAME}" = 'cotsel_ricardian_runtime' ]
     [ "$${TREASURY_MIGRATION_USERNAME}" = 'cotsel_treasury_migrator' ]
@@ -25,6 +34,42 @@ locals {
     trap 'rm -f "$${PGSSLROOTCERT}"' EXIT HUP INT TERM
     wget --quiet -O "$${PGSSLROOTCERT}" 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem'
     printf '%s  %s\n' 'e5bb2084ccf45087bda1c9bffdea0eb15ee67f0b91646106e466714f9de3c7e3' "$${PGSSLROOTCERT}" | sha256sum -c -s
+
+    verify_restricted_role() {
+      database_name="$${1}"
+      role_name="$${2}"
+      restricted_role_count="$(psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align <<'SQL'
+    SELECT count(*)
+    FROM pg_roles role_row
+    WHERE role_row.rolname = current_user
+      AND role_row.rolcanlogin
+      AND NOT role_row.rolsuper
+      AND NOT role_row.rolinherit
+      AND NOT role_row.rolcreaterole
+      AND NOT role_row.rolcreatedb
+      AND NOT role_row.rolreplication
+      AND NOT role_row.rolbypassrls
+      AND NOT EXISTS (
+        SELECT 1
+        FROM pg_auth_members membership_row
+        WHERE membership_row.member = role_row.oid
+      );
+    SQL
+    )"
+      [ "$${restricted_role_count}" = '1' ] || {
+        printf '%s\n' "Database role $${role_name} has unexpected attributes or membership." >&2
+        exit 1
+      }
+    }
+
+    verify_connection_denied() {
+      database_name="$${1}"
+      role_name="$${2}"
+      if psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
+        printf '%s\n' "Database role $${role_name} unexpectedly connected to $${database_name}." >&2
+        exit 1
+      fi
+    }
 
     verify_service() {
       database_name="$${1}"
@@ -42,10 +87,14 @@ locals {
     CREATE SCHEMA $${probe_schema};
     ROLLBACK;
     SQL
+      verify_restricted_role "$${database_name}" "$${migration_username}"
+      verify_connection_denied "$${other_database_name}" "$${migration_username}"
+      verify_connection_denied 'cotsel_indexer' "$${migration_username}"
 
       export PGUSER="$${runtime_username}"
       export PGPASSWORD="$${runtime_password}"
       psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null
+      verify_restricted_role "$${database_name}" "$${runtime_username}"
 
       if psql --dbname "$${database_name}" --set ON_ERROR_STOP=1 --quiet >/dev/null 2>&1 <<SQL
     BEGIN;
@@ -57,10 +106,100 @@ locals {
         exit 1
       fi
 
-      if psql --dbname "$${other_database_name}" --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null 2>&1; then
-        printf '%s\n' "Runtime role unexpectedly connected to $${other_database_name}." >&2
+      verify_connection_denied "$${other_database_name}" "$${runtime_username}"
+      verify_connection_denied 'cotsel_indexer' "$${runtime_username}"
+    }
+
+    verify_indexer() {
+      export PGUSER="$${INDEXER_MIGRATION_USERNAME}"
+      export PGPASSWORD="$${INDEXER_MIGRATION_PASSWORD}"
+
+      database_owner="$(psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align <<'SQL'
+    SELECT owner_row.rolname
+    FROM pg_database database_row
+    JOIN pg_roles owner_row ON owner_row.oid = database_row.datdba
+    WHERE database_row.datname = 'cotsel_indexer';
+    SQL
+    )"
+      [ "$${database_owner}" = 'cotsel_indexer_migrator' ] || {
+        printf '%s\n' "Indexer database owner is $${database_owner}, not the migration role." >&2
+        exit 1
+      }
+
+      unexpected_schema_owner_count="$(psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align <<'SQL'
+    SELECT count(*)
+    FROM pg_namespace namespace_row
+    JOIN pg_roles owner_row ON owner_row.oid = namespace_row.nspowner
+    WHERE namespace_row.nspname IN ('public', 'squid_processor')
+      AND owner_row.rolname <> current_user;
+    SQL
+    )"
+      [ "$${unexpected_schema_owner_count}" = '0' ] || {
+        printf '%s\n' "Indexer has $${unexpected_schema_owner_count} schema(s) outside migration-role ownership." >&2
+        exit 1
+      }
+
+      unexpected_owner_count="$(psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align <<'SQL'
+    SELECT count(*)
+    FROM pg_class object_row
+    JOIN pg_namespace namespace_row ON namespace_row.oid = object_row.relnamespace
+    JOIN pg_roles owner_row ON owner_row.oid = object_row.relowner
+    WHERE namespace_row.nspname IN ('public', 'squid_processor')
+      AND object_row.relkind IN ('r', 'p', 'S', 'v', 'm')
+      AND owner_row.rolname <> current_user;
+    SQL
+    )"
+      [ "$${unexpected_owner_count}" = '0' ] || {
+        printf '%s\n' "Indexer has $${unexpected_owner_count} object(s) outside migration-role ownership." >&2
+        exit 1
+      }
+
+      psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet >/dev/null <<SQL
+    BEGIN;
+    CREATE TABLE public.cotsel_indexer_entitlement_probe (id bigint PRIMARY KEY);
+    ROLLBACK;
+    SQL
+      verify_restricted_role 'cotsel_indexer' "$${INDEXER_MIGRATION_USERNAME}"
+      verify_connection_denied 'cotsel_ricardian' "$${INDEXER_MIGRATION_USERNAME}"
+      verify_connection_denied 'cotsel_treasury' "$${INDEXER_MIGRATION_USERNAME}"
+
+      export PGUSER="$${INDEXER_RUNTIME_USERNAME}"
+      export PGPASSWORD="$${INDEXER_RUNTIME_PASSWORD}"
+      psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1' >/dev/null
+      verify_restricted_role 'cotsel_indexer' "$${INDEXER_RUNTIME_USERNAME}"
+      psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'UPDATE public.migrations SET name = name WHERE false' >/dev/null
+      if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet >/dev/null 2>&1 <<'SQL'
+    BEGIN;
+    CREATE TABLE public.cotsel_runtime_ddl_probe (id bigint);
+    ROLLBACK;
+    SQL
+      then
+        printf '%s\n' 'Indexer runtime role unexpectedly created a table.' >&2
         exit 1
       fi
+      verify_connection_denied 'cotsel_ricardian' "$${INDEXER_RUNTIME_USERNAME}"
+      verify_connection_denied 'cotsel_treasury' "$${INDEXER_RUNTIME_USERNAME}"
+
+      export PGUSER="$${INDEXER_READER_USERNAME}"
+      export PGPASSWORD="$${INDEXER_READER_PASSWORD}"
+      psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'SELECT 1 FROM public.migrations LIMIT 1' >/dev/null
+      verify_restricted_role 'cotsel_indexer' "$${INDEXER_READER_USERNAME}"
+      if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet -c 'UPDATE public.migrations SET name = name WHERE false' >/dev/null 2>&1; then
+        printf '%s\n' 'Indexer GraphQL reader unexpectedly updated a table.' >&2
+        exit 1
+      fi
+      if psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 --quiet >/dev/null 2>&1 <<'SQL'
+    BEGIN;
+    CREATE TABLE public.cotsel_reader_ddl_probe (id bigint);
+    ROLLBACK;
+    SQL
+      then
+        printf '%s\n' 'Indexer GraphQL reader unexpectedly created a table.' >&2
+        exit 1
+      fi
+
+      verify_connection_denied 'cotsel_ricardian' "$${INDEXER_READER_USERNAME}"
+      verify_connection_denied 'cotsel_treasury' "$${INDEXER_READER_USERNAME}"
     }
 
     verify_service \
@@ -78,8 +217,11 @@ locals {
       "$${TREASURY_RUNTIME_USERNAME}" \
       "$${TREASURY_RUNTIME_PASSWORD}"
 
+    verify_indexer
+
+    unset INDEXER_MIGRATION_PASSWORD INDEXER_RUNTIME_PASSWORD INDEXER_READER_PASSWORD
     unset RICARDIAN_MIGRATION_PASSWORD RICARDIAN_RUNTIME_PASSWORD TREASURY_MIGRATION_PASSWORD TREASURY_RUNTIME_PASSWORD
-    printf '%s\n' 'Cotsel Treasury and Ricardian database entitlement verification passed.'
+    printf '%s\n' 'Cotsel Indexer, Treasury, and Ricardian database entitlement verification passed.'
   COMMAND
 }
 
@@ -127,12 +269,15 @@ data "aws_iam_policy_document" "database_entitlement_verification_execution" {
     sid     = "ReadOnlyEntitlementVerificationSecrets"
     effect  = "Allow"
     actions = ["secretsmanager:GetSecretValue"]
-    resources = flatten([
-      for service in values(local.database_bootstrap_services) : [
-        service.migration_secret,
-        service.runtime_secret,
-      ]
-    ])
+    resources = concat(
+      flatten([
+        for service in values(local.database_bootstrap_services) : [
+          service.migration_secret,
+          service.runtime_secret,
+        ]
+      ]),
+      [local.database_bootstrap_services.indexer.reader_secret],
+    )
   }
 
   statement {
@@ -175,6 +320,12 @@ resource "aws_ecs_task_definition" "database_entitlement_verification" {
       mountPoints            = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
       command                = ["/bin/sh", "-ec", local.database_entitlement_verification_command]
       secrets = [
+        { name = "INDEXER_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.migration_secret}:password::" },
+        { name = "INDEXER_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.migration_secret}:username::" },
+        { name = "INDEXER_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:password::" },
+        { name = "INDEXER_RUNTIME_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:username::" },
+        { name = "INDEXER_READER_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:password::" },
+        { name = "INDEXER_READER_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:username::" },
         { name = "RICARDIAN_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:password::" },
         { name = "RICARDIAN_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:username::" },
         { name = "RICARDIAN_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.runtime_secret}:password::" },

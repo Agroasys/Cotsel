@@ -69,4 +69,5 @@ overrides:
   graphql: 15.10.2
 
 patchedDependencies:
+  '@subsquid/typeorm-store@1.9.2': patches/@subsquid__typeorm-store@1.9.2.patch
   brace-expansion@5.0.9: patches/brace-expansion@5.0.9.patch

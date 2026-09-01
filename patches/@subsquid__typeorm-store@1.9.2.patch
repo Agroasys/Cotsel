@@ -1,0 +1,189 @@
+diff --git a/lib/database.d.ts b/lib/database.d.ts
+--- a/lib/database.d.ts
++++ b/lib/database.d.ts
+@@ -10,0 +11 @@ export interface TypeormDatabaseOptions {
++    initializeStateSchema?: boolean;
+@@ -19,0 +21 @@ export declare class TypeormDatabase {
++    private initializeStateSchema;
+@@ -40 +42 @@ export declare class TypeormDatabase {
+-//# sourceMappingURL=database.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=database.d.ts.map
+diff --git a/lib/database.js b/lib/database.js
+--- a/lib/database.js
++++ b/lib/database.js
+@@ -21,0 +22 @@ class TypeormDatabase {
++        this.initializeStateSchema = options?.initializeStateSchema !== false;
+@@ -45,34 +46,36 @@ class TypeormDatabase {
+-        await em.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
+-        await em.query(`CREATE TABLE IF NOT EXISTS ${schema}.status (` +
+-            `id int4 primary key, ` +
+-            `height int4 not null, ` +
+-            `hash text DEFAULT '0x', ` +
+-            `nonce int4 DEFAULT 0` +
+-            `)`);
+-        await em.query(
+-        // for databases created by prev version of typeorm store
+-        `ALTER TABLE ${schema}.status ADD COLUMN IF NOT EXISTS hash text DEFAULT '0x'`);
+-        await em.query(
+-        // for databases created by prev version of typeorm store
+-        `ALTER TABLE ${schema}.status ADD COLUMN IF NOT EXISTS nonce int DEFAULT 0`);
+-        await em.query(`CREATE TABLE IF NOT EXISTS ${schema}.hot_block (height int4 primary key, hash text not null)`);
+-        await em.query(`CREATE TABLE IF NOT EXISTS ${schema}.hot_change_log (` +
+-            `block_height int4 not null references ${schema}.hot_block on delete cascade, ` +
+-            `index int4 not null, ` +
+-            `change jsonb not null, ` +
+-            `PRIMARY KEY (block_height, index)` +
+-            `)`);
+-        await em.query(`CREATE TABLE IF NOT EXISTS ${schema}.template_registry (` +
+-            `key text not null, ` +
+-            `value text not null, ` +
+-            `type boolean not null, ` +
+-            `block_number int not null, ` +
+-            `height int not null, ` +
+-            `PRIMARY KEY (key, value, type, block_number, height)` +
+-            `)`);
+-        // Migration: pre-existing tables had PK (key, value, type, block_number)
+-        // — a hot block re-registering a template at a different height was
+-        // silently dropped by ON CONFLICT. Promote the PK to include height
+-        // so re-registrations land at the hot block's height and are visible
+-        // to state.top[i].templates after reconnect.
+-        await this.migrateTemplateRegistryPk(em);
++        if (this.initializeStateSchema) {
++            await em.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
++            await em.query(`CREATE TABLE IF NOT EXISTS ${schema}.status (` +
++                `id int4 primary key, ` +
++                `height int4 not null, ` +
++                `hash text DEFAULT '0x', ` +
++                `nonce int4 DEFAULT 0` +
++                `)`);
++            await em.query(
++            // for databases created by prev version of typeorm store
++            `ALTER TABLE ${schema}.status ADD COLUMN IF NOT EXISTS hash text DEFAULT '0x'`);
++            await em.query(
++            // for databases created by prev version of typeorm store
++            `ALTER TABLE ${schema}.status ADD COLUMN IF NOT EXISTS nonce int DEFAULT 0`);
++            await em.query(`CREATE TABLE IF NOT EXISTS ${schema}.hot_block (height int4 primary key, hash text not null)`);
++            await em.query(`CREATE TABLE IF NOT EXISTS ${schema}.hot_change_log (` +
++                `block_height int4 not null references ${schema}.hot_block on delete cascade, ` +
++                `index int4 not null, ` +
++                `change jsonb not null, ` +
++                `PRIMARY KEY (block_height, index)` +
++                `)`);
++            await em.query(`CREATE TABLE IF NOT EXISTS ${schema}.template_registry (` +
++                `key text not null, ` +
++                `value text not null, ` +
++                `type boolean not null, ` +
++                `block_number int not null, ` +
++                `height int not null, ` +
++                `PRIMARY KEY (key, value, type, block_number, height)` +
++                `)`);
++            // Migration: pre-existing tables had PK (key, value, type, block_number)
++            // — a hot block re-registering a template at a different height was
++            // silently dropped by ON CONFLICT. Promote the PK to include height
++            // so re-registrations land at the hot block's height and are visible
++            // to state.top[i].templates after reconnect.
++            await this.migrateTemplateRegistryPk(em);
++        }
+@@ -279 +282 @@ function assertChainContinuity(base, chain) {
+-//# sourceMappingURL=database.js.map
+\ No newline at end of file
++//# sourceMappingURL=database.js.map
+diff --git a/src/database.ts b/src/database.ts
+--- a/src/database.ts
++++ b/src/database.ts
+@@ -19,0 +20 @@ export interface TypeormDatabaseOptions {
++    initializeStateSchema?: boolean
+@@ -30,0 +32 @@ export class TypeormDatabase {
++    private initializeStateSchema: boolean
+@@ -39,0 +42 @@ export class TypeormDatabase {
++        this.initializeStateSchema = options?.initializeStateSchema !== false
+@@ -69,43 +72,45 @@ export class TypeormDatabase {
+-        await em.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`)
+-        await em.query(
+-            `CREATE TABLE IF NOT EXISTS ${schema}.status (` +
+-                `id int4 primary key, ` +
+-                `height int4 not null, ` +
+-                `hash text DEFAULT '0x', ` +
+-                `nonce int4 DEFAULT 0` +
+-                `)`
+-        )
+-        await em.query(
+-            // for databases created by prev version of typeorm store
+-            `ALTER TABLE ${schema}.status ADD COLUMN IF NOT EXISTS hash text DEFAULT '0x'`
+-        )
+-        await em.query(
+-            // for databases created by prev version of typeorm store
+-            `ALTER TABLE ${schema}.status ADD COLUMN IF NOT EXISTS nonce int DEFAULT 0`
+-        )
+-        await em.query(`CREATE TABLE IF NOT EXISTS ${schema}.hot_block (height int4 primary key, hash text not null)`)
+-        await em.query(
+-            `CREATE TABLE IF NOT EXISTS ${schema}.hot_change_log (` +
+-                `block_height int4 not null references ${schema}.hot_block on delete cascade, ` +
+-                `index int4 not null, ` +
+-                `change jsonb not null, ` +
+-                `PRIMARY KEY (block_height, index)` +
+-                `)`
+-        )
+-        await em.query(
+-            `CREATE TABLE IF NOT EXISTS ${schema}.template_registry (` +
+-                `key text not null, ` +
+-                `value text not null, ` +
+-                `type boolean not null, ` +
+-                `block_number int not null, ` +
+-                `height int not null, ` +
+-                `PRIMARY KEY (key, value, type, block_number, height)` +
+-                `)`
+-        )
+-
+-        // Migration: pre-existing tables had PK (key, value, type, block_number)
+-        // — a hot block re-registering a template at a different height was
+-        // silently dropped by ON CONFLICT. Promote the PK to include height
+-        // so re-registrations land at the hot block's height and are visible
+-        // to state.top[i].templates after reconnect.
+-        await this.migrateTemplateRegistryPk(em)
++        if (this.initializeStateSchema) {
++            await em.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`)
++            await em.query(
++                `CREATE TABLE IF NOT EXISTS ${schema}.status (` +
++                    `id int4 primary key, ` +
++                    `height int4 not null, ` +
++                    `hash text DEFAULT '0x', ` +
++                    `nonce int4 DEFAULT 0` +
++                    `)`
++            )
++            await em.query(
++                // for databases created by prev version of typeorm store
++                `ALTER TABLE ${schema}.status ADD COLUMN IF NOT EXISTS hash text DEFAULT '0x'`
++            )
++            await em.query(
++                // for databases created by prev version of typeorm store
++                `ALTER TABLE ${schema}.status ADD COLUMN IF NOT EXISTS nonce int DEFAULT 0`
++            )
++            await em.query(`CREATE TABLE IF NOT EXISTS ${schema}.hot_block (height int4 primary key, hash text not null)`)
++            await em.query(
++                `CREATE TABLE IF NOT EXISTS ${schema}.hot_change_log (` +
++                    `block_height int4 not null references ${schema}.hot_block on delete cascade, ` +
++                    `index int4 not null, ` +
++                    `change jsonb not null, ` +
++                    `PRIMARY KEY (block_height, index)` +
++                    `)`
++            )
++            await em.query(
++                `CREATE TABLE IF NOT EXISTS ${schema}.template_registry (` +
++                    `key text not null, ` +
++                    `value text not null, ` +
++                    `type boolean not null, ` +
++                    `block_number int not null, ` +
++                    `height int not null, ` +
++                    `PRIMARY KEY (key, value, type, block_number, height)` +
++                    `)`
++            )
++
++            // Migration: pre-existing tables had PK (key, value, type, block_number)
++            // — a hot block re-registering a template at a different height was
++            // silently dropped by ON CONFLICT. Promote the PK to include height
++            // so re-registrations land at the hot block's height and are visible
++            // to state.top[i].templates after reconnect.
++            await this.migrateTemplateRegistryPk(em)
++        }

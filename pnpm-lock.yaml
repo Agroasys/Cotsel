@@ -32,6 +32,9 @@ overrides:
   graphql: 15.10.2
 
 patchedDependencies:
+  '@subsquid/typeorm-store@1.9.2':
+    hash: b7b54b502476b53a21298d67c7ada85e598c81122c968d7785f7f80caf8b4b88
+    path: patches/@subsquid__typeorm-store@1.9.2.patch
   brace-expansion@5.0.9:
     hash: 50e3844f4c5ab95c6631a3d8a3c546eb365760fb3202d1a6e93f1dfc6a95377d
     path: patches/brace-expansion@5.0.9.patch
@@ -317,7 +320,7 @@ importers:
         version: 1.4.0(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       '@subsquid/typeorm-store':
         specifier: ^1.9.2
-        version: 1.9.2(@subsquid/big-decimal@1.0.0)(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+        version: 1.9.2(patch_hash=b7b54b502476b53a21298d67c7ada85e598c81122c968d7785f7f80caf8b4b88)(@subsquid/big-decimal@1.0.0)(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -12295,7 +12298,7 @@ snapshots:
       dotenv: 16.6.1
       typeorm: 1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
 
-  '@subsquid/typeorm-store@1.9.2(@subsquid/big-decimal@1.0.0)(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
+  '@subsquid/typeorm-store@1.9.2(patch_hash=b7b54b502476b53a21298d67c7ada85e598c81122c968d7785f7f80caf8b4b88)(@subsquid/big-decimal@1.0.0)(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
     dependencies:
       '@subsquid/big-decimal': 1.0.0
       '@subsquid/typeorm-config': 4.2.0(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
