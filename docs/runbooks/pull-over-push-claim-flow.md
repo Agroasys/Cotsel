@@ -98,20 +98,21 @@ Use this sequence when payout destination is compromised/lost/frozen:
 
 1. Freeze claim path:
 
-```bash
-cast send <ESCROW_ADDRESS> "pauseClaims()" --private-key "$ADMIN_KEY"
-```
+Use the approved admin-controlled wallet to call `pauseClaims()` on the accepted
+escrow address. Verify the wallet, chain ID, contract, and method in the signing
+device before approval. Do not place an admin key in a command or environment
+variable.
 
 2. Rotate payout receiver via governance (propose -> approve -> execute after timelock):
 
-```bash
-cast send <ESCROW_ADDRESS> "proposeTreasuryPayoutAddressUpdate(address)" <NEW_RECEIVER> --private-key "$ADMIN1_KEY"
-cast send <ESCROW_ADDRESS> "approveTreasuryPayoutAddressUpdate(uint256)" <PROPOSAL_ID> --private-key "$ADMIN2_KEY"
-# wait governance timelock
-cast send <ESCROW_ADDRESS> "executeTreasuryPayoutAddressUpdate(uint256)" <PROPOSAL_ID> --private-key "$ADMIN1_KEY"
-```
+Use distinct approved admin wallets to propose and approve
+`proposeTreasuryPayoutAddressUpdate(address)`. After the governance timelock,
+execute `executeTreasuryPayoutAddressUpdate(uint256)` through an approved admin
+wallet. Record the proposal ID, signer addresses, transaction hashes, blocks,
+new receiver, and approval evidence.
 
-AdminSDK equivalent for automation:
+Illustrative AdminSDK sequence for an approved direct-wallet integration. The
+signers remain external to Cotsel custody:
 
 ```ts
 const adminSDK = new AdminSDK({ rpc, chainId, escrowAddress, usdcAddress });
@@ -134,16 +135,19 @@ cast call <ESCROW_ADDRESS> "treasuryPayoutAddress()(address)"
 
 4. Unfreeze claim path:
 
-```bash
-cast send <ESCROW_ADDRESS> "proposeUnpause(uint8,uint256,bytes32)" 1 0 <INCIDENT_REF> --private-key "$ADMIN1_KEY"
-cast send <ESCROW_ADDRESS> "approveUnpause()" --private-key "$ADMIN2_KEY"
-```
+Use distinct approved admin wallets to propose the scoped unpause with the
+retained incident reference and to approve it. Verify the on-chain proposal,
+quorum, and resulting claim-path state before closing the incident.
 
 ## Operator Verification
 
 Use these checks during incident triage or release verification:
 
-**Production execution:** Admins run these actions through the Web2 admin dashboard, which calls the AdminSDK to submit transactions (`sdk/src/modules/adminSDK.ts`). The Foundry commands below are a reproducible fallback for audits, incident response, or manual verification when the dashboard path is unavailable.
+**Execution status:** Current gateway repository truth does not implement the
+ADR-0411 prepare/confirm mutation path. Do not describe the Web2 dashboard as an
+accepted governance execution boundary until that path is implemented and
+drilled. Read-only Foundry calls below remain valid for verification; mutations
+require an approved admin-controlled wallet and two-person evidence.
 
 ```bash
 cast call <ESCROW_ADDRESS> "claimableUsdc(address)(uint256)" <RECIPIENT>

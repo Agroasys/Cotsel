@@ -9,7 +9,19 @@ fail=0
 paths=(
   docs/runbooks
   docs/adr
+  docs/security
+  docs/licensing.md
   README.md
+  CONTRIBUTING.md
+  auth/README.md
+  contracts/README.md
+  indexer/README.md
+  notifications/README.md
+  oracle/README.md
+  reconciliation/README.md
+  ricardian/README.md
+  sdk/README.md
+  treasury/README.md
 )
 
 exclude_args=(
@@ -33,6 +45,7 @@ fi
 
 if [[ "$fail" -eq 0 ]]; then
   echo "pnpm package-manager command guard: pass"
+  node --test scripts/tests/documentation-integrity.test.mjs
   exit 0
 fi
 

@@ -1,12 +1,12 @@
 # Cotsel Ownership Map
 
-Snapshot date: 2026-04-28
+Snapshot date: 2026-08-26
 
 ## Purpose
 
 Make review ownership visible without changing the monorepo shape or inventing a
-heavy governance process. This file is the current ownership guide until real
-GitHub team handles are confirmed for `CODEOWNERS`.
+heavy governance process. This file supplements the repository's enforced
+`CODEOWNERS` control with review routing for each runtime boundary.
 
 ## Ownership Principles
 
@@ -39,10 +39,11 @@ GitHub team handles are confirmed for `CODEOWNERS`.
 
 ## Current `CODEOWNERS` Position
 
-No repo-truth source currently identifies concrete GitHub users or teams for the
-owner groups above. A `CODEOWNERS` file should be added only after those handles
-are confirmed. Until then, this document is the explicit review map and issue
-label guide.
+`.github/CODEOWNERS` assigns all paths to `@Astton` and `@czpyioe`. Settlement-
+and infrastructure-sensitive changes use the two-person programme control: the
+author obtains approval from the other named owner. The service roles in this
+document route subject-matter review, but they do not replace the enforced
+GitHub approval or candidate-specific acceptance authority.
 
 ## Review Routing Cheat Sheet
 
@@ -83,4 +84,4 @@ Use this when opening or reviewing a PR:
 - No team reorganization.
 - No repo split.
 - No formal approval board.
-- No fake `CODEOWNERS` entries without real GitHub handles.
+- No unverified user or team handles in `CODEOWNERS`.
