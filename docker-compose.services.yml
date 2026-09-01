@@ -1,3 +1,6 @@
+include:
+  - docker-compose.migrations.yml
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -260,7 +263,7 @@ services:
       RATE_LIMIT_ENABLED: '${RICARDIAN_RATE_LIMIT_ENABLED}'
       RATE_LIMIT_REDIS_URL: '${RICARDIAN_RATE_LIMIT_REDIS_URL}'
     depends_on:
-      postgres-init:
+      ricardian-migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -310,7 +313,7 @@ services:
       AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS: '${AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS:-600}'
       AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS: '${AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS:-3600}'
     depends_on:
-      postgres-init:
+      auth-migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -415,7 +418,7 @@ services:
       GATEWAY_COMMIT_SHA: '${GATEWAY_COMMIT_SHA}'
       GATEWAY_BUILD_TIME: '${GATEWAY_BUILD_TIME}'
     depends_on:
-      postgres-init:
+      gateway-migrate:
         condition: service_completed_successfully
       auth:
         condition: service_healthy
@@ -464,7 +467,7 @@ services:
       RATE_LIMIT_ENABLED: '${TREASURY_RATE_LIMIT_ENABLED}'
       RATE_LIMIT_REDIS_URL: '${TREASURY_RATE_LIMIT_REDIS_URL}'
     depends_on:
-      postgres-init:
+      treasury-migrate:
         condition: service_completed_successfully
       indexer-graphql:
         condition: service_healthy
@@ -527,7 +530,7 @@ services:
       NOTIFICATIONS_REQUEST_TIMEOUT_MS: '${ORACLE_NOTIFICATIONS_REQUEST_TIMEOUT_MS}'
       ORACLE_MANUAL_APPROVAL_ENABLED: '${ORACLE_MANUAL_APPROVAL_ENABLED}'
     depends_on:
-      postgres-init:
+      oracle-migrate:
         condition: service_completed_successfully
       indexer-graphql:
         condition: service_healthy
@@ -589,7 +592,7 @@ services:
       NOTIFICATIONS_COOLDOWN_MS: '${RECONCILIATION_NOTIFICATIONS_COOLDOWN_MS}'
       NOTIFICATIONS_REQUEST_TIMEOUT_MS: '${RECONCILIATION_NOTIFICATIONS_REQUEST_TIMEOUT_MS}'
     depends_on:
-      postgres-init:
+      reconciliation-migrate:
         condition: service_completed_successfully
       indexer-graphql:
         condition: service_healthy

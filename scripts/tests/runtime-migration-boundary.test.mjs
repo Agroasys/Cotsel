@@ -75,6 +75,26 @@ test('every non-indexer schema has a dedicated one-off migration task', async ()
   assert.doesNotMatch(source, /task_role_arn/);
 });
 
+test('local runtimes wait for their dedicated migration jobs', async () => {
+  const compose = await readFile('docker-compose.services.yml', 'utf8');
+  const migrations = await readFile('docker-compose.migrations.yml', 'utf8');
+
+  assert.match(compose, /include:\n {2}- docker-compose\.migrations\.yml/);
+  for (const service of ['auth', 'gateway', 'oracle', 'reconciliation', 'ricardian', 'treasury']) {
+    assert.match(
+      compose,
+      new RegExp(`${service}-migrate:\\n        condition: service_completed_successfully`),
+    );
+    assert.match(migrations, new RegExp(`\\n  ${service}-migrate:`));
+    assert.match(
+      migrations,
+      new RegExp(`MIGRATION_MANIFEST_PATH: /app/${service}/dist/database/migrations\\.json`),
+    );
+  }
+
+  assert.doesNotMatch(migrations, /MIGRATION_DIRECTORY/);
+});
+
 test('service migration manifests pin immutable schema checksums', async () => {
   for (const service of ['auth', 'gateway', 'oracle', 'reconciliation', 'ricardian', 'treasury']) {
     const manifest = await loadAndValidateManifest(`${service}/src/database/migrations.json`);
