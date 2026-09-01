@@ -5,6 +5,8 @@
       "name": "baseline",
       "file": "schema.sql",
       "sha256": "7fbe932b672cae06e45132dde5441a09120fc90e737020e6123d92309ba8a4f5",
+      "schema_sha256": "738188a5cd5bf31c2306777be56e2be8faf92b69b129c7f4c5fba5edd514d51a",
+      "adopt_existing_schema": true,
       "baseline": true
     }
   ]

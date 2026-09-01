@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createServicePool, parsePostgresSslMode } = require('./index');
+const { computePublicSchemaFingerprint } = require('./schema-fingerprint');
 
 const MIGRATION_VERSION_PATTERN = /^\d{12,14}$/;
 const MIGRATION_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
@@ -58,7 +59,15 @@ function loadMigrationManifest(manifestPath) {
       throw new Error(`Migration manifest entry ${index} must be an object`);
     }
 
-    const { version, name, file, sha256: expectedChecksum, baseline = false } = entry;
+    const {
+      version,
+      name,
+      file,
+      sha256: expectedChecksum,
+      schema_sha256: expectedSchemaChecksum,
+      baseline = false,
+      adopt_existing_schema: adoptExistingSchema = false,
+    } = entry;
     if (!MIGRATION_VERSION_PATTERN.test(version)) {
       throw new Error(`Migration version ${String(version)} must contain 12 to 14 digits`);
     }
@@ -71,11 +80,22 @@ function loadMigrationManifest(manifestPath) {
     if (!SHA256_PATTERN.test(expectedChecksum)) {
       throw new Error(`Migration ${version} must declare a lowercase SHA-256 checksum`);
     }
+    if (expectedSchemaChecksum !== undefined && !SHA256_PATTERN.test(expectedSchemaChecksum)) {
+      throw new Error(`Migration ${version} schema_sha256 must be a lowercase SHA-256 checksum`);
+    }
     if (seenVersions.has(version) || version <= previousVersion) {
       throw new Error('Migration versions must be unique and strictly increasing');
     }
     if (typeof baseline !== 'boolean' || (baseline && index !== 0)) {
       throw new Error('Only the first migration may declare baseline=true');
+    }
+    if (
+      typeof adoptExistingSchema !== 'boolean' ||
+      (adoptExistingSchema && (!baseline || index !== 0 || !expectedSchemaChecksum))
+    ) {
+      throw new Error(
+        'Only the first baseline migration with schema_sha256 may declare adopt_existing_schema=true',
+      );
     }
 
     const migrationPath = path.resolve(manifestDirectory, file);
@@ -97,8 +117,10 @@ function loadMigrationManifest(manifestPath) {
       file,
       absolutePath: migrationPath,
       checksum: actualChecksum,
+      schemaChecksum: expectedSchemaChecksum,
       sql,
       baseline,
+      adoptExistingSchema,
     };
   });
 }
@@ -115,6 +137,11 @@ function validateAppliedMigrations(migrations, appliedRows, serviceName, require
     }
     if (applied.name !== declared.name || applied.checksum.trim() !== declared.checksum) {
       throw new Error(`Applied migration ${applied.version} does not match the immutable manifest`);
+    }
+    if (declared.schemaChecksum && applied.schema_checksum?.trim() !== declared.schemaChecksum) {
+      throw new Error(
+        `Applied migration ${applied.version} schema fingerprint does not match the immutable manifest`,
+      );
     }
   }
 
@@ -196,13 +223,20 @@ async function assertMigrationHistory({ pool, serviceName, manifestPath }) {
   }
 
   const appliedResult = await pool.query(
-    `SELECT version, name, checksum
+    `SELECT version, name, checksum, schema_checksum, application_mode
      FROM cotsel_schema_migrations
      WHERE service_name = $1
      ORDER BY version`,
     [serviceName],
   );
   validateAppliedMigrations(migrations, appliedResult.rows, serviceName, true);
+  const expectedSchemaChecksum = migrations.at(-1).schemaChecksum;
+  if (
+    expectedSchemaChecksum &&
+    (await computePublicSchemaFingerprint(pool)) !== expectedSchemaChecksum
+  ) {
+    throw new Error(`${serviceName} schema fingerprint does not match the immutable manifest`);
+  }
 }
 
 async function rollbackQuietly(client) {
@@ -242,12 +276,21 @@ async function runVersionedMigrations({
     const ledgerResult = await client.query(
       `SELECT to_regclass('public.cotsel_schema_migrations')::text AS ledger`,
     );
+    let prevalidatedAdoptionChecksum;
     if (!ledgerResult.rows[0]?.ledger && migrations[0].baseline) {
       const existingObject = await findExistingApplicationObject(client);
       if (existingObject) {
-        throw new Error(
-          `Baseline migration ${migrations[0].version} requires an empty public schema; found ${existingObject.object_type} ${existingObject.object_name}; stop and create a reviewed adoption design`,
-        );
+        if (!migrations[0].adoptExistingSchema) {
+          throw new Error(
+            `Baseline migration ${migrations[0].version} requires an empty public schema; found ${existingObject.object_type} ${existingObject.object_name}; stop and create a reviewed adoption design`,
+          );
+        }
+        prevalidatedAdoptionChecksum = await computePublicSchemaFingerprint(client);
+        if (prevalidatedAdoptionChecksum !== migrations[0].schemaChecksum) {
+          throw new Error(
+            `Existing schema does not match the adoption fingerprint for baseline migration ${migrations[0].version}`,
+          );
+        }
       }
     }
 
@@ -257,13 +300,15 @@ async function runVersionedMigrations({
         version VARCHAR(14) NOT NULL,
         name TEXT NOT NULL,
         checksum CHAR(64) NOT NULL,
+        schema_checksum CHAR(64),
+        application_mode TEXT NOT NULL CHECK (application_mode IN ('executed', 'adopted')),
         execution_ms INTEGER NOT NULL CHECK (execution_ms >= 0),
         applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (service_name, version)
       )
     `);
     const appliedResult = await client.query(
-      `SELECT version, name, checksum
+      `SELECT version, name, checksum, schema_checksum, application_mode
        FROM cotsel_schema_migrations
        WHERE service_name = $1
        ORDER BY version`,
@@ -272,18 +317,6 @@ async function runVersionedMigrations({
     validateAppliedMigrations(migrations, appliedResult.rows, serviceName, false);
 
     const appliedVersions = new Set(appliedResult.rows.map((migration) => migration.version));
-    const pendingBaseline = migrations.find(
-      (migration) => migration.baseline && !appliedVersions.has(migration.version),
-    );
-    if (pendingBaseline) {
-      const existingObject = await findExistingApplicationObject(client);
-      if (existingObject) {
-        throw new Error(
-          `Baseline migration ${pendingBaseline.version} requires an empty public schema; found ${existingObject.object_type} ${existingObject.object_name}; stop and create a reviewed adoption design`,
-        );
-      }
-    }
-
     await client.query(`GRANT SELECT ON TABLE cotsel_schema_migrations TO ${quotedRuntimeDbUser}`);
     const appliedNow = [];
 
@@ -292,29 +325,94 @@ async function runVersionedMigrations({
         continue;
       }
 
+      const existingObject = migration.baseline
+        ? await findExistingApplicationObject(client)
+        : undefined;
+      if (existingObject) {
+        if (!migration.adoptExistingSchema) {
+          throw new Error(
+            `Baseline migration ${migration.version} requires an empty public schema; found ${existingObject.object_type} ${existingObject.object_name}; stop and create a reviewed adoption design`,
+          );
+        }
+        const schemaChecksum =
+          prevalidatedAdoptionChecksum ?? (await computePublicSchemaFingerprint(client));
+        if (schemaChecksum !== migration.schemaChecksum) {
+          throw new Error(
+            `Existing schema does not match the adoption fingerprint for baseline migration ${migration.version}`,
+          );
+        }
+        await client.query('BEGIN');
+        try {
+          await client.query(
+            `INSERT INTO cotsel_schema_migrations
+               (service_name, version, name, checksum, schema_checksum, application_mode, execution_ms)
+             VALUES ($1, $2, $3, $4, $5, 'adopted', 0)`,
+            [serviceName, migration.version, migration.name, migration.checksum, schemaChecksum],
+          );
+          await client.query('COMMIT');
+          appliedNow.push({
+            version: migration.version,
+            name: migration.name,
+            checksum: migration.checksum,
+            schemaChecksum,
+            applicationMode: 'adopted',
+            executionMs: 0,
+          });
+        } catch (error) {
+          connectionReusable = await rollbackQuietly(client);
+          throw error;
+        }
+        continue;
+      }
+
       const startedAt = Date.now();
       await client.query('BEGIN');
       try {
         await client.query(`SET LOCAL statement_timeout = '${validatedStatementTimeoutMs}ms'`);
         await client.query(migration.sql);
+        const schemaChecksum = migration.schemaChecksum
+          ? await computePublicSchemaFingerprint(client)
+          : undefined;
+        if (migration.schemaChecksum && schemaChecksum !== migration.schemaChecksum) {
+          throw new Error(
+            `Migration ${migration.version} produced a schema fingerprint that does not match its manifest`,
+          );
+        }
         const executionMs = Date.now() - startedAt;
         await client.query(
           `INSERT INTO cotsel_schema_migrations
-             (service_name, version, name, checksum, execution_ms)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [serviceName, migration.version, migration.name, migration.checksum, executionMs],
+             (service_name, version, name, checksum, schema_checksum, application_mode, execution_ms)
+           VALUES ($1, $2, $3, $4, $5, 'executed', $6)`,
+          [
+            serviceName,
+            migration.version,
+            migration.name,
+            migration.checksum,
+            schemaChecksum ?? null,
+            executionMs,
+          ],
         );
         await client.query('COMMIT');
         appliedNow.push({
           version: migration.version,
           name: migration.name,
           checksum: migration.checksum,
+          schemaChecksum,
+          applicationMode: 'executed',
           executionMs,
         });
       } catch (error) {
         connectionReusable = await rollbackQuietly(client);
         throw error;
       }
+    }
+
+    const expectedSchemaChecksum = migrations.at(-1).schemaChecksum;
+    if (
+      expectedSchemaChecksum &&
+      (await computePublicSchemaFingerprint(client)) !== expectedSchemaChecksum
+    ) {
+      throw new Error(`${serviceName} schema fingerprint does not match the immutable manifest`);
     }
 
     return { declared: migrations.length, applied: appliedNow };
