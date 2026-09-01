@@ -145,6 +145,8 @@ jobs:
           if [ "$PUBLISH" != "true" ]; then
             echo "reference=${LOCAL_TAG}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
             echo "digest=" >> "$GITHUB_OUTPUT"
+            echo "provenance_generated=false" >> "$GITHUB_OUTPUT"
+            echo "reused_existing_digest=false" >> "$GITHUB_OUTPUT"
             echo "Candidate image for ${ECR_REPOSITORY}; not published."
             exit 0
           fi
@@ -158,6 +160,13 @@ jobs:
           REFERENCE="${ECR_REGISTRY}/${ECR_REPOSITORY}@${DIGEST}"
           echo "reference=$REFERENCE" >> "$GITHUB_OUTPUT"
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          if [ -n "$REUSED" ]; then
+            echo "provenance_generated=false" >> "$GITHUB_OUTPUT"
+            echo "reused_existing_digest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "provenance_generated=true" >> "$GITHUB_OUTPUT"
+            echo "reused_existing_digest=false" >> "$GITHUB_OUTPUT"
+          fi
           echo "Image identity: $REFERENCE"
 
       - name: Generate SPDX image SBOM
@@ -175,16 +184,28 @@ jobs:
           cosign-release: v3.0.6
 
       - name: Sign and verify the published image digest
+        id: signature
         if: steps.kind.outputs.publish == 'true'
         env:
           IMAGE_REFERENCE: ${{ steps.identity.outputs.reference }}
         run: |
           set -euo pipefail
+          SIGNATURE_PATH="signature-image-${{ matrix.service }}.json"
+          TEMP_SIGNATURE_PATH="${SIGNATURE_PATH}.tmp"
           cosign sign --yes "$IMAGE_REFERENCE"
           cosign verify \
             --certificate-identity "https://github.com/Agroasys/Cotsel/.github/workflows/release-images.yml@refs/heads/main" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            "$IMAGE_REFERENCE" > "signature-image-${{ matrix.service }}.json"
+            "$IMAGE_REFERENCE" > "$TEMP_SIGNATURE_PATH"
+          node -e '
+            const fs = require("node:fs");
+            const payload = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            if (!Array.isArray(payload) || payload.length === 0) {
+              throw new Error("Cosign verification returned no signatures");
+            }
+          ' "$TEMP_SIGNATURE_PATH"
+          mv "$TEMP_SIGNATURE_PATH" "$SIGNATURE_PATH"
+          echo "verified=true" >> "$GITHUB_OUTPUT"
 
       - name: Record the complete image vulnerability report
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
@@ -216,25 +237,33 @@ jobs:
           REFERENCE: ${{ steps.identity.outputs.reference }}
           SERVICE: ${{ matrix.service }}
           PUBLISHED: ${{ steps.kind.outputs.publish }}
+          PROVENANCE_GENERATED: ${{ steps.identity.outputs.provenance_generated }}
+          REUSED_EXISTING_DIGEST: ${{ steps.identity.outputs.reused_existing_digest }}
+          SIGNATURE_VERIFIED: ${{ steps.signature.outputs.verified }}
         run: |
           node -e '
             const crypto = require("node:crypto");
             const fs = require("node:fs");
             const sbomPath = `sbom-image-${process.env.SERVICE}.spdx.json`;
-            const signaturePath = `signature-image-${process.env.SERVICE}.json`;
             const sbomSha256 = fs.existsSync(sbomPath)
               ? crypto.createHash("sha256").update(fs.readFileSync(sbomPath)).digest("hex")
               : null;
             const published = process.env.PUBLISHED === "true";
+            const provenanceGenerated = process.env.PROVENANCE_GENERATED === "true";
+            const reusedExistingDigest = process.env.REUSED_EXISTING_DIGEST === "true";
+            const signatureVerified = process.env.SIGNATURE_VERIFIED === "true";
             const out = {
               service: process.env.SERVICE,
               sourceCommit: process.env.GITHUB_SHA,
               imageReference: process.env.REFERENCE,
               imageDigest: process.env.DIGEST || null,
               published,
-              buildProvenance: published ? "mode=max" : null,
+              buildProvenance: provenanceGenerated
+                ? { mode: "max", producingWorkflowRunId: process.env.GITHUB_RUN_ID }
+                : null,
+              reusedExistingDigest,
               sbom: fs.existsSync(sbomPath) ? { path: sbomPath, sha256: sbomSha256 } : null,
-              signatureVerified: published ? fs.existsSync(signaturePath) : null,
+              signatureVerified: published ? signatureVerified : null,
               workflowRunId: process.env.GITHUB_RUN_ID,
             };
             fs.writeFileSync(`release-image-${out.service}.json`, `${JSON.stringify(out, null, 2)}\n`);
