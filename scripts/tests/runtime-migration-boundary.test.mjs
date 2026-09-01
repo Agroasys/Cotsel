@@ -79,6 +79,8 @@ test('service migration manifests pin immutable schema checksums', async () => {
   for (const service of ['auth', 'gateway', 'oracle', 'reconciliation', 'ricardian', 'treasury']) {
     const manifest = await loadAndValidateManifest(`${service}/src/database/migrations.json`);
     assert.equal(manifest.migrations[0].baseline, true);
+    assert.equal(manifest.migrations[0].adopt_existing_schema, true);
+    assert.match(manifest.migrations[0].schema_sha256, /^[a-f0-9]{64}$/);
   }
 });
 
@@ -92,6 +94,10 @@ test('dedicated migration runner locks, checksums, journals, and rolls back', as
   assert.match(source, /rollbackQuietly/);
   assert.match(source, /GRANT SELECT ON TABLE cotsel_schema_migrations/);
   assert.match(source, /WITH application_objects/);
+  assert.match(source, /adopt_existing_schema/);
+  assert.match(source, /application_mode/);
+  assert.match(source, /computePublicSchemaFingerprint/);
+  assert.match(source, /does not match the adoption fingerprint/);
 });
 
 test('indexer migration job validates history and serializes TypeORM execution', async () => {

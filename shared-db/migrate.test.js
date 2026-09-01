@@ -13,6 +13,9 @@ const {
   sha256,
 } = require('./migrate');
 
+const schemaRows = [['relation', 'public.example', 'kind=r']];
+const schemaChecksum = sha256(JSON.stringify(schemaRows));
+
 function createManifest(sql = 'CREATE TABLE example (id INTEGER PRIMARY KEY);') {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cotsel-migration-'));
   const migrationPath = path.join(directory, '001.sql');
@@ -27,6 +30,7 @@ function createManifest(sql = 'CREATE TABLE example (id INTEGER PRIMARY KEY);') 
           name: 'baseline',
           file: '001.sql',
           sha256: sha256(sql),
+          schema_sha256: schemaChecksum,
           baseline: true,
         },
       ],
@@ -40,11 +44,16 @@ function createPool({
   failSql = false,
   existingObject,
   ledgerExists = false,
+  fingerprintRows = schemaRows,
 } = {}) {
   const calls = [];
   const client = {
-    async query(sql, parameters) {
+    async query(query, parameters) {
+      const sql = typeof query === 'string' ? query : query.text;
       calls.push({ sql, parameters });
+      if (typeof query === 'object' && query.rowMode === 'array') {
+        return { rows: fingerprintRows };
+      }
       if (sql.includes('FROM cotsel_schema_migrations')) {
         return { rows: appliedRows };
       }
@@ -102,6 +111,33 @@ test('migration manifest rejects modified SQL', (t) => {
   );
 });
 
+test('migration manifest rejects unbound schema fingerprints', (t) => {
+  const fixture = createManifest();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  const manifest = JSON.parse(fs.readFileSync(fixture.manifestPath, 'utf8'));
+  manifest.migrations[0].schema_sha256 = 'not-a-checksum';
+  fs.writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
+
+  assert.throws(
+    () => loadMigrationManifest(fixture.manifestPath),
+    /schema_sha256 must be a lowercase SHA-256 checksum/,
+  );
+});
+
+test('migration manifest requires a schema fingerprint for baseline adoption', (t) => {
+  const fixture = createManifest();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  const manifest = JSON.parse(fs.readFileSync(fixture.manifestPath, 'utf8'));
+  delete manifest.migrations[0].schema_sha256;
+  manifest.migrations[0].adopt_existing_schema = true;
+  fs.writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
+
+  assert.throws(
+    () => loadMigrationManifest(fixture.manifestPath),
+    /Only the first baseline migration with schema_sha256 may declare adopt_existing_schema=true/,
+  );
+});
+
 test('versioned runner locks, applies transactionally, and records the checksum', async (t) => {
   const fixture = createManifest();
   t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
@@ -136,7 +172,15 @@ test('versioned runner skips an identical applied migration', async (t) => {
   t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
   const checksum = sha256('CREATE TABLE example (id INTEGER PRIMARY KEY);');
   const { calls, pool } = createPool({
-    appliedRows: [{ version: '202608310001', name: 'baseline', checksum }],
+    appliedRows: [
+      {
+        version: '202608310001',
+        name: 'baseline',
+        checksum,
+        schema_checksum: schemaChecksum,
+        application_mode: 'executed',
+      },
+    ],
   });
 
   const result = await runVersionedMigrations({
@@ -168,6 +212,25 @@ test('versioned runner rolls back a partial failure without recording it', async
   assert.ok(calls.some(({ sql }) => sql === 'ROLLBACK'));
   assert.ok(!calls.some(({ sql }) => sql.includes('INSERT INTO cotsel_schema_migrations')));
   assert.ok(!calls.some(({ sql }) => sql === 'COMMIT'));
+});
+
+test('versioned runner rolls back when the resulting schema fingerprint drifts', async (t) => {
+  const fixture = createManifest();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  const { calls, pool } = createPool({ fingerprintRows: [['relation', 'public.drift', 'kind=r']] });
+
+  await assert.rejects(
+    runVersionedMigrations({
+      pool,
+      serviceName: 'gateway',
+      manifestPath: fixture.manifestPath,
+      runtimeDbUser: 'cotsel_gateway_runtime',
+    }),
+    /produced a schema fingerprint that does not match its manifest/,
+  );
+
+  assert.ok(calls.some(({ sql }) => sql === 'ROLLBACK'));
+  assert.ok(!calls.some(({ sql }) => sql.includes('INSERT INTO cotsel_schema_migrations')));
 });
 
 test('versioned runner rejects ledger drift before executing DDL', async (t) => {
@@ -202,6 +265,7 @@ test('versioned runner rejects a non-prefix applied history before executing DDL
     name: 'later_example',
     file: `${laterVersion}.sql`,
     sha256: sha256(laterSql),
+    schema_sha256: schemaChecksum,
   });
   fs.writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
 
@@ -211,6 +275,8 @@ test('versioned runner rejects a non-prefix applied history before executing DDL
         version: laterVersion,
         name: 'later_example',
         checksum: sha256(laterSql),
+        schema_checksum: schemaChecksum,
+        application_mode: 'executed',
       },
     ],
     ledgerExists: true,
@@ -253,6 +319,60 @@ test('baseline migration refuses any application object before creating its ledg
   assert.ok(!calls.some(({ sql }) => sql.includes('INSERT INTO cotsel_schema_migrations')));
 });
 
+test('baseline adoption records an equivalent existing schema without executing DDL', async (t) => {
+  const fixture = createManifest();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  const manifest = JSON.parse(fs.readFileSync(fixture.manifestPath, 'utf8'));
+  manifest.migrations[0].adopt_existing_schema = true;
+  fs.writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
+  const { calls, pool } = createPool({
+    existingObject: { object_type: 'relation', object_name: 'example' },
+  });
+
+  const result = await runVersionedMigrations({
+    pool,
+    serviceName: 'gateway',
+    manifestPath: fixture.manifestPath,
+    runtimeDbUser: 'cotsel_gateway_runtime',
+  });
+
+  assert.equal(result.applied[0].applicationMode, 'adopted');
+  assert.ok(
+    calls.some(
+      ({ sql, parameters }) =>
+        sql.includes('INSERT INTO cotsel_schema_migrations') && parameters?.[4] === schemaChecksum,
+    ),
+  );
+  assert.ok(!calls.some(({ sql }) => sql === 'CREATE TABLE example (id INTEGER PRIMARY KEY);'));
+});
+
+test('baseline adoption rejects schema drift before creating its ledger', async (t) => {
+  const fixture = createManifest();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  const manifest = JSON.parse(fs.readFileSync(fixture.manifestPath, 'utf8'));
+  manifest.migrations[0].adopt_existing_schema = true;
+  fs.writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
+  const { calls, pool } = createPool({
+    existingObject: { object_type: 'relation', object_name: 'drifted' },
+    fingerprintRows: [['relation', 'public.drifted', 'kind=r']],
+  });
+
+  await assert.rejects(
+    runVersionedMigrations({
+      pool,
+      serviceName: 'gateway',
+      manifestPath: fixture.manifestPath,
+      runtimeDbUser: 'cotsel_gateway_runtime',
+    }),
+    /does not match the adoption fingerprint/,
+  );
+
+  assert.ok(
+    !calls.some(({ sql }) => sql.includes('CREATE TABLE IF NOT EXISTS cotsel_schema_migrations')),
+  );
+  assert.ok(!calls.some(({ sql }) => sql.includes('INSERT INTO cotsel_schema_migrations')));
+});
+
 test('runtime history check rejects a missing ledger', async (t) => {
   const fixture = createManifest();
   t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
@@ -289,7 +409,15 @@ test('runtime history check accepts the exact immutable manifest', async (t) => 
   const checksum = sha256('CREATE TABLE example (id INTEGER PRIMARY KEY);');
   const { pool } = createPool({
     ledgerExists: true,
-    appliedRows: [{ version: '202608310001', name: 'baseline', checksum }],
+    appliedRows: [
+      {
+        version: '202608310001',
+        name: 'baseline',
+        checksum,
+        schema_checksum: schemaChecksum,
+        application_mode: 'executed',
+      },
+    ],
   });
 
   await assertMigrationHistory({
