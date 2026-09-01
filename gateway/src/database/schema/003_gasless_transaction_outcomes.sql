@@ -1,8 +1,8 @@
 ALTER TABLE idempotency_keys
-    ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMP;
+    ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ;
 
 UPDATE idempotency_keys
-SET lease_expires_at = created_at + INTERVAL '5 minutes'
+SET lease_expires_at = (created_at AT TIME ZONE 'UTC') + INTERVAL '5 minutes'
 WHERE completed_at IS NULL
   AND lease_expires_at IS NULL;
 
