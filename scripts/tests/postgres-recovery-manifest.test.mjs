@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { chmod, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -22,14 +23,25 @@ const services = [
 function fixtureManifest(changedService) {
   return services
     .flatMap((service) => {
-      const dataHash = service === changedService ? 'changed' : `data-${service}`;
+      const tableHash = sha256(
+        service === changedService ? `changed-${service}` : `table-${service}`,
+      );
+      const sequenceHash = sha256(`sequence-${service}`);
+      const migrationTable = service === 'indexer' ? 'migrations' : 'cotsel_schema_migrations';
+      const tableRecord = `DATABASE_RECOVERY_TABLE service=${service} database=cotsel_${service} schema=public table=${migrationTable} exact_rows=1 data_sha256=${tableHash}`;
+      const sequenceRecord = `DATABASE_RECOVERY_SEQUENCE service=${service} database=cotsel_${service} schema=public sequence=fixture_id_seq state_sha256=${sequenceHash}`;
+      const dataHash = sha256(`${[tableRecord, sequenceRecord].sort().join('\n')}\n`);
       return [
-        `DATABASE_RECOVERY_TABLE service=${service} database=cotsel_${service} schema=public table=fixture exact_rows=1 data_sha256=${dataHash}`,
-        `DATABASE_RECOVERY_SEQUENCE service=${service} database=cotsel_${service} schema=public sequence=fixture_id_seq state_sha256=sequence-${service}`,
-        `DATABASE_RECOVERY_SUMMARY service=${service} database=cotsel_${service} server_version=160013 tables=1 sequences=1 exact_rows=1 migration_tables=0 schema_sha256=schema-${service} access_sha256=access-${service} data_sha256=${dataHash}`,
+        tableRecord,
+        sequenceRecord,
+        `DATABASE_RECOVERY_SUMMARY service=${service} database=cotsel_${service} server_version=160013 tables=1 sequences=1 exact_rows=1 migration_tables=1 schema_sha256=${sha256(`schema-${service}`)} access_sha256=${sha256(`access-${service}`)} data_sha256=${dataHash}`,
       ];
     })
     .join('\n');
+}
+
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
 }
 
 test('manifest comparison accepts matching records for all seven databases', () => {
@@ -46,6 +58,57 @@ test('manifest comparison reports a changed restored table without row data', ()
   assert.equal(differences[0].result, 'mismatch');
   assert.ok(
     differences.every((difference) => !JSON.stringify(difference).includes('fixture-value')),
+  );
+});
+
+test('manifest parser rejects malformed hashes', () => {
+  assert.throws(
+    () => parseManifest(fixtureManifest().replace(/[a-f0-9]{64}/, 'not-a-sha256'), 'source'),
+    /invalid data_sha256/,
+  );
+});
+
+test('manifest parser rejects inconsistent summary counts', () => {
+  assert.throws(
+    () => parseManifest(fixtureManifest().replace('tables=1', 'tables=2'), 'source'),
+    /inconsistent auth tables summary/,
+  );
+});
+
+test('manifest parser rejects a summary hash not derived from its records', () => {
+  const invalidHash = '0'.repeat(64);
+  assert.throws(
+    () =>
+      parseManifest(
+        fixtureManifest().replace(
+          /(migration_tables=1[^\n]*data_sha256=)[a-f0-9]{64}/,
+          `$1${invalidHash}`,
+        ),
+        'source',
+      ),
+    /inconsistent auth data_sha256 summary/,
+  );
+});
+
+test('manifest parser requires a migration ledger for every database', () => {
+  assert.throws(
+    () =>
+      parseManifest(
+        fixtureManifest().replace('table=cotsel_schema_migrations', 'table=projection'),
+        'source',
+      ),
+    /missing the expected migration ledger for auth/,
+  );
+});
+
+test('manifest parser requires the canonical migration ledger name', () => {
+  assert.throws(
+    () =>
+      parseManifest(
+        fixtureManifest().replace('table=cotsel_schema_migrations', 'table=legacy_migrations'),
+        'source',
+      ),
+    /missing the expected migration ledger for auth/,
   );
 });
 

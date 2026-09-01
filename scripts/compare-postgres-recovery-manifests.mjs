@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 const expectedServices = new Set([
@@ -17,6 +18,91 @@ const recordPrefixes = [
   'DATABASE_RECOVERY_SEQUENCE',
   'DATABASE_RECOVERY_SUMMARY',
 ];
+const expectedDatabases = new Map(
+  [...expectedServices].map((service) => [service, `cotsel_${service}`]),
+);
+const expectedMigrationTables = new Map(
+  [...expectedServices].map((service) => [
+    service,
+    service === 'indexer' ? 'migrations' : 'cotsel_schema_migrations',
+  ]),
+);
+const commonFields = ['service', 'database'];
+const fieldsByPrefix = new Map([
+  ['DATABASE_RECOVERY_TABLE', [...commonFields, 'schema', 'table', 'exact_rows', 'data_sha256']],
+  ['DATABASE_RECOVERY_SEQUENCE', [...commonFields, 'schema', 'sequence', 'state_sha256']],
+  [
+    'DATABASE_RECOVERY_SUMMARY',
+    [
+      ...commonFields,
+      'server_version',
+      'tables',
+      'sequences',
+      'exact_rows',
+      'migration_tables',
+      'schema_sha256',
+      'access_sha256',
+      'data_sha256',
+    ],
+  ],
+]);
+const identifierPattern = /^[A-Za-z_][A-Za-z0-9_$]*$/;
+const sha256Pattern = /^[a-f0-9]{64}$/;
+const unsignedIntegerPattern = /^(?:0|[1-9][0-9]*)$/;
+
+function sha256(content) {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+function requireFieldFormat(fields, field, pattern, sourceName) {
+  if (!pattern.test(fields[field] ?? '')) {
+    throw new Error(`${sourceName} contains invalid ${field}: ${fields[field] ?? '<missing>'}`);
+  }
+}
+
+function validateRecord(prefix, fields, sourceName) {
+  const expectedFields = fieldsByPrefix.get(prefix);
+  assert.ok(expectedFields, `Unsupported recovery record prefix: ${prefix}`);
+  assert.deepEqual(
+    Object.keys(fields).sort(),
+    [...expectedFields].sort(),
+    `${sourceName} contains unexpected or missing fields in ${prefix}`,
+  );
+
+  if (!expectedServices.has(fields.service)) {
+    throw new Error(`${sourceName} contains an unexpected service: ${fields.service}`);
+  }
+  if (fields.database !== expectedDatabases.get(fields.service)) {
+    throw new Error(`${sourceName} contains an invalid database for ${fields.service}`);
+  }
+
+  if (prefix === 'DATABASE_RECOVERY_TABLE') {
+    requireFieldFormat(fields, 'schema', identifierPattern, sourceName);
+    requireFieldFormat(fields, 'table', identifierPattern, sourceName);
+    requireFieldFormat(fields, 'exact_rows', unsignedIntegerPattern, sourceName);
+    requireFieldFormat(fields, 'data_sha256', sha256Pattern, sourceName);
+  } else if (prefix === 'DATABASE_RECOVERY_SEQUENCE') {
+    requireFieldFormat(fields, 'schema', identifierPattern, sourceName);
+    requireFieldFormat(fields, 'sequence', identifierPattern, sourceName);
+    requireFieldFormat(fields, 'state_sha256', sha256Pattern, sourceName);
+  } else {
+    requireFieldFormat(fields, 'server_version', /^\d{5,6}$/, sourceName);
+    for (const field of ['tables', 'sequences', 'exact_rows', 'migration_tables']) {
+      requireFieldFormat(fields, field, unsignedIntegerPattern, sourceName);
+    }
+    for (const field of ['schema_sha256', 'access_sha256', 'data_sha256']) {
+      requireFieldFormat(fields, field, sha256Pattern, sourceName);
+    }
+  }
+
+  if (prefix !== 'DATABASE_RECOVERY_SUMMARY') {
+    const allowedSchemas =
+      fields.service === 'indexer' ? ['public', 'squid_processor'] : ['public'];
+    if (!allowedSchemas.includes(fields.schema)) {
+      throw new Error(`${sourceName} contains an unexpected schema for ${fields.service}`);
+    }
+  }
+}
 
 function parseFields(record) {
   const fields = {};
@@ -25,9 +111,60 @@ function parseFields(record) {
     if (separator <= 0) {
       throw new Error(`Malformed recovery manifest token: ${token}`);
     }
-    fields[token.slice(0, separator)] = token.slice(separator + 1);
+    const name = token.slice(0, separator);
+    if (Object.hasOwn(fields, name)) {
+      throw new Error(`Duplicate recovery manifest field: ${name}`);
+    }
+    fields[name] = token.slice(separator + 1);
   }
   return fields;
+}
+
+function validateSummaryIntegrity(records, service, sourceName) {
+  const database = expectedDatabases.get(service);
+  const summary = records.get(`DATABASE_RECOVERY_SUMMARY:${service}:${database}`);
+  if (!summary) {
+    throw new Error(`${sourceName} is missing the ${service} recovery summary`);
+  }
+
+  const dataRecords = [...records.values()].filter(
+    (entry) => entry.fields.service === service && entry.prefix !== 'DATABASE_RECOVERY_SUMMARY',
+  );
+  const tables = dataRecords.filter((entry) => entry.prefix === 'DATABASE_RECOVERY_TABLE');
+  const sequences = dataRecords.filter((entry) => entry.prefix === 'DATABASE_RECOVERY_SEQUENCE');
+  const exactRows = tables.reduce((total, entry) => total + Number(entry.fields.exact_rows), 0);
+  const migrationTables = tables.filter((entry) => entry.fields.table.includes('migration')).length;
+  const expectedDataHash = sha256(
+    `${dataRecords
+      .map((entry) => entry.record)
+      .sort()
+      .join('\n')}\n`,
+  );
+
+  const expectedValues = {
+    tables: tables.length,
+    sequences: sequences.length,
+    exact_rows: exactRows,
+    migration_tables: migrationTables,
+    data_sha256: expectedDataHash,
+  };
+  if (
+    !tables.some(
+      (entry) =>
+        entry.fields.schema === 'public' &&
+        entry.fields.table === expectedMigrationTables.get(service),
+    )
+  ) {
+    throw new Error(`${sourceName} is missing the expected migration ledger for ${service}`);
+  }
+  for (const [field, expectedValue] of Object.entries(expectedValues)) {
+    if (summary.fields[field] !== String(expectedValue)) {
+      throw new Error(`${sourceName} has an inconsistent ${service} ${field} summary`);
+    }
+  }
+  if (migrationTables < 1) {
+    throw new Error(`${sourceName} has no migration ledger for ${service}`);
+  }
 }
 
 export function parseManifest(content, sourceName) {
@@ -40,9 +177,7 @@ export function parseManifest(content, sourceName) {
 
     const record = line.slice(line.indexOf(prefix)).trim();
     const fields = parseFields(record);
-    if (!fields.service || !fields.database) {
-      throw new Error(`${sourceName} contains a recovery record without service and database`);
-    }
+    validateRecord(prefix, fields, sourceName);
 
     let key = `${prefix}:${fields.service}:${fields.database}`;
     if (prefix === 'DATABASE_RECOVERY_TABLE') {
@@ -55,7 +190,7 @@ export function parseManifest(content, sourceName) {
     }
 
     services.add(fields.service);
-    records.set(key, { prefix, fields });
+    records.set(key, { prefix, fields, record });
   }
 
   assert.deepEqual(
@@ -64,9 +199,7 @@ export function parseManifest(content, sourceName) {
     `${sourceName} must contain exactly the seven Cotsel services`,
   );
   for (const service of expectedServices) {
-    if (!records.has(`DATABASE_RECOVERY_SUMMARY:${service}:cotsel_${service}`)) {
-      throw new Error(`${sourceName} is missing the ${service} recovery summary`);
-    }
+    validateSummaryIntegrity(records, service, sourceName);
   }
 
   return records;

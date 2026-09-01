@@ -36,6 +36,26 @@ The JSON output identifies the exact account, region, RDS instance, native PITR
 window, AWS Backup plan, retention, recovery-point count, and Vault Lock state.
 The script exits nonzero when a required control is absent.
 
+The audit binds each completed recovery point to the active plan and required
+source vault. The latest point must be no more than 48 hours old. It does not
+accept a copy action as off-site recovery proof.
+
+Set `COTSEL_RECOVERY_OBJECTIVES_REFERENCE` to the immutable approval record for
+the recovery objectives. The default thresholds are technical configuration
+checks. They are not an approved recovery point objective or recovery time
+objective. The audit cannot return `VERIFIED` without the approval reference.
+
+If an approved recovery account exists, set these non-secret identifiers:
+
+- `COTSEL_OFFSITE_AWS_PROFILE`
+- `COTSEL_OFFSITE_AWS_ACCOUNT_ID`
+- `COTSEL_OFFSITE_AWS_REGION`
+- `COTSEL_OFFSITE_BACKUP_VAULT_NAME`
+
+The profile must use read-only access to the recovery account. The audit passes
+off-site custody only when it proves the matching copy action, retention, locked
+destination vault, and completed encrypted recovery point.
+
 As of 27 August 2026, the current live staging evidence proves encrypted,
 private, deletion-protected, Multi-AZ RDS PostgreSQL; seven days of native PITR;
 and a 35-day AWS Backup plan with completed recovery points. It also proves that
@@ -180,6 +200,10 @@ Pass requires `classification: VERIFIED` and zero differences across all seven
 database summaries and every table record. A missing table, unexpected table,
 row-count mismatch, schema mismatch, access mismatch, or data-fingerprint
 mismatch fails the restore.
+
+The comparator also recalculates summary counts and data fingerprints. It
+rejects malformed hashes, missing migration ledgers, and internally inconsistent
+manifests before it compares source and target.
 
 ## Prove roles, RLS, and runtime denial
 
