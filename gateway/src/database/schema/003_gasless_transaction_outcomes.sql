@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS gasless_transaction_outcomes (
     gas_price_wei NUMERIC(78, 0),
     calldata_hash VARCHAR(66) NOT NULL CHECK (calldata_hash ~ '^0x[0-9a-f]{64}$'),
     intent_hash VARCHAR(66) NOT NULL CHECK (intent_hash ~ '^0x[0-9a-f]{64}$'),
+    observed_transaction_hash VARCHAR(66)
+        CHECK (observed_transaction_hash IS NULL OR observed_transaction_hash ~ '^0x[0-9a-f]{64}$'),
     outcome_status VARCHAR(32) NOT NULL CHECK (outcome_status IN (
         'broadcast_pending',
         'broadcast_unknown',
@@ -121,6 +123,9 @@ CREATE TABLE IF NOT EXISTS gasless_transaction_outcomes (
 
 ALTER TABLE gasless_transaction_outcomes
     ADD COLUMN IF NOT EXISTS last_reconciliation_attempt_at TIMESTAMP;
+ALTER TABLE gasless_transaction_outcomes
+    ADD COLUMN IF NOT EXISTS observed_transaction_hash VARCHAR(66)
+        CHECK (observed_transaction_hash IS NULL OR observed_transaction_hash ~ '^0x[0-9a-f]{64}$');
 
 CREATE TABLE IF NOT EXISTS gasless_transaction_outcome_events (
     outcome_event_id BIGSERIAL PRIMARY KEY,
@@ -138,8 +143,14 @@ CREATE TABLE IF NOT EXISTS gasless_transaction_outcome_events (
     failure_code VARCHAR(128),
     block_number BIGINT,
     block_hash VARCHAR(66) CHECK (block_hash IS NULL OR block_hash ~ '^0x[0-9a-f]{64}$'),
+    observed_transaction_hash VARCHAR(66)
+        CHECK (observed_transaction_hash IS NULL OR observed_transaction_hash ~ '^0x[0-9a-f]{64}$'),
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE gasless_transaction_outcome_events
+    ADD COLUMN IF NOT EXISTS observed_transaction_hash VARCHAR(66)
+        CHECK (observed_transaction_hash IS NULL OR observed_transaction_hash ~ '^0x[0-9a-f]{64}$');
 
 CREATE INDEX IF NOT EXISTS idx_gasless_transaction_outcomes_unresolved
     ON gasless_transaction_outcomes(

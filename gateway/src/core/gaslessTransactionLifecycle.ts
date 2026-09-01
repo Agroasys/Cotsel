@@ -119,11 +119,17 @@ export async function broadcastPersistedGaslessTransaction(
   }
 
   if (response.hash.toLowerCase() !== identity.transactionHash.toLowerCase()) {
+    const observedTransactionHash = response.hash.toLowerCase();
     try {
-      await recorder.markBroadcastUnknown(identity.transactionHash, 'BROADCAST_HASH_MISMATCH');
+      await recorder.markBroadcastUnknown(
+        identity.transactionHash,
+        'BROADCAST_HASH_MISMATCH',
+        observedTransactionHash,
+      );
     } catch (persistenceError) {
       Logger.error('Failed to persist gasless provider hash mismatch', {
         transactionHash: identity.transactionHash,
+        observedTransactionHash,
         error:
           persistenceError instanceof Error ? persistenceError.message : String(persistenceError),
       });

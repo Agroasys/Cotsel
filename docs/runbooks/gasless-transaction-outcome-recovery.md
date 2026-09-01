@@ -21,7 +21,9 @@ Gateway performs these steps in order:
 4. Broadcast the same signed bytes once.
 5. Record `broadcast_unknown` when the send result is ambiguous, or
    `confirmation_pending` when the provider accepts the canonical hash.
-6. Resolve the original hash from a receipt after a timeout or restart.
+6. Preserve a different provider-returned hash as separate evidence. Do not
+   replace the locally derived identity with it.
+7. Resolve the original hash from a receipt after a timeout or restart.
 
 The service never responds to a nonce error, timeout, connection loss, or
 provider 5xx by signing and broadcasting another transaction. The idempotency
@@ -46,16 +48,19 @@ interval and must be at least 1000 ms. On startup and at each interval, Gateway:
 
 1. Loads unresolved outcomes and terminal outcomes not yet projected to the
    settlement record.
-2. Looks up the stored transaction hash.
+2. Looks up the locally derived transaction hash.
 3. Records and projects a successful or reverted receipt.
 4. Records `confirmation_pending` when the transaction is visible without a
    receipt.
 5. Queries both the latest confirmed signer nonce and the pending signer nonce
    when the hash is not visible.
-6. Converts the record to `broadcast_unknown` with explicit evidence that the
+6. Looks up a separately stored provider-returned hash when the provider
+   reported an identity mismatch. The worker does not accept that hash as the
+   intended transaction.
+7. Converts the record to `broadcast_unknown` with explicit evidence that the
    transaction is absent, the pending nonce advanced, or the confirmed nonce
    advanced.
-7. Leaves unresolved records visible and emits a structured warning with the
+8. Leaves unresolved records visible and emits a structured warning with the
    stored transaction nonce and both observed signer nonces.
 
 Nonce advancement does not prove that the intended transaction succeeded. The

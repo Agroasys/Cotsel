@@ -15,6 +15,7 @@ function buildRecord(
 ): GaslessTransactionOutcomeRecord {
   return {
     transactionHash,
+    observedTransactionHash: null,
     applicationRequestId: 'request-1',
     resourceType: 'settlement_handoff',
     resourceId: 'handoff-1',
@@ -131,6 +132,49 @@ describe('gasless transaction outcome restart recovery', () => {
       transactionHash,
       'broadcast_unknown',
     );
+    expect(dependencies.store.markConfirmed).not.toHaveBeenCalled();
+    expect(dependencies.store.markReverted).not.toHaveBeenCalled();
+  });
+
+  test('investigates a provider-returned hash without accepting it as the intended transaction', async () => {
+    const observedTransactionHash = `0x${'e'.repeat(64)}`;
+    const dependencies = createDependencies({
+      ...buildRecord('broadcast_unknown'),
+      observedTransactionHash,
+      failureCode: 'BROADCAST_HASH_MISMATCH',
+    });
+    dependencies.provider.getTransactionReceipt
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(confirmedReceipt());
+    dependencies.provider.getTransaction.mockResolvedValueOnce(null);
+    const reconciler = new GaslessTransactionOutcomeReconciler(
+      dependencies.store,
+      dependencies.provider,
+      dependencies.observer,
+      5000,
+    );
+
+    await reconciler.processUnresolved();
+
+    expect(dependencies.provider.getTransactionReceipt).toHaveBeenNthCalledWith(1, transactionHash);
+    expect(dependencies.provider.getTransactionReceipt).toHaveBeenNthCalledWith(
+      2,
+      observedTransactionHash,
+    );
+    expect(dependencies.store.markBroadcastUnknown).toHaveBeenCalledWith(
+      transactionHash,
+      'RECOVERY_OBSERVED_HASH_HAS_RECEIPT',
+      observedTransactionHash,
+    );
+    expect(dependencies.observer.onBroadcastUnknown).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transactionHash,
+        observedTransactionHash,
+        outcomeStatus: 'broadcast_unknown',
+        failureCode: 'RECOVERY_OBSERVED_HASH_HAS_RECEIPT',
+      }),
+    );
+    expect(dependencies.provider.getTransactionCount).not.toHaveBeenCalled();
     expect(dependencies.store.markConfirmed).not.toHaveBeenCalled();
     expect(dependencies.store.markReverted).not.toHaveBeenCalled();
   });

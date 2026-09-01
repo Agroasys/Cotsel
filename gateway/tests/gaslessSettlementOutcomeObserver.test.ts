@@ -12,6 +12,7 @@ import type { GaslessTransactionOutcomeRecord } from '../src/core/gaslessTransac
 
 const OUTCOME: GaslessTransactionOutcomeRecord = {
   transactionHash: `0x${'a'.repeat(64)}`,
+  observedTransactionHash: null,
   applicationRequestId: 'request-crash-window',
   resourceType: 'settlement_handoff',
   resourceId: 'handoff-crash-window',
