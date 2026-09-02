@@ -4,8 +4,8 @@
       "version": "202608310001",
       "name": "baseline",
       "file": "schema.sql",
-      "sha256": "7fbe932b672cae06e45132dde5441a09120fc90e737020e6123d92309ba8a4f5",
-      "schema_sha256": "738188a5cd5bf31c2306777be56e2be8faf92b69b129c7f4c5fba5edd514d51a",
+      "sha256": "265f1e12146eeb0ddbadfe30d8051fb63c7c46bf9f3230e061af7c8880664f41",
+      "schema_sha256": "6f38d25bd4a2145874afde62f4a057de507d307f3fce2c59d923bd605295f865",
       "adopt_existing_schema": true,
       "baseline": true
     }

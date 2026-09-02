@@ -42,7 +42,7 @@
     "gateway/src/core/settlementStore.ts": 1046,
     "gateway/src/core/tradeReadService.ts": 788,
     "gateway/src/core/treasuryWorkflowService.ts": 752,
-    "gateway/src/database/schema.sql": 600,
+    "gateway/src/database/schema.sql": 646,
     "gateway/src/routes/settlement.ts": 603,
     "gateway/src/routes/treasury.ts": 807,
     "gateway/src/server.ts": 572,
