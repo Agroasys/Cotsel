@@ -15,13 +15,13 @@ const files = {
 };
 
 const requirements = [
-  ['edge provider', files.versions, 'alias  = "edge"'],
-  ['edge region', files.versions, 'region = "us-east-1"'],
-  ['WAF association', files.edge, 'web_acl_id          = aws_wafv2_web_acl.gateway.arn'],
-  ['HTTPS-only origin', files.edge, 'origin_protocol_policy = "https-only"'],
-  ['CloudFront-only HTTPS ingress', files.network, 'from_port         = 443'],
-  ['CloudFront WAF scope', files.waf, 'scope       = "CLOUDFRONT"'],
-  ['edge rate blocking', files.waf, 'aggregate_key_type = "IP"'],
+  ['edge provider', files.versions, /alias\s*=\s*"edge"/],
+  ['edge region', files.versions, /region\s*=\s*"us-east-1"/],
+  ['WAF association', files.edge, /web_acl_id\s*=\s*aws_wafv2_web_acl\.gateway\.arn/],
+  ['HTTPS-only origin', files.edge, /origin_protocol_policy\s*=\s*"https-only"/],
+  ['CloudFront-only HTTPS ingress', files.network, /from_port\s*=\s*443/],
+  ['CloudFront WAF scope', files.waf, /scope\s*=\s*"CLOUDFRONT"/],
+  ['edge rate blocking', files.waf, /aggregate_key_type\s*=\s*"IP"/],
   ['WAF logging', files.logging, 'aws_wafv2_web_acl_logging_configuration'],
   ['CloudFront access logs', files.logging, 'aws_cloudwatch_log_delivery_source'],
   ['API-key redaction', files.logging, '"x-api-key"'],
@@ -31,7 +31,7 @@ const requirements = [
 
 let failures = 0;
 for (const [name, source, expected] of requirements) {
-  const passed = source.includes(expected);
+  const passed = typeof expected === 'string' ? source.includes(expected) : expected.test(source);
   console.log(`${passed ? 'pass' : 'FAIL'} ${name}`);
   if (!passed) failures += 1;
 }
