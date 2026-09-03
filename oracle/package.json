@@ -9,6 +9,7 @@
     "dev": "ts-node src/server.ts",
     "pretest": "npm run build:sdk",
     "test": "jest --runInBand",
+    "test:transaction-outcome-db": "ts-node scripts/transaction-outcome-database-proof.ts",
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit",
     "build:sdk": "npm --prefix ../sdk run build",

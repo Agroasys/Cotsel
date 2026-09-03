@@ -3,6 +3,8 @@ import type { SettlementConfirmationStage } from '@agroasys/sdk';
 export enum TriggerStatus {
   PENDING = 'PENDING',
   EXECUTING = 'EXECUTING',
+  BROADCAST_PENDING = 'BROADCAST_PENDING',
+  BROADCAST_UNKNOWN = 'BROADCAST_UNKNOWN',
   SUBMITTED = 'SUBMITTED',
   CONFIRMED = 'CONFIRMED',
   FAILED = 'FAILED',

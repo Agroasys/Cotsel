@@ -19,13 +19,42 @@ export function generateIdempotencyKey(actionKey: string): string {
   return `${actionKey}:${generateRequestId()}`;
 }
 
-export function generateRequestHash(timestamp: string, body: string, secret: string): string {
-  const payload = timestamp + body;
-  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+export type RequestBodyBytes = string | Buffer;
+
+export class RequestSignatureError extends Error {
+  constructor(
+    public readonly reason:
+      | 'invalid_timestamp'
+      | 'expired_timestamp'
+      | 'future_timestamp'
+      | 'invalid_signature',
+  ) {
+    super('Invalid request authentication');
+    this.name = 'RequestSignatureError';
+  }
 }
 
-export function deriveRequestNonce(timestamp: string, body: string, signature: string): string {
-  return crypto.createHash('sha256').update([timestamp, body, signature].join(':')).digest('hex');
+export function generateRequestHash(
+  timestamp: string,
+  body: RequestBodyBytes,
+  secret: string,
+): string {
+  return crypto.createHmac('sha256', secret).update(timestamp).update(body).digest('hex');
+}
+
+export function deriveRequestNonce(
+  timestamp: string,
+  body: RequestBodyBytes,
+  signature: string,
+): string {
+  return crypto
+    .createHash('sha256')
+    .update(timestamp)
+    .update(':')
+    .update(body)
+    .update(':')
+    .update(signature)
+    .digest('hex');
 }
 
 // Hash the HMAC signature so logs can correlate a request without exposing any
@@ -34,29 +63,40 @@ export function hashSignature(signature: string): string {
   return crypto.createHash('sha256').update(signature).digest('hex');
 }
 
+export function hashNonce(nonce: string): string {
+  return crypto.createHash('sha256').update(nonce).digest('hex');
+}
+
 export function verifyRequestSignature(
   timestamp: string,
-  body: string,
+  body: RequestBodyBytes,
   signature: string,
   secret: string,
   maxAgeMinutes: number = 5,
 ): boolean {
-  const requestTime = new Date(parseInt(timestamp));
-  const now = new Date();
-  const ageMinutes = (now.getTime() - requestTime.getTime()) / (1000 * 60);
+  if (!/^\d{13}$/.test(timestamp)) {
+    throw new RequestSignatureError('invalid_timestamp');
+  }
+
+  const requestTimeMs = Number(timestamp);
+  if (!Number.isSafeInteger(requestTimeMs)) {
+    throw new RequestSignatureError('invalid_timestamp');
+  }
+
+  const ageMinutes = (Date.now() - requestTimeMs) / (1000 * 60);
 
   if (ageMinutes > maxAgeMinutes) {
-    throw new Error(`Request timestamp too old: ${ageMinutes.toFixed(1)} minutes`);
+    throw new RequestSignatureError('expired_timestamp');
   }
 
   if (ageMinutes < -1) {
-    throw new Error('Request timestamp is in the future');
+    throw new RequestSignatureError('future_timestamp');
   }
 
   const expectedHash = generateRequestHash(timestamp, body, secret);
 
-  if (signature.length !== expectedHash.length) {
-    throw new Error('Invalid HMAC signature');
+  if (!/^[0-9a-fA-F]{64}$/.test(signature)) {
+    throw new RequestSignatureError('invalid_signature');
   }
 
   const isValid = crypto.timingSafeEqual(
@@ -65,7 +105,7 @@ export function verifyRequestSignature(
   );
 
   if (!isValid) {
-    throw new Error('Invalid HMAC signature');
+    throw new RequestSignatureError('invalid_signature');
   }
 
   Logger.info('Request signature verified', {

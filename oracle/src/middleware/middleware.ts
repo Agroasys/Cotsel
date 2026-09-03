@@ -4,7 +4,29 @@ import { config } from '../config';
 import { consumeHmacNonce } from '../database/queries';
 import { Logger } from '../utils/logger';
 import { ErrorResponse } from '../types';
-import { deriveRequestNonce, hashSignature, verifyRequestSignature } from '../utils/crypto';
+import {
+  deriveRequestNonce,
+  hashNonce,
+  hashSignature,
+  RequestSignatureError,
+  verifyRequestSignature,
+} from '../utils/crypto';
+
+export function captureRawJsonBody(req: Request, _res: Response, body: Buffer): void {
+  req.rawBody = Buffer.from(body);
+}
+
+function requestBodyBytes(req: Request): Buffer {
+  if (req.rawBody) {
+    return req.rawBody;
+  }
+
+  if (req.body === undefined) {
+    return Buffer.alloc(0);
+  }
+
+  throw new RequestSignatureError('invalid_signature');
+}
 
 function extractBearerToken(authHeader?: string): string | null {
   if (!authHeader) {
@@ -58,7 +80,7 @@ export async function hmacMiddleware(
   }
 
   try {
-    const body = JSON.stringify(req.body ?? {});
+    const body = requestBodyBytes(req);
     verifyRequestSignature(timestamp, body, signature, config.hmacSecret);
     const nonce = providedNonce || deriveRequestNonce(timestamp, body, signature);
 
@@ -72,7 +94,7 @@ export async function hmacMiddleware(
     if (!nonceAccepted) {
       Logger.warn('Replay detected for nonce', {
         ip: req.ip,
-        nonce: nonce.substring(0, 16) + '...',
+        nonceHash: hashNonce(nonce),
       });
       res.status(401).json(failure('Unauthorized', 'Replay detected for nonce'));
       return;
@@ -84,19 +106,15 @@ export async function hmacMiddleware(
     Logger.info('HMAC signature verified', {
       timestamp,
       ip: req.ip,
-      nonce: nonce.substring(0, 16) + '...',
+      nonceHash: hashNonce(nonce),
       signatureHash: hashSignature(signature),
     });
 
     next();
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const isTimestampOrSignatureError =
-      errorMessage.includes('Request timestamp') || errorMessage.includes('Invalid HMAC signature');
-
-    if (!isTimestampOrSignatureError) {
+    if (!(error instanceof RequestSignatureError)) {
       Logger.error('HMAC nonce persistence failed', {
-        error: errorMessage,
+        error: error instanceof Error ? error.message : String(error),
         ip: req.ip,
       });
       res.status(503).json(failure('ServiceUnavailable', 'Authentication nonce store unavailable'));
@@ -104,10 +122,10 @@ export async function hmacMiddleware(
     }
 
     Logger.warn('HMAC verification failed', {
-      error: errorMessage,
+      reason: error.reason,
       ip: req.ip,
     });
-    res.status(401).json(failure('Unauthorized', errorMessage));
+    res.status(401).json(failure('Unauthorized', 'Invalid request authentication'));
   }
 }
 

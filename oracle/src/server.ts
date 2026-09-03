@@ -8,7 +8,7 @@ import { shouldAutoMigrateDatabase } from '@agroasys/shared-db';
 import { config } from './config';
 import { createRouter } from './api/routes';
 import { OracleController } from './api/controller';
-import { errorHandler } from './middleware/middleware';
+import { captureRawJsonBody, errorHandler } from './middleware/middleware';
 import { Logger } from './utils/logger';
 import { testConnection, closeConnection, pool } from './database/connection';
 import { runMigrations } from './database/migrations';
@@ -19,8 +19,14 @@ import { IndexerClient } from './blockchain/indexer-client';
 import { ConfirmationWorker } from './worker/confirmation-worker';
 import { oracleRateLimitPolicy } from './httpSecurity';
 import { createPostgresManagedSignerAuditStore } from './database/managed-signer-audit-store';
+import { createPostgresOracleTransactionOutcomeStore } from './database/transaction-outcome-store';
+import {
+  OracleTransactionOutcomeReconciler,
+  OracleTransactionOutcomeWorker,
+} from './worker/transaction-outcome-worker';
 
 let confirmationWorker: ConfirmationWorker;
+let transactionOutcomeWorker: OracleTransactionOutcomeWorker;
 let indexerClient: IndexerClient;
 let requestRateLimiterClose: (() => Promise<void>) | undefined;
 
@@ -46,6 +52,9 @@ async function gracefulShutdown(signal: string): Promise<void> {
   try {
     if (confirmationWorker) {
       confirmationWorker.stop();
+    }
+    if (transactionOutcomeWorker) {
+      transactionOutcomeWorker.stop();
     }
 
     if (requestRateLimiterClose) {
@@ -89,6 +98,7 @@ async function bootstrap() {
     });
 
     const managedSignerAuditStore = createPostgresManagedSignerAuditStore(pool);
+    const transactionOutcomeStore = createPostgresOracleTransactionOutcomeStore(pool);
     const sdkClient = new SDKClient(
       config.rpcUrl,
       config.rpcFallbackUrls,
@@ -107,6 +117,7 @@ async function bootstrap() {
       config.escrowAddress,
       config.usdcAddress,
       config.chainId,
+      transactionOutcomeStore,
       { quorum: config.rpcQuorum, stallTimeoutMs: config.rpcStallTimeoutMs },
     );
 
@@ -142,7 +153,7 @@ async function bootstrap() {
         }),
       ),
     );
-    app.use(express.json());
+    app.use(express.json({ verify: captureRawJsonBody }));
 
     app.use((req, res, next) => {
       Logger.info(`${req.method} ${req.path}`, {
@@ -168,6 +179,10 @@ async function bootstrap() {
 
     confirmationWorker = new ConfirmationWorker(indexerClient, sdkClient, notifier);
     confirmationWorker.start();
+    transactionOutcomeWorker = new OracleTransactionOutcomeWorker(
+      new OracleTransactionOutcomeReconciler(transactionOutcomeStore, sdkClient),
+    );
+    transactionOutcomeWorker.start();
 
     app.listen(config.port, () => {
       Logger.info('Oracle service started', {

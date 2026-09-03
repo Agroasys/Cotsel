@@ -7,6 +7,7 @@ import {
   updateTrigger,
 } from '../src/database/queries';
 import { incrementOracleExhaustedRetries } from '../src/metrics/counters';
+import { OracleTransactionOutcomePendingError } from '../src/blockchain/transaction-lifecycle';
 
 jest.mock('@agroasys/sdk', () => ({
   TradeStatus: {
@@ -248,6 +249,41 @@ describe('TriggerManager retry and idempotency states', () => {
       expect.objectContaining({ status: TriggerStatus.EXHAUSTED_NEEDS_REDRIVE, attempt_count: 2 }),
     );
     expect(mockedIncrementOracleExhaustedRetries).toHaveBeenCalledWith('RELEASE_STAGE_1:1');
+  });
+
+  it('never retries an ambiguous broadcast outcome', async () => {
+    mockedGetLatestTriggerByActionKey.mockResolvedValue(null);
+    mockedGetTriggerByIdempotencyKey.mockResolvedValue(null);
+    mockedCreateTrigger.mockResolvedValue({
+      ...buildTrigger(TriggerStatus.PENDING),
+      request_id: 'req-broadcast-unknown',
+      idempotency_key: 'RELEASE_STAGE_1:1:req-broadcast-unknown',
+    });
+    const transactionHash = `0x${'d'.repeat(64)}`;
+    const sdkClient = {
+      getTrade: jest.fn().mockResolvedValue(buildTrade(TRADE_STATUS_LOCKED)),
+      releaseFundsStage1: jest
+        .fn()
+        .mockRejectedValue(
+          new OracleTransactionOutcomePendingError(transactionHash, 'broadcast_unknown'),
+        ),
+      isTradePaused: jest.fn().mockResolvedValue(false),
+    } as unknown as TriggerManagerSdkClient;
+    const manager = new TriggerManager(sdkClient, 3, 1);
+
+    const response = await manager.executeTrigger({
+      tradeId: '1',
+      requestId: 'req-broadcast-unknown',
+      triggerType: TriggerType.RELEASE_STAGE_1,
+    });
+
+    expect(sdkClient.releaseFundsStage1).toHaveBeenCalledTimes(1);
+    expect(response).toMatchObject({
+      status: TriggerStatus.BROADCAST_UNKNOWN,
+      txHash: transactionHash,
+      idempotent: true,
+    });
+    expect(mockedIncrementOracleExhaustedRetries).not.toHaveBeenCalled();
   });
 
   it('transitions immediately to terminal failure for terminal errors without retrying', async () => {
