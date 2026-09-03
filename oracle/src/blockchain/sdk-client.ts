@@ -1,13 +1,15 @@
 import { ethers } from 'ethers';
-import { OracleSDK, Trade } from '@agroasys/sdk';
+import { AgroasysEscrow__factory, OracleSDK, Trade } from '@agroasys/sdk';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import type { SettlementConfirmationHeads } from '@agroasys/sdk';
 import { Logger } from '../utils/logger';
 import { ManagedSigner, ManagedSignerOptions, SignerCustodyMode } from './managed-signer';
+import type { OracleTransactionOutcomeStore } from '../database/transaction-outcome-store';
+import { broadcastPersistedOracleTransaction } from './transaction-lifecycle';
 
 export interface BlockchainResult {
   txHash: string;
-  blockNumber: number;
+  blockNumber?: number;
 }
 
 export interface OracleSignerConfig {
@@ -54,6 +56,9 @@ export class SDKClient {
   private sdk: OracleSDK;
   private provider: ethers.AbstractProvider;
   private signer: ethers.Signer;
+  private escrow: ReturnType<typeof AgroasysEscrow__factory.connect>;
+  private readonly configuredChainId: number;
+  private readonly configuredEscrowAddress: string;
 
   constructor(
     rpcUrl: string,
@@ -62,6 +67,7 @@ export class SDKClient {
     escrowAddress: string,
     usdcAddress: string,
     chainId: number,
+    private readonly transactionOutcomeStore: OracleTransactionOutcomeStore,
     rpcOptions: { quorum?: number; stallTimeoutMs?: number } = {},
   ) {
     const provider = createManagedRpcProvider(rpcUrl, rpcFallbackUrls, {
@@ -71,6 +77,9 @@ export class SDKClient {
     });
     this.provider = provider;
     this.signer = createOracleSigner(signerConfig, provider);
+    this.escrow = AgroasysEscrow__factory.connect(escrowAddress, this.signer);
+    this.configuredChainId = chainId;
+    this.configuredEscrowAddress = ethers.getAddress(escrowAddress);
 
     this.sdk = new OracleSDK({
       rpc: rpcUrl,
@@ -124,6 +133,24 @@ export class SDKClient {
     return receipt ? Number(receipt.blockNumber) : null;
   }
 
+  async getTransactionRecoveryState(txHash: string): Promise<{
+    receipt: ethers.TransactionReceipt | null;
+    transaction: ethers.TransactionResponse | null;
+  }> {
+    const receipt = await this.provider.getTransactionReceipt(txHash);
+    if (receipt) {
+      return { receipt, transaction: null };
+    }
+    return { receipt: null, transaction: await this.provider.getTransaction(txHash) };
+  }
+
+  async getSignerTransactionCount(
+    signerAddress: string,
+    blockTag: 'latest' | 'pending',
+  ): Promise<number> {
+    return this.provider.getTransactionCount(signerAddress, blockTag);
+  }
+
   async getTrade(tradeId: string): Promise<Trade> {
     Logger.info('Querying on-chain trade state', { tradeId });
     const trade = await this.sdk.getTrade(tradeId);
@@ -144,55 +171,62 @@ export class SDKClient {
     return this.sdk.isTradePaused(BigInt(tradeId));
   }
 
-  async releaseFundsStage1(tradeId: string): Promise<BlockchainResult> {
-    Logger.info('Executing releaseFundsStage1', { tradeId });
+  private async assertAuthorizedOracleSigner(): Promise<void> {
+    const [signerAddress, oracleAddress] = await Promise.all([
+      this.signer.getAddress(),
+      this.sdk.getOracleAddress(),
+    ]);
+    if (ethers.getAddress(signerAddress) !== ethers.getAddress(oracleAddress)) {
+      throw new Error('Configured Oracle signer is not authorized by the escrow contract');
+    }
+  }
 
-    const result = await this.sdk.releaseFundsStage1(tradeId, this.signer);
+  private async submitOracleTransaction(
+    triggerIdempotencyKey: string,
+    operation: 'releaseFundsStage1' | 'confirmInspectionAvailable' | 'finalizeAfterDisputeWindow',
+    args: readonly unknown[],
+  ): Promise<BlockchainResult> {
+    await this.assertAuthorizedOracleSigner();
+    const request = await this.escrow.getFunction(operation).populateTransaction(...args);
+    const populated = await this.signer.populateTransaction(request);
+    const signedTransaction = await this.signer.signTransaction(populated);
+    const response = await broadcastPersistedOracleTransaction(
+      signedTransaction,
+      {
+        triggerIdempotencyKey,
+        expectedChainId: this.configuredChainId,
+        expectedDestination: this.configuredEscrowAddress,
+      },
+      this.transactionOutcomeStore,
+      (signed) => this.provider.broadcastTransaction(signed),
+    );
+    return { txHash: response.hash };
+  }
 
-    Logger.info('Stage 1 release successful', {
-      tradeId,
-      txHash: result.txHash,
-    });
-
-    return {
-      txHash: result.txHash,
-      blockNumber: result.blockNumber,
-    };
+  async releaseFundsStage1(
+    tradeId: string,
+    triggerIdempotencyKey: string,
+  ): Promise<BlockchainResult> {
+    Logger.info('Preparing releaseFundsStage1', { tradeId });
+    return this.submitOracleTransaction(triggerIdempotencyKey, 'releaseFundsStage1', [tradeId]);
   }
 
   async confirmInspectionAvailable(
     tradeId: string,
     windowSeconds: number,
+    triggerIdempotencyKey: string,
   ): Promise<BlockchainResult> {
-    Logger.info('Executing confirmInspectionAvailable', { tradeId, windowSeconds });
-
-    const result = await this.sdk.confirmInspectionAvailable(tradeId, windowSeconds, this.signer);
-
-    Logger.info('Inspection availability confirmation successful', {
+    Logger.info('Preparing confirmInspectionAvailable', { tradeId, windowSeconds });
+    return this.submitOracleTransaction(triggerIdempotencyKey, 'confirmInspectionAvailable', [
       tradeId,
       windowSeconds,
-      txHash: result.txHash,
-    });
-
-    return {
-      txHash: result.txHash,
-      blockNumber: result.blockNumber,
-    };
+    ]);
   }
 
-  async finalizeTrade(tradeId: string): Promise<BlockchainResult> {
-    Logger.info('Executing finalizeTrade', { tradeId });
-
-    const result = await this.sdk.finalizeAfterDisputeWindow(tradeId, this.signer);
-
-    Logger.info('Trade finalization successful', {
+  async finalizeTrade(tradeId: string, triggerIdempotencyKey: string): Promise<BlockchainResult> {
+    Logger.info('Preparing finalizeAfterDisputeWindow', { tradeId });
+    return this.submitOracleTransaction(triggerIdempotencyKey, 'finalizeAfterDisputeWindow', [
       tradeId,
-      txHash: result.txHash,
-    });
-
-    return {
-      txHash: result.txHash,
-      blockNumber: result.blockNumber,
-    };
+    ]);
   }
 }

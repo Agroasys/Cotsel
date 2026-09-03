@@ -53,9 +53,9 @@ Logistics event signal
 
 If the pre-condition fails, the trigger is moved to `TERMINAL_FAILURE` (non-retryable) and must not be re-driven.
 
-**[5] Transaction submission** — oracle signs and submits the release transaction. Execution is bounded by `ORACLE_RETRY_ATTEMPTS` with exponential backoff capped at `30 s`.
+**[5] Transaction submission** — oracle persists the signed transaction identity before its single broadcast attempt. A broadcast failure or persistence uncertainty moves the trigger to `BROADCAST_UNKNOWN`; the transaction-outcome reconciler checks chain truth and never rebroadcasts an ambiguous transaction. Retry applies only before a transaction is prepared.
 
-**[6] Confirmation polling** — oracle polls for on-chain confirmation at `10 s` intervals, with soft-timeout warning at `5 m` and hard-timeout at `30 m` (trigger moves to `EXHAUSTED_NEEDS_REDRIVE` if confirmation is not observed).
+**[6] Confirmation polling** — oracle polls for on-chain confirmation at `10 s` intervals. Prepared transactions are reconciled by transaction hash before any operator action. A confirmed receipt enters the existing confirmation/indexer path; a reverted receipt is terminal; an unresolved transaction remains blocked from rebroadcast.
 
 ### Webhook Authenticity Requirements
 

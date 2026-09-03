@@ -67,7 +67,7 @@ describe('Oracle request signing', () => {
     const signature = generateRequestHash(timestamp, body, secret);
 
     expect(() => verifyRequestSignature(timestamp, tamperedBody, signature, secret)).toThrow(
-      'Invalid HMAC signature',
+      'Invalid request authentication',
     );
   });
 
@@ -79,7 +79,7 @@ describe('Oracle request signing', () => {
     const signature = generateRequestHash(timestamp, body, secret);
 
     expect(() => verifyRequestSignature(timestamp, body, signature, secret)).toThrow(
-      'Request timestamp too old',
+      'Invalid request authentication',
     );
   });
 
