@@ -5,104 +5,16 @@ import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 import { getAddress, isAddress } from 'ethers';
 import { parseAllowedOrigins } from '@agroasys/shared-edge';
-import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
+import { resolveSettlementRuntime } from '@agroasys/sdk';
 import { calculateGaslessExecutorCapacityPolicy } from '../core/gaslessExecutorCapacityPolicy';
+import { parseGaslessSignerCustodyMode } from './gaslessSignerCustodyMode';
 
 dotenv.config();
 
 const PRE_CONTRACT_SENTINEL_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-export interface GatewayConfig {
-  port: number;
-  dbHost: string;
-  dbPort: number;
-  dbName: string;
-  dbUser: string;
-  dbPassword: string;
-  dbMigrationUser?: string;
-  dbMigrationPassword?: string;
-  dbSslMode?: 'disable' | 'require' | 'verify-full';
-  authBaseUrl: string;
-  authRequestTimeoutMs: number;
-  indexerGraphqlUrl: string;
-  indexerRequestTimeoutMs: number;
-  rpcUrl: string;
-  rpcFallbackUrls: string[];
-  rpcReadTimeoutMs: number;
-  rpcQuorum?: number;
-  chainId: number;
-  escrowAddress: string;
-  usdcAddress: string;
-  settlementRuntimeKey?: SettlementRuntimeKey;
-  networkName?: string;
-  explorerBaseUrl?: string | null;
-  contractAddressRequired: boolean;
-  operatorSignerEnvironment?: string;
-  enableMutations: boolean;
-  writeAllowlist: string[];
-  governanceQueueTtlSeconds: number;
-  settlementIngressEnabled: boolean;
-  immediateInspectionAcceptanceEnabled?: boolean;
-  settlementServiceAuthApiKeysJson: string;
-  settlementServiceAuthSharedSecret?: string;
-  settlementServiceAuthMaxSkewSeconds: number;
-  settlementServiceAuthNonceTtlSeconds: number;
-  settlementCallbackEnabled: boolean;
-  settlementCallbackUrl?: string;
-  settlementCallbackApiKey?: string;
-  settlementCallbackApiSecret?: string;
-  settlementCallbackRequestTimeoutMs: number;
-  settlementCallbackPollIntervalMs: number;
-  settlementCallbackMaxAttempts: number;
-  settlementCallbackInitialBackoffMs: number;
-  settlementCallbackMaxBackoffMs: number;
-  gaslessExecutionEnabled?: boolean;
-  gaslessExecutorPrivateKey?: string;
-  gaslessSignerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
-  gaslessManagedSignerUrl?: string;
-  gaslessManagedSignerApiKey?: string;
-  gaslessManagedSignerRequestTimeoutMs?: number;
-  gaslessBroadcastPaused?: boolean;
-  gaslessMaxGasLimit?: bigint;
-  gaslessMaxFeePerGasWei?: bigint;
-  gaslessMaxNativeCostWei?: bigint;
-  gaslessMinExecutorBalanceWei?: bigint;
-  gaslessLowBalanceAlertWei?: bigint;
-  gaslessCapacityTargetTxPerDay?: number;
-  gaslessCapacityBurstMultiplierBasisPoints?: number;
-  gaslessCapacitySafetyMarginBasisPoints?: number;
-  gaslessCapacityRequiredExecutorBalanceWei?: bigint;
-  gaslessCapacityFailClosed?: boolean;
-  gaslessRequestMaxTtlSeconds?: number;
-  gaslessStuckQueueThresholdMs?: number;
-  gaslessReceiptTimeoutMs?: number;
-  gaslessRepeatedFailureAlertThreshold?: number;
-  gaslessRequireRpcFallback?: boolean;
-  oracleBaseUrl?: string;
-  oracleServiceApiKey?: string;
-  oracleServiceApiSecret?: string;
-  treasuryBaseUrl?: string;
-  treasuryServiceApiKey?: string;
-  treasuryServiceApiSecret?: string;
-  reconciliationBaseUrl?: string;
-  ricardianBaseUrl?: string;
-  ricardianServiceApiKey?: string;
-  ricardianServiceApiSecret?: string;
-  notificationsBaseUrl?: string;
-  downstreamReadRetryBudget?: number;
-  downstreamMutationRetryBudget?: number;
-  downstreamReadTimeoutMs?: number;
-  downstreamMutationTimeoutMs?: number;
-  corsAllowedOrigins: string[];
-  corsAllowNoOrigin: boolean;
-  rateLimitEnabled: boolean;
-  rateLimitRedisUrl?: string;
-  rateLimitFailOpen?: boolean;
-  allowInsecureDownstreamAuth: boolean;
-  commitSha: string;
-  buildTime: string;
-  nodeEnv: string;
-}
+export type { GatewayConfig } from './gatewayConfig';
+import type { GatewayConfig } from './gatewayConfig';
 
 function env(name: string): string {
   const value = process.env[name];
@@ -164,17 +76,6 @@ function envBigInt(name: string, fallback: bigint): bigint {
 
   assert(/^\d+$/.test(raw), `${name} must be a non-negative integer`);
   return BigInt(raw);
-}
-
-function parseGaslessSignerCustodyMode(
-  value: string | undefined,
-): 'raw_private_key' | 'kms' | 'mpc' {
-  const normalized = value?.trim() || 'raw_private_key';
-  if (normalized === 'raw_private_key' || normalized === 'kms' || normalized === 'mpc') {
-    return normalized;
-  }
-
-  throw new Error('GATEWAY_GASLESS_SIGNER_CUSTODY_MODE must be raw_private_key, kms, or mpc');
 }
 
 function parseAllowlist(raw: string | undefined): string[] {
@@ -499,6 +400,14 @@ export function loadConfig(): GatewayConfig {
     envNumber('GATEWAY_GASLESS_RECEIPT_TIMEOUT_MS', 120000) >= 1000,
     'GATEWAY_GASLESS_RECEIPT_TIMEOUT_MS must be >= 1000',
   );
+  assert(
+    envNumber('GATEWAY_GASLESS_OUTCOME_RECONCILIATION_INTERVAL_MS', 5000) >= 1000,
+    'GATEWAY_GASLESS_OUTCOME_RECONCILIATION_INTERVAL_MS must be >= 1000',
+  );
+  assert(
+    envPositiveInteger('GATEWAY_IDEMPOTENCY_LEASE_DURATION_MS', 300000) >= 1000,
+    'GATEWAY_IDEMPOTENCY_LEASE_DURATION_MS must be >= 1000',
+  );
 
   if (
     (oracleServiceApiKey && !oracleServiceApiSecret) ||
@@ -738,6 +647,7 @@ export function loadConfig(): GatewayConfig {
       2000,
     ),
     settlementCallbackMaxBackoffMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000),
+    idempotencyLeaseDurationMs: envPositiveInteger('GATEWAY_IDEMPOTENCY_LEASE_DURATION_MS', 300000),
     gaslessExecutionEnabled,
     gaslessExecutorPrivateKey,
     gaslessSignerCustodyMode,
@@ -761,6 +671,10 @@ export function loadConfig(): GatewayConfig {
     gaslessRequestMaxTtlSeconds: envNumber('GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS', 900),
     gaslessStuckQueueThresholdMs: envNumber('GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS', 300000),
     gaslessReceiptTimeoutMs: envNumber('GATEWAY_GASLESS_RECEIPT_TIMEOUT_MS', 120000),
+    gaslessOutcomeReconciliationIntervalMs: envNumber(
+      'GATEWAY_GASLESS_OUTCOME_RECONCILIATION_INTERVAL_MS',
+      5000,
+    ),
     gaslessRepeatedFailureAlertThreshold: envNumber(
       'GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD',
       3,

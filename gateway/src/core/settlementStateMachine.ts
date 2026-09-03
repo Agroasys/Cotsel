@@ -5,11 +5,30 @@ import { GatewayError } from '../errors';
 import { SettlementEventType, SettlementExecutionStatus } from './settlementStore';
 
 const EXECUTION_TRANSITIONS: Record<SettlementExecutionStatus, SettlementExecutionStatus[]> = {
-  pending: ['accepted', 'queued', 'submitted', 'failed', 'rejected'],
-  accepted: ['queued', 'submitted', 'failed', 'rejected'],
-  queued: ['submitted', 'failed', 'rejected'],
-  submitted: ['confirmed', 'failed', 'rejected'],
+  pending: [
+    'accepted',
+    'queued',
+    'broadcast_unknown',
+    'confirmation_pending',
+    'submitted',
+    'failed',
+    'rejected',
+  ],
+  accepted: [
+    'queued',
+    'broadcast_unknown',
+    'confirmation_pending',
+    'submitted',
+    'failed',
+    'rejected',
+  ],
+  queued: ['broadcast_unknown', 'confirmation_pending', 'submitted', 'failed', 'rejected'],
+  broadcast_unknown: ['confirmation_pending', 'confirmed', 'reverted', 'replaced', 'failed'],
+  confirmation_pending: ['confirmed', 'reverted', 'replaced'],
+  submitted: ['confirmation_pending', 'confirmed', 'reverted', 'replaced', 'failed', 'rejected'],
   confirmed: ['confirmed'],
+  reverted: ['reverted'],
+  replaced: ['replaced'],
   failed: ['failed'],
   rejected: ['rejected'],
 };

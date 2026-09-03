@@ -45,7 +45,6 @@ export type {
   GaslessWalletUsdcTransferExecutionInput,
 } from './gaslessExecutionTypes';
 export { createEthersGaslessSettlementExecutor } from './gaslessExecutorFactory';
-export { isGaslessNonceDriftError } from './gaslessRelayerRuntime';
 export type { GaslessRelayerBroadcastLock } from './gaslessRelayerRuntime';
 export class GaslessSettlementExecutionService {
   private broadcastQueue: Promise<void> = Promise.resolve();

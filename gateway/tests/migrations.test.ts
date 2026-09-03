@@ -15,8 +15,13 @@ describe('gateway schema migration loading', () => {
     const sql = String(query.mock.calls[0]?.[0]);
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS idempotency_keys');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS managed_signer_validation_audit');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS gasless_transaction_outcomes');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ');
     expect(sql.indexOf('CREATE TABLE IF NOT EXISTS idempotency_keys')).toBeLessThan(
       sql.indexOf('CREATE TABLE IF NOT EXISTS managed_signer_validation_audit'),
+    );
+    expect(sql.indexOf('CREATE TABLE IF NOT EXISTS managed_signer_validation_audit')).toBeLessThan(
+      sql.indexOf('CREATE TABLE IF NOT EXISTS gasless_transaction_outcomes'),
     );
   });
 });

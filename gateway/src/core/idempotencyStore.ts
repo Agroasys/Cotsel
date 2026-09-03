@@ -19,11 +19,29 @@ export interface IdempotencyRecord extends IdempotencyScope {
   responseHeaders: Record<string, string>;
   responseBody: unknown | null;
   completedAt: string | null;
+  leaseExpiresAt: string | null;
   createdAt: string;
 }
 
+export interface IdempotencyFinancialOutcome {
+  requestId: string;
+  transactionHash: string;
+  resourceType: 'settlement_handoff' | 'platform_transfer';
+  resourceId: string;
+  operation: string;
+  chainId: number;
+  outcomeStatus:
+    | 'broadcast_pending'
+    | 'broadcast_unknown'
+    | 'confirmation_pending'
+    | 'confirmed'
+    | 'reverted';
+}
+
 export interface IdempotencyStore {
+  readonly leaseDurationMs: number;
   get(scope: IdempotencyScope): Promise<IdempotencyRecord | null>;
+  getFinancialOutcome(requestId: string): Promise<IdempotencyFinancialOutcome | null>;
   createPending(
     entry: IdempotencyScope & {
       requestMethod: string;
@@ -39,8 +57,10 @@ export interface IdempotencyStore {
       responseHeaders: Record<string, string>;
       responseBody: unknown;
     },
+    leaseOwnerRequestId: string,
   ): Promise<void>;
-  releasePending(scope: IdempotencyScope): Promise<void>;
+  releasePending(scope: IdempotencyScope, leaseOwnerRequestId: string): Promise<void>;
+  renewLease(scope: IdempotencyScope, leaseOwnerRequestId: string): Promise<boolean>;
   markReplay(scope: IdempotencyScope): Promise<void>;
 }
 
@@ -56,6 +76,7 @@ interface IdempotencyRow {
   responseHeaders: Record<string, string>;
   responseBody: unknown | null;
   completedAt: Date | null;
+  leaseExpiresAt: Date | null;
   createdAt: Date;
 }
 
@@ -72,6 +93,7 @@ function mapRow(row: IdempotencyRow): IdempotencyRecord {
     responseHeaders: row.responseHeaders || {},
     responseBody: row.responseBody,
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+    leaseExpiresAt: row.leaseExpiresAt ? row.leaseExpiresAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -91,7 +113,14 @@ export function buildRequestFingerprint(method: string, path: string, rawBody?: 
     .digest('hex');
 }
 
-export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
+export function createPostgresIdempotencyStore(
+  pool: Pool,
+  leaseDurationMs = 300_000,
+): IdempotencyStore {
+  if (!Number.isSafeInteger(leaseDurationMs) || leaseDurationMs < 1_000) {
+    throw new Error('Idempotency lease duration must be an integer of at least 1000ms');
+  }
+
   const get = async (scope: IdempotencyScope): Promise<IdempotencyRecord | null> => {
     const result = await pool.query<IdempotencyRow>(
       `SELECT
@@ -106,6 +135,7 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
          response_headers AS "responseHeaders",
          response_body AS "responseBody",
          completed_at AS "completedAt",
+         lease_expires_at AS "leaseExpiresAt",
          created_at AS "createdAt"
        FROM idempotency_keys
        WHERE actor_id = $1
@@ -118,7 +148,39 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
   };
 
   return {
+    leaseDurationMs,
     get,
+
+    async getFinancialOutcome(requestId) {
+      const result = await pool.query<{
+        requestId: string;
+        transactionHash: string;
+        resourceType: IdempotencyFinancialOutcome['resourceType'];
+        resourceId: string;
+        operation: string;
+        chainId: string;
+        outcomeStatus: IdempotencyFinancialOutcome['outcomeStatus'];
+      }>(
+        `SELECT
+           application_request_id AS "requestId",
+           transaction_hash AS "transactionHash",
+           resource_type AS "resourceType",
+           resource_id AS "resourceId",
+           operation,
+           chain_id AS "chainId",
+           outcome_status AS "outcomeStatus"
+         FROM gasless_transaction_outcomes
+         WHERE application_request_id = $1
+         ORDER BY created_at DESC
+         LIMIT 2`,
+        [requestId],
+      );
+      if (result.rows.length > 1) {
+        throw new Error(`Multiple gasless outcomes found for idempotency request ${requestId}`);
+      }
+      const row = result.rows[0];
+      return row ? { ...row, chainId: Number(row.chainId) } : null;
+    },
 
     async createPending(entry) {
       const insertResult = await pool.query<IdempotencyRow>(
@@ -129,8 +191,9 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
            request_method,
            request_path,
            request_fingerprint,
-           request_id
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+           request_id,
+           lease_expires_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() + ($8::bigint * INTERVAL '1 millisecond'))
          ON CONFLICT (actor_id, endpoint, idempotency_key) DO NOTHING
          RETURNING
            idempotency_key AS "idempotencyKey",
@@ -144,6 +207,7 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
            response_headers AS "responseHeaders",
            response_body AS "responseBody",
            completed_at AS "completedAt",
+           lease_expires_at AS "leaseExpiresAt",
            created_at AS "createdAt"`,
         [
           entry.idempotencyKey,
@@ -153,6 +217,7 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
           entry.requestPath,
           entry.requestFingerprint,
           entry.requestId,
+          leaseDurationMs,
         ],
       );
 
@@ -162,6 +227,54 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
           record: mapRow(createdRow),
           created: true,
         };
+      }
+
+      const reclaimedResult = await pool.query<IdempotencyRow>(
+        `UPDATE idempotency_keys AS idempotency
+         SET request_id = $7,
+             lease_expires_at = NOW() + ($8::bigint * INTERVAL '1 millisecond'),
+             updated_at = NOW()
+         WHERE idempotency.actor_id = $1
+           AND idempotency.endpoint = $2
+           AND idempotency.idempotency_key = $3
+           AND idempotency.request_method = $4
+           AND idempotency.request_path = $5
+           AND idempotency.request_fingerprint = $6
+           AND idempotency.completed_at IS NULL
+           AND idempotency.lease_expires_at <= NOW()
+           AND NOT EXISTS (
+             SELECT 1
+             FROM gasless_transaction_outcomes AS outcome
+             WHERE outcome.application_request_id = idempotency.request_id
+           )
+         RETURNING
+           idempotency_key AS "idempotencyKey",
+           actor_id AS "actorId",
+           endpoint AS "endpoint",
+           request_method AS "requestMethod",
+           request_path AS "requestPath",
+           request_fingerprint AS "requestFingerprint",
+           request_id AS "requestId",
+           response_status AS "responseStatus",
+           response_headers AS "responseHeaders",
+           response_body AS "responseBody",
+           completed_at AS "completedAt",
+           lease_expires_at AS "leaseExpiresAt",
+           created_at AS "createdAt"`,
+        [
+          entry.actorId,
+          entry.endpoint,
+          entry.idempotencyKey,
+          entry.requestMethod,
+          entry.requestPath,
+          entry.requestFingerprint,
+          entry.requestId,
+          leaseDurationMs,
+        ],
+      );
+      const reclaimedRow = reclaimedResult.rows[0];
+      if (reclaimedRow) {
+        return { record: mapRow(reclaimedRow), created: true };
       }
 
       const stored = await get(entry);
@@ -177,17 +290,20 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
       };
     },
 
-    async complete(scope, response) {
-      await pool.query(
+    async complete(scope, response, leaseOwnerRequestId) {
+      const result = await pool.query(
         `UPDATE idempotency_keys
          SET response_status = $4,
              response_headers = $5::jsonb,
              response_body = $6::jsonb,
              completed_at = NOW(),
+             lease_expires_at = NULL,
              updated_at = NOW()
          WHERE actor_id = $1
            AND endpoint = $2
-           AND idempotency_key = $3`,
+           AND idempotency_key = $3
+           AND request_id = $7
+           AND completed_at IS NULL`,
         [
           scope.actorId,
           scope.endpoint,
@@ -195,19 +311,44 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
           response.responseStatus,
           JSON.stringify(response.responseHeaders),
           JSON.stringify(response.responseBody),
+          leaseOwnerRequestId,
         ],
+      );
+      if (result.rowCount !== 1) {
+        throw new Error(`Idempotency lease ownership was lost for ${scope.idempotencyKey}`);
+      }
+    },
+
+    async releasePending(scope, leaseOwnerRequestId) {
+      await pool.query(
+        `DELETE FROM idempotency_keys AS idempotency
+         WHERE idempotency.actor_id = $1
+           AND idempotency.endpoint = $2
+           AND idempotency.idempotency_key = $3
+           AND idempotency.request_id = $4
+           AND idempotency.completed_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1
+             FROM gasless_transaction_outcomes AS outcome
+             WHERE outcome.application_request_id = idempotency.request_id
+           )`,
+        [scope.actorId, scope.endpoint, scope.idempotencyKey, leaseOwnerRequestId],
       );
     },
 
-    async releasePending(scope) {
-      await pool.query(
-        `DELETE FROM idempotency_keys
+    async renewLease(scope, leaseOwnerRequestId) {
+      const result = await pool.query(
+        `UPDATE idempotency_keys
+         SET lease_expires_at = NOW() + ($5::bigint * INTERVAL '1 millisecond'),
+             updated_at = NOW()
          WHERE actor_id = $1
            AND endpoint = $2
            AND idempotency_key = $3
+           AND request_id = $4
            AND completed_at IS NULL`,
-        [scope.actorId, scope.endpoint, scope.idempotencyKey],
+        [scope.actorId, scope.endpoint, scope.idempotencyKey, leaseOwnerRequestId, leaseDurationMs],
       );
+      return result.rowCount === 1;
     },
 
     async markReplay(scope) {
@@ -223,18 +364,39 @@ export function createPostgresIdempotencyStore(pool: Pool): IdempotencyStore {
   };
 }
 
-export function createInMemoryIdempotencyStore(): IdempotencyStore {
+export function createInMemoryIdempotencyStore(leaseDurationMs = 300_000): IdempotencyStore {
   const store = new Map<string, IdempotencyRecord>();
 
   return {
+    leaseDurationMs,
     async get(scope) {
       return store.get(toScopedKey(scope)) ?? null;
+    },
+
+    async getFinancialOutcome() {
+      return null;
     },
 
     async createPending(entry) {
       const scopedKey = toScopedKey(entry);
       const existing = store.get(scopedKey);
       if (existing) {
+        if (
+          !existing.completedAt &&
+          existing.leaseExpiresAt &&
+          Date.parse(existing.leaseExpiresAt) <= Date.now() &&
+          existing.requestMethod === entry.requestMethod &&
+          existing.requestPath === entry.requestPath &&
+          existing.requestFingerprint === entry.requestFingerprint
+        ) {
+          const reclaimed = {
+            ...existing,
+            requestId: entry.requestId,
+            leaseExpiresAt: new Date(Date.now() + leaseDurationMs).toISOString(),
+          };
+          store.set(scopedKey, reclaimed);
+          return { record: reclaimed, created: true };
+        }
         return {
           record: existing,
           created: false,
@@ -253,6 +415,7 @@ export function createInMemoryIdempotencyStore(): IdempotencyStore {
         responseHeaders: {},
         responseBody: null,
         completedAt: null,
+        leaseExpiresAt: new Date(Date.now() + leaseDurationMs).toISOString(),
         createdAt: new Date().toISOString(),
       };
 
@@ -263,11 +426,14 @@ export function createInMemoryIdempotencyStore(): IdempotencyStore {
       };
     },
 
-    async complete(scope, response) {
+    async complete(scope, response, leaseOwnerRequestId) {
       const scopedKey = toScopedKey(scope);
       const existing = store.get(scopedKey);
       if (!existing) {
         throw new Error(`Missing in-memory idempotency record for ${scope.idempotencyKey}`);
+      }
+      if (existing.requestId !== leaseOwnerRequestId || existing.completedAt) {
+        throw new Error(`Idempotency lease ownership was lost for ${scope.idempotencyKey}`);
       }
 
       store.set(scopedKey, {
@@ -276,17 +442,31 @@ export function createInMemoryIdempotencyStore(): IdempotencyStore {
         responseHeaders: response.responseHeaders,
         responseBody: response.responseBody,
         completedAt: new Date().toISOString(),
+        leaseExpiresAt: null,
       });
     },
 
-    async releasePending(scope) {
+    async releasePending(scope, leaseOwnerRequestId) {
       const scopedKey = toScopedKey(scope);
       const existing = store.get(scopedKey);
-      if (!existing || existing.completedAt) {
+      if (!existing || existing.completedAt || existing.requestId !== leaseOwnerRequestId) {
         return;
       }
 
       store.delete(scopedKey);
+    },
+
+    async renewLease(scope, leaseOwnerRequestId) {
+      const scopedKey = toScopedKey(scope);
+      const existing = store.get(scopedKey);
+      if (!existing || existing.completedAt || existing.requestId !== leaseOwnerRequestId) {
+        return false;
+      }
+      store.set(scopedKey, {
+        ...existing,
+        leaseExpiresAt: new Date(Date.now() + leaseDurationMs).toISOString(),
+      });
+      return true;
     },
 
     async markReplay(scope) {

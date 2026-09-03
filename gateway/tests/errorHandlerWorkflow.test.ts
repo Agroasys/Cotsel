@@ -56,6 +56,21 @@ describe('gateway error handler workflow', () => {
     });
   });
 
+  test('forbids replay while a financial broadcast outcome is unresolved', () => {
+    const envelope = createGatewayErrorEnvelope(
+      new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Outcome requires reconciliation', {
+        outcome: 'broadcast_unknown',
+        transactionHash: `0x${'a'.repeat(64)}`,
+      }),
+    );
+
+    expect(envelope).toMatchObject({
+      failureClass: 'infrastructure',
+      retryable: false,
+      replayable: false,
+    });
+  });
+
   test('captures infrastructure failures into a failed-operation ledger', async () => {
     const failedOperationStore = createInMemoryFailedOperationStore();
     const workflow = new GatewayErrorHandlerWorkflow(
