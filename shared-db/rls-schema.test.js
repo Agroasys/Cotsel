@@ -27,6 +27,7 @@ const schemaExpectations = [
       'settlement_handoffs',
       'settlement_execution_events',
       'settlement_callback_deliveries',
+      'managed_signer_validation_audit',
     ],
   },
   {

@@ -2,7 +2,6 @@ locals {
   gateway_environment = [
     { name = "AWS_REGION", value = var.region },
     { name = "DB_HOST", value = local.postgres_host },
-    { name = "DB_AUTO_MIGRATE", value = "false" },
     { name = "DB_NAME", value = "cotsel_gateway" },
     { name = "DB_PORT", value = "5432" },
     { name = "DB_SSL_MODE", value = "verify-full" },
@@ -74,7 +73,6 @@ locals {
     { name = "AUTH_CORS_ALLOW_NO_ORIGIN", value = "false" },
     { name = "AUTH_RATE_LIMIT_ENABLED", value = "false" },
     { name = "DB_HOST", value = local.postgres_host },
-    { name = "DB_AUTO_MIGRATE", value = "false" },
     { name = "DB_NAME", value = "cotsel_auth" },
     { name = "DB_PORT", value = "5432" },
     { name = "DB_SSL_MODE", value = "verify-full" },

@@ -1,8 +1,10 @@
-import { createServicePool, resolveMigrationCredentials } from '@agroasys/shared-db';
-import { Pool } from 'pg';
+import { createServicePool } from '@agroasys/shared-db';
+import { assertMigrationHistory } from '@agroasys/shared-db/migrate';
+import path from 'node:path';
 import { config } from '../config';
 
 const SERVICE_NAME = 'treasury';
+const MIGRATION_MANIFEST_PATH = path.resolve(__dirname, 'migrations.json');
 
 export const pool = createServicePool({
   serviceName: SERVICE_NAME,
@@ -20,33 +22,14 @@ export const pool = createServicePool({
 });
 
 export async function testConnection(): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('SELECT 1');
-  } finally {
-    client.release();
-  }
+  await pool.query('SELECT 1');
+  await assertMigrationHistory({
+    pool,
+    serviceName: SERVICE_NAME,
+    manifestPath: MIGRATION_MANIFEST_PATH,
+  });
 }
 
 export async function closeConnection(): Promise<void> {
   await pool.end();
-}
-
-export function createMigrationPool(): Pool {
-  const credentials = resolveMigrationCredentials(config);
-
-  return createServicePool({
-    serviceName: SERVICE_NAME,
-    connectionRole: 'migration',
-    runtimeDbUser: config.dbUser,
-    host: config.dbHost,
-    port: config.dbPort,
-    database: config.dbName,
-    user: credentials.user,
-    password: credentials.password,
-    sslMode: config.dbSslMode,
-    max: 4,
-    idleTimeoutMillis: 5000,
-    connectionTimeoutMillis: 5000,
-  });
 }

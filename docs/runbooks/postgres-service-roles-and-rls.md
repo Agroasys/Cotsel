@@ -37,15 +37,21 @@ Migration roles are used only during schema bootstrap and migrations. They are
 allowed to create/alter objects in the target service database schema and grant
 runtime access to the corresponding runtime role.
 
-The canonical environment variables are:
+Long-running production services receive only runtime credentials. Dedicated
+one-off migration tasks receive migration credentials through ECS secret
+injection.
+
+Long-running service containers use only these database variables:
 
 - `DB_USER`
 - `DB_PASSWORD`
-- `DB_MIGRATION_USER`
-- `DB_MIGRATION_PASSWORD`
 
-In the compose examples, these are wired from service-specific variables such as
-`AUTH_DB_RUNTIME_USER` / `AUTH_DB_MIGRATION_USER`.
+Dedicated migration jobs use `DB_USER` and `DB_PASSWORD` from their migration
+secret. Compose initializes these identities from service-specific runtime and
+migration variables.
+
+Production schema changes must run through a reviewed, dedicated migration task.
+Long-running service code does not parse migration credentials or execute DDL.
 
 ## Session settings contract
 
@@ -137,17 +143,49 @@ The compose bootstrap does not make runtime roles owners of the schema.
 2. Grant each pair access only to its own database.
 3. Grant `USAGE` on the target schema to the runtime role.
 4. Grant `USAGE, CREATE` on the target schema to the migration role.
-5. Run schema migrations with the migration role while setting
-   `app.runtime_db_user` to the runtime role.
-6. Run services with runtime credentials only.
-7. Verify that cross-service reads fail and missing `app.service_name` fails.
+5. Review every new manifest entry and SQL file.
+6. Reject edits to an already-applied migration.
+7. Capture the database backup identity.
+8. Run the dedicated migration task.
+9. Record the task ARN and `cotsel_schema_migrations` row.
+10. Verify the schema and service health.
+11. Run services with runtime credentials only.
+12. Verify cross-service and untagged-session access fails.
+
+## Versioned migration contract
+
+Each service owns `src/database/migrations.json`. Every entry pins an ordered
+version, name, SQL file, and SHA-256 checksum.
+
+The shared migration runner:
+
+- validates manifest order and checksums before connecting
+- acquires one service-specific Postgres advisory lock
+- records applied versions in `cotsel_schema_migrations`
+- applies each pending migration in its own transaction
+- rolls back a failed migration without recording it
+- rejects missing or modified applied migrations
+- applies bounded lock and statement timeouts
+- grants the runtime role read-only access to the migration ledger
+
+Runtime readiness validates every declared version, name, and checksum against
+the ledger. The service does not start when the ledger is missing or stale.
+
+Never modify an applied SQL file. Add a later migration instead. Use
+expand-and-contract changes while the previous application revision remains a
+rollback candidate.
 
 ## Validation expectations
 
 Phase 3 is not considered complete unless all of the following are true:
 
 - schema SQL enables and forces RLS on every sensitive table in scope
-- runtime and migration credentials are separate in config
+- runtime and migration credentials are separate
+- production task definitions contain no migration credentials
+- production startup rejects runtime migration execution
+- migration manifests are ordered and checksum-pinned
+- concurrent migration tasks serialize on the advisory lock
+- partial failures roll back without a ledger entry
 - compose/bootstrap examples provision distinct roles
 - automated tests prove:
   - correct service role plus correct `app.service_name` succeeds

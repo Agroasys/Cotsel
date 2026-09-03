@@ -2,13 +2,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createHash, randomUUID } from 'crypto';
+import path from 'path';
 import { Pool } from 'pg';
+import { runVersionedMigrations } from '@agroasys/shared-db/migrate';
 import { createPostgresGaslessTransactionOutcomeRecorder } from '../src/core/gaslessTransactionOutcomeStore';
 import { createPostgresIdempotencyStore } from '../src/core/idempotencyStore';
 import { createPostgresSettlementStore } from '../src/core/settlementStore';
-import { runMigrations } from '../src/database/migrations';
 
 const ACTIVITY_COUNT = 64;
+const MIGRATION_MANIFEST_PATH = path.resolve(__dirname, '../src/database/migrations.json');
+const GATEWAY_RUNTIME_DB_USER = 'cotsel_gateway_runtime';
 
 function requireDisposableDatabaseUrl(): string {
   const value = process.env.SETTLEMENT_ACTIVITY_DATABASE_URL?.trim();
@@ -39,7 +42,25 @@ async function main(): Promise<void> {
   const pool = new Pool({ connectionString: databaseUrl, max: 24 });
 
   try {
-    await runMigrations(pool);
+    // The disposable CI database starts with only the PostgreSQL administrator.
+    // Production provisions this NOLOGIN role through infrastructure before the
+    // migration job runs; create the equivalent role here so the proof validates
+    // the intended least-privilege grant instead of skipping it.
+    await pool.query(`
+      DO $$
+      BEGIN
+        CREATE ROLE cotsel_gateway_runtime NOLOGIN;
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END
+      $$;
+    `);
+    await runVersionedMigrations({
+      pool,
+      serviceName: 'gateway',
+      manifestPath: MIGRATION_MANIFEST_PATH,
+      runtimeDbUser: GATEWAY_RUNTIME_DB_USER,
+    });
     const store = createPostgresSettlementStore(pool);
 
     const handoffs = await Promise.all(

@@ -22,12 +22,19 @@ locals {
     "treasury",
   ])
 
-  database_secret_names = toset(flatten([
-    for owner in local.database_owners : [
-      "database/${owner}/migration",
-      "database/${owner}/runtime",
-    ]
-  ]))
+  database_reader_owners = toset([
+    "indexer",
+  ])
+
+  database_secret_names = toset(concat(
+    flatten([
+      for owner in local.database_owners : [
+        "database/${owner}/migration",
+        "database/${owner}/runtime",
+      ]
+    ]),
+    [for owner in local.database_reader_owners : "database/${owner}/reader"],
+  ))
 
   integration_secret_names = toset([
     "auth-upstream-exchange",

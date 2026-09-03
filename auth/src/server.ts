@@ -11,10 +11,8 @@ import {
   type ServiceApiKey,
 } from '@agroasys/shared-auth/serviceAuth';
 import { createPostgresNonceStore } from '@agroasys/shared-auth/nonceStore';
-import { shouldAutoMigrateDatabase } from '@agroasys/shared-db';
 import { config } from './config';
 import { testConnection, closeConnection, pool } from './database/connection';
-import { runMigrations } from './database/migrations';
 import { createPostgresProfileStore } from './core/profileStore';
 import { createPostgresSessionStore } from './core/sessionStore';
 import { createSessionService } from './core/sessionService';
@@ -55,16 +53,6 @@ function createAllowedServiceApiKeyLookup(
 async function initializeDatabase(): Promise<void> {
   Logger.info('Initializing database...');
   await testConnection();
-  if (
-    shouldAutoMigrateDatabase({
-      nodeEnv: process.env.NODE_ENV,
-      rawValue: process.env.DB_AUTO_MIGRATE,
-    })
-  ) {
-    await runMigrations();
-  } else {
-    Logger.info('Automatic database migration is disabled for auth runtime');
-  }
   Logger.info('Database initialized');
 }
 
@@ -181,6 +169,7 @@ async function bootstrap(): Promise<void> {
     ? new AdminController(createAdminService(profileStore, config.adminBreakGlassMaxTtlSeconds))
     : undefined;
   const router = createRouter(sessionController, sessionService, {
+    readinessCheck: testConnection,
     trustedSessionExchangeMiddleware,
     adminController,
     adminControlMiddleware,

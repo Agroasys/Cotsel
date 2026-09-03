@@ -1,3 +1,6 @@
+include:
+  - docker-compose.migrations.yml
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -249,8 +252,6 @@ services:
       DB_NAME: '${RICARDIAN_DB_NAME}'
       DB_USER: '${RICARDIAN_DB_RUNTIME_USER}'
       DB_PASSWORD: '${RICARDIAN_DB_RUNTIME_PASSWORD}'
-      DB_MIGRATION_USER: '${RICARDIAN_DB_MIGRATION_USER}'
-      DB_MIGRATION_PASSWORD: '${RICARDIAN_DB_MIGRATION_PASSWORD}'
       AUTH_ENABLED: '${RICARDIAN_AUTH_ENABLED}'
       API_KEYS_JSON: '${RICARDIAN_API_KEYS_JSON}'
       HMAC_SECRET: '${RICARDIAN_HMAC_SECRET:-}'
@@ -262,7 +263,7 @@ services:
       RATE_LIMIT_ENABLED: '${RICARDIAN_RATE_LIMIT_ENABLED}'
       RATE_LIMIT_REDIS_URL: '${RICARDIAN_RATE_LIMIT_REDIS_URL}'
     depends_on:
-      postgres-init:
+      ricardian-migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -295,8 +296,6 @@ services:
       DB_NAME: '${AUTH_DB_NAME}'
       DB_USER: '${AUTH_DB_RUNTIME_USER}'
       DB_PASSWORD: '${AUTH_DB_RUNTIME_PASSWORD}'
-      DB_MIGRATION_USER: '${AUTH_DB_MIGRATION_USER}'
-      DB_MIGRATION_PASSWORD: '${AUTH_DB_MIGRATION_PASSWORD}'
       SESSION_TTL_SECONDS: '${AUTH_SESSION_TTL_SECONDS}'
       AUTH_CORS_ALLOWED_ORIGINS: '${AUTH_CORS_ALLOWED_ORIGINS}'
       AUTH_CORS_ALLOW_NO_ORIGIN: '${AUTH_CORS_ALLOW_NO_ORIGIN}'
@@ -314,7 +313,7 @@ services:
       AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS: '${AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS:-600}'
       AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS: '${AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS:-3600}'
     depends_on:
-      postgres-init:
+      auth-migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -347,8 +346,6 @@ services:
       DB_NAME: '${GATEWAY_DB_NAME}'
       DB_USER: '${GATEWAY_DB_RUNTIME_USER}'
       DB_PASSWORD: '${GATEWAY_DB_RUNTIME_PASSWORD}'
-      DB_MIGRATION_USER: '${GATEWAY_DB_MIGRATION_USER}'
-      DB_MIGRATION_PASSWORD: '${GATEWAY_DB_MIGRATION_PASSWORD}'
       GATEWAY_AUTH_BASE_URL: '${GATEWAY_AUTH_BASE_URL}'
       GATEWAY_AUTH_REQUEST_TIMEOUT_MS: '${GATEWAY_AUTH_REQUEST_TIMEOUT_MS}'
       GATEWAY_INDEXER_GRAPHQL_URL: '${GATEWAY_INDEXER_GRAPHQL_URL}'
@@ -421,7 +418,7 @@ services:
       GATEWAY_COMMIT_SHA: '${GATEWAY_COMMIT_SHA}'
       GATEWAY_BUILD_TIME: '${GATEWAY_BUILD_TIME}'
     depends_on:
-      postgres-init:
+      gateway-migrate:
         condition: service_completed_successfully
       auth:
         condition: service_healthy
@@ -456,8 +453,6 @@ services:
       DB_NAME: '${TREASURY_DB_NAME}'
       DB_USER: '${TREASURY_DB_RUNTIME_USER}'
       DB_PASSWORD: '${TREASURY_DB_RUNTIME_PASSWORD}'
-      DB_MIGRATION_USER: '${TREASURY_DB_MIGRATION_USER}'
-      DB_MIGRATION_PASSWORD: '${TREASURY_DB_MIGRATION_PASSWORD}'
       INDEXER_GRAPHQL_URL: '${TREASURY_INDEXER_GRAPHQL_URL}'
       TREASURY_INGEST_BATCH_SIZE: '${TREASURY_INGEST_BATCH_SIZE}'
       TREASURY_INGEST_MAX_EVENTS: '${TREASURY_INGEST_MAX_EVENTS}'
@@ -472,7 +467,7 @@ services:
       RATE_LIMIT_ENABLED: '${TREASURY_RATE_LIMIT_ENABLED}'
       RATE_LIMIT_REDIS_URL: '${TREASURY_RATE_LIMIT_REDIS_URL}'
     depends_on:
-      postgres-init:
+      treasury-migrate:
         condition: service_completed_successfully
       indexer-graphql:
         condition: service_healthy
@@ -524,8 +519,6 @@ services:
       DB_NAME: '${ORACLE_DB_NAME}'
       DB_USER: '${ORACLE_DB_RUNTIME_USER}'
       DB_PASSWORD: '${ORACLE_DB_RUNTIME_PASSWORD}'
-      DB_MIGRATION_USER: '${ORACLE_DB_MIGRATION_USER}'
-      DB_MIGRATION_PASSWORD: '${ORACLE_DB_MIGRATION_PASSWORD}'
       INDEXER_GRAPHQL_URL: '${ORACLE_INDEXER_GRAPHQL_URL}'
       RETRY_ATTEMPTS: '${ORACLE_RETRY_ATTEMPTS}'
       RETRY_DELAY: '${ORACLE_RETRY_DELAY}'
@@ -537,7 +530,7 @@ services:
       NOTIFICATIONS_REQUEST_TIMEOUT_MS: '${ORACLE_NOTIFICATIONS_REQUEST_TIMEOUT_MS}'
       ORACLE_MANUAL_APPROVAL_ENABLED: '${ORACLE_MANUAL_APPROVAL_ENABLED}'
     depends_on:
-      postgres-init:
+      oracle-migrate:
         condition: service_completed_successfully
       indexer-graphql:
         condition: service_healthy
@@ -582,8 +575,6 @@ services:
       INDEXER_DB_NAME: '${INDEXER_DB_NAME}'
       DB_USER: '${RECONCILIATION_DB_RUNTIME_USER}'
       DB_PASSWORD: '${RECONCILIATION_DB_RUNTIME_PASSWORD}'
-      DB_MIGRATION_USER: '${RECONCILIATION_DB_MIGRATION_USER}'
-      DB_MIGRATION_PASSWORD: '${RECONCILIATION_DB_MIGRATION_PASSWORD}'
       SETTLEMENT_RUNTIME: '${RECONCILIATION_SETTLEMENT_RUNTIME:-}'
       RPC_URL: '${RECONCILIATION_RPC_URL}'
       RPC_FALLBACK_URLS: '${RECONCILIATION_RPC_FALLBACK_URLS:-}'
@@ -601,7 +592,7 @@ services:
       NOTIFICATIONS_COOLDOWN_MS: '${RECONCILIATION_NOTIFICATIONS_COOLDOWN_MS}'
       NOTIFICATIONS_REQUEST_TIMEOUT_MS: '${RECONCILIATION_NOTIFICATIONS_REQUEST_TIMEOUT_MS}'
     depends_on:
-      postgres-init:
+      reconciliation-migrate:
         condition: service_completed_successfully
       indexer-graphql:
         condition: service_healthy

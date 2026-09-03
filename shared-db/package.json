@@ -6,7 +6,7 @@
   "types": "index.d.ts",
   "scripts": {
     "lint": "eslint --max-warnings=0 .",
-    "test": "node --test index.test.js rls-schema.test.js postgres-rls.integration.test.js"
+    "test": "node --test index.test.js migrate.test.js migrate.postgres.integration.test.js schema-fingerprint.test.js schema-fingerprint.manifests.postgres.test.js rls-schema.test.js postgres-rls.integration.test.js"
   },
   "dependencies": {
     "pg": "^8.22.0"
@@ -15,6 +15,13 @@
     "index.js",
     "index.d.ts",
     "migrate.js",
+    "migrate.d.ts",
+    "migrate.test.js",
+    "migrate.postgres.integration.test.js",
+    "schema-fingerprint.js",
+    "schema-fingerprint.test.js",
+    "schema-fingerprint.manifests.postgres.test.js",
+    "postgres-test-support.js",
     "index.test.js",
     "rls-schema.test.js",
     "postgres-rls.integration.test.js"

@@ -41,11 +41,6 @@ function envBoolean(name: string, fallback = false): boolean {
   return ['true', '1', 'yes', 'on'].includes(normalized);
 }
 
-function optionalEnv(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value ? value : undefined;
-}
-
 function csvEnv(name: string): string[] {
   return (process.env[name] ?? '')
     .split(',')
@@ -101,13 +96,6 @@ export function loadConfig(): AuthConfig {
     adminBreakGlassMaxTtlSeconds > 0 && adminBreakGlassMaxTtlSeconds <= 86400,
     'AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS must be between 1 and 86400',
   );
-  const dbMigrationUser = optionalEnv('DB_MIGRATION_USER');
-  const dbMigrationPassword = optionalEnv('DB_MIGRATION_PASSWORD');
-  assert(
-    Boolean(dbMigrationUser) === Boolean(dbMigrationPassword),
-    'DB_MIGRATION_USER and DB_MIGRATION_PASSWORD must be set together',
-  );
-
   return {
     nodeEnv,
     port: envNumber('PORT', 3005),
@@ -117,8 +105,6 @@ export function loadConfig(): AuthConfig {
     dbUser: env('DB_USER'),
     dbPassword: env('DB_PASSWORD'),
     dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
-    dbMigrationUser,
-    dbMigrationPassword,
     sessionTtlSeconds: envNumber('SESSION_TTL_SECONDS', 3600),
     corsAllowedOrigins: parseAllowedOrigins(process.env.AUTH_CORS_ALLOWED_ORIGINS),
     corsAllowNoOrigin: envBoolean('AUTH_CORS_ALLOW_NO_ORIGIN', false),

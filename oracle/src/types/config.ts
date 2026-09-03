@@ -37,8 +37,6 @@ export interface OracleConfig {
   dbUser: string;
   dbPassword: string;
   dbSslMode: PostgresSslMode;
-  dbMigrationUser?: string;
-  dbMigrationPassword?: string;
 
   // indexer graphql api
   indexerGraphqlUrl: string;

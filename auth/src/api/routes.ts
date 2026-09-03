@@ -17,6 +17,7 @@ export function createRouter(
   sessionController: SessionController,
   sessionService: SessionService,
   options?: {
+    readinessCheck?: () => Promise<void>;
     trustedSessionExchangeMiddleware?: RequestHandler;
     adminController?: AdminController;
     adminControlMiddleware?: RequestHandler;
@@ -34,13 +35,27 @@ export function createRouter(
     });
   });
 
-  router.get('/ready', (_req, res) => {
-    res.json({
-      success: true,
-      service: 'auth',
-      ready: true,
-      timestamp: new Date().toISOString(),
-    });
+  router.get('/ready', async (_req, res) => {
+    try {
+      if (!options?.readinessCheck) {
+        throw new Error('Readiness check is not configured');
+      }
+      await options.readinessCheck();
+      res.json({
+        success: true,
+        service: 'auth',
+        ready: true,
+        timestamp: new Date().toISOString(),
+      });
+    } catch {
+      res.status(503).json({
+        success: false,
+        service: 'auth',
+        ready: false,
+        error: 'Dependencies not ready',
+        timestamp: new Date().toISOString(),
+      });
+    }
   });
 
   if (options?.trustedSessionExchangeMiddleware) {

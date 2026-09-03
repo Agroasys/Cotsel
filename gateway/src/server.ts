@@ -7,7 +7,6 @@ import { Router } from 'express';
 import { createHttpRateLimiter } from '@agroasys/shared-edge';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
 import { createPool, closeConnection, testConnection } from './database/index';
-import { migrateGatewayDatabaseIfEnabled } from './database/autoMigrate';
 import { loadConfig } from './config/env';
 import { createApp } from './app';
 import { AccessLogService } from './core/accessLogService';
@@ -379,7 +378,6 @@ async function bootstrap(): Promise<void> {
 
   Logger.info('Initializing gateway database');
   await testConnection(pool);
-  await migrateGatewayDatabaseIfEnabled(config);
   const requestRateLimiter = await createHttpRateLimiter({
     enabled: config.rateLimitEnabled,
     redisUrl: config.rateLimitRedisUrl,

@@ -7,13 +7,18 @@
 
 ## Critical datasets
 
-These databases are initialized by `postgres/init/10-service-databases.sql` and are in scope for backup and restore operations:
+These seven service databases are in scope:
 
-- `INDEXER_DB_NAME` (`agroasys_indexer`)
-- `RECONCILIATION_DB_NAME` (`agroasys_reconciliation`)
-- `TREASURY_DB_NAME` (`agroasys_treasury`)
-- `ORACLE_DB_NAME` (`agroasys_oracle`)
-- `RICARDIAN_DB_NAME` (`agroasys_ricardian`)
+- auth
+- gateway
+- indexer
+- oracle
+- reconciliation
+- ricardian
+- treasury
+
+Use the database identifiers from the target environment. Do not assume local
+compose names match AWS names.
 
 ## Deterministic smoke drill (required evidence)
 
@@ -61,15 +66,22 @@ cat reports/postgres-recovery/indexer-<timestamp>.sql \
 Migration operations must follow this order:
 
 1. Capture backup for the affected DB before any migration.
-2. Run schema migration in controlled scope (single service first).
-3. Verify integrity checks (row counts and service health) before proceeding.
-4. Roll forward remaining services only after verification passes.
+2. Record the application rollback revision and compatibility window.
+3. Verify the manifest checksum against the reviewed commit.
+4. Run the dedicated migration task for one service.
+5. Verify its migration ledger and schema identity.
+6. Compare critical counts and financial aggregates.
+7. Verify service health with the prior application revision.
+8. Verify service health with the candidate revision.
+9. Continue only after both compatibility checks pass.
 
 Rollback controls:
 
-1. Stop the affected service profile with `scripts/cotsel.sh down <profile>`.
-2. Restore the pre-migration logical backup.
-3. Re-run migration only after root cause and ordering fix are documented.
+1. Stop the affected rollout.
+2. Prefer a compatible application rollback or reviewed roll-forward.
+3. Restore only when neither path safely preserves data.
+4. Reconcile financial and chain state before resuming.
+5. Document the decision, authority, and restored invariant.
 
 Integrity verification baseline:
 
