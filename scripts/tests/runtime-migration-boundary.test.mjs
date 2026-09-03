@@ -101,6 +101,16 @@ test('service migration manifests pin immutable schema checksums', async () => {
     assert.equal(manifest.migrations[0].baseline, true);
     assert.equal(manifest.migrations[0].adopt_existing_schema, true);
     assert.match(manifest.migrations[0].schema_sha256, /^[a-f0-9]{64}$/);
+    if (service === 'gateway') {
+      assert.deepEqual(
+        manifest.migrations.map(({ version, name }) => ({ version, name })),
+        [
+          { version: '202608310001', name: 'baseline' },
+          { version: '202608310003', name: 'gasless_transaction_outcomes' },
+        ],
+      );
+      assert.match(manifest.migrations[1].schema_sha256, /^[a-f0-9]{64}$/);
+    }
   }
 });
 

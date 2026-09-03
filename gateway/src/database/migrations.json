@@ -8,6 +8,13 @@
       "schema_sha256": "6f38d25bd4a2145874afde62f4a057de507d307f3fce2c59d923bd605295f865",
       "adopt_existing_schema": true,
       "baseline": true
+    },
+    {
+      "version": "202608310003",
+      "name": "gasless_transaction_outcomes",
+      "file": "schema/003_gasless_transaction_outcomes.sql",
+      "sha256": "3a55ed5e75fe4c42388018f99d244730d3c301a27ee92a719ce7c38bb8021103",
+      "schema_sha256": "d12dc43382bc123833a83e3145802c670de206b6ad9c5e6c4dceb1eef14a1829"
     }
   ]
 }
