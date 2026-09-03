@@ -1,0 +1,43 @@
+openapi: 3.1.0
+info:
+  title: Cotsel Dashboard Gateway API
+  version: 0.1.0
+  summary: Contract-first admin/operator gateway for Cotsel-Dash.
+  description: |
+    Contract-first API specification for the Cotsel-Dash admin/operator dashboard to interact with Cotsel.
+
+    Discovery outcome:
+    - Dedicated in-repo dashboard gateway runtime: `gateway/` Express + TypeScript service.
+    - Existing repo auth/session surface: `auth` service issues Bearer session tokens.
+    - Existing repo governance source of truth: `contracts/src/AgroasysEscrow.sol`, `sdk/src/modules/adminSDK.ts`, and governance runbooks.
+    - Existing repo compliance source of truth: policy/runbooks only; no dedicated compliance HTTP service exists yet.
+
+    This specification is therefore contract-first for the dashboard gateway, but it is grounded in existing repo truth.
+
+    Gateway authorization policy:
+    - Auth uses existing auth-service Bearer sessions.
+    - Gateway role mapping is derived from current auth role `admin`, which maps to `operator:read` and `operator:write`.
+    - All mutation endpoints additionally require `GATEWAY_ENABLE_MUTATIONS=true` and membership in `GATEWAY_WRITE_ALLOWLIST`.
+    - Governance mutations use a two-endpoint direct-sign model (ADR-0411): (1) `POST /governance/<action>/prepare` validates the session, explicit signer wallet, and pre-flight state, records audit intent, and returns the canonical backend-authored signing payload (`chainId`, `contractAddress`, `contractMethod`, `args`, `txRequest`, `signerWallet`, `preparedPayloadHash`); (2) `POST /governance/actions/:actionId/confirm` accepts the broadcast `txHash` plus the same approved signer wallet, verifies the transaction against the prepared payload when observable, and records either `broadcast` or `broadcast_pending_verification` status with monitoring state. The approved operator signer wallet signs and broadcasts between these two calls. Legacy human queue-style `POST /governance/<action>` routes are retained only as retired compatibility surfaces and fail closed with `409 direct_sign_required`.
+    - Signer-required governance and treasury mutations also apply break-glass signer policy. When `auth` marks the session as break-glass active, ordinary signer action classes (`governance`, `treasury_approve`, `treasury_execute`, `treasury_close`, and `compliance_sensitive`) fail closed with `SIGNER_POLICY_RESTRICTED`; only an explicit `emergency_admin` signer binding may be used for emergency signer paths.
+servers:
+  - url: http://127.0.0.1:3600/api/dashboard-gateway/v1
+    description: Local contract-first gateway base URL.
+tags:
+  - name: System
+  - name: Auth
+  - name: Access Logs
+  - name: Settings
+  - name: Approvals
+  - name: Overview
+  - name: Operations
+  - name: Trades
+  - name: Reconciliation
+  - name: Ricardian
+  - name: Evidence
+  - name: Settlement
+  - name: Governance
+  - name: Treasury
+  - name: Compliance
+security:
+  - sessionBearer: []

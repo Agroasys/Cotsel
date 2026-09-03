@@ -4,6 +4,7 @@
 import { Interface } from 'ethers';
 import { AgroasysEscrow__factory } from '@agroasys/sdk';
 import { testExports as gaslessSettlementExecutionTestExports } from '../src/core/gaslessSettlementExecutionService';
+import { Logger } from '../src/logging/logger';
 import {
   buildCreateTradeInput,
   buildUserActionInput,
@@ -40,8 +41,11 @@ async function expectGatewayError(
 }
 
 describe('managed signer gasless execution safety', () => {
+  afterEach(() => jest.restoreAllMocks());
+
   test('managed custody executor delegates signing without requiring a raw private key', async () => {
     const dependencies = createFakeManagedSignerDependencies();
+    const log = jest.spyOn(Logger, 'info').mockImplementation(() => undefined);
     const executor =
       gaslessSettlementExecutionTestExports.createManagedSignerGaslessSettlementExecutor(
         {
@@ -119,6 +123,22 @@ describe('managed signer gasless execution safety', () => {
     expect(dependencies.recordTransactionOutcome.markConfirmed).toHaveBeenCalledWith(
       result.txHash,
       expect.objectContaining({ blockNumber: '98765' }),
+    );
+    expect(log).toHaveBeenCalledWith(
+      'Gasless transaction signing started',
+      expect.objectContaining({
+        eventType: 'gateway.gasless_transaction.signing_started',
+        applicationRequestId: input.requestId,
+        custodyMode: 'kms',
+      }),
+    );
+    expect(log).toHaveBeenCalledWith(
+      'Gasless transaction signing completed',
+      expect.objectContaining({
+        eventType: 'gateway.gasless_transaction.signing_completed',
+        applicationRequestId: input.requestId,
+        custodyMode: 'kms',
+      }),
     );
   });
 

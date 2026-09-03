@@ -1,0 +1,90 @@
+paths:
+  /settings/role-assignments:
+    get:
+      tags:
+        - Settings
+      summary: List operator role assignments for dashboard settings
+      description: |
+        Returns role-assignment records from the gateway role-assignment ledger. This route is
+        additive and read-only; it does not infer or fabricate assignments that are not present in
+        the authoritative backend ledger.
+      operationId: listRoleAssignments
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: gatewayRole
+          in: query
+          schema:
+            type: string
+        - name: authRole
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role assignment list with source freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleAssignmentListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /settings/audit-feed:
+    get:
+      tags:
+        - Settings
+      summary: List operator audit-feed events for dashboard settings
+      description: |
+        Returns audit-feed events from the gateway audit ledger with explicit actor, event type,
+        route, request identifiers, and freshness metadata for Cotsel-Dash Settings.
+      operationId: listSettingsAuditFeed
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: eventType
+          in: query
+          schema:
+            type: string
+        - name: actorUserId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit feed list with source freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditFeedListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'

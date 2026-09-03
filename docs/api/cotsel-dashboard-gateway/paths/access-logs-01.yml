@@ -1,0 +1,118 @@
+paths:
+  /access-logs:
+    post:
+      tags:
+        - Access Logs
+      summary: Append an operator access log entry
+      description: |
+        Append-only access-log mutation for Cotsel-Dash operator surfaces. The gateway derives actor,
+        request, session, and network context from the authenticated request and applies stable
+        masking/redaction to session and IP fields in the returned record.
+
+        This mutation requires an admin session, `GATEWAY_ENABLE_MUTATIONS=true`, membership in
+        `GATEWAY_WRITE_ALLOWLIST`, and an `Idempotency-Key` header.
+      operationId: createAccessLogEntry
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessLogCreateRequest'
+      responses:
+        '201':
+          description: Access log entry recorded successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessLogEntryResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    get:
+      tags:
+        - Access Logs
+      summary: List operator access log entries
+      description: |
+        Returns append-only access-log records for operator audit surfaces. Session and IP fields are
+        returned as stable masked/fingerprint pairs so operators can correlate events without
+        exposing raw bearer-session or client network identifiers.
+      operationId: listAccessLogEntries
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: eventType
+          in: query
+          schema:
+            type: string
+        - name: outcome
+          in: query
+          schema:
+            type: string
+        - name: actorUserId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Access log list payload with freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessLogListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /access-logs/{entryId}:
+    get:
+      tags:
+        - Access Logs
+      summary: Get a single access log entry by id
+      operationId: getAccessLogEntry
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: entryId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Access log detail payload with freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessLogEntryResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'

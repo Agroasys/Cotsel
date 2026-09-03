@@ -4,6 +4,16 @@
 import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
 import { GatewayError } from '../errors';
+import type { GaslessCommandStore } from './gaslessCommandStore';
+import {
+  createGaslessCommandWithClient,
+  createPostgresGaslessCommandStore,
+} from './postgresGaslessCommandStore';
+import {
+  createPostgresSettlementCallbackStore,
+  mapSettlementCallbackDeliveryRow,
+  type SettlementCallbackDeliveryRow,
+} from './settlementCallbackStore';
 import { validateExecutionTransition } from './settlementStateMachine';
 
 export * from './settlementStoreTypes';
@@ -68,24 +78,6 @@ interface SettlementExecutionEventRow {
   createdAt: Date;
 }
 
-interface SettlementCallbackDeliveryRow {
-  deliveryId: string;
-  handoffId: string;
-  eventId: string;
-  targetUrl: string;
-  requestBody: Record<string, unknown>;
-  status: 'pending' | 'delivering' | 'delivered' | 'failed' | 'dead_letter' | 'disabled';
-  attemptCount: number;
-  nextAttemptAt: Date;
-  lastAttemptedAt: Date | null;
-  deliveredAt: Date | null;
-  responseStatus: number | null;
-  lastError: string | null;
-  requestId: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 function parseDecimal(value: string | null): number | null {
   if (value === null) {
     return null;
@@ -148,26 +140,6 @@ function mapEventRow(row: SettlementExecutionEventRow): SettlementExecutionEvent
     requestId: row.requestId,
     sourceApiKeyId: row.sourceApiKeyId,
     createdAt: row.createdAt.toISOString(),
-  };
-}
-
-function mapDeliveryRow(row: SettlementCallbackDeliveryRow): SettlementCallbackDeliveryRecord {
-  return {
-    deliveryId: row.deliveryId,
-    handoffId: row.handoffId,
-    eventId: row.eventId,
-    targetUrl: row.targetUrl,
-    requestBody: row.requestBody || {},
-    status: row.status,
-    attemptCount: row.attemptCount,
-    nextAttemptAt: row.nextAttemptAt.toISOString(),
-    lastAttemptedAt: row.lastAttemptedAt ? row.lastAttemptedAt.toISOString() : null,
-    deliveredAt: row.deliveredAt ? row.deliveredAt.toISOString() : null,
-    responseStatus: row.responseStatus,
-    lastError: row.lastError,
-    requestId: row.requestId,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -364,6 +336,8 @@ async function createCallbackDeliveryWithClient(
        delivered_at AS "deliveredAt",
        response_status AS "responseStatus",
        last_error AS "lastError",
+       lease_owner AS "leaseOwner",
+       lease_expires_at AS "leaseExpiresAt",
        request_id AS "requestId",
        created_at AS "createdAt",
        updated_at AS "updatedAt"`,
@@ -394,10 +368,12 @@ async function createCallbackDeliveryWithClient(
     );
   }
 
-  return mapDeliveryRow(delivery);
+  return mapSettlementCallbackDeliveryRow(delivery);
 }
 
-export function createPostgresSettlementStore(pool: Pool): SettlementStore {
+export function createPostgresSettlementStore(pool: Pool): SettlementStore & GaslessCommandStore {
+  const callbackStore = createPostgresSettlementCallbackStore(pool);
+  const commandStore = createPostgresGaslessCommandStore(pool);
   const getHandoff = async (handoffId: string): Promise<SettlementHandoffRecord | null> => {
     const result = await pool.query<SettlementHandoffRow>(
       `SELECT
@@ -478,6 +454,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
   };
 
   return {
+    ...commandStore,
     async createHandoff(input) {
       const existing = await getHandoffByPlatformRef(input.platformId, input.platformHandoffId);
       if (existing) {
@@ -631,7 +608,10 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       };
     },
 
-    async recordExecutionEvent(input, callback) {
+    async recordExecutionEvent(input, callback, command) {
+      if (command && (input.eventType !== 'accepted' || input.executionStatus !== 'accepted')) {
+        throw new Error('Durable gasless commands require an accepted execution event');
+      }
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -680,6 +660,8 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
                delivered_at AS "deliveredAt",
                response_status AS "responseStatus",
                last_error AS "lastError",
+               lease_owner AS "leaseOwner",
+               lease_expires_at AS "leaseExpiresAt",
                request_id AS "requestId",
                created_at AS "createdAt",
                updated_at AS "updatedAt"
@@ -691,7 +673,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           );
           const existingDeliveryRow = existingDeliveryResult.rows[0];
           const callbackDelivery = existingDeliveryRow
-            ? mapDeliveryRow(existingDeliveryRow)
+            ? mapSettlementCallbackDeliveryRow(existingDeliveryRow)
             : await createCallbackDeliveryWithClient(client, {
                 handoffId: lockedHandoff.handoffId,
                 eventId: event.eventId,
@@ -703,11 +685,15 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
               });
           const currentHandoff =
             (await getHandoffWithClient(client, input.handoffId)) ?? lockedHandoff;
+          const durableCommand = command
+            ? await createGaslessCommandWithClient(client, command)
+            : undefined;
           await client.query('COMMIT');
           return {
             handoff: currentHandoff,
             event,
             callbackDelivery,
+            command: durableCommand,
           };
         }
 
@@ -740,11 +726,15 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           callback.status === 'disabled'
             ? ((await getHandoffWithClient(client, input.handoffId)) ?? updatedHandoff)
             : updatedHandoff;
+        const durableCommand = command
+          ? await createGaslessCommandWithClient(client, command)
+          : undefined;
         await client.query('COMMIT');
         return {
           handoff: finalHandoff,
           event,
           callbackDelivery,
+          command: durableCommand,
         };
       } catch (error) {
         await client.query('ROLLBACK');
@@ -779,177 +769,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       return result.rows.map(mapEventRow);
     },
 
-    async getDueCallbackDeliveries(limit, now) {
-      const result = await pool.query<SettlementCallbackDeliveryRow>(
-        `SELECT
-           delivery_id AS "deliveryId",
-           handoff_id AS "handoffId",
-           event_id AS "eventId",
-           target_url AS "targetUrl",
-           request_body AS "requestBody",
-           status,
-           attempt_count AS "attemptCount",
-           next_attempt_at AS "nextAttemptAt",
-           last_attempted_at AS "lastAttemptedAt",
-           delivered_at AS "deliveredAt",
-           response_status AS "responseStatus",
-           last_error AS "lastError",
-           request_id AS "requestId",
-           created_at AS "createdAt",
-           updated_at AS "updatedAt"
-         FROM settlement_callback_deliveries
-         WHERE status IN ('pending', 'failed')
-           AND next_attempt_at <= $1
-         ORDER BY next_attempt_at ASC, created_at ASC
-         LIMIT $2`,
-        [now, limit],
-      );
-
-      return result.rows.map(mapDeliveryRow);
-    },
-
-    async getCallbackDelivery(deliveryId) {
-      const result = await pool.query<SettlementCallbackDeliveryRow>(
-        `SELECT
-           delivery_id AS "deliveryId",
-           handoff_id AS "handoffId",
-           event_id AS "eventId",
-           target_url AS "targetUrl",
-           request_body AS "requestBody",
-           status,
-           attempt_count AS "attemptCount",
-           next_attempt_at AS "nextAttemptAt",
-           last_attempted_at AS "lastAttemptedAt",
-           delivered_at AS "deliveredAt",
-           response_status AS "responseStatus",
-           last_error AS "lastError",
-           request_id AS "requestId",
-           created_at AS "createdAt",
-           updated_at AS "updatedAt"
-         FROM settlement_callback_deliveries
-         WHERE delivery_id = $1`,
-        [deliveryId],
-      );
-
-      return result.rows[0] ? mapDeliveryRow(result.rows[0]) : null;
-    },
-
-    async markCallbackDelivering(deliveryId, attemptedAt) {
-      const result = await pool.query<SettlementCallbackDeliveryRow>(
-        `UPDATE settlement_callback_deliveries
-         SET status = 'delivering',
-             attempt_count = attempt_count + 1,
-             last_attempted_at = $2,
-             updated_at = NOW()
-         WHERE delivery_id = $1
-           AND status IN ('pending', 'failed')
-         RETURNING
-           delivery_id AS "deliveryId",
-           handoff_id AS "handoffId",
-           event_id AS "eventId",
-           target_url AS "targetUrl",
-           request_body AS "requestBody",
-           status,
-           attempt_count AS "attemptCount",
-           next_attempt_at AS "nextAttemptAt",
-           last_attempted_at AS "lastAttemptedAt",
-           delivered_at AS "deliveredAt",
-           response_status AS "responseStatus",
-           last_error AS "lastError",
-           request_id AS "requestId",
-           created_at AS "createdAt",
-           updated_at AS "updatedAt"`,
-        [deliveryId, attemptedAt],
-      );
-
-      return result.rows[0] ? mapDeliveryRow(result.rows[0]) : null;
-    },
-
-    async markCallbackDelivered(deliveryId, completedAt, responseStatus) {
-      await pool.query(
-        `UPDATE settlement_callback_deliveries
-         SET status = 'delivered',
-             response_status = $3,
-             delivered_at = $2,
-             updated_at = NOW()
-         WHERE delivery_id = $1`,
-        [deliveryId, completedAt, responseStatus],
-      );
-
-      await pool.query(
-        `UPDATE settlement_handoffs handoffs
-         SET callback_status = 'delivered',
-             callback_delivered_at = $2,
-             updated_at = NOW()
-         FROM settlement_callback_deliveries deliveries
-         WHERE deliveries.delivery_id = $1
-           AND handoffs.handoff_id = deliveries.handoff_id
-           AND handoffs.latest_event_id = deliveries.event_id`,
-        [deliveryId, completedAt],
-      );
-    },
-
-    async markCallbackFailed(deliveryId, update) {
-      await pool.query(
-        `UPDATE settlement_callback_deliveries
-         SET status = CASE WHEN $5 THEN 'dead_letter' ELSE 'failed' END,
-             response_status = $3,
-             last_error = $4,
-             last_attempted_at = $2,
-             next_attempt_at = $6,
-             updated_at = NOW()
-         WHERE delivery_id = $1`,
-        [
-          deliveryId,
-          update.attemptedAt,
-          update.responseStatus ?? null,
-          update.errorMessage,
-          update.deadLetter,
-          update.nextAttemptAt,
-        ],
-      );
-
-      await pool.query(
-        `UPDATE settlement_handoffs handoffs
-         SET callback_status = CASE WHEN $2 THEN 'dead_letter' ELSE 'failed' END,
-             updated_at = NOW()
-         FROM settlement_callback_deliveries deliveries
-         WHERE deliveries.delivery_id = $1
-           AND handoffs.handoff_id = deliveries.handoff_id
-           AND handoffs.latest_event_id = deliveries.event_id`,
-        [deliveryId, update.deadLetter],
-      );
-    },
-
-    async requeueCallbackDelivery(deliveryId, nextAttemptAt) {
-      const result = await pool.query<SettlementCallbackDeliveryRow>(
-        `UPDATE settlement_callback_deliveries
-         SET status = 'pending',
-             next_attempt_at = $2,
-             updated_at = NOW()
-         WHERE delivery_id = $1
-           AND status = 'dead_letter'
-         RETURNING
-           delivery_id AS "deliveryId",
-           handoff_id AS "handoffId",
-           event_id AS "eventId",
-           target_url AS "targetUrl",
-           request_body AS "requestBody",
-           status,
-           attempt_count AS "attemptCount",
-           next_attempt_at AS "nextAttemptAt",
-           last_attempted_at AS "lastAttemptedAt",
-           delivered_at AS "deliveredAt",
-           response_status AS "responseStatus",
-           last_error AS "lastError",
-           request_id AS "requestId",
-           created_at AS "createdAt",
-           updated_at AS "updatedAt"`,
-        [deliveryId, nextAttemptAt],
-      );
-
-      return result.rows[0] ? mapDeliveryRow(result.rows[0]) : null;
-    },
+    ...callbackStore,
 
     async getTradeSettlementProjectionMap(tradeIds) {
       if (tradeIds.length === 0) {

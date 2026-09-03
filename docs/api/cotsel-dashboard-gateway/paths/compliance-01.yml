@@ -1,0 +1,236 @@
+paths:
+  /compliance/decisions:
+    post:
+      tags:
+        - Compliance
+      summary: Create compliance decision record
+      description: |
+        Contract-first endpoint for compliance decisioning that gates oracle progression.
+
+        This endpoint is grounded in `docs/runbooks/compliance-boundary-kyb-kyt-sanctions.md`, which defines fail-closed enforcement and audit requirements.
+
+        The gateway owns the append-only compliance decision ledger in its Postgres database. Provider
+        integrations remain out of scope; this endpoint records the authoritative control-plane decision
+        used by the dashboard and gateway orchestration path. Off-chain attestation reference semantics
+        used by later read surfaces are defined separately in `#/components/schemas/AttestationReference`.
+      operationId: createComplianceDecision
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplianceDecisionCreateRequest'
+      responses:
+        '201':
+          description: Decision recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceDecisionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /compliance/decisions/{decisionId}:
+    get:
+      tags:
+        - Compliance
+      summary: Get compliance decision by id
+      operationId: getComplianceDecision
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: decisionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Compliance decision detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceDecisionResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /compliance/trades/{tradeId}:
+    get:
+      tags:
+        - Compliance
+      summary: Get current compliance status for a trade
+      operationId: getTradeComplianceStatus
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/TradeId'
+      responses:
+        '200':
+          description: Current compliance state for the trade.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceTradeStatusResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /compliance/trades/{tradeId}/attestation-status:
+    get:
+      tags:
+        - Compliance
+      summary: Get read-only attestation status for a trade
+      description: |
+        Returns the latest attestation-backed compliance status for the trade.
+        This is a read-only operator surface and does not revalidate the
+        attestation against the issuer at request time. If the latest decision
+        records provider outage or fail-closed denial without a fresh
+        attestation payload, the response preserves the last known attestation
+        metadata and marks the status as degraded or unavailable from the
+        latest decision state.
+      operationId: getTradeComplianceAttestationStatus
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/TradeId'
+      responses:
+        '200':
+          description: Current attestation-backed compliance status for the trade.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceTradeAttestationStatusResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /compliance/trades/{tradeId}/decisions:
+    get:
+      tags:
+        - Compliance
+      summary: List compliance decisions for a trade
+      operationId: listTradeComplianceDecisions
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/TradeId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Compliance decision history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceDecisionListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /compliance/trades/{tradeId}/block-oracle-progression:
+    post:
+      tags:
+        - Compliance
+      summary: Block oracle progression for a trade
+      description: |
+        Contract-first off-chain control that prevents the oracle worker from progressing a trade.
+
+        This does not change on-chain trade state directly. It is an operator/compliance control that must be consumed by the gateway/oracle orchestration path.
+
+        The gateway stores oracle progression block state in its Postgres database as the canonical control-plane source of truth.
+      operationId: blockOracleProgression
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/TradeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplianceOperationalControlRequest'
+      responses:
+        '202':
+          description: Block accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceTradeStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /compliance/trades/{tradeId}/resume-oracle-progression:
+    post:
+      tags:
+        - Compliance
+      summary: Resume oracle progression for a trade
+      description: |
+        Contract-first off-chain control that clears a prior oracle progression block.
+
+        Resume requires an authorized gateway write principal together with the latest effective
+        compliance decision evaluating to `ALLOW`. When the effective decision uses
+        `reasonCode=CMP_OVERRIDE_ACTIVE`, the recorded override window must still be active.
+      operationId: resumeOracleProgression
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/TradeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplianceOperationalControlRequest'
+      responses:
+        '202':
+          description: Resume accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceTradeStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'

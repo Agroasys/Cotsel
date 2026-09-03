@@ -41,6 +41,9 @@ function buildRecord(
 
 function createDependencies(record: GaslessTransactionOutcomeRecord) {
   const store = {
+    getByApplicationRequestId: jest.fn(async (applicationRequestId: string) =>
+      applicationRequestId === record.applicationRequestId ? record : null,
+    ),
     listRecoveryCandidates: jest.fn(async () => [record]),
     recordPrepared: jest.fn(),
     markBroadcastUnknown: jest.fn(async () => undefined),

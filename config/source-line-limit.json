@@ -18,7 +18,7 @@
     ".yaml",
     ".yml"
   ],
-  "excludedPaths": ["docs/api/cotsel-dashboard-gateway.openapi.yml", "pnpm-lock.yaml"],
+  "excludedPaths": ["pnpm-lock.yaml"],
   "excludedPrefixes": [
     "contracts/artifacts/",
     "contracts/cache/",
@@ -53,7 +53,6 @@
     "gateway/tests/settlementRoutes.contract.test.ts": 1647,
     "gateway/tests/treasuryRoutes.contract.test.ts": 947,
     "indexer/src/main.ts": 2971,
-    "oracle/src/core/trigger-manager.ts": 623,
     "reconciliation/src/report-cli.ts": 504,
     "scripts/arch-roadmap-sync.mjs": 717,
     "scripts/base-sepolia-pilot-validation.sh": 760,

@@ -3,6 +3,7 @@
  */
 import type { SettlementService } from './settlementService';
 import type { SettlementExecutionStatus, SettlementStore } from './settlementStore';
+import type { GaslessCommandStore } from './gaslessCommandStore';
 import type {
   GaslessConfirmedOutcome,
   GaslessTransactionOutcomeRecord,
@@ -13,15 +14,18 @@ export class GaslessSettlementOutcomeObserver implements GaslessOutcomeObserver 
   constructor(
     private readonly settlementStore: SettlementStore,
     private readonly settlementService: SettlementService,
+    private readonly commandStore: GaslessCommandStore,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
   async onBroadcastUnknown(record: GaslessTransactionOutcomeRecord): Promise<void> {
     await this.recordHandoffOutcome(record, 'broadcast_unknown');
+    await this.resolveCommand(record, 'broadcast_unknown');
   }
 
   async onConfirmationPending(record: GaslessTransactionOutcomeRecord): Promise<void> {
     await this.recordHandoffOutcome(record, 'confirmation_pending');
+    await this.resolveCommand(record, 'confirmation_pending');
   }
 
   async onConfirmed(
@@ -30,6 +34,7 @@ export class GaslessSettlementOutcomeObserver implements GaslessOutcomeObserver 
   ): Promise<void> {
     await this.prepareTerminalProjection(record);
     await this.recordHandoffOutcome(record, 'confirmed', outcome);
+    await this.resolveCommand(record, 'confirmed');
   }
 
   async onReverted(
@@ -38,6 +43,22 @@ export class GaslessSettlementOutcomeObserver implements GaslessOutcomeObserver 
   ): Promise<void> {
     await this.prepareTerminalProjection(record);
     await this.recordHandoffOutcome(record, 'reverted', outcome);
+    await this.resolveCommand(record, 'reverted');
+  }
+
+  private async resolveCommand(
+    record: GaslessTransactionOutcomeRecord,
+    status: 'broadcast_unknown' | 'confirmation_pending' | 'confirmed' | 'reverted',
+  ): Promise<void> {
+    const resolved = await this.commandStore.resolveTransactionOutcome(
+      record.applicationRequestId,
+      record.transactionHash,
+      status,
+      this.now().toISOString(),
+    );
+    if (!resolved) {
+      throw new Error(`Missing durable gasless command for outcome ${record.transactionHash}`);
+    }
   }
 
   private async prepareTerminalProjection(record: GaslessTransactionOutcomeRecord): Promise<void> {

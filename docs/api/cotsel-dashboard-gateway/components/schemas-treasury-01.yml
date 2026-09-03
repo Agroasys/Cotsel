@@ -1,0 +1,440 @@
+components:
+  schemas:
+    TreasuryFreshness:
+      type: object
+      required:
+        - source
+        - sourceFreshAt
+        - queriedAt
+        - available
+      properties:
+        source:
+          type: string
+          enum:
+            - chain_rpc
+            - gateway_governance_ledger
+        sourceFreshAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+        degradedReason:
+          type: string
+    TreasuryBalanceSnapshot:
+      type: object
+      required:
+        - assetSymbol
+        - raw
+        - display
+      properties:
+        assetSymbol:
+          type: string
+          const: USDC
+        raw:
+          type: string
+        display:
+          type: string
+    TreasurySweepVisibility:
+      type: object
+      required:
+        - canSweep
+        - blockedReason
+      properties:
+        canSweep:
+          type: boolean
+        blockedReason:
+          oneOf:
+            - type: 'null'
+            - type: string
+              enum:
+                - claims_paused
+                - no_claimable_balance
+    TreasuryPayoutReceiverVisibility:
+      type: object
+      required:
+        - currentAddress
+        - hasPendingUpdate
+        - activeProposalIds
+      properties:
+        currentAddress:
+          type: string
+        hasPendingUpdate:
+          type: boolean
+        activeProposalIds:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+    TreasuryState:
+      type: object
+      required:
+        - paused
+        - claimsPaused
+        - treasuryAddress
+        - treasuryPayoutAddress
+        - governanceApprovalsRequired
+        - governanceTimelockSeconds
+        - requiredAdminCount
+        - claimableBalance
+        - sweepVisibility
+        - payoutReceiverVisibility
+      properties:
+        paused:
+          type: boolean
+        claimsPaused:
+          type: boolean
+        treasuryAddress:
+          type: string
+        treasuryPayoutAddress:
+          type: string
+        governanceApprovalsRequired:
+          type: integer
+          minimum: 1
+        governanceTimelockSeconds:
+          type: integer
+          minimum: 0
+        requiredAdminCount:
+          type: integer
+          minimum: 1
+        claimableBalance:
+          $ref: '#/components/schemas/TreasuryBalanceSnapshot'
+        sweepVisibility:
+          $ref: '#/components/schemas/TreasurySweepVisibility'
+        payoutReceiverVisibility:
+          $ref: '#/components/schemas/TreasuryPayoutReceiverVisibility'
+    TreasurySnapshotPayload:
+      type: object
+      required:
+        - state
+        - freshness
+      properties:
+        state:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TreasuryState'
+        freshness:
+          $ref: '#/components/schemas/TreasuryFreshness'
+    TreasurySnapshotResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasurySnapshotPayload'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryActionCategory:
+      type: string
+      enum:
+        - treasury_sweep
+        - treasury_payout_receiver_update
+    TreasuryActionListPayload:
+      type: object
+      required:
+        - items
+        - nextCursor
+        - freshness
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceAction'
+        nextCursor:
+          anyOf:
+            - type: string
+            - type: 'null'
+        freshness:
+          $ref: '#/components/schemas/TreasuryFreshness'
+    TreasuryActionListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasuryActionListPayload'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryAccountingPeriodStatus:
+      type: string
+      enum:
+        - OPEN
+        - PENDING_CLOSE
+        - CLOSED
+    TreasurySweepBatchStatus:
+      type: string
+      enum:
+        - DRAFT
+        - PENDING_APPROVAL
+        - APPROVED
+        - EXECUTED
+        - HANDED_OFF
+        - CLOSED
+        - VOID
+    TreasurySweepBatchAllocationStatus:
+      type: string
+      enum:
+        - ALLOCATED
+        - RELEASED
+    TreasuryPartnerHandoffStatus:
+      type: string
+      enum:
+        - CREATED
+        - SUBMITTED
+        - ACKNOWLEDGED
+        - COMPLETED
+        - FAILED
+    TreasuryAccountingState:
+      type: string
+      enum:
+        - HELD
+        - ALLOCATED_TO_SWEEP
+        - SWEPT
+        - HANDED_OFF
+        - REALIZED
+        - EXCEPTION
+    TreasuryRevenueRealizationStatus:
+      type: string
+      enum:
+        - REALIZED
+        - REVERSED
+    TreasuryWorkflowAuditInput:
+      type: object
+      required:
+        - reason
+        - ticketRef
+      properties:
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 2000
+        ticketRef:
+          type: string
+          minLength: 2
+          maxLength: 128
+        evidenceReferences:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 3
+            maxLength: 500
+        metadata:
+          type: object
+          additionalProperties: true
+    TreasuryWorkflowAuditOnlyRequest:
+      type: object
+      required:
+        - audit
+      properties:
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasuryAccountingPeriod:
+      type: object
+      required:
+        - id
+        - period_key
+        - starts_at
+        - ends_at
+        - status
+        - created_by
+        - created_at
+        - updated_at
+        - metadata
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        period_key:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/TreasuryAccountingPeriodStatus'
+        created_by:
+          type: string
+        pending_close_at:
+          type: string
+          format: date-time
+          nullable: true
+        close_reason:
+          type: string
+          nullable: true
+        closed_by:
+          type: string
+          nullable: true
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TreasuryAccountingPeriodListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryAccountingPeriod'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryAccountingPeriodResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TreasuryAccountingPeriod'
+        timestamp:
+          type: string
+          format: date-time
+    TreasuryCreateAccountingPeriodRequest:
+      type: object
+      required:
+        - periodKey
+        - startsAt
+        - endsAt
+        - audit
+      properties:
+        periodKey:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        audit:
+          $ref: '#/components/schemas/TreasuryWorkflowAuditInput'
+    TreasurySweepBatch:
+      type: object
+      required:
+        - id
+        - batch_key
+        - accounting_period_id
+        - accounting_period_key
+        - accounting_period_status
+        - asset_symbol
+        - status
+        - expected_total_raw
+        - created_by
+        - created_at
+        - updated_at
+        - metadata
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        batch_key:
+          type: string
+        accounting_period_id:
+          type: integer
+          minimum: 1
+        accounting_period_key:
+          type: string
+        accounting_period_status:
+          $ref: '#/components/schemas/TreasuryAccountingPeriodStatus'
+        asset_symbol:
+          type: string
+        status:
+          $ref: '#/components/schemas/TreasurySweepBatchStatus'
+        expected_total_raw:
+          type: string
+        payout_receiver_address:
+          type: string
+          nullable: true
+        approval_requested_at:
+          type: string
+          format: date-time
+          nullable: true
+        approval_requested_by:
+          type: string
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_by:
+          type: string
+          nullable: true
+        matched_sweep_tx_hash:
+          type: string
+          nullable: true
+        matched_sweep_block_number:
+          type: string
+          nullable: true
+        matched_swept_at:
+          type: string
+          format: date-time
+          nullable: true
+        executed_by:
+          type: string
+          nullable: true
+        created_by:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TreasurySweepBatchListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasurySweepBatch'
+        timestamp:
+          type: string
+          format: date-time

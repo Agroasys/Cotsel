@@ -1,0 +1,114 @@
+components:
+  schemas:
+    RicardianFreshness:
+      type: object
+      required:
+        - source
+        - sourceFreshAt
+        - queriedAt
+        - available
+      properties:
+        source:
+          type: string
+          enum:
+            - ricardian_http
+        sourceFreshAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+        degradedReason:
+          type: string
+    RicardianDocument:
+      type: object
+      required:
+        - id
+        - requestId
+        - documentRef
+        - hash
+        - rulesVersion
+        - canonicalJson
+        - metadata
+        - createdAt
+      properties:
+        id:
+          type: string
+        requestId:
+          type: string
+        documentRef:
+          type: string
+        hash:
+          type: string
+        rulesVersion:
+          type: string
+        canonicalJson:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    RicardianVerification:
+      type: object
+      required:
+        - status
+        - tradeHashMatchesDocument
+        - settlementHashMatchesTrade
+      properties:
+        status:
+          type: string
+          enum:
+            - verified
+            - mismatch
+            - unavailable
+        tradeHashMatchesDocument:
+          anyOf:
+            - type: boolean
+            - type: 'null'
+        settlementHashMatchesTrade:
+          anyOf:
+            - type: boolean
+            - type: 'null'
+    RicardianDocumentPayload:
+      type: object
+      required:
+        - tradeId
+        - ricardianHash
+        - document
+        - verification
+        - freshness
+      properties:
+        tradeId:
+          type: string
+        ricardianHash:
+          type: string
+        document:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/RicardianDocument'
+        verification:
+          $ref: '#/components/schemas/RicardianVerification'
+        freshness:
+          $ref: '#/components/schemas/RicardianFreshness'
+    RicardianDocumentResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/RicardianDocumentPayload'
+        timestamp:
+          type: string
+          format: date-time

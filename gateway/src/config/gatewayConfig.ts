@@ -70,6 +70,14 @@ export interface GatewayConfig {
   gaslessReceiptTimeoutMs?: number;
   gaslessOutcomeReconciliationIntervalMs?: number;
   gaslessRepeatedFailureAlertThreshold?: number;
+  gaslessCommandLeaseMs?: number;
+  gaslessCommandPollIntervalMs?: number;
+  gaslessCommandRetryInitialMs?: number;
+  gaslessCommandRetryMaxMs?: number;
+  gaslessCommandWaitTimeoutMs?: number;
+  gaslessCommandMaxAttempts?: number;
+  gaslessCommandMaxBatch?: number;
+  gaslessCommandMaxPending?: number;
   gaslessRequireRpcFallback?: boolean;
   oracleBaseUrl?: string;
   oracleServiceApiKey?: string;

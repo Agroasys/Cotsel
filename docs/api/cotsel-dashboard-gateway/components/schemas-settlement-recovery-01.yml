@@ -1,0 +1,101 @@
+components:
+  schemas:
+    GaslessFinancialOutcomeRecoveryResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - requestId
+            - transactionHash
+            - outcomeStatus
+            - resourceType
+            - resourceId
+            - operation
+            - chainId
+            - recovered
+            - rebroadcastAllowed
+          properties:
+            requestId:
+              type: string
+            transactionHash:
+              type: string
+              pattern: '^0x[0-9a-f]{64}$'
+            outcomeStatus:
+              type: string
+              enum:
+                - broadcast_pending
+                - broadcast_unknown
+                - confirmation_pending
+                - confirmed
+                - reverted
+            resourceType:
+              type: string
+              enum: [settlement_handoff, platform_transfer]
+            resourceId:
+              type: string
+            operation:
+              type: string
+            chainId:
+              type: integer
+              minimum: 1
+            recovered:
+              type: boolean
+              const: true
+            rebroadcastAllowed:
+              type: boolean
+              const: false
+        timestamp:
+          type: string
+          format: date-time
+    GaslessDurableCommandRecoveryResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - requestId
+            - commandId
+            - commandStatus
+            - resourceType
+            - resourceId
+            - operation
+            - transactionHash
+            - rebroadcastAllowed
+          properties:
+            requestId:
+              type: string
+            commandId:
+              type: string
+            commandStatus:
+              type: string
+              enum: [pending, leased, outcome_pending]
+            resourceType:
+              type: string
+              enum: [settlement_handoff, platform_transfer]
+            resourceId:
+              type: string
+            operation:
+              type: string
+            transactionHash:
+              type: string
+              pattern: '^0x[0-9a-f]{64}$'
+              nullable: true
+            rebroadcastAllowed:
+              type: boolean
+              const: false
+        timestamp:
+          type: string
+          format: date-time

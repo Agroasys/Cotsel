@@ -27,6 +27,7 @@ type MockRequest = Partial<Request> & {
   apiKeyToken?: string;
   hmacSignature?: string;
   hmacNonce?: string;
+  rawBody?: Buffer;
 };
 
 function createMockResponse(): MockResponse {
@@ -42,11 +43,12 @@ function createSignedRequest(overrides?: {
   signature?: string;
   nonce?: string;
   authorization?: string;
+  rawBody?: string;
 }): MockRequest {
   const body = overrides?.body ?? { tradeId: '1', requestId: 'req-1' };
   const timestamp = overrides?.timestamp ?? Date.now().toString();
   const authHeader = overrides?.authorization ?? 'Bearer test-api-key';
-  const bodyText = JSON.stringify(body);
+  const bodyText = overrides?.rawBody ?? JSON.stringify(body);
   const signature =
     overrides?.signature ?? generateRequestHash(timestamp, bodyText, 'test-hmac-secret');
 
@@ -63,6 +65,7 @@ function createSignedRequest(overrides?: {
   return {
     headers,
     body,
+    rawBody: Buffer.from(bodyText),
     ip: '127.0.0.1',
   };
 }
@@ -131,7 +134,7 @@ describe('oracle hmac middleware', () => {
     expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('Request timestamp too old') }),
+      expect.objectContaining({ message: 'Invalid request authentication' }),
     );
   });
 
@@ -155,7 +158,41 @@ describe('oracle hmac middleware', () => {
     expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Invalid HMAC signature' }),
+      expect.objectContaining({ message: 'Invalid request authentication' }),
     );
+  });
+
+  test('malformed hexadecimal signature fails as authentication, not storage outage', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const req = createSignedRequest({ nonce: 'nonce-malformed', signature: 'z'.repeat(64) });
+    const res = createMockResponse();
+    const next = jest.fn() as NextFunction;
+
+    await hmacMiddleware(req as Request, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.status).not.toHaveBeenCalledWith(503);
+  });
+
+  test('one-byte body change invalidates an otherwise valid signature', async () => {
+    mockConsumeHmacNonce.mockResolvedValue(true);
+    const signedBody = '{"tradeId":"1","requestId":"req-1"}';
+    const req = createSignedRequest({
+      nonce: 'nonce-one-byte',
+      rawBody: signedBody + ' ',
+      signature: generateRequestHash(Date.now().toString(), signedBody, 'test-hmac-secret'),
+    });
+    const timestamp = req.headers['x-timestamp'];
+    req.headers['x-signature'] = generateRequestHash(timestamp, signedBody, 'test-hmac-secret');
+    const res = createMockResponse();
+    const next = jest.fn() as NextFunction;
+
+    await hmacMiddleware(req as Request, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(mockConsumeHmacNonce).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
   });
 });

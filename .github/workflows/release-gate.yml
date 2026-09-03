@@ -91,9 +91,7 @@ jobs:
               - 'treasury/**'
             gateway:
               - 'gateway/**'
-              - 'docs/api/cotsel-dashboard-gateway.openapi.yml'
-              - 'docs/api/cotsel-settlement-provider.openapi.yml'
-              - 'docs/api/fixtures/cotsel-settlement-callback.v1.json'
+              - 'docs/api/**'
               - 'docs/runbooks/dashboard-api-gateway-boundary.md'
               - 'docs/runbooks/dashboard-gateway-operations.md'
             auth:
@@ -230,6 +228,7 @@ jobs:
           run_check repo-typecheck pnpm run typecheck
           run_check source-file-size pnpm run quality:file-size:check
           run_check release-evidence-binding pnpm run release:evidence:check
+          run_check wp2-durability-evidence pnpm run wp2:durability-evidence:check
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1

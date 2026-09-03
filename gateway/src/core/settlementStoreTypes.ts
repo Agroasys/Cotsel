@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import type { CreateGaslessCommandInput, GaslessCommandRecord } from './gaslessCommandStore';
 export const SETTLEMENT_EXECUTION_STATUSES = [
   'pending',
   'accepted',
@@ -110,6 +111,8 @@ export interface SettlementCallbackDeliveryRecord {
   deliveredAt: string | null;
   responseStatus: number | null;
   lastError: string | null;
+  leaseOwner: string | null;
+  leaseExpiresAt: string | null;
   requestId: string;
   createdAt: string;
   updatedAt: string;
@@ -218,25 +221,31 @@ export interface SettlementStore {
   recordExecutionEvent(
     input: PersistSettlementExecutionEventInput,
     callback: SettlementCallbackPlan,
+    command?: CreateGaslessCommandInput,
   ): Promise<{
     handoff: SettlementHandoffRecord;
     event: SettlementExecutionEventRecord;
     callbackDelivery: SettlementCallbackDeliveryRecord;
+    command?: GaslessCommandRecord;
   }>;
   listExecutionEvents(handoffId: string): Promise<SettlementExecutionEventRecord[]>;
   getCallbackDelivery(deliveryId: string): Promise<SettlementCallbackDeliveryRecord | null>;
   getDueCallbackDeliveries(limit: number, now: string): Promise<SettlementCallbackDeliveryRecord[]>;
   markCallbackDelivering(
     deliveryId: string,
+    leaseOwner: string,
     attemptedAt: string,
+    leaseExpiresAt: string,
   ): Promise<SettlementCallbackDeliveryRecord | null>;
   markCallbackDelivered(
     deliveryId: string,
+    leaseOwner: string,
     completedAt: string,
     responseStatus: number,
-  ): Promise<void>;
+  ): Promise<boolean>;
   markCallbackFailed(
     deliveryId: string,
+    leaseOwner: string,
     update: {
       attemptedAt: string;
       responseStatus?: number | null;
@@ -244,7 +253,7 @@ export interface SettlementStore {
       nextAttemptAt: string;
       deadLetter: boolean;
     },
-  ): Promise<void>;
+  ): Promise<boolean>;
   requeueCallbackDelivery(
     deliveryId: string,
     nextAttemptAt: string,

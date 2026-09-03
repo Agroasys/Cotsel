@@ -3,6 +3,8 @@
  */
 import { randomUUID } from 'crypto';
 import { GatewayError } from '../errors';
+import type { GaslessCommandStore } from './gaslessCommandStore';
+import { createInMemoryGaslessCommandState } from './inMemoryGaslessCommandStore';
 import { validateExecutionTransition } from './settlementStateMachine';
 import type {
   SettlementCallbackDeliveryRecord,
@@ -14,7 +16,7 @@ import type {
 
 export function createInMemorySettlementStore(
   initialHandoffs: SettlementHandoffRecord[] = [],
-): SettlementStore {
+): SettlementStore & GaslessCommandStore {
   const handoffs = new Map(
     initialHandoffs.map((record) => [record.handoffId, structuredClone(record)]),
   );
@@ -27,6 +29,7 @@ export function createInMemorySettlementStore(
   const events = new Map<string, SettlementExecutionEventRecord[]>();
   const eventDedupeIndex = new Map<string, string>();
   const deliveries = new Map<string, SettlementCallbackDeliveryRecord>();
+  const commandState = createInMemoryGaslessCommandState();
 
   const byTrade = (tradeId: string) =>
     [...handoffs.values()]
@@ -34,6 +37,7 @@ export function createInMemorySettlementStore(
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
 
   return {
+    ...commandState.store,
     async createHandoff(input) {
       const key = `${input.platformId}:${input.platformHandoffId}`;
       const existingId = platformIndex.get(key);
@@ -116,13 +120,17 @@ export function createInMemorySettlementStore(
       };
     },
 
-    async recordExecutionEvent(input, callback) {
+    async recordExecutionEvent(input, callback, command) {
       const handoff = handoffs.get(input.handoffId);
       if (!handoff) {
         throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', {
           handoffId: input.handoffId,
         });
       }
+      if (command && (input.eventType !== 'accepted' || input.executionStatus !== 'accepted')) {
+        throw new Error('Durable gasless commands require an accepted execution event');
+      }
+      const preparedCommand = commandState.prepare(command);
 
       const dedupeIndexKey = `${input.handoffId}:${input.dedupeKey}`;
       const existingEventId = eventDedupeIndex.get(dedupeIndexKey);
@@ -157,6 +165,8 @@ export function createInMemorySettlementStore(
             deliveredAt: null,
             responseStatus: null,
             lastError: null,
+            leaseOwner: null,
+            leaseExpiresAt: null,
             requestId: callback.requestId,
             createdAt: now,
             updatedAt: now,
@@ -171,10 +181,12 @@ export function createInMemorySettlementStore(
           }
         }
 
+        commandState.commit(preparedCommand);
         return {
           handoff: structuredClone(handoffs.get(input.handoffId)!),
           event: structuredClone(event),
           callbackDelivery: structuredClone(callbackDelivery),
+          command: preparedCommand.record ? structuredClone(preparedCommand.record) : undefined,
         };
       }
 
@@ -223,6 +235,8 @@ export function createInMemorySettlementStore(
         deliveredAt: null,
         responseStatus: null,
         lastError: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
         requestId: callback.requestId,
         createdAt: now,
         updatedAt: now,
@@ -238,11 +252,13 @@ export function createInMemorySettlementStore(
       eventDedupeIndex.set(dedupeIndexKey, event.eventId);
       deliveries.set(callbackDelivery.deliveryId, callbackDelivery);
       handoffs.set(input.handoffId, finalHandoff);
+      commandState.commit(preparedCommand);
 
       return {
         handoff: structuredClone(finalHandoff),
         event: structuredClone(event),
         callbackDelivery: structuredClone(callbackDelivery),
+        command: preparedCommand.record ? structuredClone(preparedCommand.record) : undefined,
       };
     },
 
@@ -254,10 +270,17 @@ export function createInMemorySettlementStore(
       return [...deliveries.values()]
         .filter(
           (delivery) =>
-            (delivery.status === 'pending' || delivery.status === 'failed') &&
-            delivery.nextAttemptAt <= now,
+            ((delivery.status === 'pending' || delivery.status === 'failed') &&
+              delivery.nextAttemptAt <= now) ||
+            (delivery.status === 'delivering' &&
+              delivery.leaseExpiresAt !== null &&
+              delivery.leaseExpiresAt <= now),
         )
-        .sort((left, right) => left.nextAttemptAt.localeCompare(right.nextAttemptAt))
+        .sort((left, right) =>
+          (left.leaseExpiresAt ?? left.nextAttemptAt).localeCompare(
+            right.leaseExpiresAt ?? right.nextAttemptAt,
+          ),
+        )
         .slice(0, limit)
         .map((delivery) => structuredClone(delivery));
     },
@@ -267,9 +290,16 @@ export function createInMemorySettlementStore(
       return delivery ? structuredClone(delivery) : null;
     },
 
-    async markCallbackDelivering(deliveryId, attemptedAt) {
+    async markCallbackDelivering(deliveryId, leaseOwner, attemptedAt, leaseExpiresAt) {
       const delivery = deliveries.get(deliveryId);
-      if (!delivery || (delivery.status !== 'pending' && delivery.status !== 'failed')) {
+      const ready =
+        delivery &&
+        (((delivery.status === 'pending' || delivery.status === 'failed') &&
+          delivery.nextAttemptAt <= attemptedAt) ||
+          (delivery.status === 'delivering' &&
+            delivery.leaseExpiresAt !== null &&
+            delivery.leaseExpiresAt <= attemptedAt));
+      if (!delivery || !ready) {
         return null;
       }
 
@@ -278,16 +308,18 @@ export function createInMemorySettlementStore(
         status: 'delivering' as const,
         attemptCount: delivery.attemptCount + 1,
         lastAttemptedAt: attemptedAt,
+        leaseOwner,
+        leaseExpiresAt,
         updatedAt: new Date().toISOString(),
       };
       deliveries.set(deliveryId, next);
       return structuredClone(next);
     },
 
-    async markCallbackDelivered(deliveryId, completedAt, responseStatus) {
+    async markCallbackDelivered(deliveryId, leaseOwner, completedAt, responseStatus) {
       const delivery = deliveries.get(deliveryId);
-      if (!delivery) {
-        return;
+      if (!delivery || delivery.status !== 'delivering' || delivery.leaseOwner !== leaseOwner) {
+        return false;
       }
 
       deliveries.set(deliveryId, {
@@ -295,6 +327,8 @@ export function createInMemorySettlementStore(
         status: 'delivered',
         deliveredAt: completedAt,
         responseStatus,
+        leaseOwner: null,
+        leaseExpiresAt: null,
         updatedAt: new Date().toISOString(),
       });
       const handoff = handoffs.get(delivery.handoffId);
@@ -306,12 +340,13 @@ export function createInMemorySettlementStore(
           updatedAt: new Date().toISOString(),
         });
       }
+      return true;
     },
 
-    async markCallbackFailed(deliveryId, update) {
+    async markCallbackFailed(deliveryId, leaseOwner, update) {
       const delivery = deliveries.get(deliveryId);
-      if (!delivery) {
-        return;
+      if (!delivery || delivery.status !== 'delivering' || delivery.leaseOwner !== leaseOwner) {
+        return false;
       }
 
       deliveries.set(deliveryId, {
@@ -320,6 +355,8 @@ export function createInMemorySettlementStore(
         responseStatus: update.responseStatus ?? null,
         lastError: update.errorMessage,
         nextAttemptAt: update.nextAttemptAt,
+        leaseOwner: null,
+        leaseExpiresAt: null,
         updatedAt: new Date().toISOString(),
       });
       const handoff = handoffs.get(delivery.handoffId);
@@ -330,6 +367,7 @@ export function createInMemorySettlementStore(
           updatedAt: new Date().toISOString(),
         });
       }
+      return true;
     },
 
     async requeueCallbackDelivery(deliveryId, nextAttemptAt) {
@@ -342,6 +380,8 @@ export function createInMemorySettlementStore(
         ...delivery,
         status: 'pending' as const,
         nextAttemptAt,
+        leaseOwner: null,
+        leaseExpiresAt: null,
         updatedAt: new Date().toISOString(),
       };
       deliveries.set(deliveryId, next);

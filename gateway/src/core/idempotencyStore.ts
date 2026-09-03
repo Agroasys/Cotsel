@@ -38,10 +38,23 @@ export interface IdempotencyFinancialOutcome {
     | 'reverted';
 }
 
+export interface IdempotencyGaslessCommand {
+  requestId: string;
+  commandId: string;
+  resourceType: 'settlement_handoff' | 'platform_transfer';
+  resourceId: string;
+  operation: string;
+  status: 'pending' | 'leased' | 'outcome_pending' | 'completed' | 'failed' | 'dead_letter';
+  transactionHash: string | null;
+  result: unknown | null;
+  lastErrorCode: string | null;
+}
+
 export interface IdempotencyStore {
   readonly leaseDurationMs: number;
   get(scope: IdempotencyScope): Promise<IdempotencyRecord | null>;
   getFinancialOutcome(requestId: string): Promise<IdempotencyFinancialOutcome | null>;
+  getGaslessCommand(requestId: string): Promise<IdempotencyGaslessCommand | null>;
   createPending(
     entry: IdempotencyScope & {
       requestMethod: string;
@@ -96,10 +109,6 @@ function mapRow(row: IdempotencyRow): IdempotencyRecord {
     leaseExpiresAt: row.leaseExpiresAt ? row.leaseExpiresAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };
-}
-
-function toScopedKey(scope: IdempotencyScope): string {
-  return `${scope.actorId}\u0000${scope.endpoint}\u0000${scope.idempotencyKey}`;
 }
 
 export function buildRequestFingerprint(method: string, path: string, rawBody?: Buffer): string {
@@ -182,6 +191,25 @@ export function createPostgresIdempotencyStore(
       return row ? { ...row, chainId: Number(row.chainId) } : null;
     },
 
+    async getGaslessCommand(requestId) {
+      const result = await pool.query<IdempotencyGaslessCommand>(
+        `SELECT
+           application_request_id AS "requestId",
+           command_id AS "commandId",
+           resource_type AS "resourceType",
+           resource_id AS "resourceId",
+           operation,
+           status,
+           transaction_hash AS "transactionHash",
+           result,
+           last_error_code AS "lastErrorCode"
+         FROM gasless_commands
+         WHERE application_request_id = $1`,
+        [requestId],
+      );
+      return result.rows[0] ?? null;
+    },
+
     async createPending(entry) {
       const insertResult = await pool.query<IdempotencyRow>(
         `INSERT INTO idempotency_keys (
@@ -246,6 +274,11 @@ export function createPostgresIdempotencyStore(
              SELECT 1
              FROM gasless_transaction_outcomes AS outcome
              WHERE outcome.application_request_id = idempotency.request_id
+           )
+           AND NOT EXISTS (
+             SELECT 1
+             FROM gasless_commands AS command
+             WHERE command.application_request_id = idempotency.request_id
            )
          RETURNING
            idempotency_key AS "idempotencyKey",
@@ -331,6 +364,11 @@ export function createPostgresIdempotencyStore(
              SELECT 1
              FROM gasless_transaction_outcomes AS outcome
              WHERE outcome.application_request_id = idempotency.request_id
+           )
+           AND NOT EXISTS (
+             SELECT 1
+             FROM gasless_commands AS command
+             WHERE command.application_request_id = idempotency.request_id
            )`,
         [scope.actorId, scope.endpoint, scope.idempotencyKey, leaseOwnerRequestId],
       );
@@ -364,119 +402,4 @@ export function createPostgresIdempotencyStore(
   };
 }
 
-export function createInMemoryIdempotencyStore(leaseDurationMs = 300_000): IdempotencyStore {
-  const store = new Map<string, IdempotencyRecord>();
-
-  return {
-    leaseDurationMs,
-    async get(scope) {
-      return store.get(toScopedKey(scope)) ?? null;
-    },
-
-    async getFinancialOutcome() {
-      return null;
-    },
-
-    async createPending(entry) {
-      const scopedKey = toScopedKey(entry);
-      const existing = store.get(scopedKey);
-      if (existing) {
-        if (
-          !existing.completedAt &&
-          existing.leaseExpiresAt &&
-          Date.parse(existing.leaseExpiresAt) <= Date.now() &&
-          existing.requestMethod === entry.requestMethod &&
-          existing.requestPath === entry.requestPath &&
-          existing.requestFingerprint === entry.requestFingerprint
-        ) {
-          const reclaimed = {
-            ...existing,
-            requestId: entry.requestId,
-            leaseExpiresAt: new Date(Date.now() + leaseDurationMs).toISOString(),
-          };
-          store.set(scopedKey, reclaimed);
-          return { record: reclaimed, created: true };
-        }
-        return {
-          record: existing,
-          created: false,
-        };
-      }
-
-      const record: IdempotencyRecord = {
-        idempotencyKey: entry.idempotencyKey,
-        actorId: entry.actorId,
-        endpoint: entry.endpoint,
-        requestMethod: entry.requestMethod,
-        requestPath: entry.requestPath,
-        requestFingerprint: entry.requestFingerprint,
-        requestId: entry.requestId,
-        responseStatus: null,
-        responseHeaders: {},
-        responseBody: null,
-        completedAt: null,
-        leaseExpiresAt: new Date(Date.now() + leaseDurationMs).toISOString(),
-        createdAt: new Date().toISOString(),
-      };
-
-      store.set(scopedKey, record);
-      return {
-        record,
-        created: true,
-      };
-    },
-
-    async complete(scope, response, leaseOwnerRequestId) {
-      const scopedKey = toScopedKey(scope);
-      const existing = store.get(scopedKey);
-      if (!existing) {
-        throw new Error(`Missing in-memory idempotency record for ${scope.idempotencyKey}`);
-      }
-      if (existing.requestId !== leaseOwnerRequestId || existing.completedAt) {
-        throw new Error(`Idempotency lease ownership was lost for ${scope.idempotencyKey}`);
-      }
-
-      store.set(scopedKey, {
-        ...existing,
-        responseStatus: response.responseStatus,
-        responseHeaders: response.responseHeaders,
-        responseBody: response.responseBody,
-        completedAt: new Date().toISOString(),
-        leaseExpiresAt: null,
-      });
-    },
-
-    async releasePending(scope, leaseOwnerRequestId) {
-      const scopedKey = toScopedKey(scope);
-      const existing = store.get(scopedKey);
-      if (!existing || existing.completedAt || existing.requestId !== leaseOwnerRequestId) {
-        return;
-      }
-
-      store.delete(scopedKey);
-    },
-
-    async renewLease(scope, leaseOwnerRequestId) {
-      const scopedKey = toScopedKey(scope);
-      const existing = store.get(scopedKey);
-      if (!existing || existing.completedAt || existing.requestId !== leaseOwnerRequestId) {
-        return false;
-      }
-      store.set(scopedKey, {
-        ...existing,
-        leaseExpiresAt: new Date(Date.now() + leaseDurationMs).toISOString(),
-      });
-      return true;
-    },
-
-    async markReplay(scope) {
-      const scopedKey = toScopedKey(scope);
-      const existing = store.get(scopedKey);
-      if (!existing) {
-        return;
-      }
-
-      store.set(scopedKey, existing);
-    },
-  };
-}
+export { createInMemoryIdempotencyStore } from './inMemoryIdempotencyStore';

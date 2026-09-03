@@ -1,0 +1,82 @@
+paths:
+  /operations/summary:
+    get:
+      tags:
+        - Operations
+      summary: Service health and incident summary snapshot
+      description: |
+        Authoritative operations read surface for Cotsel-Dash Operations pages.
+
+        The gateway probes service dependencies and returns deterministic service states:
+        - `healthy`: service probe succeeded within latency threshold
+        - `degraded`: probe succeeded above latency threshold, or latest probe failed while recent success is still fresh
+        - `unavailable`: probe failed and no recent successful baseline exists, or the service is not wired in gateway config
+        - `stale`: latest probe failed and last successful baseline is older than `staleAfterMs`
+
+        Incident summary is gateway-derived from non-healthy services and includes source and freshness timestamps for UI trust indicators.
+      operationId: getOperationsSummary
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Operations snapshot with service health and incident summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsSummaryResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /operations:
+    get:
+      tags:
+        - Operations
+      summary: Service health and incident summary snapshot
+      description: |
+        Canonical alias for `/operations/summary`.
+
+        This route exists so operator-facing capabilities and dashboard route checks can use a
+        stable `/operations` surface while preserving the same deterministic operations snapshot
+        contract.
+      operationId: getOperations
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Operations snapshot with service health and incident summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsSummaryResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /operations/gasless-relayer/readiness:
+    get:
+      tags:
+        - Operations
+      summary: Gasless relayer readiness and risk-control posture
+      description: |
+        Operator read surface for the Cotsel gasless relayer. It exposes whether sponsored
+        settlement broadcasts are enabled or paused, the signer custody mode, active chain and
+        contract allowlist, gas-spend caps, queue pressure, and alert-level controls used by
+        finance and operations before enabling user-facing gas sponsorship.
+      operationId: getGaslessRelayerReadiness
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Gasless relayer readiness snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GaslessRelayerReadinessResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'

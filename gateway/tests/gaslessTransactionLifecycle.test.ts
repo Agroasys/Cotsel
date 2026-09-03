@@ -7,6 +7,7 @@ import {
   broadcastPersistedGaslessTransaction,
   projectPersistedGaslessTransaction,
 } from '../src/core/gaslessTransactionLifecycle';
+import { Logger } from '../src/logging/logger';
 
 const wallet = new Wallet('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
 
@@ -42,11 +43,14 @@ const context = {
 };
 
 describe('gasless signed transaction persistence boundary', () => {
+  afterEach(() => jest.restoreAllMocks());
+
   test('derives and persists canonical raw-signer identity before one broadcast', async () => {
     const signed = await signedTransaction();
     const parsed = Transaction.from(signed);
     const recorder = createRecorder();
     const broadcast = jest.fn(async () => ({ hash: parsed.hash }) as TransactionResponse);
+    const log = jest.spyOn(Logger, 'info').mockImplementation(() => undefined);
 
     const response = await broadcastPersistedGaslessTransaction(
       signed,
@@ -73,6 +77,22 @@ describe('gasless signed transaction persistence boundary', () => {
     );
     expect(broadcast).toHaveBeenCalledTimes(1);
     expect(recorder.markConfirmationPending).toHaveBeenCalledWith(parsed.hash);
+    expect(log).toHaveBeenCalledWith(
+      'Gasless transaction identity persisted before broadcast',
+      expect.objectContaining({
+        eventType: 'gateway.gasless_transaction.identity_persisted',
+        transactionHash: parsed.hash,
+      }),
+    );
+    expect(log).toHaveBeenCalledWith(
+      'Gasless provider returned a broadcast response',
+      expect.objectContaining({ eventType: 'gateway.gasless_transaction.broadcast_response' }),
+    );
+    expect(log).toHaveBeenCalledWith(
+      'Gasless transaction awaits confirmation',
+      expect.objectContaining({ eventType: 'gateway.gasless_transaction.confirmation_pending' }),
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain(signed);
   });
 
   test('fails closed without any broadcast when identity persistence fails', async () => {

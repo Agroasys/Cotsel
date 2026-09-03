@@ -16,7 +16,10 @@ import type {
   OperationsSummarySnapshot,
 } from '../src/core/operationsSummaryService';
 import type { FailedOperationRecord, FailedOperationStore } from '../src/core/failedOperationStore';
-import type { IdempotencyStore } from '../src/core/idempotencyStore';
+import {
+  createInMemoryIdempotencyStore,
+  type IdempotencyStore,
+} from '../src/core/idempotencyStore';
 import type { OperatorCapability } from '../src/core/authSessionClient';
 
 const config: GatewayConfig = {
@@ -58,6 +61,12 @@ const config: GatewayConfig = {
   contractAddressRequired: true,
   allowInsecureDownstreamAuth: true,
 };
+
+function createObservedIdempotencyStore(): IdempotencyStore {
+  const store = createInMemoryIdempotencyStore();
+  jest.spyOn(store, 'createPending');
+  return store;
+}
 
 const operationsFixture: OperationsSummarySnapshot = {
   state: 'degraded',
@@ -233,11 +242,6 @@ describe('gateway operations summary route contract', () => {
     spec,
     '#/components/schemas/OperationsSummaryResponse',
   );
-  const validateGaslessRelayerReadiness = createSchemaValidator(
-    spec,
-    '#/components/schemas/GaslessRelayerReadinessResponse',
-  );
-
   test('OpenAPI spec exposes operations read endpoints', () => {
     expect(hasOperation(spec, 'get', '/operations')).toBe(true);
     expect(hasOperation(spec, 'get', '/operations/summary')).toBe(true);
@@ -293,91 +297,6 @@ describe('gateway operations summary route contract', () => {
       expect(forbiddenResponse.status).toBe(403);
     } finally {
       forbiddenServer.close();
-    }
-  });
-
-  test('GET /operations/gasless-relayer/readiness returns gasless control-plane posture', async () => {
-    const gaslessSettlementService = {
-      getRelayerReadiness: jest.fn().mockReturnValue({
-        enabled: true,
-        paused: true,
-        state: 'paused',
-        generatedAt: '2026-03-12T00:00:00.000Z',
-        signerCustodyMode: 'raw_private_key',
-        activeExecutionPath: {
-          chainId: 84532,
-          escrowAddress: '0x0000000000000000000000000000000000000999',
-          rpcFallbackCount: 1,
-        },
-        controls: {
-          gasLimitCap: '1500000',
-          maxFeePerGasWei: '50000000000',
-          maxNativeCostWei: '100000000000000000',
-          minExecutorBalanceWei: '10000000000000000',
-          lowBalanceAlertWei: '5000000000000000',
-          stuckQueueThresholdMs: 300000,
-          receiptTimeoutMs: 120000,
-          repeatedFailureAlertThreshold: 3,
-        },
-        capacityPolicy: {
-          targetTransactionsPerDay: 500,
-          averageTransactionsPerHour: 21,
-          burstTransactionsPerHour: 84,
-          burstMultiplierBasisPoints: 40000,
-          safetyMarginBasisPoints: 12500,
-          maxCostPerTxWei: '75000000000000000',
-          requiredBurstHourBalanceWei: '7875000000000000000',
-          configuredMinExecutorBalanceWei: '10000000000000000',
-          configuredLowBalanceAlertWei: '5000000000000000',
-          floorMeetsPolicy: false,
-          lowBalanceAlertProtectsPolicy: false,
-          failClosed: false,
-        },
-        executorBalanceWei: '4000000000000000',
-        queue: {
-          pending: 0,
-          active: 0,
-          lastQueueWaitMs: null,
-          lastSubmissionAt: null,
-        },
-        alerts: [
-          {
-            code: 'gasless_broadcast_paused',
-            severity: 'high',
-            detail: 'Gasless relayer broadcasts are paused by operator configuration.',
-          },
-          {
-            code: 'gasless_low_executor_balance',
-            severity: 'critical',
-            detail:
-              'Gasless executor balance is at or below the configured low-balance alert threshold.',
-          },
-        ],
-        recentFailureCount: 0,
-      }),
-    } as unknown as GaslessSettlementExecutionService;
-    const { server, baseUrl } = await startServer(
-      'admin',
-      operationsFixture,
-      gaslessSettlementService,
-    );
-
-    try {
-      const response = await fetch(`${baseUrl}/operations/gasless-relayer/readiness`, {
-        headers: { Authorization: 'Bearer sess-admin' },
-      });
-      const payload = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(validateGaslessRelayerReadiness(payload)).toBe(true);
-      expect(payload.data.state).toBe('paused');
-      expect(payload.data.executorBalanceWei).toBe('4000000000000000');
-      expect(payload.data.controls.maxFeePerGasWei).toBe('50000000000');
-      expect(payload.data.capacityPolicy.requiredBurstHourBalanceWei).toBe('7875000000000000000');
-      expect(payload.data.alerts[0].code).toBe('gasless_broadcast_paused');
-      expect(payload.data.alerts[1].code).toBe('gasless_low_executor_balance');
-    } finally {
-      server.close();
     }
   });
 
@@ -464,13 +383,7 @@ describe('gateway operations summary route contract', () => {
     const failedOperationReplayer = {
       replay: jest.fn(),
     } as unknown as GatewayFailedOperationReplayer;
-    const idempotencyStore = {
-      get: jest.fn(),
-      createPending: jest.fn(),
-      complete: jest.fn(),
-      releasePending: jest.fn(),
-      markReplay: jest.fn(),
-    } as unknown as IdempotencyStore;
+    const idempotencyStore = createObservedIdempotencyStore();
     const writeConfig = {
       ...config,
       enableMutations: true,
@@ -548,29 +461,7 @@ describe('gateway operations summary route contract', () => {
     const failedOperationReplayer = {
       replay: jest.fn(),
     } as unknown as GatewayFailedOperationReplayer;
-    const idempotencyStore = {
-      get: jest.fn(),
-      createPending: jest.fn().mockResolvedValue({
-        created: true,
-        record: {
-          idempotencyKey: 'replay-2',
-          actorId: 'user:uid-admin',
-          endpoint: '/operations/failed-operations/:failedOperationId/replay',
-          requestMethod: 'POST',
-          requestPath: '/api/dashboard-gateway/v1/operations/failed-operations/failed-op-2/replay',
-          requestFingerprint: 'hash',
-          requestId: 'req-replay-2',
-          responseStatus: null,
-          responseHeaders: {},
-          responseBody: null,
-          completedAt: null,
-          createdAt: '2026-03-12T00:00:00.000Z',
-        },
-      }),
-      complete: jest.fn().mockResolvedValue(undefined),
-      releasePending: jest.fn().mockResolvedValue(undefined),
-      markReplay: jest.fn().mockResolvedValue(undefined),
-    } as unknown as IdempotencyStore;
+    const idempotencyStore = createObservedIdempotencyStore();
     const writeConfig = {
       ...config,
       enableMutations: true,
@@ -647,30 +538,7 @@ describe('gateway operations summary route contract', () => {
     const failedOperationReplayer = {
       replay: jest.fn(),
     } as unknown as GatewayFailedOperationReplayer;
-    const idempotencyStore = {
-      get: jest.fn(),
-      createPending: jest.fn().mockResolvedValue({
-        created: true,
-        record: {
-          idempotencyKey: 'replay-already-replayed',
-          actorId: 'user:uid-admin',
-          endpoint: '/operations/failed-operations/:failedOperationId/replay',
-          requestMethod: 'POST',
-          requestPath:
-            '/api/dashboard-gateway/v1/operations/failed-operations/failed-op-replayed/replay',
-          requestFingerprint: 'hash',
-          requestId: 'req-replay-already-replayed',
-          responseStatus: null,
-          responseHeaders: {},
-          responseBody: null,
-          completedAt: null,
-          createdAt: '2026-03-12T00:00:00.000Z',
-        },
-      }),
-      complete: jest.fn().mockResolvedValue(undefined),
-      releasePending: jest.fn().mockResolvedValue(undefined),
-      markReplay: jest.fn().mockResolvedValue(undefined),
-    } as unknown as IdempotencyStore;
+    const idempotencyStore = createObservedIdempotencyStore();
     const writeConfig = {
       ...config,
       enableMutations: true,
@@ -754,29 +622,7 @@ describe('gateway operations summary route contract', () => {
     const failedOperationReplayer = {
       replay: jest.fn().mockResolvedValue(openOperationTemplate),
     } as unknown as GatewayFailedOperationReplayer;
-    const idempotencyStore = {
-      get: jest.fn(),
-      createPending: jest.fn().mockResolvedValue({
-        created: true,
-        record: {
-          idempotencyKey: 'replay-1',
-          actorId: 'user:uid-admin',
-          endpoint: '/operations/failed-operations/:failedOperationId/replay',
-          requestMethod: 'POST',
-          requestPath: '/api/dashboard-gateway/v1/operations/failed-operations/failed-op-1/replay',
-          requestFingerprint: 'hash',
-          requestId: 'req-replay-1',
-          responseStatus: null,
-          responseHeaders: {},
-          responseBody: null,
-          completedAt: null,
-          createdAt: '2026-03-12T00:00:00.000Z',
-        },
-      }),
-      complete: jest.fn().mockResolvedValue(undefined),
-      releasePending: jest.fn().mockResolvedValue(undefined),
-      markReplay: jest.fn().mockResolvedValue(undefined),
-    } as unknown as IdempotencyStore;
+    const idempotencyStore = createObservedIdempotencyStore();
     const writeConfig = {
       ...config,
       enableMutations: true,

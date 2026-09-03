@@ -170,6 +170,9 @@ export interface GaslessRelayerReadinessSnapshot {
   queue: {
     pending: number;
     active: number;
+    awaitingOutcome: number;
+    deadLetter: number;
+    expiredLeases: number;
     lastQueueWaitMs: number | null;
     lastSubmissionAt: string | null;
   };

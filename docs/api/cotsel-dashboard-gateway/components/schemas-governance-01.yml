@@ -1,0 +1,273 @@
+components:
+  schemas:
+    GovernanceActionCategory:
+      type: string
+      enum:
+        - pause
+        - unpause
+        - claims_pause
+        - claims_unpause
+        - treasury_sweep
+        - treasury_payout_receiver_update
+        - oracle_disable_emergency
+        - oracle_update
+    GovernanceActionStatus:
+      type: string
+      enum:
+        - requested
+        - submitted
+        - prepared
+        - broadcast_pending_verification
+        - broadcast
+        - pending_approvals
+        - approved
+        - executed
+        - cancelled
+        - expired
+        - stale
+        - failed
+    GovernanceVerificationState:
+      type: string
+      enum:
+        - not_required
+        - not_started
+        - pending
+        - verified
+        - failed
+    GovernanceMonitoringState:
+      type: string
+      enum:
+        - not_required
+        - not_started
+        - pending_verification
+        - pending_confirmation
+        - confirmed
+        - finalized
+        - reverted
+        - stale
+    GovernanceStatus:
+      type: object
+      required:
+        - paused
+        - claimsPaused
+        - oracleActive
+        - oracleAddress
+        - treasuryAddress
+        - treasuryPayoutAddress
+        - governanceApprovalsRequired
+        - governanceTimelockSeconds
+      properties:
+        paused:
+          type: boolean
+        claimsPaused:
+          type: boolean
+        oracleActive:
+          type: boolean
+        oracleAddress:
+          type: string
+        treasuryAddress:
+          type: string
+        treasuryPayoutAddress:
+          type: string
+        governanceApprovalsRequired:
+          type: integer
+          minimum: 1
+        governanceTimelockSeconds:
+          type: integer
+          minimum: 0
+          description: Derived from on-chain `governanceTimelock`.
+        requiredAdminCount:
+          type: integer
+          minimum: 1
+          description: Current required admin quorum for unpause flow.
+        hasActiveUnpauseProposal:
+          type: boolean
+        activeUnpauseApprovals:
+          type: integer
+          minimum: 0
+        activeOracleProposalIds:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+        activeTreasuryPayoutReceiverProposalIds:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+    GovernanceStatusResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/GovernanceStatus'
+        timestamp:
+          type: string
+          format: date-time
+    GovernanceAction:
+      type: object
+      required:
+        - actionId
+        - intentKey
+        - category
+        - status
+        - contractMethod
+        - audit
+        - createdAt
+      properties:
+        actionId:
+          type: string
+        intentKey:
+          type: string
+        proposalId:
+          type: integer
+          minimum: 0
+          nullable: true
+        category:
+          $ref: '#/components/schemas/GovernanceActionCategory'
+        status:
+          $ref: '#/components/schemas/GovernanceActionStatus'
+        contractMethod:
+          type: string
+        txHash:
+          type: string
+          nullable: true
+        blockNumber:
+          type: integer
+          nullable: true
+        tradeId:
+          type: string
+          nullable: true
+        chainId:
+          type: string
+          nullable: true
+        targetAddress:
+          type: string
+          nullable: true
+        broadcastAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        executedAt:
+          type: string
+          format: date-time
+          nullable: true
+        signing:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/GovernancePreparedSigningPayload'
+        finalSignerWallet:
+          type: string
+          nullable: true
+        verificationState:
+          $ref: '#/components/schemas/GovernanceVerificationState'
+        verificationError:
+          type: string
+          nullable: true
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+        monitoringState:
+          $ref: '#/components/schemas/GovernanceMonitoringState'
+        audit:
+          $ref: '#/components/schemas/MutationAuditRecord'
+    GovernanceActionResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/GovernanceAction'
+        timestamp:
+          type: string
+          format: date-time
+    GovernanceActionListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/GovernanceAction'
+            nextCursor:
+              type: string
+              nullable: true
+        timestamp:
+          type: string
+          format: date-time
+    GovernancePreparedTransactionRequest:
+      type: object
+      required:
+        - chainId
+        - to
+        - data
+        - value
+      properties:
+        chainId:
+          type: integer
+        to:
+          type: string
+        data:
+          type: string
+        value:
+          type: string
+    GovernancePreparedSigningPayload:
+      type: object
+      required:
+        - chainId
+        - contractAddress
+        - contractMethod
+        - args
+        - txRequest
+        - signerWallet
+        - preparedPayloadHash
+      properties:
+        chainId:
+          type: integer
+        contractAddress:
+          type: string
+        contractMethod:
+          type: string
+        args:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - type: integer
+              - type: boolean
+        txRequest:
+          $ref: '#/components/schemas/GovernancePreparedTransactionRequest'
+        signerWallet:
+          type: string
+        preparedPayloadHash:
+          type: string

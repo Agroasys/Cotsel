@@ -88,6 +88,48 @@ CREATE TABLE IF NOT EXISTS managed_signer_validation_audit (
 CREATE INDEX IF NOT EXISTS idx_managed_signer_validation_audit_created_at
 ON managed_signer_validation_audit(created_at DESC);
 
+CREATE TABLE IF NOT EXISTS oracle_transaction_outcomes (
+    transaction_hash VARCHAR(66) PRIMARY KEY
+        CHECK (transaction_hash ~ '^0x[0-9a-f]{64}$'),
+    trigger_idempotency_key VARCHAR(255) NOT NULL UNIQUE
+        REFERENCES oracle_triggers(idempotency_key),
+    chain_id INTEGER NOT NULL CHECK (chain_id > 0),
+    signer_address VARCHAR(42) NOT NULL
+        CHECK (signer_address ~ '^0x[0-9A-Fa-f]{40}$'),
+    transaction_nonce BIGINT NOT NULL CHECK (transaction_nonce >= 0),
+    transaction_type SMALLINT NOT NULL CHECK (transaction_type IN (0, 2)),
+    destination_address VARCHAR(42) NOT NULL
+        CHECK (destination_address ~ '^0x[0-9A-Fa-f]{40}$'),
+    value_wei NUMERIC(78, 0) NOT NULL CHECK (value_wei >= 0),
+    gas_limit NUMERIC(78, 0) NOT NULL CHECK (gas_limit > 0),
+    max_fee_per_gas_wei NUMERIC(78, 0),
+    max_priority_fee_per_gas_wei NUMERIC(78, 0),
+    gas_price_wei NUMERIC(78, 0),
+    calldata_hash VARCHAR(66) NOT NULL
+        CHECK (calldata_hash ~ '^0x[0-9a-f]{64}$'),
+    intent_hash VARCHAR(66) NOT NULL
+        CHECK (intent_hash ~ '^0x[0-9a-f]{64}$'),
+    outcome_status VARCHAR(32) NOT NULL
+        CHECK (outcome_status IN (
+            'broadcast_pending',
+            'broadcast_unknown',
+            'confirmation_pending',
+            'reverted'
+        )),
+    failure_code VARCHAR(64),
+    block_number BIGINT CHECK (block_number IS NULL OR block_number >= 0),
+    prepared_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    broadcast_observed_at TIMESTAMP,
+    recovery_attempted_at TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+DROP INDEX IF EXISTS idx_oracle_transaction_outcomes_recovery;
+
+CREATE INDEX IF NOT EXISTS idx_oracle_transaction_outcomes_recovery_v2
+ON oracle_transaction_outcomes(outcome_status, updated_at)
+WHERE outcome_status IN ('broadcast_pending', 'broadcast_unknown', 'confirmation_pending');
+
 
 DO $$
 BEGIN
@@ -104,6 +146,8 @@ BEGIN
         CHECK (status IN (
             'PENDING',
             'EXECUTING',
+            'BROADCAST_PENDING',
+            'BROADCAST_UNKNOWN',
             'SUBMITTED',
             'CONFIRMED',
             'FAILED',
@@ -140,7 +184,14 @@ END $$;
 DROP INDEX IF EXISTS idx_active_action_key_unique;
 CREATE UNIQUE INDEX idx_active_action_key_unique
     ON oracle_triggers(action_key)
-    WHERE status IN ('PENDING', 'EXECUTING', 'SUBMITTED', 'PENDING_APPROVAL');
+    WHERE status IN (
+        'PENDING',
+        'EXECUTING',
+        'BROADCAST_PENDING',
+        'BROADCAST_UNKNOWN',
+        'SUBMITTED',
+        'PENDING_APPROVAL'
+    );
 
 CREATE OR REPLACE FUNCTION current_app_service_name()
 RETURNS TEXT
@@ -163,6 +214,7 @@ BEGIN
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE oracle_triggers TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE oracle_hmac_nonces TO %I', runtime_user);
         EXECUTE format('GRANT SELECT, INSERT ON TABLE managed_signer_validation_audit TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE ON TABLE oracle_transaction_outcomes TO %I', runtime_user);
         EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE oracle_triggers_id_seq TO %I', runtime_user);
     END IF;
 END $$;
@@ -187,6 +239,14 @@ ALTER TABLE managed_signer_validation_audit ENABLE ROW LEVEL SECURITY;
 ALTER TABLE managed_signer_validation_audit FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS managed_signer_validation_audit_service_isolation ON managed_signer_validation_audit;
 CREATE POLICY managed_signer_validation_audit_service_isolation ON managed_signer_validation_audit
+    FOR ALL
+    USING (current_app_service_name() = 'oracle')
+    WITH CHECK (current_app_service_name() = 'oracle');
+
+ALTER TABLE oracle_transaction_outcomes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE oracle_transaction_outcomes FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS oracle_transaction_outcomes_service_isolation ON oracle_transaction_outcomes;
+CREATE POLICY oracle_transaction_outcomes_service_isolation ON oracle_transaction_outcomes
     FOR ALL
     USING (current_app_service_name() = 'oracle')
     WITH CHECK (current_app_service_name() = 'oracle');
