@@ -469,6 +469,7 @@ describe('gateway operations summary route contract', () => {
       createPending: jest.fn(),
       complete: jest.fn(),
       releasePending: jest.fn(),
+      renewLease: jest.fn().mockResolvedValue(true),
       markReplay: jest.fn(),
     } as unknown as IdempotencyStore;
     const writeConfig = {
@@ -569,6 +570,7 @@ describe('gateway operations summary route contract', () => {
       }),
       complete: jest.fn().mockResolvedValue(undefined),
       releasePending: jest.fn().mockResolvedValue(undefined),
+      renewLease: jest.fn().mockResolvedValue(true),
       markReplay: jest.fn().mockResolvedValue(undefined),
     } as unknown as IdempotencyStore;
     const writeConfig = {
@@ -669,6 +671,7 @@ describe('gateway operations summary route contract', () => {
       }),
       complete: jest.fn().mockResolvedValue(undefined),
       releasePending: jest.fn().mockResolvedValue(undefined),
+      renewLease: jest.fn().mockResolvedValue(true),
       markReplay: jest.fn().mockResolvedValue(undefined),
     } as unknown as IdempotencyStore;
     const writeConfig = {
@@ -775,6 +778,7 @@ describe('gateway operations summary route contract', () => {
       }),
       complete: jest.fn().mockResolvedValue(undefined),
       releasePending: jest.fn().mockResolvedValue(undefined),
+      renewLease: jest.fn().mockResolvedValue(true),
       markReplay: jest.fn().mockResolvedValue(undefined),
     } as unknown as IdempotencyStore;
     const writeConfig = {

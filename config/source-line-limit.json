@@ -48,7 +48,7 @@
     "gateway/src/server.ts": 572,
     "gateway/tests/authMiddleware.test.ts": 517,
     "gateway/tests/compliance.contract.test.ts": 731,
-    "gateway/tests/operationsRoutes.contract.test.ts": 825,
+    "gateway/tests/operationsRoutes.contract.test.ts": 829,
     "gateway/tests/settlementCallbackDispatcher.test.ts": 656,
     "gateway/tests/settlementRoutes.contract.test.ts": 1647,
     "gateway/tests/treasuryRoutes.contract.test.ts": 947,
