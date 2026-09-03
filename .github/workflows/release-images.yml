@@ -10,6 +10,8 @@ on:
   workflow_dispatch:
 
 permissions:
+  artifact-metadata: write
+  attestations: write
   contents: read
   id-token: write
 
@@ -117,7 +119,8 @@ jobs:
           target: runtime
           push: true
           tags: ${{ steps.ecr.outputs.registry }}/${{ matrix.repository }}:${{ github.sha }}
-          provenance: false
+          provenance: mode=max
+          sbom: true
 
       - name: Build without publishing
         if: steps.kind.outputs.publish != 'true'
@@ -143,6 +146,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$PUBLISH" != "true" ]; then
+            echo "name=${LOCAL_TAG}" >> "$GITHUB_OUTPUT"
             echo "reference=${LOCAL_TAG}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
             echo "digest=" >> "$GITHUB_OUTPUT"
             echo "Candidate image for ${ECR_REPOSITORY}; not published."
@@ -155,12 +159,14 @@ jobs:
             exit 1
           fi
 
+          NAME="${ECR_REGISTRY}/${ECR_REPOSITORY}"
           REFERENCE="${ECR_REGISTRY}/${ECR_REPOSITORY}@${DIGEST}"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "reference=$REFERENCE" >> "$GITHUB_OUTPUT"
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "Image identity: $REFERENCE"
 
-      - name: Record the complete image vulnerability report
+      - name: Reject high and critical vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: image
@@ -168,26 +174,104 @@ jobs:
           format: json
           output: scan-image-${{ matrix.service }}.json
           severity: HIGH,CRITICAL
-          exit-code: '0'
+          exit-code: '1'
           hide-progress: true
 
-      - name: Reject fixable high and critical vulnerabilities
+      - name: Generate SPDX image SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: image
           image-ref: ${{ steps.identity.outputs.reference }}
-          format: json
-          output: scan-fixable-image-${{ matrix.service }}.json
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
+          format: spdx-json
+          output: sbom-${{ matrix.service }}.spdx.json
           hide-progress: true
+
+      - name: Attest image provenance
+        id: provenance
+        if: steps.kind.outputs.publish == 'true' && steps.build.outputs.digest != ''
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.identity.outputs.name }}
+          subject-digest: ${{ steps.identity.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest image SBOM
+        id: sbom_attestation
+        if: steps.kind.outputs.publish == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.identity.outputs.name }}
+          subject-digest: ${{ steps.identity.outputs.digest }}
+          sbom-path: sbom-${{ matrix.service }}.spdx.json
+          push-to-registry: true
+
+      - name: Preserve signed provenance bundle
+        if: steps.kind.outputs.publish == 'true' && steps.build.outputs.digest != ''
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          cp "$PROVENANCE_BUNDLE" "provenance-${SERVICE}.sigstore.json"
+
+      - name: Preserve signed SBOM bundle
+        if: steps.kind.outputs.publish == 'true'
+        env:
+          SBOM_BUNDLE: ${{ steps.sbom_attestation.outputs.bundle-path }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          cp "$SBOM_BUNDLE" "sbom-attestation-${SERVICE}.sigstore.json"
+
+      - name: Verify signed image attestations
+        if: steps.kind.outputs.publish == 'true'
+        env:
+          CERT_IDENTITY: https://github.com/Agroasys/Cotsel/.github/workflows/release-images.yml@refs/heads/main
+          GH_TOKEN: ${{ github.token }}
+          REFERENCE: ${{ steps.identity.outputs.reference }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "oci://${REFERENCE}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --cert-identity "$CERT_IDENTITY" \
+            --source-ref refs/heads/main \
+            --source-digest "$GITHUB_SHA" \
+            --deny-self-hosted-runners \
+            --format json \
+            > "attestation-verification-${SERVICE}.json"
+          gh attestation verify "oci://${REFERENCE}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --cert-identity "$CERT_IDENTITY" \
+            --source-ref refs/heads/main \
+            --source-digest "$GITHUB_SHA" \
+            --predicate-type https://spdx.dev/Document/v2.3 \
+            --deny-self-hosted-runners \
+            --format json \
+            > "sbom-attestation-verification-${SERVICE}.json"
+
+      - name: Resolve producing workflow identity
+        id: producing
+        if: steps.kind.outputs.publish == 'true'
+        env:
+          BUILT: ${{ steps.build.outputs.digest }}
+          PROVENANCE_VERIFICATION: attestation-verification-${{ matrix.service }}.json
+        run: |
+          set -euo pipefail
+          node scripts/resolve-release-image-provenance.mjs
 
       - name: Record image evidence
         if: always()
         env:
           DIGEST: ${{ steps.identity.outputs.digest }}
+          IMAGE_REUSED: ${{ steps.producing.outputs.image_reused }}
+          PROVENANCE_ATTESTATION_ID: ${{ steps.provenance.outputs.attestation-id }}
+          PROVENANCE_ATTESTATION_URL: ${{ steps.provenance.outputs.attestation-url }}
+          PRODUCING_RUN_ID: ${{ steps.producing.outputs.producing_run_id }}
+          PRODUCING_RUN_URI: ${{ steps.producing.outputs.producing_run_uri }}
           REFERENCE: ${{ steps.identity.outputs.reference }}
+          SBOM_ATTESTATION_ID: ${{ steps.sbom_attestation.outputs.attestation-id }}
+          SBOM_ATTESTATION_URL: ${{ steps.sbom_attestation.outputs.attestation-url }}
           SERVICE: ${{ matrix.service }}
         run: |
           node -e '
@@ -198,7 +282,14 @@ jobs:
               imageReference: process.env.REFERENCE,
               imageDigest: process.env.DIGEST || null,
               published: Boolean(process.env.DIGEST),
-              workflowRunId: process.env.GITHUB_RUN_ID,
+              imageReused: process.env.IMAGE_REUSED === "true",
+              workflowRunId: process.env.PRODUCING_RUN_ID || null,
+              producingWorkflowRunUri: process.env.PRODUCING_RUN_URI || null,
+              verificationWorkflowRunId: process.env.GITHUB_RUN_ID,
+              provenanceAttestationId: process.env.PROVENANCE_ATTESTATION_ID || null,
+              provenanceAttestationUrl: process.env.PROVENANCE_ATTESTATION_URL || null,
+              sbomAttestationId: process.env.SBOM_ATTESTATION_ID || null,
+              sbomAttestationUrl: process.env.SBOM_ATTESTATION_URL || null,
             };
             fs.writeFileSync(`release-image-${out.service}.json`, `${JSON.stringify(out, null, 2)}\n`);
           '
@@ -212,5 +303,9 @@ jobs:
           path: |
             release-image-${{ matrix.service }}.json
             scan-image-${{ matrix.service }}.json
-            scan-fixable-image-${{ matrix.service }}.json
+            sbom-${{ matrix.service }}.spdx.json
+            provenance-${{ matrix.service }}.sigstore.json
+            sbom-attestation-${{ matrix.service }}.sigstore.json
+            attestation-verification-${{ matrix.service }}.json
+            sbom-attestation-verification-${{ matrix.service }}.json
           retention-days: 90

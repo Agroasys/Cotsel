@@ -11,7 +11,6 @@ on:
 permissions:
   contents: read
   packages: read
-
 jobs:
   changes:
     name: changes
@@ -115,7 +114,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -138,7 +137,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -195,7 +194,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -230,6 +229,7 @@ jobs:
           run_check repo-typecheck pnpm run typecheck
           run_check source-file-size pnpm run quality:file-size:check
           run_check release-evidence-binding pnpm run release:evidence:check
+          run_check release-supply-chain pnpm run release:supply-chain:check
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1
@@ -254,7 +254,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -307,7 +307,7 @@ jobs:
     if: needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.gateway == 'true'
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
         env:
           POSTGRES_DB: cotsel_gateway_test
           POSTGRES_USER: postgres
@@ -328,7 +328,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -384,7 +384,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Run docs/profile boundary guards
         shell: bash
@@ -528,7 +528,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -630,7 +630,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Setup Foundry
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09
@@ -714,7 +714,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -773,7 +773,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -833,7 +833,7 @@ jobs:
       INDEXER_MIGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/cotsel_indexer_test
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
         env:
           POSTGRES_DB: cotsel_indexer_test
           POSTGRES_USER: postgres
@@ -852,7 +852,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -911,7 +911,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -970,7 +970,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -1034,7 +1034,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
@@ -1086,7 +1086,7 @@ jobs:
     if: needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.treasury == 'true'
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
         env:
           POSTGRES_DB: postgres
           POSTGRES_USER: postgres
@@ -1107,7 +1107,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '20'
+          node-version: '22.23.2'
 
       - name: Enable Corepack
         run: corepack enable
