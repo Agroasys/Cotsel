@@ -3,6 +3,8 @@
  */
 import { randomUUID } from 'crypto';
 import { GatewayError } from '../errors';
+import type { GaslessCommandStore } from './gaslessCommandStore';
+import { createInMemoryGaslessCommandState } from './inMemoryGaslessCommandStore';
 import { validateExecutionTransition } from './settlementStateMachine';
 import type {
   SettlementCallbackDeliveryRecord,
@@ -14,7 +16,7 @@ import type {
 
 export function createInMemorySettlementStore(
   initialHandoffs: SettlementHandoffRecord[] = [],
-): SettlementStore {
+): SettlementStore & GaslessCommandStore {
   const handoffs = new Map(
     initialHandoffs.map((record) => [record.handoffId, structuredClone(record)]),
   );
@@ -27,6 +29,7 @@ export function createInMemorySettlementStore(
   const events = new Map<string, SettlementExecutionEventRecord[]>();
   const eventDedupeIndex = new Map<string, string>();
   const deliveries = new Map<string, SettlementCallbackDeliveryRecord>();
+  const commandState = createInMemoryGaslessCommandState();
 
   const byTrade = (tradeId: string) =>
     [...handoffs.values()]
@@ -34,6 +37,7 @@ export function createInMemorySettlementStore(
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
 
   return {
+    ...commandState.store,
     async createHandoff(input) {
       const key = `${input.platformId}:${input.platformHandoffId}`;
       const existingId = platformIndex.get(key);
@@ -116,13 +120,17 @@ export function createInMemorySettlementStore(
       };
     },
 
-    async recordExecutionEvent(input, callback) {
+    async recordExecutionEvent(input, callback, command) {
       const handoff = handoffs.get(input.handoffId);
       if (!handoff) {
         throw new GatewayError(404, 'NOT_FOUND', 'Settlement handoff not found', {
           handoffId: input.handoffId,
         });
       }
+      if (command && (input.eventType !== 'accepted' || input.executionStatus !== 'accepted')) {
+        throw new Error('Durable gasless commands require an accepted execution event');
+      }
+      const preparedCommand = commandState.prepare(command);
 
       const dedupeIndexKey = `${input.handoffId}:${input.dedupeKey}`;
       const existingEventId = eventDedupeIndex.get(dedupeIndexKey);
@@ -173,10 +181,12 @@ export function createInMemorySettlementStore(
           }
         }
 
+        commandState.commit(preparedCommand);
         return {
           handoff: structuredClone(handoffs.get(input.handoffId)!),
           event: structuredClone(event),
           callbackDelivery: structuredClone(callbackDelivery),
+          command: preparedCommand.record ? structuredClone(preparedCommand.record) : undefined,
         };
       }
 
@@ -242,11 +252,13 @@ export function createInMemorySettlementStore(
       eventDedupeIndex.set(dedupeIndexKey, event.eventId);
       deliveries.set(callbackDelivery.deliveryId, callbackDelivery);
       handoffs.set(input.handoffId, finalHandoff);
+      commandState.commit(preparedCommand);
 
       return {
         handoff: structuredClone(finalHandoff),
         event: structuredClone(event),
         callbackDelivery: structuredClone(callbackDelivery),
+        command: preparedCommand.record ? structuredClone(preparedCommand.record) : undefined,
       };
     },
 

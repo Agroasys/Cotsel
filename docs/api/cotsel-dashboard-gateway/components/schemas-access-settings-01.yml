@@ -1,0 +1,392 @@
+components:
+  schemas:
+    AccessAuditReference:
+      type: object
+      required:
+        - type
+        - reference
+      properties:
+        type:
+          type: string
+          enum:
+            - audit_log
+            - governance_action
+            - compliance_decision
+            - settlement_handoff
+            - external
+        reference:
+          type: string
+    AccessLogCreateRequest:
+      type: object
+      required:
+        - eventType
+        - surface
+        - outcome
+      properties:
+        eventType:
+          type: string
+          description: Stable dashboard/operator event type, for example `settings.access.granted`.
+        surface:
+          type: string
+          description: Dashboard surface or route associated with the access event.
+        outcome:
+          type: string
+          description: Stable event outcome label such as `allowed` or `denied`.
+        auditReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessAuditReference'
+        metadata:
+          type: object
+          additionalProperties: true
+    AccessLogActor:
+      type: object
+      required:
+        - userId
+        - walletAddress
+        - role
+        - sessionFingerprint
+        - sessionDisplay
+      properties:
+        userId:
+          type: string
+        walletAddress:
+          type: string
+          nullable: true
+        role:
+          type: string
+        sessionFingerprint:
+          type: string
+          description: Stable SHA-256 gateway fingerprint for the authenticated session reference.
+        sessionDisplay:
+          type: string
+          description: Masked session display value safe for operator UIs.
+    AccessLogNetwork:
+      type: object
+      required:
+        - ipFingerprint
+        - ipDisplay
+        - userAgent
+      properties:
+        ipFingerprint:
+          type: string
+          nullable: true
+          description: Stable SHA-256 fingerprint of the normalized client IP when available.
+        ipDisplay:
+          type: string
+          nullable: true
+          description: Masked client IP display value safe for operator UIs.
+        userAgent:
+          type: string
+          nullable: true
+    AccessLogRequestContext:
+      type: object
+      required:
+        - requestId
+        - correlationId
+        - method
+        - route
+      properties:
+        requestId:
+          type: string
+        correlationId:
+          type: string
+          nullable: true
+        method:
+          type: string
+        route:
+          type: string
+    AccessLogEntry:
+      type: object
+      required:
+        - entryId
+        - eventType
+        - surface
+        - outcome
+        - actor
+        - network
+        - request
+        - auditReferences
+        - metadata
+        - createdAt
+      properties:
+        entryId:
+          type: string
+        eventType:
+          type: string
+        surface:
+          type: string
+        outcome:
+          type: string
+        actor:
+          $ref: '#/components/schemas/AccessLogActor'
+        network:
+          $ref: '#/components/schemas/AccessLogNetwork'
+        request:
+          $ref: '#/components/schemas/AccessLogRequestContext'
+        auditReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessAuditReference'
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    AccessLogFreshness:
+      type: object
+      required:
+        - source
+        - sourceFreshAt
+        - queriedAt
+        - available
+      properties:
+        source:
+          type: string
+          enum:
+            - gateway_access_log
+        sourceFreshAt:
+          type: string
+          format: date-time
+          nullable: true
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+    AccessLogEntryEnvelope:
+      type: object
+      required:
+        - item
+        - freshness
+      properties:
+        item:
+          $ref: '#/components/schemas/AccessLogEntry'
+        freshness:
+          $ref: '#/components/schemas/AccessLogFreshness'
+    AccessLogEntryResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/AccessLogEntryEnvelope'
+        timestamp:
+          type: string
+          format: date-time
+    AccessLogListEnvelope:
+      type: object
+      required:
+        - items
+        - freshness
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessLogEntry'
+        nextCursor:
+          type: string
+          nullable: true
+        freshness:
+          $ref: '#/components/schemas/AccessLogFreshness'
+    AccessLogListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/AccessLogListEnvelope'
+        timestamp:
+          type: string
+          format: date-time
+    SettingsFreshness:
+      type: object
+      required:
+        - source
+        - sourceFreshAt
+        - queriedAt
+        - available
+      properties:
+        source:
+          type: string
+          enum:
+            - gateway_role_assignments
+            - gateway_audit_log
+        sourceFreshAt:
+          type: string
+          format: date-time
+          nullable: true
+        queriedAt:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+    RoleAssignment:
+      type: object
+      required:
+        - assignmentId
+        - subjectUserId
+        - subjectWalletAddress
+        - authRole
+        - gatewayRoles
+        - source
+        - assignedByUserId
+        - assignedByWalletAddress
+        - assignedAt
+        - lastVerifiedAt
+      properties:
+        assignmentId:
+          type: string
+        subjectUserId:
+          type: string
+        subjectWalletAddress:
+          type: string
+        authRole:
+          type: string
+        gatewayRoles:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+          enum:
+            - gateway_seed
+            - manual_sync
+        assignedByUserId:
+          type: string
+          nullable: true
+        assignedByWalletAddress:
+          type: string
+          nullable: true
+        assignedAt:
+          type: string
+          format: date-time
+        lastVerifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+    RoleAssignmentListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required:
+            - items
+            - freshness
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/RoleAssignment'
+            nextCursor:
+              type: string
+              nullable: true
+            freshness:
+              $ref: '#/components/schemas/SettingsFreshness'
+        timestamp:
+          type: string
+          format: date-time
+    AuditFeedActor:
+      type: object
+      required:
+        - userId
+        - walletAddress
+        - role
+      properties:
+        userId:
+          type: string
+          nullable: true
+        walletAddress:
+          type: string
+          nullable: true
+        role:
+          type: string
+          nullable: true
+    AuditFeedEvent:
+      type: object
+      required:
+        - eventId
+        - eventType
+        - route
+        - method
+        - requestId
+        - correlationId
+        - actor
+        - status
+        - metadata
+        - source
+        - createdAt
+      properties:
+        eventId:
+          type: string
+        eventType:
+          type: string
+        route:
+          type: string
+        method:
+          type: string
+        requestId:
+          type: string
+        correlationId:
+          type: string
+          nullable: true
+        actor:
+          $ref: '#/components/schemas/AuditFeedActor'
+        status:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        source:
+          type: string
+          enum:
+            - audit_log
+        createdAt:
+          type: string
+          format: date-time
+    AuditFeedListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required:
+            - items
+            - freshness
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditFeedEvent'
+            nextCursor:
+              type: string
+              nullable: true
+            freshness:
+              $ref: '#/components/schemas/SettingsFreshness'
+        timestamp:
+          type: string
+          format: date-time

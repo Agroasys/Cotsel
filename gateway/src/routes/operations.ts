@@ -11,6 +11,7 @@ import {
 } from '../core/failedOperationStore';
 import { GatewayFailedOperationReplayer } from '../core/errorHandlerWorkflow';
 import type { GaslessSettlementExecutionService } from '../core/gaslessSettlementExecutionService';
+import type { GaslessCommandRecord } from '../core/gaslessCommandStore';
 import { IdempotencyStore } from '../core/idempotencyStore';
 import { OperationsSummaryReader } from '../core/operationsSummaryService';
 import {
@@ -84,6 +85,37 @@ function parseFailedOperationId(raw: string | string[] | undefined): string {
   return raw.trim();
 }
 
+function parseGaslessCommandId(raw: string | string[] | undefined): string {
+  const commandId = typeof raw === 'string' ? raw.trim() : '';
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(commandId)
+  ) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', 'Path parameter commandId must be a UUID');
+  }
+  return commandId;
+}
+
+function parseDeadLetterLimit(raw: unknown): number {
+  if (raw === undefined) return 100;
+  if (typeof raw !== 'string' || !/^\d+$/.test(raw)) {
+    throw new GatewayError(400, 'VALIDATION_ERROR', "Query parameter 'limit' must be an integer");
+  }
+  const limit = Number(raw);
+  if (limit < 1 || limit > 100) {
+    throw new GatewayError(
+      400,
+      'VALIDATION_ERROR',
+      "Query parameter 'limit' must be from 1 to 100",
+    );
+  }
+  return limit;
+}
+
+function sanitizeGaslessCommand(record: GaslessCommandRecord) {
+  const { payload: _payload, result: _result, ...safeRecord } = record;
+  return safeRecord;
+}
+
 function sanitizeFailedOperation(record: FailedOperationRecord) {
   return {
     ...record,
@@ -123,7 +155,7 @@ export function createOperationsRouter(options: OperationsRouterOptions): Router
           new GatewayError(
             503,
             'UPSTREAM_UNAVAILABLE',
-            'Failed-operation replay idempotency is not configured',
+            'Operator replay idempotency is not configured',
           ),
         );
 
@@ -155,6 +187,62 @@ export function createOperationsRouter(options: OperationsRouterOptions): Router
 
     res.status(200).json(successResponse(options.gaslessSettlementService.getRelayerReadiness()));
   });
+
+  router.get('/operations/gasless-relayer/dead-letters', async (req, res, next) => {
+    try {
+      if (!options.gaslessSettlementService) {
+        throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Gasless execution is not configured');
+      }
+      const items = await options.gaslessSettlementService.listDeadLetterCommands(
+        parseDeadLetterLimit(req.query.limit),
+      );
+      res.status(200).json(successResponse({ items, generatedAt: new Date().toISOString() }));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post(
+    '/operations/gasless-relayer/dead-letters/:commandId/redrive',
+    requireMutationWriteAccess(),
+    requireOperatorActionCapability('operations:replay'),
+    replayIdempotency,
+    async (req, res, next) => {
+      try {
+        if (!options.gaslessSettlementService) {
+          throw new GatewayError(
+            503,
+            'UPSTREAM_UNAVAILABLE',
+            'Gasless execution is not configured',
+          );
+        }
+        if (!req.gatewayPrincipal || !req.requestContext) {
+          throw new GatewayError(500, 'INTERNAL_ERROR', 'Operator request context is unavailable');
+        }
+        const idempotencyKey = req.header('Idempotency-Key')?.trim();
+        if (!idempotencyKey) {
+          throw new GatewayError(
+            500,
+            'INTERNAL_ERROR',
+            'Operator idempotency context is unavailable',
+          );
+        }
+        const command = await options.gaslessSettlementService.redriveDeadLetterCommand(
+          parseGaslessCommandId(req.params.commandId),
+          {
+            route: req.route.path,
+            method: req.method,
+            idempotencyKey,
+            principal: req.gatewayPrincipal,
+            requestContext: req.requestContext,
+          },
+        );
+        res.status(202).json(successResponse(sanitizeGaslessCommand(command)));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.get('/operations/failed-operations', async (req, res, next) => {
     try {

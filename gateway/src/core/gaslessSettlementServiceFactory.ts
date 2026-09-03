@@ -6,20 +6,21 @@ import type { GatewayConfig } from '../config/gatewayConfig';
 import type { ManagedSignerValidationRecorder } from './managedSignerIntentValidation';
 import type { SettlementService } from './settlementService';
 import type { SettlementStore } from './settlementStore';
+import type { GaslessCommandStore } from './gaslessCommandStore';
 import { createPostgresGaslessRelayerBroadcastLock } from './gaslessRelayerBroadcastLock';
 import {
   createEthersGaslessSettlementExecutor,
   GaslessSettlementExecutionService,
 } from './gaslessSettlementExecutionService';
-import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutcomeStore';
+import type { GaslessTransactionOutcomeStore } from './gaslessTransactionOutcomeStore';
 
 export function createConfiguredGaslessSettlementService(
   config: GatewayConfig,
   pool: Pool,
   settlementService: SettlementService,
-  settlementStore: SettlementStore,
+  settlementStore: SettlementStore & GaslessCommandStore,
   managedSignerValidationRecorder: ManagedSignerValidationRecorder,
-  transactionOutcomeRecorder: GaslessTransactionOutcomeRecorder,
+  transactionOutcomeStore: GaslessTransactionOutcomeStore,
 ): GaslessSettlementExecutionService | null {
   if (!config.gaslessExecutionEnabled) return null;
 
@@ -28,8 +29,9 @@ export function createConfiguredGaslessSettlementService(
     settlementStore,
     createEthersGaslessSettlementExecutor(config, {
       recordValidationEvidence: managedSignerValidationRecorder,
-      recordTransactionOutcome: transactionOutcomeRecorder,
+      recordTransactionOutcome: transactionOutcomeStore,
     }),
+    transactionOutcomeStore,
     {
       chainId: config.chainId,
       escrowAddress: config.escrowAddress,
@@ -51,6 +53,14 @@ export function createConfiguredGaslessSettlementService(
       stuckQueueThresholdMs: config.gaslessStuckQueueThresholdMs,
       receiptTimeoutMs: config.gaslessReceiptTimeoutMs,
       repeatedFailureAlertThreshold: config.gaslessRepeatedFailureAlertThreshold,
+      commandLeaseMs: config.gaslessCommandLeaseMs,
+      commandPollIntervalMs: config.gaslessCommandPollIntervalMs,
+      commandRetryInitialMs: config.gaslessCommandRetryInitialMs,
+      commandRetryMaxMs: config.gaslessCommandRetryMaxMs,
+      commandWaitTimeoutMs: config.gaslessCommandWaitTimeoutMs,
+      commandMaxAttempts: config.gaslessCommandMaxAttempts,
+      commandMaxBatch: config.gaslessCommandMaxBatch,
+      commandMaxPending: config.gaslessCommandMaxPending,
       broadcastLock: createPostgresGaslessRelayerBroadcastLock(pool),
     },
   );

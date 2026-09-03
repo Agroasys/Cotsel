@@ -16,8 +16,8 @@ export interface OpenApiSpec {
 export function loadOpenApiSpec(): OpenApiSpec {
   const candidates = [
     path.resolve(__dirname, './cotsel-dashboard-gateway.openapi.yml'),
-    path.resolve(__dirname, '../../../docs/api/cotsel-dashboard-gateway.openapi.yml'),
-    path.resolve(process.cwd(), 'docs/api/cotsel-dashboard-gateway.openapi.yml'),
+    path.resolve(process.cwd(), 'gateway/.generated/openapi/cotsel-dashboard-gateway.openapi.yml'),
+    path.resolve(process.cwd(), '.generated/openapi/cotsel-dashboard-gateway.openapi.yml'),
     path.resolve(__dirname, '../../dist/openapi/cotsel-dashboard-gateway.openapi.yml'),
   ];
 

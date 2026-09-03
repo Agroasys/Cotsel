@@ -7,5 +7,15 @@ export interface GaslessRelayerBroadcastLock {
 }
 
 export function createInProcessGaslessRelayerBroadcastLock(): GaslessRelayerBroadcastLock {
-  return { runExclusive: (handler) => handler() };
+  let queue: Promise<void> = Promise.resolve();
+  return {
+    runExclusive<T>(handler: () => Promise<T>): Promise<T> {
+      const run = queue.then(handler);
+      queue = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    },
+  };
 }

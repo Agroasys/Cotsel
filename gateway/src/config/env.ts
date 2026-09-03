@@ -7,6 +7,8 @@ import { getAddress, isAddress } from 'ethers';
 import { parseAllowedOrigins } from '@agroasys/shared-edge';
 import { resolveSettlementRuntime } from '@agroasys/sdk';
 import { calculateGaslessExecutorCapacityPolicy } from '../core/gaslessExecutorCapacityPolicy';
+import { envPositiveInteger } from './environmentValues';
+import { loadGaslessCommandConfig } from './gaslessCommandConfig';
 import { parseGaslessSignerCustodyMode } from './gaslessSignerCustodyMode';
 
 dotenv.config();
@@ -36,18 +38,6 @@ function envNumber(name: string, fallback?: number): number {
   const value = raw ?? env(name);
   const parsed = Number.parseInt(value, 10);
   assert(!Number.isNaN(parsed), `${name} must be a number`);
-  return parsed;
-}
-
-function envPositiveInteger(name: string, fallback?: number): number {
-  const raw = process.env[name];
-  if ((raw === undefined || raw === '') && fallback !== undefined) {
-    return fallback;
-  }
-
-  const value = raw ?? env(name);
-  const parsed = Number(value);
-  assert(Number.isInteger(parsed) && parsed > 0, `${name} must be a positive integer`);
   return parsed;
 }
 
@@ -234,6 +224,7 @@ export function loadConfig(): GatewayConfig {
     'GATEWAY_GASLESS_CAPACITY_FAIL_CLOSED',
     nodeEnv === 'production' || chainId === 8453,
   );
+  const gaslessCommandConfig = loadGaslessCommandConfig();
   const gaslessCapacityPolicy = calculateGaslessExecutorCapacityPolicy({
     targetTransactionsPerDay: gaslessCapacityTargetTxPerDay,
     burstMultiplierBasisPoints: gaslessCapacityBurstMultiplierBasisPoints,
@@ -679,6 +670,7 @@ export function loadConfig(): GatewayConfig {
       'GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD',
       3,
     ),
+    ...gaslessCommandConfig,
     gaslessRequireRpcFallback,
     oracleBaseUrl,
     oracleServiceApiKey,

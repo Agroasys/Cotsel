@@ -1,0 +1,158 @@
+paths:
+  /evidence/{tradeId}:
+    get:
+      tags:
+        - Evidence
+      summary: Get grouped evidence records for a trade
+      description: |
+        Returns the evidence sources needed by Cotsel-Dash Evidence and Trade Detail views. The
+        payload groups trade settlement context, compliance decisions, and governance actions for a
+        single trade.
+      operationId: getTradeEvidence
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/TradeId'
+      responses:
+        '200':
+          description: Grouped evidence payload for a trade.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeEvidenceResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /evidence/bundles:
+    get:
+      tags:
+        - Evidence
+      summary: List generated evidence bundle manifests
+      operationId: listEvidenceBundles
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: tradeId
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Generated evidence bundle manifests visible to operators.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceBundleListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      tags:
+        - Evidence
+      summary: Generate an evidence bundle manifest for a trade
+      description: |
+        Generates and persists a read-only evidence bundle manifest for Cotsel-Dash Evidence. The
+        manifest exposes explicit artifact references and never claims a signed bundle unless the
+        backend actually provides one.
+      operationId: generateEvidenceBundle
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceBundleGenerateRequest'
+      responses:
+        '201':
+          description: Evidence bundle manifest generated and persisted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceBundleResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /evidence/bundles/{bundleId}:
+    get:
+      tags:
+        - Evidence
+      summary: Retrieve a generated evidence bundle manifest
+      operationId: getEvidenceBundle
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: bundleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Evidence bundle manifest metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceBundleResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /evidence/bundles/{bundleId}/download:
+    get:
+      tags:
+        - Evidence
+      summary: Download a generated evidence bundle manifest
+      operationId: downloadEvidenceBundle
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: bundleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: JSON attachment containing the evidence bundle manifest.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceBundleManifest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'

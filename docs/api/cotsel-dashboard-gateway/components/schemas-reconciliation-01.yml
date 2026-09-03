@@ -1,0 +1,183 @@
+components:
+  schemas:
+    ReconciliationRecord:
+      type: object
+      required:
+        - handoffId
+        - tradeId
+        - platformId
+        - platformHandoffId
+        - phase
+        - settlementChannel
+        - displayCurrency
+        - displayAmount
+        - assetSymbol
+        - assetAmount
+        - ricardianHash
+        - externalReference
+        - executionStatus
+        - reconciliationStatus
+        - callbackStatus
+        - providerStatus
+        - txHash
+        - latestEventType
+        - latestEventDetail
+        - latestEventAt
+        - callbackDeliveredAt
+        - createdAt
+        - updatedAt
+        - tradeProjection
+      properties:
+        handoffId:
+          type: string
+        tradeId:
+          type: string
+        platformId:
+          type: string
+        platformHandoffId:
+          type: string
+        phase:
+          type: string
+        settlementChannel:
+          type: string
+        displayCurrency:
+          type: string
+        displayAmount:
+          type: number
+        assetSymbol:
+          type:
+            - string
+            - 'null'
+        assetAmount:
+          type:
+            - number
+            - 'null'
+        ricardianHash:
+          type:
+            - string
+            - 'null'
+        externalReference:
+          type:
+            - string
+            - 'null'
+        executionStatus:
+          $ref: '#/components/schemas/SettlementExecutionStatus'
+        reconciliationStatus:
+          $ref: '#/components/schemas/SettlementReconciliationStatus'
+        callbackStatus:
+          $ref: '#/components/schemas/SettlementCallbackStatus'
+        providerStatus:
+          type:
+            - string
+            - 'null'
+        txHash:
+          type:
+            - string
+            - 'null'
+          description: Canonical EVM transaction hash when available.
+        latestEventType:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SettlementEventType'
+        latestEventDetail:
+          type:
+            - string
+            - 'null'
+        latestEventAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        callbackDeliveredAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        tradeProjection:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TradeSettlementState'
+    ReconciliationPagination:
+      type: object
+      required:
+        - limit
+        - offset
+        - total
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+        offset:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+    ReconciliationListPayload:
+      type: object
+      required:
+        - items
+        - pagination
+        - freshness
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconciliationRecord'
+        pagination:
+          $ref: '#/components/schemas/ReconciliationPagination'
+        freshness:
+          $ref: '#/components/schemas/GatewayReadFreshness'
+    ReconciliationListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ReconciliationListPayload'
+        timestamp:
+          type: string
+          format: date-time
+    ReconciliationDetailPayload:
+      type: object
+      required:
+        - handoff
+        - events
+        - freshness
+      properties:
+        handoff:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ReconciliationRecord'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/SettlementExecutionEvent'
+        freshness:
+          $ref: '#/components/schemas/GatewayReadFreshness'
+    ReconciliationDetailResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ReconciliationDetailPayload'
+        timestamp:
+          type: string
+          format: date-time

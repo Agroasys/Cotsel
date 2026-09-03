@@ -1,14 +1,13 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import fs from 'fs';
-import path from 'path';
 import { Router } from 'express';
 import { createHttpRateLimiter } from '@agroasys/shared-edge';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
 import { createPool, closeConnection, testConnection } from './database/index';
 import { migrateGatewayDatabaseIfEnabled } from './database/autoMigrate';
 import { loadConfig } from './config/env';
+import { loadPackageVersion } from './config/packageVersion';
 import { createApp } from './app';
 import { AccessLogService } from './core/accessLogService';
 import { createPostgresAccessLogStore } from './core/accessLogStore';
@@ -35,6 +34,7 @@ import {
 import { createServiceApiKeyLookup } from './core/serviceAuth';
 import { SettlementCallbackDispatcher } from './core/settlementCallbackDispatcher';
 import { createConfiguredGaslessSettlementService } from './core/gaslessSettlementServiceFactory';
+import { startGatewayBackgroundRuntimes } from './core/gatewayBackgroundRuntimes';
 import { createPostgresManagedSignerValidationRecorder } from './core/managedSignerAuditStore';
 import { createGaslessTransactionOutcomeRuntime } from './core/gaslessTransactionOutcomeRuntime';
 import { SettlementService } from './core/settlementService';
@@ -293,26 +293,6 @@ const operationsSummaryService = new OperationsSummaryService([
   },
 ]);
 
-function loadPackageVersion(): string {
-  const candidates = [
-    path.resolve(__dirname, '../package.json'),
-    path.resolve(process.cwd(), 'gateway/package.json'),
-  ];
-
-  for (const candidate of candidates) {
-    if (!fs.existsSync(candidate)) {
-      continue;
-    }
-
-    const parsed = JSON.parse(fs.readFileSync(candidate, 'utf8')) as { version?: string };
-    if (parsed.version) {
-      return parsed.version;
-    }
-  }
-
-  return '0.1.0';
-}
-
 async function readinessCheck() {
   const requestId = `readyz-${Date.now()}`;
   const dependencies = [] as {
@@ -533,13 +513,15 @@ async function bootstrap(): Promise<void> {
       allowlistSize: config.writeAllowlist.length,
     });
   });
-  settlementCallbackDispatcher.start();
-  gaslessTransactionOutcomeRuntime.start();
+  const stopBackgroundRuntimes = startGatewayBackgroundRuntimes([
+    settlementCallbackDispatcher,
+    gaslessTransactionOutcomeRuntime,
+    gaslessSettlementService,
+  ]);
 
   const shutdown = async (signal: string): Promise<void> => {
     Logger.info('Shutting down dashboard gateway', { signal });
-    settlementCallbackDispatcher.stop();
-    gaslessTransactionOutcomeRuntime.stop();
+    stopBackgroundRuntimes();
     await requestRateLimiter.close();
     await closeConnection(pool);
     server.close(() => process.exit(0));
@@ -556,8 +538,7 @@ async function bootstrap(): Promise<void> {
   server.on('error', (error) => {
     void (async () => {
       Logger.error('Dashboard gateway server error', error);
-      settlementCallbackDispatcher.stop();
-      gaslessTransactionOutcomeRuntime.stop();
+      stopBackgroundRuntimes();
       await requestRateLimiter.close().catch(() => undefined);
       await closeConnection(pool);
       process.exit(1);

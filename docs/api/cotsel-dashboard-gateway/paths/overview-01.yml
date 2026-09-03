@@ -1,0 +1,38 @@
+paths:
+  /overview:
+    get:
+      tags:
+        - Overview
+      summary: Dashboard overview KPIs and operational posture
+      description: |
+        Aggregated overview surface for Cotsel-Dash. Returns trade counts by settlement stage,
+        governance posture (paused / oracle active), compliance blocked-trade count, and
+        per-feed query metadata so the dashboard can render operator trust indicators.
+
+        All three backend feeds (indexer, chain RPC, and gateway compliance ledger) are queried
+        in parallel. When a feed is unavailable, `feedFreshness.<feed>.available` is `false`,
+        `feedFreshness.<feed>.freshAt` is `null`, the corresponding KPI values default to zero,
+        and `posture` is `null` when the chain RPC feed is unavailable. The endpoint always returns
+        HTTP 200 so the dashboard can render a partial view with degraded-feed indicators rather
+        than a blank screen.
+
+        Authoritative trade freshness comes from the indexer snapshot watermark, not from the
+        gateway request timestamp. For the trades feed:
+        - `feedFreshness.trades.queriedAt` is when the gateway asked the indexer for this snapshot
+        - `feedFreshness.trades.freshAt` mirrors the indexer `lastIndexedAt` watermark
+        - `feedFreshness.trades.lastProcessedBlock` identifies the last indexed block for the snapshot
+      operationId: getOverview
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Overview KPIs and operational posture snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverviewResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'

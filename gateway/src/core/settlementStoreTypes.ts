@@ -1,6 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import type { CreateGaslessCommandInput, GaslessCommandRecord } from './gaslessCommandStore';
 export const SETTLEMENT_EXECUTION_STATUSES = [
   'pending',
   'accepted',
@@ -220,10 +221,12 @@ export interface SettlementStore {
   recordExecutionEvent(
     input: PersistSettlementExecutionEventInput,
     callback: SettlementCallbackPlan,
+    command?: CreateGaslessCommandInput,
   ): Promise<{
     handoff: SettlementHandoffRecord;
     event: SettlementExecutionEventRecord;
     callbackDelivery: SettlementCallbackDeliveryRecord;
+    command?: GaslessCommandRecord;
   }>;
   listExecutionEvents(handoffId: string): Promise<SettlementExecutionEventRecord[]>;
   getCallbackDelivery(deliveryId: string): Promise<SettlementCallbackDeliveryRecord | null>;

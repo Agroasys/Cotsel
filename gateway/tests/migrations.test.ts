@@ -23,11 +23,15 @@ describe('gateway schema migration loading', () => {
     expect(sql).not.toContain(
       'DROP CONSTRAINT IF EXISTS settlement_callback_deliveries_lease_check',
     );
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS gasless_commands');
     expect(sql.indexOf('CREATE TABLE IF NOT EXISTS idempotency_keys')).toBeLessThan(
       sql.indexOf('CREATE TABLE IF NOT EXISTS managed_signer_validation_audit'),
     );
     expect(sql.indexOf('CREATE TABLE IF NOT EXISTS managed_signer_validation_audit')).toBeLessThan(
       sql.indexOf('CREATE TABLE IF NOT EXISTS gasless_transaction_outcomes'),
+    );
+    expect(sql.indexOf('CREATE TABLE IF NOT EXISTS gasless_transaction_outcomes')).toBeLessThan(
+      sql.indexOf('CREATE TABLE IF NOT EXISTS gasless_commands'),
     );
   });
 });

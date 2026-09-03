@@ -1,0 +1,124 @@
+components:
+  schemas:
+    GaslessCommandDeadLetter:
+      type: object
+      additionalProperties: false
+      required:
+        - commandId
+        - applicationRequestId
+        - intentKey
+        - resourceType
+        - resourceId
+        - operation
+        - maxAttempts
+        - nextAttemptAt
+        - status
+        - attemptCount
+        - leaseOwner
+        - leaseExpiresAt
+        - transactionHash
+        - lastErrorCode
+        - lastErrorDetail
+        - completedAt
+        - createdAt
+        - updatedAt
+      properties:
+        commandId:
+          type: string
+          format: uuid
+        applicationRequestId:
+          type: string
+        intentKey:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        resourceType:
+          type: string
+          enum:
+            - settlement_handoff
+            - platform_transfer
+        resourceId:
+          type: string
+        operation:
+          type: string
+        maxAttempts:
+          type: integer
+          minimum: 1
+        nextAttemptAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - pending
+            - dead_letter
+        attemptCount:
+          type: integer
+          minimum: 0
+        leaseOwner:
+          type: string
+          nullable: true
+        leaseExpiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        transactionHash:
+          type: string
+          nullable: true
+          pattern: '^0x[0-9a-f]{64}$'
+        lastErrorCode:
+          type: string
+          nullable: true
+        lastErrorDetail:
+          type: string
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    GaslessCommandDeadLetterListResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required:
+            - items
+            - generatedAt
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/GaslessCommandDeadLetter'
+            generatedAt:
+              type: string
+              format: date-time
+        timestamp:
+          type: string
+          format: date-time
+    GaslessCommandRedriveResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/GaslessCommandDeadLetter'
+        timestamp:
+          type: string
+          format: date-time

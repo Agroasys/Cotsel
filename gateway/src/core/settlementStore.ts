@@ -4,6 +4,11 @@
 import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
 import { GatewayError } from '../errors';
+import type { GaslessCommandStore } from './gaslessCommandStore';
+import {
+  createGaslessCommandWithClient,
+  createPostgresGaslessCommandStore,
+} from './postgresGaslessCommandStore';
 import {
   createPostgresSettlementCallbackStore,
   mapSettlementCallbackDeliveryRow,
@@ -366,8 +371,9 @@ async function createCallbackDeliveryWithClient(
   return mapSettlementCallbackDeliveryRow(delivery);
 }
 
-export function createPostgresSettlementStore(pool: Pool): SettlementStore {
+export function createPostgresSettlementStore(pool: Pool): SettlementStore & GaslessCommandStore {
   const callbackStore = createPostgresSettlementCallbackStore(pool);
+  const commandStore = createPostgresGaslessCommandStore(pool);
   const getHandoff = async (handoffId: string): Promise<SettlementHandoffRecord | null> => {
     const result = await pool.query<SettlementHandoffRow>(
       `SELECT
@@ -448,6 +454,7 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
   };
 
   return {
+    ...commandStore,
     async createHandoff(input) {
       const existing = await getHandoffByPlatformRef(input.platformId, input.platformHandoffId);
       if (existing) {
@@ -601,7 +608,10 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       };
     },
 
-    async recordExecutionEvent(input, callback) {
+    async recordExecutionEvent(input, callback, command) {
+      if (command && (input.eventType !== 'accepted' || input.executionStatus !== 'accepted')) {
+        throw new Error('Durable gasless commands require an accepted execution event');
+      }
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -675,11 +685,15 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
               });
           const currentHandoff =
             (await getHandoffWithClient(client, input.handoffId)) ?? lockedHandoff;
+          const durableCommand = command
+            ? await createGaslessCommandWithClient(client, command)
+            : undefined;
           await client.query('COMMIT');
           return {
             handoff: currentHandoff,
             event,
             callbackDelivery,
+            command: durableCommand,
           };
         }
 
@@ -712,11 +726,15 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           callback.status === 'disabled'
             ? ((await getHandoffWithClient(client, input.handoffId)) ?? updatedHandoff)
             : updatedHandoff;
+        const durableCommand = command
+          ? await createGaslessCommandWithClient(client, command)
+          : undefined;
         await client.query('COMMIT');
         return {
           handoff: finalHandoff,
           event,
           callbackDelivery,
+          command: durableCommand,
         };
       } catch (error) {
         await client.query('ROLLBACK');

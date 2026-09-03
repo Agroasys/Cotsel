@@ -11,6 +11,11 @@ import type {
   GaslessTransactionOutcomeRecorder,
 } from './gaslessTransactionOutcomeStore';
 import { gaslessBroadcastFailureCode } from './gaslessTransactionOutcomeStore';
+import {
+  logGaslessBroadcastResponse,
+  logGaslessConfirmationPending,
+  logGaslessIdentityPersisted,
+} from './gaslessTransactionTelemetry';
 
 export interface GaslessTransactionContext {
   applicationRequestId: string;
@@ -42,6 +47,25 @@ export class GaslessTransactionRevertedError extends GatewayError {
       outcome: 'reverted',
     });
     this.name = 'GaslessTransactionRevertedError';
+  }
+}
+
+export class GaslessPersistedOutcomeError extends GatewayError {
+  constructor(
+    public readonly transactionHash: string,
+    public readonly outcomeStatus:
+      | 'broadcast_pending'
+      | 'broadcast_unknown'
+      | 'confirmation_pending'
+      | 'confirmed'
+      | 'reverted',
+  ) {
+    super(503, 'UPSTREAM_UNAVAILABLE', 'Gasless transaction already has a durable outcome', {
+      transactionHash,
+      outcome: outcomeStatus,
+      rebroadcastAllowed: false,
+    });
+    this.name = 'GaslessPersistedOutcomeError';
   }
 }
 
@@ -94,10 +118,12 @@ export async function broadcastPersistedGaslessTransaction(
 ): Promise<TransactionResponse> {
   const identity = requireSignedTransactionIdentity(signedTransaction, context);
   await recorder.recordPrepared(identity);
+  logGaslessIdentityPersisted(identity);
 
   let response: TransactionResponse;
   try {
     response = await broadcast(signedTransaction);
+    logGaslessBroadcastResponse(identity, response.hash);
   } catch (error) {
     try {
       await recorder.markBroadcastUnknown(
@@ -143,6 +169,7 @@ export async function broadcastPersistedGaslessTransaction(
 
   try {
     await recorder.markConfirmationPending(identity.transactionHash);
+    logGaslessConfirmationPending(identity);
   } catch (persistenceError) {
     Logger.error('Failed to persist gasless confirmation-pending transition', {
       transactionHash: identity.transactionHash,
@@ -168,6 +195,12 @@ export function isGaslessTransactionRevertedError(
   error: unknown,
 ): error is GaslessTransactionRevertedError {
   return error instanceof GaslessTransactionRevertedError;
+}
+
+export function isGaslessPersistedOutcomeError(
+  error: unknown,
+): error is GaslessPersistedOutcomeError {
+  return error instanceof GaslessPersistedOutcomeError;
 }
 
 export async function projectPersistedGaslessTransaction<T>(

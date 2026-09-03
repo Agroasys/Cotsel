@@ -4,6 +4,7 @@
 import { createHash } from 'crypto';
 import { GatewayConfig } from '../config/env';
 import { GatewayError } from '../errors';
+import type { CreateGaslessCommandInput, GaslessCommandRecord } from './gaslessCommandStore';
 import {
   CreateSettlementExecutionEventInput,
   CreateSettlementHandoffInput,
@@ -215,11 +216,22 @@ export class SettlementService {
     });
   }
 
-  async recordExecutionEvent(input: CreateSettlementExecutionEventInput): Promise<{
+  async recordExecutionEvent(
+    input: CreateSettlementExecutionEventInput,
+    command?: CreateGaslessCommandInput,
+  ): Promise<{
     handoff: SettlementHandoffRecord;
     event: SettlementExecutionEventRecord;
     callbackDelivery: SettlementCallbackDeliveryRecord;
+    command?: GaslessCommandRecord;
   }> {
+    if (command && (input.eventType !== 'accepted' || input.executionStatus !== 'accepted')) {
+      throw new GatewayError(
+        500,
+        'INTERNAL_ERROR',
+        'Durable gasless commands must be coupled to an accepted execution event',
+      );
+    }
     const observedAt = parseIsoTimestamp(input.observedAt, 'observedAt');
     const callbackEnabled = this.shouldQueueCallback();
     const dedupeKey = createHash('sha256')
@@ -241,6 +253,7 @@ export class SettlementService {
         nextAttemptAt: new Date().toISOString(),
         buildRequestBody: (handoff, event) => this.buildCallbackPayload(handoff, event),
       },
+      command,
     );
   }
 

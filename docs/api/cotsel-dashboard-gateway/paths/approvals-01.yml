@@ -1,0 +1,72 @@
+paths:
+  /approvals:
+    get:
+      tags:
+        - Approvals
+      summary: List maker-checker approval workflows for dashboard consumers
+      description: |
+        Returns read-only approval workflow summaries derived from the governance action ledger and
+        live governance status reads. The route is additive and does not mutate governance state.
+      operationId: listApprovalWorkflows
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/ApprovalWorkflowCategory'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Approval workflow summaries with freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalWorkflowListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /approvals/{approvalId}:
+    get:
+      tags:
+        - Approvals
+      summary: Get approval workflow detail by workflow id
+      description: |
+        Returns request, review, status, and execution metadata for a single maker-checker
+        governance workflow. When live governance state cannot be read, the response remains
+        additive and degrades explicitly with `available=false`.
+      operationId: getApprovalWorkflow
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Approval workflow detail with freshness metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalWorkflowDetailResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'

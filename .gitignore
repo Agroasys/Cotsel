@@ -1,4 +1,5 @@
 node_modules
+gateway/.generated/
 # Single runtime env file is never committed; only its template is tracked.
 .env*
 !.env.runtime.example

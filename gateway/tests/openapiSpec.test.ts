@@ -18,10 +18,10 @@ describe('loadOpenApiSpec', () => {
     jest.resetAllMocks();
   });
 
-  test('prefers the checked-in source spec over stale dist output', () => {
-    const repoSpecPath = path.resolve(
+  test('prefers the generated workspace bundle over stale dist output', () => {
+    const generatedSpecPath = path.resolve(
       process.cwd(),
-      'docs/api/cotsel-dashboard-gateway.openapi.yml',
+      'gateway/.generated/openapi/cotsel-dashboard-gateway.openapi.yml',
     );
     const distSpecPath = path.resolve(
       process.cwd(),
@@ -29,10 +29,10 @@ describe('loadOpenApiSpec', () => {
     );
 
     existsSyncMock.mockImplementation(
-      (candidate) => candidate === repoSpecPath || candidate === distSpecPath,
+      (candidate) => candidate === generatedSpecPath || candidate === distSpecPath,
     );
     readFileSyncMock.mockImplementation((candidate) => {
-      if (candidate === repoSpecPath) {
+      if (candidate === generatedSpecPath) {
         return 'openapi: 3.0.3\npaths: {}\ncomponents:\n  schemas:\n    OperationsSummaryResponse:\n      type: object\n';
       }
 
@@ -46,7 +46,7 @@ describe('loadOpenApiSpec', () => {
     const spec = loadOpenApiSpec();
 
     expect(spec.components?.schemas?.OperationsSummaryResponse).toBeDefined();
-    expect(readFileSyncMock).toHaveBeenCalledWith(repoSpecPath, 'utf8');
+    expect(readFileSyncMock).toHaveBeenCalledWith(generatedSpecPath, 'utf8');
     expect(readFileSyncMock).not.toHaveBeenCalledWith(distSpecPath, 'utf8');
   });
 });
