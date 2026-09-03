@@ -80,8 +80,6 @@ resource "aws_cloudfront_origin_request_policy" "gateway_hmac" {
   }
 }
 
-#trivy:ignore:AVD-AWS-0011:exp:2026-09-30:standard CloudFront logging bucket is tracked as follow-up; HMAC evidence must not log auth headers.
-#trivy:ignore:AVD-AWS-0010:exp:2026-09-30:standard WAF policy is not yet approved for the staging settlement edge.
 resource "aws_cloudfront_distribution" "gateway" {
   aliases             = [var.public_gateway_domain_name]
   comment             = "Cotsel staging gateway edge for ${var.public_gateway_domain_name}"
@@ -91,6 +89,7 @@ resource "aws_cloudfront_distribution" "gateway" {
   price_class         = "PriceClass_100"
   retain_on_delete    = true
   wait_for_deployment = true
+  web_acl_id          = aws_wafv2_web_acl.gateway.arn
 
   origin {
     connection_attempts = 3

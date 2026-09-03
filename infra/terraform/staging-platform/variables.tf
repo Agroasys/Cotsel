@@ -252,3 +252,33 @@ variable "log_retention_days" {
     error_message = "log_retention_days must be an AWS-supported value of at least 30 days."
   }
 }
+
+# The edge policy starts managed groups in count mode. A group moves to blocking only after
+# reviewers inspect redacted staging matches and record the false-positive decision.
+variable "managed_rule_groups" {
+  description = "AWS managed WAF rule groups for the Cotsel CloudFront gateway."
+  type        = list(string)
+  default = [
+    "AWSManagedRulesAmazonIpReputationList",
+    "AWSManagedRulesKnownBadInputsRuleSet",
+    "AWSManagedRulesCommonRuleSet",
+    "AWSManagedRulesSQLiRuleSet",
+  ]
+}
+
+variable "blocking_rule_groups" {
+  description = "Managed WAF rule groups approved to block after count-mode review."
+  type        = list(string)
+  default     = []
+}
+
+variable "edge_rate_limit_per_five_minutes" {
+  description = "CloudFront viewer requests per IP in five minutes before the edge blocks."
+  type        = number
+  default     = 2000
+
+  validation {
+    condition     = var.edge_rate_limit_per_five_minutes >= 100
+    error_message = "edge_rate_limit_per_five_minutes must be at least 100."
+  }
+}

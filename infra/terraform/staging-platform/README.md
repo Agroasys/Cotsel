@@ -13,6 +13,9 @@ existing Agroasys staging boundary. It does not deploy a release candidate.
 - Public ingress: `cotsel.sys.agroasys.com` terminates at CloudFront. CloudFront
   reaches the private ALB through a VPC origin; the ALB remains internal and
   admits only the AWS-managed CloudFront origin prefix list.
+- Edge controls: the CloudFront distribution uses a `us-east-1` WAF web ACL. Managed
+  rules begin in count mode, the IP rate rule blocks, and 30-day WAF and access logs redact
+  gateway credentials and signatures.
 - Runtime: one private Fargate task bundles the gateway, auth, indexer pipeline,
   indexer GraphQL server, oracle, and reconciliation worker. Terraform resolves
   the reviewed commit tag for each service to its ECR digest before it creates a
