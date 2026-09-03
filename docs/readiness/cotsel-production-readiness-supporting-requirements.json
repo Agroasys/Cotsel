@@ -89,6 +89,14 @@
         "PRES-10": {
           "implementationRequirement": "Retain Hardhat, Foundry fuzz and invariant coverage and the broad service suites. Make every critical suite clean, hosted, required and representative of crash, reorganization, provider failure and recovery on the pinned supported toolchain.",
           "acceptanceEvidence": "Branch-protection and aggregate-gate evidence shows every named contract and service suite is required and green; a meta-test proves a skipped or failed suite blocks promotion, and fault runs cover crash, reorganization and provider failure."
+        },
+        "PRES-11": {
+          "implementationRequirement": "Classify qualified reconciliation discrepancies and pause only the affected trade through the existing scoped pause control. Record an incident reference, block further progression, preserve evidence, and require fresh reconciliation plus quorum-governed recovery before resumption.",
+          "acceptanceEvidence": "A deployed discrepancy drill creates a traceable incident reference, pauses only the affected trade, rejects later progression, preserves reconciliation evidence, and proves that recovery needs fresh reconciliation and governed approval."
+        },
+        "PRES-12": {
+          "implementationRequirement": "Bind each Ricardian terms version to immutable backend snapshots, authorized signatures, a hash, and the corresponding chain reference. Model amendments as linked versions and reject retrieval or settlement against stale, cross-tenant, or mismatched terms.",
+          "acceptanceEvidence": "Pinned cross-repository journeys prove version lineage, tenant authorization, signature and hash integrity, chain binding, amendment history, and rejection of stale, mismatched, or unauthorized terms."
         }
       }
     },
@@ -202,6 +210,10 @@
         "SEC-07": {
           "implementationRequirement": "Complete independent contract, API, cloud and financial-workflow assurance on the stable release before real-value or Base mainnet use, then remediate and retest findings.",
           "acceptanceEvidence": "Independent reports name exact scope and artifact identities and show no unaccepted Critical or High finding; accepted residual findings name authority, compensating control and expiry."
+        },
+        "SEC-08": {
+          "implementationRequirement": "Require phishing-resistant MFA for production-privileged access, least-privilege roles, separate view and action permissions, and dual control for financial or configuration changes. Keep customer step-up policy under Agroasys identity authority.",
+          "acceptanceEvidence": "Identity policy, role tests, denied privileged actions, hardware-backed authentication records, maker-checker demonstrations, and audited configuration changes prove that one operator cannot bypass protected financial or production controls."
         }
       }
     },

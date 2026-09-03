@@ -62,7 +62,7 @@
       ]
     },
     "preservationRules": {
-      "expectedCount": 10,
+      "expectedCount": 12,
       "entries": [
         {
           "id": "PRES-01",
@@ -123,6 +123,18 @@
           "name": "Preserve Hardhat, Foundry, fuzz, invariant, and service tests while making critical suites required",
           "primaryRoute": "wp6-gate",
           "contributingRoutes": []
+        },
+        {
+          "id": "PRES-11",
+          "name": "Contain qualified reconciliation discrepancies through scoped pause and governed resumption",
+          "primaryRoute": "wp3-recon-leases",
+          "contributingRoutes": ["wp1-governance", "wp8-drills", "wp9-treasury-recovery-journeys"]
+        },
+        {
+          "id": "PRES-12",
+          "name": "Preserve immutable Ricardian version lineage and backend-to-chain binding",
+          "primaryRoute": "wp9-ricardian",
+          "contributingRoutes": ["wp1-contract-deploy", "wp10-controls"]
         }
       ]
     },
@@ -245,7 +257,7 @@
       ]
     },
     "securityControls": {
-      "expectedCount": 7,
+      "expectedCount": 8,
       "entries": [
         {
           "id": "SEC-01",
@@ -288,6 +300,12 @@
           "name": "Complete independent contract, API, cloud, and financial-workflow assurance",
           "primaryRoute": "wp10-independent",
           "contributingRoutes": []
+        },
+        {
+          "id": "SEC-08",
+          "name": "Require phishing-resistant privileged access and dual control for financial and configuration actions",
+          "primaryRoute": "wp6-ownership",
+          "contributingRoutes": ["wp4-makerchecker", "wp7-config", "wp10-controls"]
         }
       ]
     },

@@ -449,7 +449,7 @@ const normalizedMilestones = liveMilestones
 assert.deepEqual(normalizedMilestones, milestoneContract.milestones, 'milestone contract');
 
 assert.equal(source.findings.length, 58);
-assert.equal(controls.length, 136);
+assert.equal(controls.length, 139);
 
 console.log('Live Cotsel production-readiness setup is complete and reconciled.');
 console.log(
