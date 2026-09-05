@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "cotsel.base-sepolia-staging-contract.v1",
+  "status": "accepted-for-staging-promotion",
+  "environment": "aws-staging",
+  "chainId": 84532,
+  "address": "0x95021c0fD0C69BB5Cb991832476B646857632e5d",
+  "deploymentBlock": 45914609,
+  "deploymentTransactionHash": "0xe38c4dd37d2cdf465bb8c61a0801d5d63d0c228067f99e143f63d11e0afae5ca",
+  "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "sourceCommit": "6052ed389e885fce3711be0794c8df0df6fe6d95",
+  "deploymentEvidence": "contracts/reports/deploy/base-sepolia/agroasysescrow-deploy.json",
+  "artifact": {
+    "compilerVersion": "0.8.34+commit.80d5c536",
+    "compilerSettings": {
+      "viaIR": true,
+      "optimizerEnabled": true,
+      "optimizerRuns": 1,
+      "evmVersion": "paris"
+    },
+    "compilerInputSha256": "068206dfc9a1bc35ad36753789fe35fc79fba99f72edd21d3a7743289b7b4572",
+    "abiSha256": "4384792054d99e2063cd133c62c22aea3916982d5d9c29d2c168217e6e552277",
+    "creationBytecodeSha256": "3f0acaa9810bcaa1d64796333936c105fdc00ccc7aadc78a5f2108761f9cd0a8",
+    "normalizedRuntimeBytecodeSha256": "9554685d6655a4cf70417ce40c754e039948b15720a9294f1e3ad435accd049f"
+  },
+  "roles": {
+    "oracle": "0x440b6efe3f4E0A59A9F199f97C9E4cd9368A178B",
+    "treasury": "0xc6d7c73f5a23B6b681e0fd95F30A1f38A64BE4bc",
+    "treasuryPayout": "0xc6d7c73f5a23B6b681e0fd95F30A1f38A64BE4bc",
+    "relayer": "0xE06E388BaEcFD9FcffD4890ddA552C4245c3aB2b",
+    "admins": [
+      "0x0817fe4A674a57af87E39d0CD341b2b5F0158599",
+      "0xcB1296C7149289CF1Bd0B84ce6D8c0F608E041cD",
+      "0x13F9507b51A883B1302B555F9530C0F2d1b5bB8f"
+    ],
+    "requiredApprovals": 2,
+    "governanceEpoch": 1,
+    "oracleActive": true,
+    "relayerAllowed": true
+  },
+  "acceptance": {
+    "issue": "https://github.com/Agroasys/Cotsel/issues/639",
+    "decision": "ACCEPTED",
+    "acceptedBy": "czpyioe",
+    "acceptedAt": "2026-08-26T14:26:59Z",
+    "evidence": "https://github.com/Agroasys/Cotsel/issues/639#issuecomment-5426793276"
+  },
+  "invalidationTriggers": [
+    "contract source or compiler input changes",
+    "deployment address, transaction, block, constructor, role, ABI, or bytecode evidence changes",
+    "the issue 639 acceptance decision is withdrawn or superseded"
+  ]
+}

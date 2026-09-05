@@ -396,3 +396,52 @@ gh pr view <number> --repo <owner/repository> --json headRefOid,reviews,statusCh
 ```
 
 Redact command output before attaching it to issues. Never attach raw Terraform state or secret values.
+
+## Supersession update — 2026-08-28 — WP-1 accepted-contract selection
+
+This update supersedes only the earlier statements that no Base Sepolia staging
+contract had independent acceptance. It does not supersede the historical
+runtime evidence or imply that AWS address convergence has occurred.
+
+Issue `Cotsel#639` now contains an explicit independent `ACCEPTED` decision by
+`czpyioe`, recorded at `2026-08-26T14:26:59Z` in
+`issuecomment-5426793276`. The accepted deployment is:
+
+| Field                  | Accepted value                                                       |
+| ---------------------- | -------------------------------------------------------------------- |
+| Chain                  | Base Sepolia `84532`                                                 |
+| Contract               | `0x95021c0fD0C69BB5Cb991832476B646857632e5d`                         |
+| Deployment transaction | `0xe38c4dd37d2cdf465bb8c61a0801d5d63d0c228067f99e143f63d11e0afae5ca` |
+| Deployment block       | `45914609`                                                           |
+| Source commit          | `6052ed389e885fce3711be0794c8df0df6fe6d95`                           |
+| Canonical USDC         | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`                         |
+
+The accepted identity and acceptance evidence are pinned in
+`integration/base-sepolia-staging-contract.json`. The protected Terraform plan
+workflow validates requested address, start block, USDC, deployment receipt,
+source commit, compiler settings, artifact hashes, constructor roles,
+clean-worktree evidence, and explorer-verification status against that record
+before a plan can be produced. A path-scoped comparison from source commit
+`6052ed389e885fce3711be0794c8df0df6fe6d95` to this revision found no changes in
+the contract, deployment, SDK ABI, indexer ABI, Oracle, or reconciliation
+surfaces tied to the accepted artifact.
+
+Current AWS runtime evidence was refreshed on `2026-08-28`. ECS service
+`cotsel-staging-gateway` remains healthy at desired/running `1/1` on task
+definition `cotsel-staging-gateway:21`, but gateway, oracle, indexer, and
+reconciliation still use historical contract
+`0xB594Cd561F28daBD771f9b358CF2bc731d14EDBd`; the indexer still starts at
+historical block `45807259`. Ricardian and Treasury remain stopped at `0/0`.
+
+Classifications after this update:
+
+| Claim                                       | Classification     | Evidence or remaining gate                                                                                |
+| ------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------- |
+| Contract provenance and acceptance          | VERIFIED           | Independent reproduction and explicit acceptance on `Cotsel#639`; canonical deployment report matches.    |
+| Accepted selection is guarded in source     | VERIFIED           | Manifest validator passes the accepted identity and rejects the historical runtime identity.              |
+| AWS consumers use the accepted contract     | NOT IMPLEMENTED    | Running task definition `:21` still uses the historical address and indexer start block.                  |
+| WP-1 accepted deployment is live end to end | PARTIALLY VERIFIED | Requires reviewed merge, a fresh main-branch Terraform plan, counterpart apply, and live consumer checks. |
+
+Do not close `Cotsel#639` or the WP-1 parent solely from this source-control
+guard. Closure still requires running-task convergence and the issue-defined
+indexer, reconciliation, and exact-candidate runtime evidence.
