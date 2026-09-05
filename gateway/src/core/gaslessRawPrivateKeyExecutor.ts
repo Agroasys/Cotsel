@@ -1,7 +1,8 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Contract, NonceManager, TransactionReceipt, Wallet } from 'ethers';
+import { Contract, Interface, TransactionReceipt, Wallet } from 'ethers';
+import type { TransactionRequest, TransactionResponse } from 'ethers';
 import { AgroasysEscrow__factory } from '@agroasys/sdk';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import { GatewayError } from '../errors';
@@ -14,16 +15,24 @@ import type {
   GaslessUserActionExecutionInput,
   GaslessWalletUsdcTransferExecutionInput,
 } from './gaslessExecutionTypes';
-import { isGaslessNonceDriftError } from './gaslessRelayerRuntime';
+import {
+  broadcastPersistedGaslessTransaction,
+  GaslessTransactionOutcomePendingError,
+  GaslessTransactionRevertedError,
+  persistGaslessTerminalOutcome,
+} from './gaslessTransactionLifecycle';
+import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutcomeStore';
 import {
   buildCreateTradeArguments,
   buildUserActionArguments,
   buildWalletUsdcTransferArguments,
+  getUserActionFunctionName,
   USDC_AUTHORIZATION_ABI,
 } from './gaslessTransactionEncoding';
 
 export function createRawPrivateKeyGaslessSettlementExecutor(
   config: GaslessExecutorConfig,
+  transactionOutcomeRecorder: GaslessTransactionOutcomeRecorder,
 ): GaslessSettlementExecutor {
   if (!config.gaslessExecutorPrivateKey) {
     throw new GatewayError(
@@ -37,9 +46,11 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     chainId: config.chainId,
     quorum: config.rpcQuorum,
   });
-  const signer = new NonceManager(new Wallet(config.gaslessExecutorPrivateKey, provider));
+  const signer = new Wallet(config.gaslessExecutorPrivateKey, provider);
   const escrow = AgroasysEscrow__factory.connect(config.escrowAddress, signer);
   const usdc = new Contract(config.usdcAddress, USDC_AUTHORIZATION_ABI, signer);
+  const escrowInterface = new Interface(AgroasysEscrow__factory.abi);
+  const usdcInterface = new Interface(USDC_AUTHORIZATION_ABI);
   const gaslessMaxGasLimit = config.gaslessMaxGasLimit ?? 1_500_000n;
   const gaslessMaxFeePerGasWei = config.gaslessMaxFeePerGasWei ?? 50_000_000_000n;
   const gaslessMaxNativeCostWei = config.gaslessMaxNativeCostWei ?? 100_000_000_000_000_000n;
@@ -68,28 +79,39 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     hash: string;
     wait: (confirms?: number, timeout?: number) => Promise<TransactionReceipt | null>;
   }): Promise<GaslessExecutionReceipt> {
-    const receipt = await tx.wait(1, gaslessReceiptTimeoutMs);
-    if (!receipt) {
-      throw new GatewayError(
-        502,
-        'UPSTREAM_UNAVAILABLE',
-        'Gasless transaction receipt was not available',
-        {
-          txHash: tx.hash,
-        },
+    let receipt;
+    try {
+      receipt = await tx.wait(1, gaslessReceiptTimeoutMs);
+    } catch {
+      throw new GaslessTransactionOutcomePendingError(
+        tx.hash,
+        'confirmation_pending',
+        'Gasless transaction confirmation requires reconciliation',
       );
     }
+    if (!receipt) {
+      throw new GaslessTransactionOutcomePendingError(
+        tx.hash,
+        'confirmation_pending',
+        'Gasless transaction confirmation requires reconciliation',
+      );
+    }
+    const outcome = {
+      blockNumber: BigInt(receipt.blockNumber).toString(),
+      blockHash: receipt.blockHash,
+      gasUsed: BigInt(receipt.gasUsed ?? 0n).toString(),
+      effectiveGasPriceWei: BigInt(receipt.gasPrice ?? 0n).toString(),
+    };
     if (receipt.status !== 1) {
-      throw new GatewayError(502, 'UPSTREAM_UNAVAILABLE', 'Gasless transaction reverted on-chain', {
-        txHash: tx.hash,
-        blockNumber: receipt.blockNumber,
-      });
+      await persistGaslessTerminalOutcome(transactionOutcomeRecorder, tx.hash, 'reverted', outcome);
+      throw new GaslessTransactionRevertedError(tx.hash, outcome.blockNumber);
     }
 
     const executorAddress = await signer.getAddress();
     const executorBalance = await provider.getBalance(executorAddress);
     const gasUsed = BigInt(receipt.gasUsed ?? 0n);
     const effectiveGasPriceWei = BigInt(receipt.gasPrice ?? 0n);
+    await persistGaslessTerminalOutcome(transactionOutcomeRecorder, tx.hash, 'confirmed', outcome);
 
     return {
       txHash: tx.hash,
@@ -257,57 +279,43 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     return gasEstimate;
   }
 
-  async function broadcastUserAction(
-    input: GaslessUserActionExecutionInput,
+  async function signAndBroadcast(
+    input: {
+      requestId: string;
+      operation: string;
+      resourceType: 'settlement_handoff' | 'platform_transfer';
+      resourceId: string;
+      destinationAddress: string;
+      data: string;
+    },
     gasLimit: bigint,
     feeOverrides: {
       maxFeePerGas?: bigint;
       maxPriorityFeePerGas?: bigint;
       gasPrice?: bigint;
     },
-  ): Promise<{ hash: string; wait: () => Promise<TransactionReceipt | null> }> {
-    const args = buildUserActionArguments(input);
-    if (input.action === 'open_dispute') {
-      return escrow.openDisputeWithAuthorization(...args, { gasLimit, ...feeOverrides });
-    }
-    if (input.action === 'cancel_locked_timeout') {
-      return escrow.cancelLockedTradeAfterTimeoutWithAuthorization(...args, {
-        gasLimit,
-        ...feeOverrides,
-      });
-    }
-    if (input.action === 'refund_in_transit_timeout') {
-      return escrow.refundInTransitAfterTimeoutWithAuthorization(...args, {
-        gasLimit,
-        ...feeOverrides,
-      });
-    }
-
-    if (input.action === 'finalize_after_dispute_window') {
-      return escrow.finalizeAfterDisputeWindowWithAuthorization(...args, {
-        gasLimit,
-        ...feeOverrides,
-      });
-    }
-
-    return escrow.finalizeAfterInspectionAcceptanceWithAuthorization(...args, {
+  ): Promise<TransactionResponse> {
+    const transaction: TransactionRequest = {
+      to: input.destinationAddress,
+      chainId: config.chainId,
+      value: 0n,
+      data: input.data,
+      nonce: await provider.getTransactionCount(signer.address, 'pending'),
       gasLimit,
       ...feeOverrides,
-    });
-  }
-
-  async function withFreshSignerNonce<T>(operation: () => Promise<T>): Promise<T> {
-    signer.reset();
-    try {
-      return await operation();
-    } catch (error) {
-      if (!isGaslessNonceDriftError(error)) {
-        throw error;
-      }
-
-      signer.reset();
-      return operation();
-    }
+    };
+    const signedTransaction = await signer.signTransaction(transaction);
+    return broadcastPersistedGaslessTransaction(
+      signedTransaction,
+      {
+        applicationRequestId: input.requestId,
+        resourceType: input.resourceType,
+        resourceId: input.resourceId,
+        operation: input.operation,
+      },
+      transactionOutcomeRecorder,
+      (signed) => provider.broadcastTransaction(signed),
+    );
   }
 
   return {
@@ -318,14 +326,22 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     },
 
     async executeCreateTrade(input) {
-      const args = buildCreateTradeArguments(input);
       const gasEstimate = await simulate(input);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await withFreshSignerNonce(() =>
-        escrow.createTradeWithAuthorization(...args, {
-          gasLimit: gasEstimate,
-          ...feeOverrides,
-        }),
+      const tx = await signAndBroadcast(
+        {
+          requestId: input.requestId,
+          operation: input.action,
+          resourceType: 'settlement_handoff',
+          resourceId: input.handoffId,
+          destinationAddress: config.escrowAddress,
+          data: escrowInterface.encodeFunctionData(
+            'createTradeWithAuthorization',
+            buildCreateTradeArguments(input),
+          ),
+        },
+        gasEstimate,
+        feeOverrides,
       );
 
       return {
@@ -343,8 +359,20 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     async executeUserAction(input) {
       const gasEstimate = await simulateUserAction(input);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await withFreshSignerNonce(() =>
-        broadcastUserAction(input, gasEstimate, feeOverrides),
+      const tx = await signAndBroadcast(
+        {
+          requestId: input.requestId,
+          operation: input.action,
+          resourceType: 'settlement_handoff',
+          resourceId: input.handoffId,
+          destinationAddress: config.escrowAddress,
+          data: escrowInterface.encodeFunctionData(
+            getUserActionFunctionName(input.action),
+            buildUserActionArguments(input),
+          ),
+        },
+        gasEstimate,
+        feeOverrides,
       );
       return {
         txHash: tx.hash,
@@ -361,11 +389,17 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     async executeOperatorAction(input) {
       const gasEstimate = await simulateOperatorAction(input);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await withFreshSignerNonce(() =>
-        escrow.finalizeAfterDisputeWindow(input.tradeId, {
-          gasLimit: gasEstimate,
-          ...feeOverrides,
-        }),
+      const tx = await signAndBroadcast(
+        {
+          requestId: input.requestId,
+          operation: input.action,
+          resourceType: 'settlement_handoff',
+          resourceId: input.handoffId,
+          destinationAddress: config.escrowAddress,
+          data: escrowInterface.encodeFunctionData('finalizeAfterDisputeWindow', [input.tradeId]),
+        },
+        gasEstimate,
+        feeOverrides,
       );
       return {
         txHash: tx.hash,
@@ -380,12 +414,20 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     async executeWalletUsdcTransfer(input) {
       const gasEstimate = await simulateWalletUsdcTransfer(input);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const transfer = usdc.getFunction('transferWithAuthorization');
-      const tx = await withFreshSignerNonce(() =>
-        transfer(...buildWalletUsdcTransferArguments(input), {
-          gasLimit: gasEstimate,
-          ...feeOverrides,
-        }),
+      const tx = await signAndBroadcast(
+        {
+          requestId: input.requestId,
+          operation: input.action,
+          resourceType: 'platform_transfer',
+          resourceId: input.platformTransferId,
+          destinationAddress: config.usdcAddress,
+          data: usdcInterface.encodeFunctionData(
+            'transferWithAuthorization',
+            buildWalletUsdcTransferArguments(input),
+          ),
+        },
+        gasEstimate,
+        feeOverrides,
       );
       return {
         txHash: tx.hash,

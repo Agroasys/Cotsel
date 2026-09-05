@@ -2,10 +2,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createHash, randomUUID } from 'crypto';
-import { readFile } from 'fs/promises';
-import { resolve } from 'path';
 import { Pool } from 'pg';
+import { createPostgresGaslessTransactionOutcomeRecorder } from '../src/core/gaslessTransactionOutcomeStore';
+import { createPostgresIdempotencyStore } from '../src/core/idempotencyStore';
 import { createPostgresSettlementStore } from '../src/core/settlementStore';
+import { runMigrations } from '../src/database/migrations';
 
 const ACTIVITY_COUNT = 64;
 
@@ -38,8 +39,7 @@ async function main(): Promise<void> {
   const pool = new Pool({ connectionString: databaseUrl, max: 24 });
 
   try {
-    const schema = await readFile(resolve(process.cwd(), 'src/database/schema.sql'), 'utf8');
-    await pool.query(schema);
+    await runMigrations(pool);
     const store = createPostgresSettlementStore(pool);
 
     const handoffs = await Promise.all(
@@ -204,6 +204,86 @@ async function main(): Promise<void> {
       }
     }
 
+    const idempotencyStore = createPostgresIdempotencyStore(pool);
+    const outcomeStore = createPostgresGaslessTransactionOutcomeRecorder(pool);
+    const outcomeRequestId = `outcome-${shortToken}`;
+    const outcomeHash = `0x${sha256(`${token}:outcome`)}`;
+    const idempotencyScope = {
+      actorId: 'service:activity-database-proof',
+      endpoint: '/settlement/gasless-executions/create-trade',
+      idempotencyKey: `outcome-idempotency-${shortToken}`,
+    };
+    const idempotencyReservation = await idempotencyStore.createPending({
+      ...idempotencyScope,
+      requestMethod: 'POST',
+      requestPath: '/settlement/gasless-executions/create-trade',
+      requestFingerprint: sha256(`${token}:request-fingerprint`),
+      requestId: outcomeRequestId,
+    });
+    await outcomeStore.recordPrepared({
+      transactionHash: outcomeHash,
+      applicationRequestId: outcomeRequestId,
+      resourceType: 'settlement_handoff',
+      resourceId: handoffs[0]!.handoffId,
+      operation: 'create_trade',
+      chainId: 84532,
+      signerAddress: `0x${'1'.repeat(40)}`,
+      nonce: 7,
+      transactionType: 2,
+      destinationAddress: `0x${'2'.repeat(40)}`,
+      valueWei: '0',
+      gasLimit: '210000',
+      maxFeePerGasWei: '2',
+      maxPriorityFeePerGasWei: '1',
+      gasPriceWei: null,
+      calldataHash: `0x${sha256(`${token}:calldata`)}`,
+      intentHash: `0x${sha256(`${token}:intent`)}`,
+    });
+    await idempotencyStore.releasePending(
+      idempotencyScope,
+      idempotencyReservation.record.requestId,
+    );
+    if (!(await idempotencyStore.get(idempotencyScope))) {
+      throw new Error('Idempotency reservation was released after financial identity persisted.');
+    }
+
+    await outcomeStore.markBroadcastUnknown(outcomeHash, 'DATABASE_PROOF_INJECTED_TIMEOUT');
+    await outcomeStore.markConfirmationPending(outcomeHash);
+    await outcomeStore.markConfirmed(outcomeHash, {
+      blockNumber: '12345',
+      blockHash: `0x${sha256(`${token}:block`)}`,
+      gasUsed: '210000',
+      effectiveGasPriceWei: '2',
+    });
+    const outcomeRows = await pool.query<{
+      outcomeStatus: string;
+      eventCount: string;
+      applicationRequestId: string;
+    }>(
+      `SELECT
+         outcome.outcome_status AS "outcomeStatus",
+         outcome.application_request_id AS "applicationRequestId",
+         COUNT(event.outcome_event_id)::text AS "eventCount"
+       FROM gasless_transaction_outcomes outcome
+       JOIN gasless_transaction_outcome_events event
+         ON event.transaction_hash = outcome.transaction_hash
+       WHERE outcome.transaction_hash = $1
+       GROUP BY outcome.outcome_status, outcome.application_request_id`,
+      [outcomeHash],
+    );
+    if (
+      outcomeRows.rows[0]?.outcomeStatus !== 'confirmed' ||
+      outcomeRows.rows[0]?.applicationRequestId !== outcomeRequestId ||
+      outcomeRows.rows[0]?.eventCount !== '4'
+    ) {
+      throw new Error('Gasless outcome state or append-only event history is incomplete.');
+    }
+
+    await expectTransitionRejected(
+      () => outcomeStore.markConfirmationPending(outcomeHash),
+      'terminal gasless outcome transitioned back to confirmation_pending',
+    );
+
     process.stdout.write(
       `${JSON.stringify({
         status: 'passed',
@@ -215,11 +295,27 @@ async function main(): Promise<void> {
         duplicateEvents: 0,
         duplicateCallbacks: 0,
         retainedEvidenceRows: true,
+        gaslessIdentityPersistedBeforeOutcome: true,
+        gaslessOutcomeEvents: 4,
+        terminalOutcomeImmutable: true,
+        idempotencyRetainedAcrossUnknownOutcome: true,
       })}\n`,
     );
   } finally {
     await pool.end();
   }
+}
+
+async function expectTransitionRejected(
+  operation: () => Promise<void>,
+  failureMessage: string,
+): Promise<void> {
+  try {
+    await operation();
+  } catch {
+    return;
+  }
+  throw new Error(failureMessage);
 }
 
 void main().catch((error) => {

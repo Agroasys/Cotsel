@@ -897,11 +897,13 @@ paths:
               $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionRequest'
       responses:
         '202':
-          description: Gasless create-trade execution submitted by Cotsel.
+          description: Gasless create-trade execution submitted, or the durable outcome of an earlier ambiguous attempt returned for the same idempotency key.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionResponse'
+                  - $ref: '#/components/schemas/GaslessFinancialOutcomeRecoveryResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -942,7 +944,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionResponse'
+                  - $ref: '#/components/schemas/GaslessFinancialOutcomeRecoveryResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -979,11 +983,13 @@ paths:
               $ref: '#/components/schemas/SettlementGaslessUserActionExecutionRequest'
       responses:
         '202':
-          description: Gasless user-action execution submitted by Cotsel.
+          description: Gasless user-action execution submitted, or the durable outcome of an earlier ambiguous attempt returned for the same idempotency key.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SettlementGaslessUserActionExecutionResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/SettlementGaslessUserActionExecutionResponse'
+                  - $ref: '#/components/schemas/GaslessFinancialOutcomeRecoveryResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -1020,11 +1026,13 @@ paths:
               $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionRequest'
       responses:
         '202':
-          description: Gasless operator-action execution submitted by Cotsel.
+          description: Gasless operator-action execution submitted, or the durable outcome of an earlier ambiguous attempt returned for the same idempotency key.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionResponse'
+                  - $ref: '#/components/schemas/GaslessFinancialOutcomeRecoveryResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -1061,11 +1069,13 @@ paths:
               $ref: '#/components/schemas/SponsoredWalletUsdcTransferRequest'
       responses:
         '202':
-          description: The sponsored USDC transfer was confirmed and receipt evidence was returned.
+          description: The sponsored USDC transfer was confirmed, or the durable outcome of an earlier ambiguous attempt was returned for the same idempotency key.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SponsoredWalletUsdcTransferResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/SponsoredWalletUsdcTransferResponse'
+                  - $ref: '#/components/schemas/GaslessFinancialOutcomeRecoveryResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -3745,7 +3755,20 @@ components:
           format: date-time
     SettlementExecutionStatus:
       type: string
-      enum: [pending, accepted, queued, submitted, confirmed, failed, rejected]
+      enum:
+        [
+          pending,
+          accepted,
+          queued,
+          broadcast_unknown,
+          confirmation_pending,
+          submitted,
+          confirmed,
+          reverted,
+          replaced,
+          failed,
+          rejected,
+        ]
     SettlementReconciliationStatus:
       type: string
       enum: [pending, matched, drift, unavailable]
@@ -3759,8 +3782,12 @@ components:
           accepted,
           queued,
           simulation_completed,
+          broadcast_unknown,
+          confirmation_pending,
           submitted,
           confirmed,
+          reverted,
+          replaced,
           failed,
           rejected,
           reconciled,
@@ -4171,6 +4198,56 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/SettlementGaslessCreateTradeExecutionPayload'
+        timestamp:
+          type: string
+          format: date-time
+    GaslessFinancialOutcomeRecoveryResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data, timestamp]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - requestId
+            - transactionHash
+            - outcomeStatus
+            - resourceType
+            - resourceId
+            - operation
+            - chainId
+            - recovered
+            - rebroadcastAllowed
+          properties:
+            requestId:
+              type: string
+            transactionHash:
+              type: string
+              pattern: '^0x[0-9a-f]{64}$'
+            outcomeStatus:
+              type: string
+              enum:
+                [broadcast_pending, broadcast_unknown, confirmation_pending, confirmed, reverted]
+            resourceType:
+              type: string
+              enum: [settlement_handoff, platform_transfer]
+            resourceId:
+              type: string
+            operation:
+              type: string
+            chainId:
+              type: integer
+              minimum: 1
+            recovered:
+              type: boolean
+              const: true
+            rebroadcastAllowed:
+              type: boolean
+              const: false
         timestamp:
           type: string
           format: date-time

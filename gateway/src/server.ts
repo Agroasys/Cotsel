@@ -34,12 +34,9 @@ import {
 } from './core/settlementStore';
 import { createServiceApiKeyLookup } from './core/serviceAuth';
 import { SettlementCallbackDispatcher } from './core/settlementCallbackDispatcher';
-import {
-  createEthersGaslessSettlementExecutor,
-  GaslessSettlementExecutionService,
-} from './core/gaslessSettlementExecutionService';
-import { createPostgresGaslessRelayerBroadcastLock } from './core/gaslessRelayerBroadcastLock';
+import { createConfiguredGaslessSettlementService } from './core/gaslessSettlementServiceFactory';
 import { createPostgresManagedSignerValidationRecorder } from './core/managedSignerAuditStore';
+import { createGaslessTransactionOutcomeRuntime } from './core/gaslessTransactionOutcomeRuntime';
 import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { IndexerGraphqlClient } from './core/indexerGraphqlClient';
@@ -86,7 +83,10 @@ const evidenceBundleStore = createPostgresEvidenceBundleStore(pool);
 const governanceStatusService = createGovernanceStatusService(config);
 const failedOperationStore = createPostgresFailedOperationStore(pool);
 const errorHandlerWorkflow = new GatewayErrorHandlerWorkflow(failedOperationStore, auditLogStore);
-const idempotencyStore = createPostgresIdempotencyStore(pool);
+const idempotencyStore = createPostgresIdempotencyStore(
+  pool,
+  config.idempotencyLeaseDurationMs ?? 300_000,
+);
 const roleAssignmentStore = createPostgresRoleAssignmentStore(pool);
 const settlementStore = createPostgresSettlementStore(pool);
 const settlementNonceStore = createGatewayServiceAuthNonceStore(pool);
@@ -94,38 +94,20 @@ const settlementServiceApiKeyLookup = createServiceApiKeyLookup(
   config.settlementServiceAuthApiKeysJson,
 );
 const settlementService = new SettlementService(config, settlementStore);
-const gaslessSettlementService = config.gaslessExecutionEnabled
-  ? new GaslessSettlementExecutionService(
-      settlementService,
-      settlementStore,
-      createEthersGaslessSettlementExecutor(config, {
-        recordValidationEvidence: managedSignerValidationRecorder,
-      }),
-      {
-        chainId: config.chainId,
-        escrowAddress: config.escrowAddress,
-        usdcAddress: config.usdcAddress,
-        requestMaxTtlSeconds: config.gaslessRequestMaxTtlSeconds ?? 900,
-        broadcastPaused: config.gaslessBroadcastPaused,
-        signerCustodyMode: config.gaslessSignerCustodyMode,
-        rpcFallbackCount: config.rpcFallbackUrls.length,
-        gasLimitCap: config.gaslessMaxGasLimit,
-        maxFeePerGasWei: config.gaslessMaxFeePerGasWei,
-        maxNativeCostWei: config.gaslessMaxNativeCostWei,
-        minExecutorBalanceWei: config.gaslessMinExecutorBalanceWei,
-        lowBalanceAlertWei: config.gaslessLowBalanceAlertWei,
-        capacityTargetTxPerDay: config.gaslessCapacityTargetTxPerDay,
-        capacityBurstMultiplierBasisPoints: config.gaslessCapacityBurstMultiplierBasisPoints,
-        capacitySafetyMarginBasisPoints: config.gaslessCapacitySafetyMarginBasisPoints,
-        capacityRequiredExecutorBalanceWei: config.gaslessCapacityRequiredExecutorBalanceWei,
-        capacityFailClosed: config.gaslessCapacityFailClosed,
-        stuckQueueThresholdMs: config.gaslessStuckQueueThresholdMs,
-        receiptTimeoutMs: config.gaslessReceiptTimeoutMs,
-        repeatedFailureAlertThreshold: config.gaslessRepeatedFailureAlertThreshold,
-        broadcastLock: createPostgresGaslessRelayerBroadcastLock(pool),
-      },
-    )
-  : null;
+const gaslessTransactionOutcomeRuntime = createGaslessTransactionOutcomeRuntime(
+  config,
+  pool,
+  settlementStore,
+  settlementService,
+);
+const gaslessSettlementService = createConfiguredGaslessSettlementService(
+  config,
+  pool,
+  settlementService,
+  settlementStore,
+  managedSignerValidationRecorder,
+  gaslessTransactionOutcomeRuntime.recorder,
+);
 const settlementCallbackDispatcher = new SettlementCallbackDispatcher(config, settlementStore, {
   failedOperationWorkflow: errorHandlerWorkflow,
 });
@@ -552,10 +534,12 @@ async function bootstrap(): Promise<void> {
     });
   });
   settlementCallbackDispatcher.start();
+  gaslessTransactionOutcomeRuntime.start();
 
   const shutdown = async (signal: string): Promise<void> => {
     Logger.info('Shutting down dashboard gateway', { signal });
     settlementCallbackDispatcher.stop();
+    gaslessTransactionOutcomeRuntime.stop();
     await requestRateLimiter.close();
     await closeConnection(pool);
     server.close(() => process.exit(0));
@@ -573,6 +557,7 @@ async function bootstrap(): Promise<void> {
     void (async () => {
       Logger.error('Dashboard gateway server error', error);
       settlementCallbackDispatcher.stop();
+      gaslessTransactionOutcomeRuntime.stop();
       await requestRateLimiter.close().catch(() => undefined);
       await closeConnection(pool);
       process.exit(1);

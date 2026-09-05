@@ -26,5 +26,12 @@ export function buildSettlementTransactionReference(
 }
 
 export function requiresCanonicalTxHash(executionStatus: string): boolean {
-  return executionStatus === 'submitted' || executionStatus === 'confirmed';
+  return [
+    'broadcast_unknown',
+    'confirmation_pending',
+    'submitted',
+    'confirmed',
+    'reverted',
+    'replaced',
+  ].includes(executionStatus);
 }

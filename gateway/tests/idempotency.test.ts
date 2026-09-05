@@ -1,149 +1,13 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Router } from 'express';
-import type { Server } from 'http';
-import { createApp } from '../src/app';
-import type { GatewayConfig } from '../src/config/env';
-import { createIdempotencyMiddleware } from '../src/middleware/idempotency';
 import { createInMemoryIdempotencyStore } from '../src/core/idempotencyStore';
-import type { GatewayPrincipal } from '../src/middleware/auth';
-
-const config: GatewayConfig = {
-  port: 3600,
-  dbHost: 'localhost',
-  dbPort: 5432,
-  dbName: 'agroasys_gateway',
-  dbUser: 'postgres',
-  dbPassword: 'postgres',
-  authBaseUrl: 'http://127.0.0.1:3005',
-  authRequestTimeoutMs: 5000,
-  indexerGraphqlUrl: 'http://127.0.0.1:4350/graphql',
-  indexerRequestTimeoutMs: 5000,
-  rpcUrl: 'http://127.0.0.1:8545',
-  rpcFallbackUrls: [],
-  rpcReadTimeoutMs: 8000,
-  chainId: 31337,
-  escrowAddress: '0x0000000000000000000000000000000000000000',
-  usdcAddress: '0x0000000000000000000000000000000000000888',
-  enableMutations: false,
-  writeAllowlist: [],
-  governanceQueueTtlSeconds: 86400,
-  settlementIngressEnabled: false,
-  settlementServiceAuthApiKeysJson: '[]',
-  settlementServiceAuthMaxSkewSeconds: 300,
-  settlementServiceAuthNonceTtlSeconds: 600,
-  settlementCallbackEnabled: false,
-  settlementCallbackRequestTimeoutMs: 5000,
-  settlementCallbackPollIntervalMs: 5000,
-  settlementCallbackMaxAttempts: 8,
-  settlementCallbackInitialBackoffMs: 2000,
-  settlementCallbackMaxBackoffMs: 60000,
-  commitSha: 'abc1234',
-  buildTime: '2026-03-07T00:00:00.000Z',
-  nodeEnv: 'test',
-  corsAllowedOrigins: [],
-  corsAllowNoOrigin: true,
-  rateLimitEnabled: true,
-  contractAddressRequired: true,
-  allowInsecureDownstreamAuth: true,
-};
-
-async function startServer() {
-  const router = Router();
-  const store = createInMemoryIdempotencyStore();
-  const mutationMiddleware = createIdempotencyMiddleware(store);
-  let executionCount = 0;
-  let failOnce = false;
-  let slowMutationMs = 0;
-
-  router.post(
-    '/test-mutation',
-    (req, _res, next) => {
-      const actor = req.header('x-test-actor') ?? 'admin';
-      const gatewayPrincipal: GatewayPrincipal = {
-        sessionReference: `sess-${actor}`,
-        session: {
-          userId: actor === 'buyer' ? 'uid-buyer' : 'uid-admin',
-          walletAddress:
-            actor === 'buyer'
-              ? '0x00000000000000000000000000000000000000bb'
-              : '0x00000000000000000000000000000000000000aa',
-          role: actor === 'buyer' ? 'buyer' : 'admin',
-          capabilities: [],
-          signerAuthorizations: [],
-          issuedAt: 1_744_243_200,
-          expiresAt: 1_744_246_800,
-        },
-        gatewayRoles: actor === 'buyer' ? [] : ['operator:read', 'operator:write'],
-        operatorActionCapabilities: [],
-        treasuryCapabilities:
-          actor === 'buyer'
-            ? []
-            : [
-                'treasury:read',
-                'treasury:prepare',
-                'treasury:approve',
-                'treasury:execute_match',
-                'treasury:close',
-              ],
-        writeEnabled: actor !== 'buyer',
-      };
-      req.gatewayPrincipal = gatewayPrincipal;
-      next();
-    },
-    mutationMiddleware,
-    (_req, res) => {
-      if (slowMutationMs > 0) {
-        return setTimeout(() => {
-          executionCount += 1;
-          res.status(202).json({ success: true, executionCount });
-        }, slowMutationMs);
-      }
-
-      executionCount += 1;
-      if (failOnce) {
-        failOnce = false;
-        res.status(500).json({ success: false, executionCount });
-        return;
-      }
-      res.status(202).json({ success: true, executionCount });
-    },
-  );
-
-  const app = createApp(config, {
-    version: '0.1.0',
-    commitSha: config.commitSha,
-    buildTime: config.buildTime,
-    readinessCheck: async () => [{ name: 'postgres', status: 'ok' }],
-    extraRouter: router,
-  });
-
-  const server = await new Promise<Server>((resolve) => {
-    const instance = app.listen(0, () => resolve(instance));
-  });
-
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Failed to resolve server address');
-  }
-
-  return {
-    server,
-    baseUrl: `http://127.0.0.1:${address.port}/api/dashboard-gateway/v1`,
-    getExecutionCount: () => executionCount,
-    setFailOnce: () => {
-      failOnce = true;
-    },
-    setSlowMutationMs: (ms: number) => {
-      slowMutationMs = ms;
-    },
-  };
-}
+import type { IdempotencyFinancialOutcome, IdempotencyStore } from '../src/core/idempotencyStore';
+import { startIdempotencyTestServer } from './helpers/idempotencyTestServer';
 
 describe('gateway idempotency middleware', () => {
   test('replays the stored response for duplicate keys', async () => {
-    const { server, baseUrl, getExecutionCount } = await startServer();
+    const { server, baseUrl, getExecutionCount } = await startIdempotencyTestServer();
 
     try {
       const headers = {
@@ -170,7 +34,7 @@ describe('gateway idempotency middleware', () => {
   });
 
   test('rejects reusing a key for a different payload', async () => {
-    const { server, baseUrl } = await startServer();
+    const { server, baseUrl } = await startIdempotencyTestServer();
 
     try {
       const headers = {
@@ -200,7 +64,7 @@ describe('gateway idempotency middleware', () => {
   });
 
   test('requires Idempotency-Key on mutation routes', async () => {
-    const { server, baseUrl } = await startServer();
+    const { server, baseUrl } = await startIdempotencyTestServer();
 
     try {
       const response = await fetch(`${baseUrl}/test-mutation`, {
@@ -221,7 +85,7 @@ describe('gateway idempotency middleware', () => {
   });
 
   test('releases failed reservations after a 5xx response', async () => {
-    const { server, baseUrl, getExecutionCount, setFailOnce } = await startServer();
+    const { server, baseUrl, getExecutionCount, setFailOnce } = await startIdempotencyTestServer();
 
     try {
       const headers = {
@@ -253,8 +117,201 @@ describe('gateway idempotency middleware', () => {
     }
   });
 
+  test('persists an authoritative reverted outcome and never executes the same key twice', async () => {
+    const { server, baseUrl, getExecutionCount, setRevertedOutcomeOnce } =
+      await startIdempotencyTestServer();
+
+    try {
+      const headers = {
+        'content-type': 'application/json',
+        'Idempotency-Key': 'idem-terminal-revert',
+        'x-test-actor': 'admin',
+      };
+      const body = JSON.stringify({ financialOutcome: 'reverted' });
+      setRevertedOutcomeOnce();
+
+      const first = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const firstPayload = await first.json();
+      const second = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const secondPayload = await second.json();
+
+      expect(first.status).toBe(502);
+      expect(second.status).toBe(502);
+      expect(second.headers.get('x-idempotent-replay')).toBe('true');
+      expect(secondPayload).toEqual(firstPayload);
+      expect(secondPayload.error.details.outcome).toBe('reverted');
+      expect(getExecutionCount()).toBe(1);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('persists every idempotent JSON response before it is visible to the caller', async () => {
+    const baseStore = createInMemoryIdempotencyStore();
+    let releaseCompletion!: () => void;
+    let signalCompletionStarted!: () => void;
+    const completionGate = new Promise<void>((resolve) => {
+      releaseCompletion = resolve;
+    });
+    const completionStarted = new Promise<void>((resolve) => {
+      signalCompletionStarted = resolve;
+    });
+    const store: IdempotencyStore = {
+      ...baseStore,
+      async complete(scope, response, leaseOwnerRequestId) {
+        if (scope.idempotencyKey === 'idem-durable-before-send') {
+          signalCompletionStarted();
+          await completionGate;
+        }
+        await baseStore.complete(scope, response, leaseOwnerRequestId);
+      },
+    };
+    const { server, baseUrl } = await startIdempotencyTestServer(store);
+
+    try {
+      const responsePromise = fetch(`${baseUrl}/test-mutation`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'Idempotency-Key': 'idem-durable-before-send',
+          'x-test-actor': 'admin',
+        },
+        body: JSON.stringify({ durable: true }),
+      });
+      let responseVisible = false;
+      void responsePromise.then(() => {
+        responseVisible = true;
+      });
+
+      await completionStarted;
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(responseVisible).toBe(false);
+      releaseCompletion();
+
+      const response = await responsePromise;
+      expect(response.status).toBe(202);
+    } finally {
+      releaseCompletion();
+      server.close();
+    }
+  });
+
+  test('retains the reservation when a financial broadcast outcome is unresolved', async () => {
+    const baseStore = createInMemoryIdempotencyStore();
+    let outcomeStatus: IdempotencyFinancialOutcome['outcomeStatus'] = 'broadcast_unknown';
+    const store: IdempotencyStore = {
+      ...baseStore,
+      async getFinancialOutcome(requestId) {
+        return {
+          requestId,
+          transactionHash: `0x${'a'.repeat(64)}`,
+          resourceType: 'platform_transfer',
+          resourceId: 'transfer-1',
+          operation: 'wallet_usdc_transfer',
+          chainId: 84532,
+          outcomeStatus,
+        };
+      },
+    };
+    const { server, baseUrl, getExecutionCount, setUnresolvedOutcomeOnce } =
+      await startIdempotencyTestServer(store);
+
+    try {
+      const headers = {
+        'content-type': 'application/json',
+        'Idempotency-Key': 'idem-unresolved-broadcast',
+        'x-test-actor': 'admin',
+      };
+      const body = JSON.stringify({ financialOutcome: 'unknown' });
+      setUnresolvedOutcomeOnce();
+
+      const first = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const second = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const secondPayload = await second.json();
+
+      outcomeStatus = 'confirmed';
+      const third = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const thirdPayload = await third.json();
+      const fourth = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const fourthPayload = await fourth.json();
+
+      expect(first.status).toBe(503);
+      expect(second.status).toBe(202);
+      expect(second.headers.get('x-financial-outcome-recovery')).toBe('true');
+      expect(secondPayload.data).toEqual(
+        expect.objectContaining({
+          outcomeStatus: 'broadcast_unknown',
+          rebroadcastAllowed: false,
+        }),
+      );
+      expect(third.status).toBe(202);
+      expect(thirdPayload.data.outcomeStatus).toBe('confirmed');
+      expect(fourth.status).toBe(202);
+      expect(fourth.headers.get('x-idempotent-replay')).toBe('true');
+      expect(fourthPayload).toEqual(thirdPayload);
+      expect(getExecutionCount()).toBe(1);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('replays a recovered on-chain revert as a terminal failure without rebroadcast', async () => {
+    const baseStore = createInMemoryIdempotencyStore();
+    const store: IdempotencyStore = {
+      ...baseStore,
+      async getFinancialOutcome(requestId) {
+        return {
+          requestId,
+          transactionHash: `0x${'c'.repeat(64)}`,
+          resourceType: 'platform_transfer',
+          resourceId: 'transfer-reverted',
+          operation: 'wallet_usdc_transfer',
+          chainId: 84532,
+          outcomeStatus: 'reverted',
+        };
+      },
+    };
+    const { server, baseUrl, getExecutionCount, setUnresolvedOutcomeOnce } =
+      await startIdempotencyTestServer(store);
+
+    try {
+      const headers = {
+        'content-type': 'application/json',
+        'Idempotency-Key': 'idem-recovered-revert',
+        'x-test-actor': 'admin',
+      };
+      const body = JSON.stringify({ financialOutcome: 'unknown-then-reverted' });
+      setUnresolvedOutcomeOnce();
+
+      const first = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const second = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const secondPayload = await second.json();
+      const third = await fetch(`${baseUrl}/test-mutation`, { method: 'POST', headers, body });
+      const thirdPayload = await third.json();
+
+      expect(first.status).toBe(503);
+      expect(second.status).toBe(502);
+      expect(second.headers.get('x-financial-outcome-recovery')).toBe('true');
+      expect(secondPayload.success).toBe(false);
+      expect(secondPayload.error.details).toEqual(
+        expect.objectContaining({
+          outcome: 'reverted',
+          transactionHash: `0x${'c'.repeat(64)}`,
+          rebroadcastAllowed: false,
+        }),
+      );
+      expect(third.status).toBe(502);
+      expect(third.headers.get('x-idempotent-replay')).toBe('true');
+      expect(thirdPayload).toEqual(secondPayload);
+      expect(getExecutionCount()).toBe(1);
+    } finally {
+      server.close();
+    }
+  });
+
   test('reserves a new idempotency key atomically under concurrent requests', async () => {
-    const { server, baseUrl, getExecutionCount, setSlowMutationMs } = await startServer();
+    const { server, baseUrl, getExecutionCount, setSlowMutationMs } =
+      await startIdempotencyTestServer();
 
     try {
       const headers = {
@@ -279,7 +336,7 @@ describe('gateway idempotency middleware', () => {
   });
 
   test('scopes identical idempotency keys by actor identity', async () => {
-    const { server, baseUrl, getExecutionCount } = await startServer();
+    const { server, baseUrl, getExecutionCount } = await startIdempotencyTestServer();
 
     try {
       const body = JSON.stringify({ scoped: true });

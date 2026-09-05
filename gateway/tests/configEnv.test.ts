@@ -1,65 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import path from 'path';
-
-const BASE_ENV: Record<string, string> = {
-  PORT: '3600',
-  DB_HOST: 'localhost',
-  DB_PORT: '5432',
-  DB_NAME: 'gateway',
-  DB_USER: 'postgres',
-  DB_PASSWORD: 'postgres',
-  DB_SSL_MODE: 'disable',
-  DB_MIGRATION_USER: '',
-  DB_MIGRATION_PASSWORD: '',
-  GATEWAY_AUTH_BASE_URL: 'http://127.0.0.1:4100',
-  GATEWAY_INDEXER_GRAPHQL_URL: 'http://127.0.0.1:4350/graphql',
-  GATEWAY_ESCROW_ADDRESS: '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
-  GATEWAY_ENABLE_MUTATIONS: 'false',
-  GATEWAY_WRITE_ALLOWLIST: '',
-  GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS: '86400',
-  GATEWAY_COMMIT_SHA: 'deadbeef',
-  GATEWAY_BUILD_TIME: '2026-03-30T00:00:00.000Z',
-  GATEWAY_INDEXER_REQUEST_TIMEOUT_MS: '5000',
-  GATEWAY_CORS_ALLOWED_ORIGINS: 'https://cotsel.agroasys.com,https://ops.agroasys.com',
-  GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH: 'true',
-};
-
-function withEnv(overrides: Record<string, string | undefined>, fn: () => void): void {
-  const snapshot = { ...process.env };
-
-  for (const key of Object.keys(BASE_ENV)) {
-    delete process.env[key];
-  }
-
-  Object.assign(process.env, BASE_ENV);
-
-  for (const [key, value] of Object.entries(overrides)) {
-    if (value === undefined) {
-      delete process.env[key];
-      continue;
-    }
-
-    process.env[key] = value;
-  }
-
-  try {
-    fn();
-  } finally {
-    process.env = snapshot;
-  }
-}
-
-function loadConfigModule(): typeof import('../src/config/env') {
-  const modulePath = path.resolve(__dirname, '../src/config/env');
-  jest.resetModules();
-  let loaded!: typeof import('../src/config/env');
-  jest.isolateModules(() => {
-    loaded = jest.requireActual(modulePath) as typeof import('../src/config/env');
-  });
-  return loaded;
-}
+import { loadConfigModule, withEnv } from './helpers/gatewayConfigTestHarness';
 
 describe('gateway runtime env config', () => {
   it('disables immediate inspection-acceptance release by default', () => {
@@ -374,6 +316,7 @@ describe('gateway runtime env config', () => {
         GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '1',
         GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS: '5000',
         GATEWAY_GASLESS_RECEIPT_TIMEOUT_MS: '60000',
+        GATEWAY_GASLESS_OUTCOME_RECONCILIATION_INTERVAL_MS: '7000',
         GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD: '2',
       },
       () => {
@@ -394,7 +337,24 @@ describe('gateway runtime env config', () => {
         expect(config.gaslessCapacityFailClosed).toBe(false);
         expect(config.gaslessStuckQueueThresholdMs).toBe(5000);
         expect(config.gaslessReceiptTimeoutMs).toBe(60000);
+        expect(config.gaslessOutcomeReconciliationIntervalMs).toBe(7000);
         expect(config.gaslessRepeatedFailureAlertThreshold).toBe(2);
+      },
+    );
+  });
+
+  test('rejects an idempotency lease that is too short for safe renewal', () => {
+    withEnv(
+      {
+        GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+        GATEWAY_RPC_URL: undefined,
+        GATEWAY_CHAIN_ID: undefined,
+        GATEWAY_IDEMPOTENCY_LEASE_DURATION_MS: '999',
+      },
+      () => {
+        expect(() => loadConfigModule().loadConfig()).toThrow(
+          'GATEWAY_IDEMPOTENCY_LEASE_DURATION_MS must be >= 1000',
+        );
       },
     );
   });
