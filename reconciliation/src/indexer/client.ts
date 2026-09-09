@@ -3,8 +3,26 @@ import { config } from '../config';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 import { Logger } from '../utils/logger';
 
+const TRADE_FIELDS = `
+  tradeId
+  buyer
+  supplier
+  status
+  totalAmountLocked
+  logisticsAmount
+  platformFeesAmount
+  platformFeeNetAmount
+  settlementSupportFeeAmount
+  supplierFirstTranche
+  supplierSecondTranche
+  ricardianHash
+  createdAt
+  arrivalTimestamp
+`;
+
 interface GraphQlResponse {
   data?: {
+    tradesConnection?: { totalCount?: number };
     trades?: Array<{
       tradeId: string;
       buyer: string;
@@ -25,31 +43,34 @@ interface GraphQlResponse {
   errors?: Array<{ message: string }>;
 }
 
+type RawIndexedTrade = NonNullable<NonNullable<GraphQlResponse['data']>['trades']>[number];
+
+function toIndexedTradeRecord(trade: RawIndexedTrade): IndexedTradeRecord {
+  return {
+    tradeId: trade.tradeId,
+    buyer: trade.buyer,
+    supplier: trade.supplier,
+    status: trade.status,
+    totalAmountLocked: BigInt(trade.totalAmountLocked),
+    logisticsAmount: BigInt(trade.logisticsAmount),
+    platformFeesAmount: BigInt(trade.platformFeesAmount),
+    platformFeeNetAmount: BigInt(trade.platformFeeNetAmount),
+    settlementSupportFeeAmount: BigInt(trade.settlementSupportFeeAmount),
+    supplierFirstTranche: BigInt(trade.supplierFirstTranche),
+    supplierSecondTranche: BigInt(trade.supplierSecondTranche),
+    ricardianHash: trade.ricardianHash,
+    createdAt: new Date(trade.createdAt),
+    arrivalTimestamp: trade.arrivalTimestamp ? new Date(trade.arrivalTimestamp) : null,
+  };
+}
+
 export class IndexerClient {
   constructor(private readonly graphqlUrl: string) {}
 
-  async fetchTrades(limit: number, offset: number): Promise<IndexedTradeRecord[]> {
-    const query = `
-      query ReconciliationTrades($limit: Int!, $offset: Int!) {
-        trades(orderBy: createdAt_ASC, limit: $limit, offset: $offset) {
-          tradeId
-          buyer
-          supplier
-          status
-          totalAmountLocked
-          logisticsAmount
-          platformFeesAmount
-          platformFeeNetAmount
-          settlementSupportFeeAmount
-          supplierFirstTranche
-          supplierSecondTranche
-          ricardianHash
-          createdAt
-          arrivalTimestamp
-        }
-      }
-    `;
-
+  private async execute(
+    query: string,
+    variables: Record<string, unknown>,
+  ): Promise<NonNullable<GraphQlResponse['data']>> {
     const response = await fetchWithTimeout(
       this.graphqlUrl,
       {
@@ -57,7 +78,7 @@ export class IndexerClient {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query, variables: { limit, offset } }),
+        body: JSON.stringify({ query, variables }),
       },
       config.indexerGraphqlRequestTimeoutMs,
     );
@@ -74,25 +95,56 @@ export class IndexerClient {
       );
     }
 
-    const trades = body.data?.trades ?? [];
+    return body.data ?? {};
+  }
 
-    Logger.info('Fetched indexed trades batch', { limit, offset, count: trades.length });
+  /**
+   * Fetch exactly the ids the chain says exist in this window.
+   *
+   * The chain drives the id set rather than the indexer driving pagination:
+   * `Trade.tradeId` is a GraphQL `String`, so range and ordering operators on
+   * it are lexicographic ("10" sorts before "9") and cannot express a numeric
+   * keyset. Asking for an explicit id set sidesteps that entirely, and any id
+   * absent from the response is a chain trade the indexer never projected.
+   */
+  async fetchTradesByIds(tradeIds: string[]): Promise<IndexedTradeRecord[]> {
+    if (tradeIds.length === 0) {
+      return [];
+    }
 
-    return trades.map((trade) => ({
-      tradeId: trade.tradeId,
-      buyer: trade.buyer,
-      supplier: trade.supplier,
-      status: trade.status,
-      totalAmountLocked: BigInt(trade.totalAmountLocked),
-      logisticsAmount: BigInt(trade.logisticsAmount),
-      platformFeesAmount: BigInt(trade.platformFeesAmount),
-      platformFeeNetAmount: BigInt(trade.platformFeeNetAmount),
-      settlementSupportFeeAmount: BigInt(trade.settlementSupportFeeAmount),
-      supplierFirstTranche: BigInt(trade.supplierFirstTranche),
-      supplierSecondTranche: BigInt(trade.supplierSecondTranche),
-      ricardianHash: trade.ricardianHash,
-      createdAt: new Date(trade.createdAt),
-      arrivalTimestamp: trade.arrivalTimestamp ? new Date(trade.arrivalTimestamp) : null,
-    }));
+    const query = `
+      query ReconciliationTradesByIds($tradeIds: [String!]!) {
+        trades(where: { tradeId_in: $tradeIds }, limit: ${tradeIds.length}) {
+          ${TRADE_FIELDS}
+        }
+      }
+    `;
+
+    const data = await this.execute(query, { tradeIds });
+    const trades = data.trades ?? [];
+
+    Logger.info('Fetched indexed trades by id', {
+      requested: tradeIds.length,
+      returned: trades.length,
+    });
+
+    return trades.map(toIndexedTradeRecord);
+  }
+
+  /**
+   * Total projected trades, used as the cheap indexer-side surplus invariant:
+   * the indexer must never hold more trades than the chain has allocated ids.
+   */
+  async fetchTradeCount(): Promise<number> {
+    const query = `
+      query ReconciliationTradeCount {
+        tradesConnection(orderBy: id_ASC) {
+          totalCount
+        }
+      }
+    `;
+
+    const data = await this.execute(query, {});
+    return data.tradesConnection?.totalCount ?? 0;
   }
 }

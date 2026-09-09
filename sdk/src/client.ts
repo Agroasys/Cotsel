@@ -10,6 +10,14 @@ import { createManagedRpcProvider } from './rpc/failoverProvider';
 import type { RuntimeRoleExpectations } from './config';
 import type { RuntimePreflightFailureCode, RuntimePreflightResult } from './types/runtimePreflight';
 
+export type CoverageBoundaryPreference = 'finalized' | 'safe';
+
+export interface CoverageBoundaryBlock {
+  number: number;
+  hash: string;
+  tag: CoverageBoundaryPreference;
+}
+
 const CANONICAL_USDC_BY_CHAIN = new Map<number, string>([
   [84532, '0x036CbD53842c5426634e7929541eC2318f3dCF7e'],
   [8453, '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'],
@@ -163,6 +171,52 @@ export class Client {
           actualChainId: signerNetwork.chainId.toString(),
         },
       );
+    }
+  }
+
+  /**
+   * Resolve the exact block a reconciliation sweep should read at.
+   *
+   * Reading `tradeCounter` and the trades it bounds at different heights makes
+   * a trade created mid-sweep look like a chain record the indexer never
+   * projected. Pinning every read to one finalized (or safe) block removes that
+   * false positive and gives the sweep an auditable boundary.
+   */
+  async getCoverageBoundaryBlock(
+    preference: CoverageBoundaryPreference = 'finalized',
+  ): Promise<CoverageBoundaryBlock> {
+    try {
+      const block = await this.provider.getBlock(preference);
+      if (block && block.hash !== null && typeof block.number === 'number') {
+        return { number: block.number, hash: block.hash, tag: preference };
+      }
+    } catch (error: unknown) {
+      throw new ContractError(`Failed to resolve ${preference} block: ${getErrorMessage(error)}`, {
+        preference,
+        error: getErrorMessage(error),
+      });
+    }
+
+    throw new ContractError(
+      `Provider did not return a ${preference} block; refusing to reconcile against an unpinned chain head`,
+      { preference },
+    );
+  }
+
+  /**
+   * Highest allocated trade id at `blockTag`. Trade ids are allocated
+   * sequentially from 1, so this bounds the complete chain-side id space
+   * without trusting any off-chain index.
+   */
+  async getTradeCounter(blockTag?: ethers.BlockTag): Promise<bigint> {
+    try {
+      return await this.contract.tradeCounter({ blockTag });
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      throw new ContractError(`Failed to read trade counter: ${message}`, {
+        blockTag: blockTag === undefined ? null : String(blockTag),
+        error: message,
+      });
     }
   }
 

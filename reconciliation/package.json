@@ -8,7 +8,7 @@
     "build:notifications": "pnpm --dir ../notifications run build",
     "build:deps": "pnpm run build:sdk && pnpm run build:notifications",
     "build": "tsc && npm run copy-files",
-    "copy-files": "mkdir -p dist/database && cp src/database/schema.sql src/database/migrations.json dist/database/",
+    "copy-files": "mkdir -p dist/database && cp src/database/schema.sql src/database/002_chain_coverage.sql src/database/migrations.json dist/database/",
     "prebuild": "pnpm run build:deps",
     "lint": "eslint --max-warnings=0 .",
     "pretest": "pnpm run build:deps",
