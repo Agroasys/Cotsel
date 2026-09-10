@@ -23,6 +23,8 @@ const TRADE_FIELDS = `
 interface GraphQlResponse {
   data?: {
     tradesConnection?: { totalCount?: number };
+    overviewSnapshots?: Array<{ lastProcessedBlock?: string | null }>;
+    tradeIds?: Array<{ tradeId: string }>;
     trades?: Array<{
       tradeId: string;
       buyer: string;
@@ -146,5 +148,85 @@ export class IndexerClient {
 
     const data = await this.execute(query, {});
     return data.tradesConnection?.totalCount ?? 0;
+  }
+
+  /**
+   * The block the indexer has actually processed.
+   *
+   * A run anchors every chain read to this height. The chain can be read at any
+   * historical block, but the indexer only ever reports its *current* state, so
+   * the one block both sides can describe is the block the indexer has reached.
+   * Reading the chain anywhere else (e.g. a deeper finalized block while the
+   * indexer runs closer to head) makes the indexer's lead read as field drift or
+   * a surplus that does not exist.
+   */
+  async fetchProcessedBlock(): Promise<number | null> {
+    const query = `
+      query ReconciliationIndexerProcessedBlock {
+        overviewSnapshots(limit: 1, orderBy: lastProcessedBlock_DESC) {
+          lastProcessedBlock
+        }
+      }
+    `;
+
+    const data = await this.execute(query, {});
+    const raw = data.overviewSnapshots?.[0]?.lastProcessedBlock;
+    if (raw === undefined || raw === null) {
+      return null;
+    }
+
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  /**
+   * Enumerate the indexer's own trade ids, independent of any chain-derived id
+   * set.
+   *
+   * `fetchTradesByIds` can only echo back ids from its `tradeId_in` filter, so
+   * it can never surface a record the chain never allocated — the indexer-only
+   * direction is unreachable through it. This walks the indexer's projection on
+   * its own terms (offset pagination over `id`) so an id beyond the chain
+   * counter, or a numeric surplus that a raw count would mask by cancelling
+   * against a missing id, is observed directly.
+   *
+   * Bounded by `maxIds`: a fully enumerated page shorter than the limit means
+   * the walk is complete; `truncated` flags when it was not, so the caller can
+   * surface that rather than treat a partial walk as exhaustive.
+   */
+  async fetchTradeIds(
+    maxIds: number,
+    pageSize: number,
+  ): Promise<{ tradeIds: string[]; truncated: boolean }> {
+    if (maxIds <= 0 || pageSize <= 0) {
+      throw new Error('fetchTradeIds requires positive maxIds and pageSize');
+    }
+
+    const query = `
+      query ReconciliationTradeIds($limit: Int!, $offset: Int!) {
+        tradeIds: trades(limit: $limit, offset: $offset, orderBy: id_ASC) {
+          tradeId
+        }
+      }
+    `;
+
+    const tradeIds: string[] = [];
+    let offset = 0;
+
+    for (;;) {
+      const limit = Math.min(pageSize, maxIds - tradeIds.length);
+      if (limit <= 0) {
+        return { tradeIds, truncated: true };
+      }
+
+      const data = await this.execute(query, { limit, offset });
+      const page = data.tradeIds ?? [];
+      tradeIds.push(...page.map((row) => row.tradeId));
+
+      if (page.length < limit) {
+        return { tradeIds, truncated: false };
+      }
+      offset += page.length;
+    }
   }
 }

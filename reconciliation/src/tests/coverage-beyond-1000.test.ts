@@ -28,6 +28,9 @@ function boundary(chainTradeCounter: bigint): CoverageBoundary {
     blockHash: '0xboundary',
     tag: 'finalized',
     chainTradeCounter,
+    indexerProcessedBlock: 1_000_000,
+    finalityBlockNumber: 1_000_000,
+    indexerAhead: false,
   };
 }
 

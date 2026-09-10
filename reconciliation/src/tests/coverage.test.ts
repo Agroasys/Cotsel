@@ -17,6 +17,9 @@ const BOUNDARY: CoverageBoundary = {
   blockHash: '0xboundary',
   tag: 'finalized',
   chainTradeCounter: 0n,
+  indexerProcessedBlock: 1_000_000,
+  finalityBlockNumber: 1_000_000,
+  indexerAhead: false,
 };
 
 function boundary(chainTradeCounter: bigint): CoverageBoundary {

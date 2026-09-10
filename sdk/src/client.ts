@@ -204,6 +204,29 @@ export class Client {
   }
 
   /**
+   * Resolve a specific block by number, returning its canonical hash.
+   *
+   * Reconciliation anchors every read in a run to the block the indexer has
+   * actually processed (which may sit below the chain's finalized head), so it
+   * needs the hash at that exact height rather than at a finality tag.
+   */
+  async getBlockByNumber(blockNumber: number): Promise<{ number: number; hash: string }> {
+    try {
+      const block = await this.provider.getBlock(blockNumber);
+      if (block && block.hash !== null && typeof block.number === 'number') {
+        return { number: block.number, hash: block.hash };
+      }
+    } catch (error: unknown) {
+      throw new ContractError(`Failed to resolve block ${blockNumber}: ${getErrorMessage(error)}`, {
+        blockNumber,
+        error: getErrorMessage(error),
+      });
+    }
+
+    throw new ContractError(`Provider did not return block ${blockNumber}`, { blockNumber });
+  }
+
+  /**
    * Highest allocated trade id at `blockTag`. Trade ids are allocated
    * sequentially from 1, so this bounds the complete chain-side id space
    * without trusting any off-chain index.

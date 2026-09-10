@@ -3,9 +3,76 @@ import type {
   CoverageBoundary,
   CoverageSlaVerdict,
   CoverageWindow,
+  DriftCode,
   DriftFinding,
   IndexedTradeRecord,
 } from '../types';
+
+/**
+ * Findings that prove a range has not been reconciled and therefore must hold
+ * the cursor in place. Advancing past any of these would retire the evidence
+ * and let the next run report the range clean:
+ *
+ * - `INDEXER_TRADE_MISSING` / `INDEXER_SURPLUS_RECORDS` — a real projection gap.
+ * - `ONCHAIN_TRADE_MISSING` — the indexer holds an id the chain never allocated.
+ * - `ONCHAIN_READ_ERROR` — the chain read was inconclusive, so neither presence
+ *   nor drift could be decided. A transient RPC failure must never let a window
+ *   advance and permanently retire the ids it could not check.
+ */
+const CURSOR_HOLDING_CODES: ReadonlySet<DriftCode> = new Set<DriftCode>([
+  'INDEXER_TRADE_MISSING',
+  'INDEXER_SURPLUS_RECORDS',
+  'ONCHAIN_TRADE_MISSING',
+  'ONCHAIN_READ_ERROR',
+]);
+
+export function holdsCursor(code: DriftCode): boolean {
+  return CURSOR_HOLDING_CODES.has(code);
+}
+
+/**
+ * Resolve the single block a run pins every read to.
+ *
+ * The chain can be read at any historical block, but the indexer only reports
+ * its *current* projection, so the one height both sides can describe is the
+ * block the indexer has actually processed. Anchoring the chain reads there —
+ * rather than at a finalized head the indexer may not have reached, or may have
+ * run past — is what keeps a field difference or a surplus real instead of an
+ * artefact of the two sides sitting at different heights.
+ *
+ * `indexerAhead` flags the case the chain boundary preference cannot protect
+ * against on its own: an indexer configured with a shallower finality than the
+ * run's boundary tag, processing closer to head than the finalized block.
+ */
+export function anchorBoundaryBlock(input: {
+  finalityBlockNumber: number;
+  indexerProcessedBlock: number;
+}): { blockNumber: number; indexerAhead: boolean } {
+  return {
+    blockNumber: input.indexerProcessedBlock,
+    indexerAhead: input.indexerProcessedBlock > input.finalityBlockNumber,
+  };
+}
+
+/**
+ * Where the next run resumes from.
+ *
+ * A held gap freezes the cursor at its previous value. Otherwise, a run that
+ * reached the chain counter has completed a full sweep and resets to 0 to begin
+ * a fresh epoch — without this, once the cursor reaches `tradeCounter` every
+ * later run plans an empty window and existing trades are never re-reconciled.
+ * A budget-bounded run advances to the end of its window.
+ */
+export function planNextCursor(input: {
+  window: CoverageWindow;
+  cursorHeld: boolean;
+  previousCursor: bigint;
+}): bigint {
+  if (input.cursorHeld) {
+    return input.previousCursor;
+  }
+  return input.window.complete ? 0n : input.window.nextCursor;
+}
 
 /**
  * Complete-range accounting for one run.
@@ -200,6 +267,68 @@ export function checkIndexerSurplus(input: {
       reason: 'indexer holds more trades than the chain has allocated ids',
       boundaryBlock: input.boundary.blockNumber,
       boundaryTag: input.boundary.tag,
+    },
+  };
+}
+
+/**
+ * Independent indexer-side enumeration.
+ *
+ * `fetchTradesByIds` can only return ids from its own `tradeId_in` filter, so
+ * it can never surface a record the chain never allocated, and a raw count can
+ * hide a surplus id when a separately-missing expected id cancels it out. This
+ * walks the indexer's own id set and reports every id that is not a
+ * chain-allocated trade (`> tradeCounter`, or non-positive), proving the
+ * indexer-only direction directly rather than by counting.
+ */
+export function detectIndexerOnlyTradeIds(input: {
+  indexerTradeIds: string[];
+  boundary: CoverageBoundary;
+}): DriftFinding[] {
+  const counter = input.boundary.chainTradeCounter;
+  const findings: DriftFinding[] = [];
+
+  for (const rawId of input.indexerTradeIds) {
+    let numericId: bigint;
+    try {
+      numericId = BigInt(rawId);
+    } catch {
+      // A non-numeric id is itself an id the sequential chain never allocated.
+      findings.push(indexerOnlyFinding(rawId, input.boundary, 'indexer trade id is not numeric'));
+      continue;
+    }
+
+    if (numericId <= 0n || numericId > counter) {
+      findings.push(
+        indexerOnlyFinding(
+          rawId,
+          input.boundary,
+          'indexer holds a trade id the chain never allocated',
+        ),
+      );
+    }
+  }
+
+  return findings;
+}
+
+function indexerOnlyFinding(
+  tradeId: string,
+  boundary: CoverageBoundary,
+  reason: string,
+): DriftFinding {
+  return {
+    tradeId,
+    severity: 'CRITICAL',
+    mismatchCode: 'ONCHAIN_TRADE_MISSING',
+    comparedField: 'tradePresence',
+    onchainValue: null,
+    indexedValue: tradeId,
+    details: {
+      reason,
+      chainTradeCounter: boundary.chainTradeCounter.toString(),
+      boundaryBlock: boundary.blockNumber,
+      boundaryTag: boundary.tag,
     },
   };
 }

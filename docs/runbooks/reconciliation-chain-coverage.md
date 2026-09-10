@@ -16,10 +16,17 @@ what exists.
 
 Each run:
 
-1. Resolves one **boundary block** (`finalized` by default, `safe` if configured)
-   and reads `tradeCounter` **at that same block**. Both reads share a height:
-   otherwise a trade created mid-run would look like a chain record the indexer
-   never projected.
+1. Reads the block the **indexer** has processed (`OverviewSnapshot.lastProcessedBlock`)
+   and anchors **every chain read in the run to that block**, reading `tradeCounter`
+   and each trade there. The chain can be read at any historical height, but the
+   indexer only ever reports its _current_ projection, so the one block both sides
+   can describe is the block the indexer has reached. A chain boundary tag
+   (`finalized` by default, `safe` if configured) is still resolved for reference;
+   if the indexer has processed **past** it (e.g. `FINALITY_CONFIRMATION_BLOCKS=1`,
+   indexing close to head), the run still anchors to the indexer block and logs the
+   re-org exposure rather than reading the chain at a height the indexer has not.
+   Reading the chain anywhere else makes the indexer's lead read as field drift or a
+   surplus that does not exist.
 2. Plans a window from the persisted cursor up to the counter, bounded by
    `RECONCILIATION_MAX_TRADES_PER_RUN`. That value is a **work budget, not a
    coverage cap** — whatever the run does not reach is published as
@@ -28,11 +35,20 @@ Each run:
    the indexer for exactly those ids.
 4. Compares both directions:
    - chain has it, indexer does not → `INDEXER_TRADE_MISSING` (critical)
-   - indexer returns an id the window never asked for → `ONCHAIN_TRADE_MISSING` (critical)
+   - the chain read failed (inconclusive) → `ONCHAIN_READ_ERROR` (holds the cursor)
    - both hold it → the existing field-level drift classification
    - indexer holds more trades than the chain allocated → `INDEXER_SURPLUS_RECORDS` (critical)
-5. Publishes complete-range accounting on the run row and advances the cursor —
-   **only if the window had no coverage gap**.
+5. Runs an **independent indexer-side enumeration**: it walks the indexer's own id
+   set (offset pagination over `id`) and reports any id the chain never allocated
+   (`> tradeCounter`, non-positive, or non-numeric) as `ONCHAIN_TRADE_MISSING`. This
+   proves the indexer-only direction directly — `fetchTradesByIds` can only echo ids
+   from its own `tradeId_in` filter, and a raw count can hide a surplus id when a
+   separately-missing id cancels it out.
+6. Publishes complete-range accounting on the run row **and** moves the cursor in a
+   single transaction. The cursor advances only if the window had no coverage gap
+   and no inconclusive read; when a run reaches the counter it **resets to 0** to
+   begin a fresh sweep epoch, so existing trades are reconciled again rather than
+   the cursor parking at the counter forever.
 
 ### Why the id set is driven from chain
 
@@ -69,6 +85,11 @@ A chain trade the indexer never projected (FAIL-05), or an indexer surplus.
 The cursor is **held** at its previous value while any gap is unresolved, so
 successive runs keep re-detecting it rather than advancing past it and reporting
 clean. Reconciliation does not progress until the projection is repaired.
+
+The hold also covers an **inconclusive** window: an `ONCHAIN_READ_ERROR` (a
+transient RPC failure while checking an id) and an `ONCHAIN_TRADE_MISSING`
+(indexer holds an id the chain never allocated) both freeze the cursor. A
+transient read must never retire the ids a window could not actually verify.
 
 ### Recovery
 
@@ -126,13 +147,15 @@ tail returns to zero, so ordinary bursts do not page anyone.
 
 ## Configuration
 
-| Variable                                | Default     | Meaning                                                                           |
-| --------------------------------------- | ----------- | --------------------------------------------------------------------------------- |
-| `RECONCILIATION_MAX_TRADES_PER_RUN`     | `1000`      | Per-run work budget. Not a coverage cap.                                          |
-| `RECONCILIATION_BATCH_SIZE`             | `100`       | Ids per chain/indexer request batch.                                              |
-| `RECONCILIATION_COVERAGE_BOUNDARY`      | `finalized` | Block tag every read in a run is pinned to. `safe` trades finality for freshness. |
-| `RECONCILIATION_COVERAGE_MAX_AGE_MS`    | `3600000`   | Age SLA over the uncovered tail.                                                  |
-| `RECONCILIATION_CHAIN_READ_CONCURRENCY` | `8`         | Parallel chain reads per batch.                                                   |
+| Variable                                       | Default     | Meaning                                                                                                                                                                  |
+| ---------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RECONCILIATION_MAX_TRADES_PER_RUN`            | `1000`      | Per-run work budget. Not a coverage cap.                                                                                                                                 |
+| `RECONCILIATION_BATCH_SIZE`                    | `100`       | Ids per chain/indexer request batch.                                                                                                                                     |
+| `RECONCILIATION_COVERAGE_BOUNDARY`             | `finalized` | Chain finality tag resolved for reference. The run anchors reads to the indexer's processed block; if the indexer is ahead of this tag the run logs the re-org exposure. |
+| `RECONCILIATION_COVERAGE_MAX_AGE_MS`           | `3600000`   | Age SLA over the uncovered tail.                                                                                                                                         |
+| `RECONCILIATION_CHAIN_READ_CONCURRENCY`        | `8`         | Parallel chain reads per batch.                                                                                                                                          |
+| `RECONCILIATION_INDEXER_ENUMERATION_LIMIT`     | `100000`    | Upper bound on ids walked by the independent indexer-side enumeration. A run logs a warning if it hits the bound before completing.                                      |
+| `RECONCILIATION_INDEXER_ENUMERATION_PAGE_SIZE` | `1000`      | Page size for that enumeration's offset pagination (max 5000).                                                                                                           |
 
 ## Do not
 

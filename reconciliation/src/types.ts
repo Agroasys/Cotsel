@@ -57,6 +57,19 @@ export interface CoverageBoundary {
   blockHash: string;
   tag: 'finalized' | 'safe';
   chainTradeCounter: bigint;
+  /**
+   * The block the indexer has processed, which the run anchors every read to so
+   * both sides describe the same height. Equal to `blockNumber`.
+   */
+  indexerProcessedBlock: number;
+  /** The chain finality block the boundary tag resolved to, for auditability. */
+  finalityBlockNumber: number;
+  /**
+   * True when the indexer has processed past the chain finality block — an
+   * indexer running a shallower finality than the run's boundary tag. The run
+   * still anchors to the indexer's block; this records the re-org exposure.
+   */
+  indexerAhead: boolean;
 }
 
 /**
@@ -95,6 +108,12 @@ export interface RunStats {
     indexerTradeCount: number | null;
     sla: CoverageSlaVerdict;
     cursorAdvanced: boolean;
+    /** The cursor the next run resumes from (0 after a completed sweep). */
+    nextCursor: bigint;
+    /** Whether a full sweep completed and the cursor reset to a fresh epoch. */
+    sweepReset: boolean;
+    /** Set when the indexer id enumeration hit its bound before completing. */
+    indexerEnumerationTruncated: boolean;
   };
 }
 

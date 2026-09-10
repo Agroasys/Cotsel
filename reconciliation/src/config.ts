@@ -22,6 +22,10 @@ export interface ReconciliationConfig {
   coverageBoundary: CoverageBoundaryPreference;
   coverageMaxAgeMs: number;
   chainReadConcurrency: number;
+  /** Upper bound on ids walked by the independent indexer-side enumeration. */
+  indexerEnumerationLimit: number;
+  /** Page size for that enumeration's offset pagination. */
+  indexerEnumerationPageSize: number;
   dbHost: string;
   dbPort: number;
   dbName: string;
@@ -182,6 +186,8 @@ export function loadConfig(): ReconciliationConfig {
     coverageBoundary: coverageBoundaryPreference(),
     coverageMaxAgeMs: envNumber('RECONCILIATION_COVERAGE_MAX_AGE_MS', 3600000),
     chainReadConcurrency: envNumber('RECONCILIATION_CHAIN_READ_CONCURRENCY', 8),
+    indexerEnumerationLimit: envNumber('RECONCILIATION_INDEXER_ENUMERATION_LIMIT', 100000),
+    indexerEnumerationPageSize: envNumber('RECONCILIATION_INDEXER_ENUMERATION_PAGE_SIZE', 1000),
     dbHost: env('DB_HOST'),
     dbPort: envNumber('DB_PORT'),
     dbName: env('DB_NAME'),
@@ -221,6 +227,14 @@ export function loadConfig(): ReconciliationConfig {
   assert(
     config.chainReadConcurrency > 0 && config.chainReadConcurrency <= 64,
     'RECONCILIATION_CHAIN_READ_CONCURRENCY must be between 1 and 64',
+  );
+  assert(
+    config.indexerEnumerationLimit > 0,
+    'RECONCILIATION_INDEXER_ENUMERATION_LIMIT must be > 0',
+  );
+  assert(
+    config.indexerEnumerationPageSize > 0 && config.indexerEnumerationPageSize <= 5000,
+    'RECONCILIATION_INDEXER_ENUMERATION_PAGE_SIZE must be between 1 and 5000',
   );
   assert(config.notificationsCooldownMs >= 0, 'NOTIFICATIONS_COOLDOWN_MS must be >= 0');
   assert(

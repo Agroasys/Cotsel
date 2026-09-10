@@ -1,5 +1,9 @@
+import type { Pool, PoolClient } from 'pg';
 import { pool } from './connection';
 import type { DriftFinding, ReconcileMode, ReconcileRunRow, RunStats } from '../types';
+
+/** Either the pool or a client bound to an open transaction. */
+type Executor = Pool | PoolClient;
 
 export const COVERAGE_CURSOR_SCOPE = 'trades';
 
@@ -51,14 +55,17 @@ export async function readCoverageCursor(
  * doing so would retire the evidence of a chain trade the indexer never
  * projected and let the next run report clean.
  */
-export async function advanceCoverageCursor(input: {
-  scope?: string;
-  lastTradeId: bigint;
-  boundaryBlockNumber: number;
-  boundaryBlockHash: string;
-  tailFirstSeenAt: Date | null;
-}): Promise<void> {
-  await pool.query(
+export async function advanceCoverageCursor(
+  input: {
+    scope?: string;
+    lastTradeId: bigint;
+    boundaryBlockNumber: number;
+    boundaryBlockHash: string;
+    tailFirstSeenAt: Date | null;
+  },
+  executor: Executor = pool,
+): Promise<void> {
+  await executor.query(
     `INSERT INTO reconcile_cursors (
         scope, last_trade_id, boundary_block_number, boundary_block_hash, tail_first_seen_at, updated_at
      ) VALUES ($1, $2::numeric, $3, $4, $5, NOW())
@@ -79,11 +86,14 @@ export async function advanceCoverageCursor(input: {
 }
 
 /** Record when a non-empty tail was first observed, without moving the cursor. */
-export async function recordCoverageTailSighting(input: {
-  scope?: string;
-  tailFirstSeenAt: Date | null;
-}): Promise<void> {
-  await pool.query(
+export async function recordCoverageTailSighting(
+  input: {
+    scope?: string;
+    tailFirstSeenAt: Date | null;
+  },
+  executor: Executor = pool,
+): Promise<void> {
+  await executor.query(
     `INSERT INTO reconcile_cursors (scope, tail_first_seen_at, updated_at)
      VALUES ($1, $2, NOW())
      ON CONFLICT (scope) DO UPDATE SET
@@ -175,9 +185,9 @@ export async function upsertRunTradeScope(
  * cursor and uncovered tail, so a reader can tell a complete sweep from a
  * truncated one without inspecting the code.
  */
-export async function completeRun(stats: RunStats): Promise<void> {
+export async function completeRun(stats: RunStats, executor: Executor = pool): Promise<void> {
   const coverage = stats.coverage;
-  await pool.query(
+  await executor.query(
     `UPDATE reconcile_runs
      SET status = $2,
          completed_at = NOW(),
@@ -210,11 +220,61 @@ export async function completeRun(stats: RunStats): Promise<void> {
       coverage ? coverage.fromBlock : null,
       coverage ? coverage.boundary.blockNumber : null,
       coverage ? coverage.boundary.chainTradeCounter.toString() : null,
-      coverage ? coverage.window.nextCursor.toString() : null,
+      coverage ? coverage.nextCursor.toString() : null,
       coverage ? coverage.window.uncoveredTail.toString() : null,
       coverage ? coverage.window.complete : null,
     ],
   );
+}
+
+/**
+ * Publish the run's complete-range accounting and move (or hold) the cursor in
+ * a single transaction.
+ *
+ * These two writes must commit together: if the cursor advanced in its own
+ * transaction and the run row then failed to complete, the next run would
+ * resume past a window whose evidence was never recorded — a range silently
+ * skipped behind a run marked failed. One transaction makes the cursor move
+ * exactly when, and only when, its run is recorded as complete.
+ */
+export async function finalizeRun(input: {
+  stats: RunStats;
+  cursor:
+    | {
+        advance: true;
+        lastTradeId: bigint;
+        boundaryBlockNumber: number;
+        boundaryBlockHash: string;
+        tailFirstSeenAt: Date | null;
+      }
+    | { advance: false; tailFirstSeenAt: Date | null };
+}): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await completeRun(input.stats, client);
+
+    if (input.cursor.advance) {
+      await advanceCoverageCursor(
+        {
+          lastTradeId: input.cursor.lastTradeId,
+          boundaryBlockNumber: input.cursor.boundaryBlockNumber,
+          boundaryBlockHash: input.cursor.boundaryBlockHash,
+          tailFirstSeenAt: input.cursor.tailFirstSeenAt,
+        },
+        client,
+      );
+    } else {
+      await recordCoverageTailSighting({ tailFirstSeenAt: input.cursor.tailFirstSeenAt }, client);
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function failRun(runKey: string, errorMessage: string): Promise<void> {
