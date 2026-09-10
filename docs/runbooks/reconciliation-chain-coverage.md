@@ -65,6 +65,7 @@ SELECT run_key,
        coverage_from_block, coverage_to_block,
        chain_trade_counter, next_cursor,
        uncovered_tail, coverage_complete,
+       indexer_enumeration_truncated, indexer_enumeration_walked,
        critical_count
 FROM reconcile_runs
 ORDER BY started_at DESC
@@ -73,10 +74,38 @@ LIMIT 5;
 
 - `coverage_complete = true` and `uncovered_tail = 0` — the run compared the
   entire chain range up to its boundary block.
+- `indexer_enumeration_truncated = true` — the indexer-side walk stopped at
+  `RECONCILIATION_INDEXER_ENUMERATION_LIMIT` before exhausting the projection,
+  so ids beyond `indexer_enumeration_walked` were never checked. The run is
+  **not** complete coverage and its cursor is held; raise the limit and re-run.
 - `coverage_complete = false` — the run was budget-bounded. This is normal
   throughput while `uncovered_tail` shrinks run over run; it is **not** a clean
   sweep and must not be treated as one for close purposes.
 - `next_cursor` is where the following run resumes.
+
+## Runs skipped as inconclusive
+
+A run compares chain state read at a pinned block against the indexer's
+_current_ GraphQL projection — there is no "as of block" query. It therefore
+anchors to the block the indexer has processed, and re-reads that height after
+its last indexer query. If the indexer moved in between, or its height cannot be
+read at all, the comparisons were taken across two different projections and any
+difference between them is an artefact.
+
+Such a run is recorded `SKIPPED` with the reason in `error_message`, publishes
+**no** drift, and holds the cursor. Occasional skips on a busy indexer are
+expected. Persistent skips mean the indexer never sits still long enough — widen
+`RECONCILIATION_DAEMON_INTERVAL_MS`, narrow `RECONCILIATION_MAX_TRADES_PER_RUN`
+so a run finishes inside one indexer batch, or run `reconcile:once` while
+ingestion is paused.
+
+```sql
+SELECT run_key, started_at, error_message
+FROM reconcile_runs
+WHERE status = 'SKIPPED'
+ORDER BY started_at DESC
+LIMIT 10;
+```
 
 ## `RECONCILIATION_COVERAGE_GAP`
 
@@ -154,7 +183,7 @@ tail returns to zero, so ordinary bursts do not page anyone.
 | `RECONCILIATION_COVERAGE_BOUNDARY`             | `finalized` | Chain finality tag resolved for reference. The run anchors reads to the indexer's processed block; if the indexer is ahead of this tag the run logs the re-org exposure. |
 | `RECONCILIATION_COVERAGE_MAX_AGE_MS`           | `3600000`   | Age SLA over the uncovered tail.                                                                                                                                         |
 | `RECONCILIATION_CHAIN_READ_CONCURRENCY`        | `8`         | Parallel chain reads per batch.                                                                                                                                          |
-| `RECONCILIATION_INDEXER_ENUMERATION_LIMIT`     | `100000`    | Upper bound on ids walked by the independent indexer-side enumeration. A run logs a warning if it hits the bound before completing.                                      |
+| `RECONCILIATION_INDEXER_ENUMERATION_LIMIT`     | `100000`    | Upper bound on ids walked by the independent indexer-side enumeration. Hitting the bound holds the cursor and marks the run incomplete.                                  |
 | `RECONCILIATION_INDEXER_ENUMERATION_PAGE_SIZE` | `1000`      | Page size for that enumeration's offset pagination (max 5000).                                                                                                           |
 
 ## Do not
@@ -166,6 +195,9 @@ tail returns to zero, so ordinary bursts do not page anyone.
   advancing past an unreconciled range retires the evidence that a chain trade
   was never projected.
 - Do not treat `coverage_complete = false` as a clean run.
+- Do not raise `RECONCILIATION_INDEXER_ENUMERATION_LIMIT` past what the indexer
+  can actually serve in one run to silence a truncation hold; a truncated walk
+  that keeps recurring means the projection has outgrown the bound.
 
 ## Related
 

@@ -98,7 +98,8 @@ test(
            AND column_name IN (
              'coverage_from_trade_id','coverage_to_trade_id','coverage_from_block',
              'coverage_to_block','chain_trade_counter','next_cursor',
-             'uncovered_tail','coverage_complete'
+             'uncovered_tail','coverage_complete',
+             'indexer_enumeration_truncated','indexer_enumeration_walked'
            )
          ORDER BY column_name`,
       );
@@ -112,6 +113,8 @@ test(
           'coverage_from_trade_id',
           'coverage_to_block',
           'coverage_to_trade_id',
+          'indexer_enumeration_truncated',
+          'indexer_enumeration_walked',
           'next_cursor',
           'uncovered_tail',
         ],
@@ -205,6 +208,48 @@ test(
       );
       assert.equal(rls.rows[0].relrowsecurity, true);
       assert.equal(rls.rows[0].relforcerowsecurity, true);
+    });
+  },
+);
+
+test(
+  'a truncated indexer enumeration is retained in run evidence as incomplete coverage',
+  { timeout: 180000, skip: !dockerAvailable },
+  async () => {
+    await withMigratedDatabase(async (pool) => {
+      await pool.query(
+        `INSERT INTO reconcile_runs (run_key, mode, status) VALUES ('run-truncated', 'ONCE', 'RUNNING')`,
+      );
+      // The chain-side window finished, but the indexer walk stopped at its
+      // bound, so the run must not read as a complete sweep.
+      await pool.query(
+        `UPDATE reconcile_runs
+         SET status = 'COMPLETED',
+             coverage_from_trade_id = 1,
+             coverage_to_trade_id = 2500,
+             chain_trade_counter = 2500,
+             next_cursor = 2000,
+             uncovered_tail = 0,
+             coverage_complete = false,
+             indexer_enumeration_truncated = true,
+             indexer_enumeration_walked = 5000
+         WHERE run_key = 'run-truncated'`,
+      );
+
+      const run = await pool.query(
+        `SELECT coverage_complete,
+                indexer_enumeration_truncated,
+                indexer_enumeration_walked::text AS walked,
+                next_cursor::text AS next_cursor
+         FROM reconcile_runs WHERE run_key = 'run-truncated'`,
+      );
+
+      assert.equal(run.rows[0].coverage_complete, false);
+      assert.equal(run.rows[0].indexer_enumeration_truncated, true);
+      assert.equal(run.rows[0].walked, '5000');
+      // The cursor was held short of the window end rather than advanced past
+      // ids the enumeration never reached.
+      assert.equal(run.rows[0].next_cursor, '2000');
     });
   },
 );

@@ -21,7 +21,9 @@ ALTER TABLE reconcile_runs
     ADD COLUMN IF NOT EXISTS chain_trade_counter NUMERIC(78, 0),
     ADD COLUMN IF NOT EXISTS next_cursor NUMERIC(78, 0),
     ADD COLUMN IF NOT EXISTS uncovered_tail NUMERIC(78, 0),
-    ADD COLUMN IF NOT EXISTS coverage_complete BOOLEAN;
+    ADD COLUMN IF NOT EXISTS coverage_complete BOOLEAN,
+    ADD COLUMN IF NOT EXISTS indexer_enumeration_truncated BOOLEAN,
+    ADD COLUMN IF NOT EXISTS indexer_enumeration_walked BIGINT;
 
 -- The tail's first sighting drives the age SLA: a tail that has not shrunk
 -- within the SLA means the sweep can no longer keep up.

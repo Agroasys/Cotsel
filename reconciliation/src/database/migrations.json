@@ -13,8 +13,8 @@
       "version": "202609090001",
       "name": "chain_coverage",
       "file": "002_chain_coverage.sql",
-      "sha256": "1921f8853f8f73caa1836d0451d209eaa395623a522b5895b72066e630b71475",
-      "schema_sha256": "71fb6325e3f371312f48b1d478308ffbfeba0c515e8a5bd653da436b98be6f06"
+      "sha256": "a2dc2168639e1d3d19caa2c6c2bdf97fbf4e53ba15b18ca132a337a07b9797da",
+      "schema_sha256": "bba3751b13c7f1a142f081bf0c71c0c0c64a15d3a438bf3ee28657f59e953bf0"
     }
   ]
 }

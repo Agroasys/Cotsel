@@ -30,6 +30,88 @@ export function holdsCursor(code: DriftCode): boolean {
   return CURSOR_HOLDING_CODES.has(code);
 }
 
+export interface CursorHoldVerdict {
+  held: boolean;
+  reasons: string[];
+}
+
+/**
+ * Decide whether the cursor may move past this window.
+ *
+ * Two independent things park it. A finding that proves a range was not
+ * reconciled — a projection gap, a surplus, or an inconclusive chain read —
+ * means the ids in it are still unverified. A truncated indexer enumeration
+ * means ids beyond the bound were never looked at, so the run cannot claim it
+ * swept the range even though the chain-side window finished.
+ */
+export function evaluateCursorHold(input: {
+  holdingFindingCount: number;
+  enumerationTruncated: boolean;
+}): CursorHoldVerdict {
+  const reasons: string[] = [];
+  if (input.holdingFindingCount > 0) {
+    reasons.push(`${input.holdingFindingCount} unreconciled finding(s)`);
+  }
+  if (input.enumerationTruncated) {
+    reasons.push('indexer id enumeration truncated before completing');
+  }
+  return { held: reasons.length > 0, reasons };
+}
+
+export interface IndexerSnapshotBounds {
+  /** Processed block read before any indexer query in the run. */
+  anchorBlock: number | null;
+  /** Processed block re-read after the last indexer query in the run. */
+  endBlock: number | null;
+}
+
+export interface IndexerSnapshotVerdict {
+  stable: boolean;
+  reason: string | null;
+}
+
+/**
+ * Decide whether the indexer held still for the whole run.
+ *
+ * GraphQL answers from the indexer's *current* projection — there is no "as of
+ * block" query — so a run can only trust its comparisons if the indexer sat at
+ * one height from the first read to the last. If it advanced mid-run, the field
+ * comparisons, the id enumeration and the count each saw a different projection
+ * than the chain reads were anchored to, and any difference between them is an
+ * artefact rather than drift. An unknown height is treated the same way: without
+ * it there is nothing to anchor the chain reads to.
+ */
+export function evaluateIndexerSnapshot(bounds: IndexerSnapshotBounds): IndexerSnapshotVerdict {
+  if (bounds.anchorBlock === null || bounds.endBlock === null) {
+    return {
+      stable: false,
+      reason: 'indexer processed block unavailable; nothing to anchor the chain reads to',
+    };
+  }
+
+  if (bounds.anchorBlock !== bounds.endBlock) {
+    return {
+      stable: false,
+      reason: `indexer advanced from block ${bounds.anchorBlock} to ${bounds.endBlock} during the run`,
+    };
+  }
+
+  return { stable: true, reason: null };
+}
+
+/**
+ * Coverage is only complete when the chain window was fully swept *and* the
+ * indexer-side enumeration walked its whole projection. A truncated walk means
+ * ids beyond the bound were never checked, so the run has not proved the
+ * indexer-only direction over the full range.
+ */
+export function isCoverageComplete(input: {
+  windowComplete: boolean;
+  enumerationTruncated: boolean;
+}): boolean {
+  return input.windowComplete && !input.enumerationTruncated;
+}
+
 /**
  * Resolve the single block a run pins every read to.
  *

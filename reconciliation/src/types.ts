@@ -114,6 +114,16 @@ export interface RunStats {
     sweepReset: boolean;
     /** Set when the indexer id enumeration hit its bound before completing. */
     indexerEnumerationTruncated: boolean;
+    /** How many indexer ids the enumeration actually walked. */
+    indexerEnumerationWalked: number;
+    /**
+     * Window swept *and* indexer enumeration exhausted. A truncated walk leaves
+     * the indexer-only direction unproven beyond the bound, so it is not a
+     * complete coverage result even when the chain window finished.
+     */
+    complete: boolean;
+    /** The block both sides were pinned to for the whole run. */
+    indexerProcessedBlock: number;
   };
 }
 
@@ -147,6 +157,8 @@ export interface ReconcileRunRow {
   next_cursor: string | null;
   uncovered_tail: string | null;
   coverage_complete: boolean | null;
+  indexer_enumeration_truncated: boolean | null;
+  indexer_enumeration_walked: string | null;
 }
 
 export interface CompareInput {

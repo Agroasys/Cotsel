@@ -204,7 +204,9 @@ export async function completeRun(stats: RunStats, executor: Executor = pool): P
          chain_trade_counter = $13::numeric,
          next_cursor = $14::numeric,
          uncovered_tail = $15::numeric,
-         coverage_complete = $16
+         coverage_complete = $16,
+         indexer_enumeration_truncated = $17,
+         indexer_enumeration_walked = $18
      WHERE run_key = $1`,
     [
       stats.runKey,
@@ -222,7 +224,9 @@ export async function completeRun(stats: RunStats, executor: Executor = pool): P
       coverage ? coverage.boundary.chainTradeCounter.toString() : null,
       coverage ? coverage.nextCursor.toString() : null,
       coverage ? coverage.window.uncoveredTail.toString() : null,
-      coverage ? coverage.window.complete : null,
+      coverage ? coverage.complete : null,
+      coverage ? coverage.indexerEnumerationTruncated : null,
+      coverage ? coverage.indexerEnumerationWalked : null,
     ],
   );
 }

@@ -1,9 +1,9 @@
-import { WebhookNotifier } from '@agroasys/notifications';
 import { config } from '../config';
 import { OnchainClient } from '../blockchain/client';
 import { IndexerClient } from '../indexer/client';
 import { Logger } from '../utils/logger';
 import { classifyDrifts } from './classifier';
+import { CoverageAlerts } from './coverageAlerts';
 import {
   createRun,
   failRun,
@@ -18,19 +18,16 @@ import {
   compareCoverage,
   detectIndexerOnlyTradeIds,
   evaluateCoverageSla,
+  evaluateCursorHold,
+  evaluateIndexerSnapshot,
   holdsCursor,
+  isCoverageComplete,
   planCoverageWindow,
   planNextCursor,
   tradeIdsInWindow,
   type ChainTradeRecord,
 } from './coverage';
-import {
-  DriftFinding,
-  DriftSeverity,
-  ReconcileMode,
-  RunStats,
-  type CoverageBoundary,
-} from '../types';
+import { DriftFinding, DriftSeverity, ReconcileMode, RunStats } from '../types';
 
 const DEFAULT_SEVERITY_COUNTS: Record<DriftSeverity, number> = {
   CRITICAL: 0,
@@ -111,70 +108,7 @@ function skippedStats(
 export class ReconciliationService {
   private readonly onchainClient = new OnchainClient();
   private readonly indexerClient = new IndexerClient(config.indexerGraphqlUrl);
-  private readonly notifier = new WebhookNotifier({
-    enabled: config.notificationsEnabled,
-    webhookUrl: config.notificationsWebhookUrl,
-    cooldownMs: config.notificationsCooldownMs,
-    requestTimeoutMs: config.notificationsRequestTimeoutMs,
-    logger: Logger,
-  });
-
-  private async notifyCriticalDrift(runKey: string, finding: DriftFinding): Promise<void> {
-    if (finding.severity !== 'CRITICAL') {
-      return;
-    }
-
-    const isCoverageGap =
-      finding.mismatchCode === 'INDEXER_TRADE_MISSING' ||
-      finding.mismatchCode === 'INDEXER_SURPLUS_RECORDS';
-
-    await this.notifier.notify({
-      source: 'reconciliation',
-      type: isCoverageGap ? 'RECONCILIATION_COVERAGE_GAP' : 'RECONCILIATION_CRITICAL_DRIFT',
-      severity: 'critical',
-      dedupKey:
-        (isCoverageGap ? 'reconciliation:coverage:' : 'reconciliation:critical:') +
-        finding.tradeId +
-        ':' +
-        finding.mismatchCode,
-      message: isCoverageGap
-        ? 'Chain-derived reconciliation coverage gap detected between the chain and the indexer projection.'
-        : 'Critical reconciliation drift detected between on-chain and indexed trade state.',
-      correlation: {
-        tradeId: finding.tradeId,
-        runKey,
-        mismatchCode: finding.mismatchCode,
-      },
-      metadata: {
-        onchainValue: finding.onchainValue,
-        indexedValue: finding.indexedValue,
-      },
-    });
-  }
-
-  private async notifyCoverageBacklog(
-    runKey: string,
-    reason: string,
-    uncoveredTail: bigint,
-    boundary: CoverageBoundary,
-  ): Promise<void> {
-    await this.notifier.notify({
-      source: 'reconciliation',
-      type: 'RECONCILIATION_COVERAGE_BACKLOG',
-      severity: 'critical',
-      dedupKey: 'reconciliation:coverage-backlog',
-      message:
-        'Reconciliation cannot keep up with the chain trade range; the uncovered tail has breached its age SLA.',
-      correlation: { runKey },
-      metadata: {
-        reason,
-        uncoveredTail: uncoveredTail.toString(),
-        chainTradeCounter: boundary.chainTradeCounter.toString(),
-        boundaryBlock: boundary.blockNumber,
-      },
-    });
-  }
-
+  private readonly alerts = new CoverageAlerts();
   private async recordFinding(
     runId: number,
     runKey: string,
@@ -182,7 +116,7 @@ export class ReconciliationService {
     stats: RunStats,
   ): Promise<void> {
     await upsertDrift(runId, runKey, finding);
-    await this.notifyCriticalDrift(runKey, finding);
+    await this.alerts.criticalDrift(runKey, finding);
 
     stats.driftCount += 1;
     stats.severityCounts[finding.severity] += 1;
@@ -260,8 +194,14 @@ export class ReconciliationService {
       // cursor. A transient RPC failure must never retire the ids it could not
       // check.
       let coverageHold = 0;
-      const record = async (finding: DriftFinding): Promise<void> => {
-        await this.recordFinding(run.row.id, runKey, finding, stats);
+      // Findings are buffered rather than written as they are found: the run
+      // cannot know its comparisons were valid until it has re-read the
+      // indexer's height at the end, and an unstable snapshot must publish no
+      // drift at all.
+      const pendingFindings: DriftFinding[] = [];
+      const pendingScope: string[] = [];
+      const record = (finding: DriftFinding): void => {
+        pendingFindings.push(finding);
         if (holdsCursor(finding.mismatchCode)) {
           coverageHold += 1;
         }
@@ -293,20 +233,20 @@ export class ReconciliationService {
 
         for (const finding of comparison.missingFromIndexer) {
           stats.totalTrades += 1;
-          await upsertRunTradeScope(run.row.id, runKey, finding.tradeId);
-          await record(finding);
+          pendingScope.push(finding.tradeId);
+          record(finding);
         }
 
         for (const pair of comparison.paired) {
           stats.totalTrades += 1;
-          await upsertRunTradeScope(run.row.id, runKey, pair.indexed.tradeId);
+          pendingScope.push(pair.indexed.tradeId);
 
           for (const finding of classifyDrifts({
             indexedTrade: pair.indexed,
             onchainTrade: pair.onchain,
             onchainReadError: pair.readError,
           })) {
-            await record(finding);
+            record(finding);
           }
         }
 
@@ -315,8 +255,8 @@ export class ReconciliationService {
           // path it cannot return an id outside the window. The authoritative
           // indexer-only detection is the independent enumeration below.
           stats.totalTrades += 1;
-          await upsertRunTradeScope(run.row.id, runKey, indexerOnly.tradeId);
-          await record({
+          pendingScope.push(indexerOnly.tradeId);
+          record({
             tradeId: indexerOnly.tradeId,
             severity: 'CRITICAL',
             mismatchCode: 'ONCHAIN_TRADE_MISSING',
@@ -339,7 +279,11 @@ export class ReconciliationService {
         config.indexerEnumerationPageSize,
       );
       if (enumeration.truncated) {
-        Logger.warn('Indexer id enumeration reached its bound before completing', {
+        // Ids beyond the bound were never checked, so the indexer-only
+        // direction is unproven over the rest of the range. The hold below
+        // keeps them in scope for the next run instead of retiring them behind
+        // a run that claims a complete sweep.
+        Logger.error('Indexer id enumeration reached its bound before completing', {
           runKey,
           limit: config.indexerEnumerationLimit,
           walked: enumeration.tradeIds.length,
@@ -350,8 +294,8 @@ export class ReconciliationService {
         boundary,
       })) {
         stats.totalTrades += 1;
-        await upsertRunTradeScope(run.row.id, runKey, finding.tradeId);
-        await record(finding);
+        pendingScope.push(finding.tradeId);
+        record(finding);
       }
 
       let indexerTradeCount: number | null = null;
@@ -366,7 +310,47 @@ export class ReconciliationService {
 
       const surplus = checkIndexerSurplus({ indexerTradeCount, boundary });
       if (surplus) {
-        await record(surplus);
+        record(surplus);
+      }
+
+      // Every indexer read for this run is now done. If the projection moved
+      // while they ran, the batches, the enumeration and the count each saw a
+      // different height than the chain reads were anchored to, and any
+      // difference between them is an artefact. Publish nothing and hold.
+      const snapshot = evaluateIndexerSnapshot({
+        anchorBlock: boundary.indexerProcessedBlock,
+        endBlock: await this.indexerClient.fetchProcessedBlock(),
+      });
+
+      if (!snapshot.stable) {
+        Logger.error('Discarding an unstable reconciliation snapshot without publishing drift', {
+          runKey,
+          mode,
+          reason: snapshot.reason,
+          discardedFindings: pendingFindings.length,
+          anchorBlock: boundary.indexerProcessedBlock,
+        });
+
+        const inconclusive: RunStats = {
+          ...stats,
+          status: 'SKIPPED',
+          totalTrades: 0,
+          driftCount: 0,
+          severityCounts: { ...DEFAULT_SEVERITY_COUNTS },
+          skippedReason: snapshot.reason ?? 'indexer snapshot unstable',
+        };
+        await finalizeRun({
+          stats: inconclusive,
+          cursor: { advance: false, tailFirstSeenAt: cursor.tailFirstSeenAt },
+        });
+        return inconclusive;
+      }
+
+      for (const tradeId of pendingScope) {
+        await upsertRunTradeScope(run.row.id, runKey, tradeId);
+      }
+      for (const finding of pendingFindings) {
+        await this.recordFinding(run.row.id, runKey, finding, stats);
       }
 
       const now = new Date();
@@ -383,13 +367,22 @@ export class ReconciliationService {
       // that reached the counter resets to a fresh epoch (cursor 0) so existing
       // trades are swept again — without the reset, once the cursor reaches the
       // counter every later run plans an empty window forever.
-      const cursorHeld = coverageHold > 0;
+      const hold = evaluateCursorHold({
+        holdingFindingCount: coverageHold,
+        enumerationTruncated: enumeration.truncated,
+      });
+      const cursorHeld = hold.held;
       const nextCursor = planNextCursor({
         window,
         cursorHeld,
         previousCursor: cursor.lastTradeId,
       });
       const sweepReset = !cursorHeld && window.complete;
+
+      const coverageComplete = isCoverageComplete({
+        windowComplete: window.complete,
+        enumerationTruncated: enumeration.truncated,
+      });
 
       stats.coverage = {
         boundary,
@@ -401,6 +394,9 @@ export class ReconciliationService {
         nextCursor,
         sweepReset,
         indexerEnumerationTruncated: enumeration.truncated,
+        indexerEnumerationWalked: enumeration.tradeIds.length,
+        complete: coverageComplete,
+        indexerProcessedBlock: boundary.indexerProcessedBlock,
       };
 
       // The run's complete-range accounting and the cursor move commit together:
@@ -421,13 +417,13 @@ export class ReconciliationService {
       if (cursorHeld) {
         Logger.error('Holding the reconciliation cursor on an unresolved coverage gap', {
           runKey,
-          coverageHold,
+          reasons: hold.reasons,
           heldAtTradeId: cursor.lastTradeId.toString(),
         });
       }
 
       if (sla.breached && sla.reason) {
-        await this.notifyCoverageBacklog(runKey, sla.reason, window.uncoveredTail, boundary);
+        await this.alerts.coverageBacklog(runKey, sla.reason, window.uncoveredTail, boundary);
       }
 
       Logger.info('Reconciliation run completed', {
@@ -442,7 +438,11 @@ export class ReconciliationService {
         blockInterval: `${cursor.boundaryBlockNumber}..${boundary.blockNumber}`,
         nextCursor: nextCursor.toString(),
         uncoveredTail: window.uncoveredTail.toString(),
-        coverageComplete: window.complete,
+        coverageComplete,
+        windowComplete: window.complete,
+        indexerEnumerationTruncated: enumeration.truncated,
+        indexerEnumerationWalked: enumeration.tradeIds.length,
+        indexerProcessedBlock: boundary.indexerProcessedBlock,
         cursorAdvanced: !cursorHeld,
         sweepReset,
         slaBreached: sla.breached,
