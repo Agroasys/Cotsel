@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { evaluateCursorHold, evaluateIndexerSnapshot, isCoverageComplete } from '../core/coverage';
+import {
+  evaluateCursorHold,
+  evaluateIndexerAnchor,
+  evaluateIndexerSnapshot,
+  isCoverageComplete,
+} from '../core/coverage';
 
 /**
  * Second-round review findings on WP-3 chain coverage.
@@ -11,6 +16,9 @@ import { evaluateCursorHold, evaluateIndexerSnapshot, isCoverageComplete } from 
  *    publishes drift or advances the cursor.
  * 2. A truncated id enumeration left the run free to report a complete sweep
  *    even though ids beyond the bound were never checked.
+ * 3. The last null-anchor path: an unavailable initial checkpoint was replaced
+ *    with the chain finality block before the boundary was resolved, so the
+ *    end-of-run snapshot check saw two equal numbers and accepted the run.
  */
 
 // ---------------------------------------------------------------------------
@@ -104,4 +112,89 @@ test('a clean, fully enumerated run releases the cursor', () => {
 
   assert.equal(verdict.held, false);
   assert.deepEqual(verdict.reasons, []);
+});
+
+// ---------------------------------------------------------------------------
+// Issue 3: a missing initial checkpoint is never substituted.
+// ---------------------------------------------------------------------------
+
+const FINALITY_BLOCK = 4242;
+
+/**
+ * The run's anchoring gate, in the order `reconcileOnce` applies it: the
+ * checkpoint decides whether a chain boundary is resolved at all, and only an
+ * anchored run reaches the end-of-run snapshot check. `boundariesResolved`
+ * stands in for `OnchainClient.resolveBoundary`, which the gate must keep the
+ * run away from when there is no checkpoint to pin it to.
+ */
+function gateRun(input: { checkpoint: number | null; endBlock: number | null }): {
+  published: boolean;
+  reason: string | null;
+  boundariesResolved: number;
+} {
+  let boundariesResolved = 0;
+
+  const anchor = evaluateIndexerAnchor(input.checkpoint);
+  if (!anchor.usable) {
+    return { published: false, reason: anchor.reason, boundariesResolved };
+  }
+
+  boundariesResolved += 1;
+  const snapshot = evaluateIndexerSnapshot({
+    anchorBlock: anchor.anchorBlock,
+    endBlock: input.endBlock,
+  });
+
+  return { published: snapshot.stable, reason: snapshot.reason, boundariesResolved };
+}
+
+test('a null checkpoint is rejected even when the final read matches the finality height', () => {
+  // The regression: `resolveBoundary(null)` substituted the finality block and
+  // stored it as the anchor, so a final height read landing on that same block
+  // compared equal and the run published drift decided against a projection it
+  // never had a checkpoint for.
+  const verdict = gateRun({ checkpoint: null, endBlock: FINALITY_BLOCK });
+
+  assert.equal(verdict.published, false);
+  assert.match(verdict.reason ?? '', /processed block unavailable/);
+  assert.equal(
+    verdict.boundariesResolved,
+    0,
+    'the chain boundary must not be resolved without an indexer checkpoint',
+  );
+});
+
+test('a null checkpoint is rejected whatever the final read returns', () => {
+  for (const endBlock of [null, FINALITY_BLOCK - 1, FINALITY_BLOCK, FINALITY_BLOCK + 1]) {
+    const verdict = gateRun({ checkpoint: null, endBlock });
+
+    assert.equal(verdict.published, false, `endBlock=${endBlock}`);
+    assert.equal(verdict.boundariesResolved, 0, `endBlock=${endBlock}`);
+  }
+});
+
+test('a real checkpoint that held still anchors the run and publishes', () => {
+  // The control: the gate only rejects a missing checkpoint, not a trailing one
+  // that happens to sit below the chain finality block.
+  const verdict = gateRun({ checkpoint: FINALITY_BLOCK - 300, endBlock: FINALITY_BLOCK - 300 });
+
+  assert.equal(verdict.published, true);
+  assert.equal(verdict.reason, null);
+  assert.equal(verdict.boundariesResolved, 1);
+});
+
+test('a read checkpoint is carried through as the anchor, never defaulted', () => {
+  const anchor = evaluateIndexerAnchor(940);
+
+  assert.equal(anchor.usable, true);
+  assert.equal(anchor.anchorBlock, 940);
+  assert.equal(anchor.reason, null);
+});
+
+test('an unavailable checkpoint yields no anchor block at all', () => {
+  const anchor = evaluateIndexerAnchor(null);
+
+  assert.equal(anchor.usable, false);
+  assert.equal(anchor.anchorBlock, null);
+  assert.match(anchor.reason ?? '', /processed block unavailable/);
 });
