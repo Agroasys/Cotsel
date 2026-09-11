@@ -57,6 +57,7 @@ Set the required environment values through the protected deployment environment
 ```text
 BASE_SEPOLIA_RPC_URL
 BASESCAN_API_KEY
+DEPLOYER_ADDRESS
 DEPLOY_ORACLE_ADDRESS
 DEPLOY_TREASURY_ADDRESS
 DEPLOY_RELAYER_ADDRESS
@@ -65,15 +66,33 @@ DEPLOY_REQUIRED_APPROVALS=2
 DEPLOY_VERIFY=true
 ```
 
-`DEPLOY_ADMINS` must contain exactly three distinct Base Sepolia administrator addresses. Run:
+`DEPLOY_ADMINS` must contain exactly three distinct hardware-wallet administrator addresses.
+Prepare the exact unsigned contract-creation request:
 
 ```bash
-pnpm --dir contracts deploy:base-sepolia
+pnpm --dir contracts prepare:base-sepolia
 ```
 
-The deployment script requires a clean Git commit. It records compiler settings and source hashes.
-It verifies the explorer source and constructor arguments. It compares local and live runtime bytecode.
-It also attests the token and all runtime roles. Do not propagate an address before independent acceptance.
+The canonical deployer is a separate hardware-controlled wallet. The preparation script
+rejects configured raw private keys, records the exact constructor data, estimates gas, and
+predicts the contract address from the reviewed deployer address and pending nonce. It does
+not sign or broadcast.
+
+Use the protected `Contract Deployment Evidence` workflow for shared preparation. Select
+`main`, choose `prepare`, and enter its exact reviewed commit. The staging environment
+requires another participant to approve the job. The workflow verifies only the Oracle and
+relayer KMS addresses. It records the treasury, deployer, and administrator addresses as
+reviewed non-KMS identities.
+
+After a custodian reviews the request, sign and broadcast that exact transaction with the
+approved hardware wallet. Then run the workflow with `action=verify` and the transaction
+hash. Verification rejects a changed signer, destination, value, constructor payload,
+contract address, runtime bytecode, or role matrix.
+
+The preparation and verification scripts require a clean Git commit. Verification records
+compiler settings and source hashes, verifies explorer source and constructor arguments,
+compares local and live runtime bytecode, and attests the token and all runtime roles. Do not
+propagate an address before independent acceptance.
 
 ## Rollback
 

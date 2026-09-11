@@ -13,6 +13,8 @@ import {
   expectedProjectSingleSelectOptions,
   primaryProjectMetadata,
 } from './cotsel-production-readiness-project-metadata.mjs';
+import { routeByKey } from './cotsel-production-readiness-model.mjs';
+import { renderRouteBody } from './render-cotsel-production-readiness-issue.mjs';
 
 const routeKeys = new Set(['primary', 'contributor']);
 const allowedGates = new Set(['E-0']);
@@ -101,6 +103,37 @@ test('route schema rejects removed controlIds and gate fields', () => {
       ),
     /removed controlIds/,
   );
+});
+
+test('the WP-1 role-separation route preserves the binding custody policy', () => {
+  const route = routeByKey.get('wp1-role-separation');
+  assert.ok(route);
+  const body = renderRouteBody(route);
+
+  assert.match(body, /Binding signer custody policy/);
+  assert.match(body, /two approvals from three independent administrator hardware wallets/);
+  assert.match(body, /Oracle \| Dedicated non-exportable AWS KMS key/);
+  assert.match(body, /Gasless relayer \| Dedicated non-exportable AWS KMS key/);
+  assert.match(body, /Admin 1-3 \| Three independently generated and held hardware wallets/);
+  assert.match(body, /Treasury \| No managed signer until/);
+  assert.match(body, /Deployer \| Separate hardware-controlled deployment wallet/);
+  assert.match(body, /Reject every managed signer role whose name starts with admin-/);
+});
+
+test('Terraform provisions KMS keys only for approved automated signers', () => {
+  const terraform = readFileSync(
+    new URL('../../infra/terraform/staging-platform/managed-signers.tf', import.meta.url),
+    'utf8',
+  );
+  const managedRoles = terraform.match(/managed_signer_roles = toset\(\[([\s\S]*?)\]\)/)?.[1];
+
+  assert.ok(managedRoles, 'managed signer role set exists');
+  assert.deepEqual(
+    [...managedRoles.matchAll(/"([^"]+)"/g)].map((match) => match[1]),
+    ['oracle', 'relayer'],
+  );
+  assert.match(terraform, /!startswith\(role, "admin-"\)/);
+  assert.doesNotMatch(managedRoles, /admin-|treasury|deployer/);
 });
 
 test('work packages reject a missing SOW control-sheet field', () => {

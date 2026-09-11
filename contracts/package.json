@@ -5,8 +5,11 @@
   "license": "Apache-2.0",
   "scripts": {
     "compile": "hardhat compile --force",
-    "deploy:base-sepolia": "npx hardhat run scripts/deploy-base.ts --network base-sepolia",
-    "deploy:base-mainnet": "npx hardhat run scripts/deploy-base.ts --network base-mainnet",
+    "prepare:base-sepolia": "npx hardhat run scripts/prepare-base-deployment.ts --network base-sepolia",
+    "prepare:base-mainnet": "npx hardhat run scripts/prepare-base-deployment.ts --network base-mainnet",
+    "finalize:base-sepolia": "npx hardhat run scripts/deploy-base.ts --network base-sepolia",
+    "finalize:base-mainnet": "npx hardhat run scripts/deploy-base.ts --network base-mainnet",
+    "kms:verify-automated-signers": "ts-node scripts/verify-kms-role-matrix.ts",
     "verify:base-sepolia": "npx hardhat verify --network base-sepolia",
     "verify:base-mainnet": "npx hardhat verify --network base-mainnet",
     "test": "hardhat test",
@@ -37,6 +40,8 @@
     "typescript": ">=6.0.2 <6.1.0"
   },
   "dependencies": {
+    "@agroasys/sdk": "workspace:*",
+    "@aws-sdk/client-kms": "3.1125.0",
     "@openzeppelin/contracts": "^5.6.1",
     "cookie": "^1.1.1",
     "lodash": "^4.18.1",

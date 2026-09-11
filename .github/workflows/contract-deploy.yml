@@ -1,0 +1,152 @@
+name: Contract Deployment Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Prepare an unsigned request or verify an externally broadcast deployment.
+        required: true
+        default: prepare
+        type: choice
+        options:
+          - prepare
+          - verify
+      commit_sha:
+        description: Exact reviewed main commit for the deployment request.
+        required: true
+        type: string
+      deployment_tx_hash:
+        description: Required only for verify. Transaction broadcast by the approved hardware wallet.
+        required: false
+        type: string
+      forbidden_user_wallets:
+        description: Optional comma-separated buyer and supplier wallets that must not hold a protocol role.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  SIGNER_AUDIT_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-contract-deploy
+
+concurrency:
+  group: contract-deployment-evidence-base-sepolia
+  cancel-in-progress: false
+
+jobs:
+  evidence:
+    name: contract/base-sepolia/${{ inputs.action }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    env:
+      BASE_SEPOLIA_RPC_URL: ${{ secrets.BASE_SEPOLIA_RPC_URL }}
+      BASESCAN_API_KEY: ${{ secrets.BASESCAN_API_KEY }}
+      DEPLOYER_ADDRESS: ${{ vars.COTSEL_STAGING_DEPLOYER_ADDRESS }}
+      DEPLOY_ORACLE_ADDRESS: ${{ vars.COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS }}
+      DEPLOY_TREASURY_ADDRESS: ${{ vars.COTSEL_STAGING_TREASURY_ADDRESS }}
+      DEPLOY_RELAYER_ADDRESS: ${{ vars.COTSEL_STAGING_RELAYER_KMS_EXPECTED_ADDRESS }}
+      DEPLOY_ADMINS: ${{ vars.COTSEL_STAGING_ADMIN_1_ADDRESS }},${{ vars.COTSEL_STAGING_ADMIN_2_ADDRESS }},${{ vars.COTSEL_STAGING_ADMIN_3_ADDRESS }}
+      DEPLOY_REQUIRED_APPROVALS: '2'
+      DEPLOY_VERIFY: 'true'
+      DEPLOY_TRANSACTION_HASH: ${{ inputs.deployment_tx_hash }}
+      DEPLOY_FORBIDDEN_USER_WALLETS: ${{ inputs.forbidden_user_wallets }}
+    steps:
+      - name: Checkout the requested main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Verify immutable deployment selection
+        env:
+          EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || {
+            echo "Contract deployment evidence is restricted to main." >&2
+            exit 1
+          }
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT_SHA" || {
+            echo "The dispatched commit does not match the reviewed main commit." >&2
+            exit 1
+          }
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT_SHA" || {
+            echo "The checkout does not match the reviewed commit." >&2
+            exit 1
+          }
+          test -z "$(git status --porcelain --untracked-files=all)" || {
+            echo "The deployment checkout is not clean." >&2
+            exit 1
+          }
+          if [ "${{ inputs.action }}" = "verify" ]; then
+            test -n "$DEPLOY_TRANSACTION_HASH" || {
+              echo "deployment_tx_hash is required for verify." >&2
+              exit 1
+            }
+          fi
+
+      - name: Check protected configuration
+        run: |
+          set -euo pipefail
+          for name in \
+            BASE_SEPOLIA_RPC_URL \
+            BASESCAN_API_KEY \
+            DEPLOYER_ADDRESS \
+            DEPLOY_ORACLE_ADDRESS \
+            DEPLOY_TREASURY_ADDRESS \
+            DEPLOY_RELAYER_ADDRESS \
+            DEPLOY_ADMINS; do
+            test -n "${!name:-}" || {
+              echo "$name is not configured in the protected staging environment." >&2
+              exit 1
+            }
+          done
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with:
+          version: 10.34.4
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Revalidate the contract candidate
+        run: |
+          pnpm --dir contracts run compile
+          pnpm --dir contracts run test
+
+      - name: Assume the signer-audit role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ env.SIGNER_AUDIT_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify the automated KMS signers
+        run: |
+          mkdir -p contracts/reports/deploy/base-sepolia
+          pnpm --dir contracts run kms:verify-automated-signers \
+            > contracts/reports/deploy/base-sepolia/kms-automated-signers.json
+
+      - name: Prepare the unsigned hardware-wallet request
+        if: inputs.action == 'prepare'
+        run: pnpm --dir contracts run prepare:base-sepolia
+
+      - name: Verify the hardware-wallet deployment
+        if: inputs.action == 'verify'
+        run: pnpm --dir contracts run finalize:base-sepolia
+
+      - name: Retain deployment evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: base-sepolia-contract-${{ inputs.action }}-${{ github.sha }}-${{ github.run_id }}
+          path: contracts/reports/deploy/base-sepolia/*.json
+          if-no-files-found: error
+          retention-days: 90

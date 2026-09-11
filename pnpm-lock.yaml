@@ -165,6 +165,12 @@ importers:
 
   contracts:
     dependencies:
+      '@agroasys/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@aws-sdk/client-kms':
+        specifier: 3.1125.0
+        version: 3.1125.0
       '@openzeppelin/contracts':
         specifier: ^5.6.1
         version: 5.6.1

@@ -5,22 +5,27 @@ locals {
     "admin-3",
   ])
 
-  managed_signer_roles = toset([
-    "deployer",
+  approved_automated_signer_roles = toset([
     "oracle",
     "relayer",
-    "treasury",
+  ])
+
+  managed_signer_roles = toset([
+    "oracle",
+    "relayer",
   ])
 }
 
-check "human_governance_signers_are_not_kms_managed" {
+check "only_approved_automated_signers_are_kms_managed" {
   assert {
-    condition = length(
-      setintersection(
-        local.managed_signer_roles,
-        local.human_governance_signer_roles,
-      ),
-    ) == 0
+    condition     = setequals(local.managed_signer_roles, local.approved_automated_signer_roles)
+    error_message = "Only the Oracle and gasless relayer have approved automated signing needs and may be provisioned as AWS KMS keys."
+  }
+}
+
+check "admin_prefixed_signers_are_not_kms_managed" {
+  assert {
+    condition     = alltrue([for role in local.managed_signer_roles : !startswith(role, "admin-")])
     error_message = "Human administrator signers must use independent hardware wallets and must not be provisioned as AWS KMS keys."
   }
 }

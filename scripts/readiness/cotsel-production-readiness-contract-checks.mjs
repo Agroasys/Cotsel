@@ -13,6 +13,23 @@ export function validateRouteContractShape(route, routeKeys, allowedGates) {
   for (const dependency of route.dependencies || []) {
     assert.ok(routeKeys.has(dependency), `${route.key} has unknown dependency ${dependency}`);
   }
+  if (route.custodyPolicy !== undefined) {
+    assert.ok(route.custodyPolicy.quorum?.trim(), `${route.key} custody policy missing quorum`);
+    assert.ok(route.custodyPolicy.roles?.length, `${route.key} custody policy missing roles`);
+    assert.ok(
+      route.custodyPolicy.prohibitedStates?.length,
+      `${route.key} custody policy missing prohibited states`,
+    );
+    assert.ok(
+      route.custodyPolicy.negativeTests?.length,
+      `${route.key} custody policy missing negative tests`,
+    );
+    for (const role of route.custodyPolicy.roles) {
+      assert.ok(role.role?.trim(), `${route.key} custody policy has an unnamed role`);
+      assert.ok(role.custody?.trim(), `${route.key} custody policy role missing custody`);
+      assert.ok(role.state?.trim(), `${route.key} custody policy role missing state`);
+    }
+  }
 }
 
 export function validateIssueRoutedControl(control, routeKeys) {
