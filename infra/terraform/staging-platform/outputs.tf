@@ -147,3 +147,13 @@ output "managed_signer_aliases" {
   description = "Stable aliases used to derive and attest each managed signer's EVM address."
   value       = { for role, alias in aws_kms_alias.managed_signer : role => alias.name }
 }
+
+output "oracle_task_role_arn" {
+  description = "Dedicated Oracle workload role; the only runtime role eligible for Oracle KMS signing."
+  value       = aws_iam_role.oracle_task.arn
+}
+
+output "oracle_reviewed_config_sha256" {
+  description = "Digest of the Oracle environment, secret references, and dedicated task role."
+  value       = local.oracle_reviewed_config_sha256
+}

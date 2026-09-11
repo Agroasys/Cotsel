@@ -1,13 +1,22 @@
 locals {
+  gateway_runtime_service_names = toset([
+    "auth",
+    "gateway",
+    "indexer-graphql",
+    "indexer-pipeline",
+    "reconciliation",
+  ])
+
+  gateway_runtime_containers = [
+    local.gateway_container,
+    local.auth_container,
+    local.indexer_pipeline_container,
+    local.indexer_graphql_container,
+    local.reconciliation_container,
+  ]
+
   gateway_reviewed_config_sha256 = sha256(jsonencode([
-    for container in [
-      local.gateway_container,
-      local.auth_container,
-      local.indexer_pipeline_container,
-      local.indexer_graphql_container,
-      local.oracle_container,
-      local.reconciliation_container,
-      ] : {
+    for container in local.gateway_runtime_containers : {
       name              = container.name
       environment       = try(container.environment, [])
       secret_references = try(container.secrets, [])
@@ -30,28 +39,14 @@ resource "aws_ecs_task_definition" "gateway" {
   }
 
   dynamic "volume" {
-    for_each = toset([
-      "auth",
-      "gateway",
-      "indexer-graphql",
-      "indexer-pipeline",
-      "oracle",
-      "reconciliation",
-    ])
+    for_each = local.gateway_runtime_service_names
 
     content {
       name = "${volume.value}-tmp"
     }
   }
 
-  container_definitions = jsonencode([
-    local.gateway_container,
-    local.auth_container,
-    local.indexer_pipeline_container,
-    local.indexer_graphql_container,
-    local.oracle_container,
-    local.reconciliation_container,
-  ])
+  container_definitions = jsonencode(local.gateway_runtime_containers)
 
   lifecycle {
     create_before_destroy = true
@@ -94,6 +89,10 @@ resource "aws_ecs_service" "gateway" {
     target_group_arn = aws_lb_target_group.gateway.arn
     container_name   = "gateway"
     container_port   = 3600
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.runtime["gateway"].arn
   }
 
   depends_on = [

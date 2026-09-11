@@ -6,6 +6,8 @@ resource "aws_service_discovery_private_dns_namespace" "runtime" {
 
 resource "aws_service_discovery_service" "runtime" {
   for_each = toset([
+    "gateway",
+    "oracle",
     "ricardian",
     "treasury",
   ])

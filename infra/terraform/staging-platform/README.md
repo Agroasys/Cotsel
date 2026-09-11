@@ -80,6 +80,29 @@ deployer must not hold a runtime role.
 Keep the legacy runtime unchanged during key creation. Deploy and verify the new
 contract before enabling KMS-backed runtime signing.
 
+The Oracle runs as its own ECS service and task role. The gateway task cannot
+read the Oracle database credential or legacy signer secret, and only the
+Oracle task role can call `kms:GetPublicKey` and `kms:Sign` on the Oracle key.
+Oracle reads the bundled indexer through private Cloud Map DNS; gateway-to-
+Oracle calls remain authenticated with the existing service credential.
+
+KMS activation is intentionally two-stage:
+
+1. Apply the reviewed key-creation plan while the accepted runtime remains
+   unchanged.
+2. Run `pnpm --filter oracle kms:addresses -- <oracle-key-alias>` under a
+   read-only identity and independently review the derived address.
+3. Set the GitHub Actions variable
+   `COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS` to that reviewed address.
+4. Review a fresh main-branch plan. It must remove `ORACLE_PRIVATE_KEY`, set
+   `ORACLE_SIGNER_CUSTODY_MODE=kms`, and grant only the Oracle task role access
+   to the Oracle KMS key.
+5. Apply that exact plan, then capture startup, wrong-address, denied-access,
+   outage, signing, CloudTrail, and reconciliation evidence before acceptance.
+
+An empty repository variable keeps the dedicated staging Oracle on its legacy
+rollback key. It does not satisfy production custody acceptance.
+
 Every service schema migration runs as a separate one-off ECS task. Each
 execution role can pull only its service image, write only its service log
 group, and read only its service migration credential. Long-running execution
@@ -88,7 +111,7 @@ schema migrations.
 
 Every runtime, migration, bootstrap, and verifier container has a read-only root
 filesystem. Each container receives only an ephemeral writable `/tmp` mount.
-The six containers in the bundled gateway task use separate volumes so one
+The five containers in the bundled gateway task use separate volumes so one
 service cannot read another service's temporary files.
 
 The indexer migration task executes the migration binary already present in

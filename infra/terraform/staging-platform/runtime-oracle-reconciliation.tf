@@ -1,8 +1,10 @@
 locals {
   base_sepolia_chain_id     = 84532
   base_sepolia_explorer_url = "https://sepolia.basescan.org"
+  oracle_kms_enabled        = var.oracle_kms_expected_address != ""
 
-  oracle_environment = [
+  oracle_environment = concat([
+    { name = "AWS_REGION", value = var.region },
     { name = "COTSEL_ENVIRONMENT", value = "staging" },
     { name = "CHAIN_ID", value = tostring(local.base_sepolia_chain_id) },
     { name = "DB_HOST", value = local.postgres_host },
@@ -13,31 +15,37 @@ locals {
     { name = "EXPLORER_BASE_URL", value = local.base_sepolia_explorer_url },
     { name = "HMAC_NONCE_TTL_SECONDS", value = "600" },
     { name = "INDEXER_GQL_TIMEOUT_MS", value = "10000" },
-    { name = "INDEXER_GRAPHQL_URL", value = "http://127.0.0.1:4350/graphql" },
+    { name = "INDEXER_GRAPHQL_URL", value = "http://gateway.cotsel-staging.internal:4350/graphql" },
     { name = "NODE_ENV", value = "production" },
     { name = "NOTIFICATIONS_COOLDOWN_MS", value = "300000" },
     { name = "NOTIFICATIONS_ENABLED", value = "false" },
     { name = "NOTIFICATIONS_REQUEST_TIMEOUT_MS", value = "5000" },
     { name = "ORACLE_MANUAL_APPROVAL_ENABLED", value = "false" },
     { name = "ORACLE_RATE_LIMIT_ENABLED", value = "false" },
-    { name = "ORACLE_SIGNER_CUSTODY_MODE", value = "raw_private_key" },
     { name = "PGSSLMODE", value = "verify-full" },
     { name = "PORT", value = "3001" },
     { name = "RETRY_ATTEMPTS", value = "3" },
     { name = "RETRY_DELAY", value = "1000" },
     { name = "SETTLEMENT_RUNTIME", value = "base-sepolia" },
     { name = "USDC_ADDRESS", value = var.base_sepolia_usdc_address },
-  ]
+    ], local.oracle_kms_enabled ? [
+    { name = "ORACLE_KMS_EXPECTED_ADDRESS", value = var.oracle_kms_expected_address },
+    { name = "ORACLE_KMS_KEY_ID", value = aws_kms_alias.managed_signer["oracle"].name },
+    { name = "ORACLE_SIGNER_CUSTODY_MODE", value = "kms" },
+    ] : [
+    { name = "ORACLE_SIGNER_CUSTODY_MODE", value = "raw_private_key" },
+  ])
 
-  oracle_secrets = [
+  oracle_secrets = concat([
     { name = "API_KEY", valueFrom = "${aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn}:id::" },
     { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/oracle/runtime"].arn}:password::" },
     { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/oracle/runtime"].arn}:username::" },
     { name = "HMAC_SECRET", valueFrom = "${aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn}:secret::" },
-    { name = "ORACLE_PRIVATE_KEY", valueFrom = "${data.aws_secretsmanager_secret.oracle_wallet.arn}:privateKey::" },
     { name = "RPC_FALLBACK_URLS", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn },
     { name = "RPC_URL", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn },
-  ]
+    ], local.oracle_kms_enabled ? [] : [
+    { name = "ORACLE_PRIVATE_KEY", valueFrom = "${data.aws_secretsmanager_secret.oracle_wallet.arn}:privateKey::" },
+  ])
 
   oracle_container = {
     name                   = "oracle"
