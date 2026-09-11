@@ -17,6 +17,18 @@ Before execution, create an incident record with:
 
 Do not continue when an address, artifact, role, exposure value, or owner is unknown.
 
+Record the fields in a JSON document. Validate it before execution:
+
+```bash
+node scripts/readiness/validate-contract-cohort-rollback-record.mjs <record.json>
+```
+
+Use schema version `cotsel.contract-cohort-rollback.v1`.
+
+The validator permits pending approvals only while `resumptionAuthorized` is false.
+
+It rejects resumption with pending transactions, unexplained exposure, or missing approvals.
+
 ## Implementation prerequisite
 
 The current indexer accepts one `INDEXER_CONTRACT_ADDRESS`. It cannot monitor two active cohorts.
