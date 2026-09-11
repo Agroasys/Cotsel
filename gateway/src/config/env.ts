@@ -7,7 +7,10 @@ import { getAddress, isAddress } from 'ethers';
 import { parseAllowedOrigins } from '@agroasys/shared-edge';
 import { resolveSettlementRuntime } from '@agroasys/sdk';
 import { calculateGaslessExecutorCapacityPolicy } from '../core/gaslessExecutorCapacityPolicy';
-import { parseGaslessSignerCustodyMode } from './gaslessSignerCustodyMode';
+import {
+  parseGaslessSignerCustodyMode,
+  validateGaslessSignerCustodyConfig,
+} from './gaslessSignerCustodyMode';
 
 dotenv.config();
 
@@ -200,6 +203,8 @@ export function loadConfig(): GatewayConfig {
       process.env.GATEWAY_EXECUTOR_PRIVATE_KEY?.trim() ||
       undefined,
   );
+  const gaslessKmsKeyId = optionalEnv('GATEWAY_GASLESS_KMS_KEY_ID');
+  const gaslessKmsExpectedAddress = optionalEnv('GATEWAY_GASLESS_KMS_EXPECTED_ADDRESS');
   const gaslessManagedSignerUrl =
     process.env.GATEWAY_GASLESS_MANAGED_SIGNER_URL?.trim()?.replace(/\/$/, '') || undefined;
   const gaslessManagedSignerApiKey =
@@ -503,29 +508,15 @@ export function loadConfig(): GatewayConfig {
   }
 
   if (gaslessExecutionEnabled) {
-    if (gaslessSignerCustodyMode === 'raw_private_key') {
-      assert(
-        gaslessExecutorPrivateKey,
-        'GATEWAY_GASLESS_EXECUTION_ENABLED requires GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY or GATEWAY_EXECUTOR_PRIVATE_KEY when GATEWAY_GASLESS_SIGNER_CUSTODY_MODE=raw_private_key',
-      );
-    } else {
-      assert(
-        gaslessManagedSignerUrl,
-        'GATEWAY_GASLESS_EXECUTION_ENABLED requires GATEWAY_GASLESS_MANAGED_SIGNER_URL when GATEWAY_GASLESS_SIGNER_CUSTODY_MODE is kms or mpc',
-      );
-      assert(
-        !gaslessExecutorPrivateKey,
-        'GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY must not be set when GATEWAY_GASLESS_SIGNER_CUSTODY_MODE is kms or mpc',
-      );
-      assert(
-        gaslessManagedSignerUrl?.startsWith('https://'),
-        'Managed gasless signer custody requires an https GATEWAY_GASLESS_MANAGED_SIGNER_URL',
-      );
-      assert(
-        Boolean(gaslessManagedSignerApiKey),
-        'Managed gasless signer custody requires GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY',
-      );
-    }
+    validateGaslessSignerCustodyConfig({
+      enabled: true,
+      mode: gaslessSignerCustodyMode,
+      executorPrivateKey: gaslessExecutorPrivateKey,
+      kmsKeyId: gaslessKmsKeyId,
+      kmsExpectedAddress: gaslessKmsExpectedAddress,
+      managedSignerUrl: gaslessManagedSignerUrl,
+      managedSignerApiKey: gaslessManagedSignerApiKey,
+    });
     assert(
       gaslessMaxFeePerGasWei > 0n,
       'GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI must be > 0 when gasless execution is enabled',
@@ -650,6 +641,10 @@ export function loadConfig(): GatewayConfig {
     gaslessExecutionEnabled,
     gaslessExecutorPrivateKey,
     gaslessSignerCustodyMode,
+    gaslessKmsKeyId,
+    gaslessKmsExpectedAddress: gaslessKmsExpectedAddress
+      ? getAddress(gaslessKmsExpectedAddress)
+      : undefined,
     gaslessManagedSignerUrl,
     gaslessManagedSignerApiKey,
     gaslessManagedSignerRequestTimeoutMs: envNumber(

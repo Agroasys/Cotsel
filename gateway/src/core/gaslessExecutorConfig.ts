@@ -13,6 +13,8 @@ export type GaslessExecutorConfig = Pick<
   | 'usdcAddress'
   | 'gaslessExecutorPrivateKey'
   | 'gaslessSignerCustodyMode'
+  | 'gaslessKmsKeyId'
+  | 'gaslessKmsExpectedAddress'
   | 'gaslessManagedSignerUrl'
   | 'gaslessManagedSignerApiKey'
   | 'gaslessManagedSignerRequestTimeoutMs'

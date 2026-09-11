@@ -83,6 +83,13 @@ async function bootstrap() {
       {
         custodyMode: config.oracleSignerCustodyMode,
         privateKey: config.oraclePrivateKey,
+        kmsSigner:
+          config.oracleKmsKeyId && config.oracleKmsExpectedAddress
+            ? {
+                keyId: config.oracleKmsKeyId,
+                expectedAddress: config.oracleKmsExpectedAddress,
+              }
+            : undefined,
         managedSigner: config.oracleManagedSignerUrl
           ? {
               url: config.oracleManagedSignerUrl,
@@ -97,6 +104,7 @@ async function bootstrap() {
       config.chainId,
       { quorum: config.rpcQuorum, stallTimeoutMs: config.rpcStallTimeoutMs },
     );
+    await sdkClient.assertSignerReady();
 
     const triggerManager = new TriggerManager(
       sdkClient,

@@ -103,6 +103,36 @@ function bullets(values, fallback = 'None.') {
   return values.length ? values.map((value) => `- ${value}`).join('\n') : `- ${fallback}`;
 }
 
+function custodyPolicySection(route) {
+  const policy = route.custodyPolicy;
+  if (!policy) return '';
+
+  const roleRows = policy.roles.map(
+    (role) =>
+      `| ${escapeCell(role.role)} | ${escapeCell(role.custody)} | ${escapeCell(role.state)} |`,
+  );
+
+  return `## Binding signer custody policy
+
+This policy is part of the generated source for this issue. Project automation must preserve it.
+
+${policy.quorum}
+
+| Role | Custody | Current state |
+|---|---|---|
+${roleRows.join('\n')}
+
+### Prohibited states
+
+${bullets(policy.prohibitedStates)}
+
+### Required negative tests
+
+${bullets(policy.negativeTests)}
+
+`;
+}
+
 export function renderRouteBody(route) {
   const workPackage = packageById.get(route.wp);
   const githubOwnership = githubOwnershipForRoute(route);
@@ -134,6 +164,7 @@ ${primaryRequirementTable(route)}
 
 ${contributionTable(route)}
 ${gateEvidenceTable(route)}
+${custodyPolicySection(route)}
 ## Current verified state
 
 - The SOW records this programme as NO-GO until the applicable engineering and pilot gates accept evidence from one pinned release.

@@ -17,7 +17,7 @@ locals {
     { name = "GATEWAY_EXPLORER_BASE_URL", value = local.base_sepolia_explorer_url },
     { name = "GATEWAY_GASLESS_EXECUTION_ENABLED", value = "false" },
     { name = "GATEWAY_INDEXER_GRAPHQL_URL", value = "http://127.0.0.1:4350/graphql" },
-    { name = "GATEWAY_ORACLE_BASE_URL", value = "http://127.0.0.1:3001" },
+    { name = "GATEWAY_ORACLE_BASE_URL", value = "http://oracle.cotsel-staging.internal:3001" },
     { name = "GATEWAY_RATE_LIMIT_ENABLED", value = "false" },
     { name = "GATEWAY_RECONCILIATION_BASE_URL", value = "http://127.0.0.1:9090" },
     { name = "GATEWAY_RICARDIAN_BASE_URL", value = "http://ricardian.cotsel-staging.internal:3100" },

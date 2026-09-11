@@ -5,6 +5,17 @@
 - Related issue: [#411](https://github.com/Agroasys/Cotsel/issues/411)
 - Supersedes: [Decision: Dashboard gateway governance signing model #215](https://github.com/Agroasys/Cotsel/issues/215)
 
+## Custody clarification — 2026-09-11
+
+For the controlled pilot and production, an admin-controlled wallet means a
+dedicated hardware-backed wallet assigned to one authorized human custodian.
+The three contract administrator keys are generated and held independently,
+share no seed or recovery material, and are never created in KMS or exposed to a
+backend workload. Wallet software may transport a prepared transaction, but
+physical approval occurs on the hardware device. This clarification does not
+change the chosen direct-sign architecture; it makes its production custody
+boundary explicit.
+
 ## Implementation status
 
 This ADR is an accepted target decision, not a completed implementation. As of
@@ -106,7 +117,7 @@ Gateway response: { actionId, intentKey, signing: { contractMethod, args, txRequ
    ├── Step 3: Admin reviews action details in dashboard (wallet not yet involved)
    │
    ▼
-Admin wallet (MetaMask / Rabby / hardware wallet)
+Admin hardware wallet (connected through compatible wallet software)
    │  └── Step 4: Admin signs and broadcasts, wallet appears only at this step
    │
    ▼

@@ -30,7 +30,7 @@ locals {
 
 resource "aws_security_group" "gateway" {
   name        = "${local.name_prefix}-gateway"
-  description = "Cotsel gateway tasks. Ingress is restricted to the internal ALB."
+  description = "Cotsel gateway task. Public API ingress is ALB-only; private services may read the indexer."
   vpc_id      = local.vpc_id
 
   tags = { Name = "${local.name_prefix}-gateway" }
@@ -83,6 +83,15 @@ resource "aws_vpc_security_group_ingress_rule" "gateway_from_alb" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "gateway_indexer_from_services" {
+  security_group_id            = aws_security_group.gateway.id
+  description                  = "Read-only indexer GraphQL access from private Cotsel services."
+  referenced_security_group_id = aws_security_group.internal_services.id
+  from_port                    = 4350
+  to_port                      = 4350
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "services_from_gateway" {
   security_group_id            = aws_security_group.internal_services.id
   description                  = "Internal HTTP calls from the gateway."
@@ -101,12 +110,30 @@ resource "aws_vpc_security_group_ingress_rule" "services_from_services" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_egress_rule" "services_to_gateway_indexer" {
+  security_group_id            = aws_security_group.internal_services.id
+  description                  = "Read-only GraphQL calls from private services to the bundled indexer."
+  referenced_security_group_id = aws_security_group.gateway.id
+  from_port                    = 4350
+  to_port                      = 4350
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_egress_rule" "gateway_to_ricardian" {
   security_group_id            = aws_security_group.gateway.id
   description                  = "Authenticated private HTTP calls from the gateway to Ricardian."
   referenced_security_group_id = aws_security_group.internal_services.id
   from_port                    = 3100
   to_port                      = 3100
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "gateway_to_oracle" {
+  security_group_id            = aws_security_group.gateway.id
+  description                  = "Authenticated private HTTP calls from the gateway to Oracle."
+  referenced_security_group_id = aws_security_group.internal_services.id
+  from_port                    = 3001
+  to_port                      = 3001
   ip_protocol                  = "tcp"
 }
 

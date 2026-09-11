@@ -272,7 +272,7 @@ describe('gateway runtime env config', () => {
     );
   });
 
-  test('managed gasless custody parses signer service contract without raw executor key', () => {
+  test('MPC custody parses signer service contract without raw executor key', () => {
     withEnv(
       {
         GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
@@ -280,7 +280,7 @@ describe('gateway runtime env config', () => {
         GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
         GATEWAY_CHAIN_ID: undefined,
         GATEWAY_GASLESS_EXECUTION_ENABLED: 'true',
-        GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'kms',
+        GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'mpc',
         GATEWAY_GASLESS_MANAGED_SIGNER_URL: 'https://signer.example.test/',
         GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY: 'test-key',
         GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS: '2500',
@@ -292,7 +292,7 @@ describe('gateway runtime env config', () => {
         const { loadConfig } = loadConfigModule();
         const config = loadConfig();
 
-        expect(config.gaslessSignerCustodyMode).toBe('kms');
+        expect(config.gaslessSignerCustodyMode).toBe('mpc');
         expect(config.gaslessExecutorPrivateKey).toBeUndefined();
         expect(config.gaslessManagedSignerUrl).toBe('https://signer.example.test');
         expect(config.gaslessManagedSignerApiKey).toBe('test-key');

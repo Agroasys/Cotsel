@@ -144,18 +144,18 @@ describe('oracle signer custody', () => {
     });
   });
 
-  test('kms custody requires a managed signer url', () => {
+  test('kms custody requires a KMS key identity', () => {
     withEnv({ ORACLE_SIGNER_CUSTODY_MODE: 'kms', ORACLE_PRIVATE_KEY: undefined }, () => {
       expect(() => loadConfigModule().loadConfig()).toThrow(
-        'ORACLE_MANAGED_SIGNER_URL is required when ORACLE_SIGNER_CUSTODY_MODE is kms or mpc',
+        'ORACLE_KMS_KEY_ID is required when ORACLE_SIGNER_CUSTODY_MODE is kms',
       );
     });
   });
 
-  test('kms custody rejects an insecure managed signer url', () => {
+  test('mpc custody rejects an insecure managed signer url', () => {
     withEnv(
       {
-        ORACLE_SIGNER_CUSTODY_MODE: 'kms',
+        ORACLE_SIGNER_CUSTODY_MODE: 'mpc',
         ORACLE_PRIVATE_KEY: undefined,
         ORACLE_MANAGED_SIGNER_URL: 'http://signer.internal',
         ORACLE_MANAGED_SIGNER_API_KEY: 'signer-token',
@@ -168,10 +168,10 @@ describe('oracle signer custody', () => {
     );
   });
 
-  test('kms custody rejects missing managed signer authentication', () => {
+  test('mpc custody rejects missing managed signer authentication', () => {
     withEnv(
       {
-        ORACLE_SIGNER_CUSTODY_MODE: 'kms',
+        ORACLE_SIGNER_CUSTODY_MODE: 'mpc',
         ORACLE_PRIVATE_KEY: undefined,
         ORACLE_MANAGED_SIGNER_URL: 'https://signer.internal',
         ORACLE_MANAGED_SIGNER_API_KEY: undefined,
@@ -184,21 +184,46 @@ describe('oracle signer custody', () => {
     );
   });
 
-  test('kms custody resolves without a private key', () => {
+  test('kms custody resolves a direct AWS KMS identity without a private key', () => {
     withEnv(
       {
         ...RUNTIME_ENV,
         ORACLE_SIGNER_CUSTODY_MODE: 'kms',
         ORACLE_PRIVATE_KEY: undefined,
-        ORACLE_MANAGED_SIGNER_URL: 'https://signer.internal/',
-        ORACLE_MANAGED_SIGNER_API_KEY: 'signer-token',
+        ORACLE_KMS_KEY_ID: 'alias/cotsel-staging-oracle',
+        ORACLE_KMS_EXPECTED_ADDRESS: '0x1111111111111111111111111111111111111111',
       },
       () => {
         const config = loadConfigModule().loadConfig();
         expect(config.oracleSignerCustodyMode).toBe('kms');
         expect(config.oraclePrivateKey).toBeUndefined();
-        expect(config.oracleManagedSignerUrl).toBe('https://signer.internal');
-        expect(config.oracleManagedSignerApiKey).toBe('signer-token');
+        expect(config.oracleKmsKeyId).toBe('alias/cotsel-staging-oracle');
+        expect(config.oracleKmsExpectedAddress).toBe('0x1111111111111111111111111111111111111111');
+      },
+    );
+  });
+
+  test('production rejects raw Oracle private-key custody without confusing staging NODE_ENV', () => {
+    withEnv(
+      {
+        ...RUNTIME_ENV,
+        NODE_ENV: 'production',
+        COTSEL_ENVIRONMENT: 'staging',
+        ORACLE_SIGNER_CUSTODY_MODE: 'raw_private_key',
+      },
+      () => expect(loadConfigModule().loadConfig().oracleSignerCustodyMode).toBe('raw_private_key'),
+    );
+    withEnv(
+      {
+        ...RUNTIME_ENV,
+        NODE_ENV: 'production',
+        COTSEL_ENVIRONMENT: 'production',
+        ORACLE_SIGNER_CUSTODY_MODE: 'raw_private_key',
+      },
+      () => {
+        expect(() => loadConfigModule().loadConfig()).toThrow(
+          'Production Oracle must use KMS/MPC signer custody',
+        );
       },
     );
   });

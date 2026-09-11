@@ -4,6 +4,7 @@ import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import type { SettlementConfirmationHeads } from '@agroasys/sdk';
 import { Logger } from '../utils/logger';
 import { ManagedSigner, ManagedSignerOptions, SignerCustodyMode } from './managed-signer';
+import { createAwsKmsOracleSigner } from './aws-kms-signer';
 
 export interface BlockchainResult {
   txHash: string;
@@ -13,6 +14,7 @@ export interface BlockchainResult {
 export interface OracleSignerConfig {
   custodyMode: SignerCustodyMode;
   privateKey?: string;
+  kmsSigner?: { keyId: string; expectedAddress: string };
   managedSigner?: Omit<ManagedSignerOptions, 'custodyMode'>;
 }
 
@@ -25,6 +27,13 @@ function createOracleSigner(
       throw new Error('ORACLE_PRIVATE_KEY is required for raw_private_key signer custody');
     }
     return new ethers.Wallet(signerConfig.privateKey, provider);
+  }
+
+  if (signerConfig.custodyMode === 'kms') {
+    if (!signerConfig.kmsSigner) {
+      throw new Error('AWS KMS signer configuration is required for kms custody');
+    }
+    return createAwsKmsOracleSigner(signerConfig.kmsSigner, provider);
   }
 
   if (!signerConfig.managedSigner) {
@@ -87,13 +96,12 @@ export class SDKClient {
       escrowAddress,
       chainId,
     });
+  }
 
-    // Signer address may require a network call for managed custody, so resolve it
-    // out of band for observability without blocking construction.
-    void this.signer
-      .getAddress()
-      .then((oracleAddress) => Logger.info('Oracle signer resolved', { oracleAddress }))
-      .catch((error) => Logger.warn('Failed to resolve oracle signer address', { error }));
+  async assertSignerReady(): Promise<string> {
+    const oracleAddress = await this.signer.getAddress();
+    Logger.info('Oracle signer resolved', { oracleAddress });
+    return oracleAddress;
   }
 
   private async getBlockNumberForTag(tag: 'latest' | 'safe' | 'finalized'): Promise<number | null> {

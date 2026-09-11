@@ -26,6 +26,8 @@ export interface OracleConfig {
   // signer custody
   oracleSignerCustodyMode: 'raw_private_key' | 'kms' | 'mpc';
   oraclePrivateKey?: string;
+  oracleKmsKeyId?: string;
+  oracleKmsExpectedAddress?: string;
   oracleManagedSignerUrl?: string;
   oracleManagedSignerApiKey?: string;
   oracleManagedSignerRequestTimeoutMs?: number;

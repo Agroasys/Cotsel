@@ -55,7 +55,9 @@ data "aws_iam_policy_document" "gateway_execution" {
       "ecr:BatchGetImage",
       "ecr:GetDownloadUrlForLayer",
     ]
-    resources = [for service in local.runtime_services : aws_ecr_repository.service[service].arn]
+    resources = [
+      for service in local.gateway_runtime_service_names : aws_ecr_repository.service[service].arn
+    ]
   }
 
   statement {
@@ -66,7 +68,7 @@ data "aws_iam_policy_document" "gateway_execution" {
       "logs:PutLogEvents",
     ]
     resources = [
-      for service in local.runtime_services : "${aws_cloudwatch_log_group.service[service].arn}:*"
+      for service in local.gateway_runtime_service_names : "${aws_cloudwatch_log_group.service[service].arn}:*"
     ]
   }
 
@@ -78,7 +80,6 @@ data "aws_iam_policy_document" "gateway_execution" {
       aws_secretsmanager_secret.platform["database/gateway/runtime"].arn,
       aws_secretsmanager_secret.platform["database/indexer/reader"].arn,
       aws_secretsmanager_secret.platform["database/indexer/runtime"].arn,
-      aws_secretsmanager_secret.platform["database/oracle/runtime"].arn,
       aws_secretsmanager_secret.platform["database/reconciliation/runtime"].arn,
       aws_secretsmanager_secret.platform["database/auth/runtime"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-callback"].arn,
@@ -89,7 +90,6 @@ data "aws_iam_policy_document" "gateway_execution" {
       aws_secretsmanager_secret.platform["notifications-webhook"].arn,
       aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn,
       aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn,
-      data.aws_secretsmanager_secret.oracle_wallet.arn,
     ]
   }
 

@@ -179,6 +179,50 @@
       "accountable": "Security and Protocol owners",
       "delivery": "Release and platform engineers",
       "acceptance": "Security authority",
+      "custodyPolicy": {
+        "quorum": "The contract requires two approvals from three independent administrator hardware wallets.",
+        "roles": [
+          {
+            "role": "Oracle",
+            "custody": "Dedicated non-exportable AWS KMS key with a dedicated Oracle workload identity.",
+            "state": "Approved for automated signing"
+          },
+          {
+            "role": "Gasless relayer",
+            "custody": "Dedicated non-exportable AWS KMS key with a dedicated relayer workload identity.",
+            "state": "Approved for automated signing"
+          },
+          {
+            "role": "Admin 1-3",
+            "custody": "Three independently generated and held hardware wallets with no shared seed or recovery material.",
+            "state": "Direct human signing only"
+          },
+          {
+            "role": "Treasury",
+            "custody": "No managed signer until the accountable authorities approve an explicit custody classification and automation need.",
+            "state": "Unclassified and blocked"
+          },
+          {
+            "role": "Deployer",
+            "custody": "Separate hardware-controlled deployment wallet, retired or restricted after deployment.",
+            "state": "No runtime authority"
+          }
+        ],
+        "prohibitedStates": [
+          "Do not create or import an administrator, treasury, or deployer key in AWS KMS.",
+          "Do not grant a backend workload permission to sign administrator governance actions.",
+          "Do not reuse one seed, recovery phrase, wallet, IAM role, or signer endpoint across independent roles.",
+          "Do not assign the deployer any Oracle, relayer, treasury, administrator, or other runtime role.",
+          "Do not enable treasury signing until its custody classification, automation need, permissions, and acceptance authority are recorded."
+        ],
+        "negativeTests": [
+          "Reject every managed signer role whose name starts with admin-.",
+          "Reject any managed signer set other than Oracle and relayer before the custody policy changes through an accepted decision.",
+          "Reject duplicate Oracle, relayer, treasury, deployer, administrator, buyer, or supplier addresses.",
+          "Reject an administrator quorum other than two of the three independently reviewed administrator addresses for Base Sepolia.",
+          "Reject deployment evidence when the observed signer, constructor roles, bytecode, chain, or reviewed source does not match the approved deployment request."
+        ]
+      },
       "supportingIssues": [453, 525],
       "dependencies": ["wp0-charter"],
       "primaryGate": "E-1"

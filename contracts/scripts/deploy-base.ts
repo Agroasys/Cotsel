@@ -5,6 +5,11 @@ import path from 'node:path';
 import hre, { ethers } from 'hardhat';
 import { loadBaseDeploymentConfig } from './lib/baseDeploymentConfig';
 import { getDeploymentSourceIdentity } from './lib/deploymentSourceIdentity';
+import {
+  assertHardwareWalletDeploymentTransaction,
+  loadDeploymentTransactionHash,
+  loadHardwareWalletDeployerConfig,
+} from './lib/hardwareWalletContractDeployment';
 
 function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input).digest('hex');
@@ -169,14 +174,8 @@ async function main(): Promise<void> {
       sha256Hex(source.content),
     ]),
   );
-  const [deployer] = await ethers.getSigners();
-
-  if (!deployer) {
-    throw new Error(
-      `No deployer account configured for ${hre.network.name}. Set Hardhat vars PRIVATE_KEY/PRIVATE_KEY2.`,
-    );
-  }
-  assertDeployerHasNoRuntimeRole(deployer.address, [
+  const { expectedAddress: deployerAddress } = loadHardwareWalletDeployerConfig();
+  assertDeployerHasNoRuntimeRole(deployerAddress, [
     config.oracleAddress,
     config.treasuryAddress,
     config.relayerAddress,
@@ -194,7 +193,8 @@ async function main(): Promise<void> {
 
   console.log('=== AgroasysEscrow Base deploy ===');
   console.log(`Network           : ${config.target.networkName} (${config.target.chainId})`);
-  console.log(`Deployer          : ${deployer.address}`);
+  console.log(`Deployer          : ${deployerAddress}`);
+  console.log('Deployer custody  : hardware wallet');
   console.log(`USDC              : ${config.usdcAddress}`);
   console.log(`Oracle            : ${config.oracleAddress}`);
   console.log(`Treasury          : ${config.treasuryAddress}`);
@@ -203,38 +203,55 @@ async function main(): Promise<void> {
   console.log(`Required approvals: ${config.requiredApprovals}`);
   console.log(`Verify            : ${config.verify}`);
 
-  const balance = await ethers.provider.getBalance(deployer.address);
-  if (balance === 0n) {
-    throw new Error(
-      `Deployer balance is 0 on ${config.target.networkName}. Fund the account before deployment.`,
-    );
+  const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode);
+  const expectedDeployment = await factory.getDeployTransaction(...deployArgs);
+  if (typeof expectedDeployment.data !== 'string') {
+    throw new Error('Expected deployment transaction data was not created');
   }
 
-  const factory = await ethers.getContractFactory(config.escrowName, deployer);
-  const contract = await factory.deploy(...deployArgs);
-  const deploymentTx = contract.deploymentTransaction();
+  const deploymentTransactionHash = loadDeploymentTransactionHash();
+  const deploymentTx = await ethers.provider.getTransaction(deploymentTransactionHash);
   if (!deploymentTx) {
-    throw new Error('Deployment transaction was not created');
+    throw new Error(`Deployment transaction ${deploymentTransactionHash} is not visible`);
   }
+  assertHardwareWalletDeploymentTransaction({
+    expectedDeployer: deployerAddress,
+    expectedData: expectedDeployment.data,
+    from: deploymentTx.from,
+    to: deploymentTx.to,
+    data: deploymentTx.data,
+    value: deploymentTx.value,
+  });
 
-  console.log(`Deployment tx     : ${deploymentTx.hash}`);
+  console.log(`Deployment tx     : ${deploymentTransactionHash}`);
   console.log(`Confirmations     : ${config.confirmations}`);
-  const deploymentReceipt = await deploymentTx.wait(config.confirmations);
+  const deploymentReceipt = await ethers.provider.waitForTransaction(
+    deploymentTransactionHash,
+    config.confirmations,
+  );
   if (!deploymentReceipt) {
     throw new Error(
-      `No receipt for deployment transaction ${deploymentTx.hash}. The evidence bundle cannot record a deployment block without it.`,
+      `No receipt for deployment transaction ${deploymentTransactionHash}. The evidence bundle cannot record a deployment block without it.`,
     );
   }
 
   if (deploymentReceipt.status !== 1) {
     throw new Error(
-      `Deployment transaction ${deploymentTx.hash} has receipt status ${deploymentReceipt.status}. A failed deployment produces no evidence bundle.`,
+      `Deployment transaction ${deploymentTransactionHash} has receipt status ${deploymentReceipt.status}. A failed deployment produces no evidence bundle.`,
     );
   }
 
-  await contract.waitForDeployment();
-
-  const contractAddress = await contract.getAddress();
+  if (!deploymentReceipt.contractAddress) {
+    throw new Error('Deployment receipt does not contain a contract address');
+  }
+  const expectedContractAddress = ethers.getCreateAddress({
+    from: deployerAddress,
+    nonce: deploymentTx.nonce,
+  });
+  const contractAddress = deploymentReceipt.contractAddress;
+  if (!sameAddress(contractAddress, expectedContractAddress)) {
+    throw new Error('Deployment receipt contract address does not match the reviewed signer nonce');
+  }
   const deployedBytecode = await waitForDeployedBytecode(contractAddress);
   const normalizedLocalRuntimeBytecode = normalizeRuntimeBytecode(
     localRuntimeBytecode,
@@ -302,7 +319,7 @@ async function main(): Promise<void> {
     contract: {
       name: config.escrowName,
       address: contractAddress,
-      deploymentTxHash: deploymentTx.hash,
+      deploymentTxHash: deploymentTransactionHash,
       deploymentBlock: deploymentReceipt.blockNumber,
       deploymentReceiptStatus: deploymentReceipt.status,
       explorerAddressUrl,
@@ -314,7 +331,8 @@ async function main(): Promise<void> {
         admins: config.admins,
         requiredApprovals: config.requiredApprovals,
       },
-      deployerAddress: deployer.address,
+      deployerAddress,
+      deployerCustody: 'hardware-wallet',
       roleAttestation,
     },
     verification: {

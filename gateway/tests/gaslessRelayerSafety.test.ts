@@ -176,7 +176,7 @@ describe('gasless relayer safety controls', () => {
     expect(service.getRelayerReadiness().queue.active).toBe(0);
   });
 
-  test('raw private-key executor still rejects fake KMS custody without a managed signer URL', () => {
+  test('raw private-key executor rejects fake KMS custody without a KMS identity', () => {
     expect(() =>
       createEthersGaslessSettlementExecutor({
         rpcUrl: config.rpcUrl,
@@ -188,7 +188,7 @@ describe('gasless relayer safety controls', () => {
           '0x0000000000000000000000000000000000000000000000000000000000000001',
         gaslessSignerCustodyMode: 'kms',
       }),
-    ).toThrow('Gasless managed signer URL is not configured');
+    ).toThrow('Gasless AWS KMS identity is not configured');
   });
 
   test('fail-closed capacity policy blocks broadcasts after observed low executor balance', async () => {

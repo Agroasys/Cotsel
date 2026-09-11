@@ -13,16 +13,18 @@ and must never be treated as accepted evidence.
 
 ## Transport and authentication
 
-- Managed custody requires HTTPS.
-- Gateway and Oracle require their own authenticated signer API key.
+- Direct AWS KMS custody uses the workload's IAM role and a dedicated KMS key;
+  it does not use a signer URL or API key.
+- MPC or another external signer service requires authenticated HTTPS.
+- Gateway and Oracle require their own authenticated external-signer API key.
 - Credentials remain in the approved secret store and are never logged or
   included in evidence.
-- A signer API key identifies a service. It does not grant operator, treasury,
+- An external-signer API key identifies a service. It does not grant operator, treasury,
   governance, or contract-admin authority.
 
 ## Request contract
 
-Each signing request contains:
+For MPC or another external signer, each signing request contains:
 
 - custodyMode: kms or mpc;
 - operation: the explicit approved Cotsel operation;

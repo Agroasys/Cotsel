@@ -12,32 +12,34 @@
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit",
     "build:sdk": "npm --prefix ../sdk run build",
+    "kms:addresses": "ts-node scripts/kms-signer-addresses.ts",
     "prebuild": "npm run build:sdk"
   },
   "dependencies": {
+    "@agroasys/notifications": "^1.0.0",
+    "@agroasys/sdk": "workspace:*",
     "@agroasys/shared-db": "^1.0.0",
-    "@agroasys/shared-http": "^1.0.0",
     "@agroasys/shared-edge": "^1.0.0",
-    "express": "^5.2.1",
+    "@agroasys/shared-http": "^1.0.0",
+    "@aws-sdk/client-kms": "3.1125.0",
     "cors": "^2.8.6",
-    "helmet": "^8.3.0",
     "dotenv": "^17.4.2",
     "ethers": "^6.17.0",
-    "pg": "^8.22.0",
-    "@agroasys/sdk": "workspace:*",
-    "@agroasys/notifications": "^1.0.0"
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "pg": "^8.22.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.6",
     "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.6.0",
     "@types/pg": "^8.20.0",
-    "typescript": ">=6.0.2 <6.1.0",
-    "ts-node": "^10.9.2",
-    "nodemon": "^3.1.14",
-    "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
-    "ts-jest": "^29.4.12"
+    "nodemon": "^3.1.14",
+    "ts-jest": "^29.4.12",
+    "ts-node": "^10.9.2",
+    "typescript": ">=6.0.2 <6.1.0"
   },
   "license": "Apache-2.0"
 }

@@ -77,8 +77,9 @@ Execute these steps in order. If any step fails, stop and evaluate rollback trig
 3. Verify deployment truth for the launch window.
    - If mainnet deployment is part of the launch window, execute only the approved repo command path:
      ```bash
-     pnpm --filter ./contracts run deploy:base-mainnet
-     pnpm --filter ./contracts run verify:base-mainnet
+     pnpm --filter ./contracts run prepare:base-mainnet
+     # Review and broadcast the exact request with the approved hardware wallet.
+     pnpm --filter ./contracts run finalize:base-mainnet
      ```
    - If production promotion is executed outside this repo, record the external deployment record URL and do not substitute an untracked local command.
 

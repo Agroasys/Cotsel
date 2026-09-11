@@ -85,6 +85,7 @@ function parseUrlList(raw: string | undefined): string[] {
 export function loadConfig(): OracleConfig {
   try {
     const nodeEnv = process.env.NODE_ENV || 'development';
+    const cotselEnvironment = optionalEnv('COTSEL_ENVIRONMENT') || nodeEnv;
     const notificationsEnabled = validateEnvBool('NOTIFICATIONS_ENABLED', false);
     const notificationsWebhookUrl = process.env.NOTIFICATIONS_WEBHOOK_URL;
     const indexerGraphqlRequestTimeoutMs = validateEnvNumber('INDEXER_GQL_TIMEOUT_MS', 10000);
@@ -93,16 +94,37 @@ export function loadConfig(): OracleConfig {
     const hmacNonceTtlSeconds = validateEnvNumber('HMAC_NONCE_TTL_SECONDS', 600);
     const manualApprovalEnabled = validateEnvBool('ORACLE_MANUAL_APPROVAL_ENABLED', false);
     const oracleSignerCustodyMode = parseSignerCustodyMode(process.env.ORACLE_SIGNER_CUSTODY_MODE);
+    const oracleKmsKeyId = optionalEnv('ORACLE_KMS_KEY_ID');
+    const oracleKmsExpectedAddress = optionalEnv('ORACLE_KMS_EXPECTED_ADDRESS');
     const oracleManagedSignerUrl = optionalEnv('ORACLE_MANAGED_SIGNER_URL')?.replace(/\/+$/, '');
     const oracleManagedSignerApiKey = optionalEnv('ORACLE_MANAGED_SIGNER_API_KEY');
     const oracleManagedSignerRequestTimeoutMs = process.env.ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS
       ? validateEnvNumber('ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS')
       : undefined;
 
-    if (oracleSignerCustodyMode !== 'raw_private_key') {
+    if (oracleSignerCustodyMode === 'kms') {
+      assert(
+        oracleKmsKeyId,
+        'ORACLE_KMS_KEY_ID is required when ORACLE_SIGNER_CUSTODY_MODE is kms',
+      );
+      assert(
+        oracleKmsExpectedAddress && ethers.isAddress(oracleKmsExpectedAddress),
+        'ORACLE_KMS_EXPECTED_ADDRESS must be a valid EVM address when ORACLE_SIGNER_CUSTODY_MODE is kms',
+      );
+      assert(
+        !optionalEnv('ORACLE_PRIVATE_KEY'),
+        'ORACLE_PRIVATE_KEY must not be set when ORACLE_SIGNER_CUSTODY_MODE is kms',
+      );
+      assert(
+        !oracleManagedSignerUrl && !oracleManagedSignerApiKey,
+        'KMS custody uses direct IAM authentication; managed signer URL and API key must not be set',
+      );
+    }
+
+    if (oracleSignerCustodyMode === 'mpc') {
       assert(
         oracleManagedSignerUrl,
-        'ORACLE_MANAGED_SIGNER_URL is required when ORACLE_SIGNER_CUSTODY_MODE is kms or mpc',
+        'ORACLE_MANAGED_SIGNER_URL is required when ORACLE_SIGNER_CUSTODY_MODE is mpc',
       );
       assert(
         oracleManagedSignerUrl.startsWith('https://'),
@@ -119,6 +141,11 @@ export function loadConfig(): OracleConfig {
         'ORACLE_MANAGED_SIGNER_REQUEST_TIMEOUT_MS must be >= 1000',
       );
     }
+
+    assert(
+      cotselEnvironment !== 'production' || oracleSignerCustodyMode !== 'raw_private_key',
+      'Production Oracle must use KMS/MPC signer custody; raw private-key custody is not allowed',
+    );
 
     if (notificationsEnabled) {
       assert(
@@ -174,6 +201,10 @@ export function loadConfig(): OracleConfig {
         oracleSignerCustodyMode === 'raw_private_key'
           ? validateEnv('ORACLE_PRIVATE_KEY')
           : optionalEnv('ORACLE_PRIVATE_KEY'),
+      oracleKmsKeyId,
+      oracleKmsExpectedAddress: oracleKmsExpectedAddress
+        ? ethers.getAddress(oracleKmsExpectedAddress)
+        : undefined,
       oracleManagedSignerUrl,
       oracleManagedSignerApiKey,
       oracleManagedSignerRequestTimeoutMs,

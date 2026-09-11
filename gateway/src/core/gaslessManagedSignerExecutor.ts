@@ -35,7 +35,7 @@ import {
   validateManagedSignerForBroadcast,
 } from './managedSignerIntentValidation';
 import type { ManagedSignerValidationRecorder } from './managedSignerIntentValidation';
-import { createHttpManagedSignerTransport } from './managedSignerTransport';
+import { createManagedSignerTransport } from './managedSignerTransport';
 import type {
   ManagedSignerGaslessConfig,
   ManagedSignerRequest,
@@ -72,7 +72,7 @@ export function createManagedSignerGaslessSettlementExecutor(
       chainId: config.chainId,
       quorum: config.rpcQuorum,
     }) as Provider as GaslessManagedProvider);
-  const signerTransport = dependencies?.signerTransport ?? createHttpManagedSignerTransport(config);
+  const signerTransport = dependencies?.signerTransport ?? createManagedSignerTransport(config);
   if (!dependencies?.recordTransactionOutcome) {
     throw new GatewayError(
       503,

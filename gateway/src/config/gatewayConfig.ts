@@ -51,6 +51,8 @@ export interface GatewayConfig {
   gaslessExecutionEnabled?: boolean;
   gaslessExecutorPrivateKey?: string;
   gaslessSignerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
+  gaslessKmsKeyId?: string;
+  gaslessKmsExpectedAddress?: string;
   gaslessManagedSignerUrl?: string;
   gaslessManagedSignerApiKey?: string;
   gaslessManagedSignerRequestTimeoutMs?: number;

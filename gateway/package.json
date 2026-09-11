@@ -20,10 +20,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agroasys/sdk": "*",
+    "@agroasys/shared-auth": "*",
     "@agroasys/shared-db": "*",
     "@agroasys/shared-edge": "*",
-    "@agroasys/shared-auth": "*",
-    "@agroasys/sdk": "*",
+    "@aws-sdk/client-kms": "3.1125.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "ethers": "^6.17.0",

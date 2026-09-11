@@ -54,9 +54,54 @@ identity. ECS injects the selected secret values before container startup, so
 the task execution role can read only the required secret ARNs. The application
 task role does not receive `secretsmanager:GetSecretValue`.
 
-The oracle signer secret already exists at
-`/agroasys/staging/base-sepolia/wallet-oracle`. Terraform reads its identity but
-does not read or manage its value.
+The legacy Oracle signer secret remains available only for the current staging
+rollback lane. Do not use it for the new candidate.
+
+Terraform creates two non-exportable `ECC_SECG_P256K1` KMS keys. They cover
+only the Oracle and gasless relayer identities because those roles have
+approved automated signing needs. Terraform does not create KMS keys for the
+three human administrators, treasury, or deployer.
+
+Key creation does not grant signing access. Add each least-privilege runtime or
+operator grant only after its derived EVM address is reviewed. Do not add a
+treasury signer until its custody classification is approved. Use a separate
+hardware-controlled wallet for deployment, then retire or restrict it. The
+deployer must never receive a runtime role.
+
+Use the stable aliases from `managed_signer_aliases`. Derive each public address
+with `GetPublicKey`; never create or import plaintext private key material.
+
+The new contract must use distinct approved Oracle, treasury, relayer, and
+administrator addresses. The three administrators must be independent
+hardware-backed wallets in the direct prepare, review, sign, broadcast, and
+confirm flow; they must not be KMS aliases or backend-accessible signers. The
+deployer must not hold a runtime role.
+
+Keep the legacy runtime unchanged during key creation. Deploy and verify the new
+contract before enabling KMS-backed runtime signing.
+
+The Oracle runs as its own ECS service and task role. The gateway task cannot
+read the Oracle database credential or legacy signer secret, and only the
+Oracle task role can call `kms:GetPublicKey` and `kms:Sign` on the Oracle key.
+Oracle reads the bundled indexer through private Cloud Map DNS; gateway-to-
+Oracle calls remain authenticated with the existing service credential.
+
+KMS activation is intentionally two-stage:
+
+1. Apply the reviewed key-creation plan while the accepted runtime remains
+   unchanged.
+2. Run `pnpm --filter oracle kms:addresses -- <oracle-key-alias>` under a
+   read-only identity and independently review the derived address.
+3. Set the GitHub Actions variable
+   `COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS` to that reviewed address.
+4. Review a fresh main-branch plan. It must remove `ORACLE_PRIVATE_KEY`, set
+   `ORACLE_SIGNER_CUSTODY_MODE=kms`, and grant only the Oracle task role access
+   to the Oracle KMS key.
+5. Apply that exact plan, then capture startup, wrong-address, denied-access,
+   outage, signing, CloudTrail, and reconciliation evidence before acceptance.
+
+An empty repository variable keeps the dedicated staging Oracle on its legacy
+rollback key. It does not satisfy production custody acceptance.
 
 Every service schema migration runs as a separate one-off ECS task. Each
 execution role can pull only its service image, write only its service log
@@ -66,7 +111,7 @@ schema migrations.
 
 Every runtime, migration, bootstrap, and verifier container has a read-only root
 filesystem. Each container receives only an ephemeral writable `/tmp` mount.
-The six containers in the bundled gateway task use separate volumes so one
+The five containers in the bundled gateway task use separate volumes so one
 service cannot read another service's temporary files.
 
 The indexer migration task executes the migration binary already present in
