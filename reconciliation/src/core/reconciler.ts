@@ -19,6 +19,7 @@ import {
   detectIndexerOnlyTradeIds,
   evaluateCoverageSla,
   evaluateCursorHold,
+  evaluateIndexerAnchor,
   evaluateIndexerSnapshot,
   holdsCursor,
   isCoverageComplete,
@@ -27,14 +28,8 @@ import {
   tradeIdsInWindow,
   type ChainTradeRecord,
 } from './coverage';
-import { DriftFinding, DriftSeverity, ReconcileMode, RunStats } from '../types';
-
-const DEFAULT_SEVERITY_COUNTS: Record<DriftSeverity, number> = {
-  CRITICAL: 0,
-  HIGH: 0,
-  MEDIUM: 0,
-  LOW: 0,
-};
+import { DEFAULT_SEVERITY_COUNTS, finalizeInconclusiveRun, skippedStats } from './runOutcome';
+import { DriftFinding, ReconcileMode, RunStats } from '../types';
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -74,35 +69,6 @@ async function mapWithConcurrency<T, R>(
 
   await Promise.all(runners);
   return results;
-}
-
-function skippedStats(
-  runKey: string,
-  mode: ReconcileMode,
-  row: {
-    total_trades: number;
-    drift_count: number;
-    critical_count: number;
-    high_count: number;
-    medium_count: number;
-    low_count: number;
-  },
-  skippedReason: string,
-): RunStats {
-  return {
-    runKey,
-    mode,
-    status: 'SKIPPED',
-    totalTrades: row.total_trades,
-    driftCount: row.drift_count,
-    severityCounts: {
-      CRITICAL: row.critical_count,
-      HIGH: row.high_count,
-      MEDIUM: row.medium_count,
-      LOW: row.low_count,
-    },
-    skippedReason,
-  };
 }
 
 export class ReconciliationService {
@@ -153,11 +119,26 @@ export class ReconciliationService {
     };
 
     try {
+      const cursor = await readCoverageCursor();
+
       // The indexer only reports its current projection, so the one height both
       // sides can describe is the block it has processed. Anchor every chain
-      // read in this run to that block.
-      const indexerProcessedBlock = await this.indexerClient.fetchProcessedBlock();
-      const boundary = await this.onchainClient.resolveBoundary(indexerProcessedBlock);
+      // read in this run to that block. Without a checkpoint there is nothing to
+      // anchor to, so the run stops here rather than resolving a boundary: a
+      // substituted finality block is a real block number, and the end-of-run
+      // snapshot check would accept it whenever the final height read happens to
+      // land on the same height.
+      const anchor = evaluateIndexerAnchor(await this.indexerClient.fetchProcessedBlock());
+      if (!anchor.usable) {
+        return finalizeInconclusiveRun({
+          stats,
+          reason: anchor.reason,
+          tailFirstSeenAt: cursor.tailFirstSeenAt,
+          context: { stage: 'indexer-anchor' },
+        });
+      }
+
+      const boundary = await this.onchainClient.resolveBoundary(anchor.anchorBlock);
 
       if (boundary.indexerAhead) {
         Logger.warn(
@@ -171,7 +152,6 @@ export class ReconciliationService {
         );
       }
 
-      const cursor = await readCoverageCursor();
       const window = planCoverageWindow({
         cursor: cursor.lastTradeId,
         chainTradeCounter: boundary.chainTradeCounter,
@@ -323,27 +303,16 @@ export class ReconciliationService {
       });
 
       if (!snapshot.stable) {
-        Logger.error('Discarding an unstable reconciliation snapshot without publishing drift', {
-          runKey,
-          mode,
-          reason: snapshot.reason,
-          discardedFindings: pendingFindings.length,
-          anchorBlock: boundary.indexerProcessedBlock,
+        return finalizeInconclusiveRun({
+          stats,
+          reason: snapshot.reason ?? 'indexer snapshot unstable',
+          tailFirstSeenAt: cursor.tailFirstSeenAt,
+          context: {
+            stage: 'indexer-snapshot',
+            discardedFindings: pendingFindings.length,
+            anchorBlock: boundary.indexerProcessedBlock,
+          },
         });
-
-        const inconclusive: RunStats = {
-          ...stats,
-          status: 'SKIPPED',
-          totalTrades: 0,
-          driftCount: 0,
-          severityCounts: { ...DEFAULT_SEVERITY_COUNTS },
-          skippedReason: snapshot.reason ?? 'indexer snapshot unstable',
-        };
-        await finalizeRun({
-          stats: inconclusive,
-          cursor: { advance: false, tailFirstSeenAt: cursor.tailFirstSeenAt },
-        });
-        return inconclusive;
       }
 
       for (const tradeId of pendingScope) {

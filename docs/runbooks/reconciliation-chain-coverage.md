@@ -26,7 +26,10 @@ Each run:
    indexing close to head), the run still anchors to the indexer block and logs the
    re-org exposure rather than reading the chain at a height the indexer has not.
    Reading the chain anywhere else makes the indexer's lead read as field drift or a
-   surplus that does not exist.
+   surplus that does not exist. If that checkpoint cannot be read at all, the run
+   is recorded `SKIPPED` **before any chain read** — it is never replaced with the
+   finality block, because a substituted anchor is an ordinary block number that
+   the end-of-run snapshot check below cannot tell apart from a real one.
 2. Plans a window from the persisted cursor up to the counter, bounded by
    `RECONCILIATION_MAX_TRADES_PER_RUN`. That value is a **work budget, not a
    coverage cap** — whatever the run does not reach is published as
@@ -88,9 +91,10 @@ LIMIT 5;
 A run compares chain state read at a pinned block against the indexer's
 _current_ GraphQL projection — there is no "as of block" query. It therefore
 anchors to the block the indexer has processed, and re-reads that height after
-its last indexer query. If the indexer moved in between, or its height cannot be
-read at all, the comparisons were taken across two different projections and any
-difference between them is an artefact.
+its last indexer query. If the indexer moved in between, the comparisons were
+taken across two different projections and any difference between them is an
+artefact. A height that cannot be read at all stops the run earlier still, at the
+anchoring gate, before a boundary is resolved or a single trade is read.
 
 Such a run is recorded `SKIPPED` with the reason in `error_message`, publishes
 **no** drift, and holds the cursor. Occasional skips on a busy indexer are

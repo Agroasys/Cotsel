@@ -58,6 +58,34 @@ export function evaluateCursorHold(input: {
   return { held: reasons.length > 0, reasons };
 }
 
+export type IndexerAnchorVerdict =
+  | { usable: true; anchorBlock: number; reason: null }
+  | { usable: false; anchorBlock: null; reason: string };
+
+/**
+ * Gate a run on a real indexer checkpoint, before any chain read.
+ *
+ * Every chain read in a run is pinned to the block the indexer has processed,
+ * so an unavailable checkpoint leaves nothing to pin to. Substituting the chain
+ * finality block looks harmless but is not: it compares the indexer's *live*
+ * projection against a height the indexer may never have reached, and the
+ * end-of-run snapshot check cannot catch it — the substituted anchor is a real
+ * block number, so a final height read that happens to land on it reads as a
+ * stable snapshot and the run publishes drift it never had the standing to
+ * decide. The checkpoint is therefore required, not defaulted.
+ */
+export function evaluateIndexerAnchor(indexerProcessedBlock: number | null): IndexerAnchorVerdict {
+  if (indexerProcessedBlock === null) {
+    return {
+      usable: false,
+      anchorBlock: null,
+      reason: 'indexer processed block unavailable; nothing to anchor the chain reads to',
+    };
+  }
+
+  return { usable: true, anchorBlock: indexerProcessedBlock, reason: null };
+}
+
 export interface IndexerSnapshotBounds {
   /** Processed block read before any indexer query in the run. */
   anchorBlock: number | null;

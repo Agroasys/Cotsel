@@ -35,17 +35,21 @@ export class OnchainClient {
    * that block keeps a difference real rather than an artefact of the two sides
    * sitting at different heights. The finality preference still resolves a chain
    * boundary, used to flag when the indexer is running ahead of it.
+   *
+   * The caller must supply a real indexer checkpoint. There is deliberately no
+   * fallback to the finality block: substituting one would anchor the run to a
+   * height the indexer may never have reached, and the end-of-run snapshot check
+   * cannot tell a substituted anchor from a read one. `evaluateIndexerAnchor`
+   * gates the run before it gets here.
    */
   async resolveBoundary(
-    indexerProcessedBlock: number | null,
+    indexerProcessedBlock: number,
     preference: CoverageBoundaryPreference = config.coverageBoundary,
   ): Promise<CoverageBoundary> {
     const finalityBlock = await this.sdk.getCoverageBoundaryBlock(preference);
-    // A fresh indexer with no processed block yet leaves the chain finality
-    // block as the only height to anchor to.
     const anchor = anchorBoundaryBlock({
       finalityBlockNumber: finalityBlock.number,
-      indexerProcessedBlock: indexerProcessedBlock ?? finalityBlock.number,
+      indexerProcessedBlock,
     });
 
     // Reuse the finality block's hash when it is already the anchor; otherwise
