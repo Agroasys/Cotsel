@@ -10,7 +10,14 @@ import {
   success,
 } from '@agroasys/shared-http';
 import { AdminService } from '../core/adminService';
-import { ApiErrorResponse, ApiSuccessResponse, UserProfile, UserRole } from '../types';
+import {
+  ApiErrorResponse,
+  ApiSuccessResponse,
+  OPERATOR_SIGNER_ACTION_CLASSES,
+  OperatorSignerActionClass,
+  UserProfile,
+  UserRole,
+} from '../types';
 import { resolveBreakGlassReviewStatus } from '../core/breakGlassReviewStatus';
 import { assertWalletAddress, handleControllerError, requireAuthRole } from './controllerSupport';
 
@@ -44,6 +51,25 @@ interface AccountActionBody {
 interface ListQuery {
   limit?: string;
   accountId?: string;
+  active?: string;
+}
+
+interface ProvisionSignerBody {
+  accountId?: string;
+  walletAddress?: string;
+  actionClass?: OperatorSignerActionClass;
+  environment?: string;
+  custodianName?: string;
+  approvingAuthority?: string;
+  approvedAt?: string;
+  approvalTicket?: string;
+  notes?: string | null;
+  reason?: string;
+}
+
+interface RevokeSignerBody {
+  bindingId?: string;
+  reason?: string;
 }
 
 function actorFromRequest(req: Request) {
@@ -99,6 +125,25 @@ function optionalAccountId(value: unknown): string | undefined {
     throw new HttpError(400, 'BadRequest', 'accountId must be a non-empty string');
   }
   return value.trim();
+}
+
+function optionalActive(value: unknown): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new HttpError(400, 'BadRequest', 'active must be true or false');
+}
+
+function requireActionClass(value: unknown): OperatorSignerActionClass {
+  const actionClass = requireString(value, 'actionClass') as OperatorSignerActionClass;
+  if (!OPERATOR_SIGNER_ACTION_CLASSES.includes(actionClass)) {
+    throw new HttpError(
+      400,
+      'BadRequest',
+      `actionClass must be one of: ${OPERATOR_SIGNER_ACTION_CLASSES.join(', ')}`,
+    );
+  }
+  return actionClass;
 }
 
 function profilePayload(profile: UserProfile) {
@@ -200,6 +245,88 @@ export class AdminController {
         'AdminAuditListFailed',
         statusForAdminError(error),
         'Admin audit list failed',
+      );
+    }
+  }
+
+  async listSignerBindings(
+    req: Request<Record<string, never>, unknown, unknown, ListQuery>,
+    res: Response<ApiSuccessResponse | ApiErrorResponse>,
+  ): Promise<void> {
+    try {
+      const items = await this.adminService.listSignerBindings({
+        accountId: optionalAccountId(req.query.accountId),
+        active: optionalActive(req.query.active),
+        limit: parseLimit(req.query.limit),
+      });
+      res.json(success({ items, generatedAt: new Date().toISOString() }));
+    } catch (error) {
+      handleControllerError(
+        res,
+        error,
+        'SignerListFailed',
+        statusForAdminError(error),
+        'Signer register list failed',
+      );
+    }
+  }
+
+  async provisionSigner(
+    req: Request<Record<string, never>, unknown, ProvisionSignerBody>,
+    res: Response<ApiSuccessResponse | ApiErrorResponse>,
+  ): Promise<void> {
+    try {
+      const body = requireObject(req.body, 'body') as ProvisionSignerBody;
+      const binding = await this.adminService.provisionSigner({
+        accountId: requireString(body.accountId, 'accountId'),
+        walletAddress: assertWalletAddress(
+          requireString(body.walletAddress, 'walletAddress'),
+          'walletAddress',
+        ),
+        actionClass: requireActionClass(body.actionClass),
+        environment: requireString(body.environment, 'environment'),
+        custodianName: requireString(body.custodianName, 'custodianName'),
+        approvingAuthority: requireString(body.approvingAuthority, 'approvingAuthority'),
+        approvedAt: requireString(body.approvedAt, 'approvedAt'),
+        approvalTicket: requireString(body.approvalTicket, 'approvalTicket'),
+        notes: optionalNullableString(body.notes, 'notes') ?? null,
+        actor: actorFromRequest(req),
+        reason: requireReason(body.reason),
+      });
+      res.status(201).json(success(binding));
+    } catch (error) {
+      handleControllerError(
+        res,
+        error,
+        'SignerProvisionFailed',
+        statusForAdminError(error),
+        'Signer provisioning failed',
+      );
+    }
+  }
+
+  async revokeSigner(
+    req: Request<Record<string, never>, unknown, RevokeSignerBody>,
+    res: Response<ApiSuccessResponse | ApiErrorResponse>,
+  ): Promise<void> {
+    try {
+      const body = requireObject(req.body, 'body') as RevokeSignerBody;
+      const binding = await this.adminService.revokeSigner({
+        bindingId: requireString(body.bindingId, 'bindingId'),
+        actor: actorFromRequest(req),
+        reason: requireReason(body.reason),
+      });
+      if (!binding) {
+        throw new HttpError(404, 'SignerBindingNotFound', 'No active signer binding found');
+      }
+      res.json(success(binding));
+    } catch (error) {
+      handleControllerError(
+        res,
+        error,
+        'SignerRevokeFailed',
+        statusForAdminError(error),
+        'Signer revocation failed',
       );
     }
   }

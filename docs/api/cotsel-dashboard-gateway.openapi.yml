@@ -21,7 +21,7 @@ info:
     - Auth uses existing auth-service Bearer sessions.
     - Gateway role mapping is derived from current auth role `admin`, which maps to `operator:read` and `operator:write`.
     - All mutation endpoints additionally require `GATEWAY_ENABLE_MUTATIONS=true` and membership in `GATEWAY_WRITE_ALLOWLIST`.
-    - Governance mutations use a two-endpoint direct-sign model (ADR-0411): (1) `POST /governance/<action>/prepare` validates the session, explicit signer wallet, and pre-flight state, records audit intent, and returns the canonical backend-authored signing payload (`chainId`, `contractAddress`, `contractMethod`, `args`, `txRequest`, `signerWallet`, `preparedPayloadHash`); (2) `POST /governance/actions/:actionId/confirm` accepts the broadcast `txHash` plus the same approved signer wallet, verifies the transaction against the prepared payload when observable, and records either `broadcast` or `broadcast_pending_verification` status with monitoring state. The approved operator signer wallet signs and broadcasts between these two calls. Legacy human queue-style `POST /governance/<action>` routes are retained only as retired compatibility surfaces and fail closed with `409 direct_sign_required`.
+    - Governance mutations use the two-endpoint direct-sign model in ADR-0411. A prepare endpoint validates the active signer-register entry and on-chain preconditions. It then records operator intent and returns an action-bound unsigned transaction. The named hardware-wallet custodian signs and broadcasts outside Cotsel. The confirm endpoint accepts the transaction hash and independently verifies the chain, contract, sender, destination, value, calldata, nonce, and prepared action. The gateway exposes no governance queue, executor, or server-side governance signer.
     - Signer-required governance and treasury mutations also apply break-glass signer policy. When `auth` marks the session as break-glass active, ordinary signer action classes (`governance`, `treasury_approve`, `treasury_execute`, `treasury_close`, and `compliance_sensitive`) fail closed with `SIGNER_POLICY_RESTRICTED`; only an explicit `emergency_admin` signer binding may be used for emergency signer paths.
 servers:
   - url: http://127.0.0.1:3600/api/dashboard-gateway/v1
@@ -113,6 +113,44 @@ paths:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1settlement~1handoffs~1{handoffId}~1execution-events
   /governance/status:
     $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1status
+  /governance/actions:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1actions
+  /governance/actions/{actionId}:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1actions~1{actionId}
+  /governance/pause/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1pause~1prepare
+  /governance/unpause/proposal/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1unpause~1proposal~1prepare
+  /governance/unpause/proposal/approve/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1unpause~1proposal~1approve~1prepare
+  /governance/unpause/proposal/cancel/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1unpause~1proposal~1cancel~1prepare
+  /governance/claims/pause/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1claims~1pause~1prepare
+  /governance/claims/unpause/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-01.yml#/paths/~1governance~1claims~1unpause~1prepare
+  /governance/treasury/sweep/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-02.yml#/paths/~1governance~1treasury~1sweep~1prepare
+  /governance/treasury/payout-receiver/proposals/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-02.yml#/paths/~1governance~1treasury~1payout-receiver~1proposals~1prepare
+  /governance/treasury/payout-receiver/proposals/{proposalId}/approve/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-02.yml#/paths/~1governance~1treasury~1payout-receiver~1proposals~1{proposalId}~1approve~1prepare
+  /governance/treasury/payout-receiver/proposals/{proposalId}/execute/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-02.yml#/paths/~1governance~1treasury~1payout-receiver~1proposals~1{proposalId}~1execute~1prepare
+  /governance/treasury/payout-receiver/proposals/{proposalId}/cancel-expired/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-02.yml#/paths/~1governance~1treasury~1payout-receiver~1proposals~1{proposalId}~1cancel-expired~1prepare
+  /governance/oracle/disable-emergency/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-03.yml#/paths/~1governance~1oracle~1disable-emergency~1prepare
+  /governance/oracle/proposals/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-03.yml#/paths/~1governance~1oracle~1proposals~1prepare
+  /governance/oracle/proposals/{proposalId}/approve/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-03.yml#/paths/~1governance~1oracle~1proposals~1{proposalId}~1approve~1prepare
+  /governance/oracle/proposals/{proposalId}/execute/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-03.yml#/paths/~1governance~1oracle~1proposals~1{proposalId}~1execute~1prepare
+  /governance/oracle/proposals/{proposalId}/cancel-expired/prepare:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-03.yml#/paths/~1governance~1oracle~1proposals~1{proposalId}~1cancel-expired~1prepare
+  /governance/actions/{actionId}/confirm:
+    $ref: ./cotsel-dashboard-gateway/paths/governance-03.yml#/paths/~1governance~1actions~1{actionId}~1confirm
   /treasury:
     $ref: ./cotsel-dashboard-gateway/paths/treasury-01.yml#/paths/~1treasury
   /treasury/accounting-periods:
@@ -321,6 +359,12 @@ components:
     GovernanceActionListResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-governance-01.yml#/components/schemas/GovernanceActionListResponse}
     GovernancePreparedTransactionRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-governance-01.yml#/components/schemas/GovernancePreparedTransactionRequest}
     GovernancePreparedSigningPayload: {$ref: ./cotsel-dashboard-gateway/components/schemas-governance-01.yml#/components/schemas/GovernancePreparedSigningPayload}
+    GovernanceDirectSignPrepareRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-governance-01.yml#/components/schemas/GovernanceDirectSignPrepareRequest}
+    TreasuryPayoutReceiverProposalSignerRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-governance-01.yml#/components/schemas/TreasuryPayoutReceiverProposalSignerRequest}
+    OracleUpdateProposalSignerRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-governance-01.yml#/components/schemas/OracleUpdateProposalSignerRequest}
+    GovernanceActionPreparedResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-governance-01.yml#/components/schemas/GovernanceActionPreparedResponse}
+    GovernanceBroadcastConfirmRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-governance-01.yml#/components/schemas/GovernanceBroadcastConfirmRequest}
+    GovernanceBroadcastConfirmedResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-governance-01.yml#/components/schemas/GovernanceBroadcastConfirmedResponse}
     TreasuryFreshness: {$ref: ./cotsel-dashboard-gateway/components/schemas-treasury-01.yml#/components/schemas/TreasuryFreshness}
     TreasuryBalanceSnapshot: {$ref: ./cotsel-dashboard-gateway/components/schemas-treasury-01.yml#/components/schemas/TreasuryBalanceSnapshot}
     TreasurySweepVisibility: {$ref: ./cotsel-dashboard-gateway/components/schemas-treasury-01.yml#/components/schemas/TreasurySweepVisibility}

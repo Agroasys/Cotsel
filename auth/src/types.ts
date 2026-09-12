@@ -109,6 +109,25 @@ export interface OperatorSignerAuthorization {
   notes: string | null;
 }
 
+export interface OperatorSignerRegisterRecord {
+  bindingId: string;
+  accountId: string;
+  walletAddress: string;
+  actionClass: OperatorSignerActionClass;
+  environment: string;
+  custodianName: string;
+  approvingAuthority: string;
+  approvedAt: string;
+  approvalTicket: string;
+  notes: string | null;
+  active: boolean;
+  createdBy: string;
+  createdAt: string;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  revokedReason: string | null;
+}
+
 export interface SessionIssueResult {
   sessionId: string;
   expiresAt: number;

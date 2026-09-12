@@ -37,7 +37,10 @@ function createAdminController(): AdminController {
   return {
     listAuthorityProfiles: jest.fn(),
     listAuditEvents: jest.fn(),
+    listSignerBindings: jest.fn(),
     provision: jest.fn(),
+    provisionSigner: jest.fn(),
+    revokeSigner: jest.fn(),
     deactivate: jest.fn(),
     grantBreakGlass: jest.fn(),
     revokeBreakGlass: jest.fn(),
@@ -121,7 +124,8 @@ describe('auth router', () => {
     expect(routes).toContain('POST /admin/break-glass/grant');
     expect(routes).toContain('POST /admin/break-glass/revoke');
     expect(routes).toContain('POST /admin/break-glass/review');
-    expect(routes).not.toContain('POST /admin/signers/provision');
-    expect(routes).not.toContain('POST /admin/signers/revoke');
+    expect(routes).toContain('GET /admin/signers');
+    expect(routes).toContain('POST /admin/signers/provision');
+    expect(routes).toContain('POST /admin/signers/revoke');
   });
 });

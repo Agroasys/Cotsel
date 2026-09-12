@@ -23,7 +23,7 @@ const baseConfig: GatewayConfig = {
   usdcAddress: '0x0000000000000000000000000000000000000888',
   enableMutations: true,
   writeAllowlist: ['acct-admin'],
-  governanceQueueTtlSeconds: 86400,
+  governancePreparationTtlSeconds: 86400,
   settlementIngressEnabled: false,
   settlementServiceAuthApiKeysJson: '[]',
   settlementServiceAuthMaxSkewSeconds: 300,
@@ -148,6 +148,37 @@ describe('AuthSessionClient contract validation', () => {
           approvedBy: 'uid-owner',
           ticketRef: 'FIN-900',
           notes: null,
+        },
+      ],
+    });
+    global.fetch = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: malformedSession }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const client = createAuthSessionClient(baseConfig);
+    await expect(client.resolveSession('sess-1', 'req-1')).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
+    });
+  });
+
+  test.each([
+    ['blank binding id', { bindingId: ' ' }],
+    ['invalid wallet', { walletAddress: '0xnot-a-wallet' }],
+    ['wildcard environment', { environment: '*' }],
+    ['future approval', { approvedAt: '2999-01-01T00:00:00.000Z' }],
+    ['blank approving authority', { approvedBy: ' ' }],
+    ['missing approval ticket', { ticketRef: null }],
+  ])('fails closed for signer authorization with %s', async (_label, signerOverride) => {
+    const session = buildAuthSession();
+    const malformedSession = buildAuthSession({
+      signerAuthorizations: [
+        {
+          ...session.signerAuthorizations[0],
+          ...signerOverride,
         },
       ],
     });

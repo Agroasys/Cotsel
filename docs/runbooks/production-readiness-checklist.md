@@ -45,9 +45,12 @@ Purpose:
 - Emergency rotation procedure is documented and tested in non-production first.
 - Shared test/dev keys are never reused for production environments.
 - Gateway governance signer custody is defined in `docs/runbooks/gateway-governance-signer-custody.md`.
-- Gateway governance mutation is currently blocked because the accepted
-  direct-sign prepare/confirm path is not implemented. A future executor-backed
-  service path must use managed custody and must not introduce a raw-key fallback.
+- Gateway governance source implements direct-sign prepare, confirm,
+  verification, and monitoring. Runtime use remains blocked until the reviewed
+  release and migrations are deployed, three named independent hardware-wallet
+  custodians are registered, and the two-admin rehearsal is accepted.
+- No queue, executor, KMS key, server signer, raw key, replay worker, CLI signer,
+  or manual contract call is an approved governance fallback.
 
 ### Inspection-settlement signer authority
 

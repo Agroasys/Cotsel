@@ -22,6 +22,13 @@
       "file": "schema/004_settlement_callback_delivery_leases.sql",
       "sha256": "196991bb5968163f69245ba517d5c5e14ce544fe309a25403422afffa2297f70",
       "schema_sha256": "7d0f9328b33490c625f76bbddcf74c9a816620eb20f46e18811fbbc698de7493"
+    },
+    {
+      "version": "202609120005",
+      "name": "governance_direct_sign",
+      "file": "schema/005_governance_direct_sign.sql",
+      "sha256": "2376ea968184751790017dcda7ca6d6d59f8f854434b7784dba4d9f169cb4bf8",
+      "schema_sha256": "46056206fde77365746ea1999fac1e8b00c2c01b7e3da9ea4ee440ca89a09348"
     }
   ]
 }

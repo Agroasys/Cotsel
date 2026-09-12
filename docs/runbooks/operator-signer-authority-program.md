@@ -1,11 +1,9 @@
 # Operator Signer Authority Program
 
-> **Superseded (2026-06):** The separate signer-binding control plane described
-> below has been retired. Operator signer authority is now derived from the
-> durable admin role — a durable admin confers the full capability set and a
-> wildcard-environment signer authorization for its own session wallet across
-> every action class. This document is retained only as the historical baseline;
-> for current provisioning see
+> **Current boundary (2026-09-12):** Signer authority is separate from the
+> durable admin role. A privileged action requires an explicit active binding
+> for the exact account, wallet, action class, and environment. Wildcard signer
+> authority is forbidden. For the operational procedure, see
 > [`auth-admin-provisioning.md`](./auth-admin-provisioning.md).
 
 ## Purpose
@@ -21,7 +19,7 @@ It exists to freeze the historical baseline and the completed Cotsel runtime tru
 for the operator signer hardening program, including the signer-policy tail for
 Cotsel#483, Cotsel#484, and Cotsel#485.
 
-## Current Runtime State
+## Current Source State
 
 ### 1. Session access remains the operator identity boundary
 
@@ -42,7 +40,8 @@ Relevant runtime surfaces:
 
 - `auth/session` now emits both operator capabilities and approved signer bindings.
 - `gateway` does not broaden missing capability data into full operator power.
-- Durable admin profile provisioning does not silently grant every operator capability. Operator capabilities must be explicitly provisioned through admin-control.
+- A durable admin profile receives the operator capability set, but no signer
+  authorization is derived from that role.
 - Signer authority is explicitly resolved from backend-managed signer bindings by:
   - operator account
   - wallet address
@@ -52,8 +51,9 @@ Relevant runtime surfaces:
 Relevant runtime surfaces:
 
 - `auth/src/api/sessionController.ts`
-- `auth/src/database/queries.ts`
-- `auth/src/core/operatorAuthorityStore.ts`
+- `auth/src/database/queries/sessions.ts`
+- `auth/src/core/operatorSignerStore.ts`
+- `auth/src/database/schema/002_operator_signer_register.sql`
 - `gateway/src/core/authSessionClient.ts`
 - `gateway/src/middleware/auth.ts`
 
@@ -66,17 +66,21 @@ Required admin-control calls:
 1. `POST /admin/profiles/provision`
    - `accountId`: rehearsal operator account, for example `demo-admin-001`
    - `role`: `admin`
-   - `walletAddress`: `0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a`
-   - `capabilities`: include only the explicit capabilities needed, for #489 at least `governance:write` and `compliance:write`
-   - `capabilityTicketRef`: `COTSEL-489`
+   - `walletAddress`: the address verified on the named custodian's hardware
+     device
 2. `POST /admin/signers/provision`
    - `accountId`: same rehearsal operator account
-   - `walletAddress`: `0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a`
+   - `walletAddress`: the same hardware-wallet address
    - `actionClass`: `governance`
-   - `environment`: `production` for the current staging gateway signer policy
-   - `ticketRef`: `COTSEL-489`
+   - `environment`: the exact gateway signer environment, for example `staging`
+   - `custodianName`, `approvingAuthority`, `approvedAt`, and `approvalTicket`:
+     exact approved custody evidence
 
-The signer binding table columns used by the current schema are `account_id`, `wallet_address`, `action_class`, `environment`, `active`, `provisioned_by`, `provision_reason`, `provision_ticket_ref`, `notes`, `metadata`, `created_at`, `updated_at`, `revoked_at`, `revoked_by`, and `revoked_reason`. Code and tests must align to those names; do not guess alternate names such as `signer_wallet`, `signer_address`, `granted_by`, `reason`, or `is_active`.
+The signer binding table columns used by the current schema are `account_id`,
+`wallet_address`, `action_class`, `environment`, `custodian_name`,
+`approving_authority`, `approved_at`, `approval_ticket`, `notes`, `active`,
+`created_by`, `created_at`, `updated_at`, `revoked_at`, `revoked_by`, and
+`revoked_reason`.
 
 ### 2.2 Dashboard operator session script base URL
 
@@ -104,19 +108,20 @@ If `/challenge` returns `404`, the script tries the alternate direct/routed path
   - `data.status: prepared`
   - `data.category: pause`
   - `data.signing.chainId: 84532`
-  - `data.signing.contractAddress: 0x37F5d97fd9D227dd39391ACfC3C77FDF7c7F742A`
+  - `data.signing.contractAddress`: the release's verified canonical address
   - `data.signing.contractMethod: pause`
   - `data.signing.txRequest.data: 0x8456cb59`
-  - `data.signing.signerWallet: 0x4beB8eeEC8dA57CaB76D2cAFD27Af6dFA22f972a`
+  - `data.signing.signerWallet`: the exact registered hardware-wallet address
   - `data.signing.preparedPayloadHash`: non-empty hash
   - no broadcast or execution step
 
 Relevant runtime surfaces:
 
-- `gateway/src/routes/governanceMutations.ts`
+- `gateway/src/routes/governanceDirectSignMutations.ts`
+- `gateway/src/routes/governanceCorePrepareRoutes.ts`
 - `gateway/src/core/governanceMutationService.ts`
 - `gateway/src/core/governanceStore.ts`
-- `gateway/tests/signerPolicyCoverage.test.ts`
+- `gateway/tests/governanceDirectSignService.test.ts`
 
 ### 4. Treasury has an explicit session-only vs signer-required policy
 

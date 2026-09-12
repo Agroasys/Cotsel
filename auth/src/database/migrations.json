@@ -8,6 +8,13 @@
       "schema_sha256": "13c1e35fdcb50271054bf81803fcf25dfb9196532a2c652db2abf926092c685d",
       "adopt_existing_schema": true,
       "baseline": true
+    },
+    {
+      "version": "202609120002",
+      "name": "operator_signer_register",
+      "file": "schema/002_operator_signer_register.sql",
+      "sha256": "5f1ac5cdfecee9a38f8a8ae76d2e2b8d639a5c39123b209e655e02e60e2c8f20",
+      "schema_sha256": "10dd57f2bd315841103df7e5dd5520cd9f338598a4788b8b8f16141c93b0c7bb"
     }
   ]
 }

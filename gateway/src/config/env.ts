@@ -3,14 +3,20 @@
  */
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
-import { getAddress, isAddress } from 'ethers';
 import { parseAllowedOrigins } from '@agroasys/shared-edge';
 import { resolveSettlementRuntime } from '@agroasys/sdk';
-import { calculateGaslessExecutorCapacityPolicy } from '../core/gaslessExecutorCapacityPolicy';
 import {
-  parseGaslessSignerCustodyMode,
-  validateGaslessSignerCustodyConfig,
-} from './gaslessSignerCustodyMode';
+  assertAddress,
+  env,
+  envBool,
+  envNumber,
+  envPositiveInteger,
+  optionalEnv,
+  parseAllowlist,
+  parseDbSslMode,
+  parseUrlList,
+} from './envReaders';
+import { loadGaslessEnvironment } from './gaslessEnvironment';
 
 dotenv.config();
 
@@ -18,108 +24,6 @@ const PRE_CONTRACT_SENTINEL_ADDRESS = '0x000000000000000000000000000000000000000
 
 export type { GatewayConfig } from './gatewayConfig';
 import type { GatewayConfig } from './gatewayConfig';
-
-function env(name: string): string {
-  const value = process.env[name];
-  assert(value, `${name} is missing`);
-  return value;
-}
-function optionalEnv(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value ? value : undefined;
-}
-function envNumber(name: string, fallback?: number): number {
-  const raw = process.env[name];
-  if ((raw === undefined || raw === '') && fallback !== undefined) {
-    return fallback;
-  }
-
-  const value = raw ?? env(name);
-  const parsed = Number.parseInt(value, 10);
-  assert(!Number.isNaN(parsed), `${name} must be a number`);
-  return parsed;
-}
-function envPositiveInteger(name: string, fallback?: number): number {
-  const raw = process.env[name];
-  if ((raw === undefined || raw === '') && fallback !== undefined) {
-    return fallback;
-  }
-
-  const value = raw ?? env(name);
-  const parsed = Number(value);
-  assert(Number.isInteger(parsed) && parsed > 0, `${name} must be a positive integer`);
-  return parsed;
-}
-function envBool(name: string, fallback: boolean): boolean {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') {
-    return fallback;
-  }
-
-  if (raw.toLowerCase() === 'true') {
-    return true;
-  }
-
-  if (raw.toLowerCase() === 'false') {
-    return false;
-  }
-
-  throw new Error(`${name} must be true or false`);
-}
-function envBigInt(name: string, fallback: bigint): bigint {
-  const raw = process.env[name]?.trim();
-  if (!raw) {
-    return fallback;
-  }
-
-  assert(/^\d+$/.test(raw), `${name} must be a non-negative integer`);
-  return BigInt(raw);
-}
-function parseAllowlist(raw: string | undefined): string[] {
-  if (!raw) {
-    return [];
-  }
-
-  return raw
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-}
-
-function parseUrlList(raw: string | undefined): string[] {
-  if (!raw) {
-    return [];
-  }
-
-  return raw
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0)
-    .map((value) => value.replace(/\/$/, ''));
-}
-
-function parseDbSslMode(value: string | undefined): GatewayConfig['dbSslMode'] {
-  const mode = value?.trim() || 'disable';
-  assert(
-    mode === 'disable' || mode === 'require' || mode === 'verify-full',
-    'DB_SSL_MODE must be one of disable, require, or verify-full',
-  );
-  return mode;
-}
-
-function assertAddress(name: string, value: string): string {
-  assert(isAddress(value), `${name} must be a valid EVM address`);
-  return getAddress(value);
-}
-
-function assertPrivateKey(name: string, value: string | undefined): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  assert(/^0x[a-fA-F0-9]{64}$/.test(value), `${name} must be a 32-byte hex private key`);
-  return value;
-}
 
 function assertDownstreamServiceAuth(
   serviceName: string,
@@ -188,63 +92,7 @@ export function loadConfig(): GatewayConfig {
     process.env.GATEWAY_SETTLEMENT_CALLBACK_API_KEY?.trim() || undefined;
   const settlementCallbackApiSecret =
     process.env.GATEWAY_SETTLEMENT_CALLBACK_API_SECRET?.trim() || undefined;
-  const gaslessExecutionEnabled = envBool('GATEWAY_GASLESS_EXECUTION_ENABLED', false);
-  const gaslessSignerCustodyMode = parseGaslessSignerCustodyMode(
-    process.env.GATEWAY_GASLESS_SIGNER_CUSTODY_MODE,
-  );
-  const gaslessBroadcastPaused = envBool('GATEWAY_GASLESS_BROADCAST_PAUSED', false);
-  const gaslessRequireRpcFallback = envBool(
-    'GATEWAY_GASLESS_REQUIRE_RPC_FALLBACK',
-    nodeEnv === 'production',
-  );
-  const gaslessExecutorPrivateKey = assertPrivateKey(
-    'GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY',
-    process.env.GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY?.trim() ||
-      process.env.GATEWAY_EXECUTOR_PRIVATE_KEY?.trim() ||
-      undefined,
-  );
-  const gaslessKmsKeyId = optionalEnv('GATEWAY_GASLESS_KMS_KEY_ID');
-  const gaslessKmsExpectedAddress = optionalEnv('GATEWAY_GASLESS_KMS_EXPECTED_ADDRESS');
-  const gaslessManagedSignerUrl =
-    process.env.GATEWAY_GASLESS_MANAGED_SIGNER_URL?.trim()?.replace(/\/$/, '') || undefined;
-  const gaslessManagedSignerApiKey =
-    process.env.GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY?.trim() || undefined;
-  const gaslessMaxGasLimit = envBigInt('GATEWAY_GASLESS_MAX_GAS_LIMIT', 1_500_000n);
-  const gaslessMaxFeePerGasWei = envBigInt('GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI', 50_000_000_000n);
-  const gaslessMaxNativeCostWei = envBigInt(
-    'GATEWAY_GASLESS_MAX_NATIVE_COST_WEI',
-    100_000_000_000_000_000n,
-  );
-  const gaslessMinExecutorBalanceWei = envBigInt('GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI', 0n);
-  const gaslessLowBalanceAlertWei = envBigInt('GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI', 0n);
-  const gaslessCapacityTargetTxPerDay = envPositiveInteger(
-    'GATEWAY_GASLESS_CAPACITY_TARGET_TX_PER_DAY',
-    500,
-  );
-  const gaslessCapacityBurstMultiplierBasisPoints = envPositiveInteger(
-    'GATEWAY_GASLESS_CAPACITY_BURST_MULTIPLIER_BASIS_POINTS',
-    40_000,
-  );
-  const gaslessCapacitySafetyMarginBasisPoints = envPositiveInteger(
-    'GATEWAY_GASLESS_CAPACITY_SAFETY_MARGIN_BASIS_POINTS',
-    12_500,
-  );
-  const gaslessCapacityFailClosed = envBool(
-    'GATEWAY_GASLESS_CAPACITY_FAIL_CLOSED',
-    nodeEnv === 'production' || chainId === 8453,
-  );
-  const gaslessCapacityPolicy = calculateGaslessExecutorCapacityPolicy({
-    targetTransactionsPerDay: gaslessCapacityTargetTxPerDay,
-    burstMultiplierBasisPoints: gaslessCapacityBurstMultiplierBasisPoints,
-    safetyMarginBasisPoints: gaslessCapacitySafetyMarginBasisPoints,
-    maxCostPerTxWei: gaslessMaxGasLimit * gaslessMaxFeePerGasWei,
-    configuredMinExecutorBalanceWei: gaslessMinExecutorBalanceWei,
-    configuredLowBalanceAlertWei: gaslessLowBalanceAlertWei,
-    failClosed: gaslessCapacityFailClosed,
-  });
-  const gaslessCapacityRequiredExecutorBalanceWei = BigInt(
-    gaslessCapacityPolicy.requiredBurstHourBalanceWei,
-  );
+  const gaslessConfig = loadGaslessEnvironment({ chainId, nodeEnv, rpcFallbackUrls });
   const oracleBaseUrl =
     process.env.GATEWAY_ORACLE_BASE_URL?.trim()?.replace(/\/$/, '') || undefined;
   const treasuryBaseUrl =
@@ -290,13 +138,6 @@ export function loadConfig(): GatewayConfig {
     rpcUrl.startsWith('http://') || rpcUrl.startsWith('https://'),
     'GATEWAY_RPC_URL must be an absolute http(s) URL',
   );
-  if (gaslessManagedSignerUrl) {
-    assert(
-      gaslessManagedSignerUrl.startsWith('http://') ||
-        gaslessManagedSignerUrl.startsWith('https://'),
-      'GATEWAY_GASLESS_MANAGED_SIGNER_URL must be an absolute http(s) URL',
-    );
-  }
   for (const [index, fallbackUrl] of rpcFallbackUrls.entries()) {
     assert(
       fallbackUrl.startsWith('http://') || fallbackUrl.startsWith('https://'),
@@ -344,8 +185,8 @@ export function loadConfig(): GatewayConfig {
     'GATEWAY_RPC_QUORUM must be between 1 and 10',
   );
   assert(
-    envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400) >= 60,
-    'GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS must be >= 60',
+    envNumber('GATEWAY_GOVERNANCE_PREPARATION_TTL_SECONDS', 86400) >= 60,
+    'GATEWAY_GOVERNANCE_PREPARATION_TTL_SECONDS must be >= 60',
   );
   assert(
     envNumber('GATEWAY_SETTLEMENT_SERVICE_AUTH_MAX_SKEW_SECONDS', 300) >= 30,
@@ -483,7 +324,7 @@ export function loadConfig(): GatewayConfig {
       'GATEWAY_CONTRACT_ADDRESS_REQUIRED=false requires GATEWAY_ENABLE_MUTATIONS=false',
     );
     assert(
-      !gaslessExecutionEnabled,
+      !gaslessConfig.gaslessExecutionEnabled,
       'GATEWAY_CONTRACT_ADDRESS_REQUIRED=false requires GATEWAY_GASLESS_EXECUTION_ENABLED=false',
     );
   }
@@ -505,74 +346,6 @@ export function loadConfig(): GatewayConfig {
       settlementCallbackApiSecret,
       'GATEWAY_SETTLEMENT_CALLBACK_API_SECRET is required when GATEWAY_SETTLEMENT_CALLBACK_ENABLED=true',
     );
-  }
-
-  if (gaslessExecutionEnabled) {
-    validateGaslessSignerCustodyConfig({
-      enabled: true,
-      mode: gaslessSignerCustodyMode,
-      executorPrivateKey: gaslessExecutorPrivateKey,
-      kmsKeyId: gaslessKmsKeyId,
-      kmsExpectedAddress: gaslessKmsExpectedAddress,
-      managedSignerUrl: gaslessManagedSignerUrl,
-      managedSignerApiKey: gaslessManagedSignerApiKey,
-    });
-    assert(
-      gaslessMaxFeePerGasWei > 0n,
-      'GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI must be > 0 when gasless execution is enabled',
-    );
-    assert(
-      gaslessMaxNativeCostWei > 0n,
-      'GATEWAY_GASLESS_MAX_NATIVE_COST_WEI must be > 0 when gasless execution is enabled',
-    );
-    assert(
-      gaslessLowBalanceAlertWei === 0n ||
-        gaslessMinExecutorBalanceWei === 0n ||
-        gaslessLowBalanceAlertWei >= gaslessMinExecutorBalanceWei,
-      'GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI must be >= GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI when both are set',
-    );
-    assert(
-      gaslessCapacityTargetTxPerDay > 0,
-      'GATEWAY_GASLESS_CAPACITY_TARGET_TX_PER_DAY must be > 0',
-    );
-    assert(
-      gaslessCapacityBurstMultiplierBasisPoints > 0,
-      'GATEWAY_GASLESS_CAPACITY_BURST_MULTIPLIER_BASIS_POINTS must be > 0',
-    );
-    assert(
-      gaslessCapacitySafetyMarginBasisPoints >= 10_000,
-      'GATEWAY_GASLESS_CAPACITY_SAFETY_MARGIN_BASIS_POINTS must be >= 10000',
-    );
-    if (gaslessCapacityFailClosed) {
-      assert(
-        gaslessCapacityPolicy.floorMeetsPolicy,
-        'GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI must cover the configured gasless burst-hour capacity policy when fail-closed capacity is enabled',
-      );
-      assert(
-        gaslessCapacityPolicy.lowBalanceAlertProtectsPolicy,
-        'GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI must cover the configured gasless burst-hour capacity policy when fail-closed capacity is enabled',
-      );
-    }
-    assert(
-      envNumber('GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS', 300000) >= 1000,
-      'GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS must be >= 1000',
-    );
-    assert(
-      envNumber('GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD', 3) >= 1,
-      'GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD must be >= 1',
-    );
-    if (nodeEnv === 'production') {
-      assert(
-        gaslessSignerCustodyMode !== 'raw_private_key',
-        'Production gasless execution must use KMS/MPC signer custody; raw private-key gasless custody is not allowed',
-      );
-    }
-    if (gaslessRequireRpcFallback) {
-      assert(
-        rpcFallbackUrls.length > 0,
-        'GATEWAY_GASLESS_REQUIRE_RPC_FALLBACK requires at least one GATEWAY_RPC_FALLBACK_URLS entry',
-      );
-    }
   }
 
   return {
@@ -606,7 +379,7 @@ export function loadConfig(): GatewayConfig {
     operatorSignerEnvironment,
     enableMutations,
     writeAllowlist,
-    governanceQueueTtlSeconds: envNumber('GATEWAY_GOVERNANCE_QUEUE_TTL_SECONDS', 86400),
+    governancePreparationTtlSeconds: envNumber('GATEWAY_GOVERNANCE_PREPARATION_TTL_SECONDS', 86400),
     settlementIngressEnabled,
     immediateInspectionAcceptanceEnabled,
     settlementServiceAuthApiKeysJson,
@@ -638,42 +411,7 @@ export function loadConfig(): GatewayConfig {
     ),
     settlementCallbackMaxBackoffMs: envNumber('GATEWAY_SETTLEMENT_CALLBACK_MAX_BACKOFF_MS', 60000),
     idempotencyLeaseDurationMs: envPositiveInteger('GATEWAY_IDEMPOTENCY_LEASE_DURATION_MS', 300000),
-    gaslessExecutionEnabled,
-    gaslessExecutorPrivateKey,
-    gaslessSignerCustodyMode,
-    gaslessKmsKeyId,
-    gaslessKmsExpectedAddress: gaslessKmsExpectedAddress
-      ? getAddress(gaslessKmsExpectedAddress)
-      : undefined,
-    gaslessManagedSignerUrl,
-    gaslessManagedSignerApiKey,
-    gaslessManagedSignerRequestTimeoutMs: envNumber(
-      'GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS',
-      5000,
-    ),
-    gaslessBroadcastPaused,
-    gaslessMaxGasLimit,
-    gaslessMaxFeePerGasWei,
-    gaslessMaxNativeCostWei,
-    gaslessMinExecutorBalanceWei,
-    gaslessLowBalanceAlertWei,
-    gaslessCapacityTargetTxPerDay,
-    gaslessCapacityBurstMultiplierBasisPoints,
-    gaslessCapacitySafetyMarginBasisPoints,
-    gaslessCapacityRequiredExecutorBalanceWei,
-    gaslessCapacityFailClosed,
-    gaslessRequestMaxTtlSeconds: envNumber('GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS', 900),
-    gaslessStuckQueueThresholdMs: envNumber('GATEWAY_GASLESS_STUCK_QUEUE_THRESHOLD_MS', 300000),
-    gaslessReceiptTimeoutMs: envNumber('GATEWAY_GASLESS_RECEIPT_TIMEOUT_MS', 120000),
-    gaslessOutcomeReconciliationIntervalMs: envNumber(
-      'GATEWAY_GASLESS_OUTCOME_RECONCILIATION_INTERVAL_MS',
-      5000,
-    ),
-    gaslessRepeatedFailureAlertThreshold: envNumber(
-      'GATEWAY_GASLESS_REPEATED_FAILURE_ALERT_THRESHOLD',
-      3,
-    ),
-    gaslessRequireRpcFallback,
+    ...gaslessConfig,
     oracleBaseUrl,
     oracleServiceApiKey,
     oracleServiceApiSecret,

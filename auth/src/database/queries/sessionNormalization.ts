@@ -4,7 +4,6 @@
 import {
   BreakGlassSessionContext,
   OPERATOR_CAPABILITIES,
-  OPERATOR_SIGNER_ACTION_CLASSES,
   OperatorCapability,
   OperatorSignerAuthorization,
   UserRole,
@@ -28,6 +27,7 @@ export type SessionRow = Omit<
   breakGlassRevokedBy?: string | null;
   breakGlassReviewedAt?: Date | string | null;
   breakGlassReviewedBy?: string | null;
+  signerAuthorizations?: OperatorSignerAuthorization[] | null;
 };
 
 function parseSessionEpoch(
@@ -50,27 +50,6 @@ function parseSessionEpoch(
 
 function deriveOperatorCapabilities(role: UserRole): OperatorCapability[] {
   return role === 'admin' ? [...OPERATOR_CAPABILITIES] : [];
-}
-
-function deriveSignerAuthorizations(
-  role: UserRole,
-  walletAddress: string | null,
-  approvedAtIso: string,
-): OperatorSignerAuthorization[] {
-  if (role !== 'admin' || !walletAddress) {
-    return [];
-  }
-
-  return OPERATOR_SIGNER_ACTION_CLASSES.map((actionClass) => ({
-    bindingId: `admin-role:${actionClass}`,
-    walletAddress,
-    actionClass,
-    environment: '*',
-    approvedAt: approvedAtIso,
-    approvedBy: 'durable-admin-role',
-    ticketRef: null,
-    notes: 'Derived from durable admin role',
-  }));
 }
 
 function timestampIsoOrNull(value: Date | string | null | undefined): string | null {
@@ -135,11 +114,7 @@ export function normalizeSessionRow(row: SessionRow): UserSession {
     issuedRole: row.issuedRole,
     active: row.active,
     capabilities: deriveOperatorCapabilities(row.role),
-    signerAuthorizations: deriveSignerAuthorizations(
-      row.role,
-      row.walletAddress,
-      new Date(issuedAt * 1000).toISOString(),
-    ),
+    signerAuthorizations: row.role === 'admin' ? [...(row.signerAuthorizations ?? [])] : [],
     breakGlass: normalizeBreakGlassContext(row),
     issuedAt,
     expiresAt: parseSessionEpoch(row.expiresAt, 'expiresAt'),

@@ -15,6 +15,8 @@
     "paths/evidence-01.yml",
     "paths/settlement-01.yml",
     "paths/governance-01.yml",
+    "paths/governance-02.yml",
+    "paths/governance-03.yml",
     "paths/treasury-01.yml",
     "paths/treasury-02.yml",
     "paths/compliance-01.yml"

@@ -1,8 +1,6 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import fs from 'fs';
-import path from 'path';
 import { Router } from 'express';
 import { createHttpRateLimiter } from '@agroasys/shared-edge';
 import { assertRpcEndpointsReachable, redactRpcUrlForLogs } from '@agroasys/sdk';
@@ -39,7 +37,7 @@ import { createGaslessTransactionOutcomeRuntime } from './core/gaslessTransactio
 import { SettlementService } from './core/settlementService';
 import { TradeReadService } from './core/tradeReadService';
 import { IndexerGraphqlClient } from './core/indexerGraphqlClient';
-import { createGovernanceStatusService } from './core/governanceStatusService';
+import { createGovernanceRuntime } from './governanceRuntime';
 import { EvidenceReadService } from './core/evidenceReadService';
 import { OperationsSummaryService } from './core/operationsSummaryService';
 import { OverviewService } from './core/overviewService';
@@ -56,7 +54,6 @@ import { createCapabilitiesRouter } from './routes/capabilities';
 import { createComplianceRouter } from './routes/compliance';
 import { createDashboardSettlementRouter } from './routes/dashboardSettlement';
 import { createEvidenceBundleRouter } from './routes/evidenceBundles';
-import { createGovernanceRouter } from './routes/governance';
 import { createOperationsRouter } from './routes/operations';
 import { createOverviewRouter } from './routes/overview';
 import { createReconciliationRouter } from './routes/reconciliation';
@@ -66,6 +63,7 @@ import { createSettlementRouter } from './routes/settlement';
 import { createTreasuryRouter } from './routes/treasury';
 import { createTradeRouter } from './routes/trades';
 import { gatewayRateLimitPolicy } from './httpSecurity';
+import { createReadinessCheck, loadPackageVersion } from './serverReadiness';
 
 const config = loadConfig();
 const pool = createPool(config);
@@ -79,7 +77,8 @@ const complianceStore = createPostgresComplianceStore(pool);
 const complianceWriteStore = createPostgresComplianceWriteStore(pool, complianceStore);
 const complianceService = new ComplianceService(complianceStore, complianceWriteStore);
 const evidenceBundleStore = createPostgresEvidenceBundleStore(pool);
-const governanceStatusService = createGovernanceStatusService(config);
+const governanceRuntime = createGovernanceRuntime(config, pool, auditLogStore);
+const { governanceStatusService } = governanceRuntime;
 const failedOperationStore = createPostgresFailedOperationStore(pool);
 const errorHandlerWorkflow = new GatewayErrorHandlerWorkflow(failedOperationStore, auditLogStore);
 const idempotencyStore = createPostgresIdempotencyStore(
@@ -292,80 +291,12 @@ const operationsSummaryService = new OperationsSummaryService([
   },
 ]);
 
-function loadPackageVersion(): string {
-  const candidates = [
-    path.resolve(__dirname, '../package.json'),
-    path.resolve(process.cwd(), 'gateway/package.json'),
-  ];
-
-  for (const candidate of candidates) {
-    if (!fs.existsSync(candidate)) {
-      continue;
-    }
-
-    const parsed = JSON.parse(fs.readFileSync(candidate, 'utf8')) as { version?: string };
-    if (parsed.version) {
-      return parsed.version;
-    }
-  }
-
-  return '0.1.0';
-}
-
-async function readinessCheck() {
-  const requestId = `readyz-${Date.now()}`;
-  const dependencies = [] as {
-    name: string;
-    status: 'ok' | 'degraded' | 'unavailable';
-    detail?: string;
-  }[];
-
-  try {
-    await testConnection(pool);
-    dependencies.push({ name: 'postgres', status: 'ok' });
-  } catch (error) {
-    dependencies.push({
-      name: 'postgres',
-      status: 'unavailable',
-      detail: error instanceof Error ? error.message : 'Database connection failed',
-    });
-  }
-
-  try {
-    await authSessionClient.checkReadiness(requestId);
-    dependencies.push({ name: 'auth-service', status: 'ok' });
-  } catch (error) {
-    dependencies.push({
-      name: 'auth-service',
-      status: 'unavailable',
-      detail: error instanceof Error ? error.message : 'Auth service unavailable',
-    });
-  }
-
-  try {
-    await governanceStatusService.checkReadiness();
-    dependencies.push({ name: 'chain-rpc', status: 'ok' });
-  } catch (error) {
-    dependencies.push({
-      name: 'chain-rpc',
-      status: 'unavailable',
-      detail: error instanceof Error ? error.message : 'Chain RPC unavailable',
-    });
-  }
-
-  try {
-    await tradeReadService.checkReadiness();
-    dependencies.push({ name: 'indexer-graphql', status: 'ok' });
-  } catch (error) {
-    dependencies.push({
-      name: 'indexer-graphql',
-      status: 'unavailable',
-      detail: error instanceof Error ? error.message : 'Indexer GraphQL unavailable',
-    });
-  }
-
-  return dependencies;
-}
+const readinessCheck = createReadinessCheck({
+  auth: (requestId) => authSessionClient.checkReadiness(requestId),
+  database: () => testConnection(pool),
+  governance: () => governanceStatusService.checkReadiness(),
+  indexer: () => tradeReadService.checkReadiness(),
+});
 
 async function bootstrap(): Promise<void> {
   Logger.info('Validating RPC endpoints for gateway startup', {
@@ -443,13 +374,7 @@ async function bootstrap(): Promise<void> {
       idempotencyStore,
     }),
   );
-  extraRouter.use(
-    createGovernanceRouter({
-      authSessionClient,
-      config,
-      governanceStatusService,
-    }),
-  );
+  extraRouter.use(governanceRuntime.createRouter(authSessionClient, idempotencyStore));
   extraRouter.use(
     createTreasuryRouter({
       authSessionClient,
@@ -531,13 +456,16 @@ async function bootstrap(): Promise<void> {
       allowlistSize: config.writeAllowlist.length,
     });
   });
-  settlementCallbackDispatcher.start();
-  gaslessTransactionOutcomeRuntime.start();
+  const backgroundRuntimes = [
+    settlementCallbackDispatcher,
+    gaslessTransactionOutcomeRuntime,
+    governanceRuntime,
+  ];
+  for (const runtime of backgroundRuntimes) runtime.start();
 
   const shutdown = async (signal: string): Promise<void> => {
     Logger.info('Shutting down dashboard gateway', { signal });
-    settlementCallbackDispatcher.stop();
-    gaslessTransactionOutcomeRuntime.stop();
+    for (const runtime of backgroundRuntimes) runtime.stop();
     await requestRateLimiter.close();
     await closeConnection(pool);
     server.close(() => process.exit(0));
@@ -554,8 +482,7 @@ async function bootstrap(): Promise<void> {
   server.on('error', (error) => {
     void (async () => {
       Logger.error('Dashboard gateway server error', error);
-      settlementCallbackDispatcher.stop();
-      gaslessTransactionOutcomeRuntime.stop();
+      for (const runtime of backgroundRuntimes) runtime.stop();
       await requestRateLimiter.close().catch(() => undefined);
       await closeConnection(pool);
       process.exit(1);
