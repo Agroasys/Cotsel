@@ -18,7 +18,9 @@ on:
         default: true
         type: boolean
   schedule:
-    - cron: '41 */6 * * *'
+    # Issues and governance-file changes remain event-driven. Daily reconciliation is the
+    # fallback for external Project changes that do not emit a repository event.
+    - cron: '41 2 * * *'
 
 concurrency:
   group: cotsel-production-readiness-project-governance
