@@ -29,7 +29,7 @@ export const baseTestGatewayConfig: GatewayConfig = {
   usdcAddress: '0x0000000000000000000000000000000000000888',
   enableMutations: false,
   writeAllowlist: [],
-  governanceQueueTtlSeconds: 86400,
+  governancePreparationTtlSeconds: 86400,
   settlementIngressEnabled: false,
   settlementServiceAuthApiKeysJson: '[]',
   settlementServiceAuthMaxSkewSeconds: 300,

@@ -19,3 +19,259 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
+  /governance/actions:
+    get:
+      tags:
+        - Governance
+      summary: List recent governance actions
+      operationId: listGovernanceActions
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/GovernanceActionCategory'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/GovernanceActionStatus'
+        - name: tradeId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Governance action history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /governance/actions/{actionId}:
+    get:
+      tags:
+        - Governance
+      summary: Get governance action by id
+      operationId: getGovernanceAction
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: actionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Governance action detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /governance/pause/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare protocol pause for direct admin signing
+      operationId: preparePauseProtocol
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/unpause/proposal/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare unpause proposal for direct admin signing
+      operationId: prepareProposeUnpause
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/unpause/proposal/approve/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare unpause approval for direct admin signing
+      operationId: prepareApproveUnpause
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/unpause/proposal/cancel/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare unpause proposal cancellation for direct admin signing
+      operationId: prepareCancelUnpauseProposal
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/claims/pause/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare claim pause for direct admin signing
+      operationId: preparePauseClaims
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/claims/unpause/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare claim unpause for direct admin signing
+      operationId: prepareUnpauseClaims
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'

@@ -144,10 +144,12 @@ test('service migration manifests pin immutable schema checksums', async () => {
           { version: '202608310001', name: 'baseline' },
           { version: '202608310003', name: 'gasless_transaction_outcomes' },
           { version: '202608310004', name: 'settlement_callback_delivery_leases' },
+          { version: '202609120005', name: 'governance_direct_sign' },
         ],
       );
       assert.match(manifest.migrations[1].schema_sha256, /^[a-f0-9]{64}$/);
       assert.match(manifest.migrations[2].schema_sha256, /^[a-f0-9]{64}$/);
+      assert.match(manifest.migrations[3].schema_sha256, /^[a-f0-9]{64}$/);
     }
   }
 });
