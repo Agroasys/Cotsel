@@ -36,6 +36,8 @@ export type AdminAuditAction =
   | 'break_glass_reviewed'
   | 'operator_capabilities_updated'
   | 'signer_binding_provisioned'
+  | 'signer_binding_proposed'
+  | 'signer_binding_activated'
   | 'signer_binding_revoked';
 
 export interface UserProfile {
@@ -107,6 +109,29 @@ export interface OperatorSignerAuthorization {
   approvedBy: string;
   ticketRef: string | null;
   notes: string | null;
+}
+
+export interface OperatorSignerRegisterRecord {
+  bindingId: string;
+  accountId: string;
+  walletAddress: string;
+  actionClass: OperatorSignerActionClass;
+  environment: string;
+  custodianName: string;
+  approvingAuthority: string | null;
+  approvedAt: string | null;
+  approvalTicket: string;
+  notes: string | null;
+  state: 'pending' | 'active' | 'revoked';
+  evidenceDigest: string;
+  approvedByPrincipal: string | null;
+  activatedAt: string | null;
+  active: boolean;
+  createdBy: string;
+  createdAt: string;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  revokedReason: string | null;
 }
 
 export interface SessionIssueResult {

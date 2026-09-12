@@ -45,6 +45,32 @@ export async function findSessionById(pool: Pool, sessionId: string): Promise<Us
             user_profiles.break_glass_revoked_by AS "breakGlassRevokedBy",
             user_profiles.break_glass_reviewed_at AS "breakGlassReviewedAt",
             user_profiles.break_glass_reviewed_by AS "breakGlassReviewedBy",
+            COALESCE(
+              (
+                SELECT json_agg(
+                  json_build_object(
+                    'bindingId', binding.id::text,
+                    'walletAddress', binding.wallet_address,
+                    'actionClass', binding.action_class,
+                    'environment', binding.environment,
+                    'approvedAt', binding.approved_at,
+                    'approvedBy', binding.approved_by_principal,
+                    'ticketRef', binding.approval_ticket,
+                    'notes', binding.notes
+                  )
+                  ORDER BY binding.approved_at ASC, binding.id ASC
+                )
+                FROM operator_signer_bindings AS binding
+                WHERE binding.account_id = user_profiles.account_id
+                  AND binding.active = TRUE
+                  AND binding.state = 'active'
+                  AND binding.revoked_at IS NULL
+                  AND binding.approved_by_principal IS NOT NULL
+                  AND binding.approved_digest = binding.evidence_digest
+                  AND binding.approved_at <= NOW()
+              ),
+              '[]'::json
+            ) AS "signerAuthorizations",
             issued_at AS "issuedAt", expires_at AS "expiresAt",
             revoked_at AS "revokedAt"
      FROM user_sessions

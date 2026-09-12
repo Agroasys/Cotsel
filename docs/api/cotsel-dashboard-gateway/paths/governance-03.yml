@@ -1,0 +1,202 @@
+paths:
+  /governance/oracle/disable-emergency/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare oracle emergency disable for direct admin signing
+      operationId: prepareDisableOracleEmergency
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/oracle/proposals/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare oracle update proposal for direct admin signing
+      operationId: prepareProposeOracleUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OracleUpdateProposalSignerRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/oracle/proposals/{proposalId}/approve/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare oracle update approval for direct admin signing
+      operationId: prepareApproveOracleUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/oracle/proposals/{proposalId}/execute/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare oracle update execution for direct admin signing
+      operationId: prepareExecuteOracleUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/oracle/proposals/{proposalId}/cancel-expired/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare expired oracle update proposal cancellation for direct admin signing
+      operationId: prepareCancelExpiredOracleUpdateProposal
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/actions/{actionId}/confirm:
+    post:
+      tags:
+        - Governance
+      summary: Confirm a direct-sign governance broadcast
+      operationId: confirmGovernanceBroadcast
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: actionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceBroadcastConfirmRequest'
+      responses:
+        '200':
+          description: Broadcast recorded and verified immediately or marked pending independent verification.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceBroadcastConfirmedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'

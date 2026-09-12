@@ -316,6 +316,7 @@ components:
               nullable: true
             actorWallet:
               type: string
+              nullable: true
             actorRole:
               type: string
             createdAt:
@@ -327,6 +328,24 @@ components:
               type: array
               items:
                 type: string
+            signerBindingId:
+              type: string
+              nullable: true
+            signerActionClass:
+              type: string
+              nullable: true
+            signerEnvironment:
+              type: string
+              nullable: true
+            signerPolicyResult:
+              type: string
+              nullable: true
+            signerPolicyReason:
+              type: string
+              nullable: true
+            signerBindingWallet:
+              type: string
+              nullable: true
             finalSignerWallet:
               type: string
               nullable: true

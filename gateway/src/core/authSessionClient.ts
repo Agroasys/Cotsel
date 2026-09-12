@@ -4,6 +4,7 @@
 import { GatewayConfig } from '../config/env';
 import { GatewayError } from '../errors';
 import { Logger } from '../logging/logger';
+import { isAddress } from 'ethers';
 
 export type AuthServiceRole = 'buyer' | 'supplier' | 'admin' | 'oracle';
 export type OperatorCapability =
@@ -126,14 +127,22 @@ function isSignerAuthorization(value: unknown): value is SignerAuthorization {
   }
 
   const candidate = value as Record<string, unknown>;
+  const approvedAt =
+    typeof candidate.approvedAt === 'string' ? Date.parse(candidate.approvedAt) : Number.NaN;
   return (
     typeof candidate.bindingId === 'string' &&
+    candidate.bindingId.trim().length > 0 &&
     typeof candidate.walletAddress === 'string' &&
+    isAddress(candidate.walletAddress) &&
     isKnownValue(SIGNER_ACTION_CLASSES, candidate.actionClass) &&
     typeof candidate.environment === 'string' &&
-    typeof candidate.approvedAt === 'string' &&
+    /^[a-z0-9][a-z0-9._-]{0,63}$/.test(candidate.environment) &&
+    Number.isFinite(approvedAt) &&
+    approvedAt <= Date.now() &&
     typeof candidate.approvedBy === 'string' &&
-    isStringOrNull(candidate.ticketRef) &&
+    candidate.approvedBy.trim().length > 0 &&
+    typeof candidate.ticketRef === 'string' &&
+    candidate.ticketRef.trim().length > 0 &&
     isStringOrNull(candidate.notes)
   );
 }

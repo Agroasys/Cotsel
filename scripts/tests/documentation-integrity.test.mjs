@@ -157,7 +157,7 @@ test('operator documentation does not present the retired npm toolchain as curre
   assert.deepEqual(staleCommands, []);
 });
 
-test('active runbooks do not present unimplemented gateway governance as executable', () => {
+test('active runbooks present direct-sign governance without an executor fallback', () => {
   const gatewayManifest = readJson(path.join(repositoryRoot, 'gateway/package.json'));
   assert.equal(gatewayManifest.scripts?.['execute:governance-action'], undefined);
 
@@ -169,10 +169,13 @@ test('active runbooks do not present unimplemented gateway governance as executa
     path.join(repositoryRoot, 'docs/runbooks/gateway-governance-signer-custody.md'),
     'utf8',
   );
-  assert.match(operations, /\*\*BLOCKED \/ NOT IMPLEMENTED\.\*\*/u);
-  assert.match(custody, /\*\*BLOCKED \/ NOT IMPLEMENTED\.\*\*/u);
+  assert.match(operations, /\*\*IMPLEMENTED IN SOURCE \/ NOT DEPLOYMENT-ACCEPTED\.\*\*/u);
+  assert.match(custody, /\*\*IMPLEMENTED IN SOURCE \/ NOT DEPLOYMENT-ACCEPTED\.\*\*/u);
+  assert.match(operations, /prepare and confirm only; no queue, executor/u);
+  assert.match(custody, /gateway does not sign or broadcast it/u);
   assert.doesNotMatch(operations, /pnpm --filter \.\/gateway run execute:governance-action/u);
   assert.doesNotMatch(operations, /gateway\/scripts\/governance-cleanup\.mjs/u);
+  assert.doesNotMatch(custody, /GATEWAY_EXECUTOR_PRIVATE_KEY/u);
 });
 
 test('VM deployment guidance cannot be mistaken for the AWS staging release path', () => {

@@ -17,6 +17,7 @@ import { createPostgresProfileStore } from './core/profileStore';
 import { createPostgresSessionStore } from './core/sessionStore';
 import { createSessionService } from './core/sessionService';
 import { createAdminService } from './core/adminService';
+import { createPostgresOperatorSignerStore } from './core/operatorSignerStore';
 import { SessionController } from './api/controller';
 import { AdminController } from './api/adminController';
 import { createRouter } from './api/routes';
@@ -77,6 +78,7 @@ async function bootstrap(): Promise<void> {
   //  Stores & service
   const profileStore = createPostgresProfileStore(pool);
   const sessionStore = createPostgresSessionStore(pool);
+  const operatorSignerStore = createPostgresOperatorSignerStore(pool);
   const sessionService = createSessionService(sessionStore, profileStore);
   const trustedSessionExchangeNonceStore = createPostgresNonceStore({
     tableName: 'trusted_session_exchange_nonces',
@@ -166,7 +168,9 @@ async function bootstrap(): Promise<void> {
 
   const sessionController = new SessionController(sessionService, config.sessionTtlSeconds);
   const adminController = config.adminControlEnabled
-    ? new AdminController(createAdminService(profileStore, config.adminBreakGlassMaxTtlSeconds))
+    ? new AdminController(
+        createAdminService(profileStore, config.adminBreakGlassMaxTtlSeconds, operatorSignerStore),
+      )
     : undefined;
   const router = createRouter(sessionController, sessionService, {
     readinessCheck: testConnection,
