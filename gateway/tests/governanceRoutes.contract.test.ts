@@ -8,8 +8,14 @@ import type { GatewayConfig } from '../src/config/env';
 import { loadOpenApiSpec } from '../src/openapi/spec';
 import { createSchemaValidator, hasOperation } from '../src/openapi/contract';
 import { createGovernanceRouter } from '../src/routes/governance';
-import type { AuthSessionClient } from '../src/core/authSessionClient';
-import type { EscrowGovernanceReader } from '../src/core/governanceStatusService';
+import type { AuthSessionClient, SignerAuthorization } from '../src/core/authSessionClient';
+import type { GovernanceMutationPreflightReader } from '../src/core/governanceStatusService';
+import { createInMemoryGovernanceActionStore } from '../src/core/governanceInMemoryStore';
+import { createInMemoryAuditLogStore } from '../src/core/auditLogStore';
+import { createPassthroughGovernanceWriteStore } from '../src/core/governanceWriteStore';
+import { GovernanceMutationService } from '../src/core/governanceMutationService';
+import type { GovernanceTransactionVerifier } from '../src/core/governanceMutationTypes';
+import { createInMemoryIdempotencyStore } from '../src/core/idempotencyStore';
 
 const config: GatewayConfig = {
   port: 3600,
@@ -28,9 +34,10 @@ const config: GatewayConfig = {
   chainId: 31337,
   escrowAddress: '0x0000000000000000000000000000000000000000',
   usdcAddress: '0x0000000000000000000000000000000000000888',
-  enableMutations: false,
-  writeAllowlist: [],
-  governanceQueueTtlSeconds: 86400,
+  operatorSignerEnvironment: 'staging',
+  enableMutations: true,
+  writeAllowlist: ['acct-admin'],
+  governancePreparationTtlSeconds: 86400,
   settlementIngressEnabled: false,
   settlementServiceAuthApiKeysJson: '[]',
   settlementServiceAuthMaxSkewSeconds: 300,
@@ -51,7 +58,10 @@ const config: GatewayConfig = {
   allowInsecureDownstreamAuth: true,
 };
 
-async function startServer(sessionRole: 'admin' | 'buyer' | null) {
+async function startServer(
+  sessionRole: 'admin' | 'buyer' | null,
+  signerAuthorizations: SignerAuthorization[] = [],
+) {
   const authSessionClient: AuthSessionClient = {
     resolveSession: jest.fn().mockImplementation(async () => {
       if (sessionRole === null) {
@@ -60,8 +70,24 @@ async function startServer(sessionRole: 'admin' | 'buyer' | null) {
 
       return {
         userId: `uid-${sessionRole}`,
+        accountId: `acct-${sessionRole}`,
         walletAddress: '0x00000000000000000000000000000000000000aa',
         role: sessionRole,
+        capabilities: sessionRole === 'admin' ? ['governance:write'] : [],
+        signerAuthorizations,
+        breakGlass: {
+          active: false,
+          role: null,
+          expiresAt: null,
+          grantedAt: null,
+          grantedBy: null,
+          reason: null,
+          revokedAt: null,
+          revokedBy: null,
+          reviewedAt: null,
+          reviewedBy: null,
+          reviewStatus: 'none',
+        },
         issuedAt: Date.now(),
         expiresAt: Date.now() + 60000,
       };
@@ -69,7 +95,7 @@ async function startServer(sessionRole: 'admin' | 'buyer' | null) {
     checkReadiness: jest.fn(),
   };
 
-  const governanceStatusService: EscrowGovernanceReader = {
+  const governanceStatusService: GovernanceMutationPreflightReader = {
     checkReadiness: jest.fn(),
     getGovernanceStatus: jest.fn().mockResolvedValue({
       paused: false,
@@ -86,6 +112,25 @@ async function startServer(sessionRole: 'admin' | 'buyer' | null) {
       activeOracleProposalIds: [7],
       activeTreasuryPayoutReceiverProposalIds: [],
     }),
+    getUnpauseProposalState: jest.fn(),
+    getOracleProposalState: jest.fn(),
+    getTreasuryPayoutReceiverProposalState: jest.fn(),
+    getTreasuryClaimableBalance: jest.fn(),
+    hasApprovedUnpause: jest.fn(),
+    hasApprovedOracleProposal: jest.fn(),
+    hasApprovedTreasuryPayoutReceiverProposal: jest.fn(),
+  };
+
+  const governanceActionStore = createInMemoryGovernanceActionStore();
+  const governanceWriteStore = createPassthroughGovernanceWriteStore(
+    governanceActionStore,
+    createInMemoryAuditLogStore(),
+  );
+  const verifier: GovernanceTransactionVerifier = {
+    getTransactionCount: jest.fn(async () => 0),
+    getTransaction: jest.fn(async () => null),
+    getTransactionReceipt: jest.fn(async () => null),
+    getBlockNumber: jest.fn(async () => null),
   };
 
   const router = Router();
@@ -94,6 +139,14 @@ async function startServer(sessionRole: 'admin' | 'buyer' | null) {
       authSessionClient,
       config,
       governanceStatusService,
+      governanceActionStore,
+      governanceMutationService: new GovernanceMutationService(
+        config,
+        governanceActionStore,
+        governanceWriteStore,
+        verifier,
+      ),
+      idempotencyStore: createInMemoryIdempotencyStore(),
     }),
   );
 
@@ -126,9 +179,16 @@ describe('gateway governance read routes contract', () => {
     spec,
     '#/components/schemas/GovernanceStatusResponse',
   );
+  const validatePrepared = createSchemaValidator(
+    spec,
+    '#/components/schemas/GovernanceActionPreparedResponse',
+  );
 
   test('OpenAPI spec exposes the governance status endpoint', () => {
     expect(hasOperation(spec, 'get', '/governance/status')).toBe(true);
+    expect(hasOperation(spec, 'post', '/governance/pause/prepare')).toBe(true);
+    expect(hasOperation(spec, 'post', '/governance/actions/{actionId}/confirm')).toBe(true);
+    expect(hasOperation(spec, 'post', '/governance/pause')).toBe(false);
   });
 
   test('GET /governance/status returns a schema-valid governance snapshot read from chain', async () => {
@@ -173,6 +233,124 @@ describe('gateway governance read routes contract', () => {
     } finally {
       unauthenticated.server.close();
       nonAdmin.server.close();
+    }
+  });
+
+  test('an admin session receives no governance signer authority without an exact register entry', async () => {
+    const { server, baseUrl } = await startServer('admin');
+    try {
+      const response = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'governance-unregistered-wallet',
+        },
+        body: JSON.stringify({
+          signerWallet: '0x00000000000000000000000000000000000000aa',
+          audit: {
+            reason: 'Attempt with no explicit signer register entry.',
+            ticketRef: 'WP1-641',
+            evidenceLinks: [{ kind: 'ticket', uri: 'https://example.test/WP1-641' }],
+          },
+        }),
+      });
+      const payload = await response.json();
+      expect(response.status).toBe(403);
+      expect(payload.error.code).toBe('SIGNER_NOT_AUTHORIZED');
+    } finally {
+      server.close();
+    }
+  });
+
+  test('a wildcard signer environment is rejected instead of authorizing every deployment', async () => {
+    const { server, baseUrl } = await startServer('admin', [
+      {
+        bindingId: 'legacy-wildcard',
+        walletAddress: '0x00000000000000000000000000000000000000aa',
+        actionClass: 'governance',
+        environment: '*',
+        approvedAt: '2026-09-11T08:00:00.000Z',
+        approvedBy: 'legacy-admin-role',
+        ticketRef: null,
+        notes: null,
+      },
+    ]);
+    try {
+      const response = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'governance-wildcard-wallet',
+        },
+        body: JSON.stringify({
+          signerWallet: '0x00000000000000000000000000000000000000aa',
+          audit: {
+            reason: 'Attempt with a retired wildcard signer grant.',
+            ticketRef: 'WP1-641',
+            evidenceLinks: [{ kind: 'ticket', uri: 'https://example.test/WP1-641' }],
+          },
+        }),
+      });
+      const payload = await response.json();
+      expect(response.status).toBe(403);
+      expect(payload.error.code).toBe('SIGNER_NOT_AUTHORIZED');
+    } finally {
+      server.close();
+    }
+  });
+
+  test('an exact active register entry returns an action-bound unsigned transaction', async () => {
+    const { server, baseUrl } = await startServer('admin', [
+      {
+        bindingId: 'binding-admin-1',
+        walletAddress: '0x00000000000000000000000000000000000000AA',
+        actionClass: 'governance',
+        environment: 'staging',
+        approvedAt: '2026-09-11T08:00:00.000Z',
+        approvedBy: 'security-owner',
+        ticketRef: 'WP1-641',
+        notes: null,
+      },
+    ]);
+    try {
+      const response = await fetch(`${baseUrl}/governance/pause/prepare`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess-admin',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'governance-exact-wallet',
+        },
+        body: JSON.stringify({
+          signerWallet: '0x00000000000000000000000000000000000000AA',
+          audit: {
+            reason: 'Prepare with exact registered hardware-wallet authority.',
+            ticketRef: 'WP1-641',
+            evidenceLinks: [{ kind: 'ticket', uri: 'https://example.test/WP1-641' }],
+          },
+        }),
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(validatePrepared(payload)).toBe(true);
+      expect(payload.data.signing).toMatchObject({
+        actionId: payload.data.actionId,
+        intentKey: payload.data.intentKey,
+        actionType: 'pause',
+        auditReference: 'WP1-641',
+        chainId: 31337,
+        signerWallet: '0x00000000000000000000000000000000000000AA',
+        txRequest: {
+          chainId: 31337,
+          from: '0x00000000000000000000000000000000000000AA',
+          value: '0',
+          nonce: 0,
+        },
+      });
+    } finally {
+      server.close();
     }
   });
 });

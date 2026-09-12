@@ -31,7 +31,9 @@ export interface GatewayConfig {
   operatorSignerEnvironment?: string;
   enableMutations: boolean;
   writeAllowlist: string[];
-  governanceQueueTtlSeconds: number;
+  governancePreparationTtlSeconds?: number;
+  /** @deprecated Compatibility alias for legacy in-process test fixtures only. */
+  governanceQueueTtlSeconds?: number;
   settlementIngressEnabled: boolean;
   immediateInspectionAcceptanceEnabled?: boolean;
   settlementServiceAuthApiKeysJson: string;
@@ -97,4 +99,12 @@ export interface GatewayConfig {
   commitSha: string;
   buildTime: string;
   nodeEnv: string;
+}
+
+export function resolveGovernancePreparationTtlSeconds(config: GatewayConfig): number {
+  const ttlSeconds = config.governancePreparationTtlSeconds ?? config.governanceQueueTtlSeconds;
+  if (ttlSeconds === undefined || !Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
+    throw new Error('A positive governance preparation TTL is required.');
+  }
+  return ttlSeconds;
 }

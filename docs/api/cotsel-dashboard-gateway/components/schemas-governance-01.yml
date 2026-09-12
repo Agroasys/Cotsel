@@ -14,22 +14,15 @@ components:
     GovernanceActionStatus:
       type: string
       enum:
-        - requested
-        - submitted
         - prepared
         - broadcast_pending_verification
         - broadcast
-        - pending_approvals
-        - approved
         - executed
-        - cancelled
-        - expired
         - stale
         - failed
     GovernanceVerificationState:
       type: string
       enum:
-        - not_required
         - not_started
         - pending
         - verified
@@ -37,7 +30,6 @@ components:
     GovernanceMonitoringState:
       type: string
       enum:
-        - not_required
         - not_started
         - pending_verification
         - pending_confirmation
@@ -117,6 +109,7 @@ components:
         - intentKey
         - category
         - status
+        - flowType
         - contractMethod
         - audit
         - createdAt
@@ -133,6 +126,9 @@ components:
           $ref: '#/components/schemas/GovernanceActionCategory'
         status:
           $ref: '#/components/schemas/GovernanceActionStatus'
+        flowType:
+          type: string
+          const: direct_sign
         contractMethod:
           type: string
         txHash:
@@ -229,21 +225,36 @@ components:
       type: object
       required:
         - chainId
+        - from
         - to
         - data
         - value
+        - nonce
       properties:
         chainId:
           type: integer
+          minimum: 1
+        from:
+          type: string
         to:
           type: string
         data:
           type: string
         value:
           type: string
+          const: '0'
+        nonce:
+          type: integer
+          minimum: 0
     GovernancePreparedSigningPayload:
       type: object
       required:
+        - actionId
+        - intentKey
+        - actionType
+        - proposalId
+        - expiresAt
+        - auditReference
         - chainId
         - contractAddress
         - contractMethod
@@ -252,8 +263,24 @@ components:
         - signerWallet
         - preparedPayloadHash
       properties:
+        actionId:
+          type: string
+        intentKey:
+          type: string
+        actionType:
+          $ref: '#/components/schemas/GovernanceActionCategory'
+        proposalId:
+          type: integer
+          minimum: 0
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+        auditReference:
+          type: string
         chainId:
           type: integer
+          minimum: 1
         contractAddress:
           type: string
         contractMethod:
@@ -271,3 +298,145 @@ components:
           type: string
         preparedPayloadHash:
           type: string
+          pattern: '^[0-9a-f]{64}$'
+    GovernanceDirectSignPrepareRequest:
+      type: object
+      required:
+        - audit
+        - signerWallet
+      properties:
+        audit:
+          $ref: '#/components/schemas/MutationAuditInput'
+        signerWallet:
+          type: string
+    TreasuryPayoutReceiverProposalSignerRequest:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+        - type: object
+          required:
+            - newPayoutReceiver
+          properties:
+            newPayoutReceiver:
+              type: string
+    OracleUpdateProposalSignerRequest:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+        - type: object
+          required:
+            - newOracleAddress
+          properties:
+            newOracleAddress:
+              type: string
+    GovernanceActionPreparedResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required:
+            - actionId
+            - intentKey
+            - category
+            - status
+            - preparedAt
+            - expiresAt
+            - signing
+          properties:
+            actionId:
+              type: string
+            intentKey:
+              type: string
+            proposalId:
+              type: integer
+              minimum: 0
+              nullable: true
+            category:
+              $ref: '#/components/schemas/GovernanceActionCategory'
+            status:
+              type: string
+              enum:
+                - prepared
+                - broadcast_pending_verification
+                - broadcast
+            preparedAt:
+              type: string
+              format: date-time
+            expiresAt:
+              type: string
+              format: date-time
+              nullable: true
+            signing:
+              $ref: '#/components/schemas/GovernancePreparedSigningPayload'
+        timestamp:
+          type: string
+          format: date-time
+    GovernanceBroadcastConfirmRequest:
+      type: object
+      required:
+        - txHash
+        - signerWallet
+      properties:
+        txHash:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{64}$'
+        signerWallet:
+          type: string
+    GovernanceBroadcastConfirmedResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required:
+            - actionId
+            - txHash
+            - status
+            - broadcastAt
+            - signerWallet
+            - verificationState
+            - monitoringState
+            - verifiedAt
+            - blockNumber
+          properties:
+            actionId:
+              type: string
+            txHash:
+              type: string
+              pattern: '^0x[0-9a-fA-F]{64}$'
+            status:
+              type: string
+              enum:
+                - broadcast
+                - broadcast_pending_verification
+            broadcastAt:
+              type: string
+              format: date-time
+            signerWallet:
+              type: string
+              nullable: true
+            verificationState:
+              $ref: '#/components/schemas/GovernanceVerificationState'
+            monitoringState:
+              $ref: '#/components/schemas/GovernanceMonitoringState'
+            verifiedAt:
+              type: string
+              format: date-time
+              nullable: true
+            blockNumber:
+              type: integer
+              nullable: true
+        timestamp:
+          type: string
+          format: date-time

@@ -15,7 +15,6 @@ Source of truth implementation:
 
 The gateway records a failed operation when:
 
-- a replay-eligible governance queue mutation fails due to infrastructure or unexpected error
 - a replay-eligible compliance mutation fails due to infrastructure or unexpected error
 - a settlement callback delivery exhausts retries and reaches `dead_letter`
 
@@ -59,7 +58,6 @@ Operator rule:
 
 ## Supported replay types
 
-- `governance.queue_action`
 - `compliance.create_decision`
 - `compliance.block_oracle_progression`
 - `compliance.resume_oracle_progression`
@@ -104,7 +102,7 @@ curl -fsS -X POST \
 
 1. Confirm the failure class is `infrastructure` or `unexpected`.
 2. Confirm the dependency issue is resolved:
-   - governance/compliance writes: Postgres and gateway write path healthy
+   - compliance writes: Postgres and gateway write path healthy
    - settlement callback delivery: target callback endpoint healthy and auth material valid
 3. List the failed operation and capture:
    - `failedOperationId`

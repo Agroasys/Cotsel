@@ -16,33 +16,50 @@ physical approval occurs on the hardware device. This clarification does not
 change the chosen direct-sign architecture; it makes its production custody
 boundary explicit.
 
-## Implementation status
+## Implementation status — 2026-09-12
 
-This ADR is an accepted target decision, not a completed implementation. As of
-2026-07-30, the Cotsel gateway does not implement the prepare, audit-intent,
-post-broadcast confirm and transaction-verification path described below.
-Cotsel-Dash can construct and broadcast direct-wallet governance transactions,
-but that client-only path does not satisfy the gateway control boundary in this
-ADR. The architecture coverage matrix therefore remains `In Progress`, and
-WP-9A must close the gateway path before production or pilot sign-off.
+The repository implements the gateway portion of this decision:
+
+- versioned signer-register and governance-action migrations;
+- explicit, active, environment-scoped signer bindings;
+- action-specific prepare routes;
+- immutable operator intent and canonical unsigned transaction records;
+- post-broadcast transaction verification and confirmation monitoring; and
+- no governance queue, executor, replay worker, CLI executor, KMS signer, or
+  server-held governance key.
+
+This source implementation is not deployment or acceptance evidence. The flow
+must remain disabled until the migrations and reviewed release are deployed,
+three named hardware-wallet custodians are registered, Cotsel-Dash is verified
+against the API contract, and a witnessed two-admin rehearsal passes.
 
 ## Context
 
-The queued gateway + executor signer model was approved under issue #215 as a workable pilot and compatibility arrangement. It routes human-initiated privileged governance actions through a backend queue, then executes them with an executor signer key (`GATEWAY_EXECUTOR_PRIVATE_KEY`) held by the gateway process.
+The queued gateway and executor-signer model was approved under issue #215 as a
+pilot design. It would have routed human-initiated privileged actions through a
+backend queue and signed them with a key held by a workload.
 
-This design is no longer the long-term target for human-privileged governance. Three repo-grounded incompatibilities establish this:
+That design is rejected for human privileged governance because:
 
-1. `gateway/src/routes/governanceMutations.ts` accepts privileged human governance requests into a queue instead of preparing a direct-sign flow.
-2. `gateway/src/executor/governanceExecutor.ts` enforces that the executor signer matches the queued approver wallet for approval actions, conflating human approval identity with a machine-held key.
-3. `docs/runbooks/gateway-governance-signer-custody.md` and `docs/api/cotsel-dashboard-gateway.openapi.yml` treat the queued executor as the governance execution boundary, making executor signing appear to be the intended steady-state.
+1. A machine-held key cannot prove that the named human custodian approved the
+   exact on-chain transaction.
+2. A shared workload signer would collapse independent administrator custody.
+3. A queue or replay worker could sign after the human session and reviewed
+   transaction context no longer matched current intent.
 
 ## Decision
 
-**Human privileged governance actions must migrate to a direct admin wallet signing model.**
+**Human privileged governance actions use direct hardware-wallet signing.**
 
-The backend gateway continues to play a role, it authenticates the operator session, prepares the canonical action payload, validates pre-flight state, records audit intent, and captures post-broadcast monitoring and evidence. But the signing and broadcast step must originate from the authenticated admin wallet, not from a backend executor key.
+The gateway authenticates the operator session, requires the exact active signer
+binding, validates pre-flight state, prepares the canonical unsigned
+transaction, records audit intent, and independently verifies and monitors the
+broadcast transaction. Signing and broadcast originate from the named
+hardware-wallet custodian. The gateway never possesses a governance private key.
 
-**Delegated/service execution remains executor-backed** for roles and operations that are intentionally automated. The executor model is correct for those paths and must not be dismantled.
+There is no delegated governance executor. Oracle and gasless-relayer signing
+are separate automated service authorities with isolated keys and task roles;
+neither may sign or replay a governance action.
 
 ## Action Classification
 
@@ -57,6 +74,7 @@ Every governance action is signed directly by the admin wallet.
 | Unpause approval                        | `approveUnpause`                                   |
 | Unpause proposal cancel                 | `cancelUnpauseProposal`                            |
 | Claims pause                            | `pauseClaims`                                      |
+| Claims unpause                          | `unpauseClaims`                                    |
 | Treasury sweep                          | `claimTreasury`                                    |
 | Treasury payout receiver proposal       | `proposeTreasuryPayoutAddressUpdate`               |
 | Treasury payout receiver approval       | `approveTreasuryPayoutAddressUpdate`               |
@@ -67,19 +85,10 @@ Every governance action is signed directly by the admin wallet.
 | Oracle update approval                  | `approveOracleUpdate`                              |
 | Oracle update execute                   | `executeOracleUpdate`                              |
 | Oracle update cancel expired            | `cancelExpiredOracleUpdateProposal`                |
-| Administrator or relayer change propose | `proposeAdminChange`                               |
-| Administrator or relayer change approve | `approveAdminChange`                               |
-| Administrator or relayer change execute | `executeAdminChange`                               |
-| Administrator change cancel expired     | `cancelAdminChangeProposal`                        |
 
-### Non-governance service roles — executor-backed (separate concern, not governance)
-
-The executor model is retained only for service-owned automated roles. These are not governance actions and are out of scope for this ADR.
-
-| Role                          | Operations                                           |
-| ----------------------------- | ---------------------------------------------------- |
-| Oracle service                | Stage releases, arrival confirmations, finalizations |
-| Automated maintenance runners | Service-triggered background operations              |
+Administrator, threshold, and relayer membership changes are not exposed by
+the current gateway prepare contract. They remain unsupported direct contract
+operations until a separate reviewed API and operating procedure is accepted.
 
 ## Target Architecture
 
@@ -105,7 +114,7 @@ Admin (browser)
    ▼
 Gateway (prepare phase)
    │  ├── Validate operator session + write-access
-   │  ├── Step-up auth challenge if required (Phase 3)
+   │  ├── Require the exact active signer-register binding
    │  ├── Validate pre-flight state (paused, proposal existence, quorum, timelock)
    │  ├── Build canonical action payload (`chainId`, `contractAddress`, `contractMethod`, `args`, `txRequest`)
    │  └── Record audit intent (session/account identity, expected signer wallet, action category, idempotency key)
@@ -136,21 +145,25 @@ The gateway retains its role as the trusted orchestration backend. It moves from
 
 ## Alternatives Considered
 
-### A) Keep queued executor with enforced signer match (current model, rejected for human governance)
+### A) Keep queued executor with enforced signer match (rejected)
 
 - Pros: simpler dashboard integration; no frontend wallet-sign flow required.
 - Cons: backend process holds admin key material; human approval identity is mediated by a machine key rather than the approving wallet signing directly; does not meet audit requirements for multi-admin governance.
 
-### B) Direct wallet signing for human governance + retain executor for service roles (chosen)
+### B) Direct hardware-wallet signing for human governance (chosen)
 
-- Pros: satisfies audit requirements for human governance; preserves intentional delegation for service roles; aligns signing identity with approver identity for on-chain approval methods.
+- Pros: aligns the named approving custodian with the on-chain signer and keeps
+  all administrator keys outside workloads.
 - Cons: requires phased migration across gateway, dashboard, auth/step-up, and runbooks.
 
 ## Risk Analysis
 
 ### Transition period
 
-The queued executor remains deployed during migration but is being narrowed in scope to delegated/service roles only. Human governance actions move to the direct-sign prepare -> review -> sign -> monitor path as each phase ships. The executor is not a fallback for human governance actions during or after migration; it is being restricted to service roles.
+The repository contains no governance executor fallback. During rollout,
+governance mutations stay disabled until the direct-sign release and migrations
+are deployed and rehearsed. Operators must not use an old checkout, raw contract
+call, KMS key, or database write as a substitute.
 
 ### Wallet availability
 
@@ -159,7 +172,7 @@ Direct wallet signing requires the operator wallet to be available and connected
 Mitigation:
 
 - Emergency runbooks must be updated to include wallet availability as a pre-execution check.
-- Step-up auth (Phase 3) adds an additional confirmation layer before the payload is prepared.
+- The signer register and write allowlist must be rechecked before preparation.
 
 ### Dashboard signing integration
 
@@ -177,11 +190,14 @@ Mitigation:
 
 - [Decision: Dashboard gateway governance signing model #215](https://github.com/Agroasys/Cotsel/issues/215)
 
-### Repo surfaces that must be updated in migration phases
+### Implemented repository surfaces
 
-- `gateway/src/routes/governanceMutations.ts` — queue endpoints supplemented with prepare endpoints and confirm verification (Phase 1)
-- `gateway/src/executor/governanceExecutor.ts` — executor scope to be restricted to service roles (Phase 1)
-- `docs/runbooks/gateway-governance-signer-custody.md` — updated to reflect direct-sign human governance and executor-only delegated/service flows
+- `auth/src/database/schema/002_operator_signer_register.sql` — explicit signer authority
+- `gateway/src/routes/governance*PrepareRoutes.ts` — prepare endpoints
+- `gateway/src/routes/governanceDirectSignMutations.ts` — confirmation endpoint
+- `gateway/src/core/governanceMutationService.ts` — canonical payload and verification boundary
+- `gateway/src/core/governanceDirectSignMonitor.ts` — confirmation and finality monitoring
+- `docs/runbooks/gateway-governance-signer-custody.md` — custody and operator procedure
 - `docs/api/cotsel-dashboard-gateway.openapi.yml` — direct-sign prepare + confirm contract aligned with implementation
 - `docs/runbooks/architecture-coverage-matrix.md` — row added for this decision
 
@@ -195,4 +211,7 @@ Mitigation:
 
 ## Rollback
 
-This ADR records a target architecture decision, not a completed migration. Rollback of the decision itself requires a new superseding ADR with explicit rationale. Any rollback must update the architecture coverage matrix, restore the superseded status on #215, and supersede this ADR explicitly. The executor model for service/delegated roles is unaffected by any rollback of this ADR.
+Rollback disables gateway mutations and rolls back the application release; it
+does not restore a queue, executor, raw key, or manual contract-call path. A
+change to the custody decision requires a new superseding ADR, updated threat
+and recovery analysis, independent review, and renewed acceptance.
