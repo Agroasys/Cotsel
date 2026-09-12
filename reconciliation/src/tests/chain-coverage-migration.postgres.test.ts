@@ -76,8 +76,11 @@ test(
         `SELECT version, name FROM cotsel_schema_migrations
          WHERE service_name = 'reconciliation' ORDER BY version`,
       );
+      // Only this migration's own place in the chain is asserted here. The
+      // exhaustive list belongs to the newest migration's test, so adding one
+      // does not have to touch every older migration test.
       assert.deepEqual(
-        applied.rows.map((row) => [row.version, row.name]),
+        applied.rows.slice(0, 2).map((row) => [row.version, row.name]),
         [
           ['202608310001', 'baseline'],
           ['202609090001', 'chain_coverage'],

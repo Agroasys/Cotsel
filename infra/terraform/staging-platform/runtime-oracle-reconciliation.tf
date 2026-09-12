@@ -88,6 +88,8 @@ locals {
     { name = "RECONCILIATION_CHAIN_READ_CONCURRENCY", value = "8" },
     { name = "RECONCILIATION_COVERAGE_BOUNDARY", value = "finalized" },
     { name = "RECONCILIATION_COVERAGE_MAX_AGE_MS", value = "3600000" },
+    { name = "RECONCILIATION_LEASE_HEARTBEAT_MS", value = "30000" },
+    { name = "RECONCILIATION_LEASE_TTL_MS", value = "300000" },
     { name = "RECONCILIATION_MAX_TRADES_PER_RUN", value = "1000" },
     { name = "RECONCILIATION_REQUIRE_CONTAINER_SAFE_INDEXER_URL", value = "false" },
     { name = "SETTLEMENT_RUNTIME", value = "base-sepolia" },
