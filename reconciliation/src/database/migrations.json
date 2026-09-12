@@ -8,6 +8,13 @@
       "schema_sha256": "c65fb5ffdcafbbc78cb38289a290b3b56bd3f6b03f9ca0a240a7015fad2c6c9a",
       "adopt_existing_schema": true,
       "baseline": true
+    },
+    {
+      "version": "202609090001",
+      "name": "chain_coverage",
+      "file": "002_chain_coverage.sql",
+      "sha256": "a2dc2168639e1d3d19caa2c6c2bdf97fbf4e53ba15b18ca132a337a07b9797da",
+      "schema_sha256": "bba3751b13c7f1a142f081bf0c71c0c0c64a15d3a438bf3ee28657f59e953bf0"
     }
   ]
 }

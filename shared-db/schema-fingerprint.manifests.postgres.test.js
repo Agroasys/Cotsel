@@ -49,6 +49,25 @@ test(
               baseline.schema_sha256,
               `${service} baseline schema fingerprint drifted`,
             );
+
+            // A service may have grown past its baseline. assertMigrationHistory
+            // pins the *last* migration's fingerprint at runtime, so every
+            // declared schema_sha256 along the chain must hold here too.
+            for (const migration of manifest.migrations.slice(1)) {
+              await pool.query(fs.readFileSync(path.join(serviceRoot, migration.file), 'utf8'));
+              if (migration.schema_sha256) {
+                assert.equal(
+                  await computePublicSchemaFingerprint(pool),
+                  migration.schema_sha256,
+                  `${service} schema fingerprint drifted at migration ${migration.version}`,
+                );
+              }
+            }
+
+            assert.ok(
+              manifest.migrations[manifest.migrations.length - 1].schema_sha256,
+              `${service} must pin a schema fingerprint on its final migration`,
+            );
           } finally {
             await pool.end();
           }

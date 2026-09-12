@@ -253,6 +253,19 @@ export enum TradeStatus {
   CLOSED = 4,
 }
 
+/**
+ * `trades(id)` returns a zero-filled struct for any id the contract never
+ * allocated, so absence is a value rather than a revert. Enumerating an id
+ * range therefore needs an explicit predicate.
+ */
+export function isAbsentChainTrade(trade: Pick<Trade, 'buyer' | 'createdAt'>): boolean {
+  return (
+    /^0x0{40}$/i.test(trade.buyer.trim()) ||
+    Number.isNaN(trade.createdAt.getTime()) ||
+    trade.createdAt.getTime() === 0
+  );
+}
+
 export interface Trade {
   tradeId: string;
   buyer: string;

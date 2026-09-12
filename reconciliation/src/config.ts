@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
-import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
+import {
+  resolveSettlementRuntime,
+  type CoverageBoundaryPreference,
+  type SettlementRuntimeKey,
+} from '@agroasys/sdk';
 import { parsePostgresSslMode, type PostgresSslMode } from '@agroasys/shared-db';
 import { normalizeAddressOrThrow } from './utils/address';
 
@@ -10,7 +14,18 @@ export interface ReconciliationConfig {
   enabled: boolean;
   daemonIntervalMs: number;
   batchSize: number;
+  /**
+   * Per-run work budget, not a coverage cap: whatever it does not reach is
+   * reported as an uncovered tail and resumed from the persisted cursor.
+   */
   maxTradesPerRun: number;
+  coverageBoundary: CoverageBoundaryPreference;
+  coverageMaxAgeMs: number;
+  chainReadConcurrency: number;
+  /** Upper bound on ids walked by the independent indexer-side enumeration. */
+  indexerEnumerationLimit: number;
+  /** Page size for that enumeration's offset pagination. */
+  indexerEnumerationPageSize: number;
   dbHost: string;
   dbPort: number;
   dbName: string;
@@ -118,6 +133,18 @@ function assertContainerSafeIndexerUrl(url: string, name: string): void {
   );
 }
 
+function coverageBoundaryPreference(): CoverageBoundaryPreference {
+  const raw = process.env.RECONCILIATION_COVERAGE_BOUNDARY?.trim().toLowerCase();
+  if (!raw) {
+    return 'finalized';
+  }
+  assert(
+    raw === 'finalized' || raw === 'safe',
+    'RECONCILIATION_COVERAGE_BOUNDARY must be finalized or safe',
+  );
+  return raw;
+}
+
 export function loadConfig(): ReconciliationConfig {
   const notificationsEnabled = envBool('NOTIFICATIONS_ENABLED', false);
   const notificationsWebhookUrl = process.env.NOTIFICATIONS_WEBHOOK_URL;
@@ -156,6 +183,11 @@ export function loadConfig(): ReconciliationConfig {
     daemonIntervalMs: envNumber('RECONCILIATION_DAEMON_INTERVAL_MS', 60000),
     batchSize: envNumber('RECONCILIATION_BATCH_SIZE', 100),
     maxTradesPerRun: envNumber('RECONCILIATION_MAX_TRADES_PER_RUN', 1000),
+    coverageBoundary: coverageBoundaryPreference(),
+    coverageMaxAgeMs: envNumber('RECONCILIATION_COVERAGE_MAX_AGE_MS', 3600000),
+    chainReadConcurrency: envNumber('RECONCILIATION_CHAIN_READ_CONCURRENCY', 8),
+    indexerEnumerationLimit: envNumber('RECONCILIATION_INDEXER_ENUMERATION_LIMIT', 100000),
+    indexerEnumerationPageSize: envNumber('RECONCILIATION_INDEXER_ENUMERATION_PAGE_SIZE', 1000),
     dbHost: env('DB_HOST'),
     dbPort: envNumber('DB_PORT'),
     dbName: env('DB_NAME'),
@@ -191,6 +223,19 @@ export function loadConfig(): ReconciliationConfig {
   assert(config.daemonIntervalMs >= 1000, 'RECONCILIATION_DAEMON_INTERVAL_MS must be >= 1000');
   assert(config.batchSize > 0, 'RECONCILIATION_BATCH_SIZE must be > 0');
   assert(config.maxTradesPerRun > 0, 'RECONCILIATION_MAX_TRADES_PER_RUN must be > 0');
+  assert(config.coverageMaxAgeMs > 0, 'RECONCILIATION_COVERAGE_MAX_AGE_MS must be > 0');
+  assert(
+    config.chainReadConcurrency > 0 && config.chainReadConcurrency <= 64,
+    'RECONCILIATION_CHAIN_READ_CONCURRENCY must be between 1 and 64',
+  );
+  assert(
+    config.indexerEnumerationLimit > 0,
+    'RECONCILIATION_INDEXER_ENUMERATION_LIMIT must be > 0',
+  );
+  assert(
+    config.indexerEnumerationPageSize > 0 && config.indexerEnumerationPageSize <= 5000,
+    'RECONCILIATION_INDEXER_ENUMERATION_PAGE_SIZE must be between 1 and 5000',
+  );
   assert(config.notificationsCooldownMs >= 0, 'NOTIFICATIONS_COOLDOWN_MS must be >= 0');
   assert(
     config.notificationsRequestTimeoutMs >= 1000,

@@ -121,9 +121,19 @@ export class OracleSDK extends Client {
     }
   }
 
-  async getTrade(tradeId: string | bigint): Promise<Trade> {
+  /**
+   * Read a trade, optionally pinned to an exact block.
+   *
+   * A trade id that was never allocated returns the contract's zero struct
+   * rather than reverting, so callers enumerating an id range must treat a
+   * zero buyer as "absent on chain" (see `isAbsentChainTrade`).
+   */
+  async getTrade(
+    tradeId: string | bigint,
+    options?: { blockTag?: ethers.BlockTag },
+  ): Promise<Trade> {
     try {
-      const trade = await this.contract.trades(tradeId);
+      const trade = await this.contract.trades(tradeId, { blockTag: options?.blockTag });
 
       return {
         tradeId: trade.tradeId.toString(),
@@ -146,6 +156,7 @@ export class OracleSDK extends Client {
       const message = getErrorMessage(error);
       throw new ContractError(`Failed to get trade: ${message}`, {
         tradeId: tradeId.toString(),
+        blockTag: options?.blockTag === undefined ? null : String(options.blockTag),
         error: message,
       });
     }
