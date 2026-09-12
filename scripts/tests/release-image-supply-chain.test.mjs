@@ -54,3 +54,9 @@ test('supersedes candidate images without cancelling mainline releases', async (
   );
   assert.match(workflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
 });
+
+test('builds the dedicated relayer image through the same supply-chain controls', async () => {
+  const workflow = await readFile(workflowPath, 'utf8');
+  assert.match(workflow, /service: relayer\s+repository: cotsel\/relayer/s);
+  assert.match(workflow, /dockerfile: relayer\/Dockerfile/);
+});

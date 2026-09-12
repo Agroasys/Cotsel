@@ -29,6 +29,7 @@
     "gateway",
     "indexer",
     "oracle",
+    "relayer",
     "sdk",
     "shared-http",
     "shared-edge",

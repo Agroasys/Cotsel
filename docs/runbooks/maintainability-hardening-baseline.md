@@ -36,7 +36,7 @@ Out of scope:
 ## Current Repo Shape
 
 Cotsel is a service-oriented monorepo. The root `package.json` defines
-workspaces for `auth`, `contracts`, `gateway`, `indexer`, `oracle`, `sdk`,
+workspaces for `auth`, `contracts`, `gateway`, `indexer`, `oracle`, `relayer`, `sdk`,
 `shared-http`, `shared-edge`, `shared-db`, `shared-auth`, `reconciliation`,
 `notifications`, `ricardian`, and `treasury`.
 

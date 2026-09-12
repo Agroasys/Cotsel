@@ -57,6 +57,7 @@ export interface GatewayConfig {
   gaslessKmsExpectedAddress?: string;
   gaslessManagedSignerUrl?: string;
   gaslessManagedSignerApiKey?: string;
+  gaslessManagedSignerApiSecret?: string;
   gaslessManagedSignerRequestTimeoutMs?: number;
   gaslessBroadcastPaused?: boolean;
   gaslessMaxGasLimit?: bigint;

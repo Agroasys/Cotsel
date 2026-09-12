@@ -1,5 +1,5 @@
 locals {
-  gateway_environment = [
+  gateway_environment = concat([
     { name = "AWS_REGION", value = var.region },
     { name = "COTSEL_ENVIRONMENT", value = "staging" },
     { name = "DB_HOST", value = local.postgres_host },
@@ -16,6 +16,7 @@ locals {
     { name = "GATEWAY_ESCROW_ADDRESS", value = var.base_sepolia_escrow_address },
     { name = "GATEWAY_EXPLORER_BASE_URL", value = local.base_sepolia_explorer_url },
     { name = "GATEWAY_GASLESS_EXECUTION_ENABLED", value = "false" },
+    { name = "GATEWAY_GASLESS_SIGNER_CUSTODY_MODE", value = "kms" },
     { name = "GATEWAY_INDEXER_GRAPHQL_URL", value = "http://127.0.0.1:4350/graphql" },
     { name = "GATEWAY_ORACLE_BASE_URL", value = "http://oracle.cotsel-staging.internal:3001" },
     { name = "GATEWAY_RATE_LIMIT_ENABLED", value = "false" },
@@ -31,9 +32,12 @@ locals {
     { name = "GATEWAY_USDC_ADDRESS", value = var.base_sepolia_usdc_address },
     { name = "NODE_ENV", value = "production" },
     { name = "PORT", value = "3600" },
-  ]
+    ], local.relayer_kms_enabled ? [
+    { name = "GATEWAY_GASLESS_KMS_EXPECTED_ADDRESS", value = var.relayer_kms_expected_address },
+    { name = "GATEWAY_GASLESS_MANAGED_SIGNER_URL", value = "http://relayer.cotsel-staging.internal:3300" },
+  ] : [])
 
-  gateway_secrets = [
+  gateway_secrets = concat([
     { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/gateway/runtime"].arn}:password::" },
     { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/gateway/runtime"].arn}:username::" },
     { name = "GATEWAY_ORACLE_SERVICE_API_KEY", valueFrom = "${aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn}:id::" },
@@ -47,7 +51,10 @@ locals {
     { name = "GATEWAY_SETTLEMENT_SERVICE_API_KEYS_JSON", valueFrom = aws_secretsmanager_secret.platform["gateway-settlement-ingress"].arn },
     { name = "GATEWAY_TREASURY_SERVICE_API_KEY", valueFrom = "${aws_secretsmanager_secret.platform["gateway-to-treasury-auth"].arn}:id::" },
     { name = "GATEWAY_TREASURY_SERVICE_API_SECRET", valueFrom = "${aws_secretsmanager_secret.platform["gateway-to-treasury-auth"].arn}:secret::" },
-  ]
+    ], local.relayer_kms_enabled ? [
+    { name = "GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY", valueFrom = "${aws_secretsmanager_secret.platform["gateway-managed-signer"].arn}:id::" },
+    { name = "GATEWAY_GASLESS_MANAGED_SIGNER_API_SECRET", valueFrom = "${aws_secretsmanager_secret.platform["gateway-managed-signer"].arn}:secret::" },
+  ] : [])
 
   gateway_container = {
     name                   = "gateway"

@@ -168,6 +168,23 @@ variable "oracle_kms_expected_address" {
   }
 }
 
+variable "relayer_kms_expected_address" {
+  description = "Independently reviewed EVM address derived from the staging relayer KMS key. Empty keeps relayer signing inactive."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = (
+      var.relayer_kms_expected_address == "" ||
+      (
+        can(regex("^0x[0-9a-fA-F]{40}$", var.relayer_kms_expected_address)) &&
+        lower(var.relayer_kms_expected_address) != "0x0000000000000000000000000000000000000000"
+      )
+    )
+    error_message = "relayer_kms_expected_address must be empty or a non-zero EVM address."
+  }
+}
+
 variable "backend_settlement_callback_url" {
   description = "Canonical Agroasys staging callback endpoint for Cotsel execution events."
   type        = string

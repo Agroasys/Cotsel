@@ -19,7 +19,7 @@ Cotsel was initially developed to support the Agroasys platform, but it is open-
 - **Active chain truth:** Base is the only active v1 settlement target in this repo. Base Sepolia has verified pilot evidence, and Base mainnet go/no-go plus rollback control surfaces are installed. This repo does not, by itself, prove a completed Base mainnet launch unless a filled approval record and mainnet deployment evidence are attached.
 - **Control-plane posture:** Human privileged governance uses direct-sign prepare/confirm flows; legacy human queue routes fail closed and executor-backed paths are retained only for delegated or service roles.
 - **Revenue and reconciliation posture:** Treasury close, external handoff, and realization workflows are evidence-led and reconciliation-gated where documented. Cotsel records settlement and treasury-control truth, but it does not become the bank, off-ramp, or customer accounting ledger.
-- **Gasless posture:** Gasless execution is optional, capacity-bounded, and routed through gateway controls. Buyer authorization, gateway submission, relayer broadcast, chain confirmation, callback delivery, and reconciliation are distinct evidence steps.
+- **Gasless posture:** Gasless execution is optional, capacity-bounded, and routed through gateway controls. Buyer authorization, gateway submission, isolated relayer signing, gateway broadcast, chain confirmation, callback delivery, and reconciliation are distinct evidence steps.
 
 ## Who Should Read Next
 

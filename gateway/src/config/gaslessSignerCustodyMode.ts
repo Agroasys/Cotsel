@@ -14,6 +14,17 @@ interface GaslessSignerCustodyConfig {
   kmsExpectedAddress?: string;
   managedSignerUrl?: string;
   managedSignerApiKey?: string;
+  managedSignerApiSecret?: string;
+}
+
+function isSecureManagedSignerUrl(value: string): boolean {
+  if (value.startsWith('https://')) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' && url.hostname.endsWith('.internal');
+  } catch {
+    return false;
+  }
 }
 
 export function parseGaslessSignerCustodyMode(value: string | undefined): GaslessSignerCustodyMode {
@@ -41,16 +52,20 @@ export function validateGaslessSignerCustodyConfig(config: GaslessSignerCustodyC
     );
   } else if (config.mode === 'kms') {
     assert(
-      config.kmsKeyId,
-      'GATEWAY_GASLESS_KMS_KEY_ID is required when GATEWAY_GASLESS_SIGNER_CUSTODY_MODE is kms',
+      !config.kmsKeyId,
+      'GATEWAY_GASLESS_KMS_KEY_ID must not be set; only the dedicated relayer may know the KMS key ID',
     );
     assert(
       config.kmsExpectedAddress && isAddress(config.kmsExpectedAddress),
       'GATEWAY_GASLESS_KMS_EXPECTED_ADDRESS must be a valid EVM address when GATEWAY_GASLESS_SIGNER_CUSTODY_MODE is kms',
     );
     assert(
-      !config.managedSignerUrl && !config.managedSignerApiKey,
-      'KMS custody uses direct IAM authentication; managed signer URL and API key must not be set',
+      config.managedSignerUrl && isSecureManagedSignerUrl(config.managedSignerUrl),
+      'KMS custody requires an HTTPS or private .internal GATEWAY_GASLESS_MANAGED_SIGNER_URL',
+    );
+    assert(
+      Boolean(config.managedSignerApiKey && config.managedSignerApiSecret),
+      'KMS custody requires GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY and GATEWAY_GASLESS_MANAGED_SIGNER_API_SECRET',
     );
   } else {
     assert(

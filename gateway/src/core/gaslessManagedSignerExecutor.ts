@@ -98,7 +98,19 @@ export function createManagedSignerGaslessSettlementExecutor(
         'Gasless managed signer returned an invalid address',
       );
     }
-    return getAddress(signerAddress);
+    const resolvedAddress = getAddress(signerAddress);
+    if (
+      custodyMode === 'kms' &&
+      config.gaslessKmsExpectedAddress &&
+      resolvedAddress !== getAddress(config.gaslessKmsExpectedAddress)
+    ) {
+      throw new GatewayError(
+        502,
+        'UPSTREAM_UNAVAILABLE',
+        'Gasless relayer address does not match the reviewed KMS address',
+      );
+    }
+    return resolvedAddress;
   }
 
   let executorAddressPromise: Promise<string> | null = null;

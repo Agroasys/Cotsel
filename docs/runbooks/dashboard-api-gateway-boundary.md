@@ -49,7 +49,7 @@ Gasless create-trade boundary:
 - The dashboard browser must never call `/settlement/gasless-executions/create-trade` directly because that route is the service-authenticated execution ingress.
 - The gateway must validate dashboard session authority, mutation/write posture, idempotency, gasless-execution readiness, and signed payload shape before dispatch.
 - The gateway remains the trusted server boundary that calls the existing gasless execution service and sponsors the privileged on-chain submission through the configured executor.
-- Execution evidence must distinguish buyer authorization, gateway submission, relayer broadcast, chain confirmation, callback delivery, and reconciliation. A signed authorization alone is not proof of escrow funding.
+- Execution evidence must distinguish buyer authorization, gateway submission, isolated relayer signing, gateway broadcast, chain confirmation, callback delivery, and reconciliation. A signed authorization alone is not proof of escrow funding.
 
 Operations read surface:
 

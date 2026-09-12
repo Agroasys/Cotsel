@@ -241,7 +241,9 @@ flowchart TB
    EIP-3009 USDC authorizations.
 3. Agroasys persists the settlement intent and reservation, then submits the
    service-authenticated package to the Cotsel Gateway.
-4. The managed relayer broadcasts the gasless create-trade transaction.
+4. The dedicated relayer signs the bounded transaction with its isolated KMS
+   key. The Gateway verifies the returned signer and transaction, then
+   broadcasts it.
 5. Escrow starts only when the contract lock succeeds and Agroasys reconciles
    the confirmed `TradeLocked` event. Submission or browser acknowledgement is
    not settlement truth.
@@ -251,8 +253,9 @@ flowchart TB
 - Incoming USDC is discovered and reconciled by Agroasys; Cotsel is not in the
   receipt path.
 - For an outgoing direct send, Agroasys owns the intent, reservation, history,
-  ledger posting, and chain reconciliation. Cotsel validates and broadcasts
-  only the exact service-authenticated EIP-3009 authorization.
+  ledger posting, and chain reconciliation. Cotsel validates the exact
+  service-authenticated EIP-3009 authorization, obtains an isolated relayer
+  signature, verifies it, and broadcasts the bound transaction.
 - Direct transfers cannot create escrow, satisfy milestones, spend escrowed
   value, or call order-release functions.
 

@@ -81,6 +81,7 @@ env:
   ROOT: staging-platform
   STATE_BUCKET: agroasys-tfstate-655177116834
   TF_VAR_oracle_kms_expected_address: ${{ vars.COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS }}
+  TF_VAR_relayer_kms_expected_address: ${{ vars.COTSEL_STAGING_RELAYER_KMS_EXPECTED_ADDRESS }}
   TF_VERSION: 1.15.8
   OWNER_BREAK_GLASS_ACTORS: Astton
 
@@ -112,7 +113,7 @@ jobs:
       - name: Validate configuration
         run: terraform -chdir=infra/terraform/staging-platform validate -no-color
       - name: Test destructive-change policy
-        run: node infra/terraform/scripts/destructive-change-selftest.mjs && node infra/terraform/scripts/oracle-kms-isolation-selftest.mjs
+        run: node infra/terraform/scripts/destructive-change-selftest.mjs && node infra/terraform/scripts/managed-signer-isolation-selftest.mjs
 
       - name: Test saved-plan metadata validation
         run: node infra/terraform/scripts/plan-metadata-selftest.mjs

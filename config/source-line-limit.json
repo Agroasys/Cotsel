@@ -55,7 +55,6 @@
     "scripts/arch-roadmap-sync.mjs": 717,
     "scripts/base-sepolia-pilot-validation.sh": 760,
     "scripts/check-release-evidence-binding.mjs": 1055,
-    "scripts/gasless-relayer-capacity-rehearsal.mjs": 547,
     "scripts/lib/full-protocol-health-report.mjs": 538,
     "scripts/live-base-sepolia-proof.cjs": 1171,
     "scripts/runtime-gate.sh": 786,

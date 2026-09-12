@@ -2,6 +2,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {
+  ceilDiv,
+  envBigInt,
+  envBool,
+  envNumber,
+  envPositiveInteger,
+  evidencePacketPasses,
+  FAILURE_MODE_EVIDENCE_REQUIREMENTS,
+  isProtectedSignerUrl,
+  parseUrlList,
+} from './lib/gasless-capacity-policy.mjs';
 
 const DEFAULT_OUTPUT = 'reports/gasless-relayer-capacity/latest.json';
 const DEFAULT_TARGET_TX_PER_DAY = 500;
@@ -72,109 +83,6 @@ function parseArgs(argv) {
   return options;
 }
 
-function envNumber(name, fallback) {
-  const raw = process.env[name]?.trim();
-  if (!raw) {
-    return fallback;
-  }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${name} must be a positive number`);
-  }
-  return parsed;
-}
-
-function envBigInt(name, fallback) {
-  const raw = process.env[name]?.trim();
-  if (!raw) {
-    return fallback;
-  }
-  if (!/^\d+$/.test(raw)) {
-    throw new Error(`${name} must be a non-negative integer`);
-  }
-  return BigInt(raw);
-}
-
-function envBool(name, fallback) {
-  const raw = process.env[name]?.trim();
-  if (!raw) {
-    return fallback;
-  }
-  if (raw === 'true') {
-    return true;
-  }
-  if (raw === 'false') {
-    return false;
-  }
-  throw new Error(`${name} must be true or false`);
-}
-
-function envPositiveInteger(name, fallback) {
-  const value = envNumber(name, fallback);
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`${name} must be a positive integer`);
-  }
-  return value;
-}
-
-function parseUrlList(raw) {
-  return (raw || '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
-}
-
-function ceilDiv(numerator, denominator) {
-  return (numerator + denominator - 1n) / denominator;
-}
-
-const FAILURE_MODE_EVIDENCE_REQUIREMENTS = {
-  relayerOutageOrDisabled: {
-    scenario: 'relayer_outage_or_disabled',
-    requiredChecks: ['readinessCaptured', 'broadcastPausedOrDisabled', 'noUserEthRequired'],
-  },
-  fallbackUx: {
-    scenario: 'fallback_ux',
-    requiredChecks: ['fallbackPresented', 'operatorRecoveryPathCaptured', 'noUserEthRequired'],
-  },
-  operatorFailureRehearsal: {
-    scenario: 'operator_failure_rehearsal',
-    requiredChecks: ['readinessCaptured'],
-    anyChecks: [
-      'stuckQueueAlertVisible',
-      'repeatedFailureAlertVisible',
-      'droppedExecutionCaptured',
-    ],
-  },
-};
-
-function hasValidTimestamp(value) {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value));
-}
-
-function hasNonEmptyString(value) {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-function evidencePacketPasses(packet, requirement) {
-  if (!packet || typeof packet !== 'object') {
-    return false;
-  }
-  const checks = packet.checks && typeof packet.checks === 'object' ? packet.checks : {};
-  const requiredChecksPass = requirement.requiredChecks.every((key) => checks[key] === true);
-  const anyChecksPass = requirement.anyChecks
-    ? requirement.anyChecks.some((key) => checks[key] === true)
-    : true;
-  return (
-    packet.status === 'passed' &&
-    packet.scenario === requirement.scenario &&
-    hasNonEmptyString(packet.evidenceRef) &&
-    hasValidTimestamp(packet.observedAt) &&
-    requiredChecksPass &&
-    anyChecksPass
-  );
-}
-
 function buildCapacityReport(options, now = new Date()) {
   const targetTransactionsPerDay = envPositiveInteger(
     'GATEWAY_GASLESS_CAPACITY_TARGET_TX_PER_DAY',
@@ -225,6 +133,10 @@ function buildCapacityReport(options, now = new Date()) {
   );
   const managedSignerUrl = (process.env.GATEWAY_GASLESS_MANAGED_SIGNER_URL || '').trim();
   const managedSignerApiKey = (process.env.GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY || '').trim();
+  const managedSignerApiSecret = (
+    process.env.GATEWAY_GASLESS_MANAGED_SIGNER_API_SECRET || ''
+  ).trim();
+  const gatewayKmsKeyId = (process.env.GATEWAY_GASLESS_KMS_KEY_ID || '').trim();
   const rawGaslessExecutorKeyConfigured = Boolean(
     (process.env.GATEWAY_GASLESS_EXECUTOR_PRIVATE_KEY || '').trim() ||
     (process.env.GATEWAY_EXECUTOR_PRIVATE_KEY || '').trim(),
@@ -279,9 +191,9 @@ function buildCapacityReport(options, now = new Date()) {
   if (
     (signerCustodyMode === 'kms' || signerCustodyMode === 'mpc') &&
     productionLike &&
-    !managedSignerUrl.startsWith('https://')
+    !isProtectedSignerUrl(managedSignerUrl)
   ) {
-    blockers.push('production managed gasless custody requires an https managed signer URL');
+    blockers.push('production managed gasless custody requires https or a private .internal URL');
   }
   if (
     (signerCustodyMode === 'kms' || signerCustodyMode === 'mpc') &&
@@ -289,6 +201,12 @@ function buildCapacityReport(options, now = new Date()) {
     !managedSignerApiKey
   ) {
     blockers.push('production managed gasless custody requires a managed signer API key');
+  }
+  if (signerCustodyMode === 'kms' && !managedSignerApiSecret) {
+    blockers.push('KMS gasless custody requires a managed signer API secret');
+  }
+  if (signerCustodyMode === 'kms' && gatewayKmsKeyId) {
+    blockers.push('gateway must not receive the relayer KMS key ID');
   }
   if (
     lowBalanceAlertWei > 0n &&
@@ -507,6 +425,8 @@ function buildCapacityReport(options, now = new Date()) {
       signerCustodyMode,
       managedSignerConfigured: Boolean(managedSignerUrl),
       managedSignerApiKeyConfigured: Boolean(managedSignerApiKey),
+      managedSignerApiSecretConfigured: Boolean(managedSignerApiSecret),
+      gatewayKmsKeyIdConfigured: Boolean(gatewayKmsKeyId),
     },
     evidence,
     blockers,
