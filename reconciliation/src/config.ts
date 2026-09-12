@@ -26,6 +26,13 @@ export interface ReconciliationConfig {
   indexerEnumerationLimit: number;
   /** Page size for that enumeration's offset pagination. */
   indexerEnumerationPageSize: number;
+  /**
+   * How long a run's lease stays valid without a heartbeat. This is the longest
+   * a crashed run can hold its key before a successor may take it.
+   */
+  leaseTtlMs: number;
+  /** How often a running worker extends its lease. */
+  leaseHeartbeatMs: number;
   dbHost: string;
   dbPort: number;
   dbName: string;
@@ -188,6 +195,8 @@ export function loadConfig(): ReconciliationConfig {
     chainReadConcurrency: envNumber('RECONCILIATION_CHAIN_READ_CONCURRENCY', 8),
     indexerEnumerationLimit: envNumber('RECONCILIATION_INDEXER_ENUMERATION_LIMIT', 100000),
     indexerEnumerationPageSize: envNumber('RECONCILIATION_INDEXER_ENUMERATION_PAGE_SIZE', 1000),
+    leaseTtlMs: envNumber('RECONCILIATION_LEASE_TTL_MS', 300000),
+    leaseHeartbeatMs: envNumber('RECONCILIATION_LEASE_HEARTBEAT_MS', 30000),
     dbHost: env('DB_HOST'),
     dbPort: envNumber('DB_PORT'),
     dbName: env('DB_NAME'),
@@ -235,6 +244,15 @@ export function loadConfig(): ReconciliationConfig {
   assert(
     config.indexerEnumerationPageSize > 0 && config.indexerEnumerationPageSize <= 5000,
     'RECONCILIATION_INDEXER_ENUMERATION_PAGE_SIZE must be between 1 and 5000',
+  );
+  assert(config.leaseTtlMs >= 10000, 'RECONCILIATION_LEASE_TTL_MS must be >= 10000');
+  assert(config.leaseHeartbeatMs >= 1000, 'RECONCILIATION_LEASE_HEARTBEAT_MS must be >= 1000');
+  // Two beats must fit inside the TTL. At one beat per TTL a single dropped
+  // heartbeat — a slow query, a GC pause — would hand a healthy run's key to a
+  // successor while the original worker is still writing.
+  assert(
+    config.leaseHeartbeatMs * 2 <= config.leaseTtlMs,
+    'RECONCILIATION_LEASE_HEARTBEAT_MS must be at most half of RECONCILIATION_LEASE_TTL_MS',
   );
   assert(config.notificationsCooldownMs >= 0, 'NOTIFICATIONS_COOLDOWN_MS must be >= 0');
   assert(

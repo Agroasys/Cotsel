@@ -1,6 +1,6 @@
 import { finalizeRun } from '../database/queries';
 import { Logger } from '../utils/logger';
-import type { DriftSeverity, ReconcileMode, RunStats } from '../types';
+import type { DriftSeverity, ReconcileMode, RunLeaseIdentity, RunStats } from '../types';
 
 export const DEFAULT_SEVERITY_COUNTS: Record<DriftSeverity, number> = {
   CRITICAL: 0,
@@ -50,6 +50,7 @@ export function skippedStats(
  */
 export async function finalizeInconclusiveRun(input: {
   stats: RunStats;
+  lease: RunLeaseIdentity;
   reason: string;
   tailFirstSeenAt: Date | null;
   context: Record<string, unknown>;
@@ -72,6 +73,7 @@ export async function finalizeInconclusiveRun(input: {
 
   await finalizeRun({
     stats: inconclusive,
+    lease: input.lease,
     cursor: { advance: false, tailFirstSeenAt: input.tailFirstSeenAt },
   });
 

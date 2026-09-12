@@ -4,14 +4,12 @@ import { IndexerClient } from '../indexer/client';
 import { Logger } from '../utils/logger';
 import { classifyDrifts } from './classifier';
 import { CoverageAlerts } from './coverageAlerts';
-import {
-  createRun,
-  failRun,
-  finalizeRun,
-  readCoverageCursor,
-  upsertDrift,
-  upsertRunTradeScope,
-} from '../database/queries';
+import { failRun, finalizeRun, readCoverageCursor, upsertRunTradeScope } from '../database/queries';
+import { LeaseLostError, claimRun } from '../database/leases';
+import { RunLease, createLeaseOwner } from './runLease';
+import { RunAlerts } from './runAlerts';
+import { applyContainment, publishFinding, sweepAbandonedRuns } from './runControls';
+import { generateRunKey, getErrorMessage, mapWithConcurrency, sleep } from './runHelpers';
 import {
   batchTradeIds,
   checkIndexerSurplus,
@@ -31,83 +29,57 @@ import {
 import { DEFAULT_SEVERITY_COUNTS, finalizeInconclusiveRun, skippedStats } from './runOutcome';
 import { DriftFinding, ReconcileMode, RunStats } from '../types';
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function generateRunKey(mode: ReconcileMode): string {
-  if (mode === 'DAEMON') {
-    const bucket = Math.floor(Date.now() / config.daemonIntervalMs);
-    return `daemon-${bucket}`;
-  }
-  return `once-${new Date().toISOString()}`;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Bounded-concurrency map, so a wide window cannot stampede the RPC endpoint. */
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  worker: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-
-  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    for (;;) {
-      const index = cursor;
-      cursor += 1;
-      if (index >= items.length) {
-        return;
-      }
-      results[index] = await worker(items[index]);
-    }
-  });
-
-  await Promise.all(runners);
-  return results;
-}
-
 export class ReconciliationService {
   private readonly onchainClient = new OnchainClient();
   private readonly indexerClient = new IndexerClient(config.indexerGraphqlUrl);
   private readonly alerts = new CoverageAlerts();
-  private async recordFinding(
-    runId: number,
-    runKey: string,
-    finding: DriftFinding,
-    stats: RunStats,
-  ): Promise<void> {
-    await upsertDrift(runId, runKey, finding);
-    await this.alerts.criticalDrift(runKey, finding);
-
-    stats.driftCount += 1;
-    stats.severityCounts[finding.severity] += 1;
-
-    Logger.warn('Reconciliation drift detected', {
-      runKey,
-      tradeId: finding.tradeId,
-      mismatchCode: finding.mismatchCode,
-      severity: finding.severity,
-    });
-  }
-
+  private readonly runAlerts = new RunAlerts();
   async reconcileOnce(mode: ReconcileMode, runKeyOverride?: string): Promise<RunStats> {
     const runKey = runKeyOverride || generateRunKey(mode);
-    const run = await createRun(runKey, mode);
 
-    if (!run.created && run.row.status === 'COMPLETED') {
-      Logger.warn('Skipping already completed reconciliation run key', { runKey, mode });
-      return skippedStats(runKey, mode, run.row, 'run_key already completed');
+    await sweepAbandonedRuns(this.runAlerts);
+
+    const claim = await claimRun({
+      runKey,
+      mode,
+      owner: createLeaseOwner(),
+      leaseTtlMs: config.leaseTtlMs,
+    });
+
+    if (!claim.claimed) {
+      if (claim.refusal === 'ALREADY_COMPLETED') {
+        Logger.warn('Skipping already completed reconciliation run key', { runKey, mode });
+        return skippedStats(runKey, mode, claim.row, 'run_key already completed');
+      }
+
+      Logger.warn('Skipping run key held by a live lease on another worker', {
+        runKey,
+        mode,
+        leaseOwner: claim.row.lease_owner,
+        leaseExpiresAt: claim.row.lease_expires_at?.toISOString() ?? null,
+      });
+      return skippedStats(runKey, mode, claim.row, 'run_key lease held by another worker');
     }
 
-    if (!run.created && run.row.status === 'RUNNING') {
-      Logger.warn('Skipping run key currently marked RUNNING', { runKey, mode });
-      return skippedStats(runKey, mode, run.row, 'run_key currently running');
+    const { row, lease, takeoverFrom } = claim.run;
+
+    if (takeoverFrom) {
+      Logger.warn('Reclaimed an abandoned reconciliation run as its successor', {
+        runKey,
+        mode,
+        previousOwner: takeoverFrom,
+        leaseOwner: lease.owner,
+        leaseEpoch: lease.epoch,
+        takeoverCount: row.takeover_count,
+      });
     }
+
+    const runLease = new RunLease({
+      identity: lease,
+      leaseTtlMs: config.leaseTtlMs,
+      heartbeatIntervalMs: config.leaseHeartbeatMs,
+    });
+    runLease.start();
 
     const stats: RunStats = {
       runKey,
@@ -132,6 +104,7 @@ export class ReconciliationService {
       if (!anchor.usable) {
         return finalizeInconclusiveRun({
           stats,
+          lease,
           reason: anchor.reason,
           tailFirstSeenAt: cursor.tailFirstSeenAt,
           context: { stage: 'indexer-anchor' },
@@ -188,6 +161,10 @@ export class ReconciliationService {
       };
 
       for (const idBatch of batchTradeIds(windowIds, config.batchSize)) {
+        // Stop at a batch edge rather than spending the rest of the window on
+        // comparisons the finalize fence is going to refuse anyway.
+        runLease.assertHeld();
+
         const chainTrades = await mapWithConcurrency<string, ChainTradeRecord>(
           idBatch,
           config.chainReadConcurrency,
@@ -305,6 +282,7 @@ export class ReconciliationService {
       if (!snapshot.stable) {
         return finalizeInconclusiveRun({
           stats,
+          lease,
           reason: snapshot.reason ?? 'indexer snapshot unstable',
           tailFirstSeenAt: cursor.tailFirstSeenAt,
           context: {
@@ -316,11 +294,25 @@ export class ReconciliationService {
       }
 
       for (const tradeId of pendingScope) {
-        await upsertRunTradeScope(run.row.id, runKey, tradeId);
+        await upsertRunTradeScope(row.id, runKey, tradeId);
       }
       for (const finding of pendingFindings) {
-        await this.recordFinding(run.row.id, runKey, finding, stats);
+        await publishFinding({
+          alerts: this.alerts,
+          runId: row.id,
+          runKey,
+          finding,
+          stats,
+        });
       }
+
+      stats.containedTradeIds = await applyContainment({
+        alerts: this.runAlerts,
+        runKey,
+        boundary,
+        publishedFindings: pendingFindings,
+        scopedTradeIds: pendingScope,
+      });
 
       const now = new Date();
       const tailFirstSeenAt = window.uncoveredTail === 0n ? null : (cursor.tailFirstSeenAt ?? now);
@@ -372,6 +364,7 @@ export class ReconciliationService {
       // the cursor must never advance past a window whose run was not recorded.
       await finalizeRun({
         stats,
+        lease,
         cursor: cursorHeld
           ? { advance: false, tailFirstSeenAt }
           : {
@@ -419,10 +412,38 @@ export class ReconciliationService {
 
       return stats;
     } catch (error: unknown) {
+      if (error instanceof LeaseLostError) {
+        // The successor owns this key and has redone, or is redoing, the same
+        // window. Writing anything here — including a FAILED status — would
+        // describe work that is no longer this worker's to report.
+        Logger.error('Reconciliation run discarded after losing its lease', {
+          runKey,
+          mode,
+          leaseOwner: lease.owner,
+          leaseEpoch: lease.epoch,
+        });
+
+        return {
+          ...stats,
+          status: 'SKIPPED',
+          totalTrades: 0,
+          driftCount: 0,
+          severityCounts: { ...DEFAULT_SEVERITY_COUNTS },
+          skippedReason: 'lease lost to a successor',
+        };
+      }
+
       const message = getErrorMessage(error);
-      await failRun(runKey, message);
-      Logger.error('Reconciliation run failed', { runKey, mode, error: message });
+      const recorded = await failRun(lease, message);
+      Logger.error('Reconciliation run failed', {
+        runKey,
+        mode,
+        error: message,
+        statusRecorded: recorded,
+      });
       throw error;
+    } finally {
+      await runLease.release();
     }
   }
 
