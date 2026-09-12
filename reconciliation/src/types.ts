@@ -2,7 +2,12 @@ import type { Trade } from '@agroasys/sdk';
 
 export type ReconcileMode = 'ONCE' | 'DAEMON';
 
-export type ReconcileRunStatus = 'RUNNING' | 'COMPLETED' | 'FAILED' | 'SKIPPED';
+/**
+ * `ABANDONED` is terminal for the attempt, not for the run key: it marks a run
+ * whose lease expired while it was RUNNING, and it is the one status a
+ * successor is allowed to claim back into RUNNING.
+ */
+export type ReconcileRunStatus = 'RUNNING' | 'COMPLETED' | 'FAILED' | 'SKIPPED' | 'ABANDONED';
 
 export type DriftSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
@@ -100,6 +105,11 @@ export interface RunStats {
   severityCounts: Record<DriftSeverity, number>;
   status: ReconcileRunStatus;
   skippedReason?: string;
+  /**
+   * Trades this run contained under PRES-11. Present once the run reached the
+   * publish stage, empty when nothing qualified.
+   */
+  containedTradeIds?: string[];
   /** Absent only when the run was skipped before a boundary was resolved. */
   coverage?: {
     boundary: CoverageBoundary;
@@ -149,6 +159,14 @@ export interface ReconcileRunRow {
   medium_count: number;
   low_count: number;
   error_message: string | null;
+  lease_owner: string | null;
+  lease_epoch: number;
+  lease_acquired_at: Date | null;
+  lease_heartbeat_at: Date | null;
+  lease_expires_at: Date | null;
+  abandoned_at: Date | null;
+  abandoned_owner: string | null;
+  takeover_count: number;
   coverage_from_trade_id: string | null;
   coverage_to_trade_id: string | null;
   coverage_from_block: number | null;
@@ -165,4 +183,78 @@ export interface CompareInput {
   indexedTrade: IndexedTradeRecord;
   onchainTrade: Trade | null;
   onchainReadError?: string;
+}
+
+/**
+ * The fencing token for one run attempt.
+ *
+ * Every write a run makes is conditioned on this triple still matching the run
+ * row. A worker that was declared abandoned keeps its old epoch, so its writes
+ * match nothing and cannot land on top of the successor's work.
+ */
+export interface RunLeaseIdentity {
+  runKey: string;
+  owner: string;
+  epoch: number;
+}
+
+export interface ClaimedRun {
+  row: ReconcileRunRow;
+  lease: RunLeaseIdentity;
+  /** The owner this claim took over from, when it reclaimed an abandoned run. */
+  takeoverFrom: string | null;
+}
+
+/**
+ * Why a run key could not be claimed. `LEASE_HELD` means another worker holds a
+ * live lease on it — the run is progressing elsewhere, not stuck.
+ */
+export type RunClaimRefusal = 'ALREADY_COMPLETED' | 'LEASE_HELD';
+
+export type RunClaim =
+  | { claimed: true; run: ClaimedRun }
+  | { claimed: false; refusal: RunClaimRefusal; row: ReconcileRunRow };
+
+/** A run the monitor sweep found past its lease expiry and marked abandoned. */
+export interface AbandonedRunRecord {
+  runKey: string;
+  mode: ReconcileMode;
+  owner: string | null;
+  epoch: number;
+  startedAt: Date;
+  leaseExpiresAt: Date | null;
+  lastHeartbeatAt: Date | null;
+  takeoverCount: number;
+}
+
+export type LeaseEvent = 'ACQUIRED' | 'RECLAIMED' | 'ABANDONED' | 'RELEASED' | 'LOST';
+
+/**
+ * Containment lifecycle for one trade.
+ *
+ * `CONTAINED` blocks the trade. A fresh clean reconciliation moves it to
+ * `RECONCILED_PENDING_APPROVAL` — still blocked, because a clean read is
+ * evidence, not authority. Only a recorded quorum-governed approval reaches
+ * `RELEASED`.
+ */
+export type ContainmentState = 'CONTAINED' | 'RECONCILED_PENDING_APPROVAL' | 'RELEASED';
+
+export interface TradeContainmentRow {
+  id: number;
+  trade_id: string;
+  incident_reference: string;
+  state: ContainmentState;
+  opened_run_key: string;
+  opened_at: Date;
+  qualifying_codes: string[];
+  evidence: Record<string, unknown>;
+  observation_count: number;
+  last_observed_run_key: string | null;
+  last_observed_at: Date | null;
+  cleared_run_key: string | null;
+  cleared_at: Date | null;
+  approval_reference: string | null;
+  approved_at: Date | null;
+  released_at: Date | null;
+  updated_at: Date;
 }

@@ -15,6 +15,13 @@
       "file": "002_chain_coverage.sql",
       "sha256": "a2dc2168639e1d3d19caa2c6c2bdf97fbf4e53ba15b18ca132a337a07b9797da",
       "schema_sha256": "bba3751b13c7f1a142f081bf0c71c0c0c64a15d3a438bf3ee28657f59e953bf0"
+    },
+    {
+      "version": "202609120001",
+      "name": "run_leases",
+      "file": "003_run_leases.sql",
+      "sha256": "181c5baef0ad2f8fce2764ebccf1a0c99da2df6d8ceaeaa39ea8fa091c5630af",
+      "schema_sha256": "347a1211422080541107b06eae50cc7043bc9b70cf7c698f0b600b8df3df21cd"
     }
   ]
 }

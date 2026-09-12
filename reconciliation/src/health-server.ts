@@ -17,6 +17,32 @@ interface LastRunRow {
   error_message: string | null;
 }
 
+/**
+ * Counts an operator needs to see without opening a psql session: work that is
+ * stuck, and trades that are blocked.
+ *
+ * Neither count changes the readiness verdict. The service is ready when its
+ * dependencies answer; an abandoned run or a contained trade is a condition in
+ * the data for an owner to act on, not a reason to take this process out of
+ * rotation.
+ */
+async function queryControlCounts(): Promise<{
+  abandonedRuns: number;
+  blockingContainments: number;
+}> {
+  const result = await pool.query<{ abandoned_runs: string; blocking_containments: string }>(`
+    SELECT
+      (SELECT COUNT(*) FROM reconcile_runs WHERE status = 'ABANDONED') AS abandoned_runs,
+      (SELECT COUNT(*) FROM reconcile_trade_containments WHERE state <> 'RELEASED')
+        AS blocking_containments
+  `);
+
+  return {
+    abandonedRuns: Number(result.rows[0].abandoned_runs),
+    blockingContainments: Number(result.rows[0].blocking_containments),
+  };
+}
+
 async function queryLastRun(): Promise<LastRunRow | null> {
   const client = await pool.connect();
   try {
@@ -62,11 +88,13 @@ export function startHealthServer(): http.Server {
         try {
           await testConnection();
           const lastRun = await queryLastRun();
+          const controls = await queryControlCounts();
           json(res, 200, {
             success: true,
             service: 'reconciliation',
             ready: true,
             lastRun,
+            ...controls,
             timestamp,
           });
         } catch (error) {

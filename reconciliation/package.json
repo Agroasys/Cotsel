@@ -8,7 +8,7 @@
     "build:notifications": "pnpm --dir ../notifications run build",
     "build:deps": "pnpm run build:sdk && pnpm run build:notifications",
     "build": "tsc && npm run copy-files",
-    "copy-files": "mkdir -p dist/database && cp src/database/schema.sql src/database/002_chain_coverage.sql src/database/migrations.json dist/database/",
+    "copy-files": "mkdir -p dist/database && cp src/database/schema.sql src/database/002_chain_coverage.sql src/database/003_run_leases.sql src/database/migrations.json dist/database/",
     "prebuild": "pnpm run build:deps",
     "lint": "eslint --max-warnings=0 .",
     "pretest": "pnpm run build:deps",
@@ -18,6 +18,7 @@
     "reconcile:once": "ts-node src/cli.ts once",
     "reconcile:daemon": "ts-node src/cli.ts daemon",
     "reconcile:report": "ts-node src/report-cli.ts",
+    "reconcile:containment": "ts-node src/containment-cli.ts",
     "healthcheck": "node dist/healthcheck.js"
   },
   "dependencies": {

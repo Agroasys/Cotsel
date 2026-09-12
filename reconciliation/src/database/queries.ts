@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { pool } from './connection';
-import type { DriftFinding, ReconcileMode, ReconcileRunRow, RunStats } from '../types';
+import { assertLeaseHeld, releaseLease } from './leases';
+import type { DriftFinding, RunLeaseIdentity, RunStats } from '../types';
 
 /** Either the pool or a client bound to an open transaction. */
 type Executor = Pool | PoolClient;
@@ -101,30 +102,6 @@ export async function recordCoverageTailSighting(
         updated_at = NOW()`,
     [input.scope ?? COVERAGE_CURSOR_SCOPE, input.tailFirstSeenAt],
   );
-}
-
-export async function createRun(
-  runKey: string,
-  mode: ReconcileMode,
-): Promise<{ row: ReconcileRunRow; created: boolean }> {
-  const insertResult = await pool.query<ReconcileRunRow>(
-    `INSERT INTO reconcile_runs (run_key, mode, status)
-     VALUES ($1, $2, 'RUNNING')
-     ON CONFLICT (run_key) DO NOTHING
-     RETURNING *`,
-    [runKey, mode],
-  );
-
-  if (insertResult.rows[0]) {
-    return { row: insertResult.rows[0], created: true };
-  }
-
-  const existing = await pool.query<ReconcileRunRow>(
-    'SELECT * FROM reconcile_runs WHERE run_key = $1',
-    [runKey],
-  );
-
-  return { row: existing.rows[0], created: false };
 }
 
 export async function upsertDrift(
@@ -241,22 +218,36 @@ export async function completeRun(stats: RunStats, executor: Executor = pool): P
  * skipped behind a run marked failed. One transaction makes the cursor move
  * exactly when, and only when, its run is recorded as complete.
  */
-export async function finalizeRun(input: {
-  stats: RunStats;
-  cursor:
-    | {
-        advance: true;
-        lastTradeId: bigint;
-        boundaryBlockNumber: number;
-        boundaryBlockHash: string;
-        tailFirstSeenAt: Date | null;
-      }
-    | { advance: false; tailFirstSeenAt: Date | null };
-}): Promise<void> {
-  const client = await pool.connect();
+export async function finalizeRun(
+  input: {
+    stats: RunStats;
+    /**
+     * The lease this run has been working under. Checked under `FOR UPDATE` as
+     * the first statement of the transaction, so a run that was declared
+     * abandoned — and whose window a successor may already have redone — cannot
+     * publish its findings or move the cursor on top of that successor.
+     */
+    lease: RunLeaseIdentity;
+    cursor:
+      | {
+          advance: true;
+          lastTradeId: bigint;
+          boundaryBlockNumber: number;
+          boundaryBlockHash: string;
+          tailFirstSeenAt: Date | null;
+        }
+      | { advance: false; tailFirstSeenAt: Date | null };
+  },
+  db: Pool = pool,
+): Promise<void> {
+  const client = await db.connect();
   try {
     await client.query('BEGIN');
+    await assertLeaseHeld(client, input.lease);
     await completeRun(input.stats, client);
+    // The run is terminal, so the key is free immediately rather than after a
+    // TTL. This rides the same transaction: a rolled-back run keeps its lease.
+    await releaseLease(input.lease, client);
 
     if (input.cursor.advance) {
       await advanceCoverageCursor(
@@ -281,13 +272,30 @@ export async function finalizeRun(input: {
   }
 }
 
-export async function failRun(runKey: string, errorMessage: string): Promise<void> {
-  await pool.query(
+/**
+ * Record a run that threw.
+ *
+ * Fenced on the lease for the same reason `finalizeRun` is: a displaced worker
+ * failing late must not stamp FAILED over a successor that is mid-run, or over
+ * a run the successor already completed.
+ */
+export async function failRun(
+  lease: RunLeaseIdentity,
+  errorMessage: string,
+  executor: Executor = pool,
+): Promise<boolean> {
+  const result = await executor.query(
     `UPDATE reconcile_runs
      SET status = 'FAILED',
          completed_at = NOW(),
-         error_message = $2
-     WHERE run_key = $1`,
-    [runKey, errorMessage],
+         error_message = $4,
+         lease_owner = NULL,
+         lease_expires_at = NULL
+     WHERE run_key = $1
+       AND lease_owner = $2
+       AND lease_epoch = $3`,
+    [lease.runKey, lease.owner, lease.epoch, errorMessage],
   );
+
+  return result.rowCount === 1;
 }
