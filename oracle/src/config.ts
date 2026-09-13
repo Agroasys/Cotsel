@@ -225,10 +225,8 @@ export function loadConfig(): OracleConfig {
 
       // reconciliation db (read-only containment gate)
       //
-      // Connects as reconciliation's own runtime role, which is how every
-      // cross-service read in this repo is done: the reconcile tables are
-      // behind RLS keyed on the service name, so a reader has to present that
-      // service's identity. The guard issues SELECT only.
+      // The dedicated reader presents reconciliation's service identity for
+      // RLS, but has only SELECT permission on the containment tables.
       reconciliationDbName,
       reconciliationDbHost: optionalEnv('RECONCILIATION_DB_HOST') ?? validateEnv('DB_HOST'),
       reconciliationDbPort: validateEnvNumber(

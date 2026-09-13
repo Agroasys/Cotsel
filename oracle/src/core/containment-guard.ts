@@ -5,9 +5,9 @@ import { TradeContainedError, getErrorMessage } from '../utils/errors';
 import type { OracleConfig } from '../types';
 
 /**
- * The reconcile tables sit behind row-level security keyed on the service name,
- * so a cross-service reader presents that service's identity. This mirrors how
- * reconciliation reads the treasury database.
+ * The reconcile tables sit behind row-level security keyed on the service name.
+ * The dedicated reader presents reconciliation's identity without receiving
+ * reconciliation's write capability.
  */
 const RECONCILIATION_SERVICE_NAME = 'reconciliation';
 
