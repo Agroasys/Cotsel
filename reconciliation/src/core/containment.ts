@@ -74,6 +74,34 @@ export function qualifyDiscrepancies(findings: DriftFinding[]): QualifiedDiscrep
 }
 
 /**
+ * The trades this run can actually vouch for.
+ *
+ * Clearing a containment needs positive evidence that the divergence is gone,
+ * and only a trade that was compared *and* came back with nothing wrong is that
+ * evidence. Merely appearing in a run's scope is not: a trade whose chain read
+ * failed, or whose projection was missing, is in scope precisely because the
+ * run could not conclude anything about it, and an inconclusive read must never
+ * look like a clean one. The filter is every finding, not only the qualifying
+ * ones — a status or timestamp mismatch is still a run that did not come back
+ * clean on that trade.
+ */
+export function cleanlyReconciledTradeIds(input: {
+  comparedTradeIds: Iterable<string>;
+  findings: DriftFinding[];
+}): Set<string> {
+  const withFindings = new Set(input.findings.map((finding) => finding.tradeId));
+  const clean = new Set<string>();
+
+  for (const tradeId of input.comparedTradeIds) {
+    if (!withFindings.has(tradeId)) {
+      clean.add(tradeId);
+    }
+  }
+
+  return clean;
+}
+
+/**
  * A short, quotable incident reference an operator can carry into the pause
  * request, the runbook, and the governed approval that eventually clears it.
  *

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   QUALIFYING_DISCREPANCY_CODES,
   buildContainmentEvidence,
+  cleanlyReconciledTradeIds,
   generateIncidentReference,
   isQualifyingDiscrepancy,
   qualifyDiscrepancies,
@@ -137,4 +138,34 @@ test('incident evidence preserves the findings and the block they were read at',
       },
     ],
   });
+});
+
+test('only a successful comparison with no findings clears a trade', () => {
+  const clean = cleanlyReconciledTradeIds({
+    comparedTradeIds: ['7', '8', '9'],
+    findings: [finding('8', 'AMOUNT_MISMATCH'), finding('9', 'STATUS_MISMATCH', 'HIGH')],
+  });
+
+  assert.deepEqual([...clean].sort(), ['7']);
+});
+
+test('an inconclusive chain read is not a clean reconciliation', () => {
+  // The gap this closes: ONCHAIN_READ_ERROR does not qualify for containment,
+  // so a contained trade whose chain read failed used to reach the clearance
+  // path on the strength of being in the run's scope. A read that failed proves
+  // nothing about the trade in either direction.
+  const clean = cleanlyReconciledTradeIds({
+    comparedTradeIds: ['7'],
+    findings: [finding('7', 'ONCHAIN_READ_ERROR', 'HIGH')],
+  });
+
+  assert.deepEqual([...clean], []);
+});
+
+test('a trade the run never compared cannot clear itself', () => {
+  // In scope but never successfully compared — a missing projection, say. The
+  // run has nothing to say about it, so it says nothing.
+  const clean = cleanlyReconciledTradeIds({ comparedTradeIds: [], findings: [] });
+
+  assert.deepEqual([...clean], []);
 });

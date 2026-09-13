@@ -2,173 +2,44 @@
 // which asserts a complete configuration before any test body runs.
 import './helpers/reconciliationEnv';
 import assert from 'node:assert/strict';
-import path from 'node:path';
-import test, { type TestContext } from 'node:test';
-import { Pool } from 'pg';
-import { assertMigrationHistory, runVersionedMigrations } from '@agroasys/shared-db/migrate';
+import test from 'node:test';
+import { assertMigrationHistory } from '@agroasys/shared-db/migrate';
 import {
   LeaseLostError,
   appendLeaseEvent,
   assertLeaseHeld,
-  claimRun,
   heartbeatLease,
   markAbandonedRuns,
   releaseLease,
 } from '../database/leases';
 import { failRun, finalizeRun } from '../database/queries';
 import {
-  getContainment,
-  listBlockingContainments,
-  openContainment,
-  recordCleanReconciliation,
-  releaseContainment,
-} from '../database/containments';
-import { DEFAULT_SEVERITY_COUNTS } from '../core/runOutcome';
-import type { ClaimedRun, ReconcileRunRow, RunClaim, RunLeaseIdentity, RunStats } from '../types';
-
-// postgres-test-support is untyped CommonJS test tooling, not part of the
-// shared-db public type surface.
-/* eslint-disable @typescript-eslint/no-require-imports */
-const {
+  TTL_MS,
+  type AdminPool,
+  claim,
+  claimOrThrow,
   createAdminPool,
   dockerAvailable,
+  expireLease,
+  leaseEvents,
+  readRun,
+  RUNTIME_ROLE,
+  MANIFEST_PATH,
+  scenarioRunner,
+  stats,
   withPostgresContainer,
-} = require('../../../shared-db/postgres-test-support');
-/* eslint-enable @typescript-eslint/no-require-imports */
-
-const MANIFEST_PATH = path.resolve(__dirname, '..', 'database', 'migrations.json');
-const RUNTIME_ROLE = 'cotsel_reconciliation_runtime';
-const TTL_MS = 60_000;
-
-interface AdminPool {
-  query(text: string, values?: unknown[]): Promise<unknown>;
-  end(): Promise<void>;
-}
-
-function servicePool(port: number, database: string): Pool {
-  return new Pool({
-    host: '127.0.0.1',
-    port,
-    database,
-    user: 'postgres',
-    password: 'postgres',
-    max: 8,
-    // RLS on every reconcile table keys off this setting.
-    options: `-c app.service_name=reconciliation -c app.runtime_db_user=${RUNTIME_ROLE}`,
-  });
-}
-
-/**
- * Runs each scenario against a freshly migrated database inside one shared
- * container.
- *
- * A container per scenario would mean nearly thirty Postgres starts for this
- * file alone, which dominates the suite's runtime and its Docker footprint. A
- * database per scenario gives the same isolation for the cost of a CREATE.
- */
-function scenarioRunner(
-  t: TestContext,
-  port: number,
-  admin: AdminPool,
-): (name: string, fn: (pool: Pool) => Promise<void>) => Promise<void> {
-  let sequence = 0;
-
-  return async (name, fn) => {
-    sequence += 1;
-    const database = `cotsel_reconciliation_leases_${sequence}`;
-
-    await t.test(name, async () => {
-      await admin.query(`CREATE DATABASE ${database}`);
-      const pool = servicePool(port, database);
-      try {
-        await runVersionedMigrations({
-          pool,
-          serviceName: 'reconciliation',
-          manifestPath: MANIFEST_PATH,
-          runtimeDbUser: RUNTIME_ROLE,
-        });
-        await fn(pool);
-      } finally {
-        await pool.end();
-      }
-    });
-  };
-}
-
-/** Age a lease past its expiry without making the test wait out a TTL. */
-async function expireLease(pool: Pool, runKey: string): Promise<void> {
-  await pool.query(
-    `UPDATE reconcile_runs SET lease_expires_at = NOW() - INTERVAL '1 second' WHERE run_key = $1`,
-    [runKey],
-  );
-}
-
-async function readRun(pool: Pool, runKey: string): Promise<ReconcileRunRow> {
-  const result = await pool.query<ReconcileRunRow>(
-    'SELECT * FROM reconcile_runs WHERE run_key = $1',
-    [runKey],
-  );
-  return result.rows[0];
-}
-
-async function leaseEvents(pool: Pool, runKey: string): Promise<string[]> {
-  const result = await pool.query<{ event: string }>(
-    'SELECT event FROM reconcile_run_lease_events WHERE run_key = $1 ORDER BY id',
-    [runKey],
-  );
-  return result.rows.map((row) => row.event);
-}
-
-function stats(runKey: string, status: RunStats['status'] = 'COMPLETED'): RunStats {
-  return {
-    runKey,
-    mode: 'DAEMON',
-    status,
-    totalTrades: 3,
-    driftCount: 0,
-    severityCounts: { ...DEFAULT_SEVERITY_COUNTS },
-  };
-}
-
-function claim(pool: Pool, owner: string, runKey = 'daemon-1'): Promise<RunClaim> {
-  return claimRun({ runKey, mode: 'DAEMON', owner, leaseTtlMs: TTL_MS }, pool);
-}
-
-/** Claim and unwrap, for the many scenarios where the claim must succeed. */
-async function claimOrThrow(pool: Pool, owner: string, runKey = 'daemon-1'): Promise<ClaimedRun> {
-  const result = await claim(pool, owner, runKey);
-  if (!result.claimed) {
-    throw new Error(`expected ${owner} to claim ${runKey}, refused with ${result.refusal}`);
-  }
-  return result.run;
-}
-
-function openIncident(
-  pool: Pool,
-  runKey = 'daemon-1',
-  codes = ['AMOUNT_MISMATCH'],
-): Promise<{ row: import('../types').TradeContainmentRow; opened: boolean }> {
-  return openContainment(
-    {
-      tradeId: '7',
-      incidentReference: `RECON-20260912-${runKey.replace(/[^0-9a-z]/giu, '').toUpperCase()}`,
-      runKey,
-      qualifyingCodes: codes,
-      evidence: { runKey, boundaryBlock: 10 },
-    },
-    pool,
-  );
-}
+} from './helpers/reconciliationPostgres';
+import type { RunLeaseIdentity } from '../types';
 
 test(
-  'reconciliation run leases and scoped containment',
+  'reconciliation run leases (H-17)',
   { timeout: 300_000, skip: !dockerAvailable },
   async (t) => {
     await withPostgresContainer(async ({ port }: { port: number }) => {
       const admin: AdminPool = await createAdminPool(port);
       try {
         await admin.query(`CREATE ROLE ${RUNTIME_ROLE} NOLOGIN`);
-        const scenario = scenarioRunner(t, port, admin);
+        const scenario = scenarioRunner(t, port, admin, 'leases');
 
         await scenario('the migration chain applies and matches its fingerprints', async (pool) => {
           await assertMigrationHistory({
@@ -479,6 +350,59 @@ test(
           );
         });
 
+        await scenario('an expired lease cannot be beaten back to life', async (pool) => {
+          // The window this closes: the lease has lapsed but the sweeper has not
+          // run yet, so the row still names this owner and epoch. A worker back
+          // from a long stall must find its lease gone, not renewable — by now
+          // the key is open to any successor.
+          const run = await claimOrThrow(pool, 'worker-a');
+          await expireLease(pool, 'daemon-1');
+
+          assert.equal(await heartbeatLease(run.lease, TTL_MS, pool), false);
+
+          const stillExpired = await readRun(pool, 'daemon-1');
+          assert.equal(stillExpired.status, 'RUNNING');
+          assert.ok((stillExpired.lease_expires_at as Date) <= new Date());
+        });
+
+        await scenario('an expired lease fails the finalize fence', async (pool) => {
+          const run = await claimOrThrow(pool, 'worker-a');
+          await expireLease(pool, 'daemon-1');
+
+          const client = await pool.connect();
+          try {
+            await client.query('BEGIN');
+            await assert.rejects(assertLeaseHeld(client, run.lease), LeaseLostError);
+            await client.query('ROLLBACK');
+          } finally {
+            client.release();
+          }
+
+          await assert.rejects(
+            finalizeRun(
+              {
+                stats: stats('daemon-1'),
+                lease: run.lease,
+                cursor: { advance: false, tailFirstSeenAt: null },
+              },
+              pool,
+            ),
+            LeaseLostError,
+          );
+          assert.equal((await readRun(pool, 'daemon-1')).status, 'RUNNING');
+        });
+
+        await scenario('an expired lease cannot stamp FAILED over its own key', async (pool) => {
+          // The row stays RUNNING so the sweeper records what actually happened
+          // — abandoned — rather than a failure reported by a worker that had
+          // already lost the key.
+          const run = await claimOrThrow(pool, 'worker-a');
+          await expireLease(pool, 'daemon-1');
+
+          assert.equal(await failRun(run.lease, 'boom', pool), false);
+          assert.equal((await readRun(pool, 'daemon-1')).status, 'RUNNING');
+        });
+
         await scenario('a held lease passes the finalize fence', async (pool) => {
           const run = await claimOrThrow(pool, 'worker-a');
 
@@ -526,106 +450,6 @@ test(
             ['daemon-1'],
           );
           assert.deepEqual(events.rows[0].detail, { reason: 'heartbeat rejected' });
-        });
-
-        await scenario('a qualified discrepancy contains only the affected trade', async (pool) => {
-          const { row, opened } = await openIncident(pool);
-
-          assert.equal(opened, true);
-          assert.equal(row.state, 'CONTAINED');
-          assert.equal(row.observation_count, 1);
-          assert.deepEqual(row.qualifying_codes, ['AMOUNT_MISMATCH']);
-
-          assert.deepEqual(
-            (await listBlockingContainments(pool)).map((entry) => entry.trade_id),
-            ['7'],
-          );
-        });
-
-        await scenario('a repeat sighting folds into the standing incident', async (pool) => {
-          const first = await openIncident(pool, 'daemon-1');
-          const second = await openIncident(pool, 'daemon-2', ['HASH_MISMATCH']);
-
-          assert.equal(second.opened, false);
-          // An operator quoting the original reference must keep reaching the
-          // same incident.
-          assert.equal(second.row.incident_reference, first.row.incident_reference);
-          assert.equal(second.row.observation_count, 2);
-          assert.deepEqual(second.row.qualifying_codes, ['AMOUNT_MISMATCH', 'HASH_MISMATCH']);
-          assert.equal(second.row.opened_run_key, 'daemon-1');
-          assert.equal(second.row.last_observed_run_key, 'daemon-2');
-          assert.equal((await listBlockingContainments(pool)).length, 1);
-        });
-
-        await scenario('the run that opened an incident cannot clear it', async (pool) => {
-          await openIncident(pool, 'daemon-1');
-
-          assert.equal(
-            await recordCleanReconciliation({ tradeId: '7', runKey: 'daemon-1' }, pool),
-            null,
-          );
-          assert.equal((await getContainment('7', pool))?.state, 'CONTAINED');
-        });
-
-        await scenario('a clean reconciliation does not release a trade', async (pool) => {
-          await openIncident(pool, 'daemon-1');
-
-          const cleared = await recordCleanReconciliation(
-            { tradeId: '7', runKey: 'daemon-2' },
-            pool,
-          );
-          assert.equal(cleared?.state, 'RECONCILED_PENDING_APPROVAL');
-          assert.equal(cleared?.cleared_run_key, 'daemon-2');
-
-          // Still blocked: evidence is not authority.
-          assert.equal((await listBlockingContainments(pool)).length, 1);
-        });
-
-        await scenario('release needs a fresh clean run and a governed approval', async (pool) => {
-          await openIncident(pool, 'daemon-1');
-
-          // Approval alone, while the trade is still diverging, releases nothing.
-          assert.equal(
-            await releaseContainment({ tradeId: '7', approvalReference: 'GOV-1' }, pool),
-            null,
-          );
-
-          await recordCleanReconciliation({ tradeId: '7', runKey: 'daemon-2' }, pool);
-
-          const released = await releaseContainment(
-            { tradeId: '7', approvalReference: 'GOV-1' },
-            pool,
-          );
-          assert.equal(released?.state, 'RELEASED');
-          assert.equal(released?.approval_reference, 'GOV-1');
-          assert.deepEqual(await listBlockingContainments(pool), []);
-        });
-
-        await scenario('a returning divergence re-contains a trade', async (pool) => {
-          await openIncident(pool, 'daemon-1');
-          await recordCleanReconciliation({ tradeId: '7', runKey: 'daemon-2' }, pool);
-
-          const again = await openIncident(pool, 'daemon-3');
-
-          assert.equal(again.row.state, 'CONTAINED');
-          // The clearance evidence is dropped, so a pending approval cannot be
-          // spent on a divergence that came back.
-          assert.equal(again.row.cleared_run_key, null);
-          assert.equal(again.row.cleared_at, null);
-          assert.equal(
-            await releaseContainment({ tradeId: '7', approvalReference: 'GOV-1' }, pool),
-            null,
-          );
-        });
-
-        await scenario('the containment state machine rejects an unknown state', async (pool) => {
-          await assert.rejects(
-            pool.query(
-              `INSERT INTO reconcile_trade_containments (trade_id, incident_reference, state, opened_run_key)
-               VALUES ('7', 'RECON-1', 'RESUMED', 'daemon-1')`,
-            ),
-            /ck_reconcile_trade_containments_state/u,
-          );
         });
       } finally {
         await admin.end();

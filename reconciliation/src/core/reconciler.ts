@@ -1,14 +1,16 @@
 import { config } from '../config';
 import { OnchainClient } from '../blockchain/client';
+import { EscrowGovernanceReader } from '../blockchain/escrowGovernance';
 import { IndexerClient } from '../indexer/client';
 import { Logger } from '../utils/logger';
 import { classifyDrifts } from './classifier';
 import { CoverageAlerts } from './coverageAlerts';
-import { failRun, finalizeRun, readCoverageCursor, upsertRunTradeScope } from '../database/queries';
+import { failRun, finalizeRun, readCoverageCursor } from '../database/queries';
 import { LeaseLostError, claimRun } from '../database/leases';
 import { RunLease, createLeaseOwner } from './runLease';
 import { RunAlerts } from './runAlerts';
-import { applyContainment, publishFinding, sweepAbandonedRuns } from './runControls';
+import { dispatchPendingAlerts } from './alertDispatch';
+import { publishRunOutcome, resolveContainmentDecisions, sweepAbandonedRuns } from './runControls';
 import { generateRunKey, getErrorMessage, mapWithConcurrency, sleep } from './runHelpers';
 import {
   batchTradeIds,
@@ -31,6 +33,7 @@ import { DriftFinding, ReconcileMode, RunStats } from '../types';
 
 export class ReconciliationService {
   private readonly onchainClient = new OnchainClient();
+  private readonly escrowGovernance = new EscrowGovernanceReader();
   private readonly indexerClient = new IndexerClient(config.indexerGraphqlUrl);
   private readonly alerts = new CoverageAlerts();
   private readonly runAlerts = new RunAlerts();
@@ -153,6 +156,11 @@ export class ReconciliationService {
       // drift at all.
       const pendingFindings: DriftFinding[] = [];
       const pendingScope: string[] = [];
+      // Trades whose chain read *and* indexer record both came back, so this run
+      // is in a position to say something about them either way. Being in scope
+      // is not the same thing: a trade is in scope precisely because it was
+      // looked at, including when the look failed.
+      const comparedTradeIds: string[] = [];
       const record = (finding: DriftFinding): void => {
         pendingFindings.push(finding);
         if (holdsCursor(finding.mismatchCode)) {
@@ -197,6 +205,9 @@ export class ReconciliationService {
         for (const pair of comparison.paired) {
           stats.totalTrades += 1;
           pendingScope.push(pair.indexed.tradeId);
+          if (!pair.readError && pair.onchain) {
+            comparedTradeIds.push(pair.indexed.tradeId);
+          }
 
           for (const finding of classifyDrifts({
             indexedTrade: pair.indexed,
@@ -293,27 +304,6 @@ export class ReconciliationService {
         });
       }
 
-      for (const tradeId of pendingScope) {
-        await upsertRunTradeScope(row.id, runKey, tradeId);
-      }
-      for (const finding of pendingFindings) {
-        await publishFinding({
-          alerts: this.alerts,
-          runId: row.id,
-          runKey,
-          finding,
-          stats,
-        });
-      }
-
-      stats.containedTradeIds = await applyContainment({
-        alerts: this.runAlerts,
-        runKey,
-        boundary,
-        publishedFindings: pendingFindings,
-        scopedTradeIds: pendingScope,
-      });
-
       const now = new Date();
       const tailFirstSeenAt = window.uncoveredTail === 0n ? null : (cursor.tailFirstSeenAt ?? now);
       const sla = evaluateCoverageSla({
@@ -360,11 +350,40 @@ export class ReconciliationService {
         indexerProcessedBlock: boundary.indexerProcessedBlock,
       };
 
-      // The run's complete-range accounting and the cursor move commit together:
-      // the cursor must never advance past a window whose run was not recorded.
+      // Containment decisions are settled from this run's own comparisons
+      // before the transaction opens; nothing is written until the fence has
+      // passed.
+      const containment = await resolveContainmentDecisions({
+        reader: this.escrowGovernance,
+        findings: pendingFindings,
+        comparedTradeIds,
+        boundaryBlock: boundary.blockNumber,
+      });
+
+      // Everything this run has to say lands in one fenced transaction: the
+      // findings, the trade scope, the containments they open, the alerts they
+      // owe, the run's own accounting, and the cursor move. A worker displaced
+      // after its last batch publishes none of it — previously the fence sat
+      // only in front of the cursor, so stale evidence and a stale containment
+      // could already be committed by the time the run was refused.
       await finalizeRun({
         stats,
         lease,
+        publish: (client) =>
+          publishRunOutcome(
+            {
+              runId: row.id,
+              runKey,
+              stats,
+              boundary,
+              window,
+              sla,
+              scopedTradeIds: pendingScope,
+              findings: pendingFindings,
+              ...containment,
+            },
+            client,
+          ),
         cursor: cursorHeld
           ? { advance: false, tailFirstSeenAt }
           : {
@@ -382,10 +401,6 @@ export class ReconciliationService {
           reasons: hold.reasons,
           heldAtTradeId: cursor.lastTradeId.toString(),
         });
-      }
-
-      if (sla.breached && sla.reason) {
-        await this.alerts.coverageBacklog(runKey, sla.reason, window.uncoveredTail, boundary);
       }
 
       Logger.info('Reconciliation run completed', {
@@ -444,6 +459,13 @@ export class ReconciliationService {
       throw error;
     } finally {
       await runLease.release();
+      // Dispatched from committed state, on every exit path: an outbox row left
+      // behind by a worker that died between COMMIT and delivery is still owed
+      // to an operator, and this is the next run that can pay it.
+      await dispatchPendingAlerts({
+        coverageAlerts: this.alerts,
+        runAlerts: this.runAlerts,
+      });
     }
   }
 

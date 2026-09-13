@@ -14,6 +14,7 @@ export const NOTIFICATION_TEMPLATE_VERSIONS: Record<string, string> = {
   RECONCILIATION_COVERAGE_BACKLOG: 'reconciliation-coverage-backlog-v1',
   RECONCILIATION_RUN_ABANDONED: 'reconciliation-run-abandoned-v1',
   RECONCILIATION_TRADE_CONTAINED: 'reconciliation-trade-contained-v1',
+  RECONCILIATION_TRADE_PAUSE_UNCONFIRMED: 'reconciliation-trade-pause-unconfirmed-v1',
 };
 
 export interface NotificationEvent {

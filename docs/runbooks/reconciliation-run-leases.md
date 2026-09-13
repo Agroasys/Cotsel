@@ -5,7 +5,7 @@ discrepancy is contained to the one trade it affects.
 
 - **Owner:** Reconciliation and Platform owners
 - **Traceability:** WP-3, findings H-17 and PRES-11 ([Agroasys/Cotsel#654](https://github.com/Agroasys/Cotsel/issues/654))
-- **Alerts:** `RECONCILIATION_RUN_ABANDONED`, `RECONCILIATION_TRADE_CONTAINED` (both critical, pager route)
+- **Alerts:** `RECONCILIATION_RUN_ABANDONED`, `RECONCILIATION_TRADE_CONTAINED`, `RECONCILIATION_TRADE_PAUSE_UNCONFIRMED` (all critical, pager route)
 
 ## Part 1 — Run leases (H-17)
 
@@ -30,18 +30,27 @@ Every run holds a **lease** on its row: an owner, an epoch, and an expiry.
    lease, so **exactly one successor wins**. Each claim bumps `lease_epoch`.
 2. **Heartbeat.** While the run works it extends `lease_expires_at` every
    `RECONCILIATION_LEASE_HEARTBEAT_MS`. A heartbeat that is _rejected_ (the row
-   no longer matches this owner and epoch) means the run was declared abandoned
-   and it stops at the next batch boundary. A heartbeat that _throws_ is treated
-   as a database problem, not as loss — an unreachable Postgres says nothing
-   about who owns the lease.
+   no longer carries a live lease for this owner and epoch) means the run lost
+   the lease and it stops at the next batch boundary. A heartbeat that _throws_
+   is treated as a database problem, not as loss — an unreachable Postgres says
+   nothing about who owns the lease. **A lapsed lease cannot be renewed:** once
+   the TTL passes, the key belongs to the sweeper and any successor, whether or
+   not the sweep has run yet, so a worker returning from a stall longer than the
+   TTL finds its lease gone rather than renewable. The same expiry check fences
+   finalization and `failRun`.
 3. **Sweep.** Before each claim, `markAbandonedRuns` marks every `RUNNING` run
    whose lease has lapsed as `ABANDONED`, records the displaced owner, appends a
    lease event, and pages `RECONCILIATION_RUN_ABANDONED`. This runs whether or
    not anything wants the key back, so stuck work is visible on its own.
 4. **Fence.** The finalizing transaction re-checks the lease under `FOR UPDATE`
-   as its first statement. A displaced worker cannot publish findings, move the
-   cursor, or stamp `FAILED` over its successor — the whole transaction rolls
-   back and the run returns `SKIPPED` with reason `lease lost to a successor`.
+   as its first statement, and **everything the run has to say is written inside
+   that transaction**: its drift findings, its trade scope, the containments
+   they open, the alerts they owe, the run's own accounting, and the cursor
+   move. A displaced worker therefore publishes none of it — the whole
+   transaction rolls back and the run returns `SKIPPED` with reason
+   `lease lost to a successor`. Alerts are queued rather than sent, and go out
+   only once that transaction has committed, so nobody is paged about evidence
+   that never landed.
 5. **Release.** A run that reaches a terminal status hands the lease back inside
    the same transaction, so the next worker does not wait out a TTL. A row that
    is still `RUNNING` cannot be un-leased.
@@ -142,10 +151,36 @@ trade, carrying a quotable incident reference (`RECON-<yyyymmdd>-<8 hex>`), the
 qualifying codes, and an evidence snapshot pinned to the boundary block. Repeat
 sightings fold into the standing incident rather than opening competing ones.
 
-**Reconciliation holds no admin key and pauses nothing itself.** The escrow's
-`pauseTrade(tradeId)` is an `onlyAdmin` action and resumption runs through the
-on-chain timelocked unpause proposal. The `RECONCILIATION_TRADE_CONTAINED` alert
-is the containment _request_, naming the one trade the scoped pause applies to.
+**The containment row is the control, not a note about one.** From the moment
+it commits, the oracle refuses every progression for that trade: the guard in
+`oracle/src/core/containment-guard.ts` reads this table before any milestone is
+submitted, and is fail-closed — if it cannot read the table it refuses rather
+than assumes. That is what closes the window between a qualified discrepancy and
+an operator acting.
+
+**Reconciliation still holds no admin key and pauses nothing itself.** The
+escrow's `pauseTrade(tradeId)` is an `onlyAdmin` action and resumption runs
+through the on-chain timelocked unpause proposal. The
+`RECONCILIATION_TRADE_CONTAINED` alert is the containment _request_, naming the
+one trade the scoped pause applies to. Until that pause lands, callers that do
+not consult this table — a buyer acting directly on the escrow, a relayer — are
+outside what the off-chain guard can stop, which is why the on-chain pause is
+still required and still chased.
+
+**Every run re-checks the pause.** A containment records
+`pause_observed_at`/`pause_observed_block` the first time the escrow is read as
+paused for that trade. A containment that is still unpaused raises
+`RECONCILIATION_TRADE_PAUSE_UNCONFIRMED` on every run until it lands, and a
+trade that has never been observed paused cannot be released — releasing it
+would be recording a recovery from a containment the chain never enforced.
+
+**Alerts describe committed state.** A run's findings, trade scope, containments
+and the alerts they owe are written in one transaction behind the lease fence,
+and the alerts are queued in `reconcile_alert_outbox` and dispatched only after
+that transaction commits. A worker displaced after its last batch therefore
+publishes nothing and pages nobody. An outbox row left behind by a worker that
+died between commit and delivery is drained by the next run, so an alert arrives
+late rather than never.
 
 ### Lifecycle
 
@@ -160,10 +195,14 @@ CONTAINED ──(a later run reconciles the trade clean)──> RECONCILED_PENDI
 ```
 
 Both non-released states block. A clean read is evidence, not authority: the
-trade stays blocked until a quorum-governed approval is recorded against it. The
-run that opened an incident can never be the run that clears it, so "fresh
-reconciliation" is enforced rather than assumed. A divergence that returns drops
-the clearance evidence, so a pending approval cannot be spent on it.
+trade stays blocked until a quorum-governed on-chain unpause is verified against
+it. The run that opened an incident can never be the run that clears it, so
+"fresh reconciliation" is enforced rather than assumed, and only a trade the run
+**successfully compared and found nothing wrong with** counts as clean — a trade
+whose chain read failed is in the run's scope precisely because nothing could be
+concluded about it, and it clears nothing. A divergence that returns drops the
+clearance evidence and the pause observation, so neither a pending approval nor
+a previous release can be spent on it.
 
 ### Operating it
 
@@ -174,14 +213,35 @@ pnpm --filter reconciliation run reconcile:containment list
 # One trade
 pnpm --filter reconciliation run reconcile:containment show --trade-id=<id>
 
-# Release, against the recorded quorum decision
+# Release, against the governed on-chain unpause that authorised it
 pnpm --filter reconciliation run reconcile:containment release \
-  --trade-id=<id> --approval-ref=<governance record>
+  --trade-id=<id> --approval-tx=<0x… transaction hash>
 ```
 
-`release` refuses a trade that has not reconciled clean since the incident
-opened, and refuses one with no approval reference. Record the same reference on
-the on-chain unpause proposal so the two halves of the decision tie together.
+`release` takes the **transaction hash of the executed unpause**, not a
+reference string, and reads it back from the chain. It is refused unless all of
+the following hold, each checked against what the chain says rather than what
+the operator asserts:
+
+| Check                                                                   | Why                                                                                    |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| The receipt exists and succeeded                                        | A failed transaction approves nothing                                                  |
+| It is at or behind the finality boundary                                | A re-orgable approval could clear a containment whose unpause never happened           |
+| It emits `TradeUnpaused` for **this** trade, from the configured escrow | Anyone can deploy a contract that emits the same event shape                           |
+| The executed proposal has `PauseScope.TRADE` and this trade id          | A global or claims recovery does not release a contained trade                         |
+| Its `incidentRef` resolves to this row's incident reference             | Approvals are not transferable between incidents                                       |
+| `approvalCount >= requiredApprovals`                                    | The contract's own record that quorum was met                                          |
+| It executed **after** the incident was opened                           | Blocks replaying a real, older governance receipt against a later containment          |
+| The hash has never released a containment before                        | One receipt, one release — recorded permanently in `reconcile_spent_unpause_approvals` |
+
+It also refuses a trade that has not reconciled clean since the incident opened,
+and one that has never been observed paused on chain. What is verified is
+persisted: chain id, contract, block, log index, on-chain incident reference,
+the approvers seen in the executing transaction, and the approval counts.
+
+Put the incident reference on the unpause proposal as its `incidentRef` — either
+as text (`encodeBytes32String`, which keeps it readable in an explorer) or as
+`keccak256` of it. Both are accepted; nothing else is.
 
 ### When `RECONCILIATION_TRADE_CONTAINED` fires
 
@@ -194,8 +254,11 @@ the on-chain unpause proposal so the two halves of the decision tie together.
 4. Resolve the underlying divergence, then let a later reconciliation run
    observe the trade clean. Confirm the state reached
    `RECONCILED_PENDING_APPROVAL`.
-5. Obtain the governed approval, record it with `release`, then raise the
-   on-chain unpause proposal.
+5. Raise the on-chain unpause proposal for that trade, carrying the incident
+   reference as its `incidentRef`, and take it to quorum.
+6. Record the release with `release --approval-tx=<hash of the executing
+transaction>`. The verification above runs at that point; nothing is written
+   if any of it fails.
 
 ## Verification
 
@@ -206,7 +269,15 @@ pnpm --filter reconciliation run test
 Lease and containment behaviour against real Postgres lives in
 `run-leases.postgres.test.ts` (skipped when Docker is unavailable); heartbeat and
 qualification logic in `run-lease-heartbeat.test.ts` and
-`containment-qualification.test.ts`.
+`containment-qualification.test.ts`; the governed-approval rules in
+`governed-approval.test.ts`.
+
+The oracle half — that a contained trade's next progression is actually refused,
+and that the guard is fail-closed when it cannot be read — is in:
+
+```bash
+pnpm --filter oracle exec jest tests/trigger-manager.containment.test.ts --runInBand
+```
 
 ## Scope boundary
 
@@ -214,7 +285,8 @@ This runbook covers the reconciliation-side controls. Two things it deliberately
 does **not** cover, because they are not reconciliation's to do:
 
 - Executing the scoped pause and the quorum-governed unpause. Both are admin
-  multisig actions against `AgroasysEscrow`.
+  multisig actions against `AgroasysEscrow`. Reconciliation verifies the unpause
+  after the fact; it cannot perform it, and holds no key that could.
 - The deployed discrepancy drill and the crash-injection evidence PRES-11 and
   TEST-05 require. Those are contributed to `wp8-drills`
   ([Agroasys/Cotsel#674](https://github.com/Agroasys/Cotsel/issues/674)) against

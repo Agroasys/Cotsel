@@ -1,7 +1,11 @@
 import { WebhookNotifier } from '@agroasys/notifications';
 import { config } from '../config';
 import { Logger } from '../utils/logger';
-import type { AbandonedRunRecord, TradeContainmentRow } from '../types';
+import type {
+  AbandonedRunRecord,
+  TradeContainedAlertPayload,
+  TradePauseUnconfirmedAlertPayload,
+} from '../types';
 
 /**
  * Alerting for the run-lease and scoped-containment controls.
@@ -50,33 +54,63 @@ export class RunAlerts {
   /**
    * A qualified discrepancy contained a trade and needs a scoped pause.
    *
-   * Reconciliation is read-only and holds no admin key, so this alert is the
-   * containment request: the escrow's own `pauseTrade` control is an admin
-   * action, and this names the one trade it should be applied to.
+   * The containment itself already blocks the trade — the oracle refuses every
+   * progression for it from the moment the row commits. This alert asks for the
+   * on-chain half: the escrow's own `pauseTrade` is an admin action and
+   * reconciliation holds no admin key, so it names the one trade it must be
+   * applied to and nothing wider.
    */
-  async tradeContained(input: {
-    runKey: string;
-    containment: TradeContainmentRow;
-    qualifyingCodes: string[];
-  }): Promise<void> {
+  async tradeContained(payload: TradeContainedAlertPayload): Promise<void> {
     await this.notifier.notify({
       source: 'reconciliation',
       type: 'RECONCILIATION_TRADE_CONTAINED',
       severity: 'critical',
-      dedupKey: `reconciliation:contained:${input.containment.incident_reference}`,
+      dedupKey: `reconciliation:contained:${payload.incidentReference}`,
       message:
         'A qualified reconciliation discrepancy contained a trade; apply the scoped pause to this trade only and do not let it progress.',
       correlation: {
-        tradeId: input.containment.trade_id,
-        runKey: input.runKey,
+        tradeId: payload.tradeId,
+        runKey: payload.runKey,
       },
       metadata: {
-        incidentReference: input.containment.incident_reference,
-        qualifyingCodes: input.qualifyingCodes.join(','),
-        state: input.containment.state,
-        openedRunKey: input.containment.opened_run_key,
-        openedAt: input.containment.opened_at.toISOString(),
-        observationCount: input.containment.observation_count,
+        incidentReference: payload.incidentReference,
+        qualifyingCodes: payload.qualifyingCodes.join(','),
+        state: payload.state,
+        openedRunKey: payload.openedRunKey,
+        openedAt: payload.openedAt,
+        observationCount: payload.observationCount,
+      },
+    });
+  }
+
+  /**
+   * A contained trade is still not paused on chain.
+   *
+   * Off-chain the containment is already binding, but the escrow is the only
+   * place a buyer-, relayer- or gasless-initiated transition is stopped, so a
+   * containment that never becomes an on-chain pause leaves a path open that
+   * this service does not sit in front of. Deliberately re-raised on every run
+   * that finds the pause missing, and keyed per incident rather than per run, so
+   * the notifier's cooldown collapses the repeats while the condition lasts and
+   * it fires again if it is still unpaused later.
+   */
+  async tradePauseUnconfirmed(payload: TradePauseUnconfirmedAlertPayload): Promise<void> {
+    await this.notifier.notify({
+      source: 'reconciliation',
+      type: 'RECONCILIATION_TRADE_PAUSE_UNCONFIRMED',
+      severity: 'critical',
+      dedupKey: `reconciliation:pause-unconfirmed:${payload.incidentReference}`,
+      message: payload.readError
+        ? 'A contained trade could not be confirmed paused on chain: the escrow read failed. Apply or verify the scoped pause manually.'
+        : 'A contained trade is still not paused on chain. Apply the scoped pause to this trade now; until it lands, only reconciliation-aware callers are blocked.',
+      correlation: {
+        tradeId: payload.tradeId,
+        runKey: payload.runKey,
+      },
+      metadata: {
+        incidentReference: payload.incidentReference,
+        observedAtBlock: payload.observedAtBlock,
+        readError: payload.readError,
       },
     });
   }

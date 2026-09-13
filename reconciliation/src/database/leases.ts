@@ -37,6 +37,17 @@ function expiryPredicate(ttlParam: number): string {
   return `COALESCE(lease_expires_at, started_at + make_interval(secs => $${ttlParam}::double precision / 1000)) <= NOW()`;
 }
 
+/**
+ * The inverse, for every write that must prove the lease is *still* live.
+ *
+ * Owner and epoch alone are not enough. Between a lease lapsing and the sweeper
+ * marking the run abandoned, the row still carries the stalled worker's owner
+ * and epoch — so a worker that came back from a stall past the TTL would match
+ * on identity and could renew, or finalize, a lease it had already lost. A row
+ * with no expiry at all predates this control and is nobody's live lease.
+ */
+export const LIVE_LEASE_PREDICATE = 'lease_expires_at IS NOT NULL AND lease_expires_at > NOW()';
+
 export async function appendLeaseEvent(
   input: {
     runId: number;
@@ -188,8 +199,12 @@ export async function claimRun(
 /**
  * Push the lease expiry out while the run is still working.
  *
- * Returns false when the row no longer matches this owner and epoch, which is
- * the run's signal that it was declared abandoned and must stop.
+ * Returns false when the row no longer carries a live lease for this owner and
+ * epoch, which is the run's signal that it lost the lease and must stop. A
+ * lapsed lease cannot be beaten back to life: once the TTL passes the key is
+ * the sweeper's and any successor's to take, whether or not the sweep has run
+ * yet, so a worker returning from a long stall finds its lease gone rather than
+ * renewable.
  */
 export async function heartbeatLease(
   lease: RunLeaseIdentity,
@@ -203,7 +218,8 @@ export async function heartbeatLease(
      WHERE run_key = $1
        AND lease_owner = $2
        AND lease_epoch = $3
-       AND status = 'RUNNING'`,
+       AND status = 'RUNNING'
+       AND ${LIVE_LEASE_PREDICATE}`,
     [lease.runKey, lease.owner, lease.epoch, leaseTtlMs],
   );
 
@@ -215,12 +231,16 @@ export async function heartbeatLease(
  *
  * Called inside the finalizing transaction: `FOR UPDATE` holds off a concurrent
  * takeover until the transaction settles, so the run either publishes under a
- * lease it demonstrably still held or publishes nothing.
+ * lease it demonstrably still held or publishes nothing. An expired lease is
+ * not held, even before the sweeper has relabelled the run — by then the key is
+ * already open to a successor, and two workers must never both believe they may
+ * publish it.
  */
 export async function assertLeaseHeld(client: PoolClient, lease: RunLeaseIdentity): Promise<void> {
   const held = await client.query(
     `SELECT 1 FROM reconcile_runs
      WHERE run_key = $1 AND lease_owner = $2 AND lease_epoch = $3
+       AND ${LIVE_LEASE_PREDICATE}
      FOR UPDATE`,
     [lease.runKey, lease.owner, lease.epoch],
   );

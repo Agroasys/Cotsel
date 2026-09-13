@@ -251,10 +251,120 @@ export interface TradeContainmentRow {
   observation_count: number;
   last_observed_run_key: string | null;
   last_observed_at: Date | null;
+  pause_observed_at: Date | null;
+  pause_observed_block: string | null;
+  pause_last_checked_at: Date | null;
   cleared_run_key: string | null;
   cleared_at: Date | null;
-  approval_reference: string | null;
+  approval_tx_hash: string | null;
+  approval_chain_id: string | null;
+  approval_contract: string | null;
+  approval_block_number: string | null;
+  approval_block_hash: string | null;
+  approval_log_index: number | null;
+  approval_incident_ref: string | null;
+  approval_approvers: string[];
+  approval_count: number | null;
+  approval_required: number | null;
   approved_at: Date | null;
   released_at: Date | null;
   updated_at: Date;
+}
+
+/**
+ * What one governed on-chain unpause transaction proves about one trade.
+ *
+ * Every field is read back from the chain — the receipt, the escrow's own logs,
+ * and the executed proposal as it stood at that block — rather than supplied by
+ * whoever runs the release. An operator can name a transaction; they cannot
+ * assert what it did.
+ */
+export interface GovernedUnpauseEvidence {
+  txHash: string;
+  chainId: number;
+  contractAddress: string;
+  tradeId: string;
+  blockNumber: number;
+  blockHash: string;
+  logIndex: number;
+  /** The bytes32 the proposal carried, as it appears on chain. */
+  incidentRef: string;
+  /** Approvers whose approval landed in the executing transaction. */
+  approvers: string[];
+  approvalCount: number;
+  requiredApprovals: number;
+  executedAt: Date;
+}
+
+/**
+ * An alert a run committed alongside the evidence that justifies it.
+ *
+ * The payload is stored as JSON, so it holds only values that survive a round
+ * trip through the database: no bigint, no Date.
+ */
+export type RunAlertKind =
+  | 'CRITICAL_DRIFT'
+  | 'COVERAGE_BACKLOG'
+  | 'TRADE_CONTAINED'
+  | 'TRADE_PAUSE_UNCONFIRMED';
+
+export interface CriticalDriftAlertPayload {
+  runKey: string;
+  finding: DriftFinding;
+}
+
+export interface CoverageBacklogAlertPayload {
+  runKey: string;
+  reason: string;
+  uncoveredTail: string;
+  chainTradeCounter: string;
+  boundaryBlock: number;
+}
+
+export interface TradeContainedAlertPayload {
+  runKey: string;
+  tradeId: string;
+  incidentReference: string;
+  state: ContainmentState;
+  qualifyingCodes: string[];
+  openedRunKey: string;
+  openedAt: string;
+  observationCount: number;
+}
+
+export interface TradePauseUnconfirmedAlertPayload {
+  runKey: string;
+  tradeId: string;
+  incidentReference: string;
+  observedAtBlock: number;
+  /** Set when the chain could not be read at all, rather than read as unpaused. */
+  readError: string | null;
+}
+
+export type RunAlertPayload =
+  | { kind: 'CRITICAL_DRIFT'; payload: CriticalDriftAlertPayload }
+  | { kind: 'COVERAGE_BACKLOG'; payload: CoverageBacklogAlertPayload }
+  | { kind: 'TRADE_CONTAINED'; payload: TradeContainedAlertPayload }
+  | { kind: 'TRADE_PAUSE_UNCONFIRMED'; payload: TradePauseUnconfirmedAlertPayload };
+
+export interface PendingRunAlertRow {
+  id: string;
+  run_key: string;
+  kind: RunAlertKind;
+  payload: Record<string, unknown>;
+  dispatch_attempts: number;
+}
+
+/**
+ * What a run read from the chain about the escrow's scoped pause for one trade.
+ *
+ * A read that failed is not evidence the trade is unpaused, but it is equally
+ * not evidence that it is paused, so both non-observations are carried the same
+ * way: the containment stays unconfirmed and the escalation alert fires.
+ */
+export interface TradePauseObservation {
+  tradeId: string;
+  paused: boolean;
+  blockNumber: number;
+  readError: string | null;
 }

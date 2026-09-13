@@ -20,8 +20,8 @@
       "version": "202609120001",
       "name": "run_leases",
       "file": "003_run_leases.sql",
-      "sha256": "181c5baef0ad2f8fce2764ebccf1a0c99da2df6d8ceaeaa39ea8fa091c5630af",
-      "schema_sha256": "347a1211422080541107b06eae50cc7043bc9b70cf7c698f0b600b8df3df21cd"
+      "sha256": "cae84129639aa0fe050e37ea8e9e147127f1858b9312af0f5db591f4f343322a",
+      "schema_sha256": "f4994364c7f05ada1e6d61f2c18851d5a8a75a9ab245357ef2dd5a1f89eb3959"
     }
   ]
 }
