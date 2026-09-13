@@ -4,7 +4,7 @@ import { createInMemoryNonceStore } from '@agroasys/shared-auth';
 import { createServiceAuthHeaders, validateManagedSignerResponse } from '@agroasys/sdk';
 import { createRelayerApp } from '../src/app';
 import type { RelayerSigner } from '../src/kmsRelayerSigner';
-import { buildSigningRequest, config, relayerWallet } from './helpers';
+import { buildSigningRequest, config, relayerWallet, serviceAuthSecret } from './helpers';
 
 const addressPath = '/api/signers/gasless-relayer/address';
 const signingPath = '/api/signers/gasless-relayer/sign-transaction';
@@ -12,7 +12,7 @@ const signingPath = '/api/signers/gasless-relayer/sign-transaction';
 function authHeaders(method: 'GET' | 'POST', path: string, body?: string, nonce?: string) {
   return createServiceAuthHeaders({
     apiKey: 'gateway',
-    apiSecret: 'test-secret',
+    apiSecret: serviceAuthSecret,
     method,
     path,
     body,
@@ -72,6 +72,22 @@ describe('gasless relayer HTTP boundary', () => {
     });
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ signerAddress: relayerWallet.address });
+  });
+
+  test('rejects a weak service-auth secret before serving requests', () => {
+    expect(() =>
+      createRelayerApp(
+        {
+          ...config,
+          apiKeysJson: JSON.stringify({ id: 'gateway', secret: 'weak-secret', active: true }),
+        },
+        {
+          signer,
+          authNonceStore: createInMemoryNonceStore(),
+          requestStore: createInMemoryNonceStore(),
+        },
+      ),
+    ).toThrow('at least 32 bytes');
   });
 
   test('signs only an authenticated request and returns a transaction bound to its intent', async () => {

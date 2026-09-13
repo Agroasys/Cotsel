@@ -4,7 +4,8 @@ import { relayerWallet } from './helpers';
 const BASE_ENV: Record<string, string> = {
   NODE_ENV: 'production',
   PORT: '3300',
-  RELAYER_API_KEYS_JSON: '{"id":"gateway","secret":"secret","active":true}',
+  RELAYER_API_KEYS_JSON:
+    '{"id":"gateway","secret":"test-secret-at-least-thirty-two-bytes","active":true}',
   RELAYER_AUTH_MAX_SKEW_SECONDS: '300',
   RELAYER_AUTH_NONCE_TTL_SECONDS: '600',
   RELAYER_CHAIN_ID: '84532',
@@ -46,6 +47,7 @@ test.each([
   ['raw custody mode', { RELAYER_SIGNER_CUSTODY_MODE: 'raw_private_key' }],
   ['private key material', { RELAYER_PRIVATE_KEY: `0x${'1'.repeat(64)}` }],
   ['missing Redis replay store', { RELAYER_REDIS_URL: undefined }],
+  ['plaintext Redis replay store', { RELAYER_REDIS_URL: 'redis://redis.example.test:6379' }],
   ['wrong expected address', { RELAYER_KMS_EXPECTED_ADDRESS: 'not-an-address' }],
 ] as const)('rejects %s', (_name, overrides) => {
   withEnv(overrides, () => expect(() => loadRelayerConfig()).toThrow());

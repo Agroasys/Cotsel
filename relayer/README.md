@@ -41,11 +41,12 @@ Set these non-secret variables:
 - `RELAYER_USDC_ADDRESS`
 - `RELAYER_KMS_KEY_ID`
 - `RELAYER_KMS_EXPECTED_ADDRESS`
-- `RELAYER_REDIS_URL`
+- `RELAYER_REDIS_URL` using `rediss://` in production
 - `RELAYER_SIGNER_CUSTODY_MODE=kms`
 
 Set `RELAYER_API_KEYS_JSON` from the protected `gateway-managed-signer` secret.
-The secret must contain `id`, `secret`, and `active` fields.
+The secret must contain `id`, `secret`, and `active` fields. Every HMAC `secret` must be at
+least 32 bytes and generated through the controlled bootstrap or rotation procedure.
 
 ## HTTP interface
 

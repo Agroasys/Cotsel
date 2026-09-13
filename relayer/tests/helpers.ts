@@ -12,6 +12,7 @@ export const relayerWallet = new Wallet(
 );
 export const escrowAddress = '0x1000000000000000000000000000000000000001';
 export const usdcAddress = '0x2000000000000000000000000000000000000002';
+export const serviceAuthSecret = 'test-secret-at-least-thirty-two-bytes';
 
 export const config: RelayerConfig = {
   port: 3300,
@@ -21,7 +22,7 @@ export const config: RelayerConfig = {
   usdcAddress,
   kmsKeyId: 'alias/cotsel-staging-relayer-signer',
   kmsExpectedAddress: relayerWallet.address,
-  apiKeysJson: JSON.stringify({ id: 'gateway', secret: 'test-secret', active: true }),
+  apiKeysJson: JSON.stringify({ id: 'gateway', secret: serviceAuthSecret, active: true }),
   authMaxSkewSeconds: 300,
   authNonceTtlSeconds: 600,
   requestReplayTtlSeconds: 900,

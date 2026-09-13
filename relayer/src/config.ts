@@ -62,6 +62,10 @@ export function loadRelayerConfig(): RelayerConfig {
 
   const redisUrl = process.env.RELAYER_REDIS_URL?.trim() || undefined;
   assert(nodeEnv !== 'production' || redisUrl, 'RELAYER_REDIS_URL is required in production');
+  assert(
+    nodeEnv !== 'production' || redisUrl?.startsWith('rediss://'),
+    'RELAYER_REDIS_URL must use rediss:// in production',
+  );
 
   const config: RelayerConfig = {
     port: positiveInteger('PORT', 3300),

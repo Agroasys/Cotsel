@@ -14,6 +14,8 @@ import type { RelayerSigner } from './kmsRelayerSigner';
 import { logger } from './logger';
 import { validateSigningRequest } from './signingPolicy';
 
+const MINIMUM_API_SECRET_BYTES = 32;
+
 export interface RelayerAppDependencies {
   signer: RelayerSigner;
   authNonceStore: NonceStore;
@@ -24,6 +26,13 @@ function apiKeyLookup(apiKeysJson: string): (id: string) => ServiceApiKey | unde
   const records = parseServiceApiKeys(apiKeysJson);
   if (!records.some((record) => record.active)) {
     throw new Error('RELAYER_API_KEYS_JSON must contain an active API key');
+  }
+  if (
+    records.some((record) => Buffer.byteLength(record.secret, 'utf8') < MINIMUM_API_SECRET_BYTES)
+  ) {
+    throw new Error(
+      `RELAYER_API_KEYS_JSON secrets must contain at least ${MINIMUM_API_SECRET_BYTES} bytes`,
+    );
   }
   const keys = new Map(records.map((record) => [record.id, record]));
   return (id) => keys.get(id);
