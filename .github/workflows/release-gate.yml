@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
   packages: read
+
+concurrency:
+  group: cotsel-release-gate-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   changes:
     name: changes
@@ -228,6 +233,7 @@ jobs:
           run_check repo-format-check pnpm run format:check:full
           run_check repo-typecheck pnpm run typecheck
           run_check source-file-size pnpm run quality:file-size:check
+          run_check ci-cost-controls node --test scripts/tests/ci-cost-controls.test.mjs
           run_check release-evidence-binding pnpm run release:evidence:check
           run_check release-supply-chain pnpm run release:supply-chain:check
 
