@@ -33,8 +33,5 @@ test('preserves default-branch release-gate work', async () => {
     contents,
     /group: .+\$\{\{ github\.workflow \}\}-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}/,
   );
-  assert.match(
-    contents,
-    /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/,
-  );
+  assert.match(contents, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
 });
