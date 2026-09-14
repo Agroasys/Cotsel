@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Router } from 'express';
-import { rateLimit } from 'express-rate-limit';
 import { GatewayConfig } from '../config/env';
 import { AuthSessionClient } from '../core/authSessionClient';
 import {
@@ -60,17 +59,6 @@ function parseLimit(raw: unknown): number {
 export function createGovernanceRouter(options: GovernanceRouterOptions): Router {
   const router = Router();
   const authenticate = createAuthenticationMiddleware(options.authSessionClient, options.config);
-  // The API-wide Redis-backed limiter remains the production control. Keep a
-  // route-local limiter here as a second guard for privileged governance
-  // operations and to make this protection explicit at the authorization
-  // boundary.
-  const governanceRateLimiter = rateLimit({
-    windowMs: 10_000,
-    limit: (req) => (['GET', 'HEAD'].includes(req.method.toUpperCase()) ? 60 : 20),
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-  });
-  router.use('/governance', governanceRateLimiter);
 
   // Protocol state and active proposals are read live from chain. The immutable
   // action log is served separately from the access-log feed (`/access-logs`).
