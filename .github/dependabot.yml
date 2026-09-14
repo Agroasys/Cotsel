@@ -58,12 +58,15 @@ updates:
         update-types:
           - 'version-update:semver-major'
     groups:
-      # Group only low-risk SemVer updates. Major upgrades remain individual so
-      # peer-dependency and runtime compatibility changes receive a focused review.
+      # Group only low-risk SemVer updates. Keep ox out of the routine group:
+      # Dependabot classified its observed 0.x-to-1.x update as routine, but it
+      # violates permissionless' current peer range and needs a focused review.
       npm-runtime:
         applies-to: version-updates
         patterns:
           - '*'
+        exclude-patterns:
+          - 'ox'
         dependency-type: production
         update-types:
           - minor
