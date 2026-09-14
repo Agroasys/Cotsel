@@ -7,6 +7,10 @@ updates:
       day: monday
       time: '06:00'
       timezone: 'UTC'
+    # Match pnpm's seven-day minimum release age. This applies to version
+    # updates only; Dependabot security updates remain immediate.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     ignore:
       # Temporary Hardhat v3 migration deferral (issue #192):
