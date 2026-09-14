@@ -92,6 +92,20 @@ test('indexer pipeline and GraphQL use distinct non-migration identities', async
   assert.match(entrypoint, /new TypeormDatabase\(\{ initializeStateSchema: false \}\)/);
 });
 
+test('oracle reads reconciliation containment with its dedicated reader identity', async () => {
+  const runtime = await readFile(
+    'infra/terraform/staging-platform/runtime-oracle-reconciliation.tf',
+    'utf8',
+  );
+  const oracleSecrets = runtime.match(/oracle_secrets = \[([\s\S]*?)\n[ ]{2}\]/)?.[1];
+  assert.ok(oracleSecrets, 'oracle_secrets must be present');
+  assert.match(oracleSecrets, /database\/reconciliation\/reader/);
+  assert.doesNotMatch(oracleSecrets, /database\/reconciliation\/runtime/);
+
+  const gatewayIam = await readFile('infra/terraform/staging-platform/iam.tf', 'utf8');
+  assert.match(gatewayIam, /database\/reconciliation\/reader/);
+});
+
 test('every non-indexer schema has a dedicated one-off migration task', async () => {
   const source = await readFile('infra/terraform/staging-platform/service-migrations.tf', 'utf8');
 

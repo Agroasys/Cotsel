@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const { Pool } = require('pg');
 
@@ -13,6 +14,15 @@ const {
   runSql,
   withPostgresContainer,
 } = require('./postgres-test-support');
+
+const RECONCILIATION_MANIFEST_PATH = path.resolve(
+  __dirname,
+  '../reconciliation/src/database/migrations.json',
+);
+
+function declaredReconciliationMigrations() {
+  return JSON.parse(fs.readFileSync(RECONCILIATION_MANIFEST_PATH, 'utf8')).migrations.length;
+}
 
 test(
   'runtime roles only reach service tables when grants and app.service_name both match',
@@ -78,14 +88,17 @@ test(
           const migrationResult = await runVersionedMigrations({
             pool: migrationPool,
             serviceName: 'reconciliation',
-            manifestPath: path.resolve(__dirname, '../reconciliation/src/database/migrations.json'),
+            manifestPath: RECONCILIATION_MANIFEST_PATH,
             runtimeDbUser: 'reconciliation_runtime',
           });
-          assert.equal(migrationResult.applied.length, 1);
+          // The whole declared chain applies on a fresh database. Derived from
+          // the manifest so adding a migration does not silently weaken this
+          // into "some migrations applied".
+          assert.equal(migrationResult.applied.length, declaredReconciliationMigrations());
           const replayResult = await runVersionedMigrations({
             pool: migrationPool,
             serviceName: 'reconciliation',
-            manifestPath: path.resolve(__dirname, '../reconciliation/src/database/migrations.json'),
+            manifestPath: RECONCILIATION_MANIFEST_PATH,
             runtimeDbUser: 'reconciliation_runtime',
           });
           assert.equal(replayResult.applied.length, 0);

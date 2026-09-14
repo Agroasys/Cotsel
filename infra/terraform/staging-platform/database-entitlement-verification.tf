@@ -8,6 +8,8 @@ locals {
     : "$${INDEXER_RUNTIME_PASSWORD:?INDEXER_RUNTIME_PASSWORD is required}"
     : "$${INDEXER_READER_USERNAME:?INDEXER_READER_USERNAME is required}"
     : "$${INDEXER_READER_PASSWORD:?INDEXER_READER_PASSWORD is required}"
+    : "$${RECONCILIATION_READER_USERNAME:?RECONCILIATION_READER_USERNAME is required}"
+    : "$${RECONCILIATION_READER_PASSWORD:?RECONCILIATION_READER_PASSWORD is required}"
     : "$${RICARDIAN_MIGRATION_USERNAME:?RICARDIAN_MIGRATION_USERNAME is required}"
     : "$${RICARDIAN_MIGRATION_PASSWORD:?RICARDIAN_MIGRATION_PASSWORD is required}"
     : "$${RICARDIAN_RUNTIME_USERNAME:?RICARDIAN_RUNTIME_USERNAME is required}"
@@ -21,6 +23,7 @@ locals {
     [ "$${INDEXER_MIGRATION_USERNAME}" = 'cotsel_indexer_migrator' ]
     [ "$${INDEXER_RUNTIME_USERNAME}" = 'cotsel_indexer_app' ]
     [ "$${INDEXER_READER_USERNAME}" = 'cotsel_indexer_reader' ]
+    [ "$${RECONCILIATION_READER_USERNAME}" = 'cotsel_reconciliation_reader' ]
     [ "$${RICARDIAN_MIGRATION_USERNAME}" = 'cotsel_ricardian_migrator' ]
     [ "$${RICARDIAN_RUNTIME_USERNAME}" = 'cotsel_ricardian_runtime' ]
     [ "$${TREASURY_MIGRATION_USERNAME}" = 'cotsel_treasury_migrator' ]
@@ -220,7 +223,41 @@ locals {
 
     verify_indexer
 
-    unset INDEXER_MIGRATION_PASSWORD INDEXER_RUNTIME_PASSWORD INDEXER_READER_PASSWORD
+    verify_reconciliation_reader() {
+      export PGUSER="$${RECONCILIATION_READER_USERNAME}"
+      export PGPASSWORD="$${RECONCILIATION_READER_PASSWORD}"
+      psql --dbname cotsel_reconciliation --set ON_ERROR_STOP=1 --quiet >/dev/null <<'SQL'
+    BEGIN;
+    SET LOCAL app.service_name = 'reconciliation';
+    SELECT 1 FROM reconcile_trade_containments LIMIT 1;
+    ROLLBACK;
+    SQL
+      verify_restricted_role 'cotsel_reconciliation' "$${RECONCILIATION_READER_USERNAME}"
+      if psql --dbname cotsel_reconciliation --set ON_ERROR_STOP=1 --quiet >/dev/null 2>&1 <<'SQL'
+    BEGIN;
+    SET LOCAL app.service_name = 'reconciliation';
+    UPDATE reconcile_trade_containments SET state = state WHERE false;
+    ROLLBACK;
+    SQL
+      then
+        printf '%s\n' 'Reconciliation containment reader unexpectedly updated a table.' >&2
+        exit 1
+      fi
+      if psql --dbname cotsel_reconciliation --set ON_ERROR_STOP=1 --quiet >/dev/null 2>&1 <<'SQL'
+    BEGIN;
+    CREATE TABLE public.cotsel_reconciliation_reader_ddl_probe (id bigint);
+    ROLLBACK;
+    SQL
+      then
+        printf '%s\n' 'Reconciliation containment reader unexpectedly created a table.' >&2
+        exit 1
+      fi
+      verify_connection_denied 'cotsel_treasury' "$${RECONCILIATION_READER_USERNAME}"
+    }
+
+    verify_reconciliation_reader
+
+    unset INDEXER_MIGRATION_PASSWORD INDEXER_RUNTIME_PASSWORD INDEXER_READER_PASSWORD RECONCILIATION_READER_PASSWORD
     unset RICARDIAN_MIGRATION_PASSWORD RICARDIAN_RUNTIME_PASSWORD TREASURY_MIGRATION_PASSWORD TREASURY_RUNTIME_PASSWORD
     printf '%s\n' 'Cotsel Indexer, Treasury, and Ricardian database entitlement verification passed.'
   COMMAND
@@ -278,6 +315,7 @@ data "aws_iam_policy_document" "database_entitlement_verification_execution" {
         ]
       ]),
       [local.database_bootstrap_services.indexer.reader_secret],
+      aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn,
     )
   }
 
@@ -330,6 +368,8 @@ resource "aws_ecs_task_definition" "database_entitlement_verification" {
         { name = "INDEXER_RUNTIME_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:username::" },
         { name = "INDEXER_READER_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:password::" },
         { name = "INDEXER_READER_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:username::" },
+        { name = "RECONCILIATION_READER_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:password::" },
+        { name = "RECONCILIATION_READER_USERNAME", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:username::" },
         { name = "RICARDIAN_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:password::" },
         { name = "RICARDIAN_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:username::" },
         { name = "RICARDIAN_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.runtime_secret}:password::" },

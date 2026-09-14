@@ -10,6 +10,14 @@ import { createManagedRpcProvider } from './rpc/failoverProvider';
 import type { RuntimeRoleExpectations } from './config';
 import type { RuntimePreflightFailureCode, RuntimePreflightResult } from './types/runtimePreflight';
 
+export type CoverageBoundaryPreference = 'finalized' | 'safe';
+
+export interface CoverageBoundaryBlock {
+  number: number;
+  hash: string;
+  tag: CoverageBoundaryPreference;
+}
+
 const CANONICAL_USDC_BY_CHAIN = new Map<number, string>([
   [84532, '0x036CbD53842c5426634e7929541eC2318f3dCF7e'],
   [8453, '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'],
@@ -163,6 +171,75 @@ export class Client {
           actualChainId: signerNetwork.chainId.toString(),
         },
       );
+    }
+  }
+
+  /**
+   * Resolve the exact block a reconciliation sweep should read at.
+   *
+   * Reading `tradeCounter` and the trades it bounds at different heights makes
+   * a trade created mid-sweep look like a chain record the indexer never
+   * projected. Pinning every read to one finalized (or safe) block removes that
+   * false positive and gives the sweep an auditable boundary.
+   */
+  async getCoverageBoundaryBlock(
+    preference: CoverageBoundaryPreference = 'finalized',
+  ): Promise<CoverageBoundaryBlock> {
+    try {
+      const block = await this.provider.getBlock(preference);
+      if (block && block.hash !== null && typeof block.number === 'number') {
+        return { number: block.number, hash: block.hash, tag: preference };
+      }
+    } catch (error: unknown) {
+      throw new ContractError(`Failed to resolve ${preference} block: ${getErrorMessage(error)}`, {
+        preference,
+        error: getErrorMessage(error),
+      });
+    }
+
+    throw new ContractError(
+      `Provider did not return a ${preference} block; refusing to reconcile against an unpinned chain head`,
+      { preference },
+    );
+  }
+
+  /**
+   * Resolve a specific block by number, returning its canonical hash.
+   *
+   * Reconciliation anchors every read in a run to the block the indexer has
+   * actually processed (which may sit below the chain's finalized head), so it
+   * needs the hash at that exact height rather than at a finality tag.
+   */
+  async getBlockByNumber(blockNumber: number): Promise<{ number: number; hash: string }> {
+    try {
+      const block = await this.provider.getBlock(blockNumber);
+      if (block && block.hash !== null && typeof block.number === 'number') {
+        return { number: block.number, hash: block.hash };
+      }
+    } catch (error: unknown) {
+      throw new ContractError(`Failed to resolve block ${blockNumber}: ${getErrorMessage(error)}`, {
+        blockNumber,
+        error: getErrorMessage(error),
+      });
+    }
+
+    throw new ContractError(`Provider did not return block ${blockNumber}`, { blockNumber });
+  }
+
+  /**
+   * Highest allocated trade id at `blockTag`. Trade ids are allocated
+   * sequentially from 1, so this bounds the complete chain-side id space
+   * without trusting any off-chain index.
+   */
+  async getTradeCounter(blockTag?: ethers.BlockTag): Promise<bigint> {
+    try {
+      return await this.contract.tradeCounter({ blockTag });
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      throw new ContractError(`Failed to read trade counter: ${message}`, {
+        blockTag: blockTag === undefined ? null : String(blockTag),
+        error: message,
+      });
     }
   }
 

@@ -43,6 +43,8 @@ Registered producer event types:
 | `ORACLE_CONFIRMATION_TIMEOUT`            | oracle         | warning  | Broadcast confirmation timed out.                                                                                                        |
 | `RECONCILIATION_CRITICAL_DRIFT`          | reconciliation | critical | On-chain and indexed trade state disagree.                                                                                               |
 | `INDEXER_POISON_LOG`                     | indexer        | critical | An escrow log could not be projected; the indexer quarantined it and is holding its checkpoint. Follow `indexer-poison-log-recovery.md`. |
+| `RECONCILIATION_COVERAGE_GAP`            | reconciliation | critical | A chain trade is absent from the indexer projection, or the indexer holds more trades than the chain allocated ids.                      |
+| `RECONCILIATION_COVERAGE_BACKLOG`        | reconciliation | critical | The uncovered trade tail breached its age SLA.                                                                                           |
 
 ## Retry, Cooldown, And Dedup Behavior
 

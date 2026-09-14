@@ -10,6 +10,11 @@ export const NOTIFICATION_TEMPLATE_VERSIONS: Record<string, string> = {
   ORACLE_CONFIRMATION_TIMEOUT: 'oracle-confirmation-timeout-v1',
   RECONCILIATION_CRITICAL_DRIFT: 'reconciliation-critical-drift-v1',
   INDEXER_POISON_LOG: 'indexer-poison-log-v1',
+  RECONCILIATION_COVERAGE_GAP: 'reconciliation-coverage-gap-v1',
+  RECONCILIATION_COVERAGE_BACKLOG: 'reconciliation-coverage-backlog-v1',
+  RECONCILIATION_RUN_ABANDONED: 'reconciliation-run-abandoned-v1',
+  RECONCILIATION_TRADE_CONTAINED: 'reconciliation-trade-contained-v1',
+  RECONCILIATION_TRADE_PAUSE_UNCONFIRMED: 'reconciliation-trade-pause-unconfirmed-v1',
 };
 
 export interface NotificationEvent {

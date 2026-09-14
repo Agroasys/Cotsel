@@ -25,8 +25,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          base_sha="${{ github.event.pull_request.base.sha }}"
+          # The event payload can retain the base SHA from before a PR is
+          # rebased. Resolve the live target branch and its merge-base so a
+          # signed main-branch merge is never inspected as a PR commit.
+          base_ref="${{ github.event.pull_request.base.ref }}"
+          base_sha="$(git rev-parse "origin/${base_ref}")"
           head_sha="${{ github.event.pull_request.head.sha }}"
+          merge_base="$(git merge-base "${base_sha}" "${head_sha}")"
 
           missing=0
           while IFS= read -r commit_sha; do
@@ -37,7 +42,7 @@ jobs:
               git log -1 --format='%h %s' "$commit_sha" >&2
               missing=1
             fi
-          done < <(git rev-list "${base_sha}..${head_sha}")
+          done < <(git rev-list --no-merges "${merge_base}..${head_sha}")
 
           if [[ "$missing" -ne 0 ]]; then
             exit 1

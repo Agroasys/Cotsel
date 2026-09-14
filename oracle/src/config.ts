@@ -168,6 +168,12 @@ export function loadConfig(): OracleConfig {
       usdcAddress: optionalEnv('USDC_ADDRESS') ? validateEnvAddress('USDC_ADDRESS') : null,
     });
 
+    // Naming a reconciliation database turns the PRES-11 containment guard on.
+    // Left unset, the oracle logs that it is submitting progressions with no
+    // containment gate in front of them, which is a deployment choice rather
+    // than something that can be half-configured.
+    const reconciliationDbName = optionalEnv('RECONCILIATION_DB_NAME');
+
     const config: OracleConfig = {
       nodeEnv,
       // server
@@ -216,6 +222,26 @@ export function loadConfig(): OracleConfig {
       dbUser: validateEnv('DB_USER'),
       dbPassword: validateEnv('DB_PASSWORD'),
       dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
+
+      // reconciliation db (read-only containment gate)
+      //
+      // The dedicated reader presents reconciliation's service identity for
+      // RLS, but has only SELECT permission on the containment tables.
+      reconciliationDbName,
+      reconciliationDbHost: optionalEnv('RECONCILIATION_DB_HOST') ?? validateEnv('DB_HOST'),
+      reconciliationDbPort: validateEnvNumber(
+        'RECONCILIATION_DB_PORT',
+        validateEnvNumber('DB_PORT'),
+      ),
+      reconciliationDbUser: reconciliationDbName
+        ? validateEnv('RECONCILIATION_DB_USER')
+        : undefined,
+      reconciliationDbPassword: reconciliationDbName
+        ? validateEnv('RECONCILIATION_DB_PASSWORD')
+        : undefined,
+      reconciliationDbSslMode: parsePostgresSslMode(
+        process.env.RECONCILIATION_DB_SSL_MODE ?? process.env.DB_SSL_MODE,
+      ),
 
       // indexer graphql api
       indexerGraphqlUrl: validateEnvUrl('INDEXER_GRAPHQL_URL'),
