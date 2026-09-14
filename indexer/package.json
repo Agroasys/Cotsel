@@ -31,6 +31,6 @@
     "@types/minimatch": "^6.0.0",
     "@types/node": "^25.6.0",
     "@types/pg": "^8.20.0",
-    "typescript": ">=6.0.2 <6.1.0"
+    "typescript": ">=6.0.2 <7.1.0"
   }
 }
