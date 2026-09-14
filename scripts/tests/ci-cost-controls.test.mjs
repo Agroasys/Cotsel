@@ -55,4 +55,6 @@ test('groups only minor and patch Dependabot version updates', async () => {
     assert.match(group, /update-types:\n\s+- minor\n\s+- patch/);
     assert.doesNotMatch(group, /- major/);
   }
+
+  assert.match(runtime, /exclude-patterns:\n\s+- 'ox'/);
 });
