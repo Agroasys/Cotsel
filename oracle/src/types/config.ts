@@ -40,6 +40,18 @@ export interface OracleConfig {
   dbPassword: string;
   dbSslMode: PostgresSslMode;
 
+  // reconciliation db, read-only: the PRES-11 containment gate
+  //
+  // Optional so a deployment without reconciliation still starts, but once a
+  // database is named the guard is mandatory and fail-closed — see
+  // `core/containment-guard.ts`.
+  reconciliationDbName?: string;
+  reconciliationDbHost?: string;
+  reconciliationDbPort?: number;
+  reconciliationDbUser?: string;
+  reconciliationDbPassword?: string;
+  reconciliationDbSslMode?: PostgresSslMode;
+
   // indexer graphql api
   indexerGraphqlUrl: string;
   indexerGraphqlRequestTimeoutMs: number;

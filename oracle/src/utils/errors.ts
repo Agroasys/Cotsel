@@ -33,6 +33,26 @@ export class ContractError extends OracleError {
   }
 }
 
+/**
+ * A trade is under a PRES-11 reconciliation containment, or the guard could not
+ * establish that it is not.
+ *
+ * Not terminal. A containment is lifted by a governed unpause, and a guard that
+ * could not be read is an outage — in both cases the milestone is owed once the
+ * blocker clears, so the trigger retries and then lands in
+ * `EXHAUSTED_NEEDS_REDRIVE`, which pages, rather than being written off.
+ */
+export class TradeContainedError extends OracleError {
+  constructor(
+    readonly tradeId: string,
+    readonly incidentReference: string | null,
+    message: string,
+  ) {
+    super(message, ErrorType.VALIDATION, false);
+    this.name = 'TradeContainedError';
+  }
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;

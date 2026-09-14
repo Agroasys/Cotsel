@@ -30,6 +30,8 @@ import {
 import { WebhookNotifier } from '@agroasys/notifications';
 import { approveTrigger, rejectTrigger } from '../database/queries';
 import { NOOP_ORACLE_ACTION_LOCK, type OracleActionLock } from './oracle-action-lock';
+import { createContainmentGuard, type ContainmentGuard } from './containment-guard';
+import { submitTriggerAction } from './blockchain-actions';
 
 export interface TriggerRequest {
   tradeId: string;
@@ -60,6 +62,7 @@ export class TriggerManager {
     private notifier?: WebhookNotifier,
     private manualApprovalEnabled: boolean = false,
     private readonly actionLock: OracleActionLock = NOOP_ORACLE_ACTION_LOCK,
+    private readonly containmentGuard: ContainmentGuard = createContainmentGuard(),
   ) {}
 
   async executeTrigger(request: TriggerRequest): Promise<TriggerResponse> {
@@ -118,7 +121,7 @@ export class TriggerManager {
       const trade = await this.sdkClient.getTrade(request.tradeId);
       StateValidator.validateTradeState(trade, request.triggerType);
 
-      await this.assertTradeNotPaused(request.tradeId);
+      await this.assertTradeMayProgress(request.tradeId);
 
       if (this.manualApprovalEnabled && !request.isRedrive) {
         const trigger = await this.createNewTrigger(request, actionKey);
@@ -187,12 +190,21 @@ export class TriggerManager {
   // submitting a transaction that would revert with "trade paused". Every path
   // that ends up calling executeWithRetry (fresh trigger, re-drive, and
   // post-approval resume) must gate on this.
-  private async assertTradeNotPaused(tradeId: string): Promise<void> {
+  /**
+   * Both reasons a trade must not move: the escrow's own scoped pause, and a
+   * reconciliation containment. The pause is the stronger control but the
+   * slower one, since an admin has to apply it; the containment binds as soon
+   * as reconciliation commits it, which is what closes the window between a
+   * qualified discrepancy and the pause landing.
+   */
+  private async assertTradeMayProgress(tradeId: string): Promise<void> {
     if (await this.sdkClient.isTradePaused(tradeId)) {
       throw new ValidationError(
         `Trade ${tradeId} is paused; oracle actions are blocked until an admin resumes it`,
       );
     }
+
+    await this.containmentGuard.assertMayProgress(tradeId);
   }
 
   private async handleRedrive(
@@ -205,9 +217,9 @@ export class TriggerManager {
     });
 
     // Guard before the retry machinery: a re-drive skips the executeTrigger
-    // pause check, so re-assert it here and let the ValidationError propagate
-    // out (the catch below would otherwise treat it as "already executed").
-    await this.assertTradeNotPaused(exhaustedTrigger.trade_id);
+    // pause check, so re-assert it here and let the error propagate out (the
+    // catch below would otherwise treat it as "already executed").
+    await this.assertTradeMayProgress(exhaustedTrigger.trade_id);
 
     incrementOracleRedriveAttempts(exhaustedTrigger.action_key);
 
@@ -349,8 +361,8 @@ export class TriggerManager {
       }
 
       // Approval resumes straight into executeWithRetry, bypassing the
-      // executeTrigger pause check, so re-assert the pause here.
-      await this.assertTradeNotPaused(updated.trade_id);
+      // executeTrigger checks, so re-assert them here.
+      await this.assertTradeMayProgress(updated.trade_id);
 
       incrementOracleApproved(updated.action_key);
 
@@ -591,33 +603,20 @@ export class TriggerManager {
     });
   }
 
+  /**
+   * The one place every oracle-submitted progression goes through.
+   *
+   * The guard is re-asserted here, not only at the entry points: a trigger can
+   * sit queued, retry, or be re-driven long after it was accepted, and a
+   * containment opened in the meantime must stop the submission that is about
+   * to happen — not merely the decision to attempt one.
+   */
   private async executeBlockchainAction(
     triggerType: TriggerType,
     tradeId: string,
   ): Promise<BlockchainResult> {
-    switch (triggerType) {
-      case TriggerType.RELEASE_STAGE_1:
-        return await this.sdkClient.releaseFundsStage1(tradeId);
+    await this.containmentGuard.assertMayProgress(tradeId);
 
-      // CONFIRM_ARRIVAL is retained as an inbound trigger name for upstream callers
-      // (agroasys-backend whitelists it) and maps onto the standard inspection window.
-      case TriggerType.CONFIRM_ARRIVAL:
-      case TriggerType.CONFIRM_INSPECTION_AVAILABLE_STANDARD:
-        return await this.sdkClient.confirmInspectionAvailable(tradeId, 72 * 60 * 60);
-
-      case TriggerType.CONFIRM_INSPECTION_AVAILABLE_PACKAGED_LOCAL:
-        return await this.sdkClient.confirmInspectionAvailable(tradeId, 48 * 60 * 60);
-
-      case TriggerType.FINALIZE_AFTER_INSPECTION_ACCEPTANCE:
-        throw new ValidationError(
-          'Buyer authorization is required; submit inspection acceptance through the gateway user-action route',
-        );
-
-      case TriggerType.FINALIZE_TRADE:
-        return await this.sdkClient.finalizeTrade(tradeId);
-
-      default:
-        throw new Error(`Unknown trigger type: ${triggerType}`);
-    }
+    return await submitTriggerAction(this.sdkClient, triggerType, tradeId);
   }
 }

@@ -485,6 +485,14 @@ services:
       DB_NAME: '${ORACLE_DB_NAME}'
       DB_USER: '${ORACLE_DB_RUNTIME_USER}'
       DB_PASSWORD: '${ORACLE_DB_RUNTIME_PASSWORD}'
+      # Read-only PRES-11 containment gate. Connects as reconciliation's own
+      # runtime role because the reconcile tables are behind RLS keyed on that
+      # service name; the oracle issues SELECT against one table.
+      RECONCILIATION_DB_HOST: postgres
+      RECONCILIATION_DB_PORT: '5432'
+      RECONCILIATION_DB_NAME: '${RECONCILIATION_DB_NAME}'
+      RECONCILIATION_DB_USER: '${RECONCILIATION_DB_RUNTIME_USER}'
+      RECONCILIATION_DB_PASSWORD: '${RECONCILIATION_DB_RUNTIME_PASSWORD}'
       INDEXER_GRAPHQL_URL: '${ORACLE_INDEXER_GRAPHQL_URL}'
       RETRY_ATTEMPTS: '${ORACLE_RETRY_ATTEMPTS}'
       RETRY_DELAY: '${ORACLE_RETRY_DELAY}'
@@ -497,6 +505,11 @@ services:
       ORACLE_MANUAL_APPROVAL_ENABLED: '${ORACLE_MANUAL_APPROVAL_ENABLED}'
     depends_on:
       oracle-migrate:
+        condition: service_completed_successfully
+      # The containment gate is fail-closed, so the table it reads must exist
+      # before the oracle accepts its first trigger; without this the oracle
+      # would refuse every progression until reconciliation happened to migrate.
+      reconciliation-migrate:
         condition: service_completed_successfully
       indexer-graphql:
         condition: service_healthy
@@ -534,6 +547,8 @@ services:
       RECONCILIATION_COVERAGE_BOUNDARY: '${RECONCILIATION_COVERAGE_BOUNDARY:-finalized}'
       RECONCILIATION_COVERAGE_MAX_AGE_MS: '${RECONCILIATION_COVERAGE_MAX_AGE_MS:-3600000}'
       RECONCILIATION_CHAIN_READ_CONCURRENCY: '${RECONCILIATION_CHAIN_READ_CONCURRENCY:-8}'
+      RECONCILIATION_LEASE_TTL_MS: '${RECONCILIATION_LEASE_TTL_MS:-300000}'
+      RECONCILIATION_LEASE_HEARTBEAT_MS: '${RECONCILIATION_LEASE_HEARTBEAT_MS:-30000}'
       DB_HOST: postgres
       DB_PORT: '5432'
       DB_NAME: '${RECONCILIATION_DB_NAME}'

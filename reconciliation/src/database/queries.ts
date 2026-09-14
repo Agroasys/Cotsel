@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { pool } from './connection';
-import type { DriftFinding, ReconcileMode, ReconcileRunRow, RunStats } from '../types';
+import { LIVE_LEASE_PREDICATE, assertLeaseHeld, releaseLease } from './leases';
+import type { DriftFinding, RunLeaseIdentity, RunStats } from '../types';
 
 /** Either the pool or a client bound to an open transaction. */
 type Executor = Pool | PoolClient;
@@ -103,36 +104,13 @@ export async function recordCoverageTailSighting(
   );
 }
 
-export async function createRun(
-  runKey: string,
-  mode: ReconcileMode,
-): Promise<{ row: ReconcileRunRow; created: boolean }> {
-  const insertResult = await pool.query<ReconcileRunRow>(
-    `INSERT INTO reconcile_runs (run_key, mode, status)
-     VALUES ($1, $2, 'RUNNING')
-     ON CONFLICT (run_key) DO NOTHING
-     RETURNING *`,
-    [runKey, mode],
-  );
-
-  if (insertResult.rows[0]) {
-    return { row: insertResult.rows[0], created: true };
-  }
-
-  const existing = await pool.query<ReconcileRunRow>(
-    'SELECT * FROM reconcile_runs WHERE run_key = $1',
-    [runKey],
-  );
-
-  return { row: existing.rows[0], created: false };
-}
-
 export async function upsertDrift(
   runId: number,
   runKey: string,
   finding: DriftFinding,
+  executor: Executor = pool,
 ): Promise<void> {
-  await pool.query(
+  await executor.query(
     `INSERT INTO reconcile_drifts (
         run_id,
         run_key,
@@ -171,8 +149,9 @@ export async function upsertRunTradeScope(
   runId: number,
   runKey: string,
   tradeId: string,
+  executor: Executor = pool,
 ): Promise<void> {
-  await pool.query(
+  await executor.query(
     `INSERT INTO reconcile_run_trades (run_id, run_key, trade_id)
      VALUES ($1, $2, $3)
      ON CONFLICT (run_key, trade_id) DO NOTHING`,
@@ -232,31 +211,62 @@ export async function completeRun(stats: RunStats, executor: Executor = pool): P
 }
 
 /**
- * Publish the run's complete-range accounting and move (or hold) the cursor in
- * a single transaction.
+ * Publish everything one run has to say, and move (or hold) the cursor, in a
+ * single fenced transaction.
  *
- * These two writes must commit together: if the cursor advanced in its own
+ * These writes must commit together: if the cursor advanced in its own
  * transaction and the run row then failed to complete, the next run would
  * resume past a window whose evidence was never recorded — a range silently
  * skipped behind a run marked failed. One transaction makes the cursor move
  * exactly when, and only when, its run is recorded as complete.
+ *
+ * The same transaction is also where the run's *durable* output lands, via
+ * `publish`. Writing drift, trade scope and containment outside it would let a
+ * worker displaced after its last batch publish evidence for a window its
+ * successor is redoing — the finalize fence would reject the run, but the stale
+ * findings and the containment they opened would already be committed, and the
+ * alerts already sent. Behind the fence, either every write lands under a lease
+ * the run demonstrably held, or none of them do.
  */
-export async function finalizeRun(input: {
-  stats: RunStats;
-  cursor:
-    | {
-        advance: true;
-        lastTradeId: bigint;
-        boundaryBlockNumber: number;
-        boundaryBlockHash: string;
-        tailFirstSeenAt: Date | null;
-      }
-    | { advance: false; tailFirstSeenAt: Date | null };
-}): Promise<void> {
-  const client = await pool.connect();
+export async function finalizeRun(
+  input: {
+    stats: RunStats;
+    /**
+     * The lease this run has been working under. Checked under `FOR UPDATE` as
+     * the first statement of the transaction, so a run that was declared
+     * abandoned — and whose window a successor may already have redone — cannot
+     * publish its findings or move the cursor on top of that successor.
+     */
+    lease: RunLeaseIdentity;
+    /**
+     * The run's durable output, applied after the fence and before the run row
+     * is completed. It must write only through the client it is handed, and it
+     * must not send an alert: alerts are enqueued to the outbox here and
+     * dispatched from committed state once the transaction has landed.
+     */
+    publish?: (client: PoolClient) => Promise<void>;
+    cursor:
+      | {
+          advance: true;
+          lastTradeId: bigint;
+          boundaryBlockNumber: number;
+          boundaryBlockHash: string;
+          tailFirstSeenAt: Date | null;
+        }
+      | { advance: false; tailFirstSeenAt: Date | null };
+  },
+  db: Pool = pool,
+): Promise<void> {
+  const client = await db.connect();
   try {
     await client.query('BEGIN');
+    await assertLeaseHeld(client, input.lease);
+    // Before completeRun, so the run row records the tallies `publish` produced.
+    await input.publish?.(client);
     await completeRun(input.stats, client);
+    // The run is terminal, so the key is free immediately rather than after a
+    // TTL. This rides the same transaction: a rolled-back run keeps its lease.
+    await releaseLease(input.lease, client);
 
     if (input.cursor.advance) {
       await advanceCoverageCursor(
@@ -281,13 +291,34 @@ export async function finalizeRun(input: {
   }
 }
 
-export async function failRun(runKey: string, errorMessage: string): Promise<void> {
-  await pool.query(
+/**
+ * Record a run that threw.
+ *
+ * Fenced on the lease for the same reason `finalizeRun` is: a displaced worker
+ * failing late must not stamp FAILED over a successor that is mid-run, or over
+ * a run the successor already completed. The fence includes expiry, so a worker
+ * whose lease lapsed leaves the row RUNNING for the sweeper to mark ABANDONED —
+ * which is what actually happened — rather than relabelling a key that is
+ * already open to a successor.
+ */
+export async function failRun(
+  lease: RunLeaseIdentity,
+  errorMessage: string,
+  executor: Executor = pool,
+): Promise<boolean> {
+  const result = await executor.query(
     `UPDATE reconcile_runs
      SET status = 'FAILED',
          completed_at = NOW(),
-         error_message = $2
-     WHERE run_key = $1`,
-    [runKey, errorMessage],
+         error_message = $4,
+         lease_owner = NULL,
+         lease_expires_at = NULL
+     WHERE run_key = $1
+       AND lease_owner = $2
+       AND lease_epoch = $3
+       AND ${LIVE_LEASE_PREDICATE}`,
+    [lease.runKey, lease.owner, lease.epoch, errorMessage],
   );
+
+  return result.rowCount === 1;
 }

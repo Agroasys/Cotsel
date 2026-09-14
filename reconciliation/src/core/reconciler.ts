@@ -1,17 +1,17 @@
 import { config } from '../config';
 import { OnchainClient } from '../blockchain/client';
+import { EscrowGovernanceReader } from '../blockchain/escrowGovernance';
 import { IndexerClient } from '../indexer/client';
 import { Logger } from '../utils/logger';
 import { classifyDrifts } from './classifier';
 import { CoverageAlerts } from './coverageAlerts';
-import {
-  createRun,
-  failRun,
-  finalizeRun,
-  readCoverageCursor,
-  upsertDrift,
-  upsertRunTradeScope,
-} from '../database/queries';
+import { failRun, finalizeRun, readCoverageCursor } from '../database/queries';
+import { LeaseLostError, claimRun } from '../database/leases';
+import { RunLease, createLeaseOwner } from './runLease';
+import { RunAlerts } from './runAlerts';
+import { dispatchPendingAlerts } from './alertDispatch';
+import { publishRunOutcome, resolveContainmentDecisions, sweepAbandonedRuns } from './runControls';
+import { generateRunKey, getErrorMessage, mapWithConcurrency, sleep } from './runHelpers';
 import {
   batchTradeIds,
   checkIndexerSurplus,
@@ -31,83 +31,58 @@ import {
 import { DEFAULT_SEVERITY_COUNTS, finalizeInconclusiveRun, skippedStats } from './runOutcome';
 import { DriftFinding, ReconcileMode, RunStats } from '../types';
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function generateRunKey(mode: ReconcileMode): string {
-  if (mode === 'DAEMON') {
-    const bucket = Math.floor(Date.now() / config.daemonIntervalMs);
-    return `daemon-${bucket}`;
-  }
-  return `once-${new Date().toISOString()}`;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Bounded-concurrency map, so a wide window cannot stampede the RPC endpoint. */
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  worker: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-
-  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    for (;;) {
-      const index = cursor;
-      cursor += 1;
-      if (index >= items.length) {
-        return;
-      }
-      results[index] = await worker(items[index]);
-    }
-  });
-
-  await Promise.all(runners);
-  return results;
-}
-
 export class ReconciliationService {
   private readonly onchainClient = new OnchainClient();
+  private readonly escrowGovernance = new EscrowGovernanceReader();
   private readonly indexerClient = new IndexerClient(config.indexerGraphqlUrl);
   private readonly alerts = new CoverageAlerts();
-  private async recordFinding(
-    runId: number,
-    runKey: string,
-    finding: DriftFinding,
-    stats: RunStats,
-  ): Promise<void> {
-    await upsertDrift(runId, runKey, finding);
-    await this.alerts.criticalDrift(runKey, finding);
-
-    stats.driftCount += 1;
-    stats.severityCounts[finding.severity] += 1;
-
-    Logger.warn('Reconciliation drift detected', {
-      runKey,
-      tradeId: finding.tradeId,
-      mismatchCode: finding.mismatchCode,
-      severity: finding.severity,
-    });
-  }
-
+  private readonly runAlerts = new RunAlerts();
   async reconcileOnce(mode: ReconcileMode, runKeyOverride?: string): Promise<RunStats> {
     const runKey = runKeyOverride || generateRunKey(mode);
-    const run = await createRun(runKey, mode);
 
-    if (!run.created && run.row.status === 'COMPLETED') {
-      Logger.warn('Skipping already completed reconciliation run key', { runKey, mode });
-      return skippedStats(runKey, mode, run.row, 'run_key already completed');
+    await sweepAbandonedRuns(this.runAlerts);
+
+    const claim = await claimRun({
+      runKey,
+      mode,
+      owner: createLeaseOwner(),
+      leaseTtlMs: config.leaseTtlMs,
+    });
+
+    if (!claim.claimed) {
+      if (claim.refusal === 'ALREADY_COMPLETED') {
+        Logger.warn('Skipping already completed reconciliation run key', { runKey, mode });
+        return skippedStats(runKey, mode, claim.row, 'run_key already completed');
+      }
+
+      Logger.warn('Skipping run key held by a live lease on another worker', {
+        runKey,
+        mode,
+        leaseOwner: claim.row.lease_owner,
+        leaseExpiresAt: claim.row.lease_expires_at?.toISOString() ?? null,
+      });
+      return skippedStats(runKey, mode, claim.row, 'run_key lease held by another worker');
     }
 
-    if (!run.created && run.row.status === 'RUNNING') {
-      Logger.warn('Skipping run key currently marked RUNNING', { runKey, mode });
-      return skippedStats(runKey, mode, run.row, 'run_key currently running');
+    const { row, lease, takeoverFrom } = claim.run;
+
+    if (takeoverFrom) {
+      Logger.warn('Reclaimed an abandoned reconciliation run as its successor', {
+        runKey,
+        mode,
+        previousOwner: takeoverFrom,
+        leaseOwner: lease.owner,
+        leaseEpoch: lease.epoch,
+        takeoverCount: row.takeover_count,
+      });
     }
+
+    const runLease = new RunLease({
+      identity: lease,
+      leaseTtlMs: config.leaseTtlMs,
+      heartbeatIntervalMs: config.leaseHeartbeatMs,
+    });
+    runLease.start();
 
     const stats: RunStats = {
       runKey,
@@ -132,6 +107,7 @@ export class ReconciliationService {
       if (!anchor.usable) {
         return finalizeInconclusiveRun({
           stats,
+          lease,
           reason: anchor.reason,
           tailFirstSeenAt: cursor.tailFirstSeenAt,
           context: { stage: 'indexer-anchor' },
@@ -180,6 +156,11 @@ export class ReconciliationService {
       // drift at all.
       const pendingFindings: DriftFinding[] = [];
       const pendingScope: string[] = [];
+      // Trades whose chain read *and* indexer record both came back, so this run
+      // is in a position to say something about them either way. Being in scope
+      // is not the same thing: a trade is in scope precisely because it was
+      // looked at, including when the look failed.
+      const comparedTradeIds: string[] = [];
       const record = (finding: DriftFinding): void => {
         pendingFindings.push(finding);
         if (holdsCursor(finding.mismatchCode)) {
@@ -188,6 +169,10 @@ export class ReconciliationService {
       };
 
       for (const idBatch of batchTradeIds(windowIds, config.batchSize)) {
+        // Stop at a batch edge rather than spending the rest of the window on
+        // comparisons the finalize fence is going to refuse anyway.
+        runLease.assertHeld();
+
         const chainTrades = await mapWithConcurrency<string, ChainTradeRecord>(
           idBatch,
           config.chainReadConcurrency,
@@ -220,6 +205,9 @@ export class ReconciliationService {
         for (const pair of comparison.paired) {
           stats.totalTrades += 1;
           pendingScope.push(pair.indexed.tradeId);
+          if (!pair.readError && pair.onchain) {
+            comparedTradeIds.push(pair.indexed.tradeId);
+          }
 
           for (const finding of classifyDrifts({
             indexedTrade: pair.indexed,
@@ -305,6 +293,7 @@ export class ReconciliationService {
       if (!snapshot.stable) {
         return finalizeInconclusiveRun({
           stats,
+          lease,
           reason: snapshot.reason ?? 'indexer snapshot unstable',
           tailFirstSeenAt: cursor.tailFirstSeenAt,
           context: {
@@ -313,13 +302,6 @@ export class ReconciliationService {
             anchorBlock: boundary.indexerProcessedBlock,
           },
         });
-      }
-
-      for (const tradeId of pendingScope) {
-        await upsertRunTradeScope(run.row.id, runKey, tradeId);
-      }
-      for (const finding of pendingFindings) {
-        await this.recordFinding(run.row.id, runKey, finding, stats);
       }
 
       const now = new Date();
@@ -368,10 +350,40 @@ export class ReconciliationService {
         indexerProcessedBlock: boundary.indexerProcessedBlock,
       };
 
-      // The run's complete-range accounting and the cursor move commit together:
-      // the cursor must never advance past a window whose run was not recorded.
+      // Containment decisions are settled from this run's own comparisons
+      // before the transaction opens; nothing is written until the fence has
+      // passed.
+      const containment = await resolveContainmentDecisions({
+        reader: this.escrowGovernance,
+        findings: pendingFindings,
+        comparedTradeIds,
+        boundaryBlock: boundary.blockNumber,
+      });
+
+      // Everything this run has to say lands in one fenced transaction: the
+      // findings, the trade scope, the containments they open, the alerts they
+      // owe, the run's own accounting, and the cursor move. A worker displaced
+      // after its last batch publishes none of it — previously the fence sat
+      // only in front of the cursor, so stale evidence and a stale containment
+      // could already be committed by the time the run was refused.
       await finalizeRun({
         stats,
+        lease,
+        publish: (client) =>
+          publishRunOutcome(
+            {
+              runId: row.id,
+              runKey,
+              stats,
+              boundary,
+              window,
+              sla,
+              scopedTradeIds: pendingScope,
+              findings: pendingFindings,
+              ...containment,
+            },
+            client,
+          ),
         cursor: cursorHeld
           ? { advance: false, tailFirstSeenAt }
           : {
@@ -389,10 +401,6 @@ export class ReconciliationService {
           reasons: hold.reasons,
           heldAtTradeId: cursor.lastTradeId.toString(),
         });
-      }
-
-      if (sla.breached && sla.reason) {
-        await this.alerts.coverageBacklog(runKey, sla.reason, window.uncoveredTail, boundary);
       }
 
       Logger.info('Reconciliation run completed', {
@@ -419,10 +427,45 @@ export class ReconciliationService {
 
       return stats;
     } catch (error: unknown) {
+      if (error instanceof LeaseLostError) {
+        // The successor owns this key and has redone, or is redoing, the same
+        // window. Writing anything here — including a FAILED status — would
+        // describe work that is no longer this worker's to report.
+        Logger.error('Reconciliation run discarded after losing its lease', {
+          runKey,
+          mode,
+          leaseOwner: lease.owner,
+          leaseEpoch: lease.epoch,
+        });
+
+        return {
+          ...stats,
+          status: 'SKIPPED',
+          totalTrades: 0,
+          driftCount: 0,
+          severityCounts: { ...DEFAULT_SEVERITY_COUNTS },
+          skippedReason: 'lease lost to a successor',
+        };
+      }
+
       const message = getErrorMessage(error);
-      await failRun(runKey, message);
-      Logger.error('Reconciliation run failed', { runKey, mode, error: message });
+      const recorded = await failRun(lease, message);
+      Logger.error('Reconciliation run failed', {
+        runKey,
+        mode,
+        error: message,
+        statusRecorded: recorded,
+      });
       throw error;
+    } finally {
+      await runLease.release();
+      // Dispatched from committed state, on every exit path: an outbox row left
+      // behind by a worker that died between COMMIT and delivery is still owed
+      // to an operator, and this is the next run that can pay it.
+      await dispatchPendingAlerts({
+        coverageAlerts: this.alerts,
+        runAlerts: this.runAlerts,
+      });
     }
   }
 

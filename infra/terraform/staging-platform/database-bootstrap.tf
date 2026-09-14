@@ -36,6 +36,10 @@ locals {
     : "$${INDEXER_RUNTIME_PASSWORD:?INDEXER_RUNTIME_PASSWORD is required}"
     : "$${INDEXER_READER_USERNAME:?INDEXER_READER_USERNAME is required}"
     : "$${INDEXER_READER_PASSWORD:?INDEXER_READER_PASSWORD is required}"
+    : "$${RECONCILIATION_MIGRATION_USERNAME:?RECONCILIATION_MIGRATION_USERNAME is required}"
+    : "$${RECONCILIATION_MIGRATION_PASSWORD:?RECONCILIATION_MIGRATION_PASSWORD is required}"
+    : "$${RECONCILIATION_READER_USERNAME:?RECONCILIATION_READER_USERNAME is required}"
+    : "$${RECONCILIATION_READER_PASSWORD:?RECONCILIATION_READER_PASSWORD is required}"
     : "$${RICARDIAN_MIGRATION_USERNAME:?RICARDIAN_MIGRATION_USERNAME is required}"
     : "$${RICARDIAN_MIGRATION_PASSWORD:?RICARDIAN_MIGRATION_PASSWORD is required}"
     : "$${RICARDIAN_RUNTIME_USERNAME:?RICARDIAN_RUNTIME_USERNAME is required}"
@@ -48,6 +52,8 @@ locals {
     [ "$${INDEXER_MIGRATION_USERNAME}" = 'cotsel_indexer_migrator' ]
     [ "$${INDEXER_RUNTIME_USERNAME}" = 'cotsel_indexer_app' ]
     [ "$${INDEXER_READER_USERNAME}" = 'cotsel_indexer_reader' ]
+    [ "$${RECONCILIATION_MIGRATION_USERNAME}" = 'cotsel_reconciliation_migrator' ]
+    [ "$${RECONCILIATION_READER_USERNAME}" = 'cotsel_reconciliation_reader' ]
     [ "$${RICARDIAN_MIGRATION_USERNAME}" = 'cotsel_ricardian_migrator' ]
     [ "$${RICARDIAN_RUNTIME_USERNAME}" = 'cotsel_ricardian_runtime' ]
     [ "$${TREASURY_MIGRATION_USERNAME}" = 'cotsel_treasury_migrator' ]
@@ -72,6 +78,8 @@ locals {
     \getenv indexer_migration_password INDEXER_MIGRATION_PASSWORD
     \getenv indexer_runtime_password INDEXER_RUNTIME_PASSWORD
     \getenv indexer_reader_password INDEXER_READER_PASSWORD
+    \getenv reconciliation_migration_password RECONCILIATION_MIGRATION_PASSWORD
+    \getenv reconciliation_reader_password RECONCILIATION_READER_PASSWORD
     \getenv ricardian_migration_password RICARDIAN_MIGRATION_PASSWORD
     \getenv ricardian_runtime_password RICARDIAN_RUNTIME_PASSWORD
     \getenv treasury_migration_password TREASURY_MIGRATION_PASSWORD
@@ -84,6 +92,9 @@ locals {
     \gexec
     SELECT format('CREATE ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS', 'cotsel_indexer_reader')
     WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cotsel_indexer_reader')
+    \gexec
+    SELECT format('CREATE ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS', 'cotsel_reconciliation_reader')
+    WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cotsel_reconciliation_reader')
     \gexec
     SELECT format('CREATE ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS', 'cotsel_ricardian_migrator')
     WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cotsel_ricardian_migrator')
@@ -100,6 +111,7 @@ locals {
     ALTER ROLE cotsel_indexer_migrator LOGIN PASSWORD :'indexer_migration_password';
     ALTER ROLE cotsel_indexer_app LOGIN PASSWORD :'indexer_runtime_password';
     ALTER ROLE cotsel_indexer_reader LOGIN PASSWORD :'indexer_reader_password';
+    ALTER ROLE cotsel_reconciliation_reader LOGIN PASSWORD :'reconciliation_reader_password';
     ALTER ROLE cotsel_ricardian_migrator LOGIN PASSWORD :'ricardian_migration_password';
     ALTER ROLE cotsel_ricardian_runtime LOGIN PASSWORD :'ricardian_runtime_password';
     ALTER ROLE cotsel_treasury_migrator LOGIN PASSWORD :'treasury_migration_password';
@@ -113,6 +125,29 @@ locals {
     SELECT format('CREATE DATABASE %I OWNER %I', 'cotsel_treasury', 'cotsel_treasury_migrator')
     WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'cotsel_treasury')
     \gexec
+    SQL
+
+    # Oracle consults reconciliation containment before progressing a trade.
+    # It has a separate reader identity so a compromise cannot write, release,
+    # or erase the control it is supposed to enforce.
+    # The reconciliation migration role owns the database objects, so it also
+    # applies the current and future reader grants.
+    export PGUSER="$${RECONCILIATION_MIGRATION_USERNAME}"
+    export PGPASSWORD="$${RECONCILIATION_MIGRATION_PASSWORD}"
+    psql --dbname cotsel_reconciliation --set ON_ERROR_STOP=1 <<SQL
+    REVOKE ALL ON DATABASE cotsel_reconciliation FROM PUBLIC;
+    REVOKE ALL ON DATABASE cotsel_reconciliation FROM cotsel_reconciliation_reader;
+    GRANT CONNECT ON DATABASE cotsel_reconciliation TO cotsel_reconciliation_reader;
+    REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+    REVOKE ALL ON SCHEMA public FROM cotsel_reconciliation_reader;
+    GRANT USAGE ON SCHEMA public TO cotsel_reconciliation_reader;
+    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM cotsel_reconciliation_reader;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM cotsel_reconciliation_reader;
+    GRANT SELECT ON ALL TABLES IN SCHEMA public TO cotsel_reconciliation_reader;
+    -- PostgreSQL only lets the object owner set future-table privileges.
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM cotsel_reconciliation_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM cotsel_reconciliation_reader;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO cotsel_reconciliation_reader;
     SQL
 
     psql --dbname cotsel_indexer --set ON_ERROR_STOP=1 <<SQL
@@ -198,8 +233,9 @@ locals {
     SQL
 
     unset MASTER_PASSWORD INDEXER_MIGRATION_PASSWORD INDEXER_RUNTIME_PASSWORD INDEXER_READER_PASSWORD
+    unset RECONCILIATION_MIGRATION_PASSWORD RECONCILIATION_READER_PASSWORD
     unset RICARDIAN_MIGRATION_PASSWORD RICARDIAN_RUNTIME_PASSWORD TREASURY_MIGRATION_PASSWORD TREASURY_RUNTIME_PASSWORD
-    printf '%s\n' 'Cotsel Indexer, Treasury, and Ricardian database roles and grants are configured.'
+    printf '%s\n' 'Cotsel Indexer, Reconciliation, Treasury, and Ricardian database roles and grants are configured.'
   COMMAND
 }
 
@@ -252,6 +288,8 @@ data "aws_iam_policy_document" "database_bootstrap_execution" {
       [for service in values(local.database_bootstrap_services) : service.migration_secret],
       [for service in values(local.database_bootstrap_services) : service.runtime_secret],
       [local.database_bootstrap_services.indexer.reader_secret],
+      aws_secretsmanager_secret.platform["database/reconciliation/migration"].arn,
+      aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn,
     )
   }
 
@@ -306,6 +344,10 @@ resource "aws_ecs_task_definition" "database_bootstrap" {
         { name = "INDEXER_RUNTIME_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:username::" },
         { name = "INDEXER_READER_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:password::" },
         { name = "INDEXER_READER_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:username::" },
+        { name = "RECONCILIATION_MIGRATION_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/migration"].arn}:password::" },
+        { name = "RECONCILIATION_MIGRATION_USERNAME", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/migration"].arn}:username::" },
+        { name = "RECONCILIATION_READER_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:password::" },
+        { name = "RECONCILIATION_READER_USERNAME", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:username::" },
         { name = "RICARDIAN_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:password::" },
         { name = "RICARDIAN_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:username::" },
         { name = "RICARDIAN_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.runtime_secret}:password::" },

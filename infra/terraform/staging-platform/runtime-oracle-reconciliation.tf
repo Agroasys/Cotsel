@@ -11,6 +11,12 @@ locals {
     { name = "DB_NAME", value = "cotsel_oracle" },
     { name = "DB_PORT", value = "5432" },
     { name = "DB_SSL_MODE", value = "verify-full" },
+    # Read-only PRES-11 containment gate. Its dedicated reader role presents
+    # reconciliation's service identity for RLS, but cannot alter incidents.
+    { name = "RECONCILIATION_DB_HOST", value = local.postgres_host },
+    { name = "RECONCILIATION_DB_NAME", value = "cotsel_reconciliation" },
+    { name = "RECONCILIATION_DB_PORT", value = "5432" },
+    { name = "RECONCILIATION_DB_SSL_MODE", value = "verify-full" },
     { name = "ESCROW_ADDRESS", value = var.base_sepolia_escrow_address },
     { name = "EXPLORER_BASE_URL", value = local.base_sepolia_explorer_url },
     { name = "HMAC_NONCE_TTL_SECONDS", value = "600" },
@@ -41,6 +47,8 @@ locals {
     { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/oracle/runtime"].arn}:password::" },
     { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/oracle/runtime"].arn}:username::" },
     { name = "HMAC_SECRET", valueFrom = "${aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn}:secret::" },
+    { name = "RECONCILIATION_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:password::" },
+    { name = "RECONCILIATION_DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:username::" },
     { name = "RPC_FALLBACK_URLS", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn },
     { name = "RPC_URL", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn },
     ], local.oracle_kms_enabled ? [] : [
@@ -96,6 +104,8 @@ locals {
     { name = "RECONCILIATION_CHAIN_READ_CONCURRENCY", value = "8" },
     { name = "RECONCILIATION_COVERAGE_BOUNDARY", value = "finalized" },
     { name = "RECONCILIATION_COVERAGE_MAX_AGE_MS", value = "3600000" },
+    { name = "RECONCILIATION_LEASE_HEARTBEAT_MS", value = "30000" },
+    { name = "RECONCILIATION_LEASE_TTL_MS", value = "300000" },
     { name = "RECONCILIATION_MAX_TRADES_PER_RUN", value = "1000" },
     { name = "RECONCILIATION_REQUIRE_CONTAINER_SAFE_INDEXER_URL", value = "false" },
     { name = "SETTLEMENT_RUNTIME", value = "base-sepolia" },

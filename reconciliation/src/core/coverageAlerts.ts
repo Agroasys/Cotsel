@@ -1,7 +1,7 @@
 import { WebhookNotifier } from '@agroasys/notifications';
 import { config } from '../config';
 import { Logger } from '../utils/logger';
-import type { CoverageBoundary, DriftFinding } from '../types';
+import type { CoverageBacklogAlertPayload, DriftFinding } from '../types';
 
 /**
  * Severity-routed alerting for the coverage controls.
@@ -51,12 +51,12 @@ export class CoverageAlerts {
     });
   }
 
-  async coverageBacklog(
-    runKey: string,
-    reason: string,
-    uncoveredTail: bigint,
-    boundary: CoverageBoundary,
-  ): Promise<void> {
+  /**
+   * Takes an already-flattened payload because it is dispatched from the alert
+   * outbox, where it was stored as JSON: the counts arrive as decimal strings
+   * rather than bigints.
+   */
+  async coverageBacklog(payload: CoverageBacklogAlertPayload): Promise<void> {
     await this.notifier.notify({
       source: 'reconciliation',
       type: 'RECONCILIATION_COVERAGE_BACKLOG',
@@ -64,12 +64,12 @@ export class CoverageAlerts {
       dedupKey: 'reconciliation:coverage-backlog',
       message:
         'Reconciliation cannot keep up with the chain trade range; the uncovered tail has breached its age SLA.',
-      correlation: { runKey },
+      correlation: { runKey: payload.runKey },
       metadata: {
-        reason,
-        uncoveredTail: uncoveredTail.toString(),
-        chainTradeCounter: boundary.chainTradeCounter.toString(),
-        boundaryBlock: boundary.blockNumber,
+        reason: payload.reason,
+        uncoveredTail: payload.uncoveredTail,
+        chainTradeCounter: payload.chainTradeCounter,
+        boundaryBlock: payload.boundaryBlock,
       },
     });
   }
