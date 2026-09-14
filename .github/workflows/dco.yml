@@ -42,7 +42,7 @@ jobs:
               git log -1 --format='%h %s' "$commit_sha" >&2
               missing=1
             fi
-          done < <(git rev-list "${merge_base}..${head_sha}")
+          done < <(git rev-list --no-merges "${merge_base}..${head_sha}")
 
           if [[ "$missing" -ne 0 ]]; then
             exit 1
