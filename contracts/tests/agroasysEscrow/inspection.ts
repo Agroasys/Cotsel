@@ -178,6 +178,98 @@ export function registerInspectionTests(getHarness: () => AgroasysEscrowHarness)
       ).to.be.reverted;
     });
 
+    it('binds buyer inspection authorization to nonce, trade, action, and contract', async function () {
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
+      await createTradeWithAuthorizationForTest(
+        supplier.address,
+        ethers.parseUnits('106004', 6),
+        ethers.parseUnits('5000', 6),
+        ethers.parseUnits('1504', 6),
+        ethers.parseUnits('59500', 6),
+        ethers.parseUnits('40000', 6),
+        ethers.id('second-trade-hash'),
+      );
+      const secondTradeId = 1n;
+      await escrow.connect(oracle).releaseFundsStage1(secondTradeId);
+      await escrow.connect(oracle).confirmInspectionAvailable(secondTradeId, 72 * 3600);
+
+      const nonce = await escrow.authorizationNonces(buyer.address);
+      const now = BigInt((await ethers.provider.getBlock('latest'))!.timestamp);
+      const deadline = now + 3600n;
+      const wrongNonce = nonce + 1n;
+      const wrongNonceSignature = await signUserActionAuthorization(buyer, {
+        user: buyer.address,
+        action: 5,
+        tradeId,
+        nonce: wrongNonce,
+        deadline,
+      });
+      await expect(
+        escrow
+          .connect(admin1)
+          .finalizeAfterInspectionAcceptanceWithAuthorization(
+            tradeId,
+            wrongNonce,
+            deadline,
+            wrongNonceSignature,
+          ),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorizationNonce');
+
+      const wrongTradeSignature = await signUserActionAuthorization(buyer, {
+        user: buyer.address,
+        action: 5,
+        tradeId,
+        nonce,
+        deadline,
+      });
+      await expect(
+        escrow
+          .connect(admin1)
+          .finalizeAfterInspectionAcceptanceWithAuthorization(
+            secondTradeId,
+            nonce,
+            deadline,
+            wrongTradeSignature,
+          ),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
+
+      const wrongActionSignature = await signUserActionAuthorization(buyer, {
+        user: buyer.address,
+        action: 1,
+        tradeId,
+        nonce,
+        deadline,
+      });
+      await expect(
+        escrow
+          .connect(admin1)
+          .finalizeAfterInspectionAcceptanceWithAuthorization(
+            tradeId,
+            nonce,
+            deadline,
+            wrongActionSignature,
+          ),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
+
+      const wrongContractSignature = await signUserActionAuthorization(
+        buyer,
+        { user: buyer.address, action: 5, tradeId, nonce, deadline },
+        { verifyingContract: supplier.address },
+      );
+      await expect(
+        escrow
+          .connect(admin1)
+          .finalizeAfterInspectionAcceptanceWithAuthorization(
+            tradeId,
+            nonce,
+            deadline,
+            wrongContractSignature,
+          ),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowBadAuthorization');
+
+      expect(await escrow.authorizationNonces(buyer.address)).to.equal(nonce);
+    });
+
     it('Should let the active oracle release the final tranche after the notice deadline', async function () {
       const supplierBefore = await usdc.balanceOf(supplier.address);
       await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
