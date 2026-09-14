@@ -58,14 +58,24 @@ updates:
         update-types:
           - 'version-update:semver-major'
     groups:
+      # Group only low-risk SemVer updates. Major upgrades remain individual so
+      # peer-dependency and runtime compatibility changes receive a focused review.
       npm-runtime:
+        applies-to: version-updates
         patterns:
           - '*'
         dependency-type: production
+        update-types:
+          - minor
+          - patch
       npm-dev:
+        applies-to: version-updates
         patterns:
           - '*'
         dependency-type: development
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: '/'
