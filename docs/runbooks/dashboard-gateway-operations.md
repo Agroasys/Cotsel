@@ -34,7 +34,7 @@ Approved remote staging contract:
 - chain target: Base Sepolia (`84532`)
 - explorer base: `https://sepolia-explorer.base.org/tx/`
 - mode: read-only first
-- governance signer mode: human direct-sign for privileged governance, executor only for delegated/service roles
+- governance signer mode: registered human hardware-wallet direct-sign only
 
 This means:
 
@@ -51,10 +51,10 @@ Authoritative dependencies:
 - Postgres: gateway ledgers and idempotency/audit persistence
 - Failed-operation replay: `node scripts/gateway-dead-letter-workflow.mjs list|replay`
 - Auth service: bearer-session validation
-- Chain RPC: read-only governance status and settlement operations implemented by
-  the current gateway
-- Governance mutation and executor processes: not implemented; see the blocked
-  status later in this runbook
+- Chain RPC: governance pre-flight reads, independent broadcast verification,
+  monitoring, and settlement operations
+- Governance mutation process: prepare and confirm only; no queue, executor,
+  replay worker, CLI signer, KMS signer, or server-held governance key
 
 ## Required configuration
 
@@ -72,6 +72,8 @@ Minimum gateway env contract:
 - `GATEWAY_USDC_ADDRESS`
 - `GATEWAY_ENABLE_MUTATIONS`
 - `GATEWAY_WRITE_ALLOWLIST`
+- `GATEWAY_OPERATOR_SIGNER_ENVIRONMENT`
+- `GATEWAY_GOVERNANCE_PREPARATION_TTL_SECONDS`
 - `GATEWAY_COMMIT_SHA`
 - `GATEWAY_BUILD_TIME`
 - `GATEWAY_INDEXER_REQUEST_TIMEOUT_MS`
@@ -145,7 +147,7 @@ receipt evidence is invalid.
 Operational controls:
 
 - monitor `GET /api/dashboard-gateway/v1/operations/gasless-relayer/readiness` before enabling sends;
-- use the managed signer path in production and keep raw private keys limited to local/staging use;
+- use the dedicated relayer KMS signer in staging and production;
 - refill or pause using the thresholds in `gateway-governance-signer-custody.md`;
 - on an ambiguous timeout, retry with the same platform transfer ID and idempotency key; the USDC
   authorization nonce prevents a second token spend;
@@ -206,7 +208,8 @@ Approved remote staging health evidence as of `2026-04-02`:
     - `operations:replay` for failed-operation replay
     - `treasury:prepare`, `treasury:approve`, `treasury:execute_match`, or `treasury:close`
       for the matching treasury workflow routes
-  - approved signer binding policy for signer-required governance and treasury routes
+  - the exact active signer-register binding for the submitted wallet, action
+    class, and environment
 
 Operational implication:
 
@@ -258,7 +261,6 @@ The gateway is intentionally conservative:
 
 - Auth session validation timeout: `GATEWAY_AUTH_REQUEST_TIMEOUT_MS` (default `5000ms`)
 - Chain read timeout: `GATEWAY_RPC_READ_TIMEOUT_MS` (default `8000ms`)
-- Governance executor timeout: `GATEWAY_EXECUTOR_TIMEOUT_MS` (default `45000ms`) for delegated/service-role executor paths only
 - Downstream read timeout: `GATEWAY_DOWNSTREAM_READ_TIMEOUT_MS` (default `5000ms`)
 - Downstream mutation timeout: `GATEWAY_DOWNSTREAM_MUTATION_TIMEOUT_MS` (default `8000ms`)
 - Automatic retries for gateway mutations: `GATEWAY_DOWNSTREAM_MUTATION_RETRY_BUDGET` (default `0`)
@@ -301,34 +303,27 @@ Escalation:
 
 ## Governance direct-sign procedure
 
-**BLOCKED / NOT IMPLEMENTED.** The flow below is the accepted target from
-ADR-0411, not a current operator procedure. Current repository truth has no
-gateway governance mutation routes, action store, prepare/confirm endpoints, or
-cleanup command. Do not infer execution support from the read-only governance
-status route.
-
-Target flow:
+**IMPLEMENTED IN SOURCE / NOT DEPLOYMENT-ACCEPTED.** Do not use this procedure
+until the reviewed release and migrations are deployed, the signer register is
+populated with named independent hardware-wallet custodians, and the release
+evidence window is explicitly approved.
 
 1. Gateway validates authz and payload.
-2. Gateway derives a deterministic `intentKey` from governance category, contract method, and relevant parameters.
+2. Gateway requires the exact active signer binding and derives a deterministic
+   `intentKey` from the action, chain, signer, binding, method, and parameters.
 3. If an open action already exists for the same `intentKey`, the gateway returns that existing action instead of creating a duplicate row.
 4. Otherwise the gateway writes `governance_actions` + `audit_log` atomically with status `prepared` and flow type `direct_sign`.
 5. The response includes the canonical signing payload and prepared payload hash.
-6. The admin signs and broadcasts with their own wallet.
+6. The admin reviews the complete transaction on the hardware device, then signs
+   and broadcasts with that device through compatible wallet software.
 7. The caller submits `POST /governance/actions/:actionId/confirm`.
 8. Gateway records `broadcast` or `broadcast_pending_verification` and starts backend monitoring.
-9. Operators verify tx hash, verification state, monitoring state, and chain event depth.
+9. Operators verify tx hash, verification state, monitoring state, receipt, and
+   chain confirmation depth through finalization.
 
-The owning work package must implement and accept the action store, expiry,
-cleanup, confirmation, monitoring, idempotency, and audit behavior before this
-becomes executable guidance.
-
-## Delegated/service-role executor procedure
-
-No delegated governance executor or package command exists in current repository
-truth. Do not use an old checkout, manual contract call, or direct database write
-as a substitute. Use `docs/runbooks/gateway-governance-signer-custody.md` for the
-controls that a future implementation must satisfy.
+The gateway never signs or broadcasts governance transactions. Do not use an
+old checkout, manual contract call, direct database write, executor, queue,
+replay worker, KMS key, or CLI command as a substitute.
 
 ## Rollback procedure
 

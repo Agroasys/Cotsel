@@ -237,6 +237,27 @@ function buildSessionReference(token: string): string {
   return `sha256:${createHash('sha256').update(token, 'utf8').digest('hex')}`;
 }
 
+export function buildGatewayPrincipal(
+  session: AuthSession,
+  token: string,
+  config: GatewayConfig,
+): GatewayPrincipal {
+  const normalizedSession = {
+    ...session,
+    signerAuthorizations: normalizeSignerAuthorizations(session),
+    breakGlass: resolveBreakGlassContext(session),
+  };
+  return {
+    sessionReference: buildSessionReference(token),
+    session: normalizedSession,
+    gatewayRoles: mapGatewayRoles(normalizedSession),
+    operatorActionCapabilities: resolveOperatorActionCapabilities(normalizedSession),
+    treasuryCapabilities: resolveTreasuryCapabilities(normalizedSession),
+    writeEnabled:
+      config.enableMutations && matchesAllowlist(normalizedSession, config.writeAllowlist),
+  };
+}
+
 export function createAuthenticationMiddleware(client: AuthSessionClient, config: GatewayConfig) {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     const token = getBearerToken(req);
@@ -251,18 +272,7 @@ export function createAuthenticationMiddleware(client: AuthSessionClient, config
       return;
     }
 
-    req.gatewayPrincipal = {
-      sessionReference: buildSessionReference(token),
-      session: {
-        ...session,
-        signerAuthorizations: normalizeSignerAuthorizations(session),
-        breakGlass: resolveBreakGlassContext(session),
-      },
-      gatewayRoles: mapGatewayRoles(session),
-      operatorActionCapabilities: resolveOperatorActionCapabilities(session),
-      treasuryCapabilities: resolveTreasuryCapabilities(session),
-      writeEnabled: config.enableMutations && matchesAllowlist(session, config.writeAllowlist),
-    };
+    req.gatewayPrincipal = buildGatewayPrincipal(session, token, config);
 
     next();
   };
@@ -378,9 +388,7 @@ export function requireAuthorizedSignerBinding(
     (authorization) =>
       authorization.walletAddress === walletAddress &&
       authorization.actionClass === actionClass &&
-      // A wildcard environment is the role-derived admin authorization, which is
-      // valid in any environment; otherwise the binding is environment-scoped.
-      (authorization.environment === signerEnvironment || authorization.environment === '*'),
+      authorization.environment === signerEnvironment,
   );
 
   if (!binding) {

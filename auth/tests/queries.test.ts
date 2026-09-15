@@ -76,6 +76,35 @@ describe('normalizeSessionRow', () => {
     ).toThrow('Invalid issuedAt session timestamp returned from database');
   });
 
+  test('returns only explicit signer-register entries for durable admins', () => {
+    const binding = {
+      bindingId: 'binding-1',
+      walletAddress: '0x00000000000000000000000000000000000000aa',
+      actionClass: 'governance' as const,
+      environment: 'staging',
+      approvedAt: '2026-09-12T00:00:00.000Z',
+      approvedBy: 'security-owner',
+      ticketRef: 'COTSEL-641',
+      notes: null,
+    };
+    const baseRow = {
+      sessionId: 'sess-signer',
+      accountId: 'acct-admin',
+      userId: 'user-admin',
+      walletAddress: binding.walletAddress,
+      email: 'admin@example.com',
+      issuedAt: '1772916944',
+      expiresAt: '1772920544',
+      revokedAt: null,
+      signerAuthorizations: [binding],
+    };
+
+    expect(normalizeSessionRow({ ...baseRow, role: 'admin' }).signerAuthorizations).toEqual([
+      binding,
+    ]);
+    expect(normalizeSessionRow({ ...baseRow, role: 'buyer' }).signerAuthorizations).toEqual([]);
+  });
+
   test('derives break-glass post-incident review status from session rows', () => {
     const future = new Date(Date.now() + 60_000).toISOString();
     const past = new Date(Date.now() - 60_000).toISOString();

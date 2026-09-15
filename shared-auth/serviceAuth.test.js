@@ -43,13 +43,29 @@ function createRequest(overrides = {}) {
 }
 
 test('parseServiceApiKeys validates active and trims values', () => {
-  const keys = parseServiceApiKeys('[{"id":" gateway ","secret":" top-secret ","active":true}]');
-  assert.deepEqual(keys, [{ id: 'gateway', secret: 'top-secret', active: true }]);
+  const keys = parseServiceApiKeys(
+    '[{"id":" gateway ","secret":" top-secret ","active":true,"humanPrincipalId":"agroasys-user:operator-1"}]',
+  );
+  assert.deepEqual(keys, [
+    {
+      id: 'gateway',
+      secret: 'top-secret',
+      active: true,
+      humanPrincipalId: 'agroasys-user:operator-1',
+    },
+  ]);
   const singleton = parseServiceApiKeys('{"id":" gateway ","secret":" top-secret ","active":true}');
   assert.deepEqual(singleton, [{ id: 'gateway', secret: 'top-secret', active: true }]);
   assert.throws(
     () => parseServiceApiKeys('[{"id":"a","secret":"b","active":"yes"}]'),
     /active must be a boolean/,
+  );
+  assert.throws(
+    () =>
+      parseServiceApiKeys(
+        '[{"id":"a","secret":"b","active":true,"humanPrincipalId":"Operator One"}]',
+      ),
+    /canonical lowercase identity/,
   );
 });
 
@@ -75,7 +91,14 @@ test('service auth middleware accepts a valid signed request', async () => {
     nonceTtlSeconds: 60,
     nowSeconds: () => Number(timestamp),
     lookupApiKey: (candidate) =>
-      candidate === apiKey ? { id: apiKey, secret, active: true } : undefined,
+      candidate === apiKey
+        ? {
+            id: apiKey,
+            secret,
+            active: true,
+            humanPrincipalId: 'agroasys-user:operator-1',
+          }
+        : undefined,
     consumeNonce: async (...args) => {
       consumeCalls.push(args);
       return true;
@@ -100,7 +123,11 @@ test('service auth middleware accepts a valid signed request', async () => {
   assert.equal(nextCalled, true);
   assert.equal(res.body, undefined);
   assert.deepEqual(consumeCalls, [[apiKey, nonce, 60]]);
-  assert.deepEqual(req.serviceAuth, { apiKeyId: apiKey, scheme: 'api_key' });
+  assert.deepEqual(req.serviceAuth, {
+    apiKeyId: apiKey,
+    scheme: 'api_key',
+    humanPrincipalId: 'agroasys-user:operator-1',
+  });
 });
 
 test('service auth middleware rejects replayed nonces', async () => {

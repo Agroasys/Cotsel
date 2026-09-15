@@ -1,8 +1,15 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { AdminActor, UserProfile, UserRole } from '../types';
+import {
+  AdminActor,
+  OperatorSignerActionClass,
+  OperatorSignerRegisterRecord,
+  UserProfile,
+  UserRole,
+} from '../types';
 import { ProfileStore } from './profileStore';
+import { OperatorSignerStore } from './operatorSignerStore';
 import type { AdminAuditEventRecord, OperatorProfileAuthoritySnapshot } from '../database/queries';
 import {
   incrementAdminBreakGlassGranted,
@@ -39,6 +46,31 @@ interface AccountActionInput {
   reason: string;
 }
 
+interface ProposeSignerInput {
+  accountId: string;
+  walletAddress: string;
+  actionClass: OperatorSignerActionClass;
+  environment: string;
+  custodianName: string;
+  approvalTicket: string;
+  notes?: string | null;
+  actor: AdminActor;
+  reason: string;
+}
+
+interface ApproveSignerInput {
+  bindingId: string;
+  evidenceDigest: string;
+  actor: AdminActor;
+  reason: string;
+}
+
+interface RevokeSignerInput {
+  bindingId: string;
+  actor: AdminActor;
+  reason: string;
+}
+
 export interface AdminService {
   listAuthorityProfiles(input?: { limit?: number }): Promise<OperatorProfileAuthoritySnapshot[]>;
   listAuditEvents(input?: { accountId?: string; limit?: number }): Promise<AdminAuditEventRecord[]>;
@@ -47,6 +79,14 @@ export interface AdminService {
   revokeBreakGlass(input: AccountActionInput): Promise<UserProfile | null>;
   reviewBreakGlass(input: AccountActionInput): Promise<UserProfile>;
   deactivateProfile(input: AccountActionInput): Promise<UserProfile>;
+  listSignerBindings(input?: {
+    accountId?: string;
+    active?: boolean;
+    limit?: number;
+  }): Promise<OperatorSignerRegisterRecord[]>;
+  proposeSigner(input: ProposeSignerInput): Promise<OperatorSignerRegisterRecord>;
+  approveSigner(input: ApproveSignerInput): Promise<OperatorSignerRegisterRecord>;
+  revokeSigner(input: RevokeSignerInput): Promise<OperatorSignerRegisterRecord | null>;
 }
 
 function normalizeReason(reason: string): string {
@@ -60,10 +100,26 @@ function normalizeReason(reason: string): string {
   return trimmed;
 }
 
+function normalizeRequiredEvidence(value: string, field: string, maxLength = 200): string {
+  const normalized = value.trim();
+  if (normalized.length < 2 || normalized.length > maxLength) {
+    throw new Error(`${field} must be between 2 and ${maxLength} characters`);
+  }
+  return normalized;
+}
+
 export function createAdminService(
   profiles: ProfileStore,
   maxBreakGlassTtlSeconds: number,
+  signerStore?: OperatorSignerStore,
 ): AdminService {
+  function requireSignerStore(): OperatorSignerStore {
+    if (!signerStore) {
+      throw new Error('Operator signer register is not configured');
+    }
+    return signerStore;
+  }
+
   return {
     async listAuthorityProfiles(input = {}) {
       return profiles.listAuthorityProfiles(input);
@@ -165,6 +221,50 @@ export function createAdminService(
         accountId: input.accountId,
       });
       return profile;
+    },
+
+    async listSignerBindings(input = {}) {
+      return requireSignerStore().list(input);
+    },
+
+    async proposeSigner(input) {
+      const normalizedEnvironment = input.environment.trim().toLowerCase();
+      if (normalizedEnvironment === '*') {
+        throw new Error('environment wildcard is not allowed for signer bindings');
+      }
+      const environment = normalizeRequiredEvidence(normalizedEnvironment, 'environment', 64);
+      return requireSignerStore().propose({
+        accountId: input.accountId.trim(),
+        walletAddress: input.walletAddress.toLowerCase(),
+        actionClass: input.actionClass,
+        environment,
+        custodianName: normalizeRequiredEvidence(input.custodianName, 'custodianName'),
+        approvalTicket: normalizeRequiredEvidence(input.approvalTicket, 'approvalTicket'),
+        notes: input.notes?.trim() || null,
+        actor: input.actor,
+        reason: normalizeReason(input.reason),
+      });
+    },
+
+    async approveSigner(input) {
+      const evidenceDigest = input.evidenceDigest.trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(evidenceDigest)) {
+        throw new Error('evidenceDigest must be a lowercase SHA-256 digest');
+      }
+      return requireSignerStore().approve({
+        bindingId: normalizeRequiredEvidence(input.bindingId, 'bindingId'),
+        evidenceDigest,
+        actor: input.actor,
+        reason: normalizeReason(input.reason),
+      });
+    },
+
+    async revokeSigner(input) {
+      return requireSignerStore().revoke({
+        bindingId: normalizeRequiredEvidence(input.bindingId, 'bindingId'),
+        actor: input.actor,
+        reason: normalizeReason(input.reason),
+      });
     },
   };
 }

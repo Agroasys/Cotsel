@@ -1,0 +1,165 @@
+paths:
+  /governance/treasury/sweep/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare treasury sweep for direct admin signing
+      operationId: prepareClaimTreasury
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/treasury/payout-receiver/proposals/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare treasury payout receiver proposal for direct admin signing
+      operationId: prepareProposeTreasuryPayoutReceiverUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryPayoutReceiverProposalSignerRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/treasury/payout-receiver/proposals/{proposalId}/approve/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare treasury payout receiver approval for direct admin signing
+      operationId: prepareApproveTreasuryPayoutReceiverUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/treasury/payout-receiver/proposals/{proposalId}/execute/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare treasury payout receiver execution for direct admin signing
+      operationId: prepareExecuteTreasuryPayoutReceiverUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /governance/treasury/payout-receiver/proposals/{proposalId}/cancel-expired/prepare:
+    post:
+      tags:
+        - Governance
+      summary: Prepare expired treasury payout receiver proposal cancellation for direct admin signing
+      operationId: prepareCancelExpiredTreasuryPayoutReceiverUpdate
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernanceDirectSignPrepareRequest'
+      responses:
+        '200':
+          description: Canonical direct-sign payload prepared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceActionPreparedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'

@@ -38,6 +38,8 @@ function mockRequest<TBody extends Record<string, unknown>>(
     body,
     serviceAuth: {
       apiKeyId: 'admin-control-key',
+      humanPrincipalId: 'agroasys-user:admin-controller-test',
+      scheme: 'api_key',
     },
   } as unknown as Request<Record<string, never>, unknown, TBody>;
 }
@@ -51,6 +53,27 @@ function mockResponse(): Response {
 }
 
 describe('AdminController break-glass review status payloads', () => {
+  test('rejects signer proposals when the credential lacks a bound human identity', async () => {
+    const service = { proposeSigner: jest.fn() } as unknown as AdminService;
+    const controller = new AdminController(service);
+    const response = mockResponse();
+    const request = mockRequest({
+      accountId: 'acct-admin',
+      walletAddress: '0x00000000000000000000000000000000000000aa',
+      actionClass: 'governance' as const,
+      environment: 'staging',
+      custodianName: 'Admin Custodian',
+      approvalTicket: 'COTSEL-641',
+      reason: 'Propose witnessed signer custody.',
+    });
+    delete request.serviceAuth?.humanPrincipalId;
+
+    await controller.signers.propose(request, response);
+
+    expect(response.status).toHaveBeenCalledWith(401);
+    expect(service.proposeSigner).not.toHaveBeenCalled();
+  });
+
   test('returns active_unreviewed after granting break-glass authority', async () => {
     const service = {
       grantBreakGlass: jest.fn().mockResolvedValue(
