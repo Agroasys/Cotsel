@@ -196,7 +196,7 @@ export async function resolveGovernanceConfirmationOutcome(input: {
       status: 'failed',
       monitoringState: 'reverted',
       blockNumber: receipt.blockNumber ?? observedBlockNumber,
-      executedAt: inspectedAt,
+      executedAt: null,
       eventType: 'governance.action.monitoring.reverted',
       errorCode: 'TX_REVERTED',
       errorMessage: 'Observed governance transaction reverted on-chain',

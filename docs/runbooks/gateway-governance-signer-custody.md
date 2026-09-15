@@ -103,10 +103,12 @@ ticket, and active or revoked state. Wildcard environments are forbidden.
 3. Record custody and recovery evidence in the approval ticket. Do not record a
    seed phrase, private key, PIN, device serial number, or location.
 4. Propose the binding through `POST /api/auth/v1/admin/signers/propose` using
-   one authenticated admin-control principal. Record the returned evidence digest.
-5. A different authenticated admin-control principal independently reviews the
-   canonical record and activates it through `POST /api/auth/v1/admin/signers/approve`
-   with the exact binding ID and evidence digest. Self-approval is prohibited.
+   an admin-control credential bound to the proposer's canonical human identity.
+   Record the returned evidence digest.
+5. A different canonical human principal independently reviews the record and
+   activates it through `POST /api/auth/v1/admin/signers/approve` with the exact
+   binding ID and evidence digest. A second credential belonging to the proposer
+   does not satisfy separation of duties and self-approval is rejected.
 6. Read it back through `GET /api/auth/v1/admin/signers?active=true`.
 7. Resolve a fresh session and verify it contains only the exact active binding;
    pending and revoked records must provide no signer authorization.

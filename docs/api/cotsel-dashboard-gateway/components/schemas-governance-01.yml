@@ -161,6 +161,7 @@ components:
           type: string
           format: date-time
           nullable: true
+          description: Set only after successful finalization; null for pending, stale, rejected, failed, or reverted actions.
         signing:
           oneOf:
             - type: 'null'
@@ -431,6 +432,7 @@ components:
         txHash:
           type: string
           pattern: '^0x[0-9a-fA-F]{64}$'
+          description: The reported broadcast hash. A different hash may replace it only while the prior hash remains unobserved and pending verification.
         signerWallet:
           type: string
     GovernanceBroadcastConfirmedResponse:

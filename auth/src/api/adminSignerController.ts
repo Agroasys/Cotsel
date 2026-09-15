@@ -37,8 +37,11 @@ interface BindingActionBody {
 
 function actorFromRequest(req: Request) {
   const apiKeyId = req.serviceAuth?.apiKeyId;
-  if (!apiKeyId) throw new HttpError(401, 'Unauthorized', 'Missing service-auth actor context');
-  return { type: 'service_auth' as const, id: apiKeyId };
+  const humanPrincipalId = req.serviceAuth?.humanPrincipalId;
+  if (!apiKeyId || !humanPrincipalId) {
+    throw new HttpError(401, 'Unauthorized', 'Missing authenticated admin-control identity');
+  }
+  return { type: 'service_auth' as const, id: apiKeyId, humanPrincipalId };
 }
 
 function parseLimit(value: unknown): number {

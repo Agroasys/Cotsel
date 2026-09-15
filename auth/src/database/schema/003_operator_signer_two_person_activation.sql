@@ -1,9 +1,9 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 -- Convert signer registration into a two-person lifecycle. Existing bindings
--- were activated from operator-supplied approval text; they are deliberately
--- moved to pending and must be re-approved by a distinct authenticated control
--- principal before they can authorize a session.
+-- were activated from operator-supplied approval text and cannot be attributed
+-- to canonical human principals. They are retained as revoked history and must
+-- be reproposed before they can authorize a session.
 DROP TRIGGER IF EXISTS operator_signer_binding_evidence_immutable
     ON operator_signer_bindings;
 
@@ -23,7 +23,7 @@ ALTER TABLE operator_signer_bindings
     DROP CONSTRAINT IF EXISTS operator_signer_binding_approval_not_future;
 
 UPDATE operator_signer_bindings
-SET state = CASE WHEN active THEN 'pending' ELSE 'revoked' END,
+SET state = 'revoked',
     active = FALSE,
     evidence_digest = encode(
         digest(
@@ -52,14 +52,14 @@ SET state = CASE WHEN active THEN 'pending' ELSE 'revoked' END,
     legacy_approval_claim = jsonb_build_object(
         'approvingAuthority', approving_authority,
         'approvedAt', approved_at,
-        'migratedAs', CASE WHEN active THEN 'pending_reapproval' ELSE 'revoked_history' END
+        'migratedAs', CASE
+            WHEN active THEN 'canonical_human_reproposal_required'
+            ELSE 'revoked_history'
+        END
     ),
-    revoked_at = CASE WHEN active THEN NULL ELSE COALESCE(revoked_at, updated_at, NOW()) END,
-    revoked_by = CASE WHEN active THEN NULL ELSE COALESCE(revoked_by, 'auth:migration') END,
-    revoked_reason = CASE
-        WHEN active THEN NULL
-        ELSE COALESCE(revoked_reason, 'pre_activation_lifecycle_record')
-    END,
+    revoked_at = COALESCE(revoked_at, updated_at, NOW()),
+    revoked_by = COALESCE(revoked_by, 'auth:migration'),
+    revoked_reason = COALESCE(revoked_reason, 'canonical_human_reproposal_required'),
     updated_at = NOW()
 WHERE state IS NULL;
 
@@ -73,7 +73,16 @@ ALTER TABLE operator_signer_bindings
     ADD CONSTRAINT operator_signer_binding_approval_digest_check
         CHECK (approved_digest IS NULL OR approved_digest ~ '^[0-9a-f]{64}$'),
     ADD CONSTRAINT operator_signer_binding_distinct_approver
-        CHECK (approved_by_principal IS NULL OR approved_by_principal <> created_by);
+        CHECK (approved_by_principal IS NULL OR approved_by_principal <> created_by),
+    ADD CONSTRAINT operator_signer_binding_human_principals CHECK (
+        state = 'revoked' OR (
+            created_by ~ '^human:[a-z0-9][a-z0-9:._@/-]{0,127}$'
+            AND (
+                approved_by_principal IS NULL
+                OR approved_by_principal ~ '^human:[a-z0-9][a-z0-9:._@/-]{0,127}$'
+            )
+        )
+    );
 
 ALTER TABLE operator_signer_bindings
     ADD CONSTRAINT operator_signer_binding_lifecycle_complete CHECK (

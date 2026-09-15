@@ -327,7 +327,7 @@ export class GovernanceDirectSignMonitor {
         verificationState: action.verificationState ?? 'verified',
         errorCode: 'TX_REVERTED',
         errorMessage: 'Observed governance transaction reverted on-chain',
-        executedAt: inspectedAt,
+        executedAt: action.executedAt,
       };
 
       const auditEntry = buildGovernanceMonitoringAuditEntry(
@@ -417,7 +417,7 @@ export class GovernanceDirectSignMonitor {
       monitoringState,
       errorCode,
       errorMessage,
-      executedAt: inspectedAt,
+      executedAt: action.executedAt,
     };
 
     const auditEntry = buildGovernanceMonitoringAuditEntry(action, requestId, eventType, 'failed', {
@@ -446,7 +446,7 @@ export class GovernanceDirectSignMonitor {
       verificationState,
       errorCode,
       errorMessage,
-      executedAt: inspectedAt,
+      executedAt: action.executedAt,
     };
 
     const auditEntry = buildGovernanceMonitoringAuditEntry(

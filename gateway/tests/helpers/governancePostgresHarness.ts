@@ -84,6 +84,7 @@ export async function withGovernancePostgres(fn: (port: number) => Promise<void>
           '../../src/database/schema/005_governance_direct_sign.sql',
           '../../src/database/schema/006_governance_atomic_transitions.sql',
           '../../src/database/schema/007_governance_simulation_evidence.sql',
+          '../../src/database/schema/008_governance_pending_hash_correction.sql',
         ]) {
           await client.query(fs.readFileSync(path.resolve(__dirname, file), 'utf8'));
         }

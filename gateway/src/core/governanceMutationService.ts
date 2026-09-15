@@ -354,20 +354,11 @@ export class GovernanceMutationService {
       });
     }
 
-    if (existing.txHash && existing.txHash.toLowerCase() !== input.txHash.toLowerCase()) {
-      throw new GatewayError(
-        409,
-        'CONFLICT',
-        'Governance action has already been confirmed with a different transaction hash',
-        {
-          actionId: input.actionId,
-          existingTxHash: existing.txHash,
-          submittedTxHash: input.txHash,
-        },
-      );
-    }
-
     const actorId = resolveGovernanceActorId(input.principal);
+    const replacedUnverifiedTxHash =
+      existing.txHash && existing.txHash.toLowerCase() !== input.txHash.toLowerCase()
+        ? existing.txHash
+        : null;
     const verification = await verifyGovernanceBroadcast(
       this.verifier,
       existing,
@@ -420,7 +411,9 @@ export class GovernanceMutationService {
         ? verification.verificationState === 'verified'
           ? 'governance.action.late_broadcast_detected'
           : 'governance.action.late_broadcast_reported'
-        : 'governance.action.broadcast_confirmed',
+        : replacedUnverifiedTxHash
+          ? 'governance.action.broadcast_hash_corrected'
+          : 'governance.action.broadcast_confirmed',
       route: `/governance/actions/${input.actionId}/confirm`,
       method: 'POST',
       requestId: input.requestContext.requestId,
@@ -434,6 +427,7 @@ export class GovernanceMutationService {
       metadata: {
         actionId: input.actionId,
         txHash: input.txHash,
+        replacedUnverifiedTxHash,
         category: existing.category,
         contractMethod: existing.contractMethod,
         proposalId: existing.proposalId,

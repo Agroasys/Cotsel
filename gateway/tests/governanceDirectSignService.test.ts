@@ -257,6 +257,49 @@ describe('GovernanceMutationService direct-sign boundary', () => {
     ).rejects.toThrow('different transaction hash');
   });
 
+  test('replaces only an unobserved pending hash after verifying the corrected transaction', async () => {
+    const harness = createHarness();
+    const prepared = await prepare(harness);
+    const mistypedHash = `0x${'8'.repeat(64)}`;
+    const correctHash = `0x${'9'.repeat(64)}`;
+
+    await harness.service.confirmBroadcast({
+      actionId: prepared.actionId,
+      txHash: mistypedHash,
+      signerWallet,
+      principal: principal(),
+      signerBinding: authorizedSignerBinding(),
+      requestContext: { requestId: 'req-mistyped', correlationId: 'corr-2', startedAtMs: 2 },
+    });
+    await expect(harness.actionStore.get(prepared.actionId)).resolves.toMatchObject({
+      txHash: mistypedHash,
+      status: 'broadcast_pending_verification',
+      verificationState: 'pending',
+    });
+
+    (harness.verifier.getTransaction as jest.Mock).mockResolvedValue(
+      observed({ data: prepared.signing.txRequest.data }),
+    );
+    await expect(
+      harness.service.confirmBroadcast({
+        actionId: prepared.actionId,
+        txHash: correctHash,
+        signerWallet,
+        principal: principal(),
+        signerBinding: authorizedSignerBinding(),
+        requestContext: { requestId: 'req-corrected', correlationId: 'corr-2', startedAtMs: 3 },
+      }),
+    ).resolves.toMatchObject({
+      txHash: correctHash,
+      status: 'broadcast',
+      verificationState: 'verified',
+    });
+    expect(harness.auditStore.entries[harness.auditStore.entries.length - 1]).toMatchObject({
+      eventType: 'governance.action.broadcast_hash_corrected',
+      metadata: { txHash: correctHash, replacedUnverifiedTxHash: mistypedHash },
+    });
+  });
+
   test('rejects a stored prepared payload whose action binding or hash was changed', async () => {
     const harness = createHarness();
     const prepared = await prepare(harness);

@@ -21,7 +21,8 @@ boundary explicit.
 The repository implements the gateway portion of this decision:
 
 - versioned signer-register and governance-action migrations;
-- pending → active → revoked signer bindings with distinct authenticated proposer and approver;
+- pending → active → revoked signer bindings with distinct authenticated human
+  proposer and approver identities, independent of credential rotation;
 - action-specific prepare routes;
 - immutable operator intent and canonical unsigned transaction records;
 - post-broadcast transaction verification and confirmation monitoring; and
@@ -154,7 +155,9 @@ Gateway (monitor phase)
    │  ├── Receive txHash from dashboard post-broadcast
    │  ├── Verify tx against the prepared payload when observable
    │  ├── Record `broadcast_pending_verification` if the tx is not yet observable
+   │  ├── Permit an audited txHash correction only while the prior hash remains unobserved and unverified
    │  ├── Update action record with txHash, final signer wallet, blockNumber, verification state, final status
+   │  ├── Set executedAt only after successful finalization, never for stale, rejected, or reverted actions
    │  └── Emit audit evidence (reconciliation, evidence capture)
 ```
 

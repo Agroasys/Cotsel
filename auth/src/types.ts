@@ -177,6 +177,7 @@ export interface TrustedSessionIdentity {
 export interface AdminActor {
   type: AdminActorType;
   id: string;
+  humanPrincipalId?: string;
 }
 
 export interface ApiSuccessResponse<T = unknown> {

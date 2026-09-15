@@ -130,7 +130,7 @@ describe('operator signer register persistence', () => {
   const integrationTest = dockerAvailable ? test : test.skip;
 
   integrationTest(
-    'deauthorizes legacy free-form approvals while preserving their historical claim',
+    'revokes legacy free-form approvals while preserving their historical claim',
     async () => {
       await withPostgres(
         async (pool) => {
@@ -141,13 +141,13 @@ describe('operator signer register persistence', () => {
             ['acct-legacy-admin'],
           );
           expect(result.rows[0]).toMatchObject({
-            state: 'pending',
+            state: 'revoked',
             active: false,
             created_by: 'service_auth:legacy-proposer',
             approved_by_principal: null,
             legacy_approval_claim: {
               approvingAuthority: 'free-form reviewer',
-              migratedAs: 'pending_reapproval',
+              migratedAs: 'canonical_human_reproposal_required',
             },
           });
           const store = createPostgresOperatorSignerStore(pool);
@@ -155,10 +155,14 @@ describe('operator signer register persistence', () => {
             store.approve({
               bindingId: result.rows[0].id,
               evidenceDigest: result.rows[0].evidence_digest,
-              actor: { type: 'service_auth', id: 'legacy-proposer' },
-              reason: 'Legacy proposer must not self-approve after identity canonicalization.',
+              actor: {
+                type: 'service_auth',
+                id: 'legacy-proposer-key',
+                humanPrincipalId: 'agroasys-user:legacy-proposer',
+              },
+              reason: 'Legacy records require a new human-attributed proposal.',
             }),
-          ).rejects.toThrow('cannot approve');
+          ).rejects.toThrow('not pending');
         },
         async (pool) => {
           await pool.query(`INSERT INTO user_profiles (account_id, role) VALUES ($1, 'admin')`, [
@@ -216,9 +220,23 @@ describe('operator signer register persistence', () => {
           custodianName: 'Admin Custodian One',
           approvalTicket: 'COTSEL-641',
           notes: 'Address witnessed on the hardware device.',
-          actor: { type: 'service_auth' as const, id: 'release-security' },
+          actor: {
+            type: 'service_auth' as const,
+            id: 'release-security-key-a',
+            humanPrincipalId: 'agroasys-user:release-security',
+          },
           reason: 'Register witnessed hardware wallet authority.',
         };
+
+        await expect(
+          service.proposeSigner({
+            ...input,
+            actor: {
+              ...input.actor,
+              humanPrincipalId: 'Operator Display Name',
+            },
+          }),
+        ).rejects.toThrow('authenticated human control principal');
 
         const created = await service.proposeSigner(input);
         expect(created).toMatchObject({ state: 'pending', active: false });
@@ -239,15 +257,31 @@ describe('operator signer register persistence', () => {
           service.approveSigner({
             bindingId: created.bindingId,
             evidenceDigest: created.evidenceDigest,
+            actor: {
+              type: 'service_auth',
+              id: 'release-security-key-b',
+              humanPrincipalId: 'agroasys-user:release-security',
+            },
+            reason: 'Attempt self approval using another credential for the same human.',
+          }),
+        ).rejects.toThrow('cannot approve');
+        await expect(
+          service.approveSigner({
+            bindingId: created.bindingId,
+            evidenceDigest: created.evidenceDigest,
             actor: { type: 'system', id: 'background-job' },
             reason: 'Attempt approval without an authenticated control principal.',
           }),
-        ).rejects.toThrow('authenticated admin-control principal');
+        ).rejects.toThrow('authenticated human control principal');
         await expect(
           service.approveSigner({
             bindingId: created.bindingId,
             evidenceDigest: 'f'.repeat(64),
-            actor: { type: 'service_auth', id: 'security-approver' },
+            actor: {
+              type: 'service_auth',
+              id: 'security-approver-key',
+              humanPrincipalId: 'agroasys-user:security-approver',
+            },
             reason: 'Attempt approval with the wrong evidence digest.',
           }),
         ).rejects.toThrow('does not match');
@@ -267,7 +301,7 @@ describe('operator signer register persistence', () => {
           pool.query(
             `UPDATE operator_signer_bindings
              SET state = 'active', active = TRUE,
-                 approved_by_principal = 'service_auth:malformed-approver',
+                 approved_by_principal = 'human:agroasys-user:malformed-approver',
                  activated_at = NOW()
              WHERE id = $1`,
             [created.bindingId],
@@ -277,19 +311,27 @@ describe('operator signer register persistence', () => {
         const activated = await service.approveSigner({
           bindingId: created.bindingId,
           evidenceDigest: created.evidenceDigest,
-          actor: { type: 'service_auth', id: 'security-approver' },
+          actor: {
+            type: 'service_auth',
+            id: 'security-approver-key',
+            humanPrincipalId: 'agroasys-user:security-approver',
+          },
           reason: 'Approve independently witnessed signer custody.',
         });
         expect(activated).toMatchObject({
           state: 'active',
           active: true,
-          approvedByPrincipal: 'service_auth:security-approver',
+          approvedByPrincipal: 'human:agroasys-user:security-approver',
         });
         await expect(
           service.approveSigner({
             bindingId: created.bindingId,
             evidenceDigest: created.evidenceDigest,
-            actor: { type: 'service_auth', id: 'another-approver' },
+            actor: {
+              type: 'service_auth',
+              id: 'another-approver-key',
+              humanPrincipalId: 'agroasys-user:another-approver',
+            },
             reason: 'Attempt replay of signer approval.',
           }),
         ).rejects.toThrow('not pending');
@@ -300,7 +342,7 @@ describe('operator signer register persistence', () => {
             walletAddress: input.walletAddress.toLowerCase(),
             actionClass: 'governance',
             environment: 'staging',
-            approvedBy: 'service_auth:security-approver',
+            approvedBy: 'human:agroasys-user:security-approver',
             ticketRef: 'COTSEL-641',
           }),
         ]);
@@ -322,13 +364,17 @@ describe('operator signer register persistence', () => {
         });
         expect(revoked).toMatchObject({
           active: false,
-          revokedBy: 'service_auth:release-security',
+          revokedBy: 'human:agroasys-user:release-security',
         });
         await expect(
           service.approveSigner({
             bindingId: created.bindingId,
             evidenceDigest: created.evidenceDigest,
-            actor: { type: 'service_auth', id: 'security-approver' },
+            actor: {
+              type: 'service_auth',
+              id: 'security-approver-key',
+              humanPrincipalId: 'agroasys-user:security-approver',
+            },
             reason: 'Attempt activation after signer revocation.',
           }),
         ).rejects.toThrow('not pending');
@@ -349,7 +395,11 @@ describe('operator signer register persistence', () => {
         await service.approveSigner({
           bindingId: replacement.bindingId,
           evidenceDigest: replacement.evidenceDigest,
-          actor: { type: 'service_auth', id: 'security-approver' },
+          actor: {
+            type: 'service_auth',
+            id: 'security-approver-key',
+            humanPrincipalId: 'agroasys-user:security-approver',
+          },
           reason: 'Approve replacement signer custody independently.',
         });
         await pool.query(`UPDATE user_profiles SET role = 'buyer' WHERE account_id = $1`, [
@@ -370,8 +420,13 @@ describe('operator signer register persistence', () => {
           expect.objectContaining({ role: 'buyer', signerAuthorizations: [] }),
         );
 
-        const audit = await pool.query<{ action: string }>(
-          `SELECT action FROM auth_admin_audit_events ORDER BY created_at, id`,
+        const audit = await pool.query<{
+          action: string;
+          actor_id: string;
+          metadata: { authenticatedHumanPrincipalId: string };
+        }>(
+          `SELECT action, actor_id, metadata
+           FROM auth_admin_audit_events ORDER BY created_at, id`,
         );
         expect(audit.rows.map((row) => row.action)).toEqual([
           'signer_binding_proposed',
@@ -380,6 +435,18 @@ describe('operator signer register persistence', () => {
           'signer_binding_proposed',
           'signer_binding_activated',
         ]);
+        expect(audit.rows[0]).toMatchObject({
+          actor_id: 'release-security-key-a',
+          metadata: {
+            authenticatedHumanPrincipalId: 'agroasys-user:release-security',
+          },
+        });
+        expect(audit.rows[1]).toMatchObject({
+          actor_id: 'security-approver-key',
+          metadata: {
+            authenticatedHumanPrincipalId: 'agroasys-user:security-approver',
+          },
+        });
       });
     },
     120_000,

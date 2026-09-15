@@ -5,7 +5,11 @@ import { createAdminService } from '../src/core/adminService';
 import type { OperatorSignerStore } from '../src/core/operatorSignerStore';
 import type { ProfileStore } from '../src/core/profileStore';
 
-const actor = { type: 'service_auth' as const, id: 'release-security' };
+const actor = {
+  type: 'service_auth' as const,
+  id: 'release-security-key',
+  humanPrincipalId: 'agroasys-user:release-security',
+};
 const binding = {
   bindingId: '0199a0f0-0000-7000-8000-000000000001',
   accountId: 'acct-admin-1',
@@ -101,7 +105,11 @@ describe('AdminService operator signer register', () => {
       service.approveSigner({
         bindingId: binding.bindingId,
         evidenceDigest: 'not-a-digest',
-        actor: { type: 'service_auth', id: 'security-approver' },
+        actor: {
+          type: 'service_auth',
+          id: 'security-approver-key',
+          humanPrincipalId: 'agroasys-user:security-approver',
+        },
         reason: 'Approve independently witnessed custody.',
       }),
     ).rejects.toThrow('SHA-256');

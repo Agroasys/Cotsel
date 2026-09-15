@@ -59,7 +59,12 @@ export function resolveGovernanceConfirmationCommit(
 
   const transactionHash = input.transactionHash.toLowerCase();
   const currentHash = current.txHash?.toLowerCase() ?? null;
-  if (currentHash && currentHash !== transactionHash) {
+  const replacingUnverifiedHash =
+    Boolean(currentHash) &&
+    currentHash !== transactionHash &&
+    current.status === 'broadcast_pending_verification' &&
+    current.verificationState === 'pending';
+  if (currentHash && currentHash !== transactionHash && !replacingUnverifiedHash) {
     conflict('Governance action has already been confirmed with a different transaction hash', {
       actionId: input.actionId,
       existingTxHash: current.txHash,

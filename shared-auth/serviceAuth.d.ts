@@ -4,11 +4,13 @@ export interface ServiceApiKey {
   id: string;
   secret: string;
   active: boolean;
+  humanPrincipalId?: string;
 }
 
 export interface ServiceAuthContext {
   apiKeyId: string;
   scheme: 'api_key' | 'shared_secret';
+  humanPrincipalId?: string;
 }
 
 export interface ServiceAuthMiddlewareOptions {

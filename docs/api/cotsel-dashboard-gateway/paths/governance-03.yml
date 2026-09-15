@@ -168,6 +168,7 @@ paths:
       tags:
         - Governance
       summary: Confirm a direct-sign governance broadcast
+      description: Records and independently verifies the reported transaction. A mistyped hash may be corrected only while the prior hash remains unobserved and pending verification; verified and terminal evidence is immutable.
       operationId: confirmGovernanceBroadcast
       parameters:
         - $ref: '#/components/parameters/XRequestId'

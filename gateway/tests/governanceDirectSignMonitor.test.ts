@@ -291,6 +291,7 @@ describe('GovernanceDirectSignMonitor', () => {
     expect(updated?.status).toBe('failed');
     expect(updated?.monitoringState).toBe('reverted');
     expect(updated?.errorCode).toBe('TX_REVERTED');
+    expect(updated?.executedAt).toBeNull();
     expect(auditLogStore.entries[0]?.eventType).toBe('governance.action.monitoring.reverted');
   });
 
@@ -313,6 +314,7 @@ describe('GovernanceDirectSignMonitor', () => {
     expect(updated?.status).toBe('stale');
     expect(updated?.monitoringState).toBe('stale');
     expect(updated?.errorCode).toBe('TX_NOT_OBSERVED');
+    expect(updated?.executedAt).toBeNull();
     expect(auditLogStore.entries[0]?.eventType).toBe('governance.action.monitoring.stale');
   });
 
@@ -333,6 +335,7 @@ describe('GovernanceDirectSignMonitor', () => {
     expect(updated?.verificationState).toBe('failed');
     expect(updated?.monitoringState).toBe('pending_verification');
     expect(updated?.errorCode).toBe('BROADCAST_VERIFICATION_FAILED');
+    expect(updated?.executedAt).toBeNull();
     expect(auditLogStore.entries[0]?.eventType).toBe(
       'governance.action.monitoring.verification_failed',
     );

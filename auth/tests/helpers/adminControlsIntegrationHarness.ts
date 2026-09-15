@@ -25,6 +25,7 @@ import { SessionController } from '../../src/api/controller';
 const POSTGRES_IMAGE = process.env.AUTH_TEST_POSTGRES_IMAGE || 'postgres:16-alpine';
 const API_KEY_ID = 'ops-admin-control-test';
 const API_SECRET = 'admin-control-test-secret';
+const HUMAN_PRINCIPAL_ID = 'agroasys-user:ops-admin-control-test';
 export let dockerAvailable = true;
 
 try {
@@ -185,7 +186,14 @@ export async function startAdminApp(pool: Pool) {
     maxSkewSeconds: 300,
     nonceTtlSeconds: 600,
     lookupApiKey: (key) =>
-      key === API_KEY_ID ? { id: API_KEY_ID, secret: API_SECRET, active: true } : undefined,
+      key === API_KEY_ID
+        ? {
+            id: API_KEY_ID,
+            secret: API_SECRET,
+            active: true,
+            humanPrincipalId: HUMAN_PRINCIPAL_ID,
+          }
+        : undefined,
     consumeNonce: nonceStore.consume,
   });
   const router = createRouter(new SessionController(sessionService), sessionService, {

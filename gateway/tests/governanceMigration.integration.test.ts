@@ -301,6 +301,33 @@ describe('governance direct-sign migration', () => {
             1,
           );
           expect(competingResults.filter((result) => result.status === 'rejected')).toHaveLength(1);
+          const correction = distinctAction('action-correction', 'f');
+          await actionStore.save(correction);
+          const mistypedHash = `0x${'4'.repeat(64)}`;
+          const pending = buildConfirmation(correction, mistypedHash, 'correction-pending');
+          pending.transition = {
+            ...pending.transition,
+            status: 'broadcast_pending_verification',
+            finalSignerWallet: null,
+            verificationState: 'pending',
+            verifiedAt: null,
+            monitoringState: 'pending_verification',
+          };
+          await transitionA.commitConfirmation(pending);
+          const correctionResults = await Promise.allSettled([
+            transitionA.commitConfirmation(
+              buildConfirmation(correction, `0x${'6'.repeat(64)}`, 'correction-a'),
+            ),
+            transitionB.commitConfirmation(
+              buildConfirmation(correction, `0x${'7'.repeat(64)}`, 'correction-b'),
+            ),
+          ]);
+          expect(correctionResults.filter((result) => result.status === 'fulfilled')).toHaveLength(
+            1,
+          );
+          expect(correctionResults.filter((result) => result.status === 'rejected')).toHaveLength(
+            1,
+          );
           const sharedHash = `0x${'a'.repeat(64)}`;
           const sharedHashUpper = `0x${'A'.repeat(64)}`;
           const left = distinctAction('action-left', 'd');

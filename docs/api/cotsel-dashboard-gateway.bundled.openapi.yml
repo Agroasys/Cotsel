@@ -1921,6 +1921,7 @@ paths:
       tags:
         - Governance
       summary: Confirm a direct-sign governance broadcast
+      description: Records and independently verifies the reported transaction. A mistyped hash may be corrected only while the prior hash remains unobserved and pending verification; verified and terminal evidence is immutable.
       operationId: confirmGovernanceBroadcast
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -6617,6 +6618,7 @@ components:
           type: string
           format: date-time
           nullable: true
+          description: Set only after successful finalization; null for pending, stale, rejected, failed, or reverted actions.
         signing:
           oneOf:
             - type: 'null'
@@ -6885,6 +6887,7 @@ components:
         txHash:
           type: string
           pattern: ^0x[0-9a-fA-F]{64}$
+          description: The reported broadcast hash. A different hash may replace it only while the prior hash remains unobserved and pending verification.
         signerWallet:
           type: string
     GovernanceBroadcastConfirmedResponse:

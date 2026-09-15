@@ -17,6 +17,7 @@ import { createPostgresProfileStore } from './core/profileStore';
 import { createPostgresSessionStore } from './core/sessionStore';
 import { createSessionService } from './core/sessionService';
 import { createAdminService } from './core/adminService';
+import { createAdminControlApiKeyLookup } from './core/adminControlIdentity';
 import { createPostgresOperatorSignerStore } from './core/operatorSignerStore';
 import { SessionController } from './api/controller';
 import { AdminController } from './api/adminController';
@@ -37,18 +38,6 @@ function createServiceApiKeyLookup(rawKeys: string): (apiKey: string) => Service
   const keys = parseServiceApiKeys(rawKeys);
   const lookup = new Map<string, ServiceApiKey>(keys.map((key) => [key.id, key]));
   return (apiKey: string) => lookup.get(apiKey);
-}
-
-function createAllowedServiceApiKeyLookup(
-  rawKeys: string,
-  allowedApiKeyIds: string[],
-): (apiKey: string) => ServiceApiKey | undefined {
-  const allowed = new Set(allowedApiKeyIds);
-  const lookup = createServiceApiKeyLookup(rawKeys);
-  return (apiKey: string) => {
-    const key = lookup(apiKey);
-    return key && allowed.has(key.id) ? key : undefined;
-  };
 }
 
 async function initializeDatabase(): Promise<void> {
@@ -102,7 +91,7 @@ async function bootstrap(): Promise<void> {
         enabled: true,
         maxSkewSeconds: config.adminControlMaxSkewSeconds,
         nonceTtlSeconds: config.adminControlNonceTtlSeconds,
-        lookupApiKey: createAllowedServiceApiKeyLookup(
+        lookupApiKey: createAdminControlApiKeyLookup(
           config.adminControlApiKeysJson,
           config.adminControlAllowedApiKeyIds,
         ),

@@ -87,6 +87,7 @@ const SIGNER_COLUMNS = `
   revoked_at AS "revokedAt",
   revoked_by AS "revokedBy",
   revoked_reason AS "revokedReason"`;
+const HUMAN_CONTROL_PRINCIPAL_REGEX = /^[a-z0-9][a-z0-9:._@/-]{0,127}$/;
 
 function mapRow(row: SignerBindingRow): OperatorSignerRegisterRecord {
   return {
@@ -114,10 +115,15 @@ function mapRow(row: SignerBindingRow): OperatorSignerRegisterRecord {
 }
 
 function canonicalControlPrincipal(actor: AdminActor): string {
-  if (actor.type !== 'service_auth' || actor.id.trim() === '') {
-    throw new Error('Signer binding changes require an authenticated admin-control principal');
+  const humanPrincipalId = actor.humanPrincipalId?.trim() ?? '';
+  if (
+    actor.type !== 'service_auth' ||
+    actor.id.trim() === '' ||
+    !HUMAN_CONTROL_PRINCIPAL_REGEX.test(humanPrincipalId)
+  ) {
+    throw new Error('Signer binding changes require an authenticated human control principal');
   }
-  return `${actor.type}:${actor.id.trim()}`;
+  return `human:${humanPrincipalId}`;
 }
 
 function signerProposalDigest(

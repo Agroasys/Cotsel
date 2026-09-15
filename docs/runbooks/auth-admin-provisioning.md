@@ -16,8 +16,9 @@ the signed `POST /session/exchange/agroasys` route.
   with an approved ticket.
 - Approver: a second production operator or security owner for durable admin
   grants and durable admin revocations.
-- Executor: a service principal whose API key ID is listed in
-  `AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS`.
+- Executor: a signed admin-control credential whose API key ID is listed in
+  `AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS` and is bound in secret-managed
+  configuration to the canonical identity of the human using it.
 - Trust root: Cotsel auth service verifies signed service-auth headers and
   stores the durable role state in Postgres.
 
@@ -40,11 +41,30 @@ The auth service must be started with:
 - `AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS`
 - `AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS`
 
-`AUTH_ADMIN_CONTROL_API_KEYS_JSON` contains active service-auth key records:
+`AUTH_ADMIN_CONTROL_API_KEYS_JSON` must contain at least two active keys bound
+to two distinct canonical human identities:
 
 ```json
-[{ "id": "ops-admin-control-2026-04", "secret": "stored-in-secret-manager", "active": true }]
+[
+  {
+    "id": "ops-admin-control-2026-04-a",
+    "secret": "stored-in-secret-manager",
+    "active": true,
+    "humanPrincipalId": "agroasys-user:operator-a"
+  },
+  {
+    "id": "ops-admin-control-2026-04-b",
+    "secret": "stored-in-secret-manager",
+    "active": true,
+    "humanPrincipalId": "agroasys-user:operator-b"
+  }
+]
 ```
+
+`humanPrincipalId` must be a stable, lowercase identity issued by the approved
+identity authority, not a display name or caller-supplied request field. Two
+credentials assigned to the same human still represent one approval principal.
+Each credential must be assigned to one human and must never be shared.
 
 Secrets must be stored in the production secret manager. They must not be
 stored in repo files, shell history, tickets, dashboards, or chat transcripts.
@@ -123,10 +143,10 @@ be reconciled against `auth_admin_audit_events` during access review.
 Provision a signer only after the durable admin profile and named custody
 evidence are approved.
 
-Endpoint:
+Proposal endpoint:
 
 ```text
-POST /api/auth/v1/admin/signers/provision
+POST /api/auth/v1/admin/signers/propose
 ```
 
 Body:
@@ -138,16 +158,30 @@ Body:
   "actionClass": "governance",
   "environment": "staging",
   "custodianName": "Named custodian",
-  "approvingAuthority": "Security owner",
-  "approvedAt": "2026-09-12T07:00:00.000Z",
   "approvalTicket": "COTSEL-641",
   "notes": "Hardware-wallet address verified on the device display",
   "reason": "COTSEL-641 approved staging governance signer"
 }
 ```
 
-The environment must be exact; `*` is rejected. The wallet must be a lowercase
-EVM address in storage. The auth service never stores private keys, seed phrases,
+The proposal remains `pending` and grants no session signer authorization. A
+different authenticated human principal must approve its exact evidence digest:
+
+```text
+POST /api/auth/v1/admin/signers/approve
+```
+
+```json
+{
+  "bindingId": "binding-id-from-proposal",
+  "evidenceDigest": "canonical-sha256-from-proposal",
+  "reason": "COTSEL-641 independent custody approval"
+}
+```
+
+Self-approval is rejected even if the same person uses a second API key. The
+environment must be exact; `*` is rejected. The wallet must be a lowercase EVM
+address in storage. The auth service never stores private keys, seed phrases,
 PINs, device serial numbers, or recovery material.
 
 Read back active records through:
@@ -193,6 +227,7 @@ Retain all of the following:
 - change ticket or incident ID
 - approver identity and timestamp
 - executor service-auth API key ID
+- proposer and approver canonical human principal IDs
 - request body without secret values
 - response status and response body
 - resulting row in `auth_admin_audit_events`
@@ -215,7 +250,8 @@ Rotation steps:
 
 1. Create a new secret in the production secret manager.
 2. Add the new key record to `AUTH_ADMIN_CONTROL_API_KEYS_JSON` with
-   `active=true`.
+   `active=true` and the same canonical `humanPrincipalId` as the credential it
+   replaces.
 3. Add the new key ID to `AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS`.
 4. Deploy to staging and verify one signed request against a designated staging
    test account, using `role: "buyer"` and a reason that references the key
