@@ -49,7 +49,10 @@ export async function recordAdminAuditEvent(
       input.newRole ?? null,
       input.reason,
       input.breakGlassExpiresAt ?? null,
-      JSON.stringify(input.metadata ?? {}),
+      JSON.stringify({
+        ...(input.metadata ?? {}),
+        authenticatedHumanPrincipalId: input.actor.humanPrincipalId ?? null,
+      }),
     ],
   );
 }

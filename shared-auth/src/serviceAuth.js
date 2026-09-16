@@ -4,6 +4,7 @@ const crypto = require('crypto');
 
 const SIGNATURE_HEX_REGEX = /^[a-f0-9]{64}$/i;
 const API_KEY_MAX_LENGTH = 128;
+const HUMAN_PRINCIPAL_ID_REGEX = /^[a-z0-9][a-z0-9:._@/-]{0,127}$/;
 const NONCE_MAX_LENGTH = 255;
 const SHARED_HMAC_KEY_ID = '__shared_hmac__';
 
@@ -105,6 +106,7 @@ function resolvePrincipal(apiKey, options) {
       id: apiKeyRecord.id,
       secret: apiKeyRecord.secret,
       active: apiKeyRecord.active,
+      humanPrincipalId: apiKeyRecord.humanPrincipalId,
       scheme: 'api_key',
     };
   }
@@ -167,6 +169,10 @@ function parseServiceApiKeys(raw) {
     const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
     const secret = typeof candidate.secret === 'string' ? candidate.secret.trim() : '';
     const active = parseActiveFlag(candidate.active, index);
+    const humanPrincipalId =
+      typeof candidate.humanPrincipalId === 'string'
+        ? candidate.humanPrincipalId.trim()
+        : undefined;
 
     if (!id) {
       throw new Error('API_KEYS_JSON[].id is required');
@@ -180,10 +186,20 @@ function parseServiceApiKeys(raw) {
       throw new Error(`API_KEYS_JSON[${index}].secret is required`);
     }
 
+    if (
+      candidate.humanPrincipalId !== undefined &&
+      (!humanPrincipalId || !HUMAN_PRINCIPAL_ID_REGEX.test(humanPrincipalId))
+    ) {
+      throw new Error(
+        `API_KEYS_JSON[${index}].humanPrincipalId must be a canonical lowercase identity with <= 128 characters`,
+      );
+    }
+
     return {
       id,
       secret,
       active,
+      ...(humanPrincipalId ? { humanPrincipalId } : {}),
     };
   });
 }
@@ -291,6 +307,7 @@ function createServiceAuthMiddleware(options) {
     req.serviceAuth = {
       apiKeyId: principal.id,
       scheme: principal.scheme,
+      ...(principal.humanPrincipalId ? { humanPrincipalId: principal.humanPrincipalId } : {}),
     };
 
     next();

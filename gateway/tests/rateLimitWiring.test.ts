@@ -74,7 +74,7 @@ describe('gateway rate-limit wiring', () => {
     }
   });
 
-  test('write routes use the tighter write bucket', async () => {
+  test('privileged governance routes use the shared write bucket', async () => {
     const limiter = await createHttpRateLimiter({
       enabled: true,
       nodeEnv: 'development',
@@ -83,7 +83,7 @@ describe('gateway rate-limit wiring', () => {
     });
 
     const extraRouter = Router();
-    extraRouter.post('/demo', (_req, res) => {
+    extraRouter.post('/governance/pause/prepare', (_req, res) => {
       res.status(200).json({ success: true });
     });
 
@@ -105,19 +105,27 @@ describe('gateway rate-limit wiring', () => {
     try {
       await withServer(app, async (baseUrl) => {
         for (let attempt = 0; attempt < 20; attempt += 1) {
-          const response = await request(baseUrl, '/api/dashboard-gateway/v1/demo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          });
+          const response = await request(
+            baseUrl,
+            '/api/dashboard-gateway/v1/governance/pause/prepare',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({}),
+            },
+          );
           expect(response.status).toBe(200);
         }
 
-        const blocked = await request(baseUrl, '/api/dashboard-gateway/v1/demo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
+        const blocked = await request(
+          baseUrl,
+          '/api/dashboard-gateway/v1/governance/pause/prepare',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          },
+        );
         expect(blocked.status).toBe(429);
       });
     } finally {
