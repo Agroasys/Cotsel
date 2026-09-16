@@ -54,7 +54,7 @@ export function createHttpManagedSignerTransport(
   const signerAddressPath = '/api/signers/gasless-relayer/address';
   const signerUrl = `${config.gaslessManagedSignerUrl}${signerPath}`;
   const signerAddressUrl = `${config.gaslessManagedSignerUrl}${signerAddressPath}`;
-  const requestTimeoutMs = config.gaslessManagedSignerRequestTimeoutMs ?? 5000;
+  const requestTimeoutMs = config.gaslessManagedSignerRequestTimeoutMs ?? 30_000;
 
   function authHeaders(
     method: 'GET' | 'POST',

@@ -51,6 +51,7 @@ const request: ManagedSignerRequest = {
 
 afterEach(() => {
   global.fetch = originalFetch;
+  jest.restoreAllMocks();
 });
 
 function expectValidServiceAuth(headers: Record<string, string>, path: string, body: string): void {
@@ -90,4 +91,24 @@ test('signing requests use body-bound service authentication', async () => {
     '/api/signers/gasless-relayer/sign-transaction',
     body,
   );
+});
+
+test('uses a 30 second default timeout for the complete KMS signing round trip', async () => {
+  const timeout = jest.spyOn(AbortSignal, 'timeout');
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      requestId: request.requestId,
+      intentHash: request.intentHash,
+      signerAddress: request.signerAddress,
+      signedTransaction: '0x1234',
+    }),
+  } as Response);
+
+  await createHttpManagedSignerTransport({
+    ...config,
+    gaslessManagedSignerRequestTimeoutMs: undefined,
+  }).signTransaction(request);
+
+  expect(timeout).toHaveBeenCalledWith(30_000);
 });

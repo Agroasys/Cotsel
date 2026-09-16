@@ -242,7 +242,7 @@ export function loadConfig(): GatewayConfig {
     'GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS must be >= 30',
   );
   assert(
-    envNumber('GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS', 5000) >= 1000,
+    envNumber('GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS', 30_000) >= 1000,
     'GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS must be >= 1000',
   );
   assert(

@@ -21,7 +21,13 @@ The relayer accepts only approved contract methods and the canonical staging add
 It rejects wrong signers, chains, recipients, selectors, values, fees, gas limits, and intent hashes.
 
 The relayer consumes each HMAC nonce once. It also consumes each signing `requestId` once.
-Production uses Redis for both replay controls.
+Gateway derives that request ID deterministically from the canonical application request,
+resource, operation, chain, signer, and transaction nonce. Production uses Redis for both
+relayer replay controls; PostgreSQL remains the canonical nonce-reservation authority.
+
+An expired `reserved` row may be recovered only for the exact same intent. Once signing may
+have started, the reservation is deliberately quarantined because a timeout does not prove that
+KMS failed to sign. Follow the gasless outcome recovery runbook; never delete or release the row.
 
 Never configure these values in the relayer:
 

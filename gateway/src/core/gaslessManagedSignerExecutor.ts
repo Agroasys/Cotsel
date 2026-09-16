@@ -1,8 +1,7 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { randomUUID } from 'crypto';
-import { getAddress, isAddress, keccak256 } from 'ethers';
+import { getAddress, isAddress, keccak256, toUtf8Bytes } from 'ethers';
 import type { FeeData, Provider, TransactionRequest, TransactionResponse } from 'ethers';
 import { buildManagedSignerIntentHash } from '@agroasys/sdk';
 import type { ManagedSignerPolicyContext, ManagedSignerTransactionIntent } from '@agroasys/sdk';
@@ -44,6 +43,30 @@ interface GaslessManagedProvider {
   getFeeData(): Promise<FeeData>;
   getTransactionCount(address: string, blockTag?: 'pending'): Promise<number>;
   broadcastTransaction(signedTransaction: string): Promise<TransactionResponse>;
+}
+
+function buildSigningRequestId(input: {
+  applicationRequestId: string;
+  chainId: number;
+  operation: ManagedSignerRequest['operation'];
+  resourceId: string;
+  resourceType: 'settlement_handoff' | 'platform_transfer';
+  signerAddress: string;
+  transactionNonce: number;
+}): string {
+  return keccak256(
+    toUtf8Bytes(
+      JSON.stringify([
+        input.applicationRequestId,
+        input.chainId,
+        input.operation,
+        input.resourceId,
+        input.resourceType,
+        getAddress(input.signerAddress).toLowerCase(),
+        input.transactionNonce,
+      ]),
+    ),
+  );
 }
 
 export function createManagedSignerGaslessSettlementExecutor(
@@ -273,7 +296,15 @@ export function createManagedSignerGaslessSettlementExecutor(
       gasLimit: gasEstimate,
       nonce,
     };
-    const requestId = randomUUID();
+    const requestId = buildSigningRequestId({
+      applicationRequestId: context.applicationRequestId,
+      chainId: config.chainId,
+      operation,
+      resourceId: context.resourceId,
+      resourceType: context.resourceType,
+      signerAddress: executorAddress,
+      transactionNonce: nonce,
+    });
     const serializedTransaction = serializeManagedSignerTransaction(requestTransaction);
     const intent: ManagedSignerTransactionIntent = {
       requestId,

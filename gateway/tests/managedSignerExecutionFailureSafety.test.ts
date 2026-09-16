@@ -44,6 +44,25 @@ function createExecutor(dependencies: ReturnType<typeof createFakeManagedSignerD
 }
 
 describe('managed signer gasless execution failure safety', () => {
+  test('derives a stable signing request identity for the same application request and nonce', async () => {
+    const firstDependencies = createFakeManagedSignerDependencies({ nonceStart: 23 });
+    const retryDependencies = createFakeManagedSignerDependencies({ nonceStart: 23 });
+    const laterNonceDependencies = createFakeManagedSignerDependencies({ nonceStart: 24 });
+    const input = buildCreateTradeInput('handoff-stable-signing-request', '9');
+
+    await createExecutor(firstDependencies).executeCreateTrade(input);
+    await createExecutor(retryDependencies).executeCreateTrade(input);
+    await createExecutor(laterNonceDependencies).executeCreateTrade(input);
+
+    const firstRequest = firstDependencies.signerTransport.signTransaction.mock.calls[0][0];
+    const retryRequest = retryDependencies.signerTransport.signTransaction.mock.calls[0][0];
+    const laterNonceRequest =
+      laterNonceDependencies.signerTransport.signTransaction.mock.calls[0][0];
+    expect(retryRequest.requestId).toBe(firstRequest.requestId);
+    expect(retryRequest.intentHash).toBe(firstRequest.intentHash);
+    expect(laterNonceRequest.requestId).not.toBe(firstRequest.requestId);
+  });
+
   test('rejects low signer balance before signing', async () => {
     const dependencies = createFakeManagedSignerDependencies({ balanceWei: 1n });
     await expectGatewayError(
