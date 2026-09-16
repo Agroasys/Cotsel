@@ -12,6 +12,7 @@ import {
   GaslessSettlementExecutionService,
 } from './gaslessSettlementExecutionService';
 import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutcomeStore';
+import { createPostgresGaslessNonceReservationStore } from './gaslessNonceReservationStore';
 
 export function createConfiguredGaslessSettlementService(
   config: GatewayConfig,
@@ -29,6 +30,7 @@ export function createConfiguredGaslessSettlementService(
     createEthersGaslessSettlementExecutor(config, {
       recordValidationEvidence: managedSignerValidationRecorder,
       recordTransactionOutcome: transactionOutcomeRecorder,
+      nonceReservationStore: createPostgresGaslessNonceReservationStore(pool),
     }),
     {
       chainId: config.chainId,

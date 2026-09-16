@@ -26,6 +26,7 @@ const typeAwareRuntimePatterns = [
   'gateway/src/**/*.ts',
   'indexer/src/**/*.ts',
   'oracle/src/**/*.ts',
+  'relayer/src/**/*.ts',
   'sdk/src/**/*.ts',
   'reconciliation/src/**/*.ts',
   'notifications/src/**/*.ts',

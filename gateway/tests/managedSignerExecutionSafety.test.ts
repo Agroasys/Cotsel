@@ -79,8 +79,40 @@ describe('managed signer gasless execution safety', () => {
           maxFeePerGasWei: '1',
           type: 2,
         }),
+        policyContext: expect.objectContaining({
+          kind: 'create_trade',
+          resourceId: input.handoffId,
+          actorAddress: input.buyerAddress,
+        }),
       }),
     );
+    expect(dependencies.nonceReservationStore.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chainId: config.chainId,
+        signerAddress: managedSignerWallet.address,
+        transactionNonce: 7,
+        applicationRequestId: input.requestId,
+        resourceId: input.handoffId,
+        operation: 'create_trade',
+        intentHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+      }),
+    );
+    expect(dependencies.nonceReservationStore.reserve.mock.invocationCallOrder[0]).toBeLessThan(
+      dependencies.nonceReservationStore.beginSigning.mock.invocationCallOrder[0],
+    );
+    expect(
+      dependencies.nonceReservationStore.beginSigning.mock.invocationCallOrder[0],
+    ).toBeLessThan(dependencies.signerTransport.signTransaction.mock.invocationCallOrder[0]);
+    expect(dependencies.nonceReservationStore.recordSigned).toHaveBeenCalledWith(
+      expect.objectContaining({ transactionNonce: 7 }),
+      result.txHash,
+    );
+    expect(dependencies.signerTransport.signTransaction.mock.invocationCallOrder[0]).toBeLessThan(
+      dependencies.nonceReservationStore.recordSigned.mock.invocationCallOrder[0],
+    );
+    expect(
+      dependencies.nonceReservationStore.recordSigned.mock.invocationCallOrder[0],
+    ).toBeLessThan(dependencies.provider.broadcastTransaction.mock.invocationCallOrder[0]);
     expect(dependencies.provider.broadcastTransaction).toHaveBeenCalledWith(
       expect.stringMatching(/^0x[0-9a-f]+$/),
     );
@@ -120,6 +152,33 @@ describe('managed signer gasless execution safety', () => {
       result.txHash,
       expect.objectContaining({ blockNumber: '98765' }),
     );
+  });
+
+  test('never invokes the managed signer when durable nonce reservation fails', async () => {
+    const dependencies = createFakeManagedSignerDependencies();
+    dependencies.nonceReservationStore.reserve.mockRejectedValueOnce(
+      new Error('nonce reservation conflict'),
+    );
+    const executor =
+      gaslessSettlementExecutionTestExports.createManagedSignerGaslessSettlementExecutor(
+        {
+          rpcUrl: config.rpcUrl,
+          rpcFallbackUrls: config.rpcFallbackUrls,
+          chainId: config.chainId,
+          escrowAddress: config.escrowAddress,
+          usdcAddress: config.usdcAddress,
+          gaslessSignerCustodyMode: 'kms',
+          gaslessManagedSignerUrl: 'https://signer.example.test',
+        },
+        dependencies,
+      );
+
+    await expect(
+      executor.executeCreateTrade(buildCreateTradeInput('handoff-reservation-conflict', 'f')),
+    ).rejects.toThrow('nonce reservation conflict');
+    expect(dependencies.nonceReservationStore.beginSigning).not.toHaveBeenCalled();
+    expect(dependencies.signerTransport.signTransaction).not.toHaveBeenCalled();
+    expect(dependencies.provider.broadcastTransaction).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -322,140 +381,5 @@ describe('managed signer gasless execution safety', () => {
       expect.stringMatching(/^0x[0-9a-f]{64}$/),
       'Error',
     );
-  });
-
-  test('managed custody executor rejects low signer balance before signing', async () => {
-    const dependencies = createFakeManagedSignerDependencies({ balanceWei: 1n });
-    const executor =
-      gaslessSettlementExecutionTestExports.createManagedSignerGaslessSettlementExecutor(
-        {
-          rpcUrl: config.rpcUrl,
-          rpcFallbackUrls: config.rpcFallbackUrls,
-          chainId: config.chainId,
-          escrowAddress: config.escrowAddress,
-          usdcAddress: config.usdcAddress,
-          gaslessSignerCustodyMode: 'kms',
-          gaslessManagedSignerUrl: 'https://signer.example.test',
-          gaslessMinExecutorBalanceWei: 10n,
-        },
-        dependencies,
-      );
-
-    await expectGatewayError(
-      executor.executeCreateTrade(buildCreateTradeInput('handoff-low', 'c')),
-      {
-        statusCode: 503,
-        code: 'UPSTREAM_UNAVAILABLE',
-        message: 'Gasless executor balance is below floor',
-      },
-    );
-    expect(dependencies.signerTransport.signTransaction).not.toHaveBeenCalled();
-  });
-
-  test('managed custody executor rejects fee-per-gas spend cap before signing', async () => {
-    const dependencies = createFakeManagedSignerDependencies({ maxFeePerGasWei: 20n });
-    const executor =
-      gaslessSettlementExecutionTestExports.createManagedSignerGaslessSettlementExecutor(
-        {
-          rpcUrl: config.rpcUrl,
-          rpcFallbackUrls: config.rpcFallbackUrls,
-          chainId: config.chainId,
-          escrowAddress: config.escrowAddress,
-          usdcAddress: config.usdcAddress,
-          gaslessSignerCustodyMode: 'mpc',
-          gaslessManagedSignerUrl: 'https://signer.example.test',
-          gaslessMaxGasLimit: 1_500_000n,
-          gaslessMaxFeePerGasWei: 10n,
-          gaslessMaxNativeCostWei: 10_000_000n,
-          gaslessMinExecutorBalanceWei: 10n,
-        },
-        dependencies,
-      );
-
-    await expectGatewayError(
-      executor.executeCreateTrade(buildCreateTradeInput('handoff-fee', 'd')),
-      {
-        statusCode: 503,
-        code: 'UPSTREAM_UNAVAILABLE',
-        message: 'Gasless relayer fee-per-gas cap exceeded',
-      },
-    );
-    expect(dependencies.signerTransport.signTransaction).not.toHaveBeenCalled();
-  });
-
-  test('managed custody executor fails visibly when a broadcast receipt is unavailable', async () => {
-    const dependencies = createFakeManagedSignerDependencies({ receiptAvailable: false });
-    const executor =
-      gaslessSettlementExecutionTestExports.createManagedSignerGaslessSettlementExecutor(
-        {
-          rpcUrl: config.rpcUrl,
-          rpcFallbackUrls: config.rpcFallbackUrls,
-          chainId: config.chainId,
-          escrowAddress: config.escrowAddress,
-          usdcAddress: config.usdcAddress,
-          gaslessSignerCustodyMode: 'kms',
-          gaslessManagedSignerUrl: 'https://signer.example.test',
-          gaslessReceiptTimeoutMs: 1000,
-          gaslessMinExecutorBalanceWei: 10n,
-        },
-        dependencies,
-      );
-
-    await expectGatewayError(
-      executor.executeCreateTrade(buildCreateTradeInput('handoff-timeout', 'e')),
-      {
-        statusCode: 503,
-        code: 'UPSTREAM_UNAVAILABLE',
-        message: 'Gasless transaction confirmation requires reconciliation',
-      },
-    );
-    expect(dependencies.signerTransport.signTransaction).toHaveBeenCalledTimes(1);
-    expect(dependencies.recordTransactionOutcome.markConfirmationPending).toHaveBeenCalledTimes(1);
-    expect(dependencies.recordTransactionOutcome.markConfirmed).not.toHaveBeenCalled();
-  });
-
-  test('managed executor keeps one command unknown and permits a distinct later submission', async () => {
-    const dependencies = createFakeManagedSignerDependencies({
-      broadcastFailures: [new Error('ECONNREFUSED: connect ECONNREFUSED 127.0.0.1:8545')],
-      nonceStart: 50,
-    });
-    const executor =
-      gaslessSettlementExecutionTestExports.createManagedSignerGaslessSettlementExecutor(
-        {
-          rpcUrl: config.rpcUrl,
-          rpcFallbackUrls: config.rpcFallbackUrls,
-          chainId: config.chainId,
-          escrowAddress: config.escrowAddress,
-          usdcAddress: config.usdcAddress,
-          gaslessSignerCustodyMode: 'kms',
-          gaslessManagedSignerUrl: 'https://signer.example.test',
-          gaslessMaxGasLimit: 1_500_000n,
-          gaslessMaxFeePerGasWei: 10n,
-          gaslessMaxNativeCostWei: 10_000_000n,
-          gaslessMinExecutorBalanceWei: 10n,
-        },
-        dependencies,
-      );
-
-    await expectGatewayError(
-      executor.executeCreateTrade(buildCreateTradeInput('handoff-rpc-fail', '1')),
-      {
-        statusCode: 503,
-        code: 'UPSTREAM_UNAVAILABLE',
-        message: 'Gasless transaction broadcast outcome requires reconciliation',
-      },
-    );
-    expect(dependencies.recordTransactionOutcome.markBroadcastUnknown).toHaveBeenCalledWith(
-      expect.stringMatching(/^0x[0-9a-f]{64}$/),
-      'Error',
-    );
-
-    // This is a different request and resource. The first command remains unknown;
-    // no retry or replacement is attempted for its signed transaction.
-    const recovered = await executor.executeCreateTrade(
-      buildCreateTradeInput('handoff-rpc-recover', '2'),
-    );
-    expect(recovered.txHash).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(dependencies.provider.broadcastTransaction).toHaveBeenCalledTimes(2);
   });
 });

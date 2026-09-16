@@ -8,12 +8,14 @@ import { createManagedSignerGaslessSettlementExecutor } from './gaslessManagedSi
 import { createRawPrivateKeyGaslessSettlementExecutor } from './gaslessRawPrivateKeyExecutor';
 import type { ManagedSignerValidationRecorder } from './managedSignerIntentValidation';
 import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutcomeStore';
+import type { GaslessNonceReservationStore } from './gaslessNonceReservationStore';
 
 export function createEthersGaslessSettlementExecutor(
   config: GaslessExecutorConfig,
   dependencies?: {
     recordValidationEvidence?: ManagedSignerValidationRecorder;
     recordTransactionOutcome: GaslessTransactionOutcomeRecorder;
+    nonceReservationStore: GaslessNonceReservationStore;
   },
 ): GaslessSettlementExecutor {
   if (config.gaslessSignerCustodyMode && config.gaslessSignerCustodyMode !== 'raw_private_key') {

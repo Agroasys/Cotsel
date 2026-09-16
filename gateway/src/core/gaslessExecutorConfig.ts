@@ -17,6 +17,7 @@ export type GaslessExecutorConfig = Pick<
   | 'gaslessKmsExpectedAddress'
   | 'gaslessManagedSignerUrl'
   | 'gaslessManagedSignerApiKey'
+  | 'gaslessManagedSignerApiSecret'
   | 'gaslessManagedSignerRequestTimeoutMs'
   | 'gaslessMaxGasLimit'
   | 'gaslessMaxFeePerGasWei'

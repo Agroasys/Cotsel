@@ -3,7 +3,7 @@
  */
 import { loadConfigModule, withEnv } from './helpers/gatewayConfigTestHarness';
 
-test('KMS custody parses a direct IAM-authenticated key identity', () => {
+test('KMS custody parses a dedicated authenticated relayer identity', () => {
   withEnv(
     {
       GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
@@ -12,17 +12,44 @@ test('KMS custody parses a direct IAM-authenticated key identity', () => {
       GATEWAY_CHAIN_ID: undefined,
       GATEWAY_GASLESS_EXECUTION_ENABLED: 'true',
       GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'kms',
-      GATEWAY_GASLESS_KMS_KEY_ID: 'alias/cotsel-staging-relayer',
+      GATEWAY_GASLESS_KMS_KEY_ID: undefined,
       GATEWAY_GASLESS_KMS_EXPECTED_ADDRESS: '0x1111111111111111111111111111111111111111',
+      GATEWAY_GASLESS_MANAGED_SIGNER_URL: 'http://relayer.cotsel-staging.internal:3300',
+      GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY: 'gateway',
+      GATEWAY_GASLESS_MANAGED_SIGNER_API_SECRET: 'secret',
       GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '10000000000000000000',
       GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '10000000000000000000',
     },
     () => {
       const config = loadConfigModule().loadConfig();
       expect(config.gaslessSignerCustodyMode).toBe('kms');
-      expect(config.gaslessKmsKeyId).toBe('alias/cotsel-staging-relayer');
+      expect(config.gaslessKmsKeyId).toBeUndefined();
       expect(config.gaslessKmsExpectedAddress).toBe('0x1111111111111111111111111111111111111111');
-      expect(config.gaslessManagedSignerUrl).toBeUndefined();
+      expect(config.gaslessManagedSignerUrl).toBe('http://relayer.cotsel-staging.internal:3300');
+      expect(config.gaslessManagedSignerApiSecret).toBe('secret');
+    },
+  );
+});
+
+test('KMS custody rejects exposing the relayer key ID to the gateway', () => {
+  withEnv(
+    {
+      GATEWAY_SETTLEMENT_RUNTIME: 'base-sepolia',
+      GATEWAY_RPC_FALLBACK_URLS: 'https://fallback.example.test',
+      GATEWAY_GASLESS_EXECUTION_ENABLED: 'true',
+      GATEWAY_GASLESS_SIGNER_CUSTODY_MODE: 'kms',
+      GATEWAY_GASLESS_KMS_KEY_ID: 'alias/cotsel-staging-relayer',
+      GATEWAY_GASLESS_KMS_EXPECTED_ADDRESS: '0x1111111111111111111111111111111111111111',
+      GATEWAY_GASLESS_MANAGED_SIGNER_URL: 'http://relayer.cotsel-staging.internal:3300',
+      GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY: 'gateway',
+      GATEWAY_GASLESS_MANAGED_SIGNER_API_SECRET: 'secret',
+      GATEWAY_GASLESS_MIN_EXECUTOR_BALANCE_WEI: '10000000000000000000',
+      GATEWAY_GASLESS_LOW_BALANCE_ALERT_WEI: '10000000000000000000',
+    },
+    () => {
+      expect(() => loadConfigModule().loadConfig()).toThrow(
+        'only the dedicated relayer may know the KMS key ID',
+      );
     },
   );
 });

@@ -8,6 +8,7 @@ resource "aws_service_discovery_service" "runtime" {
   for_each = toset([
     "gateway",
     "oracle",
+    "relayer",
     "ricardian",
     "treasury",
   ])

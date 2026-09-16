@@ -50,6 +50,13 @@
       "file": "schema/008_governance_pending_hash_correction.sql",
       "sha256": "380cc9e5ba81ebdc7d8c8798016e660e8a6bf82c77d5c4327b30d32f4f599da2",
       "schema_sha256": "bc3fbc0f8d765a4ad795b7f15e015a9c1ca4d1a8d6a738d48af81f5bf32a0049"
+    },
+    {
+      "version": "202609160009",
+      "name": "gasless_nonce_reservations",
+      "file": "schema/009_gasless_nonce_reservations.sql",
+      "sha256": "7b42d08ddfac1322ff69b89c643323efc2f7b0023907a05f44c7983c28064621",
+      "schema_sha256": "2b39da7f976bfbc1b3de57bbc1d6c1270ecd5878360895206465a3d05d430a06"
     }
   ]
 }

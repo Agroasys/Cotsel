@@ -1,21 +1,13 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import { randomUUID } from 'crypto';
-import { getAddress, Interface, isAddress } from 'ethers';
+import { getAddress, isAddress, keccak256, toUtf8Bytes } from 'ethers';
 import type { FeeData, Provider, TransactionRequest, TransactionResponse } from 'ethers';
-import { AgroasysEscrow__factory, buildManagedSignerIntentHash } from '@agroasys/sdk';
-import type { ManagedSignerTransactionIntent } from '@agroasys/sdk';
+import { buildManagedSignerIntentHash } from '@agroasys/sdk';
+import type { ManagedSignerPolicyContext, ManagedSignerTransactionIntent } from '@agroasys/sdk';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import { GatewayError } from '../errors';
-import type {
-  GaslessCreateTradeExecutionInput,
-  GaslessExecutionReceipt,
-  GaslessOperatorActionExecutionInput,
-  GaslessSettlementExecutor,
-  GaslessUserActionExecutionInput,
-  GaslessWalletUsdcTransferExecutionInput,
-} from './gaslessExecutionTypes';
+import type { GaslessExecutionReceipt, GaslessSettlementExecutor } from './gaslessExecutionTypes';
 import {
   broadcastPersistedGaslessTransaction,
   GaslessTransactionOutcomePendingError,
@@ -23,13 +15,15 @@ import {
   persistGaslessTerminalOutcome,
 } from './gaslessTransactionLifecycle';
 import type { GaslessTransactionOutcomeRecorder } from './gaslessTransactionOutcomeStore';
+import type { GaslessNonceReservationStore } from './gaslessNonceReservationStore';
 import {
-  buildCreateTradeArguments,
-  buildUserActionArguments,
-  buildWalletUsdcTransferArguments,
-  getUserActionFunctionName,
-  USDC_AUTHORIZATION_ABI,
-} from './gaslessTransactionEncoding';
+  buildManagedCreateTradeTransaction,
+  buildManagedUserActionTransaction,
+  buildManagedWalletTransferTransaction,
+  createTradePolicyContext,
+  userActionPolicyContext,
+  walletTransferPolicyContext,
+} from './gaslessManagedSignerTransactions';
 import {
   serializeManagedSignerTransaction,
   validateManagedSignerForBroadcast,
@@ -51,6 +45,30 @@ interface GaslessManagedProvider {
   broadcastTransaction(signedTransaction: string): Promise<TransactionResponse>;
 }
 
+function buildSigningRequestId(input: {
+  applicationRequestId: string;
+  chainId: number;
+  operation: ManagedSignerRequest['operation'];
+  resourceId: string;
+  resourceType: 'settlement_handoff' | 'platform_transfer';
+  signerAddress: string;
+  transactionNonce: number;
+}): string {
+  return keccak256(
+    toUtf8Bytes(
+      JSON.stringify([
+        input.applicationRequestId,
+        input.chainId,
+        input.operation,
+        input.resourceId,
+        input.resourceType,
+        getAddress(input.signerAddress).toLowerCase(),
+        input.transactionNonce,
+      ]),
+    ),
+  );
+}
+
 export function createManagedSignerGaslessSettlementExecutor(
   config: ManagedSignerGaslessConfig,
   dependencies?: {
@@ -58,6 +76,7 @@ export function createManagedSignerGaslessSettlementExecutor(
     signerTransport?: ManagedSignerTransport;
     recordValidationEvidence?: ManagedSignerValidationRecorder;
     recordTransactionOutcome: GaslessTransactionOutcomeRecorder;
+    nonceReservationStore: GaslessNonceReservationStore;
   },
 ): GaslessSettlementExecutor {
   const configuredCustodyMode = config.gaslessSignerCustodyMode;
@@ -81,8 +100,19 @@ export function createManagedSignerGaslessSettlementExecutor(
     );
   }
   const transactionOutcomeRecorder = dependencies.recordTransactionOutcome;
-  const escrowInterface = new Interface(AgroasysEscrow__factory.abi);
-  const usdcInterface = new Interface(USDC_AUTHORIZATION_ABI);
+  if (!dependencies.nonceReservationStore) {
+    throw new GatewayError(
+      503,
+      'UPSTREAM_UNAVAILABLE',
+      'Gasless durable nonce reservation is not configured',
+    );
+  }
+  const nonceReservationStore = dependencies.nonceReservationStore;
+  const transactionConfig = {
+    chainId: config.chainId,
+    escrowAddress: config.escrowAddress,
+    usdcAddress: config.usdcAddress,
+  };
   const gaslessMaxGasLimit = config.gaslessMaxGasLimit ?? 1_500_000n;
   const gaslessMaxFeePerGasWei = config.gaslessMaxFeePerGasWei ?? 50_000_000_000n;
   const gaslessMaxNativeCostWei = config.gaslessMaxNativeCostWei ?? 100_000_000_000_000_000n;
@@ -123,67 +153,6 @@ export function createManagedSignerGaslessSettlementExecutor(
     }
 
     return { executorAddress, balance };
-  }
-
-  function buildCreateTradeTransaction(
-    input: GaslessCreateTradeExecutionInput,
-    from: string,
-  ): TransactionRequest {
-    return {
-      from,
-      to: config.escrowAddress,
-      chainId: config.chainId,
-      value: 0n,
-      data: escrowInterface.encodeFunctionData(
-        'createTradeWithAuthorization',
-        buildCreateTradeArguments(input),
-      ),
-    };
-  }
-
-  function buildUserActionTransaction(
-    input: GaslessUserActionExecutionInput,
-    from: string,
-  ): TransactionRequest {
-    const args = buildUserActionArguments(input);
-    const functionName = getUserActionFunctionName(input.action);
-
-    return {
-      from,
-      to: config.escrowAddress,
-      chainId: config.chainId,
-      value: 0n,
-      data: escrowInterface.encodeFunctionData(functionName, args),
-    };
-  }
-
-  function buildOperatorActionTransaction(
-    input: GaslessOperatorActionExecutionInput,
-    from: string,
-  ): TransactionRequest {
-    return {
-      from,
-      to: config.escrowAddress,
-      chainId: config.chainId,
-      value: 0n,
-      data: escrowInterface.encodeFunctionData('finalizeAfterDisputeWindow', [input.tradeId]),
-    };
-  }
-
-  function buildWalletUsdcTransferTransaction(
-    input: GaslessWalletUsdcTransferExecutionInput,
-    from: string,
-  ): TransactionRequest {
-    return {
-      from,
-      to: config.usdcAddress,
-      chainId: config.chainId,
-      value: 0n,
-      data: usdcInterface.encodeFunctionData(
-        'transferWithAuthorization',
-        buildWalletUsdcTransferArguments(input),
-      ),
-    };
   }
 
   async function assertGasSpendCap(gasEstimate: bigint): Promise<{
@@ -305,6 +274,7 @@ export function createManagedSignerGaslessSettlementExecutor(
 
   async function broadcastManagedTransaction(
     operation: ManagedSignerRequest['operation'],
+    policyContext: ManagedSignerPolicyContext,
     context: {
       applicationRequestId: string;
       resourceType: 'settlement_handoff' | 'platform_transfer';
@@ -326,7 +296,15 @@ export function createManagedSignerGaslessSettlementExecutor(
       gasLimit: gasEstimate,
       nonce,
     };
-    const requestId = randomUUID();
+    const requestId = buildSigningRequestId({
+      applicationRequestId: context.applicationRequestId,
+      chainId: config.chainId,
+      operation,
+      resourceId: context.resourceId,
+      resourceType: context.resourceType,
+      signerAddress: executorAddress,
+      transactionNonce: nonce,
+    });
     const serializedTransaction = serializeManagedSignerTransaction(requestTransaction);
     const intent: ManagedSignerTransactionIntent = {
       requestId,
@@ -334,6 +312,18 @@ export function createManagedSignerGaslessSettlementExecutor(
       ...serializedTransaction,
     };
     const intentHash = buildManagedSignerIntentHash(intent);
+    const nonceReservation = await nonceReservationStore.reserve({
+      chainId: config.chainId,
+      signerAddress: executorAddress,
+      transactionNonce: nonce,
+      requestId,
+      applicationRequestId: context.applicationRequestId,
+      resourceType: context.resourceType,
+      resourceId: context.resourceId,
+      operation,
+      intentHash,
+    });
+    await nonceReservationStore.beginSigning(nonceReservation);
     const signerResponse = await signerTransport.signTransaction({
       custodyMode,
       operation,
@@ -341,6 +331,7 @@ export function createManagedSignerGaslessSettlementExecutor(
       requestId,
       intentHash,
       transaction: serializedTransaction,
+      policyContext,
     });
     const signedTransaction = await validateManagedSignerForBroadcast(
       signerResponse,
@@ -348,6 +339,7 @@ export function createManagedSignerGaslessSettlementExecutor(
       { operation, ...context },
       dependencies?.recordValidationEvidence,
     );
+    await nonceReservationStore.recordSigned(nonceReservation, keccak256(signedTransaction));
     return broadcastPersistedGaslessTransaction(
       signedTransaction,
       {
@@ -364,17 +356,24 @@ export function createManagedSignerGaslessSettlementExecutor(
     async simulateCreateTrade(input) {
       const { executorAddress } = await assertSignerBalance();
       return {
-        gasEstimate: await simulateTransaction(buildCreateTradeTransaction(input, executorAddress)),
+        gasEstimate: await simulateTransaction(
+          buildManagedCreateTradeTransaction(transactionConfig, input, executorAddress),
+        ),
       };
     },
 
     async executeCreateTrade(input) {
       const { executorAddress } = await assertSignerBalance();
-      const transaction = buildCreateTradeTransaction(input, executorAddress);
+      const transaction = buildManagedCreateTradeTransaction(
+        transactionConfig,
+        input,
+        executorAddress,
+      );
       const gasEstimate = await simulateTransaction(transaction);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
       const tx = await broadcastManagedTransaction(
         'create_trade',
+        createTradePolicyContext(input),
         {
           applicationRequestId: input.requestId,
           resourceType: 'settlement_handoff',
@@ -393,48 +392,24 @@ export function createManagedSignerGaslessSettlementExecutor(
     async simulateUserAction(input) {
       const { executorAddress } = await assertSignerBalance();
       return {
-        gasEstimate: await simulateTransaction(buildUserActionTransaction(input, executorAddress)),
+        gasEstimate: await simulateTransaction(
+          buildManagedUserActionTransaction(transactionConfig, input, executorAddress),
+        ),
       };
     },
 
     async executeUserAction(input) {
       const { executorAddress } = await assertSignerBalance();
-      const transaction = buildUserActionTransaction(input, executorAddress);
-      const gasEstimate = await simulateTransaction(transaction);
-      const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await broadcastManagedTransaction(
-        input.action,
-        {
-          applicationRequestId: input.requestId,
-          resourceType: 'settlement_handoff',
-          resourceId: input.handoffId,
-        },
-        transaction,
-        gasEstimate,
-        feeOverrides,
+      const transaction = buildManagedUserActionTransaction(
+        transactionConfig,
+        input,
+        executorAddress,
       );
-      return {
-        txHash: tx.hash,
-        receipt: await waitForConfirmedReceipt(tx),
-      };
-    },
-
-    async simulateOperatorAction(input) {
-      const { executorAddress } = await assertSignerBalance();
-      return {
-        gasEstimate: await simulateTransaction(
-          buildOperatorActionTransaction(input, executorAddress),
-        ),
-      };
-    },
-
-    async executeOperatorAction(input) {
-      const { executorAddress } = await assertSignerBalance();
-      const transaction = buildOperatorActionTransaction(input, executorAddress);
       const gasEstimate = await simulateTransaction(transaction);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
       const tx = await broadcastManagedTransaction(
         input.action,
+        userActionPolicyContext(input),
         {
           applicationRequestId: input.requestId,
           resourceType: 'settlement_handoff',
@@ -454,18 +429,23 @@ export function createManagedSignerGaslessSettlementExecutor(
       const { executorAddress } = await assertSignerBalance();
       return {
         gasEstimate: await simulateTransaction(
-          buildWalletUsdcTransferTransaction(input, executorAddress),
+          buildManagedWalletTransferTransaction(transactionConfig, input, executorAddress),
         ),
       };
     },
 
     async executeWalletUsdcTransfer(input) {
       const { executorAddress } = await assertSignerBalance();
-      const transaction = buildWalletUsdcTransferTransaction(input, executorAddress);
+      const transaction = buildManagedWalletTransferTransaction(
+        transactionConfig,
+        input,
+        executorAddress,
+      );
       const gasEstimate = await simulateTransaction(transaction);
       const feeOverrides = await assertGasSpendCap(gasEstimate);
       const tx = await broadcastManagedTransaction(
         'wallet_usdc_transfer',
+        walletTransferPolicyContext(input),
         {
           applicationRequestId: input.requestId,
           resourceType: 'platform_transfer',

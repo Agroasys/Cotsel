@@ -87,13 +87,29 @@ data "aws_iam_policy_document" "oracle_kms_signing" {
   count = local.oracle_kms_enabled ? 1 : 0
 
   statement {
-    sid    = "SignOracleTransactions"
-    effect = "Allow"
-    actions = [
-      "kms:GetPublicKey",
-      "kms:Sign",
-    ]
+    sid       = "ReadOracleSignerPublicKey"
+    effect    = "Allow"
+    actions   = ["kms:GetPublicKey"]
     resources = [aws_kms_key.managed_signer["oracle"].arn]
+  }
+
+  statement {
+    sid       = "SignOracleTransactionDigests"
+    effect    = "Allow"
+    actions   = ["kms:Sign"]
+    resources = [aws_kms_key.managed_signer["oracle"].arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:MessageType"
+      values   = ["DIGEST"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:SigningAlgorithm"
+      values   = ["ECDSA_SHA_256"]
+    }
   }
 }
 
@@ -135,11 +151,12 @@ resource "aws_ecs_task_definition" "oracle" {
 }
 
 resource "aws_ecs_service" "oracle" {
-  name            = "${local.name_prefix}-oracle"
-  cluster         = aws_ecs_cluster.staging.id
-  task_definition = aws_ecs_task_definition.oracle.arn
-  desired_count   = var.gateway_desired_count > 0 ? 1 : 0
-  launch_type     = "FARGATE"
+  name                   = "${local.name_prefix}-oracle"
+  cluster                = aws_ecs_cluster.staging.id
+  task_definition        = aws_ecs_task_definition.oracle.arn
+  desired_count          = var.gateway_desired_count > 0 ? 1 : 0
+  launch_type            = "FARGATE"
+  enable_execute_command = false
   # Oracle can submit financial state transitions. Never overlap revisions:
   # remove the bundled worker first, then accept a bounded maintenance gap.
   deployment_maximum_percent         = 100

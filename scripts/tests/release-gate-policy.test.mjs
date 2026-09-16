@@ -205,6 +205,10 @@ test('shared package changes select every transitive consumer through the full s
     assert.match(sharedFilter, new RegExp(`- '${workspace}/\\*\\*'`));
   }
 
+  assert.match(sharedFilter, /- 'relayer\/\*\*'/);
+  assert.match(workflow, /run_check relayer-tests pnpm --filter @agroasys\/relayer run test/);
+  assert.match(workflow, /run_check relayer-build pnpm --filter @agroasys\/relayer run build/);
+
   const needs = makeNeeds({ selected: ['shared'] });
   for (const { job, label } of RELEASE_GATE_CHECKS) {
     if (job === 'changes') continue;

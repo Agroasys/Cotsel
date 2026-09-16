@@ -14,6 +14,7 @@ COPY indexer/package.json indexer/package.json
 COPY notifications/package.json notifications/package.json
 COPY oracle/package.json oracle/package.json
 COPY reconciliation/package.json reconciliation/package.json
+COPY relayer/package.json relayer/package.json
 COPY ricardian/package.json ricardian/package.json
 COPY sdk/package.json sdk/package.json
 COPY shared-auth/package.json shared-auth/package.json
@@ -52,6 +53,7 @@ COPY indexer/package.json indexer/package.json
 COPY notifications/package.json notifications/package.json
 COPY oracle/package.json oracle/package.json
 COPY reconciliation/package.json reconciliation/package.json
+COPY relayer/package.json relayer/package.json
 COPY ricardian/package.json ricardian/package.json
 COPY sdk/package.json sdk/package.json
 COPY shared-auth/package.json shared-auth/package.json

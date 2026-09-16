@@ -27,6 +27,7 @@ type GaslessGatewayConfig = Pick<
   | 'gaslessKmsExpectedAddress'
   | 'gaslessManagedSignerUrl'
   | 'gaslessManagedSignerApiKey'
+  | 'gaslessManagedSignerApiSecret'
   | 'gaslessManagedSignerRequestTimeoutMs'
   | 'gaslessBroadcastPaused'
   | 'gaslessMaxGasLimit'
@@ -77,6 +78,8 @@ export function loadGaslessEnvironment({
     process.env.GATEWAY_GASLESS_MANAGED_SIGNER_URL?.trim()?.replace(/\/$/, '') || undefined;
   const gaslessManagedSignerApiKey =
     process.env.GATEWAY_GASLESS_MANAGED_SIGNER_API_KEY?.trim() || undefined;
+  const gaslessManagedSignerApiSecret =
+    process.env.GATEWAY_GASLESS_MANAGED_SIGNER_API_SECRET?.trim() || undefined;
   const gaslessMaxGasLimit = envBigInt('GATEWAY_GASLESS_MAX_GAS_LIMIT', 1_500_000n);
   const gaslessMaxFeePerGasWei = envBigInt('GATEWAY_GASLESS_MAX_FEE_PER_GAS_WEI', 50_000_000_000n);
   const gaslessMaxNativeCostWei = envBigInt(
@@ -116,7 +119,7 @@ export function loadGaslessEnvironment({
     'GATEWAY_GASLESS_REQUEST_MAX_TTL_SECONDS must be >= 30',
   );
   assert(
-    envNumber('GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS', 5000) >= 1000,
+    envNumber('GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS', 30_000) >= 1000,
     'GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS must be >= 1000',
   );
   assert(
@@ -145,6 +148,7 @@ export function loadGaslessEnvironment({
       kmsExpectedAddress: gaslessKmsExpectedAddress,
       managedSignerUrl: gaslessManagedSignerUrl,
       managedSignerApiKey: gaslessManagedSignerApiKey,
+      managedSignerApiSecret: gaslessManagedSignerApiSecret,
     });
     assert(
       gaslessMaxFeePerGasWei > 0n,
@@ -214,9 +218,10 @@ export function loadGaslessEnvironment({
       : undefined,
     gaslessManagedSignerUrl,
     gaslessManagedSignerApiKey,
+    gaslessManagedSignerApiSecret,
     gaslessManagedSignerRequestTimeoutMs: envNumber(
       'GATEWAY_GASLESS_MANAGED_SIGNER_REQUEST_TIMEOUT_MS',
-      5000,
+      30_000,
     ),
     gaslessBroadcastPaused,
     gaslessMaxGasLimit,

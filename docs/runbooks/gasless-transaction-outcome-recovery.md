@@ -71,6 +71,38 @@ outcome.
 
 The recovery worker has no broadcast method and cannot create a replacement.
 
+## Managed-signer nonce reservation recovery
+
+The managed-signer request ID is deterministic for the canonical application request,
+resource, operation, chain, signer, and transaction nonce. This lets a replica reclaim an
+expired `reserved` row only when its complete intent hash is unchanged. A changed fee,
+destination, value, calldata, gas limit, or other transaction field changes the intent hash and
+must remain a conflict. Deterministic request identity must never weaken exact-intent matching.
+
+A reservation in `signing` is a quarantine, not an abandoned lease. An HTTP timeout or process
+failure after `beginSigning` cannot prove that KMS did not produce a signature. Do not reset,
+delete, expire, or reassign that row, and do not submit a different transaction at its nonce.
+
+For a `signing` reservation that does not progress:
+
+1. Disable gasless execution through a newly reviewed immutable plan and preserve the database
+   row and append-only events.
+2. Record the release commit, image digest, task ARN, request ID, intent hash, chain, signer,
+   nonce, application request, resource, operation, and failure timestamp in the incident.
+3. Correlate Gateway and relayer logs, KMS CloudTrail `Sign` evidence, both configured RPC
+   providers, the indexer, and the explorer. Search by exact transaction hash when a relayer log
+   recorded one, and by signer plus nonce when it did not.
+4. If the intended transaction or another nonce-consuming transaction is proven, reconcile that
+   exact hash and outcome. Do not infer success from nonce advancement alone.
+5. If no transaction can be proven, keep the old signer quarantined. Recovery requires an
+   independently reviewed signer-key rotation and the contract's existing quorum/timelock relayer
+   rotation. Do not reuse the ambiguous nonce or restore the old signer to service.
+6. Re-enable gasless execution only after the new signer address, role isolation, funding,
+   contract authorization, CloudTrail evidence, and failure/recovery rehearsal are accepted.
+
+This procedure requires the same explicit approvals as any KMS, Terraform, funding, or governance
+change. It does not authorize those operations by itself. Manual database edits are prohibited.
+
 ## Operator verification
 
 1. Identify the request by application request ID or transaction hash. Do not

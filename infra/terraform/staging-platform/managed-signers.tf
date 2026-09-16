@@ -14,6 +14,11 @@ locals {
     "oracle",
     "relayer",
   ])
+
+  managed_signer_task_role_arns = {
+    oracle  = aws_iam_role.oracle_task.arn
+    relayer = aws_iam_role.relayer_task.arn
+  }
 }
 
 check "only_approved_automated_signers_are_kms_managed" {
@@ -44,6 +49,63 @@ data "aws_iam_policy_document" "managed_signer_key" {
 
     actions   = ["kms:*"]
     resources = ["*"]
+  }
+
+  statement {
+    sid    = "DenyUnapprovedSigningPrincipal"
+    effect = "Deny"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
+    actions   = ["kms:Sign"]
+    resources = ["*"]
+
+    condition {
+      test     = "ArnNotEquals"
+      variable = "aws:PrincipalArn"
+      values   = [local.managed_signer_task_role_arns[each.key]]
+    }
+  }
+
+  statement {
+    sid    = "DenyNonDigestSigning"
+    effect = "Deny"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
+    actions   = ["kms:Sign"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringNotEquals"
+      variable = "kms:MessageType"
+      values   = ["DIGEST"]
+    }
+  }
+
+  statement {
+    sid    = "DenyUnexpectedSigningAlgorithm"
+    effect = "Deny"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
+    actions   = ["kms:Sign"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringNotEquals"
+      variable = "kms:SigningAlgorithm"
+      values   = ["ECDSA_SHA_256"]
+    }
   }
 }
 
