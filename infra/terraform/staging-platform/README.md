@@ -86,22 +86,31 @@ Oracle task role can call `kms:GetPublicKey` and `kms:Sign` on the Oracle key.
 Oracle reads the bundled indexer through private Cloud Map DNS; gateway-to-
 Oracle calls remain authenticated with the existing service credential.
 
-KMS activation is intentionally two-stage:
+The gasless relayer also runs as its own ECS service and task role. Only that
+task role can sign with the relayer key. The gateway sends HMAC-authenticated,
+intent-bound requests and independently verifies the returned transaction. The
+gateway has no KMS key ID, KMS SDK dependency, or `kms:Sign` permission. Both
+signer policies permit only `DIGEST` with `ECDSA_SHA_256`; cross-role signing is
+explicitly denied, and ECS Exec is disabled for both signer workloads.
 
-1. Apply the reviewed key-creation plan while the accepted runtime remains
-   unchanged.
-2. Run `pnpm --filter oracle kms:addresses -- <oracle-key-alias>` under a
-   read-only identity and independently review the derived address.
-3. Set the GitHub Actions variable
-   `COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS` to that reviewed address.
-4. Review a fresh main-branch plan. It must remove `ORACLE_PRIVATE_KEY`, set
-   `ORACLE_SIGNER_CUSTODY_MODE=kms`, and grant only the Oracle task role access
-   to the Oracle KMS key.
-5. Apply that exact plan, then capture startup, wrong-address, denied-access,
-   outage, signing, CloudTrail, and reconciliation evidence before acceptance.
+KMS activation uses separate key-creation and runtime plans:
 
-An empty repository variable keeps the dedicated staging Oracle on its legacy
-rollback key. It does not satisfy production custody acceptance.
+1. Apply the reviewed key-creation plan while both expected-address variables are empty.
+2. Derive both EVM addresses with `GetPublicKey` under a scoped read-only identity.
+3. Independently verify both addresses.
+4. Set `COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS` to the reviewed Oracle address.
+5. Set `COTSEL_STAGING_RELAYER_KMS_EXPECTED_ADDRESS` to the reviewed relayer address.
+6. Populate the protected `gateway-managed-signer` service-auth secret.
+7. Review a fresh plan from `main` and confirm each role can access only its own key.
+8. Apply that exact plan.
+9. Capture startup, wrong-address, denial, signing, CloudTrail, and reconciliation evidence.
+
+An empty Oracle address keeps its legacy rollback key. An empty relayer address
+keeps the relayer stopped and omits its gateway credential. Neither state
+satisfies custody acceptance. Keep `gasless_execution_enabled=false` until the
+durable nonce migration, one-writer topology, signing denials, and Base Sepolia
+rehearsal have been accepted. Terraform rejects enabling gasless execution with
+more than one gateway writer.
 
 Every service schema migration runs as a separate one-off ECS task. Each
 execution role can pull only its service image, write only its service log

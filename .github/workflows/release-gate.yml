@@ -73,6 +73,7 @@ jobs:
               - 'shared-db/**'
               - 'shared-edge/**'
               - 'shared-http/**'
+              - 'relayer/**'
               - 'README.md'
               - 'CONTRIBUTING.md'
               - 'SECURITY.md'
@@ -236,6 +237,8 @@ jobs:
           run_check ci-cost-controls node --test scripts/tests/ci-cost-controls.test.mjs
           run_check release-evidence-binding pnpm run release:evidence:check
           run_check release-supply-chain pnpm run release:supply-chain:check
+          run_check relayer-tests pnpm --filter @agroasys/relayer run test
+          run_check relayer-build pnpm --filter @agroasys/relayer run build
 
           if [[ "$fail" -ne 0 ]]; then
             exit 1

@@ -10,7 +10,6 @@ import type { GaslessExecutorConfig } from './gaslessExecutorConfig';
 import type {
   GaslessCreateTradeExecutionInput,
   GaslessExecutionReceipt,
-  GaslessOperatorActionExecutionInput,
   GaslessSettlementExecutor,
   GaslessUserActionExecutionInput,
   GaslessWalletUsdcTransferExecutionInput,
@@ -238,28 +237,6 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
     return gasEstimate;
   }
 
-  async function simulateOperatorAction(
-    input: GaslessOperatorActionExecutionInput,
-  ): Promise<bigint> {
-    await assertSignerBalance();
-    await escrow.finalizeAfterDisputeWindow.staticCall(input.tradeId);
-    const gasEstimate = await escrow.finalizeAfterDisputeWindow.estimateGas(input.tradeId);
-    if (gasEstimate > gaslessMaxGasLimit) {
-      throw new GatewayError(
-        400,
-        'VALIDATION_ERROR',
-        'Gasless operator-action gas estimate exceeds cap',
-        {
-          action: input.action,
-          gasEstimate: gasEstimate.toString(),
-          gasCap: gaslessMaxGasLimit.toString(),
-        },
-      );
-    }
-
-    return gasEstimate;
-  }
-
   async function simulateWalletUsdcTransfer(
     input: GaslessWalletUsdcTransferExecutionInput,
   ): Promise<bigint> {
@@ -370,33 +347,6 @@ export function createRawPrivateKeyGaslessSettlementExecutor(
             getUserActionFunctionName(input.action),
             buildUserActionArguments(input),
           ),
-        },
-        gasEstimate,
-        feeOverrides,
-      );
-      return {
-        txHash: tx.hash,
-        receipt: await waitForConfirmedReceipt(tx),
-      };
-    },
-
-    async simulateOperatorAction(input) {
-      return {
-        gasEstimate: await simulateOperatorAction(input),
-      };
-    },
-
-    async executeOperatorAction(input) {
-      const gasEstimate = await simulateOperatorAction(input);
-      const feeOverrides = await assertGasSpendCap(gasEstimate);
-      const tx = await signAndBroadcast(
-        {
-          requestId: input.requestId,
-          operation: input.action,
-          resourceType: 'settlement_handoff',
-          resourceId: input.handoffId,
-          destinationAddress: config.escrowAddress,
-          data: escrowInterface.encodeFunctionData('finalizeAfterDisputeWindow', [input.tradeId]),
         },
         gasEstimate,
         feeOverrides,

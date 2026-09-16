@@ -105,8 +105,6 @@ paths:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1dashboard-settlement~1gasless-executions~1create-trade
   /settlement/gasless-executions/user-action:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1settlement~1gasless-executions~1user-action
-  /settlement/gasless-executions/operator-action:
-    $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1settlement~1gasless-executions~1operator-action
   /wallet/usdc/gasless-transfers:
     $ref: ./cotsel-dashboard-gateway/paths/settlement-01.yml#/paths/~1wallet~1usdc~1gasless-transfers
   /settlement/handoffs/{handoffId}/execution-events:
@@ -321,9 +319,6 @@ components:
     SettlementGaslessUserActionExecutionRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SettlementGaslessUserActionExecutionRequest}
     SettlementGaslessUserActionExecutionPayload: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SettlementGaslessUserActionExecutionPayload}
     SettlementGaslessUserActionExecutionResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SettlementGaslessUserActionExecutionResponse}
-    SettlementGaslessOperatorActionExecutionRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SettlementGaslessOperatorActionExecutionRequest}
-    SettlementGaslessOperatorActionExecutionPayload: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SettlementGaslessOperatorActionExecutionPayload}
-    SettlementGaslessOperatorActionExecutionResponse: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SettlementGaslessOperatorActionExecutionResponse}
     SponsoredWalletUsdcTransferRequest: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SponsoredWalletUsdcTransferRequest}
     SponsoredWalletUsdcTransferReceipt: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SponsoredWalletUsdcTransferReceipt}
     SponsoredWalletUsdcTransferPayload: {$ref: ./cotsel-dashboard-gateway/components/schemas-settlement-02.yml#/components/schemas/SponsoredWalletUsdcTransferPayload}

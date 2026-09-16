@@ -12,6 +12,7 @@ export function registerInspectionTests(getHarness: () => AgroasysEscrowHarness)
   let buyer!: AgroasysEscrowHarness['buyer'];
   let supplier!: AgroasysEscrowHarness['supplier'];
   let oracle!: AgroasysEscrowHarness['oracle'];
+  let relayer!: AgroasysEscrowHarness['relayer'];
   let admin1!: AgroasysEscrowHarness['admin1'];
   let signUserActionAuthorization!: AgroasysEscrowHarness['signUserActionAuthorization'];
   let createTradeWithAuthorizationForTest!: AgroasysEscrowHarness['createTradeWithAuthorizationForTest'];
@@ -25,6 +26,7 @@ export function registerInspectionTests(getHarness: () => AgroasysEscrowHarness)
         buyer,
         supplier,
         oracle,
+        relayer,
         admin1,
         signUserActionAuthorization,
         createTradeWithAuthorizationForTest,
@@ -293,6 +295,15 @@ export function registerInspectionTests(getHarness: () => AgroasysEscrowHarness)
 
       await expect(
         escrow.connect(buyer).finalizeAfterDisputeWindow(tradeId),
+      ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyOracleOrAdmin');
+    });
+
+    it('Should reject direct deadline finalization from the configured relayer', async function () {
+      await escrow.connect(oracle).confirmInspectionAvailable(tradeId, 72 * 3600);
+      await time.increase(72 * 3600 + 1);
+
+      await expect(
+        escrow.connect(relayer).finalizeAfterDisputeWindow(tradeId),
       ).to.be.revertedWithCustomError(escrow, 'EscrowOnlyOracleOrAdmin');
     });
 

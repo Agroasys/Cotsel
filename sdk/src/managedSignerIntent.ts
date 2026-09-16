@@ -18,6 +18,38 @@ export interface ManagedSignerTransactionIntent {
   gasPriceWei?: string;
 }
 
+export type ManagedSignerPolicyContext =
+  | {
+      kind: 'create_trade';
+      resourceId: string;
+      actorAddress: string;
+      supplierAddress: string;
+      authorizationNonce: string;
+      authorizationDeadline: string;
+      usdcAuthorizationNonce: string;
+      usdcValidAfter: string;
+      usdcValidBefore: string;
+    }
+  | {
+      kind: 'user_action';
+      resourceId: string;
+      actorAddress: string;
+      tradeId: string;
+      authorizationNonce: string;
+      authorizationDeadline: string;
+    }
+  | {
+      kind: 'wallet_usdc_transfer';
+      resourceId: string;
+      actorAddress: string;
+      recipientAddress: string;
+      amount: string;
+      validAfter: string;
+      validBefore: string;
+      authorizationNonce: string;
+      authorizationDomainName: string;
+    };
+
 export interface ManagedSignerValidationEvidence {
   requestId: string;
   intentHash: string;

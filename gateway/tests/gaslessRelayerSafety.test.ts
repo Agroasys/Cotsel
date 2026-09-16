@@ -136,12 +136,6 @@ function createService(
           '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
           '100',
         ),
-      simulateOperatorAction: async () => ({ gasEstimate: 210000n }),
-      executeOperatorAction: async () =>
-        buildConfirmedSubmission(
-          '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-          '100',
-        ),
       simulateWalletUsdcTransfer: async () => ({ gasEstimate: 110000n }),
       executeWalletUsdcTransfer: async () =>
         buildConfirmedSubmission(
@@ -176,7 +170,7 @@ describe('gasless relayer safety controls', () => {
     expect(service.getRelayerReadiness().queue.active).toBe(0);
   });
 
-  test('raw private-key executor rejects fake KMS custody without a KMS identity', () => {
+  test('gateway refuses KMS custody without the isolated relayer transport', () => {
     expect(() =>
       createEthersGaslessSettlementExecutor({
         rpcUrl: config.rpcUrl,
@@ -188,7 +182,7 @@ describe('gasless relayer safety controls', () => {
           '0x0000000000000000000000000000000000000000000000000000000000000001',
         gaslessSignerCustodyMode: 'kms',
       }),
-    ).toThrow('Gasless AWS KMS identity is not configured');
+    ).toThrow('Gasless managed signer URL is not configured');
   });
 
   test('fail-closed capacity policy blocks broadcasts after observed low executor balance', async () => {

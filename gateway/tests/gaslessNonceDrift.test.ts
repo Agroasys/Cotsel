@@ -13,6 +13,6 @@ describe('gasless relayer nonce safety', () => {
     expect(source).not.toContain('signer.reset()');
     expect(source).toContain('const signedTransaction = await signer.signTransaction(transaction)');
     expect(source).toContain('return broadcastPersistedGaslessTransaction(');
-    expect(source.match(/await signAndBroadcast\(/g)).toHaveLength(4);
+    expect(source.match(/await signAndBroadcast\(/g)).toHaveLength(3);
   });
 });

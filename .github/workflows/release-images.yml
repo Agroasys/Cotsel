@@ -57,6 +57,10 @@ jobs:
             repository: cotsel/reconciliation
             dockerfile: reconciliation/Dockerfile
             local_tag: cotsel-reconciliation
+          - service: relayer
+            repository: cotsel/relayer
+            dockerfile: relayer/Dockerfile
+            local_tag: cotsel-relayer
           - service: ricardian
             repository: cotsel/ricardian
             dockerfile: ricardian/Dockerfile

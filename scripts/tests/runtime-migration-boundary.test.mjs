@@ -148,6 +148,7 @@ test('service migration manifests pin immutable schema checksums', async () => {
           { version: '202609130006', name: 'governance_atomic_transitions' },
           { version: '202609130007', name: 'governance_simulation_evidence' },
           { version: '202609150008', name: 'governance_pending_hash_correction' },
+          { version: '202609160009', name: 'gasless_nonce_reservations' },
         ],
       );
       assert.match(manifest.migrations[1].schema_sha256, /^[a-f0-9]{64}$/);
@@ -156,6 +157,7 @@ test('service migration manifests pin immutable schema checksums', async () => {
       assert.match(manifest.migrations[4].schema_sha256, /^[a-f0-9]{64}$/);
       assert.match(manifest.migrations[5].schema_sha256, /^[a-f0-9]{64}$/);
       assert.match(manifest.migrations[6].schema_sha256, /^[a-f0-9]{64}$/);
+      assert.match(manifest.migrations[7].schema_sha256, /^[a-f0-9]{64}$/);
     }
   }
 });

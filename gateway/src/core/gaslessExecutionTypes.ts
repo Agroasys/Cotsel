@@ -11,10 +11,8 @@ export const USER_ACTIONS = [
   'finalize_after_dispute_window',
   'finalize_after_inspection_acceptance',
 ] as const;
-export const OPERATOR_ACTIONS = ['finalize_after_dispute_window'] as const;
 
 export type GaslessUserAction = (typeof USER_ACTIONS)[number];
-export type GaslessOperatorAction = (typeof OPERATOR_ACTIONS)[number];
 
 export interface GaslessBuyerAuthorization {
   nonce: string;
@@ -75,18 +73,6 @@ export interface GaslessUserActionExecutionInput {
   sourceApiKeyId?: string | null;
 }
 
-export interface GaslessOperatorActionExecutionInput {
-  action: GaslessOperatorAction;
-  handoffId: string;
-  chainId: number;
-  contractAddress: string;
-  expiresAt: string;
-  payloadHash: string;
-  tradeId: string;
-  requestId: string;
-  sourceApiKeyId?: string | null;
-}
-
 export interface GaslessWalletUsdcTransferExecutionInput {
   action: 'wallet_usdc_transfer';
   platformTransferId: string;
@@ -114,11 +100,6 @@ export type GaslessUserActionPayload = Omit<
   GaslessUserActionExecutionInput,
   'payloadHash' | 'requestId' | 'sourceApiKeyId'
 >;
-export type GaslessOperatorActionPayload = Omit<
-  GaslessOperatorActionExecutionInput,
-  'payloadHash' | 'requestId' | 'sourceApiKeyId'
->;
-
 export interface GaslessCreateTradeExecutionResult {
   handoff: SettlementHandoffRecord;
   acceptedEvent: SettlementExecutionEventRecord;
@@ -190,12 +171,6 @@ export interface GaslessSettlementExecutor {
     input: GaslessUserActionExecutionInput,
   ): Promise<{ gasEstimate?: bigint | string | number | null }>;
   executeUserAction(input: GaslessUserActionExecutionInput): Promise<GaslessExecutionSubmission>;
-  simulateOperatorAction(
-    input: GaslessOperatorActionExecutionInput,
-  ): Promise<{ gasEstimate?: bigint | string | number | null }>;
-  executeOperatorAction(
-    input: GaslessOperatorActionExecutionInput,
-  ): Promise<GaslessExecutionSubmission>;
   simulateWalletUsdcTransfer(
     input: GaslessWalletUsdcTransferExecutionInput,
   ): Promise<{ gasEstimate?: bigint | string | number | null }>;

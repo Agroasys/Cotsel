@@ -6,7 +6,6 @@ import { GatewayError } from '../errors';
 import { createGaslessPayloadHash } from './gaslessRequestNormalization';
 import type {
   GaslessCreateTradeExecutionInput,
-  GaslessOperatorActionExecutionInput,
   GaslessUserActionExecutionInput,
 } from './gaslessExecutionTypes';
 import type { SettlementHandoffRecord } from './settlementStore';
@@ -116,10 +115,7 @@ export function assertHandoffMatchesExecution(
 }
 
 export function assertContractMatchesRuntime(
-  input:
-    | GaslessCreateTradeExecutionInput
-    | GaslessUserActionExecutionInput
-    | GaslessOperatorActionExecutionInput,
+  input: GaslessCreateTradeExecutionInput | GaslessUserActionExecutionInput,
   expectedContractAddress: string,
 ): void {
   const expected = getAddress(expectedContractAddress);
@@ -132,10 +128,7 @@ export function assertContractMatchesRuntime(
 }
 
 function assertPayloadHash(
-  input:
-    | GaslessCreateTradeExecutionInput
-    | GaslessUserActionExecutionInput
-    | GaslessOperatorActionExecutionInput,
+  input: GaslessCreateTradeExecutionInput | GaslessUserActionExecutionInput,
 ): void {
   const {
     payloadHash: _payloadHash,
@@ -154,4 +147,3 @@ function assertPayloadHash(
 
 export const assertCreateTradePayloadHash = assertPayloadHash;
 export const assertUserActionPayloadHash = assertPayloadHash;
-export const assertOperatorActionPayloadHash = assertPayloadHash;
