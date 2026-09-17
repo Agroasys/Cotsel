@@ -96,18 +96,18 @@ function sendOracleExecutionResult(
 
 function buildOracleErrorResponse(error: unknown): ErrorResponse {
   if (error instanceof HttpError) {
-    return failure(error.code, error.message) as ErrorResponse;
+    return failure(error.code, error.message);
   }
 
   if (error instanceof ValidationError) {
-    return failure('ValidationError', error.message) as ErrorResponse;
+    return failure('ValidationError', error.message);
   }
 
   if (error instanceof Error) {
-    return failure(error.name || 'InternalError', error.message) as ErrorResponse;
+    return failure(error.name || 'InternalError', error.message);
   }
 
-  return failure('InternalError', 'An unexpected oracle error occurred') as ErrorResponse;
+  return failure('InternalError', 'An unexpected oracle error occurred');
 }
 
 function resolveStatusCode(error: unknown): number {
