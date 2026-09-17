@@ -61,9 +61,7 @@ export interface SettlementCallbackReplaySpec {
 }
 
 export type FailedOperationReplaySpec =
-  | ComplianceDecisionReplaySpec
-  | ComplianceControlReplaySpec
-  | SettlementCallbackReplaySpec;
+  ComplianceDecisionReplaySpec | ComplianceControlReplaySpec | SettlementCallbackReplaySpec;
 
 export interface FailedOperationCaptureInput {
   operationType: ReplayableOperationType;
@@ -305,8 +303,7 @@ export class GatewayFailedOperationReplayer {
 
     try {
       const principalSnapshot = (record.metadata.principalSnapshot as
-        | FailedOperationPrincipalSnapshot
-        | undefined) ?? {
+        FailedOperationPrincipalSnapshot | undefined) ?? {
         actorId: record.actorId || 'user:replay',
         actorAccountId: null,
         actorUserId: record.actorUserId,
