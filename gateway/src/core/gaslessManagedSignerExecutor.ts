@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { getAddress, isAddress, keccak256, toUtf8Bytes } from 'ethers';
-import type { FeeData, Provider, TransactionRequest, TransactionResponse } from 'ethers';
+import type { FeeData, TransactionRequest, TransactionResponse } from 'ethers';
 import { buildManagedSignerIntentHash } from '@agroasys/sdk';
 import type { ManagedSignerPolicyContext, ManagedSignerTransactionIntent } from '@agroasys/sdk';
 import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
@@ -87,10 +87,10 @@ export function createManagedSignerGaslessSettlementExecutor(
 
   const provider =
     dependencies?.provider ??
-    (createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
+    createManagedRpcProvider(config.rpcUrl, config.rpcFallbackUrls, {
       chainId: config.chainId,
       quorum: config.rpcQuorum,
-    }) as Provider as GaslessManagedProvider);
+    });
   const signerTransport = dependencies?.signerTransport ?? createManagedSignerTransport(config);
   if (!dependencies?.recordTransactionOutcome) {
     throw new GatewayError(

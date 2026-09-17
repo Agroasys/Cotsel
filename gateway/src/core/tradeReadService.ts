@@ -419,7 +419,7 @@ function parseGraphQlResponse(payload: unknown): TradesGraphQlResponse {
     );
   }
 
-  return payload as TradesGraphQlResponse;
+  return payload;
 }
 
 function readTradesArray(payload: TradesGraphQlResponse): TradeGraphQlRecord[] {
@@ -646,8 +646,7 @@ export class TradeReadService implements TradeReadReader {
     this.indexerClient = indexerClientOrUrl;
     this.complianceStore = indexerRequestTimeoutOrComplianceStore as ComplianceStore;
     this.settlementReadStore = complianceStoreOrSettlementStore as
-      | TradeSettlementReadStore
-      | undefined;
+      TradeSettlementReadStore | undefined;
     this.explorerBaseUrl =
       typeof maybeSettlementReadStoreOrExplorerBaseUrl === 'string'
         ? maybeSettlementReadStoreOrExplorerBaseUrl
