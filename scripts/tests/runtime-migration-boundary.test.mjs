@@ -97,7 +97,7 @@ test('oracle reads reconciliation containment with its dedicated reader identity
     'infra/terraform/staging-platform/runtime-oracle-reconciliation.tf',
     'utf8',
   );
-  const oracleSecrets = runtime.match(/oracle_secrets = \[([\s\S]*?)\n[ ]{2}\]/)?.[1];
+  const oracleSecrets = runtime.match(/oracle_secrets = (?:concat\()?\[([\s\S]*?)\n {2}\]\)?/)?.[1];
   assert.ok(oracleSecrets, 'oracle_secrets must be present');
   assert.match(oracleSecrets, /database\/reconciliation\/reader/);
   assert.doesNotMatch(oracleSecrets, /database\/reconciliation\/runtime/);
