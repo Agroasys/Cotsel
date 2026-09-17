@@ -3,12 +3,7 @@
  */
 
 export type DownstreamServiceKey =
-  | 'indexer'
-  | 'oracle'
-  | 'treasury'
-  | 'reconciliation'
-  | 'ricardian'
-  | 'notifications';
+  'indexer' | 'oracle' | 'treasury' | 'reconciliation' | 'ricardian' | 'notifications';
 
 export type DownstreamAuthMode = 'none' | 'shared_hmac' | 'oracle_legacy_hmac';
 export type DownstreamHeaderStyle = 'agroasys' | 'legacy';

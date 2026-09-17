@@ -8,15 +8,7 @@
 
 export interface EvidenceLink {
   kind:
-    | 'runbook'
-    | 'incident'
-    | 'ticket'
-    | 'tx'
-    | 'event'
-    | 'document'
-    | 'log'
-    | 'dashboard'
-    | 'other';
+    'runbook' | 'incident' | 'ticket' | 'tx' | 'event' | 'document' | 'log' | 'dashboard' | 'other';
   uri: string;
   note?: string;
 }

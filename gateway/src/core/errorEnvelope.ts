@@ -4,10 +4,7 @@
 import type { RequestContext } from '../middleware/requestContext';
 import { GatewayError, type GatewayErrorCode } from '../errors';
 export type GatewayFailureClass =
-  | 'client_contract'
-  | 'upstream_business'
-  | 'infrastructure'
-  | 'unexpected';
+  'client_contract' | 'upstream_business' | 'infrastructure' | 'unexpected';
 
 export interface GatewayErrorEnvelopeV1 {
   statusCode: number;

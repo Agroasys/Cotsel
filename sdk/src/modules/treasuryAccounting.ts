@@ -3,20 +3,11 @@
  */
 
 export type TreasuryAccountingState =
-  | 'HELD'
-  | 'ALLOCATED_TO_SWEEP'
-  | 'SWEPT'
-  | 'HANDED_OFF'
-  | 'REALIZED'
-  | 'EXCEPTION';
+  'HELD' | 'ALLOCATED_TO_SWEEP' | 'SWEPT' | 'HANDED_OFF' | 'REALIZED' | 'EXCEPTION';
 
 export type SweepBatchAllocationStatus = 'ALLOCATED' | 'RELEASED';
 export type PartnerHandoffStatus =
-  | 'CREATED'
-  | 'SUBMITTED'
-  | 'ACKNOWLEDGED'
-  | 'COMPLETED'
-  | 'FAILED';
+  'CREATED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'COMPLETED' | 'FAILED';
 export type RevenueRealizationStatus = 'REALIZED' | 'REVERSED';
 export type FiatDepositState = 'PENDING' | 'FUNDED' | 'PARTIAL' | 'REVERSED' | 'FAILED';
 export type BankPayoutState = 'PENDING' | 'CONFIRMED' | 'REJECTED';
