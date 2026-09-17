@@ -10,6 +10,7 @@ import {
   candidateIdentityDigest,
   validateCandidateManifest,
 } from './lib/release-candidate-manifest.mjs';
+import { assertCrossRepositoryManifestBinding } from './lib/release-candidate-inventory.mjs';
 import {
   assertEvidenceIndexComplete,
   validateEvidenceIndex,
@@ -18,7 +19,6 @@ import {
   CONTROL_ID_PATTERN,
   canonicalDigest,
   canonicalize,
-  failManifest,
 } from './lib/release-evidence-validation.mjs';
 import { validateAuthorityProfileRegistry } from './lib/release-authority-profile.mjs';
 
@@ -28,6 +28,7 @@ const ROOT_DIR = path.resolve(SCRIPT_DIR, '..');
 export {
   IDENTITY_DIMENSIONS,
   assertCandidateBindable,
+  assertCrossRepositoryManifestBinding,
   assertEvidenceIndexComplete,
   candidateIdentity,
   candidateIdentityDigest,
@@ -44,16 +45,6 @@ export function readJsonDocument(documentPath) {
 
 export function readCandidateManifest(manifestPath) {
   return validateCandidateManifest(readJsonDocument(manifestPath));
-}
-
-export function assertCrossRepositoryManifestBinding(manifest, releaseManifestPath) {
-  const actual = canonicalDigest(readJsonDocument(releaseManifestPath));
-  if (manifest.crossRepositoryManifest.sha256 !== actual) {
-    failManifest(
-      `crossRepositoryManifest.sha256 ${manifest.crossRepositoryManifest.sha256} does not match ${releaseManifestPath} (${actual})`,
-    );
-  }
-  return manifest;
 }
 
 function readFlag(args, name) {
@@ -102,12 +93,6 @@ function main() {
   }
 
   const manifest = readCandidateManifest(manifestPath);
-  if (args.includes('--verify-cross-repository')) {
-    assertCrossRepositoryManifestBinding(
-      manifest,
-      path.join(ROOT_DIR, 'integration/release-manifest.json'),
-    );
-  }
   process.stdout.write(
     `Candidate manifest valid (${manifest.status}); candidate=${manifest.candidateId} identity=${candidateIdentityDigest(manifest)}\n`,
   );

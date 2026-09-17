@@ -113,6 +113,16 @@ test('a complete v2 candidate validates and binds', () => {
   assert.doesNotThrow(() => assertCandidateBindable(manifest));
 });
 
+test('candidate validation rejects a mismatched cross-repository manifest digest', () => {
+  const manifest = fixture();
+  manifest.crossRepositoryManifest.sha256 = '0'.repeat(64);
+
+  assert.throws(
+    () => validateCandidateManifest(manifest),
+    /crossRepositoryManifest\.sha256 .* does not match integration\/release-manifest\.json/,
+  );
+});
+
 test('a one-artifact candidate is rejected', () => {
   const manifest = fixture();
   manifest.artifacts = [manifest.artifacts[0]];

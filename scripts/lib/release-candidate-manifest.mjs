@@ -1,5 +1,6 @@
 import {
   artifactIdentityDigests,
+  assertCrossRepositoryManifestBinding,
   migrationIdentityStrings,
   validateCandidateInventory,
 } from './release-candidate-inventory.mjs';
@@ -321,6 +322,7 @@ export function validateCandidateManifest(manifest) {
     'crossRepositoryManifest.sha256',
     SHA256_PATTERN,
   );
+  assertCrossRepositoryManifestBinding(manifest);
   if (legacyV1) {
     validateLegacyInventory(manifest);
   } else {

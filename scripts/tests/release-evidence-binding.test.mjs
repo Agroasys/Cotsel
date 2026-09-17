@@ -9,9 +9,7 @@ import { fileURLToPath } from 'node:url';
 import {
   IDENTITY_DIMENSIONS,
   assertCandidateBindable,
-  assertCrossRepositoryManifestBinding,
   assertEvidenceIndexComplete,
-  canonicalDigest,
   candidateIdentityDigest,
   readCandidateManifest,
   readJsonDocument,
@@ -629,20 +627,6 @@ test('requires a rollback target that is not the candidate itself', () => {
   };
 
   assert.throws(() => validateCandidateManifest(manifest), /cannot be its own rollback target/);
-});
-
-test('binds the candidate to the checked-in cross-repository release manifest', () => {
-  const releaseManifestPath = path.join(ROOT_DIR, 'integration/release-manifest.json');
-  const manifest = manifestFixture();
-  manifest.crossRepositoryManifest.sha256 = '0'.repeat(64);
-
-  assert.throws(
-    () => assertCrossRepositoryManifestBinding(manifest, releaseManifestPath),
-    /crossRepositoryManifest\.sha256 .* does not match/,
-  );
-
-  manifest.crossRepositoryManifest.sha256 = canonicalDigest(readJsonDocument(releaseManifestPath));
-  assert.doesNotThrow(() => assertCrossRepositoryManifestBinding(manifest, releaseManifestPath));
 });
 
 /**

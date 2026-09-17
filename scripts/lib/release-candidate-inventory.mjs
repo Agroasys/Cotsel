@@ -77,6 +77,16 @@ function loadInventory() {
 const INVENTORY = loadInventory();
 const RELEASE_MANIFEST = readJson(RELEASE_MANIFEST_PATH);
 
+export function assertCrossRepositoryManifestBinding(manifest) {
+  const actual = sha256(canonicalize(RELEASE_MANIFEST));
+  if (manifest.crossRepositoryManifest.sha256 !== actual) {
+    fail(
+      `crossRepositoryManifest.sha256 ${manifest.crossRepositoryManifest.sha256} does not match integration/release-manifest.json (${actual})`,
+    );
+  }
+  return manifest;
+}
+
 export function releaseCandidateInventory() {
   return structuredClone(INVENTORY);
 }
