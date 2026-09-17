@@ -55,7 +55,7 @@ signer rule, data contract or operational control. Refactoring that provably pre
 change and does not need a GOV-02 record.
 
 **GOV-03 preconditions.** All three must hold: the candidate manifest validates against
-`integration/candidate-manifest.schema.json`; every required release-gate run for that exact candidate is green;
+`integration/candidate-manifest.v2.schema.json`; every required release-gate run for that exact candidate is green;
 and the target environment matches an authority profile in `integration/release-authority-profile.json` whose
 `promotionPolicy` is not `blocked`. `local-ci` and `base-mainnet` are currently `blocked` by that profile.
 
@@ -117,7 +117,7 @@ that consumed it.
 | ----------------------------- | ----------------------------------------------------------------- |
 | Source commit                 | Git SHA in the candidate manifest                                 |
 | Artifact or image digest      | Immutable digest per service in the candidate manifest            |
-| Chain ID and contract address | `integration/candidate-manifest.schema.json` contract block       |
+| Chain ID and contract address | `integration/candidate-manifest.v2.schema.json` contract block    |
 | Deployment block              | Contract deploy report; also the indexer start block              |
 | Migration identity            | Applied migration set recorded for the candidate                  |
 | Environment                   | Authority profile in `integration/release-authority-profile.json` |

@@ -3,12 +3,12 @@
   "candidateId": "cotsel-2026-08-05-fixture",
   "manifest": {
     "path": "scripts/tests/fixtures/release-evidence/candidate-manifest.json",
-    "sha256": "7ee026a1e964c288c4db7390c157ed151ee30e925dd22ab8f2a5359e9978e370"
+    "sha256": "3137ddde7289fb9c7f2126481f209277cf3b50cac74f376560541f9b6f3acaaa"
   },
   "environmentReport": {
     "path": "ci-reports/environment-report.json",
     "sha256": "66d51889f1ac4eeee3064c44ab784d5039216adf53c0b1ae073f1c61a5f4e2e1",
-    "manifestSha256": "7ee026a1e964c288c4db7390c157ed151ee30e925dd22ab8f2a5359e9978e370",
+    "manifestSha256": "3137ddde7289fb9c7f2126481f209277cf3b50cac74f376560541f9b6f3acaaa",
     "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
   },
   "generatedAt": "2026-08-05T10:00:00.000Z",
@@ -29,16 +29,34 @@
       "boundIdentity": {
         "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
         "artifactDigests": [
-          "sha256:0a2b3b297e6065476bdd1df01d4b40191682522c13dd4f932014b917c800a149",
-          "sha256:2568a281b9aa8b6b5092908edfe81ce00452bed10b3617631ec35e184e57bc61",
-          "sha256:1a4bbbd16723882b09a665aceaaf7120a007753d04b5c5caa07d144d255000a7",
-          "sha256:c670dd418c1bd71c900a4ece5b31f788b5deb8a7d0438d9c1eb6a02c49bc9fea"
+          "sha256:274daf8dc2606e18ec7de1d99838fb5f8604a43ba3b4f385af539b74ef6a6b83",
+          "sha256:389ab912a395d2b7bb507f952e3088c4d7c9b65385f77fba591cd72af6fa0469",
+          "sha256:415d975416f94fcd6a1474f482de8cb1c23b3f882a5f4df72319ffa9a67ef1c7",
+          "sha256:58afac464e221d6a42751e7a269f06ecca841dd595692511aa41c25e66b77c24",
+          "sha256:5fc11a4ca3201e2f2b3a2013ed7198a85d0ffdaadbb785d4da03f52ce1ad2645",
+          "sha256:6e33d4b88a889b1a4b913bbf45710f34f9230ac1820c9b72e664ab8d2ed222ed",
+          "sha256:6ffabb39cb7ba94c8066ec5cc947b018ebd7ef698bf94791352bdca5d9e1512d",
+          "sha256:80cf73b685658e3e2fa98957f4b7970b8589583bb7ca11e861b6df6b7f4ed4d1",
+          "sha256:a5df9814f45b9e10734227325219b3a31a9d24cc964a813766dbfa2f2ae1e572",
+          "sha256:b7abbd1eafec7c7b391cadcb749a30ed3da2acf2cb2758f768b475b93e703ce4",
+          "sha256:c4855460e18ba344e6b1baf6dcef4d673c963e01ec6ca2f208eb774a959f3deb",
+          "sha256:c51ac34b0c2883f67e3e3b95ff31088750be279926cc543b105fa706bfc7397b",
+          "sha256:d3639ba71107e76ea1fc982e65b3ee7efe19ed1e0f2025413b0b74645a935ccd",
+          "sha256:ee02dbffbf3763cccdd29719a5ce518c4e47ce4c7fe178ee8bb60078dd5bb857"
         ],
         "environment": "base-sepolia-staging",
         "chainId": 84532,
         "contractAddress": "0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
         "contractDeployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a",
-        "migrationIdentities": ["indexer@0042_trade_timeline", "treasury@0017_close_packet"],
+        "migrationIdentities": [
+          "auth@202609130003_operator_signer_two_person_activation#sha256:3f0a3b1657f48f7c837e5dd3d0ea66f178c3ab108f23940cfb646c98a3a795ea",
+          "gateway@202609160009_gasless_nonce_reservations#sha256:0c66d7b41372a3e9f8f38486dd88f25daf77744ffb9e1620a1a2fec91b5b710d",
+          "indexer@1785600000000_indexer_quarantine#sha256:c153d044cf8adbd0fa6a22fe25d0ec5ccd4e1b399024f8406106b32eeb5b7680",
+          "oracle@202608310001_baseline#sha256:bd596dfb79adabdfa95b1930e05c06bf9d9f8cb76a17c16276154ad7b3c073af",
+          "reconciliation@202609120001_run_leases#sha256:278cac59c7b2d5b7d287bdabfcd3964f83581cc47315e55f7d411b6d31b85b20",
+          "ricardian@202608310001_baseline#sha256:68b1014d5334631301e68f12e99874849e5d1f843ecd29e588815e4f6ccaf42b",
+          "treasury@202609170002_canonical_monetary_amounts#sha256:984ce6f6175b12a7c77ce8c459a7ab11b74053104ec02a455a6fa419dfbedf33"
+        ],
         "providerMode": {
           "fiatOffRamp": "disabled",
           "signer": "kms",
@@ -69,16 +87,34 @@
       "boundIdentity": {
         "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
         "artifactDigests": [
-          "sha256:0a2b3b297e6065476bdd1df01d4b40191682522c13dd4f932014b917c800a149",
-          "sha256:2568a281b9aa8b6b5092908edfe81ce00452bed10b3617631ec35e184e57bc61",
-          "sha256:1a4bbbd16723882b09a665aceaaf7120a007753d04b5c5caa07d144d255000a7",
-          "sha256:c670dd418c1bd71c900a4ece5b31f788b5deb8a7d0438d9c1eb6a02c49bc9fea"
+          "sha256:274daf8dc2606e18ec7de1d99838fb5f8604a43ba3b4f385af539b74ef6a6b83",
+          "sha256:389ab912a395d2b7bb507f952e3088c4d7c9b65385f77fba591cd72af6fa0469",
+          "sha256:415d975416f94fcd6a1474f482de8cb1c23b3f882a5f4df72319ffa9a67ef1c7",
+          "sha256:58afac464e221d6a42751e7a269f06ecca841dd595692511aa41c25e66b77c24",
+          "sha256:5fc11a4ca3201e2f2b3a2013ed7198a85d0ffdaadbb785d4da03f52ce1ad2645",
+          "sha256:6e33d4b88a889b1a4b913bbf45710f34f9230ac1820c9b72e664ab8d2ed222ed",
+          "sha256:6ffabb39cb7ba94c8066ec5cc947b018ebd7ef698bf94791352bdca5d9e1512d",
+          "sha256:80cf73b685658e3e2fa98957f4b7970b8589583bb7ca11e861b6df6b7f4ed4d1",
+          "sha256:a5df9814f45b9e10734227325219b3a31a9d24cc964a813766dbfa2f2ae1e572",
+          "sha256:b7abbd1eafec7c7b391cadcb749a30ed3da2acf2cb2758f768b475b93e703ce4",
+          "sha256:c4855460e18ba344e6b1baf6dcef4d673c963e01ec6ca2f208eb774a959f3deb",
+          "sha256:c51ac34b0c2883f67e3e3b95ff31088750be279926cc543b105fa706bfc7397b",
+          "sha256:d3639ba71107e76ea1fc982e65b3ee7efe19ed1e0f2025413b0b74645a935ccd",
+          "sha256:ee02dbffbf3763cccdd29719a5ce518c4e47ce4c7fe178ee8bb60078dd5bb857"
         ],
         "environment": "base-sepolia-staging",
         "chainId": 84532,
         "contractAddress": "0x54391ad22880B845021D49e79bA7E47bA8CcDDA7",
         "contractDeployedBytecodeSha256": "8ae6bd40151f975007997152aa60a5421b1fccc59e2fc866da27f8467af7b61a",
-        "migrationIdentities": ["indexer@0042_trade_timeline", "treasury@0017_close_packet"],
+        "migrationIdentities": [
+          "auth@202609130003_operator_signer_two_person_activation#sha256:3f0a3b1657f48f7c837e5dd3d0ea66f178c3ab108f23940cfb646c98a3a795ea",
+          "gateway@202609160009_gasless_nonce_reservations#sha256:0c66d7b41372a3e9f8f38486dd88f25daf77744ffb9e1620a1a2fec91b5b710d",
+          "indexer@1785600000000_indexer_quarantine#sha256:c153d044cf8adbd0fa6a22fe25d0ec5ccd4e1b399024f8406106b32eeb5b7680",
+          "oracle@202608310001_baseline#sha256:bd596dfb79adabdfa95b1930e05c06bf9d9f8cb76a17c16276154ad7b3c073af",
+          "reconciliation@202609120001_run_leases#sha256:278cac59c7b2d5b7d287bdabfcd3964f83581cc47315e55f7d411b6d31b85b20",
+          "ricardian@202608310001_baseline#sha256:68b1014d5334631301e68f12e99874849e5d1f843ecd29e588815e4f6ccaf42b",
+          "treasury@202609170002_canonical_monetary_amounts#sha256:984ce6f6175b12a7c77ce8c459a7ab11b74053104ec02a455a6fa419dfbedf33"
+        ],
         "providerMode": {
           "fiatOffRamp": "disabled",
           "signer": "kms",

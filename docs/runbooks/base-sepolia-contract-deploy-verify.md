@@ -166,7 +166,7 @@ The bundle records the deployment block and the receipt status as
 `contract.deploymentBlock` and `contract.deploymentReceiptStatus`. Both are read
 from the deployment receipt, never entered by hand. `contract.deploymentBlock` is
 the start block for `INDEXER_START_BLOCK` and for the `contract.deploymentBlock`
-field of a candidate manifest (`integration/candidate-manifest.schema.json`); a
+field of a candidate manifest (`integration/candidate-manifest.v2.schema.json`); a
 bundle without it cannot evidence a candidate.
 
 ## Failure Handling

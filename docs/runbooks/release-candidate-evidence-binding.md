@@ -1,27 +1,52 @@
 # Release candidate manifest and evidence index
 
-This runbook defines the two machine-readable contracts that bind Cotsel readiness evidence to an
-exact candidate, and the rules CI enforces on them. It implements SOW rows REPORT-02 and PROG-01
-under work package WP-0 ([#636](https://github.com/Agroasys/Cotsel/issues/636), gate E-0).
+This runbook defines the machine-readable records that bind Cotsel readiness evidence to an exact
+release candidate. It also defines the rules that CI enforces. It implements SOW rows REPORT-02 and
+PROG-01 under work package WP-0
+([#636](https://github.com/Agroasys/Cotsel/issues/636), gate E-0).
 
 The programme verdict is **NO-GO**. These contracts describe how evidence is bound and accepted.
 They do not authorize a rehearsal, pilot or mainnet release, and no candidate is pinned yet.
 
-## The two documents
+## Records and schemas
 
-| Document                                     | Schema                         | Owner                                                 |
-| -------------------------------------------- | ------------------------------ | ----------------------------------------------------- |
-| `integration/candidate-manifest.schema.json` | `cotsel.candidate-manifest.v1` | Release Owner                                         |
-| `integration/evidence-index.schema.json`     | `cotsel.evidence-index.v1`     | Release Owner, with Security and Operations reviewers |
+| Record or schema                                       | Version                                 | Owner                                                 |
+| ------------------------------------------------------ | --------------------------------------- | ----------------------------------------------------- |
+| `integration/release-candidate-inventory.json`         | `cotsel.release-candidate-inventory.v1` | Release Owner and Platform                            |
+| `integration/candidate-manifest.v2.schema.json`        | `cotsel.candidate-manifest.v2`          | Release Owner                                         |
+| `integration/evidence-index.schema.json`               | `cotsel.evidence-index.v1`              | Release Owner, with Security and Operations reviewers |
+| `integration/candidate-manifest.schema.json` (history) | `cotsel.candidate-manifest.v1`          | Release Owner                                         |
 
-The **candidate manifest** is the immutable identity of one deployable candidate: source commit,
-artifact digests, migration heads, chain, contract address and ABI digest, provider mode, redacted
-configuration digest, environment, approvals and rollback target. It also carries the digest of
-`integration/release-manifest.json`, so the sibling-repository pins (`agroasys-backend`,
-`platform.v1`, `Cotsel-Dash`) are part of the candidate identity rather than a parallel record.
+The **release candidate inventory** lists every required artifact and migration owner. CI compares
+this inventory with Terraform, release workflows, and migration manifests.
+
+The **candidate manifest** identifies one deployable release candidate. It records the source,
+artifacts, migrations, chain, contract, configuration, approvals, and rollback target. It includes
+the digest of `integration/release-manifest.json`. Therefore, sibling repository pins are part of
+the candidate identity.
 
 The **evidence index** maps SOW control identities to reproducible artifacts. Every entry records
 the identity it was produced against, who produced it, and who accepted it.
+
+Candidate manifest version 1 is historical. The validator reads it only with `superseded` status.
+Version 1 cannot authorize new evidence.
+
+## Required release candidate inventory
+
+The inventory is closed. A candidate must contain every required entry and no additional entry.
+
+The Cotsel image set is `auth`, `gateway`, `indexer-graphql`, `indexer-pipeline`, `oracle`,
+`reconciliation`, `relayer`, `ricardian`, and `treasury`.
+
+The cross-repository set is `@agroasys/sdk`, `AgroasysEscrow`, `agroasys-backend`, `platform.v1`,
+and `Cotsel-Dash`.
+
+The migration set is `auth`, `gateway`, `indexer`, `oracle`, `reconciliation`, `ricardian`, and
+`treasury`.
+
+Each artifact records its digest, source commit, producing workflow, provenance, SBOM status, and
+verification result. Container images also use digest references. Each migration records its head
+and checksum.
 
 ## Candidate identity, and what may change without invalidating evidence
 
@@ -33,10 +58,11 @@ chainId, contractAddress, contractAbiSha256, contractDeployedBytecodeSha256,
 migrationIdentities, providerMode, configDigestSha256
 ```
 
-Lifecycle fields — `status`, `approvals`, `supersedes`, `rollbackTarget` notes — are deliberately
-excluded. Promoting a candidate from `candidate` to `promoted` therefore does **not** invalidate
-evidence already accepted against it. Changing any identity dimension does, and produces a new
-candidate.
+An artifact identity digest covers the complete artifact record. A provenance, workflow, source,
+SBOM, or verification change therefore changes the candidate identity.
+
+Lifecycle fields such as `status`, `approvals`, and rollback notes are excluded. Promotion does not
+invalidate evidence for the same candidate. A change to an identity field creates a new candidate.
 
 Compute the digest with:
 
@@ -58,6 +84,9 @@ following.
 - Every entry's `boundIdentity` equals the manifest on all nine dimensions REPORT-02 names:
   `sourceCommit`, `artifactDigests`, `environment`, `chainId`, `contractAddress`,
   `contractDeployedBytecodeSha256`, `migrationIdentities`, `providerMode`, `configDigestSha256`.
+
+  `artifactDigests` contains full artifact identity digests for version 2 candidates.
+  `migrationIdentities` includes each migration checksum.
 
   `contractDeployedBytecodeSha256` is recorded per entry because an address is not an
   implementation: a proxy upgrade keeps the address by design, and the same source compiled with a
@@ -125,34 +154,30 @@ fresh WP-12 packet.
 
 ## Producing a candidate
 
-1. Build and publish artifacts; record each image or package digest.
-2. Record migration heads and checksums for every component with a schema.
-3. Record the deployed contract identity from
-   `contracts/reports/deploy/<network>/agroasysescrow-deploy.json` — address, ABI digest, deployed
-   bytecode digest, compiler version and deployment transaction.
-4. Update `integration/release-manifest.json` if any sibling pin changed, then embed its canonical
-   digest in the candidate manifest. Verify with
-   `node scripts/check-release-evidence-binding.mjs --manifest <path> --verify-cross-repository`.
-5. Produce the redacted configuration inventory and its digest.
-6. Emit the environment report carrying the identity digest and configuration digest.
-7. Confirm `integration/release-authority-profile.json` explicitly permits the target environment.
-   Private Base Sepolia staging uses the named two-person roster. Local CI is non-promotable, and
-   Base mainnet is blocked until WP-12 ([#690](https://github.com/Agroasys/Cotsel/issues/690)) records
-   its separate authority and four-role GO decision. A missing or blocked profile fails closed; no
-   arbitrary pair of handles can promote or bind evidence.
-8. Append evidence entries as each control produces proof, then have the named reviewer record a
-   decision. The reviewer must not be the producer, and both must use their canonical handle.
-9. Check that the decisions actually landed. The binding check alone does not do this:
+1. Build and publish every required artifact.
+2. Record each immutable artifact digest.
+3. Verify each provenance record and required SBOM.
+4. Record every migration head and checksum.
+5. Record the deployed contract identity from its deployment report.
+6. Update `integration/release-manifest.json` when a sibling pin changes.
+7. Record the canonical release manifest digest in the candidate manifest.
+8. Run the cross-repository binding check.
+9. Produce the redacted configuration inventory and digest.
+10. Produce the environment report.
+11. Confirm that the authority profile permits the environment.
+12. Add evidence after each control produces proof.
+13. Obtain the required independent evidence decision.
+14. Run the acceptance check with the required controls:
 
-   ```bash
-   node scripts/check-release-evidence-binding.mjs \
-     --manifest <candidate-manifest.json> \
-     --index <evidence-index.json> \
-     --require-controls <CONTROL,CONTROL>
-   ```
+```bash
+node scripts/check-release-evidence-binding.mjs \
+  --manifest <candidate-manifest.json> \
+  --index <evidence-index.json> \
+  --require-controls <CONTROL,CONTROL>
+```
 
-   Without `--require-controls` the command reports `acceptance not checked`. Read `Evidence index
-valid` as "bound to this candidate", never as "accepted".
+Without `--require-controls`, the command reports `acceptance not checked`. “Evidence index valid”
+means “bound to this candidate.” It does not mean “accepted.”
 
 Fixtures showing a complete, valid pair are in `scripts/tests/fixtures/release-evidence/`. They are
 test data, not a pinned candidate, and no value in them is release evidence.

@@ -9,9 +9,7 @@ import { fileURLToPath } from 'node:url';
 import {
   IDENTITY_DIMENSIONS,
   assertCandidateBindable,
-  assertCrossRepositoryManifestBinding,
   assertEvidenceIndexComplete,
-  canonicalDigest,
   candidateIdentityDigest,
   readCandidateManifest,
   readJsonDocument,
@@ -631,27 +629,13 @@ test('requires a rollback target that is not the candidate itself', () => {
   assert.throws(() => validateCandidateManifest(manifest), /cannot be its own rollback target/);
 });
 
-test('binds the candidate to the checked-in cross-repository release manifest', () => {
-  const releaseManifestPath = path.join(ROOT_DIR, 'integration/release-manifest.json');
-  const manifest = manifestFixture();
-
-  assert.throws(
-    () => assertCrossRepositoryManifestBinding(manifest, releaseManifestPath),
-    /crossRepositoryManifest\.sha256 .* does not match/,
-  );
-
-  manifest.crossRepositoryManifest.sha256 = canonicalDigest(readJsonDocument(releaseManifestPath));
-  assert.doesNotThrow(() => assertCrossRepositoryManifestBinding(manifest, releaseManifestPath));
-});
-
 /**
  * The published JSON Schemas are the contract other repositories read. The hand-written validator
  * is what CI enforces. This proves the two agree on what is mandatory.
  */
 test('the validator enforces every required property the published schemas declare', () => {
-  const manifestSchema = readJsonDocument(
-    path.join(ROOT_DIR, 'integration/candidate-manifest.schema.json'),
-  );
+  const schemaPath = path.join(ROOT_DIR, 'integration/candidate-manifest.v2.schema.json');
+  const manifestSchema = readJsonDocument(schemaPath);
   for (const property of manifestSchema.required) {
     const manifest = manifestFixture();
     delete manifest[property];

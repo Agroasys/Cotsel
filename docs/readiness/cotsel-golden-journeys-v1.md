@@ -29,10 +29,10 @@ proof owned by WP-9.
 This specification inherits the proposed internal integration boundary. The entries below identify the work that
 will later produce a candidate and journey evidence; they do not prevent approval of this specification itself.
 
-| Dependency                                                                   | Effect if unresolved                                                                                                                                                                        |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [#635](https://github.com/Agroasys/Cotsel/issues/635) `wp0-charter`          | Supplies the private Base Sepolia, internal-tester, zero-real-value, AWS, signer and provider boundary inherited by each journey.                                                           |
-| [#636](https://github.com/Agroasys/Cotsel/issues/636) `wp0-release-evidence` | Supplies the candidate-manifest and evidence-index contracts (`integration/candidate-manifest.schema.json`, `integration/evidence-index.schema.json`) that later journey runs will bind to. |
+| Dependency                                                                   | Effect if unresolved                                                                                                                                                                                                                                               |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [#635](https://github.com/Agroasys/Cotsel/issues/635) `wp0-charter`          | Supplies the private Base Sepolia, internal-tester, zero-real-value, AWS, signer and provider boundary inherited by each journey.                                                                                                                                  |
+| [#636](https://github.com/Agroasys/Cotsel/issues/636) `wp0-release-evidence` | Supplies the release inventory, candidate-manifest, and evidence-index contracts (`integration/release-candidate-inventory.json`, `integration/candidate-manifest.v2.schema.json`, `integration/evidence-index.schema.json`) that later journey runs will bind to. |
 
 ## Authority boundaries
 
