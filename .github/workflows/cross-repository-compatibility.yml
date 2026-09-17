@@ -5,7 +5,11 @@ on:
     secrets:
       CI_APP_PRIVATE_KEY:
         description: GitHub App private key (PEM)
-        required: true
+        # GitHub does not expose repository Actions secrets to Dependabot runs.
+        # The Dependabot job below therefore performs the checks that need no
+        # cross-repository credential, while normal pull requests retain the
+        # full authenticated consumer-contract verification.
+        required: false
   workflow_dispatch:
 
 permissions:
@@ -19,6 +23,7 @@ concurrency:
 jobs:
   compatibility:
     name: ci/cross-repository-compatibility
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Mint cross-repository read token
@@ -141,3 +146,28 @@ jobs:
           AGROASYS_BACKEND_REPO_DIR: ${{ github.workspace }}/agroasys-backend
           DASHBOARD_LIVE_SUITE_REPO_DIR: ${{ github.workspace }}/Cotsel-Dash
         run: pnpm run m3:continuity:ci
+
+  dependabot-compatibility:
+    name: ci/dependabot-compatibility
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Cotsel
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Resolve pinned repository commits
+        run: node scripts/check-cross-repo-release-manifest.mjs
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.2'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check dependency compatibility
+        run: pnpm run security:deps:compat
