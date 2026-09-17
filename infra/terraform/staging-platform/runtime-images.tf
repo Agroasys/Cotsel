@@ -16,7 +16,3 @@ data "aws_ecr_image" "release" {
   repository_name = aws_ecr_repository.service[each.value].name
   image_tag       = var.gateway_image_tag
 }
-
-data "aws_secretsmanager_secret" "oracle_wallet" {
-  name = var.oracle_wallet_secret_name
-}
