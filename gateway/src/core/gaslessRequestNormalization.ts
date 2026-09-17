@@ -12,12 +12,10 @@ import {
   ZeroAddress,
 } from 'ethers';
 import { GatewayError } from '../errors';
-import { OPERATOR_ACTIONS, USER_ACTIONS } from './gaslessExecutionTypes';
+import { USER_ACTIONS } from './gaslessExecutionTypes';
 import type {
   GaslessCreateTradeExecutionInput,
   GaslessCreateTradePayload,
-  GaslessOperatorActionExecutionInput,
-  GaslessOperatorActionPayload,
   GaslessUserActionExecutionInput,
   GaslessUserActionPayload,
   GaslessWalletUsdcTransferExecutionInput,
@@ -114,7 +112,7 @@ function stableJson(value: unknown): string {
 }
 
 export function createGaslessPayloadHash(
-  input: GaslessCreateTradePayload | GaslessUserActionPayload | GaslessOperatorActionPayload,
+  input: GaslessCreateTradePayload | GaslessUserActionPayload,
 ): string {
   return keccak256(toUtf8Bytes(stableJson(input)));
 }
@@ -188,25 +186,6 @@ export function normalizeUserActionInput(
       deadline: requireUint(input.userAuthorization.deadline, 'userAuthorization.deadline'),
       signature: requireSignature(input.userAuthorization.signature, 'userAuthorization.signature'),
     },
-  };
-}
-
-export function normalizeOperatorActionInput(
-  input: GaslessOperatorActionExecutionInput,
-): GaslessOperatorActionExecutionInput {
-  if (!OPERATOR_ACTIONS.includes(input.action)) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', 'action is not supported', {
-      field: 'action',
-      allowed: OPERATOR_ACTIONS,
-    });
-  }
-  return {
-    ...input,
-    action: input.action,
-    handoffId: input.handoffId.trim(),
-    contractAddress: requireAddress(input.contractAddress, 'contractAddress'),
-    payloadHash: requireBytes32(input.payloadHash, 'payloadHash'),
-    tradeId: requireUint(input.tradeId, 'tradeId'),
   };
 }
 

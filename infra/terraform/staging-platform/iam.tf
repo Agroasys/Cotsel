@@ -84,6 +84,7 @@ data "aws_iam_policy_document" "gateway_execution" {
       aws_secretsmanager_secret.platform["database/auth/runtime"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-callback"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-ingress"].arn,
+      aws_secretsmanager_secret.platform["gateway-managed-signer"].arn,
       aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn,
       aws_secretsmanager_secret.platform["gateway-to-ricardian-auth"].arn,
       aws_secretsmanager_secret.platform["gateway-to-treasury-auth"].arn,

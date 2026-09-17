@@ -16,19 +16,19 @@ the signed `POST /session/exchange/agroasys` route.
   with an approved ticket.
 - Approver: a second production operator or security owner for durable admin
   grants and durable admin revocations.
-- Executor: a service principal whose API key ID is listed in
-  `AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS`.
+- Executor: a signed admin-control credential whose API key ID is listed in
+  `AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS` and is bound in secret-managed
+  configuration to the canonical identity of the human using it.
 - Trust root: Cotsel auth service verifies signed service-auth headers and
   stores the durable role state in Postgres.
 
 No browser client, dashboard client, or caller-supplied login role is
 authoritative for durable admin access.
 
-Operator authority is derived entirely from the durable admin role. A durable
-admin profile confers the full operator capability set and authorizes the
-operator's own session wallet as the signer for every action class. There is no
-separate capability list or signer-binding control plane to provision — the only
-thing you provision is the admin profile below.
+The durable admin role grants the operator capability set, but it does not grant
+signer authority. Privileged signing additionally requires an explicit, active
+signer-register record for the exact account, wallet, action class, and
+environment.
 
 ## Required Configuration
 
@@ -41,11 +41,30 @@ The auth service must be started with:
 - `AUTH_ADMIN_CONTROL_NONCE_TTL_SECONDS`
 - `AUTH_ADMIN_BREAK_GLASS_MAX_TTL_SECONDS`
 
-`AUTH_ADMIN_CONTROL_API_KEYS_JSON` contains active service-auth key records:
+`AUTH_ADMIN_CONTROL_API_KEYS_JSON` must contain at least two active keys bound
+to two distinct canonical human identities:
 
 ```json
-[{ "id": "ops-admin-control-2026-04", "secret": "stored-in-secret-manager", "active": true }]
+[
+  {
+    "id": "ops-admin-control-2026-04-a",
+    "secret": "stored-in-secret-manager",
+    "active": true,
+    "humanPrincipalId": "agroasys-user:operator-a"
+  },
+  {
+    "id": "ops-admin-control-2026-04-b",
+    "secret": "stored-in-secret-manager",
+    "active": true,
+    "humanPrincipalId": "agroasys-user:operator-b"
+  }
+]
 ```
+
+`humanPrincipalId` must be a stable, lowercase identity issued by the approved
+identity authority, not a display name or caller-supplied request field. Two
+credentials assigned to the same human still represent one approval principal.
+Each credential must be assigned to one human and must never be shared.
 
 Secrets must be stored in the production secret manager. They must not be
 stored in repo files, shell history, tickets, dashboards, or chat transcripts.
@@ -121,17 +140,65 @@ be reconciled against `auth_admin_audit_events` during access review.
 
 ## Operator Signer Authority
 
-Signer authority is no longer provisioned separately. When a profile holds the
-durable admin role, every resolved session for that profile derives:
+Provision a signer only after the durable admin profile and named custody
+evidence are approved.
 
-- the full operator capability set, and
-- a signer authorization for every action class, bound to the operator's own
-  session wallet with a wildcard environment (`*`).
+Proposal endpoint:
 
-There are no `POST /admin/signers/provision` or `POST /admin/signers/revoke`
-endpoints. To grant or remove signer authority, grant or revoke the durable
-admin role using the provision endpoint above. Durable admin review only needs
-to confirm role state.
+```text
+POST /api/auth/v1/admin/signers/propose
+```
+
+Body:
+
+```json
+{
+  "accountId": "agroasys-user:123",
+  "walletAddress": "0x1111111111111111111111111111111111111111",
+  "actionClass": "governance",
+  "environment": "staging",
+  "custodianName": "Named custodian",
+  "approvalTicket": "COTSEL-641",
+  "notes": "Hardware-wallet address verified on the device display",
+  "reason": "COTSEL-641 approved staging governance signer"
+}
+```
+
+The proposal remains `pending` and grants no session signer authorization. A
+different authenticated human principal must approve its exact evidence digest:
+
+```text
+POST /api/auth/v1/admin/signers/approve
+```
+
+```json
+{
+  "bindingId": "binding-id-from-proposal",
+  "evidenceDigest": "canonical-sha256-from-proposal",
+  "reason": "COTSEL-641 independent custody approval"
+}
+```
+
+Self-approval is rejected even if the same person uses a second API key. The
+environment must be exact; `*` is rejected. The wallet must be a lowercase EVM
+address in storage. The auth service never stores private keys, seed phrases,
+PINs, device serial numbers, or recovery material.
+
+Read back active records through:
+
+```text
+GET /api/auth/v1/admin/signers?accountId=<account>&active=true
+```
+
+Revoke through:
+
+```text
+POST /api/auth/v1/admin/signers/revoke
+```
+
+with `bindingId` and a specific `reason`. Revoked records and original approval
+evidence remain immutable. Existing sessions resolve signer authority from the
+database on each session lookup, so a revoked binding is no longer returned.
 
 ## Deactivation
 
@@ -160,9 +227,11 @@ Retain all of the following:
 - change ticket or incident ID
 - approver identity and timestamp
 - executor service-auth API key ID
+- proposer and approver canonical human principal IDs
 - request body without secret values
 - response status and response body
 - resulting row in `auth_admin_audit_events`
+- resulting immutable signer-register record for signer changes
 - session revocation evidence from the audit metadata
 
 Audit rows are the source of truth for Cotsel-local durable role changes.
@@ -181,7 +250,8 @@ Rotation steps:
 
 1. Create a new secret in the production secret manager.
 2. Add the new key record to `AUTH_ADMIN_CONTROL_API_KEYS_JSON` with
-   `active=true`.
+   `active=true` and the same canonical `humanPrincipalId` as the credential it
+   replaces.
 3. Add the new key ID to `AUTH_ADMIN_CONTROL_ALLOWED_API_KEY_IDS`.
 4. Deploy to staging and verify one signed request against a designated staging
    test account, using `role: "buyer"` and a reason that references the key
@@ -193,6 +263,7 @@ Rotation steps:
 
 ## Review Cadence
 
-Durable admin grants must be reviewed monthly and after every incident. The
-reviewer verifies that each active admin has a current business justification,
-recent access approval, and a matching `auth_admin_audit_events` trail.
+Durable admin grants and active signer bindings must be reviewed monthly and
+after every incident. The reviewer verifies current business justification,
+named custody, action class, environment, approval evidence, and matching
+`auth_admin_audit_events` records.

@@ -157,3 +157,13 @@ output "oracle_reviewed_config_sha256" {
   description = "Digest of the Oracle environment, secret references, and dedicated task role."
   value       = local.oracle_reviewed_config_sha256
 }
+
+output "relayer_task_role_arn" {
+  description = "Dedicated relayer role; the only runtime role eligible for relayer KMS signing."
+  value       = aws_iam_role.relayer_task.arn
+}
+
+output "relayer_reviewed_config_sha256" {
+  description = "Digest of the relayer environment, secret references, and dedicated task role."
+  value       = local.relayer_reviewed_config_sha256
+}

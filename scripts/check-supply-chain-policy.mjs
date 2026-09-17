@@ -162,6 +162,7 @@ export function repositoryViolations(root) {
     'indexer',
     'oracle',
     'reconciliation',
+    'relayer',
     'ricardian',
     'treasury',
   ];

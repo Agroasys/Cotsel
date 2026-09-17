@@ -18,6 +18,13 @@ test('AWS staging runs application services with production security semantics',
   assert.equal(source.match(/name = "COTSEL_ENVIRONMENT", value = "staging"/g)?.length, 6);
   assert.equal(source.match(/name = "AUTH_ENABLED", value = "true"/g)?.length, 2);
   assert.match(source, /name = "GATEWAY_ALLOW_INSECURE_DOWNSTREAM_AUTH", value = "false"/);
+  assert.match(source, /name = "GATEWAY_RATE_LIMIT_ENABLED", value = "true"/);
+  assert.match(source, /name = "GATEWAY_RATE_LIMIT_FAIL_OPEN", value = "false"/);
+  assert.match(
+    source,
+    /name = "GATEWAY_RATE_LIMIT_REDIS_URL", value = "rediss:\/\/\$\{local\.redis_primary_endpoint\}:6379"/,
+  );
+  assert.doesNotMatch(source, /name = "GATEWAY_RATE_LIMIT_ENABLED", value = "false"/);
 });
 
 test('ECS publishes redacted reviewed configuration identities', async () => {

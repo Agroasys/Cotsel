@@ -115,6 +115,72 @@ export function createRouter(
       ),
     );
 
+    router.get(
+      '/admin/signers',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.signers.list(
+          req as Request<
+            Record<string, never>,
+            unknown,
+            unknown,
+            { limit?: string; accountId?: string; active?: string }
+          >,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/signers/propose',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.signers.propose(
+          req as Request<
+            Record<string, never>,
+            unknown,
+            {
+              accountId?: string;
+              walletAddress?: string;
+              actionClass?: import('../types').OperatorSignerActionClass;
+              environment?: string;
+              custodianName?: string;
+              approvalTicket?: string;
+              notes?: string | null;
+              reason?: string;
+            }
+          >,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/signers/approve',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.signers.approve(
+          req as Request<
+            Record<string, never>,
+            unknown,
+            { bindingId?: string; evidenceDigest?: string; reason?: string }
+          >,
+          res,
+        ),
+      ),
+    );
+
+    router.post(
+      '/admin/signers/revoke',
+      options.adminControlMiddleware,
+      asyncHandler((req, res) =>
+        options.adminController!.signers.revoke(
+          req as Request<Record<string, never>, unknown, { bindingId?: string; reason?: string }>,
+          res,
+        ),
+      ),
+    );
+
     router.post(
       '/admin/profiles/provision',
       options.adminControlMiddleware,

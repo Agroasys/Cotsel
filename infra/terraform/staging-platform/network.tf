@@ -146,6 +146,15 @@ resource "aws_vpc_security_group_egress_rule" "gateway_to_treasury" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_egress_rule" "gateway_to_relayer" {
+  security_group_id            = aws_security_group.gateway.id
+  description                  = "Authenticated intent-bound signing requests to the gasless relayer."
+  referenced_security_group_id = aws_security_group.internal_services.id
+  from_port                    = 3300
+  to_port                      = 3300
+  ip_protocol                  = "tcp"
+}
+
 # Cotsel currently needs HTTPS egress for Base RPC and the reciprocal Agroasys
 # callback. Destination restriction is added after the two managed RPC endpoints
 # and the callback edge addresses are pinned. VPC flow logs remain the detection

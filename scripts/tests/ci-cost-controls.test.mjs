@@ -5,6 +5,9 @@ import { test } from 'node:test';
 const workflow = (name) =>
   readFile(new URL(`../../.github/workflows/${name}`, import.meta.url), 'utf8');
 
+const dependabotConfig = () =>
+  readFile(new URL('../../.github/dependabot.yml', import.meta.url), 'utf8');
+
 test('uses events first and only one daily governance reconciliation', async () => {
   const contents = await workflow('cotsel-production-readiness-project-governance.yml');
 
@@ -34,4 +37,24 @@ test('preserves default-branch release-gate work', async () => {
     /group: .+\$\{\{ github\.workflow \}\}-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}/,
   );
   assert.match(contents, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
+});
+
+test('groups only minor and patch Dependabot version updates', async () => {
+  const contents = await dependabotConfig();
+  const runtime = contents.slice(
+    contents.indexOf('      npm-runtime:'),
+    contents.indexOf('      npm-dev:'),
+  );
+  const development = contents.slice(
+    contents.indexOf('      npm-dev:'),
+    contents.indexOf('\n\n  - package-ecosystem: github-actions'),
+  );
+
+  for (const group of [runtime, development]) {
+    assert.match(group, /applies-to: version-updates/);
+    assert.match(group, /update-types:\n\s+- minor\n\s+- patch/);
+    assert.doesNotMatch(group, /- major/);
+  }
+
+  assert.match(runtime, /exclude-patterns:\n\s+- 'ox'/);
 });

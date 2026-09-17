@@ -10,7 +10,6 @@ import type {
   GaslessCreateTradeExecutionInput,
   GaslessCreateTradeExecutionResult,
   GaslessExecutionReceipt,
-  GaslessOperatorActionExecutionInput,
   GaslessRelayerReadinessSnapshot,
   GaslessSettlementExecutor,
   GaslessUserActionExecutionInput,
@@ -18,7 +17,6 @@ import type {
 } from './gaslessExecutionTypes';
 import { createManagedSignerGaslessSettlementExecutor } from './gaslessManagedSignerExecutor';
 import { executeCreateTradeWorkflow } from './gaslessCreateTradeWorkflow';
-import { executeOperatorActionWorkflow } from './gaslessOperatorActionWorkflow';
 import { executeUserActionWorkflow } from './gaslessUserActionWorkflow';
 import { executeWalletUsdcTransferWorkflow } from './gaslessWalletUsdcTransferWorkflow';
 import { createInProcessGaslessRelayerBroadcastLock } from './gaslessRelayerRuntime';
@@ -34,8 +32,6 @@ export type {
   GaslessCreateTradeExecutionResult,
   GaslessExecutionReceipt,
   GaslessExecutionSubmission,
-  GaslessOperatorAction,
-  GaslessOperatorActionExecutionInput,
   GaslessRelayerReadinessSnapshot,
   GaslessSettlementExecutor,
   GaslessUserAction,
@@ -238,11 +234,6 @@ export class GaslessSettlementExecutionService {
     input: GaslessUserActionExecutionInput,
   ): Promise<GaslessCreateTradeExecutionResult> {
     return executeUserActionWorkflow(this.createWorkflowContext(), input);
-  }
-  async executeOperatorAction(
-    input: GaslessOperatorActionExecutionInput,
-  ): Promise<GaslessCreateTradeExecutionResult> {
-    return executeOperatorActionWorkflow(this.createWorkflowContext(), input);
   }
 }
 

@@ -4,6 +4,7 @@
 import { keccak256, Wallet } from 'ethers';
 import type { FeeData, TransactionRequest, TransactionResponse } from 'ethers';
 import type { GatewayConfig } from '../../src/config/env';
+import type { GaslessNonceReservationInput } from '../../src/core/gaslessNonceReservationStore';
 import {
   type GaslessCreateTradeExecutionInput,
   type GaslessUserAction,
@@ -30,7 +31,7 @@ export const config: GatewayConfig = {
   usdcAddress: '0x0000000000000000000000000000000000000888',
   enableMutations: false,
   writeAllowlist: [],
-  governanceQueueTtlSeconds: 86400,
+  governancePreparationTtlSeconds: 86400,
   settlementIngressEnabled: true,
   settlementServiceAuthApiKeysJson: '[]',
   settlementServiceAuthMaxSkewSeconds: 300,
@@ -148,6 +149,7 @@ export interface FakeManagedSignerRequest {
   operation: string;
   signerAddress: string;
   transaction: FakeManagedSignerTransaction;
+  policyContext: unknown;
 }
 
 export interface FakeManagedSignerResponse {
@@ -184,6 +186,19 @@ export function createFakeManagedSignerDependencies(options?: {
     markConfirmationPending: jest.fn(async () => undefined),
     markConfirmed: jest.fn(async () => undefined),
     markReverted: jest.fn(async () => undefined),
+  };
+  const nonceReservationStore = {
+    reserve: jest.fn(async (input: GaslessNonceReservationInput) => ({
+      reservationId: '3cc522a7-01ae-46cb-b4ae-a97cf8ec9a4d',
+      leaseToken: 'lease-1',
+      chainId: input.chainId,
+      signerAddress: input.signerAddress.toLowerCase(),
+      transactionNonce: input.transactionNonce,
+      requestId: input.requestId,
+      intentHash: input.intentHash,
+    })),
+    beginSigning: jest.fn(async () => undefined),
+    recordSigned: jest.fn(async () => undefined),
   };
 
   return {
@@ -258,5 +273,6 @@ export function createFakeManagedSignerDependencies(options?: {
     },
     recordValidationEvidence,
     recordTransactionOutcome,
+    nonceReservationStore,
   };
 }

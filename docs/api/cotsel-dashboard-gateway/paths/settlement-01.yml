@@ -309,50 +309,6 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '503':
           $ref: '#/components/responses/UpstreamUnavailableError'
-  /settlement/gasless-executions/operator-action:
-    post:
-      tags:
-        - Settlement
-      summary: Execute a service-owned gasless settlement action
-      description: |
-        Service-authenticated Cotsel execution boundary for settlement actions that do not require a buyer or
-        supplier wallet signature. The retained action is finalize after dispute window; Cotsel validates the
-        backend-approved payload, simulates the allowlisted contract call, signs/broadcasts with the configured
-        executor key, and records settlement lifecycle events.
-      operationId: createGaslessOperatorActionExecution
-      security: []
-      parameters:
-        - $ref: '#/components/parameters/XRequestId'
-        - name: Idempotency-Key
-          in: header
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionRequest'
-      responses:
-        '202':
-          description: Gasless operator-action execution submitted, or the durable outcome of an earlier ambiguous attempt returned for the same idempotency key.
-          content:
-            application/json:
-              schema:
-                oneOf:
-                  - $ref: '#/components/schemas/SettlementGaslessOperatorActionExecutionResponse'
-                  - $ref: '#/components/schemas/GaslessFinancialOutcomeRecoveryResponse'
-        '400':
-          $ref: '#/components/responses/ValidationError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
-        '503':
-          $ref: '#/components/responses/UpstreamUnavailableError'
   /wallet/usdc/gasless-transfers:
     post:
       tags:

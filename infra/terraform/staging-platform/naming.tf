@@ -8,6 +8,7 @@ locals {
     "indexer-pipeline",
     "oracle",
     "reconciliation",
+    "relayer",
     "ricardian",
     "treasury",
   ])

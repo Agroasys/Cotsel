@@ -7,6 +7,10 @@ updates:
       day: monday
       time: '06:00'
       timezone: 'UTC'
+    # Match pnpm's seven-day minimum release age. This applies to version
+    # updates only; Dependabot security updates remain immediate.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     ignore:
       # Temporary Hardhat v3 migration deferral (issue #192):
@@ -54,14 +58,27 @@ updates:
         update-types:
           - 'version-update:semver-major'
     groups:
+      # Group only low-risk SemVer updates. Keep ox out of the routine group:
+      # Dependabot classified its observed 0.x-to-1.x update as routine, but it
+      # violates permissionless' current peer range and needs a focused review.
       npm-runtime:
+        applies-to: version-updates
         patterns:
           - '*'
+        exclude-patterns:
+          - 'ox'
         dependency-type: production
+        update-types:
+          - minor
+          - patch
       npm-dev:
+        applies-to: version-updates
         patterns:
           - '*'
         dependency-type: development
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: '/'

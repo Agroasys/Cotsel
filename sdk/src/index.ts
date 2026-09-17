@@ -41,6 +41,7 @@ export {
 } from './managedSignerIntent';
 export type {
   ManagedSignerTransactionIntent,
+  ManagedSignerPolicyContext,
   ManagedSignerResponsePayload,
   ManagedSignerValidationAuditRecord,
   ManagedSignerValidationFailureReason,

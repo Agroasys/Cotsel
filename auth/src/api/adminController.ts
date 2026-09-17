@@ -13,6 +13,7 @@ import { AdminService } from '../core/adminService';
 import { ApiErrorResponse, ApiSuccessResponse, UserProfile, UserRole } from '../types';
 import { resolveBreakGlassReviewStatus } from '../core/breakGlassReviewStatus';
 import { assertWalletAddress, handleControllerError, requireAuthRole } from './controllerSupport';
+import { AdminSignerController } from './adminSignerController';
 
 const VALID_BREAK_GLASS_BASE_ROLES: Exclude<UserRole, 'admin'>[] = ['buyer', 'supplier', 'oracle'];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -44,14 +45,16 @@ interface AccountActionBody {
 interface ListQuery {
   limit?: string;
   accountId?: string;
+  active?: string;
 }
 
 function actorFromRequest(req: Request) {
   const apiKeyId = req.serviceAuth?.apiKeyId;
-  if (!apiKeyId) {
-    throw new HttpError(401, 'Unauthorized', 'Missing service-auth actor context');
+  const humanPrincipalId = req.serviceAuth?.humanPrincipalId;
+  if (!apiKeyId || !humanPrincipalId) {
+    throw new HttpError(401, 'Unauthorized', 'Missing authenticated admin-control identity');
   }
-  return { type: 'service_auth' as const, id: apiKeyId };
+  return { type: 'service_auth' as const, id: apiKeyId, humanPrincipalId };
 }
 
 function optionalEmail(value: string | null | undefined): string | null {
@@ -148,7 +151,11 @@ function statusForAdminError(error: unknown): number {
 }
 
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  readonly signers: AdminSignerController;
+
+  constructor(private readonly adminService: AdminService) {
+    this.signers = new AdminSignerController(adminService);
+  }
 
   async listAuthorityProfiles(
     req: Request<Record<string, never>, unknown, unknown, ListQuery>,
