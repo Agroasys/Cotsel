@@ -43,6 +43,11 @@ draws from, and a zero allocation is never meaningful. This is enforced twice:
 - The `sweep_batch_entries_allocation_bound` trigger enforces it for **any**
   writer, including a manual repair session.
 
+The trigger applies to **every** allocation status, not only `ALLOCATED`. A
+`RELEASED` row still records what was drawn from the ledger entry, so exempting
+it would leave an unvalidated amount in the table. The bound is checked on
+`UPDATE` as well as `INSERT`.
+
 ## Export contract
 
 `GET /export` previously issued `getLedgerEntries({ limit: 5000, offset: 0 })`.
@@ -52,13 +57,13 @@ every later page.
 
 The export is now a keyset page bounded by a fixed cutoff.
 
-| Parameter      | Meaning                                                                               |
-| -------------- | ------------------------------------------------------------------------------------- |
-| `cutoff`       | ISO-8601 snapshot boundary. Defaults to now. Must be restated on every page.          |
-| `cursor`       | Opaque continuation from the previous page's `nextCursor`.                            |
-| `limit`        | Page size, default 500, maximum 1000. An oversized limit is **refused**, not clamped. |
-| `format`       | `json` (default) or `csv`.                                                            |
-| `allowPartial` | `true` to accept a knowingly truncated CSV. Default `false`.                          |
+| Parameter      | Meaning                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| `cutoff`       | ISO-8601 snapshot boundary. Defaults to now. Must be restated on every page.                       |
+| `cursor`       | Opaque continuation from the previous page's `nextCursor`. Carries the cutoff it was issued under. |
+| `limit`        | Page size, default 500, maximum 1000. An oversized limit is **refused**, not clamped.              |
+| `format`       | `json` (default) or `csv`.                                                                         |
+| `allowPartial` | `true` to accept a knowingly truncated CSV. Default `false`.                                       |
 
 The JSON envelope carries what makes the export checkable:
 
@@ -83,6 +88,18 @@ consumer proves it received every record exactly once.
 
 Continuation advances over candidates, not exported rows. A cursor taken from
 exported rows would re-scan an ineligible row forever.
+
+The candidate set is the same in both queries: `getLedgerExportSnapshot` counts
+every ledger entry at or before the cutoff, and the page query reaches its
+payout state through a **LEFT** lateral join so an entry with no lifecycle event
+is still enumerated. An inner join would count such an entry in the snapshot but
+never return it on any page, so the pages could never reconcile. That entry
+carries a null state and is therefore scanned but never exported.
+
+The cursor token carries the cutoff it was issued under, and a continuation
+supplying a different cutoff is rejected with `CutoffMismatch`. Paging one
+snapshot's cursor against another would skip or repeat rows while every page
+still reported itself complete.
 
 ### Truncation is explicit
 
@@ -124,9 +141,11 @@ pnpm --filter treasury run test          # unit + contract tests
 pnpm --filter treasury run typecheck
 pnpm --filter treasury run lint
 
-# Database-level constraints need a real PostgreSQL instance.
+# Database-level constraints and export coverage need a real PostgreSQL
+# instance. `ci/treasury` sets these variables against its own service
+# container, so both suites run in CI rather than self-skipping.
 TREASURY_POSTGRES_TESTS=true DB_HOST=127.0.0.1 DB_PORT=5432 \
-  pnpm --filter treasury exec jest tests/canonicalAmounts.postgres.test.ts --runInBand
+  pnpm --filter treasury run test
 
 # The manifest fingerprint must match the schema the migration produces.
 node --test shared-db/schema-fingerprint.manifests.postgres.test.js

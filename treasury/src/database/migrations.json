@@ -13,8 +13,8 @@
       "version": "202609170002",
       "name": "canonical_monetary_amounts",
       "file": "002_canonical_monetary_amounts.sql",
-      "sha256": "18909b296e3287f91468897900ee04922f8f94e6ba9e0240856c6e7c22e1d890",
-      "schema_sha256": "25b6f1e5d99d6c9e57ce9a81dfc2a32a804e499047cd08f1892dcf724ae845cc"
+      "sha256": "0afc19ba61f79c13aea3224caa82a2bfa9bda85f41499de3af366b56487b3d68",
+      "schema_sha256": "c0bf0c3fdbd3cb7c065a32f77091a6bbcf52443e67f63f3c7964868f29ca2441"
     }
   ]
 }

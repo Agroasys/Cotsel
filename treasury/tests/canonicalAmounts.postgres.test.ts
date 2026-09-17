@@ -153,6 +153,30 @@ describePostgres('treasury canonical monetary amount constraints', () => {
       await expect(allocate('0')).rejects.toThrow(/must be greater than zero/);
     });
 
+    it('rejects an over-limit RELEASED allocation, not just an ALLOCATED one', async () => {
+      // RELEASED is a real row recording what was drawn from the entry, so
+      // exempting it would leave an unvalidated amount in the table.
+      await expect(allocate('1001', 'RELEASED')).rejects.toThrow(
+        /exceeds the eligible ledger amount/,
+      );
+    });
+
+    it('rejects a zero RELEASED allocation', async () => {
+      await expect(allocate('0', 'RELEASED')).rejects.toThrow(/must be greater than zero/);
+    });
+
+    it('rejects an update that raises an existing allocation above the ledger amount', async () => {
+      await allocate('100', 'RELEASED');
+      await expect(
+        pool.query(
+          `UPDATE sweep_batch_entries
+              SET entry_amount_raw = '1001'
+            WHERE sweep_batch_id = $1 AND ledger_entry_id = $2 AND entry_amount_raw = '100'`,
+          [batchId, ledgerEntryId],
+        ),
+      ).rejects.toThrow(/exceeds the eligible ledger amount/);
+    });
+
     it('accepts a partial allocation within the ledger amount', async () => {
       await expect(allocate('250', 'RELEASED')).resolves.toBeUndefined();
       await expect(allocate('750')).resolves.toBeUndefined();

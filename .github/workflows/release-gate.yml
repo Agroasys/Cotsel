@@ -1106,6 +1106,14 @@ jobs:
           --health-retries 5
     env:
       WORKSPACE: treasury
+      # Without these the treasury Postgres suites self-skip and the job still
+      # reports green, which is how the migration and the allocation trigger
+      # went unexercised. The job already provisions the service above.
+      TREASURY_POSTGRES_TESTS: 'true'
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_USER: postgres
+      DB_PASSWORD: postgres
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

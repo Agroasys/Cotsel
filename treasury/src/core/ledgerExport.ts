@@ -68,13 +68,19 @@ export interface ExportPage<TEntry> {
   entries: TEntry[];
 }
 
-function encodeCursor(cursor: ExportCursor): string {
-  return Buffer.from(`${cursor.createdAt.toISOString()}|${cursor.id}`, 'utf8').toString(
-    'base64url',
-  );
+/**
+ * The cutoff is part of the token, not just the query string. A cursor issued
+ * under one cutoff continued against another would page across two different
+ * snapshots, skipping or repeating rows while still reporting `complete`.
+ */
+function encodeCursor(cutoff: Date, cursor: ExportCursor): string {
+  return Buffer.from(
+    `${cutoff.toISOString()}|${cursor.createdAt.toISOString()}|${cursor.id}`,
+    'utf8',
+  ).toString('base64url');
 }
 
-export function decodeCursor(value: string): ExportCursor {
+export function decodeCursor(value: string): ExportCursor & { cutoff: Date } {
   let decoded: string;
   try {
     decoded = Buffer.from(value, 'base64url').toString('utf8');
@@ -82,13 +88,19 @@ export function decodeCursor(value: string): ExportCursor {
     throw new ExportRequestError('InvalidCursor', 'cursor is not valid base64url');
   }
 
-  const separator = decoded.lastIndexOf('|');
-  if (separator <= 0) {
+  const parts = decoded.split('|');
+  if (parts.length !== 3) {
     throw new ExportRequestError('InvalidCursor', 'cursor is malformed');
   }
 
-  const createdAt = new Date(decoded.slice(0, separator));
-  const id = Number(decoded.slice(separator + 1));
+  const [rawCutoff, rawCreatedAt, rawId] = parts;
+  const cutoff = new Date(rawCutoff);
+  const createdAt = new Date(rawCreatedAt);
+  const id = Number(rawId);
+
+  if (Number.isNaN(cutoff.getTime())) {
+    throw new ExportRequestError('InvalidCursor', 'cursor cutoff is not a valid date');
+  }
 
   if (Number.isNaN(createdAt.getTime())) {
     throw new ExportRequestError('InvalidCursor', 'cursor timestamp is not a valid date');
@@ -98,7 +110,7 @@ export function decodeCursor(value: string): ExportCursor {
     throw new ExportRequestError('InvalidCursor', 'cursor id is not a positive integer');
   }
 
-  return { createdAt, id };
+  return { cutoff, createdAt, id };
 }
 
 function parseLimit(raw: unknown): number {
@@ -169,24 +181,32 @@ export function parseExportRequest(
     throw new ExportRequestError('InvalidCursor', 'cursor must be a string');
   }
 
-  const request: ExportRequest = {
-    cutoff: parseCutoff(query.cutoff, now),
-    cursor: cursor ? decodeCursor(cursor) : null,
-    limit: parseLimit(query.limit),
-    allowPartial: parseBoolean(query.allowPartial, 'AllowPartial'),
-  };
+  const cutoff = parseCutoff(query.cutoff, now);
+  const decoded = cursor ? decodeCursor(cursor) : null;
 
-  // A continuation that changes the cutoff is a different export. Requiring the
-  // cutoff alongside the cursor stops a caller from stitching two snapshots into
-  // one file and calling the result complete.
-  if (request.cursor && (query.cutoff === undefined || query.cutoff === '')) {
+  // A continuation that changes the cutoff is a different export. The cutoff
+  // must be restated, and it must be the one the cursor was issued under, so a
+  // caller cannot stitch two snapshots into one file and call it complete.
+  if (decoded && (query.cutoff === undefined || query.cutoff === '')) {
     throw new ExportRequestError(
       'MissingCutoff',
       'cutoff is required when continuing an export with a cursor',
     );
   }
 
-  return request;
+  if (decoded && decoded.cutoff.getTime() !== cutoff.getTime()) {
+    throw new ExportRequestError(
+      'CutoffMismatch',
+      `cursor was issued for cutoff ${decoded.cutoff.toISOString()} but the request supplied ${cutoff.toISOString()}`,
+    );
+  }
+
+  return {
+    cutoff,
+    cursor: decoded ? { createdAt: decoded.createdAt, id: decoded.id } : null,
+    limit: parseLimit(query.limit),
+    allowPartial: parseBoolean(query.allowPartial, 'AllowPartial'),
+  };
 }
 
 export function buildExportPage<TEntry>(input: ExportPageInput<TEntry>): ExportPage<TEntry> {
@@ -201,7 +221,9 @@ export function buildExportPage<TEntry>(input: ExportPageInput<TEntry>): ExportP
 
   const lastCandidate = input.candidates[input.candidates.length - 1];
   const nextCursor =
-    input.hasMore && lastCandidate ? encodeCursor(input.readCursor(lastCandidate)) : null;
+    input.hasMore && lastCandidate
+      ? encodeCursor(input.request.cutoff, input.readCursor(lastCandidate))
+      : null;
 
   return {
     cutoff: input.request.cutoff.toISOString(),

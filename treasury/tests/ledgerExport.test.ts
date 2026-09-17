@@ -73,21 +73,38 @@ describe('parseExportRequest', () => {
   });
 
   it('requires the cutoff to be restated when continuing with a cursor', () => {
-    const cursor = Buffer.from('2026-09-17T10:01:00.000Z|1', 'utf8').toString('base64url');
-    expect(() => parseExportRequest({ cursor }, NOW)).toThrow(/cutoff is required/);
+    const emitted = page([row(1, '100'), row(2, '200')], true).nextCursor as string;
+    expect(() => parseExportRequest({ cursor: emitted }, NOW)).toThrow(/cutoff is required/);
   });
 
-  it('accepts a cursor when the cutoff is restated', () => {
-    const cursor = Buffer.from('2026-09-17T10:01:00.000Z|1', 'utf8').toString('base64url');
-    const request = parseExportRequest({ cursor, cutoff: '2026-09-17T11:00:00.000Z' }, NOW);
-    expect(request.cursor).toEqual({ createdAt: new Date('2026-09-17T10:01:00.000Z'), id: 1 });
+  it('accepts a cursor continued under the cutoff it was issued for', () => {
+    const emitted = page([row(1, '100'), row(2, '200')], true).nextCursor as string;
+    const request = parseExportRequest({ cursor: emitted, cutoff: NOW.toISOString() }, NOW);
+    expect(request.cursor).toEqual({ createdAt: new Date('2026-09-17T10:02:00.000Z'), id: 2 });
+  });
+
+  it('rejects a cursor continued under a different cutoff', () => {
+    // Paging one snapshot's cursor against another silently skips or repeats
+    // rows while every page still reports itself complete.
+    const emitted = page([row(1, '100'), row(2, '200')], true).nextCursor as string;
+    expect(() =>
+      parseExportRequest({ cursor: emitted, cutoff: '2026-09-17T11:00:00.000Z' }, NOW),
+    ).toThrow(/cursor was issued for cutoff/);
   });
 
   it.each([
     ['not base64url', '!!!'],
-    ['missing separator', Buffer.from('nope', 'utf8').toString('base64url')],
-    ['bad timestamp', Buffer.from('nope|1', 'utf8').toString('base64url')],
-    ['bad id', Buffer.from('2026-09-17T10:01:00.000Z|0', 'utf8').toString('base64url')],
+    ['missing separators', Buffer.from('nope', 'utf8').toString('base64url')],
+    [
+      'missing the cutoff segment',
+      Buffer.from('2026-09-17T10:01:00.000Z|1', 'utf8').toString('base64url'),
+    ],
+    ['a bad cutoff', Buffer.from('nope|2026-09-17T10:01:00.000Z|1', 'utf8').toString('base64url')],
+    ['a bad timestamp', Buffer.from(`${NOW.toISOString()}|nope|1`, 'utf8').toString('base64url')],
+    [
+      'a bad id',
+      Buffer.from(`${NOW.toISOString()}|2026-09-17T10:01:00.000Z|0`, 'utf8').toString('base64url'),
+    ],
   ])('rejects a cursor that is %s', (_label, cursor) => {
     expect(() => parseExportRequest({ cursor, cutoff: NOW.toISOString() }, NOW)).toThrow(
       ExportRequestError,
@@ -100,9 +117,10 @@ describe('parseExportRequest', () => {
 });
 
 describe('decodeCursor', () => {
-  it('round-trips a cursor emitted by a page', () => {
+  it('round-trips a cursor emitted by a page, carrying its cutoff', () => {
     const emitted = page([row(1, '100'), row(2, '200')], true).nextCursor as string;
     expect(decodeCursor(emitted)).toEqual({
+      cutoff: NOW,
       createdAt: new Date('2026-09-17T10:02:00.000Z'),
       id: 2,
     });

@@ -5,7 +5,8 @@ import {
   SettlementConfirmationState,
 } from '@agroasys/sdk';
 import { config } from '../config';
-import { LedgerEntryWithState, PayoutState, TreasuryEntryEligibility } from '../types';
+import { PayoutState, TreasuryEntryEligibility } from '../types';
+import type { LedgerEntryForExport } from '../database/queries/ledger';
 import { ReconciliationGateService, type TradeReconciliationGate } from './reconciliationGate';
 import { getLatestBankPayoutConfirmation } from '../database/queries';
 
@@ -129,7 +130,7 @@ export class TreasuryEligibilityService {
   }
 
   async assessEntries(
-    entries: LedgerEntryWithState[],
+    entries: LedgerEntryForExport[],
   ): Promise<Map<number, TreasuryEntryEligibility>> {
     const gates = new Map<number, TreasuryEntryEligibility>();
     if (entries.length === 0) {

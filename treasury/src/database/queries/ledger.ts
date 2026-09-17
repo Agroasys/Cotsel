@@ -12,6 +12,17 @@ import type {
   TreasuryComponent,
 } from '../../types';
 
+/**
+ * The row shape the export produces. Its lateral join is a LEFT join, so a
+ * ledger entry with no payout lifecycle event still appears and carries a null
+ * state. Every `LedgerEntryWithState` is assignable to this, so a reader that
+ * tolerates a null state accepts either shape.
+ */
+export interface LedgerEntryForExport extends LedgerEntry {
+  latest_state: PayoutState | null;
+  latest_state_at: Date | null;
+}
+
 export async function upsertLedgerEntryWithInitialState(data: {
   entryKey: string;
   tradeId: string;
@@ -236,13 +247,19 @@ export async function getLedgerExportSnapshot(cutoff: Date): Promise<{
  * Offset paging was the original defect: a row inserted between pages shifts
  * every later offset, so rows are silently skipped or repeated.
  *
+ * The lateral join is a LEFT join so this enumerates exactly the candidate set
+ * `getLedgerExportSnapshot` counts. An inner join would drop a ledger entry that
+ * has no payout lifecycle event yet, and that entry would be counted in the
+ * snapshot but never appear on any page, so the pages could never reconcile.
+ * Such an entry carries a null state and is scanned but never exported.
+ *
  * Fetches one row beyond the page to detect continuation without a second query.
  */
 export async function getLedgerEntriesForExport(params: {
   cutoff: Date;
   cursor: { createdAt: Date; id: number } | null;
   limit: number;
-}): Promise<{ entries: LedgerEntryWithState[]; hasMore: boolean }> {
+}): Promise<{ entries: LedgerEntryForExport[]; hasMore: boolean }> {
   const values: Array<string | number | Date> = [params.cutoff];
   let cursorClause = '';
 
@@ -253,13 +270,13 @@ export async function getLedgerEntriesForExport(params: {
 
   values.push(params.limit + 1);
 
-  const result = await pool.query<LedgerEntryWithState>(
+  const result = await pool.query<LedgerEntryForExport>(
     `SELECT
         e.*,
         s.state AS latest_state,
         s.created_at AS latest_state_at
       FROM treasury_ledger_entries e
-      JOIN LATERAL (
+      LEFT JOIN LATERAL (
         SELECT p.state, p.created_at
         FROM payout_lifecycle_events p
         WHERE p.ledger_entry_id = e.id

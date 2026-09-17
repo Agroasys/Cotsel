@@ -65,6 +65,10 @@ ALTER TABLE treasury_partner_handoffs
 -- draws from, and a zero allocation is never meaningful. The application
 -- enforces this inside its allocation transaction; the trigger makes the
 -- invariant hold for any writer, including a manual repair session.
+--
+-- The bound applies to every allocation status. `RELEASED` is a real row that
+-- still records what was drawn from the ledger entry, so exempting it would
+-- leave an amount nobody validated sitting in the table.
 CREATE OR REPLACE FUNCTION treasury_assert_allocation_within_ledger_amount()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -72,10 +76,6 @@ AS $$
 DECLARE
     ledger_amount treasury_raw_amount;
 BEGIN
-    IF NEW.allocation_status <> 'ALLOCATED' THEN
-        RETURN NEW;
-    END IF;
-
     SELECT amount_raw
       INTO ledger_amount
       FROM treasury_ledger_entries

@@ -1,10 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { LedgerEntryWithState } from '../types';
+import type { LedgerEntryForExport } from '../database/queries/ledger';
 import type { EligibilitySummary } from './controller';
 
-export function toCsv(entries: Array<LedgerEntryWithState & EligibilitySummary>): string {
+export function toCsv(entries: Array<LedgerEntryForExport & EligibilitySummary>): string {
   const headers = [
     'id',
     'trade_id',
@@ -33,7 +33,7 @@ export function toCsv(entries: Array<LedgerEntryWithState & EligibilitySummary>)
     entry.event_name,
     entry.component_type,
     entry.amount_raw,
-    entry.latest_state,
+    entry.latest_state ?? '',
     entry.confirmationStage ?? '',
     entry.reconciliationStatus,
     entry.reconciliationFreshness,
@@ -41,7 +41,7 @@ export function toCsv(entries: Array<LedgerEntryWithState & EligibilitySummary>)
     entry.staleRunningRunCount,
     entry.eligibleForExport ? 'true' : 'false',
     entry.blockedReasons.join('|'),
-    entry.latest_state_at.toISOString(),
+    entry.latest_state_at?.toISOString() ?? '',
     entry.created_at.toISOString(),
   ]);
 

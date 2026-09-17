@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { getLedgerEntriesForExport, getLedgerExportSnapshot } from '../database/queries';
-import type { LedgerEntryWithState } from '../types';
+import type { LedgerEntryForExport } from '../database/queries/ledger';
 import { buildExportPage, type ExportPage, type ExportRequest } from './ledgerExport';
 
 /**
@@ -10,7 +10,7 @@ import { buildExportPage, type ExportPage, type ExportRequest } from './ledgerEx
  * and the reconciliation gate, which belong to the controller's wiring rather
  * than to the export contract.
  */
-export type AnnotatedLedgerEntry = LedgerEntryWithState & { eligibleForExport: boolean };
+export type AnnotatedLedgerEntry = LedgerEntryForExport & { eligibleForExport: boolean };
 
 export interface LedgerExportReader {
   loadSnapshot: typeof getLedgerExportSnapshot;
@@ -29,7 +29,7 @@ const defaultReader: LedgerExportReader = {
  */
 export async function loadLedgerExportPage<TEntry extends AnnotatedLedgerEntry>(
   request: ExportRequest,
-  annotate: (entries: LedgerEntryWithState[]) => Promise<TEntry[]>,
+  annotate: (entries: LedgerEntryForExport[]) => Promise<TEntry[]>,
   reader: LedgerExportReader = defaultReader,
 ): Promise<ExportPage<TEntry>> {
   const [snapshot, candidatePage] = await Promise.all([
