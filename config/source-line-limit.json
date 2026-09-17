@@ -64,7 +64,7 @@
     "scripts/trusted-dashboard-session.mjs": 563,
     "sdk/src/modules/adminSDK.ts": 832,
     "sdk/tests/adminSDK.test.ts": 502,
-    "treasury/src/api/controller.ts": 1406,
+    "treasury/src/api/controller.ts": 1383,
     "treasury/src/core/closeReporting.ts": 562,
     "treasury/src/database/schema.sql": 528,
     "treasury/src/types.ts": 548,

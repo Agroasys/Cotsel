@@ -18,6 +18,8 @@ process.env.INDEXER_GRAPHQL_URL =
 jest.mock('../src/database/queries', () => ({
   ...jest.requireActual('../src/database/queries'),
   getLedgerEntries: jest.fn(),
+  getLedgerEntriesForExport: jest.fn(),
+  getLedgerExportSnapshot: jest.fn(),
   getLedgerEntryById: jest.fn(),
   getLatestPayoutState: jest.fn(),
   listDistinctLedgerTradeIds: jest.fn(),
@@ -236,7 +238,13 @@ describe('TreasuryController eligibility gates', () => {
       ]),
     );
 
-    jest.mocked(queriesModule.getLedgerEntries).mockResolvedValue([makeEntry(11), makeEntry(12)]);
+    jest.mocked(queriesModule.getLedgerEntriesForExport).mockResolvedValue({
+      entries: [makeEntry(11), makeEntry(12)],
+      hasMore: false,
+    });
+    jest
+      .mocked(queriesModule.getLedgerExportSnapshot)
+      .mockResolvedValue({ rowCount: 2, totalAmountRaw: '84' });
 
     const controller = new LoadedTreasuryController();
     const res = mockResponse();
@@ -248,14 +256,24 @@ describe('TreasuryController eligibility gates', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         success: true,
-        data: [
-          expect.objectContaining({
-            id: 11,
-            eligibleForExport: true,
-            reconciliationFreshness: 'FRESH',
-            reconciliationCompletedAt: '2026-03-31T00:05:00.000Z',
-          }),
-        ],
+        data: expect.objectContaining({
+          entries: [
+            expect.objectContaining({
+              id: 11,
+              eligibleForExport: true,
+              reconciliationFreshness: 'FRESH',
+              reconciliationCompletedAt: '2026-03-31T00:05:00.000Z',
+            }),
+          ],
+          // Entry 12 was scanned and rejected by the gates, so the scanned and
+          // exported counts must differ for the page to reconcile.
+          scannedRowCount: 2,
+          exportedRowCount: 1,
+          exportedAmountRaw: '42',
+          snapshot: { rowCount: 2, totalAmountRaw: '84' },
+          nextCursor: null,
+          complete: true,
+        }),
       }),
     );
   });

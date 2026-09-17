@@ -15,6 +15,13 @@ import {
 } from '@agroasys/shared-http';
 import { assertBankPayoutState, BankPayoutConflictError } from '../core/bankPayout';
 import { TreasuryEligibilityService } from '../core/exportEligibility';
+import {
+  assertCompleteExportDelivery,
+  ExportRequestError,
+  parseExportRequest,
+} from '../core/ledgerExport';
+import { loadLedgerExportPage } from '../core/ledgerExportService';
+import { toCsv } from './ledgerCsv';
 import { TreasuryIngestionService } from '../core/ingestion';
 import { ReconciliationGateService } from '../core/reconciliationGate';
 import { SweepExecutionMatcherService } from '../core/sweepExecutionMatcher';
@@ -233,7 +240,7 @@ type AppendTreasuryPartnerHandoffEvidenceBody = {
   metadata?: Record<string, unknown>;
 };
 
-type EligibilitySummary = {
+export type EligibilitySummary = {
   confirmationStage: string | null;
   latestBlockNumber: number | null;
   safeBlockNumber: number | null;
@@ -410,52 +417,6 @@ function assertTreasuryPartnerHandoffStatus(
       'partnerStatus must be a valid treasury partner handoff status',
     );
   }
-}
-
-function toCsv(
-  entries: Array<Awaited<ReturnType<typeof getLedgerEntries>>[number] & EligibilitySummary>,
-): string {
-  const headers = [
-    'id',
-    'trade_id',
-    'tx_hash',
-    'block_number',
-    'event_name',
-    'component_type',
-    'amount_raw',
-    'latest_state',
-    'confirmation_stage',
-    'reconciliation_status',
-    'reconciliation_freshness',
-    'reconciliation_completed_at',
-    'stale_running_run_count',
-    'eligible_for_export',
-    'blocked_reasons',
-    'latest_state_at',
-    'created_at',
-  ];
-
-  const rows = entries.map((entry) => [
-    entry.id,
-    entry.trade_id,
-    entry.tx_hash,
-    entry.block_number,
-    entry.event_name,
-    entry.component_type,
-    entry.amount_raw,
-    entry.latest_state,
-    entry.confirmationStage ?? '',
-    entry.reconciliationStatus,
-    entry.reconciliationFreshness,
-    entry.reconciliationCompletedAt ?? '',
-    entry.staleRunningRunCount,
-    entry.eligibleForExport ? 'true' : 'false',
-    entry.blockedReasons.join('|'),
-    entry.latest_state_at.toISOString(),
-    entry.created_at.toISOString(),
-  ]);
-
-  return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
 }
 
 export class TreasuryController {
@@ -1368,26 +1329,41 @@ export class TreasuryController {
   async exportEntries(req: Request, res: Response): Promise<void> {
     try {
       const format = optionalEnum(req.query.format, EXPORT_FORMATS, 'format') ?? 'json';
-      const entries = await getLedgerEntries({ limit: 5000, offset: 0 });
-      const eligibility = await this.eligibility.assessEntries(entries);
-      const exportableEntries = entries
-        .map((entry) => ({
+      const request = parseExportRequest(req.query as Record<string, unknown>);
+      const page = await loadLedgerExportPage(request, async (entries) => {
+        const eligibility = await this.eligibility.assessEntries(entries);
+        return entries.map((entry) => ({
           ...entry,
           ...(eligibility.has(entry.id)
             ? serializeEligibility(eligibility.get(entry.id)!)
             : fallbackEligibility()),
-        }))
-        .filter((entry) => entry.eligibleForExport);
+        }));
+      });
+
+      assertCompleteExportDelivery(page, format, request.allowPartial);
 
       if (format === 'csv') {
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename="treasury-ledger.csv"');
-        res.status(200).send(toCsv(exportableEntries));
+        res.setHeader('X-Treasury-Export-Cutoff', page.cutoff);
+        res.setHeader('X-Treasury-Export-Row-Count', String(page.exportedRowCount));
+        res.setHeader('X-Treasury-Export-Amount-Raw', page.exportedAmountRaw);
+        res.status(200).send(toCsv(page.entries));
         return;
       }
 
-      res.status(200).json(success(exportableEntries));
+      // The envelope carries the cutoff, snapshot totals and continuation the
+      // consumer needs to prove it received every row exactly once. That is the
+      // point of H-32, so `data` is an export document rather than a bare array.
+      res.status(200).json(success(page));
     } catch (error: unknown) {
+      if (error instanceof ExportRequestError) {
+        res
+          .status(error.code === 'IncompleteExport' ? 409 : 400)
+          .json(failure(error.code, error.message));
+        return;
+      }
+
       if (error instanceof HttpError) {
         res.status(error.statusCode).json(failure(error.code, error.message, error.details));
         return;
