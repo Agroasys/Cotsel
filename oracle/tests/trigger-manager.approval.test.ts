@@ -42,6 +42,17 @@ import {
   incrementOracleRejected,
 } from '../src/metrics/counters';
 
+// These scenarios are about retry, idempotency and approval state, not about
+// PRES-11 containment, so the gate is stubbed open. Its own behaviour — and the
+// proof that a contained trade cannot progress — is in
+// trigger-manager.containment.test.ts.
+jest.mock('../src/core/containment-guard', () => ({
+  createContainmentGuard: () => ({
+    assertMayProgress: jest.fn().mockResolvedValue(undefined),
+    close: jest.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 type TriggerManagerSdkClient = ConstructorParameters<typeof TriggerManager>[0];
 type TradeRecord = Awaited<ReturnType<TriggerManagerSdkClient['getTrade']>>;
 

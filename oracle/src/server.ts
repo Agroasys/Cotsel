@@ -12,6 +12,7 @@ import { Logger } from './utils/logger';
 import { testConnection, closeConnection, pool } from './database/connection';
 import { TriggerManager } from './core/trigger-manager';
 import { createPostgresOracleActionLock } from './core/oracle-action-lock';
+import { buildContainmentGuard, type ContainmentGuard } from './core/containment-guard';
 import { SDKClient } from './blockchain/sdk-client';
 import { IndexerClient } from './blockchain/indexer-client';
 import { ConfirmationWorker } from './worker/confirmation-worker';
@@ -21,6 +22,7 @@ import { createPostgresManagedSignerAuditStore } from './database/managed-signer
 let confirmationWorker: ConfirmationWorker;
 let indexerClient: IndexerClient;
 let requestRateLimiterClose: (() => Promise<void>) | undefined;
+let containmentGuard: ContainmentGuard | undefined;
 
 async function initializeDatabase(): Promise<void> {
   Logger.info('Initializing database...');
@@ -42,6 +44,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
 
     if (indexerClient) {
       await indexerClient.close();
+    }
+
+    if (containmentGuard) {
+      await containmentGuard.close();
     }
 
     await closeConnection();
@@ -106,6 +112,11 @@ async function bootstrap() {
     );
     await sdkClient.assertSignerReady();
 
+    // Built here rather than left to the manager's default so the PRES-11
+    // containment gate is visible where the service is assembled, and so its
+    // connection is closed with everything else on shutdown.
+    containmentGuard = buildContainmentGuard(config);
+
     const triggerManager = new TriggerManager(
       sdkClient,
       config.retryAttempts,
@@ -113,6 +124,7 @@ async function bootstrap() {
       notifier,
       config.manualApprovalEnabled,
       createPostgresOracleActionLock(pool),
+      containmentGuard,
     );
 
     const controller = new OracleController(triggerManager);

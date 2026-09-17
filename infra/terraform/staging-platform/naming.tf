@@ -25,6 +25,7 @@ locals {
 
   database_reader_owners = toset([
     "indexer",
+    "reconciliation",
   ])
 
   database_secret_names = toset(concat(

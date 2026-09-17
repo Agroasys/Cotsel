@@ -66,6 +66,10 @@ test('the database bootstrap sets default privileges as each migration role', as
     source,
     /ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO cotsel_indexer_reader/,
   );
+  assert.match(
+    source,
+    /ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO cotsel_reconciliation_reader/,
+  );
   assert.match(source, /REASSIGN OWNED BY cotsel_indexer_app TO cotsel_indexer_migrator/);
   assert.match(source, /ALTER DATABASE cotsel_indexer OWNER TO cotsel_indexer_migrator/);
   assert.match(source, /ALTER SCHEMA squid_processor OWNER TO cotsel_indexer_migrator/);
@@ -78,6 +82,8 @@ test('the database bootstrap passes role passwords through psql variables', asyn
     'INDEXER_MIGRATION_PASSWORD',
     'INDEXER_RUNTIME_PASSWORD',
     'INDEXER_READER_PASSWORD',
+    'RECONCILIATION_MIGRATION_PASSWORD',
+    'RECONCILIATION_READER_PASSWORD',
     'RICARDIAN_MIGRATION_PASSWORD',
     'RICARDIAN_RUNTIME_PASSWORD',
     'TREASURY_MIGRATION_PASSWORD',
@@ -90,6 +96,10 @@ test('the database bootstrap passes role passwords through psql variables', asyn
   assert.match(
     source,
     /ALTER ROLE cotsel_indexer_reader LOGIN PASSWORD :'indexer_reader_password'/,
+  );
+  assert.match(
+    source,
+    /ALTER ROLE cotsel_reconciliation_reader LOGIN PASSWORD :'reconciliation_reader_password'/,
   );
 });
 
@@ -105,6 +115,7 @@ test('the entitlement verifier is private, strict-TLS, and tests the live role b
   assert.match(source, /CREATE SCHEMA \$\$\{probe_schema\}/);
   assert.match(source, /Runtime role unexpectedly created schema/);
   assert.match(source, /Indexer GraphQL reader unexpectedly updated a table/);
+  assert.match(source, /Reconciliation containment reader unexpectedly updated a table/);
   assert.match(source, /has unexpected attributes or membership/);
   assert.match(source, /unexpectedly connected to/);
   assert.match(source, /Indexer database owner is/);

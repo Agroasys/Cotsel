@@ -80,7 +80,7 @@ data "aws_iam_policy_document" "gateway_execution" {
       aws_secretsmanager_secret.platform["database/gateway/runtime"].arn,
       aws_secretsmanager_secret.platform["database/indexer/reader"].arn,
       aws_secretsmanager_secret.platform["database/indexer/runtime"].arn,
-      aws_secretsmanager_secret.platform["database/reconciliation/runtime"].arn,
+      aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn,
       aws_secretsmanager_secret.platform["database/auth/runtime"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-callback"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-ingress"].arn,
