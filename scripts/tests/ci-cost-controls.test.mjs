@@ -58,3 +58,20 @@ test('groups only minor and patch Dependabot version updates', async () => {
 
   assert.match(runtime, /exclude-patterns:\n\s+- 'ox'/);
 });
+
+test('keeps authenticated cross-repository checks for people and a credential-free gate for Dependabot', async () => {
+  const contents = await workflow('cross-repository-compatibility.yml');
+
+  assert.match(contents, /CI_APP_PRIVATE_KEY:[\s\S]*?required: false/);
+  assert.match(contents, /compatibility:[\s\S]*?if: github\.actor != 'dependabot\[bot\]'/);
+  assert.match(
+    contents,
+    /dependabot-compatibility:[\s\S]*?if: github\.actor == 'dependabot\[bot\]'/,
+  );
+  assert.match(
+    contents,
+    /dependabot-compatibility:[\s\S]*?node scripts\/check-cross-repo-release-manifest\.mjs/,
+  );
+  assert.match(contents, /dependabot-compatibility:[\s\S]*?pnpm install --frozen-lockfile/);
+  assert.match(contents, /dependabot-compatibility:[\s\S]*?pnpm run security:deps:compat/);
+});
