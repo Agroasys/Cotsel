@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { releaseCandidateInventory } from '../lib/release-candidate-inventory.mjs';
+
 const workflowPath = new URL('../../.github/workflows/release-images.yml', import.meta.url);
 
 test('published images require provenance, an SBOM, and verified keyless signatures', async () => {
@@ -55,8 +57,15 @@ test('supersedes candidate images without cancelling mainline releases', async (
   assert.match(workflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
 });
 
-test('builds the dedicated relayer image through the same supply-chain controls', async () => {
+test('builds every Cotsel release image through the same supply-chain workflow', async () => {
   const workflow = await readFile(workflowPath, 'utf8');
-  assert.match(workflow, /service: relayer\s+repository: cotsel\/relayer/s);
-  assert.match(workflow, /dockerfile: relayer\/Dockerfile/);
+  const images = releaseCandidateInventory().artifacts.filter(
+    (artifact) =>
+      artifact.kind === 'container-image' && artifact.sourceRepository === 'Agroasys/Cotsel',
+  );
+  for (const image of images) {
+    assert.match(workflow, new RegExp(`service: ${image.name}`, 'u'));
+    assert.match(workflow, new RegExp(`repository: ${image.repository}`, 'u'));
+    assert.match(workflow, new RegExp(`dockerfile: ${image.dockerfile}`, 'u'));
+  }
 });

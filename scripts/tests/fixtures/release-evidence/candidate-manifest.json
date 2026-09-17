@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "cotsel.candidate-manifest.v1",
+  "schemaVersion": "cotsel.candidate-manifest.v2",
   "candidateId": "cotsel-2026-08-05-fixture",
   "status": "candidate",
   "owner": {
@@ -21,40 +21,347 @@
   "crossRepositoryManifest": {
     "path": "integration/release-manifest.json",
     "schemaVersion": "cotsel.release-manifest.v1",
-    "sha256": "82b76f55d91fba06ade6a837d3cc05a3d527e82a05f9ea222e4e8dfaa41e9955"
+    "sha256": "109fd744249f794dfa27017a507724562b878107d112d53abb658326ca4366eb"
   },
   "artifacts": [
     {
-      "name": "gateway",
+      "name": "auth",
       "kind": "container-image",
-      "digest": "sha256:0a2b3b297e6065476bdd1df01d4b40191682522c13dd4f932014b917c800a149"
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "reference": "example.invalid/cotsel/auth@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "producingRunId": "fixture-auth",
+      "provenance": {
+        "uri": "https://evidence.invalid/auth/provenance",
+        "sha256": "f111111111111111111111111111111111111111111111111111111111111111",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/auth/sbom",
+        "sha256": "0111111111111111111111111111111111111111111111111111111111111111",
+        "verified": true
+      },
+      "verificationStatus": "verified"
     },
     {
-      "name": "indexer",
+      "name": "gateway",
       "kind": "container-image",
-      "digest": "sha256:2568a281b9aa8b6b5092908edfe81ce00452bed10b3617631ec35e184e57bc61"
+      "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "reference": "example.invalid/cotsel/gateway@sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "producingRunId": "fixture-gateway",
+      "provenance": {
+        "uri": "https://evidence.invalid/gateway/provenance",
+        "sha256": "f222222222222222222222222222222222222222222222222222222222222222",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/gateway/sbom",
+        "sha256": "0222222222222222222222222222222222222222222222222222222222222222",
+        "verified": true
+      },
+      "verificationStatus": "verified"
+    },
+    {
+      "name": "indexer-graphql",
+      "kind": "container-image",
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "reference": "example.invalid/cotsel/indexer-graphql@sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "producingRunId": "fixture-indexer-graphql",
+      "provenance": {
+        "uri": "https://evidence.invalid/indexer-graphql/provenance",
+        "sha256": "f333333333333333333333333333333333333333333333333333333333333333",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/indexer-graphql/sbom",
+        "sha256": "0333333333333333333333333333333333333333333333333333333333333333",
+        "verified": true
+      },
+      "verificationStatus": "verified"
+    },
+    {
+      "name": "indexer-pipeline",
+      "kind": "container-image",
+      "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "reference": "example.invalid/cotsel/indexer-pipeline@sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "producingRunId": "fixture-indexer-pipeline",
+      "provenance": {
+        "uri": "https://evidence.invalid/indexer-pipeline/provenance",
+        "sha256": "f444444444444444444444444444444444444444444444444444444444444444",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/indexer-pipeline/sbom",
+        "sha256": "0444444444444444444444444444444444444444444444444444444444444444",
+        "verified": true
+      },
+      "verificationStatus": "verified"
+    },
+    {
+      "name": "oracle",
+      "kind": "container-image",
+      "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "reference": "example.invalid/cotsel/oracle@sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "producingRunId": "fixture-oracle",
+      "provenance": {
+        "uri": "https://evidence.invalid/oracle/provenance",
+        "sha256": "f555555555555555555555555555555555555555555555555555555555555555",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/oracle/sbom",
+        "sha256": "0555555555555555555555555555555555555555555555555555555555555555",
+        "verified": true
+      },
+      "verificationStatus": "verified"
+    },
+    {
+      "name": "reconciliation",
+      "kind": "container-image",
+      "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "reference": "example.invalid/cotsel/reconciliation@sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "producingRunId": "fixture-reconciliation",
+      "provenance": {
+        "uri": "https://evidence.invalid/reconciliation/provenance",
+        "sha256": "f666666666666666666666666666666666666666666666666666666666666666",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/reconciliation/sbom",
+        "sha256": "0666666666666666666666666666666666666666666666666666666666666666",
+        "verified": true
+      },
+      "verificationStatus": "verified"
+    },
+    {
+      "name": "relayer",
+      "kind": "container-image",
+      "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "reference": "example.invalid/cotsel/relayer@sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "producingRunId": "fixture-relayer",
+      "provenance": {
+        "uri": "https://evidence.invalid/relayer/provenance",
+        "sha256": "f777777777777777777777777777777777777777777777777777777777777777",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/relayer/sbom",
+        "sha256": "0777777777777777777777777777777777777777777777777777777777777777",
+        "verified": true
+      },
+      "verificationStatus": "verified"
+    },
+    {
+      "name": "ricardian",
+      "kind": "container-image",
+      "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "reference": "example.invalid/cotsel/ricardian@sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "producingRunId": "fixture-ricardian",
+      "provenance": {
+        "uri": "https://evidence.invalid/ricardian/provenance",
+        "sha256": "f888888888888888888888888888888888888888888888888888888888888888",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/ricardian/sbom",
+        "sha256": "0888888888888888888888888888888888888888888888888888888888888888",
+        "verified": true
+      },
+      "verificationStatus": "verified"
     },
     {
       "name": "treasury",
       "kind": "container-image",
-      "digest": "sha256:1a4bbbd16723882b09a665aceaaf7120a007753d04b5c5caa07d144d255000a7"
+      "digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "reference": "example.invalid/cotsel/treasury@sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "producingRunId": "fixture-treasury",
+      "provenance": {
+        "uri": "https://evidence.invalid/treasury/provenance",
+        "sha256": "f999999999999999999999999999999999999999999999999999999999999999",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/treasury/sbom",
+        "sha256": "0999999999999999999999999999999999999999999999999999999999999999",
+        "verified": true
+      },
+      "verificationStatus": "verified"
     },
     {
       "name": "@agroasys/sdk",
       "kind": "npm-package",
-      "digest": "sha256:c670dd418c1bd71c900a4ece5b31f788b5deb8a7d0438d9c1eb6a02c49bc9fea"
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/sdk-publish.yml",
+      "producingRunId": "fixture-sdk",
+      "provenance": {
+        "uri": "https://evidence.invalid/sdk/provenance",
+        "sha256": "faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/sdk/sbom",
+        "sha256": "0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verified": true
+      },
+      "verificationStatus": "verified"
+    },
+    {
+      "name": "AgroasysEscrow",
+      "kind": "contract-bundle",
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "sourceRepository": "Agroasys/Cotsel",
+      "sourceCommit": "8b4a693eb4cff3fe62605f2d10435f895afebb78",
+      "producingWorkflow": ".github/workflows/contract-deploy.yml",
+      "producingRunId": "fixture-contract",
+      "provenance": {
+        "uri": "https://evidence.invalid/contract/provenance",
+        "sha256": "fbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "verified": true
+      },
+      "sbom": {
+        "required": false,
+        "rationale": "The contract bundle uses compiler-input, ABI, bytecode, source, and explorer verification evidence instead of a package SBOM."
+      },
+      "verificationStatus": "verified"
+    },
+    {
+      "name": "agroasys-backend",
+      "kind": "container-image",
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "reference": "example.invalid/agroasys-backend@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "sourceRepository": "Agroasys/agroasys-backend",
+      "sourceCommit": "7f5ed9201d56f969c39747134d0a2af8961775fb",
+      "producingWorkflow": ".github/workflows/release-image.yml",
+      "producingRunId": "fixture-backend",
+      "provenance": {
+        "uri": "https://evidence.invalid/backend/provenance",
+        "sha256": "fccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/backend/sbom",
+        "sha256": "0ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "verified": true
+      },
+      "verificationStatus": "verified"
+    },
+    {
+      "name": "platform.v1",
+      "kind": "web-bundle",
+      "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "sourceRepository": "Agroasys/platform.v1",
+      "sourceCommit": "173463c79b4cade4466489e74b8edca47aea8d26",
+      "producingWorkflow": ".github/workflows/release-artifact.yml",
+      "producingRunId": "fixture-platform",
+      "provenance": {
+        "uri": "https://evidence.invalid/platform/provenance",
+        "sha256": "fddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/platform/sbom",
+        "sha256": "0ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "verified": true
+      },
+      "verificationStatus": "verified"
+    },
+    {
+      "name": "Cotsel-Dash",
+      "kind": "web-bundle",
+      "digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "sourceRepository": "Agroasys/Cotsel.dash",
+      "sourceCommit": "a03d03c8f2cc5804075137f6bfcaa6549812cd3b",
+      "producingWorkflow": ".github/workflows/deploy-staging.yml",
+      "producingRunId": "fixture-dashboard",
+      "provenance": {
+        "uri": "https://evidence.invalid/dashboard/provenance",
+        "sha256": "feeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "verified": true
+      },
+      "sbom": {
+        "required": true,
+        "uri": "https://evidence.invalid/dashboard/sbom",
+        "sha256": "0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "verified": true
+      },
+      "verificationStatus": "verified"
     }
   ],
   "migrations": [
     {
+      "component": "auth",
+      "headIdentity": "202609130003_operator_signer_two_person_activation",
+      "checksumSha256": "3f0a3b1657f48f7c837e5dd3d0ea66f178c3ab108f23940cfb646c98a3a795ea"
+    },
+    {
+      "component": "gateway",
+      "headIdentity": "202609160009_gasless_nonce_reservations",
+      "checksumSha256": "0c66d7b41372a3e9f8f38486dd88f25daf77744ffb9e1620a1a2fec91b5b710d"
+    },
+    {
       "component": "indexer",
-      "headIdentity": "0042_trade_timeline",
-      "checksumSha256": "8938260e7320d7995ae7421e41606c2addf756371ca7aa7aa52484abd54c81dc"
+      "headIdentity": "1785600000000_indexer_quarantine",
+      "checksumSha256": "c153d044cf8adbd0fa6a22fe25d0ec5ccd4e1b399024f8406106b32eeb5b7680"
+    },
+    {
+      "component": "oracle",
+      "headIdentity": "202608310001_baseline",
+      "checksumSha256": "bd596dfb79adabdfa95b1930e05c06bf9d9f8cb76a17c16276154ad7b3c073af"
+    },
+    {
+      "component": "reconciliation",
+      "headIdentity": "202609120001_run_leases",
+      "checksumSha256": "278cac59c7b2d5b7d287bdabfcd3964f83581cc47315e55f7d411b6d31b85b20"
+    },
+    {
+      "component": "ricardian",
+      "headIdentity": "202608310001_baseline",
+      "checksumSha256": "68b1014d5334631301e68f12e99874849e5d1f843ecd29e588815e4f6ccaf42b"
     },
     {
       "component": "treasury",
-      "headIdentity": "0017_close_packet",
-      "checksumSha256": "ac054cd0e98d229fdabc17560520b2c49743e261662e2756fe271191dfda83b3"
+      "headIdentity": "202609170002_canonical_monetary_amounts",
+      "checksumSha256": "984ce6f6175b12a7c77ce8c459a7ab11b74053104ec02a455a6fa419dfbedf33"
     }
   ],
   "chain": {

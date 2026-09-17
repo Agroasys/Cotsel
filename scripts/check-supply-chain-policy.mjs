@@ -156,20 +156,18 @@ export function repositoryViolations(root) {
   const releaseWorkflow = readFileSync(join(workflowDirectory, 'release-images.yml'), 'utf8');
   violations.push(...releaseWorkflowViolations(releaseWorkflow));
 
-  const runtimeServices = [
-    'auth',
-    'gateway',
-    'indexer',
-    'oracle',
-    'reconciliation',
-    'relayer',
-    'ricardian',
-    'treasury',
-  ];
-  for (const service of runtimeServices) {
-    const dockerfile = readFileSync(join(root, service, 'Dockerfile'), 'utf8');
+  const candidateInventory = JSON.parse(
+    readFileSync(join(root, 'integration/release-candidate-inventory.json'), 'utf8'),
+  );
+  const dockerfiles = new Set(
+    candidateInventory.artifacts
+      .filter((artifact) => artifact.sourceRepository === 'Agroasys/Cotsel' && artifact.dockerfile)
+      .map((artifact) => artifact.dockerfile),
+  );
+  for (const dockerfilePath of dockerfiles) {
+    const dockerfile = readFileSync(join(root, dockerfilePath), 'utf8');
     if (!/^USER agro$/mu.test(dockerfile)) {
-      violations.push(`${service}/Dockerfile: runtime must use USER agro`);
+      violations.push(`${dockerfilePath}: runtime must use USER agro`);
     }
   }
 

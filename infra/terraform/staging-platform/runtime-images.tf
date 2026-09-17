@@ -1,17 +1,8 @@
 locals {
   postgres_host = split(":", local.postgres_endpoint)[0]
 
-  runtime_services = toset([
-    "auth",
-    "gateway",
-    "indexer-graphql",
-    "indexer-pipeline",
-    "oracle",
-    "reconciliation",
-    "relayer",
-    "ricardian",
-    "treasury",
-  ])
+  # Reuse the deployment service set from naming.tf. Inventory tests keep both sources aligned.
+  runtime_services = local.services
 
   runtime_images = {
     for service in local.runtime_services : service =>

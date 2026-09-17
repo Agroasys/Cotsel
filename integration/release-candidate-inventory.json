@@ -1,0 +1,143 @@
+{
+  "schemaVersion": "cotsel.release-candidate-inventory.v1",
+  "artifacts": [
+    {
+      "name": "auth",
+      "kind": "container-image",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "repository": "cotsel/auth",
+      "dockerfile": "auth/Dockerfile",
+      "localTag": "cotsel-auth",
+      "sbomRequired": true
+    },
+    {
+      "name": "gateway",
+      "kind": "container-image",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "repository": "cotsel/gateway",
+      "dockerfile": "gateway/Dockerfile",
+      "localTag": "cotsel-gateway",
+      "sbomRequired": true
+    },
+    {
+      "name": "indexer-graphql",
+      "kind": "container-image",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "repository": "cotsel/indexer-graphql",
+      "dockerfile": "indexer/Dockerfile",
+      "localTag": "cotsel-indexer-graphql",
+      "sbomRequired": true
+    },
+    {
+      "name": "indexer-pipeline",
+      "kind": "container-image",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "repository": "cotsel/indexer-pipeline",
+      "dockerfile": "indexer/Dockerfile",
+      "localTag": "cotsel-indexer-pipeline",
+      "sbomRequired": true
+    },
+    {
+      "name": "oracle",
+      "kind": "container-image",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "repository": "cotsel/oracle",
+      "dockerfile": "oracle/Dockerfile",
+      "localTag": "cotsel-oracle",
+      "sbomRequired": true
+    },
+    {
+      "name": "reconciliation",
+      "kind": "container-image",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "repository": "cotsel/reconciliation",
+      "dockerfile": "reconciliation/Dockerfile",
+      "localTag": "cotsel-reconciliation",
+      "sbomRequired": true
+    },
+    {
+      "name": "relayer",
+      "kind": "container-image",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "repository": "cotsel/relayer",
+      "dockerfile": "relayer/Dockerfile",
+      "localTag": "cotsel-relayer",
+      "sbomRequired": true
+    },
+    {
+      "name": "ricardian",
+      "kind": "container-image",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "repository": "cotsel/ricardian",
+      "dockerfile": "ricardian/Dockerfile",
+      "localTag": "cotsel-ricardian",
+      "sbomRequired": true
+    },
+    {
+      "name": "treasury",
+      "kind": "container-image",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/release-images.yml",
+      "repository": "cotsel/treasury",
+      "dockerfile": "treasury/Dockerfile",
+      "localTag": "cotsel-treasury",
+      "sbomRequired": true
+    },
+    {
+      "name": "@agroasys/sdk",
+      "kind": "npm-package",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/sdk-publish.yml",
+      "sbomRequired": true
+    },
+    {
+      "name": "AgroasysEscrow",
+      "kind": "contract-bundle",
+      "sourceRepository": "Agroasys/Cotsel",
+      "producingWorkflow": ".github/workflows/contract-deploy.yml",
+      "sbomRequired": false
+    },
+    {
+      "name": "agroasys-backend",
+      "kind": "container-image",
+      "sourceRepository": "Agroasys/agroasys-backend",
+      "producingWorkflow": ".github/workflows/release-image.yml",
+      "repository": "agroasys-backend",
+      "sbomRequired": true
+    },
+    {
+      "name": "platform.v1",
+      "kind": "web-bundle",
+      "sourceRepository": "Agroasys/platform.v1",
+      "producingWorkflow": ".github/workflows/release-artifact.yml",
+      "sbomRequired": true
+    },
+    {
+      "name": "Cotsel-Dash",
+      "kind": "web-bundle",
+      "sourceRepository": "Agroasys/Cotsel.dash",
+      "producingWorkflow": ".github/workflows/deploy-staging.yml",
+      "sbomRequired": true
+    }
+  ],
+  "migrations": [
+    { "component": "auth", "manifestPath": "auth/src/database/migrations.json" },
+    { "component": "gateway", "manifestPath": "gateway/src/database/migrations.json" },
+    { "component": "indexer", "manifestPath": "indexer/db/migrations.json" },
+    { "component": "oracle", "manifestPath": "oracle/src/database/migrations.json" },
+    {
+      "component": "reconciliation",
+      "manifestPath": "reconciliation/src/database/migrations.json"
+    },
+    { "component": "ricardian", "manifestPath": "ricardian/src/database/migrations.json" },
+    { "component": "treasury", "manifestPath": "treasury/src/database/migrations.json" }
+  ]
+}

@@ -634,6 +634,7 @@ test('requires a rollback target that is not the candidate itself', () => {
 test('binds the candidate to the checked-in cross-repository release manifest', () => {
   const releaseManifestPath = path.join(ROOT_DIR, 'integration/release-manifest.json');
   const manifest = manifestFixture();
+  manifest.crossRepositoryManifest.sha256 = '0'.repeat(64);
 
   assert.throws(
     () => assertCrossRepositoryManifestBinding(manifest, releaseManifestPath),
@@ -649,9 +650,8 @@ test('binds the candidate to the checked-in cross-repository release manifest', 
  * is what CI enforces. This proves the two agree on what is mandatory.
  */
 test('the validator enforces every required property the published schemas declare', () => {
-  const manifestSchema = readJsonDocument(
-    path.join(ROOT_DIR, 'integration/candidate-manifest.schema.json'),
-  );
+  const schemaPath = path.join(ROOT_DIR, 'integration/candidate-manifest.v2.schema.json');
+  const manifestSchema = readJsonDocument(schemaPath);
   for (const property of manifestSchema.required) {
     const manifest = manifestFixture();
     delete manifest[property];

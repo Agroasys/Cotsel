@@ -103,7 +103,7 @@ been deployed into it.
 
 ## 5. Release identity as currently known
 
-The candidate manifest contract defined by #636 (`integration/candidate-manifest.schema.json`) is what binds
+The candidate manifest contract defined by #636 (`integration/candidate-manifest.v2.schema.json`) is what binds
 these values to a specific run. This section records what is pinned today and what is not.
 
 | Dimension             | Value                                                                                                                                |
@@ -145,7 +145,7 @@ Two defects block it from identifying a candidate:
 - **Its artifact digests and its deployment do not describe the same event.** `bytecodeSha256` was recorded
   from a later compile than the deployment the bundle describes.
 - **It carries no deployment block.** `contract.deploymentBlock` is required by the candidate manifest
-  (`integration/candidate-manifest.schema.json`), is read by the protocol health report, and is the start block
+  (`integration/candidate-manifest.v2.schema.json`), is read by the protocol health report, and is the start block
   for `INDEXER_START_BLOCK`. The deploy script now emits that field and the receipt status from the deployment
   receipt, so the next controlled deploy produces a bundle that carries them; this one predates that change and
   cannot be corrected by hand without becoming hand-entered prose.
