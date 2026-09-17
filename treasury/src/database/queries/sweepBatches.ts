@@ -6,6 +6,10 @@ import {
   assertSweepBatchRoleSeparation,
   assertSweepBatchTransition,
 } from '../../core/accountingPolicy';
+import {
+  assertAllocationWithinLedgerAmount,
+  assertCanonicalRawAmount,
+} from '../../core/canonicalAmount';
 import { sumAllocatedEntryAmountRaw } from '../../core/sweepBatchAmounts';
 import type {
   AccountingPeriod,
@@ -31,6 +35,8 @@ export async function createSweepBatch(data: {
   createdBy: string;
   metadata?: Record<string, unknown>;
 }): Promise<SweepBatch> {
+  assertCanonicalRawAmount(data.expectedTotalRaw, 'expectedTotalRaw');
+
   const client = await pool.connect();
 
   try {
@@ -372,6 +378,15 @@ export async function addSweepBatchEntry(data: {
       throw new Error('Ledger entry is already allocated to an active sweep batch');
     }
 
+    // Both rows are read inside this transaction, so the bound is checked
+    // against the same ledger amount the allocation is written against.
+    const entryAmountRaw = data.entryAmountRaw ?? ledgerEntry.amount_raw;
+    assertAllocationWithinLedgerAmount({
+      entryAmountRaw,
+      ledgerAmountRaw: ledgerEntry.amount_raw,
+      ledgerEntryId: data.ledgerEntryId,
+    });
+
     const result = await client.query<SweepBatchEntry>(
       `INSERT INTO sweep_batch_entries (
           sweep_batch_id,
@@ -382,13 +397,7 @@ export async function addSweepBatchEntry(data: {
           updated_at
         ) VALUES ($1, $2, $3, $4, $5, NOW())
         RETURNING *`,
-      [
-        data.sweepBatchId,
-        data.ledgerEntryId,
-        'ALLOCATED',
-        data.entryAmountRaw ?? ledgerEntry.amount_raw,
-        data.allocatedBy,
-      ],
+      [data.sweepBatchId, data.ledgerEntryId, 'ALLOCATED', entryAmountRaw, data.allocatedBy],
     );
 
     await client.query('COMMIT');

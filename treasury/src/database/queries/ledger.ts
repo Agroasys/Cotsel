@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { pool } from '../connection';
+import { assertCanonicalRawAmount } from '../../core/canonicalAmount';
 import type {
   BankPayoutConfirmation,
   LedgerEntry,
@@ -10,6 +11,17 @@ import type {
   PayoutState,
   TreasuryComponent,
 } from '../../types';
+
+/**
+ * The row shape the export produces. Its lateral join is a LEFT join, so a
+ * ledger entry with no payout lifecycle event still appears and carries a null
+ * state. Every `LedgerEntryWithState` is assignable to this, so a reader that
+ * tolerates a null state accepts either shape.
+ */
+export interface LedgerEntryForExport extends LedgerEntry {
+  latest_state: PayoutState | null;
+  latest_state_at: Date | null;
+}
 
 export async function upsertLedgerEntryWithInitialState(data: {
   entryKey: string;
@@ -24,6 +36,10 @@ export async function upsertLedgerEntryWithInitialState(data: {
   initialStateNote?: string;
   initialStateActor?: string;
 }): Promise<{ entry: LedgerEntry; initialStateCreated: boolean }> {
+  // Ingress is the last point where a non-canonical amount can still be
+  // attributed to its source event rather than discovered during a close.
+  assertCanonicalRawAmount(data.amountRaw, 'amountRaw');
+
   const client = await pool.connect();
 
   try {
@@ -199,6 +215,86 @@ export async function getLedgerEntries(params: {
   );
 
   return result.rows;
+}
+
+/**
+ * Counts and totals the candidate set at the export cutoff. The consumer
+ * reconciles the pages it received against these two numbers, which is what
+ * makes "every record exactly once" checkable rather than assumed.
+ */
+export async function getLedgerExportSnapshot(cutoff: Date): Promise<{
+  rowCount: number;
+  totalAmountRaw: string;
+}> {
+  const result = await pool.query<{ row_count: string; total_amount_raw: string | null }>(
+    `SELECT
+        COUNT(*)::text AS row_count,
+        COALESCE(SUM(e.amount_raw::numeric), 0)::text AS total_amount_raw
+      FROM treasury_ledger_entries e
+      WHERE e.created_at <= $1`,
+    [cutoff],
+  );
+
+  const row = result.rows[0];
+  return {
+    rowCount: Number(row?.row_count ?? '0'),
+    totalAmountRaw: row?.total_amount_raw ?? '0',
+  };
+}
+
+/**
+ * Keyset page over `(created_at DESC, id DESC)` bounded by the export cutoff.
+ * Offset paging was the original defect: a row inserted between pages shifts
+ * every later offset, so rows are silently skipped or repeated.
+ *
+ * The lateral join is a LEFT join so this enumerates exactly the candidate set
+ * `getLedgerExportSnapshot` counts. An inner join would drop a ledger entry that
+ * has no payout lifecycle event yet, and that entry would be counted in the
+ * snapshot but never appear on any page, so the pages could never reconcile.
+ * Such an entry carries a null state and is scanned but never exported.
+ *
+ * Fetches one row beyond the page to detect continuation without a second query.
+ */
+export async function getLedgerEntriesForExport(params: {
+  cutoff: Date;
+  cursor: { createdAt: Date; id: number } | null;
+  limit: number;
+}): Promise<{ entries: LedgerEntryForExport[]; hasMore: boolean }> {
+  const values: Array<string | number | Date> = [params.cutoff];
+  let cursorClause = '';
+
+  if (params.cursor) {
+    values.push(params.cursor.createdAt, params.cursor.id);
+    cursorClause = `AND (e.created_at, e.id) < ($${values.length - 1}, $${values.length})`;
+  }
+
+  values.push(params.limit + 1);
+
+  const result = await pool.query<LedgerEntryForExport>(
+    `SELECT
+        e.*,
+        s.state AS latest_state,
+        s.created_at AS latest_state_at
+      FROM treasury_ledger_entries e
+      LEFT JOIN LATERAL (
+        SELECT p.state, p.created_at
+        FROM payout_lifecycle_events p
+        WHERE p.ledger_entry_id = e.id
+        ORDER BY p.created_at DESC, p.id DESC
+        LIMIT 1
+      ) s ON TRUE
+      WHERE e.created_at <= $1
+      ${cursorClause}
+      ORDER BY e.created_at DESC, e.id DESC
+      LIMIT $${values.length}`,
+    values,
+  );
+
+  const hasMore = result.rows.length > params.limit;
+  return {
+    entries: hasMore ? result.rows.slice(0, params.limit) : result.rows,
+    hasMore,
+  };
 }
 
 export async function listDistinctLedgerTradeIds(): Promise<string[]> {

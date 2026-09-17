@@ -8,6 +8,13 @@
       "schema_sha256": "c1e302f3a4c2fac60ce2a51eb6cc4b79395c61765c7101563ea636cee15df995",
       "adopt_existing_schema": true,
       "baseline": true
+    },
+    {
+      "version": "202609170002",
+      "name": "canonical_monetary_amounts",
+      "file": "002_canonical_monetary_amounts.sql",
+      "sha256": "0afc19ba61f79c13aea3224caa82a2bfa9bda85f41499de3af366b56487b3d68",
+      "schema_sha256": "c0bf0c3fdbd3cb7c065a32f77091a6bbcf52443e67f63f3c7964868f29ca2441"
     }
   ]
 }
