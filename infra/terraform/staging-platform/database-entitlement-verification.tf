@@ -315,7 +315,7 @@ data "aws_iam_policy_document" "database_entitlement_verification_execution" {
         ]
       ]),
       [local.database_bootstrap_services.indexer.reader_secret],
-      aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn,
+      [aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn],
     )
   }
 
