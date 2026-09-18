@@ -77,12 +77,12 @@ hardware-backed wallets in the direct prepare, review, sign, broadcast, and
 confirm flow; they must not be KMS aliases or backend-accessible signers. The
 deployer must not hold a runtime role.
 
-Keep the legacy runtime unchanged during key creation. Deploy and verify the new
+Keep signer services disabled during key creation. Deploy and verify the new
 contract before enabling KMS-backed runtime signing.
 
 The Oracle runs as its own ECS service and task role. The gateway task cannot
-read the Oracle database credential or legacy signer secret, and only the
-Oracle task role can call `kms:GetPublicKey` and `kms:Sign` on the Oracle key.
+read the Oracle database credential or any Oracle signing material, and only
+the Oracle task role can call `kms:GetPublicKey` and `kms:Sign` on the Oracle key.
 Oracle reads the bundled indexer through private Cloud Map DNS; gateway-to-
 Oracle calls remain authenticated with the existing service credential.
 
@@ -105,9 +105,9 @@ KMS activation uses separate key-creation and runtime plans:
 8. Apply that exact plan.
 9. Capture startup, wrong-address, denial, signing, CloudTrail, and reconciliation evidence.
 
-An empty Oracle address keeps its legacy rollback key. An empty relayer address
-keeps the relayer stopped and omits its gateway credential. Neither state
-satisfies custody acceptance. Keep `gasless_execution_enabled=false` until the
+An empty Oracle address keeps the Oracle service stopped and supplies no signer
+material. An empty relayer address keeps the relayer stopped and omits its
+gateway credential. Neither state satisfies custody acceptance. Keep `gasless_execution_enabled=false` until the
 durable nonce migration, one-writer topology, signing denials, and Base Sepolia
 rehearsal have been accepted. Terraform rejects enabling gasless execution with
 more than one gateway writer.

@@ -55,7 +55,7 @@ data "aws_iam_policy_document" "oracle_execution" {
       aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn,
       aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn,
       aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn,
-    ], local.oracle_kms_enabled ? [] : [data.aws_secretsmanager_secret.oracle_wallet.arn])
+    ])
   }
 
   statement {
@@ -151,10 +151,13 @@ resource "aws_ecs_task_definition" "oracle" {
 }
 
 resource "aws_ecs_service" "oracle" {
-  name                   = "${local.name_prefix}-oracle"
-  cluster                = aws_ecs_cluster.staging.id
-  task_definition        = aws_ecs_task_definition.oracle.arn
-  desired_count          = var.gateway_desired_count > 0 ? 1 : 0
+  name            = "${local.name_prefix}-oracle"
+  cluster         = aws_ecs_cluster.staging.id
+  task_definition = aws_ecs_task_definition.oracle.arn
+  # Plan A creates the non-exportable KMS key with no runnable Oracle task.
+  # Plan B can enable one task only after its derived address is independently
+  # verified and supplied through oracle_kms_expected_address.
+  desired_count          = local.oracle_kms_enabled && var.gateway_desired_count > 0 ? 1 : 0
   launch_type            = "FARGATE"
   enable_execute_command = false
   # Oracle can submit financial state transitions. Never overlap revisions:

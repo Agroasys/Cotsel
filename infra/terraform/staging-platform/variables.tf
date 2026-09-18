@@ -205,17 +205,6 @@ variable "backend_settlement_callback_url" {
   }
 }
 
-variable "oracle_wallet_secret_name" {
-  description = "Existing Secrets Manager identity for the controlled Base Sepolia oracle signer."
-  type        = string
-  default     = "/agroasys/staging/base-sepolia/wallet-oracle"
-
-  validation {
-    condition     = var.oracle_wallet_secret_name == "/agroasys/staging/base-sepolia/wallet-oracle"
-    error_message = "oracle_wallet_secret_name must identify the controlled staging oracle wallet."
-  }
-}
-
 variable "gateway_desired_count" {
   description = "Number of Cotsel gateway tasks to run in staging."
   type        = number

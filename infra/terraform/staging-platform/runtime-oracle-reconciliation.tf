@@ -38,9 +38,7 @@ locals {
     { name = "ORACLE_KMS_EXPECTED_ADDRESS", value = var.oracle_kms_expected_address },
     { name = "ORACLE_KMS_KEY_ID", value = aws_kms_alias.managed_signer["oracle"].name },
     { name = "ORACLE_SIGNER_CUSTODY_MODE", value = "kms" },
-    ] : [
-    { name = "ORACLE_SIGNER_CUSTODY_MODE", value = "raw_private_key" },
-  ])
+  ] : [])
 
   oracle_secrets = concat([
     { name = "API_KEY", valueFrom = "${aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn}:id::" },
@@ -51,8 +49,6 @@ locals {
     { name = "RECONCILIATION_DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:username::" },
     { name = "RPC_FALLBACK_URLS", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn },
     { name = "RPC_URL", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn },
-    ], local.oracle_kms_enabled ? [] : [
-    { name = "ORACLE_PRIVATE_KEY", valueFrom = "${data.aws_secretsmanager_secret.oracle_wallet.arn}:privateKey::" },
   ])
 
   oracle_container = {

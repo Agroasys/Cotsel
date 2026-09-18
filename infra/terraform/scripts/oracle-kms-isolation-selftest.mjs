@@ -16,6 +16,7 @@ const oracleRuntime = read('runtime-oracle-reconciliation.tf');
 const oracleService = read('oracle-service.tf');
 const relayerService = read('relayer-service.tf');
 const network = read('network.tf');
+const runtimeImages = read('runtime-images.tf');
 const gatewayPackage = readFileSync(join(root, '..', '..', 'gateway', 'package.json'), 'utf8');
 const gatewayTransport = readFileSync(
   join(root, '..', '..', 'gateway', 'src', 'core', 'managedSignerTransport.ts'),
@@ -37,7 +38,9 @@ assert.doesNotMatch(gatewayIam, /database\/oracle\/runtime|oracle_wallet/);
 
 assert.match(oracleRuntime, /ORACLE_KMS_EXPECTED_ADDRESS/);
 assert.match(oracleRuntime, /ORACLE_SIGNER_CUSTODY_MODE", value = "kms"/);
-assert.match(oracleRuntime, /oracle_kms_enabled \? \[\] : \[/);
+assert.match(oracleRuntime, /oracle_kms_enabled \? \[/);
+assert.doesNotMatch(oracleRuntime, /ORACLE_PRIVATE_KEY|raw_private_key|oracle_wallet/);
+assert.doesNotMatch(runtimeImages, /oracle_wallet/);
 assert.match(oracleRuntime, /http:\/\/gateway\.cotsel-staging\.internal:4350\/graphql/);
 
 assert.match(oracleService, /task_role_arn\s+= aws_iam_role\.oracle_task\.arn/);
@@ -51,6 +54,8 @@ assert.match(
 );
 assert.match(oracleService, /service_discovery_service\.runtime\["oracle"\]/);
 assert.match(oracleService, /enable_execute_command\s+= false/);
+assert.match(oracleService, /desired_count\s+= local\.oracle_kms_enabled && var\.gateway_desired_count > 0 \? 1 : 0/);
+assert.doesNotMatch(oracleService, /oracle_wallet/);
 assert.match(oracleService, /deployment_maximum_percent\s+= 100/);
 assert.match(oracleService, /deployment_minimum_healthy_percent\s+= 0/);
 assert.match(oracleService, /aws_ecs_service\.gateway/);
