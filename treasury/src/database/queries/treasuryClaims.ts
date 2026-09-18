@@ -3,6 +3,7 @@
  */
 import { createHash } from 'node:crypto';
 import { assertRealizationAllowed } from '../../core/accountingPolicy';
+import { rejectConcurrentWrite } from '../../core/transitionConcurrency';
 import type {
   PartnerHandoff,
   PartnerHandoffStatus,
@@ -155,7 +156,8 @@ export async function upsertPartnerHandoff(data: {
     const batchResult = await client.query<SweepBatch>(
       `SELECT *
        FROM sweep_batches
-       WHERE id = $1`,
+       WHERE id = $1
+       FOR UPDATE`,
       [data.sweepBatchId],
     );
     const batch = batchResult.rows[0];
@@ -249,6 +251,13 @@ export async function createRevenueRealization(data: {
   try {
     await client.query('BEGIN');
 
+    // Realization is once-per-entry. Locking the entry first makes the
+    // eligibility read and the insert one decision, so two concurrent
+    // realizations cannot both pass `assertRealizationAllowed`.
+    await client.query(`SELECT id FROM treasury_ledger_entries WHERE id = $1 FOR UPDATE`, [
+      data.ledgerEntryId,
+    ]);
+
     const facts = await getLedgerEntryAccountingFacts(data.ledgerEntryId, client);
     if (!facts) {
       throw new Error('Ledger entry accounting facts not found');
@@ -285,8 +294,10 @@ export async function createRevenueRealization(data: {
       );
     }
 
-    const result = await client.query<RevenueRealization>(
-      `INSERT INTO revenue_realizations (
+    const result = await rejectConcurrentWrite(
+      async () =>
+        client.query<RevenueRealization>(
+          `INSERT INTO revenue_realizations (
           ledger_entry_id,
           accounting_period_id,
           sweep_batch_id,
@@ -298,17 +309,19 @@ export async function createRevenueRealization(data: {
           metadata
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
         RETURNING *`,
-      [
-        data.ledgerEntryId,
-        data.accountingPeriodId,
-        data.sweepBatchId ?? facts.sweep_batch_id,
-        data.partnerHandoffId ?? facts.partner_handoff_id,
-        'REALIZED',
-        new Date(),
-        data.actor,
-        data.note ?? null,
-        JSON.stringify(data.metadata ?? {}),
-      ],
+          [
+            data.ledgerEntryId,
+            data.accountingPeriodId,
+            data.sweepBatchId ?? facts.sweep_batch_id,
+            data.partnerHandoffId ?? facts.partner_handoff_id,
+            'REALIZED',
+            new Date(),
+            data.actor,
+            data.note ?? null,
+            JSON.stringify(data.metadata ?? {}),
+          ],
+        ),
+      'Ledger entry was realized concurrently',
     );
 
     await client.query('COMMIT');

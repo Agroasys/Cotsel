@@ -6,6 +6,7 @@ import {
   createTreasuryPartnerHandoffPayloadHash,
   TreasuryPartnerHandoffConflictError,
 } from '../../core/treasuryPartnerHandoff';
+import { retryOnceOnUniqueViolation } from '../../core/transitionConcurrency';
 import type {
   LedgerEntry,
   TreasuryPartnerHandoff,
@@ -42,11 +43,24 @@ export async function listTreasuryPartnerHandoffEventsByLedgerEntryId(
   return result.rows;
 }
 
-export async function upsertTreasuryPartnerHandoff(data: TreasuryPartnerHandoffInput): Promise<{
+export interface TreasuryPartnerHandoffUpsertResult {
   handoff: TreasuryPartnerHandoff;
   created: boolean;
   idempotentReplay: boolean;
-}> {
+}
+
+export async function upsertTreasuryPartnerHandoff(
+  data: TreasuryPartnerHandoffInput,
+): Promise<TreasuryPartnerHandoffUpsertResult> {
+  return retryOnceOnUniqueViolation(
+    () => upsertTreasuryPartnerHandoffOnce(data),
+    'Treasury partner handoff was created concurrently for this ledger entry',
+  );
+}
+
+async function upsertTreasuryPartnerHandoffOnce(
+  data: TreasuryPartnerHandoffInput,
+): Promise<TreasuryPartnerHandoffUpsertResult> {
   const normalized = {
     ledgerEntryId: data.ledgerEntryId,
     partnerCode: data.partnerCode,
@@ -73,8 +87,10 @@ export async function upsertTreasuryPartnerHandoff(data: TreasuryPartnerHandoffI
   try {
     await client.query('BEGIN');
 
+    // The handoff is unique per ledger entry, so the entry row is the natural
+    // lock for "does this entry already have a handoff, and may I create one".
     const ledgerEntryResult = await client.query<LedgerEntry>(
-      `SELECT * FROM treasury_ledger_entries WHERE id = $1`,
+      `SELECT * FROM treasury_ledger_entries WHERE id = $1 FOR UPDATE`,
       [normalized.ledgerEntryId],
     );
     if (!ledgerEntryResult.rows[0]) {
@@ -167,14 +183,25 @@ export async function upsertTreasuryPartnerHandoff(data: TreasuryPartnerHandoffI
   }
 }
 
-export async function appendTreasuryPartnerHandoffEvidence(
-  data: TreasuryPartnerHandoffEvidenceInput,
-): Promise<{
+export interface TreasuryPartnerHandoffEvidenceResult {
   handoff: TreasuryPartnerHandoff;
   event: TreasuryPartnerHandoffEvent;
   created: boolean;
   idempotentReplay: boolean;
-}> {
+}
+
+export async function appendTreasuryPartnerHandoffEvidence(
+  data: TreasuryPartnerHandoffEvidenceInput,
+): Promise<TreasuryPartnerHandoffEvidenceResult> {
+  return retryOnceOnUniqueViolation(
+    () => appendTreasuryPartnerHandoffEvidenceOnce(data),
+    'Treasury partner evidence event was recorded concurrently',
+  );
+}
+
+async function appendTreasuryPartnerHandoffEvidenceOnce(
+  data: TreasuryPartnerHandoffEvidenceInput,
+): Promise<TreasuryPartnerHandoffEvidenceResult> {
   const normalized = {
     ledgerEntryId: data.ledgerEntryId,
     partnerCode: data.partnerCode,
@@ -229,10 +256,14 @@ export async function appendTreasuryPartnerHandoffEvidence(
       };
     }
 
+    // Provider events for one handoff arrive concurrently and each one rewrites
+    // the handoff's latest status. Locking the handoff row serialises them so
+    // the last event applied is the last event recorded.
     const handoffResult = await client.query<TreasuryPartnerHandoff>(
       `SELECT *
        FROM treasury_partner_handoffs
-       WHERE ledger_entry_id = $1`,
+       WHERE ledger_entry_id = $1
+       FOR UPDATE`,
       [normalized.ledgerEntryId],
     );
 

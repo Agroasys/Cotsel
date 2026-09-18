@@ -4,6 +4,10 @@ import { parseAllowedOrigins } from '@agroasys/shared-edge';
 import { parsePostgresSslMode, type PostgresSslMode } from '@agroasys/shared-db';
 import { resolveSettlementRuntime, type SettlementRuntimeKey } from '@agroasys/sdk';
 import { parseServiceApiKeys, ServiceApiKey } from './auth/serviceAuth';
+import {
+  parseProviderWebhookSecrets,
+  type ProviderWebhookSecret,
+} from './core/providerCallbackAuth';
 
 dotenv.config();
 
@@ -25,9 +29,13 @@ export interface TreasuryConfig {
   authEnabled: boolean;
   apiKeys: ServiceApiKey[];
   internalMutationApiKeys: string[];
+  operatorDelegationApiKeys: string[];
   hmacSecret?: string;
   authMaxSkewSeconds: number;
   authNonceTtlSeconds: number;
+  providerCallbackAuthEnabled: boolean;
+  providerWebhookSecrets: ProviderWebhookSecret[];
+  providerCallbackMaxSkewSeconds: number;
   nonceStore: NonceStoreMode;
   nonceRedisUrl?: string;
   nonceTtlSeconds: number;
@@ -175,7 +183,23 @@ export function loadConfig(): TreasuryConfig {
       : apiKeys.length === 1
         ? [apiKeys[0].id]
         : [];
+  // Operator traffic reaches treasury through the dashboard gateway, which
+  // authenticates the human and then calls under its own service key. Naming a
+  // caller here lets it assert the operator identity it authenticated, which is
+  // a separation-of-duty exception and therefore never inferred: the list is
+  // empty unless a deployment states it, so an unlisted internal caller cannot
+  // manufacture distinct maker and checker identities.
+  const operatorDelegationApiKeys = parseAllowlist(
+    process.env.TREASURY_OPERATOR_DELEGATION_API_KEYS,
+  );
   const hmacSecret = process.env.HMAC_SECRET?.trim();
+  const providerWebhookSecrets = parseProviderWebhookSecrets(
+    process.env.TREASURY_PROVIDER_WEBHOOK_SECRETS_JSON,
+  );
+  const providerCallbackAuthEnabled = envBool(
+    'TREASURY_PROVIDER_CALLBACK_AUTH_ENABLED',
+    authEnabled,
+  );
   const nonceStore = resolveNonceStoreMode(nodeEnv);
   const nonceRedisUrl = process.env.REDIS_URL?.trim() || undefined;
   const rateLimitEnabled = envBool('RATE_LIMIT_ENABLED', true);
@@ -210,12 +234,45 @@ export function loadConfig(): TreasuryConfig {
     throw new Error('AUTH_ENABLED=false is not allowed when NODE_ENV=production');
   }
 
+  // A delegating caller must be an identity treasury can actually authenticate
+  // and one already trusted to mutate treasury state. Anything else would grant
+  // the exception to a key that cannot use it, or widen mutation access.
+  for (const apiKeyId of operatorDelegationApiKeys) {
+    assert(
+      apiKeys.some((key) => key.id === apiKeyId),
+      `TREASURY_OPERATOR_DELEGATION_API_KEYS names ${apiKeyId}, which is not a configured API key`,
+    );
+    assert(
+      internalMutationApiKeys.includes(apiKeyId),
+      `TREASURY_OPERATOR_DELEGATION_API_KEYS names ${apiKeyId}, which is not an internal mutation caller`,
+    );
+  }
+
+  // External completion evidence is only worth what its provenance proves, so a
+  // production deployment may not accept provider callbacks it cannot verify.
+  if (nodeEnv === 'production' && !providerCallbackAuthEnabled) {
+    throw new Error(
+      'TREASURY_PROVIDER_CALLBACK_AUTH_ENABLED=false is not allowed when NODE_ENV=production',
+    );
+  }
+
   if (nodeEnv === 'production' && nonceStore === 'inmemory') {
     throw new Error('NONCE_STORE=inmemory is not allowed when NODE_ENV=production');
   }
 
   if (nonceStore === 'redis') {
     assert(nonceRedisUrl, 'REDIS_URL is required when NONCE_STORE=redis');
+  }
+
+  // Treasury's operator path runs through a delegating gateway. In production,
+  // an empty list is not a safe default but a silent outage: every
+  // operator-initiated transition would be refused as an actor mismatch. Fail
+  // at startup instead of at the first approval.
+  if (nodeEnv === 'production' && authEnabled) {
+    assert(
+      operatorDelegationApiKeys.length > 0,
+      'NODE_ENV=production requires TREASURY_OPERATOR_DELEGATION_API_KEYS to name the delegating gateway API key',
+    );
   }
 
   assert(
@@ -239,9 +296,16 @@ export function loadConfig(): TreasuryConfig {
     authEnabled,
     apiKeys,
     internalMutationApiKeys,
+    operatorDelegationApiKeys,
     hmacSecret,
     authMaxSkewSeconds: envNumber('AUTH_MAX_SKEW_SECONDS', 300),
     authNonceTtlSeconds,
+    providerCallbackAuthEnabled,
+    providerWebhookSecrets,
+    providerCallbackMaxSkewSeconds: envNumber(
+      'TREASURY_PROVIDER_CALLBACK_MAX_SKEW_SECONDS',
+      envNumber('AUTH_MAX_SKEW_SECONDS', 300),
+    ),
     nonceStore,
     nonceRedisUrl,
     nonceTtlSeconds,
@@ -281,6 +345,10 @@ export function loadConfig(): TreasuryConfig {
   assert(config.ingestBatchSize > 0, 'TREASURY_INGEST_BATCH_SIZE must be > 0');
   assert(config.ingestMaxEvents > 0, 'TREASURY_INGEST_MAX_EVENTS must be > 0');
   assert(config.authMaxSkewSeconds > 0, 'AUTH_MAX_SKEW_SECONDS must be > 0');
+  assert(
+    config.providerCallbackMaxSkewSeconds > 0,
+    'TREASURY_PROVIDER_CALLBACK_MAX_SKEW_SECONDS must be > 0',
+  );
   assert(config.authNonceTtlSeconds > 0, 'AUTH_NONCE_TTL_SECONDS must be > 0');
   assert(config.nonceTtlSeconds > 0, 'NONCE_TTL_SECONDS must be > 0');
   assert(config.reconciliationMaxAgeSeconds > 0, 'RECONCILIATION_MAX_AGE_SECONDS must be > 0');
