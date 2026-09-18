@@ -288,8 +288,8 @@ data "aws_iam_policy_document" "database_bootstrap_execution" {
       [for service in values(local.database_bootstrap_services) : service.migration_secret],
       [for service in values(local.database_bootstrap_services) : service.runtime_secret],
       [local.database_bootstrap_services.indexer.reader_secret],
-      aws_secretsmanager_secret.platform["database/reconciliation/migration"].arn,
-      aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn,
+      [aws_secretsmanager_secret.platform["database/reconciliation/migration"].arn],
+      [aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn],
     )
   }
 

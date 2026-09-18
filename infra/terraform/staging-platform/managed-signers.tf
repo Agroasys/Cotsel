@@ -23,7 +23,7 @@ locals {
 
 check "only_approved_automated_signers_are_kms_managed" {
   assert {
-    condition     = setequals(local.managed_signer_roles, local.approved_automated_signer_roles)
+    condition     = local.managed_signer_roles == local.approved_automated_signer_roles
     error_message = "Only the Oracle and gasless relayer have approved automated signing needs and may be provisioned as AWS KMS keys."
   }
 }
