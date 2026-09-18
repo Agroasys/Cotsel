@@ -53,6 +53,11 @@ export {
   upsertTreasuryClaimEvent,
 } from './queries/treasuryClaims';
 export {
+  listTransitionActors,
+  listTransitionActorsForSubject,
+  recordTransitionActor,
+} from './queries/transitionActors';
+export {
   appendTreasuryPartnerHandoffEvidence,
   getTreasuryPartnerHandoffByLedgerEntryId,
   listTreasuryPartnerHandoffEventsByLedgerEntryId,

@@ -101,6 +101,61 @@ export function assertBatchExecutionMatchable(params: {
   }
 }
 
+export type TransitionActorRole = 'MAKER' | 'CHECKER' | 'EXECUTOR' | 'CLOSER';
+
+export interface TransitionActorRecord {
+  actor: string;
+  actor_role: TransitionActorRole;
+}
+
+/**
+ * Only the transitions that carry a separation-of-duty role are attributed.
+ * Sending a batch back to DRAFT, voiding it, or reopening a period changes
+ * state without granting anything, and the role that matters is re-recorded on
+ * the next transition that does.
+ */
+const SWEEP_BATCH_ACTOR_ROLES: Partial<Record<SweepBatchStatus, TransitionActorRole>> = {
+  PENDING_APPROVAL: 'MAKER',
+  APPROVED: 'CHECKER',
+  EXECUTED: 'EXECUTOR',
+  HANDED_OFF: 'EXECUTOR',
+  CLOSED: 'CLOSER',
+};
+
+const ACCOUNTING_PERIOD_ACTOR_ROLES: Partial<Record<AccountingPeriodStatus, TransitionActorRole>> =
+  {
+    PENDING_CLOSE: 'MAKER',
+    CLOSED: 'CHECKER',
+  };
+
+export function sweepBatchActorRole(status: SweepBatchStatus): TransitionActorRole | null {
+  return SWEEP_BATCH_ACTOR_ROLES[status] ?? null;
+}
+
+export function accountingPeriodActorRole(
+  status: AccountingPeriodStatus,
+): TransitionActorRole | null {
+  return ACCOUNTING_PERIOD_ACTOR_ROLES[status] ?? null;
+}
+
+function heldRoles(chain: TransitionActorRecord[], actor: string): Set<TransitionActorRole> {
+  const roles = new Set<TransitionActorRole>();
+
+  for (const record of chain) {
+    if (record.actor === actor) {
+      roles.add(record.actor_role);
+    }
+  }
+
+  return roles;
+}
+
+/**
+ * Separation of duty is decided against the whole recorded chain, not the
+ * latest `*_by` column. A batch that returns to DRAFT and is re-prepared by a
+ * second maker still remembers the first, so an earlier maker cannot come back
+ * as the approver once someone else has taken their column over.
+ */
 export function assertSweepBatchRoleSeparation(params: {
   nextStatus: SweepBatchStatus;
   actor: string;
@@ -108,23 +163,55 @@ export function assertSweepBatchRoleSeparation(params: {
   approvalRequestedBy: string | null;
   approvedBy: string | null;
   executedBy: string | null;
+  transitionChain?: TransitionActorRecord[];
 }): void {
+  const held = heldRoles(params.transitionChain ?? [], params.actor);
+
   if (
     params.nextStatus === 'APPROVED' &&
-    [params.createdBy, params.approvalRequestedBy].includes(params.actor)
+    ([params.createdBy, params.approvalRequestedBy].includes(params.actor) || held.has('MAKER'))
   ) {
     throw new Error('Sweep batch approval requires a different actor than preparation');
   }
 
-  if (params.nextStatus === 'EXECUTED' && params.approvedBy === params.actor) {
+  if (
+    params.nextStatus === 'EXECUTED' &&
+    (params.approvedBy === params.actor || held.has('CHECKER'))
+  ) {
     throw new Error('Sweep batch execution requires a different actor than approval');
   }
 
   if (
     params.nextStatus === 'CLOSED' &&
-    [params.approvedBy, params.executedBy].includes(params.actor)
+    ([params.approvedBy, params.executedBy].includes(params.actor) ||
+      held.has('CHECKER') ||
+      held.has('EXECUTOR'))
   ) {
     throw new Error('Sweep batch close requires a different actor than approval or execution');
+  }
+}
+
+/**
+ * Closing an accounting period freezes a financial result, so it carries the
+ * same two-person rule the sweep batches already had: whoever asked for the
+ * close cannot also grant it.
+ */
+export function assertAccountingPeriodRoleSeparation(params: {
+  nextStatus: AccountingPeriodStatus;
+  actor: string;
+  createdBy: string;
+  transitionChain?: TransitionActorRecord[];
+}): void {
+  if (params.nextStatus !== 'CLOSED') {
+    return;
+  }
+
+  const held = heldRoles(params.transitionChain ?? [], params.actor);
+
+  if (held.has('MAKER') || params.createdBy === params.actor) {
+    throw new Error(
+      'Accounting period close requires a different actor than the close request or period creation',
+    );
   }
 }
 

@@ -175,9 +175,12 @@ describe('treasury accounting control queries', () => {
           },
         ],
       })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [{ id: 10, status: 'APPROVED', approved_by: 'approver-2' }],
+        rowCount: 1,
       })
+      .mockResolvedValueOnce({ rows: [{ id: 1 }] })
       .mockResolvedValueOnce({});
 
     const result = await updateSweepBatchStatus({
@@ -207,9 +210,12 @@ describe('treasury accounting control queries', () => {
           },
         ],
       })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [{ id: 10, status: 'HANDED_OFF', executed_by: 'executor-3' }],
+        rowCount: 1,
       })
+      .mockResolvedValueOnce({ rows: [{ id: 1 }] })
       .mockResolvedValueOnce({});
 
     const result = await updateSweepBatchStatus({
@@ -218,7 +224,7 @@ describe('treasury accounting control queries', () => {
       actor: 'handoff-operator-4',
     });
 
-    expect(mockClientQuery.mock.calls[2][1][9]).toBe('executor-3');
+    expect(mockClientQuery.mock.calls[3][1][9]).toBe('executor-3');
     expect(result.executed_by).toBe('executor-3');
   });
 

@@ -21,6 +21,7 @@ import {
   parseExportRequest,
 } from '../core/ledgerExport';
 import { loadLedgerExportPage } from '../core/ledgerExportService';
+import { actorFor, optionalActorFor } from './actorBinding';
 import { toCsv } from './ledgerCsv';
 import { TreasuryIngestionService } from '../core/ingestion';
 import { ReconciliationGateService } from '../core/reconciliationGate';
@@ -581,7 +582,7 @@ export class TreasuryController {
         periodKey: requireString(body.periodKey, 'periodKey'),
         startsAt: parseObservedAt(body.startsAt, 'startsAt'),
         endsAt: parseObservedAt(body.endsAt, 'endsAt'),
-        createdBy: requireString(body.createdBy, 'createdBy'),
+        createdBy: actorFor(req, body.createdBy, 'createdBy'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
@@ -602,7 +603,7 @@ export class TreasuryController {
       const period = await updateAccountingPeriodStatus({
         periodId,
         status: 'PENDING_CLOSE',
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         closeReason: optionalNullableString(body.closeReason, 'closeReason'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
@@ -641,7 +642,7 @@ export class TreasuryController {
       const period = await updateAccountingPeriodStatus({
         periodId,
         status: 'CLOSED',
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         closeReason: optionalNullableString(body.closeReason, 'closeReason'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
@@ -688,7 +689,7 @@ export class TreasuryController {
           body.payoutReceiverAddress,
           'payoutReceiverAddress',
         ),
-        createdBy: requireString(body.createdBy, 'createdBy'),
+        createdBy: actorFor(req, body.createdBy, 'createdBy'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
@@ -736,7 +737,7 @@ export class TreasuryController {
       const result = await addSweepBatchEntry({
         sweepBatchId: batchId,
         ledgerEntryId: requireInteger(body.ledgerEntryId, 'ledgerEntryId', { min: 1 }),
-        allocatedBy: requireString(body.allocatedBy, 'allocatedBy'),
+        allocatedBy: actorFor(req, body.allocatedBy, 'allocatedBy'),
         entryAmountRaw: optionalString(body.entryAmountRaw, 'entryAmountRaw'),
       });
 
@@ -783,7 +784,7 @@ export class TreasuryController {
       const batch = await updateSweepBatchStatus({
         batchId,
         status: 'PENDING_APPROVAL',
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
@@ -816,7 +817,7 @@ export class TreasuryController {
       const batch = await updateSweepBatchStatus({
         batchId,
         status: 'APPROVED',
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
@@ -851,7 +852,7 @@ export class TreasuryController {
         batch = await this.sweepExecutionMatcher.matchApprovedBatch({
           batchId,
           txHash: matchedSweepTxHash,
-          actor: requireString(body.actor, 'actor'),
+          actor: actorFor(req, body.actor),
           metadata: optionalRecord(body.metadata, 'metadata'),
         });
       } catch (error) {
@@ -944,7 +945,7 @@ export class TreasuryController {
       const batch = await updateSweepBatchStatus({
         batchId,
         status: 'CLOSED',
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
@@ -991,7 +992,7 @@ export class TreasuryController {
           body.partnerHandoffId === undefined || body.partnerHandoffId === null
             ? null
             : requireInteger(body.partnerHandoffId, 'partnerHandoffId', { min: 1 }),
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         note: optionalNullableString(body.note, 'note'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
@@ -1060,7 +1061,7 @@ export class TreasuryController {
           body.destinationCurrency,
           'destinationCurrency',
         ),
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         note: optionalNullableString(body.note, 'note'),
         failureCode: optionalNullableString(body.failureCode, 'failureCode'),
         initiatedAt: parseObservedAt(body.initiatedAt, 'initiatedAt'),
@@ -1168,7 +1169,7 @@ export class TreasuryController {
       const body = requireObject<AppendStateBody>(req.body, 'body');
       const requestedState = requireString(body.state, 'state');
       const note = optionalString(body.note, 'note');
-      const actor = optionalString(body.actor, 'actor');
+      const actor = optionalActorFor(req, body.actor);
       assertPayoutState(requestedState);
 
       const entry = await getLedgerEntryById(entryId);
@@ -1288,7 +1289,7 @@ export class TreasuryController {
         bankState,
         confirmedAt: parseObservedAt(body.confirmedAt, 'confirmedAt'),
         source: requireString(body.source, 'source'),
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         failureCode: optionalNullableString(body.failureCode, 'failureCode'),
         evidenceReference: optionalNullableString(body.evidenceReference, 'evidenceReference'),
         metadata: optionalRecord(body.metadata, 'metadata'),

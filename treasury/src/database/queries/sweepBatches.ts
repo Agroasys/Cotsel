@@ -5,12 +5,14 @@ import {
   assertBatchAllocationAllowed,
   assertSweepBatchRoleSeparation,
   assertSweepBatchTransition,
+  sweepBatchActorRole,
 } from '../../core/accountingPolicy';
 import {
   assertAllocationWithinLedgerAmount,
   assertCanonicalRawAmount,
 } from '../../core/canonicalAmount';
 import { sumAllocatedEntryAmountRaw } from '../../core/sweepBatchAmounts';
+import { assertTransitionApplied, rejectConcurrentWrite } from '../../core/transitionConcurrency';
 import type {
   AccountingPeriod,
   AccountingPeriodStatus,
@@ -25,6 +27,7 @@ import type {
 } from '../../types';
 import { pool } from '../connection';
 import { getLedgerEntryAccountingProjection } from './accountingProjections';
+import { listTransitionActors, recordTransitionActor } from './transitionActors';
 
 export async function createSweepBatch(data: {
   batchKey: string;
@@ -244,10 +247,14 @@ export async function updateSweepBatchStatus(data: {
   try {
     await client.query('BEGIN');
 
+    // The lock makes the checks below decide against the state this transaction
+    // will actually write over, instead of a snapshot a racing caller has
+    // already moved on from.
     const existingResult = await client.query<SweepBatch>(
       `SELECT *
        FROM sweep_batches
-       WHERE id = $1`,
+       WHERE id = $1
+       FOR UPDATE`,
       [data.batchId],
     );
     const existing = existingResult.rows[0];
@@ -255,6 +262,8 @@ export async function updateSweepBatchStatus(data: {
     if (!existing) {
       throw new Error('Sweep batch not found');
     }
+
+    const transitionChain = await listTransitionActors(client, 'SWEEP_BATCH', data.batchId);
 
     assertSweepBatchTransition(existing.status, data.status);
     assertSweepBatchRoleSeparation({
@@ -264,6 +273,7 @@ export async function updateSweepBatchStatus(data: {
       approvalRequestedBy: existing.approval_requested_by,
       approvedBy: existing.approved_by,
       executedBy: existing.executed_by,
+      transitionChain,
     });
 
     const approvalRequestedAt =
@@ -295,6 +305,7 @@ export async function updateSweepBatchStatus(data: {
            END,
            updated_at = NOW()
        WHERE id = $1
+         AND status = $14
        RETURNING *`,
       [
         data.batchId,
@@ -310,8 +321,29 @@ export async function updateSweepBatchStatus(data: {
         closedAt,
         closedBy,
         JSON.stringify(data.metadata ?? {}),
+        existing.status,
       ],
     );
+
+    // The expected-state predicate is the second half of the guarantee: even if
+    // the lock were lost, a row that no longer holds the status this decision
+    // was made against is not updated, and the loser is told so.
+    assertTransitionApplied(
+      result.rowCount,
+      `Sweep batch ${data.batchId} changed state concurrently; retry the transition against the current state`,
+    );
+
+    const actorRole = sweepBatchActorRole(data.status);
+    if (actorRole) {
+      await recordTransitionActor(client, {
+        subjectType: 'SWEEP_BATCH',
+        subjectId: data.batchId,
+        fromStatus: existing.status,
+        toStatus: data.status,
+        actor: data.actor,
+        actorRole,
+      });
+    }
 
     await client.query('COMMIT');
     return result.rows[0];
@@ -340,7 +372,8 @@ export async function addSweepBatchEntry(data: {
       `SELECT b.*, p.status AS accounting_period_status
        FROM sweep_batches b
        JOIN accounting_periods p ON p.id = b.accounting_period_id
-       WHERE b.id = $1`,
+       WHERE b.id = $1
+       FOR UPDATE OF b`,
       [data.sweepBatchId],
     );
     const batch = batchResult.rows[0];
@@ -387,8 +420,13 @@ export async function addSweepBatchEntry(data: {
       ledgerEntryId: data.ledgerEntryId,
     });
 
-    const result = await client.query<SweepBatchEntry>(
-      `INSERT INTO sweep_batch_entries (
+    // Two callers can clear the read above at the same time; the partial unique
+    // index on active allocations decides the winner, and the loser gets the
+    // same answer it would have got from the read.
+    const result = await rejectConcurrentWrite(
+      async () =>
+        client.query<SweepBatchEntry>(
+          `INSERT INTO sweep_batch_entries (
           sweep_batch_id,
           ledger_entry_id,
           allocation_status,
@@ -397,7 +435,9 @@ export async function addSweepBatchEntry(data: {
           updated_at
         ) VALUES ($1, $2, $3, $4, $5, NOW())
         RETURNING *`,
-      [data.sweepBatchId, data.ledgerEntryId, 'ALLOCATED', entryAmountRaw, data.allocatedBy],
+          [data.sweepBatchId, data.ledgerEntryId, 'ALLOCATED', entryAmountRaw, data.allocatedBy],
+        ),
+      'Ledger entry is already allocated to an active sweep batch',
     );
 
     await client.query('COMMIT');
