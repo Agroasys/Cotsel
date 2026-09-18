@@ -29,8 +29,10 @@ locals {
 }
 
 resource "aws_security_group" "gateway" {
-  name        = "${local.name_prefix}-gateway"
-  description = "Cotsel gateway task. Public API ingress is ALB-only; private services may read the indexer."
+  name = "${local.name_prefix}-gateway"
+  # AWS security-group descriptions are immutable. Keep this aligned with the
+  # deployed group so a documentation-only edit cannot replace live ingress.
+  description = "Cotsel gateway tasks. Ingress is restricted to the internal ALB."
   vpc_id      = local.vpc_id
 
   tags = { Name = "${local.name_prefix}-gateway" }
