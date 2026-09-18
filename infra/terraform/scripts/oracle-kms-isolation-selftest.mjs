@@ -54,7 +54,10 @@ assert.match(
 );
 assert.match(oracleService, /service_discovery_service\.runtime\["oracle"\]/);
 assert.match(oracleService, /enable_execute_command\s+= false/);
-assert.match(oracleService, /desired_count\s+= local\.oracle_kms_enabled && var\.gateway_desired_count > 0 \? 1 : 0/);
+assert.match(
+  oracleService,
+  /desired_count\s+= local\.oracle_kms_enabled && var\.gateway_desired_count > 0 \? 1 : 0/,
+);
 assert.doesNotMatch(oracleService, /oracle_wallet/);
 assert.match(oracleService, /deployment_maximum_percent\s+= 100/);
 assert.match(oracleService, /deployment_minimum_healthy_percent\s+= 0/);
