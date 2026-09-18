@@ -17,6 +17,7 @@ const oracleService = read('oracle-service.tf');
 const relayerService = read('relayer-service.tf');
 const network = read('network.tf');
 const runtimeImages = read('runtime-images.tf');
+const variables = read('variables.tf');
 const gatewayPackage = readFileSync(join(root, '..', '..', 'gateway', 'package.json'), 'utf8');
 const gatewayTransport = readFileSync(
   join(root, '..', '..', 'gateway', 'src', 'core', 'managedSignerTransport.ts'),
@@ -35,6 +36,10 @@ assert.doesNotMatch(gateway, /local\.oracle_container/);
 assert.match(gateway, /service_discovery_service\.runtime\["gateway"\]/);
 assert.match(gatewayAuth, /http:\/\/oracle\.cotsel-staging\.internal:3001/);
 assert.doesNotMatch(gatewayIam, /database\/oracle\/runtime|oracle_wallet/);
+assert.match(
+  variables,
+  /variable "gateway_desired_count"[\s\S]*?default\s+= 0[\s\S]*?variable "ricardian_desired_count"[\s\S]*?default\s+= 0/,
+);
 
 assert.match(oracleRuntime, /ORACLE_KMS_EXPECTED_ADDRESS/);
 assert.match(oracleRuntime, /ORACLE_SIGNER_CUSTODY_MODE", value = "kms"/);
