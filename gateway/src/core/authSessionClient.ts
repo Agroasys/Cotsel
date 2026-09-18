@@ -24,11 +24,7 @@ export type SignerActionClass =
   | 'compliance_sensitive'
   | 'emergency_admin';
 export type BreakGlassReviewStatus =
-  | 'none'
-  | 'active_unreviewed'
-  | 'revoked_unreviewed'
-  | 'expired_unreviewed'
-  | 'reviewed';
+  'none' | 'active_unreviewed' | 'revoked_unreviewed' | 'expired_unreviewed' | 'reviewed';
 
 export interface SignerAuthorization {
   bindingId: string;

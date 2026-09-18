@@ -5,7 +5,7 @@ import { Client } from '../client';
 import { ethers } from 'ethers';
 import { ContractError, AuthorizationError, getErrorMessage } from '../types/errors';
 import { OracleResult } from '../types/oracle';
-import { Trade, TradeStatus } from '../types/trade';
+import { Trade } from '../types/trade';
 
 export class OracleSDK extends Client {
   static readonly STANDARD_INSPECTION_WINDOW_SECONDS = 72 * 60 * 60;
@@ -139,7 +139,7 @@ export class OracleSDK extends Client {
         tradeId: trade.tradeId.toString(),
         buyer: trade.buyerAddress,
         supplier: trade.supplierAddress,
-        status: Number(trade.status) as TradeStatus,
+        status: Number(trade.status),
         totalAmountLocked: trade.totalAmountLocked,
         logisticsAmount: trade.logisticsAmount,
         platformFeesAmount: trade.platformFeesAmount,

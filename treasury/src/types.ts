@@ -24,35 +24,16 @@ export type BankPayoutState = 'PENDING' | 'CONFIRMED' | 'REJECTED';
 export type ReconciliationGateStatus = 'CLEAR' | 'BLOCKED' | 'UNKNOWN';
 export type TreasuryPartnerCode = 'bridge';
 export type TreasuryPartnerHandoffStatus =
-  | 'SUBMITTED'
-  | 'PROCESSING'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'RETURNED';
+  'SUBMITTED' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'RETURNED';
 export type AccountingPeriodStatus = 'OPEN' | 'PENDING_CLOSE' | 'CLOSED';
 export type SweepBatchStatus =
-  | 'DRAFT'
-  | 'PENDING_APPROVAL'
-  | 'APPROVED'
-  | 'EXECUTED'
-  | 'HANDED_OFF'
-  | 'CLOSED'
-  | 'VOID';
+  'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'EXECUTED' | 'HANDED_OFF' | 'CLOSED' | 'VOID';
 export type SweepBatchAllocationStatus = 'ALLOCATED' | 'RELEASED';
 export type PartnerHandoffStatus =
-  | 'CREATED'
-  | 'SUBMITTED'
-  | 'ACKNOWLEDGED'
-  | 'COMPLETED'
-  | 'FAILED';
+  'CREATED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'COMPLETED' | 'FAILED';
 export type RevenueRealizationStatus = 'REALIZED' | 'REVERSED';
 export type TreasuryAccountingState =
-  | 'HELD'
-  | 'ALLOCATED_TO_SWEEP'
-  | 'SWEPT'
-  | 'HANDED_OFF'
-  | 'REALIZED'
-  | 'EXCEPTION';
+  'HELD' | 'ALLOCATED_TO_SWEEP' | 'SWEPT' | 'HANDED_OFF' | 'REALIZED' | 'EXCEPTION';
 
 export interface LedgerEntry {
   id: number;

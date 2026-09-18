@@ -363,21 +363,11 @@ async function main(): Promise<void> {
         allocatedAmountRaw: row.allocated_amount_raw,
         partnerReference: row.partner_reference,
         partnerHandoffStatus: row.partner_handoff_status as
-          | 'CREATED'
-          | 'SUBMITTED'
-          | 'ACKNOWLEDGED'
-          | 'COMPLETED'
-          | 'FAILED'
-          | null,
+          'CREATED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'COMPLETED' | 'FAILED' | null,
         matchedSweepTxHash: row.matched_sweep_tx_hash,
         matchedSweptAt: row.matched_swept_at ? new Date(row.matched_swept_at) : null,
         latestFiatDepositState: row.fiat_deposit_state as
-          | 'PENDING'
-          | 'FUNDED'
-          | 'PARTIAL'
-          | 'REVERSED'
-          | 'FAILED'
-          | null,
+          'PENDING' | 'FUNDED' | 'PARTIAL' | 'REVERSED' | 'FAILED' | null,
         latestBankPayoutState: row.bank_payout_state as 'PENDING' | 'CONFIRMED' | 'REJECTED' | null,
         revenueRealizationStatus: row.revenue_realization_status as 'REALIZED' | 'REVERSED' | null,
         realizedAt: row.realized_at ? new Date(row.realized_at) : null,

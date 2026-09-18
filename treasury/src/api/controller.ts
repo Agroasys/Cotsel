@@ -1222,7 +1222,7 @@ export class TreasuryController {
   async exportEntries(req: Request, res: Response): Promise<void> {
     try {
       const format = optionalEnum(req.query.format, EXPORT_FORMATS, 'format') ?? 'json';
-      const request = parseExportRequest(req.query as Record<string, unknown>);
+      const request = parseExportRequest(req.query);
       const page = await loadLedgerExportPage(request, async (entries) => {
         const eligibility = await this.eligibility.assessEntries(entries);
         return entries.map((entry) => ({

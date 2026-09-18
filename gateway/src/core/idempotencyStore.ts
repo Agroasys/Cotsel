@@ -31,11 +31,7 @@ export interface IdempotencyFinancialOutcome {
   operation: string;
   chainId: number;
   outcomeStatus:
-    | 'broadcast_pending'
-    | 'broadcast_unknown'
-    | 'confirmation_pending'
-    | 'confirmed'
-    | 'reverted';
+    'broadcast_pending' | 'broadcast_unknown' | 'confirmation_pending' | 'confirmed' | 'reverted';
 }
 
 export interface IdempotencyStore {
