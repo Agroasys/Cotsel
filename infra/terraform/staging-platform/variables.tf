@@ -206,20 +206,20 @@ variable "backend_settlement_callback_url" {
 }
 
 variable "gateway_desired_count" {
-  description = "Number of Cotsel gateway tasks to run in staging."
+  description = "Number of Cotsel gateway tasks to run in staging. Keep zero until the runtime-convergence plan is accepted."
   type        = number
-  default     = 1
+  default     = 0
 
   validation {
-    condition     = var.gateway_desired_count >= 1 && var.gateway_desired_count <= 2
-    error_message = "gateway_desired_count must be 1 or 2 for the current staging runtime."
+    condition     = var.gateway_desired_count >= 0 && var.gateway_desired_count <= 2
+    error_message = "gateway_desired_count must be 0, 1, or 2 for the staged convergence sequence."
   }
 }
 
 variable "ricardian_desired_count" {
-  description = "Number of Cotsel Ricardian tasks to run in staging after database bootstrap and entitlement verification."
+  description = "Number of Cotsel Ricardian tasks to run in staging. Keep zero until its runtime preflight is accepted."
   type        = number
-  default     = 1
+  default     = 0
 
   validation {
     condition     = var.ricardian_desired_count >= 0 && var.ricardian_desired_count <= 1
