@@ -187,38 +187,14 @@ jobs:
           if [ "$ROOT" = "staging-foundation" ]; then
             exit 0
           fi
-          test -n "$ORIGIN_CERTIFICATE_ARN" || {
-            echo "origin_certificate_arn is required for plan." >&2
-            exit 1
-          }
-          test -n "$EDGE_CERTIFICATE_ARN" || {
-            echo "edge_certificate_arn is required for plan." >&2
-            exit 1
-          }
-          test -n "$GATEWAY_IMAGE_TAG" || {
-            echo "gateway_image_tag is required for plan." >&2
-            exit 1
-          }
-          test -n "$BASE_SEPOLIA_ESCROW_ADDRESS" || {
-            echo "base_sepolia_escrow_address is required for plan." >&2
-            exit 1
-          }
-          test -n "$BASE_SEPOLIA_CONTRACT_START_BLOCK" || {
-            echo "base_sepolia_contract_start_block is required for plan." >&2
-            exit 1
-          }
-          test -n "$BASE_SEPOLIA_USDC_ADDRESS" || {
-            echo "base_sepolia_usdc_address is required for plan." >&2
-            exit 1
-          }
-          test -n "$BASE_SEPOLIA_ESCROW_CODEHASH" || {
-            echo "base_sepolia_escrow_codehash is required for plan." >&2
-            exit 1
-          }
-          test -n "$ESCROW_ABI_FINGERPRINT" || {
-            echo "escrow_abi_fingerprint is required for plan." >&2
-            exit 1
-          }
+          for name in ORIGIN_CERTIFICATE_ARN EDGE_CERTIFICATE_ARN GATEWAY_IMAGE_TAG \
+            BASE_SEPOLIA_ESCROW_ADDRESS BASE_SEPOLIA_CONTRACT_START_BLOCK \
+            BASE_SEPOLIA_USDC_ADDRESS BASE_SEPOLIA_ESCROW_CODEHASH ESCROW_ABI_FINGERPRINT; do
+            test -n "${!name}" || {
+              echo "${name,,} is required for a runtime plan." >&2
+              exit 1
+            }
+          done
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
