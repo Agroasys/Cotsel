@@ -29,3 +29,17 @@ variable "environment" {
     error_message = "The staging foundation may operate only in staging."
   }
 }
+
+variable "service_role_permissions_boundary_arn" {
+  description = "Permissions boundary required for isolated Cotsel signer task roles."
+  type        = string
+  default     = "arn:aws:iam::655177116834:policy/agroasys-cotsel-staging-service-role-boundary"
+
+  validation {
+    condition = can(regex(
+      "^arn:(aws|aws-us-gov|aws-cn):iam::655177116834:policy/agroasys-cotsel-staging-service-role-boundary$",
+      var.service_role_permissions_boundary_arn,
+    ))
+    error_message = "service_role_permissions_boundary_arn must be the Cotsel staging service role boundary policy ARN."
+  }
+}

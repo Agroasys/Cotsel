@@ -9,7 +9,7 @@ locals {
     { name = "RELAYER_CHAIN_ID", value = tostring(local.base_sepolia_chain_id) },
     { name = "RELAYER_ESCROW_ADDRESS", value = var.base_sepolia_escrow_address },
     { name = "RELAYER_KMS_EXPECTED_ADDRESS", value = var.relayer_kms_expected_address },
-    { name = "RELAYER_KMS_KEY_ID", value = aws_kms_alias.managed_signer["relayer"].name },
+    { name = "RELAYER_KMS_KEY_ID", value = local.managed_signer_aliases["relayer"] },
     { name = "RELAYER_MAX_FEE_PER_GAS_WEI", value = "50000000000" },
     { name = "RELAYER_MAX_GAS_LIMIT", value = "1500000" },
     { name = "RELAYER_MAX_NATIVE_COST_WEI", value = "100000000000000000" },
@@ -49,7 +49,7 @@ locals {
   relayer_reviewed_config_sha256 = sha256(jsonencode({
     environment       = local.relayer_environment
     secret_references = local.relayer_secrets
-    task_role_arn     = aws_iam_role.relayer_task.arn
+    task_role_arn     = local.managed_signer_task_role_arns["relayer"]
   }))
 }
 
@@ -110,13 +110,6 @@ resource "aws_iam_role_policy" "relayer_execution" {
   policy = data.aws_iam_policy_document.relayer_execution.json
 }
 
-resource "aws_iam_role" "relayer_task" {
-  name                 = "${local.name_prefix}-relayer-task"
-  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-  permissions_boundary = var.service_role_permissions_boundary_arn
-  tags                 = { Environment = var.environment, Service = "relayer" }
-}
-
 data "aws_iam_policy_document" "relayer_kms_signing" {
   count = local.relayer_kms_enabled ? 1 : 0
 
@@ -124,14 +117,14 @@ data "aws_iam_policy_document" "relayer_kms_signing" {
     sid       = "ReadRelayerSignerPublicKey"
     effect    = "Allow"
     actions   = ["kms:GetPublicKey"]
-    resources = [aws_kms_key.managed_signer["relayer"].arn]
+    resources = [local.managed_signer_key_arns["relayer"]]
   }
 
   statement {
     sid       = "SignGaslessTransactionDigests"
     effect    = "Allow"
     actions   = ["kms:Sign"]
-    resources = [aws_kms_key.managed_signer["relayer"].arn]
+    resources = [local.managed_signer_key_arns["relayer"]]
 
     condition {
       test     = "StringEquals"
@@ -150,7 +143,7 @@ data "aws_iam_policy_document" "relayer_kms_signing" {
 resource "aws_iam_role_policy" "relayer_kms_signing" {
   count  = local.relayer_kms_enabled ? 1 : 0
   name   = "${local.name_prefix}-relayer-kms-signing"
-  role   = aws_iam_role.relayer_task.id
+  role   = local.managed_signer_task_role_names["relayer"]
   policy = data.aws_iam_policy_document.relayer_kms_signing[0].json
 }
 
@@ -161,7 +154,7 @@ resource "aws_ecs_task_definition" "relayer" {
   cpu                      = 256
   memory                   = 512
   execution_role_arn       = aws_iam_role.relayer_execution.arn
-  task_role_arn            = aws_iam_role.relayer_task.arn
+  task_role_arn            = local.managed_signer_task_role_arns["relayer"]
 
   runtime_platform {
     cpu_architecture        = "X86_64"

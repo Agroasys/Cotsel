@@ -2,7 +2,7 @@ locals {
   oracle_reviewed_config_sha256 = sha256(jsonencode({
     environment       = local.oracle_environment
     secret_references = local.oracle_secrets
-    task_role_arn     = aws_iam_role.oracle_task.arn
+    task_role_arn     = local.managed_signer_task_role_arns["oracle"]
   }))
 }
 
@@ -72,17 +72,6 @@ resource "aws_iam_role_policy" "oracle_execution" {
   policy = data.aws_iam_policy_document.oracle_execution.json
 }
 
-resource "aws_iam_role" "oracle_task" {
-  name                 = "${local.name_prefix}-oracle-task"
-  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-  permissions_boundary = var.service_role_permissions_boundary_arn
-
-  tags = {
-    Environment = var.environment
-    Service     = "oracle"
-  }
-}
-
 data "aws_iam_policy_document" "oracle_kms_signing" {
   count = local.oracle_kms_enabled ? 1 : 0
 
@@ -90,14 +79,14 @@ data "aws_iam_policy_document" "oracle_kms_signing" {
     sid       = "ReadOracleSignerPublicKey"
     effect    = "Allow"
     actions   = ["kms:GetPublicKey"]
-    resources = [aws_kms_key.managed_signer["oracle"].arn]
+    resources = [local.managed_signer_key_arns["oracle"]]
   }
 
   statement {
     sid       = "SignOracleTransactionDigests"
     effect    = "Allow"
     actions   = ["kms:Sign"]
-    resources = [aws_kms_key.managed_signer["oracle"].arn]
+    resources = [local.managed_signer_key_arns["oracle"]]
 
     condition {
       test     = "StringEquals"
@@ -117,7 +106,7 @@ resource "aws_iam_role_policy" "oracle_kms_signing" {
   count = local.oracle_kms_enabled ? 1 : 0
 
   name   = "${local.name_prefix}-oracle-kms-signing"
-  role   = aws_iam_role.oracle_task.id
+  role   = local.managed_signer_task_role_names["oracle"]
   policy = data.aws_iam_policy_document.oracle_kms_signing[0].json
 }
 
@@ -128,7 +117,7 @@ resource "aws_ecs_task_definition" "oracle" {
   cpu                      = 512
   memory                   = 1024
   execution_role_arn       = aws_iam_role.oracle_execution.arn
-  task_role_arn            = aws_iam_role.oracle_task.arn
+  task_role_arn            = local.managed_signer_task_role_arns["oracle"]
 
   runtime_platform {
     cpu_architecture        = "X86_64"
