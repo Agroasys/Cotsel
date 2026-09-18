@@ -1,5 +1,12 @@
+locals {
+  # The relayer repository is a foundation prerequisite. Keeping it out of the
+  # runtime state prevents a full-platform plan from being required merely to
+  # restore the release-image publication path.
+  platform_registry_services = setsubtract(local.services, toset(["relayer"]))
+}
+
 resource "aws_ecr_repository" "service" {
-  for_each = local.services
+  for_each = local.platform_registry_services
 
   name                 = "cotsel/${each.key}"
   image_tag_mutability = "IMMUTABLE"

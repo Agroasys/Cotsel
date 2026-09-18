@@ -26,8 +26,47 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  registry-ready:
+    name: release/registry-ready
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Validate the authoritative release inventory
+        run: node --test scripts/tests/release-candidate-inventory.test.mjs
+
+      - name: Assume the Cotsel image-publish role
+        if: github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ env.PUSH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify the complete ECR repository cohort
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          mapfile -t repositories < <(node -e '
+            const inventory = require("./integration/release-candidate-inventory.json");
+            for (const artifact of inventory.artifacts) {
+              if (artifact.kind === "container-image" && artifact.sourceRepository === "Agroasys/Cotsel") {
+                console.log(artifact.repository);
+              }
+            }
+          ')
+          test "${#repositories[@]}" -eq 9 || {
+            echo "Expected nine Cotsel release repositories, found ${#repositories[@]}." >&2
+            exit 1
+          }
+          aws ecr describe-repositories \
+            --repository-names "${repositories[@]}" \
+            --query 'sort_by(repositories,&repositoryName)[].{name:repositoryName,mutability:imageTagMutability,encryption:encryptionConfiguration.encryptionType,scanOnPush:imageScanningConfiguration.scanOnPush}' \
+            --output table
+
   build:
     name: build/${{ matrix.service }}
+    needs: registry-ready
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

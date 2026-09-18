@@ -82,7 +82,7 @@ data "aws_iam_policy_document" "relayer_execution" {
       "ecr:BatchGetImage",
       "ecr:GetDownloadUrlForLayer",
     ]
-    resources = [aws_ecr_repository.service["relayer"].arn]
+    resources = [data.terraform_remote_state.foundation.outputs.ecr_repository_arns["relayer"]]
   }
   statement {
     sid       = "WriteRelayerLogs"
