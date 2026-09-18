@@ -15,6 +15,7 @@ const BASE_ENV: Record<string, string> = {
   HMAC_SECRET: 'test-shared-secret',
   AUTH_MAX_SKEW_SECONDS: '300',
   AUTH_NONCE_TTL_SECONDS: '600',
+  TREASURY_OPERATOR_DELEGATION_API_KEYS: 'gateway-internal',
 };
 
 function withEnv(overrides: Record<string, string | undefined>, run: () => void): void {
@@ -47,6 +48,31 @@ function loadConfigModule(): typeof import('../src/config') {
 }
 
 describe('treasury nonce store config', () => {
+  test('production refuses to start without a named delegating caller', () => {
+    withEnv({ NODE_ENV: 'production', TREASURY_OPERATOR_DELEGATION_API_KEYS: undefined }, () => {
+      expect(() => loadConfigModule()).toThrow(
+        'NODE_ENV=production requires TREASURY_OPERATOR_DELEGATION_API_KEYS',
+      );
+    });
+  });
+
+  test('a delegating caller must be a configured internal mutation key', () => {
+    withEnv({ TREASURY_OPERATOR_DELEGATION_API_KEYS: 'not-a-configured-key' }, () => {
+      expect(() => loadConfigModule()).toThrow(
+        'TREASURY_OPERATOR_DELEGATION_API_KEYS names not-a-configured-key, which is not a configured API key',
+      );
+    });
+  });
+
+  test('delegation is empty unless a deployment names a caller', () => {
+    withEnv({ TREASURY_OPERATOR_DELEGATION_API_KEYS: undefined }, () => {
+      const { loadConfig } = loadConfigModule();
+      const config = loadConfig();
+      expect(config.internalMutationApiKeys).toContain('gateway-internal');
+      expect(config.operatorDelegationApiKeys).toEqual([]);
+    });
+  });
+
   test('production rejects in-memory nonce store', () => {
     withEnv({ NODE_ENV: 'production', NONCE_STORE: 'inmemory' }, () => {
       expect(() => loadConfigModule()).toThrow(

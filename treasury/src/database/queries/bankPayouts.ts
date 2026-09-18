@@ -7,6 +7,7 @@ import {
   createBankPayoutPayloadHash,
   normalizeBankPayoutConfirmationInput,
 } from '../../core/bankPayout';
+import { retryOnceOnUniqueViolation } from '../../core/transitionConcurrency';
 import type {
   BankPayoutConfirmation,
   BankPayoutConfirmationUpsertInput,
@@ -15,13 +16,24 @@ import type {
 } from '../../types';
 import { pool } from '../connection';
 
-export async function upsertBankPayoutConfirmation(
-  data: BankPayoutConfirmationUpsertInput,
-): Promise<{
+export interface BankPayoutConfirmationUpsertResult {
   confirmation: BankPayoutConfirmation;
   created: boolean;
   idempotentReplay: boolean;
-}> {
+}
+
+export async function upsertBankPayoutConfirmation(
+  data: BankPayoutConfirmationUpsertInput,
+): Promise<BankPayoutConfirmationUpsertResult> {
+  return retryOnceOnUniqueViolation(
+    () => upsertBankPayoutConfirmationOnce(data),
+    'Duplicate bank reference was recorded concurrently',
+  );
+}
+
+async function upsertBankPayoutConfirmationOnce(
+  data: BankPayoutConfirmationUpsertInput,
+): Promise<BankPayoutConfirmationUpsertResult> {
   const normalized = normalizeBankPayoutConfirmationInput(data);
   const payloadHash = createBankPayoutPayloadHash(normalized);
   const client = await pool.connect();
@@ -49,10 +61,14 @@ export async function upsertBankPayoutConfirmation(
       };
     }
 
+    // Locking the ledger entry serialises every bank confirmation for it, so the
+    // payout-state check below cannot be made against a state another
+    // confirmation is in the middle of replacing.
     const ledgerEntryResult = await client.query<LedgerEntry>(
       `SELECT *
        FROM treasury_ledger_entries
-       WHERE id = $1`,
+       WHERE id = $1
+       FOR UPDATE`,
       [normalized.ledgerEntryId],
     );
 
@@ -73,6 +89,8 @@ export async function upsertBankPayoutConfirmation(
     const latestPayoutState = payoutStateResult.rows[0];
     assertBankPayoutTransition(latestPayoutState?.state ?? 'PENDING_REVIEW', normalized.bankState);
 
+    // Two callers can both miss the bank reference above; the unique constraint
+    // settles it and the caller retries into the replay path.
     const result = await client.query<BankPayoutConfirmation>(
       `INSERT INTO bank_payout_confirmations (
           ledger_entry_id,

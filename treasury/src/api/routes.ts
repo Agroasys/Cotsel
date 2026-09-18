@@ -4,6 +4,12 @@ import { TreasuryController } from './controller';
 export interface TreasuryRouterOptions {
   authMiddleware?: RequestHandler;
   mutationAuthMiddleware?: RequestHandler;
+  /**
+   * Applied only to the routes that carry external provider evidence. Cotsel's
+   * own service key proves an internal caller relayed the payload; this proves
+   * the provider produced it.
+   */
+  providerCallbackMiddleware?: RequestHandler;
   readinessCheck?: () => Promise<void>;
 }
 
@@ -50,6 +56,10 @@ export function createRouter(
   const internalMutationMiddlewares: RequestHandler[] = [
     options.authMiddleware,
     options.mutationAuthMiddleware,
+  ].filter(Boolean) as RequestHandler[];
+  const providerCallbackMiddlewares: RequestHandler[] = [
+    ...internalMutationMiddlewares,
+    options.providerCallbackMiddleware,
   ].filter(Boolean) as RequestHandler[];
 
   router.get('/auth-check', ...protectedMiddlewares, (_req, res) => {
@@ -134,7 +144,7 @@ export function createRouter(
   );
   router.post(
     '/internal/entries/:entryId/partner-handoff/evidence',
-    ...internalMutationMiddlewares,
+    ...providerCallbackMiddlewares,
     controller.appendTreasuryPartnerHandoffEvidence.bind(controller),
   );
   router.post(
@@ -194,7 +204,7 @@ export function createRouter(
   );
   router.post(
     '/internal/deposits',
-    ...internalMutationMiddlewares,
+    ...providerCallbackMiddlewares,
     controller.upsertDeposit.bind(controller),
   );
 

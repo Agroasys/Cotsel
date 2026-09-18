@@ -11,7 +11,9 @@ import { closeConnection, testConnection } from './database/connection';
 import { Logger } from './utils/logger';
 import { TreasuryIngestionService } from './core/ingestion';
 import { createServiceAuthMiddleware } from './auth/serviceAuth';
+import { createProviderCallbackMiddleware } from './auth/providerCallback';
 import { createTreasuryNonceStore } from './auth/nonceStore';
+import { incrementAuthFailure } from './metrics/counters';
 import { treasuryRateLimitPolicy } from './httpSecurity';
 
 type ServiceAuthRequest = Request & {
@@ -73,6 +75,28 @@ async function bootstrap(): Promise<void> {
 
     next();
   };
+  // A provider names itself either in the payload it signed (`partnerCode`) or
+  // in the delivery header. Neither present means no configured secret can
+  // apply, and the callback is refused rather than guessed at.
+  const providerCallbackMiddleware = createProviderCallbackMiddleware({
+    enabled: config.providerCallbackAuthEnabled,
+    secrets: config.providerWebhookSecrets,
+    maxSkewSeconds: config.providerCallbackMaxSkewSeconds,
+    resolvePartnerCode: (req) =>
+      (req.body as { partnerCode?: string } | undefined)?.partnerCode ??
+      req.header('x-webhook-partner') ??
+      undefined,
+    resolveBodyEventId: (req) =>
+      (req.body as { providerEventId?: string } | undefined)?.providerEventId,
+    onReject: incrementAuthFailure,
+  });
+
+  if (config.providerCallbackAuthEnabled && config.providerWebhookSecrets.length === 0) {
+    Logger.warn('Provider callback verification is enabled with no configured webhook secrets', {
+      effect: 'every provider callback will be rejected until a secret is configured',
+    });
+  }
+
   const requestRateLimiter = await createHttpRateLimiter({
     enabled: config.rateLimitEnabled,
     redisUrl: config.rateLimitRedisUrl,
@@ -106,6 +130,7 @@ async function bootstrap(): Promise<void> {
     createRouter(controller, {
       authMiddleware,
       mutationAuthMiddleware,
+      providerCallbackMiddleware,
       readinessCheck: testConnection,
     }),
   );
@@ -115,6 +140,7 @@ async function bootstrap(): Promise<void> {
       port: config.port,
       indexerGraphqlUrl: config.indexerGraphqlUrl,
       authEnabled: config.authEnabled,
+      providerCallbackAuthEnabled: config.providerCallbackAuthEnabled,
       nonceStore: config.nonceStore,
     });
   });

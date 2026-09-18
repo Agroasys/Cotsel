@@ -21,6 +21,21 @@ import {
   parseExportRequest,
 } from '../core/ledgerExport';
 import { loadLedgerExportPage } from '../core/ledgerExportService';
+import { actorFor, optionalActorFor } from './actorBinding';
+import type {
+  AddSweepBatchEntryBody,
+  AppendStateBody,
+  AppendTreasuryPartnerHandoffEvidenceBody,
+  CreateAccountingPeriodBody,
+  CreateRevenueRealizationBody,
+  CreateSweepBatchBody,
+  UpdateAccountingPeriodStatusBody,
+  UpdateSweepBatchStatusBody,
+  UpsertBankConfirmationBody,
+  UpsertDepositBody,
+  UpsertPartnerHandoffBody,
+  UpsertTreasuryPartnerHandoffBody,
+} from './requestBodies';
 import { toCsv } from './ledgerCsv';
 import { TreasuryIngestionService } from '../core/ingestion';
 import { ReconciliationGateService } from '../core/reconciliationGate';
@@ -60,8 +75,6 @@ import {
 import { TreasuryPartnerHandoffConflictError } from '../core/treasuryPartnerHandoff';
 import {
   AccountingPeriodStatus,
-  BankPayoutState,
-  FiatDepositState,
   PartnerHandoffStatus,
   PayoutState,
   SweepBatchStatus,
@@ -113,132 +126,6 @@ const ACCOUNTING_STATES: TreasuryAccountingState[] = [
   'REALIZED',
   'EXCEPTION',
 ];
-
-type AppendStateBody = {
-  state?: string;
-  note?: string;
-  actor?: string;
-};
-
-type UpsertDepositBody = {
-  rampReference?: string;
-  tradeId?: string;
-  ledgerEntryId?: number | null;
-  depositState?: FiatDepositState;
-  sourceAmount?: string;
-  currency?: string;
-  expectedAmount?: string;
-  expectedCurrency?: string;
-  observedAt?: string;
-  providerEventId?: string;
-  providerAccountRef?: string;
-  failureCode?: string | null;
-  reversalReference?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type UpsertBankConfirmationBody = {
-  payoutReference?: string | null;
-  bankReference?: string;
-  bankState?: BankPayoutState;
-  confirmedAt?: string;
-  source?: string;
-  actor?: string;
-  failureCode?: string | null;
-  evidenceReference?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type CreateAccountingPeriodBody = {
-  periodKey?: string;
-  startsAt?: string;
-  endsAt?: string;
-  createdBy?: string;
-  metadata?: Record<string, unknown>;
-};
-
-type UpdateAccountingPeriodStatusBody = {
-  actor?: string;
-  closeReason?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type CreateSweepBatchBody = {
-  batchKey?: string;
-  accountingPeriodId?: number;
-  assetSymbol?: string;
-  expectedTotalRaw?: string;
-  payoutReceiverAddress?: string | null;
-  createdBy?: string;
-  metadata?: Record<string, unknown>;
-};
-
-type AddSweepBatchEntryBody = {
-  ledgerEntryId?: number;
-  allocatedBy?: string;
-  entryAmountRaw?: string;
-};
-
-type UpdateSweepBatchStatusBody = {
-  actor?: string;
-  matchedSweepTxHash?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type UpsertPartnerHandoffBody = {
-  partnerName?: string;
-  partnerReference?: string;
-  handoffStatus?: PartnerHandoffStatus;
-  evidenceReference?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type CreateRevenueRealizationBody = {
-  accountingPeriodId?: number;
-  sweepBatchId?: number | null;
-  partnerHandoffId?: number | null;
-  actor?: string;
-  note?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type UpsertTreasuryPartnerHandoffBody = {
-  partnerCode?: TreasuryPartnerCode;
-  handoffReference?: string;
-  partnerStatus?: TreasuryPartnerHandoffStatus;
-  payoutReference?: string | null;
-  transferReference?: string | null;
-  drainReference?: string | null;
-  destinationExternalAccountId?: string | null;
-  liquidationAddressId?: string | null;
-  sourceAmount?: string | null;
-  sourceCurrency?: string | null;
-  destinationAmount?: string | null;
-  destinationCurrency?: string | null;
-  actor?: string;
-  note?: string | null;
-  failureCode?: string | null;
-  initiatedAt?: string;
-  metadata?: Record<string, unknown>;
-};
-
-type AppendTreasuryPartnerHandoffEvidenceBody = {
-  partnerCode?: TreasuryPartnerCode;
-  providerEventId?: string;
-  eventType?: string;
-  partnerStatus?: TreasuryPartnerHandoffStatus;
-  payoutReference?: string | null;
-  transferReference?: string | null;
-  drainReference?: string | null;
-  destinationExternalAccountId?: string | null;
-  liquidationAddressId?: string | null;
-  bankReference?: string | null;
-  bankState?: BankPayoutState | null;
-  evidenceReference?: string | null;
-  failureCode?: string | null;
-  observedAt?: string;
-  metadata?: Record<string, unknown>;
-};
 
 export type EligibilitySummary = {
   confirmationStage: string | null;
@@ -581,7 +468,7 @@ export class TreasuryController {
         periodKey: requireString(body.periodKey, 'periodKey'),
         startsAt: parseObservedAt(body.startsAt, 'startsAt'),
         endsAt: parseObservedAt(body.endsAt, 'endsAt'),
-        createdBy: requireString(body.createdBy, 'createdBy'),
+        createdBy: actorFor(req, body.createdBy, 'createdBy'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
@@ -602,7 +489,7 @@ export class TreasuryController {
       const period = await updateAccountingPeriodStatus({
         periodId,
         status: 'PENDING_CLOSE',
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         closeReason: optionalNullableString(body.closeReason, 'closeReason'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
@@ -641,7 +528,7 @@ export class TreasuryController {
       const period = await updateAccountingPeriodStatus({
         periodId,
         status: 'CLOSED',
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         closeReason: optionalNullableString(body.closeReason, 'closeReason'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
@@ -688,7 +575,7 @@ export class TreasuryController {
           body.payoutReceiverAddress,
           'payoutReceiverAddress',
         ),
-        createdBy: requireString(body.createdBy, 'createdBy'),
+        createdBy: actorFor(req, body.createdBy, 'createdBy'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
@@ -736,7 +623,7 @@ export class TreasuryController {
       const result = await addSweepBatchEntry({
         sweepBatchId: batchId,
         ledgerEntryId: requireInteger(body.ledgerEntryId, 'ledgerEntryId', { min: 1 }),
-        allocatedBy: requireString(body.allocatedBy, 'allocatedBy'),
+        allocatedBy: actorFor(req, body.allocatedBy, 'allocatedBy'),
         entryAmountRaw: optionalString(body.entryAmountRaw, 'entryAmountRaw'),
       });
 
@@ -783,7 +670,7 @@ export class TreasuryController {
       const batch = await updateSweepBatchStatus({
         batchId,
         status: 'PENDING_APPROVAL',
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
@@ -816,7 +703,7 @@ export class TreasuryController {
       const batch = await updateSweepBatchStatus({
         batchId,
         status: 'APPROVED',
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
@@ -851,7 +738,7 @@ export class TreasuryController {
         batch = await this.sweepExecutionMatcher.matchApprovedBatch({
           batchId,
           txHash: matchedSweepTxHash,
-          actor: requireString(body.actor, 'actor'),
+          actor: actorFor(req, body.actor),
           metadata: optionalRecord(body.metadata, 'metadata'),
         });
       } catch (error) {
@@ -889,13 +776,19 @@ export class TreasuryController {
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
+      // The partner is what the handoff asserts, not who performed it. The
+      // chain records the authenticated principal that recorded the handoff and
+      // keeps the partner assertion beside it as evidence.
       const detail = await getSweepBatchDetail(batchId);
       if (detail?.batch.status === 'EXECUTED') {
         await updateSweepBatchStatus({
           batchId,
           status: 'HANDED_OFF',
-          actor: `system:external-handoff:${handoff.partner_name}`,
-          metadata: { partnerReference: handoff.partner_reference },
+          actor: actorFor(req, body.actor),
+          metadata: {
+            partnerName: handoff.partner_name,
+            partnerReference: handoff.partner_reference,
+          },
         });
       }
 
@@ -944,7 +837,7 @@ export class TreasuryController {
       const batch = await updateSweepBatchStatus({
         batchId,
         status: 'CLOSED',
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
@@ -991,7 +884,7 @@ export class TreasuryController {
           body.partnerHandoffId === undefined || body.partnerHandoffId === null
             ? null
             : requireInteger(body.partnerHandoffId, 'partnerHandoffId', { min: 1 }),
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         note: optionalNullableString(body.note, 'note'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
@@ -1060,7 +953,7 @@ export class TreasuryController {
           body.destinationCurrency,
           'destinationCurrency',
         ),
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         note: optionalNullableString(body.note, 'note'),
         failureCode: optionalNullableString(body.failureCode, 'failureCode'),
         initiatedAt: parseObservedAt(body.initiatedAt, 'initiatedAt'),
@@ -1168,7 +1061,7 @@ export class TreasuryController {
       const body = requireObject<AppendStateBody>(req.body, 'body');
       const requestedState = requireString(body.state, 'state');
       const note = optionalString(body.note, 'note');
-      const actor = optionalString(body.actor, 'actor');
+      const actor = optionalActorFor(req, body.actor);
       assertPayoutState(requestedState);
 
       const entry = await getLedgerEntryById(entryId);
@@ -1288,7 +1181,7 @@ export class TreasuryController {
         bankState,
         confirmedAt: parseObservedAt(body.confirmedAt, 'confirmedAt'),
         source: requireString(body.source, 'source'),
-        actor: requireString(body.actor, 'actor'),
+        actor: actorFor(req, body.actor),
         failureCode: optionalNullableString(body.failureCode, 'failureCode'),
         evidenceReference: optionalNullableString(body.evidenceReference, 'evidenceReference'),
         metadata: optionalRecord(body.metadata, 'metadata'),
