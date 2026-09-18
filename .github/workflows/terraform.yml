@@ -20,6 +20,14 @@ on:
         options:
           - plan
           - apply
+      root:
+        description: Terraform root. Foundation must be applied before the runtime platform is planned.
+        required: true
+        default: staging-foundation
+        type: choice
+        options:
+          - staging-foundation
+          - staging-platform
       origin_certificate_arn:
         description: Required for plan. ACM certificate ARN for the private origin.
         required: false
@@ -78,14 +86,14 @@ env:
   AWS_REGION: eu-north-1
   APPLY_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-terraform-apply
   PLAN_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-terraform-plan-dispatch
-  ROOT: staging-platform
+  ROOT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root || 'staging-platform' }}
   STATE_BUCKET: agroasys-tfstate-655177116834
   TF_VAR_oracle_kms_expected_address: ${{ vars.COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS }}
   TF_VERSION: 1.15.8
   OWNER_BREAK_GLASS_ACTORS: Astton
 
 concurrency:
-  group: terraform-staging-platform-${{ github.event_name }}-${{ github.ref }}
+  group: terraform-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root || 'validation' }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -107,12 +115,20 @@ jobs:
         run: terraform fmt -check -recursive infra/terraform
 
       - name: Initialize without remote state
-        run: terraform -chdir=infra/terraform/staging-platform init -backend=false -input=false -lockfile=readonly
+        run: |
+          terraform -chdir=infra/terraform/staging-foundation init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=infra/terraform/staging-platform init -backend=false -input=false -lockfile=readonly
 
-      - name: Validate configuration
-        run: terraform -chdir=infra/terraform/staging-platform validate -no-color
+      - name: Validate configurations
+        run: |
+          terraform -chdir=infra/terraform/staging-foundation validate -no-color
+          terraform -chdir=infra/terraform/staging-platform validate -no-color
+
       - name: Test destructive-change policy
-        run: node infra/terraform/scripts/destructive-change-selftest.mjs && node infra/terraform/scripts/oracle-kms-isolation-selftest.mjs
+        run: |
+          node infra/terraform/scripts/destructive-change-selftest.mjs
+          node infra/terraform/scripts/oracle-kms-isolation-selftest.mjs
+          node infra/terraform/scripts/staging-foundation-selftest.mjs
 
       - name: Test saved-plan metadata validation
         run: node infra/terraform/scripts/plan-metadata-selftest.mjs
@@ -157,7 +173,7 @@ jobs:
           echo "Plans for apply run from main only. This dispatch used $DISPATCH_REF." >&2
           exit 1
 
-      - name: Require the origin certificate
+      - name: Require runtime-plan inputs
         env:
           EDGE_CERTIFICATE_ARN: ${{ github.event.inputs.edge_certificate_arn }}
           ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
@@ -168,43 +184,23 @@ jobs:
           BASE_SEPOLIA_ESCROW_CODEHASH: ${{ github.event.inputs.base_sepolia_escrow_codehash }}
           ESCROW_ABI_FINGERPRINT: ${{ github.event.inputs.escrow_abi_fingerprint }}
         run: |
-          test -n "$ORIGIN_CERTIFICATE_ARN" || {
-            echo "origin_certificate_arn is required for plan." >&2
-            exit 1
-          }
-          test -n "$EDGE_CERTIFICATE_ARN" || {
-            echo "edge_certificate_arn is required for plan." >&2
-            exit 1
-          }
-          test -n "$GATEWAY_IMAGE_TAG" || {
-            echo "gateway_image_tag is required for plan." >&2
-            exit 1
-          }
-          test -n "$BASE_SEPOLIA_ESCROW_ADDRESS" || {
-            echo "base_sepolia_escrow_address is required for plan." >&2
-            exit 1
-          }
-          test -n "$BASE_SEPOLIA_CONTRACT_START_BLOCK" || {
-            echo "base_sepolia_contract_start_block is required for plan." >&2
-            exit 1
-          }
-          test -n "$BASE_SEPOLIA_USDC_ADDRESS" || {
-            echo "base_sepolia_usdc_address is required for plan." >&2
-            exit 1
-          }
-          test -n "$BASE_SEPOLIA_ESCROW_CODEHASH" || {
-            echo "base_sepolia_escrow_codehash is required for plan." >&2
-            exit 1
-          }
-          test -n "$ESCROW_ABI_FINGERPRINT" || {
-            echo "escrow_abi_fingerprint is required for plan." >&2
-            exit 1
-          }
+          if [ "$ROOT" = "staging-foundation" ]; then
+            exit 0
+          fi
+          for name in ORIGIN_CERTIFICATE_ARN EDGE_CERTIFICATE_ARN GATEWAY_IMAGE_TAG \
+            BASE_SEPOLIA_ESCROW_ADDRESS BASE_SEPOLIA_CONTRACT_START_BLOCK \
+            BASE_SEPOLIA_USDC_ADDRESS BASE_SEPOLIA_ESCROW_CODEHASH ESCROW_ABI_FINGERPRINT; do
+            test -n "${!name}" || {
+              echo "${name,,} is required for a runtime plan." >&2
+              exit 1
+            }
+          done
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Validate accepted Base Sepolia selection
+        if: env.ROOT == 'staging-platform'
         env:
           BASE_SEPOLIA_ESCROW_ADDRESS: ${{ github.event.inputs.base_sepolia_escrow_address }}
           BASE_SEPOLIA_CONTRACT_START_BLOCK: ${{ github.event.inputs.base_sepolia_contract_start_block }}
@@ -230,15 +226,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Initialize
-        working-directory: infra/terraform/staging-platform
-        run: terraform init -input=false -lockfile=readonly
+        run: terraform -chdir="infra/terraform/$ROOT" init -input=false -lockfile=readonly
 
       - name: Validate
-        working-directory: infra/terraform/staging-platform
-        run: terraform validate -no-color
+        run: terraform -chdir="infra/terraform/$ROOT" validate -no-color
 
       - name: Plan
-        working-directory: infra/terraform/staging-platform
         env:
           EDGE_CERTIFICATE_ARN: ${{ github.event.inputs.edge_certificate_arn }}
           ORIGIN_CERTIFICATE_ARN: ${{ github.event.inputs.origin_certificate_arn }}
@@ -250,38 +243,44 @@ jobs:
           ESCROW_ABI_FINGERPRINT: ${{ github.event.inputs.escrow_abi_fingerprint }}
         run: |
           set -euo pipefail
-          terraform plan \
-            -input=false \
-            -lock-timeout=5m \
-            -no-color \
-            -out=tfplan \
-            -var="account_id=$AWS_ACCOUNT_ID" \
-            -var="edge_certificate_arn=$EDGE_CERTIFICATE_ARN" \
-            -var="origin_certificate_arn=$ORIGIN_CERTIFICATE_ARN" \
-            -var="gateway_image_tag=$GATEWAY_IMAGE_TAG" \
-            -var="base_sepolia_escrow_address=$BASE_SEPOLIA_ESCROW_ADDRESS" \
-            -var="base_sepolia_contract_start_block=$BASE_SEPOLIA_CONTRACT_START_BLOCK" \
-            -var="base_sepolia_usdc_address=$BASE_SEPOLIA_USDC_ADDRESS" \
-            -var="base_sepolia_escrow_codehash=$BASE_SEPOLIA_ESCROW_CODEHASH" \
-            -var="escrow_abi_fingerprint=$ESCROW_ABI_FINGERPRINT"
-          terraform show -no-color tfplan > plan.txt
-          terraform show -json tfplan > plan.json
+          if [ "$ROOT" = "staging-foundation" ]; then
+            terraform -chdir="infra/terraform/$ROOT" plan \
+              -input=false \
+              -lock-timeout=5m \
+              -no-color \
+              -out=tfplan \
+              -var="account_id=$AWS_ACCOUNT_ID"
+          else
+            terraform -chdir="infra/terraform/$ROOT" plan \
+              -input=false \
+              -lock-timeout=5m \
+              -no-color \
+              -out=tfplan \
+              -var="account_id=$AWS_ACCOUNT_ID" \
+              -var="edge_certificate_arn=$EDGE_CERTIFICATE_ARN" \
+              -var="origin_certificate_arn=$ORIGIN_CERTIFICATE_ARN" \
+              -var="gateway_image_tag=$GATEWAY_IMAGE_TAG" \
+              -var="base_sepolia_escrow_address=$BASE_SEPOLIA_ESCROW_ADDRESS" \
+              -var="base_sepolia_contract_start_block=$BASE_SEPOLIA_CONTRACT_START_BLOCK" \
+              -var="base_sepolia_usdc_address=$BASE_SEPOLIA_USDC_ADDRESS" \
+              -var="base_sepolia_escrow_codehash=$BASE_SEPOLIA_ESCROW_CODEHASH" \
+              -var="escrow_abi_fingerprint=$ESCROW_ABI_FINGERPRINT"
+          fi
+          terraform -chdir="infra/terraform/$ROOT" show -no-color tfplan > "infra/terraform/$ROOT/plan.txt"
+          terraform -chdir="infra/terraform/$ROOT" show -json tfplan > "infra/terraform/$ROOT/plan.json"
 
       - name: Apply destructive-change policy
-        working-directory: infra/terraform/staging-platform
-        run: node ../scripts/check-destructive-changes.mjs < plan.json
+        run: node infra/terraform/scripts/check-destructive-changes.mjs < "infra/terraform/$ROOT/plan.json"
 
       - name: Test saved-plan metadata validation
-        working-directory: infra/terraform/staging-platform
-        run: node ../scripts/plan-metadata-selftest.mjs
+        run: node infra/terraform/scripts/plan-metadata-selftest.mjs
 
       - name: Remove rendered plan JSON
         if: always()
-        run: rm -f infra/terraform/staging-platform/plan.json
+        run: rm -f "infra/terraform/$ROOT/plan.json"
 
       - name: Store the exact plan
         id: store
-        working-directory: infra/terraform/staging-platform
         run: |
           set -euo pipefail
           VERSIONING_STATUS=$(aws s3api get-bucket-versioning \
@@ -293,11 +292,13 @@ jobs:
             exit 1
           }
 
-          PLAN_SHA256=$(sha256sum tfplan | cut -d ' ' -f 1)
+          PLAN_FILE="infra/terraform/$ROOT/tfplan"
+          PLAN_TEXT="infra/terraform/$ROOT/plan.txt"
+          PLAN_SHA256=$(sha256sum "$PLAN_FILE" | cut -d ' ' -f 1)
           VERSION=$(aws s3api put-object \
             --bucket "$STATE_BUCKET" \
-            --key "plans/cotsel-staging-platform/$GITHUB_RUN_ID.tfplan" \
-            --body tfplan \
+            --key "plans/cotsel-staging-platform/$ROOT/$GITHUB_RUN_ID.tfplan" \
+            --body "$PLAN_FILE" \
             --metadata "action=plan,root=$ROOT,repository=$GITHUB_REPOSITORY,workflow-path=.github/workflows/terraform.yml,run-id=$GITHUB_RUN_ID,run-attempt=$GITHUB_RUN_ATTEMPT,head-sha=$GITHUB_SHA,ref=$GITHUB_REF,actor=$GITHUB_TRIGGERING_ACTOR,plan-sha256=$PLAN_SHA256" \
             --query VersionId \
             --output text)
@@ -307,19 +308,18 @@ jobs:
           }
           aws s3api put-object \
             --bucket "$STATE_BUCKET" \
-            --key "plans/cotsel-staging-platform/$GITHUB_RUN_ID.txt" \
-            --body plan.txt >/dev/null
+            --key "plans/cotsel-staging-platform/$ROOT/$GITHUB_RUN_ID.txt" \
+            --body "$PLAN_TEXT" >/dev/null
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "sha256=$PLAN_SHA256" >> "$GITHUB_OUTPUT"
 
       - name: Record approval inputs
-        working-directory: infra/terraform/staging-platform
         env:
           PLAN_SHA256: ${{ steps.store.outputs.sha256 }}
           PLAN_VERSION: ${{ steps.store.outputs.version }}
         run: |
           {
-            printf '%s\n\n' '### Terraform plan for `staging-platform`'
+            printf '### Terraform plan for `%s`\n\n' "$ROOT"
             printf 'Commit `%s`, planned by `%s`.\n\n' "$GITHUB_SHA" "$GITHUB_TRIGGERING_ACTOR"
             printf '%s\n' '| Apply input | Value |'
             printf '%s\n' '| --- | --- |'
@@ -329,7 +329,7 @@ jobs:
             printf 'Saved plan SHA-256: `%s`.\n\n' "$PLAN_SHA256"
             printf '%s\n\n' 'A different person must dispatch apply within 24 hours unless an authorized owner break-glass apply is explicitly recorded.'
             printf '%s\n' '```'
-            tail -c 60000 plan.txt
+            tail -c 60000 "infra/terraform/$ROOT/plan.txt"
             printf '%s\n' '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -423,11 +423,9 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Initialize
-        working-directory: infra/terraform/staging-platform
-        run: terraform init -input=false -lockfile=readonly
+        run: terraform -chdir="infra/terraform/$ROOT" init -input=false -lockfile=readonly
 
       - name: Verify and fetch the approved plan
-        working-directory: infra/terraform/staging-platform
         env:
           PLAN_ACTOR: ${{ steps.approved_plan.outputs.actor }}
           PLAN_ATTEMPT: ${{ steps.approved_plan.outputs.attempt }}
@@ -446,7 +444,7 @@ jobs:
 
           HEAD=$(aws s3api head-object \
             --bucket "$STATE_BUCKET" \
-            --key "plans/cotsel-staging-platform/$PLAN_RUN_ID.tfplan" \
+            --key "plans/cotsel-staging-platform/$ROOT/$PLAN_RUN_ID.tfplan" \
             --version-id "$PLAN_VERSION_ID")
 
           PLAN_SHA256=$(printf '%s' "$HEAD" |
@@ -456,18 +454,17 @@ jobs:
             EXPECTED_RUN_ATTEMPT="$PLAN_ATTEMPT" \
             EXPECTED_HEAD_SHA="$GITHUB_SHA" \
             EXPECTED_ACTOR="$PLAN_ACTOR" \
-            node ../scripts/verify-plan-metadata.mjs)
+            node infra/terraform/scripts/verify-plan-metadata.mjs)
 
           aws s3api get-object \
             --bucket "$STATE_BUCKET" \
-            --key "plans/cotsel-staging-platform/$PLAN_RUN_ID.tfplan" \
+            --key "plans/cotsel-staging-platform/$ROOT/$PLAN_RUN_ID.tfplan" \
             --version-id "$PLAN_VERSION_ID" \
-            tfplan >/dev/null
-          echo "$PLAN_SHA256  tfplan" | sha256sum --check --strict
+            "infra/terraform/$ROOT/tfplan" >/dev/null
+          echo "$PLAN_SHA256  infra/terraform/$ROOT/tfplan" | sha256sum --check --strict
 
       - name: Apply
-        working-directory: infra/terraform/staging-platform
-        run: terraform apply -input=false -no-color -lock-timeout=5m -auto-approve tfplan
+        run: terraform -chdir="infra/terraform/$ROOT" apply -input=false -no-color -lock-timeout=5m -auto-approve tfplan
 
       - name: Record apply result
         if: always()
@@ -484,6 +481,7 @@ jobs:
             printf '%s\n' '| Field | Value |'
             printf '%s\n' '| --- | --- |'
             printf '| Result | `%s` |\n' "$APPLY_RESULT"
+            printf '| Root | `%s` |\n' "$ROOT"
             printf '| Commit | `%s` |\n' "$GITHUB_SHA"
             printf '| Plan run | `%s` |\n' "$PLAN_RUN_ID"
             printf '| Plan version | `%s` |\n' "$PLAN_VERSION_ID"

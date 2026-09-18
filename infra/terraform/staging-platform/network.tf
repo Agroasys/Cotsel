@@ -18,6 +18,16 @@ data "terraform_remote_state" "data" {
   }
 }
 
+data "terraform_remote_state" "foundation" {
+  backend = "s3"
+
+  config = {
+    bucket = var.state_bucket
+    key    = "cotsel/staging-platform/foundation.tfstate"
+    region = var.state_bucket_region
+  }
+}
+
 locals {
   vpc_id                     = data.terraform_remote_state.network.outputs.vpc_id
   private_subnet_ids         = data.terraform_remote_state.network.outputs.private_subnet_ids

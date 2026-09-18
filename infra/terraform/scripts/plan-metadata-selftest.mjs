@@ -31,6 +31,12 @@ const validMetadata = {
 
 const cases = [
   { name: 'valid metadata', metadata: validMetadata, expected: 0 },
+  {
+    name: 'valid foundation metadata',
+    metadata: { ...validMetadata, root: 'staging-foundation' },
+    expected: 0,
+    environment: { EXPECTED_ROOT: 'staging-foundation' },
+  },
   { name: 'apply action', metadata: { ...validMetadata, action: 'apply' }, expected: 1 },
   { name: 'wrong root', metadata: { ...validMetadata, root: 'bootstrap' }, expected: 1 },
   {
@@ -51,7 +57,7 @@ const cases = [
 let failures = 0;
 for (const testCase of cases) {
   const result = spawnSync('node', [checker], {
-    env: expectedEnvironment,
+    env: { ...expectedEnvironment, ...testCase.environment },
     input: JSON.stringify({ Metadata: testCase.metadata }),
     encoding: 'utf8',
   });

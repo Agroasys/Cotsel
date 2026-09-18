@@ -5,7 +5,7 @@ output "cluster_arn" {
 
 output "ecr_repository_urls" {
   description = "Immutable per-service ECR repositories."
-  value       = { for name, repository in aws_ecr_repository.service : name => repository.repository_url }
+  value       = local.runtime_repository_urls
 }
 
 output "secret_arns" {
