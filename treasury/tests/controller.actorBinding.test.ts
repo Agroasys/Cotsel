@@ -45,6 +45,7 @@ jest.mock('../src/database/queries', () => ({
   updateSweepBatchStatus: jest.fn(),
   getSweepBatchDetail: jest.fn(),
   createAccountingPeriod: jest.fn(),
+  upsertPartnerHandoff: jest.fn(),
 }));
 
 type TreasuryControllerType = typeof import('../src/api/controller').TreasuryController;
@@ -191,6 +192,57 @@ describe('TreasuryController actor binding', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: false, error: 'ActorUnauthenticated' }),
     );
+  });
+
+  test('attributes an external handoff to the authenticated principal, not a synthetic identity', async () => {
+    jest.mocked(queriesModule.getSweepBatchDetail).mockResolvedValue({
+      batch: { id: 10, status: 'EXECUTED' },
+      entries: [],
+      partnerHandoff: null,
+      totals: { allocatedAmountRaw: '0', entryCount: 0 },
+    } as unknown as Awaited<ReturnType<QueriesModule['getSweepBatchDetail']>>);
+    jest.mocked(queriesModule.upsertPartnerHandoff).mockResolvedValue({
+      id: 7,
+      partner_name: 'bridge',
+      partner_reference: 'bridge-ref-1',
+    } as never);
+
+    const controller = new LoadedTreasuryController();
+    const res = mockResponse();
+
+    await controller.recordPartnerHandoff(
+      {
+        params: { batchId: '10' },
+        body: {
+          partnerName: 'bridge',
+          partnerReference: 'bridge-ref-1',
+          handoffStatus: 'COMPLETED',
+        },
+        serviceAuth: {
+          apiKeyId: 'treasury-checker',
+          scheme: 'api_key',
+          humanPrincipalId: 'finance.checker@agroasys',
+        },
+      } as unknown as Parameters<TreasuryControllerType['prototype']['recordPartnerHandoff']>[0],
+      res,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(queriesModule.updateSweepBatchStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        batchId: 10,
+        status: 'HANDED_OFF',
+        actor: 'finance.checker@agroasys',
+      }),
+    );
+
+    // The partner is what the handoff asserts, not who performed it.
+    const [call] = jest.mocked(queriesModule.updateSweepBatchStatus).mock.calls;
+    expect(call[0].actor).not.toMatch(/^system:/);
+    expect(call[0].metadata).toEqual({
+      partnerName: 'bridge',
+      partnerReference: 'bridge-ref-1',
+    });
   });
 
   test('binds the creator of an accounting period to the authenticated principal too', async () => {

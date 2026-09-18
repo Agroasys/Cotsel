@@ -100,6 +100,45 @@ describePostgres('treasury maker-checker concurrency (postgres)', () => {
     return { batchId: batch.id, periodId: period.id };
   }
 
+  async function seedLedgerEntryId(): Promise<number> {
+    sequence += 1;
+    const { entry } = await queries.upsertLedgerEntryWithInitialState({
+      entryKey: `entry-alloc-${sequence}`,
+      tradeId: `trade-alloc-${sequence}`,
+      txHash: `0xalloc${sequence}`,
+      blockNumber: 700 + sequence,
+      eventName: 'PlatformFeesPaidStage1',
+      componentType: 'PLATFORM_FEE',
+      amountRaw: '125000000',
+      sourceTimestamp: new Date('2026-04-16T08:00:00.000Z'),
+      metadata: {},
+    });
+    return entry.id;
+  }
+
+  async function seedDraftBatch(): Promise<{ batchId: number; periodId: number }> {
+    sequence += 1;
+    const suffix = `alloc-${sequence}`;
+
+    const period = await queries.createAccountingPeriod({
+      periodKey: `period-${suffix}`,
+      startsAt: new Date('2026-04-01T00:00:00.000Z'),
+      endsAt: new Date('2026-07-01T00:00:00.000Z'),
+      createdBy: 'finance-maker',
+    });
+
+    const batch = await queries.createSweepBatch({
+      batchKey: `batch-${suffix}`,
+      accountingPeriodId: period.id,
+      assetSymbol: 'USDC',
+      expectedTotalRaw: '125000000',
+      payoutReceiverAddress: '0xpayoutreceiver',
+      createdBy: 'treasury-maker',
+    });
+
+    return { batchId: batch.id, periodId: period.id };
+  }
+
   function settle<T>(promise: Promise<T>): Promise<{ ok: boolean; error?: Error }> {
     return promise.then(
       () => ({ ok: true }),
@@ -219,6 +258,52 @@ describePostgres('treasury maker-checker concurrency (postgres)', () => {
     const closes = chain.filter((record) => record.to_status === 'CLOSED');
     expect(closes).toHaveLength(1);
     expect(closes[0].actor).toBe(closed?.closed_by);
+  });
+
+  it('makes an allocation lose once a period close has started', async () => {
+    const { batchId, periodId } = await seedDraftBatch();
+
+    // Hold the accounting period the way `updateAccountingPeriodStatus` does,
+    // so the allocation below queues behind the close rather than racing it.
+    const holder = await sidecar.connect();
+    let allocation: Promise<{ ok: boolean; error?: Error }>;
+
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT * FROM accounting_periods WHERE id = $1 FOR UPDATE', [periodId]);
+
+      allocation = settle(
+        queries.addSweepBatchEntry({
+          sweepBatchId: batchId,
+          ledgerEntryId: await seedLedgerEntryId(),
+          allocatedBy: 'treasury-maker',
+        }),
+      );
+
+      await new Promise((resolveTimer) => setTimeout(resolveTimer, 250));
+      await holder.query(`UPDATE accounting_periods SET status = 'PENDING_CLOSE' WHERE id = $1`, [
+        periodId,
+      ]);
+      await holder.query('COMMIT');
+    } finally {
+      holder.release();
+    }
+
+    const result = await allocation;
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toMatch(
+      /requires an OPEN accounting period; received PENDING_CLOSE/,
+    );
+
+    // The decisive assertion: nothing was stranded in a period that is closing.
+    const stranded = await sidecar.query(
+      `SELECT COUNT(*)::int AS count
+       FROM sweep_batch_entries e
+       JOIN sweep_batches b ON b.id = e.sweep_batch_id
+       JOIN accounting_periods p ON p.id = b.accounting_period_id
+       WHERE p.status <> 'OPEN'`,
+    );
+    expect(stranded.rows[0].count).toBe(0);
   });
 
   it('records exactly one bank confirmation when the same reference arrives twice at once', async () => {

@@ -22,6 +22,20 @@ import {
 } from '../core/ledgerExport';
 import { loadLedgerExportPage } from '../core/ledgerExportService';
 import { actorFor, optionalActorFor } from './actorBinding';
+import type {
+  AddSweepBatchEntryBody,
+  AppendStateBody,
+  AppendTreasuryPartnerHandoffEvidenceBody,
+  CreateAccountingPeriodBody,
+  CreateRevenueRealizationBody,
+  CreateSweepBatchBody,
+  UpdateAccountingPeriodStatusBody,
+  UpdateSweepBatchStatusBody,
+  UpsertBankConfirmationBody,
+  UpsertDepositBody,
+  UpsertPartnerHandoffBody,
+  UpsertTreasuryPartnerHandoffBody,
+} from './requestBodies';
 import { toCsv } from './ledgerCsv';
 import { TreasuryIngestionService } from '../core/ingestion';
 import { ReconciliationGateService } from '../core/reconciliationGate';
@@ -61,8 +75,6 @@ import {
 import { TreasuryPartnerHandoffConflictError } from '../core/treasuryPartnerHandoff';
 import {
   AccountingPeriodStatus,
-  BankPayoutState,
-  FiatDepositState,
   PartnerHandoffStatus,
   PayoutState,
   SweepBatchStatus,
@@ -114,132 +126,6 @@ const ACCOUNTING_STATES: TreasuryAccountingState[] = [
   'REALIZED',
   'EXCEPTION',
 ];
-
-type AppendStateBody = {
-  state?: string;
-  note?: string;
-  actor?: string;
-};
-
-type UpsertDepositBody = {
-  rampReference?: string;
-  tradeId?: string;
-  ledgerEntryId?: number | null;
-  depositState?: FiatDepositState;
-  sourceAmount?: string;
-  currency?: string;
-  expectedAmount?: string;
-  expectedCurrency?: string;
-  observedAt?: string;
-  providerEventId?: string;
-  providerAccountRef?: string;
-  failureCode?: string | null;
-  reversalReference?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type UpsertBankConfirmationBody = {
-  payoutReference?: string | null;
-  bankReference?: string;
-  bankState?: BankPayoutState;
-  confirmedAt?: string;
-  source?: string;
-  actor?: string;
-  failureCode?: string | null;
-  evidenceReference?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type CreateAccountingPeriodBody = {
-  periodKey?: string;
-  startsAt?: string;
-  endsAt?: string;
-  createdBy?: string;
-  metadata?: Record<string, unknown>;
-};
-
-type UpdateAccountingPeriodStatusBody = {
-  actor?: string;
-  closeReason?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type CreateSweepBatchBody = {
-  batchKey?: string;
-  accountingPeriodId?: number;
-  assetSymbol?: string;
-  expectedTotalRaw?: string;
-  payoutReceiverAddress?: string | null;
-  createdBy?: string;
-  metadata?: Record<string, unknown>;
-};
-
-type AddSweepBatchEntryBody = {
-  ledgerEntryId?: number;
-  allocatedBy?: string;
-  entryAmountRaw?: string;
-};
-
-type UpdateSweepBatchStatusBody = {
-  actor?: string;
-  matchedSweepTxHash?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type UpsertPartnerHandoffBody = {
-  partnerName?: string;
-  partnerReference?: string;
-  handoffStatus?: PartnerHandoffStatus;
-  evidenceReference?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type CreateRevenueRealizationBody = {
-  accountingPeriodId?: number;
-  sweepBatchId?: number | null;
-  partnerHandoffId?: number | null;
-  actor?: string;
-  note?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-type UpsertTreasuryPartnerHandoffBody = {
-  partnerCode?: TreasuryPartnerCode;
-  handoffReference?: string;
-  partnerStatus?: TreasuryPartnerHandoffStatus;
-  payoutReference?: string | null;
-  transferReference?: string | null;
-  drainReference?: string | null;
-  destinationExternalAccountId?: string | null;
-  liquidationAddressId?: string | null;
-  sourceAmount?: string | null;
-  sourceCurrency?: string | null;
-  destinationAmount?: string | null;
-  destinationCurrency?: string | null;
-  actor?: string;
-  note?: string | null;
-  failureCode?: string | null;
-  initiatedAt?: string;
-  metadata?: Record<string, unknown>;
-};
-
-type AppendTreasuryPartnerHandoffEvidenceBody = {
-  partnerCode?: TreasuryPartnerCode;
-  providerEventId?: string;
-  eventType?: string;
-  partnerStatus?: TreasuryPartnerHandoffStatus;
-  payoutReference?: string | null;
-  transferReference?: string | null;
-  drainReference?: string | null;
-  destinationExternalAccountId?: string | null;
-  liquidationAddressId?: string | null;
-  bankReference?: string | null;
-  bankState?: BankPayoutState | null;
-  evidenceReference?: string | null;
-  failureCode?: string | null;
-  observedAt?: string;
-  metadata?: Record<string, unknown>;
-};
 
 export type EligibilitySummary = {
   confirmationStage: string | null;
@@ -890,13 +776,19 @@ export class TreasuryController {
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
 
+      // The partner is what the handoff asserts, not who performed it. The
+      // chain records the authenticated principal that recorded the handoff and
+      // keeps the partner assertion beside it as evidence.
       const detail = await getSweepBatchDetail(batchId);
       if (detail?.batch.status === 'EXECUTED') {
         await updateSweepBatchStatus({
           batchId,
           status: 'HANDED_OFF',
-          actor: `system:external-handoff:${handoff.partner_name}`,
-          metadata: { partnerReference: handoff.partner_reference },
+          actor: actorFor(req, body.actor),
+          metadata: {
+            partnerName: handoff.partner_name,
+            partnerReference: handoff.partner_reference,
+          },
         });
       }
 

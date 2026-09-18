@@ -80,6 +80,9 @@ describe('treasury accounting control queries', () => {
   it('blocks duplicate active ledger allocation across sweep batches', async () => {
     mockClientQuery
       .mockResolvedValueOnce({})
+      // Period lookup, then the period lock taken before the batch lock.
+      .mockResolvedValueOnce({ rows: [{ accounting_period_id: 5 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] })
       .mockResolvedValueOnce({
         rows: [
           {

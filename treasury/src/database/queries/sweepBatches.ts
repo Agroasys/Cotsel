@@ -45,10 +45,13 @@ export async function createSweepBatch(data: {
   try {
     await client.query('BEGIN');
 
+    // Locked for the same reason as the allocation path below: an OPEN period
+    // read without the lock can be closed before this insert commits.
     const periodResult = await client.query<AccountingPeriod>(
       `SELECT *
        FROM accounting_periods
-       WHERE id = $1`,
+       WHERE id = $1
+       FOR UPDATE`,
       [data.accountingPeriodId],
     );
     const period = periodResult.rows[0];
@@ -365,6 +368,26 @@ export async function addSweepBatchEntry(data: {
 
   try {
     await client.query('BEGIN');
+
+    // `assertBatchAllocationAllowed` decides on the period status as well as the
+    // batch status, so locking the batch alone left a real race: a close could
+    // commit between this read and the insert, stranding a new allocation in a
+    // closed period. Both rows are locked, and every path that needs both takes
+    // the period first so a close and an allocation queue rather than deadlock.
+    const periodLookup = await client.query<{ accounting_period_id: number }>(
+      `SELECT accounting_period_id
+       FROM sweep_batches
+       WHERE id = $1`,
+      [data.sweepBatchId],
+    );
+
+    if (!periodLookup.rows[0]) {
+      throw new Error('Sweep batch not found');
+    }
+
+    await client.query(`SELECT id FROM accounting_periods WHERE id = $1 FOR UPDATE`, [
+      periodLookup.rows[0].accounting_period_id,
+    ]);
 
     const batchResult = await client.query<
       SweepBatch & { accounting_period_status: AccountingPeriodStatus }

@@ -31,7 +31,8 @@ predicate:
 | --------------------------------- | ------------------------------------------ | ---------------------------------------------------- |
 | Sweep batch status                | `sweep_batches` row `FOR UPDATE`           | `AND status = <observed>`                            |
 | Accounting period status          | `accounting_periods` row `FOR UPDATE`      | `AND status = <observed>`                            |
-| Sweep allocation                  | `sweep_batches` row `FOR UPDATE`           | Partial unique index on active allocations           |
+| Sweep batch creation              | `accounting_periods` row `FOR UPDATE`      | Period must still be `OPEN`                          |
+| Sweep allocation                  | period row, then batch row `FOR UPDATE`    | Partial unique index on active allocations           |
 | Bank confirmation                 | `treasury_ledger_entries` row `FOR UPDATE` | `bank_reference` uniqueness                          |
 | Partner handoff create / evidence | ledger entry / handoff row `FOR UPDATE`    | `ledger_entry_id` and `provider_event_id` uniqueness |
 | Revenue realization               | `treasury_ledger_entries` row `FOR UPDATE` | `ledger_entry_id` uniqueness                         |
@@ -41,6 +42,13 @@ actually write over. The predicate is the second half: a row that no longer
 holds the status the decision was made against is not updated, and the losing
 caller is told so with `TreasuryConcurrentTransitionError` rather than silently
 overwriting.
+
+Allocation locks two rows, because `assertBatchAllocationAllowed` decides on the
+accounting period's status as well as the batch's. Locking the batch alone left
+a real race: a close could commit between the read and the insert, stranding a
+new allocation in a closed period. Every path that needs both rows takes **the
+period first, then the batch**, so a close and an allocation queue rather than
+deadlock.
 
 The idempotent upserts — bank confirmations and partner evidence — retry once
 on a unique violation instead of failing. A provider that delivers the same
@@ -101,6 +109,17 @@ body-supplied actor is an assertion to check rather than a value to trust:
 | No principal reached the handler            | `401 ActorUnauthenticated`          |
 | `AUTH_ENABLED=false` (local development)    | The body actor is required and used |
 
+Recording an external partner handoff is attributed the same way. It advances
+the batch to `HANDED_OFF`, so it writes an `EXECUTOR` entry into the chain, and
+that entry names the authenticated principal that recorded the handoff. The
+partner is what the handoff asserts, not who performed it, so `partnerName` and
+`partnerReference` are carried as transition metadata beside the actor.
+
+Note the consequence: whoever records the handoff now holds `EXECUTOR` on that
+batch and therefore cannot also close it. That is the two-person rule working,
+not a regression - previously a synthetic `system:` identity absorbed the role
+and left the real operator free to close their own handoff.
+
 ### Delegated operator identity
 
 Treasury's operator traffic does not arrive from operators. The dashboard
@@ -116,10 +135,22 @@ operator they authenticated. The recorded actor names both - for example
 never attributable to a principal that did not authenticate, and two operators
 behind the same gateway key remain distinct actors for separation of duty.
 
-The allowlist defaults to the internal-mutation key set. Narrow it to the one
-delegating caller a deployment actually runs, and keep every other internal key
-off it: a key on this list can attribute a transition to any operator string,
+**The allowlist is empty unless a deployment states it.** Delegation is a
+separation-of-duty exception, so it is never inferred from another setting: an
+internal caller trusted to mutate treasury still cannot assert an operator
+identity, and therefore cannot manufacture distinct maker and checker identities
+to walk a batch through approval on its own. An unlisted caller gets
+`403 ActorMismatch` for any body actor that differs from its principal.
+
+Each listed id must be a configured API key that is also an internal mutation
+caller; anything else fails startup rather than granting an exception a key
+cannot use. Name only the delegating gateway, and keep every other internal key
+off the list: a key on it can attribute a transition to any operator string,
 bounded only by the fact that its own identity is recorded alongside.
+
+In production an empty list fails startup. There it is not a safe default but a
+silent outage - every operator-initiated transition would be refused as an actor
+mismatch - so the failure happens at boot rather than at the first approval.
 
 **Residual risk.** Delegation moves the trust boundary for operator identity
 into the gateway. Treasury can prove which service asserted an operator, not
@@ -164,12 +195,12 @@ rather than guessed at.
 
 ## Configuration
 
-| Variable                                      | Default                 | Meaning                                                  |
-| --------------------------------------------- | ----------------------- | -------------------------------------------------------- |
-| `TREASURY_OPERATOR_DELEGATION_API_KEYS`       | internal-mutation keys  | Callers permitted to name an operator they authenticated |
-| `TREASURY_PROVIDER_CALLBACK_AUTH_ENABLED`     | `AUTH_ENABLED`          | Verify provider callbacks. Must be true in production.   |
-| `TREASURY_PROVIDER_WEBHOOK_SECRETS_JSON`      | empty                   | `[{"partnerCode","keyId","secret"}]`, secret ≥ 32 chars  |
-| `TREASURY_PROVIDER_CALLBACK_MAX_SKEW_SECONDS` | `AUTH_MAX_SKEW_SECONDS` | Signed-timestamp window                                  |
+| Variable                                      | Default                        | Meaning                                                  |
+| --------------------------------------------- | ------------------------------ | -------------------------------------------------------- |
+| `TREASURY_OPERATOR_DELEGATION_API_KEYS`       | empty (required in production) | Callers permitted to name an operator they authenticated |
+| `TREASURY_PROVIDER_CALLBACK_AUTH_ENABLED`     | `AUTH_ENABLED`                 | Verify provider callbacks. Must be true in production.   |
+| `TREASURY_PROVIDER_WEBHOOK_SECRETS_JSON`      | empty                          | `[{"partnerCode","keyId","secret"}]`, secret ≥ 32 chars  |
+| `TREASURY_PROVIDER_CALLBACK_MAX_SKEW_SECONDS` | `AUTH_MAX_SKEW_SECONDS`        | Signed-timestamp window                                  |
 
 Several entries may share a `partnerCode`, which is how a secret is rotated:
 add the new secret, let both verify, then remove the old one.

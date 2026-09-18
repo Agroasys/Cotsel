@@ -184,15 +184,14 @@ export function loadConfig(): TreasuryConfig {
         ? [apiKeys[0].id]
         : [];
   // Operator traffic reaches treasury through the dashboard gateway, which
-  // authenticates the human and then calls under its own service key. Those
-  // callers may name the operator they authenticated; the default is the
-  // internal-mutation set, and a deployment should narrow it to the one
-  // delegating caller it actually runs.
-  const configuredDelegationApiKeys = parseAllowlist(
+  // authenticates the human and then calls under its own service key. Naming a
+  // caller here lets it assert the operator identity it authenticated, which is
+  // a separation-of-duty exception and therefore never inferred: the list is
+  // empty unless a deployment states it, so an unlisted internal caller cannot
+  // manufacture distinct maker and checker identities.
+  const operatorDelegationApiKeys = parseAllowlist(
     process.env.TREASURY_OPERATOR_DELEGATION_API_KEYS,
   );
-  const operatorDelegationApiKeys =
-    configuredDelegationApiKeys.length > 0 ? configuredDelegationApiKeys : internalMutationApiKeys;
   const hmacSecret = process.env.HMAC_SECRET?.trim();
   const providerWebhookSecrets = parseProviderWebhookSecrets(
     process.env.TREASURY_PROVIDER_WEBHOOK_SECRETS_JSON,
@@ -235,6 +234,20 @@ export function loadConfig(): TreasuryConfig {
     throw new Error('AUTH_ENABLED=false is not allowed when NODE_ENV=production');
   }
 
+  // A delegating caller must be an identity treasury can actually authenticate
+  // and one already trusted to mutate treasury state. Anything else would grant
+  // the exception to a key that cannot use it, or widen mutation access.
+  for (const apiKeyId of operatorDelegationApiKeys) {
+    assert(
+      apiKeys.some((key) => key.id === apiKeyId),
+      `TREASURY_OPERATOR_DELEGATION_API_KEYS names ${apiKeyId}, which is not a configured API key`,
+    );
+    assert(
+      internalMutationApiKeys.includes(apiKeyId),
+      `TREASURY_OPERATOR_DELEGATION_API_KEYS names ${apiKeyId}, which is not an internal mutation caller`,
+    );
+  }
+
   // External completion evidence is only worth what its provenance proves, so a
   // production deployment may not accept provider callbacks it cannot verify.
   if (nodeEnv === 'production' && !providerCallbackAuthEnabled) {
@@ -249,6 +262,17 @@ export function loadConfig(): TreasuryConfig {
 
   if (nonceStore === 'redis') {
     assert(nonceRedisUrl, 'REDIS_URL is required when NONCE_STORE=redis');
+  }
+
+  // Treasury's operator path runs through a delegating gateway. In production,
+  // an empty list is not a safe default but a silent outage: every
+  // operator-initiated transition would be refused as an actor mismatch. Fail
+  // at startup instead of at the first approval.
+  if (nodeEnv === 'production' && authEnabled) {
+    assert(
+      operatorDelegationApiKeys.length > 0,
+      'NODE_ENV=production requires TREASURY_OPERATOR_DELEGATION_API_KEYS to name the delegating gateway API key',
+    );
   }
 
   assert(
