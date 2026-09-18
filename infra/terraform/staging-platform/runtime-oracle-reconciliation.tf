@@ -36,7 +36,7 @@ locals {
     { name = "USDC_ADDRESS", value = var.base_sepolia_usdc_address },
     ], local.oracle_kms_enabled ? [
     { name = "ORACLE_KMS_EXPECTED_ADDRESS", value = var.oracle_kms_expected_address },
-    { name = "ORACLE_KMS_KEY_ID", value = aws_kms_alias.managed_signer["oracle"].name },
+    { name = "ORACLE_KMS_KEY_ID", value = local.managed_signer_aliases["oracle"] },
     { name = "ORACLE_SIGNER_CUSTODY_MODE", value = "kms" },
   ] : [])
 

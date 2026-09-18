@@ -1,139 +1,18 @@
 locals {
-  human_governance_signer_roles = toset([
-    "admin-1",
-    "admin-2",
-    "admin-3",
-  ])
-
-  approved_automated_signer_roles = toset([
-    "oracle",
-    "relayer",
-  ])
-
-  managed_signer_roles = toset([
-    "oracle",
-    "relayer",
-  ])
-
-  managed_signer_task_role_arns = {
-    oracle  = aws_iam_role.oracle_task.arn
-    relayer = aws_iam_role.relayer_task.arn
-  }
+  managed_signer_aliases         = data.terraform_remote_state.foundation.outputs.managed_signer_aliases
+  managed_signer_key_arns        = data.terraform_remote_state.foundation.outputs.managed_signer_key_arns
+  managed_signer_task_role_arns  = data.terraform_remote_state.foundation.outputs.managed_signer_task_role_arns
+  managed_signer_task_role_names = data.terraform_remote_state.foundation.outputs.managed_signer_task_role_names
 }
 
-check "only_approved_automated_signers_are_kms_managed" {
+check "foundation_exposes_only_approved_automated_signers" {
   assert {
-    condition     = local.managed_signer_roles == local.approved_automated_signer_roles
-    error_message = "Only the Oracle and gasless relayer have approved automated signing needs and may be provisioned as AWS KMS keys."
+    condition = (
+      toset(keys(local.managed_signer_key_arns)) == toset(["oracle", "relayer"]) &&
+      toset(keys(local.managed_signer_aliases)) == toset(["oracle", "relayer"]) &&
+      toset(keys(local.managed_signer_task_role_arns)) == toset(["oracle", "relayer"]) &&
+      toset(keys(local.managed_signer_task_role_names)) == toset(["oracle", "relayer"])
+    )
+    error_message = "The foundation state must expose exactly the Oracle and relayer signer custody identities."
   }
-}
-
-check "admin_prefixed_signers_are_not_kms_managed" {
-  assert {
-    condition     = alltrue([for role in local.managed_signer_roles : !startswith(role, "admin-")])
-    error_message = "Human administrator signers must use independent hardware wallets and must not be provisioned as AWS KMS keys."
-  }
-}
-
-data "aws_iam_policy_document" "managed_signer_key" {
-  for_each = local.managed_signer_roles
-
-  statement {
-    sid    = "AccountAdministration"
-    effect = "Allow"
-
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"]
-    }
-
-    actions   = ["kms:*"]
-    resources = ["*"]
-  }
-
-  statement {
-    sid    = "DenyUnapprovedSigningPrincipal"
-    effect = "Deny"
-
-    principals {
-      type        = "AWS"
-      identifiers = ["*"]
-    }
-
-    actions   = ["kms:Sign"]
-    resources = ["*"]
-
-    condition {
-      test     = "ArnNotEquals"
-      variable = "aws:PrincipalArn"
-      values   = [local.managed_signer_task_role_arns[each.key]]
-    }
-  }
-
-  statement {
-    sid    = "DenyNonDigestSigning"
-    effect = "Deny"
-
-    principals {
-      type        = "AWS"
-      identifiers = ["*"]
-    }
-
-    actions   = ["kms:Sign"]
-    resources = ["*"]
-
-    condition {
-      test     = "StringNotEquals"
-      variable = "kms:MessageType"
-      values   = ["DIGEST"]
-    }
-  }
-
-  statement {
-    sid    = "DenyUnexpectedSigningAlgorithm"
-    effect = "Deny"
-
-    principals {
-      type        = "AWS"
-      identifiers = ["*"]
-    }
-
-    actions   = ["kms:Sign"]
-    resources = ["*"]
-
-    condition {
-      test     = "StringNotEquals"
-      variable = "kms:SigningAlgorithm"
-      values   = ["ECDSA_SHA_256"]
-    }
-  }
-}
-
-resource "aws_kms_key" "managed_signer" {
-  for_each = local.managed_signer_roles
-
-  description                        = "Cotsel ${var.environment} ${each.key} EVM signer"
-  customer_master_key_spec           = "ECC_SECG_P256K1"
-  key_usage                          = "SIGN_VERIFY"
-  deletion_window_in_days            = 30
-  bypass_policy_lockout_safety_check = false
-  policy                             = data.aws_iam_policy_document.managed_signer_key[each.key].json
-
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  tags = {
-    Custody     = "aws-kms"
-    SignerRole  = each.key
-    Exportable  = "false"
-    WorkPackage = "WP-1-WP-2"
-  }
-}
-
-resource "aws_kms_alias" "managed_signer" {
-  for_each = local.managed_signer_roles
-
-  name          = "alias/${local.name_prefix}-${each.key}-signer"
-  target_key_id = aws_kms_key.managed_signer[each.key].key_id
 }

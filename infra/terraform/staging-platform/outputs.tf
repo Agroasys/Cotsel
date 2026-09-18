@@ -140,17 +140,17 @@ output "kms_key_arn" {
 
 output "managed_signer_key_arns" {
   description = "Non-exportable secp256k1 KMS signer keys. IAM grants remain separate from key creation."
-  value       = { for role, key in aws_kms_key.managed_signer : role => key.arn }
+  value       = local.managed_signer_key_arns
 }
 
 output "managed_signer_aliases" {
   description = "Stable aliases used to derive and attest each managed signer's EVM address."
-  value       = { for role, alias in aws_kms_alias.managed_signer : role => alias.name }
+  value       = local.managed_signer_aliases
 }
 
 output "oracle_task_role_arn" {
   description = "Dedicated Oracle workload role; the only runtime role eligible for Oracle KMS signing."
-  value       = aws_iam_role.oracle_task.arn
+  value       = local.managed_signer_task_role_arns["oracle"]
 }
 
 output "oracle_reviewed_config_sha256" {
@@ -160,7 +160,7 @@ output "oracle_reviewed_config_sha256" {
 
 output "relayer_task_role_arn" {
   description = "Dedicated relayer role; the only runtime role eligible for relayer KMS signing."
-  value       = aws_iam_role.relayer_task.arn
+  value       = local.managed_signer_task_role_arns["relayer"]
 }
 
 output "relayer_reviewed_config_sha256" {

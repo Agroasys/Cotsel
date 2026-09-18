@@ -54,13 +54,15 @@ identity. ECS injects the selected secret values before container startup, so
 the task execution role can read only the required secret ARNs. The application
 task role does not receive `secretsmanager:GetSecretValue`.
 
-The legacy Oracle signer secret remains available only for the current staging
-rollback lane. Do not use it for the new candidate.
+The historical Oracle signer secret is not a permitted rollback signer. Keep it
+only until consumer analysis and evidence preservation are complete. Then
+revoke its authority and schedule deletion through the approved process.
 
-Terraform creates two non-exportable `ECC_SECG_P256K1` KMS keys. They cover
-only the Oracle and gasless relayer identities because those roles have
-approved automated signing needs. Terraform does not create KMS keys for the
-three human administrators, treasury, or deployer.
+The staging-foundation root creates two non-exportable `ECC_SECG_P256K1` KMS
+keys and dedicated task roles. They cover only the Oracle and gasless relayer
+identities because those roles have approved automated signing needs. Terraform
+does not create KMS keys for the three human administrators, treasury, or
+deployer.
 
 Key creation does not grant signing access. Add each least-privilege runtime or
 operator grant only after its derived EVM address is reviewed. Do not add a
@@ -93,9 +95,9 @@ gateway has no KMS key ID, KMS SDK dependency, or `kms:Sign` permission. Both
 signer policies permit only `DIGEST` with `ECDSA_SHA_256`; cross-role signing is
 explicitly denied, and ECS Exec is disabled for both signer workloads.
 
-KMS activation uses separate key-creation and runtime plans:
+KMS activation uses separate foundation and runtime plans:
 
-1. Apply the reviewed key-creation plan while both expected-address variables are empty.
+1. Apply the reviewed staging-foundation plan.
 2. Derive both EVM addresses with `GetPublicKey` under a scoped read-only identity.
 3. Independently verify both addresses.
 4. Set `COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS` to the reviewed Oracle address.
