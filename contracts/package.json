@@ -10,6 +10,7 @@
     "finalize:base-sepolia": "npx hardhat run scripts/deploy-base.ts --network base-sepolia",
     "finalize:base-mainnet": "npx hardhat run scripts/deploy-base.ts --network base-mainnet",
     "kms:verify-automated-signers": "ts-node scripts/verify-kms-role-matrix.ts",
+    "kms:derive-addresses": "ts-node scripts/derive-kms-signer-addresses.ts",
     "verify:base-sepolia": "npx hardhat verify --network base-sepolia",
     "verify:base-mainnet": "npx hardhat verify --network base-mainnet",
     "test": "hardhat test",
