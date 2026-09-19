@@ -23,6 +23,7 @@ import {
 import { loadLedgerExportPage } from '../core/ledgerExportService';
 import { actorFor, optionalActorFor } from './actorBinding';
 import { mapValidationError } from './errorMapping';
+import { resolveRealizationBinding } from './realizationBinding';
 import type {
   AddSweepBatchEntryBody,
   AppendStateBody,
@@ -227,6 +228,8 @@ function serializeReconciliationControlSummary(summary: {
   latestCompletedRunKey: string | null;
   latestCompletedRunAt: Date | null;
   latestCompletedRunAgeSeconds: number | null;
+  coverageToBlock: number | null;
+  coverageComplete: boolean | null;
   staleRunningRunCount: number;
   trackedTradeCount: number;
   clearTradeCount: number;
@@ -244,6 +247,10 @@ function serializeReconciliationControlSummary(summary: {
         ? summary.latestCompletedRunAt.toISOString()
         : summary.latestCompletedRunAt,
     latestCompletedRunAgeSeconds: summary.latestCompletedRunAgeSeconds,
+    // WP-4 H-25. The operator-facing summary names the exact block the accepted
+    // run reached, not just how recent it was.
+    coverageToBlock: summary.coverageToBlock,
+    coverageComplete: summary.coverageComplete,
     staleRunningRunCount: summary.staleRunningRunCount,
     trackedTradeCount: summary.trackedTradeCount,
     clearTradeCount: summary.clearTradeCount,
@@ -946,6 +953,7 @@ export class TreasuryController {
       const entryId = parseEntryId(req.params.entryId);
       const body = requireObject<CreateRevenueRealizationBody>(req.body, 'body');
       const realization = await createRevenueRealization({
+        reconciliationBinding: await resolveRealizationBinding(this.reconciliationGate, entryId),
         ledgerEntryId: entryId,
         accountingPeriodId: requireInteger(body.accountingPeriodId, 'accountingPeriodId', {
           min: 1,

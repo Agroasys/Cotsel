@@ -158,6 +158,9 @@ export interface PartnerHandoff {
 }
 
 export interface RevenueRealization {
+  reconciliation_run_key: string | null;
+  reconciliation_coverage_to_block: number | null;
+  entry_block_number: number | null;
   id: number;
   ledger_entry_id: number;
   accounting_period_id: number;
@@ -532,6 +535,9 @@ export interface TreasuryEntryEligibility {
   reconciliationFreshness: 'FRESH' | 'STALE' | 'MISSING';
   reconciliationCompletedAt: Date | null;
   staleRunningRunCount: number;
+  /** WP-4 H-25: the exact chain watermark the accepted run reached. */
+  reconciliationCoverageToBlock: number | null;
+  reconciliationCoverageComplete: boolean | null;
   canonicalityState: ChainCanonicalityState;
   canonicalityDepth: number | null;
   canonicalityStableBlockNumber: number | null;

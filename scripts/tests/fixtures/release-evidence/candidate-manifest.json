@@ -360,8 +360,8 @@
     },
     {
       "component": "treasury",
-      "headIdentity": "202609190006_provider_handoff_authority",
-      "checksumSha256": "8f5b0634e6bf5ab0e2ab489c67fec861ca96ad0c3a4562c1587a1852f58cdee1"
+      "headIdentity": "202609190007_realization_reconciliation_binding",
+      "checksumSha256": "47e8afc0281dbd507ff567c98a9d7c1a18ffa3cbe292b525fde2cb61b648b2ed"
     }
   ],
   "chain": {

@@ -5,6 +5,10 @@ import {
   assertSweepBatchTransition,
 } from '../src/core/accountingPolicy';
 
+function coveredBinding() {
+  return { runKey: 'run-1', coverageToBlock: 1_000, entryBlockNumber: 900 };
+}
+
 describe('accountingPolicy', () => {
   it('allows valid accounting period transitions', () => {
     expect(() => assertAccountingPeriodTransition('OPEN', 'PENDING_CLOSE')).not.toThrow();
@@ -51,6 +55,7 @@ describe('accountingPolicy', () => {
         partnerHandoffStatus: 'COMPLETED',
         bankPayoutState: 'CONFIRMED',
         revenueRealizationStatus: null,
+        reconciliationBinding: coveredBinding(),
       }),
     ).not.toThrow();
 
@@ -60,7 +65,45 @@ describe('accountingPolicy', () => {
         partnerHandoffStatus: 'ACKNOWLEDGED',
         bankPayoutState: 'CONFIRMED',
         revenueRealizationStatus: null,
+        reconciliationBinding: coveredBinding(),
       }),
     ).toThrow('Revenue realization requires completed external handoff evidence');
+  });
+
+  /**
+   * WP-4 H-25. A run is evidence about the range it covered. Being recent and
+   * drift-free says nothing about an entry the run never reached.
+   */
+  describe('reconciliation watermark binding', () => {
+    function realization(
+      reconciliationBinding: ReturnType<typeof coveredBinding> | null,
+    ): () => void {
+      return () =>
+        assertRealizationAllowed({
+          batchStatus: 'HANDED_OFF',
+          partnerHandoffStatus: 'COMPLETED',
+          bankPayoutState: 'CONFIRMED',
+          revenueRealizationStatus: null,
+          reconciliationBinding,
+        });
+    }
+
+    it('refuses realization with no reconciliation run bound to the entry', () => {
+      expect(realization(null)).toThrow(
+        'Revenue realization requires an accepted reconciliation run bound to the entry block',
+      );
+    });
+
+    it('refuses a run whose coverage stops below the entry block', () => {
+      expect(realization({ runKey: 'run-7', coverageToBlock: 900, entryBlockNumber: 901 })).toThrow(
+        'run run-7 reached only 900',
+      );
+    });
+
+    it('accepts a run that reached exactly the entry block', () => {
+      expect(
+        realization({ runKey: 'run-7', coverageToBlock: 901, entryBlockNumber: 901 }),
+      ).not.toThrow();
+    });
   });
 });

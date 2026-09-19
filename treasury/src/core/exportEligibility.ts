@@ -73,6 +73,7 @@ function buildBlockedReasons(input: {
   bankConfirmationState: 'PENDING' | 'CONFIRMED' | 'REJECTED' | null;
   canonicalityBlockedReason: string | null;
   ingestionBlockedReasons: string[];
+  reconciliationCoverageBlockedReason: string | null;
 }): string[] {
   const reasons: string[] = [];
 
@@ -105,6 +106,14 @@ function buildBlockedReasons(input: {
     reasons.push(...input.reconciliationBlockedReasons);
   }
 
+  // WP-4 H-25. Kept separate from the status above: a run can be accepted,
+  // fresh and drift-free and still be evidence about a range that stops below
+  // this entry. "The run was clean" and "the run reached here" are different
+  // claims, and only the second one clears this entry.
+  if (input.reconciliationCoverageBlockedReason) {
+    reasons.push(input.reconciliationCoverageBlockedReason);
+  }
+
   if (
     input.latestState === 'EXTERNAL_EXECUTION_CONFIRMED' &&
     input.bankConfirmationState !== 'CONFIRMED'
@@ -113,6 +122,26 @@ function buildBlockedReasons(input: {
   }
 
   return Array.from(new Set(reasons));
+}
+
+/**
+ * WP-4 H-25. The run's watermark is compared against the entry's own block, not
+ * against the head: what matters is whether the reconciliation actually reached
+ * the evidence being paid out on.
+ */
+function resolveCoverageBlockedReason(
+  entryBlockNumber: number,
+  gate: TradeReconciliationGate,
+): string | null {
+  if (gate.coverageToBlock === null) {
+    return 'Reconciliation run has no chain coverage watermark, so it cannot be bound to this entry.';
+  }
+
+  if (entryBlockNumber > gate.coverageToBlock) {
+    return `Entry block ${entryBlockNumber} is beyond reconciliation run ${gate.runKey ?? 'unknown'} coverage watermark ${gate.coverageToBlock}.`;
+  }
+
+  return null;
 }
 
 function isExportableState(state: PayoutState | null): boolean {
@@ -393,8 +422,15 @@ export class TreasuryEligibilityService {
         freshness: 'MISSING' as const,
         completedAt: null,
         staleRunningRunCount: 0,
+        coverageFromBlock: null,
+        coverageToBlock: null,
+        coverageComplete: null,
         blockedReasons: ['Reconciliation status could not be determined'],
       };
+      const reconciliationCoverageBlockedReason = resolveCoverageBlockedReason(
+        entry.block_number,
+        reconciliationGate,
+      );
       const blockedReasons = buildBlockedReasons({
         latestState: entry.latest_state,
         confirmationState,
@@ -404,6 +440,7 @@ export class TreasuryEligibilityService {
         bankConfirmationState: latestBankConfirmation?.bank_state ?? null,
         canonicalityBlockedReason: canonicality.blockedReason,
         ingestionBlockedReasons: ingestion.blockedReasons,
+        reconciliationCoverageBlockedReason,
       });
       const eligibleForPayout = blockedReasons.length === 0;
       const eligibleForExport = eligibleForPayout && isExportableState(entry.latest_state);
@@ -421,6 +458,8 @@ export class TreasuryEligibilityService {
         reconciliationFreshness: reconciliationGate.freshness,
         reconciliationCompletedAt: reconciliationGate.completedAt,
         staleRunningRunCount: reconciliationGate.staleRunningRunCount,
+        reconciliationCoverageToBlock: reconciliationGate.coverageToBlock,
+        reconciliationCoverageComplete: reconciliationGate.coverageComplete,
         canonicalityState: canonicality.state,
         canonicalityDepth: canonicality.depth,
         canonicalityStableBlockNumber: canonicality.stableBlockNumber,

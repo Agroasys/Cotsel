@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc && npm run copy-files",
-    "copy-files": "mkdir -p dist/database && cp src/database/schema.sql src/database/002_canonical_monetary_amounts.sql src/database/003_maker_checker_actor_chain.sql src/database/004_canonical_chain_evidence.sql src/database/005_ingestion_freshness_worker.sql src/database/006_provider_handoff_authority.sql src/database/migrations.json dist/database/",
+    "copy-files": "mkdir -p dist/database && cp src/database/schema.sql src/database/002_canonical_monetary_amounts.sql src/database/003_maker_checker_actor_chain.sql src/database/004_canonical_chain_evidence.sql src/database/005_ingestion_freshness_worker.sql src/database/006_provider_handoff_authority.sql src/database/007_realization_reconciliation_binding.sql src/database/migrations.json dist/database/",
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
     "test": "jest --runInBand",

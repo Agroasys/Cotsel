@@ -18,25 +18,7 @@ import {
   TEST_REORGED_BLOCK_HASH,
 } from './helpers/chainCanonicality';
 import { eligibilityServiceWithFreshIngestion } from './helpers/eligibilityService';
-
-const clearReconciliation = {
-  assessTrades: async () =>
-    new Map([
-      [
-        'trade-1',
-        {
-          tradeId: 'trade-1',
-          status: 'CLEAR' as const,
-          runKey: 'run-1',
-          driftCount: 0,
-          freshness: 'FRESH' as const,
-          completedAt: new Date('2026-03-31T00:05:00.000Z'),
-          staleRunningRunCount: 0,
-          blockedReasons: [],
-        },
-      ],
-    ]),
-};
+import { clearReconciliation } from './helpers/reconciliationGate';
 
 // Spread rather than `??` per field: a test that sets `block_hash: null` is
 // making a point about an entry with no chain identity, and a nullish default
@@ -94,6 +76,9 @@ describe('TreasuryEligibilityService', () => {
                 freshness: 'FRESH',
                 completedAt: new Date('2026-03-31T00:05:00.000Z'),
                 staleRunningRunCount: 0,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: [],
               },
             ],
@@ -138,6 +123,9 @@ describe('TreasuryEligibilityService', () => {
                 freshness: 'FRESH',
                 completedAt: new Date('2026-03-31T00:05:00.000Z'),
                 staleRunningRunCount: 0,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: [],
               },
             ],
@@ -189,6 +177,9 @@ describe('TreasuryEligibilityService', () => {
                 freshness: 'FRESH',
                 completedAt: new Date('2026-03-31T00:05:00.000Z'),
                 staleRunningRunCount: 0,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: [],
               },
             ],
@@ -231,6 +222,9 @@ describe('TreasuryEligibilityService', () => {
                 freshness: 'FRESH',
                 completedAt: new Date('2026-03-31T00:05:00.000Z'),
                 staleRunningRunCount: 0,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: ['Latest reconciliation run reported 2 drift finding(s)'],
               },
             ],
@@ -273,6 +267,9 @@ describe('TreasuryEligibilityService', () => {
                 freshness: 'STALE',
                 completedAt: staleCompletedAt,
                 staleRunningRunCount: 1,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: [
                   'Latest completed reconciliation run is older than 900 seconds',
                   '1 reconciliation run(s) have remained RUNNING beyond 900 seconds',

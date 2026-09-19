@@ -171,6 +171,11 @@ handoff instead of overwriting it:
 
 - [`../docs/runbooks/treasury-provider-handoff-authority.md`](../docs/runbooks/treasury-provider-handoff-authority.md)
 
+Revenue realization is bound to the exact reconciliation run and chain block it
+was cleared against, and the realization record names both:
+
+- [`../docs/runbooks/treasury-realization-reconciliation-binding.md`](../docs/runbooks/treasury-realization-reconciliation-binding.md)
+
 Authoritative sweep execution evidence is matched from indexed `TreasuryClaimed` events. A batch
 does not become `EXECUTED` from operator-supplied amount or destination fields alone.
 

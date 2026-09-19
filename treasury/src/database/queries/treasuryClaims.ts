@@ -2,7 +2,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createHash } from 'node:crypto';
-import { assertRealizationAllowed } from '../../core/accountingPolicy';
+import {
+  assertRealizationAllowed,
+  type RealizationReconciliationBinding,
+} from '../../core/accountingPolicy';
 import {
   assertCompletionEvidence,
   classifyProviderHandoffTransition,
@@ -312,6 +315,12 @@ export async function createRevenueRealization(data: {
   actor: string;
   note?: string | null;
   metadata?: Record<string, unknown>;
+  /**
+   * WP-4 H-25. Resolved by the caller, because the reconciliation run lives in
+   * another database, and re-checked here against the entry's own block so a
+   * caller cannot assert coverage for a block the entry is not in.
+   */
+  reconciliationBinding: RealizationReconciliationBinding | null;
 }): Promise<RevenueRealization> {
   const client = await pool.connect();
 
@@ -330,11 +339,28 @@ export async function createRevenueRealization(data: {
       throw new Error('Ledger entry accounting facts not found');
     }
 
+    const entryBlock = await client.query<{ block_number: number }>(
+      `SELECT block_number FROM treasury_ledger_entries WHERE id = $1`,
+      [data.ledgerEntryId],
+    );
+    const entryBlockNumber = Number(entryBlock.rows[0]?.block_number);
+    if (!Number.isFinite(entryBlockNumber)) {
+      throw new Error('Ledger entry block number is unavailable');
+    }
+
+    // The caller supplies the run it read; the entry's block is re-derived here
+    // rather than trusted, so the stored comparison is between the real block
+    // and the real watermark.
+    const reconciliationBinding = data.reconciliationBinding
+      ? { ...data.reconciliationBinding, entryBlockNumber }
+      : null;
+
     assertRealizationAllowed({
       batchStatus: facts.sweep_batch_status,
       partnerHandoffStatus: facts.partner_handoff_status,
       bankPayoutState: facts.latest_bank_payout_state,
       revenueRealizationStatus: facts.revenue_realization_status,
+      reconciliationBinding,
     });
 
     if (data.accountingPeriodId !== facts.accounting_period_id) {
@@ -373,8 +399,11 @@ export async function createRevenueRealization(data: {
           realized_at,
           recognized_by,
           note,
-          metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+          metadata,
+          reconciliation_run_key,
+          reconciliation_coverage_to_block,
+          entry_block_number
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)
         RETURNING *`,
           [
             data.ledgerEntryId,
@@ -386,6 +415,9 @@ export async function createRevenueRealization(data: {
             data.actor,
             data.note ?? null,
             JSON.stringify(data.metadata ?? {}),
+            reconciliationBinding?.runKey ?? null,
+            reconciliationBinding?.coverageToBlock ?? null,
+            reconciliationBinding ? entryBlockNumber : null,
           ],
         ),
       'Ledger entry was realized concurrently',
