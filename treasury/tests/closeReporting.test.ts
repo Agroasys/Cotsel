@@ -239,6 +239,8 @@ describe('treasury close reporting', () => {
         partner_name: 'licensed-counterparty',
         partner_reference: 'handoff-33',
         handoff_status: 'ACKNOWLEDGED',
+        frozen_at: null,
+        frozen_reason: null,
         latest_payload_hash: 'payload-hash',
         evidence_reference: 'evidence://handoff-33',
         submitted_at: new Date('2026-03-24T09:00:00.000Z'),

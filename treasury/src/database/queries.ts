@@ -69,6 +69,7 @@ export {
   listTransitionActorsForSubject,
   recordTransitionActor,
 } from './queries/transitionActors';
+export { correctFrozenTreasuryPartnerHandoff } from './queries/partnerHandoffCorrections';
 export {
   appendTreasuryPartnerHandoffEvidence,
   getTreasuryPartnerHandoffByLedgerEntryId,

@@ -3,7 +3,13 @@
  */
 import { createHash } from 'node:crypto';
 import { assertRealizationAllowed } from '../../core/accountingPolicy';
+import {
+  assertCompletionEvidence,
+  classifyProviderHandoffTransition,
+} from '../../core/providerHandoffAuthority';
+import { PartnerHandoffConflictError } from '../../core/treasuryPartnerHandoff';
 import { rejectConcurrentWrite } from '../../core/transitionConcurrency';
+import { recordPartnerHandoffConflict } from './partnerHandoffConflicts';
 import type {
   PartnerHandoff,
   PartnerHandoffStatus,
@@ -170,13 +176,74 @@ export async function upsertPartnerHandoff(data: {
       throw new Error('External handoff requires matched on-chain treasury claim evidence');
     }
 
-    const timestamp = new Date();
-    const isSubmittedOrLater = ['SUBMITTED', 'ACKNOWLEDGED', 'COMPLETED'].includes(
+    // WP-4 B-09 / FAIL-11. The batch handoff was last-write-wins: any status
+    // overwrote any other, so a delayed callback could regress a completed
+    // handoff and a FAILED arriving after a COMPLETED replaced it outright.
+    const existingHandoff = await client.query<PartnerHandoff>(
+      `SELECT * FROM partner_handoffs WHERE sweep_batch_id = $1 FOR UPDATE`,
+      [data.sweepBatchId],
+    );
+    const current = existingHandoff.rows[0] ?? null;
+
+    if (current?.frozen_at) {
+      throw new PartnerHandoffConflictError(
+        `External handoff for this batch is frozen pending an approved correction: ${current.frozen_reason ?? 'contradictory provider evidence'}`,
+      );
+    }
+
+    assertCompletionEvidence(data.handoffStatus, {
+      evidenceReference: data.evidenceReference ?? null,
+    });
+
+    const transition = classifyProviderHandoffTransition(
+      current?.handoff_status ?? null,
       data.handoffStatus,
     );
-    const isAcknowledgedOrCompleted = ['ACKNOWLEDGED', 'COMPLETED'].includes(data.handoffStatus);
+
+    if (transition === 'CONTRADICTION') {
+      const detail = `Provider reported ${data.handoffStatus} for a batch handoff already terminal at ${current?.handoff_status}`;
+      await recordPartnerHandoffConflict(client, {
+        scope: 'SWEEP_BATCH',
+        subjectId: data.sweepBatchId,
+        partnerCode: data.partnerName,
+        retainedStatus: current?.handoff_status as PartnerHandoffStatus,
+        conflictingStatus: data.handoffStatus,
+        detail,
+        actor: `provider:${data.partnerName}`,
+        observedAt: new Date(),
+      });
+      await client.query(
+        `UPDATE partner_handoffs
+         SET frozen_at = COALESCE(frozen_at, NOW()),
+             frozen_reason = COALESCE(frozen_reason, $2),
+             updated_at = NOW()
+         WHERE sweep_batch_id = $1`,
+        [data.sweepBatchId, detail],
+      );
+      // Committed before the throw so the freeze and its reason survive the
+      // refusal; a rollback would leave the batch open to the same callback.
+      await client.query('COMMIT');
+      throw new PartnerHandoffConflictError(detail);
+    }
+
+    if (transition === 'STALE') {
+      await client.query('COMMIT');
+      return current as PartnerHandoff;
+    }
+
+    const timestamp = new Date();
+    const isSubmittedOrLater = ['SUBMITTED', 'ACKNOWLEDGED', 'PROCESSING', 'COMPLETED'].includes(
+      data.handoffStatus,
+    );
+    const isAcknowledgedOrCompleted = ['ACKNOWLEDGED', 'PROCESSING', 'COMPLETED'].includes(
+      data.handoffStatus,
+    );
     const isCompleted = data.handoffStatus === 'COMPLETED';
-    const isFailed = data.handoffStatus === 'FAILED';
+    const isFailed = ['FAILED', 'RETURNED'].includes(data.handoffStatus);
+    // `verified_at` used to be set from the status alone, which recorded
+    // Cotsel's own acceptance of an assertion as verification of it. Only
+    // evidence the provider produced can do that.
+    const isVerified = isAcknowledgedOrCompleted && Boolean(data.evidenceReference?.trim());
     const result = await client.query<PartnerHandoff>(
       `INSERT INTO partner_handoffs (
           sweep_batch_id,
@@ -222,7 +289,7 @@ export async function upsertPartnerHandoff(data: {
         isAcknowledgedOrCompleted ? timestamp : null,
         isCompleted ? timestamp : null,
         isFailed ? timestamp : null,
-        isAcknowledgedOrCompleted ? timestamp : null,
+        isVerified ? timestamp : null,
         JSON.stringify(metadata),
       ],
     );

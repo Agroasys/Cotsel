@@ -36,6 +36,13 @@
       "file": "005_ingestion_freshness_worker.sql",
       "sha256": "45627935877818ab27bb17419fcacb509f9705851831d1f3317159e81dd201ec",
       "schema_sha256": "3cdb1c7d95e50e776e526b167d9a7b79722bed6a9c6b1b59f5a6600d517fad55"
+    },
+    {
+      "version": "202609190006",
+      "name": "provider_handoff_authority",
+      "file": "006_provider_handoff_authority.sql",
+      "sha256": "33bb784d889ee340d4845c42229e84b9e04e5911737a6543527dc864373841a2",
+      "schema_sha256": "ed2f9e5a62fbefe0b014c8350f98fdb8a466e7b3bd434148273d071acd91a768"
     }
   ]
 }

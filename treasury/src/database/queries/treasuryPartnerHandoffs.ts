@@ -6,7 +6,13 @@ import {
   createTreasuryPartnerHandoffPayloadHash,
   TreasuryPartnerHandoffConflictError,
 } from '../../core/treasuryPartnerHandoff';
+import {
+  assertCompletionEvidence,
+  classifyProviderHandoffTransition,
+  type ProviderHandoffTransition,
+} from '../../core/providerHandoffAuthority';
 import { retryOnceOnUniqueViolation } from '../../core/transitionConcurrency';
+import { recordPartnerHandoffConflict } from './partnerHandoffConflicts';
 import type {
   LedgerEntry,
   TreasuryPartnerHandoff,
@@ -188,6 +194,10 @@ export interface TreasuryPartnerHandoffEvidenceResult {
   event: TreasuryPartnerHandoffEvent;
   created: boolean;
   idempotentReplay: boolean;
+  /** How the append-only state machine judged this callback. */
+  transition: ProviderHandoffTransition;
+  /** Whether it became the authoritative state. A recorded event that did not. */
+  applied: boolean;
 }
 
 export async function appendTreasuryPartnerHandoffEvidence(
@@ -220,6 +230,13 @@ async function appendTreasuryPartnerHandoffEvidenceOnce(
     observedAt: data.observedAt,
     metadata: data.metadata ?? {},
   };
+  // A completion is the one claim that says value left Cotsel's control, so it
+  // is refused outright unless the provider or the bank corroborated it.
+  assertCompletionEvidence(normalized.partnerStatus, {
+    evidenceReference: normalized.evidenceReference,
+    bankReference: normalized.bankReference,
+  });
+
   const payloadHash = createTreasuryPartnerHandoffEvidencePayloadHash(normalized);
   const client = await pool.connect();
 
@@ -253,6 +270,8 @@ async function appendTreasuryPartnerHandoffEvidenceOnce(
         event: existingEvent.rows[0],
         created: false,
         idempotentReplay: true,
+        transition: 'REPLAY',
+        applied: false,
       };
     }
 
@@ -319,17 +338,58 @@ async function appendTreasuryPartnerHandoffEvidenceOnce(
       ],
     );
 
+    // The evidence row above is written before any verdict is reached, and it
+    // is never conditional on one. What the callback is allowed to *do* varies;
+    // that it arrived, and what it said, does not.
+    const transition = handoff.frozen_at
+      ? ('STALE' as ProviderHandoffTransition)
+      : classifyProviderHandoffTransition(handoff.partner_status, normalized.partnerStatus);
+
+    if (transition === 'CONTRADICTION') {
+      const detail = `Provider reported ${normalized.partnerStatus} for a handoff already terminal at ${handoff.partner_status}`;
+      await recordPartnerHandoffConflict(client, {
+        scope: 'LEDGER_ENTRY',
+        subjectId: normalized.ledgerEntryId,
+        partnerCode: normalized.partnerCode,
+        providerEventId: normalized.providerEventId,
+        retainedStatus: handoff.partner_status,
+        conflictingStatus: normalized.partnerStatus,
+        detail,
+        actor: `provider:${normalized.partnerCode}`,
+        observedAt: normalized.observedAt,
+      });
+
+      await client.query(
+        `UPDATE treasury_partner_handoffs
+         SET frozen_at = COALESCE(frozen_at, NOW()),
+             frozen_reason = COALESCE(frozen_reason, $2),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [handoff.id, detail],
+      );
+
+      // Committed before the throw on purpose. Rolling back would discard the
+      // very evidence the conflict is about, leaving an unexplained refusal and
+      // a handoff that the next identical callback would freeze all over again.
+      await client.query('COMMIT');
+      throw new TreasuryPartnerHandoffConflictError(detail);
+    }
+
+    // ADVANCE is the only transition that moves the authoritative state. A
+    // REPLAY or a delayed, reordered callback fills in references it can add
+    // without regressing the state that has already been established.
+    const applied = transition === 'ADVANCE';
     const updatedHandoff = await client.query<TreasuryPartnerHandoff>(
       `UPDATE treasury_partner_handoffs
        SET
-         partner_status = $2,
-         payout_reference = COALESCE($3, payout_reference),
-         transfer_reference = COALESCE($4, transfer_reference),
-         drain_reference = COALESCE($5, drain_reference),
-         destination_external_account_id = COALESCE($6, destination_external_account_id),
-         liquidation_address_id = COALESCE($7, liquidation_address_id),
-         failure_code = COALESCE($8, failure_code),
-         latest_event_payload_hash = $9,
+         partner_status = CASE WHEN $11 THEN $2 ELSE partner_status END,
+         payout_reference = COALESCE(payout_reference, $3),
+         transfer_reference = COALESCE(transfer_reference, $4),
+         drain_reference = COALESCE(drain_reference, $5),
+         destination_external_account_id = COALESCE(destination_external_account_id, $6),
+         liquidation_address_id = COALESCE(liquidation_address_id, $7),
+         failure_code = COALESCE(failure_code, $8),
+         latest_event_payload_hash = CASE WHEN $11 THEN $9 ELSE latest_event_payload_hash END,
          metadata = COALESCE(metadata, '{}'::jsonb) || $10::jsonb,
          updated_at = NOW()
        WHERE id = $1
@@ -345,6 +405,7 @@ async function appendTreasuryPartnerHandoffEvidenceOnce(
         normalized.failureCode,
         payloadHash,
         JSON.stringify(normalized.metadata),
+        applied,
       ],
     );
 
@@ -355,6 +416,8 @@ async function appendTreasuryPartnerHandoffEvidenceOnce(
       event: eventResult.rows[0],
       created: true,
       idempotentReplay: false,
+      transition,
+      applied,
     };
   } catch (error) {
     await client.query('ROLLBACK');

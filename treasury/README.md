@@ -165,6 +165,12 @@ export and close fail closed once its freshness watermark lapses:
 
 - [`../docs/runbooks/treasury-ingestion-freshness.md`](../docs/runbooks/treasury-ingestion-freshness.md)
 
+External handoff state is append-only. A provider's `CREATED` or `FAILED` report
+never marks value handed off, and contradictory terminal evidence freezes the
+handoff instead of overwriting it:
+
+- [`../docs/runbooks/treasury-provider-handoff-authority.md`](../docs/runbooks/treasury-provider-handoff-authority.md)
+
 Authoritative sweep execution evidence is matched from indexed `TreasuryClaimed` events. A batch
 does not become `EXECUTED` from operator-supplied amount or destination fields alone.
 
