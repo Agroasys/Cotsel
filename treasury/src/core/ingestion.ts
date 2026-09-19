@@ -32,8 +32,10 @@ function resolvePlatformFeeSplit(event: {
   return splitPlatformFeeComponents(BigInt(event.paidPlatformFees));
 }
 
-const TRADE_EVENT_CURSOR = 'trade_events';
-const CLAIM_EVENT_CURSOR = 'claim_events';
+export const TRADE_EVENT_CURSOR = 'trade_events';
+export const CLAIM_EVENT_CURSOR = 'claim_events';
+/** Both cursors advance in the same run, so freshness is judged across both. */
+export const INGESTION_CURSORS = [TRADE_EVENT_CURSOR, CLAIM_EVENT_CURSOR];
 
 export interface TreasuryIngestionResult {
   fetched: number;
@@ -42,12 +44,41 @@ export interface TreasuryIngestionResult {
   stableBlockNumber: number | null;
   /** The highest block the indexer had processed when the run started. */
   indexerProcessedBlockNumber: number | null;
-  /** `min(stable, indexer)`: the height this run could prove coverage through. */
+  /**
+   * The height this run actually read through -- the lower of the two cursors,
+   * not the window it was aiming at. A run capped by `TREASURY_INGEST_MAX_EVENTS`
+   * stops below `toBlock`, and reporting the target here would claim coverage of
+   * a range nothing read.
+   */
   ingestedThroughBlockNumber: number | null;
+  /**
+   * Whether both cursors reached the end of the bounded window. A run can
+   * succeed without exhausting it, which is progress but not coverage: only an
+   * exhausted window may advance the freshness watermark.
+   */
+  windowExhausted: boolean;
   nextTradeBlockNumber: number;
   nextClaimBlockNumber: number;
   /** Set when the run refused to ingest; `fetched` is then 0 by construction. */
   blockedReason: string | null;
+}
+
+/**
+ * The resume height is the first block not fully consumed, so coverage is
+ * everything strictly below it. A cursor still at 0 has proved nothing, which
+ * is `null` rather than block 0.
+ */
+function provenCoverage(nextBlockNumber: number): number | null {
+  return nextBlockNumber > 0 ? nextBlockNumber - 1 : null;
+}
+
+/** Both cursors advance in one run, so the weaker one bounds the run's claim. */
+function lowestCoverage(first: number | null, second: number | null): number | null {
+  if (first === null || second === null) {
+    return null;
+  }
+
+  return Math.min(first, second);
 }
 
 interface WindowOutcome {
@@ -125,15 +156,24 @@ export class TreasuryIngestionService {
     const trades = await this.ingestTradeEvents(tradeWatermark, toBlock);
     const claims = await this.ingestClaimEvents(claimWatermark, toBlock);
 
-    await setIngestionWatermark(trades.nextBlockNumber, TRADE_EVENT_CURSOR, toBlock);
-    await setIngestionWatermark(claims.nextBlockNumber, CLAIM_EVENT_CURSOR, toBlock);
+    // Coverage is derived from where each cursor actually landed, never from
+    // the window the run was aiming at. The resume height is the first block
+    // not fully consumed, so everything strictly below it was read whole --
+    // which holds for all three ways a window loop ends: exhaustion, the event
+    // cap, and a stop on an unresolvable block.
+    const tradeCoverage = provenCoverage(trades.nextBlockNumber);
+    const claimCoverage = provenCoverage(claims.nextBlockNumber);
+
+    await setIngestionWatermark(trades.nextBlockNumber, TRADE_EVENT_CURSOR, tradeCoverage);
+    await setIngestionWatermark(claims.nextBlockNumber, CLAIM_EVENT_CURSOR, claimCoverage);
 
     const result: TreasuryIngestionResult = {
       fetched: trades.fetched + claims.fetched,
       inserted: trades.inserted + claims.inserted,
       stableBlockNumber: head.finalizedBlockNumber,
       indexerProcessedBlockNumber: indexerProcessed,
-      ingestedThroughBlockNumber: toBlock,
+      ingestedThroughBlockNumber: lowestCoverage(tradeCoverage, claimCoverage),
+      windowExhausted: trades.nextBlockNumber > toBlock && claims.nextBlockNumber > toBlock,
       nextTradeBlockNumber: trades.nextBlockNumber,
       nextClaimBlockNumber: claims.nextBlockNumber,
       blockedReason: null,
@@ -159,6 +199,7 @@ export class TreasuryIngestionService {
       stableBlockNumber: state.stableBlockNumber,
       indexerProcessedBlockNumber: state.indexerProcessed,
       ingestedThroughBlockNumber: null,
+      windowExhausted: false,
       nextTradeBlockNumber: state.tradeWatermark,
       nextClaimBlockNumber: state.claimWatermark,
       blockedReason,

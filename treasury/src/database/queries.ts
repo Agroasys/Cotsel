@@ -28,6 +28,12 @@ export {
 export {
   consumeServiceAuthNonce,
   getIngestionWatermark,
+  listIngestionCursorStates,
+  markIngestionAttemptStarted,
+  markIngestionRunCompleted,
+  markIngestionRunPartial,
+  markIngestionRunUnsuccessful,
+  recordIngestionRun,
   setIngestionWatermark,
 } from './queries/ingestion';
 export {
@@ -64,6 +70,7 @@ export {
   listTransitionActorsForSubject,
   recordTransitionActor,
 } from './queries/transitionActors';
+export { correctFrozenTreasuryPartnerHandoff } from './queries/partnerHandoffCorrections';
 export {
   appendTreasuryPartnerHandoffEvidence,
   getTreasuryPartnerHandoffByLedgerEntryId,

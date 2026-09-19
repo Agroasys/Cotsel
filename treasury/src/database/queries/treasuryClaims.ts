@@ -2,8 +2,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createHash } from 'node:crypto';
-import { assertRealizationAllowed } from '../../core/accountingPolicy';
+import {
+  assertRealizationAllowed,
+  type RealizationReconciliationBinding,
+} from '../../core/accountingPolicy';
+import {
+  assertCompletionEvidence,
+  classifyProviderHandoffTransition,
+} from '../../core/providerHandoffAuthority';
+import { PartnerHandoffConflictError } from '../../core/treasuryPartnerHandoff';
 import { rejectConcurrentWrite } from '../../core/transitionConcurrency';
+import { recordPartnerHandoffConflict } from './partnerHandoffConflicts';
 import type {
   PartnerHandoff,
   PartnerHandoffStatus,
@@ -170,13 +179,99 @@ export async function upsertPartnerHandoff(data: {
       throw new Error('External handoff requires matched on-chain treasury claim evidence');
     }
 
-    const timestamp = new Date();
-    const isSubmittedOrLater = ['SUBMITTED', 'ACKNOWLEDGED', 'COMPLETED'].includes(
+    // WP-4 B-09 / FAIL-11. The batch handoff was last-write-wins: any status
+    // overwrote any other, so a delayed callback could regress a completed
+    // handoff and a FAILED arriving after a COMPLETED replaced it outright.
+    const existingHandoff = await client.query<PartnerHandoff>(
+      `SELECT * FROM partner_handoffs WHERE sweep_batch_id = $1 FOR UPDATE`,
+      [data.sweepBatchId],
+    );
+    const current = existingHandoff.rows[0] ?? null;
+
+    if (current?.frozen_at) {
+      throw new PartnerHandoffConflictError(
+        `External handoff for this batch is frozen pending an approved correction: ${current.frozen_reason ?? 'contradictory provider evidence'}`,
+      );
+    }
+
+    assertCompletionEvidence(data.handoffStatus, {
+      evidenceReference: data.evidenceReference ?? null,
+    });
+
+    const transition = classifyProviderHandoffTransition(
+      current?.handoff_status ?? null,
       data.handoffStatus,
     );
-    const isAcknowledgedOrCompleted = ['ACKNOWLEDGED', 'COMPLETED'].includes(data.handoffStatus);
+
+    // Written before the verdict and never conditional on it. What a callback
+    // is allowed to *do* varies; that it arrived, and what it said, does not.
+    await client.query(
+      `INSERT INTO partner_handoff_events (
+         sweep_batch_id, partner_name, partner_reference, handoff_status,
+         transition, applied, evidence_reference, payload_hash, metadata, observed_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())`,
+      [
+        data.sweepBatchId,
+        data.partnerName,
+        data.partnerReference,
+        data.handoffStatus,
+        transition,
+        transition === 'ADVANCE',
+        data.evidenceReference ?? null,
+        payloadHash,
+        JSON.stringify(metadata),
+      ],
+    );
+
+    if (transition === 'CONTRADICTION') {
+      const detail = `Provider reported ${data.handoffStatus} for a batch handoff already terminal at ${current?.handoff_status}`;
+      await recordPartnerHandoffConflict(client, {
+        scope: 'SWEEP_BATCH',
+        subjectId: data.sweepBatchId,
+        partnerCode: data.partnerName,
+        retainedStatus: current?.handoff_status as PartnerHandoffStatus,
+        conflictingStatus: data.handoffStatus,
+        detail,
+        actor: `provider:${data.partnerName}`,
+        observedAt: new Date(),
+      });
+      await client.query(
+        `UPDATE partner_handoffs
+         SET frozen_at = COALESCE(frozen_at, NOW()),
+             frozen_reason = COALESCE(frozen_reason, $2),
+             updated_at = NOW()
+         WHERE sweep_batch_id = $1`,
+        [data.sweepBatchId, detail],
+      );
+      // Committed before the throw so the freeze and its reason survive the
+      // refusal; a rollback would leave the batch open to the same callback.
+      await client.query('COMMIT');
+      throw new PartnerHandoffConflictError(detail);
+    }
+
+    // A replayed or reordered delivery is now recorded above and stops here.
+    // It used to fall through to the upsert, where `evidence_reference` and
+    // `metadata` were overwritten from the incoming payload -- so a repeat
+    // carrying no receipt erased the receipt the batch already had.
+    if (transition === 'STALE' || transition === 'REPLAY') {
+      await client.query('COMMIT');
+      return current as PartnerHandoff;
+    }
+
+    const timestamp = new Date();
+    const isSubmittedOrLater = ['SUBMITTED', 'ACKNOWLEDGED', 'PROCESSING', 'COMPLETED'].includes(
+      data.handoffStatus,
+    );
+    const isAcknowledgedOrCompleted = ['ACKNOWLEDGED', 'PROCESSING', 'COMPLETED'].includes(
+      data.handoffStatus,
+    );
     const isCompleted = data.handoffStatus === 'COMPLETED';
-    const isFailed = data.handoffStatus === 'FAILED';
+    const isFailed = ['FAILED', 'RETURNED'].includes(data.handoffStatus);
+    // `verified_at` used to be set from the status alone, which recorded
+    // Cotsel's own acceptance of an assertion as verification of it. Only
+    // evidence the provider produced can do that.
+    const isVerified = isAcknowledgedOrCompleted && Boolean(data.evidenceReference?.trim());
     const result = await client.query<PartnerHandoff>(
       `INSERT INTO partner_handoffs (
           sweep_batch_id,
@@ -202,13 +297,13 @@ export async function upsertPartnerHandoff(data: {
           partner_reference = EXCLUDED.partner_reference,
           handoff_status = EXCLUDED.handoff_status,
           latest_payload_hash = EXCLUDED.latest_payload_hash,
-          evidence_reference = EXCLUDED.evidence_reference,
+          evidence_reference = COALESCE(EXCLUDED.evidence_reference, partner_handoffs.evidence_reference),
           submitted_at = COALESCE(EXCLUDED.submitted_at, partner_handoffs.submitted_at),
           acknowledged_at = COALESCE(EXCLUDED.acknowledged_at, partner_handoffs.acknowledged_at),
           completed_at = COALESCE(EXCLUDED.completed_at, partner_handoffs.completed_at),
           failed_at = COALESCE(EXCLUDED.failed_at, partner_handoffs.failed_at),
           verified_at = COALESCE(EXCLUDED.verified_at, partner_handoffs.verified_at),
-          metadata = EXCLUDED.metadata,
+          metadata = COALESCE(partner_handoffs.metadata, '{}'::jsonb) || EXCLUDED.metadata,
           updated_at = NOW()
         RETURNING *`,
       [
@@ -222,7 +317,7 @@ export async function upsertPartnerHandoff(data: {
         isAcknowledgedOrCompleted ? timestamp : null,
         isCompleted ? timestamp : null,
         isFailed ? timestamp : null,
-        isAcknowledgedOrCompleted ? timestamp : null,
+        isVerified ? timestamp : null,
         JSON.stringify(metadata),
       ],
     );
@@ -245,6 +340,12 @@ export async function createRevenueRealization(data: {
   actor: string;
   note?: string | null;
   metadata?: Record<string, unknown>;
+  /**
+   * WP-4 H-25. Resolved by the caller, because the reconciliation run lives in
+   * another database, and re-checked here against the entry's own block so a
+   * caller cannot assert coverage for a block the entry is not in.
+   */
+  reconciliationBinding: RealizationReconciliationBinding | null;
 }): Promise<RevenueRealization> {
   const client = await pool.connect();
 
@@ -263,11 +364,28 @@ export async function createRevenueRealization(data: {
       throw new Error('Ledger entry accounting facts not found');
     }
 
+    const entryBlock = await client.query<{ block_number: number }>(
+      `SELECT block_number FROM treasury_ledger_entries WHERE id = $1`,
+      [data.ledgerEntryId],
+    );
+    const entryBlockNumber = Number(entryBlock.rows[0]?.block_number);
+    if (!Number.isFinite(entryBlockNumber)) {
+      throw new Error('Ledger entry block number is unavailable');
+    }
+
+    // The caller supplies the run it read; the entry's block is re-derived here
+    // rather than trusted, so the stored comparison is between the real block
+    // and the real watermark.
+    const reconciliationBinding = data.reconciliationBinding
+      ? { ...data.reconciliationBinding, entryBlockNumber }
+      : null;
+
     assertRealizationAllowed({
       batchStatus: facts.sweep_batch_status,
       partnerHandoffStatus: facts.partner_handoff_status,
       bankPayoutState: facts.latest_bank_payout_state,
       revenueRealizationStatus: facts.revenue_realization_status,
+      reconciliationBinding,
     });
 
     if (data.accountingPeriodId !== facts.accounting_period_id) {
@@ -306,8 +424,11 @@ export async function createRevenueRealization(data: {
           realized_at,
           recognized_by,
           note,
-          metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+          metadata,
+          reconciliation_run_key,
+          reconciliation_coverage_to_block,
+          entry_block_number
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)
         RETURNING *`,
           [
             data.ledgerEntryId,
@@ -319,6 +440,9 @@ export async function createRevenueRealization(data: {
             data.actor,
             data.note ?? null,
             JSON.stringify(data.metadata ?? {}),
+            reconciliationBinding?.runKey ?? null,
+            reconciliationBinding?.coverageToBlock ?? null,
+            reconciliationBinding ? entryBlockNumber : null,
           ],
         ),
       'Ledger entry was realized concurrently',

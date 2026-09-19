@@ -10,6 +10,21 @@ export class TreasuryPartnerHandoffConflictError extends Error {
   }
 }
 
+/**
+ * WP-4 B-09 / FAIL-11. The batch-level equivalent, raised when contradictory
+ * provider evidence freezes a sweep batch's external handoff. It is a separate
+ * class from the ledger-entry one because the containment differs: freezing a
+ * batch holds every entry allocated to it.
+ */
+export class PartnerHandoffConflictError extends Error {
+  readonly code = 'PARTNER_HANDOFF_CONFLICT';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'PartnerHandoffConflictError';
+  }
+}
+
 export interface TreasuryPartnerHandoffPayloadHashInput {
   ledgerEntryId: number;
   partnerCode: TreasuryPartnerCode;

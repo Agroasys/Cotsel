@@ -1,6 +1,8 @@
 import type { SettlementConfirmationStage } from '@agroasys/sdk';
 import type { ChainCanonicalityState } from './core/chainCanonicality';
 
+import type { ProviderHandoffStatus } from './core/providerHandoffAuthority';
+
 export type TreasuryComponent = 'LOGISTICS' | 'PLATFORM_FEE' | 'SETTLEMENT_SUPPORT_FEE';
 
 export type PayoutState =
@@ -24,12 +26,16 @@ export type FiatDepositFailureClass =
 export type BankPayoutState = 'PENDING' | 'CONFIRMED' | 'REJECTED';
 export type ReconciliationGateStatus = 'CLEAR' | 'BLOCKED' | 'UNKNOWN';
 export type TreasuryPartnerCode = 'bridge';
-export type TreasuryPartnerHandoffStatus =
-  | 'SUBMITTED'
-  | 'PROCESSING'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'RETURNED';
+/**
+ * WP-4 B-09 / FAIL-11. These were two hand-written lists that had drifted --
+ * one carried CREATED and ACKNOWLEDGED, the other PROCESSING and RETURNED --
+ * so the same provider lifecycle was named differently at the ledger entry and
+ * at the sweep batch, and neither name said whether the state meant anything
+ * had moved. Both now resolve to the single vocabulary that
+ * `providerHandoffAuthority` maps; the two aliases remain because the tables
+ * they describe are still distinct.
+ */
+export type TreasuryPartnerHandoffStatus = ProviderHandoffStatus;
 export type AccountingPeriodStatus = 'OPEN' | 'PENDING_CLOSE' | 'CLOSED';
 export type SweepBatchStatus =
   | 'DRAFT'
@@ -40,12 +46,7 @@ export type SweepBatchStatus =
   | 'CLOSED'
   | 'VOID';
 export type SweepBatchAllocationStatus = 'ALLOCATED' | 'RELEASED';
-export type PartnerHandoffStatus =
-  | 'CREATED'
-  | 'SUBMITTED'
-  | 'ACKNOWLEDGED'
-  | 'COMPLETED'
-  | 'FAILED';
+export type PartnerHandoffStatus = ProviderHandoffStatus;
 export type RevenueRealizationStatus = 'REALIZED' | 'REVERSED';
 export type TreasuryAccountingState =
   | 'HELD'
@@ -142,6 +143,8 @@ export interface PartnerHandoff {
   partner_name: string;
   partner_reference: string;
   handoff_status: PartnerHandoffStatus;
+  frozen_at: Date | null;
+  frozen_reason: string | null;
   latest_payload_hash: string;
   evidence_reference: string | null;
   submitted_at: Date | null;
@@ -155,6 +158,9 @@ export interface PartnerHandoff {
 }
 
 export interface RevenueRealization {
+  reconciliation_run_key: string | null;
+  reconciliation_coverage_to_block: number | null;
+  entry_block_number: number | null;
   id: number;
   ledger_entry_id: number;
   accounting_period_id: number;
@@ -432,6 +438,8 @@ export interface TreasuryPartnerHandoff {
   partner_code: TreasuryPartnerCode;
   handoff_reference: string;
   partner_status: TreasuryPartnerHandoffStatus;
+  frozen_at: Date | null;
+  frozen_reason: string | null;
   payout_reference: string | null;
   transfer_reference: string | null;
   drain_reference: string | null;
@@ -527,6 +535,9 @@ export interface TreasuryEntryEligibility {
   reconciliationFreshness: 'FRESH' | 'STALE' | 'MISSING';
   reconciliationCompletedAt: Date | null;
   staleRunningRunCount: number;
+  /** WP-4 H-25: the exact chain watermark the accepted run reached. */
+  reconciliationCoverageToBlock: number | null;
+  reconciliationCoverageComplete: boolean | null;
   canonicalityState: ChainCanonicalityState;
   canonicalityDepth: number | null;
   canonicalityStableBlockNumber: number | null;
