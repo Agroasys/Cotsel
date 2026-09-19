@@ -1,11 +1,38 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildRuntimeContainmentEvidence } from '../runtime-containment-evidence.mjs';
+import {
+  buildRuntimeContainmentEvidence,
+  secretArnFromReference,
+} from '../runtime-containment-evidence.mjs';
 
 const secretArn =
   'arn:aws:secretsmanager:ap-south-1:655177116834:secret:/agroasys/staging/base-sepolia/wallet-oracle-vGkekr';
+const secretReference = `${secretArn}:privateKey::`;
 const historicalContract = '0xB594Cd561F28daBD771f9b358CF2bc731d14EDBd';
+
+function secretEvent(eventId, eventTime) {
+  return {
+    EventId: eventId,
+    EventName: 'GetSecretValue',
+    EventTime: eventTime,
+    EventSource: 'secretsmanager.amazonaws.com',
+    Username: 'cotsel-staging-gateway-execution',
+    Resources: [{ ResourceName: secretArn }],
+    CloudTrailEvent: JSON.stringify({
+      requestParameters: { secretId: secretArn },
+      userIdentity: {
+        sessionContext: {
+          sessionIssuer: {
+            arn: 'arn:aws:iam::655177116834:role/cotsel-staging-gateway-execution',
+          },
+        },
+      },
+      sourceIPAddress: '192.0.2.1',
+      userAgent: 'amazon-ecs-agent',
+    }),
+  };
+}
 
 function fixture() {
   return {
@@ -65,7 +92,7 @@ function fixture() {
               { name: 'ESCROW_ADDRESS', value: historicalContract },
               { name: 'ORACLE_SIGNER_CUSTODY_MODE', value: 'raw_private_key' },
             ],
-            secrets: [{ name: 'ORACLE_PRIVATE_KEY', valueFrom: secretArn }],
+            secrets: [{ name: 'ORACLE_PRIVATE_KEY', valueFrom: secretReference }],
           },
         ],
       },
@@ -86,6 +113,10 @@ function fixture() {
           containers: [{ name: 'indexer-pipeline', lastStatus: 'STOPPED', exitCode: 1 }],
         },
       ],
+    },
+    taskLaunchEvents: { Events: [] },
+    preContainmentSecretEvents: {
+      Events: [secretEvent('6d59caee-a679-4bd8-ada6-dcb4b7de768c', '2026-09-18T13:12:19Z')],
     },
     secretEvents: { Events: [] },
     logGroups: [
@@ -117,10 +148,19 @@ test('builds sanitized fail-closed containment evidence', () => {
   const evidence = buildRuntimeContainmentEvidence(fixture(), metadata);
   assert.equal(evidence.assertions.noRunningOrPendingTasks, true);
   assert.equal(evidence.containment.historicalOracleSecretArn, secretArn);
+  assert.equal(evidence.containment.historicalOracleSecretReference, secretReference);
+  assert.equal(
+    evidence.containment.preContainmentOracleSecretLookupControl.eventId,
+    '6d59caee-a679-4bd8-ada6-dcb4b7de768c',
+  );
   assert.equal(evidence.containment.logEvidence[0].events[0].classification, 'rpc_rate_limited');
   assert.match(evidence.containment.logEvidence[0].events[0].messageSha256, /^[0-9a-f]{64}$/);
   assert.equal(evidence.containment.taskDefinition.containers[0].environment.RPC_URL, undefined);
   assert.doesNotMatch(JSON.stringify(evidence), /reusable-credential/);
+});
+
+test('normalizes an ECS secret reference to the Secrets Manager ARN', () => {
+  assert.equal(secretArnFromReference(secretReference), secretArn);
 });
 
 test('rejects nonzero service counts and post-containment task starts', () => {
@@ -141,29 +181,35 @@ test('rejects nonzero service counts and post-containment task starts', () => {
 
 test('rejects post-containment Oracle secret retrieval', () => {
   const input = fixture();
-  input.secretEvents.Events.push({
-    EventId: 'event-id',
-    EventName: 'GetSecretValue',
-    EventTime: '2026-09-18T13:20:00Z',
-    EventSource: 'secretsmanager.amazonaws.com',
-    Username: 'cotsel-staging-gateway-execution',
-    Resources: [{ ResourceName: secretArn }],
-    CloudTrailEvent: JSON.stringify({
-      requestParameters: { secretId: secretArn },
-      userIdentity: {
-        sessionContext: {
-          sessionIssuer: {
-            arn: 'arn:aws:iam::655177116834:role/cotsel-staging-gateway-execution',
-          },
-        },
-      },
-      sourceIPAddress: '192.0.2.1',
-      userAgent: 'amazon-ecs-agent',
-    }),
-  });
+  input.secretEvents.Events.push(secretEvent('event-id', '2026-09-18T13:20:00Z'));
   assert.throws(
     () => buildRuntimeContainmentEvidence(input, metadata),
     /retrieved after containment/,
+  );
+});
+
+test('rejects a missing pre-containment lookup control or a task launch', () => {
+  const missingControl = fixture();
+  missingControl.preContainmentSecretEvents.Events = [];
+  assert.throws(
+    () => buildRuntimeContainmentEvidence(missingControl, metadata),
+    /did not recover the known pre-containment/,
+  );
+
+  const taskLaunch = fixture();
+  taskLaunch.taskLaunchEvents.Events.push({
+    EventId: 'run-task-event',
+    EventName: 'RunTask',
+    EventTime: '2026-09-18T13:20:00Z',
+    EventSource: 'ecs.amazonaws.com',
+    CloudTrailEvent: JSON.stringify({
+      requestParameters: { taskDefinition: 'cotsel-staging-gateway:21' },
+      userIdentity: { invokedBy: 'ecs.amazonaws.com' },
+    }),
+  });
+  assert.throws(
+    () => buildRuntimeContainmentEvidence(taskLaunch, metadata),
+    /task launch after containment/,
   );
 });
 

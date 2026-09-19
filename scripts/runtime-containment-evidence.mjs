@@ -14,6 +14,7 @@ const EXPECTED_SECRET_PREFIX =
   'arn:aws:secretsmanager:ap-south-1:655177116834:secret:/agroasys/staging/base-sepolia/wallet-oracle-';
 const EXPECTED_ROLE_FRAGMENT = 'assumed-role/agroasys-cotsel-terraform-plan-dispatch/';
 const CONTAINMENT_BOUNDARY = '2026-09-18T13:15:01.000Z';
+const KNOWN_PRE_CONTAINMENT_SECRET_EVENT = '6d59caee-a679-4bd8-ada6-dcb4b7de768c';
 
 const SAFE_ENVIRONMENT_NAMES = new Set([
   'CHAIN_ID',
@@ -111,6 +112,12 @@ function sanitizeStoppedTasks(tasks) {
   }));
 }
 
+export function secretArnFromReference(reference) {
+  const fields = reference.split(':');
+  assert(fields.length >= 7, 'Oracle secret reference is not an ARN');
+  return fields.slice(0, 7).join(':');
+}
+
 function eventTargetsOracleSecret(event, oracleSecretArn) {
   if (event.EventName !== 'GetSecretValue') return false;
   const detail = JSON.parse(event.CloudTrailEvent ?? '{}');
@@ -138,6 +145,31 @@ function sanitizeSecretEvents(events, oracleSecretArn) {
         issuerArn: identity.sessionContext?.sessionIssuer?.arn ?? null,
         invokedBy: identity.invokedBy ?? null,
         userAgentClass: /ecs-agent|fargate/i.test(detail.userAgent ?? '') ? 'ecs-runtime' : 'other',
+      };
+    });
+}
+
+function sanitizeTaskLaunchEvents(events) {
+  return (events ?? [])
+    .filter((event) => {
+      if (!['RunTask', 'StartTask'].includes(event.EventName)) return false;
+      const detail = JSON.parse(event.CloudTrailEvent ?? '{}');
+      const request = detail.requestParameters ?? {};
+      return (
+        String(request.taskDefinition ?? '').includes(EXPECTED_TASK_DEFINITION.split(':')[0]) ||
+        String(request.group ?? '').includes(EXPECTED_SERVICE)
+      );
+    })
+    .map((event) => {
+      const detail = JSON.parse(event.CloudTrailEvent ?? '{}');
+      const identity = detail.userIdentity ?? {};
+      return {
+        eventId: event.EventId,
+        eventTime: iso(event.EventTime),
+        eventName: event.EventName,
+        eventSource: event.EventSource,
+        issuerArn: identity.sessionContext?.sessionIssuer?.arn ?? null,
+        invokedBy: identity.invokedBy ?? null,
       };
     });
 }
@@ -183,7 +215,8 @@ export function buildRuntimeContainmentEvidence(input, metadata) {
       .map(({ valueFrom }) => valueFrom),
   );
   assert(oraclePrivateKeyReferences.length === 1, 'Expected one historical Oracle key reference');
-  const oracleSecretArn = oraclePrivateKeyReferences[0];
+  const oracleSecretReference = oraclePrivateKeyReferences[0];
+  const oracleSecretArn = secretArnFromReference(oracleSecretReference);
   assert(
     oracleSecretArn.startsWith(EXPECTED_SECRET_PREFIX),
     'Historical Oracle secret identity changed unexpectedly',
@@ -209,6 +242,26 @@ export function buildRuntimeContainmentEvidence(input, metadata) {
     ({ startedAt }) => startedAt !== null && startedAt >= CONTAINMENT_BOUNDARY,
   );
   assert(postContainmentStarts.length === 0, 'A gateway task started after containment');
+
+  const taskLaunchEvents = sanitizeTaskLaunchEvents(input.taskLaunchEvents?.Events).filter(
+    ({ eventTime }) => eventTime >= CONTAINMENT_BOUNDARY,
+  );
+  assert(
+    taskLaunchEvents.length === 0,
+    'CloudTrail recorded a gateway task launch after containment',
+  );
+
+  const preContainmentSecretReads = sanitizeSecretEvents(
+    input.preContainmentSecretEvents?.Events,
+    oracleSecretArn,
+  );
+  const knownPreContainmentRead = preContainmentSecretReads.find(
+    ({ eventId }) => eventId === KNOWN_PRE_CONTAINMENT_SECRET_EVENT,
+  );
+  assert(
+    knownPreContainmentRead !== null && knownPreContainmentRead !== undefined,
+    'CloudTrail lookup did not recover the known pre-containment Oracle secret read',
+  );
 
   const secretReads = sanitizeSecretEvents(input.secretEvents?.Events, oracleSecretArn).filter(
     ({ eventTime }) => eventTime >= CONTAINMENT_BOUNDARY,
@@ -264,22 +317,32 @@ export function buildRuntimeContainmentEvidence(input, metadata) {
         registeredAt: iso(taskDefinition.registeredAt),
         containers,
       },
+      historicalOracleSecretReference: oracleSecretReference,
       historicalOracleSecretArn: oracleSecretArn,
       historicalContractBindings: contractBindings,
       stoppedTasks,
+      postContainmentTaskLaunchEvents: taskLaunchEvents,
       logEvidence: sanitizeLogEvidence(input.logGroups),
+      preContainmentOracleSecretLookupControl: knownPreContainmentRead,
       postContainmentOracleSecretReads: secretReads,
     },
     assertions: {
       serviceScaledToZero: true,
       noRunningOrPendingTasks: true,
       noObservedPostContainmentTaskStarts: true,
+      noObservedPostContainmentTaskLaunchEvents: true,
+      preContainmentSecretLookupControlRecovered: true,
       noObservedPostContainmentOracleSecretReads: true,
       historicalTaskDefinitionPreserved: true,
       historicalSecretReferencePreserved: true,
       noSecretValuesCollected: true,
     },
     limitations: [
+      ...(stoppedTasks.length === 0
+        ? [
+            'ECS no longer returned the stopped tasks; their reasons remain in the linked pre-containment evidence.',
+          ]
+        : []),
       'GitHub Actions artifacts are provisional until the approved immutable archive exists.',
       'This evidence proves containment only; it does not prove custody or runtime remediation.',
     ],
@@ -301,6 +364,8 @@ function main() {
     runningTaskArns: read('running-tasks.json').taskArns ?? [],
     pendingTaskArns: read('pending-tasks.json').taskArns ?? [],
     stoppedTasks: read('stopped-tasks.json'),
+    taskLaunchEvents: read('task-launch-events.json'),
+    preContainmentSecretEvents: read('pre-containment-secret-events.json'),
     secretEvents: read('secret-events.json'),
     logGroups: read('log-events.json'),
   };

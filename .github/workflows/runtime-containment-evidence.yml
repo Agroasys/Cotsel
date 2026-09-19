@@ -135,14 +135,15 @@ jobs:
             printf '[]\n' > evidence-input/log-events.json
           fi
 
-      - name: Collect post-containment Oracle secret events
+      - name: Collect Oracle secret lookup controls
         run: |
           set -euo pipefail
-          ORACLE_SECRET_ARN=$(jq -er '
+          ORACLE_SECRET_REFERENCE=$(jq -er '
             .taskDefinition.containerDefinitions[].secrets[]?
             | select(.name == "ORACLE_PRIVATE_KEY")
             | .valueFrom
           ' evidence-input/task-definition.json)
+          ORACLE_SECRET_ARN=$(printf '%s' "$ORACLE_SECRET_REFERENCE" | cut -d: -f1-7)
           case "$ORACLE_SECRET_ARN" in
             arn:aws:secretsmanager:ap-south-1:655177116834:secret:/agroasys/staging/base-sepolia/wallet-oracle-*) ;;
             *) echo "Unexpected Oracle secret identity." >&2; exit 1 ;;
@@ -151,10 +152,35 @@ jobs:
           aws cloudtrail lookup-events \
             --region "$AWS_REGION" \
             --lookup-attributes AttributeKey=ResourceName,AttributeValue="$ORACLE_SECRET_ARN" \
+            --start-time '2026-09-18T13:00:00Z' \
+            --end-time "$CONTAINMENT_BOUNDARY" \
+            --max-items 1000 \
+            > evidence-input/pre-containment-secret-events.json
+
+          aws cloudtrail lookup-events \
+            --region "$AWS_REGION" \
+            --lookup-attributes AttributeKey=ResourceName,AttributeValue="$ORACLE_SECRET_ARN" \
             --start-time "$CONTAINMENT_BOUNDARY" \
             --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --max-items 1000 \
             > evidence-input/secret-events.json
+
+      - name: Collect post-containment task-launch events
+        run: |
+          set -euo pipefail
+          for event_name in RunTask StartTask; do
+            aws cloudtrail lookup-events \
+              --region "$AWS_REGION" \
+              --lookup-attributes AttributeKey=EventName,AttributeValue="$event_name" \
+              --start-time "$CONTAINMENT_BOUNDARY" \
+              --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --max-items 1000 \
+              > "evidence-input/task-launch-${event_name}.json"
+          done
+          jq -s '{Events: [.[].Events[]]}' \
+            evidence-input/task-launch-RunTask.json \
+            evidence-input/task-launch-StartTask.json \
+            > evidence-input/task-launch-events.json
 
       - name: Build and verify sanitized evidence
         run: |
