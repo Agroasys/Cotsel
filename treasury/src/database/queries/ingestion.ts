@@ -89,6 +89,7 @@ export interface IngestionCursorState {
   lastAttemptAt: Date | null;
   lastSuccessAt: Date | null;
   lastBlockedReason: string | null;
+  lastPartialReason: string | null;
   consecutiveFailureCount: number;
 }
 
@@ -99,6 +100,7 @@ type IngestionCursorStateRow = {
   last_attempt_at: Date | null;
   last_success_at: Date | null;
   last_blocked_reason: string | null;
+  last_partial_reason: string | null;
   consecutive_failure_count: number;
 };
 
@@ -112,6 +114,7 @@ export async function listIngestionCursorStates(
             last_attempt_at,
             last_success_at,
             last_blocked_reason,
+            last_partial_reason,
             consecutive_failure_count
      FROM treasury_ingestion_state
      WHERE cursor_name = ANY($1::text[])
@@ -131,6 +134,7 @@ export async function listIngestionCursorStates(
     lastAttemptAt: row.last_attempt_at,
     lastSuccessAt: row.last_success_at,
     lastBlockedReason: row.last_blocked_reason,
+    lastPartialReason: row.last_partial_reason,
     consecutiveFailureCount: Number(row.consecutive_failure_count),
   }));
 }
@@ -156,10 +160,32 @@ export async function markIngestionRunCompleted(cursorNames: string[]): Promise<
     `UPDATE treasury_ingestion_state
      SET last_success_at = NOW(),
          last_blocked_reason = NULL,
+         last_partial_reason = NULL,
          consecutive_failure_count = 0,
          updated_at = NOW()
      WHERE cursor_name = ANY($1::text[])`,
     [cursorNames],
+  );
+}
+
+/**
+ * A run capped by `TREASURY_INGEST_MAX_EVENTS` read everything it claimed to
+ * read and is not a failure, so the failure counter stays where it is. What it
+ * did not do is catch up, so it must not advance `last_success_at` either:
+ * freshness is the claim that treasury is level with the chain, and a run that
+ * stopped short has not established it.
+ */
+export async function markIngestionRunPartial(
+  cursorNames: string[],
+  partialReason: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE treasury_ingestion_state
+     SET last_partial_reason = $2,
+         last_blocked_reason = NULL,
+         updated_at = NOW()
+     WHERE cursor_name = ANY($1::text[])`,
+    [cursorNames, partialReason],
   );
 }
 
@@ -183,7 +209,7 @@ export async function markIngestionRunUnsuccessful(
 }
 
 export type IngestionRunTriggerSource = 'WORKER' | 'CLI' | 'API';
-export type IngestionRunOutcome = 'COMPLETED' | 'BLOCKED' | 'FAILED' | 'NOT_OWNER';
+export type IngestionRunOutcome = 'COMPLETED' | 'PARTIAL' | 'BLOCKED' | 'FAILED' | 'NOT_OWNER';
 
 export interface IngestionRunRecord {
   runKey: string;

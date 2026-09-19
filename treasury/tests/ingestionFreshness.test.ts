@@ -19,6 +19,7 @@ function cursor(overrides: Partial<IngestionCursorState> & { cursorName: string 
     lastAttemptAt: NOW,
     lastSuccessAt: NOW,
     lastBlockedReason: null,
+    lastPartialReason: null,
     consecutiveFailureCount: 0,
     ...overrides,
   } satisfies IngestionCursorState;

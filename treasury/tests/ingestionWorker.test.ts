@@ -1,11 +1,13 @@
 const mockMarkAttemptStarted = jest.fn();
 const mockMarkRunCompleted = jest.fn();
+const mockMarkRunPartial = jest.fn();
 const mockMarkRunUnsuccessful = jest.fn();
 const mockRecordIngestionRun = jest.fn();
 
 jest.mock('../src/database/queries/ingestion', () => ({
   markIngestionAttemptStarted: mockMarkAttemptStarted,
   markIngestionRunCompleted: mockMarkRunCompleted,
+  markIngestionRunPartial: mockMarkRunPartial,
   markIngestionRunUnsuccessful: mockMarkRunUnsuccessful,
   recordIngestionRun: mockRecordIngestionRun,
 }));
@@ -39,6 +41,7 @@ function completedResult(
     ingestedThroughBlockNumber: 980,
     nextTradeBlockNumber: 981,
     nextClaimBlockNumber: 981,
+    windowExhausted: true,
     blockedReason: null,
     ...overrides,
   };
@@ -94,6 +97,7 @@ describe('TreasuryIngestionWorker', () => {
     jest.clearAllMocks();
     mockMarkAttemptStarted.mockResolvedValue(undefined);
     mockMarkRunCompleted.mockResolvedValue(undefined);
+    mockMarkRunPartial.mockResolvedValue(undefined);
     mockMarkRunUnsuccessful.mockResolvedValue(undefined);
     mockRecordIngestionRun.mockResolvedValue(undefined);
   });
@@ -230,6 +234,55 @@ describe('TreasuryIngestionWorker', () => {
 
     expect(run.outcome).toBe('COMPLETED');
     expect(mockMarkRunCompleted).toHaveBeenCalled();
+  });
+
+  /**
+   * A run capped by `TREASURY_INGEST_MAX_EVENTS` read everything it claims to
+   * have read, but did not reach the end of its window. Treating that as a
+   * completed run reported a permanently-behind ingester as level with the
+   * chain -- the same false-green this control removes, produced by a worker
+   * that is running rather than one that stopped.
+   */
+  it('does not advance freshness when the run stopped short of its window', async () => {
+    const { worker } = makeWorker(async () =>
+      completedResult({
+        windowExhausted: false,
+        ingestedThroughBlockNumber: 600,
+        nextTradeBlockNumber: 601,
+      }),
+    );
+
+    const run = await worker.runOnce('WORKER');
+
+    expect(run.outcome).toBe('PARTIAL');
+    expect(mockMarkRunCompleted).not.toHaveBeenCalled();
+    expect(mockMarkRunPartial).toHaveBeenCalledWith(
+      ['trade_events', 'claim_events'],
+      expect.stringContaining('600'),
+    );
+  });
+
+  it('records the coverage a capped run actually reached, not the window it targeted', async () => {
+    const { worker } = makeWorker(async () =>
+      completedResult({ windowExhausted: false, ingestedThroughBlockNumber: 600 }),
+    );
+
+    await worker.runOnce('WORKER');
+
+    expect(mockRecordIngestionRun).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'PARTIAL', ingestedThroughBlockNumber: 600 }),
+    );
+  });
+
+  /** A capped run is not a failure, so it must not drive the failure alarm. */
+  it('does not count a capped run as a failure', async () => {
+    const { worker } = makeWorker(async () =>
+      completedResult({ windowExhausted: false, ingestedThroughBlockNumber: 600 }),
+    );
+
+    await worker.runOnce('WORKER');
+
+    expect(mockMarkRunUnsuccessful).not.toHaveBeenCalled();
   });
 
   it('stops scheduling once stopped', async () => {

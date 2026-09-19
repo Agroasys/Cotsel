@@ -86,6 +86,25 @@ Both cursors advance in the same run, so **the furthest-behind cursor governs**.
 A fresh `trade_events` beside a stalled `claim_events` is a stalled ingester,
 and reporting the newer success would let one cursor mask the other's outage.
 
+### Progress is not coverage
+
+A run bounded by `TREASURY_INGEST_MAX_EVENTS` stops below the window it was
+aiming at. It read everything it claims to have read, so it is recorded as
+`PARTIAL` with the coverage it actually reached — but it does **not** advance
+`last_success_at`, because freshness is the claim that treasury is level with
+the chain and a capped run has not established that.
+
+Coverage is always derived from where each cursor landed, never from the window
+target. The resume height is the first block not fully consumed, so everything
+strictly below it was read whole; the run reports the lower of the two cursors.
+A capped run is not a failure either, so it does not drive the failure counter —
+what escalates it is the freshness threshold, and the lag alarm before that.
+
+A persistently capped ingester therefore goes stale exactly like a stopped one,
+which is the point: both are behind the chain, and export must not clear against
+either. `last_partial_reason` is what tells the operator which of the two it is —
+one needs restarting, the other needs a bigger window or a shorter interval.
+
 `NEVER_RUN` is separated from `STALE` because the operator action differs: one
 is a deployment that has not started ingesting, the other is an ingester that
 stopped. Existing rows keep `last_success_at IS NULL` after the migration

@@ -342,6 +342,14 @@ export class TreasuryController {
         return;
       }
 
+      // A capped run read what it claims to have read and is not a refusal.
+      // The caller is told the window was not exhausted so it can ask again
+      // rather than record the range as covered.
+      if (run.outcome === 'PARTIAL') {
+        res.status(200).json(success({ runKey: run.runKey, ...run.result }));
+        return;
+      }
+
       if (run.outcome !== 'COMPLETED') {
         // A refusal is not a successful empty run. An operator reading 200 here
         // would record "ingestion completed, nothing new" for a run that never

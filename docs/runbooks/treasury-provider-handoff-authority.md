@@ -84,6 +84,34 @@ The callback response reports `transition` and `applied`, so a provider can tell
 a delivery that was recorded from one that became authoritative. A provider that
 cannot distinguish them will retry a state it already lost.
 
+### Completion is never asserted at creation
+
+`POST /internal/entries/:entryId/partner-handoff` records the _intent_ to hand
+off. It runs under internal service auth alone — no provider signature is
+involved, and its payload carries no evidence or bank reference for one to be
+checked against — so it refuses a `COMPLETED` status outright with
+`400 PROVIDER_HANDOFF_STATE_UNKNOWN`. Completion arrives only through the
+provider-signed evidence route, where `assertCompletionEvidence` applies.
+
+Without that, an internal caller could write an uncorroborated completion
+straight into the authoritative state, and from there into the accounting
+projection.
+
+### Every batch callback is recorded
+
+`partner_handoff_events` is the sweep-batch equivalent of the ledger entry's
+evidence log, written **before** the callback is classified and carrying the
+verdict beside the delivery. Only an `ADVANCE` updates the authoritative
+projection; a replayed or reordered delivery is recorded with `applied = false`
+and stops there.
+
+That ordering matters for more than the audit trail. A replay used to fall
+through to the upsert, where `evidence_reference` and `metadata` were assigned
+straight from the incoming payload — so a repeat carrying no receipt erased the
+receipt the batch already had. References and metadata now accumulate rather
+than being replaced, and a non-advancing delivery does not touch the projection
+at all.
+
 ### Evidence survives the verdict
 
 The evidence row is written **before** any verdict is reached and is never

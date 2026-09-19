@@ -28,7 +28,7 @@ export function incrementReplayReject(): void {
  * distinguish a healthy quiet period from a worker that stopped emitting.
  */
 export function recordIngestionRunOutcome(
-  outcome: 'COMPLETED' | 'BLOCKED' | 'FAILED' | 'NOT_OWNER',
+  outcome: 'COMPLETED' | 'PARTIAL' | 'BLOCKED' | 'FAILED' | 'NOT_OWNER',
   detail: Record<string, unknown>,
 ): void {
   const metric = {
@@ -39,6 +39,14 @@ export function recordIngestionRunOutcome(
 
   if (outcome === 'FAILED' || outcome === 'BLOCKED') {
     Logger.error('Metric increment', metric);
+    return;
+  }
+
+  // A capped run is progress, not an incident -- but a run of them means
+  // ingestion is not keeping up, which is what the freshness threshold and the
+  // lag alarm are there to escalate.
+  if (outcome === 'PARTIAL') {
+    Logger.warn('Metric increment', metric);
     return;
   }
 

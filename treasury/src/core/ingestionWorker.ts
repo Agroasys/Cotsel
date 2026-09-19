@@ -24,6 +24,7 @@ import { pool } from '../database/connection';
 import {
   markIngestionAttemptStarted,
   markIngestionRunCompleted,
+  markIngestionRunPartial,
   markIngestionRunUnsuccessful,
   recordIngestionRun,
   type IngestionRunOutcome,
@@ -187,6 +188,25 @@ export class TreasuryIngestionWorker {
         });
       }
 
+      // A run that stopped at the event cap read everything it claims to have
+      // read, but it did not reach the end of its window. Advancing the
+      // freshness watermark here would report a permanently-behind ingester as
+      // level with the chain, which is the same false-green this control exists
+      // to remove -- only now produced by a worker that is running.
+      if (!result.windowExhausted) {
+        const partialReason = `Ingestion stopped at the event cap with coverage through block ${result.ingestedThroughBlockNumber ?? 'none'}, short of block ${result.stableBlockNumber ?? 'unknown'}`;
+        await markIngestionRunPartial(INGESTION_CURSORS, partialReason);
+        return await this.finish({
+          runKey,
+          startedAt,
+          triggerSource,
+          outcome: 'PARTIAL',
+          result,
+          error: null,
+          blockedReason: partialReason,
+        });
+      }
+
       await markIngestionRunCompleted(INGESTION_CURSORS);
       return await this.finish({
         runKey,
@@ -236,6 +256,9 @@ export class TreasuryIngestionWorker {
   }): Promise<IngestionWorkerRun> {
     const durationMs = Math.max(0, Date.now() - input.startedAt.getTime());
     const completed = input.outcome === 'COMPLETED';
+    // A partial run proved a smaller window, so it records the coverage it
+    // actually reached; only a refusal or a throw proved nothing at all.
+    const provedCoverage = completed || input.outcome === 'PARTIAL';
 
     try {
       await recordIngestionRun({
@@ -249,7 +272,7 @@ export class TreasuryIngestionWorker {
         indexerProcessedBlockNumber: input.result?.indexerProcessedBlockNumber ?? null,
         // Only a completed run proved a window; the table's own constraint
         // refuses a coverage height on any other outcome.
-        ingestedThroughBlockNumber: completed
+        ingestedThroughBlockNumber: provedCoverage
           ? (input.result?.ingestedThroughBlockNumber ?? null)
           : null,
         nextTradeBlockNumber: input.result?.nextTradeBlockNumber ?? null,

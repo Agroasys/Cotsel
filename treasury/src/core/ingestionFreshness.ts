@@ -101,6 +101,8 @@ export class TreasuryIngestionFreshnessService {
     );
     const lastBlockedReason =
       states.find((state) => state.lastBlockedReason !== null)?.lastBlockedReason ?? null;
+    const lastPartialReason =
+      states.find((state) => state.lastPartialReason !== null)?.lastPartialReason ?? null;
     const ingestedThroughBlockNumber = states.reduce<number | null>((lowest, state) => {
       if (state.lastIngestedThroughBlockNumber === null) {
         return lowest;
@@ -160,6 +162,13 @@ export class TreasuryIngestionFreshnessService {
 
     if (blockedReasons.length > 0 && lastBlockedReason) {
       blockedReasons.push(`Last ingestion attempt was refused: ${lastBlockedReason}`);
+    }
+
+    // A worker that is running but permanently capped is a different outage
+    // from one that stopped, and an operator reading a red probe needs to know
+    // which it is: one needs restarting, the other needs a bigger window.
+    if (blockedReasons.length > 0 && lastPartialReason) {
+      blockedReasons.push(`Last ingestion run did not catch up: ${lastPartialReason}`);
     }
 
     return {

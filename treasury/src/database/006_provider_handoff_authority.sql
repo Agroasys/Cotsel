@@ -100,6 +100,46 @@ CREATE TABLE IF NOT EXISTS treasury_partner_handoff_conflicts (
 COMMENT ON TABLE treasury_partner_handoff_conflicts IS
     'Append-only record of contradictory provider evidence and the approved corrections that resolve it. A correction never edits the conflict it resolves; both rows survive, which is what makes the full history reproducible.';
 
+-- The ledger-entry handoff had an append-only evidence log beside it; the
+-- batch handoff had nothing. Its row was the only record, so a callback that
+-- did not advance the authoritative state left no trace at all: a reordered
+-- delivery was dropped, and a repeated one overwrote the stored evidence
+-- reference on its way past. Neither an auditable record of what the provider
+-- actually sent, nor an immutable record of the completion it had already sent.
+CREATE TABLE IF NOT EXISTS partner_handoff_events (
+    id SERIAL PRIMARY KEY,
+    sweep_batch_id INT NOT NULL REFERENCES sweep_batches(id) ON DELETE CASCADE,
+    partner_name VARCHAR(255) NOT NULL,
+    partner_reference VARCHAR(255) NOT NULL,
+    handoff_status VARCHAR(32) NOT NULL
+        CHECK (handoff_status IN (
+            'CREATED', 'SUBMITTED', 'ACKNOWLEDGED', 'PROCESSING',
+            'COMPLETED', 'FAILED', 'RETURNED'
+        )),
+    -- How the append-only state machine judged this delivery, recorded beside
+    -- the delivery itself so the reason a callback did not take effect is
+    -- reconstructable without replaying the classifier.
+    transition VARCHAR(16) NOT NULL
+        CHECK (transition IN ('ADVANCE', 'REPLAY', 'STALE', 'CONTRADICTION')),
+    applied BOOLEAN NOT NULL,
+    evidence_reference VARCHAR(255),
+    payload_hash CHAR(64) NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    observed_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    -- Only an ADVANCE becomes the authoritative state. Anything else is a
+    -- delivery that was recorded and did not take effect.
+    CONSTRAINT partner_handoff_events_applied_only_on_advance CHECK (
+        applied = (transition = 'ADVANCE')
+    )
+);
+
+COMMENT ON TABLE partner_handoff_events IS
+    'Append-only record of every external-handoff callback for a sweep batch, written before the callback is classified. No uniqueness constraint: two identical deliveries are two deliveries, and the log records what arrived, not what was distinct.';
+
+CREATE INDEX IF NOT EXISTS idx_partner_handoff_events_batch
+    ON partner_handoff_events(sweep_batch_id, id);
+
 CREATE OR REPLACE FUNCTION treasury_partner_handoff_append_only()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -113,6 +153,12 @@ $$;
 DROP TRIGGER IF EXISTS treasury_partner_handoff_events_immutable ON treasury_partner_handoff_events;
 CREATE TRIGGER treasury_partner_handoff_events_immutable
     BEFORE UPDATE OR DELETE ON treasury_partner_handoff_events
+    FOR EACH ROW
+    EXECUTE FUNCTION treasury_partner_handoff_append_only();
+
+DROP TRIGGER IF EXISTS partner_handoff_events_immutable ON partner_handoff_events;
+CREATE TRIGGER partner_handoff_events_immutable
+    BEFORE UPDATE OR DELETE ON partner_handoff_events
     FOR EACH ROW
     EXECUTE FUNCTION treasury_partner_handoff_append_only();
 
@@ -133,6 +179,8 @@ DECLARE
 BEGIN
     IF runtime_user IS NOT NULL THEN
         EXECUTE format('GRANT SELECT, INSERT ON TABLE treasury_partner_handoff_conflicts TO %I', runtime_user);
+        EXECUTE format('GRANT SELECT, INSERT ON TABLE partner_handoff_events TO %I', runtime_user);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE partner_handoff_events_id_seq TO %I', runtime_user);
         EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE treasury_partner_handoff_conflicts_id_seq TO %I', runtime_user);
         -- The trigger already refuses a rewrite, but the grant is withdrawn as
         -- well: a control that depends only on a trigger is one `ALTER TABLE
@@ -140,6 +188,14 @@ BEGIN
         EXECUTE format('REVOKE UPDATE, DELETE ON TABLE treasury_partner_handoff_events FROM %I', runtime_user);
     END IF;
 END $$;
+
+ALTER TABLE partner_handoff_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE partner_handoff_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS partner_handoff_events_service_isolation ON partner_handoff_events;
+CREATE POLICY partner_handoff_events_service_isolation ON partner_handoff_events
+    FOR ALL
+    USING (current_app_service_name() = 'treasury')
+    WITH CHECK (current_app_service_name() = 'treasury');
 
 ALTER TABLE treasury_partner_handoff_conflicts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE treasury_partner_handoff_conflicts FORCE ROW LEVEL SECURITY;

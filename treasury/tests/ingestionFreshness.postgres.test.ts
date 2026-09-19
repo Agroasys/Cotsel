@@ -50,6 +50,7 @@ function completedResult(
     ingestedThroughBlockNumber: 990,
     nextTradeBlockNumber: 991,
     nextClaimBlockNumber: 991,
+    windowExhausted: true,
     blockedReason: null,
     ...overrides,
   };
@@ -254,6 +255,55 @@ describePostgres('treasury stopped-ingestion drill (postgres)', () => {
     );
     expect(declined.rows).toHaveLength(1);
     expect(declined.rows[0].worker_identity).toBe('worker-b:1');
+  });
+
+  /**
+   * A run capped by `TREASURY_INGEST_MAX_EVENTS` read everything it claims to
+   * have read, but did not reach the end of its window. Advancing freshness
+   * here reported a permanently-behind ingester as level with the chain -- the
+   * same false-green this control removes, produced by a worker that is running
+   * rather than one that stopped.
+   */
+  it('does not turn fresh on a run that stopped short of its window', async () => {
+    const worker = makeWorker(
+      async () => completedResult({ windowExhausted: false, ingestedThroughBlockNumber: 600 }),
+      'worker-a:1',
+    );
+
+    const run = await worker.runOnce('WORKER');
+    const assessment = await makeFreshness(new Date()).assess({ stableBlockNumber: 1000 });
+
+    expect(run.outcome).toBe('PARTIAL');
+    expect(assessment.status).toBe('NEVER_RUN');
+  });
+
+  it('records the coverage a capped run reached, not the window it targeted', async () => {
+    const worker = makeWorker(
+      async () => completedResult({ windowExhausted: false, ingestedThroughBlockNumber: 600 }),
+      'worker-a:1',
+    );
+
+    await worker.runOnce('WORKER');
+
+    const runs = await sidecar.query(
+      `SELECT outcome, ingested_through_block_number FROM treasury_ingestion_runs`,
+    );
+    expect(runs.rows[0].outcome).toBe('PARTIAL');
+    expect(Number(runs.rows[0].ingested_through_block_number)).toBe(600);
+  });
+
+  it('turns fresh once a later run finishes the window', async () => {
+    const capped = makeWorker(
+      async () => completedResult({ windowExhausted: false, ingestedThroughBlockNumber: 600 }),
+      'worker-a:1',
+    );
+    await capped.runOnce('WORKER');
+
+    const caughtUp = makeWorker(async () => completedResult(), 'worker-a:1');
+    await caughtUp.runOnce('WORKER');
+
+    const assessment = await makeFreshness(new Date()).assess({ stableBlockNumber: 1000 });
+    expect(assessment.status).toBe('FRESH');
   });
 
   it('refuses to rewrite or delete a recorded run', async () => {

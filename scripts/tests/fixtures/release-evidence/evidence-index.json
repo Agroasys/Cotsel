@@ -3,12 +3,12 @@
   "candidateId": "cotsel-2026-08-05-fixture",
   "manifest": {
     "path": "scripts/tests/fixtures/release-evidence/candidate-manifest.json",
-    "sha256": "0debe79e8d2bc36f96ae3300612880aeb68a7427a1e0913417b61650bca820da"
+    "sha256": "59b7d414af026100077245db4fc41b49762a28133b69019c85f67ccf2947cf40"
   },
   "environmentReport": {
     "path": "ci-reports/environment-report.json",
     "sha256": "66d51889f1ac4eeee3064c44ab784d5039216adf53c0b1ae073f1c61a5f4e2e1",
-    "manifestSha256": "0debe79e8d2bc36f96ae3300612880aeb68a7427a1e0913417b61650bca820da",
+    "manifestSha256": "59b7d414af026100077245db4fc41b49762a28133b69019c85f67ccf2947cf40",
     "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
   },
   "generatedAt": "2026-08-05T10:00:00.000Z",
@@ -55,7 +55,7 @@
           "oracle@202608310001_baseline#sha256:bd596dfb79adabdfa95b1930e05c06bf9d9f8cb76a17c16276154ad7b3c073af",
           "reconciliation@202609120001_run_leases#sha256:278cac59c7b2d5b7d287bdabfcd3964f83581cc47315e55f7d411b6d31b85b20",
           "ricardian@202608310001_baseline#sha256:68b1014d5334631301e68f12e99874849e5d1f843ecd29e588815e4f6ccaf42b",
-          "treasury@202609190007_realization_reconciliation_binding#sha256:47e8afc0281dbd507ff567c98a9d7c1a18ffa3cbe292b525fde2cb61b648b2ed"
+          "treasury@202609190007_realization_reconciliation_binding#sha256:d257bab818f79ac660fff9717e13413ca9f2406cef9fc0d397e976da41fc9b67"
         ],
         "providerMode": {
           "fiatOffRamp": "disabled",
@@ -113,7 +113,7 @@
           "oracle@202608310001_baseline#sha256:bd596dfb79adabdfa95b1930e05c06bf9d9f8cb76a17c16276154ad7b3c073af",
           "reconciliation@202609120001_run_leases#sha256:278cac59c7b2d5b7d287bdabfcd3964f83581cc47315e55f7d411b6d31b85b20",
           "ricardian@202608310001_baseline#sha256:68b1014d5334631301e68f12e99874849e5d1f843ecd29e588815e4f6ccaf42b",
-          "treasury@202609190007_realization_reconciliation_binding#sha256:47e8afc0281dbd507ff567c98a9d7c1a18ffa3cbe292b525fde2cb61b648b2ed"
+          "treasury@202609190007_realization_reconciliation_binding#sha256:d257bab818f79ac660fff9717e13413ca9f2406cef9fc0d397e976da41fc9b67"
         ],
         "providerMode": {
           "fiatOffRamp": "disabled",

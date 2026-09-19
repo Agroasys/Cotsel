@@ -9,6 +9,8 @@ import {
 import {
   assertCompletionEvidence,
   classifyProviderHandoffTransition,
+  isHandoffComplete,
+  ProviderHandoffAuthorityError,
   type ProviderHandoffTransition,
 } from '../../core/providerHandoffAuthority';
 import { retryOnceOnUniqueViolation } from '../../core/transitionConcurrency';
@@ -87,6 +89,19 @@ async function upsertTreasuryPartnerHandoffOnce(
     initiatedAt: data.initiatedAt,
     metadata: data.metadata ?? {},
   };
+  // WP-4 B-09 / FAIL-11. This route records the *intent* to hand off, under
+  // internal service auth alone -- no provider signature is involved, and the
+  // input carries no evidence reference or bank reference for one to be checked
+  // against. Completion is therefore not something it can assert: a `COMPLETED`
+  // here would enter the authoritative state, and the accounting projection,
+  // with nothing external corroborating it. Completion arrives only through the
+  // provider-signed evidence route, where `assertCompletionEvidence` applies.
+  if (isHandoffComplete(normalized.partnerStatus)) {
+    throw new ProviderHandoffAuthorityError(
+      'External handoff cannot be created as COMPLETED; completion requires provider-signed evidence through the handoff evidence route',
+    );
+  }
+
   const payloadHash = createTreasuryPartnerHandoffPayloadHash(normalized);
   const client = await pool.connect();
 

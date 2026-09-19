@@ -235,6 +235,51 @@ describePostgres('provider handoff append-only state (postgres)', () => {
     ).rejects.toThrow(/append-only/);
   });
 
+  /**
+   * The upsert route records the intent to hand off, under internal service
+   * auth and with no evidence field for a completion to be checked against. A
+   * COMPLETED here would enter the authoritative state, and the accounting
+   * projection, with nothing external corroborating it.
+   */
+  it('refuses to create a handoff that is already COMPLETED', async () => {
+    sequence += 1;
+    const { entry } = await queries.upsertLedgerEntryWithInitialState({
+      entryKey: `handoff-initial-complete-${sequence}`,
+      tradeId: `trade-initial-complete-${sequence}`,
+      txHash: `0xinitial${sequence}`,
+      blockNumber: 500 + sequence,
+      blockHash: `0x${(500 + sequence).toString(16).padStart(64, '0')}`,
+      logIndex: 0,
+      logAddress: `0x${'11'.repeat(20)}`,
+      logIdentityHash: 'c'.repeat(64),
+      eventName: 'PlatformFeesPaidStage1',
+      componentType: 'PLATFORM_FEE',
+      amountRaw: '125000000',
+      sourceTimestamp: new Date('2026-04-16T08:00:00.000Z'),
+      metadata: {},
+    });
+
+    await expect(
+      queries.upsertTreasuryPartnerHandoff({
+        ledgerEntryId: entry.id,
+        partnerCode: 'bridge',
+        handoffReference: `bridge-initial-complete-${sequence}`,
+        partnerStatus: 'COMPLETED',
+        actor: 'postgres-test',
+        initiatedAt: new Date('2026-04-16T08:05:00.000Z'),
+      }),
+    ).rejects.toThrow(/cannot be created as COMPLETED/i);
+
+    expect(await queries.getTreasuryPartnerHandoffByLedgerEntryId(entry.id)).toBeNull();
+  });
+
+  it('still creates a handoff at an in-flight state', async () => {
+    const { entryId } = await seedHandoff('SUBMITTED');
+    const stored = await queries.getTreasuryPartnerHandoffByLedgerEntryId(entryId);
+
+    expect(stored?.partner_status).toBe('SUBMITTED');
+  });
+
   it('refuses to store a provider state it has no mapping for', async () => {
     const { entryId } = await seedHandoff();
 

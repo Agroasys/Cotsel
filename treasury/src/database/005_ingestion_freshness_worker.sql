@@ -17,7 +17,8 @@ ALTER TABLE treasury_ingestion_state
     ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMP,
     ADD COLUMN IF NOT EXISTS last_blocked_reason TEXT,
     ADD COLUMN IF NOT EXISTS consecutive_failure_count INT NOT NULL DEFAULT 0
-        CHECK (consecutive_failure_count >= 0);
+        CHECK (consecutive_failure_count >= 0),
+    ADD COLUMN IF NOT EXISTS last_partial_reason TEXT;
 
 -- Deliberately left NULL for rows that already exist. `updated_at` is not a
 -- substitute: it moves on every run including a refused one, so adopting it
@@ -25,7 +26,7 @@ ALTER TABLE treasury_ingestion_state
 -- proved this cursor fresh", which readiness and export both treat as stale.
 -- The first completed run of the new worker sets it.
 COMMENT ON COLUMN treasury_ingestion_state.last_success_at IS
-    'When a run last completed without a blocked reason. NULL means no run has proved this cursor fresh; readiness and export eligibility fail closed until one does.';
+    'When a run last read the whole bounded window without a blocked reason. A run capped part-way advances coverage but not this column, because freshness is a claim about having caught up. NULL means no run has proved this cursor fresh; readiness and export eligibility fail closed until one does.';
 COMMENT ON COLUMN treasury_ingestion_state.last_attempt_at IS
     'When a run last started against this cursor, whether or not it completed. Compared with last_success_at to separate "not running" from "running and refusing".';
 COMMENT ON COLUMN treasury_ingestion_state.last_blocked_reason IS
@@ -40,7 +41,7 @@ CREATE TABLE IF NOT EXISTS treasury_ingestion_runs (
     trigger_source VARCHAR(32) NOT NULL
         CHECK (trigger_source IN ('WORKER', 'CLI', 'API')),
     outcome VARCHAR(32) NOT NULL
-        CHECK (outcome IN ('COMPLETED', 'BLOCKED', 'FAILED', 'NOT_OWNER')),
+        CHECK (outcome IN ('COMPLETED', 'PARTIAL', 'BLOCKED', 'FAILED', 'NOT_OWNER')),
     fetched INT NOT NULL DEFAULT 0 CHECK (fetched >= 0),
     inserted INT NOT NULL DEFAULT 0 CHECK (inserted >= 0),
     stable_block_number INT CHECK (stable_block_number >= 0),
@@ -53,12 +54,14 @@ CREATE TABLE IF NOT EXISTS treasury_ingestion_runs (
     started_at TIMESTAMP NOT NULL,
     completed_at TIMESTAMP NOT NULL DEFAULT NOW(),
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    -- A completed run proved a window; anything else proved nothing. Storing a
-    -- coverage height beside a BLOCKED or FAILED outcome would let a reader
-    -- reconstruct a range the run never actually read.
+    -- A run that read something proved a window, whether or not it reached the
+    -- end of it. A run that refused or threw proved nothing, and storing a
+    -- coverage height beside it would let a reader reconstruct a range nothing
+    -- actually read.
     CONSTRAINT treasury_ingestion_runs_outcome_consistent CHECK (
         (outcome = 'COMPLETED' AND blocked_reason IS NULL)
-        OR (outcome <> 'COMPLETED' AND ingested_through_block_number IS NULL)
+        OR outcome = 'PARTIAL'
+        OR (outcome NOT IN ('COMPLETED', 'PARTIAL') AND ingested_through_block_number IS NULL)
     )
 );
 
@@ -67,7 +70,7 @@ COMMENT ON TABLE treasury_ingestion_runs IS
 COMMENT ON COLUMN treasury_ingestion_runs.trigger_source IS
     'WORKER for the scheduled single-owner loop, CLI for --ingest-once, API for the internal ingest route. Separates routine coverage from operator-driven backfill in the evidence bundle.';
 COMMENT ON COLUMN treasury_ingestion_runs.outcome IS
-    'NOT_OWNER records a worker tick that declined because another replica held the lease. It proves the schedule is alive without claiming coverage.';
+    'NOT_OWNER records a worker tick that declined because another replica held the lease; it proves the schedule is alive without claiming coverage. PARTIAL records a run that read successfully but stopped short of the bounded window, so it advanced coverage without proving freshness.';
 
 CREATE OR REPLACE FUNCTION treasury_ingestion_runs_append_only()
 RETURNS TRIGGER

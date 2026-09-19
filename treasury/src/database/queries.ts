@@ -31,6 +31,7 @@ export {
   listIngestionCursorStates,
   markIngestionAttemptStarted,
   markIngestionRunCompleted,
+  markIngestionRunPartial,
   markIngestionRunUnsuccessful,
   recordIngestionRun,
   setIngestionWatermark,

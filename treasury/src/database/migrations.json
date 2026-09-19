@@ -34,22 +34,22 @@
       "version": "202609190005",
       "name": "ingestion_freshness_worker",
       "file": "005_ingestion_freshness_worker.sql",
-      "sha256": "45627935877818ab27bb17419fcacb509f9705851831d1f3317159e81dd201ec",
-      "schema_sha256": "3cdb1c7d95e50e776e526b167d9a7b79722bed6a9c6b1b59f5a6600d517fad55"
+      "sha256": "02c101f02804646587d34ffe4906d1a444a14f5101b5540f44d44d927bcc367d",
+      "schema_sha256": "b2a872ad0d884353b94c425ca8adf3012dba15f5ac6c0de06289f36efac5a105"
     },
     {
       "version": "202609190006",
       "name": "provider_handoff_authority",
       "file": "006_provider_handoff_authority.sql",
-      "sha256": "33bb784d889ee340d4845c42229e84b9e04e5911737a6543527dc864373841a2",
-      "schema_sha256": "ed2f9e5a62fbefe0b014c8350f98fdb8a466e7b3bd434148273d071acd91a768"
+      "sha256": "bf2021ebcdd47d0bc91f1ceb11cde6032552059a6e38e21ff0b5d1b33c49b9a5",
+      "schema_sha256": "37fda23e2c10693057df4d556e3fe2ef210b04e9aee72652f05fed4a58d9601d"
     },
     {
       "version": "202609190007",
       "name": "realization_reconciliation_binding",
       "file": "007_realization_reconciliation_binding.sql",
       "sha256": "9d8acdc90706d92e50457a795994257cecaf05a960bb6406317f0f6809bd224d",
-      "schema_sha256": "029093ceb904eccdae5995f60b0f2f87f0599715b789fd9edcb2c1a024e89c7f"
+      "schema_sha256": "da73e75e78a25d9b6308e19fbdb5e266e3a3d7c1eadd4d76614dcbb40933c7b4"
     }
   ]
 }

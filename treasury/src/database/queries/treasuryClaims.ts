@@ -203,6 +203,27 @@ export async function upsertPartnerHandoff(data: {
       data.handoffStatus,
     );
 
+    // Written before the verdict and never conditional on it. What a callback
+    // is allowed to *do* varies; that it arrived, and what it said, does not.
+    await client.query(
+      `INSERT INTO partner_handoff_events (
+         sweep_batch_id, partner_name, partner_reference, handoff_status,
+         transition, applied, evidence_reference, payload_hash, metadata, observed_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())`,
+      [
+        data.sweepBatchId,
+        data.partnerName,
+        data.partnerReference,
+        data.handoffStatus,
+        transition,
+        transition === 'ADVANCE',
+        data.evidenceReference ?? null,
+        payloadHash,
+        JSON.stringify(metadata),
+      ],
+    );
+
     if (transition === 'CONTRADICTION') {
       const detail = `Provider reported ${data.handoffStatus} for a batch handoff already terminal at ${current?.handoff_status}`;
       await recordPartnerHandoffConflict(client, {
@@ -229,7 +250,11 @@ export async function upsertPartnerHandoff(data: {
       throw new PartnerHandoffConflictError(detail);
     }
 
-    if (transition === 'STALE') {
+    // A replayed or reordered delivery is now recorded above and stops here.
+    // It used to fall through to the upsert, where `evidence_reference` and
+    // `metadata` were overwritten from the incoming payload -- so a repeat
+    // carrying no receipt erased the receipt the batch already had.
+    if (transition === 'STALE' || transition === 'REPLAY') {
       await client.query('COMMIT');
       return current as PartnerHandoff;
     }
@@ -272,13 +297,13 @@ export async function upsertPartnerHandoff(data: {
           partner_reference = EXCLUDED.partner_reference,
           handoff_status = EXCLUDED.handoff_status,
           latest_payload_hash = EXCLUDED.latest_payload_hash,
-          evidence_reference = EXCLUDED.evidence_reference,
+          evidence_reference = COALESCE(EXCLUDED.evidence_reference, partner_handoffs.evidence_reference),
           submitted_at = COALESCE(EXCLUDED.submitted_at, partner_handoffs.submitted_at),
           acknowledged_at = COALESCE(EXCLUDED.acknowledged_at, partner_handoffs.acknowledged_at),
           completed_at = COALESCE(EXCLUDED.completed_at, partner_handoffs.completed_at),
           failed_at = COALESCE(EXCLUDED.failed_at, partner_handoffs.failed_at),
           verified_at = COALESCE(EXCLUDED.verified_at, partner_handoffs.verified_at),
-          metadata = EXCLUDED.metadata,
+          metadata = COALESCE(partner_handoffs.metadata, '{}'::jsonb) || EXCLUDED.metadata,
           updated_at = NOW()
         RETURNING *`,
       [
