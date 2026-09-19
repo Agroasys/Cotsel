@@ -175,6 +175,7 @@ resource "aws_ecs_task_definition" "private_runtime" {
   memory                   = 1024
   execution_role_arn       = aws_iam_role.private_runtime_execution[each.key].arn
   task_role_arn            = aws_iam_role.private_runtime_task[each.key].arn
+  skip_destroy             = true
 
   runtime_platform {
     cpu_architecture        = "X86_64"

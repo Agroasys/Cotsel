@@ -12,10 +12,12 @@ const readFoundation = (name) => readFileSync(join(root, 'staging-foundation', n
 const gateway = read('gateway-runtime.tf');
 const gatewayAuth = read('runtime-gateway-auth.tf');
 const gatewayIam = read('iam.tf');
+const indexerService = read('indexer-service.tf');
 const managedSigners = read('managed-signers.tf');
 const signerCustody = readFoundation('signer-custody.tf');
 const oracleRuntime = read('runtime-oracle-reconciliation.tf');
 const oracleService = read('oracle-service.tf');
+const reconciliationService = read('reconciliation-service.tf');
 const relayerService = read('relayer-service.tf');
 const network = read('network.tf');
 const runtimeImages = read('runtime-images.tf');
@@ -36,11 +38,22 @@ const relayerSigner = readFileSync(
 
 assert.doesNotMatch(gateway, /local\.oracle_container/);
 assert.match(gateway, /service_discovery_service\.runtime\["gateway"\]/);
+assert.doesNotMatch(
+  gateway,
+  /local\.indexer_(pipeline|graphql)_container|local\.reconciliation_container/,
+);
+assert.match(gateway, /enable_execute_command\s+= false/);
 assert.match(gatewayAuth, /http:\/\/oracle\.cotsel-staging\.internal:3001/);
+assert.match(gatewayAuth, /http:\/\/indexer-graphql\.cotsel-staging\.internal:4350\/graphql/);
+assert.match(gatewayAuth, /http:\/\/reconciliation\.cotsel-staging\.internal:9090/);
 assert.doesNotMatch(gatewayIam, /database\/oracle\/runtime|oracle_wallet/);
+assert.doesNotMatch(
+  gatewayIam,
+  /database\/indexer\/(reader|runtime)|database\/reconciliation\/reader/,
+);
 assert.match(
   variables,
-  /variable "gateway_desired_count"[\s\S]*?default\s+= 0[\s\S]*?variable "ricardian_desired_count"[\s\S]*?default\s+= 0/,
+  /variable "gateway_desired_count"[\s\S]*?default\s+= 0[\s\S]*?variable "indexer_desired_count"[\s\S]*?default\s+= 0[\s\S]*?variable "reconciliation_desired_count"[\s\S]*?default\s+= 0[\s\S]*?variable "oracle_desired_count"[\s\S]*?default\s+= 0[\s\S]*?variable "relayer_desired_count"[\s\S]*?default\s+= 0/,
 );
 
 assert.match(oracleRuntime, /ORACLE_KMS_EXPECTED_ADDRESS/);
@@ -48,7 +61,7 @@ assert.match(oracleRuntime, /ORACLE_SIGNER_CUSTODY_MODE", value = "kms"/);
 assert.match(oracleRuntime, /oracle_kms_enabled \? \[/);
 assert.doesNotMatch(oracleRuntime, /ORACLE_PRIVATE_KEY|raw_private_key|oracle_wallet/);
 assert.doesNotMatch(runtimeImages, /oracle_wallet/);
-assert.match(oracleRuntime, /http:\/\/gateway\.cotsel-staging\.internal:4350\/graphql/);
+assert.match(oracleRuntime, /http:\/\/indexer-graphql\.cotsel-staging\.internal:4350\/graphql/);
 
 assert.match(oracleService, /task_role_arn\s+= local\.managed_signer_task_role_arns\["oracle"\]/);
 assert.match(oracleService, /actions\s+= \["kms:GetPublicKey"\]/);
@@ -61,18 +74,25 @@ assert.match(
 );
 assert.match(oracleService, /service_discovery_service\.runtime\["oracle"\]/);
 assert.match(oracleService, /enable_execute_command\s+= false/);
-assert.match(
-  oracleService,
-  /desired_count\s+= local\.oracle_kms_enabled && var\.gateway_desired_count > 0 \? 1 : 0/,
-);
+assert.match(oracleService, /desired_count\s+= var\.oracle_desired_count/);
+assert.match(oracleService, /oracle_activation_requires_reviewed_kms_address/);
 assert.doesNotMatch(oracleService, /oracle_wallet/);
 assert.match(oracleService, /deployment_maximum_percent\s+= 100/);
 assert.match(oracleService, /deployment_minimum_healthy_percent\s+= 0/);
-assert.match(oracleService, /aws_ecs_service\.gateway/);
+assert.match(oracleService, /aws_ecs_service\.indexer/);
 
 assert.match(network, /gateway_to_oracle/);
-assert.match(network, /gateway_indexer_from_services/);
-assert.match(network, /services_to_gateway_indexer/);
+assert.match(network, /gateway_to_indexer/);
+assert.match(network, /services_to_indexer/);
+
+assert.match(indexerService, /resource "aws_ecs_service" "indexer"/);
+assert.match(indexerService, /desired_count\s+= var\.indexer_desired_count/);
+assert.match(indexerService, /enable_execute_command\s+= false/);
+assert.match(indexerService, /skip_destroy\s+= true/);
+assert.match(reconciliationService, /resource "aws_ecs_service" "reconciliation"/);
+assert.match(reconciliationService, /desired_count\s+= var\.reconciliation_desired_count/);
+assert.match(reconciliationService, /enable_execute_command\s+= false/);
+assert.match(reconciliationService, /skip_destroy\s+= true/);
 
 assert.match(relayerService, /task_role_arn\s+= local\.managed_signer_task_role_arns\["relayer"\]/);
 assert.match(relayerService, /actions\s+= \["kms:GetPublicKey"\]/);
@@ -84,6 +104,8 @@ assert.match(
   /variable\s+= "kms:SigningAlgorithm"\s+values\s+= \["ECDSA_SHA_256"\]/s,
 );
 assert.match(relayerService, /enable_execute_command\s+= false/);
+assert.match(relayerService, /desired_count\s+= var\.relayer_desired_count/);
+assert.match(relayerService, /relayer_activation_requires_reviewed_kms_address/);
 assert.match(relayerService, /gasless_execution_has_one_gateway_writer/);
 assert.match(network, /gateway_to_relayer/);
 

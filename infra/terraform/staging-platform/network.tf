@@ -95,12 +95,30 @@ resource "aws_vpc_security_group_ingress_rule" "gateway_from_alb" {
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "gateway_indexer_from_services" {
-  security_group_id            = aws_security_group.gateway.id
+resource "aws_vpc_security_group_ingress_rule" "indexer_from_gateway" {
+  security_group_id            = aws_security_group.internal_services.id
+  description                  = "Read-only indexer GraphQL access from the gateway."
+  referenced_security_group_id = aws_security_group.gateway.id
+  from_port                    = 4350
+  to_port                      = 4350
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "indexer_from_services" {
+  security_group_id            = aws_security_group.internal_services.id
   description                  = "Read-only indexer GraphQL access from private Cotsel services."
   referenced_security_group_id = aws_security_group.internal_services.id
   from_port                    = 4350
   to_port                      = 4350
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "reconciliation_from_gateway" {
+  security_group_id            = aws_security_group.internal_services.id
+  description                  = "Reconciliation status access from the gateway."
+  referenced_security_group_id = aws_security_group.gateway.id
+  from_port                    = 9090
+  to_port                      = 9090
   ip_protocol                  = "tcp"
 }
 
@@ -122,12 +140,30 @@ resource "aws_vpc_security_group_ingress_rule" "services_from_services" {
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "services_to_gateway_indexer" {
-  security_group_id            = aws_security_group.internal_services.id
-  description                  = "Read-only GraphQL calls from private services to the bundled indexer."
-  referenced_security_group_id = aws_security_group.gateway.id
+resource "aws_vpc_security_group_egress_rule" "gateway_to_indexer" {
+  security_group_id            = aws_security_group.gateway.id
+  description                  = "Read-only GraphQL calls from the gateway to the isolated indexer."
+  referenced_security_group_id = aws_security_group.internal_services.id
   from_port                    = 4350
   to_port                      = 4350
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "services_to_indexer" {
+  security_group_id            = aws_security_group.internal_services.id
+  description                  = "Read-only GraphQL calls between private services and the isolated indexer."
+  referenced_security_group_id = aws_security_group.internal_services.id
+  from_port                    = 4350
+  to_port                      = 4350
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "gateway_to_reconciliation" {
+  security_group_id            = aws_security_group.gateway.id
+  description                  = "Reconciliation status calls from the gateway."
+  referenced_security_group_id = aws_security_group.internal_services.id
+  from_port                    = 9090
+  to_port                      = 9090
   ip_protocol                  = "tcp"
 }
 

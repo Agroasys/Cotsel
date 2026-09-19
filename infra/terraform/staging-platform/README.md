@@ -16,13 +16,17 @@ existing Agroasys staging boundary. It does not deploy a release candidate.
 - Edge controls: the CloudFront distribution uses a `us-east-1` WAF web ACL. Managed
   rules begin in count mode, the IP rate rule blocks, and 30-day WAF and access logs redact
   gateway credentials and signatures.
-- Runtime: one private Fargate task bundles the gateway, auth, indexer pipeline,
-  indexer GraphQL server, oracle, and reconciliation worker. Terraform resolves
-  the reviewed commit tag for each service to its ECR digest before it creates a
-  task definition.
-- Deployment: the service uses a serialized `100/0` rollout because two bundled
-  indexer processors cannot safely write the same status table concurrently.
-  This causes a short staging interruption during task replacement.
+- Runtime: the gateway and auth service share one private Fargate task. The
+  indexer pipeline and GraphQL server share a second task. Reconciliation,
+  Oracle, and relayer use independent services. Terraform resolves the reviewed
+  commit tag for each service to its ECR digest before it creates a task definition.
+- Deployment: every one-writer service uses a serialized `100/0` rollout.
+  Indexer or reconciliation failure cannot terminate the gateway task. Gateway
+  liveness remains observable while financial readiness fails closed when chain
+  state is stale or unavailable.
+- History: task definitions use `skip_destroy=true`. Terraform can register a
+  reviewed revision without deregistering the historical revisions retained for
+  incident evidence and rollback analysis.
 
 ## Secret handling
 
@@ -73,19 +77,19 @@ deployer must never receive a runtime role.
 Use the stable aliases from `managed_signer_aliases`. Derive each public address
 with `GetPublicKey`; never create or import plaintext private key material.
 
-The new contract must use distinct approved Oracle, treasury, relayer, and
-administrator addresses. The three administrators must be independent
+The accepted staging contract uses distinct approved Oracle, treasury, relayer,
+and administrator addresses. The three administrators must be independent
 hardware-backed wallets in the direct prepare, review, sign, broadcast, and
 confirm flow; they must not be KMS aliases or backend-accessible signers. The
 deployer must not hold a runtime role.
 
-Keep signer services disabled during key creation. Deploy and verify the new
-contract before enabling KMS-backed runtime signing.
+Keep signer services disabled during key creation. Reconstruct and verify the
+accepted contract evidence before enabling KMS-backed runtime signing.
 
 The Oracle runs as its own ECS service and task role. The gateway task cannot
 read the Oracle database credential or any Oracle signing material, and only
 the Oracle task role can call `kms:GetPublicKey` and `kms:Sign` on the Oracle key.
-Oracle reads the bundled indexer through private Cloud Map DNS; gateway-to-
+Oracle reads the isolated indexer through private Cloud Map DNS; gateway-to-
 Oracle calls remain authenticated with the existing service credential.
 
 The gasless relayer also runs as its own ECS service and task role. Only that
@@ -103,16 +107,30 @@ KMS activation uses separate foundation and runtime plans:
 4. Set `COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS` to the reviewed Oracle address.
 5. Set `COTSEL_STAGING_RELAYER_KMS_EXPECTED_ADDRESS` to the reviewed relayer address.
 6. Populate the protected `gateway-managed-signer` service-auth secret.
-7. Review a fresh plan from `main` and confirm each role can access only its own key.
-8. Apply that exact plan.
-9. Capture startup, wrong-address, denial, signing, CloudTrail, and reconciliation evidence.
+7. Review a fresh zero-count plan from `main` and confirm each role can access only its own key.
+8. Apply that exact plan without activating either signer.
+9. Set a signer desired-count variable to `1` only after its independent custody gate passes.
+10. Review and apply that signer-specific activation plan.
+11. Capture startup, wrong-address, denial, signing, CloudTrail, and reconciliation evidence.
 
 An empty Oracle address keeps the Oracle service stopped and supplies no signer
 material. An empty relayer address keeps the relayer stopped and omits its
-gateway credential. Neither state satisfies custody acceptance. Keep `gasless_execution_enabled=false` until the
-durable nonce migration, one-writer topology, signing denials, and Base Sepolia
-rehearsal have been accepted. Terraform rejects enabling gasless execution with
-more than one gateway writer.
+gateway credential. A reviewed address does not start a service: the matching
+`COTSEL_STAGING_ORACLE_DESIRED_COUNT` or
+`COTSEL_STAGING_RELAYER_DESIRED_COUNT` must also be set to `1`. Neither state
+satisfies custody acceptance by itself. Keep `gasless_execution_enabled=false`
+until the durable nonce migration, one-writer topology, signing denials, and
+Base Sepolia rehearsal have been accepted. Terraform rejects enabling gasless
+execution with more than one gateway writer.
+
+Runtime recovery uses separate saved plans. Set
+`COTSEL_STAGING_INDEXER_DESIRED_COUNT=1` first and verify migration state,
+provider health, and catch-up. Next set
+`COTSEL_STAGING_RECONCILIATION_DESIRED_COUNT=1` and verify reconciliation.
+Only then set `COTSEL_STAGING_GATEWAY_DESIRED_COUNT=1`. Oracle and relayer stay
+at zero until their custody gates pass; Ricardian and Treasury use their own
+desired-count variables and preflights. Change one activation stage at a time
+and never reuse a plan created against an earlier state.
 
 Every service schema migration runs as a separate one-off ECS task. Each
 execution role can pull only its service image, write only its service log
@@ -122,8 +140,8 @@ schema migrations.
 
 Every runtime, migration, bootstrap, and verifier container has a read-only root
 filesystem. Each container receives only an ephemeral writable `/tmp` mount.
-The five containers in the bundled gateway task use separate volumes so one
-service cannot read another service's temporary files.
+The gateway/auth and indexer pipeline/GraphQL task pairs use separate volumes so
+one container cannot read another container's temporary files.
 
 The indexer migration task executes the migration binary already present in
 the immutable image. It does not invoke a removed package-manager shim or
@@ -169,7 +187,8 @@ The plan dispatch also requires these non-secret release coordinates:
 - reviewed Base Sepolia escrow address;
 - escrow deployment block used by the indexer;
 - reviewed Base Sepolia USDC address;
-- one commit SHA whose immutable ECR tag exists in all six runtime repositories.
+- one commit SHA whose immutable ECR tag exists in every repository in the
+  authoritative runtime inventory.
 
 After apply, record the workflow run, plan hash, state serial, non-secret output
 ARNs, CloudFront distribution domain, reviewer, and timestamp. Then update the

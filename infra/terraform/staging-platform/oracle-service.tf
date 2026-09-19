@@ -6,6 +6,13 @@ locals {
   }))
 }
 
+check "oracle_activation_requires_reviewed_kms_address" {
+  assert {
+    condition     = var.oracle_desired_count == 0 || local.oracle_kms_enabled
+    error_message = "Oracle activation requires the independently reviewed KMS address."
+  }
+}
+
 resource "aws_iam_role" "oracle_execution" {
   name                 = "${local.name_prefix}-oracle-execution"
   assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
@@ -52,6 +59,7 @@ data "aws_iam_policy_document" "oracle_execution" {
     actions = ["secretsmanager:GetSecretValue"]
     resources = concat([
       aws_secretsmanager_secret.platform["database/oracle/runtime"].arn,
+      aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn,
       aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn,
       aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn,
       aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn,
@@ -118,6 +126,7 @@ resource "aws_ecs_task_definition" "oracle" {
   memory                   = 1024
   execution_role_arn       = aws_iam_role.oracle_execution.arn
   task_role_arn            = local.managed_signer_task_role_arns["oracle"]
+  skip_destroy             = true
 
   runtime_platform {
     cpu_architecture        = "X86_64"
@@ -146,7 +155,7 @@ resource "aws_ecs_service" "oracle" {
   # Plan A creates the non-exportable KMS key with no runnable Oracle task.
   # Plan B can enable one task only after its derived address is independently
   # verified and supplied through oracle_kms_expected_address.
-  desired_count          = local.oracle_kms_enabled && var.gateway_desired_count > 0 ? 1 : 0
+  desired_count          = var.oracle_desired_count
   launch_type            = "FARGATE"
   enable_execute_command = false
   # Oracle can submit financial state transitions. Never overlap revisions:
@@ -174,7 +183,7 @@ resource "aws_ecs_service" "oracle" {
   }
 
   depends_on = [
-    aws_ecs_service.gateway,
+    aws_ecs_service.indexer,
     aws_iam_role_policy.oracle_execution,
     aws_iam_role_policy.oracle_kms_signing,
   ]
