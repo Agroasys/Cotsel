@@ -15,13 +15,20 @@ export {
 } from './queries/accountingProjections';
 export { upsertBankPayoutConfirmation } from './queries/bankPayouts';
 export {
+  countLedgerEntriesByCanonicality,
+  getIngestionStableBlock,
+  listChainReorgEvents,
+  markLedgerEntryCanonical,
+  recordLedgerEntryOrphaned,
+} from './queries/chainCanonicality';
+export {
   getFiatDepositByProviderEventId,
   upsertFiatDepositReference,
 } from './queries/fiatDeposits';
 export {
   consumeServiceAuthNonce,
-  getIngestionOffset,
-  setIngestionOffset,
+  getIngestionWatermark,
+  setIngestionWatermark,
 } from './queries/ingestion';
 export {
   appendPayoutState,

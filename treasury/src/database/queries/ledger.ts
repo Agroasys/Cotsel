@@ -3,6 +3,7 @@
  */
 import { pool } from '../connection';
 import { assertCanonicalRawAmount } from '../../core/canonicalAmount';
+import { normalizeBlockHash, normalizeLogAddress } from '../../core/chainCanonicality';
 import type {
   BankPayoutConfirmation,
   LedgerEntry,
@@ -23,11 +24,35 @@ export interface LedgerEntryForExport extends LedgerEntry {
   latest_state_at: Date | null;
 }
 
+/**
+ * Every field a CANONICAL verdict asserted something about. The verdict is kept
+ * across a re-ingest only when all of them are unchanged; anything else drops
+ * the entry back to UNVERIFIED.
+ */
+const PROOF_UNCHANGED = [
+  'trade_id',
+  'tx_hash',
+  'block_number',
+  'block_hash',
+  'log_index',
+  'event_name',
+  'component_type',
+  'amount_raw',
+  'log_address',
+  'log_identity_hash',
+]
+  .map((column) => `treasury_ledger_entries.${column} IS NOT DISTINCT FROM EXCLUDED.${column}`)
+  .join('\n              AND ');
+
 export async function upsertLedgerEntryWithInitialState(data: {
   entryKey: string;
   tradeId: string;
   txHash: string;
   blockNumber: number;
+  blockHash: string;
+  logIndex: number;
+  logAddress: string | null;
+  logIdentityHash: string | null;
   eventName: string;
   componentType: TreasuryComponent;
   amountRaw: string;
@@ -40,39 +65,88 @@ export async function upsertLedgerEntryWithInitialState(data: {
   // attributed to its source event rather than discovered during a close.
   assertCanonicalRawAmount(data.amountRaw, 'amountRaw');
 
+  const blockHash = normalizeBlockHash(data.blockHash);
+  if (!blockHash) {
+    throw new Error(`blockHash is not a canonical block hash: ${data.blockHash}`);
+  }
+  if (!Number.isInteger(data.logIndex) || data.logIndex < 0) {
+    throw new Error(`logIndex must be a non-negative integer, received ${data.logIndex}`);
+  }
+
+  // A partial identity is stored as no identity. Half of it cannot verify
+  // anything, and the CANONICAL check constraint would reject it later anyway.
+  const logAddress = normalizeLogAddress(data.logAddress);
+  if (data.logAddress !== null && !logAddress) {
+    throw new Error(`logAddress is not a canonical contract address: ${data.logAddress}`);
+  }
+
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
     const entryResult = await client.query<LedgerEntry>(
+      // The `WHERE` on the conflict path is what keeps a revocation from being
+      // undone by a routine re-ingest. An ORPHANED entry is preserved exactly as
+      // the reorganization left it; returning it to service is an approved
+      // correction, never a side effect of the ingester running again.
+      //
+      // A CANONICAL verdict is a proof about one exact row: this amount, for
+      // this trade, from this log. So the verdict survives only a byte-identical
+      // re-ingest. If any field the proof covered changed -- including the
+      // payable amount -- the proof no longer describes what is stored, and the
+      // entry returns to UNVERIFIED and has to earn CANONICAL again from the
+      // chain. Comparing only the block hash and log position here would let a
+      // later source correction move the payable amount underneath a recorded
+      // proof.
       `INSERT INTO treasury_ledger_entries (
           entry_key,
           trade_id,
           tx_hash,
           block_number,
+          block_hash,
+          log_index,
+          log_address,
+          log_identity_hash,
           event_name,
           component_type,
           amount_raw,
           source_timestamp,
           metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
         ON CONFLICT (entry_key)
         DO UPDATE SET
           trade_id = EXCLUDED.trade_id,
           tx_hash = EXCLUDED.tx_hash,
           block_number = EXCLUDED.block_number,
+          block_hash = EXCLUDED.block_hash,
+          log_index = EXCLUDED.log_index,
+          log_address = EXCLUDED.log_address,
+          log_identity_hash = EXCLUDED.log_identity_hash,
           event_name = EXCLUDED.event_name,
           component_type = EXCLUDED.component_type,
           amount_raw = EXCLUDED.amount_raw,
           source_timestamp = EXCLUDED.source_timestamp,
-          metadata = EXCLUDED.metadata
+          metadata = EXCLUDED.metadata,
+          canonicality_state = CASE
+            WHEN ${PROOF_UNCHANGED} THEN treasury_ledger_entries.canonicality_state
+            ELSE 'UNVERIFIED'
+          END,
+          canonicality_verified_at = CASE
+            WHEN ${PROOF_UNCHANGED} THEN treasury_ledger_entries.canonicality_verified_at
+            ELSE NULL
+          END
+        WHERE treasury_ledger_entries.canonicality_state <> 'ORPHANED'
         RETURNING *`,
       [
         data.entryKey,
         data.tradeId,
         data.txHash,
         data.blockNumber,
+        blockHash,
+        data.logIndex,
+        logAddress,
+        data.logIdentityHash,
         data.eventName,
         data.componentType,
         data.amountRaw,
@@ -81,7 +155,17 @@ export async function upsertLedgerEntryWithInitialState(data: {
       ],
     );
 
-    const entry = entryResult.rows[0];
+    // No row comes back when the conflict target exists but the `WHERE` above
+    // declined the update, which is the orphaned case. Read it so the caller
+    // still receives the entry it asked about instead of a crash.
+    const entry =
+      entryResult.rows[0] ??
+      (
+        await client.query<LedgerEntry>(
+          'SELECT * FROM treasury_ledger_entries WHERE entry_key = $1',
+          [data.entryKey],
+        )
+      ).rows[0];
 
     const initialStateResult = await client.query(
       `INSERT INTO payout_lifecycle_events (

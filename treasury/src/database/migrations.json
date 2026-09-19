@@ -22,6 +22,13 @@
       "file": "003_maker_checker_actor_chain.sql",
       "sha256": "9644cd5e85a7b7d97c30ab612d1c35ae4846f0a34efc55d411d4d2fee357d0a3",
       "schema_sha256": "e7352f193b278707e1c5ccdfc67183593bcee10fe8750b3d21c1c030dc6e8ded"
+    },
+    {
+      "version": "202609190004",
+      "name": "canonical_chain_evidence",
+      "file": "004_canonical_chain_evidence.sql",
+      "sha256": "a03ae987f0da4d5b014409a6d1d8faf73384718fb8a5618d29585c0eeed70ca4",
+      "schema_sha256": "351eb9847e635d8ae2409558865901f359fd7899d5734eccacbb20dc3906340e"
     }
   ]
 }

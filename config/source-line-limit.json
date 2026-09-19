@@ -67,7 +67,6 @@
     "treasury/src/core/closeReporting.ts": 562,
     "treasury/src/database/schema.sql": 528,
     "treasury/src/types.ts": 548,
-    "treasury/tests/adminBridgeRouteSafety.test.ts": 1208,
-    "treasury/tests/serviceAuthRoutes.test.ts": 519
+    "treasury/tests/adminBridgeRouteSafety.test.ts": 1208
   }
 }

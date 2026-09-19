@@ -23,7 +23,17 @@ async function applyTreasurySchema(): Promise<void> {
   });
 
   try {
-    await pool.query(readFileSync(resolve(__dirname, '../src/database/schema.sql'), 'utf8'));
+    // The whole manifest, not the baseline alone. Migration 004 adds the chain
+    // identity columns the ledger upsert writes, so a baseline-only database
+    // would fail on a schema this service no longer runs against.
+    const databaseDir = resolve(__dirname, '../src/database');
+    const manifest = JSON.parse(readFileSync(resolve(databaseDir, 'migrations.json'), 'utf8')) as {
+      migrations: Array<{ file: string }>;
+    };
+
+    for (const migration of manifest.migrations) {
+      await pool.query(readFileSync(resolve(databaseDir, migration.file), 'utf8'));
+    }
   } finally {
     await pool.end();
   }
@@ -98,6 +108,10 @@ describePostgres('treasury partner handoff persistence (postgres)', () => {
       tradeId: 'trade-bridge-handoff-proof',
       txHash: '0xbridgeproof',
       blockNumber: 42,
+      blockHash: `0x${'42'.repeat(32)}`,
+      logIndex: 0,
+      logAddress: `0x${'11'.repeat(20)}`,
+      logIdentityHash: 'a'.repeat(64),
       eventName: 'PlatformFeesPaidStage1',
       componentType: 'PLATFORM_FEE',
       amountRaw: '125000000',
@@ -246,6 +260,10 @@ describePostgres('treasury partner handoff routes (postgres)', () => {
       tradeId: 'trade-bridge-route-proof',
       txHash: '0xbridgerouteproof',
       blockNumber: 43,
+      blockHash: `0x${'43'.repeat(32)}`,
+      logIndex: 0,
+      logAddress: `0x${'11'.repeat(20)}`,
+      logIdentityHash: 'a'.repeat(64),
       eventName: 'PlatformFeesPaidStage1',
       componentType: 'PLATFORM_FEE',
       amountRaw: '150000000',

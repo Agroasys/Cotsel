@@ -1,4 +1,5 @@
 import type { SettlementConfirmationStage } from '@agroasys/sdk';
+import type { ChainCanonicalityState } from './core/chainCanonicality';
 
 export type TreasuryComponent = 'LOGISTICS' | 'PLATFORM_FEE' | 'SETTLEMENT_SUPPORT_FEE';
 
@@ -66,6 +67,15 @@ export interface LedgerEntry {
   source_timestamp: Date;
   metadata: Record<string, unknown>;
   created_at: Date;
+  block_hash: string | null;
+  log_index: number | null;
+  log_address: string | null;
+  log_identity_hash: string | null;
+  canonicality_state: ChainCanonicalityState;
+  canonicality_verified_at: Date | null;
+  canonicality_observed_block_hash: string | null;
+  canonicality_depth: number | null;
+  canonicality_stable_block_number: number | null;
 }
 
 export interface LedgerEntryWithState extends LedgerEntry {
@@ -241,31 +251,6 @@ export interface LedgerEntryAccountingFacts {
 export interface LedgerEntryAccountingProjection extends LedgerEntryAccountingFacts {
   accounting_state: TreasuryAccountingState;
   accounting_state_reason: string;
-}
-
-export interface IndexerTradeEvent {
-  id: string;
-  tradeId: string;
-  eventName: string;
-  txHash: string | null;
-  blockNumber: number;
-  timestamp: Date;
-  releasedLogisticsAmount?: string | null;
-  paidPlatformFees?: string | null;
-  paidPlatformFeeNet?: string | null;
-  paidSettlementSupportFee?: string | null;
-}
-
-export interface IndexerTreasuryClaimEvent {
-  id: string;
-  eventName: 'TreasuryClaimed';
-  txHash: string;
-  blockNumber: number;
-  timestamp: Date;
-  claimAmount: string;
-  treasuryIdentity: string;
-  payoutReceiver: string;
-  triggeredBy: string | null;
 }
 
 export interface FiatDepositReference {
@@ -542,6 +527,9 @@ export interface TreasuryEntryEligibility {
   reconciliationFreshness: 'FRESH' | 'STALE' | 'MISSING';
   reconciliationCompletedAt: Date | null;
   staleRunningRunCount: number;
+  canonicalityState: ChainCanonicalityState;
+  canonicalityDepth: number | null;
+  canonicalityStableBlockNumber: number | null;
   eligibleForPayout: boolean;
   eligibleForExport: boolean;
   blockedReasons: string[];

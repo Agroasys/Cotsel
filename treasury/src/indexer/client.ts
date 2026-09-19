@@ -1,14 +1,29 @@
-import { IndexerTradeEvent, IndexerTreasuryClaimEvent } from '../types';
+import { IndexerTradeEvent, IndexerTreasuryClaimEvent } from './types';
 import { config } from '../config';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 
+/**
+ * Ingestion reads a half-open-free, fully closed block range rather than a
+ * position in the indexer's result set. `toBlock` is the finalized head the run
+ * is anchored to, so a block the indexer adds mid-run cannot widen the window,
+ * and `offset` only pages within that fixed range.
+ */
+export interface IndexerBlockWindow {
+  limit: number;
+  offset: number;
+  fromBlock: number;
+  toBlock: number;
+}
+
 interface GraphQlResponse {
   data?: {
+    overviewSnapshots?: Array<{ lastProcessedBlock?: string | null }>;
     tradeEvents?: Array<{
       id: string;
       eventName: string;
       txHash: string | null;
       blockNumber: number;
+      logIndex: number;
       timestamp: string;
       releasedLogisticsAmount?: string | null;
       paidPlatformFees?: string | null;
@@ -23,6 +38,7 @@ interface GraphQlResponse {
       eventName: 'TreasuryClaimed';
       txHash: string;
       blockNumber: number;
+      logIndex: number;
       timestamp: string;
       claimAmount: string | null;
       treasuryIdentity: string | null;
@@ -36,12 +52,64 @@ interface GraphQlResponse {
 export class IndexerClient {
   constructor(private readonly graphqlUrl: string) {}
 
-  async fetchTreasuryEvents(limit: number, offset: number): Promise<IndexerTradeEvent[]> {
+  /**
+   * The highest block the indexer has actually processed.
+   *
+   * Ingestion needs this because an empty page proves nothing on its own: if
+   * the finalized chain head is ahead of the indexer, a query bounded only by
+   * the chain returns a short page for a range the indexer has not reached yet,
+   * and advancing the watermark past it drops every fee event indexed later.
+   * The window is therefore bounded by whichever of the two is behind.
+   */
+  async fetchProcessedBlock(): Promise<number | null> {
     const query = `
-      query TreasuryEvents($limit: Int!, $offset: Int!) {
+      query TreasuryIndexerProcessedBlock {
+        overviewSnapshots(limit: 1, orderBy: lastProcessedBlock_DESC) {
+          lastProcessedBlock
+        }
+      }
+    `;
+
+    const response = await fetchWithTimeout(
+      this.graphqlUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, variables: {} }),
+      },
+      config.indexerGraphqlRequestTimeoutMs,
+    );
+
+    if (!response.ok) {
+      throw new Error(`Indexer GraphQL request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const body = (await response.json()) as GraphQlResponse;
+    if (body.errors?.length) {
+      throw new Error(
+        `Indexer GraphQL errors: ${body.errors.map((item) => item.message).join('; ')}`,
+      );
+    }
+
+    const raw = body.data?.overviewSnapshots?.[0]?.lastProcessedBlock;
+    if (raw === undefined || raw === null) {
+      return null;
+    }
+
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  async fetchTreasuryEvents(window: IndexerBlockWindow): Promise<IndexerTradeEvent[]> {
+    const query = `
+      query TreasuryEvents($limit: Int!, $offset: Int!, $fromBlock: Int!, $toBlock: Int!) {
         tradeEvents(
-          where: { eventName_in: [\"FundsReleasedStage1\", \"PlatformFeesPaidStage1\"] }
-          orderBy: blockNumber_ASC
+          where: {
+            eventName_in: [\"FundsReleasedStage1\", \"PlatformFeesPaidStage1\"]
+            blockNumber_gte: $fromBlock
+            blockNumber_lte: $toBlock
+          }
+          orderBy: [blockNumber_ASC, logIndex_ASC]
           limit: $limit
           offset: $offset
         ) {
@@ -49,6 +117,7 @@ export class IndexerClient {
           eventName
           txHash
           blockNumber
+          logIndex
           timestamp
           releasedLogisticsAmount
           paidPlatformFees
@@ -70,7 +139,12 @@ export class IndexerClient {
         },
         body: JSON.stringify({
           query,
-          variables: { limit, offset },
+          variables: {
+            limit: window.limit,
+            offset: window.offset,
+            fromBlock: window.fromBlock,
+            toBlock: window.toBlock,
+          },
         }),
       },
       config.indexerGraphqlRequestTimeoutMs,
@@ -96,6 +170,7 @@ export class IndexerClient {
       eventName: event.eventName,
       txHash: event.txHash ?? null,
       blockNumber: Number(event.blockNumber),
+      logIndex: Number(event.logIndex),
       timestamp: new Date(event.timestamp),
       releasedLogisticsAmount: event.releasedLogisticsAmount || null,
       paidPlatformFees: event.paidPlatformFees || null,
@@ -116,6 +191,7 @@ export class IndexerClient {
           eventName
           txHash
           blockNumber
+          logIndex
           timestamp
           claimAmount
           treasuryIdentity
@@ -171,6 +247,7 @@ export class IndexerClient {
       eventName: event.eventName,
       txHash: event.txHash,
       blockNumber: Number(event.blockNumber),
+      logIndex: Number(event.logIndex),
       timestamp: new Date(event.timestamp),
       claimAmount: event.claimAmount,
       treasuryIdentity: event.treasuryIdentity.toLowerCase(),
@@ -179,15 +256,16 @@ export class IndexerClient {
     };
   }
 
-  async fetchTreasuryClaimEvents(
-    limit: number,
-    offset: number,
-  ): Promise<IndexerTreasuryClaimEvent[]> {
+  async fetchTreasuryClaimEvents(window: IndexerBlockWindow): Promise<IndexerTreasuryClaimEvent[]> {
     const query = `
-      query TreasuryClaimEvents($limit: Int!, $offset: Int!) {
+      query TreasuryClaimEvents($limit: Int!, $offset: Int!, $fromBlock: Int!, $toBlock: Int!) {
         systemEvents(
-          where: { eventName_eq: "TreasuryClaimed" }
-          orderBy: blockNumber_ASC
+          where: {
+            eventName_eq: "TreasuryClaimed"
+            blockNumber_gte: $fromBlock
+            blockNumber_lte: $toBlock
+          }
+          orderBy: [blockNumber_ASC, logIndex_ASC]
           limit: $limit
           offset: $offset
         ) {
@@ -195,6 +273,7 @@ export class IndexerClient {
           eventName
           txHash
           blockNumber
+          logIndex
           timestamp
           claimAmount
           treasuryIdentity
@@ -213,7 +292,12 @@ export class IndexerClient {
         },
         body: JSON.stringify({
           query,
-          variables: { limit, offset },
+          variables: {
+            limit: window.limit,
+            offset: window.offset,
+            fromBlock: window.fromBlock,
+            toBlock: window.toBlock,
+          },
         }),
       },
       config.indexerGraphqlRequestTimeoutMs,
@@ -239,6 +323,7 @@ export class IndexerClient {
         eventName: event.eventName,
         txHash: event.txHash,
         blockNumber: Number(event.blockNumber),
+        logIndex: Number(event.logIndex),
         timestamp: new Date(event.timestamp),
         claimAmount: event.claimAmount as string,
         treasuryIdentity: (event.treasuryIdentity as string).toLowerCase(),

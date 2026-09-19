@@ -9,6 +9,17 @@ import {
   signServiceAuthCanonicalString,
 } from '../src/auth/serviceAuth';
 
+/**
+ * The route-wiring stubs differ only in status code and body, and there are
+ * dozens of them. One factory keeps each route a single readable line so the
+ * list stays about which routes exist, not about how a stub is written.
+ */
+function respond(status: number, body: Record<string, unknown>) {
+  return (_req: Request, res: Response) => {
+    res.status(status).json(body);
+  };
+}
+
 type ServiceAuthRequest = Request & {
   serviceAuth?: {
     apiKeyId: string;
@@ -123,80 +134,35 @@ describe('treasury service-authenticated routes', () => {
 
     const controller = {
       ingest: ingestHandler,
-      listEntries: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: [] });
-      },
-      listEntryAccounting: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: [] });
-      },
-      getEntryAccounting: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: null });
-      },
-      getTreasuryPartnerHandoff: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: null });
-      },
-      appendState: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: { updated: true } });
-      },
+      listEntries: respond(200, { success: true, data: [] }),
+      listEntryAccounting: respond(200, { success: true, data: [] }),
+      getEntryAccounting: respond(200, { success: true, data: null }),
+      getTreasuryPartnerHandoff: respond(200, { success: true, data: null }),
+      appendState: respond(200, { success: true, data: { updated: true } }),
       upsertTreasuryPartnerHandoff: upsertTreasuryPartnerHandoffHandler,
       appendTreasuryPartnerHandoffEvidence: appendTreasuryPartnerHandoffEvidenceHandler,
-      createEntryRealization: (_req: Request, res: Response) => {
-        res.status(201).json({ success: true, route: 'realization' });
-      },
+      createEntryRealization: respond(201, { success: true, route: 'realization' }),
       upsertBankConfirmation: upsertBankConfirmationHandler,
-      listAccountingPeriods: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: [] });
-      },
-      getAccountingPeriodRollforward: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: null });
-      },
-      getAccountingPeriodClosePacket: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: null });
-      },
-      createAccountingPeriod: (_req: Request, res: Response) => {
-        res.status(201).json({ success: true, route: 'periods' });
-      },
-      requestAccountingPeriodClose: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'period-request-close' });
-      },
-      closeAccountingPeriod: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'period-close' });
-      },
-      listSweepBatches: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: [] });
-      },
-      createSweepBatch: (_req: Request, res: Response) => {
-        res.status(201).json({ success: true, route: 'batch-create' });
-      },
-      getSweepBatch: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: null });
-      },
-      getSweepBatchTrace: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: null });
-      },
-      addSweepBatchEntry: (_req: Request, res: Response) => {
-        res.status(201).json({ success: true, route: 'batch-entry' });
-      },
-      requestSweepBatchApproval: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'batch-request-approval' });
-      },
-      approveSweepBatch: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'batch-approve' });
-      },
-      markSweepBatchExecuted: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'batch-match-execution' });
-      },
+      listAccountingPeriods: respond(200, { success: true, data: [] }),
+      getAccountingPeriodRollforward: respond(200, { success: true, data: null }),
+      getAccountingPeriodClosePacket: respond(200, { success: true, data: null }),
+      createAccountingPeriod: respond(201, { success: true, route: 'periods' }),
+      requestAccountingPeriodClose: respond(200, { success: true, route: 'period-request-close' }),
+      closeAccountingPeriod: respond(200, { success: true, route: 'period-close' }),
+      listSweepBatches: respond(200, { success: true, data: [] }),
+      createSweepBatch: respond(201, { success: true, route: 'batch-create' }),
+      getSweepBatch: respond(200, { success: true, data: null }),
+      getSweepBatchTrace: respond(200, { success: true, data: null }),
+      addSweepBatchEntry: respond(201, { success: true, route: 'batch-entry' }),
+      requestSweepBatchApproval: respond(200, { success: true, route: 'batch-request-approval' }),
+      approveSweepBatch: respond(200, { success: true, route: 'batch-approve' }),
+      markSweepBatchExecuted: respond(200, { success: true, route: 'batch-match-execution' }),
       recordPartnerHandoff: recordPartnerHandoffHandler,
-      closeSweepBatch: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, route: 'batch-close' });
-      },
+      closeSweepBatch: respond(200, { success: true, route: 'batch-close' }),
       upsertDeposit: upsertDepositHandler,
-      getReconciliationControlSummary: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: null });
-      },
-      exportEntries: (_req: Request, res: Response) => {
-        res.status(200).json({ success: true, data: [] });
-      },
+      getChainCanonicalitySummary: respond(200, { success: true, data: null }),
+      getReconciliationControlSummary: respond(200, { success: true, data: null }),
+      exportEntries: respond(200, { success: true, data: [] }),
     };
 
     const app = express();
