@@ -176,6 +176,12 @@ was cleared against, and the realization record names both:
 
 - [`../docs/runbooks/treasury-realization-reconciliation-binding.md`](../docs/runbooks/treasury-realization-reconciliation-binding.md)
 
+External-provider assurance is an unresolved external dependency. The technical
+controls are in place; the due-diligence, contract and escalation approvals are
+not:
+
+- [`../docs/runbooks/treasury-provider-assurance-dossier.md`](../docs/runbooks/treasury-provider-assurance-dossier.md)
+
 Authoritative sweep execution evidence is matched from indexed `TreasuryClaimed` events. A batch
 does not become `EXECUTED` from operator-supplied amount or destination fields alone.
 

@@ -215,4 +215,7 @@ External provider and bank completion remains outside Cotsel authority. This
 control makes a provider's claims non-destructive and auditable; it cannot make
 them true. Independently verifiable provider and bank evidence is still required
 before revenue is realized, and the provider due-diligence, contract and
-escalation obligations under COMP-06 remain open as an external dependency.
+escalation obligations under COMP-06 remain open as an external dependency —
+tracked in the
+[provider assurance dossier](./treasury-provider-assurance-dossier.md), which
+has no approved instance.
