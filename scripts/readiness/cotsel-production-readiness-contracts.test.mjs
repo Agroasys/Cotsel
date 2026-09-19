@@ -122,16 +122,19 @@ test('the WP-1 role-separation route preserves the binding custody policy', () =
 
 test('Terraform provisions KMS keys only for approved automated signers', () => {
   const terraform = readFileSync(
-    new URL('../../infra/terraform/staging-platform/managed-signers.tf', import.meta.url),
+    new URL('../../infra/terraform/staging-foundation/signer-custody.tf', import.meta.url),
     'utf8',
   );
-  const managedRoles = terraform.match(/managed_signer_roles = toset\(\[([\s\S]*?)\]\)/)?.[1];
+  const managedRoles = terraform.match(
+    /approved_automated_signer_roles = toset\(\[([\s\S]*?)\]\)/,
+  )?.[1];
 
   assert.ok(managedRoles, 'managed signer role set exists');
   assert.deepEqual(
     [...managedRoles.matchAll(/"([^"]+)"/g)].map((match) => match[1]),
     ['oracle', 'relayer'],
   );
+  assert.match(terraform, /managed_signer_roles = local\.approved_automated_signer_roles/);
   assert.match(terraform, /!startswith\(role, "admin-"\)/);
   assert.doesNotMatch(managedRoles, /admin-|treasury|deployer/);
 });

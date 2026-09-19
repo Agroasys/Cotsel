@@ -18,6 +18,8 @@ packages:
 linkWorkspacePackages: true
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
+  # Security fix for GHSA-7q85-xj36-vmfc. Keep the exception version-specific.
+  - adm-zip@0.6.1
   # Security fix for GHSA-mh99-v99m-4gvg. Keep the exception version-specific.
   - brace-expansion@5.0.9
   # Security fix for GHSA-7p8r-x3mc-p8w7. Keep the exception version-specific.
@@ -42,7 +44,7 @@ overrides:
   '@babel/core@<=7.29.0': 7.29.6
   '@humanfs/node': 0.16.8
   '@protobufjs/utf8': 1.1.1
-  adm-zip@<0.6.1: 0.6.1
+  adm-zip: 0.6.1
   axios: 1.18.0
   bn.js: 4.12.3
   body-parser@>=2 <2.3.0: 2.3.0

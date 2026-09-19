@@ -1,0 +1,88 @@
+name: KMS Signer Address Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Exact reviewed main commit that owns the derivation workflow.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  SIGNER_AUDIT_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-contract-deploy
+
+jobs:
+  derive:
+    name: custody/derive-kms-addresses
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - name: Checkout the requested main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Verify the immutable source selection
+        env:
+          EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || {
+            echo "Address derivation is restricted to main." >&2
+            exit 1
+          }
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT_SHA" || {
+            echo "The dispatch commit does not match current main." >&2
+            exit 1
+          }
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT_SHA" || {
+            echo "The checkout does not match the requested commit." >&2
+            exit 1
+          }
+          test -z "$(git status --porcelain --untracked-files=all)" || {
+            echo "The derivation checkout is not clean." >&2
+            exit 1
+          }
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          version: 10.34.4
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test both derivation paths
+        run: pnpm --dir contracts exec hardhat test tests/kmsSignerAddressDerivation.ts
+
+      - name: Assume the read-only signer-audit role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ env.SIGNER_AUDIT_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Derive and compare the live signer addresses
+        run: |
+          mkdir -p contracts/reports/custody
+          pnpm --dir contracts exec ts-node scripts/derive-kms-signer-addresses.ts \
+            alias/cotsel-staging-oracle-signer \
+            alias/cotsel-staging-relayer-signer \
+            > contracts/reports/custody/kms-signer-addresses.json
+
+      - name: Retain provisional derivation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: kms-signer-addresses-${{ github.sha }}-${{ github.run_id }}
+          path: contracts/reports/custody/kms-signer-addresses.json
+          if-no-files-found: error
+          retention-days: 90
