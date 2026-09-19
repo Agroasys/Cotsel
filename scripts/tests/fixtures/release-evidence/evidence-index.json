@@ -3,12 +3,12 @@
   "candidateId": "cotsel-2026-08-05-fixture",
   "manifest": {
     "path": "scripts/tests/fixtures/release-evidence/candidate-manifest.json",
-    "sha256": "b17d68a16b42982cc53be9e5afe4c24c776a59d0b12a71d702f8d1d481c53a8d"
+    "sha256": "8f496413bac4888672f7131bb858ab812ff67cc0843310ac4e3fa91c49e6eba6"
   },
   "environmentReport": {
     "path": "ci-reports/environment-report.json",
     "sha256": "66d51889f1ac4eeee3064c44ab784d5039216adf53c0b1ae073f1c61a5f4e2e1",
-    "manifestSha256": "b17d68a16b42982cc53be9e5afe4c24c776a59d0b12a71d702f8d1d481c53a8d",
+    "manifestSha256": "8f496413bac4888672f7131bb858ab812ff67cc0843310ac4e3fa91c49e6eba6",
     "configDigestSha256": "ec9d52dbc40c92b82e4610bcf07d164b31e92da0f59717f9fd5bc1ebbc24a517"
   },
   "generatedAt": "2026-08-05T10:00:00.000Z",
@@ -55,7 +55,7 @@
           "oracle@202608310001_baseline#sha256:bd596dfb79adabdfa95b1930e05c06bf9d9f8cb76a17c16276154ad7b3c073af",
           "reconciliation@202609120001_run_leases#sha256:278cac59c7b2d5b7d287bdabfcd3964f83581cc47315e55f7d411b6d31b85b20",
           "ricardian@202608310001_baseline#sha256:68b1014d5334631301e68f12e99874849e5d1f843ecd29e588815e4f6ccaf42b",
-          "treasury@202609190004_canonical_chain_evidence#sha256:e34bb16547155b02407e34e7ae94f78d85f3bc8bc15ce3c48fd3e29d628a513e"
+          "treasury@202609190004_canonical_chain_evidence#sha256:c82a20f4070981975ca14bd0b3ef51d6d8ef9c1e7430a75300bf3651c4f2af13"
         ],
         "providerMode": {
           "fiatOffRamp": "disabled",
@@ -113,7 +113,7 @@
           "oracle@202608310001_baseline#sha256:bd596dfb79adabdfa95b1930e05c06bf9d9f8cb76a17c16276154ad7b3c073af",
           "reconciliation@202609120001_run_leases#sha256:278cac59c7b2d5b7d287bdabfcd3964f83581cc47315e55f7d411b6d31b85b20",
           "ricardian@202608310001_baseline#sha256:68b1014d5334631301e68f12e99874849e5d1f843ecd29e588815e4f6ccaf42b",
-          "treasury@202609190004_canonical_chain_evidence#sha256:e34bb16547155b02407e34e7ae94f78d85f3bc8bc15ce3c48fd3e29d628a513e"
+          "treasury@202609190004_canonical_chain_evidence#sha256:c82a20f4070981975ca14bd0b3ef51d6d8ef9c1e7430a75300bf3651c4f2af13"
         ],
         "providerMode": {
           "fiatOffRamp": "disabled",

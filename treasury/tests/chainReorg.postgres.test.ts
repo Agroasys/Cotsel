@@ -25,6 +25,8 @@ const INGESTED_BLOCK = 900;
 const INGESTED_BLOCK_HASH = `0x${'ab'.repeat(32)}`;
 const REORGED_BLOCK_HASH = `0x${'cd'.repeat(32)}`;
 const STABLE_BLOCK = 950;
+const LOG_ADDRESS = `0x${'11'.repeat(20)}`;
+const LOG_IDENTITY_HASH = 'a'.repeat(64);
 
 describePostgres('treasury chain reorganization drill (postgres)', () => {
   jest.setTimeout(120_000);
@@ -70,6 +72,8 @@ describePostgres('treasury chain reorganization drill (postgres)', () => {
       blockNumber: INGESTED_BLOCK,
       blockHash: INGESTED_BLOCK_HASH,
       logIndex: 3,
+      logAddress: `0x${'11'.repeat(20)}`,
+      logIdentityHash: 'a'.repeat(64),
       eventName: 'PlatformFeesPaidStage1',
       componentType: 'PLATFORM_FEE',
       amountRaw: '1000000',
@@ -106,6 +110,8 @@ describePostgres('treasury chain reorganization drill (postgres)', () => {
       ledgerEntryId: entryId,
       blockHash: INGESTED_BLOCK_HASH,
       logIndex: 3,
+      logAddress: `0x${'11'.repeat(20)}`,
+      logIdentityHash: 'a'.repeat(64),
       stableBlockNumber: STABLE_BLOCK,
     });
 
@@ -121,6 +127,8 @@ describePostgres('treasury chain reorganization drill (postgres)', () => {
       ledgerEntryId: entryId,
       blockHash: INGESTED_BLOCK_HASH,
       logIndex: 3,
+      logAddress: `0x${'11'.repeat(20)}`,
+      logIdentityHash: 'a'.repeat(64),
       stableBlockNumber: STABLE_BLOCK,
     });
     await queries.setIngestionWatermark(STABLE_BLOCK + 1, 'trade_events', STABLE_BLOCK);
@@ -197,6 +205,8 @@ describePostgres('treasury chain reorganization drill (postgres)', () => {
       blockNumber: INGESTED_BLOCK,
       blockHash: INGESTED_BLOCK_HASH,
       logIndex: 3,
+      logAddress: `0x${'11'.repeat(20)}`,
+      logIdentityHash: 'a'.repeat(64),
       eventName: 'PlatformFeesPaidStage1',
       componentType: 'PLATFORM_FEE',
       amountRaw: '1000000',
@@ -212,6 +222,8 @@ describePostgres('treasury chain reorganization drill (postgres)', () => {
       ledgerEntryId: entryId,
       blockHash: INGESTED_BLOCK_HASH,
       logIndex: 3,
+      logAddress: `0x${'11'.repeat(20)}`,
+      logIdentityHash: 'a'.repeat(64),
       stableBlockNumber: STABLE_BLOCK + 500,
     });
 
@@ -263,5 +275,172 @@ describePostgres('treasury chain reorganization drill (postgres)', () => {
         [`no-identity-${sequence}`],
       ),
     ).rejects.toThrow(/canonical_requires_identity/);
+  });
+
+  test('a same-position replay with a different amount drops the canonical proof', async () => {
+    const { entryId, entryKey } = await seedIngestedEntry();
+    await queries.markLedgerEntryCanonical({
+      ledgerEntryId: entryId,
+      blockHash: INGESTED_BLOCK_HASH,
+      logIndex: 3,
+      logAddress: LOG_ADDRESS,
+      logIdentityHash: LOG_IDENTITY_HASH,
+      stableBlockNumber: STABLE_BLOCK,
+    });
+    expect((await readEntry(entryId)).canonicality_state).toBe('CANONICAL');
+
+    // Same block, same log position, different payable amount. The proof was
+    // about the old amount, so it must not carry over to the new one.
+    await queries.upsertLedgerEntryWithInitialState({
+      entryKey,
+      tradeId: `trade-reorg-${sequence}`,
+      txHash: `0xreorg${sequence}`,
+      blockNumber: INGESTED_BLOCK,
+      blockHash: INGESTED_BLOCK_HASH,
+      logIndex: 3,
+      logAddress: LOG_ADDRESS,
+      logIdentityHash: LOG_IDENTITY_HASH,
+      eventName: 'PlatformFeesPaidStage1',
+      componentType: 'PLATFORM_FEE',
+      amountRaw: '9999999',
+      sourceTimestamp: new Date('2026-03-31T00:00:00.000Z'),
+      metadata: { source: 'reorg-drill-amount-change' },
+    });
+
+    const entry = await readEntry(entryId);
+    expect(entry.amount_raw).toBe('9999999');
+    expect(entry.canonicality_state).toBe('UNVERIFIED');
+    expect(entry.canonicality_verified_at).toBeNull();
+  });
+
+  test('a byte-identical replay keeps the canonical proof', async () => {
+    const { entryId, entryKey } = await seedIngestedEntry();
+    await queries.markLedgerEntryCanonical({
+      ledgerEntryId: entryId,
+      blockHash: INGESTED_BLOCK_HASH,
+      logIndex: 3,
+      logAddress: LOG_ADDRESS,
+      logIdentityHash: LOG_IDENTITY_HASH,
+      stableBlockNumber: STABLE_BLOCK,
+    });
+
+    await queries.upsertLedgerEntryWithInitialState({
+      entryKey,
+      tradeId: `trade-reorg-${sequence}`,
+      txHash: `0xreorg${sequence}`,
+      blockNumber: INGESTED_BLOCK,
+      blockHash: INGESTED_BLOCK_HASH,
+      logIndex: 3,
+      logAddress: LOG_ADDRESS,
+      logIdentityHash: LOG_IDENTITY_HASH,
+      eventName: 'PlatformFeesPaidStage1',
+      componentType: 'PLATFORM_FEE',
+      amountRaw: '1000000',
+      sourceTimestamp: new Date('2026-03-31T00:00:00.000Z'),
+      metadata: { source: 'reorg-drill-identical-replay' },
+    });
+
+    expect((await readEntry(entryId)).canonicality_state).toBe('CANONICAL');
+  });
+
+  test('a replay that changes the log emitter drops the canonical proof', async () => {
+    const { entryId, entryKey } = await seedIngestedEntry();
+    await queries.markLedgerEntryCanonical({
+      ledgerEntryId: entryId,
+      blockHash: INGESTED_BLOCK_HASH,
+      logIndex: 3,
+      logAddress: LOG_ADDRESS,
+      logIdentityHash: LOG_IDENTITY_HASH,
+      stableBlockNumber: STABLE_BLOCK,
+    });
+
+    await queries.upsertLedgerEntryWithInitialState({
+      entryKey,
+      tradeId: `trade-reorg-${sequence}`,
+      txHash: `0xreorg${sequence}`,
+      blockNumber: INGESTED_BLOCK,
+      blockHash: INGESTED_BLOCK_HASH,
+      logIndex: 3,
+      logAddress: `0x${'22'.repeat(20)}`,
+      logIdentityHash: 'b'.repeat(64),
+      eventName: 'PlatformFeesPaidStage1',
+      componentType: 'PLATFORM_FEE',
+      amountRaw: '1000000',
+      sourceTimestamp: new Date('2026-03-31T00:00:00.000Z'),
+      metadata: { source: 'reorg-drill-emitter-change' },
+    });
+
+    expect((await readEntry(entryId)).canonicality_state).toBe('UNVERIFIED');
+  });
+
+  test('canonical promotion loses to a concurrent orphaning and reports it', async () => {
+    const { entryId, entryKey } = await seedIngestedEntry();
+
+    // Orphaning commits first, standing in for the assessment that wins the
+    // race after another one has already read the entry and decided CANONICAL.
+    await queries.recordLedgerEntryOrphaned({
+      ledgerEntryId: entryId,
+      entryKey,
+      tradeId: `trade-reorg-${sequence}`,
+      txHash: `0xreorg${sequence}`,
+      blockNumber: INGESTED_BLOCK,
+      expectedBlockHash: INGESTED_BLOCK_HASH,
+      observedBlockHash: REORGED_BLOCK_HASH,
+      observedBlockNumber: INGESTED_BLOCK,
+      observedLogIndex: null,
+      reorgDepth: 50,
+      stableBlockNumber: STABLE_BLOCK,
+      mismatchReason: 'BLOCK_HASH_MISMATCH',
+      detail: 'concurrent orphaning',
+      cancelFromState: 'PENDING_REVIEW',
+      actor: 'system:chain-canonicality',
+    });
+
+    const promotion = await queries.markLedgerEntryCanonical({
+      ledgerEntryId: entryId,
+      blockHash: INGESTED_BLOCK_HASH,
+      logIndex: 3,
+      logAddress: LOG_ADDRESS,
+      logIdentityHash: LOG_IDENTITY_HASH,
+      stableBlockNumber: STABLE_BLOCK,
+    });
+
+    // The promotion must report what actually happened, not what it attempted.
+    expect(promotion.state).toBe('ORPHANED');
+    expect((await readEntry(entryId)).canonicality_state).toBe('ORPHANED');
+  });
+
+  test('a successful promotion reports CANONICAL', async () => {
+    const { entryId } = await seedIngestedEntry();
+
+    const promotion = await queries.markLedgerEntryCanonical({
+      ledgerEntryId: entryId,
+      blockHash: INGESTED_BLOCK_HASH,
+      logIndex: 3,
+      logAddress: LOG_ADDRESS,
+      logIdentityHash: LOG_IDENTITY_HASH,
+      stableBlockNumber: STABLE_BLOCK,
+    });
+
+    expect(promotion.state).toBe('CANONICAL');
+  });
+
+  test('the retained offset column keeps a previous-image writer working', async () => {
+    // Expand/contract: during a rolling deploy a pod on the old image still
+    // writes next_offset. The migration must not have taken that column away.
+    await sidecar.query(
+      `INSERT INTO treasury_ingestion_state (cursor_name, next_offset)
+       VALUES ('legacy_reader_probe', 42)
+       ON CONFLICT (cursor_name) DO UPDATE SET next_offset = EXCLUDED.next_offset`,
+    );
+
+    const row = await sidecar.query(
+      `SELECT next_offset, next_block_number
+       FROM treasury_ingestion_state WHERE cursor_name = 'legacy_reader_probe'`,
+    );
+
+    expect(row.rows[0].next_offset).toBe(42);
+    // The two cursors do not interfere: an old writer never moves the new one.
+    expect(row.rows[0].next_block_number).toBe(0);
   });
 });

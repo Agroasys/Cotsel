@@ -12,6 +12,8 @@
  * exact log position, and the verdict is re-derived from the settlement RPC
  * rather than read back from the row that is being questioned.
  */
+import crypto from 'node:crypto';
+
 export type ChainCanonicalityState = 'UNVERIFIED' | 'CANONICAL' | 'ORPHANED';
 
 export type ChainMismatchReason =
@@ -19,7 +21,8 @@ export type ChainMismatchReason =
   | 'RECEIPT_REVERTED'
   | 'BLOCK_HASH_MISMATCH'
   | 'BLOCK_NUMBER_MISMATCH'
-  | 'LOG_IDENTITY_MISMATCH';
+  | 'LOG_IDENTITY_MISMATCH'
+  | 'LOG_CONTENT_MISMATCH';
 
 export const BLOCK_HASH_PATTERN = /^0x[0-9a-f]{64}$/;
 
@@ -28,6 +31,46 @@ export interface ChainLogIdentity {
   blockNumber: number;
   blockHash: string | null;
   logIndex: number | null;
+  logAddress: string | null;
+  logIdentityHash: string | null;
+}
+
+/** The subset of a receipt log that identifies which event it is. */
+export interface SettlementLog {
+  index: number;
+  address?: string | null;
+  topics?: ReadonlyArray<string> | null;
+  data?: string | null;
+}
+
+/**
+ * A log's content identity: who emitted it, which event it is, and what it
+ * said. A position in a receipt is not an identity -- a corrected or poisoned
+ * source record can name a real transaction and a real log index and still
+ * describe a different event -- so the ingested log is reduced to this digest
+ * and the digest is what a later verification has to reproduce.
+ *
+ * Topics and data are lowercased before hashing because the same log read
+ * through two providers can differ in hex case alone.
+ */
+export function computeLogIdentityHash(log: SettlementLog): string {
+  const address = (log.address ?? '').trim().toLowerCase();
+  const topics = (log.topics ?? []).map((topic) => String(topic).trim().toLowerCase());
+  const data = (log.data ?? '').trim().toLowerCase();
+
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify({ address, topics, data }))
+    .digest('hex');
+}
+
+export function normalizeLogAddress(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return /^0x[0-9a-f]{40}$/.test(normalized) ? normalized : null;
 }
 
 export interface CanonicalVerdict {
@@ -65,7 +108,7 @@ export interface SettlementReceipt {
   blockNumber: number | bigint;
   blockHash: string | null;
   status?: number | null;
-  logs?: ReadonlyArray<{ index: number }>;
+  logs?: ReadonlyArray<SettlementLog>;
 }
 
 export interface SettlementChainReader {
@@ -106,6 +149,7 @@ export interface ChainStableHead {
 export class ChainCanonicalityVerifier {
   private readonly provider: SettlementChainReader | null;
   private readonly blockHashCache = new Map<number, string | null>();
+  private readonly receiptCache = new Map<string, SettlementReceipt | null>();
 
   /**
    * The provider is always injected. This module stays free of configuration so
@@ -124,6 +168,7 @@ export class ChainCanonicalityVerifier {
    */
   resetCache(): void {
     this.blockHashCache.clear();
+    this.receiptCache.clear();
   }
 
   isConfigured(): boolean {
@@ -173,6 +218,39 @@ export class ChainCanonicalityVerifier {
   }
 
   /**
+   * The identity of one log, read from the chain at ingestion so that a later
+   * verification has something to reproduce. Receipts are memoized per run
+   * because one transaction commonly carries several fee components, each of
+   * which becomes its own ledger entry.
+   */
+  async resolveLogIdentity(
+    txHash: string,
+    logIndex: number,
+  ): Promise<{ address: string; identityHash: string } | null> {
+    if (!this.provider) {
+      return null;
+    }
+
+    let receipt = this.receiptCache.get(txHash);
+    if (receipt === undefined) {
+      receipt = await this.provider.getTransactionReceipt(txHash);
+      this.receiptCache.set(txHash, receipt);
+    }
+
+    if (!receipt || receipt.status === 0 || !receipt.logs) {
+      return null;
+    }
+
+    const log = receipt.logs.find((candidate) => candidate.index === logIndex);
+    const address = log ? normalizeLogAddress(log.address) : null;
+    if (!log || !address) {
+      return null;
+    }
+
+    return { address, identityHash: computeLogIdentityHash(log) };
+  }
+
+  /**
    * Re-derives the verdict for one stored entry from the transaction receipt.
    *
    * The receipt is the authority rather than a second block lookup by height:
@@ -195,11 +273,17 @@ export class ChainCanonicalityVerifier {
     }
 
     const expectedBlockHash = normalizeBlockHash(entry.blockHash);
-    if (!expectedBlockHash || entry.logIndex === null) {
+    const expectedLogAddress = normalizeLogAddress(entry.logAddress);
+    if (
+      !expectedBlockHash ||
+      entry.logIndex === null ||
+      !expectedLogAddress ||
+      !entry.logIdentityHash
+    ) {
       return {
         state: 'UNVERIFIED',
         detail:
-          'Entry was ingested without a block hash and log index, so its chain identity cannot be re-derived',
+          'Entry was ingested without a full chain identity (block hash, log index, emitter and log digest), so it cannot be re-derived',
         stableBlockNumber,
       };
     }
@@ -271,10 +355,17 @@ export class ChainCanonicalityVerifier {
     }
 
     // The block matches, so the remaining question is whether this entry still
-    // points at the same log inside it. A receipt that no longer carries the
-    // ingested log index is a different transaction shape than the one the
-    // amount was read from.
-    if (receipt.logs && !receipt.logs.some((log) => log.index === entry.logIndex)) {
+    // describes the same log inside it.
+    if (!receipt.logs) {
+      return {
+        state: 'UNVERIFIED',
+        detail: `Settlement RPC returned a receipt for ${entry.txHash} without logs, so the log identity cannot be re-derived`,
+        stableBlockNumber,
+      };
+    }
+
+    const observedLog = receipt.logs.find((log) => log.index === entry.logIndex);
+    if (!observedLog) {
       return orphaned(
         'LOG_IDENTITY_MISMATCH',
         `Receipt for ${entry.txHash} no longer contains log index ${entry.logIndex}`,
@@ -282,6 +373,28 @@ export class ChainCanonicalityVerifier {
           blockHash: observedBlockHash,
           blockNumber: observedBlockNumber,
           logIndex: receipt.logs.length > 0 ? receipt.logs[0].index : null,
+        },
+      );
+    }
+
+    // Position is not identity. A source record can name a real transaction and
+    // a real log index and still describe a different event -- a different
+    // emitter, a different topic, different amounts -- so the ingested log's
+    // content digest is what has to match, not the slot it occupied.
+    const observedLogAddress = normalizeLogAddress(observedLog.address);
+    const observedLogIdentityHash = computeLogIdentityHash(observedLog);
+
+    if (
+      observedLogAddress !== expectedLogAddress ||
+      observedLogIdentityHash !== entry.logIdentityHash
+    ) {
+      return orphaned(
+        'LOG_CONTENT_MISMATCH',
+        `Log ${entry.logIndex} of ${entry.txHash} is emitted by ${observedLogAddress ?? 'unknown'} with digest ${observedLogIdentityHash}, not the ingested ${expectedLogAddress}/${entry.logIdentityHash}`,
+        {
+          blockHash: observedBlockHash,
+          blockNumber: observedBlockNumber,
+          logIndex: observedLog.index,
         },
       );
     }

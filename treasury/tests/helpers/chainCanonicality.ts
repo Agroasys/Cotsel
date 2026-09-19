@@ -6,11 +6,33 @@
  * settlement chain just to get past the canonicality gate. Tests that are
  * about canonicality itself use the real verifier over `stubChainReader`.
  */
-import { ChainCanonicalityVerifier } from '../../src/core/chainCanonicality';
+import {
+  ChainCanonicalityVerifier,
+  computeLogIdentityHash,
+} from '../../src/core/chainCanonicality';
 import type { ChainLogIdentity, SettlementChainReader } from '../../src/core/chainCanonicality';
 
 export const TEST_BLOCK_HASH = `0x${'ab'.repeat(32)}`;
 export const TEST_REORGED_BLOCK_HASH = `0x${'cd'.repeat(32)}`;
+export const TEST_LOG_ADDRESS = `0x${'11'.repeat(20)}`;
+export const TEST_OTHER_LOG_ADDRESS = `0x${'22'.repeat(20)}`;
+export const TEST_LOG_TOPIC = `0x${'ee'.repeat(32)}`;
+
+export function testLog(overrides?: {
+  index?: number;
+  address?: string;
+  topics?: string[];
+  data?: string;
+}) {
+  return {
+    index: overrides?.index ?? 0,
+    address: overrides?.address ?? TEST_LOG_ADDRESS,
+    topics: overrides?.topics ?? [TEST_LOG_TOPIC],
+    data: overrides?.data ?? '0x01',
+  };
+}
+
+export const TEST_LOG_IDENTITY_HASH = computeLogIdentityHash(testLog());
 
 export interface StubReceipt {
   txHash: string;
@@ -18,6 +40,9 @@ export interface StubReceipt {
   blockHash: string;
   logIndex: number;
   status?: number;
+  logAddress?: string;
+  logTopics?: string[];
+  logData?: string;
 }
 
 /**
@@ -50,7 +75,14 @@ export function stubChainReader(options: {
         blockNumber: receipt.blockNumber,
         blockHash: receipt.blockHash,
         status: receipt.status ?? 1,
-        logs: [{ index: receipt.logIndex }],
+        logs: [
+          testLog({
+            index: receipt.logIndex,
+            address: receipt.logAddress,
+            topics: receipt.logTopics,
+            data: receipt.logData,
+          }),
+        ],
       };
     },
   };
@@ -75,6 +107,9 @@ export function alwaysCanonicalVerifier(): ChainCanonicalityVerifier {
     async resolveBlockHash() {
       return TEST_BLOCK_HASH;
     },
+    async resolveLogIdentity() {
+      return { address: TEST_LOG_ADDRESS, identityHash: TEST_LOG_IDENTITY_HASH };
+    },
     async verify(entry: ChainLogIdentity, stableBlockNumber: number) {
       return {
         state: 'CANONICAL' as const,
@@ -96,6 +131,7 @@ export function recordingCanonicalityWriter() {
     writer: {
       markCanonical: async (data: { ledgerEntryId: number; blockHash: string }) => {
         marked.push({ ledgerEntryId: data.ledgerEntryId, blockHash: data.blockHash });
+        return { state: 'CANONICAL' as const };
       },
       recordOrphaned: async (data: Record<string, unknown>) => {
         orphaned.push(data);

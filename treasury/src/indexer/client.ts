@@ -17,6 +17,7 @@ export interface IndexerBlockWindow {
 
 interface GraphQlResponse {
   data?: {
+    overviewSnapshots?: Array<{ lastProcessedBlock?: string | null }>;
     tradeEvents?: Array<{
       id: string;
       eventName: string;
@@ -50,6 +51,54 @@ interface GraphQlResponse {
 
 export class IndexerClient {
   constructor(private readonly graphqlUrl: string) {}
+
+  /**
+   * The highest block the indexer has actually processed.
+   *
+   * Ingestion needs this because an empty page proves nothing on its own: if
+   * the finalized chain head is ahead of the indexer, a query bounded only by
+   * the chain returns a short page for a range the indexer has not reached yet,
+   * and advancing the watermark past it drops every fee event indexed later.
+   * The window is therefore bounded by whichever of the two is behind.
+   */
+  async fetchProcessedBlock(): Promise<number | null> {
+    const query = `
+      query TreasuryIndexerProcessedBlock {
+        overviewSnapshots(limit: 1, orderBy: lastProcessedBlock_DESC) {
+          lastProcessedBlock
+        }
+      }
+    `;
+
+    const response = await fetchWithTimeout(
+      this.graphqlUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, variables: {} }),
+      },
+      config.indexerGraphqlRequestTimeoutMs,
+    );
+
+    if (!response.ok) {
+      throw new Error(`Indexer GraphQL request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const body = (await response.json()) as GraphQlResponse;
+    if (body.errors?.length) {
+      throw new Error(
+        `Indexer GraphQL errors: ${body.errors.map((item) => item.message).join('; ')}`,
+      );
+    }
+
+    const raw = body.data?.overviewSnapshots?.[0]?.lastProcessedBlock;
+    if (raw === undefined || raw === null) {
+      return null;
+    }
+
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
 
   async fetchTreasuryEvents(window: IndexerBlockWindow): Promise<IndexerTradeEvent[]> {
     const query = `

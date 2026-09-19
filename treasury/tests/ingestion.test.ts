@@ -19,85 +19,19 @@ process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'postgres';
 process.env.INDEXER_GRAPHQL_URL =
   process.env.INDEXER_GRAPHQL_URL || 'http://localhost:3000/graphql';
 
-import { TreasuryIngestionService } from '../src/core/ingestion';
+// The config module reads these at first import, and TypeScript emits each
+// `require` where its import statement sits, so this has to precede them.
 import {
-  ChainCanonicalityVerifier,
-  type SettlementChainReader,
-} from '../src/core/chainCanonicality';
+  attachIndexer,
+  blockHashFor,
+  chainReader,
+  FINALIZED_BLOCK,
+  LOG_ADDRESS,
+  makeEvent,
+  makeService,
+} from './helpers/ingestion';
+
 import type { IndexerBlockWindow } from '../src/indexer/client';
-import type { IndexerTradeEvent } from '../src/indexer/types';
-
-const FINALIZED_BLOCK = 500;
-
-function blockHashFor(blockNumber: number): string {
-  return `0x${blockNumber.toString(16).padStart(64, '0')}`;
-}
-
-/**
- * A chain that answers for every height. `finalized` is what bounds ingestion,
- * so a test that wants an unbounded run has to say so explicitly.
- */
-function chainReader(options?: {
-  finalized?: number | null;
-  unknownBlocks?: number[];
-}): SettlementChainReader {
-  const finalized = options?.finalized === undefined ? FINALIZED_BLOCK : options.finalized;
-  const unknown = new Set(options?.unknownBlocks ?? []);
-
-  return {
-    async getBlock(tag) {
-      if (tag === 'finalized') {
-        return finalized === null ? null : { number: finalized, hash: blockHashFor(finalized) };
-      }
-      if (tag === 'safe' || tag === 'latest') {
-        return { number: FINALIZED_BLOCK, hash: blockHashFor(FINALIZED_BLOCK) };
-      }
-      return unknown.has(tag) ? null : { number: tag, hash: blockHashFor(tag) };
-    },
-    async getTransactionReceipt() {
-      return null;
-    },
-  };
-}
-
-function makeService(reader: SettlementChainReader): TreasuryIngestionService {
-  return new TreasuryIngestionService({
-    verifier: new ChainCanonicalityVerifier({ provider: reader }),
-  });
-}
-
-function makeEvent(
-  data: Partial<IndexerTradeEvent> & Pick<IndexerTradeEvent, 'id' | 'tradeId' | 'eventName'>,
-): IndexerTradeEvent {
-  return {
-    id: data.id,
-    tradeId: data.tradeId,
-    eventName: data.eventName,
-    txHash: data.txHash === undefined ? '0xtx' : data.txHash,
-    blockNumber: data.blockNumber ?? 1,
-    logIndex: data.logIndex ?? 0,
-    timestamp: data.timestamp || new Date('2026-01-01T00:00:00.000Z'),
-    releasedLogisticsAmount: data.releasedLogisticsAmount,
-    paidPlatformFees: data.paidPlatformFees,
-    paidPlatformFeeNet: data.paidPlatformFeeNet,
-    paidSettlementSupportFee: data.paidSettlementSupportFee,
-  };
-}
-
-function attachIndexer(
-  service: TreasuryIngestionService,
-  fetchTreasuryEvents: jest.Mock,
-  fetchTreasuryClaimEvents: jest.Mock = jest.fn().mockResolvedValue([]),
-): void {
-  (
-    service as unknown as {
-      indexerClient: {
-        fetchTreasuryEvents: jest.Mock;
-        fetchTreasuryClaimEvents: jest.Mock;
-      };
-    }
-  ).indexerClient = { fetchTreasuryEvents, fetchTreasuryClaimEvents };
-}
 
 describe('TreasuryIngestionService', () => {
   beforeEach(() => {
@@ -108,58 +42,6 @@ describe('TreasuryIngestionService', () => {
       entry: { id: 1 },
       initialStateCreated: true,
     });
-  });
-
-  it('bounds the read window by the finalized head and resumes from the block watermark', async () => {
-    mockGetIngestionWatermark.mockImplementation(async (cursor: string) =>
-      cursor === 'trade_events' ? 120 : 0,
-    );
-
-    const fetchTreasuryEvents = jest
-      .fn()
-      .mockResolvedValueOnce([
-        makeEvent({
-          id: 'evt-1',
-          tradeId: 'trade-1',
-          eventName: 'FundsReleasedStage1',
-          blockNumber: 120,
-          releasedLogisticsAmount: '100',
-        }),
-      ])
-      .mockResolvedValue([]);
-
-    const service = makeService(chainReader());
-    attachIndexer(service, fetchTreasuryEvents);
-
-    const result = await service.ingestOnce();
-
-    const window = fetchTreasuryEvents.mock.calls[0][0] as IndexerBlockWindow;
-    expect(window.fromBlock).toBe(120);
-    expect(window.toBlock).toBe(FINALIZED_BLOCK);
-    expect(result.stableBlockNumber).toBe(FINALIZED_BLOCK);
-    expect(result.blockedReason).toBeNull();
-    // The window was exhausted, so the next run starts past the finalized head
-    // it was bounded by rather than re-reading it.
-    expect(mockSetIngestionWatermark).toHaveBeenNthCalledWith(
-      1,
-      FINALIZED_BLOCK + 1,
-      'trade_events',
-      FINALIZED_BLOCK,
-    );
-  });
-
-  it('refuses to ingest when the settlement RPC reports no finalized head', async () => {
-    const fetchTreasuryEvents = jest.fn().mockResolvedValue([]);
-    const service = makeService(chainReader({ finalized: null }));
-    attachIndexer(service, fetchTreasuryEvents);
-
-    const result = await service.ingestOnce();
-
-    expect(result.fetched).toBe(0);
-    expect(result.stableBlockNumber).toBeNull();
-    expect(result.blockedReason).toMatch(/finalized head/);
-    expect(fetchTreasuryEvents).not.toHaveBeenCalled();
-    expect(mockSetIngestionWatermark).not.toHaveBeenCalled();
   });
 
   it('records the canonical block hash and log index with every ledger entry', async () => {
@@ -403,5 +285,54 @@ describe('TreasuryIngestionService', () => {
       'claim_events',
       FINALIZED_BLOCK,
     );
+  });
+
+  it('stores the emitter and log digest so a position alone cannot verify an entry', async () => {
+    const fetchTreasuryEvents = jest
+      .fn()
+      .mockResolvedValueOnce([
+        makeEvent({
+          id: 'evt-identity',
+          tradeId: 'trade-identity',
+          eventName: 'FundsReleasedStage1',
+          blockNumber: 150,
+          logIndex: 0,
+          releasedLogisticsAmount: '100',
+        }),
+      ])
+      .mockResolvedValue([]);
+
+    const service = makeService(chainReader());
+    attachIndexer(service, fetchTreasuryEvents);
+
+    await service.ingestOnce();
+
+    const call = mockUpsertLedgerEntryWithInitialState.mock.calls[0][0];
+    expect(call.logAddress).toBe(LOG_ADDRESS);
+    expect(call.logIdentityHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('stores no identity when the log cannot be read, leaving the entry unverifiable', async () => {
+    const reader = chainReader();
+    const service = makeService({ ...reader, getTransactionReceipt: async () => null });
+    const fetchTreasuryEvents = jest
+      .fn()
+      .mockResolvedValueOnce([
+        makeEvent({
+          id: 'evt-no-receipt',
+          tradeId: 'trade-no-receipt',
+          eventName: 'FundsReleasedStage1',
+          blockNumber: 150,
+          releasedLogisticsAmount: '100',
+        }),
+      ])
+      .mockResolvedValue([]);
+    attachIndexer(service, fetchTreasuryEvents);
+
+    await service.ingestOnce();
+
+    const call = mockUpsertLedgerEntryWithInitialState.mock.calls[0][0];
+    expect(call.logAddress).toBeNull();
+    expect(call.logIdentityHash).toBeNull();
   });
 });

@@ -12,35 +12,94 @@
 import { pool } from '../connection';
 import type { PoolClient } from 'pg';
 import type { ChainMismatchReason } from '../../core/chainCanonicality';
-import type { ChainCanonicalityCounts, LedgerChainReorgEvent } from '../../core/chainCanonicality';
+import type {
+  ChainCanonicalityCounts,
+  ChainCanonicalityState,
+  LedgerChainReorgEvent,
+} from '../../core/chainCanonicality';
 import type { PayoutState } from '../../types';
 
+/**
+ * Promotes an entry to CANONICAL and reports the state the row actually ended
+ * in.
+ *
+ * The caller must not assume the promotion happened. A concurrent assessment
+ * can orphan this entry between the read that produced the verdict and this
+ * write; the `ORPHANED` guard then matches no row and the update silently does
+ * nothing. Returning the resulting state -- read under the same row lock that
+ * the update takes -- is what lets the caller fail closed instead of treating a
+ * revoked entry as eligible.
+ */
 export async function markLedgerEntryCanonical(data: {
   ledgerEntryId: number;
   blockHash: string;
   logIndex: number;
+  logAddress: string;
+  logIdentityHash: string;
   stableBlockNumber: number;
-}): Promise<void> {
-  await pool.query(
-    `UPDATE treasury_ledger_entries
-     SET canonicality_state = 'CANONICAL',
-         block_hash = $2,
-         log_index = $3,
-         canonicality_verified_at = NOW(),
-         canonicality_observed_block_hash = $2,
-         canonicality_depth = NULL,
-         canonicality_stable_block_number = $4
-     WHERE id = $1
-       AND canonicality_state <> 'ORPHANED'`,
-    [data.ledgerEntryId, data.blockHash, data.logIndex, data.stableBlockNumber],
-  );
+}): Promise<{ state: ChainCanonicalityState }> {
+  const client: PoolClient = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const locked = await client.query<{ canonicality_state: ChainCanonicalityState }>(
+      `SELECT canonicality_state
+       FROM treasury_ledger_entries
+       WHERE id = $1
+       FOR UPDATE`,
+      [data.ledgerEntryId],
+    );
+
+    const current = locked.rows[0]?.canonicality_state;
+    if (current === undefined) {
+      await client.query('COMMIT');
+      return { state: 'UNVERIFIED' };
+    }
+
+    if (current === 'ORPHANED') {
+      await client.query('COMMIT');
+      return { state: 'ORPHANED' };
+    }
+
+    const updated = await client.query<{ canonicality_state: ChainCanonicalityState }>(
+      `UPDATE treasury_ledger_entries
+       SET canonicality_state = 'CANONICAL',
+           block_hash = $2,
+           log_index = $3,
+           log_address = $4,
+           log_identity_hash = $5,
+           canonicality_verified_at = NOW(),
+           canonicality_observed_block_hash = $2,
+           canonicality_depth = NULL,
+           canonicality_stable_block_number = $6
+       WHERE id = $1
+       RETURNING canonicality_state`,
+      [
+        data.ledgerEntryId,
+        data.blockHash,
+        data.logIndex,
+        data.logAddress,
+        data.logIdentityHash,
+        data.stableBlockNumber,
+      ],
+    );
+
+    await client.query('COMMIT');
+    return { state: updated.rows[0]?.canonicality_state ?? 'UNVERIFIED' };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**
- * `canonicality_state <> 'ORPHANED'` above is the important half of this pair.
- * Once the chain has contradicted an entry, a later run that happens to read a
- * matching receipt must not silently clear the revocation; returning an entry
- * to service is an approved correction, not a side effect of a retry.
+ * The `ORPHANED` guard above is the important half of this pair. Once the chain
+ * has contradicted an entry, a later run that happens to read a matching
+ * receipt must not silently clear the revocation; returning an entry to service
+ * is an approved correction, not a side effect of a retry.
  */
 export async function recordLedgerEntryOrphaned(data: {
   ledgerEntryId: number;
@@ -202,17 +261,18 @@ export async function countLedgerEntriesByCanonicality(): Promise<ChainCanonical
 }
 
 /**
- * The finalized head the last completed ingestion run was bounded by. It is the
+ * The height the last completed ingestion run proved coverage through -- the
+ * lower of the finalized head and the indexer's processed height. It is the
  * stable block a reconciliation of the canonicality counts is quoted against,
- * so a reader can tell which view of the chain produced them.
+ * so a reader can tell how far the numbers actually reach.
  */
 export async function getIngestionStableBlock(): Promise<number | null> {
-  const result = await pool.query<{ last_finalized_block_number: number | null }>(
-    `SELECT MIN(last_finalized_block_number) AS last_finalized_block_number
+  const result = await pool.query<{ last_ingested_through_block_number: number | null }>(
+    `SELECT MIN(last_ingested_through_block_number) AS last_ingested_through_block_number
      FROM treasury_ingestion_state
-     WHERE last_finalized_block_number IS NOT NULL`,
+     WHERE last_ingested_through_block_number IS NOT NULL`,
   );
 
-  const value = result.rows[0]?.last_finalized_block_number;
+  const value = result.rows[0]?.last_ingested_through_block_number;
   return value === null || value === undefined ? null : Number(value);
 }

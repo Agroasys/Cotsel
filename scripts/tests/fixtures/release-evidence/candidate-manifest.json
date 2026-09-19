@@ -361,7 +361,7 @@
     {
       "component": "treasury",
       "headIdentity": "202609190004_canonical_chain_evidence",
-      "checksumSha256": "e34bb16547155b02407e34e7ae94f78d85f3bc8bc15ce3c48fd3e29d628a513e"
+      "checksumSha256": "c82a20f4070981975ca14bd0b3ef51d6d8ef9c1e7430a75300bf3651c4f2af13"
     }
   ],
   "chain": {

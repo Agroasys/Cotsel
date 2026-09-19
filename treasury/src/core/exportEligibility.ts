@@ -214,6 +214,8 @@ export class TreasuryEligibilityService {
         blockNumber: entry.block_number,
         blockHash: entry.block_hash,
         logIndex: entry.log_index,
+        logAddress: entry.log_address,
+        logIdentityHash: entry.log_identity_hash,
       },
       stableBlockNumber,
     );
@@ -227,12 +229,36 @@ export class TreasuryEligibilityService {
     stableBlockNumber: number,
   ): Promise<CanonicalityOutcome> {
     if (verdict.state === 'CANONICAL') {
-      await this.canonicalityWriter.markCanonical({
+      // The verdict was reached against a read of this entry; another
+      // assessment may have orphaned it since. The write reports the state the
+      // row actually ended in, and anything other than CANONICAL means the
+      // promotion did not happen and the entry stays blocked.
+      const promotion = await this.canonicalityWriter.markCanonical({
         ledgerEntryId: entry.id,
         blockHash: verdict.blockHash,
         logIndex: entry.log_index as number,
+        logAddress: entry.log_address as string,
+        logIdentityHash: entry.log_identity_hash as string,
         stableBlockNumber,
       });
+
+      if (promotion.state !== 'CANONICAL') {
+        Logger.warn('Canonical promotion did not take effect; failing closed', {
+          ledgerEntryId: entry.id,
+          tradeId: entry.trade_id,
+          observedState: promotion.state,
+        });
+
+        return {
+          state: promotion.state,
+          depth: entry.canonicality_depth,
+          stableBlockNumber,
+          blockedReason:
+            promotion.state === 'ORPHANED'
+              ? 'Entry was orphaned by a concurrent chain re-verification and cannot become eligible again without an approved correction.'
+              : 'Chain canonicality could not be recorded, so the entry is not cleared for payout.',
+        };
+      }
 
       return {
         state: 'CANONICAL',

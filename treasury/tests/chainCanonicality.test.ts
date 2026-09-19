@@ -9,13 +9,27 @@
  */
 import {
   ChainCanonicalityVerifier,
+  computeLogIdentityHash,
   normalizeBlockHash,
+  normalizeLogAddress,
   type SettlementChainReader,
 } from '../src/core/chainCanonicality';
 
 const BLOCK_HASH = `0x${'ab'.repeat(32)}`;
 const OTHER_BLOCK_HASH = `0x${'cd'.repeat(32)}`;
-const ENTRY = { txHash: '0xtx', blockNumber: 100, blockHash: BLOCK_HASH, logIndex: 2 };
+const LOG_ADDRESS = `0x${'11'.repeat(20)}`;
+const OTHER_LOG_ADDRESS = `0x${'22'.repeat(20)}`;
+const TOPIC = `0x${'ee'.repeat(32)}`;
+const LOG = { index: 2, address: LOG_ADDRESS, topics: [TOPIC], data: '0x01' };
+const LOG_IDENTITY_HASH = computeLogIdentityHash(LOG);
+const ENTRY = {
+  txHash: '0xtx',
+  blockNumber: 100,
+  blockHash: BLOCK_HASH,
+  logIndex: 2,
+  logAddress: LOG_ADDRESS,
+  logIdentityHash: LOG_IDENTITY_HASH,
+};
 const STABLE_BLOCK = 150;
 
 function reader(overrides: Partial<SettlementChainReader>): SettlementChainReader {
@@ -24,7 +38,7 @@ function reader(overrides: Partial<SettlementChainReader>): SettlementChainReade
       return { number: STABLE_BLOCK, hash: BLOCK_HASH };
     },
     async getTransactionReceipt() {
-      return { blockNumber: 100, blockHash: BLOCK_HASH, status: 1, logs: [{ index: 2 }] };
+      return { blockNumber: 100, blockHash: BLOCK_HASH, status: 1, logs: [LOG] };
     },
     ...overrides,
   };
@@ -70,7 +84,7 @@ describe('ChainCanonicalityVerifier', () => {
         blockNumber: 100,
         blockHash: BLOCK_HASH,
         status: 0,
-        logs: [{ index: 2 }],
+        logs: [LOG],
       }),
     }).verify(ENTRY, STABLE_BLOCK);
 
@@ -85,7 +99,7 @@ describe('ChainCanonicalityVerifier', () => {
         blockNumber: 104,
         blockHash: OTHER_BLOCK_HASH,
         status: 1,
-        logs: [{ index: 2 }],
+        logs: [LOG],
       }),
     }).verify(ENTRY, STABLE_BLOCK);
 
@@ -104,7 +118,7 @@ describe('ChainCanonicalityVerifier', () => {
         blockNumber: 100,
         blockHash: OTHER_BLOCK_HASH,
         status: 1,
-        logs: [{ index: 2 }],
+        logs: [LOG],
       }),
     }).verify(ENTRY, STABLE_BLOCK);
 
@@ -125,7 +139,7 @@ describe('ChainCanonicalityVerifier', () => {
         blockNumber: 100,
         blockHash: BLOCK_HASH,
         status: 1,
-        logs: [{ index: 9 }],
+        logs: [{ ...LOG, index: 9 }],
       }),
     }).verify(ENTRY, STABLE_BLOCK);
 
@@ -136,7 +150,7 @@ describe('ChainCanonicalityVerifier', () => {
 
   it('reports UNVERIFIED rather than ORPHANED when the entry has no stored identity', async () => {
     const verdict = await verifierFor().verify(
-      { ...ENTRY, blockHash: null, logIndex: null },
+      { ...ENTRY, blockHash: null, logIndex: null, logAddress: null, logIdentityHash: null },
       STABLE_BLOCK,
     );
 
@@ -190,5 +204,108 @@ describe('ChainCanonicalityVerifier', () => {
     }).verify({ ...ENTRY, blockNumber: 200 }, STABLE_BLOCK);
 
     expect(verdict).toEqual(expect.objectContaining({ state: 'ORPHANED', depth: 0 }));
+  });
+
+  it('orphans a log at the right index emitted by a different contract', async () => {
+    const verdict = await verifierFor({
+      getTransactionReceipt: async () => ({
+        blockNumber: 100,
+        blockHash: BLOCK_HASH,
+        status: 1,
+        logs: [{ ...LOG, address: OTHER_LOG_ADDRESS }],
+      }),
+    }).verify(ENTRY, STABLE_BLOCK);
+
+    expect(verdict).toEqual(
+      expect.objectContaining({ state: 'ORPHANED', reason: 'LOG_CONTENT_MISMATCH' }),
+    );
+  });
+
+  it('orphans a log at the right index whose topics no longer match', async () => {
+    const verdict = await verifierFor({
+      getTransactionReceipt: async () => ({
+        blockNumber: 100,
+        blockHash: BLOCK_HASH,
+        status: 1,
+        logs: [{ ...LOG, topics: [`0x${'ff'.repeat(32)}`] }],
+      }),
+    }).verify(ENTRY, STABLE_BLOCK);
+
+    expect(verdict).toEqual(
+      expect.objectContaining({ state: 'ORPHANED', reason: 'LOG_CONTENT_MISMATCH' }),
+    );
+  });
+
+  it('orphans a log at the right index whose data no longer matches', async () => {
+    // The amount lives in the data field, so this is the case where a source
+    // record points at a real position and a real event type but a different
+    // value than the ledger row was written from.
+    const verdict = await verifierFor({
+      getTransactionReceipt: async () => ({
+        blockNumber: 100,
+        blockHash: BLOCK_HASH,
+        status: 1,
+        logs: [{ ...LOG, data: '0x02' }],
+      }),
+    }).verify(ENTRY, STABLE_BLOCK);
+
+    expect(verdict).toEqual(
+      expect.objectContaining({ state: 'ORPHANED', reason: 'LOG_CONTENT_MISMATCH' }),
+    );
+  });
+
+  it('reports UNVERIFIED when the entry stored a position but no content identity', async () => {
+    const verdict = await verifierFor().verify(
+      { ...ENTRY, logAddress: null, logIdentityHash: null },
+      STABLE_BLOCK,
+    );
+
+    expect(verdict.state).toBe('UNVERIFIED');
+  });
+
+  it('treats hex case as spelling, not as a different log', async () => {
+    const verdict = await verifierFor({
+      getTransactionReceipt: async () => ({
+        blockNumber: 100,
+        blockHash: BLOCK_HASH,
+        status: 1,
+        logs: [
+          {
+            ...LOG,
+            address: LOG_ADDRESS.toUpperCase().replace('0X', '0x'),
+            topics: [TOPIC.toUpperCase().replace('0X', '0x')],
+            data: '0X01',
+          },
+        ],
+      }),
+    }).verify(ENTRY, STABLE_BLOCK);
+
+    expect(verdict.state).toBe('CANONICAL');
+  });
+
+  it('resolves the log identity an ingestion run stores, and memoizes the receipt', async () => {
+    const getTransactionReceipt = jest.fn(async () => ({
+      blockNumber: 100,
+      blockHash: BLOCK_HASH,
+      status: 1,
+      logs: [LOG],
+    }));
+    const verifier = verifierFor({ getTransactionReceipt });
+
+    expect(await verifier.resolveLogIdentity('0xtx', 2)).toEqual({
+      address: LOG_ADDRESS,
+      identityHash: LOG_IDENTITY_HASH,
+    });
+    // A second component from the same transaction must not cost a second call.
+    await verifier.resolveLogIdentity('0xtx', 2);
+    expect(getTransactionReceipt).toHaveBeenCalledTimes(1);
+
+    expect(await verifier.resolveLogIdentity('0xtx', 9)).toBeNull();
+  });
+
+  it('normalizes a contract address and rejects anything that is not one', () => {
+    expect(normalizeLogAddress(LOG_ADDRESS.toUpperCase().replace('0X', '0x'))).toBe(LOG_ADDRESS);
+    expect(normalizeLogAddress('0xnope')).toBeNull();
+    expect(normalizeLogAddress(null)).toBeNull();
   });
 });

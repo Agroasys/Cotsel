@@ -65,9 +65,21 @@ where that transition is legal, and eligibility is removed on the canonicality
 axis in every case.
 
 `CANONICAL` is only ever assigned by the verifier, never by ingestion. The
-database enforces the same rule: `treasury_ledger_entries_canonical_requires_identity`
-rejects a `CANONICAL` row without `block_hash`, `log_index` and
+database enforces the same rule:
+`treasury_ledger_entries_canonical_requires_identity` rejects a `CANONICAL` row
+without `block_hash`, `log_index`, `log_address`, `log_identity_hash` and
 `canonicality_verified_at`.
+
+A verdict is a proof about one exact row, so it survives only a byte-identical
+re-ingest. If any field it covered changes — including `amount_raw` — the entry
+drops back to `UNVERIFIED` and must earn `CANONICAL` again from the chain. This
+is what stops a later source correction from moving the payable amount
+underneath a recorded proof.
+
+The promotion itself takes a row lock and returns the state the row ended in.
+A concurrent assessment can orphan an entry between the read that produced a
+verdict and the write that records it; the caller fails closed on anything other
+than `CANONICAL` rather than treating a revoked entry as eligible.
 
 ### What counts as a mismatch
 
@@ -133,11 +145,55 @@ not a retry. There is no API for it by design.
 MIGRATION_MANIFEST_PATH=treasury/dist/database/migrations.json node shared-db/migrate.js
 ```
 
-**The offset cursor cannot be translated.** An offset does not identify a block,
-so `next_offset` is dropped and `next_block_number` starts at 0. The next run
-therefore re-reads from the start of the finalized range. This is deliberate and
-safe: `entry_key` makes every ledger upsert idempotent, and the second pass is
-what backfills `block_hash` and `log_index` onto rows migrated as `UNVERIFIED`.
+This is the **expand** half of an expand/contract rollout. `next_offset` is
+kept, so a pod still running the previous image keeps working while the
+deployment replaces pods one at a time. Dropping it in this migration would
+break every not-yet-replaced pod with `column next_offset does not exist` the
+moment the migration landed.
+
+The two cursors do not interfere: an old pod advances only `next_offset`, a new
+pod advances only `next_block_number`. An offset does not identify a block, so
+nothing is translated — `next_block_number` starts at 0 and the next run re-reads
+from the start of the range. That is deliberate and safe: `entry_key` makes every
+ledger upsert idempotent, and the second pass is what backfills the chain
+identity onto rows migrated as `UNVERIFIED`.
+
+### Contract step (a later release)
+
+Only after every pod runs an image with the block watermark:
+
+```sql
+-- Verify no writer has touched the old cursor since the rollout.
+SELECT cursor_name, next_offset, next_block_number, updated_at
+FROM treasury_ingestion_state;
+
+ALTER TABLE treasury_ingestion_state DROP COLUMN next_offset;
+```
+
+### Index rollout
+
+This migration deliberately adds **no** index to `treasury_ledger_entries`. A
+plain `CREATE INDEX` holds a `SHARE` lock for the length of the build, which
+blocks every `INSERT` and `UPDATE` on the ingestion and payout path, and this
+migration runner executes each migration inside a single transaction, so
+`CREATE INDEX CONCURRENTLY` is not available to it. Nothing added here filters
+on `canonicality_state` — the verifier reads entries by id, export pages on
+`(created_at, id)`, and the operator summary is a full aggregate — so there is
+no index to justify stalling fee ingestion for. The indexes this migration does
+create are on `treasury_chain_reorg_events`, a new and empty table, where the
+build is instant.
+
+If a canonicality-filtered scan is added later, build its index concurrently in
+a non-transactional step and verify with:
+
+```sql
+SELECT indexrelid::regclass AS index, indisvalid, indisready
+FROM pg_index
+WHERE indrelid = 'treasury_ledger_entries'::regclass;
+```
+
+An index left `indisvalid = false` by a failed concurrent build must be dropped
+and rebuilt; it is not used by the planner but still costs every write.
 
 Existing rows are **not** assumed canonical. Nothing on them supports the
 stronger claim, so they stay `UNVERIFIED` — and therefore blocked — until

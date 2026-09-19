@@ -69,6 +69,8 @@ export interface LedgerEntry {
   created_at: Date;
   block_hash: string | null;
   log_index: number | null;
+  log_address: string | null;
+  log_identity_hash: string | null;
   canonicality_state: ChainCanonicalityState;
   canonicality_verified_at: Date | null;
   canonicality_observed_block_hash: string | null;

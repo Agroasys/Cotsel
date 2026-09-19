@@ -27,8 +27,8 @@
       "version": "202609190004",
       "name": "canonical_chain_evidence",
       "file": "004_canonical_chain_evidence.sql",
-      "sha256": "2e0156ed063814cbcc9ec71da833f8d82f25e2cebbc26502b8194ccd6c502d9c",
-      "schema_sha256": "254abc257c2c2f16c8e92930720bd68cce19b235ca3eb026a7fa4d56f1e81e4c"
+      "sha256": "a03ae987f0da4d5b014409a6d1d8faf73384718fb8a5618d29585c0eeed70ca4",
+      "schema_sha256": "351eb9847e635d8ae2409558865901f359fd7899d5734eccacbb20dc3906340e"
     }
   ]
 }

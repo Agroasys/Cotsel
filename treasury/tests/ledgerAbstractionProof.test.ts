@@ -57,6 +57,8 @@ function makeEntry(overrides?: Partial<LedgerEntryWithState>): LedgerEntryWithSt
     block_hash:
       overrides?.block_hash ?? '0xabababababababababababababababababababababababababababababababab',
     log_index: overrides?.log_index ?? 0,
+    log_address: overrides?.log_address ?? `0x${'11'.repeat(20)}`,
+    log_identity_hash: overrides?.log_identity_hash ?? 'a'.repeat(64),
     canonicality_state: overrides?.canonicality_state ?? 'CANONICAL',
     canonicality_verified_at:
       overrides?.canonicality_verified_at ?? new Date('2026-03-31T00:00:00.000Z'),

@@ -40,6 +40,10 @@ export interface TreasuryIngestionResult {
   inserted: number;
   /** The finalized head the run was bounded by, and the anchor for its evidence. */
   stableBlockNumber: number | null;
+  /** The highest block the indexer had processed when the run started. */
+  indexerProcessedBlockNumber: number | null;
+  /** `min(stable, indexer)`: the height this run could prove coverage through. */
+  ingestedThroughBlockNumber: number | null;
   nextTradeBlockNumber: number;
   nextClaimBlockNumber: number;
   /** Set when the run refused to ingest; `fetched` is then 0 by construction. */
@@ -92,20 +96,32 @@ export class TreasuryIngestionService {
     if (!head) {
       // Fail closed. Without a finalized head there is no bound that keeps
       // reorganizable evidence out, and ingesting past it is exactly the defect.
-      const blockedReason =
-        'Settlement RPC did not report a finalized head; ingestion is bounded by finality and will not run unbounded';
-      Logger.error('Treasury ingestion blocked', { blockedReason });
-      return {
-        fetched: 0,
-        inserted: 0,
-        stableBlockNumber: null,
-        nextTradeBlockNumber: tradeWatermark,
-        nextClaimBlockNumber: claimWatermark,
-        blockedReason,
-      };
+      return this.blocked(
+        'Settlement RPC did not report a finalized head; ingestion is bounded by finality and will not run unbounded',
+        { tradeWatermark, claimWatermark, stableBlockNumber: null, indexerProcessed: null },
+      );
     }
 
-    const toBlock = head.finalizedBlockNumber;
+    // An empty page is not proof of coverage. The indexer can be behind the
+    // finalized head, in which case a query bounded only by the chain returns a
+    // short page for blocks it has not reached, and advancing past them would
+    // drop every fee event indexed afterwards. The run is therefore bounded by
+    // whichever side is further behind, and refuses to run at all if the
+    // indexer cannot say where it has reached.
+    const indexerProcessed = await this.indexerClient.fetchProcessedBlock();
+    if (indexerProcessed === null) {
+      return this.blocked(
+        'Indexer did not report a processed block height; an empty page cannot be distinguished from an unindexed range',
+        {
+          tradeWatermark,
+          claimWatermark,
+          stableBlockNumber: head.finalizedBlockNumber,
+          indexerProcessed: null,
+        },
+      );
+    }
+
+    const toBlock = Math.min(head.finalizedBlockNumber, indexerProcessed);
     const trades = await this.ingestTradeEvents(tradeWatermark, toBlock);
     const claims = await this.ingestClaimEvents(claimWatermark, toBlock);
 
@@ -115,7 +131,9 @@ export class TreasuryIngestionService {
     const result: TreasuryIngestionResult = {
       fetched: trades.fetched + claims.fetched,
       inserted: trades.inserted + claims.inserted,
-      stableBlockNumber: toBlock,
+      stableBlockNumber: head.finalizedBlockNumber,
+      indexerProcessedBlockNumber: indexerProcessed,
+      ingestedThroughBlockNumber: toBlock,
       nextTradeBlockNumber: trades.nextBlockNumber,
       nextClaimBlockNumber: claims.nextBlockNumber,
       blockedReason: null,
@@ -123,6 +141,28 @@ export class TreasuryIngestionService {
 
     Logger.info('Treasury ingestion run completed', { ...result });
     return result;
+  }
+
+  private blocked(
+    blockedReason: string,
+    state: {
+      tradeWatermark: number;
+      claimWatermark: number;
+      stableBlockNumber: number | null;
+      indexerProcessed: number | null;
+    },
+  ): TreasuryIngestionResult {
+    Logger.error('Treasury ingestion blocked', { blockedReason, ...state });
+    return {
+      fetched: 0,
+      inserted: 0,
+      stableBlockNumber: state.stableBlockNumber,
+      indexerProcessedBlockNumber: state.indexerProcessed,
+      ingestedThroughBlockNumber: null,
+      nextTradeBlockNumber: state.tradeWatermark,
+      nextClaimBlockNumber: state.claimWatermark,
+      blockedReason,
+    };
   }
 
   /**
@@ -169,7 +209,15 @@ export class TreasuryIngestionService {
 
         fetched += 1;
         lastBlockNumber = event.blockNumber;
-        inserted += await this.ingestTradeEvent(event, blockHash);
+        // Identity is captured here, not asserted later: the emitter and the
+        // log's content digest are what a re-verification has to reproduce.
+        // A log we cannot read is stored without one, which leaves the entry
+        // UNVERIFIED and therefore unpayable rather than silently trusted.
+        const logIdentity = event.txHash
+          ? await this.verifier.resolveLogIdentity(event.txHash, event.logIndex)
+          : null;
+
+        inserted += await this.ingestTradeEvent(event, blockHash, logIdentity);
       }
 
       if (stoppedAtBlock !== null) {
@@ -204,7 +252,11 @@ export class TreasuryIngestionService {
     };
   }
 
-  private async ingestTradeEvent(event: IndexerTradeEvent, blockHash: string): Promise<number> {
+  private async ingestTradeEvent(
+    event: IndexerTradeEvent,
+    blockHash: string,
+    logIdentity: { address: string; identityHash: string } | null,
+  ): Promise<number> {
     let inserted = 0;
 
     if (event.eventName === 'FundsReleasedStage1' && event.releasedLogisticsAmount) {
@@ -223,6 +275,8 @@ export class TreasuryIngestionService {
         blockNumber: event.blockNumber,
         blockHash,
         logIndex: event.logIndex,
+        logAddress: logIdentity?.address ?? null,
+        logIdentityHash: logIdentity?.identityHash ?? null,
         eventName: event.eventName,
         componentType: 'LOGISTICS',
         amountRaw: event.releasedLogisticsAmount,
@@ -287,6 +341,8 @@ export class TreasuryIngestionService {
           blockNumber: event.blockNumber,
           blockHash,
           logIndex: event.logIndex,
+          logAddress: logIdentity?.address ?? null,
+          logIdentityHash: logIdentity?.identityHash ?? null,
           eventName: event.eventName,
           componentType: entry.componentType,
           amountRaw: entry.amountRaw,

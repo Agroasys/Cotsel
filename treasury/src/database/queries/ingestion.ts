@@ -50,19 +50,19 @@ export async function getIngestionWatermark(
 export async function setIngestionWatermark(
   nextBlockNumber: number,
   cursorName: string = INGESTION_CURSOR_NAME,
-  lastFinalizedBlockNumber: number | null = null,
+  lastIngestedThroughBlockNumber: number | null = null,
 ): Promise<void> {
   await pool.query(
     `INSERT INTO treasury_ingestion_state (
-       cursor_name, next_block_number, last_finalized_block_number, updated_at
+       cursor_name, next_block_number, last_ingested_through_block_number, updated_at
      )
      VALUES ($1, $2, $3, NOW())
      ON CONFLICT (cursor_name)
      DO UPDATE SET
        next_block_number = GREATEST(treasury_ingestion_state.next_block_number, EXCLUDED.next_block_number),
-       last_finalized_block_number = COALESCE(EXCLUDED.last_finalized_block_number, treasury_ingestion_state.last_finalized_block_number),
+       last_ingested_through_block_number = COALESCE(EXCLUDED.last_ingested_through_block_number, treasury_ingestion_state.last_ingested_through_block_number),
        updated_at = NOW()`,
-    [cursorName, nextBlockNumber, lastFinalizedBlockNumber],
+    [cursorName, nextBlockNumber, lastIngestedThroughBlockNumber],
   );
 }
 

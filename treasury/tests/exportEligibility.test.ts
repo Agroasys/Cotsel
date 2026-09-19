@@ -14,6 +14,8 @@ import {
   recordingCanonicalityWriter,
   stubVerifier,
   TEST_BLOCK_HASH,
+  TEST_LOG_ADDRESS,
+  TEST_LOG_IDENTITY_HASH,
   TEST_REORGED_BLOCK_HASH,
 } from './helpers/chainCanonicality';
 
@@ -54,6 +56,8 @@ function makeEntry(overrides?: Partial<LedgerEntryWithState>): LedgerEntryWithSt
     created_at: new Date('2026-03-31T00:00:00.000Z'),
     block_hash: TEST_BLOCK_HASH,
     log_index: 0,
+    log_address: TEST_LOG_ADDRESS,
+    log_identity_hash: TEST_LOG_IDENTITY_HASH,
     canonicality_state: 'UNVERIFIED',
     canonicality_verified_at: null,
     canonicality_observed_block_hash: null,
@@ -472,7 +476,13 @@ describe('TreasuryEligibilityService chain canonicality', () => {
 
     const gate = (
       await service.assessEntries([
-        makeEntry({ block_number: 100, block_hash: null, log_index: null }),
+        makeEntry({
+          block_number: 100,
+          block_hash: null,
+          log_index: null,
+          log_address: null,
+          log_identity_hash: null,
+        }),
       ])
     ).get(1);
 
