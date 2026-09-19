@@ -11,6 +11,7 @@ import type { Request, Response } from 'express';
 import { TreasuryEligibilityService } from '../src/core/exportEligibility';
 import { ReconciliationGateService } from '../src/core/reconciliationGate';
 import type { LedgerEntryWithState } from '../src/types';
+import { alwaysCanonicalVerifier, recordingCanonicalityWriter } from './helpers/chainCanonicality';
 
 jest.mock('../src/database/queries', () => ({
   ...jest.requireActual('../src/database/queries'),
@@ -53,6 +54,17 @@ function makeEntry(overrides?: Partial<LedgerEntryWithState>): LedgerEntryWithSt
     source_timestamp: overrides?.source_timestamp ?? new Date('2026-03-31T00:00:00.000Z'),
     metadata: overrides?.metadata ?? {},
     created_at: overrides?.created_at ?? new Date('2026-03-31T00:00:00.000Z'),
+    block_hash:
+      overrides?.block_hash ?? '0xabababababababababababababababababababababababababababababababab',
+    log_index: overrides?.log_index ?? 0,
+    canonicality_state: overrides?.canonicality_state ?? 'CANONICAL',
+    canonicality_verified_at:
+      overrides?.canonicality_verified_at ?? new Date('2026-03-31T00:00:00.000Z'),
+    canonicality_observed_block_hash:
+      overrides?.canonicality_observed_block_hash ??
+      '0xabababababababababababababababababababababababababababababababab',
+    canonicality_depth: overrides?.canonicality_depth ?? null,
+    canonicality_stable_block_number: overrides?.canonicality_stable_block_number ?? 100,
     latest_state: overrides?.latest_state ?? 'READY_FOR_EXTERNAL_HANDOFF',
     latest_state_at: overrides?.latest_state_at ?? new Date('2026-03-31T00:00:00.000Z'),
   };
@@ -97,6 +109,8 @@ describe('Ledger Abstraction Proof', () => {
         getBlock: async () => ({ number: 150n }),
       },
       reconciliationGate: gate,
+      canonicalityVerifier: alwaysCanonicalVerifier(),
+      canonicalityWriter: recordingCanonicalityWriter().writer,
     });
     const entryGate = await eligibility.assessEntries([makeEntry({ trade_id: 'trade-1' })]);
 
@@ -163,6 +177,8 @@ describe('Ledger Abstraction Proof', () => {
             ],
           ]),
       } as unknown as ReconciliationGateService,
+      canonicalityVerifier: alwaysCanonicalVerifier(),
+      canonicalityWriter: recordingCanonicalityWriter().writer,
     });
     const entryGate = await eligibility.assessEntries([makeEntry({ trade_id: 'trade-1' })]);
 
@@ -209,6 +225,8 @@ describe('Ledger Abstraction Proof', () => {
         getBlock: async () => ({ number: 150n }),
       },
       reconciliationGate: gate,
+      canonicalityVerifier: alwaysCanonicalVerifier(),
+      canonicalityWriter: recordingCanonicalityWriter().writer,
     });
     const entryGate = await eligibility.assessEntries([makeEntry({ trade_id: 'trade-404' })]);
 

@@ -65,6 +65,8 @@ describePostgres('treasury maker-checker role separation (postgres)', () => {
       tradeId: `trade-${suffix}`,
       txHash: `0xrs${sequence}`,
       blockNumber: 900 + sequence,
+      blockHash: `0x${(900 + sequence).toString(16).padStart(64, '0')}`,
+      logIndex: 0,
       eventName: 'PlatformFeesPaidStage1',
       componentType: 'PLATFORM_FEE',
       amountRaw: '125000000',

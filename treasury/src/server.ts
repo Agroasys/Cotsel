@@ -39,8 +39,14 @@ async function bootstrap(): Promise<void> {
 
   if (shouldIngestOnce) {
     const ingestionService = new TreasuryIngestionService();
-    await ingestionService.ingestOnce();
+    const result = await ingestionService.ingestOnce();
     await closeConnection();
+    // A run that refused to ingest must not exit 0. This is the command a
+    // scheduler and the release gate call, and both read the exit code as the
+    // answer to "did treasury take in the evidence it was asked for".
+    if (result.blockedReason) {
+      process.exitCode = 1;
+    }
     return;
   }
 

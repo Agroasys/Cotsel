@@ -3,6 +3,7 @@
  */
 import { pool } from '../connection';
 import { assertCanonicalRawAmount } from '../../core/canonicalAmount';
+import { normalizeBlockHash } from '../../core/chainCanonicality';
 import type {
   BankPayoutConfirmation,
   LedgerEntry,
@@ -28,6 +29,8 @@ export async function upsertLedgerEntryWithInitialState(data: {
   tradeId: string;
   txHash: string;
   blockNumber: number;
+  blockHash: string;
+  logIndex: number;
   eventName: string;
   componentType: TreasuryComponent;
   amountRaw: string;
@@ -40,39 +43,74 @@ export async function upsertLedgerEntryWithInitialState(data: {
   // attributed to its source event rather than discovered during a close.
   assertCanonicalRawAmount(data.amountRaw, 'amountRaw');
 
+  const blockHash = normalizeBlockHash(data.blockHash);
+  if (!blockHash) {
+    throw new Error(`blockHash is not a canonical block hash: ${data.blockHash}`);
+  }
+  if (!Number.isInteger(data.logIndex) || data.logIndex < 0) {
+    throw new Error(`logIndex must be a non-negative integer, received ${data.logIndex}`);
+  }
+
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
     const entryResult = await client.query<LedgerEntry>(
+      // The `WHERE` on the conflict path is what keeps a revocation from being
+      // undone by a routine re-ingest. An ORPHANED entry is preserved exactly as
+      // the reorganization left it; returning it to service is an approved
+      // correction, never a side effect of the ingester running again.
+      //
+      // When the identity does change the prior verdict described a different
+      // block, so it is dropped rather than carried over: the entry returns to
+      // UNVERIFIED and has to earn CANONICAL again from the chain.
       `INSERT INTO treasury_ledger_entries (
           entry_key,
           trade_id,
           tx_hash,
           block_number,
+          block_hash,
+          log_index,
           event_name,
           component_type,
           amount_raw,
           source_timestamp,
           metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
         ON CONFLICT (entry_key)
         DO UPDATE SET
           trade_id = EXCLUDED.trade_id,
           tx_hash = EXCLUDED.tx_hash,
           block_number = EXCLUDED.block_number,
+          block_hash = EXCLUDED.block_hash,
+          log_index = EXCLUDED.log_index,
           event_name = EXCLUDED.event_name,
           component_type = EXCLUDED.component_type,
           amount_raw = EXCLUDED.amount_raw,
           source_timestamp = EXCLUDED.source_timestamp,
-          metadata = EXCLUDED.metadata
+          metadata = EXCLUDED.metadata,
+          canonicality_state = CASE
+            WHEN treasury_ledger_entries.block_hash IS DISTINCT FROM EXCLUDED.block_hash
+              OR treasury_ledger_entries.log_index IS DISTINCT FROM EXCLUDED.log_index
+            THEN 'UNVERIFIED'
+            ELSE treasury_ledger_entries.canonicality_state
+          END,
+          canonicality_verified_at = CASE
+            WHEN treasury_ledger_entries.block_hash IS DISTINCT FROM EXCLUDED.block_hash
+              OR treasury_ledger_entries.log_index IS DISTINCT FROM EXCLUDED.log_index
+            THEN NULL
+            ELSE treasury_ledger_entries.canonicality_verified_at
+          END
+        WHERE treasury_ledger_entries.canonicality_state <> 'ORPHANED'
         RETURNING *`,
       [
         data.entryKey,
         data.tradeId,
         data.txHash,
         data.blockNumber,
+        blockHash,
+        data.logIndex,
         data.eventName,
         data.componentType,
         data.amountRaw,
@@ -81,7 +119,17 @@ export async function upsertLedgerEntryWithInitialState(data: {
       ],
     );
 
-    const entry = entryResult.rows[0];
+    // No row comes back when the conflict target exists but the `WHERE` above
+    // declined the update, which is the orphaned case. Read it so the caller
+    // still receives the entry it asked about instead of a crash.
+    const entry =
+      entryResult.rows[0] ??
+      (
+        await client.query<LedgerEntry>(
+          'SELECT * FROM treasury_ledger_entries WHERE entry_key = $1',
+          [data.entryKey],
+        )
+      ).rows[0];
 
     const initialStateResult = await client.query(
       `INSERT INTO payout_lifecycle_events (

@@ -117,6 +117,9 @@ describe('treasury router auth scope', () => {
       upsertDeposit: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { stored: true } });
       },
+      getChainCanonicalitySummary: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: null });
+      },
       getReconciliationControlSummary: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: null });
       },

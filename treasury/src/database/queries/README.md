@@ -6,7 +6,8 @@ more specific dependency.
 
 Each module owns one database concern:
 
-- `ingestion.ts`: durable ingestion cursor and service-auth nonce operations.
+- `ingestion.ts`: durable ingestion block watermark and service-auth nonce operations.
+- `chainCanonicality.ts`: block-hash canonicality verdicts and reorganization evidence.
 - `ledger.ts`: ledger entries and payout lifecycle reads and writes.
 - `accountingPeriods.ts`: accounting-period lifecycle.
 - `accountingProjections.ts`: ledger accounting projections.

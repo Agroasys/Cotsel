@@ -47,6 +47,7 @@ import {
 } from '../core/closeReporting';
 import { assertFiatDepositState, FiatDepositConflictError } from '../core/fiatDeposit';
 import { assertValidTransition } from '../core/payout';
+import type { ChainCanonicalityState, LedgerChainReorgEvent } from '../core/chainCanonicality';
 import {
   appendPayoutState,
   addSweepBatchEntry,
@@ -62,6 +63,9 @@ import {
   getLedgerEntries,
   getLedgerEntryById,
   getSweepBatchDetail,
+  countLedgerEntriesByCanonicality,
+  getIngestionStableBlock,
+  listChainReorgEvents,
   listDistinctLedgerTradeIds,
   listAccountingPeriods,
   listSweepBatches,
@@ -137,6 +141,9 @@ export type EligibilitySummary = {
   reconciliationFreshness: 'FRESH' | 'STALE' | 'MISSING';
   reconciliationCompletedAt: string | null;
   staleRunningRunCount: number;
+  canonicalityState: ChainCanonicalityState;
+  canonicalityDepth: number | null;
+  canonicalityStableBlockNumber: number | null;
   eligibleForPayout: boolean;
   eligibleForExport: boolean;
   blockedReasons: string[];
@@ -153,6 +160,9 @@ function fallbackEligibility(): EligibilitySummary {
     reconciliationFreshness: 'MISSING',
     reconciliationCompletedAt: null,
     staleRunningRunCount: 0,
+    canonicalityState: 'UNVERIFIED',
+    canonicalityDepth: null,
+    canonicalityStableBlockNumber: null,
     eligibleForPayout: false,
     eligibleForExport: false,
     blockedReasons: ['Eligibility state unavailable'],
@@ -172,6 +182,9 @@ function serializeEligibility(
         reconciliationFreshness: 'FRESH' | 'STALE' | 'MISSING';
         reconciliationCompletedAt: Date | null;
         staleRunningRunCount: number;
+        canonicalityState: ChainCanonicalityState;
+        canonicalityDepth: number | null;
+        canonicalityStableBlockNumber: number | null;
         eligibleForPayout: boolean;
         eligibleForExport: boolean;
         blockedReasons: string[];
@@ -190,9 +203,34 @@ function serializeEligibility(
         ? eligibility.reconciliationCompletedAt.toISOString()
         : eligibility.reconciliationCompletedAt,
     staleRunningRunCount: eligibility.staleRunningRunCount,
+    canonicalityState: eligibility.canonicalityState,
+    canonicalityDepth: eligibility.canonicalityDepth,
+    canonicalityStableBlockNumber: eligibility.canonicalityStableBlockNumber,
     eligibleForPayout: eligibility.eligibleForPayout,
     eligibleForExport: eligibility.eligibleForExport,
     blockedReasons: eligibility.blockedReasons,
+  };
+}
+
+const CHAIN_REORG_EVIDENCE_LIMIT = 100;
+
+function serializeChainReorgEvent(event: LedgerChainReorgEvent): Record<string, unknown> {
+  return {
+    id: event.id,
+    ledgerEntryId: event.ledger_entry_id,
+    entryKey: event.entry_key,
+    tradeId: event.trade_id,
+    txHash: event.tx_hash,
+    blockNumber: event.block_number,
+    expectedBlockHash: event.expected_block_hash,
+    observedBlockHash: event.observed_block_hash,
+    observedBlockNumber: event.observed_block_number,
+    observedLogIndex: event.observed_log_index,
+    reorgDepth: event.reorg_depth,
+    stableBlockNumber: event.stable_block_number,
+    mismatchReason: event.mismatch_reason,
+    detail: event.detail,
+    detectedAt: event.detected_at.toISOString(),
   };
 }
 
@@ -315,6 +353,13 @@ export class TreasuryController {
   async ingest(_req: Request, res: Response): Promise<void> {
     try {
       const result = await this.ingestion.ingestOnce();
+      if (result.blockedReason) {
+        // A refusal is not a successful empty run. An operator reading 200 here
+        // would record "ingestion completed, nothing new" for a run that never
+        // reached the chain, which is the false-green this control removes.
+        res.status(503).json(failure('SettlementUnavailable', result.blockedReason));
+        return;
+      }
       res.status(200).json(success(result));
     } catch (error: unknown) {
       res
@@ -345,6 +390,39 @@ export class TreasuryController {
     } catch (error: unknown) {
       const response = mapValidationError(error, 'Failed to list entries');
       res.status(response.statusCode).json(response.body);
+    }
+  }
+
+  /**
+   * WP-4 FAIL-06 evidence surface. Answers, at one named stable block, how much
+   * of the ledger is provably on the chain, how much has been revoked, and what
+   * each revocation observed. The reorganization drill reads this before and
+   * after the orphaning to show eligibility was removed rather than assumed.
+   */
+  async getChainCanonicalitySummary(_req: Request, res: Response): Promise<void> {
+    try {
+      const [counts, stableBlockNumber, reorgEvents] = await Promise.all([
+        countLedgerEntriesByCanonicality(),
+        getIngestionStableBlock(),
+        listChainReorgEvents({ limit: CHAIN_REORG_EVIDENCE_LIMIT }),
+      ]);
+
+      res.status(200).json(
+        success({
+          stableBlockNumber,
+          counts,
+          reorgEvents: reorgEvents.map(serializeChainReorgEvent),
+        }),
+      );
+    } catch (error: unknown) {
+      res
+        .status(500)
+        .json(
+          failure(
+            'InternalError',
+            error instanceof Error ? error.message : 'Failed to read chain canonicality summary',
+          ),
+        );
     }
   }
 

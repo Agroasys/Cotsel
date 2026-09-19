@@ -71,6 +71,11 @@ export function createRouter(
   });
 
   router.get(
+    '/chain/canonicality-summary',
+    ...protectedMiddlewares,
+    controller.getChainCanonicalitySummary.bind(controller),
+  );
+  router.get(
     '/reconciliation/control-summary',
     ...protectedMiddlewares,
     controller.getReconciliationControlSummary.bind(controller),

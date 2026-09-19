@@ -116,6 +116,9 @@ describe('treasury rate-limit wiring', () => {
       async upsertDeposit(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
+      async getChainCanonicalitySummary(_req: express.Request, res: express.Response) {
+        res.status(200).json({ success: true });
+      },
       async getReconciliationControlSummary(_req: express.Request, res: express.Response) {
         res.status(200).json({ success: true });
       },
