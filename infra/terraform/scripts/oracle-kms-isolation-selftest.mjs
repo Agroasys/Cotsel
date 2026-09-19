@@ -15,11 +15,11 @@ const gatewayIam = read('iam.tf');
 const indexerService = read('indexer-service.tf');
 const managedSigners = read('managed-signers.tf');
 const signerCustody = readFoundation('signer-custody.tf');
+const runtimePrerequisites = readFoundation('runtime-prerequisites.tf');
 const oracleRuntime = read('runtime-oracle-reconciliation.tf');
 const oracleService = read('oracle-service.tf');
 const reconciliationService = read('reconciliation-service.tf');
 const relayerService = read('relayer-service.tf');
-const network = read('network.tf');
 const runtimeImages = read('runtime-images.tf');
 const variables = read('variables.tf');
 const gatewayPackage = readFileSync(join(root, '..', '..', 'gateway', 'package.json'), 'utf8');
@@ -37,7 +37,7 @@ const relayerSigner = readFileSync(
 );
 
 assert.doesNotMatch(gateway, /local\.oracle_container/);
-assert.match(gateway, /service_discovery_service\.runtime\["gateway"\]/);
+assert.match(gateway, /runtime_service_discovery_arns\["gateway"\]/);
 assert.doesNotMatch(
   gateway,
   /local\.indexer_(pipeline|graphql)_container|local\.reconciliation_container/,
@@ -72,7 +72,7 @@ assert.match(
   oracleService,
   /variable\s+= "kms:SigningAlgorithm"\s+values\s+= \["ECDSA_SHA_256"\]/s,
 );
-assert.match(oracleService, /service_discovery_service\.runtime\["oracle"\]/);
+assert.match(oracleService, /runtime_service_discovery_arns\["oracle"\]/);
 assert.match(oracleService, /enable_execute_command\s+= false/);
 assert.match(oracleService, /desired_count\s+= var\.oracle_desired_count/);
 assert.match(oracleService, /oracle_activation_requires_reviewed_kms_address/);
@@ -81,9 +81,9 @@ assert.match(oracleService, /deployment_maximum_percent\s+= 100/);
 assert.match(oracleService, /deployment_minimum_healthy_percent\s+= 0/);
 assert.match(oracleService, /aws_ecs_service\.indexer/);
 
-assert.match(network, /gateway_to_oracle/);
-assert.match(network, /gateway_to_indexer/);
-assert.match(network, /services_to_indexer/);
+assert.match(runtimePrerequisites, /gateway_to_oracle/);
+assert.match(runtimePrerequisites, /gateway_to_indexer/);
+assert.match(runtimePrerequisites, /services_to_indexer/);
 
 assert.match(indexerService, /resource "aws_ecs_service" "indexer"/);
 assert.match(indexerService, /desired_count\s+= var\.indexer_desired_count/);
@@ -107,7 +107,7 @@ assert.match(relayerService, /enable_execute_command\s+= false/);
 assert.match(relayerService, /desired_count\s+= var\.relayer_desired_count/);
 assert.match(relayerService, /relayer_activation_requires_reviewed_kms_address/);
 assert.match(relayerService, /gasless_execution_has_one_gateway_writer/);
-assert.match(network, /gateway_to_relayer/);
+assert.match(runtimePrerequisites, /gateway_to_relayer/);
 
 assert.match(
   managedSigners,

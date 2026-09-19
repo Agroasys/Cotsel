@@ -2,84 +2,8 @@ locals {
   reconciliation_reviewed_config_sha256 = sha256(jsonencode({
     environment       = local.reconciliation_environment
     secret_references = local.reconciliation_secrets
-    task_role_arn     = aws_iam_role.reconciliation_task.arn
+    task_role_arn     = data.terraform_remote_state.foundation.outputs.runtime_task_role_arns["reconciliation"]
   }))
-}
-
-resource "aws_iam_role" "reconciliation_execution" {
-  name                 = "${local.name_prefix}-reconciliation-execution"
-  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-  permissions_boundary = var.service_role_permissions_boundary_arn
-
-  tags = {
-    Environment = var.environment
-    Service     = "reconciliation"
-  }
-}
-
-resource "aws_iam_role" "reconciliation_task" {
-  name                 = "${local.name_prefix}-reconciliation-task"
-  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-  permissions_boundary = var.service_role_permissions_boundary_arn
-
-  tags = {
-    Environment = var.environment
-    Service     = "reconciliation"
-  }
-}
-
-data "aws_iam_policy_document" "reconciliation_execution" {
-  statement {
-    sid       = "GetRuntimeImageAuthorization"
-    effect    = "Allow"
-    actions   = ["ecr:GetAuthorizationToken"]
-    resources = ["*"]
-  }
-
-  statement {
-    sid    = "PullReconciliationRuntimeImage"
-    effect = "Allow"
-    actions = [
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:BatchGetImage",
-      "ecr:GetDownloadUrlForLayer",
-    ]
-    resources = [aws_ecr_repository.service["reconciliation"].arn]
-  }
-
-  statement {
-    sid    = "WriteReconciliationLogs"
-    effect = "Allow"
-    actions = [
-      "logs:CreateLogStream",
-      "logs:PutLogEvents",
-    ]
-    resources = ["${aws_cloudwatch_log_group.service["reconciliation"].arn}:*"]
-  }
-
-  statement {
-    sid     = "ReadReconciliationStartupSecrets"
-    effect  = "Allow"
-    actions = ["secretsmanager:GetSecretValue"]
-    resources = [
-      aws_secretsmanager_secret.platform["database/reconciliation/runtime"].arn,
-      aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn,
-      aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn,
-    ]
-  }
-
-  statement {
-    sid       = "DecryptReconciliationStartupSecrets"
-    effect    = "Allow"
-    actions   = ["kms:Decrypt"]
-    resources = [aws_kms_key.platform.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "reconciliation_execution" {
-  name   = "${local.name_prefix}-reconciliation-execution"
-  role   = aws_iam_role.reconciliation_execution.id
-  policy = data.aws_iam_policy_document.reconciliation_execution.json
 }
 
 resource "aws_ecs_task_definition" "reconciliation" {
@@ -88,8 +12,8 @@ resource "aws_ecs_task_definition" "reconciliation" {
   network_mode             = "awsvpc"
   cpu                      = 512
   memory                   = 1024
-  execution_role_arn       = aws_iam_role.reconciliation_execution.arn
-  task_role_arn            = aws_iam_role.reconciliation_task.arn
+  execution_role_arn       = data.terraform_remote_state.foundation.outputs.runtime_execution_role_arns["reconciliation"]
+  task_role_arn            = data.terraform_remote_state.foundation.outputs.runtime_task_role_arns["reconciliation"]
   skip_destroy             = true
 
   runtime_platform {
@@ -138,11 +62,10 @@ resource "aws_ecs_service" "reconciliation" {
   }
 
   service_registries {
-    registry_arn = aws_service_discovery_service.runtime["reconciliation"].arn
+    registry_arn = data.terraform_remote_state.foundation.outputs.runtime_service_discovery_arns["reconciliation"]
   }
 
   depends_on = [
     aws_ecs_service.indexer,
-    aws_iam_role_policy.reconciliation_execution,
   ]
 }

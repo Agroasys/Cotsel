@@ -315,7 +315,7 @@ data "aws_iam_policy_document" "database_entitlement_verification_execution" {
         ]
       ]),
       [local.database_bootstrap_services.indexer.reader_secret],
-      [aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn],
+      [local.foundation_secret_arns["database/reconciliation/reader"]],
     )
   }
 
@@ -369,8 +369,8 @@ resource "aws_ecs_task_definition" "database_entitlement_verification" {
         { name = "INDEXER_RUNTIME_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.runtime_secret}:username::" },
         { name = "INDEXER_READER_PASSWORD", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:password::" },
         { name = "INDEXER_READER_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:username::" },
-        { name = "RECONCILIATION_READER_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:password::" },
-        { name = "RECONCILIATION_READER_USERNAME", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:username::" },
+        { name = "RECONCILIATION_READER_PASSWORD", valueFrom = "${local.foundation_secret_arns["database/reconciliation/reader"]}:password::" },
+        { name = "RECONCILIATION_READER_USERNAME", valueFrom = "${local.foundation_secret_arns["database/reconciliation/reader"]}:username::" },
         { name = "RICARDIAN_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:password::" },
         { name = "RICARDIAN_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:username::" },
         { name = "RICARDIAN_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.runtime_secret}:password::" },

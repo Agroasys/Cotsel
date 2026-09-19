@@ -13,98 +13,14 @@ locals {
   ]))
 }
 
-resource "aws_iam_role" "indexer_execution" {
-  name                 = "${local.name_prefix}-indexer-execution"
-  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-  permissions_boundary = var.service_role_permissions_boundary_arn
-
-  tags = {
-    Environment = var.environment
-    Service     = "indexer"
-  }
-}
-
-resource "aws_iam_role" "indexer_task" {
-  name                 = "${local.name_prefix}-indexer-task"
-  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-  permissions_boundary = var.service_role_permissions_boundary_arn
-
-  tags = {
-    Environment = var.environment
-    Service     = "indexer"
-  }
-}
-
-data "aws_iam_policy_document" "indexer_execution" {
-  statement {
-    sid       = "GetRuntimeImageAuthorization"
-    effect    = "Allow"
-    actions   = ["ecr:GetAuthorizationToken"]
-    resources = ["*"]
-  }
-
-  statement {
-    sid    = "PullIndexerRuntimeImages"
-    effect = "Allow"
-    actions = [
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:BatchGetImage",
-      "ecr:GetDownloadUrlForLayer",
-    ]
-    resources = [
-      aws_ecr_repository.service["indexer-graphql"].arn,
-      aws_ecr_repository.service["indexer-pipeline"].arn,
-    ]
-  }
-
-  statement {
-    sid    = "WriteIndexerLogs"
-    effect = "Allow"
-    actions = [
-      "logs:CreateLogStream",
-      "logs:PutLogEvents",
-    ]
-    resources = [
-      "${aws_cloudwatch_log_group.service["indexer-graphql"].arn}:*",
-      "${aws_cloudwatch_log_group.service["indexer-pipeline"].arn}:*",
-    ]
-  }
-
-  statement {
-    sid     = "ReadIndexerStartupSecrets"
-    effect  = "Allow"
-    actions = ["secretsmanager:GetSecretValue"]
-    resources = [
-      aws_secretsmanager_secret.platform["database/indexer/reader"].arn,
-      aws_secretsmanager_secret.platform["database/indexer/runtime"].arn,
-      aws_secretsmanager_secret.platform["notifications-webhook"].arn,
-      aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn,
-      aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn,
-    ]
-  }
-
-  statement {
-    sid       = "DecryptIndexerStartupSecrets"
-    effect    = "Allow"
-    actions   = ["kms:Decrypt"]
-    resources = [aws_kms_key.platform.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "indexer_execution" {
-  name   = "${local.name_prefix}-indexer-execution"
-  role   = aws_iam_role.indexer_execution.id
-  policy = data.aws_iam_policy_document.indexer_execution.json
-}
-
 resource "aws_ecs_task_definition" "indexer" {
   family                   = "${local.name_prefix}-indexer"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 1024
   memory                   = 2048
-  execution_role_arn       = aws_iam_role.indexer_execution.arn
-  task_role_arn            = aws_iam_role.indexer_task.arn
+  execution_role_arn       = data.terraform_remote_state.foundation.outputs.runtime_execution_role_arns["indexer"]
+  task_role_arn            = data.terraform_remote_state.foundation.outputs.runtime_task_role_arns["indexer"]
   skip_destroy             = true
 
   runtime_platform {
@@ -160,8 +76,6 @@ resource "aws_ecs_service" "indexer" {
   }
 
   service_registries {
-    registry_arn = aws_service_discovery_service.runtime["indexer-graphql"].arn
+    registry_arn = data.terraform_remote_state.foundation.outputs.runtime_service_discovery_arns["indexer-graphql"]
   }
-
-  depends_on = [aws_iam_role_policy.indexer_execution]
 }

@@ -95,33 +95,6 @@ resource "aws_vpc_security_group_ingress_rule" "gateway_from_alb" {
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "indexer_from_gateway" {
-  security_group_id            = aws_security_group.internal_services.id
-  description                  = "Read-only indexer GraphQL access from the gateway."
-  referenced_security_group_id = aws_security_group.gateway.id
-  from_port                    = 4350
-  to_port                      = 4350
-  ip_protocol                  = "tcp"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "indexer_from_services" {
-  security_group_id            = aws_security_group.internal_services.id
-  description                  = "Read-only indexer GraphQL access from private Cotsel services."
-  referenced_security_group_id = aws_security_group.internal_services.id
-  from_port                    = 4350
-  to_port                      = 4350
-  ip_protocol                  = "tcp"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "reconciliation_from_gateway" {
-  security_group_id            = aws_security_group.internal_services.id
-  description                  = "Reconciliation status access from the gateway."
-  referenced_security_group_id = aws_security_group.gateway.id
-  from_port                    = 9090
-  to_port                      = 9090
-  ip_protocol                  = "tcp"
-}
-
 resource "aws_vpc_security_group_ingress_rule" "services_from_gateway" {
   security_group_id            = aws_security_group.internal_services.id
   description                  = "Internal HTTP calls from the gateway."
@@ -140,33 +113,6 @@ resource "aws_vpc_security_group_ingress_rule" "services_from_services" {
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "gateway_to_indexer" {
-  security_group_id            = aws_security_group.gateway.id
-  description                  = "Read-only GraphQL calls from the gateway to the isolated indexer."
-  referenced_security_group_id = aws_security_group.internal_services.id
-  from_port                    = 4350
-  to_port                      = 4350
-  ip_protocol                  = "tcp"
-}
-
-resource "aws_vpc_security_group_egress_rule" "services_to_indexer" {
-  security_group_id            = aws_security_group.internal_services.id
-  description                  = "Read-only GraphQL calls between private services and the isolated indexer."
-  referenced_security_group_id = aws_security_group.internal_services.id
-  from_port                    = 4350
-  to_port                      = 4350
-  ip_protocol                  = "tcp"
-}
-
-resource "aws_vpc_security_group_egress_rule" "gateway_to_reconciliation" {
-  security_group_id            = aws_security_group.gateway.id
-  description                  = "Reconciliation status calls from the gateway."
-  referenced_security_group_id = aws_security_group.internal_services.id
-  from_port                    = 9090
-  to_port                      = 9090
-  ip_protocol                  = "tcp"
-}
-
 resource "aws_vpc_security_group_egress_rule" "gateway_to_ricardian" {
   security_group_id            = aws_security_group.gateway.id
   description                  = "Authenticated private HTTP calls from the gateway to Ricardian."
@@ -176,30 +122,12 @@ resource "aws_vpc_security_group_egress_rule" "gateway_to_ricardian" {
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "gateway_to_oracle" {
-  security_group_id            = aws_security_group.gateway.id
-  description                  = "Authenticated private HTTP calls from the gateway to Oracle."
-  referenced_security_group_id = aws_security_group.internal_services.id
-  from_port                    = 3001
-  to_port                      = 3001
-  ip_protocol                  = "tcp"
-}
-
 resource "aws_vpc_security_group_egress_rule" "gateway_to_treasury" {
   security_group_id            = aws_security_group.gateway.id
   description                  = "Authenticated private HTTP calls from the gateway to Treasury."
   referenced_security_group_id = aws_security_group.internal_services.id
   from_port                    = 3200
   to_port                      = 3200
-  ip_protocol                  = "tcp"
-}
-
-resource "aws_vpc_security_group_egress_rule" "gateway_to_relayer" {
-  security_group_id            = aws_security_group.gateway.id
-  description                  = "Authenticated intent-bound signing requests to the gasless relayer."
-  referenced_security_group_id = aws_security_group.internal_services.id
-  from_port                    = 3300
-  to_port                      = 3300
   ip_protocol                  = "tcp"
 }
 

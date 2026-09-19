@@ -2,14 +2,19 @@
 
 This Terraform root owns the narrow infrastructure that must exist before a
 release image or managed signer can be activated. It owns the `cotsel/relayer`
-ECR repository and the isolated Oracle and relayer custody identities. The
-eight existing repositories remain owned by the historical `staging-platform`
-state. This root reads them only to verify the complete release cohort.
+ECR repository, the isolated Oracle and relayer custody identities, and the
+absent zero-runtime prerequisites identified by the live reconciliation plan:
+execution/task roles, narrowly scoped execution policies, reader/notification
+secret identities, the relayer log group, Cloud Map service identities, and
+the network rules needed by the separated services. The eight existing
+repositories and all historical runtime resources remain owned by the
+`staging-platform` state.
 
 The root creates two non-exportable `ECC_SECG_P256K1` KMS keys, stable aliases,
-and dedicated ECS task roles. It does not grant `kms:Sign`, deploy ECS tasks,
-change contract configuration, activate a signer, enable gasless execution, or
-manage secret values. Plan and apply it only through
+and dedicated ECS task roles. It does not grant `kms:Sign`, register task
+definitions, create or update ECS services, change contract configuration,
+activate a signer, enable gasless execution, or manage secret values. Plan and
+apply it only through
 `.github/workflows/terraform.yml` with `root=staging-foundation`. The apply must
 consume the exact reviewed saved-plan version.
 
@@ -24,3 +29,10 @@ read-only identity. Derive each EVM address twice. Record the key ARN, alias,
 algorithm, address, and verification evidence. Do not generate or import raw
 private-key material. Do not create a runtime plan until both addresses are
 independently verified.
+
+The runtime-prerequisite resources are intentionally in this state because the
+diagnostic platform plan proved they do not yet exist in the historical
+platform state. Do not move an existing resource into this root without a
+separately reviewed state-migration plan. Apply this root first, verify every
+created identity and policy live, and only then generate a fresh
+`staging-platform` runtime-convergence plan.
