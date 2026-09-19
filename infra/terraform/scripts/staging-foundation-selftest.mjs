@@ -58,18 +58,12 @@ assert.match(
   relayerService,
   /terraform_remote_state\.foundation\.outputs\.runtime_execution_role_arns\["relayer"\]/,
 );
-assert.match(
-  foundationRuntimePrerequisites,
-  /resource "aws_iam_role" "runtime_execution"/,
-);
+assert.match(foundationRuntimePrerequisites, /resource "aws_iam_role" "runtime_execution"/);
 assert.match(
   foundationRuntimePrerequisites,
   /resource "aws_service_discovery_service" "runtime_prerequisite"/,
 );
-assert.match(
-  foundationRuntimePrerequisites,
-  /runtime_prerequisite_secret_names\s*=\s*toset/,
-);
+assert.match(foundationRuntimePrerequisites, /runtime_prerequisite_secret_names\s*=\s*toset/);
 assert.match(foundationRuntimePrerequisites, /resource "aws_cloudwatch_log_group" "relayer"/);
 
 assert.match(terraformWorkflow, /- staging-foundation\s+- staging-platform/);
