@@ -146,6 +146,18 @@ export function isTerminalProviderStatus(status: ProviderHandoffStatus): boolean
  */
 export type ProviderHandoffTransition = 'ADVANCE' | 'REPLAY' | 'STALE' | 'CONTRADICTION';
 
+/**
+ * What the evidence log records. Wider than the transition set because a
+ * delivery can be refused before it is ever classified -- while the handoff is
+ * frozen, or because it asserts a completion nothing corroborates -- and a
+ * refused delivery is still a delivery. Losing those is how a disputed handoff
+ * ends up with a gap in its history exactly where the dispute is.
+ *
+ * - `FROZEN`   -- arrived while the handoff was frozen. Recorded, not applied.
+ * - `REJECTED` -- failed validation before classification. Recorded, not applied.
+ */
+export type ProviderHandoffDisposition = ProviderHandoffTransition | 'FROZEN' | 'REJECTED';
+
 export function classifyProviderHandoffTransition(
   from: ProviderHandoffStatus | null,
   to: ProviderHandoffStatus,
@@ -186,20 +198,33 @@ export function classifyProviderHandoffTransition(
  * the bank produced. A `COMPLETED` status with nothing attached is a claim, and
  * this control exists because claims were being recorded as completions.
  */
-export function assertCompletionEvidence(
+export function resolveCompletionEvidenceFailure(
   status: ProviderHandoffStatus,
   evidence: { evidenceReference?: string | null; bankReference?: string | null },
-): void {
+): string | null {
   if (!isHandoffComplete(status)) {
-    return;
+    return null;
   }
 
   const hasEvidence = Boolean(evidence.evidenceReference?.trim() || evidence.bankReference?.trim());
 
-  if (!hasEvidence) {
-    throw new ProviderHandoffAuthorityError(
-      'Completed external handoff requires an authoritative provider or bank evidence reference',
-    );
+  return hasEvidence
+    ? null
+    : 'Completed external handoff requires an authoritative provider or bank evidence reference';
+}
+
+/**
+ * The throwing form, for callers that have already recorded the delivery and
+ * only need to refuse it. A caller that must record it first uses
+ * `resolveCompletionEvidenceFailure`, so the refusal does not cost the evidence.
+ */
+export function assertCompletionEvidence(
+  status: ProviderHandoffStatus,
+  evidence: { evidenceReference?: string | null; bankReference?: string | null },
+): void {
+  const failure = resolveCompletionEvidenceFailure(status, evidence);
+  if (failure) {
+    throw new ProviderHandoffAuthorityError(failure);
   }
 }
 

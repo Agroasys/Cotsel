@@ -161,11 +161,11 @@ describePostgres('sweep batch handoff evidence log (postgres)', () => {
   });
 
   /**
-   * A completion is refused before it is classified at all. It is not a state
-   * the provider can assert without corroboration, so there is nothing to
-   * record -- unlike a well-formed callback that merely arrives out of order.
+   * A completion nobody corroborated is refused, but it is still something the
+   * provider claimed. Refusing before recording it would delete the claim, and
+   * the claim is exactly what a later dispute turns on.
    */
-  it('refuses a batch completion carrying no evidence, without recording it', async () => {
+  it('records a batch completion carrying no evidence, then refuses it', async () => {
     const batchId = await seedBatch();
     await callback(batchId, 'SUBMITTED');
 
@@ -173,9 +173,53 @@ describePostgres('sweep batch handoff evidence log (postgres)', () => {
       /authoritative provider or bank evidence/i,
     );
 
-    const recorded = await events(batchId);
-    expect(recorded).toHaveLength(1);
-    expect(recorded[0].handoff_status).toBe('SUBMITTED');
+    expect(await events(batchId)).toEqual([
+      expect.objectContaining({ handoff_status: 'SUBMITTED', transition: 'ADVANCE' }),
+      expect.objectContaining({
+        handoff_status: 'COMPLETED',
+        transition: 'REJECTED',
+        applied: false,
+      }),
+    ]);
+
+    const stored = await sidecar.query(
+      `SELECT handoff_status FROM partner_handoffs WHERE sweep_batch_id = $1`,
+      [batchId],
+    );
+    expect(stored.rows[0].handoff_status).toBe('SUBMITTED');
+  });
+
+  /**
+   * The deliveries that arrive *after* a contradiction are the ones a dispute
+   * turns on, and they used to be dropped at the frozen guard before anything
+   * was written. The projection stays frozen; the log keeps growing.
+   */
+  it('retains provider deliveries that arrive while the batch is frozen', async () => {
+    const batchId = await seedBatch();
+    await callback(batchId, 'COMPLETED', 'receipt-3');
+    await expect(callback(batchId, 'FAILED')).rejects.toThrow(/already terminal at COMPLETED/i);
+
+    await expect(callback(batchId, 'ACKNOWLEDGED', 'receipt-4')).rejects.toThrow(/frozen/i);
+    await expect(callback(batchId, 'FAILED')).rejects.toThrow(/frozen/i);
+
+    expect(await events(batchId)).toEqual([
+      expect.objectContaining({ handoff_status: 'COMPLETED', transition: 'ADVANCE' }),
+      expect.objectContaining({ handoff_status: 'FAILED', transition: 'CONTRADICTION' }),
+      expect.objectContaining({
+        handoff_status: 'ACKNOWLEDGED',
+        transition: 'FROZEN',
+        applied: false,
+        evidence_reference: 'receipt-4',
+      }),
+      expect.objectContaining({ handoff_status: 'FAILED', transition: 'FROZEN', applied: false }),
+    ]);
+
+    const frozen = await sidecar.query(
+      `SELECT handoff_status, frozen_at FROM partner_handoffs WHERE sweep_batch_id = $1`,
+      [batchId],
+    );
+    expect(frozen.rows[0].handoff_status).toBe('COMPLETED');
+    expect(frozen.rows[0].frozen_at).not.toBeNull();
   });
 
   it('records the contradicting delivery that freezes the batch', async () => {

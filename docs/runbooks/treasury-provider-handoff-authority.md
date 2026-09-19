@@ -121,8 +121,15 @@ and then** the error is raised — rolling back would discard the very evidence
 the conflict is about, leave an unexplained refusal, and let the next identical
 callback freeze the handoff all over again.
 
-While frozen, further callbacks are still recorded and still cannot advance the
-handoff.
+While frozen, further callbacks are still recorded — under the `FROZEN`
+disposition, with the projection untouched — and still cannot advance the
+handoff. The same holds for a completion that carries no corroboration: it is
+written under `REJECTED` and then refused, so the claim the provider made
+survives the refusal.
+
+Both paths commit the delivery before raising, for the same reason the
+contradiction path does: a rollback would discard the record that explains the
+refusal.
 
 ## Applying the migration
 
@@ -170,6 +177,10 @@ docker compose -f docker-compose.migrations.yml run --rm treasury-migrate
    - Both events are in the evidence log.
    - One `CONFLICT` row exists in `treasury_partner_handoff_conflicts` naming
      the retained and conflicting states and the provider event.
+
+   Then send a third callback. It is refused with `409`, the projection is
+   unchanged, and the delivery is nevertheless present in the evidence log under
+   `FROZEN`.
 
 6. **Evidence cannot be rewritten.** `UPDATE` or `DELETE` against
    `treasury_partner_handoff_events` raises `... is append-only`.

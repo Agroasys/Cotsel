@@ -119,8 +119,14 @@ CREATE TABLE IF NOT EXISTS partner_handoff_events (
     -- How the append-only state machine judged this delivery, recorded beside
     -- the delivery itself so the reason a callback did not take effect is
     -- reconstructable without replaying the classifier.
+    -- Wider than the transition set: a delivery can be refused before it is
+    -- ever classified -- while the batch is frozen, or because it asserts a
+    -- completion nothing corroborates -- and those are the deliveries a
+    -- disputed batch most needs to have kept.
     transition VARCHAR(16) NOT NULL
-        CHECK (transition IN ('ADVANCE', 'REPLAY', 'STALE', 'CONTRADICTION')),
+        CHECK (transition IN (
+            'ADVANCE', 'REPLAY', 'STALE', 'CONTRADICTION', 'FROZEN', 'REJECTED'
+        )),
     applied BOOLEAN NOT NULL,
     evidence_reference VARCHAR(255),
     payload_hash CHAR(64) NOT NULL,

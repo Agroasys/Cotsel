@@ -1,5 +1,6 @@
 import {
   assertCompletionEvidence,
+  resolveCompletionEvidenceFailure,
   classifyProviderHandoffTransition,
   isHandedOff,
   isHandoffComplete,
@@ -121,6 +122,19 @@ describe('provider handoff authority', () => {
     it('asks nothing of a state that does not assert movement', () => {
       expect(() => assertCompletionEvidence('SUBMITTED', {})).not.toThrow();
       expect(() => assertCompletionEvidence('FAILED', {})).not.toThrow();
+    });
+
+    /**
+     * The non-throwing form exists so a caller can record the delivery under a
+     * `REJECTED` disposition first. Refusing before recording would delete the
+     * claim, and the claim is what a later dispute turns on.
+     */
+    it('reports the failure without throwing, for callers that log first', () => {
+      expect(resolveCompletionEvidenceFailure('COMPLETED', {})).toMatch(
+        /authoritative provider or bank evidence/i,
+      );
+      expect(resolveCompletionEvidenceFailure('COMPLETED', { bankReference: 'wire-1' })).toBeNull();
+      expect(resolveCompletionEvidenceFailure('SUBMITTED', {})).toBeNull();
     });
   });
 

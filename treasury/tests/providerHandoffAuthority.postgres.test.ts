@@ -144,7 +144,12 @@ describePostgres('provider handoff append-only state (postgres)', () => {
     expect(events.map((event) => event.partner_status)).toEqual(['ACKNOWLEDGED', 'SUBMITTED']);
   });
 
-  it('refuses a completion that carries no provider or bank evidence', async () => {
+  /**
+   * The completion is refused, but it is still something the provider claimed.
+   * Refusing before recording it would delete the claim, and the claim is what
+   * a later dispute turns on.
+   */
+  it('records a completion carrying no evidence, then refuses it', async () => {
     const { entryId } = await seedHandoff();
 
     await expect(
@@ -155,6 +160,9 @@ describePostgres('provider handoff append-only state (postgres)', () => {
 
     const stored = await queries.getTreasuryPartnerHandoffByLedgerEntryId(entryId);
     expect(stored?.partner_status).toBe('SUBMITTED');
+
+    const events = await queries.listTreasuryPartnerHandoffEventsByLedgerEntryId(entryId);
+    expect(events.map((event) => event.partner_status)).toEqual(['COMPLETED']);
   });
 
   /**
@@ -196,7 +204,11 @@ describePostgres('provider handoff append-only state (postgres)', () => {
     expect(conflicts.rows[0].conflicting_status).toBe('FAILED');
   });
 
-  it('keeps recording evidence for a frozen handoff without advancing it', async () => {
+  /**
+   * The deliveries that arrive *after* a contradiction are the ones a dispute
+   * turns on. The projection stays frozen; the log keeps growing.
+   */
+  it('retains provider deliveries that arrive while the handoff is frozen', async () => {
     const { entryId } = await seedHandoff();
     await queries.appendTreasuryPartnerHandoffEvidence(
       evidence(entryId, `done2-${entryId}`, 'COMPLETED', { evidenceReference: 'receipt-2' }),
@@ -211,9 +223,17 @@ describePostgres('provider handoff append-only state (postgres)', () => {
       evidence(entryId, `post-freeze-${entryId}`, 'PROCESSING'),
     );
 
+    expect(afterFreeze.transition).toBe('FROZEN');
     expect(afterFreeze.applied).toBe(false);
     expect(afterFreeze.handoff.partner_status).toBe('COMPLETED');
     expect(afterFreeze.handoff.frozen_at).not.toBeNull();
+
+    const events = await queries.listTreasuryPartnerHandoffEventsByLedgerEntryId(entryId);
+    expect(events.map((event) => event.partner_status)).toEqual([
+      'COMPLETED',
+      'RETURNED',
+      'PROCESSING',
+    ]);
   });
 
   it('refuses to rewrite or delete recorded provider evidence', async () => {

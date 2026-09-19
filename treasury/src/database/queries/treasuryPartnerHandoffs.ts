@@ -7,11 +7,11 @@ import {
   TreasuryPartnerHandoffConflictError,
 } from '../../core/treasuryPartnerHandoff';
 import {
-  assertCompletionEvidence,
   classifyProviderHandoffTransition,
   isHandoffComplete,
   ProviderHandoffAuthorityError,
-  type ProviderHandoffTransition,
+  resolveCompletionEvidenceFailure,
+  type ProviderHandoffDisposition,
 } from '../../core/providerHandoffAuthority';
 import { retryOnceOnUniqueViolation } from '../../core/transitionConcurrency';
 import { recordPartnerHandoffConflict } from './partnerHandoffConflicts';
@@ -210,7 +210,7 @@ export interface TreasuryPartnerHandoffEvidenceResult {
   created: boolean;
   idempotentReplay: boolean;
   /** How the append-only state machine judged this callback. */
-  transition: ProviderHandoffTransition;
+  transition: ProviderHandoffDisposition;
   /** Whether it became the authoritative state. A recorded event that did not. */
   applied: boolean;
 }
@@ -245,13 +245,6 @@ async function appendTreasuryPartnerHandoffEvidenceOnce(
     observedAt: data.observedAt,
     metadata: data.metadata ?? {},
   };
-  // A completion is the one claim that says value left Cotsel's control, so it
-  // is refused outright unless the provider or the bank corroborated it.
-  assertCompletionEvidence(normalized.partnerStatus, {
-    evidenceReference: normalized.evidenceReference,
-    bankReference: normalized.bankReference,
-  });
-
   const payloadHash = createTreasuryPartnerHandoffEvidencePayloadHash(normalized);
   const client = await pool.connect();
 
@@ -355,10 +348,27 @@ async function appendTreasuryPartnerHandoffEvidenceOnce(
 
     // The evidence row above is written before any verdict is reached, and it
     // is never conditional on one. What the callback is allowed to *do* varies;
-    // that it arrived, and what it said, does not.
-    const transition = handoff.frozen_at
-      ? ('STALE' as ProviderHandoffTransition)
-      : classifyProviderHandoffTransition(handoff.partner_status, normalized.partnerStatus);
+    // that it arrived, and what it said, does not -- which is why the
+    // completion check below runs here rather than before the transaction: a
+    // completion nobody corroborated is still something the provider claimed.
+    const evidenceFailure = handoff.frozen_at
+      ? null
+      : resolveCompletionEvidenceFailure(normalized.partnerStatus, {
+          evidenceReference: normalized.evidenceReference,
+          bankReference: normalized.bankReference,
+        });
+
+    const transition: ProviderHandoffDisposition = handoff.frozen_at
+      ? 'FROZEN'
+      : evidenceFailure
+        ? 'REJECTED'
+        : classifyProviderHandoffTransition(handoff.partner_status, normalized.partnerStatus);
+
+    if (evidenceFailure) {
+      // Committed before the throw so the claim survives the refusal.
+      await client.query('COMMIT');
+      throw new ProviderHandoffAuthorityError(evidenceFailure);
+    }
 
     if (transition === 'CONTRADICTION') {
       const detail = `Provider reported ${normalized.partnerStatus} for a handoff already terminal at ${handoff.partner_status}`;

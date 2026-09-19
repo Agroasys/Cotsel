@@ -7,8 +7,10 @@ import {
   type RealizationReconciliationBinding,
 } from '../../core/accountingPolicy';
 import {
-  assertCompletionEvidence,
   classifyProviderHandoffTransition,
+  ProviderHandoffAuthorityError,
+  resolveCompletionEvidenceFailure,
+  type ProviderHandoffDisposition,
 } from '../../core/providerHandoffAuthority';
 import { PartnerHandoffConflictError } from '../../core/treasuryPartnerHandoff';
 import { rejectConcurrentWrite } from '../../core/transitionConcurrency';
@@ -188,20 +190,24 @@ export async function upsertPartnerHandoff(data: {
     );
     const current = existingHandoff.rows[0] ?? null;
 
-    if (current?.frozen_at) {
-      throw new PartnerHandoffConflictError(
-        `External handoff for this batch is frozen pending an approved correction: ${current.frozen_reason ?? 'contradictory provider evidence'}`,
-      );
-    }
+    // Both refusals below used to return before the log was written, so every
+    // delivery that arrived while the batch was disputed -- the ones whose
+    // retention matters most -- vanished. The disposition is decided here and
+    // the delivery is recorded under it; refusing comes afterwards.
+    const frozenReason = current?.frozen_at
+      ? `External handoff for this batch is frozen pending an approved correction: ${current.frozen_reason ?? 'contradictory provider evidence'}`
+      : null;
+    const evidenceFailure = frozenReason
+      ? null
+      : resolveCompletionEvidenceFailure(data.handoffStatus, {
+          evidenceReference: data.evidenceReference ?? null,
+        });
 
-    assertCompletionEvidence(data.handoffStatus, {
-      evidenceReference: data.evidenceReference ?? null,
-    });
-
-    const transition = classifyProviderHandoffTransition(
-      current?.handoff_status ?? null,
-      data.handoffStatus,
-    );
+    const transition: ProviderHandoffDisposition = frozenReason
+      ? 'FROZEN'
+      : evidenceFailure
+        ? 'REJECTED'
+        : classifyProviderHandoffTransition(current?.handoff_status ?? null, data.handoffStatus);
 
     // Written before the verdict and never conditional on it. What a callback
     // is allowed to *do* varies; that it arrived, and what it said, does not.
@@ -223,6 +229,19 @@ export async function upsertPartnerHandoff(data: {
         JSON.stringify(metadata),
       ],
     );
+
+    // Committed before each throw, for the same reason the contradiction path
+    // commits: a rollback would discard the delivery that was just recorded and
+    // leave the refusal unexplained.
+    if (frozenReason) {
+      await client.query('COMMIT');
+      throw new PartnerHandoffConflictError(frozenReason);
+    }
+
+    if (evidenceFailure) {
+      await client.query('COMMIT');
+      throw new ProviderHandoffAuthorityError(evidenceFailure);
+    }
 
     if (transition === 'CONTRADICTION') {
       const detail = `Provider reported ${data.handoffStatus} for a batch handoff already terminal at ${current?.handoff_status}`;
