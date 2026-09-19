@@ -15,19 +15,6 @@ const developmentAuditAllowlist = new Map([
         'No patched release exists. The affected path is limited to development-only Hardhat tooling.',
     },
   ],
-  [
-    'GHSA-vwc7-r8mq-g2x9',
-    {
-      moduleName: 'adm-zip',
-      severity: 'moderate',
-      versions: new Set(['0.6.0']),
-      patchedVersions: '<0.0.0',
-      owner: 'Cotsel security maintainers',
-      expiresOn: '2026-10-31',
-      reason:
-        'No patched release exists. The production audit is clean, and the affected path is limited to development-only Hardhat tooling.',
-    },
-  ],
 ]);
 
 const locallyPatchedAdvisories = new Map([
