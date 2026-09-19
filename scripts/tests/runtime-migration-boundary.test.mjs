@@ -81,8 +81,10 @@ test('indexer pipeline and GraphQL use distinct non-migration identities', async
   assert.match(runtime, /indexer_graphql_secrets[\s\S]*database\/indexer\/reader/);
   assert.doesNotMatch(runtime, /indexer_graphql_secrets[\s\S]*database\/indexer\/runtime/);
 
-  const gatewayIam = await readFile('infra/terraform/staging-platform/iam.tf', 'utf8');
-  assert.match(gatewayIam, /database\/indexer\/reader/);
+  const indexerIam = await readFile('infra/terraform/staging-platform/indexer-service.tf', 'utf8');
+  assert.match(indexerIam, /database\/indexer\/reader/);
+  assert.match(indexerIam, /database\/indexer\/runtime/);
+  assert.doesNotMatch(indexerIam, /database\/indexer\/migration/);
 
   const migration = await readFile('infra/terraform/staging-platform/indexer-migration.tf', 'utf8');
   assert.match(migration, /database\/indexer\/migration/);
@@ -102,8 +104,9 @@ test('oracle reads reconciliation containment with its dedicated reader identity
   assert.match(oracleSecrets, /database\/reconciliation\/reader/);
   assert.doesNotMatch(oracleSecrets, /database\/reconciliation\/runtime/);
 
-  const gatewayIam = await readFile('infra/terraform/staging-platform/iam.tf', 'utf8');
-  assert.match(gatewayIam, /database\/reconciliation\/reader/);
+  const oracleIam = await readFile('infra/terraform/staging-platform/oracle-service.tf', 'utf8');
+  assert.match(oracleIam, /database\/reconciliation\/reader/);
+  assert.doesNotMatch(oracleIam, /database\/reconciliation\/runtime/);
 });
 
 test('every non-indexer schema has a dedicated one-off migration task', async () => {
@@ -312,9 +315,14 @@ test('runtime evidence queries do not use the Postgres administrator for indexer
 test('long-running task definitions register replacements before deregistration', async () => {
   for (const file of [
     'infra/terraform/staging-platform/gateway-runtime.tf',
+    'infra/terraform/staging-platform/indexer-service.tf',
+    'infra/terraform/staging-platform/oracle-service.tf',
+    'infra/terraform/staging-platform/reconciliation-service.tf',
+    'infra/terraform/staging-platform/relayer-service.tf',
     'infra/terraform/staging-platform/runtime-treasury-ricardian.tf',
   ]) {
     const source = await readFile(file, 'utf8');
     assert.match(source, /lifecycle\s*{\s*create_before_destroy\s*=\s*true\s*}/, file);
+    assert.match(source, /skip_destroy\s*=\s*true/, file);
   }
 });

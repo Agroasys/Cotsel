@@ -76,22 +76,19 @@ data "aws_iam_policy_document" "gateway_execution" {
     sid     = "ReadRuntimeStartupSecrets"
     effect  = "Allow"
     actions = ["secretsmanager:GetSecretValue"]
-    resources = [
+    resources = concat([
       aws_secretsmanager_secret.platform["database/gateway/runtime"].arn,
-      aws_secretsmanager_secret.platform["database/indexer/reader"].arn,
-      aws_secretsmanager_secret.platform["database/indexer/runtime"].arn,
-      aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn,
       aws_secretsmanager_secret.platform["database/auth/runtime"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-callback"].arn,
       aws_secretsmanager_secret.platform["gateway-settlement-ingress"].arn,
-      aws_secretsmanager_secret.platform["gateway-managed-signer"].arn,
       aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn,
       aws_secretsmanager_secret.platform["gateway-to-ricardian-auth"].arn,
       aws_secretsmanager_secret.platform["gateway-to-treasury-auth"].arn,
-      aws_secretsmanager_secret.platform["notifications-webhook"].arn,
       aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn,
       aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn,
-    ]
+      ], local.relayer_kms_enabled ? [
+      aws_secretsmanager_secret.platform["gateway-managed-signer"].arn,
+    ] : [])
   }
 
   statement {

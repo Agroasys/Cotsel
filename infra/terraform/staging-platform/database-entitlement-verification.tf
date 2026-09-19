@@ -340,6 +340,7 @@ resource "aws_ecs_task_definition" "database_entitlement_verification" {
   cpu                      = 256
   memory                   = 512
   execution_role_arn       = aws_iam_role.database_entitlement_verification_execution.arn
+  skip_destroy             = true
 
   runtime_platform {
     cpu_architecture        = "X86_64"

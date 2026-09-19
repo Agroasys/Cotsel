@@ -60,6 +60,13 @@ check "gasless_execution_has_one_gateway_writer" {
   }
 }
 
+check "relayer_activation_requires_reviewed_kms_address" {
+  assert {
+    condition     = var.relayer_desired_count == 0 || local.relayer_kms_enabled
+    error_message = "Relayer activation requires the independently reviewed KMS address."
+  }
+}
+
 resource "aws_iam_role" "relayer_execution" {
   name                 = "${local.name_prefix}-relayer-execution"
   assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
@@ -155,6 +162,7 @@ resource "aws_ecs_task_definition" "relayer" {
   memory                   = 512
   execution_role_arn       = aws_iam_role.relayer_execution.arn
   task_role_arn            = local.managed_signer_task_role_arns["relayer"]
+  skip_destroy             = true
 
   runtime_platform {
     cpu_architecture        = "X86_64"
@@ -178,7 +186,7 @@ resource "aws_ecs_service" "relayer" {
   name                               = "${local.name_prefix}-relayer"
   cluster                            = aws_ecs_cluster.staging.id
   task_definition                    = aws_ecs_task_definition.relayer.arn
-  desired_count                      = local.relayer_kms_enabled ? 1 : 0
+  desired_count                      = var.relayer_desired_count
   launch_type                        = "FARGATE"
   enable_execute_command             = false
   deployment_maximum_percent         = 100

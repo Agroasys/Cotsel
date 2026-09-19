@@ -211,8 +211,52 @@ variable "gateway_desired_count" {
   default     = 0
 
   validation {
-    condition     = var.gateway_desired_count >= 0 && var.gateway_desired_count <= 2
+    condition     = contains([0, 1, 2], var.gateway_desired_count)
     error_message = "gateway_desired_count must be 0, 1, or 2 for the staged convergence sequence."
+  }
+}
+
+variable "indexer_desired_count" {
+  description = "Number of Cotsel indexer tasks to run in staging. Keep zero until database migration and RPC preflight evidence are accepted."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = contains([0, 1], var.indexer_desired_count)
+    error_message = "indexer_desired_count must be 0 or 1 for the staged cutover."
+  }
+}
+
+variable "reconciliation_desired_count" {
+  description = "Number of Cotsel reconciliation tasks to run in staging. Keep zero until indexer catch-up and database migration evidence are accepted."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = contains([0, 1], var.reconciliation_desired_count)
+    error_message = "reconciliation_desired_count must be 0 or 1 for the staged cutover."
+  }
+}
+
+variable "oracle_desired_count" {
+  description = "Number of KMS-backed Oracle tasks to run in staging. Keep zero until signer isolation and address-binding evidence are accepted."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = contains([0, 1], var.oracle_desired_count)
+    error_message = "oracle_desired_count must be 0 or 1 for the staged cutover."
+  }
+}
+
+variable "relayer_desired_count" {
+  description = "Number of KMS-backed relayer tasks to run in staging. Keep zero until signer isolation and nonce-safety evidence are accepted."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = contains([0, 1], var.relayer_desired_count)
+    error_message = "relayer_desired_count must be 0 or 1 for the staged cutover."
   }
 }
 
