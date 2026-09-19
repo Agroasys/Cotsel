@@ -87,7 +87,10 @@ assert.match(relayerService, /enable_execute_command\s+= false/);
 assert.match(relayerService, /gasless_execution_has_one_gateway_writer/);
 assert.match(network, /gateway_to_relayer/);
 
-assert.match(managedSigners, /terraform_remote_state\.foundation\.outputs\.managed_signer_key_arns/);
+assert.match(
+  managedSigners,
+  /terraform_remote_state\.foundation\.outputs\.managed_signer_key_arns/,
+);
 assert.match(managedSigners, /foundation_exposes_only_approved_automated_signers/);
 assert.doesNotMatch(managedSigners, /resource "aws_(kms|iam)_/);
 assert.match(signerCustody, /DenyUnapprovedSigningPrincipal/);
