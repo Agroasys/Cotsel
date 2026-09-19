@@ -81,7 +81,10 @@ test('indexer pipeline and GraphQL use distinct non-migration identities', async
   assert.match(runtime, /indexer_graphql_secrets[\s\S]*database\/indexer\/reader/);
   assert.doesNotMatch(runtime, /indexer_graphql_secrets[\s\S]*database\/indexer\/runtime/);
 
-  const indexerIam = await readFile('infra/terraform/staging-platform/indexer-service.tf', 'utf8');
+  const indexerIam = await readFile(
+    'infra/terraform/staging-foundation/runtime-prerequisites.tf',
+    'utf8',
+  );
   assert.match(indexerIam, /database\/indexer\/reader/);
   assert.match(indexerIam, /database\/indexer\/runtime/);
   assert.doesNotMatch(indexerIam, /database\/indexer\/migration/);
@@ -104,7 +107,17 @@ test('oracle reads reconciliation containment with its dedicated reader identity
   assert.match(oracleSecrets, /database\/reconciliation\/reader/);
   assert.doesNotMatch(oracleSecrets, /database\/reconciliation\/runtime/);
 
-  const oracleIam = await readFile('infra/terraform/staging-platform/oracle-service.tf', 'utf8');
+  const runtimePrerequisites = await readFile(
+    'infra/terraform/staging-foundation/runtime-prerequisites.tf',
+    'utf8',
+  );
+  const [, oraclePolicyRemainder] = runtimePrerequisites.split(
+    'data "aws_iam_policy_document" "oracle_execution" {',
+  );
+  assert.ok(oraclePolicyRemainder, 'oracle execution policy must be present');
+  const [oracleIam] = oraclePolicyRemainder.split(
+    '\ndata "aws_iam_policy_document" "reconciliation_execution" {',
+  );
   assert.match(oracleIam, /database\/reconciliation\/reader/);
   assert.doesNotMatch(oracleIam, /database\/reconciliation\/runtime/);
 });
