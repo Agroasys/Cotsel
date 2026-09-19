@@ -51,3 +51,33 @@ output "managed_signer_task_role_names" {
   description = "Dedicated workload role names used by runtime-owned least-privilege policies."
   value       = { for role, task_role in aws_iam_role.managed_signer_task : role => task_role.name }
 }
+
+output "runtime_execution_role_arns" {
+  description = "Execution roles for isolated zero-count runtime services."
+  value       = { for name, role in aws_iam_role.runtime_execution : name => role.arn }
+}
+
+output "runtime_task_role_arns" {
+  description = "Non-signing task roles for isolated runtime services."
+  value       = { for name, role in aws_iam_role.runtime_task : name => role.arn }
+}
+
+output "runtime_service_discovery_arns" {
+  description = "Cloud Map service ARNs for independently deployed runtime services."
+  value       = { for name, service in aws_service_discovery_service.runtime_prerequisite : name => service.arn }
+}
+
+output "runtime_prerequisite_secret_arns" {
+  description = "Secret identities created for runtime prerequisites. Values remain externally managed."
+  value       = { for name, secret in aws_secretsmanager_secret.runtime_prerequisite : name => secret.arn }
+}
+
+output "runtime_prerequisite_log_groups" {
+  description = "Log groups created before their runtime services are registered."
+  value = {
+    relayer = {
+      arn  = aws_cloudwatch_log_group.relayer.arn
+      name = aws_cloudwatch_log_group.relayer.name
+    }
+  }
+}

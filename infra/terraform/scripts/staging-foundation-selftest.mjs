@@ -18,6 +18,9 @@ const foundationSignerCustody = read(
   join(terraformDirectory, 'staging-foundation', 'signer-custody.tf'),
 );
 const foundationOutputs = read(join(terraformDirectory, 'staging-foundation', 'outputs.tf'));
+const foundationRuntimePrerequisites = read(
+  join(terraformDirectory, 'staging-foundation', 'runtime-prerequisites.tf'),
+);
 const foundationBackend = read(join(terraformDirectory, 'staging-foundation', 'backend.tf'));
 const platformRegistry = read(join(terraformDirectory, 'staging-platform', 'registry.tf'));
 const platformManagedSigners = read(
@@ -51,7 +54,17 @@ assert.doesNotMatch(platformManagedSigners, /resource "aws_(kms|iam)_/);
 assert.match(platformRegistry, /setsubtract\(local\.services, toset\(\["relayer"\]\)\)/);
 assert.match(runtimeImages, /terraform_remote_state\.foundation\.outputs\.ecr_repository_names/);
 assert.match(runtimeImages, /terraform_remote_state\.foundation\.outputs\.ecr_repository_urls/);
-assert.match(relayerService, /terraform_remote_state\.foundation\.outputs\.ecr_repository_arns/);
+assert.match(
+  relayerService,
+  /terraform_remote_state\.foundation\.outputs\.runtime_execution_role_arns\["relayer"\]/,
+);
+assert.match(foundationRuntimePrerequisites, /resource "aws_iam_role" "runtime_execution"/);
+assert.match(
+  foundationRuntimePrerequisites,
+  /resource "aws_service_discovery_service" "runtime_prerequisite"/,
+);
+assert.match(foundationRuntimePrerequisites, /runtime_prerequisite_secret_names\s*=\s*toset/);
+assert.match(foundationRuntimePrerequisites, /resource "aws_cloudwatch_log_group" "relayer"/);
 
 assert.match(terraformWorkflow, /- staging-foundation\s+- staging-platform/);
 assert.match(terraformWorkflow, /plans\/cotsel-staging-platform\/\$ROOT\/\$GITHUB_RUN_ID\.tfplan/);

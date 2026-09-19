@@ -40,7 +40,7 @@ locals {
     logConfiguration = {
       logDriver = "awslogs"
       options = {
-        awslogs-group         = aws_cloudwatch_log_group.service["relayer"].name
+        awslogs-group         = data.terraform_remote_state.foundation.outputs.runtime_prerequisite_log_groups["relayer"].name
         awslogs-region        = var.region
         awslogs-stream-prefix = "relayer"
       }
@@ -65,56 +65,6 @@ check "relayer_activation_requires_reviewed_kms_address" {
     condition     = var.relayer_desired_count == 0 || local.relayer_kms_enabled
     error_message = "Relayer activation requires the independently reviewed KMS address."
   }
-}
-
-resource "aws_iam_role" "relayer_execution" {
-  name                 = "${local.name_prefix}-relayer-execution"
-  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-  permissions_boundary = var.service_role_permissions_boundary_arn
-  tags                 = { Environment = var.environment, Service = "relayer" }
-}
-
-data "aws_iam_policy_document" "relayer_execution" {
-  statement {
-    sid       = "GetRuntimeImageAuthorization"
-    effect    = "Allow"
-    actions   = ["ecr:GetAuthorizationToken"]
-    resources = ["*"]
-  }
-  statement {
-    sid    = "PullRelayerRuntimeImage"
-    effect = "Allow"
-    actions = [
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:BatchGetImage",
-      "ecr:GetDownloadUrlForLayer",
-    ]
-    resources = [data.terraform_remote_state.foundation.outputs.ecr_repository_arns["relayer"]]
-  }
-  statement {
-    sid       = "WriteRelayerLogs"
-    effect    = "Allow"
-    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-    resources = ["${aws_cloudwatch_log_group.service["relayer"].arn}:*"]
-  }
-  statement {
-    sid       = "ReadRelayerStartupSecret"
-    effect    = "Allow"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.platform["gateway-managed-signer"].arn]
-  }
-  statement {
-    sid       = "DecryptRelayerStartupSecret"
-    effect    = "Allow"
-    actions   = ["kms:Decrypt"]
-    resources = [aws_kms_key.platform.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "relayer_execution" {
-  name   = "${local.name_prefix}-relayer-execution"
-  role   = aws_iam_role.relayer_execution.id
-  policy = data.aws_iam_policy_document.relayer_execution.json
 }
 
 data "aws_iam_policy_document" "relayer_kms_signing" {
@@ -160,7 +110,7 @@ resource "aws_ecs_task_definition" "relayer" {
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
-  execution_role_arn       = aws_iam_role.relayer_execution.arn
+  execution_role_arn       = data.terraform_remote_state.foundation.outputs.runtime_execution_role_arns["relayer"]
   task_role_arn            = local.managed_signer_task_role_arns["relayer"]
   skip_destroy             = true
 
@@ -205,8 +155,8 @@ resource "aws_ecs_service" "relayer" {
   }
 
   service_registries {
-    registry_arn = aws_service_discovery_service.runtime["relayer"].arn
+    registry_arn = data.terraform_remote_state.foundation.outputs.runtime_service_discovery_arns["relayer"]
   }
 
-  depends_on = [aws_iam_role_policy.relayer_execution, aws_iam_role_policy.relayer_kms_signing]
+  depends_on = [aws_iam_role_policy.relayer_kms_signing]
 }

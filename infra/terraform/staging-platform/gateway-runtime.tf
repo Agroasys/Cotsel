@@ -86,7 +86,7 @@ resource "aws_ecs_service" "gateway" {
   }
 
   service_registries {
-    registry_arn = aws_service_discovery_service.runtime["gateway"].arn
+    registry_arn = data.terraform_remote_state.foundation.outputs.runtime_service_discovery_arns["gateway"]
   }
 
   depends_on = [

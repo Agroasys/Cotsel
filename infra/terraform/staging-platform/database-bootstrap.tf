@@ -5,7 +5,7 @@ locals {
       migration_role   = "cotsel_indexer_migrator"
       migration_secret = aws_secretsmanager_secret.platform["database/indexer/migration"].arn
       reader_role      = "cotsel_indexer_reader"
-      reader_secret    = aws_secretsmanager_secret.platform["database/indexer/reader"].arn
+      reader_secret    = local.foundation_secret_arns["database/indexer/reader"]
       runtime_role     = "cotsel_indexer_app"
       runtime_secret   = aws_secretsmanager_secret.platform["database/indexer/runtime"].arn
     }
@@ -289,7 +289,7 @@ data "aws_iam_policy_document" "database_bootstrap_execution" {
       [for service in values(local.database_bootstrap_services) : service.runtime_secret],
       [local.database_bootstrap_services.indexer.reader_secret],
       [aws_secretsmanager_secret.platform["database/reconciliation/migration"].arn],
-      [aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn],
+      [local.foundation_secret_arns["database/reconciliation/reader"]],
     )
   }
 
@@ -347,8 +347,8 @@ resource "aws_ecs_task_definition" "database_bootstrap" {
         { name = "INDEXER_READER_USERNAME", valueFrom = "${local.database_bootstrap_services.indexer.reader_secret}:username::" },
         { name = "RECONCILIATION_MIGRATION_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/migration"].arn}:password::" },
         { name = "RECONCILIATION_MIGRATION_USERNAME", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/migration"].arn}:username::" },
-        { name = "RECONCILIATION_READER_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:password::" },
-        { name = "RECONCILIATION_READER_USERNAME", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:username::" },
+        { name = "RECONCILIATION_READER_PASSWORD", valueFrom = "${local.foundation_secret_arns["database/reconciliation/reader"]}:password::" },
+        { name = "RECONCILIATION_READER_USERNAME", valueFrom = "${local.foundation_secret_arns["database/reconciliation/reader"]}:username::" },
         { name = "RICARDIAN_MIGRATION_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:password::" },
         { name = "RICARDIAN_MIGRATION_USERNAME", valueFrom = "${local.database_bootstrap_services.ricardian.migration_secret}:username::" },
         { name = "RICARDIAN_RUNTIME_PASSWORD", valueFrom = "${local.database_bootstrap_services.ricardian.runtime_secret}:password::" },

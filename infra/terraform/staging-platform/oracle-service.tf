@@ -13,73 +13,6 @@ check "oracle_activation_requires_reviewed_kms_address" {
   }
 }
 
-resource "aws_iam_role" "oracle_execution" {
-  name                 = "${local.name_prefix}-oracle-execution"
-  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-  permissions_boundary = var.service_role_permissions_boundary_arn
-
-  tags = {
-    Environment = var.environment
-    Service     = "oracle"
-  }
-}
-
-data "aws_iam_policy_document" "oracle_execution" {
-  statement {
-    sid       = "GetRuntimeImageAuthorization"
-    effect    = "Allow"
-    actions   = ["ecr:GetAuthorizationToken"]
-    resources = ["*"]
-  }
-
-  statement {
-    sid    = "PullOracleRuntimeImage"
-    effect = "Allow"
-    actions = [
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:BatchGetImage",
-      "ecr:GetDownloadUrlForLayer",
-    ]
-    resources = [aws_ecr_repository.service["oracle"].arn]
-  }
-
-  statement {
-    sid    = "WriteOracleLogs"
-    effect = "Allow"
-    actions = [
-      "logs:CreateLogStream",
-      "logs:PutLogEvents",
-    ]
-    resources = ["${aws_cloudwatch_log_group.service["oracle"].arn}:*"]
-  }
-
-  statement {
-    sid     = "ReadOracleStartupSecrets"
-    effect  = "Allow"
-    actions = ["secretsmanager:GetSecretValue"]
-    resources = concat([
-      aws_secretsmanager_secret.platform["database/oracle/runtime"].arn,
-      aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn,
-      aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn,
-      aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn,
-      aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn,
-    ])
-  }
-
-  statement {
-    sid       = "DecryptOracleStartupSecrets"
-    effect    = "Allow"
-    actions   = ["kms:Decrypt"]
-    resources = [aws_kms_key.platform.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "oracle_execution" {
-  name   = "${local.name_prefix}-oracle-execution"
-  role   = aws_iam_role.oracle_execution.id
-  policy = data.aws_iam_policy_document.oracle_execution.json
-}
-
 data "aws_iam_policy_document" "oracle_kms_signing" {
   count = local.oracle_kms_enabled ? 1 : 0
 
@@ -124,7 +57,7 @@ resource "aws_ecs_task_definition" "oracle" {
   network_mode             = "awsvpc"
   cpu                      = 512
   memory                   = 1024
-  execution_role_arn       = aws_iam_role.oracle_execution.arn
+  execution_role_arn       = data.terraform_remote_state.foundation.outputs.runtime_execution_role_arns["oracle"]
   task_role_arn            = local.managed_signer_task_role_arns["oracle"]
   skip_destroy             = true
 
@@ -179,12 +112,11 @@ resource "aws_ecs_service" "oracle" {
   }
 
   service_registries {
-    registry_arn = aws_service_discovery_service.runtime["oracle"].arn
+    registry_arn = data.terraform_remote_state.foundation.outputs.runtime_service_discovery_arns["oracle"]
   }
 
   depends_on = [
     aws_ecs_service.indexer,
-    aws_iam_role_policy.oracle_execution,
     aws_iam_role_policy.oracle_kms_signing,
   ]
 }

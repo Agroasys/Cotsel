@@ -45,8 +45,8 @@ locals {
     { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/oracle/runtime"].arn}:password::" },
     { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/oracle/runtime"].arn}:username::" },
     { name = "HMAC_SECRET", valueFrom = "${aws_secretsmanager_secret.platform["gateway-to-oracle-auth"].arn}:secret::" },
-    { name = "RECONCILIATION_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:password::" },
-    { name = "RECONCILIATION_DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/reconciliation/reader"].arn}:username::" },
+    { name = "RECONCILIATION_DB_PASSWORD", valueFrom = "${local.foundation_secret_arns["database/reconciliation/reader"]}:password::" },
+    { name = "RECONCILIATION_DB_USER", valueFrom = "${local.foundation_secret_arns["database/reconciliation/reader"]}:username::" },
     { name = "RPC_FALLBACK_URLS", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn },
     { name = "RPC_URL", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn },
   ])

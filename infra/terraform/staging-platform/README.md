@@ -63,7 +63,9 @@ only until consumer analysis and evidence preservation are complete. Then
 revoke its authority and schedule deletion through the approved process.
 
 The staging-foundation root creates two non-exportable `ECC_SECG_P256K1` KMS
-keys and dedicated task roles. They cover only the Oracle and gasless relayer
+keys and the absent zero-runtime prerequisites for the separated services. The
+runtime root consumes those reviewed outputs; it does not duplicate their
+Terraform ownership. The KMS keys cover only the Oracle and gasless relayer
 identities because those roles have approved automated signing needs. Terraform
 does not create KMS keys for the three human administrators, treasury, or
 deployer.
