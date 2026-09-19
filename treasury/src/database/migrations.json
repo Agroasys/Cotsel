@@ -29,6 +29,13 @@
       "file": "004_canonical_chain_evidence.sql",
       "sha256": "a03ae987f0da4d5b014409a6d1d8faf73384718fb8a5618d29585c0eeed70ca4",
       "schema_sha256": "351eb9847e635d8ae2409558865901f359fd7899d5734eccacbb20dc3906340e"
+    },
+    {
+      "version": "202609190005",
+      "name": "ingestion_freshness_worker",
+      "file": "005_ingestion_freshness_worker.sql",
+      "sha256": "45627935877818ab27bb17419fcacb509f9705851831d1f3317159e81dd201ec",
+      "schema_sha256": "3cdb1c7d95e50e776e526b167d9a7b79722bed6a9c6b1b59f5a6600d517fad55"
     }
   ]
 }

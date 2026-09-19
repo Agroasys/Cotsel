@@ -32,8 +32,10 @@ function resolvePlatformFeeSplit(event: {
   return splitPlatformFeeComponents(BigInt(event.paidPlatformFees));
 }
 
-const TRADE_EVENT_CURSOR = 'trade_events';
-const CLAIM_EVENT_CURSOR = 'claim_events';
+export const TRADE_EVENT_CURSOR = 'trade_events';
+export const CLAIM_EVENT_CURSOR = 'claim_events';
+/** Both cursors advance in the same run, so freshness is judged across both. */
+export const INGESTION_CURSORS = [TRADE_EVENT_CURSOR, CLAIM_EVENT_CURSOR];
 
 export interface TreasuryIngestionResult {
   fetched: number;

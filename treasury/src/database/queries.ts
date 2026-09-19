@@ -28,6 +28,11 @@ export {
 export {
   consumeServiceAuthNonce,
   getIngestionWatermark,
+  listIngestionCursorStates,
+  markIngestionAttemptStarted,
+  markIngestionRunCompleted,
+  markIngestionRunUnsuccessful,
+  recordIngestionRun,
   setIngestionWatermark,
 } from './queries/ingestion';
 export {

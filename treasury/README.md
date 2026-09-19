@@ -160,6 +160,11 @@ Operational close procedure:
 
 - [`../docs/runbooks/treasury-revenue-close.md`](../docs/runbooks/treasury-revenue-close.md)
 
+Chain-evidence ingestion is a scheduled single-owner worker, and readiness,
+export and close fail closed once its freshness watermark lapses:
+
+- [`../docs/runbooks/treasury-ingestion-freshness.md`](../docs/runbooks/treasury-ingestion-freshness.md)
+
 Authoritative sweep execution evidence is matched from indexed `TreasuryClaimed` events. A batch
 does not become `EXECUTED` from operator-supplied amount or destination fields alone.
 

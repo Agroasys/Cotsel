@@ -360,8 +360,8 @@
     },
     {
       "component": "treasury",
-      "headIdentity": "202609190004_canonical_chain_evidence",
-      "checksumSha256": "c82a20f4070981975ca14bd0b3ef51d6d8ef9c1e7430a75300bf3651c4f2af13"
+      "headIdentity": "202609190005_ingestion_freshness_worker",
+      "checksumSha256": "7871721b13011bf5e65971c44decf90024cd18feff31f622f9e090323f7e262a"
     }
   ],
   "chain": {

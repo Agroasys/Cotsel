@@ -37,7 +37,7 @@ import type {
   UpsertTreasuryPartnerHandoffBody,
 } from './requestBodies';
 import { toCsv } from './ledgerCsv';
-import { TreasuryIngestionService } from '../core/ingestion';
+import { TreasuryIngestionWorker } from '../core/ingestionWorker';
 import { ReconciliationGateService } from '../core/reconciliationGate';
 import { SweepExecutionMatcherService } from '../core/sweepExecutionMatcher';
 import {
@@ -345,22 +345,46 @@ function assertTreasuryPartnerHandoffStatus(
 }
 
 export class TreasuryController {
-  private readonly ingestion = new TreasuryIngestionService();
+  private readonly ingestion = new TreasuryIngestionWorker();
   private readonly eligibility = new TreasuryEligibilityService();
   private readonly reconciliationGate = new ReconciliationGateService();
   private readonly sweepExecutionMatcher = new SweepExecutionMatcherService();
 
   async ingest(_req: Request, res: Response): Promise<void> {
     try {
-      const result = await this.ingestion.ingestOnce();
-      if (result.blockedReason) {
+      const run = await this.ingestion.runOnce('API');
+
+      // Declining the lease is not an error and not coverage. The scheduled
+      // owner is mid-run, so the caller should retry rather than treat this
+      // request as the run that proved the window.
+      if (run.outcome === 'NOT_OWNER') {
+        res
+          .status(409)
+          .json(
+            failure(
+              'IngestionLeaseHeld',
+              'Another treasury replica holds the ingestion lease; retry after the current run completes',
+            ),
+          );
+        return;
+      }
+
+      if (run.outcome !== 'COMPLETED') {
         // A refusal is not a successful empty run. An operator reading 200 here
         // would record "ingestion completed, nothing new" for a run that never
         // reached the chain, which is the false-green this control removes.
-        res.status(503).json(failure('SettlementUnavailable', result.blockedReason));
+        res
+          .status(503)
+          .json(
+            failure(
+              'SettlementUnavailable',
+              run.result?.blockedReason ?? run.error ?? 'Ingestion did not complete',
+            ),
+          );
         return;
       }
-      res.status(200).json(success(result));
+
+      res.status(200).json(success({ runKey: run.runKey, ...run.result }));
     } catch (error: unknown) {
       res
         .status(500)

@@ -12,6 +12,10 @@ import {
   type ChainCanonicalityVerdict,
   type SettlementChainReader,
 } from './chainCanonicality';
+import {
+  TreasuryIngestionFreshnessService,
+  type IngestionFreshnessAssessment,
+} from './ingestionFreshness';
 import { canTransition } from './payout';
 import { createSettlementProvider } from './settlementProvider';
 import {
@@ -19,6 +23,7 @@ import {
   markLedgerEntryCanonical,
   recordLedgerEntryOrphaned,
 } from '../database/queries';
+import { recordIngestionFreshness } from '../metrics/counters';
 import { Logger } from '../utils/logger';
 
 const EXPORTABLE_STATES: ReadonlySet<PayoutState> = new Set([
@@ -35,6 +40,10 @@ interface SettlementHeadProvider {
 
 interface ReconciliationGateReader {
   assessTrades(tradeIds: string[]): Promise<Map<string, TradeReconciliationGate>>;
+}
+
+interface IngestionFreshnessReader {
+  assess(options?: { stableBlockNumber?: number | null }): Promise<IngestionFreshnessAssessment>;
 }
 
 interface BankConfirmationReader {
@@ -63,8 +72,16 @@ function buildBlockedReasons(input: {
   reconciliationBlockedReasons: string[];
   bankConfirmationState: 'PENDING' | 'CONFIRMED' | 'REJECTED' | null;
   canonicalityBlockedReason: string | null;
+  ingestionBlockedReasons: string[];
 }): string[] {
   const reasons: string[] = [];
+
+  // WP-4 B-09 / FAIL-10. This is a property of the whole assessment, not of the
+  // entry: stale ingestion does not make any one entry wrong, it makes the
+  // absence of a *later* entry meaningless. Every entry therefore carries the
+  // reason, so a blocked export names the outage rather than looking like a set
+  // of individually unlucky rows.
+  reasons.push(...input.ingestionBlockedReasons);
 
   if (input.confirmationFailureReason) {
     reasons.push(input.confirmationFailureReason);
@@ -108,6 +125,7 @@ export class TreasuryEligibilityService {
   private readonly bankConfirmationReader: BankConfirmationReader;
   private readonly canonicalityVerifier: ChainCanonicalityVerifier;
   private readonly canonicalityWriter: CanonicalityWriter;
+  private readonly ingestionFreshness: IngestionFreshnessReader;
 
   constructor(deps?: {
     provider?: SettlementHeadProvider | null;
@@ -115,6 +133,7 @@ export class TreasuryEligibilityService {
     bankConfirmationReader?: BankConfirmationReader;
     canonicalityVerifier?: ChainCanonicalityVerifier;
     canonicalityWriter?: CanonicalityWriter;
+    ingestionFreshness?: IngestionFreshnessReader;
   }) {
     this.provider = deps?.provider !== undefined ? deps.provider : createSettlementProvider();
     this.reconciliationGate = deps?.reconciliationGate ?? new ReconciliationGateService();
@@ -130,6 +149,7 @@ export class TreasuryEligibilityService {
       markCanonical: markLedgerEntryCanonical,
       recordOrphaned: recordLedgerEntryOrphaned,
     };
+    this.ingestionFreshness = deps?.ingestionFreshness ?? new TreasuryIngestionFreshnessService();
   }
 
   /**
@@ -328,6 +348,30 @@ export class TreasuryEligibilityService {
     const { heads, failureReason } = await this.readHeads();
     const stableBlockNumber = heads?.finalizedBlockNumber ?? null;
 
+    // The finalized head is already in hand here, so the block-lag half of the
+    // freshness check costs nothing extra. Readiness cannot do this -- it must
+    // not depend on the settlement RPC -- which is why the assessment takes the
+    // head as an option rather than reading it itself.
+    const ingestion = await this.ingestionFreshness.assess({ stableBlockNumber });
+    recordIngestionFreshness({
+      status: ingestion.status,
+      ageSeconds: ingestion.ageSeconds,
+      maxAgeSeconds: ingestion.maxAgeSeconds,
+      lagBlocks: ingestion.lagBlocks,
+      maxLagBlocks: ingestion.maxLagBlocks,
+      consecutiveFailureCount: ingestion.consecutiveFailureCount,
+    });
+
+    if (ingestion.blockedReasons.length > 0) {
+      Logger.error('Treasury eligibility blocked by stale chain-evidence ingestion', {
+        status: ingestion.status,
+        ageSeconds: ingestion.ageSeconds,
+        lagBlocks: ingestion.lagBlocks,
+        entryCount: entries.length,
+        blockedReasons: ingestion.blockedReasons,
+      });
+    }
+
     const reconciliationByTradeId = await this.reconciliationGate.assessTrades(
       entries.map((entry) => entry.trade_id),
     );
@@ -359,6 +403,7 @@ export class TreasuryEligibilityService {
         reconciliationBlockedReasons: reconciliationGate.blockedReasons,
         bankConfirmationState: latestBankConfirmation?.bank_state ?? null,
         canonicalityBlockedReason: canonicality.blockedReason,
+        ingestionBlockedReasons: ingestion.blockedReasons,
       });
       const eligibleForPayout = blockedReasons.length === 0;
       const eligibleForExport = eligibleForPayout && isExportableState(entry.latest_state);

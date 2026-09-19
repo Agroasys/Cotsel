@@ -12,6 +12,7 @@ import { TreasuryEligibilityService } from '../src/core/exportEligibility';
 import { ReconciliationGateService } from '../src/core/reconciliationGate';
 import type { LedgerEntryWithState } from '../src/types';
 import { alwaysCanonicalVerifier, recordingCanonicalityWriter } from './helpers/chainCanonicality';
+import { freshIngestion } from './helpers/ingestionFreshness';
 
 jest.mock('../src/database/queries', () => ({
   ...jest.requireActual('../src/database/queries'),
@@ -107,6 +108,7 @@ describe('Ledger Abstraction Proof', () => {
     });
     const tradeGate = await gate.assessTrades(['trade-1']);
     const eligibility = new TreasuryEligibilityService({
+      ingestionFreshness: freshIngestion(),
       provider: {
         getBlock: async () => ({ number: 150n }),
       },
@@ -158,6 +160,7 @@ describe('Ledger Abstraction Proof', () => {
     });
 
     const eligibility = new TreasuryEligibilityService({
+      ingestionFreshness: freshIngestion(),
       provider: {
         getBlock: async () => ({ number: 150n }),
       },
@@ -223,6 +226,7 @@ describe('Ledger Abstraction Proof', () => {
     const tradeGate = await gate.assessTrades(['trade-404']);
     const summary = await gate.summarizeTrades(['trade-404']);
     const eligibility = new TreasuryEligibilityService({
+      ingestionFreshness: freshIngestion(),
       provider: {
         getBlock: async () => ({ number: 150n }),
       },

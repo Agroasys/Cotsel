@@ -21,3 +21,60 @@ export function incrementReplayReject(): void {
     value: counters.replayRejectsTotal,
   });
 }
+
+/**
+ * WP-4 B-09 / FAIL-10. Ingestion emits a signal on every run, including the
+ * runs that did nothing. A metric that only appears on success cannot
+ * distinguish a healthy quiet period from a worker that stopped emitting.
+ */
+export function recordIngestionRunOutcome(
+  outcome: 'COMPLETED' | 'BLOCKED' | 'FAILED' | 'NOT_OWNER',
+  detail: Record<string, unknown>,
+): void {
+  const metric = {
+    metric: 'treasury_ingestion_runs_total',
+    outcome,
+    ...detail,
+  };
+
+  if (outcome === 'FAILED' || outcome === 'BLOCKED') {
+    Logger.error('Metric increment', metric);
+    return;
+  }
+
+  Logger.info('Metric increment', metric);
+}
+
+/**
+ * The lag alarm fires before the freshness threshold does. Staleness blocks
+ * export and close, which is a stop; lag is the warning that arrives while an
+ * operator can still repair the worker without one.
+ */
+export function recordIngestionFreshness(sample: {
+  status: string;
+  ageSeconds: number | null;
+  maxAgeSeconds: number;
+  lagBlocks: number | null;
+  maxLagBlocks: number;
+  consecutiveFailureCount: number;
+}): void {
+  const metric = {
+    metric: 'treasury_ingestion_freshness',
+    ...sample,
+  };
+
+  const lagExceeded = sample.lagBlocks !== null && sample.lagBlocks > sample.maxLagBlocks;
+  const ageExceeded = sample.ageSeconds !== null && sample.ageSeconds > sample.maxAgeSeconds;
+
+  if (sample.status !== 'FRESH' || lagExceeded || ageExceeded) {
+    Logger.error('Metric increment', metric);
+    return;
+  }
+
+  if (sample.consecutiveFailureCount > 0) {
+    Logger.warn('Metric increment', metric);
+    return;
+  }
+
+  Logger.info('Metric increment', metric);
+}
