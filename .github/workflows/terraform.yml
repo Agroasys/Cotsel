@@ -134,6 +134,7 @@ jobs:
       - name: Test destructive-change policy
         run: |
           node infra/terraform/scripts/destructive-change-selftest.mjs
+          node infra/terraform/scripts/fargate-task-size-selftest.mjs
           node infra/terraform/scripts/oracle-kms-isolation-selftest.mjs
           node infra/terraform/scripts/staging-foundation-selftest.mjs
 
