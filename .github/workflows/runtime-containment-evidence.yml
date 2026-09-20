@@ -1,0 +1,206 @@
+name: Runtime Containment Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Exact reviewed main commit that owns this evidence workflow.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_ACCOUNT_ID: '655177116834'
+  AWS_REGION: ap-south-1
+  CLUSTER: cotsel-staging
+  SERVICE: cotsel-staging-gateway
+  CONTAINMENT_BOUNDARY: '2026-09-18T13:15:01Z'
+  PLAN_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-terraform-plan-dispatch
+
+jobs:
+  collect:
+    name: evidence/recheck-runtime-containment
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the requested main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Verify the immutable source selection
+        env:
+          EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || {
+            echo "Runtime evidence is restricted to main." >&2
+            exit 1
+          }
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT_SHA" || {
+            echo "The dispatch commit does not match current main." >&2
+            exit 1
+          }
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Assume the scoped read-only evidence role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ env.PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Collect current ECS containment state
+        run: |
+          set -euo pipefail
+          mkdir -p evidence-input evidence-output
+
+          aws sts get-caller-identity > evidence-input/identity.json
+          test "$(jq -r .Account evidence-input/identity.json)" = "$AWS_ACCOUNT_ID"
+
+          aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            > evidence-input/services.json
+
+          TASK_DEFINITION=$(jq -er '.services[0].taskDefinition' evidence-input/services.json)
+          aws ecs describe-task-definition \
+            --region "$AWS_REGION" \
+            --task-definition "$TASK_DEFINITION" \
+            > evidence-input/task-definition.json
+
+          for status in RUNNING PENDING; do
+            output="evidence-input/$(printf '%s' "$status" | tr '[:upper:]' '[:lower:]')-tasks.json"
+            aws ecs list-tasks \
+              --region "$AWS_REGION" \
+              --cluster "$CLUSTER" \
+              --service-name "$SERVICE" \
+              --desired-status "$status" \
+              > "$output"
+          done
+
+          mapfile -t stopped_tasks < <(
+            aws ecs list-tasks \
+              --region "$AWS_REGION" \
+              --cluster "$CLUSTER" \
+              --family cotsel-staging-gateway \
+              --desired-status STOPPED \
+              --max-items 100 \
+              --query 'taskArns' \
+              --output text | tr '\t' '\n' | sed '/^None$/d;/^$/d'
+          )
+          if (( ${#stopped_tasks[@]} > 0 )); then
+            aws ecs describe-tasks \
+              --region "$AWS_REGION" \
+              --cluster "$CLUSTER" \
+              --tasks "${stopped_tasks[@]}" \
+              > evidence-input/stopped-tasks.json
+          else
+            printf '{"tasks":[],"failures":[]}\n' > evidence-input/stopped-tasks.json
+          fi
+
+      - name: Collect redaction-safe log inputs
+        run: |
+          set -euo pipefail
+          LOG_START_MS=$(node -e \
+            'process.stdout.write(String(Date.parse(process.env.CONTAINMENT_BOUNDARY) - 30 * 60 * 1000))')
+          LOG_END_MS=$(node -e \
+            'process.stdout.write(String(Date.parse(process.env.CONTAINMENT_BOUNDARY)))')
+          mapfile -t log_groups < <(
+            jq -r \
+              '.taskDefinition.containerDefinitions[].logConfiguration.options["awslogs-group"] // empty' \
+              evidence-input/task-definition.json | sort -u
+          )
+
+          index=0
+          for log_group in "${log_groups[@]}"; do
+            aws logs filter-log-events \
+              --region "$AWS_REGION" \
+              --log-group-name "$log_group" \
+              --start-time "$LOG_START_MS" \
+              --end-time "$LOG_END_MS" \
+              --limit 100 \
+              --no-interleaved \
+              | jq --arg logGroupName "$log_group" \
+                '{logGroupName: $logGroupName, events: (.events // [])}' \
+                > "evidence-input/log-group-${index}.json"
+            index=$((index + 1))
+          done
+
+          if compgen -G 'evidence-input/log-group-*.json' > /dev/null; then
+            jq -s '.' evidence-input/log-group-*.json > evidence-input/log-events.json
+          else
+            printf '[]\n' > evidence-input/log-events.json
+          fi
+
+      - name: Collect Oracle secret lookup controls
+        run: |
+          set -euo pipefail
+          ORACLE_SECRET_REFERENCE=$(jq -er '
+            .taskDefinition.containerDefinitions[].secrets[]?
+            | select(.name == "ORACLE_PRIVATE_KEY")
+            | .valueFrom
+          ' evidence-input/task-definition.json)
+          ORACLE_SECRET_ARN=$(printf '%s' "$ORACLE_SECRET_REFERENCE" | cut -d: -f1-7)
+          case "$ORACLE_SECRET_ARN" in
+            arn:aws:secretsmanager:ap-south-1:655177116834:secret:/agroasys/staging/base-sepolia/wallet-oracle-*) ;;
+            *) echo "Unexpected Oracle secret identity." >&2; exit 1 ;;
+          esac
+
+          aws cloudtrail lookup-events \
+            --region "$AWS_REGION" \
+            --lookup-attributes AttributeKey=ResourceName,AttributeValue="$ORACLE_SECRET_ARN" \
+            --start-time '2026-09-18T13:00:00Z' \
+            --end-time "$CONTAINMENT_BOUNDARY" \
+            --max-items 1000 \
+            > evidence-input/pre-containment-secret-events.json
+
+          aws cloudtrail lookup-events \
+            --region "$AWS_REGION" \
+            --lookup-attributes AttributeKey=ResourceName,AttributeValue="$ORACLE_SECRET_ARN" \
+            --start-time "$CONTAINMENT_BOUNDARY" \
+            --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --max-items 1000 \
+            > evidence-input/secret-events.json
+
+      - name: Collect post-containment task-launch events
+        run: |
+          set -euo pipefail
+          for event_name in RunTask StartTask; do
+            aws cloudtrail lookup-events \
+              --region "$AWS_REGION" \
+              --lookup-attributes AttributeKey=EventName,AttributeValue="$event_name" \
+              --start-time "$CONTAINMENT_BOUNDARY" \
+              --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --max-items 1000 \
+              > "evidence-input/task-launch-${event_name}.json"
+          done
+          jq -s '{Events: [.[].Events[]]}' \
+            evidence-input/task-launch-RunTask.json \
+            evidence-input/task-launch-StartTask.json \
+            > evidence-input/task-launch-events.json
+
+      - name: Build and verify sanitized evidence
+        run: |
+          set -euo pipefail
+          node scripts/runtime-containment-evidence.mjs \
+            evidence-input evidence-output/runtime-containment-evidence.json
+          jq -e '.assertions | to_entries | all(.value == true)' \
+            evidence-output/runtime-containment-evidence.json > /dev/null
+          if rg -n 'CloudTrailEvent|sourceIPAddress|requestParameters|RPC_URL|authorization' \
+            evidence-output/runtime-containment-evidence.json; then
+            echo "Evidence contains a prohibited raw field." >&2
+            exit 1
+          fi
+          sha256sum evidence-output/runtime-containment-evidence.json \
+            > evidence-output/runtime-containment-evidence.json.sha256
+
+      - name: Retain provisional containment evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: runtime-containment-evidence-${{ github.sha }}-${{ github.run_id }}
+          path: evidence-output/
+          if-no-files-found: error
+          retention-days: 90

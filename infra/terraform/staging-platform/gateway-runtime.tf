@@ -2,17 +2,11 @@ locals {
   gateway_runtime_service_names = toset([
     "auth",
     "gateway",
-    "indexer-graphql",
-    "indexer-pipeline",
-    "reconciliation",
   ])
 
   gateway_runtime_containers = [
     local.gateway_container,
     local.auth_container,
-    local.indexer_pipeline_container,
-    local.indexer_graphql_container,
-    local.reconciliation_container,
   ]
 
   gateway_reviewed_config_sha256 = sha256(jsonencode([
@@ -29,9 +23,10 @@ resource "aws_ecs_task_definition" "gateway" {
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 2048
-  memory                   = 4096
+  memory                   = 2048
   execution_role_arn       = aws_iam_role.gateway_execution.arn
   task_role_arn            = aws_iam_role.gateway_task.arn
+  skip_destroy             = true
 
   runtime_platform {
     cpu_architecture        = "X86_64"
@@ -58,15 +53,14 @@ resource "aws_ecs_task_definition" "gateway" {
 }
 
 resource "aws_ecs_service" "gateway" {
-  name            = "${local.name_prefix}-gateway"
-  cluster         = aws_ecs_cluster.staging.id
-  task_definition = aws_ecs_task_definition.gateway.arn
-  desired_count   = var.gateway_desired_count
-  launch_type     = "FARGATE"
-  # Keep the authenticated settlement boundary available while ECS replaces a
-  # task. A single desired task with a 0% minimum allows an avoidable outage.
-  # Keep the bundled gateway rollout serialized. The task also runs the
-  # indexer pipeline, so overlapping revisions can process the same stream.
+  name                   = "${local.name_prefix}-gateway"
+  cluster                = aws_ecs_cluster.staging.id
+  task_definition        = aws_ecs_task_definition.gateway.arn
+  desired_count          = var.gateway_desired_count
+  launch_type            = "FARGATE"
+  enable_execute_command = false
+  # Keep replacement serialized during the staged cutover. The gateway can be
+  # scaled beyond one only after distributed replay and nonce evidence passes.
   deployment_maximum_percent         = 100
   deployment_minimum_healthy_percent = 0
   health_check_grace_period_seconds  = 120
@@ -92,7 +86,7 @@ resource "aws_ecs_service" "gateway" {
   }
 
   service_registries {
-    registry_arn = aws_service_discovery_service.runtime["gateway"].arn
+    registry_arn = data.terraform_remote_state.foundation.outputs.runtime_service_discovery_arns["gateway"]
   }
 
   depends_on = [

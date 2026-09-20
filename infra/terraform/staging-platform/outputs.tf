@@ -10,7 +10,10 @@ output "ecr_repository_urls" {
 
 output "secret_arns" {
   description = "Secret identities only. Values are never managed by Terraform."
-  value       = { for name, secret in aws_secretsmanager_secret.platform : name => secret.arn }
+  value = merge(
+    { for name, secret in aws_secretsmanager_secret.platform : name => secret.arn },
+    local.foundation_secret_arns,
+  )
 }
 
 output "gateway_alb" {
@@ -41,7 +44,7 @@ output "gateway_edge" {
 }
 
 output "gateway_runtime" {
-  description = "Bundled Cotsel ECS runtime metadata. Contains no secret values."
+  description = "Gateway and auth ECS runtime metadata. Contains no secret values."
   value = {
     execution_role_arn     = aws_iam_role.gateway_execution.arn
     image_digests          = { for service, image in data.aws_ecr_image.release : service => image.image_digest }
@@ -52,6 +55,32 @@ output "gateway_runtime" {
     task_family            = aws_ecs_task_definition.gateway.family
     task_revision          = aws_ecs_task_definition.gateway.revision
     task_role_arn          = aws_iam_role.gateway_task.arn
+  }
+}
+
+output "indexer_runtime" {
+  description = "Isolated indexer pipeline and GraphQL ECS runtime metadata. Contains no secret values."
+  value = {
+    execution_role_arn     = data.terraform_remote_state.foundation.outputs.runtime_execution_role_arns["indexer"]
+    reviewed_config_sha256 = local.indexer_reviewed_config_sha256
+    service_arn            = aws_ecs_service.indexer.id
+    service_name           = aws_ecs_service.indexer.name
+    task_family            = aws_ecs_task_definition.indexer.family
+    task_revision          = aws_ecs_task_definition.indexer.revision
+    task_role_arn          = data.terraform_remote_state.foundation.outputs.runtime_task_role_arns["indexer"]
+  }
+}
+
+output "reconciliation_runtime" {
+  description = "Isolated reconciliation ECS runtime metadata. Contains no secret values."
+  value = {
+    execution_role_arn     = data.terraform_remote_state.foundation.outputs.runtime_execution_role_arns["reconciliation"]
+    reviewed_config_sha256 = local.reconciliation_reviewed_config_sha256
+    service_arn            = aws_ecs_service.reconciliation.id
+    service_name           = aws_ecs_service.reconciliation.name
+    task_family            = aws_ecs_task_definition.reconciliation.family
+    task_revision          = aws_ecs_task_definition.reconciliation.revision
+    task_role_arn          = data.terraform_remote_state.foundation.outputs.runtime_task_role_arns["reconciliation"]
   }
 }
 

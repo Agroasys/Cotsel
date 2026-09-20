@@ -77,7 +77,6 @@ on:
         description: Required when owner_break_glass_apply is true.
         required: false
         type: string
-
 permissions:
   contents: read
 
@@ -87,8 +86,16 @@ env:
   APPLY_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-terraform-apply
   PLAN_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-terraform-plan-dispatch
   ROOT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root || 'staging-platform' }}
+  TF_VAR_gateway_desired_count: ${{ vars.COTSEL_STAGING_GATEWAY_DESIRED_COUNT || '0' }}
+  TF_VAR_indexer_desired_count: ${{ vars.COTSEL_STAGING_INDEXER_DESIRED_COUNT || '0' }}
   STATE_BUCKET: agroasys-tfstate-655177116834
   TF_VAR_oracle_kms_expected_address: ${{ vars.COTSEL_STAGING_ORACLE_KMS_EXPECTED_ADDRESS }}
+  TF_VAR_oracle_desired_count: ${{ vars.COTSEL_STAGING_ORACLE_DESIRED_COUNT || '0' }}
+  TF_VAR_reconciliation_desired_count: ${{ vars.COTSEL_STAGING_RECONCILIATION_DESIRED_COUNT || '0' }}
+  TF_VAR_relayer_kms_expected_address: ${{ vars.COTSEL_STAGING_RELAYER_KMS_EXPECTED_ADDRESS }}
+  TF_VAR_relayer_desired_count: ${{ vars.COTSEL_STAGING_RELAYER_DESIRED_COUNT || '0' }}
+  TF_VAR_ricardian_desired_count: ${{ vars.COTSEL_STAGING_RICARDIAN_DESIRED_COUNT || '0' }}
+  TF_VAR_treasury_desired_count: ${{ vars.COTSEL_STAGING_TREASURY_DESIRED_COUNT || '0' }}
   TF_VERSION: 1.15.8
   OWNER_BREAK_GLASS_ACTORS: Astton
 

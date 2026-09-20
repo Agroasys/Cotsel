@@ -30,6 +30,29 @@ variable "environment" {
   }
 }
 
+variable "state_bucket" {
+  description = "Shared Agroasys Terraform state bucket used to read the established staging network boundary."
+  type        = string
+  default     = "agroasys-tfstate-655177116834"
+}
+
+variable "state_bucket_region" {
+  description = "Region of the shared Agroasys Terraform state bucket."
+  type        = string
+  default     = "eu-north-1"
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch retention for new staging runtime prerequisite logs."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = contains([30, 60, 90, 120, 150, 180, 365], var.log_retention_days)
+    error_message = "log_retention_days must be an AWS-supported value of at least 30 days."
+  }
+}
+
 variable "service_role_permissions_boundary_arn" {
   description = "Permissions boundary required for isolated Cotsel signer task roles."
   type        = string

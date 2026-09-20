@@ -1,5 +1,5 @@
 resource "aws_cloudwatch_log_group" "service" {
-  for_each = local.services
+  for_each = setsubtract(local.services, toset(["relayer"]))
 
   name              = "/agroasys/cotsel/staging/${each.key}"
   retention_in_days = var.log_retention_days

@@ -24,8 +24,8 @@ locals {
   ])
 
   database_reader_owners = toset([
-    "indexer",
-    "reconciliation",
+    # Reader identities are foundation prerequisites because migration and
+    # isolated runtimes both depend on them.
   ])
 
   database_secret_names = toset(concat(
@@ -46,11 +46,12 @@ locals {
     "gateway-to-ricardian-auth",
     "gateway-to-treasury-auth",
     "gateway-managed-signer",
-    "notifications-webhook",
     "oracle-managed-signer",
     "rpc-base-sepolia-fallback",
     "rpc-base-sepolia-primary",
   ])
 
   secret_names = setunion(local.database_secret_names, local.integration_secret_names)
+
+  foundation_secret_arns = data.terraform_remote_state.foundation.outputs.runtime_prerequisite_secret_arns
 }

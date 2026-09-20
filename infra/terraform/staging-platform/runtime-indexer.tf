@@ -29,7 +29,7 @@ locals {
     { name = "DB_PASS", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/runtime"].arn}:password::" },
     { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/runtime"].arn}:password::" },
     { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/runtime"].arn}:username::" },
-    { name = "NOTIFICATIONS_WEBHOOK_URL", valueFrom = aws_secretsmanager_secret.platform["notifications-webhook"].arn },
+    { name = "NOTIFICATIONS_WEBHOOK_URL", valueFrom = local.foundation_secret_arns["notifications-webhook"] },
     { name = "RPC_ENDPOINT", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn },
     { name = "RPC_FALLBACK_ENDPOINTS", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn },
   ]
@@ -65,9 +65,9 @@ locals {
   ]
 
   indexer_graphql_secrets = [
-    { name = "DB_PASS", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/reader"].arn}:password::" },
-    { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/reader"].arn}:password::" },
-    { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/indexer/reader"].arn}:username::" },
+    { name = "DB_PASS", valueFrom = "${local.foundation_secret_arns["database/indexer/reader"]}:password::" },
+    { name = "DB_PASSWORD", valueFrom = "${local.foundation_secret_arns["database/indexer/reader"]}:password::" },
+    { name = "DB_USER", valueFrom = "${local.foundation_secret_arns["database/indexer/reader"]}:username::" },
   ]
 
   indexer_graphql_container = {
