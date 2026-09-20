@@ -8,7 +8,6 @@ process.env.INDEXER_GRAPHQL_URL =
   process.env.INDEXER_GRAPHQL_URL || 'http://127.0.0.1:3100/graphql';
 
 import { LedgerEntryWithState } from '../src/types';
-import { TreasuryEligibilityService } from '../src/core/exportEligibility';
 import {
   alwaysCanonicalVerifier,
   recordingCanonicalityWriter,
@@ -18,25 +17,8 @@ import {
   TEST_LOG_IDENTITY_HASH,
   TEST_REORGED_BLOCK_HASH,
 } from './helpers/chainCanonicality';
-
-const clearReconciliation = {
-  assessTrades: async () =>
-    new Map([
-      [
-        'trade-1',
-        {
-          tradeId: 'trade-1',
-          status: 'CLEAR' as const,
-          runKey: 'run-1',
-          driftCount: 0,
-          freshness: 'FRESH' as const,
-          completedAt: new Date('2026-03-31T00:05:00.000Z'),
-          staleRunningRunCount: 0,
-          blockedReasons: [],
-        },
-      ],
-    ]),
-};
+import { eligibilityServiceWithFreshIngestion } from './helpers/eligibilityService';
+import { clearReconciliation } from './helpers/reconciliationGate';
 
 // Spread rather than `??` per field: a test that sets `block_hash: null` is
 // making a point about an entry with no chain identity, and a nullish default
@@ -71,7 +53,7 @@ function makeEntry(overrides?: Partial<LedgerEntryWithState>): LedgerEntryWithSt
 
 describe('TreasuryEligibilityService', () => {
   test('allows payout/export only when finalized and reconciliation is clear', async () => {
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       canonicalityVerifier: alwaysCanonicalVerifier(),
       canonicalityWriter: recordingCanonicalityWriter().writer,
       provider: {
@@ -94,6 +76,9 @@ describe('TreasuryEligibilityService', () => {
                 freshness: 'FRESH',
                 completedAt: new Date('2026-03-31T00:05:00.000Z'),
                 staleRunningRunCount: 0,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: [],
               },
             ],
@@ -119,7 +104,7 @@ describe('TreasuryEligibilityService', () => {
   });
 
   test('blocks completed-state export when confirmed payout evidence is missing', async () => {
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       canonicalityVerifier: alwaysCanonicalVerifier(),
       canonicalityWriter: recordingCanonicalityWriter().writer,
       provider: {
@@ -138,6 +123,9 @@ describe('TreasuryEligibilityService', () => {
                 freshness: 'FRESH',
                 completedAt: new Date('2026-03-31T00:05:00.000Z'),
                 staleRunningRunCount: 0,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: [],
               },
             ],
@@ -166,7 +154,7 @@ describe('TreasuryEligibilityService', () => {
   });
 
   test('blocks export before Base finalized stage even when reconciliation is clear', async () => {
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       canonicalityVerifier: alwaysCanonicalVerifier(),
       canonicalityWriter: recordingCanonicalityWriter().writer,
       provider: {
@@ -189,6 +177,9 @@ describe('TreasuryEligibilityService', () => {
                 freshness: 'FRESH',
                 completedAt: new Date('2026-03-31T00:05:00.000Z'),
                 staleRunningRunCount: 0,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: [],
               },
             ],
@@ -212,7 +203,7 @@ describe('TreasuryEligibilityService', () => {
   });
 
   test('blocks payout when reconciliation drift exists even after finalization', async () => {
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       canonicalityVerifier: alwaysCanonicalVerifier(),
       canonicalityWriter: recordingCanonicalityWriter().writer,
       provider: {
@@ -231,6 +222,9 @@ describe('TreasuryEligibilityService', () => {
                 freshness: 'FRESH',
                 completedAt: new Date('2026-03-31T00:05:00.000Z'),
                 staleRunningRunCount: 0,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: ['Latest reconciliation run reported 2 drift finding(s)'],
               },
             ],
@@ -254,7 +248,7 @@ describe('TreasuryEligibilityService', () => {
 
   test('blocks payout when reconciliation freshness is stale even after finalization', async () => {
     const staleCompletedAt = new Date('2026-03-31T00:00:00.000Z');
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       canonicalityVerifier: alwaysCanonicalVerifier(),
       canonicalityWriter: recordingCanonicalityWriter().writer,
       provider: {
@@ -273,6 +267,9 @@ describe('TreasuryEligibilityService', () => {
                 freshness: 'STALE',
                 completedAt: staleCompletedAt,
                 staleRunningRunCount: 1,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: [
                   'Latest completed reconciliation run is older than 900 seconds',
                   '1 reconciliation run(s) have remained RUNNING beyond 900 seconds',
@@ -323,7 +320,7 @@ describe('TreasuryEligibilityService chain canonicality', () => {
 
   test('clears an entry the chain still contains and records the verdict', async () => {
     const canonicality = recordingCanonicalityWriter();
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       provider: { getBlock: async () => ({ number: 150n }) },
       reconciliationGate: clearReconciliation,
       canonicalityVerifier: stubVerifier({
@@ -351,7 +348,7 @@ describe('TreasuryEligibilityService chain canonicality', () => {
 
   test('revokes eligibility when the block at the entry height is no longer the ingested block', async () => {
     const canonicality = recordingCanonicalityWriter();
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       provider: { getBlock: async () => ({ number: 150n }) },
       reconciliationGate: clearReconciliation,
       canonicalityVerifier: stubVerifier({
@@ -392,7 +389,7 @@ describe('TreasuryEligibilityService chain canonicality', () => {
 
   test('revokes eligibility when the reorganization dropped the transaction entirely', async () => {
     const canonicality = recordingCanonicalityWriter();
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       provider: { getBlock: async () => ({ number: 150n }) },
       reconciliationGate: clearReconciliation,
       canonicalityVerifier: stubVerifier({ finalizedBlockNumber: 150, receipts: [] }),
@@ -409,7 +406,7 @@ describe('TreasuryEligibilityService chain canonicality', () => {
 
   test('revokes eligibility when the receipt no longer carries the ingested log', async () => {
     const canonicality = recordingCanonicalityWriter();
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       provider: { getBlock: async () => ({ number: 150n }) },
       reconciliationGate: clearReconciliation,
       canonicalityVerifier: stubVerifier({
@@ -435,7 +432,7 @@ describe('TreasuryEligibilityService chain canonicality', () => {
       receipts: [{ txHash: '0xtx-1', blockNumber: 100, blockHash: TEST_BLOCK_HASH, logIndex: 0 }],
     });
     const verifySpy = jest.spyOn(verifier, 'verify');
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       provider: { getBlock: async () => ({ number: 150n }) },
       reconciliationGate: clearReconciliation,
       canonicalityVerifier: verifier,
@@ -464,7 +461,7 @@ describe('TreasuryEligibilityService chain canonicality', () => {
 
   test('blocks an entry ingested without a chain identity instead of assuming it', async () => {
     const canonicality = recordingCanonicalityWriter();
-    const service = new TreasuryEligibilityService({
+    const service = eligibilityServiceWithFreshIngestion({
       provider: { getBlock: async () => ({ number: 150n }) },
       reconciliationGate: clearReconciliation,
       canonicalityVerifier: stubVerifier({

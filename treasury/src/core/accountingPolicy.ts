@@ -215,11 +215,23 @@ export function assertAccountingPeriodRoleSeparation(params: {
   }
 }
 
+/**
+ * WP-4 H-25. A reconciliation run is evidence about the block range it covered.
+ * Realization therefore needs the run's watermark, not just its verdict: a
+ * fresh, drift-free run that stopped below this entry says nothing about it.
+ */
+export interface RealizationReconciliationBinding {
+  runKey: string;
+  coverageToBlock: number;
+  entryBlockNumber: number;
+}
+
 export function assertRealizationAllowed(params: {
   batchStatus: SweepBatchStatus | null;
   partnerHandoffStatus: PartnerHandoffStatus | null;
   bankPayoutState: BankPayoutState | null;
   revenueRealizationStatus: RevenueRealizationStatus | null;
+  reconciliationBinding: RealizationReconciliationBinding | null;
 }): void {
   if (!params.batchStatus || !['HANDED_OFF', 'CLOSED'].includes(params.batchStatus)) {
     throw new Error('Revenue realization requires a handed-off or closed sweep batch');
@@ -239,5 +251,19 @@ export function assertRealizationAllowed(params: {
 
   if (params.revenueRealizationStatus === 'REVERSED') {
     throw new Error('Ledger entry has a reversed realization and needs controlled remediation');
+  }
+
+  if (!params.reconciliationBinding) {
+    throw new Error(
+      'Revenue realization requires an accepted reconciliation run bound to the entry block',
+    );
+  }
+
+  if (
+    params.reconciliationBinding.entryBlockNumber > params.reconciliationBinding.coverageToBlock
+  ) {
+    throw new Error(
+      `Revenue realization requires reconciliation coverage through block ${params.reconciliationBinding.entryBlockNumber}; run ${params.reconciliationBinding.runKey} reached only ${params.reconciliationBinding.coverageToBlock}`,
+    );
   }
 }

@@ -56,6 +56,9 @@ describe('ReconciliationGateService', () => {
       freshness: 'MISSING',
       completedAt: null,
       staleRunningRunCount: 0,
+      coverageFromBlock: null,
+      coverageToBlock: null,
+      coverageComplete: null,
       blockedReasons: ['No completed reconciliation run is available'],
     });
   });
@@ -64,7 +67,15 @@ describe('ReconciliationGateService', () => {
     const completedAt = new Date('2026-03-31T00:00:00.000Z');
     const pool = createPoolMock({
       "WHERE status = 'COMPLETED'": () => ({
-        rows: [{ run_key: 'run-1', completed_at: completedAt }],
+        rows: [
+          {
+            run_key: 'run-1',
+            completed_at: completedAt,
+            coverage_from_block: '0',
+            coverage_to_block: '1000000',
+            coverage_complete: true,
+          },
+        ],
       }),
       "WHERE status = 'RUNNING'": () => ({
         rows: [{ count: '1' }],
@@ -94,6 +105,9 @@ describe('ReconciliationGateService', () => {
       freshness: 'STALE',
       completedAt,
       staleRunningRunCount: 1,
+      coverageFromBlock: 0,
+      coverageToBlock: 1_000_000,
+      coverageComplete: true,
       blockedReasons: [
         'Latest completed reconciliation run is older than 900 seconds',
         '1 reconciliation run(s) have remained RUNNING beyond 900 seconds',
@@ -105,7 +119,15 @@ describe('ReconciliationGateService', () => {
     const completedAt = new Date('2026-03-31T00:20:00.000Z');
     const pool = createPoolMock({
       "WHERE status = 'COMPLETED'": () => ({
-        rows: [{ run_key: 'run-2', completed_at: completedAt }],
+        rows: [
+          {
+            run_key: 'run-2',
+            completed_at: completedAt,
+            coverage_from_block: '0',
+            coverage_to_block: '1000000',
+            coverage_complete: true,
+          },
+        ],
       }),
       "WHERE status = 'RUNNING'": () => ({
         rows: [{ count: '0' }],
@@ -135,6 +157,9 @@ describe('ReconciliationGateService', () => {
       freshness: 'FRESH',
       completedAt,
       staleRunningRunCount: 0,
+      coverageFromBlock: 0,
+      coverageToBlock: 1_000_000,
+      coverageComplete: true,
       blockedReasons: [],
     });
   });

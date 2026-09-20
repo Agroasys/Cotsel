@@ -9,7 +9,8 @@ import { createRouter } from './api/routes';
 import { TreasuryController } from './api/controller';
 import { closeConnection, testConnection } from './database/connection';
 import { Logger } from './utils/logger';
-import { TreasuryIngestionService } from './core/ingestion';
+import { TreasuryIngestionWorker } from './core/ingestionWorker';
+import { TreasuryIngestionFreshnessService } from './core/ingestionFreshness';
 import { createServiceAuthMiddleware } from './auth/serviceAuth';
 import { createProviderCallbackMiddleware } from './auth/providerCallback';
 import { createTreasuryNonceStore } from './auth/nonceStore';
@@ -36,15 +37,21 @@ async function bootstrap(): Promise<void> {
   }
 
   const shouldIngestOnce = process.argv.includes('--ingest-once');
+  const ingestionWorker = new TreasuryIngestionWorker();
+  const ingestionFreshness = new TreasuryIngestionFreshnessService();
 
   if (shouldIngestOnce) {
-    const ingestionService = new TreasuryIngestionService();
-    const result = await ingestionService.ingestOnce();
+    // The CLI path runs through the worker rather than beside it, so a manual
+    // backfill takes the same lease, advances the same freshness watermark and
+    // leaves the same append-only evidence as a scheduled run. A backfill that
+    // ingested without recording it would repair the data and leave readiness
+    // red, which reads as an unrepaired outage.
+    const run = await ingestionWorker.runOnce('CLI');
     await closeConnection();
-    // A run that refused to ingest must not exit 0. This is the command a
-    // scheduler and the release gate call, and both read the exit code as the
+    // A run that refused to ingest must not exit 0. This is the command an
+    // operator and the release gate call, and both read the exit code as the
     // answer to "did treasury take in the evidence it was asked for".
-    if (result.blockedReason) {
+    if (run.outcome !== 'COMPLETED') {
       process.exitCode = 1;
     }
     return;
@@ -138,6 +145,7 @@ async function bootstrap(): Promise<void> {
       mutationAuthMiddleware,
       providerCallbackMiddleware,
       readinessCheck: testConnection,
+      ingestionFreshnessCheck: () => ingestionFreshness.assess(),
     }),
   );
 
@@ -148,11 +156,25 @@ async function bootstrap(): Promise<void> {
       authEnabled: config.authEnabled,
       providerCallbackAuthEnabled: config.providerCallbackAuthEnabled,
       nonceStore: config.nonceStore,
+      ingestionWorkerEnabled: config.ingestionWorkerEnabled,
+      ingestionIntervalMs: config.ingestionIntervalMs,
     });
   });
 
+  if (config.ingestionWorkerEnabled) {
+    ingestionWorker.start();
+  } else {
+    // Every replica declining to schedule is indistinguishable from a crashed
+    // worker once freshness decays, so say which one this is at startup.
+    Logger.warn('Treasury ingestion worker is disabled', {
+      effect:
+        'chain evidence will not advance in this replica; readiness fails closed once the freshness threshold passes',
+    });
+  }
+
   const shutdown = async (signal: string): Promise<void> => {
     Logger.info('Shutting down treasury service', { signal });
+    await ingestionWorker.stop();
     await nonceStore.close();
     await requestRateLimiter.close();
     await closeConnection();

@@ -160,6 +160,28 @@ Operational close procedure:
 
 - [`../docs/runbooks/treasury-revenue-close.md`](../docs/runbooks/treasury-revenue-close.md)
 
+Chain-evidence ingestion is a scheduled single-owner worker, and readiness,
+export and close fail closed once its freshness watermark lapses:
+
+- [`../docs/runbooks/treasury-ingestion-freshness.md`](../docs/runbooks/treasury-ingestion-freshness.md)
+
+External handoff state is append-only. A provider's `CREATED` or `FAILED` report
+never marks value handed off, and contradictory terminal evidence freezes the
+handoff instead of overwriting it:
+
+- [`../docs/runbooks/treasury-provider-handoff-authority.md`](../docs/runbooks/treasury-provider-handoff-authority.md)
+
+Revenue realization is bound to the exact reconciliation run and chain block it
+was cleared against, and the realization record names both:
+
+- [`../docs/runbooks/treasury-realization-reconciliation-binding.md`](../docs/runbooks/treasury-realization-reconciliation-binding.md)
+
+External-provider assurance is an unresolved external dependency. The technical
+controls are in place; the due-diligence, contract and escalation approvals are
+not:
+
+- [`../docs/runbooks/treasury-provider-assurance-dossier.md`](../docs/runbooks/treasury-provider-assurance-dossier.md)
+
 Authoritative sweep execution evidence is matched from indexed `TreasuryClaimed` events. A batch
 does not become `EXECUTED` from operator-supplied amount or destination fields alone.
 

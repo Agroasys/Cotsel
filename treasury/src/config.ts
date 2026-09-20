@@ -26,6 +26,10 @@ export interface TreasuryConfig {
   indexerGraphqlRequestTimeoutMs: number;
   ingestBatchSize: number;
   ingestMaxEvents: number;
+  ingestionWorkerEnabled: boolean;
+  ingestionIntervalMs: number;
+  ingestionMaxAgeSeconds: number;
+  ingestionMaxLagBlocks: number;
   authEnabled: boolean;
   apiKeys: ServiceApiKey[];
   internalMutationApiKeys: string[];
@@ -209,6 +213,11 @@ export function loadConfig(): TreasuryConfig {
     ? envNumber('NONCE_TTL_SECONDS')
     : authNonceTtlSeconds;
   const indexerGraphqlRequestTimeoutMs = envNumber('INDEXER_GQL_TIMEOUT_MS', 10000);
+  // The worker is the only thing that advances chain evidence on a schedule, so
+  // turning it off in production would reinstate exactly the silent-stall this
+  // control removes: freshness would decay, and export would fail closed
+  // service-wide with nothing running to repair it.
+  const ingestionWorkerEnabled = envBool('TREASURY_INGESTION_WORKER_ENABLED', true);
   const runtime = hasSettlementRuntimeOverride()
     ? resolveSettlementRuntime({
         runtimeKey: optionalEnv('SETTLEMENT_RUNTIME'),
@@ -256,6 +265,12 @@ export function loadConfig(): TreasuryConfig {
     );
   }
 
+  if (nodeEnv === 'production' && !ingestionWorkerEnabled) {
+    throw new Error(
+      'TREASURY_INGESTION_WORKER_ENABLED=false is not allowed when NODE_ENV=production',
+    );
+  }
+
   if (nodeEnv === 'production' && nonceStore === 'inmemory') {
     throw new Error('NONCE_STORE=inmemory is not allowed when NODE_ENV=production');
   }
@@ -293,6 +308,10 @@ export function loadConfig(): TreasuryConfig {
     indexerGraphqlRequestTimeoutMs,
     ingestBatchSize: envNumber('TREASURY_INGEST_BATCH_SIZE', 100),
     ingestMaxEvents: envNumber('TREASURY_INGEST_MAX_EVENTS', 2000),
+    ingestionWorkerEnabled,
+    ingestionIntervalMs: envNumber('TREASURY_INGEST_INTERVAL_MS', 60000),
+    ingestionMaxAgeSeconds: envNumber('TREASURY_INGEST_MAX_AGE_SECONDS', 900),
+    ingestionMaxLagBlocks: envNumber('TREASURY_INGEST_MAX_LAG_BLOCKS', 300),
     authEnabled,
     apiKeys,
     internalMutationApiKeys,
@@ -344,6 +363,15 @@ export function loadConfig(): TreasuryConfig {
 
   assert(config.ingestBatchSize > 0, 'TREASURY_INGEST_BATCH_SIZE must be > 0');
   assert(config.ingestMaxEvents > 0, 'TREASURY_INGEST_MAX_EVENTS must be > 0');
+  assert(config.ingestionIntervalMs >= 1000, 'TREASURY_INGEST_INTERVAL_MS must be >= 1000');
+  assert(config.ingestionMaxAgeSeconds > 0, 'TREASURY_INGEST_MAX_AGE_SECONDS must be > 0');
+  assert(config.ingestionMaxLagBlocks >= 0, 'TREASURY_INGEST_MAX_LAG_BLOCKS must be >= 0');
+  // A threshold shorter than the schedule is unsatisfiable: evidence would be
+  // stale before the next run could refresh it, so export would never open.
+  assert(
+    config.ingestionMaxAgeSeconds * 1000 > config.ingestionIntervalMs,
+    'TREASURY_INGEST_MAX_AGE_SECONDS must exceed TREASURY_INGEST_INTERVAL_MS',
+  );
   assert(config.authMaxSkewSeconds > 0, 'AUTH_MAX_SKEW_SECONDS must be > 0');
   assert(
     config.providerCallbackMaxSkewSeconds > 0,

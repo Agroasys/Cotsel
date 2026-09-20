@@ -105,7 +105,12 @@ describe('TreasuryIngestionService', () => {
     expect(mockUpsertLedgerEntryWithInitialState).toHaveBeenCalledTimes(1);
     // Resume at the unresolvable block, never past it.
     expect(result.nextTradeBlockNumber).toBe(301);
-    expect(mockSetIngestionWatermark).toHaveBeenNthCalledWith(1, 301, 'trade_events', 500);
+    // And claim coverage only through the last block read whole. This used to
+    // record the window's target (500) regardless of where the run stopped,
+    // which reported a range nothing had read as covered.
+    expect(mockSetIngestionWatermark).toHaveBeenNthCalledWith(1, 301, 'trade_events', 300);
+    expect(result.ingestedThroughBlockNumber).toBe(300);
+    expect(result.windowExhausted).toBe(false);
   });
 
   it('counts inserted entries only when an initial lifecycle state is created', async () => {

@@ -29,6 +29,27 @@
       "file": "004_canonical_chain_evidence.sql",
       "sha256": "a03ae987f0da4d5b014409a6d1d8faf73384718fb8a5618d29585c0eeed70ca4",
       "schema_sha256": "351eb9847e635d8ae2409558865901f359fd7899d5734eccacbb20dc3906340e"
+    },
+    {
+      "version": "202609190005",
+      "name": "ingestion_freshness_worker",
+      "file": "005_ingestion_freshness_worker.sql",
+      "sha256": "02c101f02804646587d34ffe4906d1a444a14f5101b5540f44d44d927bcc367d",
+      "schema_sha256": "b2a872ad0d884353b94c425ca8adf3012dba15f5ac6c0de06289f36efac5a105"
+    },
+    {
+      "version": "202609190006",
+      "name": "provider_handoff_authority",
+      "file": "006_provider_handoff_authority.sql",
+      "sha256": "52700c2ad6a2c7fda401471212551a4ce81747dafb1e3b7dbadd944efc4d3200",
+      "schema_sha256": "86fb394d0a8bafe7d66274fdb138fa3b0526c5134c425813377447876b40ccad"
+    },
+    {
+      "version": "202609190007",
+      "name": "realization_reconciliation_binding",
+      "file": "007_realization_reconciliation_binding.sql",
+      "sha256": "9d8acdc90706d92e50457a795994257cecaf05a960bb6406317f0f6809bd224d",
+      "schema_sha256": "1036385e023172ed3fc0882b32fb972379e4e81d73f7fe7e4051ba3d9dffb4dc"
     }
   ]
 }

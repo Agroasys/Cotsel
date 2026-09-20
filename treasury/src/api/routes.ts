@@ -1,5 +1,6 @@
 import { RequestHandler, Router } from 'express';
 import { TreasuryController } from './controller';
+import type { IngestionFreshnessAssessment } from '../core/ingestionFreshness';
 
 export interface TreasuryRouterOptions {
   authMiddleware?: RequestHandler;
@@ -11,6 +12,37 @@ export interface TreasuryRouterOptions {
    */
   providerCallbackMiddleware?: RequestHandler;
   readinessCheck?: () => Promise<void>;
+  /**
+   * WP-4 B-09 / FAIL-10. Readiness, not liveness: a treasury whose chain
+   * evidence has stopped advancing is still a healthy process, and `/health`
+   * keeps saying so. What it is not is safe to export, realize or close
+   * against, and this is the signal that says which of the two it is.
+   */
+  ingestionFreshnessCheck?: () => Promise<IngestionFreshnessAssessment>;
+}
+
+function serializeIngestionFreshness(assessment: IngestionFreshnessAssessment): {
+  status: string;
+  lastSuccessAt: string | null;
+  ageSeconds: number | null;
+  maxAgeSeconds: number;
+  lagBlocks: number | null;
+  maxLagBlocks: number;
+  ingestedThroughBlockNumber: number | null;
+  consecutiveFailureCount: number;
+  blockedReasons: string[];
+} {
+  return {
+    status: assessment.status,
+    lastSuccessAt: assessment.lastSuccessAt?.toISOString() ?? null,
+    ageSeconds: assessment.ageSeconds,
+    maxAgeSeconds: assessment.maxAgeSeconds,
+    lagBlocks: assessment.lagBlocks,
+    maxLagBlocks: assessment.maxLagBlocks,
+    ingestedThroughBlockNumber: assessment.ingestedThroughBlockNumber,
+    consecutiveFailureCount: assessment.consecutiveFailureCount,
+    blockedReasons: assessment.blockedReasons,
+  };
 }
 
 export function createRouter(
@@ -34,10 +66,29 @@ export function createRouter(
         await options.readinessCheck();
       }
 
+      const ingestion = options.ingestionFreshnessCheck
+        ? await options.ingestionFreshnessCheck()
+        : null;
+
+      if (ingestion && ingestion.status !== 'FRESH') {
+        // The blocked reasons are returned rather than summarized. An operator
+        // reading a red probe needs the cause on the probe, not a pointer to a
+        // log they then have to correlate by timestamp.
+        res.status(503).json({
+          success: false,
+          service: 'treasury',
+          ready: false,
+          error: 'Treasury chain-evidence ingestion is not fresh',
+          ingestion: serializeIngestionFreshness(ingestion),
+        });
+        return;
+      }
+
       res.status(200).json({
         success: true,
         service: 'treasury',
         ready: true,
+        ingestion: ingestion ? serializeIngestionFreshness(ingestion) : null,
         timestamp: new Date().toISOString(),
       });
     } catch {

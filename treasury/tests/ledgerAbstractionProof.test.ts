@@ -12,6 +12,7 @@ import { TreasuryEligibilityService } from '../src/core/exportEligibility';
 import { ReconciliationGateService } from '../src/core/reconciliationGate';
 import type { LedgerEntryWithState } from '../src/types';
 import { alwaysCanonicalVerifier, recordingCanonicalityWriter } from './helpers/chainCanonicality';
+import { freshIngestion } from './helpers/ingestionFreshness';
 
 jest.mock('../src/database/queries', () => ({
   ...jest.requireActual('../src/database/queries'),
@@ -95,7 +96,15 @@ describe('Ledger Abstraction Proof', () => {
     const gate = new ReconciliationGateService({
       pool: createPoolMock({
         "WHERE status = 'COMPLETED'": () => ({
-          rows: [{ run_key: 'run-clean', completed_at: new Date('2026-03-31T00:20:00.000Z') }],
+          rows: [
+            {
+              run_key: 'run-clean',
+              completed_at: new Date('2026-03-31T00:20:00.000Z'),
+              coverage_from_block: '0',
+              coverage_to_block: '1000000',
+              coverage_complete: true,
+            },
+          ],
         }),
         "WHERE status = 'RUNNING'": () => ({ rows: [{ count: '0' }] }),
         'FROM reconcile_run_trades': () => ({ rows: [{ trade_id: 'trade-1' }] }),
@@ -107,6 +116,7 @@ describe('Ledger Abstraction Proof', () => {
     });
     const tradeGate = await gate.assessTrades(['trade-1']);
     const eligibility = new TreasuryEligibilityService({
+      ingestionFreshness: freshIngestion(),
       provider: {
         getBlock: async () => ({ number: 150n }),
       },
@@ -148,6 +158,8 @@ describe('Ledger Abstraction Proof', () => {
       latestCompletedRunKey: 'run-drift',
       latestCompletedRunAt: new Date('2026-03-31T00:21:00.000Z'),
       latestCompletedRunAgeSeconds: 240,
+      coverageToBlock: 1_000_000,
+      coverageComplete: true,
       staleRunningRunCount: 0,
       trackedTradeCount: 2,
       clearTradeCount: 1,
@@ -158,6 +170,7 @@ describe('Ledger Abstraction Proof', () => {
     });
 
     const eligibility = new TreasuryEligibilityService({
+      ingestionFreshness: freshIngestion(),
       provider: {
         getBlock: async () => ({ number: 150n }),
       },
@@ -174,6 +187,9 @@ describe('Ledger Abstraction Proof', () => {
                 freshness: 'FRESH',
                 completedAt: new Date('2026-03-31T00:21:00.000Z'),
                 staleRunningRunCount: 0,
+                coverageFromBlock: 0,
+                coverageToBlock: 1_000_000,
+                coverageComplete: true,
                 blockedReasons: ['Latest reconciliation run reported 1 drift finding(s)'],
               },
             ],
@@ -210,7 +226,15 @@ describe('Ledger Abstraction Proof', () => {
     const gate = new ReconciliationGateService({
       pool: createPoolMock({
         "WHERE status = 'COMPLETED'": () => ({
-          rows: [{ run_key: 'run-unknown', completed_at: new Date('2026-03-31T00:20:00.000Z') }],
+          rows: [
+            {
+              run_key: 'run-unknown',
+              completed_at: new Date('2026-03-31T00:20:00.000Z'),
+              coverage_from_block: '0',
+              coverage_to_block: '1000000',
+              coverage_complete: true,
+            },
+          ],
         }),
         "WHERE status = 'RUNNING'": () => ({ rows: [{ count: '0' }] }),
         'FROM reconcile_run_trades': () => ({ rows: [] }),
@@ -223,6 +247,7 @@ describe('Ledger Abstraction Proof', () => {
     const tradeGate = await gate.assessTrades(['trade-404']);
     const summary = await gate.summarizeTrades(['trade-404']);
     const eligibility = new TreasuryEligibilityService({
+      ingestionFreshness: freshIngestion(),
       provider: {
         getBlock: async () => ({ number: 150n }),
       },

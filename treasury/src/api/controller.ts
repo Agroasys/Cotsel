@@ -22,6 +22,8 @@ import {
 } from '../core/ledgerExport';
 import { loadLedgerExportPage } from '../core/ledgerExportService';
 import { actorFor, optionalActorFor } from './actorBinding';
+import { mapValidationError } from './errorMapping';
+import { resolveRealizationBinding } from './realizationBinding';
 import type {
   AddSweepBatchEntryBody,
   AppendStateBody,
@@ -37,7 +39,8 @@ import type {
   UpsertTreasuryPartnerHandoffBody,
 } from './requestBodies';
 import { toCsv } from './ledgerCsv';
-import { TreasuryIngestionService } from '../core/ingestion';
+import { TreasuryIngestionWorker } from '../core/ingestionWorker';
+import { isHandedOff, isProviderHandoffStatus } from '../core/providerHandoffAuthority';
 import { ReconciliationGateService } from '../core/reconciliationGate';
 import { SweepExecutionMatcherService } from '../core/sweepExecutionMatcher';
 import {
@@ -79,7 +82,6 @@ import {
 import { TreasuryPartnerHandoffConflictError } from '../core/treasuryPartnerHandoff';
 import {
   AccountingPeriodStatus,
-  PartnerHandoffStatus,
   PayoutState,
   SweepBatchStatus,
   TreasuryAccountingState,
@@ -107,21 +109,7 @@ const SWEEP_BATCH_STATUSES: SweepBatchStatus[] = [
   'CLOSED',
   'VOID',
 ];
-const PARTNER_HANDOFF_STATUSES: PartnerHandoffStatus[] = [
-  'CREATED',
-  'SUBMITTED',
-  'ACKNOWLEDGED',
-  'COMPLETED',
-  'FAILED',
-];
 const TREASURY_PARTNER_CODES: TreasuryPartnerCode[] = ['bridge'];
-const TREASURY_PARTNER_HANDOFF_STATUSES: TreasuryPartnerHandoffStatus[] = [
-  'SUBMITTED',
-  'PROCESSING',
-  'COMPLETED',
-  'FAILED',
-  'RETURNED',
-];
 const ACCOUNTING_STATES: TreasuryAccountingState[] = [
   'HELD',
   'ALLOCATED_TO_SWEEP',
@@ -240,6 +228,8 @@ function serializeReconciliationControlSummary(summary: {
   latestCompletedRunKey: string | null;
   latestCompletedRunAt: Date | null;
   latestCompletedRunAgeSeconds: number | null;
+  coverageToBlock: number | null;
+  coverageComplete: boolean | null;
   staleRunningRunCount: number;
   trackedTradeCount: number;
   clearTradeCount: number;
@@ -257,6 +247,10 @@ function serializeReconciliationControlSummary(summary: {
         ? summary.latestCompletedRunAt.toISOString()
         : summary.latestCompletedRunAt,
     latestCompletedRunAgeSeconds: summary.latestCompletedRunAgeSeconds,
+    // WP-4 H-25. The operator-facing summary names the exact block the accepted
+    // run reached, not just how recent it was.
+    coverageToBlock: summary.coverageToBlock,
+    coverageComplete: summary.coverageComplete,
     staleRunningRunCount: summary.staleRunningRunCount,
     trackedTradeCount: summary.trackedTradeCount,
     clearTradeCount: summary.clearTradeCount,
@@ -295,27 +289,6 @@ function buildFailure(
   };
 }
 
-function mapValidationError(error: unknown, fallbackMessage: string) {
-  if (error instanceof HttpError) {
-    return {
-      statusCode: error.statusCode,
-      body: failure(error.code, error.message, error.details),
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      statusCode: 400,
-      body: failure('ValidationError', error.message || fallbackMessage),
-    };
-  }
-
-  return {
-    statusCode: 400,
-    body: failure('ValidationError', fallbackMessage),
-  };
-}
-
 function assertPayoutState(value: string): asserts value is PayoutState {
   if (!PAYOUT_STATES.includes(value as PayoutState)) {
     throw new HttpError(400, 'ValidationError', 'state must be a valid payout state');
@@ -335,7 +308,7 @@ function assertTreasuryPartnerCode(value: string): asserts value is TreasuryPart
 function assertTreasuryPartnerHandoffStatus(
   value: string,
 ): asserts value is TreasuryPartnerHandoffStatus {
-  if (!TREASURY_PARTNER_HANDOFF_STATUSES.includes(value as TreasuryPartnerHandoffStatus)) {
+  if (!isProviderHandoffStatus(value)) {
     throw new HttpError(
       400,
       'ValidationError',
@@ -345,22 +318,54 @@ function assertTreasuryPartnerHandoffStatus(
 }
 
 export class TreasuryController {
-  private readonly ingestion = new TreasuryIngestionService();
+  private readonly ingestion = new TreasuryIngestionWorker();
   private readonly eligibility = new TreasuryEligibilityService();
   private readonly reconciliationGate = new ReconciliationGateService();
   private readonly sweepExecutionMatcher = new SweepExecutionMatcherService();
 
   async ingest(_req: Request, res: Response): Promise<void> {
     try {
-      const result = await this.ingestion.ingestOnce();
-      if (result.blockedReason) {
+      const run = await this.ingestion.runOnce('API');
+
+      // Declining the lease is not an error and not coverage. The scheduled
+      // owner is mid-run, so the caller should retry rather than treat this
+      // request as the run that proved the window.
+      if (run.outcome === 'NOT_OWNER') {
+        res
+          .status(409)
+          .json(
+            failure(
+              'IngestionLeaseHeld',
+              'Another treasury replica holds the ingestion lease; retry after the current run completes',
+            ),
+          );
+        return;
+      }
+
+      // A capped run read what it claims to have read and is not a refusal.
+      // The caller is told the window was not exhausted so it can ask again
+      // rather than record the range as covered.
+      if (run.outcome === 'PARTIAL') {
+        res.status(200).json(success({ runKey: run.runKey, ...run.result }));
+        return;
+      }
+
+      if (run.outcome !== 'COMPLETED') {
         // A refusal is not a successful empty run. An operator reading 200 here
         // would record "ingestion completed, nothing new" for a run that never
         // reached the chain, which is the false-green this control removes.
-        res.status(503).json(failure('SettlementUnavailable', result.blockedReason));
+        res
+          .status(503)
+          .json(
+            failure(
+              'SettlementUnavailable',
+              run.result?.blockedReason ?? run.error ?? 'Ingestion did not complete',
+            ),
+          );
         return;
       }
-      res.status(200).json(success(result));
+
+      res.status(200).json(success({ runKey: run.runKey, ...run.result }));
     } catch (error: unknown) {
       res
         .status(500)
@@ -841,7 +846,7 @@ export class TreasuryController {
       const batchId = parseBatchId(req.params.batchId);
       const body = requireObject<UpsertPartnerHandoffBody>(req.body, 'body');
       const handoffStatus = requireString(body.handoffStatus, 'handoffStatus');
-      if (!PARTNER_HANDOFF_STATUSES.includes(handoffStatus as PartnerHandoffStatus)) {
+      if (!isProviderHandoffStatus(handoffStatus)) {
         throw new HttpError(400, 'ValidationError', 'handoffStatus must be valid');
       }
 
@@ -849,7 +854,7 @@ export class TreasuryController {
         sweepBatchId: batchId,
         partnerName: requireString(body.partnerName, 'partnerName'),
         partnerReference: requireString(body.partnerReference, 'partnerReference'),
-        handoffStatus: handoffStatus as PartnerHandoffStatus,
+        handoffStatus,
         evidenceReference: optionalNullableString(body.evidenceReference, 'evidenceReference'),
         metadata: optionalRecord(body.metadata, 'metadata'),
       });
@@ -857,8 +862,14 @@ export class TreasuryController {
       // The partner is what the handoff asserts, not who performed it. The
       // chain records the authenticated principal that recorded the handoff and
       // keeps the partner assertion beside it as evidence.
+      //
+      // WP-4 B-09 / FAIL-11. The batch used to advance to HANDED_OFF on the
+      // strength of being EXECUTED alone, whatever the provider had reported --
+      // so recording a CREATED or FAILED handoff marked the batch handed off
+      // and opened realization behind it. The provider state now has to mean
+      // the instruction actually left.
       const detail = await getSweepBatchDetail(batchId);
-      if (detail?.batch.status === 'EXECUTED') {
+      if (detail?.batch.status === 'EXECUTED' && isHandedOff(handoffStatus)) {
         await updateSweepBatchStatus({
           batchId,
           status: 'HANDED_OFF',
@@ -950,6 +961,7 @@ export class TreasuryController {
       const entryId = parseEntryId(req.params.entryId);
       const body = requireObject<CreateRevenueRealizationBody>(req.body, 'body');
       const realization = await createRevenueRealization({
+        reconciliationBinding: await resolveRealizationBinding(this.reconciliationGate, entryId),
         ledgerEntryId: entryId,
         accountingPeriodId: requireInteger(body.accountingPeriodId, 'accountingPeriodId', {
           min: 1,
@@ -1111,6 +1123,12 @@ export class TreasuryController {
           event: result.event,
           created: result.created,
           idempotentReplay: result.idempotentReplay,
+          // The caller is told whether its callback became the authoritative
+          // state. A recorded-but-not-applied event is a successful delivery of
+          // evidence that did not move anything, and a provider that cannot
+          // tell the two apart will retry a state it already lost.
+          transition: result.transition,
+          applied: result.applied,
         }),
       );
     } catch (error: unknown) {

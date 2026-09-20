@@ -11,6 +11,16 @@ export interface TradeReconciliationGate {
   freshness: 'FRESH' | 'STALE' | 'MISSING';
   completedAt: Date | null;
   staleRunningRunCount: number;
+  /**
+   * WP-4 H-25. The chain watermark the accepted run actually reached. A run is
+   * evidence about the range it covered and nothing else, so a caller has to be
+   * able to ask whether its own block is inside that range -- a fresh, drift-free
+   * run that stopped short of an entry says nothing about that entry.
+   */
+  coverageFromBlock: number | null;
+  coverageToBlock: number | null;
+  /** False or null means the run published a truncated or unproven range. */
+  coverageComplete: boolean | null;
   blockedReasons: string[];
 }
 
@@ -20,6 +30,9 @@ export interface ReconciliationControlSummary {
   latestCompletedRunKey: string | null;
   latestCompletedRunAt: Date | null;
   latestCompletedRunAgeSeconds: number | null;
+  /** WP-4 H-25: the exact chain watermark the accepted run reached. */
+  coverageToBlock: number | null;
+  coverageComplete: boolean | null;
   staleRunningRunCount: number;
   trackedTradeCount: number;
   clearTradeCount: number;
@@ -32,6 +45,9 @@ export interface ReconciliationControlSummary {
 interface LatestCompletedRunRow {
   run_key: string;
   completed_at: Date | null;
+  coverage_from_block: string | number | null;
+  coverage_to_block: string | number | null;
+  coverage_complete: boolean | null;
 }
 
 interface ScopedTradeRow {
@@ -48,6 +64,16 @@ interface CountRow {
 }
 
 type PoolLike = Pick<Pool, 'query'>;
+
+/** `BIGINT` arrives as a string from `pg`, and `Number(null)` is `0`. */
+function toBlockNumber(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export class ReconciliationGateService {
   private readonly pool: PoolLike | null;
@@ -98,6 +124,9 @@ export class ReconciliationGateService {
           freshness: 'MISSING',
           completedAt: null,
           staleRunningRunCount: 0,
+          coverageFromBlock: null,
+          coverageToBlock: null,
+          coverageComplete: null,
           blockedReasons: ['Reconciliation database is not configured'],
         });
       }
@@ -107,6 +136,9 @@ export class ReconciliationGateService {
     const latestRun = await this.pool.query<LatestCompletedRunRow>(
       `SELECT run_key
               , completed_at
+              , coverage_from_block
+              , coverage_to_block
+              , coverage_complete
        FROM reconcile_runs
        WHERE status = 'COMPLETED'
        ORDER BY completed_at DESC, id DESC
@@ -134,6 +166,9 @@ export class ReconciliationGateService {
           freshness: 'MISSING',
           completedAt: null,
           staleRunningRunCount,
+          coverageFromBlock: null,
+          coverageToBlock: null,
+          coverageComplete: null,
           blockedReasons: ['No completed reconciliation run is available'],
         });
       }
@@ -152,6 +187,20 @@ export class ReconciliationGateService {
       staleRunningRunCount > 0
         ? `${staleRunningRunCount} reconciliation run(s) have remained RUNNING beyond ${this.maxRunningRunAgeSeconds} seconds`
         : null;
+
+    // WP-4 H-25. A run that stopped short published a range, not a verdict.
+    // Accepting it would let a truncated sweep clear every trade it happened to
+    // reach and say nothing about the ones it did not -- which is
+    // indistinguishable, downstream, from a clean run.
+    const coverageFromBlock = toBlockNumber(latestRun.rows[0]?.coverage_from_block);
+    const coverageToBlock = toBlockNumber(latestRun.rows[0]?.coverage_to_block);
+    const coverageComplete = latestRun.rows[0]?.coverage_complete ?? null;
+    const coverageReason =
+      coverageComplete === true && coverageToBlock !== null
+        ? null
+        : coverageComplete === false
+          ? 'Latest completed reconciliation run published an incomplete chain range'
+          : 'Latest completed reconciliation run did not publish a chain coverage watermark';
 
     const [scopedTrades, driftCounts] = await Promise.all([
       this.pool.query<ScopedTradeRow>(
@@ -186,6 +235,9 @@ export class ReconciliationGateService {
       if (runningReason) {
         blockedReasons.push(runningReason);
       }
+      if (coverageReason) {
+        blockedReasons.push(coverageReason);
+      }
 
       if (blockedReasons.length > 0) {
         result.set(tradeId, {
@@ -193,9 +245,15 @@ export class ReconciliationGateService {
           status: 'BLOCKED',
           runKey,
           driftCount,
-          freshness: 'STALE',
+          // Coverage is not freshness. A run can be current and still have
+          // published no watermark, and reporting that as STALE would send an
+          // operator to look at the schedule instead of at the run.
+          freshness: isStale ? 'STALE' : 'FRESH',
           completedAt,
           staleRunningRunCount,
+          coverageFromBlock,
+          coverageToBlock,
+          coverageComplete,
           blockedReasons,
         });
         continue;
@@ -210,6 +268,9 @@ export class ReconciliationGateService {
           freshness: 'FRESH',
           completedAt,
           staleRunningRunCount,
+          coverageFromBlock,
+          coverageToBlock,
+          coverageComplete,
           blockedReasons: ['Trade is not covered by the latest completed reconciliation run'],
         });
         continue;
@@ -224,6 +285,9 @@ export class ReconciliationGateService {
           freshness: 'FRESH',
           completedAt,
           staleRunningRunCount,
+          coverageFromBlock,
+          coverageToBlock,
+          coverageComplete,
           blockedReasons: [`Latest reconciliation run reported ${driftCount} drift finding(s)`],
         });
         continue;
@@ -237,6 +301,9 @@ export class ReconciliationGateService {
         freshness: 'FRESH',
         completedAt,
         staleRunningRunCount,
+        coverageFromBlock,
+        coverageToBlock,
+        coverageComplete,
         blockedReasons: [],
       });
     }
@@ -251,6 +318,8 @@ export class ReconciliationGateService {
     const latestCompletedRunKey = values[0]?.runKey ?? null;
     const latestCompletedRunAt = values[0]?.completedAt ?? null;
     const staleRunningRunCount = values[0]?.staleRunningRunCount ?? 0;
+    const coverageToBlock = values[0]?.coverageToBlock ?? null;
+    const coverageComplete = values[0]?.coverageComplete ?? null;
     const latestCompletedRunAgeSeconds =
       latestCompletedRunAt === null || latestCompletedRunAt === undefined
         ? null
@@ -280,6 +349,8 @@ export class ReconciliationGateService {
       latestCompletedRunKey,
       latestCompletedRunAt,
       latestCompletedRunAgeSeconds,
+      coverageToBlock,
+      coverageComplete,
       staleRunningRunCount,
       trackedTradeCount: values.length,
       clearTradeCount,
