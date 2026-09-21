@@ -14,9 +14,11 @@ const PROTECTED_TYPES = new Set([
   'aws_secretsmanager_secret',
   'aws_security_group',
 ]);
+const REVIEWED_STATE_ONLY_REMOVALS = new Set(['aws_ecs_task_definition.gateway']);
 
 function classify(change) {
   const actions = change.change?.actions ?? [];
+  if (actions.includes('forget')) return 'forget';
   if (actions.includes('delete') && actions.includes('create')) return 'replace';
   if (actions.includes('delete')) return 'delete';
   if (actions.includes('create')) return 'create';
@@ -48,21 +50,36 @@ const changes = (plan.resource_changes ?? []).map((change) => ({
   address: change.address,
   type: change.type,
   action: classify(change),
+  beforeSkipDestroy: change.change?.before?.skip_destroy,
+  afterSkipDestroy: change.change?.after?.skip_destroy,
 }));
 const destructive = changes.filter((change) => ['delete', 'replace'].includes(change.action));
-const blocked = destructive.filter((change) => PROTECTED_TYPES.has(change.type));
+const forgotten = changes.filter((change) => change.action === 'forget');
+const blocked = destructive.filter(
+  (change) =>
+    PROTECTED_TYPES.has(change.type) ||
+    (change.type === 'aws_ecs_task_definition' &&
+      (change.action === 'delete' ||
+        change.beforeSkipDestroy !== true ||
+        change.afterSkipDestroy !== true)),
+);
+const unreviewedStateRemovals = forgotten.filter(
+  (change) => !REVIEWED_STATE_ONLY_REMOVALS.has(change.address),
+);
 
-if (destructive.length > 0) {
-  console.log('Destructive changes in this plan:');
-  for (const change of destructive) {
+if (destructive.length > 0 || forgotten.length > 0) {
+  console.log('Destructive or state-only removal changes in this plan:');
+  for (const change of [...destructive, ...forgotten]) {
     console.log(
-      `  ${PROTECTED_TYPES.has(change.type) ? 'BLOCKED' : 'review'}  ${change.action}  ${change.address}`,
+      `  ${blocked.includes(change) || unreviewedStateRemovals.includes(change) ? 'BLOCKED' : 'review'}  ${change.action}  ${change.address}`,
     );
   }
 }
 
-if (blocked.length > 0) {
-  console.error(`\n${blocked.length} protected resource(s) would be destroyed or replaced.`);
+if (blocked.length > 0 || unreviewedStateRemovals.length > 0) {
+  console.error(
+    `\n${blocked.length} unsafe destroy/replacement(s) and ${unreviewedStateRemovals.length} unreviewed state-only removal(s).`,
+  );
   process.exit(1);
 }
 

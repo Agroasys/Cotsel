@@ -11,6 +11,11 @@ const cases = [
   { name: 'allowed-create.json', expected: 0 },
   { name: 'blocked-secret-delete.json', expected: 1 },
   { name: 'blocked-registry-replace.json', expected: 1 },
+  { name: 'blocked-task-definition-unretained-replace.json', expected: 1 },
+  { name: 'blocked-task-definition-retention-drop.json', expected: 1 },
+  { name: 'allowed-task-definition-retained-replace.json', expected: 0 },
+  { name: 'allowed-gateway-state-retirement.json', expected: 0 },
+  { name: 'blocked-unreviewed-state-retirement.json', expected: 1 },
 ];
 
 let failures = 0;

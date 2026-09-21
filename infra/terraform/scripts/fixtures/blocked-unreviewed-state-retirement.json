@@ -1,0 +1,9 @@
+{
+  "resource_changes": [
+    {
+      "address": "aws_ecs_task_definition.oracle",
+      "type": "aws_ecs_task_definition",
+      "change": { "actions": ["forget"] }
+    }
+  ]
+}
