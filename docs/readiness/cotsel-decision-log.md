@@ -44,12 +44,26 @@
 
 ## Entries
 
-No entry has been recorded. As of 2026-08-11 the programme has made no exception, rollback, pause, unpause,
-signer change, migration, pilot-limit change or equivalence acceptance. The log is open and the first decision
-of any logged type is recorded here as `DL-0001`.
+### DL-0001 — Expand the eligible production-pilot participant class
 
-This zero state is itself a reportable fact: it means no gate is currently held open by a bounded exception, and
-no evidence in the programme currently depends on an equivalence argument.
+| Field                | Value                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sequence             | `DL-0001`                                                                                                                                                                                                                                                                                                                                                         |
+| Date                 | 2026-09-22                                                                                                                                                                                                                                                                                                                                                        |
+| Type                 | Pilot-limit change                                                                                                                                                                                                                                                                                                                                                |
+| Deciding authority   | Product and Finance authority @Astton                                                                                                                                                                                                                                                                                                                             |
+| Reviewer             | Engineering and Security authority @czpyioe, recorded by approval of the exact head of [PR #838](https://github.com/Agroasys/Cotsel/pull/838)                                                                                                                                                                                                                     |
+| Scope                | Expands the eligible production-pilot class from the two named internal test accounts to named, candidate-approved, invite-only testing users. It retains Base Sepolia, testnet assets, zero real commercial value, disabled fiat off-ramp, no public self-registration, no automatic expansion, and no public launch. It does not authorize a particular roster. |
+| Rationale            | Permit controlled testing with invited users without treating the pilot as a public or value-bearing launch. Candidate-specific P-3 and P-6 decisions remain mandatory before access.                                                                                                                                                                             |
+| Affected release     | `none`; no candidate roster or release is authorized by this programme-level scope decision                                                                                                                                                                                                                                                                       |
+| Affected issues      | [#622](https://github.com/Agroasys/Cotsel/issues/622), [#635](https://github.com/Agroasys/Cotsel/issues/635), [#684](https://github.com/Agroasys/Cotsel/issues/684), and [#686](https://github.com/Agroasys/Cotsel/issues/686)                                                                                                                                    |
+| Expiry               | not applicable                                                                                                                                                                                                                                                                                                                                                    |
+| Invalidated evidence | The participant-limit portions of the 2026-08-10 WP-0 charter acceptance and the 2026-W33.1 blocker snapshot, plus any later evidence that assumes only two internal test accounts. Technical evidence unaffected by participant class remains valid only under its own candidate and invalidation rules.                                                         |
+| Revocation trigger   | Any unapproved or unnamed participant, public self-registration, automatic cohort expansion, real commercial value, enabled fiat off-ramp, missing candidate-specific P-3 or P-6 acceptance, or another material participant/value boundary change                                                                                                                |
+| Register version     | `1.0-two-person.1`                                                                                                                                                                                                                                                                                                                                                |
+
+This entry changes programme scope only. It does not accept P-3 or P-6, deploy a candidate, approve a roster,
+or authorize public launch.
 
 ## Decisions recorded elsewhere
 
@@ -57,12 +71,12 @@ The baseline decisions below predate this log and are not of a logged type. They
 named here, which remain their authoritative home. They are listed for traceability only; this section is not an
 entry list and is not append-only.
 
-| Decision                                                                       | Authority                   | Date       | Authoritative record                                                                                                |
-| ------------------------------------------------------------------------------ | --------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------- |
-| DEC-01 — AWS as the authoritative cloud and control plane                      | Programme Lead @Astton      | 2026-08-10 | `docs/readiness/cotsel-release-charter-v1.md` §7; accepted at [#635](https://github.com/Agroasys/Cotsel/issues/635) |
-| DEC-02 — Candidate-approved invite-only testers, testnet-only, zero real value | Product and Finance @Astton | 2026-09-22 | Charter §5 and §7; candidate controls remain governed by [#684](https://github.com/Agroasys/Cotsel/issues/684)      |
-| Charter approval — Product authority                                           | Product @Astton             | 2026-08-10 | Charter §9 approval table                                                                                           |
-| Charter approval — Finance authority, zero-real-value use                      | Finance @Astton             | 2026-08-10 | Charter §9 approval table                                                                                           |
+| Decision                                                           | Authority                   | Date       | Authoritative record                                                                                                |
+| ------------------------------------------------------------------ | --------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------- |
+| DEC-01 — AWS as the authoritative cloud and control plane          | Programme Lead @Astton      | 2026-08-10 | `docs/readiness/cotsel-release-charter-v1.md` §7; accepted at [#635](https://github.com/Agroasys/Cotsel/issues/635) |
+| DEC-02 — Two named internal testers, testnet-only, zero real value | Product and Finance @Astton | 2026-08-10 | Charter §5 and §7; recorded for traceability at [#684](https://github.com/Agroasys/Cotsel/issues/684)               |
+| Charter approval — Product authority                               | Product @Astton             | 2026-08-10 | Charter §9 approval table                                                                                           |
+| Charter approval — Finance authority, zero-real-value use          | Finance @Astton             | 2026-08-10 | Charter §9 approval table                                                                                           |
 
 Work-package scope acceptances under GOV-01, design approvals under GOV-02 and staging promotions under GOV-03
 are recorded in their own artifacts as defined by the governance register §1. Only the residual-risk acceptances
