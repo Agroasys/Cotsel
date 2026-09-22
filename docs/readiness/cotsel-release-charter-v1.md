@@ -106,19 +106,19 @@ been deployed into it.
 The candidate manifest contract defined by #636 (`integration/candidate-manifest.v2.schema.json`) is what binds
 these values to a specific run. This section records what is pinned today and what is not.
 
-| Dimension             | Value                                                                                                                                |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Chain (rehearsal)     | Base Sepolia, chain ID `84532`                                                                                                       |
-| Chain (production)    | Base mainnet, chain ID `8453` — separately gated by WP-12, no deployment authorized                                                  |
-| USDC (Base Sepolia)   | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`                                                                                         |
-| Escrow contract       | **Not pinned.** Currently recorded deployment is `0x8e1e152167FeD9FF7833156A023fFCa88f243B3d`. See the note below.                   |
-| Trade states          | `LOCKED=0`, `IN_TRANSIT=1`, `ARRIVAL_CONFIRMED=2`, `FROZEN=3`, `CLOSED=4` (`sdk/src/types/trade.ts`)                                 |
-| Cross-repository pins | `integration/release-manifest.json`, status `candidate` — `agroasys-backend@develop`, `platform.v1@main`, `Cotsel.dash@main`         |
-| Callback contracts    | `cotsel.settlement-callback.v1`, `cotsel.settlement-observed-amounts.v1`                                                             |
-| Participant class     | Two named internal Agroasys test accounts operated by @Astton and @czpyioe. No public or external participants.                      |
-| Value caps            | Testnet assets only and zero real commercial value. One test flow is active at a time; no fiat or off-ramp settlement is enabled.    |
-| Provider mode         | Fiat off-ramp disabled; AWS KMS signer; managed RPC with primary and fallback endpoints.                                             |
-| Cloud and region      | Existing Agroasys AWS staging account and the backend staging region; the exact non-secret identifiers enter the candidate manifest. |
+| Dimension             | Value                                                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chain (rehearsal)     | Base Sepolia, chain ID `84532`                                                                                                                                                             |
+| Chain (production)    | Base mainnet, chain ID `8453` — separately gated by WP-12, no deployment authorized                                                                                                        |
+| USDC (Base Sepolia)   | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`                                                                                                                                               |
+| Escrow contract       | **Not pinned.** Currently recorded deployment is `0x8e1e152167FeD9FF7833156A023fFCa88f243B3d`. See the note below.                                                                         |
+| Trade states          | `LOCKED=0`, `IN_TRANSIT=1`, `ARRIVAL_CONFIRMED=2`, `FROZEN=3`, `CLOSED=4` (`sdk/src/types/trade.ts`)                                                                                       |
+| Cross-repository pins | `integration/release-manifest.json`, status `candidate` — `agroasys-backend@develop`, `platform.v1@main`, `Cotsel.dash@main`                                                               |
+| Callback contracts    | `cotsel.settlement-callback.v1`, `cotsel.settlement-observed-amounts.v1`                                                                                                                   |
+| Participant class     | Named invite-only testing accounts approved for the candidate, including accounts operated by @Astton and @czpyioe. No public self-registration, public launch or unapproved participants. |
+| Value caps            | Testnet assets only and zero real commercial value. One test flow is active at a time; no fiat or off-ramp settlement is enabled.                                                          |
+| Provider mode         | Fiat off-ramp disabled; AWS KMS signer; managed RPC with primary and fallback endpoints.                                                                                                   |
+| Cloud and region      | Existing Agroasys AWS staging account and the backend staging region; the exact non-secret identifiers enter the candidate manifest.                                                       |
 
 ### Escrow contract identity
 
