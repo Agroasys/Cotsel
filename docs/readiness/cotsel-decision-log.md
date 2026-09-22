@@ -57,12 +57,12 @@ The baseline decisions below predate this log and are not of a logged type. They
 named here, which remain their authoritative home. They are listed for traceability only; this section is not an
 entry list and is not append-only.
 
-| Decision                                                           | Authority                   | Date       | Authoritative record                                                                                                |
-| ------------------------------------------------------------------ | --------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------- |
-| DEC-01 — AWS as the authoritative cloud and control plane          | Programme Lead @Astton      | 2026-08-10 | `docs/readiness/cotsel-release-charter-v1.md` §7; accepted at [#635](https://github.com/Agroasys/Cotsel/issues/635) |
-| DEC-02 — Two named internal testers, testnet-only, zero real value | Product and Finance @Astton | 2026-08-10 | Charter §5 and §7; recorded for traceability at [#684](https://github.com/Agroasys/Cotsel/issues/684)               |
-| Charter approval — Product authority                               | Product @Astton             | 2026-08-10 | Charter §9 approval table                                                                                           |
-| Charter approval — Finance authority, zero-real-value use          | Finance @Astton             | 2026-08-10 | Charter §9 approval table                                                                                           |
+| Decision                                                                       | Authority                   | Date       | Authoritative record                                                                                                |
+| ------------------------------------------------------------------------------ | --------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------- |
+| DEC-01 — AWS as the authoritative cloud and control plane                      | Programme Lead @Astton      | 2026-08-10 | `docs/readiness/cotsel-release-charter-v1.md` §7; accepted at [#635](https://github.com/Agroasys/Cotsel/issues/635) |
+| DEC-02 — Candidate-approved invite-only testers, testnet-only, zero real value | Product and Finance @Astton | 2026-09-22 | Charter §5 and §7; candidate controls remain governed by [#684](https://github.com/Agroasys/Cotsel/issues/684)      |
+| Charter approval — Product authority                                           | Product @Astton             | 2026-08-10 | Charter §9 approval table                                                                                           |
+| Charter approval — Finance authority, zero-real-value use                      | Finance @Astton             | 2026-08-10 | Charter §9 approval table                                                                                           |
 
 Work-package scope acceptances under GOV-01, design approvals under GOV-02 and staging promotions under GOV-03
 are recorded in their own artifacts as defined by the governance register §1. Only the residual-risk acceptances

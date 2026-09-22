@@ -547,7 +547,7 @@
           "acceptanceEvidence": "An approved decision record names the cloud, account, region, control owner, network and deployment boundary, rejected alternative and downstream WP-7 obligations."
         },
         "DEC-02": {
-          "implementationRequirement": "Approve the pilot participant class, jurisdiction, value and transaction limits and support model before inviting any external participant, then enforce the decision in allowlists, caps and operations.",
+          "implementationRequirement": "Permit only candidate-approved invite-only testing users. Before granting access, bind each participant, jurisdiction, eligibility decision, consent, training, value and transaction limits, support contact and stop condition to the exact candidate, then enforce the decision in allowlists, caps and operations. Prohibit public self-registration and unapproved expansion.",
           "acceptanceEvidence": "A signed Product, Compliance, Finance and Pilot Owner record names participants, jurisdiction, limits, eligibility, support contacts and change authority and maps to deployed controls."
         },
         "DEC-03": {
