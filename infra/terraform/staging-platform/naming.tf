@@ -49,6 +49,7 @@ locals {
     "oracle-managed-signer",
     "rpc-base-sepolia-fallback",
     "rpc-base-sepolia-primary",
+    "treasury-provider-callback",
   ])
 
   secret_names = setunion(local.database_secret_names, local.integration_secret_names)
