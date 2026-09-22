@@ -31,6 +31,58 @@ the identity it was produced against, who produced it, and who accepted it.
 Candidate manifest version 1 is historical. The validator reads it only with `superseded` status.
 Version 1 cannot authorize new evidence.
 
+## Base Sepolia evidence archive preflight
+
+Audience: Account Owner, Security Authority, Release Owner, and independent reviewer.
+
+Outcome: prepare the immutable evidence archive without creating cloud resources or authorizing a
+release.
+
+The Account Owner has selected 90-day S3 Object Lock governance retention for Base Sepolia staging
+evidence. Compliance mode is disabled. This decision applies when an object version is stored. It
+does not delay a release by itself, but evidence custody is a release gate.
+
+The archive implementation is blocked until the Security Authority accepts the retention
+administrator and custody role. The independent reviewer must also acknowledge the archive-reader
+role. Do not create an archive bucket, role, policy, plan, or object before those acknowledgements
+are recorded.
+
+The writer identity design is also blocked. A GitHub Actions OIDC role scoped only to the repository
+and `main` branch does not meet the required exact-workflow control. Do not replace that control
+with a repository- or branch-wide writer role. Security must approve an enforceable design, including
+the protected environment or other identity boundary and the allowed candidate key prefix, before
+Terraform work begins.
+
+When the design is approved, implement all of the following controls in a separately reviewed
+Terraform change:
+
+- Create one encrypted, versioned S3 bucket with Object Lock governance retention of 90 days.
+- Disable public access and require TLS.
+- Separate writer, independent reader, and retention-administrator roles.
+- Permit the writer only to add objects below the approved Base Sepolia candidate prefix.
+- Deny ordinary runtime, deployment, CI, and administrator roles governance bypass, retention and
+  legal-hold administration, and object-version deletion.
+- Record CloudTrail S3 data events and alert the Account Owner and Security Authority for reads,
+  deletes, policy changes, retention changes, legal-hold changes, and governance-bypass attempts.
+
+Each archived object version must have an evidence-index entry that records the object URI and
+version ID, SHA-256, source commit, image digest where applicable, Terraform state and plan
+version/hash where applicable, redacted configuration digest, producer identity, reviewer identity,
+and candidate identity. Never store a private key, seed phrase, passphrase, raw secret, or unredacted
+Terraform plan in the evidence index.
+
+After a reviewed apply, run these acceptance tests before archiving release evidence:
+
+1. Upload an object with the writer identity.
+2. Retrieve the object with the independent reader identity.
+3. Verify the retrieved SHA-256 against the evidence index.
+4. Verify governance mode and a 90-day retain-until date for the object version.
+5. Verify that ordinary deployment identity cannot delete, shorten retention, or bypass governance.
+6. Verify CloudTrail data events and alert delivery for each required event class.
+
+Keep services, signers, contract actions, and settlement traffic disabled if any preflight or
+acceptance test fails.
+
 ## Required release candidate inventory
 
 The inventory is closed. A candidate must contain every required entry and no additional entry.
