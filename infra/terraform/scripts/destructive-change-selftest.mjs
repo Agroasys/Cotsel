@@ -15,6 +15,7 @@ const cases = [
   { name: 'blocked-task-definition-retention-drop.json', expected: 1 },
   { name: 'allowed-task-definition-retained-replace.json', expected: 0 },
   { name: 'allowed-gateway-state-retirement.json', expected: 0 },
+  { name: 'blocked-gateway-mixed-forget.json', expected: 1 },
   { name: 'blocked-unreviewed-state-retirement.json', expected: 1 },
 ];
 
