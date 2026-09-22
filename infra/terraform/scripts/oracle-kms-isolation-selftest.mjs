@@ -37,6 +37,12 @@ const relayerSigner = readFileSync(
 );
 
 assert.doesNotMatch(gateway, /local\.oracle_container/);
+assert.match(
+  gateway,
+  /removed\s*\{\s*from = aws_ecs_task_definition\.gateway\s+lifecycle\s*\{\s*destroy = false/s,
+);
+assert.match(gateway, /resource "aws_ecs_task_definition" "gateway_current"/);
+assert.match(gateway, /task_definition\s+= aws_ecs_task_definition\.gateway_current\.arn/);
 assert.match(gateway, /runtime_service_discovery_arns\["gateway"\]/);
 assert.doesNotMatch(
   gateway,

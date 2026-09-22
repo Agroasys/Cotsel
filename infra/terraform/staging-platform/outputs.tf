@@ -52,8 +52,8 @@ output "gateway_runtime" {
     reviewed_config_sha256 = local.gateway_reviewed_config_sha256
     service_arn            = aws_ecs_service.gateway.id
     service_name           = aws_ecs_service.gateway.name
-    task_family            = aws_ecs_task_definition.gateway.family
-    task_revision          = aws_ecs_task_definition.gateway.revision
+    task_family            = aws_ecs_task_definition.gateway_current.family
+    task_revision          = aws_ecs_task_definition.gateway_current.revision
     task_role_arn          = aws_iam_role.gateway_task.arn
   }
 }

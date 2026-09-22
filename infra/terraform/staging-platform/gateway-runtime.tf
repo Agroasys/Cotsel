@@ -18,7 +18,19 @@ locals {
   ]))
 }
 
-resource "aws_ecs_task_definition" "gateway" {
+# The historical gateway revision in state predates skip_destroy=true. Its
+# original state would cause the provider to deregister it on replacement.
+# Retire that state address without touching the live revision, then manage the
+# corrected gateway under a new address with retention enabled from creation.
+removed {
+  from = aws_ecs_task_definition.gateway
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+resource "aws_ecs_task_definition" "gateway_current" {
   family                   = "${local.name_prefix}-gateway"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
@@ -55,7 +67,7 @@ resource "aws_ecs_task_definition" "gateway" {
 resource "aws_ecs_service" "gateway" {
   name                   = "${local.name_prefix}-gateway"
   cluster                = aws_ecs_cluster.staging.id
-  task_definition        = aws_ecs_task_definition.gateway.arn
+  task_definition        = aws_ecs_task_definition.gateway_current.arn
   desired_count          = var.gateway_desired_count
   launch_type            = "FARGATE"
   enable_execute_command = false
