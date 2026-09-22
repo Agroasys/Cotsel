@@ -24,9 +24,13 @@ existing Agroasys staging boundary. It does not deploy a release candidate.
   Indexer or reconciliation failure cannot terminate the gateway task. Gateway
   liveness remains observable while financial readiness fails closed when chain
   state is stale or unavailable.
-- History: task definitions use `skip_destroy=true`. Terraform can register a
-  reviewed revision without deregistering the historical revisions retained for
-  incident evidence and rollback analysis.
+- History: task definitions use `skip_destroy=true`. The gateway revision that
+  predates that setting is retired from Terraform state with `destroy=false`.
+  Terraform retains that AWS revision and manages later gateway revisions under
+  `gateway_current`. Verify the old revision remains `ACTIVE` after the apply.
+  After the reviewed apply confirms the state retirement and retained AWS
+  revision, remove the `removed` block, the one-time gateway exemption in
+  `check-destructive-changes.mjs`, and its positive fixture and self-test.
 
 ## Secret handling
 

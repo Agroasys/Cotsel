@@ -14,14 +14,23 @@ const PROTECTED_TYPES = new Set([
   'aws_secretsmanager_secret',
   'aws_security_group',
 ]);
+// Remove this one-time exemption after the reviewed gateway retirement is applied.
+const REVIEWED_STATE_ONLY_REMOVALS = new Map([
+  ['aws_ecs_task_definition.gateway', 'aws_ecs_task_definition'],
+]);
 
 function classify(change) {
   const actions = change.change?.actions ?? [];
-  if (actions.includes('delete') && actions.includes('create')) return 'replace';
-  if (actions.includes('delete')) return 'delete';
-  if (actions.includes('create')) return 'create';
-  if (actions.includes('update')) return 'update';
-  return 'no-op';
+  if (actions.length === 1) {
+    if (['forget', 'delete', 'create', 'update', 'no-op'].includes(actions[0])) {
+      return actions[0];
+    }
+    if (actions[0] === 'read') return 'no-op';
+  }
+  if (actions.length === 2 && actions.includes('delete') && actions.includes('create')) {
+    return 'replace';
+  }
+  return 'invalid';
 }
 
 async function readStdin() {
@@ -48,21 +57,37 @@ const changes = (plan.resource_changes ?? []).map((change) => ({
   address: change.address,
   type: change.type,
   action: classify(change),
+  beforeSkipDestroy: change.change?.before?.skip_destroy,
+  afterSkipDestroy: change.change?.after?.skip_destroy,
 }));
 const destructive = changes.filter((change) => ['delete', 'replace'].includes(change.action));
-const blocked = destructive.filter((change) => PROTECTED_TYPES.has(change.type));
+const forgotten = changes.filter((change) => change.action === 'forget');
+const invalid = changes.filter((change) => change.action === 'invalid');
+const blocked = destructive.filter(
+  (change) =>
+    PROTECTED_TYPES.has(change.type) ||
+    (change.type === 'aws_ecs_task_definition' &&
+      (change.action === 'delete' ||
+        change.beforeSkipDestroy !== true ||
+        change.afterSkipDestroy !== true)),
+);
+const unreviewedStateRemovals = forgotten.filter(
+  (change) => REVIEWED_STATE_ONLY_REMOVALS.get(change.address) !== change.type,
+);
 
-if (destructive.length > 0) {
-  console.log('Destructive changes in this plan:');
-  for (const change of destructive) {
+if (destructive.length > 0 || forgotten.length > 0 || invalid.length > 0) {
+  console.log('Destructive, state-only removal, or invalid changes in this plan:');
+  for (const change of [...destructive, ...forgotten, ...invalid]) {
     console.log(
-      `  ${PROTECTED_TYPES.has(change.type) ? 'BLOCKED' : 'review'}  ${change.action}  ${change.address}`,
+      `  ${blocked.includes(change) || unreviewedStateRemovals.includes(change) || invalid.includes(change) ? 'BLOCKED' : 'review'}  ${change.action}  ${change.address}`,
     );
   }
 }
 
-if (blocked.length > 0) {
-  console.error(`\n${blocked.length} protected resource(s) would be destroyed or replaced.`);
+if (blocked.length > 0 || unreviewedStateRemovals.length > 0 || invalid.length > 0) {
+  console.error(
+    `\n${blocked.length} unsafe destroy/replacement(s), ${unreviewedStateRemovals.length} unreviewed state-only removal(s), and ${invalid.length} invalid action set(s).`,
+  );
   process.exit(1);
 }
 
