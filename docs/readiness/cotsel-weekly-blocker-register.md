@@ -45,3 +45,38 @@ on 2026-08-11. There are no P0 items in `Blocked` or `Evidence Review`; the seve
 No item in this edition has an accepted GOV-05 exception. A changed scope, provider, authority, environment,
 participant class, or value boundary invalidates the affected evidence and requires a new edition or an immediate
 P0-change update.
+
+## Edition 2026-W39.1 — 2026-09-22
+
+**Snapshot:** A direct Project 9 query on 2026-09-22 returned the 16 P0 items below in `Blocked`,
+`Decision Required`, or `Evidence Review`. The automated live audit did not pass: it found 75 managed programme
+issues while its source contract expected 71. This edition therefore records the live blocker set and the audit
+drift explicitly; it does not claim a green metadata audit.
+
+DL-0001 expands the eligible participant class but authorizes no roster or release. Any evidence that relied on
+the prior two-internal-tester limit is stale and must be revalidated. The decision does not accept or close any
+item below, and all unaffected evidence remains subject to its existing candidate and invalidation rules.
+
+| Blocker                                                                               | Live status       | Accountable owner                          | Gate    | Next decision                                                                                                                                          |
+| ------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [#690](https://github.com/Agroasys/Cotsel/issues/690) — mainnet authorization         | Decision Required | Executive launch authority                 | Mainnet | Retain NO-GO until the exact mainnet packet receives the separate four-role approval.                                                                  |
+| [#687](https://github.com/Agroasys/Cotsel/issues/687) — mainnet decision              | Decision Required | Executive launch authority                 | Mainnet | Record a separate product and governance change decision; pilot evidence cannot authorize mainnet.                                                     |
+| [#686](https://github.com/Agroasys/Cotsel/issues/686) — controlled-pilot GO           | Decision Required | Pilot Owner                                | P-6     | Record GO only after the exact candidate, roster, P-0 through P-5 evidence, stop conditions, and rollback target are accepted.                         |
+| [#684](https://github.com/Agroasys/Cotsel/issues/684) — participant decision          | Decision Required | Pilot Owner                                | P-3     | Bind each named invitee, eligibility decision, consent, training, zero-value limits, support, and stop authority to the exact candidate before access. |
+| [#673](https://github.com/Agroasys/Cotsel/issues/673) — evidence custody              | Decision Required | Release, Operations, and Compliance owners | E-5     | Accept immutable evidence custody only after its exact deployed controls and recovery proof pass review.                                               |
+| [#667](https://github.com/Agroasys/Cotsel/issues/667) — staging platform              | Blocked           | Platform and Release owners                | E-4     | Complete the approved platform apply and candidate-bound runtime, denial, recovery, and rollback evidence.                                             |
+| [#649](https://github.com/Agroasys/Cotsel/issues/649) — Oracle custody                | Blocked           | Oracle and Security owners                 | E-2     | Prove fail-closed Oracle custody and independently accepted runtime identity on the exact candidate.                                                   |
+| [#645](https://github.com/Agroasys/Cotsel/issues/645) — signer response verification  | Blocked           | Gateway and Security owners                | E-2     | Prove every managed-signer response matches canonical intent through the deployed path.                                                                |
+| [#644](https://github.com/Agroasys/Cotsel/issues/644) — broadcast recovery            | Blocked           | Gateway and Finance owners                 | E-2     | Prove durable broadcast identity and safe recovery of unknown outcomes on the exact candidate.                                                         |
+| [#640](https://github.com/Agroasys/Cotsel/issues/640) — buyer authorization           | Evidence Review   | Protocol Owner and Product Security        | E-1     | Complete independent review of the exact candidate evidence; source completion alone cannot accept E-1.                                                |
+| [#639](https://github.com/Agroasys/Cotsel/issues/639) — contract deployment           | Blocked           | Protocol and Release owners                | E-1     | Deploy and verify the pinned Base Sepolia contract through the protected path.                                                                         |
+| [#636](https://github.com/Agroasys/Cotsel/issues/636) — release evidence contract     | Blocked           | Release Owner                              | E-0     | Accept the immutable manifest and evidence-index contract through its named review route.                                                              |
+| [#714](https://github.com/Agroasys/Cotsel/issues/714) — RPC log redaction             | Blocked           | Platform and Security owners               | E-4     | Prove authenticated RPC URLs remain redacted in the deployed path.                                                                                     |
+| [#789](https://github.com/Agroasys/Cotsel/issues/789) — protected contract deployment | Blocked           | Protocol and Release owners                | E-1     | Complete the protected KMS deployment and independently verify the resulting identity.                                                                 |
+| [#788](https://github.com/Agroasys/Cotsel/issues/788) — Oracle KMS isolation          | Blocked           | Oracle and Security owners                 | E-2     | Complete runtime isolation and prove the Oracle workload cannot bypass its scoped KMS boundary.                                                        |
+| [#795](https://github.com/Agroasys/Cotsel/issues/795) — relayer authorization         | Blocked           | Gateway, Security, and Protocol owners     | E-1     | Prove contract-authorized operations and semantic calldata validation through the deployed path.                                                       |
+
+No item in this edition has an accepted GOV-05 exception. Public self-registration, unnamed or unapproved
+participants, real commercial value, enabled fiat off-ramp, automatic expansion, and public launch remain stop
+conditions. Re-run the live audit after its 71-to-75 source-contract drift is reconciled; do not treat this direct
+query as acceptance of that audit.

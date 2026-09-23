@@ -1,0 +1,13 @@
+{
+  "resource_changes": [
+    {
+      "address": "aws_ecs_task_definition.gateway_current",
+      "type": "aws_ecs_task_definition",
+      "change": {
+        "actions": ["create", "delete"],
+        "before": { "skip_destroy": true },
+        "after": { "skip_destroy": true }
+      }
+    }
+  ]
+}

@@ -282,6 +282,23 @@ variable "treasury_desired_count" {
   }
 }
 
+variable "treasury_gateway_api_key_id" {
+  description = "Service API key identifier the dashboard gateway presents to Treasury. Treasury accepts a delegated operator identity only from this caller, so the value is a reviewed control decision and not a credential."
+  type        = string
+  default     = "cotsel-gateway-treasury-staging-v1"
+
+  validation {
+    condition     = length(trimspace(var.treasury_gateway_api_key_id)) > 0
+    error_message = "treasury_gateway_api_key_id must name the configured gateway-to-treasury API key."
+  }
+}
+
+variable "treasury_provider_callback_secret_populated" {
+  description = "Set true only after the treasury-provider-callback secret holds a current version. The Treasury task references that secret when true; an unresolvable secret reference fails task startup, so the default leaves callbacks verified and refused rather than unverified and accepted."
+  type        = bool
+  default     = false
+}
+
 variable "service_role_permissions_boundary_arn" {
   description = "Permissions boundary required for Cotsel staging ECS task and execution roles."
   type        = string

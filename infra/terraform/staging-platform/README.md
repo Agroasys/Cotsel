@@ -24,9 +24,13 @@ existing Agroasys staging boundary. It does not deploy a release candidate.
   Indexer or reconciliation failure cannot terminate the gateway task. Gateway
   liveness remains observable while financial readiness fails closed when chain
   state is stale or unavailable.
-- History: task definitions use `skip_destroy=true`. Terraform can register a
-  reviewed revision without deregistering the historical revisions retained for
-  incident evidence and rollback analysis.
+- History: task definitions use `skip_destroy=true`. The gateway revision that
+  predates that setting is retired from Terraform state with `destroy=false`.
+  Terraform retains that AWS revision and manages later gateway revisions under
+  `gateway_current`. Verify the old revision remains `ACTIVE` after the apply.
+  After the reviewed apply confirms the state retirement and retained AWS
+  revision, remove the `removed` block, the one-time gateway exemption in
+  `check-destructive-changes.mjs`, and its positive fixture and self-test.
 
 ## Secret handling
 
@@ -51,6 +55,15 @@ store these singleton credentials as an array: the service parser accepts an
 array for rotation, but ECS JSON-key injection into the gateway requires an
 object. Add a separate, explicitly supported rotation mapping before changing
 this representation.
+
+The `treasury-provider-callback` secret holds the WP-4 provider webhook signing
+material as `TREASURY_PROVIDER_WEBHOOK_SECRETS_JSON`: an array of objects with
+`partnerCode`, `keyId`, and a `secret` of at least 32 characters. Treasury
+references it only when `treasury_provider_callback_secret_populated` is `true`,
+because an unresolvable secret reference fails task startup. Until then callback
+verification stays enabled and every provider callback is refused, which is the
+intended fail-closed state: unverified external evidence must never complete a
+handoff. Populate the secret first, then set the variable.
 
 Database runtime and migration identities are also separate for every database
 owner. Each service-auth boundary and each managed signer has its own secret
@@ -87,6 +100,40 @@ deployer must not hold a runtime role.
 
 Keep signer services disabled during key creation. Reconstruct and verify the
 accepted contract evidence before enabling KMS-backed runtime signing.
+
+## Treasury settlement and control configuration
+
+Treasury carries the WP-4 controls, so its task needs more than a database and a
+service credential.
+
+It reads the chain directly through `SETTLEMENT_RUNTIME`, `CHAIN_ID`, `RPC_URL`
+and `RPC_FALLBACK_URLS`, because canonicality is re-derived from the transaction
+receipt rather than taken from the indexer. `RPC_QUORUM=2` makes two independent
+endpoints agree before a receipt can decide payout eligibility; the SDK clamps
+the value to the number of configured endpoints, so a degraded fallback set
+cannot take the service down. Without a settlement runtime every ingestion run
+refuses with 503, freshness decays, and export and close fail closed.
+
+The scheduled ingestion worker is the only thing that advances chain evidence.
+`TREASURY_INGESTION_WORKER_ENABLED` may not be `false` in a production runtime,
+and `TREASURY_INGEST_MAX_AGE_SECONDS` must exceed `TREASURY_INGEST_INTERVAL_MS`
+or the freshness threshold would be unsatisfiable. Treasury refuses to start in
+either case. Readiness is red until the first run completes.
+
+Treasury reads the accepted reconciliation run through
+`cotsel_reconciliation_reader`, the same read-only identity the Oracle uses for
+containment. Realization compares its own entry block against the run's coverage
+watermark, so treasury must be able to ask what a run covered and must never be
+able to write, clear, or age the evidence that gates it.
+
+`TREASURY_OPERATOR_DELEGATION_API_KEYS` names the one caller allowed to assert
+the operator identity it authenticated. Operator traffic reaches treasury from
+the dashboard gateway under the gateway's own service key, so without this the
+maker and checker of a pair collapse onto one service identity. The value is the
+key identifier, not a credential, and it is a separation-of-duty exception:
+it is held in reviewed configuration, covered by the reviewed config digest,
+through `treasury_gateway_api_key_id`. Narrow it when the delegating caller
+changes; never widen it to the whole internal-mutation key set.
 
 The Oracle runs as its own ECS service and task role. The gateway task cannot
 read the Oracle database credential or any Oracle signing material, and only
