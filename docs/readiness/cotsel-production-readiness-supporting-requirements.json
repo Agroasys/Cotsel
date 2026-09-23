@@ -384,8 +384,8 @@
       "representation": "structured-paraphrase",
       "entries": {
         "E-0": {
-          "implementationRequirement": "Freeze the WP-0 scope, prohibit external users and real value, identify the exact release manifest and environment owner, and require Engineering, Product and Finance approval. Stop when scope, chain, contract or ownership is ambiguous.",
-          "acceptanceEvidence": "A candidate-specific E-0 review links the approved WP-0 charter and immutable manifest, confirms no external users or value, names the environment owner and records Engineering Lead, Product and Finance decisions."
+          "implementationRequirement": "Freeze the WP-0 scope to named invite-only testing users, prohibit public self-registration, public launch and real value, identify the exact release manifest and environment owner, and require Engineering, Product and Finance approval. Stop when scope, participant authorization, chain, contract or ownership is ambiguous.",
+          "acceptanceEvidence": "A candidate-specific E-0 review links the approved WP-0 charter and immutable manifest, identifies the authorized invite-only testing cohort, confirms public registration, public launch and real value remain prohibited, names the environment owner and records Engineering Lead, Product and Finance decisions."
         },
         "E-1": {
           "implementationRequirement": "Verify current contract source, bytecode, roles, ABI and address and update every consumer. Stop new testing while an old or unverified address remains active.",
@@ -547,7 +547,7 @@
           "acceptanceEvidence": "An approved decision record names the cloud, account, region, control owner, network and deployment boundary, rejected alternative and downstream WP-7 obligations."
         },
         "DEC-02": {
-          "implementationRequirement": "Approve the pilot participant class, jurisdiction, value and transaction limits and support model before inviting any external participant, then enforce the decision in allowlists, caps and operations.",
+          "implementationRequirement": "Permit only candidate-approved invite-only testing users. Before granting access, bind each participant, jurisdiction, eligibility decision, consent, training, value and transaction limits, support contact and stop condition to the exact candidate, then enforce the decision in allowlists, caps and operations. Prohibit public self-registration and unapproved expansion.",
           "acceptanceEvidence": "A signed Product, Compliance, Finance and Pilot Owner record names participants, jurisdiction, limits, eligibility, support contacts and change authority and maps to deployed controls."
         },
         "DEC-03": {

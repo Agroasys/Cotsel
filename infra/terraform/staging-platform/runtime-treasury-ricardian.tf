@@ -1,4 +1,10 @@
 locals {
+  # WP-4 FAIL-11 and COMP-06. Provider completion evidence is only worth its
+  # provenance, so treasury verifies every callback signature. The secret
+  # identity always exists; the task references it only once a value has been
+  # written, because an unresolvable secret reference fails task startup.
+  treasury_provider_callbacks_enabled = var.treasury_provider_callback_secret_populated
+
   private_runtime_services = {
     ricardian = {
       container_port = 3100
@@ -17,10 +23,18 @@ locals {
       db_name        = "cotsel_treasury"
       health_path    = "/api/treasury/v1/health"
       log_prefix     = "treasury"
-      secret_arns = [
+      secret_arns = concat([
         aws_secretsmanager_secret.platform["database/treasury/runtime"].arn,
         aws_secretsmanager_secret.platform["gateway-to-treasury-auth"].arn,
-      ]
+        aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn,
+        aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn,
+        # WP-4 H-25. Read-only reconciliation identity. Treasury must be able to
+        # ask which chain range an accepted run covered; it must never be able to
+        # write, clear or age the evidence that gates its own realization.
+        local.foundation_secret_arns["database/reconciliation/reader"],
+        ], local.treasury_provider_callbacks_enabled ? [
+        aws_secretsmanager_secret.platform["treasury-provider-callback"].arn,
+      ] : [])
     }
   }
 
@@ -45,11 +59,13 @@ locals {
       { name = "AUTH_ENABLED", value = "true" },
       { name = "AUTH_MAX_SKEW_SECONDS", value = "300" },
       { name = "AUTH_NONCE_TTL_SECONDS", value = "600" },
+      { name = "CHAIN_ID", value = tostring(local.base_sepolia_chain_id) },
       { name = "COTSEL_ENVIRONMENT", value = "staging" },
       { name = "DB_HOST", value = local.postgres_host },
       { name = "DB_NAME", value = local.private_runtime_services.treasury.db_name },
       { name = "DB_PORT", value = "5432" },
       { name = "DB_SSL_MODE", value = "verify-full" },
+      { name = "EXPLORER_BASE_URL", value = local.base_sepolia_explorer_url },
       { name = "INDEXER_GRAPHQL_URL", value = "http://indexer-graphql.cotsel-staging.internal:4350/graphql" },
       { name = "NODE_ENV", value = "production" },
       { name = "NONCE_STORE", value = "postgres" },
@@ -59,8 +75,39 @@ locals {
       { name = "RATE_LIMIT_ENABLED", value = "true" },
       { name = "RATE_LIMIT_FAIL_OPEN", value = "false" },
       { name = "RATE_LIMIT_REDIS_URL", value = "rediss://${local.redis_primary_endpoint}:6379" },
+      # WP-4 H-25. Realization and close read the accepted reconciliation run
+      # through a dedicated reader role. Without this database the gate returns
+      # UNKNOWN and blocks, which is safe but unprovable.
+      { name = "RECONCILIATION_DB_HOST", value = local.postgres_host },
+      { name = "RECONCILIATION_DB_NAME", value = "cotsel_reconciliation" },
+      { name = "RECONCILIATION_DB_PORT", value = "5432" },
+      { name = "RECONCILIATION_DB_SSL_MODE", value = "verify-full" },
+      { name = "RECONCILIATION_MAX_AGE_SECONDS", value = "900" },
+      { name = "RECONCILIATION_MAX_RUNNING_RUN_AGE_SECONDS", value = "900" },
+      # WP-4 FAIL-06. Canonicality decides payout eligibility, so no single RPC
+      # provider may answer for the chain alone. The SDK clamps this to the
+      # number of configured endpoints, so a degraded fallback set cannot take
+      # the service down.
+      { name = "RPC_QUORUM", value = "2" },
+      { name = "SETTLEMENT_RUNTIME", value = "base-sepolia" },
+      # WP-4 B-09 and FAIL-10. The worker is the only thing that advances chain
+      # evidence on a schedule. The freshness threshold must exceed the interval
+      # or export could never open; treasury asserts that relationship at boot.
+      { name = "TREASURY_INGESTION_WORKER_ENABLED", value = "true" },
       { name = "TREASURY_INGEST_BATCH_SIZE", value = "100" },
+      { name = "TREASURY_INGEST_INTERVAL_MS", value = "60000" },
+      { name = "TREASURY_INGEST_MAX_AGE_SECONDS", value = "900" },
       { name = "TREASURY_INGEST_MAX_EVENTS", value = "2000" },
+      { name = "TREASURY_INGEST_MAX_LAG_BLOCKS", value = "300" },
+      # WP-4 H-16 and PRES-05. Treasury's operator traffic arrives from the
+      # dashboard gateway under its own service key, so that one caller may name
+      # the operator it authenticated. This is a separation-of-duty exception and
+      # therefore belongs in reviewed configuration, not in a secret: the
+      # identifier is not a credential, and the reviewed config digest has to
+      # cover which caller holds the exception.
+      { name = "TREASURY_OPERATOR_DELEGATION_API_KEYS", value = var.treasury_gateway_api_key_id },
+      { name = "TREASURY_PROVIDER_CALLBACK_AUTH_ENABLED", value = "true" },
+      { name = "TREASURY_PROVIDER_CALLBACK_MAX_SKEW_SECONDS", value = "300" },
     ]
   }
 
@@ -70,11 +117,17 @@ locals {
       { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/ricardian/runtime"].arn}:password::" },
       { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/ricardian/runtime"].arn}:username::" },
     ]
-    treasury = [
+    treasury = concat([
       { name = "API_KEYS_JSON", valueFrom = aws_secretsmanager_secret.platform["gateway-to-treasury-auth"].arn },
       { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.platform["database/treasury/runtime"].arn}:password::" },
       { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.platform["database/treasury/runtime"].arn}:username::" },
-    ]
+      { name = "RECONCILIATION_DB_PASSWORD", valueFrom = "${local.foundation_secret_arns["database/reconciliation/reader"]}:password::" },
+      { name = "RECONCILIATION_DB_USER", valueFrom = "${local.foundation_secret_arns["database/reconciliation/reader"]}:username::" },
+      { name = "RPC_FALLBACK_URLS", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-fallback"].arn },
+      { name = "RPC_URL", valueFrom = aws_secretsmanager_secret.platform["rpc-base-sepolia-primary"].arn },
+      ], local.treasury_provider_callbacks_enabled ? [
+      { name = "TREASURY_PROVIDER_WEBHOOK_SECRETS_JSON", valueFrom = aws_secretsmanager_secret.platform["treasury-provider-callback"].arn },
+    ] : [])
   }
 
   private_runtime_reviewed_config_sha256 = {
