@@ -90,12 +90,12 @@ Four environments with hard boundaries between them. Evidence produced in one do
 without the documented equivalence and reviewer approval defined by
 `docs/runbooks/release-candidate-evidence-binding.md`.
 
-| ID     | Environment                  | Permitted                                                                                                                                                                                            | Prohibited                                                               | Current state                                                                                                                                                                                                            |
-| ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ENV-01 | Local and CI verification    | Node 20, frozen lockfile, all workspaces, PostgreSQL and Redis, Hardhat and Foundry, clean image builds. Unit, contract, schema, build and failure-injection proof.                                  | Any claim of deployed or pilot readiness.                                | Operating. `.github/workflows/release-gate.yml`. Runs must carry an explicit non-deployed classification.                                                                                                                |
-| ENV-02 | Private Base Sepolia staging | Current-release integration and operational rehearsal in one private control plane with managed database and Redis, AWS KMS, primary and fallback RPC, protected deployment, monitoring and restore. | **Public users. Real commercial value.**                                 | Target: the existing Agroasys AWS staging boundary. WP-7 ([#667](https://github.com/Agroasys/Cotsel/issues/667)) supplies the platform evidence for an exact candidate.                                                  |
-| ENV-03 | Controlled pilot             | Named users, bounded value, supervised journeys, all Section 13 gates, allowlists, caps, staffed on-call and support, incident and rollback authority.                                               | Automatic expansion. Unnamed participants. Value above the approved cap. | Outside this internal integration baseline. If used later, the decision is recorded in WP-11 ([#684](https://github.com/Agroasys/Cotsel/issues/684)).                                                                    |
-| ENV-04 | Base mainnet                 | Production settlement after a separately recorded decision, verified current contract, protected release and live drills.                                                                            | **Any promotion from the pilot by assumption.**                          | Outside this internal integration baseline. Its authority profile is explicitly blocked; WP-12 records the exact candidate, authority and four-role GO decision ([#690](https://github.com/Agroasys/Cotsel/issues/690)). |
+| ID     | Environment                  | Permitted                                                                                                                                                                                            | Prohibited                                                                       | Current state                                                                                                                                                                                                            |
+| ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ENV-01 | Local and CI verification    | Node 20, frozen lockfile, all workspaces, PostgreSQL and Redis, Hardhat and Foundry, clean image builds. Unit, contract, schema, build and failure-injection proof.                                  | Any claim of deployed or pilot readiness.                                        | Operating. `.github/workflows/release-gate.yml`. Runs must carry an explicit non-deployed classification.                                                                                                                |
+| ENV-02 | Private Base Sepolia staging | Current-release integration and operational rehearsal in one private control plane with managed database and Redis, AWS KMS, primary and fallback RPC, protected deployment, monitoring and restore. | **Public users. Real commercial value.**                                         | Target: the existing Agroasys AWS staging boundary. WP-7 ([#667](https://github.com/Agroasys/Cotsel/issues/667)) supplies the platform evidence for an exact candidate.                                                  |
+| ENV-03 | Controlled pilot             | Named invite-only users, zero-real-value supervised journeys, all Section 13 gates, allowlists, caps, staffed on-call and support, incident and rollback authority.                                  | Public self-registration. Automatic expansion. Unnamed participants. Real value. | Approved as a production-pilot scope extension; candidate access remains blocked until WP-11 and the applicable P gates accept its exact roster and evidence ([#684](https://github.com/Agroasys/Cotsel/issues/684)).    |
+| ENV-04 | Base mainnet                 | Production settlement after a separately recorded decision, verified current contract, protected release and live drills.                                                                            | **Any promotion from the pilot by assumption.**                                  | Outside this internal integration baseline. Its authority profile is explicitly blocked; WP-12 records the exact candidate, authority and four-role GO decision ([#690](https://github.com/Agroasys/Cotsel/issues/690)). |
 
 WP-7 supplies the platform evidence for the exact candidate when the internal integration reaches that stage.
 This baseline fixes the environment boundary and ownership now; it does not claim that a candidate has already
@@ -106,19 +106,19 @@ been deployed into it.
 The candidate manifest contract defined by #636 (`integration/candidate-manifest.v2.schema.json`) is what binds
 these values to a specific run. This section records what is pinned today and what is not.
 
-| Dimension             | Value                                                                                                                                |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Chain (rehearsal)     | Base Sepolia, chain ID `84532`                                                                                                       |
-| Chain (production)    | Base mainnet, chain ID `8453` — separately gated by WP-12, no deployment authorized                                                  |
-| USDC (Base Sepolia)   | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`                                                                                         |
-| Escrow contract       | **Not pinned.** Currently recorded deployment is `0x8e1e152167FeD9FF7833156A023fFCa88f243B3d`. See the note below.                   |
-| Trade states          | `LOCKED=0`, `IN_TRANSIT=1`, `ARRIVAL_CONFIRMED=2`, `FROZEN=3`, `CLOSED=4` (`sdk/src/types/trade.ts`)                                 |
-| Cross-repository pins | `integration/release-manifest.json`, status `candidate` — `agroasys-backend@develop`, `platform.v1@main`, `Cotsel.dash@main`         |
-| Callback contracts    | `cotsel.settlement-callback.v1`, `cotsel.settlement-observed-amounts.v1`                                                             |
-| Participant class     | Two named internal Agroasys test accounts operated by @Astton and @czpyioe. No public or external participants.                      |
-| Value caps            | Testnet assets only and zero real commercial value. One test flow is active at a time; no fiat or off-ramp settlement is enabled.    |
-| Provider mode         | Fiat off-ramp disabled; AWS KMS signer; managed RPC with primary and fallback endpoints.                                             |
-| Cloud and region      | Existing Agroasys AWS staging account and the backend staging region; the exact non-secret identifiers enter the candidate manifest. |
+| Dimension             | Value                                                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chain (rehearsal)     | Base Sepolia, chain ID `84532`                                                                                                                                                             |
+| Chain (production)    | Base mainnet, chain ID `8453` — separately gated by WP-12, no deployment authorized                                                                                                        |
+| USDC (Base Sepolia)   | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`                                                                                                                                               |
+| Escrow contract       | **Not pinned.** Currently recorded deployment is `0x8e1e152167FeD9FF7833156A023fFCa88f243B3d`. See the note below.                                                                         |
+| Trade states          | `LOCKED=0`, `IN_TRANSIT=1`, `ARRIVAL_CONFIRMED=2`, `FROZEN=3`, `CLOSED=4` (`sdk/src/types/trade.ts`)                                                                                       |
+| Cross-repository pins | `integration/release-manifest.json`, status `candidate` — `agroasys-backend@develop`, `platform.v1@main`, `Cotsel.dash@main`                                                               |
+| Callback contracts    | `cotsel.settlement-callback.v1`, `cotsel.settlement-observed-amounts.v1`                                                                                                                   |
+| Participant class     | Named invite-only testing accounts approved for the candidate, including accounts operated by @Astton and @czpyioe. No public self-registration, public launch or unapproved participants. |
+| Value caps            | Testnet assets only and zero real commercial value. One test flow is active at a time; no fiat or off-ramp settlement is enabled.                                                          |
+| Provider mode         | Fiat off-ramp disabled; AWS KMS signer; managed RPC with primary and fallback endpoints.                                                                                                   |
+| Cloud and region      | Existing Agroasys AWS staging account and the backend staging region; the exact non-secret identifiers enter the candidate manifest.                                                       |
 
 ### Escrow contract identity
 
@@ -193,15 +193,15 @@ the linked pull request.**
 The first integrated staging path uses the existing Agroasys AWS control plane. It is not split across cloud
 providers and does not introduce a separate personal or Cotsel-owned cloud account.
 
-| Field                              | Value                                                                                                                |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Cloud                              | AWS                                                                                                                  |
-| Account                            | Existing Agroasys staging account                                                                                    |
-| Region                             | The existing Agroasys backend staging region; the exact non-secret identifier is recorded in the candidate manifest  |
-| Control owner                      | @Astton (Programme and Release Owner), with @czpyioe as Engineering Lead                                             |
-| Network and deployment boundary    | Private Agroasys staging boundary behind the existing Cloudflare and AWS deployment controls; no public participants |
-| Rejected alternative and why       | A separate personal account or second cloud provider; it would split ownership, secret rotation and release evidence |
-| Consistency with Agroasys platform | Reuses AWS KMS, Secrets Manager, GitHub OIDC and the existing backend staging deployment model                       |
+| Field                              | Value                                                                                                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloud                              | AWS                                                                                                                                                                       |
+| Account                            | Existing Agroasys staging account                                                                                                                                         |
+| Region                             | The existing Agroasys backend staging region; the exact non-secret identifier is recorded in the candidate manifest                                                       |
+| Control owner                      | @Astton (Programme and Release Owner), with @czpyioe as Engineering Lead                                                                                                  |
+| Network and deployment boundary    | Private Agroasys staging boundary behind the existing Cloudflare and AWS deployment controls; candidate-approved invite-only participants and no public self-registration |
+| Rejected alternative and why       | A separate personal account or second cloud provider; it would split ownership, secret rotation and release evidence                                                      |
+| Consistency with Agroasys platform | Reuses AWS KMS, Secrets Manager, GitHub OIDC and the existing backend staging deployment model                                                                            |
 
 WP-7 provisions the platform from reviewed IaC and inherits every value above.
 
@@ -236,16 +236,18 @@ private Base Sepolia candidate approvals and human evidence reviews.
 
 ### Contributed decisions accepted elsewhere
 
-This charter supplies input to two decisions it does not replace. DEC-02 is settled for the current internal
-integration baseline and is recorded in WP-11 for traceability; DEC-03 remains a future mainnet decision.
+This charter supplies input to two decisions it does not replace. DEC-02 permits a named invite-only testing
+cohort for the production-pilot extension and is recorded in WP-11 for candidate-specific controls; DEC-03
+remains a future mainnet decision.
 
-| ID     | Decision                                                                                  | Primary record                                                              | Current baseline decision                                                                                 |
-| ------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| DEC-02 | Internal participant class, values and support model                                      | `wp11-participants` — [#684](https://github.com/Agroasys/Cotsel/issues/684) | Two named internal operators only; testnet assets, zero real commercial value and disabled fiat off-ramp. |
-| DEC-03 | Protocol governance, and whether the immutable contract design is replaced before mainnet | `wp12-authority` — [#687](https://github.com/Agroasys/Cotsel/issues/687)    | No. Gated by WP-12, separately from pilot authorization.                                                  |
+| ID     | Decision                                                                                  | Primary record                                                              | Current baseline decision                                                                                        |
+| ------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| DEC-02 | Invite-only participant class, values and support model                                   | `wp11-participants` — [#684](https://github.com/Agroasys/Cotsel/issues/684) | Candidate-approved invited testing users; testnet assets, zero real commercial value and disabled fiat off-ramp. |
+| DEC-03 | Protocol governance, and whether the immutable contract design is replaced before mainnet | `wp12-authority` — [#687](https://github.com/Agroasys/Cotsel/issues/687)    | No. Gated by WP-12, separately from pilot authorization.                                                         |
 
-This decision does not add a controlled pilot. Any later expansion records its new participant and value decision
-in WP-11 before that expanded scope is used.
+This decision does not authorize a particular candidate or public launch. WP-11 must bind each invited participant,
+eligibility decision, consent, support contact and stop condition before access. Any later expansion requires a new
+participant and value decision before the expanded scope is used.
 
 ## 8. Coverage
 
@@ -258,10 +260,10 @@ Every control for which #635 is the primary acceptance route, and the section th
 | EXCLUSION-01 … 03  | 3. Exclusions           | Specified                                                                                |
 | ENV-01             | 4. Environments         | Specified; operating                                                                     |
 | ENV-02             | 4. Environments         | Boundary and owner recorded; candidate platform evidence owned by WP-7                   |
-| ENV-03             | 4. Environments         | Outside this internal integration baseline; any later expansion is owned by WP-11        |
+| ENV-03             | 4. Environments         | Invite-only scope recorded; candidate access and any expansion remain owned by WP-11     |
 | ENV-04             | 4. Environments         | Outside this internal integration baseline; any later mainnet decision is owned by WP-12 |
 | DEC-01             | 7. Decisions            | Recorded for the existing Agroasys AWS staging control plane                             |
-| DEC-02             | 5. and 7.               | Recorded for two named internal, zero-real-value testers                                 |
+| DEC-02             | 5. and 7.               | Recorded for candidate-approved invite-only, zero-real-value testers                     |
 
 The WP-0 implementation package is ready for two-person approval. The linked pull request does not record final
 acceptance until @czpyioe completes the Engineering and Security review; future work packages supply their own
