@@ -86,6 +86,8 @@ env:
   AWS_REGION: eu-north-1
   APPLY_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-terraform-apply
   PLAN_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-terraform-plan-dispatch
+  EVIDENCE_APPLY_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-evidence-archive-apply
+  EVIDENCE_PLAN_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-evidence-archive-plan
   ROOT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root || 'staging-platform' }}
   TF_VAR_gateway_desired_count: ${{ vars.COTSEL_STAGING_GATEWAY_DESIRED_COUNT || '0' }}
   TF_VAR_indexer_desired_count: ${{ vars.COTSEL_STAGING_INDEXER_DESIRED_COUNT || '0' }}
@@ -144,6 +146,9 @@ jobs:
 
       - name: Test origin-lockdown controls
         run: node infra/terraform/scripts/origin-lockdown-selftest.mjs
+
+      - name: Test evidence-archive identity isolation
+        run: node infra/terraform/scripts/evidence-archive-identity-selftest.mjs
 
   security:
     name: terraform/security
@@ -228,7 +233,7 @@ jobs:
       - name: Assume the main-branch plan role
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd
         with:
-          role-to-assume: ${{ env.PLAN_ROLE_ARN }}
+          role-to-assume: ${{ github.event.inputs.root == 'base-sepolia-evidence-archive' && env.EVIDENCE_PLAN_ROLE_ARN || env.PLAN_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Initialize
@@ -343,7 +348,8 @@ jobs:
     name: terraform/apply
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
     runs-on: ubuntu-latest
-    environment: staging
+    environment:
+      name: ${{ github.event.inputs.root == 'base-sepolia-evidence-archive' && 'base-sepolia-evidence' || 'staging' }}
     permissions:
       actions: read
       contents: read
@@ -425,7 +431,7 @@ jobs:
       - name: Assume the protected apply role
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd
         with:
-          role-to-assume: ${{ env.APPLY_ROLE_ARN }}
+          role-to-assume: ${{ github.event.inputs.root == 'base-sepolia-evidence-archive' && env.EVIDENCE_APPLY_ROLE_ARN || env.APPLY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Initialize
