@@ -11,6 +11,7 @@
 import { Pool } from 'pg';
 import {
   applyTreasuryTestEnv,
+  markSeededEntryCanonical,
   provisionTreasuryDatabase,
   runPostgresIntegrationTests,
 } from './helpers/treasuryPostgres';
@@ -79,6 +80,7 @@ describePostgres('treasury maker-checker concurrency (postgres)', () => {
       sourceTimestamp: new Date('2026-04-16T08:00:00.000Z'),
       metadata: {},
     });
+    await markSeededEntryCanonical(queries, entry);
 
     const batch = await queries.createSweepBatch({
       batchKey: `batch-${suffix}`,
@@ -121,6 +123,7 @@ describePostgres('treasury maker-checker concurrency (postgres)', () => {
       sourceTimestamp: new Date('2026-04-16T08:00:00.000Z'),
       metadata: {},
     });
+    await markSeededEntryCanonical(queries, entry);
     return entry.id;
   }
 

@@ -9,16 +9,28 @@ import {
 import { IndexerClient } from '../indexer/client';
 import { SweepBatch } from '../types';
 import { assertBatchExecutionMatchable } from './accountingPolicy';
+import type { SettlementChainReader } from './chainCanonicality';
+import { FinalizedTransactionVerifier } from './finalizedTransaction';
+import { createSettlementProvider } from './settlementProvider';
+
+type ClaimTransactionVerifier = Pick<FinalizedTransactionVerifier, 'verify'>;
 
 interface SweepExecutionMatcherDeps {
   indexerClient?: Pick<IndexerClient, 'fetchTreasuryClaimEventByTxHash'>;
+  claimVerifier?: ClaimTransactionVerifier;
 }
 
 export class SweepExecutionMatcherService {
   private readonly indexerClient: Pick<IndexerClient, 'fetchTreasuryClaimEventByTxHash'>;
+  private readonly claimVerifier: ClaimTransactionVerifier;
 
   constructor(deps?: SweepExecutionMatcherDeps) {
     this.indexerClient = deps?.indexerClient ?? new IndexerClient(config.indexerGraphqlUrl);
+    this.claimVerifier =
+      deps?.claimVerifier ??
+      new FinalizedTransactionVerifier({
+        provider: createSettlementProvider() as unknown as SettlementChainReader | null,
+      });
   }
 
   async matchApprovedBatch(params: {
@@ -70,6 +82,19 @@ export class SweepExecutionMatcherService {
       observedPayoutReceiver: observedClaimEvent.payoutReceiver,
       observedAmountRaw: observedClaimEvent.claimAmount,
     });
+
+    // WP-4 B-08. The indexer is a copy of the chain, not the chain. A claim it
+    // read from a block that has since been reorganized away would otherwise
+    // mark the batch executed against a sweep that never happened.
+    const claimVerdict = await this.claimVerifier.verify(
+      observedClaimEvent.txHash,
+      Number(observedClaimEvent.blockNumber),
+    );
+    if (!claimVerdict.finalized) {
+      throw new Error(
+        `TreasuryClaimed transaction is not finalized canonical evidence: ${claimVerdict.detail}`,
+      );
+    }
 
     const claimEvent = await upsertTreasuryClaimEvent({
       sourceEventId: observedClaimEvent.id,

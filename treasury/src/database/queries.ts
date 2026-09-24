@@ -41,6 +41,7 @@ export {
   getLatestBankPayoutConfirmation,
   getLatestPayoutState,
   getLedgerEntries,
+  getLedgerEntriesForEligibilityByIds,
   getLedgerEntriesForExport,
   getLedgerEntryById,
   getLedgerEntryByTradeId,

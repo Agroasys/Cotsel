@@ -12,6 +12,7 @@ import {
   assertCanonicalRawAmount,
 } from '../../core/canonicalAmount';
 import { sumAllocatedEntryAmountRaw } from '../../core/sweepBatchAmounts';
+import { sweepTransitionRequiresCanonicalEntries } from '../../core/sweepCanonicality';
 import { assertTransitionApplied, rejectConcurrentWrite } from '../../core/transitionConcurrency';
 import type {
   AccountingPeriod,
@@ -27,6 +28,7 @@ import type {
 } from '../../types';
 import { pool } from '../connection';
 import { getLedgerEntryAccountingProjection } from './accountingProjections';
+import { assertLedgerEntryCanonical, assertSweepBatchEntriesCanonical } from './chainCanonicality';
 import { listTransitionActors, recordTransitionActor } from './transitionActors';
 
 export async function createSweepBatch(data: {
@@ -278,6 +280,10 @@ export async function updateSweepBatchStatus(data: {
       executedBy: existing.executed_by,
       transitionChain,
     });
+    // WP-4 B-08 / PRES-05. Decided against the persisted verdict, under lock.
+    if (sweepTransitionRequiresCanonicalEntries(data.status)) {
+      await assertSweepBatchEntriesCanonical(client, data.batchId);
+    }
 
     const approvalRequestedAt =
       data.status === 'PENDING_APPROVAL' ? new Date() : existing.approval_requested_at;
@@ -421,6 +427,7 @@ export async function addSweepBatchEntry(data: {
     if (!ledgerEntry) {
       throw new Error('Ledger entry not found');
     }
+    await assertLedgerEntryCanonical(client, data.ledgerEntryId);
 
     const existingAllocation = await client.query<SweepBatchEntry>(
       `SELECT *
