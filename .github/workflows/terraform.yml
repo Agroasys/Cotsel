@@ -1,5 +1,4 @@
 name: Terraform
-
 on:
   pull_request:
     branches:
@@ -145,10 +144,7 @@ jobs:
         run: node --test scripts/tests/base-sepolia-staging-contract.test.mjs
 
       - name: Test origin-lockdown controls
-        run: node infra/terraform/scripts/origin-lockdown-selftest.mjs
-
-      - name: Test evidence-archive identity isolation
-        run: node infra/terraform/scripts/evidence-archive-identity-selftest.mjs
+        run: node infra/terraform/scripts/origin-lockdown-selftest.mjs && node infra/terraform/scripts/evidence-archive-identity-selftest.mjs
 
   security:
     name: terraform/security
@@ -348,8 +344,7 @@ jobs:
     name: terraform/apply
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ github.event.inputs.root == 'base-sepolia-evidence-archive' && 'base-sepolia-evidence' || 'staging' }}
+    environment: ${{ github.event.inputs.root == 'base-sepolia-evidence-archive' && 'base-sepolia-evidence' || 'staging' }}
     permissions:
       actions: read
       contents: read
