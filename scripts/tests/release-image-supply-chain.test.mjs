@@ -33,6 +33,19 @@ test('reused digests do not claim provenance from the current workflow run', asy
   assert.doesNotMatch(workflow, /buildProvenance: published \? "mode=max" : null/);
 });
 
+test('new image provenance is recorded before fallible signature checks', async () => {
+  const workflow = await readFile(workflowPath, 'utf8');
+  const attest = workflow.indexOf('- name: Attest image provenance');
+  const preserve = workflow.indexOf('- name: Preserve signed provenance bundle');
+  const sign = workflow.indexOf('- name: Sign and verify the published image digest');
+
+  assert.notEqual(attest, -1);
+  assert.notEqual(preserve, -1);
+  assert.notEqual(sign, -1);
+  assert.ok(attest < preserve, 'provenance must be attested before it is preserved');
+  assert.ok(preserve < sign, 'provenance must exist before signature checks can fail');
+});
+
 test('pull request image builds remain credential-free', async () => {
   const workflow = await readFile(workflowPath, 'utf8');
 
