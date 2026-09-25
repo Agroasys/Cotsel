@@ -43,7 +43,7 @@ export class AdminSDK extends Client {
     for (const log of logs) {
       try {
         const parsedLog = contractInterface.parseLog({
-          topics: log.topics as string[],
+          topics: log.topics,
           data: log.data,
         });
         if (!parsedLog || parsedLog.name !== expectedEventName) {

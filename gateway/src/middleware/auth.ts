@@ -22,9 +22,7 @@ export type TreasuryCapability =
   | 'treasury:execute_match'
   | 'treasury:close';
 export type OperatorActionCapability =
-  | 'governance:write'
-  | 'compliance:write'
-  | 'operations:replay';
+  'governance:write' | 'compliance:write' | 'operations:replay';
 
 const TREASURY_CAPABILITIES: readonly TreasuryCapability[] = [
   'treasury:read',

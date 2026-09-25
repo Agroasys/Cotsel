@@ -10,7 +10,6 @@ import {
   ChainCanonicalityVerifier,
   type ChainCanonicalityState,
   type ChainCanonicalityVerdict,
-  type SettlementChainReader,
 } from './chainCanonicality';
 import {
   TreasuryIngestionFreshnessService,
@@ -172,7 +171,7 @@ export class TreasuryEligibilityService {
     this.canonicalityVerifier =
       deps?.canonicalityVerifier ??
       new ChainCanonicalityVerifier({
-        provider: createSettlementProvider() as unknown as SettlementChainReader | null,
+        provider: createSettlementProvider(),
       });
     this.canonicalityWriter = deps?.canonicalityWriter ?? {
       markCanonical: markLedgerEntryCanonical,

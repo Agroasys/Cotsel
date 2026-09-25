@@ -90,13 +90,7 @@ describePostgres('provider handoff append-only state (postgres)', () => {
     entryId: number,
     providerEventId: string,
     partnerStatus:
-      | 'CREATED'
-      | 'SUBMITTED'
-      | 'ACKNOWLEDGED'
-      | 'PROCESSING'
-      | 'COMPLETED'
-      | 'FAILED'
-      | 'RETURNED',
+      'CREATED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'RETURNED',
     overrides: Record<string, unknown> = {},
   ) {
     return {

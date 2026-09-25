@@ -80,11 +80,7 @@ export interface UserSession {
 }
 
 export type BreakGlassReviewStatus =
-  | 'none'
-  | 'active_unreviewed'
-  | 'revoked_unreviewed'
-  | 'expired_unreviewed'
-  | 'reviewed';
+  'none' | 'active_unreviewed' | 'revoked_unreviewed' | 'expired_unreviewed' | 'reviewed';
 
 export interface BreakGlassSessionContext {
   active: boolean;
