@@ -9,7 +9,6 @@ import {
 import { IndexerClient } from '../indexer/client';
 import { SweepBatch } from '../types';
 import { assertBatchExecutionMatchable } from './accountingPolicy';
-import type { SettlementChainReader } from './chainCanonicality';
 import { FinalizedTransactionVerifier } from './finalizedTransaction';
 import { createSettlementProvider } from './settlementProvider';
 import { verifyTreasuryClaimLog } from './treasuryClaimLog';
@@ -30,7 +29,7 @@ export class SweepExecutionMatcherService {
     this.claimVerifier =
       deps?.claimVerifier ??
       new FinalizedTransactionVerifier({
-        provider: createSettlementProvider() as unknown as SettlementChainReader | null,
+        provider: createSettlementProvider(),
       });
   }
 

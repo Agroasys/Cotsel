@@ -27,8 +27,7 @@ export interface TreasuryClaimFields {
 }
 
 export type TreasuryClaimLogVerdict =
-  | { matched: true; claim: TreasuryClaimFields }
-  | { matched: false; detail: string };
+  { matched: true; claim: TreasuryClaimFields } | { matched: false; detail: string };
 
 /** Decoded with the escrow ABI; anything that is not this event is null. */
 export function decodeTreasuryClaimedLog(log: SettlementLog): TreasuryClaimFields | null {
