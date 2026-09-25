@@ -81,8 +81,8 @@ importers:
         specifier: 4.18.1
         version: 4.18.1
       pg:
-        specifier: 8.22.0
-        version: 8.22.0
+        specifier: 8.23.0
+        version: 8.23.0
       prettier:
         specifier: 3.8.3
         version: 3.8.3
@@ -129,8 +129,8 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0
       pg:
-        specifier: ^8.22.0
-        version: 8.22.0
+        specifier: ^8.23.0
+        version: 8.23.0
     devDependencies:
       '@types/cors':
         specifier: ^2.8.17
@@ -145,8 +145,8 @@ importers:
         specifier: ^25.6.0
         version: 25.6.0
       '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.0
+        specifier: ^8.23.1
+        version: 8.23.1
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
@@ -169,8 +169,8 @@ importers:
         specifier: workspace:*
         version: link:../sdk
       '@aws-sdk/client-kms':
-        specifier: 3.1125.0
-        version: 3.1125.0
+        specifier: 3.1133.0
+        version: 3.1133.0
       '@openzeppelin/contracts':
         specifier: ^5.6.1
         version: 5.6.1
@@ -269,8 +269,8 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0
       pg:
-        specifier: ^8.22.0
-        version: 8.22.0
+        specifier: ^8.23.0
+        version: 8.23.0
     devDependencies:
       '@types/cors':
         specifier: ^2.8.17
@@ -288,8 +288,8 @@ importers:
         specifier: ^25.6.0
         version: 25.6.0
       '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.0
+        specifier: ^8.23.1
+        version: 8.23.1
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -325,16 +325,16 @@ importers:
         version: 5.0.0
       '@subsquid/graphql-server':
         specifier: ^4.12.1
-        version: 4.12.1(@subsquid/big-decimal@1.0.0)(bufferutil@4.1.0)(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(utf-8-validate@6.0.6)
+        version: 4.12.1(@subsquid/big-decimal@1.0.0)(bufferutil@4.1.0)(typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(utf-8-validate@6.0.6)
       '@subsquid/logger':
         specifier: ^1.6.0
         version: 1.6.0
       '@subsquid/typeorm-migration':
         specifier: ^1.4.0
-        version: 1.4.0(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+        version: 1.4.0(typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       '@subsquid/typeorm-store':
         specifier: ^1.9.2
-        version: 1.9.2(patch_hash=b7b54b502476b53a21298d67c7ada85e598c81122c968d7785f7f80caf8b4b88)(@subsquid/big-decimal@1.0.0)(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+        version: 1.9.2(patch_hash=b7b54b502476b53a21298d67c7ada85e598c81122c968d7785f7f80caf8b4b88)(@subsquid/big-decimal@1.0.0)(typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -342,11 +342,11 @@ importers:
         specifier: ^6.17.0
         version: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       pg:
-        specifier: 8.22.0
-        version: 8.22.0
+        specifier: 8.23.0
+        version: 8.23.0
       typeorm:
-        specifier: 1.1.0
-        version: 1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+        specifier: 1.1.1
+        version: 1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
     devDependencies:
       '@subsquid/typeorm-codegen':
         specifier: ^2.4.0
@@ -358,8 +358,8 @@ importers:
         specifier: ^25.6.0
         version: 25.6.0
       '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.0
+        specifier: ^8.23.1
+        version: 8.23.1
       typescript:
         specifier: '>=6.0.2 <6.1.0'
         version: 6.0.3
@@ -391,8 +391,8 @@ importers:
         specifier: ^1.0.0
         version: link:../shared-http
       '@aws-sdk/client-kms':
-        specifier: 3.1125.0
-        version: 3.1125.0
+        specifier: 3.1133.0
+        version: 3.1133.0
       cors:
         specifier: ^2.8.6
         version: 2.8.6
@@ -409,8 +409,8 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0
       pg:
-        specifier: ^8.22.0
-        version: 8.22.0
+        specifier: ^8.23.0
+        version: 8.23.0
     devDependencies:
       '@types/cors':
         specifier: ^2.8.17
@@ -425,8 +425,8 @@ importers:
         specifier: ^25.6.0
         version: 25.6.0
       '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.0
+        specifier: ^8.23.1
+        version: 8.23.1
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
@@ -461,15 +461,15 @@ importers:
         specifier: ^6.17.0
         version: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       pg:
-        specifier: ^8.22.0
-        version: 8.22.0
+        specifier: ^8.23.0
+        version: 8.23.0
     devDependencies:
       '@types/node':
         specifier: ^25.6.0
         version: 25.6.0
       '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.0
+        specifier: ^8.23.1
+        version: 8.23.1
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@25.6.0)(typescript@6.0.3)
@@ -486,8 +486,8 @@ importers:
         specifier: workspace:*
         version: link:../shared-auth
       '@aws-sdk/client-kms':
-        specifier: 3.1125.0
-        version: 3.1125.0
+        specifier: 3.1133.0
+        version: 3.1133.0
       ethers:
         specifier: ^6.17.0
         version: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -553,8 +553,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       pg:
-        specifier: ^8.22.0
-        version: 8.22.0
+        specifier: ^8.23.0
+        version: 8.23.0
     devDependencies:
       '@types/cors':
         specifier: ^2.8.17
@@ -569,8 +569,8 @@ importers:
         specifier: ^25.6.0
         version: 25.6.0
       '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.0
+        specifier: ^8.23.1
+        version: 8.23.1
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
@@ -620,8 +620,8 @@ importers:
   shared-db:
     dependencies:
       pg:
-        specifier: ^8.22.0
-        version: 8.22.0
+        specifier: ^8.23.0
+        version: 8.23.0
 
   shared-edge:
     dependencies:
@@ -668,8 +668,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       pg:
-        specifier: ^8.22.0
-        version: 8.22.0
+        specifier: ^8.23.0
+        version: 8.23.0
     devDependencies:
       '@types/cors':
         specifier: ^2.8.17
@@ -684,8 +684,8 @@ importers:
         specifier: ^25.6.0
         version: 25.6.0
       '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.0
+        specifier: ^8.23.1
+        version: 8.23.1
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@25.6.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
@@ -813,80 +813,80 @@ packages:
         integrity: sha512-xCcXpoz52rI4ksJSdOCxeOCn2DLocxwHf9dVT/Q90Pte1LX+LY+91SFtJF3KXVHH8kEin+g1KKCQPKBjZJfWNA==,
       }
 
-  '@aws-sdk/client-kms@3.1125.0':
+  '@aws-sdk/client-kms@3.1133.0':
     resolution:
       {
-        integrity: sha512-gzxhtJ95jkv00XmPlSgZwiqdI+7JqPULfP0Ozywp10diB34OT5Fn1q086rfec4MXZXZMwOHCkNV+UCHA1cTkyQ==,
+        integrity: sha512-mM/vqPsT97lNsH0shXqAAuWHDLJExKnKwFvva5l5uyJPRZfF1tHC78CVzmyt9L3EMc5ibjguwGEIQogQvas9+Q==,
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/core@3.977.9':
+  '@aws-sdk/core@3.978.0':
     resolution:
       {
-        integrity: sha512-reqPFEQrZxDZpeGj4PFMepBeR5LGYHRqq/L0motTzgFkCRBA4rFdaVXDSLYyGHhxVz7sT2PDnPN9CluGSfgyJA==,
+        integrity: sha512-2yX9LUmxPklVjSGTb8dfnWRJSiFQ3TeH2nn7G1mdKHTfnabzF0+gfrS8rYfLWmZrQ8A3mEcxMJjRc51dL5KWaA==,
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/credential-provider-env@3.972.70':
+  '@aws-sdk/credential-provider-env@3.972.71':
     resolution:
       {
-        integrity: sha512-H404B7dJl2mCrBqahDEYsanB0xhdDp6tXnXcTUnXmmpy2Q3J0Ho0bUajZ2jr/RdwzCyS59Gi8xXIFwPLGBl6Uw==,
+        integrity: sha512-JN+JHruYZw3GUZB8YGAlDk4wTDPOEAEEdEzj5nS0xodWR4smzHsN7PnK2j6IeOsDIj2aqua5DSbhXl9Gtf90FQ==,
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/credential-provider-http@3.972.72':
+  '@aws-sdk/credential-provider-http@3.972.73':
     resolution:
       {
-        integrity: sha512-X98zYOrVOeuosCX+6ktf29FC2N2GHPLia7qv6mzPzTc+RPAuHWCDS++Z6JK7eGYqb/v6uaW7bAXaOvDBfol+0w==,
+        integrity: sha512-uyYYnJOnlis8uQzaYGPd7N1JoioCoNpXgnkXYixsWJXHXgXyYi8WXJSDfofxJeWfQIGWLe2Nwyq60Uc7MZdVOg==,
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/credential-provider-ini@3.973.15':
+  '@aws-sdk/credential-provider-ini@3.973.16':
     resolution:
       {
-        integrity: sha512-Rykg6s5ceBuynMOGWgoowO4N+27JfnqXAnVaSunZl0hOO1XodSrxGNz6sCEbnmS0lAfQZDKyb3fbr46gSuv6Sg==,
+        integrity: sha512-i++ly+0Uxa+u3ebSSyr0S/3CFhFJDxCXT3+Zj+mW2bXenEx5bKGCdTIKFu39SgXBNhWDjex/8cXUx9MUTMCrTw==,
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/credential-provider-login@3.972.77':
+  '@aws-sdk/credential-provider-login@3.972.78':
     resolution:
       {
-        integrity: sha512-Jb59xfEISoN5mmbnA+HYqdtrSX3CgCtJoof+V5D8/TgUI56W63GEEd5Y58WijU3Ou6+WEgaLD1feVzaRXV5IDQ==,
+        integrity: sha512-eUtswnXu0+Ii9ieRK+0L7aPFV3Z/dnW2VntJzjBP9xs8s+8p5nBNuymIXtXwZ+5r5+XJP3e32nMkuZ/r0HozEA==,
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/credential-provider-node@3.972.82':
+  '@aws-sdk/credential-provider-node@3.972.83':
     resolution:
       {
-        integrity: sha512-znDkEOGXB8W3kG1LJUKP3foBZY/9qLM0eil/DxWXSp37XsdsRLQHE/d/OaCGGVgKpA6znR38h/+INk8do1FjiA==,
+        integrity: sha512-jdso7ejzfRnatxMUZK4S/U6KbaDPCvfIV4XL+IQAPFDBt5rj5Fq595euqlK8Le4lNCMFR9oUpt+1l0aMgaayOQ==,
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/credential-provider-process@3.972.70':
+  '@aws-sdk/credential-provider-process@3.972.71':
     resolution:
       {
-        integrity: sha512-2ry03fGRJr4sV3jI+ocjj5JqALnFD6ymM5KiNCDZMvq8bX2GSbE0vji4aM43TVCl2nXqqLRZaUxdq/KeWRAY4Q==,
+        integrity: sha512-lYmXJa4gvq4xN1lrT5NiP5vIYYKcGWAdj8y+8o6dlcateB5eF3Dn8DtmjjHKfMBrTPAMr2pebIiX/UOj8c1/UA==,
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/credential-provider-sso@3.973.14':
+  '@aws-sdk/credential-provider-sso@3.973.15':
     resolution:
       {
-        integrity: sha512-jkhg/8ocAAoc0RFyLMhCw+/zZh7gystQgd4F4hznNa8P4Cc501PQmxd+jGLiMHodPJ+7Zv/3znM62gZojyasmA==,
+        integrity: sha512-6Jhcf4v0pSFdjk1EW2kvzuEBKD+UZ2uNcHUIglKKLndD20YhvkL2kdmDOV5/j4mYuWWwe/a1FQ1aomU86/Cg5Q==,
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/credential-provider-web-identity@3.972.76':
+  '@aws-sdk/credential-provider-web-identity@3.972.77':
     resolution:
       {
-        integrity: sha512-d3AGyVu759PGr35mEB2s22xxlNEA5rpdxtSPJthfPFJvoQ8dt357iVPECqWfUxXp1toJAvKmbtcIYVGigaGsCA==,
+        integrity: sha512-uylIQSUWpfLuH2LovxEEfwzJGM/SabLOfLMg6YXu/E8jJEKUdpdILCVCQCdFvHyu/7dLJOHPMfrSwduxO56NkQ==,
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/nested-clients@3.997.44':
+  '@aws-sdk/nested-clients@3.997.45':
     resolution:
       {
-        integrity: sha512-NhEgryjlBF9w38ZXqGymQV28IhkYa1mKhlbYnqIis57AYwWGVYfUPgg/qC2rLRqOUfblxx++irvju10kVTa8Vw==,
+        integrity: sha512-mooq9Q+jLa18VoM7HouczmslZU60iiB0aKc/Ztnq/luIL1ud0z4DnYprLR/ZO1gp331S9tJctM1HZr7u6YKBXQ==,
       }
     engines: { node: '>=20.0.0' }
 
@@ -897,10 +897,10 @@ packages:
       }
     engines: { node: '>=20.0.0' }
 
-  '@aws-sdk/token-providers@3.1116.0':
+  '@aws-sdk/token-providers@3.1129.0':
     resolution:
       {
-        integrity: sha512-ygIivKqh8aHzNkucOCXHyIBgBpLPfrSI0mCqXF+vLBsPTUKqj0VSqAY0GFPe7lQl4HntjOcQ+KSyS7oUV2C54Q==,
+        integrity: sha512-Sbl3rpzQdsG4ZK2zh0JWUYyZPKKorJlVOddA2T0DVbKJFrsW8J6wgnslxxUH04+WaBMr4A1HzJZvZX0xUvkniA==,
       }
     engines: { node: '>=20.0.0' }
 
@@ -2738,10 +2738,10 @@ packages:
         integrity: sha512-DsG+8/LscQIQg68J6Ef3dv10u6nVyetYn923s3/sus5eaGfTo1of5WMZSLf0UJc9KDuKPilPH0UDJCjvNbDNCA==,
       }
 
-  '@smithy/core@3.33.3':
+  '@smithy/core@3.34.1':
     resolution:
       {
-        integrity: sha512-CsOeKq/9kA3y6VJHt+/+VTCtBaxJ4OTFpgrjIUhPpDIKxBci1k2bJaQASF2h/ELWrulGp+t97DZ0mevfAD8idg==,
+        integrity: sha512-dLcOUxz8YCv1RZUMKq6GbyUf95pLbrqh34bPvpCZ1+CByFF31BEAFewZjsGCnVsZTKdThNENfGyAgk2TJqVwSw==,
       }
     engines: { node: '>=18.0.0' }
 
@@ -2752,17 +2752,17 @@ packages:
       }
     engines: { node: '>=18.0.0' }
 
-  '@smithy/fetch-http-handler@5.7.2':
+  '@smithy/fetch-http-handler@5.8.0':
     resolution:
       {
-        integrity: sha512-nZyWTmSpJEXl6VtWVMBJve/7x12DZu6sIX1z1a+ZMaHlQQRs9Zpu6NbTe/gmxYXVRpkjxyDYpZ5gx2IM6f/Wkw==,
+        integrity: sha512-ycSJu3tFAQ4v04CBB0agqFMVsSQ1iG3yw+SpgxRqKfaURpQD4CZ8Wn0zPMmSnOuTpTh65Vz+EA0rMrw089wvkA==,
       }
     engines: { node: '>=18.0.0' }
 
-  '@smithy/node-http-handler@4.11.3':
+  '@smithy/node-http-handler@4.12.1':
     resolution:
       {
-        integrity: sha512-2jY1tSpERfPfWqyBV2pH+iGFaghVsIJszJNsT7hxtQYhVJpWDyc0LqOWI+nXOxOAHaEfZ4PXXtp1wW1TGpHhkA==,
+        integrity: sha512-ThMkboGeONWXAelq9FvGsuJC4rOi+qyC4/zhUF58xYpxUg5sQKx2VXZYJmtNjr4dSuBJ1HeJXETQILCz3wOHvw==,
       }
     engines: { node: '>=18.0.0' }
 
@@ -2773,10 +2773,10 @@ packages:
       }
     engines: { node: '>=18.0.0' }
 
-  '@smithy/types@4.17.2':
+  '@smithy/types@4.18.0':
     resolution:
       {
-        integrity: sha512-FOKpVZob9MPTn2znRzGrnsMHv7BOsKVw3XiP/cOyYLDVZ9qKp4nifIiSCuUU/fIj5Vu0UOAxCFr+qRAtG0NUkA==,
+        integrity: sha512-CgB6HHWer/vrKps24ulRIbpcpb7K4xAU7SkZ7YHzBPlwHsvsrCJFEXK421s+cJzX+ZrqtA/TuU5w1HzI7k9N8A==,
       }
     engines: { node: '>=18.0.0' }
 
@@ -3590,10 +3590,10 @@ packages:
         integrity: sha512-uRwJqmiXmh9++aSu1VNEn3iIxWOhd8AHXNSdlaLfdAAdSTY9jYVeGWnzejM3dvrkbqE3/hyQkQQ29IFATEGlew==,
       }
 
-  '@types/pg@8.20.0':
+  '@types/pg@8.23.1':
     resolution:
       {
-        integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==,
+        integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==,
       }
 
   '@types/prettier@2.7.3':
@@ -4305,10 +4305,10 @@ packages:
       }
     engines: { node: '>=8' }
 
-  ansi-regex@6.2.2:
+  ansi-regex@6.3.0:
     resolution:
       {
-        integrity: sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==,
+        integrity: sha512-WpDfL7NO6j7tH88IDBNVdUJxDh9nmCteAVW9dsep846XdwF4naCBK+/tGLX3KJgcpgMRXCFlTM2hKGoK9FsdrQ==,
       }
     engines: { node: '>=12' }
 
@@ -4340,10 +4340,10 @@ packages:
       }
     engines: { node: '>=12' }
 
-  ansis@4.3.1:
+  ansis@4.4.0:
     resolution:
       {
-        integrity: sha512-BJ8/l4R5LRE7hW9WdSuGYrLSHi2ynxeFpDFbH0K/CgNeY/tyhk+vO6TYxXC5r5CpUhNVX310xzPsN/H9lCdfOA==,
+        integrity: sha512-9k3v7xcHwgdO/DruxGIg4HtjvlAZlcnsX/mzqUb1t3NkYnl9kK2UJ+Gq0io+vQf7iT//BD/HB/NBkUR1LWxoeA==,
       }
     engines: { node: '>=14' }
 
@@ -5334,10 +5334,10 @@ packages:
       }
     engines: { node: '>=0.11' }
 
-  dayjs@1.11.21:
+  dayjs@1.11.23:
     resolution:
       {
-        integrity: sha512-98IT+HOahAisibz/yjKbzuOBwYcjJ7BCLPzARyHiyEBmRz4fatF+KPJszEHXsGYjUG234aH/cOjW1wwTbKUZlA==,
+        integrity: sha512-QDTCU0M0MxR3hQfnlDJfwekQiaanm1ubOD231u73WBckQ/fsamwRLiE2GBz6D3a/xF1NgfiDLJjXBa1hYOYTtQ==,
       }
 
   death@1.1.0:
@@ -8562,16 +8562,10 @@ packages:
     peerDependencies:
       pg: '>=8.0'
 
-  pg-protocol@1.13.0:
+  pg-protocol@1.16.0:
     resolution:
       {
-        integrity: sha512-zzdvXfS6v89r6v7OcFCHfHlyG/wvry1ALxZo4LqgUoy7W9xhBDMaqOuMiF3qEV45VqsN6rdlcehHrfDtlCPc8w==,
-      }
-
-  pg-protocol@1.15.0:
-    resolution:
-      {
-        integrity: sha512-cq9sECI5s0+uPUXjbz8ioyPJni6RzsRib0US67i5IoTZKw8fNeYlVE7u8F4dG7vEJJtc5wdD1K189lCCUwqWTQ==,
+        integrity: sha512-sILXutLVjCLjcDuOmvhX5e2Z4cS5qG/6Bu3VkpFwdf/633ElGLpEh9bgmuI5I4sqKqkifQiGyiCcx1HdtrK7tg==,
       }
 
   pg-types@2.2.0:
@@ -8581,10 +8575,10 @@ packages:
       }
     engines: { node: '>=4' }
 
-  pg@8.22.0:
+  pg@8.23.0:
     resolution:
       {
-        integrity: sha512-8wih1vVIBMxoUM2oB4soJsD9tDnDpLv4OXBJ+EJzFsvycD+lfyIreC2gGHq78f8jbLLt+bvlPTFdFZfJkOuzAA==,
+        integrity: sha512-Ip2EQCngowJLGOfCwkFhPXU7/ljlhn6Rxlmy4XYfL2Y+vyRM59+8uR2xqRWKdYmbXmxCFOAmKxBuSUCdF34qLg==,
       }
     engines: { node: '>= 16.0.0' }
     peerDependencies:
@@ -8612,17 +8606,17 @@ packages:
       }
     engines: { node: '>=8.6' }
 
-  picomatch@4.0.4:
-    resolution:
-      {
-        integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==,
-      }
-    engines: { node: '>=12' }
-
   picomatch@4.0.5:
     resolution:
       {
         integrity: sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==,
+      }
+    engines: { node: '>=12' }
+
+  picomatch@4.0.7:
+    resolution:
+      {
+        integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==,
       }
     engines: { node: '>=12' }
 
@@ -9605,6 +9599,13 @@ packages:
       }
     engines: { node: '>=18' }
 
+  string-width@8.2.2:
+    resolution:
+      {
+        integrity: sha512-GaPUh5gfdrYzqeVNZvUfT23vYYxXzKYidUcnMtJg/3rxRV63EFZy3k6xfKlmfeJD0176lnUV/Usr3XcwSvFzpg==,
+      }
+    engines: { node: '>=20' }
+
   string_decoder@1.1.1:
     resolution:
       {
@@ -10045,10 +10046,10 @@ packages:
         integrity: sha512-7uc1O8h1M1g0rArakJdf0uLRSSgFcYexrVoKo+bzJd32gd4gDy2L/Z+8/FjPnU9ydY3pEnVPtr9FyscYY60K1g==,
       }
 
-  typeorm@1.1.0:
+  typeorm@1.1.1:
     resolution:
       {
-        integrity: sha512-iX/kvsV42/htCNAQUyElGW87E4Z12neZc6YUFBTEu0BnLiREYDNT5Wfw3wRqZw9vyOEC36zUBAY6Qvywoig06Q==,
+        integrity: sha512-og9mG4Lwlvj6MfvYd8yRCzXy73gETtwgTKQ/ISLYvEOpJPy4IrjU/89HK4ZAFmRIbEg1hkIk04v8phTrxfgPmQ==,
       }
     engines: { node: ^20.19.0 || ^22.13.0 || >=24.11.0 }
     hasBin: true
@@ -10723,10 +10724,10 @@ packages:
       }
     engines: { node: '>=12' }
 
-  yargs@18.0.0:
+  yargs@18.1.0:
     resolution:
       {
-        integrity: sha512-4UEqdc2RYGHZc7Doyqkrqiln3p9X2DZVxaGbwhn2pi7MrRagKaOcIKe8L3OxYcbhXLgLFUS3zAYuQjKBQgmuNg==,
+        integrity: sha512-2rAgRKu54VsHkqI0/tYkmluGXHD4KW7yZoycuqDQ15QOTnc2VVfy0nN/1eMhnQLO00A+dwtK20xuCnc1YGeUyg==,
       }
     engines: { node: ^20.19.0 || ^22.12.0 || >=23 }
 
@@ -10834,147 +10835,147 @@ snapshots:
     dependencies:
       xss: 1.0.15
 
-  '@aws-sdk/client-kms@3.1125.0':
+  '@aws-sdk/client-kms@3.1133.0':
     dependencies:
-      '@aws-sdk/core': 3.977.9
-      '@aws-sdk/credential-provider-node': 3.972.82
+      '@aws-sdk/core': 3.978.0
+      '@aws-sdk/credential-provider-node': 3.972.83
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
-      '@smithy/fetch-http-handler': 5.7.2
-      '@smithy/node-http-handler': 4.11.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/fetch-http-handler': 5.8.0
+      '@smithy/node-http-handler': 4.12.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/core@3.977.9':
+  '@aws-sdk/core@3.978.0':
     dependencies:
       '@aws-sdk/types': 3.974.5
       '@aws-sdk/xml-builder': 3.972.40
       '@aws/lambda-invoke-store': 0.3.0
-      '@smithy/core': 3.33.3
+      '@smithy/core': 3.34.1
       '@smithy/signature-v4': 5.7.3
-      '@smithy/types': 4.17.2
+      '@smithy/types': 4.18.0
       bowser: 2.14.1
       tslib: 2.8.1
 
-  '@aws-sdk/credential-provider-env@3.972.70':
+  '@aws-sdk/credential-provider-env@3.972.71':
     dependencies:
-      '@aws-sdk/core': 3.977.9
+      '@aws-sdk/core': 3.978.0
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/credential-provider-http@3.972.72':
+  '@aws-sdk/credential-provider-http@3.972.73':
     dependencies:
-      '@aws-sdk/core': 3.977.9
+      '@aws-sdk/core': 3.978.0
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
-      '@smithy/fetch-http-handler': 5.7.2
-      '@smithy/node-http-handler': 4.11.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/fetch-http-handler': 5.8.0
+      '@smithy/node-http-handler': 4.12.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/credential-provider-ini@3.973.15':
+  '@aws-sdk/credential-provider-ini@3.973.16':
     dependencies:
-      '@aws-sdk/core': 3.977.9
-      '@aws-sdk/credential-provider-env': 3.972.70
-      '@aws-sdk/credential-provider-http': 3.972.72
-      '@aws-sdk/credential-provider-login': 3.972.77
-      '@aws-sdk/credential-provider-process': 3.972.70
-      '@aws-sdk/credential-provider-sso': 3.973.14
-      '@aws-sdk/credential-provider-web-identity': 3.972.76
-      '@aws-sdk/nested-clients': 3.997.44
+      '@aws-sdk/core': 3.978.0
+      '@aws-sdk/credential-provider-env': 3.972.71
+      '@aws-sdk/credential-provider-http': 3.972.73
+      '@aws-sdk/credential-provider-login': 3.972.78
+      '@aws-sdk/credential-provider-process': 3.972.71
+      '@aws-sdk/credential-provider-sso': 3.973.15
+      '@aws-sdk/credential-provider-web-identity': 3.972.77
+      '@aws-sdk/nested-clients': 3.997.45
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
+      '@smithy/core': 3.34.1
       '@smithy/credential-provider-imds': 4.5.2
-      '@smithy/types': 4.17.2
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/credential-provider-login@3.972.77':
+  '@aws-sdk/credential-provider-login@3.972.78':
     dependencies:
-      '@aws-sdk/core': 3.977.9
-      '@aws-sdk/nested-clients': 3.997.44
+      '@aws-sdk/core': 3.978.0
+      '@aws-sdk/nested-clients': 3.997.45
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/credential-provider-node@3.972.82':
+  '@aws-sdk/credential-provider-node@3.972.83':
     dependencies:
-      '@aws-sdk/credential-provider-env': 3.972.70
-      '@aws-sdk/credential-provider-http': 3.972.72
-      '@aws-sdk/credential-provider-ini': 3.973.15
-      '@aws-sdk/credential-provider-process': 3.972.70
-      '@aws-sdk/credential-provider-sso': 3.973.14
-      '@aws-sdk/credential-provider-web-identity': 3.972.76
+      '@aws-sdk/credential-provider-env': 3.972.71
+      '@aws-sdk/credential-provider-http': 3.972.73
+      '@aws-sdk/credential-provider-ini': 3.973.16
+      '@aws-sdk/credential-provider-process': 3.972.71
+      '@aws-sdk/credential-provider-sso': 3.973.15
+      '@aws-sdk/credential-provider-web-identity': 3.972.77
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
+      '@smithy/core': 3.34.1
       '@smithy/credential-provider-imds': 4.5.2
-      '@smithy/types': 4.17.2
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/credential-provider-process@3.972.70':
+  '@aws-sdk/credential-provider-process@3.972.71':
     dependencies:
-      '@aws-sdk/core': 3.977.9
+      '@aws-sdk/core': 3.978.0
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/credential-provider-sso@3.973.14':
+  '@aws-sdk/credential-provider-sso@3.973.15':
     dependencies:
-      '@aws-sdk/core': 3.977.9
-      '@aws-sdk/nested-clients': 3.997.44
-      '@aws-sdk/token-providers': 3.1116.0
+      '@aws-sdk/core': 3.978.0
+      '@aws-sdk/nested-clients': 3.997.45
+      '@aws-sdk/token-providers': 3.1129.0
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/credential-provider-web-identity@3.972.76':
+  '@aws-sdk/credential-provider-web-identity@3.972.77':
     dependencies:
-      '@aws-sdk/core': 3.977.9
-      '@aws-sdk/nested-clients': 3.997.44
+      '@aws-sdk/core': 3.978.0
+      '@aws-sdk/nested-clients': 3.997.45
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/nested-clients@3.997.44':
+  '@aws-sdk/nested-clients@3.997.45':
     dependencies:
-      '@aws-sdk/core': 3.977.9
+      '@aws-sdk/core': 3.978.0
       '@aws-sdk/signature-v4-multi-region': 3.996.46
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
-      '@smithy/fetch-http-handler': 5.7.2
-      '@smithy/node-http-handler': 4.11.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/fetch-http-handler': 5.8.0
+      '@smithy/node-http-handler': 4.12.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
   '@aws-sdk/signature-v4-multi-region@3.996.46':
     dependencies:
       '@aws-sdk/types': 3.974.5
       '@smithy/signature-v4': 5.7.3
-      '@smithy/types': 4.17.2
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/token-providers@3.1116.0':
+  '@aws-sdk/token-providers@3.1129.0':
     dependencies:
-      '@aws-sdk/core': 3.977.9
-      '@aws-sdk/nested-clients': 3.997.44
+      '@aws-sdk/core': 3.978.0
+      '@aws-sdk/nested-clients': 3.997.45
       '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.33.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
   '@aws-sdk/types@3.974.5':
     dependencies:
-      '@smithy/types': 4.17.2
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
   '@aws-sdk/xml-builder@3.972.40':
     dependencies:
-      '@smithy/types': 4.17.2
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
   '@aws/lambda-invoke-store@0.3.0': {}
@@ -12398,36 +12399,36 @@ snapshots:
     dependencies:
       '@sinonjs/commons': 3.0.1
 
-  '@smithy/core@3.33.3':
+  '@smithy/core@3.34.1':
     dependencies:
-      '@smithy/types': 4.17.2
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
   '@smithy/credential-provider-imds@4.5.2':
     dependencies:
-      '@smithy/core': 3.33.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@smithy/fetch-http-handler@5.7.2':
+  '@smithy/fetch-http-handler@5.8.0':
     dependencies:
-      '@smithy/core': 3.33.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@smithy/node-http-handler@4.11.3':
+  '@smithy/node-http-handler@4.12.1':
     dependencies:
-      '@smithy/core': 3.33.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
   '@smithy/signature-v4@5.7.3':
     dependencies:
-      '@smithy/core': 3.33.3
-      '@smithy/types': 4.17.2
+      '@smithy/core': 3.34.1
+      '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@smithy/types@4.17.2':
+  '@smithy/types@4.18.0':
     dependencies:
       tslib: 2.8.1
 
@@ -12578,7 +12579,7 @@ snapshots:
 
   '@subsquid/graphiql-console@0.3.0': {}
 
-  '@subsquid/graphql-server@4.12.1(@subsquid/big-decimal@1.0.0)(bufferutil@4.1.0)(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(utf-8-validate@6.0.6)':
+  '@subsquid/graphql-server@4.12.1(@subsquid/big-decimal@1.0.0)(bufferutil@4.1.0)(typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))(utf-8-validate@6.0.6)':
     dependencies:
       '@apollo/utils.keyvadapter': 1.1.2
       '@apollo/utils.keyvaluecache': 1.0.2
@@ -12590,7 +12591,7 @@ snapshots:
       '@subsquid/apollo-server-express': 3.14.1(express@4.22.2)(graphql@15.10.2)
       '@subsquid/logger': 1.6.0
       '@subsquid/openreader': 5.5.1(@subsquid/big-decimal@1.0.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      '@subsquid/typeorm-config': 4.2.0(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+      '@subsquid/typeorm-config': 4.2.0(typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       '@subsquid/util-internal': 3.3.1
       '@subsquid/util-internal-commander': 1.4.0(commander@11.1.0)
       '@subsquid/util-internal-http-server': 2.0.1
@@ -12602,11 +12603,11 @@ snapshots:
       graphql: 15.10.2
       graphql-ws: 5.16.2(graphql@15.10.2)
       keyv: 4.5.4
-      pg: 8.22.0
+      pg: 8.23.0
       ws: 8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
       '@subsquid/big-decimal': 1.0.0
-      typeorm: 1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      typeorm: 1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
     transitivePeerDependencies:
       - bufferutil
       - encoding
@@ -12645,7 +12646,7 @@ snapshots:
       graphql-parse-resolve-info: 4.14.1(graphql@15.10.2)
       graphql-ws: 5.16.2(graphql@15.10.2)
       inflected: 2.1.0
-      pg: 8.22.0
+      pg: 8.23.0
       ws: 8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
       '@subsquid/big-decimal': 1.0.0
@@ -12684,30 +12685,30 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@subsquid/typeorm-config@4.2.0(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
+  '@subsquid/typeorm-config@4.2.0(typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
     dependencies:
       '@subsquid/logger': 1.6.0
       '@subsquid/util-internal-ts-node': 0.0.0
       '@subsquid/util-naming': 1.3.0
     optionalDependencies:
-      typeorm: 1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      typeorm: 1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
 
-  '@subsquid/typeorm-migration@1.4.0(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
+  '@subsquid/typeorm-migration@1.4.0(typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
     dependencies:
-      '@subsquid/typeorm-config': 4.2.0(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+      '@subsquid/typeorm-config': 4.2.0(typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       '@subsquid/util-internal': 3.3.1
       '@subsquid/util-internal-code-printer': 1.2.2
       '@subsquid/util-internal-ts-node': 0.0.0
       commander: 11.1.0
       dotenv: 16.6.1
-      typeorm: 1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      typeorm: 1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
 
-  '@subsquid/typeorm-store@1.9.2(patch_hash=b7b54b502476b53a21298d67c7ada85e598c81122c968d7785f7f80caf8b4b88)(@subsquid/big-decimal@1.0.0)(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
+  '@subsquid/typeorm-store@1.9.2(patch_hash=b7b54b502476b53a21298d67c7ada85e598c81122c968d7785f7f80caf8b4b88)(@subsquid/big-decimal@1.0.0)(typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))':
     dependencies:
       '@subsquid/big-decimal': 1.0.0
-      '@subsquid/typeorm-config': 4.2.0(typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
+      '@subsquid/typeorm-config': 4.2.0(typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)))
       '@subsquid/util-internal': 3.3.1
-      typeorm: 1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
+      typeorm: 1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3))
 
   '@subsquid/util-internal-archive-client@0.2.1(@subsquid/http-client@1.8.1)(@subsquid/logger@1.6.0)':
     dependencies:
@@ -13171,10 +13172,10 @@ snapshots:
     dependencies:
       '@types/node': 25.6.0
 
-  '@types/pg@8.20.0':
+  '@types/pg@8.23.1':
     dependencies:
       '@types/node': 25.6.0
-      pg-protocol: 1.13.0
+      pg-protocol: 1.16.0
       pg-types: 2.2.0
 
   '@types/prettier@2.7.3': {}
@@ -13908,7 +13909,7 @@ snapshots:
 
   ansi-regex@5.0.1: {}
 
-  ansi-regex@6.2.2: {}
+  ansi-regex@6.3.0: {}
 
   ansi-styles@3.2.1:
     dependencies:
@@ -13922,7 +13923,7 @@ snapshots:
 
   ansi-styles@6.2.3: {}
 
-  ansis@4.3.1: {}
+  ansis@4.4.0: {}
 
   anymatch@3.1.3:
     dependencies:
@@ -14539,7 +14540,7 @@ snapshots:
     dependencies:
       '@babel/runtime': 7.28.6
 
-  dayjs@1.11.21: {}
+  dayjs@1.11.23: {}
 
   death@1.1.0: {}
 
@@ -15127,9 +15128,9 @@ snapshots:
     dependencies:
       bser: 2.1.1
 
-  fdir@6.5.0(picomatch@4.0.5):
+  fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
-      picomatch: 4.0.5
+      picomatch: 4.0.7
 
   fetch-blob@3.2.0:
     dependencies:
@@ -15980,7 +15981,7 @@ snapshots:
       jest-regex-util: 30.4.0
       jest-util: 30.4.1
       jest-worker: 30.4.1
-      picomatch: 4.0.4
+      picomatch: 4.0.7
       walker: 1.0.8
     optionalDependencies:
       fsevents: 2.3.3
@@ -16011,7 +16012,7 @@ snapshots:
       '@types/stack-utils': 2.0.3
       chalk: 4.1.2
       graceful-fs: 4.2.11
-      picomatch: 4.0.4
+      picomatch: 4.0.7
       pretty-format: 30.3.0
       slash: 3.0.0
       stack-utils: 2.0.6
@@ -16024,7 +16025,7 @@ snapshots:
       chalk: 4.1.2
       graceful-fs: 4.2.11
       jest-util: 30.4.1
-      picomatch: 4.0.4
+      picomatch: 4.0.7
       pretty-format: 30.4.1
       slash: 3.0.0
       stack-utils: 2.0.6
@@ -16154,7 +16155,7 @@ snapshots:
       chalk: 4.1.2
       ci-info: 4.4.0
       graceful-fs: 4.2.11
-      picomatch: 4.0.4
+      picomatch: 4.0.7
 
   jest-util@30.4.1:
     dependencies:
@@ -16163,7 +16164,7 @@ snapshots:
       chalk: 4.1.2
       ci-info: 4.4.0
       graceful-fs: 4.2.11
-      picomatch: 4.0.4
+      picomatch: 4.0.7
 
   jest-validate@30.4.1:
     dependencies:
@@ -16806,13 +16807,11 @@ snapshots:
 
   pg-int8@1.0.1: {}
 
-  pg-pool@3.14.0(pg@8.22.0):
+  pg-pool@3.14.0(pg@8.23.0):
     dependencies:
-      pg: 8.22.0
+      pg: 8.23.0
 
-  pg-protocol@1.13.0: {}
-
-  pg-protocol@1.15.0: {}
+  pg-protocol@1.16.0: {}
 
   pg-types@2.2.0:
     dependencies:
@@ -16822,11 +16821,11 @@ snapshots:
       postgres-date: 1.0.7
       postgres-interval: 1.2.0
 
-  pg@8.22.0:
+  pg@8.23.0:
     dependencies:
       pg-connection-string: 2.14.0
-      pg-pool: 3.14.0(pg@8.22.0)
-      pg-protocol: 1.15.0
+      pg-pool: 3.14.0(pg@8.23.0)
+      pg-protocol: 1.16.0
       pg-types: 2.2.0
       pgpass: 1.0.5
     optionalDependencies:
@@ -16840,9 +16839,9 @@ snapshots:
 
   picomatch@2.3.2: {}
 
-  picomatch@4.0.4: {}
-
   picomatch@4.0.5: {}
+
+  picomatch@4.0.7: {}
 
   pify@4.0.1: {}
 
@@ -17489,6 +17488,11 @@ snapshots:
       get-east-asian-width: 1.6.0
       strip-ansi: 7.2.0
 
+  string-width@8.2.2:
+    dependencies:
+      get-east-asian-width: 1.6.0
+      strip-ansi: 7.2.0
+
   string_decoder@1.1.1:
     dependencies:
       safe-buffer: 5.1.2
@@ -17503,7 +17507,7 @@ snapshots:
 
   strip-ansi@7.2.0:
     dependencies:
-      ansi-regex: 6.2.2
+      ansi-regex: 6.3.0
 
   strip-bom@4.0.0: {}
 
@@ -17586,8 +17590,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.5)
-      picomatch: 4.0.5
+      fdir: 6.5.0(picomatch@4.0.7)
+      picomatch: 4.0.7
 
   tmp@0.2.7: {}
 
@@ -17765,21 +17769,21 @@ snapshots:
 
   typeforce@1.18.0: {}
 
-  typeorm@1.1.0(ioredis@5.11.1)(pg@8.22.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)):
+  typeorm@1.1.1(ioredis@5.11.1)(pg@8.23.0)(ts-node@10.9.2(@types/node@25.6.0)(typescript@6.0.3)):
     dependencies:
       '@sqltools/formatter': 1.2.5
-      ansis: 4.3.1
-      dayjs: 1.11.21
+      ansis: 4.4.0
+      dayjs: 1.11.23
       debug: 4.4.3(supports-color@8.1.1)
       dedent: 1.7.2
       reflect-metadata: 0.2.2
       sql-highlight: 6.1.0
       tinyglobby: 0.2.17
       tslib: 2.8.1
-      yargs: 18.0.0
+      yargs: 18.1.0
     optionalDependencies:
       ioredis: 5.11.1
-      pg: 8.22.0
+      pg: 8.23.0
       ts-node: 10.9.2(@types/node@25.6.0)(typescript@6.0.3)
     transitivePeerDependencies:
       - babel-plugin-macros
@@ -18180,12 +18184,12 @@ snapshots:
       y18n: 5.0.8
       yargs-parser: 21.1.1
 
-  yargs@18.0.0:
+  yargs@18.1.0:
     dependencies:
       cliui: 9.0.1
       escalade: 3.2.0
       get-caller-file: 2.0.5
-      string-width: 7.2.0
+      string-width: 8.2.2
       y18n: 5.0.8
       yargs-parser: 22.0.0
 
