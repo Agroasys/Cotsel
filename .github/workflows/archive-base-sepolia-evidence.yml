@@ -291,9 +291,31 @@ jobs:
 
       - name: Verify CloudTrail denial evidence and alert delivery path
         env:
+          OBJECT_KEY: ${{ inputs.object_key }}
+          OBJECT_VERSION_ID: ${{ inputs.object_version_id }}
           WRITER_CREATED: ${{ steps.provenance.outputs.writer_created }}
         run: |
           set -euo pipefail
+          OBJECT_METADATA=$(aws s3api head-object --bucket "$ARCHIVE_BUCKET" --key "$OBJECT_KEY" \
+            --version-id "$OBJECT_VERSION_ID")
+          ARCHIVE_KEY_ARN=$(jq -r '.SSEKMSKeyId // empty' <<<"$OBJECT_METADATA")
+          [[ "$ARCHIVE_KEY_ARN" =~ ^arn:[^:]+:kms:[^:]+:[0-9]{12}:key/[0-9a-fA-F-]+$ ]]
+
+          FILTERS=$(aws logs describe-metric-filters --log-group-name "$AUDIT_LOG_GROUP")
+          jq -e --arg bucket "$ARCHIVE_BUCKET" --arg key "$ARCHIVE_KEY_ARN" '
+            (.metricFilters | any(
+              .filterName == "DeniedArchiveMutation" and
+              (.filterPattern | contains($bucket))
+            )) and
+            (.metricFilters | any(
+              .filterName == "DeniedArchiveKeyMutation" and
+              (.filterPattern | contains($key))
+            ))
+          ' <<<"$FILTERS" >/dev/null || {
+            echo 'Denied-mutation filters are not bound to the exact archive bucket and KMS key.' >&2
+            exit 1
+          }
+
           START_MS=$(( $(date -u -d "$WRITER_CREATED" +%s) * 1000 ))
           EVENTS_FILE="$RUNNER_TEMP/archive-denials.json"
           FOUND=false

@@ -53,6 +53,11 @@ assert.match(
 assert.match(archiveWorkflow, /put-object-retention[\s\S]*bypass-governance-retention/);
 assert.match(archiveWorkflow, /put-object-legal-hold/);
 assert.match(archiveWorkflow, /CloudTrail did not deliver every required denial/);
+assert.match(
+  archiveWorkflow,
+  /describe-metric-filters[\s\S]*DeniedArchiveMutation[\s\S]*DeniedArchiveKeyMutation/,
+);
+assert.match(archiveWorkflow, /filters are not bound to the exact archive bucket and KMS key/);
 assert.match(archiveWorkflow, /SubscriptionsConfirmed/);
 
 console.log('Evidence archive separates plan, apply, writer, reader, audit, and alert controls.');
