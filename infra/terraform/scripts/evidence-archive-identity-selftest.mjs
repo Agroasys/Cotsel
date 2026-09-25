@@ -46,6 +46,10 @@ assert.match(archiveWorkflow, /action:[\s\S]*write-denial-test[\s\S]*verify-cust
 assert.match(archiveWorkflow, /READER_ROLE_ARN:.*agroasys-cotsel-base-sepolia-evidence-reader/);
 assert.match(archiveWorkflow, /verify-custody:[\s\S]*environment: base-sepolia-evidence-review/);
 assert.match(archiveWorkflow, /The writer and independent reader must be different actors/);
+assert.match(
+  archiveWorkflow,
+  /IFS=\$'\\t' read -r NAME PATH_ EVENT BRANCH CONCLUSION ACTOR SHA CREATED/,
+);
 assert.match(archiveWorkflow, /put-object-retention[\s\S]*bypass-governance-retention/);
 assert.match(archiveWorkflow, /put-object-legal-hold/);
 assert.match(archiveWorkflow, /CloudTrail did not deliver every required denial/);

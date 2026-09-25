@@ -230,7 +230,7 @@ jobs:
           [[ "$OBJECT_KEY" == "base-sepolia/staging/candidates/${CANDIDATE_ID}/archive-control/${WRITER_RUN_ID}.json" ]]
 
           RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$WRITER_RUN_ID")
-          read -r NAME PATH_ EVENT BRANCH CONCLUSION ACTOR SHA CREATED <<<"$(
+          IFS=$'\t' read -r NAME PATH_ EVENT BRANCH CONCLUSION ACTOR SHA CREATED <<<"$(
             jq -r '[.name, .path, .event, .head_branch, .conclusion, .triggering_actor.login, .head_sha, .created_at] | @tsv' <<<"$RUN"
           )"
           test "$NAME" = 'Archive Base Sepolia Evidence'
