@@ -2,10 +2,11 @@ data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
 locals {
-  bucket_name      = "agroasys-cotsel-base-sepolia-evidence-${var.account_id}"
-  writer_role_name = "agroasys-cotsel-base-sepolia-evidence-writer"
-  writer_role_arn  = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/${local.writer_role_name}"
-  trail_name       = "cotsel-base-sepolia-evidence"
+  bucket_name         = "agroasys-cotsel-base-sepolia-evidence-${var.account_id}"
+  writer_role_name    = "agroasys-cotsel-base-sepolia-evidence-writer"
+  writer_role_arn     = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/${local.writer_role_name}"
+  writer_boundary_arn = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:policy/agroasys-cotsel-evidence-writer-boundary"
+  trail_name          = "cotsel-base-sepolia-evidence"
 }
 
 resource "terraform_data" "environment_guard" {
@@ -129,6 +130,8 @@ resource "aws_kms_key" "archive" {
   lifecycle {
     prevent_destroy = true
   }
+
+  depends_on = [aws_iam_role.writer]
 }
 
 resource "aws_kms_alias" "archive" {
@@ -178,9 +181,10 @@ data "aws_iam_policy_document" "writer_trust" {
 }
 
 resource "aws_iam_role" "writer" {
-  name               = local.writer_role_name
-  description        = "Writes reviewed Base Sepolia staging evidence. It cannot delete evidence or bypass retention."
-  assume_role_policy = data.aws_iam_policy_document.writer_trust.json
+  name                 = local.writer_role_name
+  description          = "Writes reviewed Base Sepolia staging evidence. It cannot delete evidence or bypass retention."
+  assume_role_policy   = data.aws_iam_policy_document.writer_trust.json
+  permissions_boundary = local.writer_boundary_arn
 
   lifecycle {
     prevent_destroy = true
