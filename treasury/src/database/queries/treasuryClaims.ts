@@ -22,6 +22,7 @@ import type {
   SweepBatch,
   TreasuryClaimEvent,
 } from '../../types';
+import type { PoolClient } from 'pg';
 import { pool } from '../connection';
 import { getLedgerEntryAccountingFacts } from './accountingProjections';
 
@@ -44,7 +45,7 @@ function createExternalPartnerHandoffPayloadHash(input: {
   return createHash('sha256').update(serialized).digest('hex');
 }
 
-export async function upsertTreasuryClaimEvent(data: {
+export interface TreasuryClaimEventUpsert {
   sourceEventId: string;
   matchedSweepBatchId?: number | null;
   txHash: string;
@@ -54,92 +55,104 @@ export async function upsertTreasuryClaimEvent(data: {
   payoutReceiver: string;
   amountRaw: string;
   triggeredBy?: string | null;
-}): Promise<TreasuryClaimEvent> {
+}
+
+export async function upsertTreasuryClaimEvent(
+  data: TreasuryClaimEventUpsert,
+): Promise<TreasuryClaimEvent> {
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
-
-    const existingByTx = await client.query<TreasuryClaimEvent>(
-      `SELECT *
-       FROM treasury_claim_events
-       WHERE tx_hash = $1
-          OR source_event_id = $2`,
-      [data.txHash, data.sourceEventId],
-    );
-
-    const existing = existingByTx.rows[0];
-    if (
-      existing &&
-      existing.matched_sweep_batch_id !== null &&
-      data.matchedSweepBatchId !== undefined &&
-      data.matchedSweepBatchId !== null &&
-      existing.matched_sweep_batch_id !== data.matchedSweepBatchId
-    ) {
-      throw new Error('Treasury claim event is already matched to a different sweep batch');
-    }
-
-    const result = existing
-      ? await client.query<TreasuryClaimEvent>(
-          `UPDATE treasury_claim_events
-           SET source_event_id = $2,
-               matched_sweep_batch_id = COALESCE($3, matched_sweep_batch_id),
-               tx_hash = $4,
-               block_number = $5,
-               observed_at = $6,
-               treasury_identity = $7,
-               payout_receiver = $8,
-               amount_raw = $9,
-               triggered_by = $10
-           WHERE id = $1
-           RETURNING *`,
-          [
-            existing.id,
-            data.sourceEventId,
-            data.matchedSweepBatchId ?? null,
-            data.txHash,
-            data.blockNumber,
-            data.observedAt,
-            data.treasuryIdentity,
-            data.payoutReceiver,
-            data.amountRaw,
-            data.triggeredBy ?? null,
-          ],
-        )
-      : await client.query<TreasuryClaimEvent>(
-          `INSERT INTO treasury_claim_events (
-              source_event_id,
-              matched_sweep_batch_id,
-              tx_hash,
-              block_number,
-              observed_at,
-              treasury_identity,
-              payout_receiver,
-              amount_raw,
-              triggered_by
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING *`,
-          [
-            data.sourceEventId,
-            data.matchedSweepBatchId ?? null,
-            data.txHash,
-            data.blockNumber,
-            data.observedAt,
-            data.treasuryIdentity,
-            data.payoutReceiver,
-            data.amountRaw,
-            data.triggeredBy ?? null,
-          ],
-        );
-
+    const claimEvent = await upsertTreasuryClaimEventWith(client, data);
     await client.query('COMMIT');
-    return result.rows[0];
+    return claimEvent;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();
   }
+}
+
+/** The upsert inside a caller's transaction. */
+export async function upsertTreasuryClaimEventWith(
+  client: PoolClient,
+  data: TreasuryClaimEventUpsert,
+): Promise<TreasuryClaimEvent> {
+  const existingByTx = await client.query<TreasuryClaimEvent>(
+    `SELECT *
+     FROM treasury_claim_events
+     WHERE tx_hash = $1
+        OR source_event_id = $2`,
+    [data.txHash, data.sourceEventId],
+  );
+
+  const existing = existingByTx.rows[0];
+  if (
+    existing &&
+    existing.matched_sweep_batch_id !== null &&
+    data.matchedSweepBatchId !== undefined &&
+    data.matchedSweepBatchId !== null &&
+    existing.matched_sweep_batch_id !== data.matchedSweepBatchId
+  ) {
+    throw new Error('Treasury claim event is already matched to a different sweep batch');
+  }
+
+  const result = existing
+    ? await client.query<TreasuryClaimEvent>(
+        `UPDATE treasury_claim_events
+         SET source_event_id = $2,
+             matched_sweep_batch_id = COALESCE($3, matched_sweep_batch_id),
+             tx_hash = $4,
+             block_number = $5,
+             observed_at = $6,
+             treasury_identity = $7,
+             payout_receiver = $8,
+             amount_raw = $9,
+             triggered_by = $10
+         WHERE id = $1
+         RETURNING *`,
+        [
+          existing.id,
+          data.sourceEventId,
+          data.matchedSweepBatchId ?? null,
+          data.txHash,
+          data.blockNumber,
+          data.observedAt,
+          data.treasuryIdentity,
+          data.payoutReceiver,
+          data.amountRaw,
+          data.triggeredBy ?? null,
+        ],
+      )
+    : await client.query<TreasuryClaimEvent>(
+        `INSERT INTO treasury_claim_events (
+            source_event_id,
+            matched_sweep_batch_id,
+            tx_hash,
+            block_number,
+            observed_at,
+            treasury_identity,
+            payout_receiver,
+            amount_raw,
+            triggered_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          RETURNING *`,
+        [
+          data.sourceEventId,
+          data.matchedSweepBatchId ?? null,
+          data.txHash,
+          data.blockNumber,
+          data.observedAt,
+          data.treasuryIdentity,
+          data.payoutReceiver,
+          data.amountRaw,
+          data.triggeredBy ?? null,
+        ],
+      );
+
+  return result.rows[0];
 }
 
 export async function upsertPartnerHandoff(data: {

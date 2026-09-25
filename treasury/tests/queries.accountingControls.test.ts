@@ -95,6 +95,7 @@ describe('treasury accounting control queries', () => {
       .mockResolvedValueOnce({
         rows: [{ id: 99, amount_raw: '1000' }],
       })
+      .mockResolvedValueOnce({ rows: [{ ledger_entry_id: 99, canonicality_state: 'CANONICAL' }] })
       .mockResolvedValueOnce({
         rows: [{ id: 44, ledger_entry_id: 99 }],
       })
@@ -109,6 +110,104 @@ describe('treasury accounting control queries', () => {
     ).rejects.toThrow('Ledger entry is already allocated to an active sweep batch');
 
     expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
+  });
+
+  it.each(['UNVERIFIED', 'ORPHANED'])(
+    'refuses to allocate a %s ledger entry to a sweep batch',
+    async (canonicalityState) => {
+      mockClientQuery
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ rows: [{ accounting_period_id: 5 }] })
+        .mockResolvedValueOnce({ rows: [{ id: 5 }] })
+        .mockResolvedValueOnce({
+          rows: [{ id: 10, status: 'DRAFT', accounting_period_status: 'OPEN' }],
+        })
+        .mockResolvedValueOnce({ rows: [{ id: 99, amount_raw: '1000' }] })
+        .mockResolvedValueOnce({
+          rows: [{ ledger_entry_id: 99, canonicality_state: canonicalityState }],
+        })
+        .mockResolvedValueOnce({});
+
+      await expect(
+        addSweepBatchEntry({ sweepBatchId: 10, ledgerEntryId: 99, allocatedBy: 'operator-1' }),
+      ).rejects.toThrow(`not proven canonical: 99 (${canonicalityState})`);
+
+      expect(mockClientQuery.mock.calls[5][0]).toContain('FOR SHARE');
+      expect(mockClientQuery).not.toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO sweep_batch_entries'),
+        expect.anything(),
+      );
+      expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
+    },
+  );
+
+  it('refuses approval while an allocated entry is orphaned, inside the transition', async () => {
+    mockClientQuery
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 10,
+            status: 'PENDING_APPROVAL',
+            created_by: 'operator-1',
+            approval_requested_by: 'operator-1',
+            approved_by: null,
+            executed_by: null,
+            closed_at: null,
+            closed_by: null,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          { ledger_entry_id: 98, canonicality_state: 'CANONICAL' },
+          { ledger_entry_id: 99, canonicality_state: 'ORPHANED' },
+        ],
+      })
+      .mockResolvedValueOnce({});
+
+    await expect(
+      updateSweepBatchStatus({ batchId: 10, status: 'APPROVED', actor: 'approver-2' }),
+    ).rejects.toThrow('not proven canonical: 99 (ORPHANED)');
+
+    expect(mockClientQuery.mock.calls[3][0]).toContain('FOR SHARE OF e');
+    expect(mockClientQuery).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE sweep_batches'),
+      expect.anything(),
+    );
+    expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
+  });
+
+  it('lets a batch holding an orphaned entry be voided', async () => {
+    mockClientQuery
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 10,
+            status: 'PENDING_APPROVAL',
+            created_by: 'operator-1',
+            approval_requested_by: 'operator-1',
+            approved_by: null,
+            executed_by: null,
+            closed_at: null,
+            closed_by: null,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 10, status: 'VOID' }], rowCount: 1 })
+      .mockResolvedValueOnce({});
+
+    const result = await updateSweepBatchStatus({
+      batchId: 10,
+      status: 'VOID',
+      actor: 'operator-1',
+    });
+
+    expect(result.status).toBe('VOID');
+    expect(mockClientQuery.mock.calls[3][0]).toContain('UPDATE sweep_batches');
   });
 
   it('requires matched sweep evidence before external handoff can be recorded', async () => {
@@ -179,6 +278,7 @@ describe('treasury accounting control queries', () => {
         ],
       })
       .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ ledger_entry_id: 99, canonicality_state: 'CANONICAL' }] })
       .mockResolvedValueOnce({
         rows: [{ id: 10, status: 'APPROVED', approved_by: 'approver-2' }],
         rowCount: 1,

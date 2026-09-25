@@ -381,6 +381,39 @@ export async function getLedgerEntriesForExport(params: {
   };
 }
 
+/**
+ * The entries a sweep decision is about, in the shape the eligibility
+ * assessment reads. A LEFT join, like the export, so an entry with no payout
+ * lifecycle event is still assessed rather than silently skipped.
+ */
+export async function getLedgerEntriesForEligibilityByIds(
+  entryIds: number[],
+): Promise<LedgerEntryForExport[]> {
+  if (entryIds.length === 0) {
+    return [];
+  }
+
+  const result = await pool.query<LedgerEntryForExport>(
+    `SELECT
+        e.*,
+        s.state AS latest_state,
+        s.created_at AS latest_state_at
+      FROM treasury_ledger_entries e
+      LEFT JOIN LATERAL (
+        SELECT p.state, p.created_at
+        FROM payout_lifecycle_events p
+        WHERE p.ledger_entry_id = e.id
+        ORDER BY p.created_at DESC, p.id DESC
+        LIMIT 1
+      ) s ON TRUE
+      WHERE e.id = ANY($1::int[])
+      ORDER BY e.id`,
+    [entryIds],
+  );
+
+  return result.rows;
+}
+
 export async function listDistinctLedgerTradeIds(): Promise<string[]> {
   const result = await pool.query<{ trade_id: string }>(
     `SELECT DISTINCT trade_id

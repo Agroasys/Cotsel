@@ -41,6 +41,7 @@ export {
   getLatestBankPayoutConfirmation,
   getLatestPayoutState,
   getLedgerEntries,
+  getLedgerEntriesForEligibilityByIds,
   getLedgerEntriesForExport,
   getLedgerEntryById,
   getLedgerEntryByTradeId,
@@ -58,8 +59,12 @@ export {
   getTreasuryClaimEventByTxHash,
   listSweepBatchEntries,
   listSweepBatches,
-  updateSweepBatchStatus,
 } from './queries/sweepBatches';
+export {
+  listSweepBatchEntryLogAddresses,
+  recordSweepBatchExecution,
+  updateSweepBatchStatus,
+} from './queries/sweepBatchTransitions';
 export {
   createRevenueRealization,
   upsertPartnerHandoff,
