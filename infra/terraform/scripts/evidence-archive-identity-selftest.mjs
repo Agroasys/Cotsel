@@ -14,10 +14,18 @@ const workflow = readFileSync(
   join(here, '..', '..', '..', '.github', 'workflows', 'terraform.yml'),
   'utf8',
 );
+const archiveWorkflow = readFileSync(
+  join(here, '..', '..', '..', '.github', 'workflows', 'archive-base-sepolia-evidence.yml'),
+  'utf8',
+);
 
 assert.match(terraform, /permissions_boundary\s+= local\.writer_boundary_arn/);
 assert.match(terraform, /agroasys-cotsel-evidence-writer-boundary/);
 assert.match(terraform, /depends_on = \[aws_iam_role\.writer\]/);
+assert.match(terraform, /agroasys-cotsel-base-sepolia-evidence-reader/);
+assert.match(terraform, /EvidenceReaderDecryption/);
+assert.match(terraform, /cloud_watch_logs_role_arn\s+= local\.cloudtrail_role_arn/);
+assert.match(terraform, /cloud_watch_logs_group_arn\s+=.*local\.audit_log_group/);
 
 assert.match(workflow, /EVIDENCE_PLAN_ROLE_ARN:.*agroasys-cotsel-evidence-archive-plan/);
 assert.match(workflow, /EVIDENCE_APPLY_ROLE_ARN:.*agroasys-cotsel-evidence-archive-apply/);
@@ -34,4 +42,13 @@ assert.match(
   /environment: \$\{\{ github\.event\.inputs\.root == 'base-sepolia-evidence-archive' && 'base-sepolia-evidence' \|\| 'staging' \}\}/,
 );
 
-console.log('Evidence archive uses dedicated plan, apply, and writer boundaries.');
+assert.match(archiveWorkflow, /action:[\s\S]*write-denial-test[\s\S]*verify-custody/);
+assert.match(archiveWorkflow, /READER_ROLE_ARN:.*agroasys-cotsel-base-sepolia-evidence-reader/);
+assert.match(archiveWorkflow, /verify-custody:[\s\S]*environment: base-sepolia-evidence-review/);
+assert.match(archiveWorkflow, /The writer and independent reader must be different actors/);
+assert.match(archiveWorkflow, /put-object-retention[\s\S]*bypass-governance-retention/);
+assert.match(archiveWorkflow, /put-object-legal-hold/);
+assert.match(archiveWorkflow, /CloudTrail did not deliver every required denial/);
+assert.match(archiveWorkflow, /SubscriptionsConfirmed/);
+
+console.log('Evidence archive separates plan, apply, writer, reader, audit, and alert controls.');

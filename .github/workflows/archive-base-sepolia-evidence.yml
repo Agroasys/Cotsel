@@ -3,72 +3,367 @@ name: Archive Base Sepolia Evidence
 on:
   workflow_dispatch:
     inputs:
+      action:
+        description: Run writer preflight, create the custody test, or independently verify it.
+        required: true
+        default: writer-preflight
+        type: choice
+        options:
+          - writer-preflight
+          - write-denial-test
+          - verify-custody
       candidate_id:
         description: Exact Base Sepolia candidate identifier.
         required: true
         type: string
+      writer_run_id:
+        description: Verify only. Successful write-denial-test run ID.
+        required: false
+        type: string
+      object_key:
+        description: Verify only. Candidate object key recorded by the writer run.
+        required: false
+        type: string
+      object_version_id:
+        description: Verify only. Exact S3 object version recorded by the writer run.
+        required: false
+        type: string
       evidence_sha256:
-        description: SHA-256 of the redacted evidence packet to archive.
-        required: true
+        description: Verify only. SHA-256 recorded by the writer run.
+        required: false
         type: string
 
 permissions:
   contents: read
 
+env:
+  AWS_REGION: eu-north-1
+  ARCHIVE_BUCKET: agroasys-cotsel-base-sepolia-evidence-655177116834
+  WRITER_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-base-sepolia-evidence-writer
+  READER_ROLE_ARN: arn:aws:iam::655177116834:role/agroasys-cotsel-base-sepolia-evidence-reader
+  AUDIT_LOG_GROUP: /aws/cloudtrail/cotsel-base-sepolia-evidence
+  DENIAL_ALARM_NAME: cotsel-base-sepolia-evidence-denied-mutation
+  ALERT_TOPIC_ARN: arn:aws:sns:eu-north-1:655177116834:cotsel-base-sepolia-evidence-alerts
+
 jobs:
-  preflight:
-    name: archive/preflight
-    if: github.ref == 'refs/heads/main'
+  writer-preflight:
+    name: archive/writer-preflight
+    if: github.ref == 'refs/heads/main' && inputs.action == 'writer-preflight'
     runs-on: ubuntu-latest
     environment: base-sepolia-evidence
     permissions:
       contents: read
       id-token: write
-    env:
-      ARCHIVE_BUCKET: ${{ vars.COTSEL_BASE_SEPOLIA_EVIDENCE_BUCKET }}
-      WRITER_ROLE_ARN: ${{ vars.COTSEL_BASE_SEPOLIA_EVIDENCE_WRITER_ROLE_ARN }}
-      CANDIDATE_ID: ${{ inputs.candidate_id }}
-      EVIDENCE_SHA256: ${{ inputs.evidence_sha256 }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-
       - name: Validate the archive request
-        id: request
+        env:
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
         run: |
           set -euo pipefail
           [[ "$CANDIDATE_ID" =~ ^cotsel-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]{4,16}$ ]] || {
             echo 'candidate_id must use the evidence-index candidate format.' >&2
             exit 1
           }
-          [[ "$EVIDENCE_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
-            echo 'evidence_sha256 must be a lowercase SHA-256 digest.' >&2
-            exit 1
-          }
-          test -n "$ARCHIVE_BUCKET" || {
-            echo 'The protected environment does not define COTSEL_BASE_SEPOLIA_EVIDENCE_BUCKET.' >&2
-            exit 1
-          }
-          test -n "$WRITER_ROLE_ARN" || {
-            echo 'The protected environment does not define COTSEL_BASE_SEPOLIA_EVIDENCE_WRITER_ROLE_ARN.' >&2
-            exit 1
-          }
-          printf 'candidate_prefix=base-sepolia/staging/candidates/%s/\n' "$CANDIDATE_ID" >> "$GITHUB_OUTPUT"
 
       - name: Assume the archive writer role
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
         with:
           role-to-assume: ${{ env.WRITER_ROLE_ARN }}
-          aws-region: ap-south-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify writer access is limited to the candidate prefix
         env:
-          CANDIDATE_PREFIX: ${{ steps.request.outputs.candidate_prefix }}
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
         run: |
           set -euo pipefail
           aws s3api list-objects-v2 \
             --bucket "$ARCHIVE_BUCKET" \
-            --prefix "$CANDIDATE_PREFIX" \
+            --prefix "base-sepolia/staging/candidates/${CANDIDATE_ID}/" \
             --max-keys 1 \
             --output json >/dev/null
-          echo "Archive writer preflight passed for $CANDIDATE_PREFIX."
+
+  write-denial-test:
+    name: archive/write-and-deny
+    if: github.ref == 'refs/heads/main' && inputs.action == 'write-denial-test'
+    runs-on: ubuntu-latest
+    environment: base-sepolia-evidence
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Validate the custody-test request
+        env:
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_ID" =~ ^cotsel-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]{4,16}$ ]] || {
+            echo 'candidate_id must use the evidence-index candidate format.' >&2
+            exit 1
+          }
+
+      - name: Assume the archive writer role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ env.WRITER_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload one versioned custody-test object
+        id: upload
+        env:
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+        run: |
+          set -euo pipefail
+          OBJECT_KEY="base-sepolia/staging/candidates/${CANDIDATE_ID}/archive-control/${GITHUB_RUN_ID}.json"
+          PACKET="$RUNNER_TEMP/archive-control.json"
+          jq -n \
+            --arg candidateId "$CANDIDATE_ID" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg sourceSha "$GITHUB_SHA" \
+            --arg runId "$GITHUB_RUN_ID" \
+            '{schemaVersion: 1, kind: "archive-custody-control-test", candidateId: $candidateId, repository: $repository, sourceSha: $sourceSha, writerRunId: $runId}' \
+            > "$PACKET"
+          SHA256=$(sha256sum "$PACKET" | cut -d ' ' -f 1)
+          VERSION_ID=$(aws s3api put-object \
+            --bucket "$ARCHIVE_BUCKET" \
+            --key "$OBJECT_KEY" \
+            --body "$PACKET" \
+            --checksum-algorithm SHA256 \
+            --metadata "sha256=$SHA256,source-sha=$GITHUB_SHA,writer-run-id=$GITHUB_RUN_ID,candidate-id=$CANDIDATE_ID" \
+            --query VersionId \
+            --output text)
+          test -n "$VERSION_ID" && test "$VERSION_ID" != "None" && test "$VERSION_ID" != "null"
+          printf 'object_key=%s\nobject_version_id=%s\nevidence_sha256=%s\n' \
+            "$OBJECT_KEY" "$VERSION_ID" "$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Prove the writer cannot read, delete, bypass, or change retention
+        env:
+          OBJECT_KEY: ${{ steps.upload.outputs.object_key }}
+          OBJECT_VERSION_ID: ${{ steps.upload.outputs.object_version_id }}
+        run: |
+          set -euo pipefail
+          expect_denied() {
+            local name="$1"
+            shift
+            set +e
+            local result
+            result=$("$@" 2>&1)
+            local status=$?
+            set -e
+            test "$status" -ne 0 || {
+              echo "$name unexpectedly succeeded." >&2
+              exit 1
+            }
+            grep -Eiq 'AccessDenied|not authorized|explicit deny' <<<"$result" || {
+              echo "$name failed for an unexpected reason: $result" >&2
+              exit 1
+            }
+            echo "$name: denied as required"
+          }
+
+          expect_denied read-back \
+            aws s3api get-object --bucket "$ARCHIVE_BUCKET" --key "$OBJECT_KEY" \
+              --version-id "$OBJECT_VERSION_ID" "$RUNNER_TEMP/forbidden-read"
+          expect_denied delete-version \
+            aws s3api delete-object --bucket "$ARCHIVE_BUCKET" --key "$OBJECT_KEY" \
+              --version-id "$OBJECT_VERSION_ID"
+          expect_denied bypass-retention \
+            aws s3api delete-object --bucket "$ARCHIVE_BUCKET" --key "$OBJECT_KEY" \
+              --version-id "$OBJECT_VERSION_ID" --bypass-governance-retention
+          SHORT_RETENTION=$(date -u -d '+1 day' '+%Y-%m-%dT%H:%M:%SZ')
+          expect_denied shorten-retention \
+            aws s3api put-object-retention --bucket "$ARCHIVE_BUCKET" --key "$OBJECT_KEY" \
+              --version-id "$OBJECT_VERSION_ID" \
+              --retention "Mode=GOVERNANCE,RetainUntilDate=$SHORT_RETENTION" \
+              --bypass-governance-retention
+          expect_denied change-legal-hold \
+            aws s3api put-object-legal-hold --bucket "$ARCHIVE_BUCKET" --key "$OBJECT_KEY" \
+              --version-id "$OBJECT_VERSION_ID" --legal-hold Status=ON
+
+      - name: Record the independent verification inputs
+        env:
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+          OBJECT_KEY: ${{ steps.upload.outputs.object_key }}
+          OBJECT_VERSION_ID: ${{ steps.upload.outputs.object_version_id }}
+          EVIDENCE_SHA256: ${{ steps.upload.outputs.evidence_sha256 }}
+        run: |
+          {
+            echo '### Archive custody writer result'
+            echo
+            echo '| Field | Value |'
+            echo '| --- | --- |'
+            printf '| Candidate | `%s` |\n' "$CANDIDATE_ID"
+            printf '| Source SHA | `%s` |\n' "$GITHUB_SHA"
+            printf '| Writer run | `%s` |\n' "$GITHUB_RUN_ID"
+            printf '| Object key | `%s` |\n' "$OBJECT_KEY"
+            printf '| Object version | `%s` |\n' "$OBJECT_VERSION_ID"
+            printf '| SHA-256 | `%s` |\n' "$EVIDENCE_SHA256"
+            echo
+            echo 'A different actor must run `verify-custody` with these exact values.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify-custody:
+    name: archive/independent-custody-verification
+    if: github.ref == 'refs/heads/main' && inputs.action == 'verify-custody'
+    runs-on: ubuntu-latest
+    environment: base-sepolia-evidence-review
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - name: Validate independent writer provenance
+        id: provenance
+        env:
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+          EVIDENCE_SHA256: ${{ inputs.evidence_sha256 }}
+          GH_TOKEN: ${{ github.token }}
+          OBJECT_KEY: ${{ inputs.object_key }}
+          OBJECT_VERSION_ID: ${{ inputs.object_version_id }}
+          WRITER_RUN_ID: ${{ inputs.writer_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_ID" =~ ^cotsel-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]{4,16}$ ]]
+          [[ "$WRITER_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$EVIDENCE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test -n "$OBJECT_KEY"
+          test -n "$OBJECT_VERSION_ID"
+          [[ "$OBJECT_KEY" == "base-sepolia/staging/candidates/${CANDIDATE_ID}/archive-control/${WRITER_RUN_ID}.json" ]]
+
+          RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$WRITER_RUN_ID")
+          read -r NAME PATH_ EVENT BRANCH CONCLUSION ACTOR SHA CREATED <<<"$(
+            jq -r '[.name, .path, .event, .head_branch, .conclusion, .triggering_actor.login, .head_sha, .created_at] | @tsv' <<<"$RUN"
+          )"
+          test "$NAME" = 'Archive Base Sepolia Evidence'
+          test "$PATH_" = '.github/workflows/archive-base-sepolia-evidence.yml'
+          test "$EVENT" = 'workflow_dispatch'
+          test "$BRANCH" = 'main'
+          test "$CONCLUSION" = 'success'
+          JOBS=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$WRITER_RUN_ID/jobs")
+          jq -e '.jobs | any(.name == "archive/write-and-deny" and .conclusion == "success")' \
+            <<<"$JOBS" >/dev/null
+          test "$SHA" = "$GITHUB_SHA"
+          test "$ACTOR" != "$GITHUB_TRIGGERING_ACTOR" || {
+            echo 'The writer and independent reader must be different actors.' >&2
+            exit 1
+          }
+          printf 'writer_actor=%s\nwriter_created=%s\n' "$ACTOR" "$CREATED" >> "$GITHUB_OUTPUT"
+
+      - name: Assume the independent evidence-reader role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ env.READER_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify the exact object, hash, retention, and reader write denial
+        env:
+          OBJECT_KEY: ${{ inputs.object_key }}
+          OBJECT_VERSION_ID: ${{ inputs.object_version_id }}
+          EVIDENCE_SHA256: ${{ inputs.evidence_sha256 }}
+          WRITER_CREATED: ${{ steps.provenance.outputs.writer_created }}
+        run: |
+          set -euo pipefail
+          PACKET="$RUNNER_TEMP/archive-control.json"
+          aws s3api get-object --bucket "$ARCHIVE_BUCKET" --key "$OBJECT_KEY" \
+            --version-id "$OBJECT_VERSION_ID" "$PACKET" >/dev/null
+          echo "$EVIDENCE_SHA256  $PACKET" | sha256sum --check --strict
+
+          RETENTION=$(aws s3api get-object-retention --bucket "$ARCHIVE_BUCKET" --key "$OBJECT_KEY" \
+            --version-id "$OBJECT_VERSION_ID")
+          test "$(jq -r '.Retention.Mode' <<<"$RETENTION")" = 'GOVERNANCE'
+          RETAIN_UNTIL=$(jq -r '.Retention.RetainUntilDate' <<<"$RETENTION")
+          RETAIN_EPOCH=$(date -u -d "$RETAIN_UNTIL" +%s)
+          MINIMUM_EPOCH=$(date -u -d "$WRITER_CREATED +89 days" +%s)
+          test "$RETAIN_EPOCH" -ge "$MINIMUM_EPOCH" || {
+            echo "Retention ends too early: $RETAIN_UNTIL" >&2
+            exit 1
+          }
+          LEGAL_HOLD=$(aws s3api get-object-legal-hold --bucket "$ARCHIVE_BUCKET" --key "$OBJECT_KEY" \
+            --version-id "$OBJECT_VERSION_ID")
+          test "$(jq -r '.LegalHold.Status' <<<"$LEGAL_HOLD")" = 'OFF'
+
+          set +e
+          WRITE_RESULT=$(aws s3api put-object --bucket "$ARCHIVE_BUCKET" \
+            --key "${OBJECT_KEY}.reader-write-probe" --body "$PACKET" 2>&1)
+          WRITE_STATUS=$?
+          set -e
+          test "$WRITE_STATUS" -ne 0
+          grep -Eiq 'AccessDenied|not authorized|explicit deny' <<<"$WRITE_RESULT"
+
+      - name: Verify CloudTrail denial evidence and alert delivery path
+        env:
+          WRITER_CREATED: ${{ steps.provenance.outputs.writer_created }}
+        run: |
+          set -euo pipefail
+          START_MS=$(( $(date -u -d "$WRITER_CREATED" +%s) * 1000 ))
+          EVENTS_FILE="$RUNNER_TEMP/archive-denials.json"
+          FOUND=false
+          for attempt in $(seq 1 30); do
+            aws logs filter-log-events --log-group-name "$AUDIT_LOG_GROUP" \
+              --start-time "$START_MS" --filter-pattern '"AccessDenied"' > "$EVENTS_FILE"
+            if jq -e --arg role "$WRITER_ROLE_ARN" '
+              [.events[].message | fromjson |
+                select(.userIdentity.sessionContext.sessionIssuer.arn == $role) |
+                select(.errorCode | test("AccessDenied")) |
+                .eventName] as $names |
+              (["GetObject", "DeleteObject", "PutObjectRetention", "PutObjectLegalHold"] - $names | length) == 0
+            ' "$EVENTS_FILE" >/dev/null; then
+              FOUND=true
+              break
+            fi
+            sleep 30
+          done
+          test "$FOUND" = true || {
+            echo 'CloudTrail did not deliver every required denial within 15 minutes.' >&2
+            exit 1
+          }
+
+          SUBSCRIPTIONS=$(aws sns get-topic-attributes --topic-arn "$ALERT_TOPIC_ARN" \
+            --query 'Attributes.SubscriptionsConfirmed' --output text)
+          test "$SUBSCRIPTIONS" -ge 1 || {
+            echo 'The archive alert topic has no confirmed recipient.' >&2
+            exit 1
+          }
+
+          ALARM=$(aws cloudwatch describe-alarms --alarm-names "$DENIAL_ALARM_NAME")
+          test "$(jq -r '.MetricAlarms[0].ActionsEnabled' <<<"$ALARM")" = 'true'
+          jq -e --arg topic "$ALERT_TOPIC_ARN" '.MetricAlarms[0].AlarmActions | index($topic)' <<<"$ALARM" >/dev/null
+
+          ACTION_RECORDED=false
+          for attempt in $(seq 1 20); do
+            HISTORY=$(aws cloudwatch describe-alarm-history --alarm-name "$DENIAL_ALARM_NAME" \
+              --history-item-type Action --start-date "$WRITER_CREATED")
+            if jq -e '.AlarmHistoryItems | any(.HistorySummary | test("Successfully executed action"))' \
+              <<<"$HISTORY" >/dev/null; then
+              ACTION_RECORDED=true
+              break
+            fi
+            sleep 30
+          done
+          test "$ACTION_RECORDED" = true || {
+            echo 'The denial alarm did not record a successful alert action.' >&2
+            exit 1
+          }
+
+      - name: Record custody verification
+        env:
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+          EVIDENCE_SHA256: ${{ inputs.evidence_sha256 }}
+          OBJECT_VERSION_ID: ${{ inputs.object_version_id }}
+          WRITER_RUN_ID: ${{ inputs.writer_run_id }}
+          WRITER_ACTOR: ${{ steps.provenance.outputs.writer_actor }}
+        run: |
+          {
+            echo '### Independent archive custody verification'
+            echo
+            echo '| Field | Value |'
+            echo '| --- | --- |'
+            printf '| Candidate | `%s` |\n' "$CANDIDATE_ID"
+            printf '| Source SHA | `%s` |\n' "$GITHUB_SHA"
+            printf '| Writer | `%s` (run `%s`) |\n' "$WRITER_ACTOR" "$WRITER_RUN_ID"
+            printf '| Independent reader | `%s` |\n' "$GITHUB_TRIGGERING_ACTOR"
+            printf '| Object version | `%s` |\n' "$OBJECT_VERSION_ID"
+            printf '| SHA-256 | `%s` |\n' "$EVIDENCE_SHA256"
+            echo '| Retention | `GOVERNANCE`, at least 89 days remaining at verification |'
+            echo '| Denials | writer read, delete, bypass, shortening, and legal-hold attempts denied |'
+            echo '| Audit | CloudTrail events present; alarm action recorded; recipient confirmed |'
+          } >> "$GITHUB_STEP_SUMMARY"
