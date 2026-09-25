@@ -6,14 +6,19 @@
  * finalized head.
  *
  * This is for evidence that carries no stored log identity to re-derive -- the
- * TreasuryClaimed transaction a sweep batch is matched against -- so the
- * receipt and the finalized head are the whole check. Ledger entries, which do
- * carry that identity, go through `ChainCanonicalityVerifier` instead.
+ * TreasuryClaimed transaction a sweep batch is matched against. The verdict
+ * hands back the receipt's logs so the caller can decode the event it expects
+ * from them (`treasuryClaimLog.ts`). Ledger entries, which do carry a stored
+ * identity, go through `ChainCanonicalityVerifier` instead.
  */
-import type { SettlementChainReader } from './chainCanonicality';
+import type { SettlementChainReader, SettlementLog } from './chainCanonicality';
 
 export type FinalizedTransactionVerdict =
-  | { finalized: true; finalizedBlockNumber: number }
+  | {
+      finalized: true;
+      finalizedBlockNumber: number;
+      logs: ReadonlyArray<SettlementLog> | null;
+    }
   | { finalized: false; detail: string };
 
 function describeError(error: unknown): string {
@@ -79,6 +84,6 @@ export class FinalizedTransactionVerifier {
       };
     }
 
-    return { finalized: true, finalizedBlockNumber };
+    return { finalized: true, finalizedBlockNumber, logs: receipt.logs ?? null };
   }
 }

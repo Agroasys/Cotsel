@@ -11,108 +11,37 @@ jest.mock('../src/database/queries', () => ({
   getSweepBatchDetail: jest.fn(),
   getTreasuryClaimEventByBatchId: jest.fn(),
   getTreasuryClaimEventByTxHash: jest.fn(),
-  updateSweepBatchStatus: jest.fn(),
-  upsertTreasuryClaimEvent: jest.fn(),
+  listSweepBatchEntryLogAddresses: jest.fn(),
+  recordSweepBatchExecution: jest.fn(),
 }));
 
 import { FinalizedTransactionVerifier } from '../src/core/finalizedTransaction';
 import { SweepExecutionMatcherService } from '../src/core/sweepExecutionMatcher';
 import * as queries from '../src/database/queries';
-import { stubChainReader, TEST_BLOCK_HASH, type StubReceipt } from './helpers/chainCanonicality';
-
-const CANONICAL_CLAIM_RECEIPT: StubReceipt = {
-  txHash: '0xclaim',
-  blockNumber: 101,
-  blockHash: TEST_BLOCK_HASH,
-  logIndex: 0,
-};
-
-function claimVerifier(options?: { receipts?: StubReceipt[]; finalizedBlockNumber?: number }) {
-  return new FinalizedTransactionVerifier({
-    provider: stubChainReader({
-      receipts: options?.receipts ?? [CANONICAL_CLAIM_RECEIPT],
-      finalizedBlockNumber: options?.finalizedBlockNumber,
-    }),
-  });
-}
-
-const indexedClaim = {
-  id: 'event-90',
-  eventName: 'TreasuryClaimed' as const,
-  txHash: '0xclaim',
-  blockNumber: 101,
-  logIndex: 0,
-  timestamp: new Date('2026-04-15T11:00:00.000Z'),
-  claimAmount: '125000000',
-  treasuryIdentity: '0xtreasury',
-  payoutReceiver: '0xpayout',
-  triggeredBy: '0xsigner',
-};
-
-const batchDetailFixture = {
-  batch: {
-    id: 11,
-    batch_key: 'batch-q2-001',
-    accounting_period_id: 7,
-    accounting_period_key: '2026-Q2',
-    accounting_period_status: 'OPEN',
-    asset_symbol: 'USDC',
-    status: 'APPROVED',
-    expected_total_raw: '125000000',
-    payout_receiver_address: '0xpayout',
-    approval_requested_at: new Date('2026-04-15T09:00:00.000Z'),
-    approval_requested_by: 'operator-1',
-    approved_at: new Date('2026-04-15T10:00:00.000Z'),
-    approved_by: 'approver-2',
-    matched_sweep_tx_hash: null,
-    matched_sweep_block_number: null,
-    matched_swept_at: null,
-    executed_by: null,
-    closed_at: null,
-    closed_by: null,
-    created_by: 'operator-1',
-    metadata: {},
-    created_at: new Date('2026-04-15T08:00:00.000Z'),
-    updated_at: new Date('2026-04-15T10:00:00.000Z'),
-  },
-  entries: [],
-  partnerHandoff: null,
-  totals: {
-    allocatedAmountRaw: '125000000',
-    entryCount: 1,
-  },
-};
+import { TEST_LOG_ADDRESS } from './helpers/chainCanonicality';
+import {
+  batchDetailFixture,
+  CANONICAL_CLAIM_RECEIPT,
+  claimVerifier,
+  executedBatchFixture,
+  indexedClaim,
+  OTHER,
+  PAYOUT,
+  SIGNER,
+  TREASURY,
+} from './helpers/sweepExecution';
 
 describe('SweepExecutionMatcherService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(queries.listSweepBatchEntryLogAddresses).mockResolvedValue([TEST_LOG_ADDRESS]);
+    jest.mocked(queries.recordSweepBatchExecution).mockResolvedValue(executedBatchFixture as never);
   });
 
   it('matches execution only from authoritative TreasuryClaimed evidence', async () => {
     jest.mocked(queries.getSweepBatchDetail).mockResolvedValue(batchDetailFixture as never);
     jest.mocked(queries.getTreasuryClaimEventByBatchId).mockResolvedValue(null);
     jest.mocked(queries.getTreasuryClaimEventByTxHash).mockResolvedValue(null);
-    jest.mocked(queries.upsertTreasuryClaimEvent).mockResolvedValue({
-      id: 90,
-      source_event_id: 'event-90',
-      matched_sweep_batch_id: 11,
-      tx_hash: '0xclaim',
-      block_number: 101,
-      observed_at: new Date('2026-04-15T11:00:00.000Z'),
-      treasury_identity: '0xtreasury',
-      payout_receiver: '0xpayout',
-      amount_raw: '125000000',
-      triggered_by: '0xsigner',
-      created_at: new Date('2026-04-15T11:00:00.000Z'),
-    });
-    jest.mocked(queries.updateSweepBatchStatus).mockResolvedValue({
-      ...batchDetailFixture.batch,
-      status: 'EXECUTED',
-      matched_sweep_tx_hash: '0xclaim',
-      matched_sweep_block_number: '101',
-      matched_swept_at: new Date('2026-04-15T11:00:00.000Z'),
-      executed_by: 'executor-3',
-    } as never);
 
     const matcher = new SweepExecutionMatcherService({
       indexerClient: {
@@ -123,9 +52,9 @@ describe('SweepExecutionMatcherService', () => {
           blockNumber: 101,
           timestamp: new Date('2026-04-15T11:00:00.000Z'),
           claimAmount: '125000000',
-          treasuryIdentity: '0xtreasury',
-          payoutReceiver: '0xpayout',
-          triggeredBy: '0xsigner',
+          treasuryIdentity: TREASURY,
+          payoutReceiver: PAYOUT,
+          triggeredBy: SIGNER,
         }),
       },
       claimVerifier: claimVerifier(),
@@ -138,14 +67,16 @@ describe('SweepExecutionMatcherService', () => {
     });
 
     expect(result.status).toBe('EXECUTED');
-    expect(queries.upsertTreasuryClaimEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(queries.recordSweepBatchExecution).toHaveBeenCalledWith({
+      claim: expect.objectContaining({
         matchedSweepBatchId: 11,
         txHash: '0xclaim',
         amountRaw: '125000000',
-        payoutReceiver: '0xpayout',
+        payoutReceiver: PAYOUT,
       }),
-    );
+      actor: 'executor-3',
+      metadata: undefined,
+    });
   });
 
   it('rejects unmatched tx hashes with no chain evidence', async () => {
@@ -182,9 +113,9 @@ describe('SweepExecutionMatcherService', () => {
           blockNumber: 101,
           timestamp: new Date('2026-04-15T11:00:00.000Z'),
           claimAmount: '1',
-          treasuryIdentity: '0xtreasury',
-          payoutReceiver: '0xpayout',
-          triggeredBy: '0xsigner',
+          treasuryIdentity: TREASURY,
+          payoutReceiver: PAYOUT,
+          triggeredBy: SIGNER,
         }),
       },
     });
@@ -212,9 +143,9 @@ describe('SweepExecutionMatcherService', () => {
           blockNumber: 101,
           timestamp: new Date('2026-04-15T11:00:00.000Z'),
           claimAmount: '125000000',
-          treasuryIdentity: '0xtreasury',
-          payoutReceiver: '0xother',
-          triggeredBy: '0xsigner',
+          treasuryIdentity: TREASURY,
+          payoutReceiver: OTHER,
+          triggeredBy: SIGNER,
         }),
       },
     });
@@ -239,10 +170,10 @@ describe('SweepExecutionMatcherService', () => {
       tx_hash: '0xclaim',
       block_number: 101,
       observed_at: new Date('2026-04-15T11:00:00.000Z'),
-      treasury_identity: '0xtreasury',
-      payout_receiver: '0xpayout',
+      treasury_identity: TREASURY,
+      payout_receiver: PAYOUT,
       amount_raw: '125000000',
-      triggered_by: '0xsigner',
+      triggered_by: SIGNER,
       created_at: new Date('2026-04-15T11:00:00.000Z'),
     });
     jest.mocked(queries.getTreasuryClaimEventByTxHash).mockResolvedValue(null);
@@ -272,33 +203,12 @@ describe('SweepExecutionMatcherService', () => {
       tx_hash: '0xclaim',
       block_number: 101,
       observed_at: new Date('2026-04-15T11:00:00.000Z'),
-      treasury_identity: '0xtreasury',
-      payout_receiver: '0xpayout',
+      treasury_identity: TREASURY,
+      payout_receiver: PAYOUT,
       amount_raw: '125000000',
-      triggered_by: '0xsigner',
+      triggered_by: SIGNER,
       created_at: new Date('2026-04-15T11:00:00.000Z'),
     });
-    jest.mocked(queries.upsertTreasuryClaimEvent).mockResolvedValue({
-      id: 90,
-      source_event_id: 'event-90',
-      matched_sweep_batch_id: 11,
-      tx_hash: '0xclaim',
-      block_number: 101,
-      observed_at: new Date('2026-04-15T11:00:00.000Z'),
-      treasury_identity: '0xtreasury',
-      payout_receiver: '0xpayout',
-      amount_raw: '125000000',
-      triggered_by: '0xsigner',
-      created_at: new Date('2026-04-15T11:00:00.000Z'),
-    });
-    jest.mocked(queries.updateSweepBatchStatus).mockResolvedValue({
-      ...batchDetailFixture.batch,
-      status: 'EXECUTED',
-      matched_sweep_tx_hash: '0xclaim',
-      matched_sweep_block_number: '101',
-      matched_swept_at: new Date('2026-04-15T11:00:00.000Z'),
-      executed_by: 'executor-3',
-    } as never);
 
     const fetchTreasuryClaimEventByTxHash = jest.fn();
     const matcher = new SweepExecutionMatcherService({
@@ -354,8 +264,7 @@ describe('SweepExecutionMatcherService', () => {
         matcher.matchApprovedBatch({ batchId: 11, txHash: '0xclaim', actor: 'executor-3' }),
       ).rejects.toThrow(reason);
 
-      expect(queries.upsertTreasuryClaimEvent).not.toHaveBeenCalled();
-      expect(queries.updateSweepBatchStatus).not.toHaveBeenCalled();
+      expect(queries.recordSweepBatchExecution).not.toHaveBeenCalled();
     });
 
     it('refuses when no settlement runtime is configured to check the claim', async () => {
@@ -370,7 +279,7 @@ describe('SweepExecutionMatcherService', () => {
         matcher.matchApprovedBatch({ batchId: 11, txHash: '0xclaim', actor: 'executor-3' }),
       ).rejects.toThrow('Settlement runtime is not configured');
 
-      expect(queries.updateSweepBatchStatus).not.toHaveBeenCalled();
+      expect(queries.recordSweepBatchExecution).not.toHaveBeenCalled();
     });
 
     it('re-verifies previously ingested claim evidence rather than trusting the stored copy', async () => {
@@ -381,10 +290,10 @@ describe('SweepExecutionMatcherService', () => {
         tx_hash: '0xclaim',
         block_number: 101,
         observed_at: new Date('2026-04-15T11:00:00.000Z'),
-        treasury_identity: '0xtreasury',
-        payout_receiver: '0xpayout',
+        treasury_identity: TREASURY,
+        payout_receiver: PAYOUT,
         amount_raw: '125000000',
-        triggered_by: '0xsigner',
+        triggered_by: SIGNER,
         created_at: new Date('2026-04-15T11:00:00.000Z'),
       });
 
@@ -397,7 +306,7 @@ describe('SweepExecutionMatcherService', () => {
         matcher.matchApprovedBatch({ batchId: 11, txHash: '0xclaim', actor: 'executor-3' }),
       ).rejects.toThrow('has no receipt');
 
-      expect(queries.updateSweepBatchStatus).not.toHaveBeenCalled();
+      expect(queries.recordSweepBatchExecution).not.toHaveBeenCalled();
     });
   });
 });

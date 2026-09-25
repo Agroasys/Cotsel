@@ -243,4 +243,93 @@ describePostgres('treasury sweep canonicality gate (postgres)', () => {
     );
     expect(batch.rows[0].status).toBe('PENDING_APPROVAL');
   });
+
+  describe('matched execution', () => {
+    async function seedApprovedBatch(): Promise<number> {
+      const batchId = await seedDraftBatch();
+      const entry = await seedEntry();
+      await markSeededEntryCanonical(queries, entry);
+      await queries.addSweepBatchEntry({
+        sweepBatchId: batchId,
+        ledgerEntryId: entry.id,
+        allocatedBy: 'treasury-maker',
+      });
+      await queries.updateSweepBatchStatus({
+        batchId,
+        status: 'PENDING_APPROVAL',
+        actor: 'treasury-maker',
+      });
+      await queries.updateSweepBatchStatus({
+        batchId,
+        status: 'APPROVED',
+        actor: 'treasury-checker',
+      });
+      return batchId;
+    }
+
+    function claimFor(batchId: number) {
+      sequence += 1;
+      return {
+        sourceEventId: `claim-sc-${sequence}`,
+        matchedSweepBatchId: batchId,
+        txHash: `0xclaimsc${sequence}`,
+        blockNumber: 900 + sequence,
+        observedAt: new Date('2026-04-16T09:00:00.000Z'),
+        treasuryIdentity: `0x${'aa'.repeat(20)}`,
+        payoutReceiver: '0xpayoutreceiver',
+        amountRaw: '125000000',
+        triggeredBy: `0x${'cc'.repeat(20)}`,
+      };
+    }
+
+    async function claimCount(batchId: number): Promise<number> {
+      const result = await sidecar.query<{ count: number }>(
+        'SELECT COUNT(*)::int AS count FROM treasury_claim_events WHERE matched_sweep_batch_id = $1',
+        [batchId],
+      );
+      return result.rows[0].count;
+    }
+
+    it('names the escrow that emitted the allocated entries', async () => {
+      const batchId = await seedApprovedBatch();
+
+      await expect(queries.listSweepBatchEntryLogAddresses(batchId)).resolves.toEqual([
+        `0x${'11'.repeat(20)}`,
+      ]);
+    });
+
+    it('binds the claim and executes the batch in one commit', async () => {
+      const batchId = await seedApprovedBatch();
+      const claim = claimFor(batchId);
+
+      const batch = await queries.recordSweepBatchExecution({
+        claim,
+        actor: 'treasury-executor',
+      });
+
+      expect(batch.status).toBe('EXECUTED');
+      expect(batch.matched_sweep_tx_hash).toBe(claim.txHash);
+      expect(await claimCount(batchId)).toBe(1);
+    });
+
+    it('leaves no bound claim behind when the transition is refused', async () => {
+      // Still DRAFT, so EXECUTED is not a legal transition and the whole write
+      // must roll back -- a claim left bound here is what stranded batches.
+      const batchId = await seedDraftBatch();
+
+      await expect(
+        queries.recordSweepBatchExecution({
+          claim: claimFor(batchId),
+          actor: 'treasury-executor',
+        }),
+      ).rejects.toThrow();
+
+      expect(await claimCount(batchId)).toBe(0);
+      const batch = await sidecar.query<{ status: string }>(
+        'SELECT status FROM sweep_batches WHERE id = $1',
+        [batchId],
+      );
+      expect(batch.rows[0].status).toBe('DRAFT');
+    });
+  });
 });

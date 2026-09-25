@@ -125,13 +125,13 @@ the verdict from the chain in the controller, then re-checks the persisted
 share-locked. An orphaning takes the same rows `FOR UPDATE`, so it either
 commits first and is refused, or waits until the decision has committed.
 
-| Decision                              | Requirement                                                                                                     |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Allocate an entry                     | Eligible for payout (finalized, canonical, reconciled)                                                          |
-| Request approval (`PENDING_APPROVAL`) | Every allocated entry eligible for payout                                                                       |
-| Approve (`APPROVED`)                  | Every allocated entry eligible for payout                                                                       |
-| Mark executed (`EXECUTED`)            | The `TreasuryClaimed` transaction is a successful receipt at the reported block, at or below the finalized head |
-| Close (`CLOSED`)                      | Every allocated entry still `CANONICAL`                                                                         |
+| Decision                              | Requirement                                                                                                                                                                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Allocate an entry                     | Eligible for payout (finalized, canonical, reconciled)                                                                                                                                                                         |
+| Request approval (`PENDING_APPROVAL`) | Every allocated entry eligible for payout                                                                                                                                                                                      |
+| Approve (`APPROVED`)                  | Every allocated entry eligible for payout                                                                                                                                                                                      |
+| Mark executed (`EXECUTED`)            | The `TreasuryClaimed` transaction is a successful receipt at the reported block, at or below the finalized head, and carries exactly one `TreasuryClaimed` log from the batch's escrow whose decoded receiver and amount match |
+| Close (`CLOSED`)                      | Every allocated entry still `CANONICAL`                                                                                                                                                                                        |
 
 `DRAFT` and `VOID` stay open, so a blocked batch can always be withdrawn.
 `EXECUTED` and `HANDED_OFF` record facts that already happened and are not
@@ -140,6 +140,13 @@ which is where the batch stops for the correction decision.
 
 `UNVERIFIED` is refused as firmly as `ORPHANED`. A refusal returns `409
 SweepEligibilityBlocked` naming each blocked entry and its reasons.
+
+Mark executed is bound to the transaction hash the operator supplied: an
+indexed claim for any other hash is refused. The expected emitter is the one
+escrow address shared by the batch's allocated entries. The claim match and the
+`EXECUTED` transition commit in one transaction. A batch left `APPROVED` with a
+claim already bound (by a match that failed before this was atomic) is
+re-verified and completed when mark executed is retried with the same hash.
 
 ## Running the reorganization drill
 
@@ -238,15 +245,16 @@ consumed block is re-read rather than stepped over.
 
 ## Failure handling
 
-| Symptom                                                                                         | Cause                                                                                 | Action                                                                                                                                                     |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /internal/ingest` returns 503 `SettlementUnavailable`                                     | No finalized head from the settlement RPC                                             | Fail-closed by design. Restore RPC reachability; check `RPC_URL`, `RPC_FALLBACK_URLS`, chain id.                                                           |
-| `ingest:once` exits 1                                                                           | Same                                                                                  | The scheduler and release gate read this exit code; do not treat it as an empty run.                                                                       |
-| Ingestion stops early, watermark unchanged                                                      | A block's canonical hash was unavailable                                              | Logged with the block number. Resume happens automatically once the RPC can answer for that height.                                                        |
-| All entries blocked with "Chain canonicality is unproven"                                       | Provider not configured, or entries predate identity capture                          | Confirm `RPC_URL`/`CHAIN_ID`, then let ingestion replay to backfill identity.                                                                              |
-| An entry is `ORPHANED`                                                                          | The chain contradicted it                                                             | Freeze the affected batch, preserve the evidence row, and follow `treasury-revenue-close.md` for the correction decision.                                  |
-| Sweep action returns 409 `SweepEligibilityBlocked`                                              | An allocated entry is not eligible or not canonical                                   | Read `details.entries`. Before execution, void or rebuild the batch without the entry. After execution, hold close and follow `treasury-revenue-close.md`. |
-| Mark executed returns 409 `ExecutionMatchFailed` naming the finalized head or a missing receipt | The claim transaction is not yet final, or the indexer read it from an orphaned block | Wait for finality and retry; a missing or re-mined receipt is a reorganization and needs the correction decision.                                          |
+| Symptom                                                                                         | Cause                                                                                                     | Action                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /internal/ingest` returns 503 `SettlementUnavailable`                                     | No finalized head from the settlement RPC                                                                 | Fail-closed by design. Restore RPC reachability; check `RPC_URL`, `RPC_FALLBACK_URLS`, chain id.                                                           |
+| `ingest:once` exits 1                                                                           | Same                                                                                                      | The scheduler and release gate read this exit code; do not treat it as an empty run.                                                                       |
+| Ingestion stops early, watermark unchanged                                                      | A block's canonical hash was unavailable                                                                  | Logged with the block number. Resume happens automatically once the RPC can answer for that height.                                                        |
+| All entries blocked with "Chain canonicality is unproven"                                       | Provider not configured, or entries predate identity capture                                              | Confirm `RPC_URL`/`CHAIN_ID`, then let ingestion replay to backfill identity.                                                                              |
+| An entry is `ORPHANED`                                                                          | The chain contradicted it                                                                                 | Freeze the affected batch, preserve the evidence row, and follow `treasury-revenue-close.md` for the correction decision.                                  |
+| Sweep action returns 409 `SweepEligibilityBlocked`                                              | An allocated entry is not eligible or not canonical                                                       | Read `details.entries`. Before execution, void or rebuild the batch without the entry. After execution, hold close and follow `treasury-revenue-close.md`. |
+| Mark executed returns 409 `ExecutionMatchFailed` naming the finalized head or a missing receipt | The claim transaction is not yet final, or the indexer read it from an orphaned block                     | Wait for finality and retry; a missing or re-mined receipt is a reorganization and needs the correction decision.                                          |
+| Mark executed returns 409 `ExecutionMatchFailed` naming the `TreasuryClaimed` log               | The receipt has no claim log from the batch's escrow, or its decoded fields differ from the indexed claim | Do not retry. The indexer record is stale or wrong for this hash; confirm the claim transaction on the explorer and raise it as an indexer incident.       |
 
 ## Verification
 
@@ -269,10 +277,9 @@ node --test shared-db/schema-fingerprint.manifests.postgres.test.js
 `treasury_claim_events` rows still do not carry a block hash or a stored
 canonicality verdict. Before a claim is matched to a sweep batch, its receipt is
 re-read from the settlement RPC and must be successful at the reported block, at
-or below the finalized head. The claim's log content is not re-derived: the
-batch amount and payout receiver are matched against the indexed claim, and a
-reorganization that preserved the transaction but changed its logs is outside
-this check.
+or below the finalized head, and its `TreasuryClaimed` log is decoded with the
+escrow ABI and compared with the indexed claim. The check runs once, at match
+time; a claim already matched is not re-verified later.
 
 ## Residual risk
 
