@@ -7,7 +7,7 @@ import {
   upsertLedgerEntryWithInitialState,
   upsertTreasuryClaimEvent,
 } from '../database/queries';
-import { ChainCanonicalityVerifier, type SettlementChainReader } from './chainCanonicality';
+import { ChainCanonicalityVerifier } from './chainCanonicality';
 import { createSettlementProvider } from './settlementProvider';
 import { Logger } from '../utils/logger';
 import type { IndexerTradeEvent } from '../indexer/types';
@@ -110,7 +110,7 @@ export class TreasuryIngestionService {
     this.verifier =
       deps?.verifier ??
       new ChainCanonicalityVerifier({
-        provider: createSettlementProvider() as unknown as SettlementChainReader | null,
+        provider: createSettlementProvider(),
       });
   }
 

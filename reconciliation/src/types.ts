@@ -303,10 +303,7 @@ export interface GovernedUnpauseEvidence {
  * trip through the database: no bigint, no Date.
  */
 export type RunAlertKind =
-  | 'CRITICAL_DRIFT'
-  | 'COVERAGE_BACKLOG'
-  | 'TRADE_CONTAINED'
-  | 'TRADE_PAUSE_UNCONFIRMED';
+  'CRITICAL_DRIFT' | 'COVERAGE_BACKLOG' | 'TRADE_CONTAINED' | 'TRADE_PAUSE_UNCONFIRMED';
 
 export interface CriticalDriftAlertPayload {
   runKey: string;

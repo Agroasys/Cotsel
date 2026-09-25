@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type {
-  ListSettlementHandoffsInput,
   SettlementExecutionEventRecord,
   SettlementExecutionStatus,
   SettlementHandoffRecord,
@@ -163,9 +162,7 @@ export class ReconciliationReadService implements ReconciliationReadReader {
     const queriedAt = this.now().toISOString();
 
     try {
-      const handoffs = await this.settlementStore.listHandoffs(
-        query as ListSettlementHandoffsInput,
-      );
+      const handoffs = await this.settlementStore.listHandoffs(query);
       const projectionResult = await this.settlementStore
         .getTradeSettlementProjectionMap([...new Set(handoffs.items.map((item) => item.tradeId))])
         .then((value) => ({ ok: true as const, value }))

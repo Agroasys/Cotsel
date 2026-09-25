@@ -38,23 +38,12 @@ export type TreasuryPartnerCode = 'bridge';
 export type TreasuryPartnerHandoffStatus = ProviderHandoffStatus;
 export type AccountingPeriodStatus = 'OPEN' | 'PENDING_CLOSE' | 'CLOSED';
 export type SweepBatchStatus =
-  | 'DRAFT'
-  | 'PENDING_APPROVAL'
-  | 'APPROVED'
-  | 'EXECUTED'
-  | 'HANDED_OFF'
-  | 'CLOSED'
-  | 'VOID';
+  'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'EXECUTED' | 'HANDED_OFF' | 'CLOSED' | 'VOID';
 export type SweepBatchAllocationStatus = 'ALLOCATED' | 'RELEASED';
 export type PartnerHandoffStatus = ProviderHandoffStatus;
 export type RevenueRealizationStatus = 'REALIZED' | 'REVERSED';
 export type TreasuryAccountingState =
-  | 'HELD'
-  | 'ALLOCATED_TO_SWEEP'
-  | 'SWEPT'
-  | 'HANDED_OFF'
-  | 'REALIZED'
-  | 'EXCEPTION';
+  'HELD' | 'ALLOCATED_TO_SWEEP' | 'SWEPT' | 'HANDED_OFF' | 'REALIZED' | 'EXCEPTION';
 
 export interface LedgerEntry {
   id: number;
