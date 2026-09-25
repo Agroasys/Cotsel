@@ -30,13 +30,7 @@
  * because the safe-looking default is the one that reads as progress.
  */
 export type ProviderHandoffStatus =
-  | 'CREATED'
-  | 'SUBMITTED'
-  | 'ACKNOWLEDGED'
-  | 'PROCESSING'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'RETURNED';
+  'CREATED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'RETURNED';
 
 export const PROVIDER_HANDOFF_STATUSES: readonly ProviderHandoffStatus[] = [
   'CREATED',
@@ -58,10 +52,7 @@ export const PROVIDER_HANDOFF_STATUSES: readonly ProviderHandoffStatus[] = [
  * - `TERMINAL_FAILED`-- the instruction ended without movement.
  */
 export type ProviderHandoffAuthority =
-  | 'NOT_HANDED_OFF'
-  | 'IN_FLIGHT'
-  | 'COMPLETE'
-  | 'TERMINAL_FAILED';
+  'NOT_HANDED_OFF' | 'IN_FLIGHT' | 'COMPLETE' | 'TERMINAL_FAILED';
 
 const AUTHORITY: Readonly<Record<ProviderHandoffStatus, ProviderHandoffAuthority>> = {
   CREATED: 'NOT_HANDED_OFF',
@@ -240,11 +231,7 @@ export function assertCompletionEvidence(
  * `FAILED`. The full-fidelity status stays on the row and in the evidence log.
  */
 export type SdkPartnerHandoffStatus =
-  | 'CREATED'
-  | 'SUBMITTED'
-  | 'ACKNOWLEDGED'
-  | 'COMPLETED'
-  | 'FAILED';
+  'CREATED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'COMPLETED' | 'FAILED';
 
 export function toSdkPartnerHandoffStatus(status: ProviderHandoffStatus): SdkPartnerHandoffStatus {
   if (status === 'PROCESSING') {
