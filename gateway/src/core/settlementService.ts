@@ -5,6 +5,12 @@ import { createHash } from 'crypto';
 import { GatewayConfig } from '../config/env';
 import { GatewayError } from '../errors';
 import {
+  ASSET_AMOUNT_SPEC,
+  DISPLAY_AMOUNT_SPEC,
+  parseOptionalSettlementAmount,
+  parseSettlementAmount,
+} from './settlementAmount';
+import {
   CreateSettlementExecutionEventInput,
   CreateSettlementHandoffInput,
   SettlementCallbackDeliveryRecord,
@@ -35,17 +41,6 @@ function requireNonEmpty(value: string, field: string): string {
   }
 
   return trimmed;
-}
-
-function validateAmount(value: number, field: string): number {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be a non-negative number`, {
-      field,
-      value,
-    });
-  }
-
-  return value;
 }
 
 export const SETTLEMENT_CALLBACK_CONTRACT_VERSION = 'cotsel.settlement-callback.v1';
@@ -204,11 +199,16 @@ export class SettlementService {
       phase: requireNonEmpty(input.phase, 'phase'),
       settlementChannel: requireNonEmpty(input.settlementChannel, 'settlementChannel'),
       displayCurrency: requireNonEmpty(input.displayCurrency, 'displayCurrency'),
-      displayAmount: validateAmount(input.displayAmount, 'displayAmount'),
-      assetAmount:
-        input.assetAmount === undefined || input.assetAmount === null
-          ? null
-          : validateAmount(input.assetAmount, 'assetAmount'),
+      displayAmount: parseSettlementAmount(
+        input.displayAmount,
+        'displayAmount',
+        DISPLAY_AMOUNT_SPEC,
+      ),
+      assetAmount: parseOptionalSettlementAmount(
+        input.assetAmount,
+        'assetAmount',
+        ASSET_AMOUNT_SPEC,
+      ),
       ricardianHash: input.ricardianHash?.trim() || null,
       externalReference: input.externalReference?.trim() || null,
       metadata: input.metadata ?? {},

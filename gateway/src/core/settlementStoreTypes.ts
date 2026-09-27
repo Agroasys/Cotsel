@@ -1,6 +1,8 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
  */
+import type { SettlementAmountInput } from './settlementAmount';
+
 export const SETTLEMENT_EXECUTION_STATUSES = [
   'pending',
   'accepted',
@@ -124,9 +126,9 @@ export interface CreateSettlementHandoffInput {
   phase: string;
   settlementChannel: string;
   displayCurrency: string;
-  displayAmount: number;
+  displayAmount: SettlementAmountInput;
   assetSymbol?: string | null;
-  assetAmount?: number | null;
+  assetAmount?: SettlementAmountInput | null;
   ricardianHash?: string | null;
   externalReference?: string | null;
   metadata?: Record<string, unknown>;

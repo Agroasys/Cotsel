@@ -11,6 +11,12 @@ import { GaslessSettlementExecutionService } from '../core/gaslessSettlementExec
 import type { GaslessUserAction } from '../core/gaslessSettlementExecutionService';
 import { createServiceAuthMiddleware } from '../core/serviceAuth';
 import { SettlementService } from '../core/settlementService';
+import {
+  ASSET_AMOUNT_SPEC,
+  DISPLAY_AMOUNT_SPEC,
+  parseOptionalSettlementAmount,
+  parseSettlementAmount,
+} from '../core/settlementAmount';
 import { OracleSettlementProgressionService } from '../core/oracleSettlementProgressionService';
 import type { RicardianClient } from '../core/ricardianClient';
 import {
@@ -56,14 +62,6 @@ function optionalString(value: unknown, field: string): string | null {
   }
 
   return requireString(value, field);
-}
-
-function requireNumber(value: unknown, field: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new GatewayError(400, 'VALIDATION_ERROR', `${field} must be a number`);
-  }
-
-  return value;
 }
 
 function requireInteger(value: unknown, field: string): number {
@@ -228,12 +226,17 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           phase: requireString(body.phase, 'phase'),
           settlementChannel: requireString(body.settlementChannel, 'settlementChannel'),
           displayCurrency: requireString(body.displayCurrency, 'displayCurrency'),
-          displayAmount: requireNumber(body.displayAmount, 'displayAmount'),
+          displayAmount: parseSettlementAmount(
+            body.displayAmount,
+            'displayAmount',
+            DISPLAY_AMOUNT_SPEC,
+          ),
           assetSymbol: optionalString(body.assetSymbol, 'assetSymbol'),
-          assetAmount:
-            body.assetAmount === undefined || body.assetAmount === null
-              ? null
-              : requireNumber(body.assetAmount, 'assetAmount'),
+          assetAmount: parseOptionalSettlementAmount(
+            body.assetAmount,
+            'assetAmount',
+            ASSET_AMOUNT_SPEC,
+          ),
           ricardianHash: optionalString(body.ricardianHash, 'ricardianHash'),
           externalReference: optionalString(body.externalReference, 'externalReference'),
           metadata: optionalMetadata(body.metadata),
