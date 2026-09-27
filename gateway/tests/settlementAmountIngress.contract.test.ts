@@ -131,6 +131,20 @@ describe('settlement handoff amount ingress', () => {
       'displayAmount',
       'magnitude_exceeded',
     ],
+    [
+      'raw number rounded by the JSON parser',
+      '"displayAmount":9999999999999.9901',
+      'displayAmount',
+      'scale_exceeded',
+    ],
+    [
+      'raw asset number rounded by the JSON parser',
+      '"displayAmount":"1","assetAmount":1.0000000000000001',
+      'assetAmount',
+      'scale_exceeded',
+    ],
+    ['raw exponent number', '"displayAmount":1e3', 'displayAmount', 'not_canonical_decimal'],
+    ['raw negative zero', '"displayAmount":-0', 'displayAmount', 'not_canonical_decimal'],
     ['exponent string', '"displayAmount":"1e3"', 'displayAmount', 'not_canonical_decimal'],
     ['negative amount', '"displayAmount":"-0.01"', 'displayAmount', 'not_canonical_decimal'],
     ['boolean amount', '"displayAmount":true', 'displayAmount', 'invalid_type'],
@@ -144,6 +158,29 @@ describe('settlement handoff amount ingress', () => {
     expect(status).toBe(400);
     expect(payload.error?.code).toBe('VALIDATION_ERROR');
     expect(payload.error?.details).toMatchObject({ field, reason });
+
+    // A different valid amount under the same platform reference is accepted, so nothing was
+    // persisted for the rejected request.
+    const retry = await postHandoff(
+      app,
+      handoffBody(`amount-reject-${field}`, '"displayAmount":"7.00","assetAmount":"7"'),
+    );
+    expect(retry.status).toBe(202);
+    expect(retry.payload.data?.displayAmount).toBe(7);
+  });
+
+  test('ignores nested metadata numbers when reading amount lexemes', async () => {
+    const app = createTestApp();
+    const { status, payload } = await postHandoff(
+      app,
+      handoffBody(
+        'amount-nested-metadata',
+        '"displayAmount":250.5,"metadata":{"displayAmount":1e3,"lines":[{"assetAmount":0.1234567}]}',
+      ),
+    );
+
+    expect(status).toBe(202);
+    expect(payload.data?.displayAmount).toBe(250.5);
   });
 
   test('returns the original handoff for an equivalent replay and rejects a changed amount', async () => {

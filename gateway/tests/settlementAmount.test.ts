@@ -7,7 +7,9 @@ import {
   DISPLAY_AMOUNT_SPEC,
   assertSameMonetaryIntent,
   parseOptionalSettlementAmount,
+  jsonSettlementAmountInput,
   parseSettlementAmount,
+  readTopLevelJsonNumberLexemes,
   settlementAmountToNumber,
 } from '../src/core/settlementAmount';
 
@@ -47,7 +49,7 @@ describe('settlement amount parsing', () => {
     [0.1, '0.10'],
     [623.06, '623.06'],
     [9999999999999.99, '9999999999999.99'],
-  ])('accepts exactly representable legacy JSON number %p', (input, expected) => {
+  ])('accepts exactly representable in-process number %p', (input, expected) => {
     expect(parseSettlementAmount(input, 'displayAmount', DISPLAY_AMOUNT_SPEC)).toBe(expected);
   });
 
@@ -110,6 +112,54 @@ describe('settlement amount parsing', () => {
   test('treats absent optional amounts as null', () => {
     expect(parseOptionalSettlementAmount(undefined, 'assetAmount', ASSET_AMOUNT_SPEC)).toBeNull();
     expect(parseOptionalSettlementAmount(null, 'assetAmount', ASSET_AMOUNT_SPEC)).toBeNull();
+  });
+});
+
+describe('raw JSON number lexemes', () => {
+  test('preserves the exact source text of top-level numbers only', () => {
+    const lexemes = readTopLevelJsonNumberLexemes(
+      Buffer.from(
+        '{"displayAmount":9999999999999.9901,"assetAmount":1e3,"metadata":{"displayAmount":5}}',
+      ),
+    );
+
+    expect(lexemes?.get('displayAmount')).toBe('9999999999999.9901');
+    expect(lexemes?.get('assetAmount')).toBe('1e3');
+    expect(lexemes?.has('metadata')).toBe(false);
+  });
+
+  test('returns null when the raw body is absent or not JSON', () => {
+    expect(readTopLevelJsonNumberLexemes(undefined)).toBeNull();
+    expect(readTopLevelJsonNumberLexemes(Buffer.from('{"displayAmount":'))).toBeNull();
+  });
+
+  test('validates the lexeme, not the rounded double', () => {
+    const lexemes = readTopLevelJsonNumberLexemes(
+      Buffer.from('{"displayAmount":9999999999999.9901}'),
+    );
+    const input = jsonSettlementAmountInput(
+      9999999999999.99,
+      lexemes,
+      'displayAmount',
+      DISPLAY_AMOUNT_SPEC,
+    );
+
+    expect(input).toBe('9999999999999.9901');
+    expect(
+      rejectionReason(() => parseSettlementAmount(input, 'displayAmount', DISPLAY_AMOUNT_SPEC)),
+    ).toBe('scale_exceeded');
+  });
+
+  test('fails closed on a JSON number whose source text is unavailable', () => {
+    expect(
+      rejectionReason(() =>
+        jsonSettlementAmountInput(1000, null, 'displayAmount', DISPLAY_AMOUNT_SPEC),
+      ),
+    ).toBe('raw_number_unavailable');
+    expect(jsonSettlementAmountInput('1000', null, 'displayAmount', DISPLAY_AMOUNT_SPEC)).toBe(
+      '1000',
+    );
+    expect(jsonSettlementAmountInput(null, null, 'assetAmount', ASSET_AMOUNT_SPEC)).toBeNull();
   });
 });
 

@@ -5390,7 +5390,7 @@ components:
         displayCurrency:
           type: string
         displayAmount:
-          description: Exact non-negative amount with at most 13 integer and 2 fractional digits. Canonical decimal strings are preferred; JSON numbers are accepted only when exactly within that range. Values are never rounded.
+          description: Exact non-negative amount with at most 13 integer and 2 fractional digits. Canonical decimal strings are preferred. JSON numbers are validated against their exact request source text, so exponent, signed, and over-scale numerals are rejected. Values are never rounded.
           oneOf:
             - type: string
               pattern: ^(0|[1-9][0-9]{0,12})(\.[0-9]{1,2})?$
@@ -5400,7 +5400,7 @@ components:
         assetSymbol:
           type: string
         assetAmount:
-          description: Exact non-negative amount with at most 9 integer and 6 fractional digits. Canonical decimal strings are preferred; JSON numbers are accepted only when exactly within that range. Values are never rounded.
+          description: Exact non-negative amount with at most 9 integer and 6 fractional digits. Canonical decimal strings are preferred. JSON numbers are validated against their exact request source text, so exponent, signed, and over-scale numerals are rejected. Values are never rounded.
           oneOf:
             - type: string
               pattern: ^(0|[1-9][0-9]{0,8})(\.[0-9]{1,6})?$

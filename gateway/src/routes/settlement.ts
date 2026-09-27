@@ -14,8 +14,10 @@ import { SettlementService } from '../core/settlementService';
 import {
   ASSET_AMOUNT_SPEC,
   DISPLAY_AMOUNT_SPEC,
+  jsonSettlementAmountInput,
   parseOptionalSettlementAmount,
   parseSettlementAmount,
+  readTopLevelJsonNumberLexemes,
 } from '../core/settlementAmount';
 import { OracleSettlementProgressionService } from '../core/oracleSettlementProgressionService';
 import type { RicardianClient } from '../core/ricardianClient';
@@ -219,6 +221,7 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           ],
           'body',
         );
+        const amountLexemes = readTopLevelJsonNumberLexemes(req.rawBody);
         const handoff = await options.settlementService.createHandoff({
           platformId: requireString(body.platformId, 'platformId'),
           platformHandoffId: requireString(body.platformHandoffId, 'platformHandoffId'),
@@ -227,13 +230,23 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
           settlementChannel: requireString(body.settlementChannel, 'settlementChannel'),
           displayCurrency: requireString(body.displayCurrency, 'displayCurrency'),
           displayAmount: parseSettlementAmount(
-            body.displayAmount,
+            jsonSettlementAmountInput(
+              body.displayAmount,
+              amountLexemes,
+              'displayAmount',
+              DISPLAY_AMOUNT_SPEC,
+            ),
             'displayAmount',
             DISPLAY_AMOUNT_SPEC,
           ),
           assetSymbol: optionalString(body.assetSymbol, 'assetSymbol'),
           assetAmount: parseOptionalSettlementAmount(
-            body.assetAmount,
+            jsonSettlementAmountInput(
+              body.assetAmount,
+              amountLexemes,
+              'assetAmount',
+              ASSET_AMOUNT_SPEC,
+            ),
             'assetAmount',
             ASSET_AMOUNT_SPEC,
           ),

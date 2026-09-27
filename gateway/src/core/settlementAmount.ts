@@ -10,7 +10,7 @@ export interface SettlementAmountSpec {
 
 // Scales match the settlement_handoffs NUMERIC columns. Integer digits are capped so that
 // integer + scale digits never exceed 15 significant digits, the range in which every decimal
-// round-trips exactly through an IEEE-754 double on the legacy JSON-number contract.
+// round-trips exactly through the IEEE-754 doubles of the v1 JSON-number responses.
 export const DISPLAY_AMOUNT_SPEC: SettlementAmountSpec = { scale: 2, maxIntegerDigits: 13 };
 export const ASSET_AMOUNT_SPEC: SettlementAmountSpec = { scale: 6, maxIntegerDigits: 9 };
 
@@ -35,7 +35,8 @@ function decimalText(value: unknown, field: string, spec: SettlementAmountSpec):
     if (!Number.isFinite(value)) {
       return reject(field, 'not_finite', spec);
     }
-    // Shortest round-trip form; any exponent form is outside the accepted range.
+    // In-process callers only. JSON request numbers are already rounded by the parser and must be
+    // validated from their raw lexeme via readTopLevelJsonNumberLexemes instead.
     return String(value);
   }
   return reject(field, 'invalid_type', spec);
@@ -75,6 +76,68 @@ export function parseOptionalSettlementAmount(
   spec: SettlementAmountSpec,
 ): string | null {
   return value === undefined || value === null ? null : parseSettlementAmount(value, field, spec);
+}
+
+type JsonReviverWithSource = (
+  this: unknown,
+  key: string,
+  value: unknown,
+  context?: { source?: string },
+) => unknown;
+
+/**
+ * Reads the exact source text of top-level JSON number members from the raw request bytes,
+ * before IEEE-754 conversion can round them. Returns null when the source text is unavailable,
+ * so callers fail closed on JSON numbers rather than trusting the parsed double.
+ */
+export function readTopLevelJsonNumberLexemes(
+  rawBody: Buffer | undefined,
+): ReadonlyMap<string, string> | null {
+  if (!rawBody) {
+    return null;
+  }
+
+  const lexemesByHolder = new Map<unknown, Map<string, string>>();
+  let sourceAvailable = true;
+  const reviver: JsonReviverWithSource = function (key, value, context) {
+    if (typeof value === 'number') {
+      if (typeof context?.source !== 'string') {
+        sourceAvailable = false;
+      } else {
+        const lexemes = lexemesByHolder.get(this) ?? new Map<string, string>();
+        lexemes.set(key, context.source);
+        lexemesByHolder.set(this, lexemes);
+      }
+    }
+    return value;
+  };
+
+  let root: unknown;
+  try {
+    root = JSON.parse(rawBody.toString('utf8'), reviver as Parameters<typeof JSON.parse>[1]);
+  } catch {
+    return null;
+  }
+
+  return sourceAvailable ? (lexemesByHolder.get(root) ?? new Map()) : null;
+}
+
+/**
+ * Substitutes the raw JSON lexeme for a parsed JSON number so amount validation sees exactly
+ * what the caller sent. Strings, null, and absent values pass through unchanged.
+ */
+export function jsonSettlementAmountInput(
+  value: unknown,
+  lexemes: ReadonlyMap<string, string> | null,
+  field: string,
+  spec: SettlementAmountSpec,
+): unknown {
+  if (typeof value !== 'number') {
+    return value;
+  }
+
+  const lexeme = lexemes?.get(field);
+  return lexeme === undefined ? reject(field, 'raw_number_unavailable', spec) : lexeme;
 }
 
 /**
