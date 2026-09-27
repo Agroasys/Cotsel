@@ -8,6 +8,7 @@
  */
 import { failure, HttpError } from '@agroasys/shared-http';
 import { ProviderHandoffAuthorityError } from '../core/providerHandoffAuthority';
+import { SweepCanonicalityError } from '../core/sweepCanonicality';
 import { PartnerHandoffConflictError } from '../core/treasuryPartnerHandoff';
 
 export function mapValidationError(error: unknown, fallbackMessage: string) {
@@ -16,6 +17,15 @@ export function mapValidationError(error: unknown, fallbackMessage: string) {
   // state the caller cannot see, which needs an operator rather than a retry.
   if (error instanceof PartnerHandoffConflictError) {
     return { statusCode: 409, body: failure('PartnerHandoffConflict', error.message) };
+  }
+
+  // WP-4 B-08 / PRES-05. The batch is well formed; what it carries is not
+  // proven to be on the chain, which is state the caller has to resolve.
+  if (error instanceof SweepCanonicalityError) {
+    return {
+      statusCode: 409,
+      body: failure('SweepEligibilityBlocked', error.message, { entryIds: error.entryIds }),
+    };
   }
 
   if (error instanceof ProviderHandoffAuthorityError) {

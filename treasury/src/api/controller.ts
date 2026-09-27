@@ -24,6 +24,7 @@ import { loadLedgerExportPage } from '../core/ledgerExportService';
 import { actorFor, optionalActorFor } from './actorBinding';
 import { mapValidationError } from './errorMapping';
 import { resolveRealizationBinding } from './realizationBinding';
+import { SweepBatchGate } from './sweepBatchGate';
 import type {
   AddSweepBatchEntryBody,
   AppendStateBody,
@@ -322,6 +323,7 @@ export class TreasuryController {
   private readonly eligibility = new TreasuryEligibilityService();
   private readonly reconciliationGate = new ReconciliationGateService();
   private readonly sweepExecutionMatcher = new SweepExecutionMatcherService();
+  private readonly sweepGate = new SweepBatchGate(this.eligibility);
 
   async ingest(_req: Request, res: Response): Promise<void> {
     try {
@@ -703,9 +705,11 @@ export class TreasuryController {
     try {
       const batchId = parseBatchId(req.params.batchId);
       const body = requireObject<AddSweepBatchEntryBody>(req.body, 'body');
+      const ledgerEntryId = requireInteger(body.ledgerEntryId, 'ledgerEntryId', { min: 1 });
+      await this.sweepGate.assertEntries([ledgerEntryId], 'PAYOUT');
       const result = await addSweepBatchEntry({
         sweepBatchId: batchId,
-        ledgerEntryId: requireInteger(body.ledgerEntryId, 'ledgerEntryId', { min: 1 }),
+        ledgerEntryId,
         allocatedBy: actorFor(req, body.allocatedBy, 'allocatedBy'),
         entryAmountRaw: optionalString(body.entryAmountRaw, 'entryAmountRaw'),
       });
@@ -749,6 +753,7 @@ export class TreasuryController {
           },
         );
       }
+      await this.sweepGate.assertBatch(detail, 'PAYOUT');
 
       const batch = await updateSweepBatchStatus({
         batchId,
@@ -782,6 +787,7 @@ export class TreasuryController {
           'Sweep batch total does not match allocated entry total',
         );
       }
+      await this.sweepGate.assertBatch(detail, 'PAYOUT');
 
       const batch = await updateSweepBatchStatus({
         batchId,
@@ -922,6 +928,7 @@ export class TreasuryController {
           },
         );
       }
+      await this.sweepGate.assertBatch(detail, 'CANONICAL');
 
       const batch = await updateSweepBatchStatus({
         batchId,

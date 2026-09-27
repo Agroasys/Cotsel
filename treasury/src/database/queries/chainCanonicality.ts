@@ -17,6 +17,7 @@ import type {
   ChainCanonicalityState,
   LedgerChainReorgEvent,
 } from '../../core/chainCanonicality';
+import { assertSweepEntriesCanonical } from '../../core/sweepCanonicality';
 import type { PayoutState } from '../../types';
 
 /**
@@ -275,4 +276,53 @@ export async function getIngestionStableBlock(): Promise<number | null> {
 
   const value = result.rows[0]?.last_ingested_through_block_number;
   return value === null || value === undefined ? null : Number(value);
+}
+
+type LockedCanonicality = { ledger_entry_id: number; canonicality_state: ChainCanonicalityState };
+
+function assertLockedRowsCanonical(rows: LockedCanonicality[]): void {
+  assertSweepEntriesCanonical(
+    rows.map((row) => ({
+      ledgerEntryId: row.ledger_entry_id,
+      canonicalityState: row.canonicality_state,
+    })),
+  );
+}
+
+/**
+ * WP-4 B-08 / PRES-05. Share-locks the ledger entry inside the caller's
+ * transaction and refuses unless it is CANONICAL. An orphaning takes the same
+ * row FOR UPDATE, so it either commits first and is seen here or waits until the
+ * caller's decision has committed.
+ */
+export async function assertLedgerEntryCanonical(
+  client: PoolClient,
+  ledgerEntryId: number,
+): Promise<void> {
+  const result = await client.query<LockedCanonicality>(
+    `SELECT id AS ledger_entry_id, canonicality_state
+     FROM treasury_ledger_entries
+     WHERE id = $1
+     FOR SHARE`,
+    [ledgerEntryId],
+  );
+  assertLockedRowsCanonical(result.rows);
+}
+
+/** The same guarantee for every entry actively allocated to a sweep batch. */
+export async function assertSweepBatchEntriesCanonical(
+  client: PoolClient,
+  sweepBatchId: number,
+): Promise<void> {
+  const result = await client.query<LockedCanonicality>(
+    `SELECT e.id AS ledger_entry_id, e.canonicality_state
+     FROM sweep_batch_entries sbe
+     JOIN treasury_ledger_entries e ON e.id = sbe.ledger_entry_id
+     WHERE sbe.sweep_batch_id = $1
+       AND sbe.allocation_status = 'ALLOCATED'
+     ORDER BY e.id
+     FOR SHARE OF e`,
+    [sweepBatchId],
+  );
+  assertLockedRowsCanonical(result.rows);
 }

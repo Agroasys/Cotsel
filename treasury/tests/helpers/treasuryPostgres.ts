@@ -4,6 +4,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Pool } from 'pg';
+import type { LedgerEntry } from '../../src/types';
+
+type CanonicalityWriter = Pick<
+  typeof import('../../src/database/queries'),
+  'markLedgerEntryCanonical'
+>;
 
 const databaseDir = resolve(__dirname, '../../src/database');
 
@@ -76,4 +82,26 @@ export function applyTreasuryTestEnv(dbName: string): void {
   process.env.PORT = process.env.PORT || '3200';
   process.env.INDEXER_GRAPHQL_URL =
     process.env.INDEXER_GRAPHQL_URL || 'http://127.0.0.1:3100/graphql';
+}
+
+/**
+ * Seeded entries start UNVERIFIED, which WP-4 B-08 keeps out of every sweep
+ * decision. A suite about something other than canonicality proves its entry
+ * canonical the way the verifier would, against the identity it was stored with.
+ */
+export async function markSeededEntryCanonical(
+  queries: CanonicalityWriter,
+  entry: LedgerEntry,
+): Promise<void> {
+  const { state } = await queries.markLedgerEntryCanonical({
+    ledgerEntryId: entry.id,
+    blockHash: entry.block_hash as string,
+    logIndex: entry.log_index as number,
+    logAddress: entry.log_address as string,
+    logIdentityHash: entry.log_identity_hash as string,
+    stableBlockNumber: entry.block_number + 64,
+  });
+  if (state !== 'CANONICAL') {
+    throw new Error(`Seeded ledger entry ${entry.id} could not be marked canonical (${state})`);
+  }
 }
