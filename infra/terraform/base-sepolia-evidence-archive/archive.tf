@@ -6,7 +6,12 @@ locals {
   writer_role_name    = "agroasys-cotsel-base-sepolia-evidence-writer"
   writer_role_arn     = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/${local.writer_role_name}"
   writer_boundary_arn = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:policy/agroasys-cotsel-evidence-writer-boundary"
+  reader_role_arn     = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/agroasys-cotsel-base-sepolia-evidence-reader"
+  cloudtrail_role_arn = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/agroasys-cotsel-evidence-cloudtrail-logs"
   trail_name          = "cotsel-base-sepolia-evidence"
+  audit_log_group     = "/aws/cloudtrail/cotsel-base-sepolia-evidence"
+  alert_topic_name    = "cotsel-base-sepolia-evidence-alerts"
+  denial_alarm_name   = "cotsel-base-sepolia-evidence-denied-mutation"
 }
 
 resource "terraform_data" "environment_guard" {
@@ -86,6 +91,25 @@ data "aws_iam_policy_document" "archive_key" {
     }
 
     actions   = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${var.region}.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid    = "EvidenceReaderDecryption"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [local.reader_role_arn]
+    }
+
+    actions   = ["kms:Decrypt", "kms:DescribeKey"]
     resources = ["*"]
 
     condition {
@@ -332,6 +356,8 @@ resource "aws_cloudtrail" "evidence" {
   include_global_service_events = false
   is_multi_region_trail         = false
   enable_log_file_validation    = true
+  cloud_watch_logs_group_arn    = "arn:${data.aws_partition.current.partition}:logs:${var.region}:${var.account_id}:log-group:${local.audit_log_group}:*"
+  cloud_watch_logs_role_arn     = local.cloudtrail_role_arn
 
   lifecycle {
     prevent_destroy = true
@@ -353,6 +379,25 @@ resource "aws_cloudtrail" "evidence" {
     field_selector {
       field       = "resources.ARN"
       starts_with = ["${aws_s3_bucket.evidence.arn}/base-sepolia/"]
+    }
+  }
+
+  advanced_event_selector {
+    name = "ArchiveControlPlaneWriteEvents"
+
+    field_selector {
+      field  = "eventCategory"
+      equals = ["Management"]
+    }
+
+    field_selector {
+      field  = "readOnly"
+      equals = ["false"]
+    }
+
+    field_selector {
+      field  = "eventSource"
+      equals = ["kms.amazonaws.com", "s3.amazonaws.com"]
     }
   }
 
