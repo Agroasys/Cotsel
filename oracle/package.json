@@ -21,7 +21,7 @@
     "@agroasys/shared-db": "^1.0.0",
     "@agroasys/shared-edge": "^1.0.0",
     "@agroasys/shared-http": "^1.0.0",
-    "@aws-sdk/client-kms": "3.1133.0",
+    "@aws-sdk/client-kms": "3.1136.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "ethers": "^6.17.0",
