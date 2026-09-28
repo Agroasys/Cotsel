@@ -4,6 +4,14 @@
 import { randomUUID } from 'crypto';
 import { GatewayError } from '../errors';
 import { validateExecutionTransition } from './settlementStateMachine';
+import {
+  ASSET_AMOUNT_SPEC,
+  DISPLAY_AMOUNT_SPEC,
+  assertSameMonetaryIntent,
+  parseOptionalSettlementAmount,
+  parseSettlementAmount,
+  settlementAmountToNumber,
+} from './settlementAmount';
 import type {
   SettlementCallbackDeliveryRecord,
   SettlementExecutionEventRecord,
@@ -35,10 +43,42 @@ export function createInMemorySettlementStore(
 
   return {
     async createHandoff(input) {
+      const intent = {
+        displayCurrency: input.displayCurrency,
+        displayAmount: parseSettlementAmount(
+          input.displayAmount,
+          'displayAmount',
+          DISPLAY_AMOUNT_SPEC,
+        ),
+        assetSymbol: input.assetSymbol ?? null,
+        assetAmount: parseOptionalSettlementAmount(
+          input.assetAmount,
+          'assetAmount',
+          ASSET_AMOUNT_SPEC,
+        ),
+      };
       const key = `${input.platformId}:${input.platformHandoffId}`;
       const existingId = platformIndex.get(key);
       if (existingId) {
-        return structuredClone(handoffs.get(existingId)!);
+        const existing = handoffs.get(existingId)!;
+        assertSameMonetaryIntent(
+          {
+            displayCurrency: existing.displayCurrency,
+            displayAmount: parseSettlementAmount(
+              existing.displayAmount,
+              'displayAmount',
+              DISPLAY_AMOUNT_SPEC,
+            ),
+            assetSymbol: existing.assetSymbol,
+            assetAmount: parseOptionalSettlementAmount(
+              existing.assetAmount,
+              'assetAmount',
+              ASSET_AMOUNT_SPEC,
+            ),
+          },
+          intent,
+        );
+        return structuredClone(existing);
       }
 
       const now = new Date().toISOString();
@@ -50,9 +90,10 @@ export function createInMemorySettlementStore(
         phase: input.phase,
         settlementChannel: input.settlementChannel,
         displayCurrency: input.displayCurrency,
-        displayAmount: input.displayAmount,
-        assetSymbol: input.assetSymbol ?? null,
-        assetAmount: input.assetAmount ?? null,
+        displayAmount: settlementAmountToNumber(intent.displayAmount),
+        assetSymbol: intent.assetSymbol,
+        assetAmount:
+          intent.assetAmount === null ? null : settlementAmountToNumber(intent.assetAmount),
         ricardianHash: input.ricardianHash ?? null,
         externalReference: input.externalReference ?? null,
         metadata: structuredClone(input.metadata ?? {}),

@@ -10,6 +10,13 @@ import {
   type SettlementCallbackDeliveryRow,
 } from './settlementCallbackStore';
 import { validateExecutionTransition } from './settlementStateMachine';
+import {
+  ASSET_AMOUNT_SPEC,
+  DISPLAY_AMOUNT_SPEC,
+  assertSameMonetaryIntent,
+  parseOptionalSettlementAmount,
+  parseSettlementAmount,
+} from './settlementAmount';
 
 export * from './settlementStoreTypes';
 import type {
@@ -406,10 +413,10 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
     return result.rows[0] ? mapHandoffRow(result.rows[0]) : null;
   };
 
-  const getHandoffByPlatformRef = async (
+  const findHandoffRowByPlatformRef = async (
     platformId: string,
     platformHandoffId: string,
-  ): Promise<SettlementHandoffRecord | null> => {
+  ): Promise<SettlementHandoffRow | null> => {
     const result = await pool.query<SettlementHandoffRow>(
       `SELECT
          handoff_id AS "handoffId",
@@ -444,14 +451,46 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
       [platformId, platformHandoffId],
     );
 
-    return result.rows[0] ? mapHandoffRow(result.rows[0]) : null;
+    return result.rows[0] ?? null;
+  };
+
+  const getHandoffByPlatformRef = async (
+    platformId: string,
+    platformHandoffId: string,
+  ): Promise<SettlementHandoffRecord | null> => {
+    const row = await findHandoffRowByPlatformRef(platformId, platformHandoffId);
+    return row ? mapHandoffRow(row) : null;
   };
 
   return {
     async createHandoff(input) {
-      const existing = await getHandoffByPlatformRef(input.platformId, input.platformHandoffId);
+      const intent = {
+        displayCurrency: input.displayCurrency,
+        displayAmount: parseSettlementAmount(
+          input.displayAmount,
+          'displayAmount',
+          DISPLAY_AMOUNT_SPEC,
+        ),
+        assetSymbol: input.assetSymbol ?? null,
+        assetAmount: parseOptionalSettlementAmount(
+          input.assetAmount,
+          'assetAmount',
+          ASSET_AMOUNT_SPEC,
+        ),
+      };
+      const existing = await findHandoffRowByPlatformRef(input.platformId, input.platformHandoffId);
       if (existing) {
-        return existing;
+        // NUMERIC text output carries the column scale, so it compares exactly with canonical input.
+        assertSameMonetaryIntent(
+          {
+            displayCurrency: existing.displayCurrency,
+            displayAmount: existing.displayAmount,
+            assetSymbol: existing.assetSymbol,
+            assetAmount: existing.assetAmount,
+          },
+          intent,
+        );
+        return mapHandoffRow(existing);
       }
 
       const handoffId = randomUUID();
@@ -512,11 +551,9 @@ export function createPostgresSettlementStore(pool: Pool): SettlementStore {
           input.phase,
           input.settlementChannel,
           input.displayCurrency,
-          input.displayAmount.toFixed(2),
-          input.assetSymbol ?? null,
-          input.assetAmount === undefined || input.assetAmount === null
-            ? null
-            : input.assetAmount.toFixed(6),
+          intent.displayAmount,
+          intent.assetSymbol,
+          intent.assetAmount,
           input.ricardianHash ?? null,
           input.externalReference ?? null,
           JSON.stringify(input.metadata ?? {}),
