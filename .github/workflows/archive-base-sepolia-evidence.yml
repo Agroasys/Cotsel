@@ -66,7 +66,7 @@ jobs:
           }
 
       - name: Assume the archive writer role
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd
         with:
           role-to-assume: ${{ env.WRITER_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -102,7 +102,7 @@ jobs:
           }
 
       - name: Assume the archive writer role
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd
         with:
           role-to-assume: ${{ env.WRITER_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -249,7 +249,7 @@ jobs:
           printf 'writer_actor=%s\nwriter_created=%s\n' "$ACTOR" "$CREATED" >> "$GITHUB_OUTPUT"
 
       - name: Assume the independent evidence-reader role
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd
         with:
           role-to-assume: ${{ env.READER_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
