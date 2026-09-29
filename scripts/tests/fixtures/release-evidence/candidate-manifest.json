@@ -355,8 +355,8 @@
     },
     {
       "component": "ricardian",
-      "headIdentity": "202608310001_baseline",
-      "checksumSha256": "68b1014d5334631301e68f12e99874849e5d1f843ecd29e588815e4f6ccaf42b"
+      "headIdentity": "202609290002_tenant_binding",
+      "checksumSha256": "ddb8c28133c8f5efb6d4afb32a14777967c30908c860501a097781e8898c96d6"
     },
     {
       "component": "treasury",
