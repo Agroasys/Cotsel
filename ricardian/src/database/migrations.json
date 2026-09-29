@@ -8,6 +8,13 @@
       "schema_sha256": "1a4624f19453daa6b1bfd30094fa159693f40f91049d1cb268117b831cfa1f50",
       "adopt_existing_schema": true,
       "baseline": true
+    },
+    {
+      "version": "202609290002",
+      "name": "tenant_binding",
+      "file": "schema/002_tenant_binding.sql",
+      "sha256": "c7cdd156ab139d77675666736287659a13d7885f9131dd3159ed31cffeaedc92",
+      "schema_sha256": "f075431e9d08791e5ea028c0dd2f2a6a505b02a72b9a2307498f4deebe094bbc"
     }
   ]
 }

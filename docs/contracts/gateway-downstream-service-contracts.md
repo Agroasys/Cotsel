@@ -60,13 +60,18 @@ Validation:
 
 ### `gateway -> ricardian`
 
-Gateway consumes `/api/ricardian/v1/hash/:hash` as a document lookup contract.
+Gateway consumes `/api/ricardian/v1/hash/:hash/document?tenantId=<tenant>` as a
+tenant-scoped document lookup contract. The tenant is the settlement handoff's
+`sourceApiKeyId`; when it cannot be resolved, gateway does not request the document and
+reports the Ricardian snapshot as unavailable. Registrations through
+`POST /settlement/ricardian-documents` carry the authenticated platform key id as `tenantId`.
 
 Required successful document fields:
 
 - `hash`
 - `documentRef`
 - `requestId`
+- `tenantId`
 - `createdAt`
 
 Gateway preserves `404` as not-found and fails closed on invalid successful

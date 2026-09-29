@@ -4,10 +4,24 @@ Deterministic canonicalization and SHA-256 hashing service for Ricardian payload
 
 ## Endpoints
 
-- `POST /api/ricardian/v1/hash`
-- `GET /api/ricardian/v1/hash/:hash`
+- `POST /api/ricardian/v1/hash` (requires `tenantId`)
+- `GET /api/ricardian/v1/hash/:hash` (minimal public attestation)
+- `GET /api/ricardian/v1/hash/:hash/document?tenantId=<tenant>` (complete document, owning tenant only)
 - `GET /api/ricardian/v1/health`
 - `GET /api/ricardian/v1/ready`
+
+Tenant boundary:
+
+- Every registration is bound to a `tenantId` (the gateway sends the authenticated platform
+  service key id; callers cannot choose it). The tenant is stored with the row but is not part of
+  the hashed canonical payload.
+- `GET /hash/:hash` returns only `hash`, `rulesVersion`, and `registeredAt`. It never returns
+  terms, metadata, `documentRef`, `requestId`, or the tenant.
+- `GET /hash/:hash/document` returns the complete record only when `tenantId` matches the
+  registering tenant. Another tenant's document, and rows registered before the
+  `tenant_binding` migration, return `404 DOCUMENT_NOT_FOUND`, identical to an unknown hash.
+- Registering an existing `(hash, documentRef)` pair under a different tenant is a `409`
+  conflict; the historical row is never reassigned.
 
 Health semantics:
 
@@ -45,7 +59,7 @@ Auth failures return structured JSON with stable `code` values (for example: `AU
 Set `RATE_LIMIT_ENABLED=true` to enforce per-route limits.
 
 - Write route (`POST /hash`): stricter burst + sustained limits
-- Read route (`GET /hash/:hash`): looser burst + sustained limits
+- Read routes (`GET /hash/:hash`, `GET /hash/:hash/document`): looser burst + sustained limits
 - Limiter identity:
   - authenticated write calls: `apiKey + ip`
   - unauthenticated calls: `ip` fallback

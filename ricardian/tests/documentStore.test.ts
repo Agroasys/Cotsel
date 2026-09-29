@@ -1,9 +1,11 @@
 const mockDbCreateHash = jest.fn();
 const mockDbGetHash = jest.fn();
+const mockDbGetTenantHash = jest.fn();
 
 jest.mock('../src/database/queries', () => ({
   createRicardianHash: mockDbCreateHash,
   getRicardianHash: mockDbGetHash,
+  getTenantRicardianHash: mockDbGetTenantHash,
 }));
 
 jest.mock('../src/utils/logger', () => ({
@@ -22,7 +24,7 @@ jest.mock('../src/metrics/counters', () => ({
   incrementReplayReject: jest.fn(),
 }));
 
-import { createDocument, getDocument } from '../src/database/documentStore';
+import { createDocument, getDocument, getTenantDocument } from '../src/database/documentStore';
 import {
   DocumentConflictError,
   DocumentIntegrityError,
@@ -42,6 +44,7 @@ function makeValidRow() {
   return {
     id: 1,
     request_id: 'req-abc',
+    tenant_id: 'platform-main',
     document_ref: result.documentRef,
     hash: result.hash,
     rules_version: result.rulesVersion,
@@ -64,6 +67,7 @@ function makeTransientPgCodeError(code: string): Error & { code: string } {
 describe('documentStore.createDocument', () => {
   const validInput = {
     requestId: 'req-1',
+    tenantId: 'platform-main',
     documentRef: 'doc://trade-1',
     hash: 'a'.repeat(64),
     rulesVersion: 'RICARDIAN_CANONICAL_V1',
@@ -221,5 +225,36 @@ describe('documentStore.getDocument', () => {
     await expect(getDocument('e'.repeat(64))).rejects.toMatchObject({
       code: 'DOCUMENT_RETRIEVAL_FAILURE',
     });
+  });
+});
+
+describe('documentStore.getTenantDocument', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
+
+  test('returns the integrity-verified row owned by the tenant', async () => {
+    const row = makeValidRow();
+    mockDbGetTenantHash.mockResolvedValueOnce(row);
+
+    await expect(getTenantDocument(row.hash, 'platform-main')).resolves.toBe(row);
+    expect(mockDbGetTenantHash).toHaveBeenCalledWith(row.hash, 'platform-main');
+    expect(mockDbGetHash).not.toHaveBeenCalled();
+  });
+
+  test('reports another tenant registration as not found', async () => {
+    mockDbGetTenantHash.mockResolvedValueOnce(null);
+
+    await expect(getTenantDocument('a'.repeat(64), 'platform-other')).rejects.toBeInstanceOf(
+      DocumentNotFoundError,
+    );
+  });
+
+  test('refuses a tampered tenant row', async () => {
+    mockDbGetTenantHash.mockResolvedValueOnce({ ...makeValidRow(), canonical_json: '{}' });
+
+    await expect(getTenantDocument('a'.repeat(64), 'platform-main')).rejects.toBeInstanceOf(
+      DocumentIntegrityError,
+    );
   });
 });

@@ -19,7 +19,7 @@ describe('ricardian client', () => {
 
     const client = new RicardianClient('https://ricardian.example/api/v1', 5000);
 
-    await expect(client.getDocument('missing-hash')).rejects.toMatchObject({
+    await expect(client.getDocument('missing-hash', 'platform-main')).rejects.toMatchObject({
       statusCode: 404,
       code: 'NOT_FOUND',
     });
@@ -42,7 +42,7 @@ describe('ricardian client', () => {
 
     const client = new RicardianClient('https://ricardian.example/api/v1', 5000);
 
-    await expect(client.getDocument('0xabc')).rejects.toMatchObject({
+    await expect(client.getDocument('0xabc', 'platform-main')).rejects.toMatchObject({
       statusCode: 502,
       code: 'UPSTREAM_UNAVAILABLE',
       message: 'Ricardian service returned an invalid payload',
@@ -59,6 +59,7 @@ describe('ricardian client', () => {
           data: {
             id: 7,
             requestId: 'order-42-v1',
+            tenantId: 'platform-main',
             documentRef: 'agroasys-order:42:terms:1',
             hash: 'a'.repeat(64),
             rulesVersion: 'RICARDIAN_CANONICAL_V1',
@@ -73,6 +74,7 @@ describe('ricardian client', () => {
     const client = new RicardianClient('https://ricardian.example/api/v1', 5000);
     const document = await client.registerDocument({
       requestId: 'order-42-v1',
+      tenantId: 'platform-main',
       documentRef: 'agroasys-order:42:terms:1',
       terms: { total: 1250 },
       metadata: { orderId: 42 },
@@ -85,11 +87,67 @@ describe('ricardian client', () => {
         method: 'POST',
         body: JSON.stringify({
           requestId: 'order-42-v1',
+          tenantId: 'platform-main',
           documentRef: 'agroasys-order:42:terms:1',
           terms: { total: 1250 },
           metadata: { orderId: 42 },
         }),
       }),
     );
+  });
+
+  test('requests complete terms from the tenant-scoped document route', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: jest.fn().mockResolvedValue(
+        JSON.stringify({
+          success: true,
+          data: {
+            id: 7,
+            requestId: 'order-42-v1',
+            tenantId: 'platform-main',
+            documentRef: 'agroasys-order:42:terms:1',
+            hash: 'a'.repeat(64),
+            rulesVersion: 'RICARDIAN_CANONICAL_V1',
+            canonicalJson: '{}',
+            metadata: {},
+            createdAt: '2026-07-26T00:00:00.000Z',
+          },
+        }),
+      ),
+    });
+
+    const client = new RicardianClient('https://ricardian.example/api/v1', 5000);
+    await client.getDocument('a'.repeat(64), 'platform-main');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `https://ricardian.example/api/v1/hash/${'a'.repeat(64)}/document?tenantId=platform-main`,
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  test('rejects a minimal attestation where a tenant document is required', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: jest.fn().mockResolvedValue(
+        JSON.stringify({
+          success: true,
+          data: {
+            hash: 'a'.repeat(64),
+            rulesVersion: 'RICARDIAN_CANONICAL_V1',
+            registeredAt: '2026-07-26T00:00:00.000Z',
+          },
+        }),
+      ),
+    });
+
+    const client = new RicardianClient('https://ricardian.example/api/v1', 5000);
+
+    await expect(client.getDocument('a'.repeat(64), 'platform-main')).rejects.toMatchObject({
+      statusCode: 502,
+      code: 'UPSTREAM_UNAVAILABLE',
+    });
   });
 });
