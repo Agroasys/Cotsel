@@ -33,7 +33,7 @@ minimumReleaseAgeExclude:
   - qs@6.16.0
   # Security fixes for GHSA-8xcm-r25x-g524, GHSA-m8rv-5g2x-5cg5,
   # GHSA-v3r7-h72x-cjcm and GHSA-3wwx-pv8p-q78v.
-  # Keep the exception version-specific.
+  # Keep the exception version-specific for transitive dependencies requiring undici <7.
   - undici@6.28.1
   # Security fix for GHSA-2m8v-j782-fhvr. Keep the exception version-specific.
   - socket.io-parser@4.2.7
@@ -73,7 +73,7 @@ overrides:
   serialize-javascript: 7.0.5
   socket.io-parser: 4.2.7
   tmp: 0.2.7
-  undici: 6.28.1
+  undici@<7: 6.28.1
   uuid@<11.1.1: 11.1.1
   ws@>=7 <7.5.11: 7.5.11
   ws@>=8 <8.20.1: 8.21.0

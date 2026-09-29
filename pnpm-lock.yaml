@@ -28,7 +28,7 @@ overrides:
   serialize-javascript: 7.0.5
   socket.io-parser: 4.2.7
   tmp: 0.2.7
-  undici: 6.28.1
+  undici@<7: 6.28.1
   uuid@<11.1.1: 11.1.1
   ws@>=7 <7.5.11: 7.5.11
   ws@>=8 <8.20.1: 8.21.0
@@ -93,8 +93,8 @@ importers:
         specifier: ^8.70.0
         version: 8.70.0(eslint@10.11.0)(typescript@6.0.3)
       undici:
-        specifier: 6.28.1
-        version: 6.28.1
+        specifier: 8.10.2
+        version: 8.10.2
       viem:
         specifier: 2.56.8
         version: 2.56.8(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@6.0.6)
@@ -10390,6 +10390,13 @@ packages:
       }
     engines: { node: '>=18.17' }
 
+  undici@8.10.2:
+    resolution:
+      {
+        integrity: sha512-/y4/bH9YNU5hi9NIrpOuvGXFcxrj3CMrV+/AYpowAYTpHn8gX/XPFjNy766FPoYY0miQhdW977JFWKGNhBdwyQ==,
+      }
+    engines: { node: '>=22.19.0' }
+
   unfetch@3.1.2:
     resolution:
       {
@@ -18156,6 +18163,8 @@ snapshots:
   undici-types@8.9.0: {}
 
   undici@6.28.1: {}
+
+  undici@8.10.2: {}
 
   unfetch@3.1.2: {}
 
