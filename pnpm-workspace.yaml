@@ -22,17 +22,19 @@ minimumReleaseAgeExclude:
   - adm-zip@0.6.1
   # Security fix for GHSA-mh99-v99m-4gvg. Keep the exception version-specific.
   - brace-expansion@5.0.9
-  # Security fix for GHSA-7p8r-x3mc-p8w7. Keep the exception version-specific.
-  - fast-uri@3.1.6
+  # Security fixes for GHSA-7p8r-x3mc-p8w7, GHSA-qw65-cvwx-89v3 and
+  # GHSA-58mr-gqgx-xq4g. Keep the exception version-specific.
+  - fast-uri@3.1.7
   # Security fixes for GHSA-c83g-rgw3-j3cx and GHSA-73wf-gq98-2v4g.
   - browserslist@4.28.7
   # Security fix for GHSA-p498-v437-472g.
   - '@humanfs/node@0.16.8'
   # Security fixes for GHSA-x5fp-wj9c-mxmx and GHSA-4mjr-xmp4-gh2g.
   - qs@6.16.0
-  # Security fix for GHSA-8xcm-r25x-g524, GHSA-m8rv-5g2x-5cg5 and GHSA-v3r7-h72x-cjcm.
+  # Security fixes for GHSA-8xcm-r25x-g524, GHSA-m8rv-5g2x-5cg5,
+  # GHSA-v3r7-h72x-cjcm and GHSA-3wwx-pv8p-q78v.
   # Keep the exception version-specific.
-  - undici@6.28.0
+  - undici@6.28.1
   # Security fix for GHSA-2m8v-j782-fhvr. Keep the exception version-specific.
   - socket.io-parser@4.2.7
   # Security fixes for GHSA-5p4m-2wfm-xmqj and GHSA-2883-xcg3-v3hh. The patched
@@ -53,7 +55,7 @@ overrides:
   brace-expansion: 5.0.9
   browserslist: 4.28.7
   cookie: 0.7.0
-  fast-uri: 3.1.6
+  fast-uri: 3.1.7
   follow-redirects: 1.16.0
   form-data@>=4.0.0 <4.0.6: 4.0.6
   # Dedupe graphql to a single instance. @subsquid/openreader builds the schema
@@ -71,7 +73,7 @@ overrides:
   serialize-javascript: 7.0.5
   socket.io-parser: 4.2.7
   tmp: 0.2.7
-  undici: 6.28.0
+  undici: 6.28.1
   uuid@<11.1.1: 11.1.1
   ws@>=7 <7.5.11: 7.5.11
   ws@>=8 <8.20.1: 8.21.0
