@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "1.1.0",
+  "verifiedAt": "2026-09-29T07:14:15Z",
+  "repository": "Agroasys/Cotsel",
+  "visibility": "public",
+  "defaultBranch": "main",
+  "architectureSnapshotSha": "139c74a15a262d6e56b9a4a55010fb08f5d924c8",
+  "governance": {
+    "defaultBranchProtected": false,
+    "observedAt": "2026-09-29T07:14:15Z",
+    "sourceEndpoint": "GET /repos/Agroasys/Cotsel/branches/main/protection",
+    "apiEvidence": "HTTP 404 Branch not protected"
+  },
+  "workflowRunUsage": {
+    "windowStart": "2026-08-28T00:00:00Z",
+    "windowEnd": "2026-09-27T16:20:56Z",
+    "sourceEndpointTemplate": "GET /repos/Agroasys/Cotsel/actions/workflows/{file}/runs?created={windowStart}..{windowEnd}&per_page=1",
+    "counts": [
+      {
+        "file": "pr-roadmap-policy.yml",
+        "runs": 581
+      },
+      {
+        "file": "release-images.yml",
+        "runs": 395
+      },
+      {
+        "file": "release-gate.yml",
+        "runs": 389
+      },
+      {
+        "file": "dco.yml",
+        "runs": 352
+      },
+      {
+        "file": "terraform.yml",
+        "runs": 162
+      }
+    ]
+  },
+  "billing": {
+    "periodStart": "2026-09-01T00:00:00Z",
+    "periodEnd": "2026-09-27T23:59:59Z",
+    "verifiedAt": "2026-09-29T07:14:15Z",
+    "scope": "Agroasys/Cotsel",
+    "sourceEndpoint": "GET /organizations/Agroasys/settings/billing/usage?year=2026&month=9",
+    "linuxGrossMinutes": 25113,
+    "linuxGrossAmountUsd": 150.678,
+    "linuxDiscountAmountUsd": 150.678,
+    "linuxNetAmountUsd": 0,
+    "storageNetAmountUsd": 0,
+    "providerDataMayBeBackfilled": true
+  },
+  "workflows": [
+    {
+      "file": "archive-base-sepolia-evidence.yml",
+      "name": "Archive Base Sepolia Evidence",
+      "triggers": ["workflow_dispatch"],
+      "maximumRunnerJobExecutions": 1
+    },
+    {
+      "file": "contract-deploy.yml",
+      "name": "Contract Deployment Evidence",
+      "triggers": ["workflow_dispatch"],
+      "maximumRunnerJobExecutions": 1
+    },
+    {
+      "file": "cotsel-production-readiness-project-governance.yml",
+      "name": "Cotsel Production-Readiness Project Governance",
+      "triggers": ["issues", "push", "schedule", "workflow_dispatch"],
+      "maximumRunnerJobExecutions": 1
+    },
+    {
+      "file": "cross-repository-compatibility.yml",
+      "name": "Cross-repository compatibility",
+      "triggers": ["workflow_call", "workflow_dispatch"],
+      "maximumRunnerJobExecutions": 1
+    },
+    {
+      "file": "dco.yml",
+      "name": "DCO Check",
+      "triggers": ["pull_request"],
+      "maximumRunnerJobExecutions": 1,
+      "prConcurrencyCancellation": true
+    },
+    {
+      "file": "kms-signer-addresses.yml",
+      "name": "KMS Signer Address Evidence",
+      "triggers": ["workflow_dispatch"],
+      "maximumRunnerJobExecutions": 1
+    },
+    {
+      "file": "pr-roadmap-policy.yml",
+      "name": "PR Roadmap Policy",
+      "triggers": ["pull_request"],
+      "maximumRunnerJobExecutions": 1,
+      "prConcurrencyCancellation": true
+    },
+    {
+      "file": "release-gate.yml",
+      "name": "CI Release Gate",
+      "triggers": ["pull_request", "push"],
+      "maximumRunnerJobExecutions": 20,
+      "prConcurrencyCancellation": true
+    },
+    {
+      "file": "release-images.yml",
+      "name": "Release Images",
+      "triggers": ["pull_request", "push", "workflow_dispatch"],
+      "maximumRunnerJobExecutions": 10,
+      "prConcurrencyCancellation": true
+    },
+    {
+      "file": "roadmap-pr-closeout-sync.yml",
+      "name": "Roadmap PR Closeout Sync",
+      "triggers": ["pull_request_target", "workflow_dispatch"],
+      "maximumRunnerJobExecutions": 1
+    },
+    {
+      "file": "roadmap-weighted-progress-sync.yml",
+      "name": "Historical Roadmap Weighted Progress Sync (A/B/C Archive)",
+      "triggers": ["workflow_dispatch"],
+      "maximumRunnerJobExecutions": 1
+    },
+    {
+      "file": "runtime-containment-evidence.yml",
+      "name": "Runtime Containment Evidence",
+      "triggers": ["workflow_dispatch"],
+      "maximumRunnerJobExecutions": 1
+    },
+    {
+      "file": "sdk-publish.yml",
+      "name": "SDK Publish",
+      "triggers": ["workflow_dispatch"],
+      "maximumRunnerJobExecutions": 1
+    },
+    {
+      "file": "terraform.yml",
+      "name": "Terraform",
+      "triggers": ["pull_request", "workflow_dispatch"],
+      "maximumRunnerJobExecutions": 2,
+      "pathFiltered": true
+    }
+  ],
+  "behaviorSuppressionEnabledByThisBaseline": false
+}
