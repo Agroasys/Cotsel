@@ -15,7 +15,10 @@ async function bootstrap(): Promise<void> {
   await testConnection();
 
   const app = express();
-  const controller = new RicardianController();
+  const controller = new RicardianController({
+    authEnabled: config.authEnabled,
+    delegationApiKeyIds: config.tenantDelegationApiKeys,
+  });
   const apiKeysById = new Map(config.apiKeys.map((key) => [key.id, key]));
   const nonceStore = createRicardianNonceStore(config);
 

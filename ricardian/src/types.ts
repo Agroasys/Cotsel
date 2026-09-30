@@ -7,9 +7,13 @@ export interface RicardianHashRequest {
   metadata?: Record<string, unknown>;
 }
 
-/** Registration body: the hashed request plus the tenant that owns it. The tenant is not hashed. */
+/**
+ * Registration body: the hashed request plus an optional tenant. The tenant defaults to the
+ * authenticated principal and may name another tenant only for a delegating caller. It is not
+ * hashed.
+ */
 export interface RicardianRegistrationRequest extends RicardianHashRequest {
-  tenantId: string;
+  tenantId?: unknown;
 }
 
 export interface RicardianHashResponse {

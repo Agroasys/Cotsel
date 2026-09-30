@@ -19,6 +19,7 @@ export interface RicardianConfig {
   dbSslMode: PostgresSslMode;
   authEnabled: boolean;
   apiKeys: ServiceApiKey[];
+  tenantDelegationApiKeys: string[];
   hmacSecret?: string;
   authMaxSkewSeconds: number;
   authNonceTtlSeconds: number;
@@ -92,6 +93,17 @@ function resolveNonceStoreMode(nodeEnv: string): NonceStoreMode {
   throw new Error('NONCE_STORE must be one of: redis, postgres, inmemory');
 }
 
+function parseAllowlist(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
 export function loadConfig(): RicardianConfig {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const authEnabled = envBool('AUTH_ENABLED', nodeEnv === 'production');
@@ -108,6 +120,17 @@ export function loadConfig(): RicardianConfig {
     assert(
       apiKeys.length > 0 || Boolean(hmacSecret),
       'AUTH_ENABLED=true requires either API_KEYS_JSON entries or HMAC_SECRET',
+    );
+  }
+
+  // Naming a caller here lets it assert a tenant other than its own principal: the gateway
+  // authenticates the platform and calls under its own key. It is never inferred, and it must
+  // name a key Ricardian can authenticate, so the exception cannot reach an unknown identity.
+  const tenantDelegationApiKeys = parseAllowlist(process.env.TENANT_DELEGATION_API_KEYS);
+  for (const apiKeyId of tenantDelegationApiKeys) {
+    assert(
+      apiKeys.some((key) => key.id === apiKeyId),
+      `TENANT_DELEGATION_API_KEYS names ${apiKeyId}, which is not a configured API key`,
     );
   }
 
@@ -135,6 +158,7 @@ export function loadConfig(): RicardianConfig {
     dbSslMode: parsePostgresSslMode(process.env.DB_SSL_MODE),
     authEnabled,
     apiKeys,
+    tenantDelegationApiKeys,
     hmacSecret,
     authMaxSkewSeconds: envNumber('AUTH_MAX_SKEW_SECONDS', 300),
     authNonceTtlSeconds,

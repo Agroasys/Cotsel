@@ -21,6 +21,10 @@ jest.mock('../src/database/documentStore', () => ({
   getTenantDocument: jest.fn(),
 }));
 
+// Controller unit tests run with service auth off, where the tenant must be named explicitly.
+// Principal binding and delegation are covered in tenantBinding and tenantBoundary tests.
+const LOCAL_TENANT_OPTIONS = { authEnabled: false, delegationApiKeyIds: [] };
+
 type MockedResponse = Response & {
   status: jest.Mock;
   json: jest.Mock;
@@ -44,7 +48,7 @@ function createMockResponse(): MockedResponse {
 }
 
 describe('RicardianController.createHash', () => {
-  const controller = new RicardianController();
+  const controller = new RicardianController(LOCAL_TENANT_OPTIONS);
   const mockedBuildRicardianHash = buildRicardianHash as jest.MockedFunction<
     typeof buildRicardianHash
   >;
@@ -168,7 +172,7 @@ describe('RicardianController.createHash', () => {
 });
 
 describe('RicardianController.getHash', () => {
-  const controller = new RicardianController();
+  const controller = new RicardianController(LOCAL_TENANT_OPTIONS);
   const mockedGetDocument = getDocument as jest.MockedFunction<typeof getDocument>;
 
   beforeEach(() => {
@@ -266,7 +270,7 @@ describe('RicardianController.getHash', () => {
 });
 
 describe('RicardianController tenant boundary', () => {
-  const controller = new RicardianController();
+  const controller = new RicardianController(LOCAL_TENANT_OPTIONS);
   const mockedBuildRicardianHash = buildRicardianHash as jest.MockedFunction<
     typeof buildRicardianHash
   >;

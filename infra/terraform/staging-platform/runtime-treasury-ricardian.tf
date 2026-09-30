@@ -54,6 +54,11 @@ locals {
       { name = "PGSSLMODE", value = "verify-full" },
       { name = "PORT", value = "3100" },
       { name = "RATE_LIMIT_ENABLED", value = "false" },
+      # WP-9 H-27. Platform traffic reaches Ricardian from the dashboard gateway
+      # under its own service key, so that one caller may name the platform
+      # tenant it authenticated. Every other caller is bound to its own principal.
+      # The identifier is not a credential and belongs in reviewed configuration.
+      { name = "TENANT_DELEGATION_API_KEYS", value = var.ricardian_gateway_api_key_id },
     ]
     treasury = [
       { name = "AUTH_ENABLED", value = "true" },

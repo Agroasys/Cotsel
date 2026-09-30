@@ -293,6 +293,17 @@ variable "treasury_gateway_api_key_id" {
   }
 }
 
+variable "ricardian_gateway_api_key_id" {
+  description = "Service API key identifier the dashboard gateway presents to Ricardian. Ricardian accepts a delegated platform tenant only from this caller, so the value is a reviewed control decision and not a credential."
+  type        = string
+  default     = "cotsel-gateway-ricardian-staging-v1"
+
+  validation {
+    condition     = length(trimspace(var.ricardian_gateway_api_key_id)) > 0
+    error_message = "ricardian_gateway_api_key_id must name the configured gateway-to-ricardian API key."
+  }
+}
+
 variable "treasury_provider_callback_secret_populated" {
   description = "Set true only after the treasury-provider-callback secret holds a current version. The Treasury task references that secret when true; an unresolvable secret reference fails task startup, so the default leaves callbacks verified and refused rather than unverified and accepted."
   type        = bool

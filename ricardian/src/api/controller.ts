@@ -7,8 +7,8 @@ import {
   RicardianHashResponse,
   RicardianHashRow,
   RicardianRegistrationRequest,
-  TENANT_ID_PATTERN,
 } from '../types';
+import { resolveTenant, type TenantResolutionOptions } from '../auth/tenantBinding';
 import { buildRicardianHash } from '../utils/hash';
 
 function mapRowToResponse(row: RicardianHashRow, tenantId: string): RicardianHashResponse {
@@ -33,22 +33,13 @@ function mapRowToAttestation(row: RicardianHashRow): RicardianHashAttestation {
   };
 }
 
-function parseTenantId(value: unknown): string {
-  const tenantId = requireString(value, 'tenantId');
-  if (!TENANT_ID_PATTERN.test(tenantId)) {
-    throw new HttpError(400, 'ValidationError', 'Invalid tenantId format');
-  }
-
-  return tenantId;
-}
-
 function parseCreateHashBody(body: unknown): RicardianRegistrationRequest {
   const payload = requireObject(body, 'body') as unknown as RicardianRegistrationRequest;
 
   return {
     requestId:
       payload.requestId === undefined ? undefined : requireString(payload.requestId, 'requestId'),
-    tenantId: parseTenantId(payload.tenantId),
+    tenantId: payload.tenantId,
     documentRef: requireString(payload.documentRef, 'documentRef'),
     terms: requireObject(payload.terms, 'terms'),
     metadata:
@@ -66,17 +57,20 @@ function parseHashParam(value: unknown): string {
 }
 
 export class RicardianController {
+  constructor(private readonly tenantOptions: TenantResolutionOptions) {}
+
   async createHash(
     req: Request<Record<string, never>, Record<string, never>, RicardianRegistrationRequest>,
     res: Response,
   ): Promise<void> {
     try {
       const payload = parseCreateHashBody(req.body);
+      const tenantId = resolveTenant(req, payload.tenantId, this.tenantOptions);
       const hashed = buildRicardianHash(payload);
       try {
         const row = await createDocument({
           requestId: hashed.requestId,
-          tenantId: payload.tenantId,
+          tenantId,
           documentRef: hashed.documentRef,
           hash: hashed.hash,
           rulesVersion: hashed.rulesVersion,
@@ -84,7 +78,7 @@ export class RicardianController {
           metadata: hashed.metadata,
         });
 
-        res.status(200).json(success(mapRowToResponse(row, payload.tenantId)));
+        res.status(200).json(success(mapRowToResponse(row, tenantId)));
       } catch (error: unknown) {
         if (error instanceof DocumentConflictError) {
           res.status(409).json({
@@ -139,7 +133,7 @@ export class RicardianController {
   async getTenantDocument(req: Request<{ hash: string }>, res: Response): Promise<void> {
     await this.respondWithRow(res, 'Failed to fetch Ricardian document', async () => {
       const hash = parseHashParam(req.params.hash);
-      const tenantId = parseTenantId(req.query.tenantId);
+      const tenantId = resolveTenant(req, req.query.tenantId, this.tenantOptions);
       return mapRowToResponse(await getTenantDocument(hash, tenantId), tenantId);
     });
   }

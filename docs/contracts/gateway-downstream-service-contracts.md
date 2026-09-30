@@ -65,6 +65,8 @@ tenant-scoped document lookup contract. The tenant is the settlement handoff's
 `sourceApiKeyId`; when it cannot be resolved, gateway does not request the document and
 reports the Ricardian snapshot as unavailable. Registrations through
 `POST /settlement/ricardian-documents` carry the authenticated platform key id as `tenantId`.
+Ricardian accepts a named tenant only because the gateway's Ricardian key id is listed in
+Ricardian's `TENANT_DELEGATION_API_KEYS`; without that entry it answers `403 TenantMismatch`.
 
 Required successful document fields:
 
