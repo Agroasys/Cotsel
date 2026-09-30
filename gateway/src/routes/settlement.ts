@@ -286,8 +286,18 @@ export function createSettlementRouter(options: SettlementRouterOptions): Router
         const body = requireObject(req.body, 'body');
         rejectUnexpectedFields(body, ['requestId', 'documentRef', 'terms', 'metadata'], 'body');
 
+        const tenantId = getServiceApiKeyId(req);
+        if (!tenantId) {
+          throw new GatewayError(
+            401,
+            'AUTH_REQUIRED',
+            'Authenticated platform identity is required',
+          );
+        }
+
         return options.ricardianClient.registerDocument({
           requestId: requireString(body.requestId, 'requestId'),
+          tenantId,
           documentRef: requireString(body.documentRef, 'documentRef'),
           terms: requireObject(body.terms, 'terms'),
           metadata: optionalMetadata(body.metadata),

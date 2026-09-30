@@ -40,6 +40,11 @@ components:
           type: string
         requestId:
           type: string
+        tenantId:
+          description: >-
+            Platform service key id that registered the document. Ricardian releases complete terms
+            and metadata only to this tenant.
+          type: string
         documentRef:
           type: string
         hash:

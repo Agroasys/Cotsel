@@ -65,6 +65,12 @@ API_KEYS_JSON
 HMAC_SECRET
 ```
 
+Ricardian tenant delegation:
+
+```text
+TENANT_DELEGATION_API_KEYS
+```
+
 Oracle inbound auth:
 
 ```text
@@ -107,6 +113,12 @@ paths for ECS. They do not prove service authentication. The gateway uses each
 service's protected `/auth-check` endpoint for the operational downstream
 probe; a successful probe proves the gateway generated an accepted shared-auth
 HMAC request through the private service-discovery path.
+
+Ricardian binds document tenancy to the authenticated key id. Only a caller
+listed in Ricardian's `TENANT_DELEGATION_API_KEYS` (the gateway's
+gateway-to-ricardian key id) may register or read a document for a different
+tenant; every other caller is limited to its own key id and receives
+`403 TenantMismatch` when it names another tenant.
 
 ## Header-level expectations
 

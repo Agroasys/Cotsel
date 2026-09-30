@@ -63,6 +63,11 @@ export function createRouter(
 
   router.post('/hash', ...writeMiddlewares, controller.createHash.bind(controller));
   router.get('/hash/:hash', ...readMiddlewares, controller.getHash.bind(controller));
+  router.get(
+    '/hash/:hash/document',
+    ...readMiddlewares,
+    controller.getTenantDocument.bind(controller),
+  );
 
   return router;
 }

@@ -414,7 +414,25 @@ describe('gateway settlement routes contract', () => {
 
       expect(response.status).toBe(202);
       expect(payload.data.hash).toBe('a'.repeat(64));
-      expect(ricardianClient.registerDocument).toHaveBeenCalledWith(body);
+      // The tenant is the authenticated platform key, never a caller-supplied value.
+      expect(ricardianClient.registerDocument).toHaveBeenCalledWith({
+        ...body,
+        tenantId: 'platform-main',
+      });
+
+      const spoofBody = { ...body, requestId: 'order-42-v2', tenantId: 'platform-other' };
+      const spoofResponse = await fetch(`${baseUrl}/settlement/ricardian-documents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'order-42-v2',
+          ...withServiceAuth(path, spoofBody),
+        },
+        body: JSON.stringify(spoofBody),
+      });
+
+      expect(spoofResponse.status).toBe(400);
+      expect(ricardianClient.registerDocument).toHaveBeenCalledTimes(1);
     } finally {
       server.close();
     }

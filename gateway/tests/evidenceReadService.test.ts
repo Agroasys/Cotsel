@@ -132,6 +132,10 @@ describe('evidence read service', () => {
 
     const result = await service.getRicardianDocument('TRD-9001');
 
+    expect(ricardianClient.getDocument).toHaveBeenCalledWith(
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      'platform-main',
+    );
     expect(result).toEqual({
       tradeId: 'TRD-9001',
       ricardianHash: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -277,11 +281,15 @@ describe('evidence read service', () => {
 
     const result = await service.getRicardianDocument('TRD-9001');
 
+    // Without the handoff the owning tenant is unknown, so full terms are never requested.
+    expect(result.document).toBeNull();
+    expect(ricardianClient.getDocument).not.toHaveBeenCalled();
     expect(result.verification.status).toBe('unavailable');
-    expect(result.verification.tradeHashMatchesDocument).toBe(true);
+    expect(result.verification.tradeHashMatchesDocument).toBeNull();
     expect(result.verification.settlementHashMatchesTrade).toBeNull();
     expect(result.freshness.available).toBe(false);
     expect(result.freshness.degradedReason).toContain('settlement ledger unavailable');
+    expect(result.freshness.degradedReason).toContain('Ricardian document owner is unresolved');
   });
 
   test('does not report a synthetic ricardian mismatch when the upstream document service is unavailable', async () => {
