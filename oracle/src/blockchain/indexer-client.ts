@@ -42,6 +42,26 @@ export class IndexerClient {
     });
   }
 
+  /** Readiness: the indexer GraphQL endpoint answers a trivial query without errors. */
+  async checkReadiness(): Promise<void> {
+    const response = await fetchWithTimeout(
+      this.graphqlUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: '{ __typename }' }),
+      },
+      config.indexerGraphqlRequestTimeoutMs,
+    );
+    if (!response.ok) {
+      throw new Error(`Indexer GraphQL readiness failed (status ${response.status})`);
+    }
+    const payload = (await response.json()) as { errors?: unknown[] };
+    if (payload.errors?.length) {
+      throw new Error('Indexer GraphQL readiness returned errors');
+    }
+  }
+
   async getTrade(tradeId: string): Promise<IndexerTrade | null> {
     try {
       const query = `

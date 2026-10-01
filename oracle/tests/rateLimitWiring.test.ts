@@ -47,7 +47,7 @@ describe('oracle rate-limit wiring', () => {
     app.use(
       '/api/oracle',
       limiter.middleware,
-      createRouter({} as never, async () => undefined),
+      createRouter({} as never, async () => ({ ready: true, dependencies: [] })),
     );
 
     try {

@@ -2995,6 +2995,17 @@ components:
                       - ok
                       - degraded
                       - unavailable
+                  required:
+                    description: Optional dependencies are reported but never fail readiness. Absent means required.
+                    type: boolean
+                  reason:
+                    description: Why an unavailable dependency failed. Error text is never returned.
+                    type: string
+                    enum:
+                      - failed
+                      - timeout
+                  durationMs:
+                    type: number
                   detail:
                     type: string
         timestamp:

@@ -7,8 +7,8 @@ import {
   SignCommand,
   SigningAlgorithmSpec,
 } from '@aws-sdk/client-kms';
-import { KmsEvmSigner, type KmsSigningClient } from '@agroasys/sdk';
-import type { Provider } from 'ethers';
+import { evmAddressFromKmsPublicKey, KmsEvmSigner, type KmsSigningClient } from '@agroasys/sdk';
+import { getAddress, type Provider } from 'ethers';
 
 function requiredBytes(value: Uint8Array | undefined, operation: string): Uint8Array {
   if (!value?.length) {
@@ -17,11 +17,7 @@ function requiredBytes(value: Uint8Array | undefined, operation: string): Uint8A
   return value;
 }
 
-export function createAwsKmsOracleSigner(
-  options: { keyId: string; expectedAddress: string },
-  provider: Provider,
-  kms = new KMSClient({}),
-): KmsEvmSigner {
+export function createAwsKmsSigningClient(kms = new KMSClient({})): KmsSigningClient {
   const client: KmsSigningClient = {
     async getPublicKey(keyId) {
       const result = await kms.send(new GetPublicKeyCommand({ KeyId: keyId }));
@@ -46,5 +42,30 @@ export function createAwsKmsOracleSigner(
     },
   };
 
+  return client;
+}
+
+export function createAwsKmsOracleSigner(
+  options: { keyId: string; expectedAddress: string },
+  provider: Provider,
+  client: KmsSigningClient = createAwsKmsSigningClient(),
+): KmsEvmSigner {
   return new KmsEvmSigner(client, options, provider);
+}
+
+/**
+ * Readiness probe: reads the key from KMS now (the signer caches its address after startup) and
+ * refuses a key that is unreachable, disabled, of the wrong type, or no longer the reviewed one.
+ */
+export function createAwsKmsOracleKeyProbe(
+  options: { keyId: string; expectedAddress: string },
+  client: KmsSigningClient,
+): () => Promise<void> {
+  const expectedAddress = getAddress(options.expectedAddress);
+  return async () => {
+    const address = evmAddressFromKmsPublicKey(await client.getPublicKey(options.keyId));
+    if (address !== expectedAddress) {
+      throw new Error('Oracle KMS key no longer matches the reviewed signer address');
+    }
+  };
 }

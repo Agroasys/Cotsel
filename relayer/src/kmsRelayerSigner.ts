@@ -7,13 +7,22 @@ import {
   SignCommand,
   SigningAlgorithmSpec,
 } from '@aws-sdk/client-kms';
-import { KmsEvmSigner, type KmsSigningClient } from '@agroasys/sdk';
+import { evmAddressFromKmsPublicKey, KmsEvmSigner, type KmsSigningClient } from '@agroasys/sdk';
+import { getAddress } from 'ethers';
 import type { RelayerConfig } from './config';
 import type { RelayerSigningRequest } from './signingPolicy';
 
 export interface RelayerSigner {
   getAddress(): Promise<string>;
   signTransaction(request: RelayerSigningRequest): Promise<string>;
+}
+
+export interface KmsRelayerSigner extends RelayerSigner {
+  /**
+   * Readiness probe: reads the key from KMS now (the signer caches its address after startup)
+   * and refuses a key that is unreachable, disabled, or no longer the reviewed one.
+   */
+  checkReadiness(): Promise<void>;
 }
 
 function requiredBytes(value: Uint8Array | undefined, operation: string): Uint8Array {
@@ -24,7 +33,7 @@ function requiredBytes(value: Uint8Array | undefined, operation: string): Uint8A
 export function createKmsRelayerSigner(
   config: RelayerConfig,
   kms = new KMSClient({}),
-): RelayerSigner {
+): KmsRelayerSigner {
   const client: KmsSigningClient = {
     async getPublicKey(keyId) {
       const result = await kms.send(new GetPublicKeyCommand({ KeyId: keyId }));
@@ -54,8 +63,16 @@ export function createKmsRelayerSigner(
     null,
   );
 
+  const expectedAddress = getAddress(config.kmsExpectedAddress);
+
   return {
     getAddress: () => signer.getAddress(),
+    async checkReadiness() {
+      const address = evmAddressFromKmsPublicKey(await client.getPublicKey(config.kmsKeyId));
+      if (address !== expectedAddress) {
+        throw new Error('Relayer KMS key no longer matches the reviewed signer address');
+      }
+    },
     async signTransaction(request) {
       const transaction = request.transaction;
       return signer.signTransaction({

@@ -7,6 +7,10 @@ import { successResponse } from '../responses';
 export interface DependencyStatus {
   name: string;
   status: 'ok' | 'degraded' | 'unavailable';
+  /** Optional dependencies are reported but never fail readiness. Defaults to required. */
+  required?: boolean;
+  reason?: 'failed' | 'timeout';
+  durationMs?: number;
   detail?: string;
 }
 
@@ -32,7 +36,9 @@ export function createSystemRouter(options: SystemRouterOptions): Router {
   router.get('/readyz', async (_req, res, next) => {
     try {
       const dependencies = await options.readinessCheck();
-      const ready = dependencies.every((dependency) => dependency.status === 'ok');
+      const ready = dependencies.every(
+        (dependency) => dependency.required === false || dependency.status === 'ok',
+      );
       res.status(ready ? 200 : 503).json(
         successResponse({
           service: 'dashboard-gateway',

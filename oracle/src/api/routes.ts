@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authMiddleware, hmacMiddleware } from '../middleware/middleware';
+import type { ReadinessResult } from '@agroasys/shared-edge';
 import { OracleController } from './controller';
 
 function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
@@ -10,7 +11,7 @@ function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => P
 
 export function createRouter(
   controller: OracleController,
-  readinessCheck?: () => Promise<void>,
+  readinessCheck?: () => Promise<ReadinessResult>,
 ): Router {
   const router = Router();
 
@@ -25,14 +26,13 @@ export function createRouter(
 
   router.get('/ready', async (_req, res) => {
     try {
-      if (readinessCheck) {
-        await readinessCheck();
-      }
+      const result = readinessCheck ? await readinessCheck() : { ready: true, dependencies: [] };
 
-      res.json({
-        success: true,
+      res.status(result.ready ? 200 : 503).json({
+        success: result.ready,
         service: 'oracle',
-        ready: true,
+        ready: result.ready,
+        dependencies: result.dependencies,
         timestamp: new Date().toISOString(),
       });
     } catch {

@@ -3,6 +3,7 @@ import { createRelayerApp } from './app';
 import { loadRelayerConfig } from './config';
 import { createKmsRelayerSigner } from './kmsRelayerSigner';
 import { logger } from './logger';
+import { createRelayerReadinessCheck } from './readiness';
 
 async function bootstrap(): Promise<void> {
   const config = loadRelayerConfig();
@@ -14,7 +15,11 @@ async function bootstrap(): Promise<void> {
     : createInMemoryNonceStore();
   const signer = createKmsRelayerSigner(config);
   const signerAddress = await signer.getAddress();
-  const app = createRelayerApp(config, { signer, authNonceStore, requestStore });
+  const readinessCheck = createRelayerReadinessCheck({
+    signerProbe: () => signer.checkReadiness(),
+    replayStore: config.redisUrl ? requestStore : undefined,
+  });
+  const app = createRelayerApp(config, { signer, authNonceStore, requestStore, readinessCheck });
   const server = app.listen(config.port, () => {
     logger.info('Gasless relayer started', {
       port: config.port,

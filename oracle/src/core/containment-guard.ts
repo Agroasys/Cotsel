@@ -14,6 +14,8 @@ const RECONCILIATION_SERVICE_NAME = 'reconciliation';
 export interface ContainmentGuard {
   /** Throws `TradeContainedError` unless this trade is clear to progress. */
   assertMayProgress(tradeId: string): Promise<void>;
+  /** Readiness: the guard can currently answer, so progressions are not all being refused. */
+  checkReadiness(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -25,6 +27,7 @@ export interface ContainmentGuard {
  */
 const UNGUARDED: ContainmentGuard = {
   async assertMayProgress(): Promise<void> {},
+  async checkReadiness(): Promise<void> {},
   async close(): Promise<void> {},
 };
 
@@ -50,6 +53,10 @@ const UNGUARDED: ContainmentGuard = {
  */
 class ReconciliationContainmentGuard implements ContainmentGuard {
   constructor(private readonly pool: Pool) {}
+
+  async checkReadiness(): Promise<void> {
+    await this.pool.query('SELECT 1 FROM reconcile_trade_containments LIMIT 1');
+  }
 
   async assertMayProgress(tradeId: string): Promise<void> {
     let row: { incident_reference: string; state: string } | undefined;
@@ -153,6 +160,9 @@ export function createContainmentGuard(): ContainmentGuard {
   return {
     async assertMayProgress(tradeId: string): Promise<void> {
       await (await resolve()).assertMayProgress(tradeId);
+    },
+    async checkReadiness(): Promise<void> {
+      await (await resolve()).checkReadiness();
     },
     async close(): Promise<void> {
       await resolved?.close();

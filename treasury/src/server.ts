@@ -11,6 +11,8 @@ import { closeConnection, testConnection } from './database/connection';
 import { Logger } from './utils/logger';
 import { TreasuryIngestionWorker } from './core/ingestionWorker';
 import { TreasuryIngestionFreshnessService } from './core/ingestionFreshness';
+import { ReconciliationGateService } from './core/reconciliationGate';
+import { createTreasuryReadinessCheck } from './readiness';
 import { createServiceAuthMiddleware } from './auth/serviceAuth';
 import { createProviderCallbackMiddleware } from './auth/providerCallback';
 import { createTreasuryNonceStore } from './auth/nonceStore';
@@ -137,6 +139,14 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
+  const readinessReconciliationGate = new ReconciliationGateService();
+  const readinessCheck = createTreasuryReadinessCheck({
+    database: testConnection,
+    reconciliation: readinessReconciliationGate.isConfigured()
+      ? () => readinessReconciliationGate.checkReadiness()
+      : undefined,
+  });
+
   app.use(
     '/api/treasury/v1',
     requestRateLimiter.middleware,
@@ -144,7 +154,7 @@ async function bootstrap(): Promise<void> {
       authMiddleware,
       mutationAuthMiddleware,
       providerCallbackMiddleware,
-      readinessCheck: testConnection,
+      readinessCheck,
       ingestionFreshnessCheck: () => ingestionFreshness.assess(),
     }),
   );

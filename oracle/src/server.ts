@@ -10,6 +10,7 @@ import { OracleController } from './api/controller';
 import { errorHandler } from './middleware/middleware';
 import { Logger } from './utils/logger';
 import { testConnection, closeConnection, pool } from './database/connection';
+import { createOracleReadinessCheck } from './readiness';
 import { TriggerManager } from './core/trigger-manager';
 import { createPostgresOracleActionLock } from './core/oracle-action-lock';
 import { buildContainmentGuard, type ContainmentGuard } from './core/containment-guard';
@@ -160,7 +161,15 @@ async function bootstrap() {
       next();
     });
 
-    const router = createRouter(controller, testConnection);
+    const activeContainmentGuard = containmentGuard;
+    const readinessCheck = createOracleReadinessCheck({
+      database: testConnection,
+      rpc: () => sdkClient.checkRpcReadiness(),
+      signer: () => sdkClient.checkSignerReadiness(),
+      indexer: () => indexerClient.checkReadiness(),
+      containment: () => activeContainmentGuard.checkReadiness(),
+    });
+    const router = createRouter(controller, readinessCheck);
     app.use('/api/oracle', requestRateLimiter.middleware, router);
 
     app.use(errorHandler);

@@ -4,7 +4,11 @@ import { createManagedRpcProvider } from '@agroasys/sdk/rpc/failoverProvider';
 import type { SettlementConfirmationHeads } from '@agroasys/sdk';
 import { Logger } from '../utils/logger';
 import { ManagedSigner, ManagedSignerOptions, SignerCustodyMode } from './managed-signer';
-import { createAwsKmsOracleSigner } from './aws-kms-signer';
+import {
+  createAwsKmsOracleKeyProbe,
+  createAwsKmsOracleSigner,
+  createAwsKmsSigningClient,
+} from './aws-kms-signer';
 
 export interface BlockchainResult {
   txHash: string;
@@ -18,22 +22,32 @@ export interface OracleSignerConfig {
   managedSigner?: Omit<ManagedSignerOptions, 'custodyMode'>;
 }
 
+interface OracleSignerBinding {
+  signer: ethers.Signer;
+  /** Proves the signer can be reached now, independent of any cached startup state. */
+  probe: () => Promise<void>;
+}
+
 function createOracleSigner(
   signerConfig: OracleSignerConfig,
   provider: ethers.Provider,
-): ethers.Signer {
+): OracleSignerBinding {
   if (signerConfig.custodyMode === 'raw_private_key') {
     if (!signerConfig.privateKey) {
       throw new Error('ORACLE_PRIVATE_KEY is required for raw_private_key signer custody');
     }
-    return new ethers.Wallet(signerConfig.privateKey, provider);
+    return { signer: new ethers.Wallet(signerConfig.privateKey, provider), probe: async () => {} };
   }
 
   if (signerConfig.custodyMode === 'kms') {
     if (!signerConfig.kmsSigner) {
       throw new Error('AWS KMS signer configuration is required for kms custody');
     }
-    return createAwsKmsOracleSigner(signerConfig.kmsSigner, provider);
+    const client = createAwsKmsSigningClient();
+    return {
+      signer: createAwsKmsOracleSigner(signerConfig.kmsSigner, provider, client),
+      probe: createAwsKmsOracleKeyProbe(signerConfig.kmsSigner, client),
+    };
   }
 
   if (!signerConfig.managedSigner) {
@@ -42,7 +56,7 @@ function createOracleSigner(
     );
   }
 
-  return new ManagedSigner(
+  const managedSigner = new ManagedSigner(
     {
       ...signerConfig.managedSigner,
       custodyMode: signerConfig.custodyMode,
@@ -57,12 +71,14 @@ function createOracleSigner(
     },
     provider,
   );
+  return { signer: managedSigner, probe: () => managedSigner.checkReadiness() };
 }
 
 export class SDKClient {
   private sdk: OracleSDK;
   private provider: ethers.AbstractProvider;
   private signer: ethers.Signer;
+  private signerProbe: () => Promise<void>;
 
   constructor(
     rpcUrl: string,
@@ -79,7 +95,9 @@ export class SDKClient {
       stallTimeoutMs: rpcOptions.stallTimeoutMs,
     });
     this.provider = provider;
-    this.signer = createOracleSigner(signerConfig, provider);
+    const signerBinding = createOracleSigner(signerConfig, provider);
+    this.signer = signerBinding.signer;
+    this.signerProbe = signerBinding.probe;
 
     this.sdk = new OracleSDK({
       rpc: rpcUrl,
@@ -96,6 +114,16 @@ export class SDKClient {
       escrowAddress,
       chainId,
     });
+  }
+
+  /** Readiness: the managed RPC answers with a current block. */
+  async checkRpcReadiness(): Promise<void> {
+    await this.provider.getBlockNumber();
+  }
+
+  /** Readiness: the configured signer custody answers now, not just at startup. */
+  async checkSignerReadiness(): Promise<void> {
+    await this.signerProbe();
   }
 
   async assertSignerReady(): Promise<string> {

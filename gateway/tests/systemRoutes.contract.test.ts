@@ -141,6 +141,24 @@ describe('gateway system routes contract', () => {
     }
   });
 
+  test('GET /readyz stays ready when only an optional dependency is unavailable', async () => {
+    const { server, baseUrl } = await startServer(async () => [
+      { name: 'postgres', status: 'ok', required: true },
+      { name: 'notifications', status: 'unavailable', required: false, reason: 'failed' },
+    ]);
+
+    try {
+      const response = await fetch(`${baseUrl}/readyz`);
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(validateReady(payload)).toBe(true);
+      expect(payload.data.ready).toBe(true);
+    } finally {
+      server.close();
+    }
+  });
+
   test('GET /version matches OpenAPI schema', async () => {
     const { server, baseUrl } = await startServer(async () => [{ name: 'postgres', status: 'ok' }]);
 

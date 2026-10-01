@@ -296,6 +296,8 @@ const readinessCheck = createReadinessCheck({
   database: () => testConnection(pool),
   governance: () => governanceStatusService.checkReadiness(),
   indexer: () => tradeReadService.checkReadiness(),
+  gaslessRelayer: gaslessSettlementService?.getRelayerReadiness.bind(gaslessSettlementService),
+  timeoutMs: config.downstreamReadTimeoutMs,
 });
 
 async function bootstrap(): Promise<void> {
