@@ -106,6 +106,22 @@ export class ManagedSigner extends ethers.AbstractSigner {
       return this.cachedAddress;
     }
 
+    this.cachedAddress = await this.fetchAddress();
+    return this.cachedAddress;
+  }
+
+  /**
+   * Readiness probe: asks the managed signer for its address now, bypassing the cache, and
+   * refuses a signer that no longer answers with the address already used for signing.
+   */
+  async checkReadiness(): Promise<void> {
+    const address = await this.fetchAddress();
+    if (this.cachedAddress && address !== this.cachedAddress) {
+      throw new Error('Managed signer address changed since startup');
+    }
+  }
+
+  private async fetchAddress(): Promise<string> {
     const response = await fetch(this.addressUrl, {
       method: 'GET',
       headers: this.headers,
@@ -120,8 +136,7 @@ export class ManagedSigner extends ethers.AbstractSigner {
       throw new Error('Managed signer returned an invalid address');
     }
 
-    this.cachedAddress = ethers.getAddress(String(payload.signerAddress));
-    return this.cachedAddress;
+    return ethers.getAddress(String(payload.signerAddress));
   }
 
   async signTransaction(tx: ethers.TransactionRequest): Promise<string> {

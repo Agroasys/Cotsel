@@ -106,6 +106,19 @@ export class ReconciliationGateService {
       deps?.maxRunningRunAgeSeconds ?? config.reconciliationMaxRunningRunAgeSeconds;
   }
 
+  /** Whether a reconciliation reader is configured, making it part of the readiness profile. */
+  isConfigured(): boolean {
+    return this.pool !== null;
+  }
+
+  /** Readiness: the reconciliation reader can be queried, so realization is not blind. */
+  async checkReadiness(): Promise<void> {
+    if (!this.pool) {
+      throw new Error('Reconciliation database is not configured');
+    }
+    await this.pool.query('SELECT 1');
+  }
+
   async assessTrades(tradeIds: string[]): Promise<Map<string, TradeReconciliationGate>> {
     const uniqueTradeIds = [...new Set(tradeIds.filter((tradeId) => tradeId.trim().length > 0))];
     const result = new Map<string, TradeReconciliationGate>();

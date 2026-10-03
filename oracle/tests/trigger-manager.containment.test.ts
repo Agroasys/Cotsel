@@ -125,6 +125,7 @@ function guardHolding(tradeIds: string[]): ContainmentGuard {
         );
       }
     }),
+    checkReadiness: jest.fn(),
     close: jest.fn(),
   };
 }
@@ -200,6 +201,7 @@ describe('PRES-11 containment blocks the next progression', () => {
         // Contained by a reconciliation run between acceptance and submission.
         contained = true;
       }),
+      checkReadiness: jest.fn(),
       close: jest.fn(),
     };
 

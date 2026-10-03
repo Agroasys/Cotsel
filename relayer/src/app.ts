@@ -1,4 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
+import type { RelayerReadinessResult } from './readiness';
 import helmet from 'helmet';
 import {
   createServiceAuthMiddleware,
@@ -20,6 +21,8 @@ export interface RelayerAppDependencies {
   signer: RelayerSigner;
   authNonceStore: NonceStore;
   requestStore: NonceStore;
+  /** Dependency readiness for /api/relayer/ready; liveness stays at /api/relayer/health. */
+  readinessCheck?: () => Promise<RelayerReadinessResult>;
 }
 
 function apiKeyLookup(apiKeysJson: string): (id: string) => ServiceApiKey | undefined {
@@ -87,6 +90,18 @@ export function createRelayerApp(config: RelayerConfig, dependencies: RelayerApp
 
   app.get('/api/relayer/health', (_req, res) => {
     res.status(200).json({ success: true, service: 'gasless-relayer' });
+  });
+
+  app.get('/api/relayer/ready', async (_req, res) => {
+    const result = dependencies.readinessCheck
+      ? await dependencies.readinessCheck()
+      : { ready: false, dependencies: [] };
+    res.status(result.ready ? 200 : 503).json({
+      success: result.ready,
+      service: 'gasless-relayer',
+      ready: result.ready,
+      dependencies: result.dependencies,
+    });
   });
 
   const authenticate = createServiceAuthMiddleware({

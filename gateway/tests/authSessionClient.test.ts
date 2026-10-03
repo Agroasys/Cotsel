@@ -224,4 +224,31 @@ describe('AuthSessionClient contract validation', () => {
       message: 'Auth service returned an invalid session payload',
     });
   });
+
+  test('readiness probes auth dependency readiness, not liveness', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    global.fetch = fetchMock;
+
+    await expect(
+      createAuthSessionClient(baseConfig).checkReadiness('readyz-1'),
+    ).resolves.toBeUndefined();
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/api\/auth\/v1\/ready$/);
+  });
+
+  test('readiness fails when auth is live but its database is down', async () => {
+    // Auth keeps `/health` at 200 and answers `/ready` with 503 when its database is unreachable.
+    global.fetch = jest.fn(async (input: string | URL | Request) =>
+      String(input).endsWith('/api/auth/v1/health')
+        ? new Response('{}', { status: 200 })
+        : new Response(JSON.stringify({ success: false, ready: false }), { status: 503 }),
+    ) as typeof fetch;
+
+    await expect(
+      createAuthSessionClient(baseConfig).checkReadiness('readyz-1'),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: 'Auth service readiness check failed',
+    });
+  });
 });
