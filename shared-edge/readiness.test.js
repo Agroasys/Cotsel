@@ -50,6 +50,23 @@ describe('evaluateReadiness', () => {
     expect(result.dependencies[1]).toMatchObject({ required: false, status: 'unavailable' });
   });
 
+  test('reports a disabled dependency without running it or showing it as ok', async () => {
+    const check = jest.fn();
+    const result = await evaluateReadiness([
+      { name: 'postgres', check: async () => {} },
+      { name: 'reconciliation-containment', disabled: true, check },
+    ]);
+
+    expect(result.ready).toBe(true);
+    expect(check).not.toHaveBeenCalled();
+    expect(result.dependencies[1]).toEqual({
+      name: 'reconciliation-containment',
+      required: false,
+      status: 'disabled',
+      durationMs: 0,
+    });
+  });
+
   test('bounds a hung dependency by its timeout and runs checks in parallel', async () => {
     const started = Date.now();
     const result = await evaluateReadiness(

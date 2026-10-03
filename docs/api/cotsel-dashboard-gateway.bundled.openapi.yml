@@ -2995,6 +2995,7 @@ components:
                       - ok
                       - degraded
                       - unavailable
+                      - disabled
                   required:
                     description: Optional dependencies are reported but never fail readiness. Absent means required.
                     type: boolean

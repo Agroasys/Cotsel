@@ -13,8 +13,10 @@ type ReadinessChecks = {
   database: () => Promise<void>;
   governance: () => Promise<void>;
   indexer: () => Promise<void>;
-  /** Present only when gasless execution is enabled, so the relayer is part of the profile. */
+  /** Present only when gasless execution is enabled: the gateway's local queue and policy state. */
   gaslessRelayer?: () => GaslessRelayerReadinessSnapshot;
+  /** Present only when gasless signing is delegated to the standalone relayer (KMS custody). */
+  gaslessRelayerService?: () => Promise<void>;
   timeoutMs?: number;
 };
 
@@ -52,10 +54,13 @@ export function createReadinessCheck(checks: ReadinessChecks) {
       { name: 'chain-rpc', check: checks.governance },
       { name: 'indexer-graphql', check: checks.indexer },
     ];
+    if (checks.gaslessRelayerService) {
+      dependencyChecks.push({ name: 'gasless-relayer', check: checks.gaslessRelayerService });
+    }
     const gaslessRelayer = checks.gaslessRelayer;
     if (gaslessRelayer) {
       dependencyChecks.push({
-        name: 'gasless-relayer',
+        name: 'gasless-relayer-policy',
         check: async () => assertGaslessRelayerServing(gaslessRelayer()),
       });
     }

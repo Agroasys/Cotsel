@@ -6,7 +6,7 @@ import { successResponse } from '../responses';
 
 export interface DependencyStatus {
   name: string;
-  status: 'ok' | 'degraded' | 'unavailable';
+  status: 'ok' | 'degraded' | 'unavailable' | 'disabled';
   /** Optional dependencies are reported but never fail readiness. Defaults to required. */
   required?: boolean;
   reason?: 'failed' | 'timeout';

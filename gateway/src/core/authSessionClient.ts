@@ -228,8 +228,10 @@ export function createAuthSessionClient(config: GatewayConfig): AuthSessionClien
       return payload.data;
     },
 
+    // `/ready` checks Auth's own dependencies (its database); `/health` is liveness only and stays
+    // green while session resolution is unusable.
     async checkReadiness(requestId) {
-      const response = await fetch(buildUrl(config.authBaseUrl, '/api/auth/v1/health'), {
+      const response = await fetch(buildUrl(config.authBaseUrl, '/api/auth/v1/ready'), {
         method: 'GET',
         headers: requestId ? { 'x-request-id': requestId } : undefined,
         signal: AbortSignal.timeout(config.authRequestTimeoutMs),

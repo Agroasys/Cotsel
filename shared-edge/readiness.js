@@ -28,6 +28,12 @@ function withTimeout(promiseFactory, timeoutMs) {
 }
 
 async function runCheck(check, defaultTimeoutMs, now) {
+  // A disabled dependency is not part of this profile: it is reported, never probed, and never
+  // shown as ok, so a control nobody is enforcing cannot look like one that is passing.
+  if (check.disabled) {
+    return { name: check.name, required: false, status: 'disabled', durationMs: 0 };
+  }
+
   const startedAt = now();
   const required = check.required !== false;
   try {

@@ -21,18 +21,28 @@ that whatever routes or promotes on it stops sending financial work.
 ## What each service requires
 
 Every listed dependency is required: if any one is unavailable, readiness
-returns `503` with `ready: false`.
+returns `503` with `ready: false`. A dependency that is not part of the running
+profile is reported as `status: "disabled"` with `required: false`, never as `ok`.
 
 | Service  | Liveness                                | Readiness                              | Required dependencies                                                                                                                                                                          |
 | -------- | --------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Gateway  | `GET /api/dashboard-gateway/v1/healthz` | `GET /api/dashboard-gateway/v1/readyz` | `postgres`, `auth-service`, `chain-rpc`, `indexer-graphql`, and `gasless-relayer` when gasless execution is enabled                                                                            |
-| Oracle   | `GET /api/oracle/health`                | `GET /api/oracle/ready`                | `postgres`, `chain-rpc`, `oracle-signer`, `indexer-graphql`, `reconciliation-containment`                                                                                                      |
+| Gateway  | `GET /api/dashboard-gateway/v1/healthz` | `GET /api/dashboard-gateway/v1/readyz` | `postgres`, `auth-service`, `chain-rpc`, `indexer-graphql`; with gasless execution enabled, `gasless-relayer-policy`, plus `gasless-relayer` under KMS custody                                 |
+| Oracle   | `GET /api/oracle/health`                | `GET /api/oracle/ready`                | `postgres`, `chain-rpc`, `oracle-signer`, `indexer-graphql`, `reconciliation-containment` (reported `disabled` only outside staging and production)                                            |
 | Treasury | `GET /api/treasury/v1/health`           | `GET /api/treasury/v1/ready`           | `postgres`, `reconciliation-reader` when a reconciliation database is configured, then chain-evidence ingestion freshness ([treasury-ingestion-freshness.md](treasury-ingestion-freshness.md)) |
 | Relayer  | `GET /api/relayer/health`               | `GET /api/relayer/ready`               | `kms-signer`, and `replay-store` when Redis replay protection is configured                                                                                                                    |
 
 Dependency-specific rules:
 
-- **Gateway `gasless-relayer`:** unavailable when the relayer readiness snapshot
+- **Gateway `auth-service`:** probes Auth's `GET /api/auth/v1/ready`, which
+  checks Auth's database. Auth's `/health` is liveness only and stays green while
+  session resolution is unusable.
+- **Gateway `gasless-relayer`:** under KMS custody, calls the standalone
+  relayer's `GET /api/relayer/ready` (at `GATEWAY_GASLESS_MANAGED_SIGNER_URL`)
+  under the probe timeout, so a stopped relayer, an unusable KMS key, or a lost
+  replay store fails gateway readiness before any request has failed. MPC custody
+  signs through an external provider and is not probed here.
+- **Gateway `gasless-relayer-policy`:** the gateway's local queue and policy
+  snapshot, with no network call. Unavailable when the snapshot
   is `blocked` (critical capacity or balance policy breach). A deliberate
   `paused` state is an operator control, not a dependency failure, and stays
   ready. The full snapshot remains at `GET /api/dashboard-gateway/v1/operations/gasless-relayer/readiness`.
@@ -43,7 +53,10 @@ Dependency-specific rules:
   and refuses one that changed since startup.
 - **Oracle `reconciliation-containment`:** the containment guard fails closed,
   so an unreachable reconciliation reader already stops every progression.
-  Readiness reports that instead of staying green.
+  Readiness reports that instead of staying green. With no reconciliation reader
+  configured (`RECONCILIATION_DB_*`), progressions are not gated: in `staging` and
+  `production` (`COTSEL_ENVIRONMENT`, falling back to `NODE_ENV`) readiness
+  fails; in any other profile the dependency is reported `disabled`.
 - **Relayer `kms-signer`:** the same fresh `GetPublicKey` check against
   `RELAYER_KMS_EXPECTED_ADDRESS`.
 
@@ -82,8 +95,8 @@ time. Record the candidate identity, the probe responses, and timestamps.
    dependencies `ok`, and every liveness endpoint returns `200`.
 2. **Inject one fault.** For example: block the RPC endpoint from the task
    security group, revoke `kms:GetPublicKey` on the signer key, stop the
-   indexer GraphQL service, or revoke the reconciliation reader's database
-   access.
+   indexer GraphQL service, stop the standalone relayer, or revoke the
+   reconciliation reader's database access.
 3. **Observe.** Within one probe interval the affected service's readiness
    returns `503`, names the dependency with `status: "unavailable"`, and shows
    no error text. Liveness for the same service stays `200` and ECS does not

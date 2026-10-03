@@ -32,6 +32,7 @@ import {
 import { createServiceApiKeyLookup } from './core/serviceAuth';
 import { SettlementCallbackDispatcher } from './core/settlementCallbackDispatcher';
 import { createConfiguredGaslessSettlementService } from './core/gaslessSettlementServiceFactory';
+import { createGaslessRelayerServiceProbe } from './core/gaslessRelayerServiceProbe';
 import { createPostgresManagedSignerValidationRecorder } from './core/managedSignerAuditStore';
 import { createGaslessTransactionOutcomeRuntime } from './core/gaslessTransactionOutcomeRuntime';
 import { SettlementService } from './core/settlementService';
@@ -297,6 +298,16 @@ const readinessCheck = createReadinessCheck({
   governance: () => governanceStatusService.checkReadiness(),
   indexer: () => tradeReadService.checkReadiness(),
   gaslessRelayer: gaslessSettlementService?.getRelayerReadiness.bind(gaslessSettlementService),
+  // In KMS custody the managed signer URL is the dedicated relayer; MPC custody signs elsewhere.
+  gaslessRelayerService:
+    gaslessSettlementService &&
+    config.gaslessSignerCustodyMode === 'kms' &&
+    config.gaslessManagedSignerUrl
+      ? createGaslessRelayerServiceProbe(
+          config.gaslessManagedSignerUrl,
+          config.downstreamReadTimeoutMs ?? 5_000,
+        )
+      : undefined,
   timeoutMs: config.downstreamReadTimeoutMs,
 });
 

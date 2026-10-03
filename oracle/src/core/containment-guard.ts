@@ -14,7 +14,10 @@ const RECONCILIATION_SERVICE_NAME = 'reconciliation';
 export interface ContainmentGuard {
   /** Throws `TradeContainedError` unless this trade is clear to progress. */
   assertMayProgress(tradeId: string): Promise<void>;
-  /** Readiness: the guard can currently answer, so progressions are not all being refused. */
+  /**
+   * Readiness: the guard can currently answer, so progressions are not all being refused.
+   * An unconfigured guard never answers successfully: it is enforcing nothing.
+   */
   checkReadiness(): Promise<void>;
   close(): Promise<void>;
 }
@@ -27,7 +30,9 @@ export interface ContainmentGuard {
  */
 const UNGUARDED: ContainmentGuard = {
   async assertMayProgress(): Promise<void> {},
-  async checkReadiness(): Promise<void> {},
+  async checkReadiness(): Promise<void> {
+    throw new Error('Reconciliation containment is not configured');
+  },
   async close(): Promise<void> {},
 };
 
@@ -105,12 +110,28 @@ class ReconciliationContainmentGuard implements ContainmentGuard {
   }
 }
 
+/** Whether this configuration names a reconciliation reader, which turns containment on. */
+export function isContainmentConfigured(
+  config: OracleConfig,
+): config is OracleConfig &
+  Required<
+    Pick<OracleConfig, 'reconciliationDbName' | 'reconciliationDbUser' | 'reconciliationDbPassword'>
+  > {
+  return Boolean(
+    config.reconciliationDbName && config.reconciliationDbUser && config.reconciliationDbPassword,
+  );
+}
+
+/**
+ * Staging and production must gate progressions on containment; only local and test profiles
+ * may run without it.
+ */
+export function isContainmentRequired(config: OracleConfig): boolean {
+  return config.cotselEnvironment === 'staging' || config.cotselEnvironment === 'production';
+}
+
 export function buildContainmentGuard(config: OracleConfig): ContainmentGuard {
-  if (
-    !config.reconciliationDbName ||
-    !config.reconciliationDbUser ||
-    !config.reconciliationDbPassword
-  ) {
+  if (!isContainmentConfigured(config)) {
     Logger.warn(
       'No reconciliation database configured: trade progressions are not gated on PRES-11 containment',
       { configKey: 'RECONCILIATION_DB_NAME' },

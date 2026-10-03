@@ -10,6 +10,12 @@ export interface OracleReadinessDependencies {
   signer: () => Promise<void>;
   indexer: () => Promise<void>;
   containment: () => Promise<void>;
+  /**
+   * Whether containment is part of this profile. `required` (the default) fails readiness unless
+   * the guard can answer, including when no reader is configured; `disabled` is only for local
+   * and test profiles that run without a reconciliation reader, and is never reported as ok.
+   */
+  containmentMode?: 'required' | 'disabled';
   timeoutMs?: number;
   /** A signer success is reused this long so readiness does not call KMS on every probe. */
   signerSuccessTtlMs?: number;
@@ -39,7 +45,11 @@ export function createOracleReadinessCheck(
         { name: 'chain-rpc', check: dependencies.rpc },
         { name: 'oracle-signer', check: signer },
         { name: 'indexer-graphql', check: dependencies.indexer },
-        { name: 'reconciliation-containment', check: dependencies.containment },
+        {
+          name: 'reconciliation-containment',
+          check: dependencies.containment,
+          disabled: dependencies.containmentMode === 'disabled',
+        },
       ],
       { defaultTimeoutMs: dependencies.timeoutMs },
     );

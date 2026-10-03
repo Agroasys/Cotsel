@@ -8,6 +8,12 @@ jest.mock('../src/config', () => ({
 }));
 
 import { createRouter } from '../src/api/routes';
+import {
+  buildContainmentGuard,
+  isContainmentConfigured,
+  isContainmentRequired,
+} from '../src/core/containment-guard';
+import type { OracleConfig } from '../src/types';
 import { createAwsKmsOracleKeyProbe } from '../src/blockchain/aws-kms-signer';
 import { ManagedSigner } from '../src/blockchain/managed-signer';
 import { createOracleReadinessCheck } from '../src/readiness';
@@ -78,6 +84,48 @@ describe('oracle readiness', () => {
     expect((await check()).ready).toBe(false);
     expect((await check()).ready).toBe(true);
     expect(signer).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('oracle reconciliation containment readiness', () => {
+  const unconfigured = { cotselEnvironment: 'staging' } as OracleConfig;
+
+  test('an unconfigured guard never reports a successful readiness check', async () => {
+    const guard = buildContainmentGuard(unconfigured);
+
+    expect(isContainmentConfigured(unconfigured)).toBe(false);
+    await expect(guard.checkReadiness()).rejects.toThrow('not configured');
+  });
+
+  test.each(['staging', 'production'])(
+    'fails readiness in %s when no reconciliation reader is configured',
+    async (cotselEnvironment) => {
+      const config = { cotselEnvironment } as OracleConfig;
+      expect(isContainmentRequired(config)).toBe(true);
+
+      const result = await readiness({
+        containment: () => buildContainmentGuard(config).checkReadiness(),
+        containmentMode: 'required',
+      })();
+
+      expect(result.ready).toBe(false);
+      expect(
+        result.dependencies.find((item) => item.name === 'reconciliation-containment'),
+      ).toMatchObject({ required: true, status: 'unavailable', reason: 'failed' });
+    },
+  );
+
+  test('reports containment as disabled, not ok, in a local profile without a reader', async () => {
+    expect(isContainmentRequired({ cotselEnvironment: 'development' } as OracleConfig)).toBe(false);
+    const containment = jest.fn();
+
+    const result = await readiness({ containment, containmentMode: 'disabled' })();
+
+    expect(result.ready).toBe(true);
+    expect(containment).not.toHaveBeenCalled();
+    expect(
+      result.dependencies.find((item) => item.name === 'reconciliation-containment'),
+    ).toMatchObject({ required: false, status: 'disabled' });
   });
 });
 
