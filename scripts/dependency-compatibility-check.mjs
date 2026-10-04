@@ -42,7 +42,7 @@ assert.equal(
   'All minimatch versions must resolve one patched brace-expansion',
 );
 const [bracePath] = braceTargets;
-assert.match(bracePath, /brace-expansion@5\.0\.9_patch_hash=/);
+assert.match(bracePath, /brace-expansion@5\.0\.12_patch_hash=/);
 
 const braceExpansion = require(bracePath);
 assert.equal(
@@ -100,5 +100,5 @@ await new Promise((resolve, reject) => {
 });
 
 console.log(
-  `Dependency compatibility check passed: minimatch ${minimatchVersions.join(', ')} -> patched brace-expansion 5.0.9; jayson 4.3.0 -> security-patched stream-json 1.9.1`,
+  `Dependency compatibility check passed: minimatch ${minimatchVersions.join(', ')} -> patched brace-expansion 5.0.12; jayson 4.3.0 -> security-patched stream-json 1.9.1`,
 );

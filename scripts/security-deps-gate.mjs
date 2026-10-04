@@ -15,6 +15,19 @@ const developmentAuditAllowlist = new Map([
         'No patched release exists. The affected path is limited to development-only Hardhat tooling.',
     },
   ],
+  [
+    'GHSA-vfj7-8cjw-p6xm',
+    {
+      moduleName: 'braces',
+      severity: 'high',
+      versions: new Set(['3.0.3']),
+      patchedVersions: '<0.0.0',
+      owner: 'Cotsel security maintainers',
+      expiresOn: '2026-10-18',
+      reason:
+        'No patched release exists. The affected path is limited to development-only file watching and test tooling.',
+    },
+  ],
 ]);
 
 const locallyPatchedAdvisories = new Map([

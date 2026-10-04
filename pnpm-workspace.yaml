@@ -20,11 +20,14 @@ minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   # Security fix for GHSA-7q85-xj36-vmfc. Keep the exception version-specific.
   - adm-zip@0.6.1
-  # Security fix for GHSA-mh99-v99m-4gvg. Keep the exception version-specific.
-  - brace-expansion@5.0.9
-  # Security fixes for GHSA-7p8r-x3mc-p8w7, GHSA-qw65-cvwx-89v3 and
-  # GHSA-58mr-gqgx-xq4g. Keep the exception version-specific.
-  - fast-uri@3.1.7
+  # Security fixes for GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7, and
+  # GHSA-6j4f-fj2g-mc7p. Keep the exception version-specific.
+  - brace-expansion@5.0.12
+  # Security fix for GHSA-hrr3-gc8f-f4qj. Keep the exception version-specific.
+  - fast-uri@3.1.8
+  # Security fixes for the axios advisories remediated in 1.20.0. Keep the
+  # exception version-specific.
+  - axios@1.20.0
   # Security fixes for GHSA-c83g-rgw3-j3cx and GHSA-73wf-gq98-2v4g.
   - browserslist@4.28.7
   # Security fix for GHSA-p498-v437-472g.
@@ -47,15 +50,15 @@ overrides:
   '@humanfs/node': 0.16.8
   '@protobufjs/utf8': 1.1.1
   adm-zip: 0.6.1
-  axios: 1.18.0
+  axios: 1.20.0
   bn.js: 4.12.3
   body-parser@>=2 <2.3.0: 2.3.0
   # Route every legacy consumer through the patched 5.x implementation.
   # The package patch preserves the callable CommonJS API expected by 1.x and 2.x consumers.
-  brace-expansion: 5.0.9
+  brace-expansion: 5.0.12
   browserslist: 4.28.7
   cookie: 0.7.0
-  fast-uri: 3.1.7
+  fast-uri: 3.1.8
   follow-redirects: 1.16.0
   form-data@>=4.0.0 <4.0.6: 4.0.6
   # Dedupe graphql to a single instance. @subsquid/openreader builds the schema
@@ -80,6 +83,6 @@ overrides:
 
 patchedDependencies:
   '@subsquid/typeorm-store@1.9.2': patches/@subsquid__typeorm-store@1.9.2.patch
-  brace-expansion@5.0.9: patches/brace-expansion@5.0.9.patch
+  brace-expansion@5.0.12: patches/brace-expansion@5.0.12.patch
   stream-json@1.9.1: patches/stream-json@1.9.1.patch
 preferWorkspacePackages: true
