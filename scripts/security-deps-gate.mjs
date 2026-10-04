@@ -15,6 +15,9 @@ const developmentAuditAllowlist = new Map([
         'No patched release exists. The affected path is limited to development-only Hardhat tooling.',
     },
   ],
+]);
+
+const locallyPatchedAdvisories = new Map([
   [
     'GHSA-vfj7-8cjw-p6xm',
     {
@@ -22,15 +25,9 @@ const developmentAuditAllowlist = new Map([
       severity: 'high',
       versions: new Set(['3.0.3']),
       patchedVersions: '<0.0.0',
-      owner: 'Cotsel security maintainers',
-      expiresOn: '2026-10-18',
-      reason:
-        'No patched release exists. The affected path is limited to development-only file watching and test tooling.',
+      patchFile: 'patches/braces@3.0.3.patch',
     },
   ],
-]);
-
-const locallyPatchedAdvisories = new Map([
   [
     'GHSA-528h-pc64-c93x',
     {
@@ -186,7 +183,7 @@ if (auditAllReport) {
   for (const advisory of patchedAdvisories) {
     const patch = locallyPatchedAdvisories.get(advisoryId(advisory));
     console.log(
-      `Accepted locally patched advisory: ${auditDescription(advisory)}; upstream-commit=${patch.upstreamCommit}; compatibility-check=passed`,
+      `Accepted locally patched advisory: ${auditDescription(advisory)}; patch-source=${patch.upstreamCommit ?? patch.patchFile}; compatibility-check=passed`,
     );
   }
 
