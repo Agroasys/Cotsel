@@ -31,6 +31,9 @@ describe('ricardian router auth scope', () => {
       getHash: (_req: Request, res: Response) => {
         res.status(200).json({ success: true, data: { hash: 'ok' } });
       },
+      getTenantDocument: (_req: Request, res: Response) => {
+        res.status(200).json({ success: true, data: { document: 'ok' } });
+      },
     } as unknown as RicardianController;
 
     app.use(
@@ -54,6 +57,13 @@ describe('ricardian router auth scope', () => {
 
   test('unauthenticated read route is rejected', async () => {
     const response = await fetch(`${baseUrl}/api/ricardian/v1/hash/${'a'.repeat(64)}`);
+    expect(response.status).toBe(401);
+  });
+
+  test('unauthenticated tenant document route is rejected', async () => {
+    const response = await fetch(
+      `${baseUrl}/api/ricardian/v1/hash/${'a'.repeat(64)}/document?tenantId=platform-main`,
+    );
     expect(response.status).toBe(401);
   });
 

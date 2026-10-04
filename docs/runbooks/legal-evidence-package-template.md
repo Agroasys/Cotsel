@@ -80,8 +80,11 @@ Record:
 ### Step 2: Verify Hash Record in Ricardian API
 
 ```bash
-curl -fsS "http://127.0.0.1:${RICARDIAN_PORT:-3100}/api/ricardian/v1/hash/<hash>"
+curl -fsS "http://127.0.0.1:${RICARDIAN_PORT:-3100}/api/ricardian/v1/hash/<hash>/document?tenantId=<tenant>"
 ```
+
+Use the platform service key id that registered the document as `<tenant>`. The generic
+`/hash/<hash>` lookup returns only a minimal attestation.
 
 Confirm:
 

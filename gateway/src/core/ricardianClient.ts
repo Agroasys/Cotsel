@@ -7,6 +7,7 @@ import type { DownstreamServiceOrchestrator } from './serviceOrchestrator';
 export interface RicardianDocumentRecord {
   id: string;
   requestId: string;
+  tenantId: string;
   documentRef: string;
   hash: string;
   rulesVersion: string;
@@ -17,6 +18,8 @@ export interface RicardianDocumentRecord {
 
 export interface RicardianDocumentRegistration {
   requestId: string;
+  /** Authenticated platform service key id that owns the document. */
+  tenantId: string;
   documentRef: string;
   terms: Record<string, unknown>;
   metadata: Record<string, unknown>;
@@ -49,6 +52,7 @@ function isDocumentRecord(value: unknown): value is RicardianDocumentRecord {
     typeof (value as RicardianDocumentRecord).hash === 'string' &&
     typeof (value as RicardianDocumentRecord).documentRef === 'string' &&
     typeof (value as RicardianDocumentRecord).requestId === 'string' &&
+    typeof (value as RicardianDocumentRecord).tenantId === 'string' &&
     typeof (value as RicardianDocumentRecord).createdAt === 'string',
   );
 }
@@ -71,17 +75,22 @@ export class RicardianClient {
     this.orchestrator = orchestratorOrBaseUrl;
   }
 
-  async getDocument(hash: string): Promise<RicardianDocumentRecord> {
+  /**
+   * Complete canonical terms and metadata, scoped to the owning tenant. Ricardian answers 404 for
+   * another tenant's document, exactly as for an unknown hash.
+   */
+  async getDocument(hash: string, tenantId: string): Promise<RicardianDocumentRecord> {
     try {
       const response = this.orchestrator
         ? await this.orchestrator.fetch('ricardian', {
             method: 'GET',
-            path: `/api/ricardian/v1/hash/${encodeURIComponent(hash)}`,
+            path: `/api/ricardian/v1/hash/${encodeURIComponent(hash)}/document`,
+            query: { tenantId },
             readOnly: true,
             authenticated: true,
             operation: 'ricardian:getDocument',
           })
-        : await this.fetchLegacy(hash);
+        : await this.fetchLegacy(hash, tenantId);
       const payload = await parseOptionalJson(response);
 
       if (response.status === 404) {
@@ -179,7 +188,7 @@ export class RicardianClient {
     }
   }
 
-  private async fetchLegacy(hash: string): Promise<Response> {
+  private async fetchLegacy(hash: string, tenantId: string): Promise<Response> {
     if (!this.baseUrl) {
       throw new GatewayError(503, 'UPSTREAM_UNAVAILABLE', 'Ricardian service is not configured', {
         upstream: 'ricardian',
@@ -190,7 +199,8 @@ export class RicardianClient {
     const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs ?? 5_000);
 
     try {
-      return await fetch(`${this.baseUrl}/hash/${encodeURIComponent(hash)}`, {
+      const query = new URLSearchParams({ tenantId });
+      return await fetch(`${this.baseUrl}/hash/${encodeURIComponent(hash)}/document?${query}`, {
         method: 'GET',
         signal: controller.signal,
       });

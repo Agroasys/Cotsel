@@ -11,6 +11,7 @@ import { DocumentConflictError } from '../src/errors';
 
 const input = {
   requestId: 'req-retry',
+  tenantId: 'platform-main',
   documentRef: 'doc://trade-1',
   hash: 'a'.repeat(64),
   rulesVersion: 'RICARDIAN_CANONICAL_V1',
@@ -21,6 +22,7 @@ const input = {
 const existingRow = {
   id: 7,
   request_id: 'req-original',
+  tenant_id: input.tenantId,
   document_ref: input.documentRef,
   hash: input.hash,
   rules_version: input.rulesVersion,
@@ -69,6 +71,17 @@ describe('Ricardian registry append-only writes', () => {
         },
       ],
     });
+
+    await expect(createRicardianHash(input)).rejects.toBeInstanceOf(DocumentConflictError);
+  });
+
+  test.each([
+    ['another tenant', 'platform-other'],
+    ['an untenanted legacy row', null],
+  ])('never hands %s registration to a different tenant', async (_label, existingTenant) => {
+    mockPoolQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ ...existingRow, tenant_id: existingTenant }] });
 
     await expect(createRicardianHash(input)).rejects.toBeInstanceOf(DocumentConflictError);
   });

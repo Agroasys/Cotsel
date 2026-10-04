@@ -137,10 +137,14 @@ export class EvidenceReadService implements EvidenceReadReader {
     const queriedAt = this.now().toISOString();
     let settlementHashMatchesTrade: boolean | null = null;
     let settlementLookupDegradedReason: string | undefined;
+    // Ricardian releases full terms only to the platform that registered them: the
+    // authenticated service key that created this trade's settlement handoff.
+    let documentTenantId: string | null = null;
 
     if (trade.settlement) {
       try {
         const settlementHandoff = await this.settlementStore.getHandoff(trade.settlement.handoffId);
+        documentTenantId = settlementHandoff?.sourceApiKeyId ?? null;
         settlementHashMatchesTrade = settlementHandoff?.ricardianHash
           ? settlementHandoff.ricardianHash.toLowerCase() === trade.ricardianHash.toLowerCase()
           : null;
@@ -153,7 +157,18 @@ export class EvidenceReadService implements EvidenceReadReader {
     }
 
     try {
-      const document = await this.ricardianClient.getDocument(trade.ricardianHash);
+      if (!documentTenantId) {
+        throw new GatewayError(
+          503,
+          'UPSTREAM_UNAVAILABLE',
+          'Ricardian document owner is unresolved for this trade',
+          { reason: 'ricardian_tenant_unresolved' },
+        );
+      }
+      const document = await this.ricardianClient.getDocument(
+        trade.ricardianHash,
+        documentTenantId,
+      );
       const tradeHashMatchesDocument =
         document.hash.toLowerCase() === trade.ricardianHash.toLowerCase();
       const responseDegradedReason = combineDegradedReasons([settlementLookupDegradedReason]);
@@ -199,7 +214,10 @@ export class EvidenceReadService implements EvidenceReadReader {
           sourceFreshAt: null,
           queriedAt,
           available: false,
-          degradedReason: degradedReason(error, 'Ricardian service is unavailable'),
+          degradedReason: combineDegradedReasons([
+            settlementLookupDegradedReason,
+            degradedReason(error, 'Ricardian service is unavailable'),
+          ]),
         },
       };
     }

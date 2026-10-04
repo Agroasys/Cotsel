@@ -129,3 +129,30 @@ describe('ricardian nonce store config', () => {
     });
   });
 });
+
+describe('ricardian tenant delegation config', () => {
+  const API_KEYS = JSON.stringify([
+    { id: 'cotsel-gateway', secret: 'gateway-secret', active: true },
+    { id: 'other-service', secret: 'other-secret', active: true },
+  ]);
+
+  test('delegates to no caller unless a deployment names one', () => {
+    withEnv({ API_KEYS_JSON: API_KEYS, TENANT_DELEGATION_API_KEYS: undefined }, () => {
+      expect(loadConfigModule().loadConfig().tenantDelegationApiKeys).toEqual([]);
+    });
+  });
+
+  test('accepts a delegating caller that is a configured API key', () => {
+    withEnv({ API_KEYS_JSON: API_KEYS, TENANT_DELEGATION_API_KEYS: ' cotsel-gateway ' }, () => {
+      expect(loadConfigModule().loadConfig().tenantDelegationApiKeys).toEqual(['cotsel-gateway']);
+    });
+  });
+
+  test('rejects a delegating caller Ricardian cannot authenticate', () => {
+    withEnv({ API_KEYS_JSON: API_KEYS, TENANT_DELEGATION_API_KEYS: 'unknown-caller' }, () => {
+      expect(() => loadConfigModule()).toThrow(
+        'TENANT_DELEGATION_API_KEYS names unknown-caller, which is not a configured API key',
+      );
+    });
+  });
+});

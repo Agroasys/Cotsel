@@ -135,6 +135,14 @@ it is held in reviewed configuration, covered by the reviewed config digest,
 through `treasury_gateway_api_key_id`. Narrow it when the delegating caller
 changes; never widen it to the whole internal-mutation key set.
 
+`TENANT_DELEGATION_API_KEYS` names the one caller allowed to assert a Ricardian
+tenant other than its own principal. The gateway registers and reads documents
+for the platform key it authenticated, under its own gateway-to-ricardian key.
+Any other Ricardian caller is bound to its own key id and receives `403` when it
+names another tenant. The value comes from `ricardian_gateway_api_key_id`, is a
+key identifier rather than a credential, and must match the id stored in
+`gateway-to-ricardian-auth`.
+
 The Oracle runs as its own ECS service and task role. The gateway task cannot
 read the Oracle database credential or any Oracle signing material, and only
 the Oracle task role can call `kms:GetPublicKey` and `kms:Sign` on the Oracle key.
