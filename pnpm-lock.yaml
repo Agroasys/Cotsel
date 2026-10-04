@@ -9,13 +9,13 @@ overrides:
   '@humanfs/node': 0.16.8
   '@protobufjs/utf8': 1.1.1
   adm-zip: 0.6.1
-  axios: 1.18.0
+  axios: 1.20.0
   bn.js: 4.12.3
   body-parser@>=2 <2.3.0: 2.3.0
-  brace-expansion: 5.0.9
+  brace-expansion: 5.0.12
   browserslist: 4.28.7
   cookie: 0.7.0
-  fast-uri: 3.1.7
+  fast-uri: 3.1.8
   follow-redirects: 1.16.0
   form-data@>=4.0.0 <4.0.6: 4.0.6
   graphql: 15.10.2
@@ -37,9 +37,9 @@ patchedDependencies:
   '@subsquid/typeorm-store@1.9.2':
     hash: b7b54b502476b53a21298d67c7ada85e598c81122c968d7785f7f80caf8b4b88
     path: patches/@subsquid__typeorm-store@1.9.2.patch
-  brace-expansion@5.0.9:
-    hash: 50e3844f4c5ab95c6631a3d8a3c546eb365760fb3202d1a6e93f1dfc6a95377d
-    path: patches/brace-expansion@5.0.9.patch
+  brace-expansion@5.0.12:
+    hash: 113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670
+    path: patches/brace-expansion@5.0.12.patch
   stream-json@1.9.1:
     hash: fe09015178d7af091bf29d9da9575fa6e124fd51bbbae0cca31d9a0fd59b5ee3
     path: patches/stream-json@1.9.1.patch
@@ -4689,10 +4689,10 @@ packages:
       }
     engines: { node: '>= 0.4' }
 
-  axios@1.18.0:
+  axios@1.20.0:
     resolution:
       {
-        integrity: sha512-E32NzpYKp++W7XRe52rHiXV2ehxmh3wbdgO7MHeFM+vqxLBYHzt0ElkiImtOBxtOmyp0yoC8C6uESVV84Y2/hw==,
+        integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==,
       }
 
   babel-jest@30.5.2:
@@ -4865,10 +4865,10 @@ packages:
       }
     engines: { node: '>=10' }
 
-  brace-expansion@5.0.9:
+  brace-expansion@5.0.12:
     resolution:
       {
-        integrity: sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==,
+        integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==,
       }
     engines: { node: 20 || >=22 }
 
@@ -6288,10 +6288,10 @@ packages:
         integrity: sha512-wpYMUmFu5f00Sm0cj2pfivpmawLZ0NKdviQ4w9zJeR8JVtOpOxHmLaJuj0vxvGqMJQWyP/COUkF75/57OKyRag==,
       }
 
-  fast-uri@3.1.7:
+  fast-uri@3.1.8:
     resolution:
       {
-        integrity: sha512-dOvZVzjdZdz7phd9v6jCbwxrBW3fK6n8Rc0CtdmM4bumzMnxywBYhuph6J819RRw/ku+rLbelwfMunktuzVVHg==,
+        integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==,
       }
 
   fastest-levenshtein@1.0.16:
@@ -14179,7 +14179,7 @@ snapshots:
   ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.7
+      fast-uri: 3.1.8
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -14319,7 +14319,7 @@ snapshots:
     dependencies:
       possible-typed-array-names: 1.1.0
 
-  axios@1.18.0:
+  axios@1.20.0:
     dependencies:
       follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.6
@@ -14475,7 +14475,7 @@ snapshots:
       widest-line: 3.1.0
       wrap-ansi: 7.0.0
 
-  brace-expansion@5.0.9(patch_hash=50e3844f4c5ab95c6631a3d8a3c546eb365760fb3202d1a6e93f1dfc6a95377d):
+  brace-expansion@5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670):
     dependencies:
       balanced-match: 4.0.4
 
@@ -15417,7 +15417,7 @@ snapshots:
 
   fast-stable-stringify@1.0.0: {}
 
-  fast-uri@3.1.7: {}
+  fast-uri@3.1.8: {}
 
   fastest-levenshtein@1.0.16: {}
 
@@ -15729,7 +15729,7 @@ snapshots:
       '@ethersproject/bytes': 5.8.0
       '@ethersproject/units': 5.8.0
       '@solidity-parser/parser': 0.20.2
-      axios: 1.18.0
+      axios: 1.20.0
       brotli-wasm: 2.0.1
       chalk: 4.1.2
       cli-table3: 0.6.5
@@ -16774,19 +16774,19 @@ snapshots:
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 5.0.9(patch_hash=50e3844f4c5ab95c6631a3d8a3c546eb365760fb3202d1a6e93f1dfc6a95377d)
+      brace-expansion: 5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670)
 
   minimatch@3.1.5:
     dependencies:
-      brace-expansion: 5.0.9(patch_hash=50e3844f4c5ab95c6631a3d8a3c546eb365760fb3202d1a6e93f1dfc6a95377d)
+      brace-expansion: 5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670)
 
   minimatch@5.1.9:
     dependencies:
-      brace-expansion: 5.0.9(patch_hash=50e3844f4c5ab95c6631a3d8a3c546eb365760fb3202d1a6e93f1dfc6a95377d)
+      brace-expansion: 5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670)
 
   minimatch@9.0.9:
     dependencies:
-      brace-expansion: 5.0.9(patch_hash=50e3844f4c5ab95c6631a3d8a3c546eb365760fb3202d1a6e93f1dfc6a95377d)
+      brace-expansion: 5.0.12(patch_hash=113905b55a1cae20f1427e4caed8ca730232a5a0f2b00dddea5a362aa1f63670)
 
   minimist@1.2.8: {}
 
