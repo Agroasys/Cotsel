@@ -30,7 +30,7 @@ profile is reported as `status: "disabled"` with `required: false`, never as `ok
 | Oracle   | `GET /api/oracle/health`                | `GET /api/oracle/ready`                | `postgres`, `chain-rpc`, `oracle-signer`, `indexer-graphql`, `reconciliation-containment` (reported `disabled` only outside staging and production)                                            |
 | Treasury | `GET /api/treasury/v1/health`           | `GET /api/treasury/v1/ready`           | `postgres`, `reconciliation-reader` when a reconciliation database is configured, then chain-evidence ingestion freshness ([treasury-ingestion-freshness.md](treasury-ingestion-freshness.md)) |
 | Relayer  | `GET /api/relayer/health`               | `GET /api/relayer/ready`               | `kms-signer`, and `replay-store` when Redis replay protection is configured                                                                                                                    |
-| Indexer  | `GET /health` on `READINESS_PORT`       | `GET /ready` on `READINESS_PORT`       | `startup-preflight`, `chain-rpc`, `quarantine` (also proves the database), `checkpoint-freshness` ([indexer startup gates](#indexer-startup-gates))                                            |
+| Indexer  | `GET /health` on `READINESS_PORT`       | `GET /ready` on `READINESS_PORT`       | `startup-preflight`, `chain-rpc`, `quarantine` (also proves the database), `checkpoint-freshness`, `checkpoint-on-chain` ([indexer startup gates](#indexer-startup-gates))                     |
 
 Dependency-specific rules:
 
@@ -73,6 +73,10 @@ Dependency-specific rules:
   still catching up from `START_BLOCK` is correctly not ready. The GraphQL
   service reads the same database, so a red indexer readiness means its answers
   are stale too.
+- **Indexer `checkpoint-on-chain`:** the stored checkpoint's block hash still
+  matches the selected RPC at that height. The startup gate proves this once;
+  this check catches an RPC moved to another fork, or a database restored from
+  one at the same height, while the process keeps running and the lag is zero.
 
 ### Indexer startup gates
 
@@ -130,7 +134,8 @@ time. Record the candidate identity, the probe responses, and timestamps.
    security group, revoke `kms:GetPublicKey` on the signer key, stop the
    indexer GraphQL service, stop the standalone relayer, revoke the
    reconciliation reader's database access, or block the indexer pipeline's
-   RPC egress (its `checkpoint-freshness` and `chain-rpc` go red).
+   RPC egress (its `chain-rpc`, `checkpoint-freshness`, and
+   `checkpoint-on-chain` go red).
 3. **Observe.** Within one probe interval the affected service's readiness
    returns `503`, names the dependency with `status: "unavailable"`, and shows
    no error text. Liveness for the same service stays `200` and ECS does not

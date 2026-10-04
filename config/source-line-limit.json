@@ -49,7 +49,7 @@
     "gateway/tests/settlementCallbackDispatcher.test.ts": 656,
     "gateway/tests/settlementRoutes.contract.test.ts": 1647,
     "gateway/tests/treasuryRoutes.contract.test.ts": 947,
-    "indexer/src/main.ts": 2803,
+    "indexer/src/main.ts": 2804,
     "oracle/src/core/trigger-manager.ts": 623,
     "scripts/arch-roadmap-sync.mjs": 717,
     "scripts/base-sepolia-pilot-validation.sh": 760,

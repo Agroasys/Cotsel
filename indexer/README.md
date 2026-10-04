@@ -87,7 +87,8 @@ These findings are tracked upstream in [subsquid/squid-sdk#547](https://github.c
 
 The pipeline serves `GET /health` (liveness) and `GET /ready` (readiness) on
 `READINESS_PORT` (default `8090`). Readiness fails on a dead or wrong-chain
-RPC, an unresolved quarantined log, or a checkpoint more than
+RPC, an unresolved quarantined log, a checkpoint whose block hash no longer
+matches the chain, or a checkpoint more than
 `READINESS_MAX_CHECKPOINT_LAG_BLOCKS` (default `150`) behind
 `head - FINALITY_CONFIRMATION_BLOCKS`. Startup also fails when the RPC cannot
 serve the `finalized` block tag or the stored checkpoint is not on the

@@ -191,6 +191,9 @@ test('checkpoint lag excludes the configured confirmations and never goes negati
   assert.equal(checkpointLagBlocks(1000n, 999, 10), 0n);
 });
 
+// A chain whose block 985 matches the default checkpoint below.
+const CHAIN = { head: 1000, blocks: { '0x3d9': header(985, HASH_A) } };
+
 function readinessDeps(url, overrides = {}) {
   return {
     startupComplete: () => true,
@@ -200,6 +203,7 @@ function readinessDeps(url, overrides = {}) {
     countUnresolvedQuarantine: async () => 0,
     finalityConfirmationBlocks: 10,
     maxCheckpointLagBlocks: 20,
+    startBlock: 10,
     rpcTimeoutMs: 1000,
     ...overrides,
   };
@@ -210,7 +214,7 @@ function statusOf(result, name) {
 }
 
 test('readiness is green when every dependency is safe', async () => {
-  await withRpc({ head: 1000 }, async (url) => {
+  await withRpc(CHAIN, async (url) => {
     const result = await createIndexerReadinessCheck(readinessDeps(url))();
     assert.equal(result.ready, true);
     assert.deepEqual(
@@ -220,13 +224,14 @@ test('readiness is green when every dependency is safe', async () => {
         ['chain-rpc', 'ok'],
         ['quarantine', 'ok'],
         ['checkpoint-freshness', 'ok'],
+        ['checkpoint-on-chain', 'ok'],
       ],
     );
   });
 });
 
 test('readiness stays red until startup gates pass', async () => {
-  await withRpc({ head: 1000 }, async (url) => {
+  await withRpc(CHAIN, async (url) => {
     const result = await createIndexerReadinessCheck(
       readinessDeps(url, { startupComplete: () => false }),
     )();
@@ -236,7 +241,7 @@ test('readiness stays red until startup gates pass', async () => {
 });
 
 test('a stale checkpoint fails readiness', async () => {
-  await withRpc({ head: 1000 }, async (url) => {
+  await withRpc(CHAIN, async (url) => {
     const result = await createIndexerReadinessCheck(
       readinessDeps(url, { readCheckpoint: async () => ({ height: 900, hash: HASH_A }) }),
     )();
@@ -247,11 +252,31 @@ test('a stale checkpoint fails readiness', async () => {
 });
 
 test('a missing checkpoint fails readiness', async () => {
-  await withRpc({ head: 1000 }, async (url) => {
+  await withRpc(CHAIN, async (url) => {
     const result = await createIndexerReadinessCheck(
       readinessDeps(url, { readCheckpoint: async () => null }),
     )();
     assert.equal(statusOf(result, 'checkpoint-freshness'), 'unavailable');
+  });
+});
+
+test('a same-height checkpoint from another fork fails readiness after startup', async () => {
+  await withRpc({ head: 1000, blocks: { '0x3d9': header(985, HASH_B) } }, async (url) => {
+    const result = await createIndexerReadinessCheck(readinessDeps(url))();
+    assert.equal(result.ready, false);
+    assert.equal(statusOf(result, 'startup-preflight'), 'ok');
+    assert.equal(statusOf(result, 'checkpoint-freshness'), 'ok');
+    assert.equal(statusOf(result, 'checkpoint-on-chain'), 'unavailable');
+    assert.doesNotMatch(JSON.stringify(result), /hash does not match/);
+  });
+});
+
+test('an initial checkpoint is not mistaken for fork drift', async () => {
+  await withRpc(CHAIN, async (url) => {
+    const result = await createIndexerReadinessCheck(
+      readinessDeps(url, { readCheckpoint: async () => ({ height: 985, hash: '0x' }) }),
+    )();
+    assert.equal(statusOf(result, 'checkpoint-on-chain'), 'ok');
   });
 });
 
@@ -264,6 +289,7 @@ test('a dead RPC fails readiness without leaking the endpoint', async () => {
   assert.equal(result.ready, false);
   assert.equal(statusOf(result, 'chain-rpc'), 'unavailable');
   assert.equal(statusOf(result, 'checkpoint-freshness'), 'unavailable');
+  assert.equal(statusOf(result, 'checkpoint-on-chain'), 'unavailable');
   assert.doesNotMatch(JSON.stringify(result), /127\.0\.0\.1/);
 });
 
@@ -275,7 +301,7 @@ test('an RPC that switched chains fails readiness', async () => {
 });
 
 test('an unresolved quarantine or unreachable database fails readiness', async () => {
-  await withRpc({ head: 1000 }, async (url) => {
+  await withRpc(CHAIN, async (url) => {
     const quarantined = await createIndexerReadinessCheck(
       readinessDeps(url, { countUnresolvedQuarantine: async () => 2 }),
     )();

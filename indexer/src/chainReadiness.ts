@@ -8,7 +8,8 @@ import { callRpc } from './rpc-preflight';
  * projection (no finality tag, or a stored checkpoint that is not on this
  * chain). Readiness reports, while running, whether the projection may be
  * trusted: the RPC still serves the configured chain, the checkpoint is within
- * the allowed lag of the finalized head, and no poison log is quarantined.
+ * the allowed lag of the finalized head and still on that chain, and no poison
+ * log is quarantined.
  */
 
 export const PROCESSOR_STATUS_TABLE = 'squid_processor.status';
@@ -166,6 +167,7 @@ export interface IndexerReadinessDependencies {
   countUnresolvedQuarantine: () => Promise<number>;
   finalityConfirmationBlocks: number;
   maxCheckpointLagBlocks: number;
+  startBlock: number;
   rpcTimeoutMs?: number;
   timeoutMs?: number;
 }
@@ -248,6 +250,20 @@ export function createIndexerReadinessCheck(
             if (lag > BigInt(dependencies.maxCheckpointLagBlocks)) {
               throw new ChainReadinessError('Processor checkpoint is stale');
             }
+          },
+        },
+        {
+          // The startup gate only proves the checkpoint at boot. An RPC moved to
+          // another fork, or a database restored from one at the same height,
+          // must turn readiness red too, even when the lag is zero.
+          name: 'checkpoint-on-chain',
+          check: async () => {
+            await assertCheckpointOnChain({
+              rpcUrl: requireRpcUrl(dependencies),
+              checkpoint: await dependencies.readCheckpoint(),
+              startBlock: dependencies.startBlock,
+              timeoutMs: rpcTimeoutMs,
+            });
           },
         },
       ],

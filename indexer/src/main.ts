@@ -926,6 +926,7 @@ async function bootstrap(): Promise<void> {
       countUnresolvedQuarantine: () => quarantine.countUnresolved(),
       finalityConfirmationBlocks: config.finalityConfirmationBlocks,
       maxCheckpointLagBlocks: config.readinessMaxCheckpointLagBlocks,
+      startBlock: config.startBlock,
       rpcTimeoutMs: config.rpcRequestTimeoutMs ?? undefined,
     }),
   });
