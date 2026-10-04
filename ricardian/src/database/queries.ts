@@ -11,6 +11,7 @@ const serviceAuthNonceStore = createPostgresNonceStore({
 
 export async function createRicardianHash(data: {
   requestId: string;
+  tenantId: string;
   documentRef: string;
   hash: string;
   rulesVersion: string;
@@ -20,17 +21,19 @@ export async function createRicardianHash(data: {
   const inserted = await pool.query<RicardianHashRow>(
     `INSERT INTO ricardian_hashes (
         request_id,
+        tenant_id,
         document_ref,
         hash,
         rules_version,
         canonical_json,
         metadata
-     ) VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
      ON CONFLICT (hash, document_ref)
      DO NOTHING
      RETURNING *`,
     [
       data.requestId,
+      data.tenantId,
       data.documentRef,
       data.hash,
       data.rulesVersion,
@@ -51,8 +54,10 @@ export async function createRicardianHash(data: {
     [data.hash, data.documentRef],
   );
   const row = existing.rows[0];
+  // A different tenant (or an untenanted legacy row) never inherits an existing registration.
   const isIdentical =
-    row?.rules_version === data.rulesVersion &&
+    row?.tenant_id === data.tenantId &&
+    row.rules_version === data.rulesVersion &&
     row.canonical_json === data.canonicalJson &&
     isDeepStrictEqual(row.metadata, data.metadata);
 
@@ -68,9 +73,25 @@ export async function getRicardianHash(hash: string): Promise<RicardianHashRow |
     `SELECT *
      FROM ricardian_hashes
      WHERE hash = $1
-     ORDER BY created_at DESC
+     ORDER BY created_at ASC, id ASC
      LIMIT 1`,
     [hash],
+  );
+
+  return result.rows[0] || null;
+}
+
+export async function getTenantRicardianHash(
+  hash: string,
+  tenantId: string,
+): Promise<RicardianHashRow | null> {
+  const result = await pool.query<RicardianHashRow>(
+    `SELECT *
+     FROM ricardian_hashes
+     WHERE hash = $1 AND tenant_id = $2
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1`,
+    [hash, tenantId],
   );
 
   return result.rows[0] || null;

@@ -72,12 +72,18 @@ Expected output format:
 - Create hash:
   - `POST /api/ricardian/v1/hash`
   - Request payload fields:
-    - `requestId?`, `documentRef`, `terms`, `metadata?`
+    - `requestId?`, `tenantId?`, `documentRef`, `terms`, `metadata?`
+    - The tenant defaults to the authenticated principal's key id. Naming another tenant requires the caller to be listed in `TENANT_DELEGATION_API_KEYS` (otherwise `403 TenantMismatch`).
+    - The tenant is stored with the row but excluded from the hashed canonical payload.
   - Success response includes:
-    - `id`, `requestId`, `documentRef`, `hash`, `rulesVersion`, `canonicalJson`, `metadata`, `createdAt`
-- Fetch hash:
+    - `id`, `requestId`, `tenantId`, `documentRef`, `hash`, `rulesVersion`, `canonicalJson`, `metadata`, `createdAt`
+- Attest hash (generic lookup):
   - `GET /api/ricardian/v1/hash/:hash`
-  - Returns the same typed record shape.
+  - Returns only `hash`, `rulesVersion`, and `registeredAt` (earliest registration).
+- Fetch complete document (owning tenant only):
+  - `GET /api/ricardian/v1/hash/:hash/document[?tenantId=<tenant>]`
+  - The tenant resolves exactly as for registration: the caller's own key id, or a named tenant for a delegating caller only.
+  - Returns the full typed record. Another tenant, or an untenanted legacy row, returns `404`.
 
 Controller behavior source: `ricardian/src/api/controller.ts`.
 
@@ -94,11 +100,12 @@ Controller behavior source: `ricardian/src/api/controller.ts`.
   - `ricardian/src/database/documentStore.ts#createDocument`
     - Wraps `ricardian/src/database/queries.ts#createRicardianHash` with retry and typed errors.
   - Persists into `ricardian_hashes` with uniqueness on `(hash, document_ref)`.
-  - Conflict behavior: update `metadata` and return row.
+  - Conflict behavior: an identical retry by the same tenant returns the existing row; any other difference, including a different or missing tenant, is `409 DOCUMENT_REGISTRATION_CONFLICT`. Rows are never updated.
 - Read path:
   - `ricardian/src/database/documentStore.ts#getDocument`
     - Wraps `ricardian/src/database/queries.ts#getRicardianHash` with retry, not-found handling, and integrity verification.
-  - Lookup by `hash`, latest row first.
+  - `getDocument`: lookup by `hash`, earliest row first (attestation).
+  - `getTenantDocument`: lookup by `hash` and `tenant_id`, latest row first (complete document).
   - Every successful read verifies SHA-256 integrity: `sha256(rulesVersion + ":" + canonicalJson)` must equal the stored hash.
 - Retry boundaries (hardened defaults, module constants):
   - `MAX_RETRIES = 3` (4 total attempts)
@@ -128,7 +135,7 @@ Backup and restore are covered by the shared AWS Postgres recovery runbook:
 
 For legal/audit retrieval scenarios (e.g. dispute review or regulatory inquiry), the complete integrity chain is:
 
-1. Retrieve the row via `GET /api/ricardian/v1/hash/:hash`.
+1. Retrieve the complete row via `GET /api/ricardian/v1/hash/:hash/document?tenantId=<tenant>`, signed as the delegating gateway key and naming the platform service key id that registered it (the gateway records it as the handoff `sourceApiKeyId`).
 2. Run the integrity verification procedure above to confirm the stored `hash` matches the `canonicalJson` and `rulesVersion`.
 3. Run `scripts/reproduce-ricardian-hash.mjs` with the original payload to confirm the `canonicalJson` and `hash` match the original inputs.
 4. Cross-reference against the on-chain `ricardianHash` emitted at escrow lock (contract event).

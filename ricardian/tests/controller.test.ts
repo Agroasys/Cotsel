@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 import { RicardianController } from '../src/api/controller';
-import type { RicardianHashRequest } from '../src/types';
+import type { RicardianRegistrationRequest } from '../src/types';
 import { buildRicardianHash } from '../src/utils/hash';
-import { createDocument, getDocument } from '../src/database/documentStore';
+import { createDocument, getDocument, getTenantDocument } from '../src/database/documentStore';
 import {
   DocumentConflictError,
   DocumentIntegrityError,
@@ -18,7 +18,12 @@ jest.mock('../src/utils/hash', () => ({
 jest.mock('../src/database/documentStore', () => ({
   createDocument: jest.fn(),
   getDocument: jest.fn(),
+  getTenantDocument: jest.fn(),
 }));
+
+// Controller unit tests run with service auth off, where the tenant must be named explicitly.
+// Principal binding and delegation are covered in tenantBinding and tenantBoundary tests.
+const LOCAL_TENANT_OPTIONS = { authEnabled: false, delegationApiKeyIds: [] };
 
 type MockedResponse = Response & {
   status: jest.Mock;
@@ -27,11 +32,11 @@ type MockedResponse = Response & {
 
 function asHashRequest(
   body: unknown,
-): Request<Record<string, never>, Record<string, never>, RicardianHashRequest> {
+): Request<Record<string, never>, Record<string, never>, RicardianRegistrationRequest> {
   return { body } as unknown as Request<
     Record<string, never>,
     Record<string, never>,
-    RicardianHashRequest
+    RicardianRegistrationRequest
   >;
 }
 
@@ -43,7 +48,7 @@ function createMockResponse(): MockedResponse {
 }
 
 describe('RicardianController.createHash', () => {
-  const controller = new RicardianController();
+  const controller = new RicardianController(LOCAL_TENANT_OPTIONS);
   const mockedBuildRicardianHash = buildRicardianHash as jest.MockedFunction<
     typeof buildRicardianHash
   >;
@@ -58,7 +63,7 @@ describe('RicardianController.createHash', () => {
       throw new Error('documentRef is required');
     });
 
-    const req = asHashRequest({});
+    const req = asHashRequest({ tenantId: 'platform-main' });
     const res = createMockResponse();
 
     await controller.createHash(req, res);
@@ -85,7 +90,11 @@ describe('RicardianController.createHash', () => {
 
     mockedCreateDocument.mockRejectedValue(new DocumentPersistenceError('db unavailable'));
 
-    const req = asHashRequest({ documentRef: 'doc://ok', terms: { ok: true } });
+    const req = asHashRequest({
+      tenantId: 'platform-main',
+      documentRef: 'doc://ok',
+      terms: { ok: true },
+    });
     const res = createMockResponse();
 
     await controller.createHash(req, res);
@@ -112,7 +121,11 @@ describe('RicardianController.createHash', () => {
       new DocumentConflictError('a'.repeat(64), 'doc://trade-1'),
     );
 
-    const req = asHashRequest({ documentRef: 'doc://trade-1', terms: { ok: true } });
+    const req = asHashRequest({
+      tenantId: 'platform-main',
+      documentRef: 'doc://trade-1',
+      terms: { ok: true },
+    });
     const res = createMockResponse();
 
     await controller.createHash(req, res);
@@ -138,7 +151,11 @@ describe('RicardianController.createHash', () => {
 
     mockedCreateDocument.mockRejectedValue(new Error('unexpected db error'));
 
-    const req = asHashRequest({ documentRef: 'doc://ok', terms: { ok: true } });
+    const req = asHashRequest({
+      tenantId: 'platform-main',
+      documentRef: 'doc://ok',
+      terms: { ok: true },
+    });
     const res = createMockResponse();
 
     await controller.createHash(req, res);
@@ -155,7 +172,7 @@ describe('RicardianController.createHash', () => {
 });
 
 describe('RicardianController.getHash', () => {
-  const controller = new RicardianController();
+  const controller = new RicardianController(LOCAL_TENANT_OPTIONS);
   const mockedGetDocument = getDocument as jest.MockedFunction<typeof getDocument>;
 
   beforeEach(() => {
@@ -182,6 +199,7 @@ describe('RicardianController.getHash', () => {
     const row = {
       id: 1,
       request_id: 'req-1',
+      tenant_id: 'platform-main',
       document_ref: 'doc://trade-1',
       hash: 'a'.repeat(64),
       rules_version: 'RICARDIAN_CANONICAL_V1',
@@ -197,7 +215,12 @@ describe('RicardianController.getHash', () => {
     await controller.getHash(req, res);
 
     expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    // Generic lookup is a minimal attestation: no terms, metadata, reference, or tenant.
+    expect(res.json.mock.calls[0][0].data).toEqual({
+      hash: 'a'.repeat(64),
+      rulesVersion: 'RICARDIAN_CANONICAL_V1',
+      registeredAt: '2026-03-11T00:00:00.000Z',
+    });
   });
 
   test('returns 404 with stable code for DocumentNotFoundError', async () => {
@@ -243,5 +266,134 @@ describe('RicardianController.getHash', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: false, code: 'DOCUMENT_INTEGRITY_FAILURE' }),
     );
+  });
+});
+
+describe('RicardianController tenant boundary', () => {
+  const controller = new RicardianController(LOCAL_TENANT_OPTIONS);
+  const mockedBuildRicardianHash = buildRicardianHash as jest.MockedFunction<
+    typeof buildRicardianHash
+  >;
+  const mockedCreateDocument = createDocument as jest.MockedFunction<typeof createDocument>;
+  const mockedGetTenantDocument = getTenantDocument as jest.MockedFunction<
+    typeof getTenantDocument
+  >;
+  const hash = 'a'.repeat(64);
+  const row = {
+    id: 1,
+    request_id: 'req-1',
+    tenant_id: 'platform-main',
+    document_ref: 'doc://trade-1',
+    hash,
+    rules_version: 'RICARDIAN_CANONICAL_V1',
+    canonical_json: '{"terms":{"price":"1"}}',
+    metadata: { orderId: 'ORD-1' },
+    created_at: new Date('2026-03-11T00:00:00Z'),
+  };
+
+  function tenantDocumentRequest(tenantId: unknown): Request<{ hash: string }> {
+    return { params: { hash }, query: { tenantId } } as unknown as Request<{ hash: string }>;
+  }
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
+
+  test.each([
+    ['missing', undefined],
+    ['blank', '  '],
+    ['malformed', 'platform main'],
+    ['oversized', `t${'x'.repeat(128)}`],
+    ['repeated', ['platform-main', 'platform-other']],
+  ])('rejects registration with a %s tenantId before hashing', async (_label, tenantId) => {
+    const res = createMockResponse();
+
+    await controller.createHash(
+      asHashRequest({ tenantId, documentRef: 'doc://ok', terms: { ok: true } }),
+      res,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(mockedBuildRicardianHash).not.toHaveBeenCalled();
+    expect(mockedCreateDocument).not.toHaveBeenCalled();
+  });
+
+  test('binds the registration to the tenant and returns it', async () => {
+    mockedBuildRicardianHash.mockReturnValue({
+      requestId: 'req-1',
+      documentRef: 'doc://trade-1',
+      canonicalJson: row.canonical_json,
+      hash,
+      rulesVersion: 'RICARDIAN_CANONICAL_V1',
+      metadata: row.metadata,
+    });
+    mockedCreateDocument.mockResolvedValueOnce(row);
+    const res = createMockResponse();
+
+    await controller.createHash(
+      asHashRequest({
+        tenantId: 'platform-main',
+        documentRef: 'doc://trade-1',
+        terms: { price: '1' },
+      }),
+      res,
+    );
+
+    expect(mockedCreateDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 'platform-main' }),
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 'platform-main', documentRef: 'doc://trade-1' }),
+      }),
+    );
+  });
+
+  test('returns complete terms and metadata to the owning tenant', async () => {
+    mockedGetTenantDocument.mockResolvedValueOnce(row);
+    const res = createMockResponse();
+
+    await controller.getTenantDocument(tenantDocumentRequest('platform-main'), res);
+
+    expect(mockedGetTenantDocument).toHaveBeenCalledWith(hash, 'platform-main');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: 'platform-main',
+          canonicalJson: row.canonical_json,
+          metadata: row.metadata,
+        }),
+      }),
+    );
+  });
+
+  test('answers a cross-tenant request exactly like an unknown hash', async () => {
+    mockedGetTenantDocument.mockRejectedValueOnce(new DocumentNotFoundError(hash));
+    const res = createMockResponse();
+
+    await controller.getTenantDocument(tenantDocumentRequest('platform-other'), res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, code: 'DOCUMENT_NOT_FOUND' }),
+    );
+    const body = JSON.stringify(res.json.mock.calls[0][0]);
+    expect(body).not.toContain('platform-main');
+    expect(body).not.toContain('ORD-1');
+  });
+
+  test.each([
+    ['missing', undefined],
+    ['malformed', 'platform/main'],
+    ['repeated', ['platform-main', 'platform-main']],
+  ])('rejects full retrieval with a %s tenantId', async (_label, tenantId) => {
+    const res = createMockResponse();
+
+    await controller.getTenantDocument(tenantDocumentRequest(tenantId), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(mockedGetTenantDocument).not.toHaveBeenCalled();
   });
 });

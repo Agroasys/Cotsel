@@ -1,4 +1,8 @@
-import { createRicardianHash as dbCreateHash, getRicardianHash as dbGetHash } from './queries';
+import {
+  createRicardianHash as dbCreateHash,
+  getRicardianHash as dbGetHash,
+  getTenantRicardianHash as dbGetTenantHash,
+} from './queries';
 import { RicardianHashRow } from '../types';
 import {
   DocumentConflictError,
@@ -78,6 +82,7 @@ async function withRetry<T>(operation: () => Promise<T>, operationName: string):
 
 export interface DocumentCreateInput {
   requestId: string;
+  tenantId: string;
   documentRef: string;
   hash: string;
   rulesVersion: string;
@@ -106,14 +111,18 @@ export async function createDocument(data: DocumentCreateInput): Promise<Ricardi
   }
 }
 
-export async function getDocument(hash: string): Promise<RicardianHashRow> {
+async function getVerifiedRow(
+  hash: string,
+  operationName: string,
+  lookup: () => Promise<RicardianHashRow | null>,
+): Promise<RicardianHashRow> {
   let row: RicardianHashRow | null;
 
   try {
-    row = await withRetry(() => dbGetHash(hash), 'getDocument');
+    row = await withRetry(lookup, operationName);
   } catch (error) {
-    incrementDocumentStoreFailure('getDocument', 'DOCUMENT_RETRIEVAL_FAILURE');
-    Logger.error('DocumentStore getDocument failed', {
+    incrementDocumentStoreFailure(operationName, 'DOCUMENT_RETRIEVAL_FAILURE');
+    Logger.error(`DocumentStore ${operationName} failed`, {
       hash,
       error: (error as Error)?.message,
     });
@@ -141,4 +150,17 @@ export async function getDocument(hash: string): Promise<RicardianHashRow> {
   }
 
   return row;
+}
+
+/** Earliest integrity-verified registration of a hash, for the minimal public attestation. */
+export async function getDocument(hash: string): Promise<RicardianHashRow> {
+  return getVerifiedRow(hash, 'getDocument', () => dbGetHash(hash));
+}
+
+/**
+ * Complete registration owned by the tenant. Another tenant's registration, or an untenanted
+ * legacy row, is reported as not found so retrieval cannot confirm cross-tenant existence.
+ */
+export async function getTenantDocument(hash: string, tenantId: string): Promise<RicardianHashRow> {
+  return getVerifiedRow(hash, 'getTenantDocument', () => dbGetTenantHash(hash, tenantId));
 }

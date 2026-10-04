@@ -44,10 +44,11 @@ All values are illustrative for the demo session:
 ### Step 1.2 — Retrieve the stored hash via API
 
 ```bash
-curl -fsS "http://127.0.0.1:${RICARDIAN_PORT:-3100}/api/ricardian/v1/hash/<hash-from-step-1.1>"
+curl -fsS "http://127.0.0.1:${RICARDIAN_PORT:-3100}/api/ricardian/v1/hash/<hash-from-step-1.1>/document?tenantId=<registering-platform-key-id>"
 ```
 
-**Show:** `documentRef`, `hash`, `rulesVersion`, `createdAt` in the response.
+**Show:** `documentRef`, `hash`, `rulesVersion`, `createdAt` in the response. The generic
+`/hash/<hash>` lookup deliberately returns only `hash`, `rulesVersion`, and `registeredAt`.
 
 ## Act 2 — Login: Buyer Authentication and Session Setup (Web3Auth)
 
