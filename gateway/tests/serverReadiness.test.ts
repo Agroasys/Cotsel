@@ -3,7 +3,11 @@
  */
 import http from 'http';
 import type { AddressInfo } from 'net';
-import { assertGaslessRelayerServing, createReadinessCheck } from '../src/serverReadiness';
+import {
+  assertGaslessRelayerServing,
+  createGatewayReadinessCheck,
+  createReadinessCheck,
+} from '../src/serverReadiness';
 import { createGaslessRelayerServiceProbe } from '../src/core/gaslessRelayerServiceProbe';
 import type { GaslessRelayerReadinessSnapshot } from '../src/core/gaslessExecutionTypes';
 
@@ -156,6 +160,25 @@ describe('gasless relayer service probe', () => {
     });
 
     await expect(createGaslessRelayerServiceProbe(baseUrl, 1_000)()).rejects.toThrow('status 503');
+  });
+
+  test('probes the standalone relayer when KMS custody is configured', async () => {
+    respond = json(503, { ready: false });
+
+    const dependencies = await createGatewayReadinessCheck({
+      auth: ok,
+      database: ok,
+      governance: ok,
+      indexer: ok,
+      gaslessRelayer: relayer('ready'),
+      config: {
+        gaslessSignerCustodyMode: 'kms',
+        gaslessManagedSignerUrl: baseUrl,
+        downstreamReadTimeoutMs: 1_000,
+      },
+    })();
+
+    expect(byName(dependencies, 'gasless-relayer')).toMatchObject({ status: 'unavailable' });
   });
 
   test('fails when the relayer answers 200 without confirming readiness', async () => {

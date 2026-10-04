@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { evaluateReadiness, type ReadinessCheck } from '@agroasys/shared-edge';
+import { createGaslessRelayerServiceProbe } from './core/gaslessRelayerServiceProbe';
 import type { DependencyStatus } from './routes/system';
 import type { GaslessRelayerReadinessSnapshot } from './core/gaslessExecutionTypes';
 
@@ -18,6 +19,14 @@ type ReadinessChecks = {
   /** Present only when gasless signing is delegated to the standalone relayer (KMS custody). */
   gaslessRelayerService?: () => Promise<void>;
   timeoutMs?: number;
+};
+
+type GatewayReadinessChecks = Omit<ReadinessChecks, 'gaslessRelayerService' | 'timeoutMs'> & {
+  config: {
+    downstreamReadTimeoutMs?: number;
+    gaslessSignerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
+    gaslessManagedSignerUrl?: string;
+  };
 };
 
 /**
@@ -70,4 +79,22 @@ export function createReadinessCheck(checks: ReadinessChecks) {
     });
     return dependencies;
   };
+}
+
+export function createGatewayReadinessCheck({ config, ...checks }: GatewayReadinessChecks) {
+  const gaslessRelayerService =
+    checks.gaslessRelayer &&
+    config.gaslessSignerCustodyMode === 'kms' &&
+    config.gaslessManagedSignerUrl
+      ? createGaslessRelayerServiceProbe(
+          config.gaslessManagedSignerUrl,
+          config.downstreamReadTimeoutMs ?? 5_000,
+        )
+      : undefined;
+
+  return createReadinessCheck({
+    ...checks,
+    gaslessRelayerService,
+    timeoutMs: config.downstreamReadTimeoutMs,
+  });
 }
