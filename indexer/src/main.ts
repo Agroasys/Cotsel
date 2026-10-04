@@ -47,11 +47,10 @@ import { loadConfig } from './config';
 import { WebhookIndexerAlerts, type IndexerAlerts } from './alerts';
 import { createQuarantinePool, QuarantineStore } from './quarantine';
 import { haltOnPoisonLog, PoisonLogHaltError, type PoisonLogDeps } from './poisonLog';
-import {
-  assertContractPreflight,
-  assertNoUnresolvedQuarantine,
-  ESCROW_ABI_FINGERPRINT,
-} from './preflight';
+import { ESCROW_ABI_FINGERPRINT } from './preflight';
+import { createIndexerReadinessCheck, readProcessorCheckpoint } from './chainReadiness';
+import { startProbeServer } from './probeServer';
+import { logBootstrapEvent, runStartupGates } from './startup';
 
 const config = loadConfig();
 
@@ -64,6 +63,7 @@ const quarantinePool = createQuarantinePool({
   sslMode: config.dbSslMode,
 });
 const quarantine = new QuarantineStore(quarantinePool);
+const readCheckpoint = () => readProcessorCheckpoint(quarantinePool);
 const alerts: IndexerAlerts = new WebhookIndexerAlerts({
   enabled: config.notificationsEnabled,
   webhookUrl: config.notificationsWebhookUrl ?? undefined,
@@ -912,51 +912,27 @@ async function processBatch(ctx: IndexerContext): Promise<void> {
   );
 }
 
-function logBootstrapEvent(
-  level: 'info' | 'warn' | 'error',
-  eventType: string,
-  message: string,
-  meta: Record<string, unknown> = {},
-): void {
-  process.stderr.write(
-    `${JSON.stringify({ level, service: 'indexer', eventType, message, ...meta })}\n`,
-  );
-}
+let selectedRpcUrl: string | null = null;
+let startupComplete = false;
 
 async function bootstrap(): Promise<void> {
-  const selection = await applyReachableRpcEndpoint();
-
-  const preflight = await assertContractPreflight(
-    {
-      rpcUrl: selection.url,
-      contractAddress: config.contractAddress,
-      startBlock: config.startBlock,
-      timeoutMs: config.rpcRequestTimeoutMs ?? undefined,
-      expectedCodehash: config.expectedContractCodehash,
-      expectedAbiFingerprint: config.expectedAbiFingerprint,
-      verifyStartBlockCode: config.verifyStartBlockCode,
-    },
-    {
-      warn: (message, meta) =>
-        logBootstrapEvent('warn', 'contract.preflight_partial', message, meta),
-    },
-  );
-  logBootstrapEvent('info', 'contract.preflight_passed', 'Contract preflight passed', {
-    contractAddress: config.contractAddress,
-    startBlock: config.startBlock,
-    codehash: preflight.codehash,
-    abiFingerprint: preflight.abiFingerprint,
-    startBlockVerified: preflight.startBlockVerified,
+  await startProbeServer({
+    port: config.readinessPort,
+    readiness: createIndexerReadinessCheck({
+      startupComplete: () => startupComplete,
+      rpcUrl: () => selectedRpcUrl,
+      chainId: config.chainId,
+      readCheckpoint,
+      countUnresolvedQuarantine: () => quarantine.countUnresolved(),
+      finalityConfirmationBlocks: config.finalityConfirmationBlocks,
+      maxCheckpointLagBlocks: config.readinessMaxCheckpointLagBlocks,
+      rpcTimeoutMs: config.rpcRequestTimeoutMs ?? undefined,
+    }),
   });
 
-  await assertNoUnresolvedQuarantine({
-    quarantine,
-    alerts,
-    logger: {
-      error: (message, meta) =>
-        logBootstrapEvent('error', 'quarantine.startup_blocked', message, meta ?? {}),
-    },
-  });
+  selectedRpcUrl = (await applyReachableRpcEndpoint()).url;
+  await runStartupGates({ config, rpcUrl: selectedRpcUrl, quarantine, alerts, readCheckpoint });
+  startupComplete = true;
 
   await processor.run(new TypeormDatabase({ initializeStateSchema: false }), processBatch);
 }

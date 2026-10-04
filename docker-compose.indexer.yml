@@ -57,13 +57,23 @@ services:
       NOTIFICATIONS_COOLDOWN_MS: '${INDEXER_NOTIFICATIONS_COOLDOWN_MS:-300000}'
       NOTIFICATIONS_REQUEST_TIMEOUT_MS: '${INDEXER_NOTIFICATIONS_REQUEST_TIMEOUT_MS:-5000}'
       GRAPHQL_PORT: '${INDEXER_GRAPHQL_PORT}'
+      READINESS_PORT: '${INDEXER_READINESS_PORT}'
+      READINESS_MAX_CHECKPOINT_LAG_BLOCKS: '${INDEXER_READINESS_MAX_CHECKPOINT_LAG_BLOCKS}'
     depends_on:
       postgres-init:
         condition: service_completed_successfully
       indexer-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ['CMD-SHELL', "cat /proc/1/cmdline | tr '\\0' ' ' | grep -q 'lib/main.js'"]
+      # Liveness only. Readiness (GET /ready) is reported, not used to restart.
+      test:
+        - CMD
+        - node
+        - -e
+        - |
+          fetch('http://127.0.0.1:' + process.env.READINESS_PORT + '/health')
+            .then((response) => process.exit(response.ok ? 0 : 1))
+            .catch(() => process.exit(1));
       interval: 15s
       timeout: 5s
       retries: 5
