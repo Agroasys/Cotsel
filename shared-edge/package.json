@@ -10,7 +10,9 @@
     "cors.js",
     "cors.d.ts",
     "rateLimit.js",
-    "rateLimit.d.ts"
+    "rateLimit.d.ts",
+    "readiness.js",
+    "readiness.d.ts"
   ],
   "dependencies": {
     "ioredis": "^6.0.0"

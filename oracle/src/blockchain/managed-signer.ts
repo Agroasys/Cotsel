@@ -106,6 +106,37 @@ export class ManagedSigner extends ethers.AbstractSigner {
       return this.cachedAddress;
     }
 
+    this.cachedAddress = await this.fetchAddress();
+    return this.cachedAddress;
+  }
+
+  /**
+   * Readiness probe: asks the managed signer for its address now, bypassing the cache, and
+   * verifies the signing route with a zero-gas challenge that cannot execute on chain.
+   */
+  async checkReadiness(): Promise<void> {
+    const address = await this.fetchAddress();
+    if (this.cachedAddress && address !== this.cachedAddress) {
+      throw new Error('Managed signer address changed since startup');
+    }
+    if (!this.provider) {
+      throw new Error('Managed signer readiness requires the configured chain provider');
+    }
+    const { chainId } = await this.provider.getNetwork();
+    await this.signTransaction({
+      chainId,
+      to: address,
+      value: 0n,
+      nonce: 0,
+      gasLimit: 0n,
+      type: 2,
+      maxFeePerGas: 0n,
+      maxPriorityFeePerGas: 0n,
+      data: ethers.hexlify(ethers.toUtf8Bytes(`Cotsel oracle readiness v1:${randomUUID()}`)),
+    });
+  }
+
+  private async fetchAddress(): Promise<string> {
     const response = await fetch(this.addressUrl, {
       method: 'GET',
       headers: this.headers,
@@ -120,8 +151,7 @@ export class ManagedSigner extends ethers.AbstractSigner {
       throw new Error('Managed signer returned an invalid address');
     }
 
-    this.cachedAddress = ethers.getAddress(String(payload.signerAddress));
-    return this.cachedAddress;
+    return ethers.getAddress(String(payload.signerAddress));
   }
 
   async signTransaction(tx: ethers.TransactionRequest): Promise<string> {

@@ -10,9 +10,15 @@ import { OracleController } from './api/controller';
 import { errorHandler } from './middleware/middleware';
 import { Logger } from './utils/logger';
 import { testConnection, closeConnection, pool } from './database/connection';
+import { createOracleReadinessCheck } from './readiness';
 import { TriggerManager } from './core/trigger-manager';
 import { createPostgresOracleActionLock } from './core/oracle-action-lock';
-import { buildContainmentGuard, type ContainmentGuard } from './core/containment-guard';
+import {
+  buildContainmentGuard,
+  isContainmentConfigured,
+  isContainmentRequired,
+  type ContainmentGuard,
+} from './core/containment-guard';
 import { SDKClient } from './blockchain/sdk-client';
 import { IndexerClient } from './blockchain/indexer-client';
 import { ConfirmationWorker } from './worker/confirmation-worker';
@@ -160,7 +166,18 @@ async function bootstrap() {
       next();
     });
 
-    const router = createRouter(controller, testConnection);
+    const activeContainmentGuard = containmentGuard;
+    const readinessCheck = createOracleReadinessCheck({
+      database: testConnection,
+      rpc: () => sdkClient.checkRpcReadiness(),
+      signer: () => sdkClient.checkSignerReadiness(),
+      indexer: () => indexerClient.checkReadiness(),
+      containment: () => activeContainmentGuard.checkReadiness(),
+      // Governed profiles must enforce containment, so an unconfigured reader fails readiness there.
+      containmentMode:
+        isContainmentConfigured(config) || isContainmentRequired(config) ? 'required' : 'disabled',
+    });
+    const router = createRouter(controller, readinessCheck);
     app.use('/api/oracle', requestRateLimiter.middleware, router);
 
     app.use(errorHandler);

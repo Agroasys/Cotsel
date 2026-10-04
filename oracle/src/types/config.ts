@@ -2,6 +2,8 @@ import type { PostgresSslMode } from '@agroasys/shared-db';
 
 export interface OracleConfig {
   nodeEnv: string;
+  /** Deployment profile (`COTSEL_ENVIRONMENT`, falling back to `NODE_ENV`). */
+  cotselEnvironment: string;
   // server
   port: number;
   apiKey: string;

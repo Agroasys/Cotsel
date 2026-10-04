@@ -20,10 +20,14 @@ minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   # Security fix for GHSA-7q85-xj36-vmfc. Keep the exception version-specific.
   - adm-zip@0.6.1
-  # Security fix for GHSA-qhr7-859c-m2p7. Keep the exception version-specific.
+  # Security fixes for GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7, and
+  # GHSA-6j4f-fj2g-mc7p. Keep the exception version-specific.
   - brace-expansion@5.0.12
   # Security fix for GHSA-hrr3-gc8f-f4qj. Keep the exception version-specific.
   - fast-uri@3.1.8
+  # Security fixes for the axios advisories remediated in 1.20.0. Keep the
+  # exception version-specific.
+  - axios@1.20.0
   # Security fixes for GHSA-c83g-rgw3-j3cx and GHSA-73wf-gq98-2v4g.
   - browserslist@4.28.7
   # Security fix for GHSA-p498-v437-472g.

@@ -4,18 +4,40 @@
 import fs from 'fs';
 import path from 'path';
 
-type ReadinessDependency = {
-  name: string;
-  status: 'ok' | 'degraded' | 'unavailable';
-  detail?: string;
-};
+import { evaluateReadiness, type ReadinessCheck } from '@agroasys/shared-edge';
+import { createGaslessRelayerServiceProbe } from './core/gaslessRelayerServiceProbe';
+import type { DependencyStatus } from './routes/system';
+import type { GaslessRelayerReadinessSnapshot } from './core/gaslessExecutionTypes';
 
 type ReadinessChecks = {
   auth: (requestId: string) => Promise<void>;
   database: () => Promise<void>;
   governance: () => Promise<void>;
   indexer: () => Promise<void>;
+  /** Present only when gasless execution is enabled: the gateway's local queue and policy state. */
+  gaslessRelayer?: () => GaslessRelayerReadinessSnapshot;
+  /** Present only when gasless signing is delegated to the standalone relayer (KMS custody). */
+  gaslessRelayerService?: () => Promise<void>;
+  timeoutMs?: number;
 };
+
+type GatewayReadinessChecks = Omit<ReadinessChecks, 'gaslessRelayerService' | 'timeoutMs'> & {
+  config: {
+    downstreamReadTimeoutMs?: number;
+    gaslessSignerCustodyMode?: 'raw_private_key' | 'kms' | 'mpc';
+    gaslessManagedSignerUrl?: string;
+  };
+};
+
+/**
+ * A blocked relayer cannot accept new gasless commitments, so a gasless-enabled gateway is not
+ * ready. A deliberate pause is an operator control, not a dependency failure.
+ */
+export function assertGaslessRelayerServing(snapshot: GaslessRelayerReadinessSnapshot): void {
+  if (snapshot.state === 'blocked') {
+    throw new Error('Gasless relayer is blocked');
+  }
+}
 
 export function loadPackageVersion(): string {
   const candidates = [
@@ -33,30 +55,46 @@ export function loadPackageVersion(): string {
 }
 
 export function createReadinessCheck(checks: ReadinessChecks) {
-  return async (): Promise<ReadinessDependency[]> => {
+  return async (): Promise<DependencyStatus[]> => {
     const requestId = `readyz-${Date.now()}`;
-    const dependencies: ReadinessDependency[] = [];
-    const run = async (
-      name: string,
-      check: () => Promise<void>,
-      fallbackDetail: string,
-    ): Promise<void> => {
-      try {
-        await check();
-        dependencies.push({ name, status: 'ok' });
-      } catch (error) {
-        dependencies.push({
-          name,
-          status: 'unavailable',
-          detail: error instanceof Error ? error.message : fallbackDetail,
-        });
-      }
-    };
+    const dependencyChecks: ReadinessCheck[] = [
+      { name: 'postgres', check: checks.database },
+      { name: 'auth-service', check: () => checks.auth(requestId) },
+      { name: 'chain-rpc', check: checks.governance },
+      { name: 'indexer-graphql', check: checks.indexer },
+    ];
+    if (checks.gaslessRelayerService) {
+      dependencyChecks.push({ name: 'gasless-relayer', check: checks.gaslessRelayerService });
+    }
+    const gaslessRelayer = checks.gaslessRelayer;
+    if (gaslessRelayer) {
+      dependencyChecks.push({
+        name: 'gasless-relayer-policy',
+        check: async () => assertGaslessRelayerServing(gaslessRelayer()),
+      });
+    }
 
-    await run('postgres', checks.database, 'Database connection failed');
-    await run('auth-service', () => checks.auth(requestId), 'Auth service unavailable');
-    await run('chain-rpc', checks.governance, 'Chain RPC unavailable');
-    await run('indexer-graphql', checks.indexer, 'Indexer GraphQL unavailable');
+    const { dependencies } = await evaluateReadiness(dependencyChecks, {
+      defaultTimeoutMs: checks.timeoutMs,
+    });
     return dependencies;
   };
+}
+
+export function createGatewayReadinessCheck({ config, ...checks }: GatewayReadinessChecks) {
+  const gaslessRelayerService =
+    checks.gaslessRelayer &&
+    config.gaslessSignerCustodyMode === 'kms' &&
+    config.gaslessManagedSignerUrl
+      ? createGaslessRelayerServiceProbe(
+          config.gaslessManagedSignerUrl,
+          config.downstreamReadTimeoutMs ?? 5_000,
+        )
+      : undefined;
+
+  return createReadinessCheck({
+    ...checks,
+    gaslessRelayerService,
+    timeoutMs: config.downstreamReadTimeoutMs,
+  });
 }

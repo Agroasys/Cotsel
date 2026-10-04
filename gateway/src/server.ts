@@ -63,7 +63,7 @@ import { createSettlementRouter } from './routes/settlement';
 import { createTreasuryRouter } from './routes/treasury';
 import { createTradeRouter } from './routes/trades';
 import { gatewayRateLimitPolicy } from './httpSecurity';
-import { createReadinessCheck, loadPackageVersion } from './serverReadiness';
+import { createGatewayReadinessCheck, loadPackageVersion } from './serverReadiness';
 
 const config = loadConfig();
 const pool = createPool(config);
@@ -291,11 +291,13 @@ const operationsSummaryService = new OperationsSummaryService([
   },
 ]);
 
-const readinessCheck = createReadinessCheck({
+const readinessCheck = createGatewayReadinessCheck({
   auth: (requestId) => authSessionClient.checkReadiness(requestId),
   database: () => testConnection(pool),
   governance: () => governanceStatusService.checkReadiness(),
   indexer: () => tradeReadService.checkReadiness(),
+  gaslessRelayer: gaslessSettlementService?.getRelayerReadiness.bind(gaslessSettlementService),
+  config,
 });
 
 async function bootstrap(): Promise<void> {

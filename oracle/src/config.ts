@@ -176,6 +176,7 @@ export function loadConfig(): OracleConfig {
 
     const config: OracleConfig = {
       nodeEnv,
+      cotselEnvironment,
       // server
       port: validateEnvNumber('PORT'),
       apiKey: validateEnv('API_KEY'),

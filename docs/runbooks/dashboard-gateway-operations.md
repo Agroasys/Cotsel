@@ -181,7 +181,7 @@ curl -fsS -H "Authorization: Bearer <session>" \
 ## Health and readiness interpretation
 
 - `/healthz`: process is alive
-- `/readyz`: Postgres, auth service, and chain RPC are reachable and consistent with gateway config
+- `/readyz`: Postgres, auth service, chain RPC, indexer GraphQL, and (when gasless execution is enabled) a non-blocked gasless relayer can serve; each check is time-bounded and reports no error text. See [service-readiness.md](service-readiness.md)
 - `/version`: build, commit, and repository metadata
 
 Readiness must stay green before enabling connected dashboard mode.

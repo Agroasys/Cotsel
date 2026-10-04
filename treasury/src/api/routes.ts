@@ -1,4 +1,5 @@
 import { RequestHandler, Router } from 'express';
+import type { ReadinessResult } from '@agroasys/shared-edge';
 import { TreasuryController } from './controller';
 import type { IngestionFreshnessAssessment } from '../core/ingestionFreshness';
 
@@ -11,7 +12,7 @@ export interface TreasuryRouterOptions {
    * the provider produced it.
    */
   providerCallbackMiddleware?: RequestHandler;
-  readinessCheck?: () => Promise<void>;
+  readinessCheck?: () => Promise<void | ReadinessResult>;
   /**
    * WP-4 B-09 / FAIL-10. Readiness, not liveness: a treasury whose chain
    * evidence has stopped advancing is still a healthy process, and `/health`
@@ -62,8 +63,17 @@ export function createRouter(
 
   router.get('/ready', async (_req, res) => {
     try {
-      if (options.readinessCheck) {
-        await options.readinessCheck();
+      const dependencyResult = options.readinessCheck ? await options.readinessCheck() : undefined;
+      const dependencies = dependencyResult ? dependencyResult.dependencies : undefined;
+      if (dependencyResult && !dependencyResult.ready) {
+        res.status(503).json({
+          success: false,
+          service: 'treasury',
+          ready: false,
+          error: 'Dependencies not ready',
+          dependencies,
+        });
+        return;
       }
 
       const ingestion = options.ingestionFreshnessCheck
@@ -80,6 +90,7 @@ export function createRouter(
           ready: false,
           error: 'Treasury chain-evidence ingestion is not fresh',
           ingestion: serializeIngestionFreshness(ingestion),
+          dependencies,
         });
         return;
       }
@@ -89,6 +100,7 @@ export function createRouter(
         service: 'treasury',
         ready: true,
         ingestion: ingestion ? serializeIngestionFreshness(ingestion) : null,
+        dependencies,
         timestamp: new Date().toISOString(),
       });
     } catch {

@@ -27,6 +27,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY indexer indexer
 COPY notifications notifications
 COPY shared-db shared-db
+COPY shared-edge shared-edge
 
 RUN pnpm --filter @agroasys/notifications run build \
   && pnpm --filter indexer run build
@@ -81,6 +82,7 @@ COPY --from=builder /app/indexer/quarantine.js /app/indexer/quarantine.js
 COPY --from=builder /app/indexer/schema.graphql /app/indexer/schema.graphql
 COPY --from=builder /app/notifications/dist /app/notifications/dist
 COPY --from=builder /app/shared-db /app/shared-db
+COPY --from=builder /app/shared-edge /app/shared-edge
 
 RUN addgroup -S agro && adduser -S agro -G agro \
   && chown -R agro:agro /app
