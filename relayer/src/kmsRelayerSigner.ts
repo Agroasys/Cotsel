@@ -7,8 +7,14 @@ import {
   SignCommand,
   SigningAlgorithmSpec,
 } from '@aws-sdk/client-kms';
-import { evmAddressFromKmsPublicKey, KmsEvmSigner, type KmsSigningClient } from '@agroasys/sdk';
-import { getAddress } from 'ethers';
+import {
+  evmAddressFromKmsPublicKey,
+  KmsEvmSigner,
+  signatureFromKmsDer,
+  type KmsSigningClient,
+} from '@agroasys/sdk';
+import { randomUUID } from 'node:crypto';
+import { getAddress, getBytes, hashMessage } from 'ethers';
 import type { RelayerConfig } from './config';
 import type { RelayerSigningRequest } from './signingPolicy';
 
@@ -72,6 +78,9 @@ export function createKmsRelayerSigner(
       if (address !== expectedAddress) {
         throw new Error('Relayer KMS key no longer matches the reviewed signer address');
       }
+      const digest = hashMessage(`Cotsel relayer readiness v1:${expectedAddress}:${randomUUID()}`);
+      const signature = await client.signDigest(config.kmsKeyId, getBytes(digest));
+      signatureFromKmsDer(digest, signature, expectedAddress);
     },
     async signTransaction(request) {
       const transaction = request.transaction;

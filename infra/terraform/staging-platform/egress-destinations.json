@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0",
+  "environment": "staging",
+  "description": "Internet destinations Cotsel staging tasks require. The staging-platform plan fails unless every entry is resolved and approved by the shared staging Network Firewall (agroasys-backend docs/readiness/wp2-staging-egress.json).",
+  "entries": [
+    {
+      "service": "ECR registry",
+      "hostname": "655177116834.dkr.ecr.ap-south-1.amazonaws.com",
+      "workloads": [
+        "gateway",
+        "auth",
+        "oracle",
+        "indexer-pipeline",
+        "indexer-graphql",
+        "reconciliation",
+        "ricardian",
+        "treasury",
+        "relayer"
+      ],
+      "purpose": "Image manifests at task start; layers use the S3 gateway endpoint",
+      "status": "required"
+    },
+    {
+      "service": "ECR API",
+      "hostname": "api.ecr.ap-south-1.amazonaws.com",
+      "workloads": [
+        "gateway",
+        "auth",
+        "oracle",
+        "indexer-pipeline",
+        "indexer-graphql",
+        "reconciliation",
+        "ricardian",
+        "treasury",
+        "relayer"
+      ],
+      "purpose": "Registry authorization at task start",
+      "status": "required"
+    },
+    {
+      "service": "CloudWatch Logs",
+      "hostname": "logs.ap-south-1.amazonaws.com",
+      "workloads": [
+        "gateway",
+        "auth",
+        "oracle",
+        "indexer-pipeline",
+        "indexer-graphql",
+        "reconciliation",
+        "ricardian",
+        "treasury",
+        "relayer"
+      ],
+      "purpose": "awslogs driver",
+      "status": "required"
+    },
+    {
+      "service": "Secrets Manager",
+      "hostname": "secretsmanager.ap-south-1.amazonaws.com",
+      "workloads": [
+        "gateway",
+        "auth",
+        "oracle",
+        "indexer-pipeline",
+        "indexer-graphql",
+        "reconciliation",
+        "ricardian",
+        "treasury",
+        "relayer"
+      ],
+      "purpose": "Secret injection at task start",
+      "status": "required"
+    },
+    {
+      "service": "KMS",
+      "hostname": "kms.ap-south-1.amazonaws.com",
+      "workloads": ["oracle", "relayer"],
+      "purpose": "Managed-signer GetPublicKey and Sign",
+      "status": "required"
+    },
+    {
+      "service": "Agroasys settlement callback",
+      "hostname": "api.staging.agroasys.com",
+      "workloads": ["gateway"],
+      "purpose": "GATEWAY_SETTLEMENT_CALLBACK_URL (var.backend_settlement_callback_url)",
+      "status": "required"
+    },
+    {
+      "service": "Base Sepolia RPC primary",
+      "hostname": null,
+      "workloads": ["gateway", "oracle", "indexer-pipeline", "reconciliation", "treasury"],
+      "purpose": "rpc-base-sepolia-primary secret",
+      "status": "unresolved",
+      "note": "Record the bare hostname from the secret, never the URL or key."
+    },
+    {
+      "service": "Base Sepolia RPC fallback",
+      "hostname": null,
+      "workloads": ["gateway", "oracle", "indexer-pipeline", "reconciliation", "treasury"],
+      "purpose": "rpc-base-sepolia-fallback secret",
+      "status": "unresolved",
+      "note": "Record the bare hostname from the secret, never the URL or key."
+    },
+    {
+      "service": "Notifications webhook",
+      "hostname": null,
+      "workloads": ["indexer-pipeline"],
+      "purpose": "notifications-webhook foundation secret",
+      "status": "unresolved",
+      "note": "Record the bare hostname from the secret."
+    }
+  ]
+}

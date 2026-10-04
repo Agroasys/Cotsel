@@ -61,6 +61,53 @@ assert.equal(braceExpansion('{1..200000}').length, braceExpansion.EXPANSION_MAX)
 const lengthCapped = braceExpansion('{a,b}'.repeat(1500), { maxLength: 100 });
 assert.ok(lengthCapped.reduce((total, value) => total + value.length, 0) <= 100);
 
+const bracesTargets = new Set();
+for (const [consumer, version] of [
+  ['micromatch', '4.0.8'],
+  ['chokidar', '3.6.0'],
+]) {
+  const consumerPath = packagePath(consumer, version);
+  bracesTargets.add(fs.realpathSync(path.join(path.dirname(consumerPath), 'braces')));
+}
+assert.equal(bracesTargets.size, 1, 'Glob consumers must share the depth-patched braces');
+const [bracesPath] = bracesTargets;
+assert.match(bracesPath, /braces@3\.0\.3_patch_hash=/);
+const braces = require(bracesPath);
+assert.deepEqual(braces.expand('src/{routes,core}/*.{ts,js}'), [
+  'src/routes/*.ts',
+  'src/routes/*.js',
+  'src/core/*.ts',
+  'src/core/*.js',
+]);
+assert.equal(braces.compile('file-{1..3}.ts'), 'file-([1-3]).ts');
+assert.equal(braces.stringify(braces.parse('file-{a,b}.ts')), 'file-{a,b}.ts');
+const depthError = (error) =>
+  error instanceof RangeError && error.message === 'braces: nesting depth exceeds 128';
+for (const pattern of [
+  '{'.repeat(4000) + 'a' + '}'.repeat(4000),
+  '('.repeat(4000) + 'a' + ')'.repeat(4000),
+  '{'.repeat(4000) + 'a',
+]) {
+  for (const operation of ['parse', 'compile', 'expand', 'stringify']) {
+    assert.throws(() => braces[operation](pattern), depthError, `${operation} must bound nesting`);
+  }
+}
+// Walkers also accept caller-provided ASTs, which bypass the parser's guard.
+for (const operation of ['compile', 'expand', 'stringify']) {
+  const ast = { type: 'root', nodes: [] };
+  let cursor = ast;
+  for (let depth = 0; depth < 1000; depth++) {
+    const child = { type: 'root', nodes: [], parent: cursor };
+    cursor.nodes.push(child);
+    cursor = child;
+  }
+  cursor.nodes.push({ type: 'text', value: 'a' });
+  assert.throws(() => braces[operation](ast), depthError, `${operation} must bound AST depth`);
+}
+// Escaped and quoted braces are text, not nesting.
+assert.doesNotThrow(() => braces.parse('\\{'.repeat(1000)));
+assert.doesNotThrow(() => braces.parse('"' + '{'.repeat(1000) + '"'));
+
 const jaysonPath = packagePath('jayson', '4.3.0');
 const streamJsonPath = fs.realpathSync(path.join(path.dirname(jaysonPath), 'stream-json'));
 assert.match(
@@ -100,5 +147,5 @@ await new Promise((resolve, reject) => {
 });
 
 console.log(
-  `Dependency compatibility check passed: minimatch ${minimatchVersions.join(', ')} -> patched brace-expansion 5.0.12; jayson 4.3.0 -> security-patched stream-json 1.9.1`,
+  `Dependency compatibility check passed: minimatch ${minimatchVersions.join(', ')} -> patched brace-expansion 5.0.12; glob consumers -> depth-patched braces 3.0.3; jayson 4.3.0 -> security-patched stream-json 1.9.1`,
 );

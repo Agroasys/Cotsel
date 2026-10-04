@@ -1,6 +1,6 @@
 import express from 'express';
 import type { AddressInfo } from 'net';
-import { Wallet } from 'ethers';
+import { getBytes, hexlify, Wallet } from 'ethers';
 import type { KmsSigningClient } from '@agroasys/sdk';
 
 jest.mock('../src/config', () => ({
@@ -24,6 +24,22 @@ const SECP256K1_SPKI_PREFIX = '3056301006072a8648ce3d020106052b8104000a034200';
 function spkiFor(wallet: { signingKey: { publicKey: string } }): Uint8Array {
   const uncompressed = wallet.signingKey.publicKey.slice(2);
   return Buffer.from(`${SECP256K1_SPKI_PREFIX}${uncompressed}`, 'hex');
+}
+
+function derSignature(
+  wallet: Wallet | ReturnType<typeof Wallet.createRandom>,
+  digest: Uint8Array,
+): Uint8Array {
+  const signature = wallet.signingKey.sign(hexlify(digest));
+  const integer = (value: string) => {
+    let bytes = getBytes(value);
+    while (bytes.length > 1 && bytes[0] === 0) bytes = bytes.slice(1);
+    if (bytes[0] & 0x80) bytes = Uint8Array.from([0, ...bytes]);
+    return Uint8Array.from([0x02, bytes.length, ...bytes]);
+  };
+  const r = integer(signature.r);
+  const s = integer(signature.s);
+  return Uint8Array.from([0x30, r.length + s.length, ...r, ...s]);
 }
 
 function readiness(overrides: Partial<Parameters<typeof createOracleReadinessCheck>[0]> = {}) {
@@ -190,7 +206,10 @@ describe('oracle signer readiness probes', () => {
   const wallet = Wallet.createRandom();
 
   function kmsClient(publicKey: () => Promise<Uint8Array>): KmsSigningClient {
-    return { getPublicKey: jest.fn(publicKey), signDigest: jest.fn() };
+    return {
+      getPublicKey: jest.fn(publicKey),
+      signDigest: jest.fn(async (_keyId, digest) => derSignature(wallet, digest)),
+    };
   }
 
   test('KMS probe reads the key now and accepts the reviewed address', async () => {
@@ -203,6 +222,36 @@ describe('oracle signer readiness probes', () => {
     await expect(probe()).resolves.toBeUndefined();
     await expect(probe()).resolves.toBeUndefined();
     expect(client.getPublicKey).toHaveBeenCalledTimes(2);
+    expect(client.signDigest).toHaveBeenCalledTimes(2);
+    const calls = (client.signDigest as jest.Mock).mock.calls;
+    expect(hexlify(calls[0][1])).not.toBe(hexlify(calls[1][1]));
+  });
+
+  test('KMS readiness fails when GetPublicKey succeeds but Sign is denied', async () => {
+    const client = kmsClient(async () => spkiFor(wallet));
+    client.signDigest = jest.fn().mockRejectedValue(new Error('Sign AccessDeniedException'));
+    const signer = createAwsKmsOracleKeyProbe(
+      { keyId: 'alias/oracle', expectedAddress: wallet.address },
+      client,
+    );
+    await expect(signer()).rejects.toThrow('Sign AccessDeniedException');
+    const result = await readiness({ signer })();
+    expect(result.ready).toBe(false);
+    expect(result.dependencies.find((item) => item.name === 'oracle-signer')).toMatchObject({
+      status: 'unavailable',
+    });
+    expect(JSON.stringify(result)).not.toContain('AccessDenied');
+  });
+
+  test('KMS readiness rejects a signature made by another key', async () => {
+    const client = kmsClient(async () => spkiFor(wallet));
+    client.signDigest = async (_keyId, digest) => derSignature(Wallet.createRandom(), digest);
+    await expect(
+      createAwsKmsOracleKeyProbe(
+        { keyId: 'alias/oracle', expectedAddress: wallet.address },
+        client,
+      )(),
+    ).rejects.toThrow('expected signer address');
   });
 
   test('KMS probe refuses a replaced key and an unreachable key', async () => {
@@ -233,7 +282,7 @@ describe('oracle signer readiness probes', () => {
     function signer() {
       return new ManagedSigner(
         { url: 'https://signer.internal', custodyMode: 'kms', requestTimeoutMs: 1_000 },
-        null as never,
+        { getNetwork: async () => ({ chainId: 84532n }) } as never,
       );
     }
 
@@ -242,14 +291,43 @@ describe('oracle signer readiness probes', () => {
     }
 
     test('probes the signer on every call instead of trusting the startup cache', async () => {
-      global.fetch = jest.fn().mockResolvedValue(addressResponse(wallet.address)) as never;
+      global.fetch = jest.fn(async (_url, init: RequestInit) => {
+        if (init.method === 'GET') return addressResponse(wallet.address);
+        const body = JSON.parse(String(init.body));
+        const tx = body.transaction;
+        expect(tx.gasLimit).toBe('0');
+        expect(tx.value).toBe('0');
+        expect(tx.to).toBe(wallet.address);
+        expect(tx.chainId).toBe(84532);
+        const signedTransaction = await wallet.signTransaction({
+          ...tx,
+          maxFeePerGas: tx.maxFeePerGasWei,
+          maxPriorityFeePerGas: tx.maxPriorityFeePerGasWei,
+        });
+        return {
+          ...addressResponse(wallet.address),
+          json: async () => ({
+            signerAddress: wallet.address,
+            signedTransaction,
+            requestId: body.requestId,
+            intentHash: body.intentHash,
+          }),
+        };
+      }) as never;
       const managed = signer();
 
       await managed.getAddress();
       await managed.checkReadiness();
       await managed.checkReadiness();
 
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(global.fetch).toHaveBeenCalledTimes(5);
+    });
+
+    test('fails when the address route succeeds but the signing POST fails', async () => {
+      global.fetch = jest.fn(async (_url, init: RequestInit) =>
+        init.method === 'GET' ? addressResponse(wallet.address) : { ok: false, status: 403 },
+      ) as never;
+      await expect(signer().checkReadiness()).rejects.toThrow('status 403');
     });
 
     test('refuses a signer that now answers with a different address', async () => {
