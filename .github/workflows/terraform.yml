@@ -143,8 +143,8 @@ jobs:
       - name: Test accepted Base Sepolia selection validation
         run: node --test scripts/tests/base-sepolia-staging-contract.test.mjs
 
-      - name: Test origin-lockdown controls
-        run: node infra/terraform/scripts/origin-lockdown-selftest.mjs && node infra/terraform/scripts/evidence-archive-identity-selftest.mjs
+      - name: Test origin-lockdown and egress controls
+        run: node infra/terraform/scripts/origin-lockdown-selftest.mjs && node infra/terraform/scripts/evidence-archive-identity-selftest.mjs && node --test infra/terraform/scripts/staging-egress-gate.test.mjs
 
   security:
     name: terraform/security
