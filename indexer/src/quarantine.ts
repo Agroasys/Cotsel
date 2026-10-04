@@ -60,8 +60,9 @@ export interface QuarantinePoolConfig {
 }
 
 /**
- * The independent connection described above. Kept tiny (`max: 2`) because it
- * is only used for preflight counts and the rare poison-log write.
+ * The independent connection described above. Kept tiny (`max: 3`) because it
+ * is only used for preflight counts, readiness probes (quarantine count and
+ * checkpoint read in parallel), and the rare poison-log write.
  */
 export function createQuarantinePool(config: QuarantinePoolConfig): Pool {
   return createServicePool({
@@ -73,7 +74,7 @@ export function createQuarantinePool(config: QuarantinePoolConfig): Pool {
     user: config.user,
     password: config.password,
     sslMode: config.sslMode,
-    max: 2,
+    max: 3,
     idleTimeoutMillis: 5000,
     connectionTimeoutMillis: 5000,
   });

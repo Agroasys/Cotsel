@@ -16,6 +16,8 @@ locals {
     { name = "NOTIFICATIONS_REQUEST_TIMEOUT_MS", value = "5000" },
     { name = "PGSSLMODE", value = "verify-full" },
     { name = "RATE_LIMIT", value = "10" },
+    { name = "READINESS_MAX_CHECKPOINT_LAG_BLOCKS", value = "150" },
+    { name = "READINESS_PORT", value = "8090" },
     { name = "RPC_CAPACITY", value = "1" },
     { name = "RPC_MAX_BATCH_CALL_SIZE", value = "1" },
     { name = "RPC_REQUEST_TIMEOUT_MS", value = "10000" },

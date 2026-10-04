@@ -320,6 +320,9 @@ importers:
       '@agroasys/shared-db':
         specifier: workspace:*
         version: link:../shared-db
+      '@agroasys/shared-edge':
+        specifier: workspace:*
+        version: link:../shared-edge
       '@subsquid/evm-processor':
         specifier: ^1.30.1
         version: 1.30.1
