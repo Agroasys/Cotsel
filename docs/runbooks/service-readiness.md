@@ -50,7 +50,11 @@ Dependency-specific rules:
   trusting the address cached at startup. KMS custody reads the key with
   `GetPublicKey` and refuses a key whose address no longer matches
   `ORACLE_KMS_EXPECTED_ADDRESS`. Managed custody asks the signer for its address
-  and refuses one that changed since startup.
+  and refuses one that changed since startup. KMS also signs a fresh, domain-separated
+  readiness challenge and verifies its signature against the reviewed address.
+  Managed custody calls the existing transaction-signing route with a fresh challenge,
+  zero value, and zero gas. It verifies the returned transaction without broadcasting it.
+  Zero gas prevents this challenge from executing on chain. Signing denial fails readiness.
 - **Oracle `reconciliation-containment`:** the containment guard fails closed,
   so an unreachable reconciliation reader already stops every progression.
   Readiness reports that instead of staying green. With no reconciliation reader
@@ -58,7 +62,7 @@ Dependency-specific rules:
   `production` (`COTSEL_ENVIRONMENT`, falling back to `NODE_ENV`) readiness
   fails; in any other profile the dependency is reported `disabled`.
 - **Relayer `kms-signer`:** the same fresh `GetPublicKey` check against
-  `RELAYER_KMS_EXPECTED_ADDRESS`.
+  `RELAYER_KMS_EXPECTED_ADDRESS`, followed by a fresh signed readiness challenge.
 
 ## Probe behavior
 

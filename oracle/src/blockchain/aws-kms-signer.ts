@@ -7,8 +7,14 @@ import {
   SignCommand,
   SigningAlgorithmSpec,
 } from '@aws-sdk/client-kms';
-import { evmAddressFromKmsPublicKey, KmsEvmSigner, type KmsSigningClient } from '@agroasys/sdk';
-import { getAddress, type Provider } from 'ethers';
+import {
+  evmAddressFromKmsPublicKey,
+  KmsEvmSigner,
+  signatureFromKmsDer,
+  type KmsSigningClient,
+} from '@agroasys/sdk';
+import { randomUUID } from 'node:crypto';
+import { getAddress, getBytes, hashMessage, type Provider } from 'ethers';
 
 function requiredBytes(value: Uint8Array | undefined, operation: string): Uint8Array {
   if (!value?.length) {
@@ -55,7 +61,7 @@ export function createAwsKmsOracleSigner(
 
 /**
  * Readiness probe: reads the key from KMS now (the signer caches its address after startup) and
- * refuses a key that is unreachable, disabled, of the wrong type, or no longer the reviewed one.
+ * verifies signing permission with a fresh domain-separated challenge. No transaction is created.
  */
 export function createAwsKmsOracleKeyProbe(
   options: { keyId: string; expectedAddress: string },
@@ -67,5 +73,8 @@ export function createAwsKmsOracleKeyProbe(
     if (address !== expectedAddress) {
       throw new Error('Oracle KMS key no longer matches the reviewed signer address');
     }
+    const digest = hashMessage(`Cotsel oracle readiness v1:${expectedAddress}:${randomUUID()}`);
+    const signature = await client.signDigest(options.keyId, getBytes(digest));
+    signatureFromKmsDer(digest, signature, expectedAddress);
   };
 }

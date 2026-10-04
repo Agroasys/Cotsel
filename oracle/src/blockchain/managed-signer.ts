@@ -112,13 +112,28 @@ export class ManagedSigner extends ethers.AbstractSigner {
 
   /**
    * Readiness probe: asks the managed signer for its address now, bypassing the cache, and
-   * refuses a signer that no longer answers with the address already used for signing.
+   * verifies the signing route with a zero-gas challenge that cannot execute on chain.
    */
   async checkReadiness(): Promise<void> {
     const address = await this.fetchAddress();
     if (this.cachedAddress && address !== this.cachedAddress) {
       throw new Error('Managed signer address changed since startup');
     }
+    if (!this.provider) {
+      throw new Error('Managed signer readiness requires the configured chain provider');
+    }
+    const { chainId } = await this.provider.getNetwork();
+    await this.signTransaction({
+      chainId,
+      to: address,
+      value: 0n,
+      nonce: 0,
+      gasLimit: 0n,
+      type: 2,
+      maxFeePerGas: 0n,
+      maxPriorityFeePerGas: 0n,
+      data: ethers.hexlify(ethers.toUtf8Bytes(`Cotsel oracle readiness v1:${randomUUID()}`)),
+    });
   }
 
   private async fetchAddress(): Promise<string> {

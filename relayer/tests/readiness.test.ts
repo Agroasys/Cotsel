@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'net';
-import { GetPublicKeyCommand, KeySpec, KeyUsageType } from '@aws-sdk/client-kms';
+import { GetPublicKeyCommand, KeySpec, KeyUsageType, SignCommand } from '@aws-sdk/client-kms';
 import { createInMemoryNonceStore, type NonceStore } from '@agroasys/shared-auth';
-import { getBytes, SigningKey, Wallet } from 'ethers';
+import { getBytes, hexlify, SigningKey, Wallet } from 'ethers';
 import { createRelayerApp } from '../src/app';
 import { createKmsRelayerSigner } from '../src/kmsRelayerSigner';
 import { createRelayerReadinessCheck } from '../src/readiness';
@@ -15,6 +15,18 @@ function spkiPublicKey(privateKey: string): Uint8Array {
 function kmsReturning(privateKey: string) {
   return {
     send: jest.fn(async (command: unknown) => {
+      if (command instanceof SignCommand) {
+        const signature = new SigningKey(privateKey).sign(hexlify(command.input.Message!));
+        const integer = (value: string) => {
+          let bytes = getBytes(value);
+          while (bytes.length > 1 && bytes[0] === 0) bytes = bytes.slice(1);
+          if (bytes[0] & 0x80) bytes = Uint8Array.from([0, ...bytes]);
+          return Uint8Array.from([0x02, bytes.length, ...bytes]);
+        };
+        const r = integer(signature.r);
+        const s = integer(signature.s);
+        return { Signature: Uint8Array.from([0x30, r.length + s.length, ...r, ...s]) };
+      }
       if (!(command instanceof GetPublicKeyCommand)) {
         throw new Error('unexpected KMS command');
       }
@@ -35,13 +47,29 @@ describe('relayer readiness', () => {
     await signer.getAddress();
     await signer.checkReadiness();
     await signer.checkReadiness();
-    expect(kms.send).toHaveBeenCalledTimes(3);
+    expect(kms.send).toHaveBeenCalledTimes(5);
 
     const replaced = createKmsRelayerSigner(
       config,
       kmsReturning(Wallet.createRandom().privateKey) as never,
     );
     await expect(replaced.checkReadiness()).rejects.toThrow('no longer matches');
+  });
+
+  test('refuses readiness when GetPublicKey succeeds but Sign is denied', async () => {
+    const kms = kmsReturning(relayerWallet.privateKey);
+    const originalSend = kms.send.getMockImplementation()!;
+    kms.send.mockImplementation(async (command) => {
+      if (command instanceof SignCommand) throw new Error('Sign AccessDeniedException');
+      return originalSend(command);
+    });
+    const signer = createKmsRelayerSigner(config, kms as never);
+    const result = await createRelayerReadinessCheck({
+      signerProbe: () => signer.checkReadiness(),
+    })();
+    expect(result.ready).toBe(false);
+    expect(result.dependencies[0]).toMatchObject({ status: 'unavailable' });
+    expect(JSON.stringify(result)).not.toContain('AccessDenied');
   });
 
   test('reuses a signer success within the ttl and re-probes after a failure', async () => {
