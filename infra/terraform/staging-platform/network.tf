@@ -131,11 +131,59 @@ resource "aws_vpc_security_group_egress_rule" "gateway_to_treasury" {
   ip_protocol                  = "tcp"
 }
 
-# Cotsel currently needs HTTPS egress for Base RPC and the reciprocal Agroasys
-# callback. Destination restriction is added after the two managed RPC endpoints
-# and the callback edge addresses are pinned. VPC flow logs remain the detection
-# control inherited from staging-network in the interim.
-#trivy:ignore:AVD-AWS-0104:exp:2026-09-30
+# Cotsel tasks share the Agroasys staging VPC. Their only internet path is private subnet ->
+# same-zone AWS Network Firewall -> NAT, owned by the agroasys-backend staging-network root.
+# That firewall passes only TLS SNI names approved in its reviewed contract and drops the
+# rest. Cotsel's own destinations are owned here, in egress-destinations.json.
+locals {
+  egress_contract      = jsondecode(file("${path.module}/egress-destinations.json"))
+  network_egress       = try(data.terraform_remote_state.network.outputs.egress_inventory, {})
+  network_approved_tls = toset(try(local.network_egress.approved_tls_names, []))
+
+  # Unresolved entries carry a null hostname; compare them as empty strings.
+  egress_destinations = [
+    for entry in local.egress_contract.entries : merge(entry, {
+      hostname = entry.hostname == null ? "" : entry.hostname
+    })
+  ]
+
+  unresolved_egress_destinations = [
+    for entry in local.egress_destinations : entry.service
+    if entry.status != "required" || !can(regex("^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$", entry.hostname))
+  ]
+  unapproved_egress_destinations = [
+    for entry in local.egress_destinations : "${entry.service} (${entry.hostname})"
+    if entry.status == "required" && !contains(local.network_approved_tls, entry.hostname)
+  ]
+}
+
+# The two HTTPS rules below are only as narrow as the firewall behind them, so the plan
+# refuses unless the network root reports default-deny enforcement and approves every
+# destination Cotsel needs.
+resource "terraform_data" "egress_enforcement_gate" {
+  lifecycle {
+    precondition {
+      condition     = try(local.network_egress.denied_by_default, false) == true
+      error_message = "The staging network does not report default-deny egress enforcement. Apply the agroasys-backend staging-network Network Firewall first."
+    }
+
+    precondition {
+      condition     = length(local.unresolved_egress_destinations) == 0
+      error_message = "Every Cotsel egress destination needs status \"required\" and a bare lowercase hostname. Unresolved: ${join(", ", local.unresolved_egress_destinations)}."
+    }
+
+    precondition {
+      condition     = length(local.unapproved_egress_destinations) == 0
+      error_message = "The staging Network Firewall does not approve these Cotsel destinations, so the tasks would fail closed: ${join(", ", local.unapproved_egress_destinations)}. Approve them in agroasys-backend docs/readiness/wp2-staging-egress.json and apply staging-network first."
+    }
+  }
+}
+
+# Trivy cannot follow the route-table hop through AWS Network Firewall and therefore sees
+# only the IP-wide security-group rules. Each exception covers TCP 443 on one rule; the
+# enforcement gate above, the network root's strict-order default-drop policy, and deployed
+# denial evidence remain mandatory. Renew it only with that evidence.
+#trivy:ignore:AVD-AWS-0104:exp:2026-12-31
 resource "aws_vpc_security_group_egress_rule" "gateway_https" {
   security_group_id = aws_security_group.gateway.id
   description       = "HTTPS to approved RPC and Agroasys callback endpoints through managed NAT."
@@ -143,9 +191,11 @@ resource "aws_vpc_security_group_egress_rule" "gateway_https" {
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
+
+  depends_on = [terraform_data.egress_enforcement_gate]
 }
 
-#trivy:ignore:AVD-AWS-0104:exp:2026-09-30
+#trivy:ignore:AVD-AWS-0104:exp:2026-12-31
 resource "aws_vpc_security_group_egress_rule" "services_https" {
   security_group_id = aws_security_group.internal_services.id
   description       = "HTTPS to approved Base RPC and provider endpoints through managed NAT."
@@ -153,4 +203,6 @@ resource "aws_vpc_security_group_egress_rule" "services_https" {
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
+
+  depends_on = [terraform_data.egress_enforcement_gate]
 }

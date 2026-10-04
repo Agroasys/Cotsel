@@ -13,7 +13,7 @@ const dockerfiles = [
 ];
 
 const bundleUrl = 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem';
-const bundleChecksum = 'sha256:e5bb2084ccf45087bda1c9bffdea0eb15ee67f0b91646106e466714f9de3c7e3';
+const bundleChecksum = 'sha256:fe45bbebf92ad3e27a583bbb2ddd1553c521ed4d49af5514dc0a40372ea5395c';
 const bundleDigest = bundleChecksum.slice('sha256:'.length);
 const bundlePath = '/app/aws-rds-global-bundle.pem';
 const runtimeStagePattern =

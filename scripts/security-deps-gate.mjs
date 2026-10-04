@@ -19,6 +19,16 @@ const developmentAuditAllowlist = new Map([
 
 const locallyPatchedAdvisories = new Map([
   [
+    'GHSA-vfj7-8cjw-p6xm',
+    {
+      moduleName: 'braces',
+      severity: 'high',
+      versions: new Set(['3.0.3']),
+      patchedVersions: '<0.0.0',
+      patchFile: 'patches/braces@3.0.3.patch',
+    },
+  ],
+  [
     'GHSA-528h-pc64-c93x',
     {
       moduleName: 'stream-json',
@@ -173,7 +183,7 @@ if (auditAllReport) {
   for (const advisory of patchedAdvisories) {
     const patch = locallyPatchedAdvisories.get(advisoryId(advisory));
     console.log(
-      `Accepted locally patched advisory: ${auditDescription(advisory)}; upstream-commit=${patch.upstreamCommit}; compatibility-check=passed`,
+      `Accepted locally patched advisory: ${auditDescription(advisory)}; patch-source=${patch.upstreamCommit ?? patch.patchFile}; compatibility-check=passed`,
     );
   }
 
