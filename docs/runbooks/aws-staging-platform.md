@@ -19,6 +19,38 @@ the platform boundary for WP-7. It does not accept WP-7 or authorize a release.
    image tags.
 7. Confirm #639 supplies the exact Base Sepolia contract identity. Do not reuse
    the historical address as candidate evidence.
+8. Confirm the Agroasys `staging-network` root enforces egress through AWS
+   Network Firewall and approves every hostname in
+   `infra/terraform/staging-platform/egress-destinations.json`. See
+   [Egress enforcement](#egress-enforcement).
+
+## Egress enforcement
+
+Cotsel tasks share the Agroasys staging VPC. Their only internet path is
+private subnet, then the same-zone Network Firewall, then NAT. The
+`agroasys-backend` `staging-network` root owns that firewall and passes only the
+TLS SNI hostnames approved in its `docs/readiness/wp2-staging-egress.json`.
+
+Cotsel owns its own destination list in `egress-destinations.json`. The
+`terraform_data.egress_enforcement_gate` precondition fails the plan when:
+
+- the network output `egress_inventory.denied_by_default` is not `true`;
+- an entry is still `unresolved` or is not a bare lowercase hostname;
+- a required hostname is missing from the network's `approved_tls_names`.
+
+The `gateway_https` and `services_https` security-group rules still allow TCP
+443 to `0.0.0.0/0`, because a security group cannot match hostnames. Their
+Trivy exceptions are valid only while this gate holds. Renew an exception only
+with deployed evidence: an allowed flow for each destination and a dropped,
+alerted flow to an unapproved hostname.
+
+To add or change a destination:
+
+1. Record the bare hostname in `egress-destinations.json`. Never record a URL,
+   path, or API key.
+2. Get the same hostname approved in the Agroasys staging contract and apply
+   `staging-network`.
+3. Plan this root. The gate passes only when both lists agree.
 
 ## Plan
 
