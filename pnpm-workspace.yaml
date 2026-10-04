@@ -80,5 +80,6 @@ overrides:
 patchedDependencies:
   '@subsquid/typeorm-store@1.9.2': patches/@subsquid__typeorm-store@1.9.2.patch
   brace-expansion@5.0.12: patches/brace-expansion@5.0.12.patch
+  braces@3.0.3: patches/braces@3.0.3.patch
   stream-json@1.9.1: patches/stream-json@1.9.1.patch
 preferWorkspacePackages: true

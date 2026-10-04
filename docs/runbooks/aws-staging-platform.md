@@ -26,6 +26,9 @@ the platform boundary for WP-7. It does not accept WP-7 or authorize a release.
 
 ## Egress enforcement
 
+The repository implementation can merge before firewall deployment and destination approval.
+This does not authorize deployment. The plan must fail until all preconditions below pass.
+
 Cotsel tasks share the Agroasys staging VPC. Their only internet path is
 private subnet, then the same-zone Network Firewall, then NAT. The
 `agroasys-backend` `staging-network` root owns that firewall and passes only the
