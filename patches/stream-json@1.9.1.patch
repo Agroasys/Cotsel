@@ -29,3 +29,36 @@ index 2e96d1581e8ca67ca600ab9228ec7a4a1c84d4af..cfc877722853960184be79568f002c25
      // check, if we allow a chunk
      if (this._checkChunk(chunk)) {
        return callback(null);
+diff --git a/Assembler.js b/Assembler.js
+--- a/Assembler.js
++++ b/Assembler.js
+@@ -5,3 +5,11 @@
++const saveObjectValue = (object, key, value) => {
++  if (key === '__proto__') {
++    Object.defineProperty(object, key, {value, enumerable: true, writable: true, configurable: true});
++  } else {
++    object[key] = value;
++  }
++};
++
+ const startObject = Ctr =>
+   function () {
+     if (this.done) {
+@@ -120,7 +128,7 @@ class Assembler extends EventEmitter {
+       if (this.current instanceof Array) {
+         this.current.push(value);
+       } else {
+-        this.current[this.key] = value;
++        saveObjectValue(this.current, this.key, value);
+         this.key = null;
+       }
+     }
+@@ -138,7 +146,7 @@ class Assembler extends EventEmitter {
+       } else {
+         value = this.reviver(this.key, value);
+         if (value !== undefined) {
+-          this.current[this.key] = value;
++          saveObjectValue(this.current, this.key, value);
+         }
+         this.key = null;
+       }

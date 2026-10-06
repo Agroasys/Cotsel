@@ -61,6 +61,38 @@ and approved as release risk.
   - removal condition (upstream fix version or migration milestone)
 - Review overrides during dependency maintenance and remove when no longer required.
 
+## October 2026 Advisory Disposition
+
+[PR #865](https://github.com/Agroasys/Cotsel/pull/865) addresses the advisories that
+blocked the `main` release gate on 6 October 2026. The production audit must
+remain clear at every release candidate head.
+
+- The `@graphql-tools/utils@<=12.0.0` override selects patched version 12.0.1.
+  Retire it when Subsquid's GraphQL packages select a patched version directly.
+  The compatibility check merges and queries two executable schemas through
+  Subsquid's installed GraphQL server package.
+- The `proxy-addr@<2.0.8` override selects patched version 2.0.8. Retire it when
+  Express selects that version directly.
+- The `stream-json@1.9.1` package patch preserves the legacy API used by Jayson
+  and creates an own data property for `__proto__`. Retire it after the Web3Auth
+  chain moves to a compatible patched version. The compatibility check verifies
+  normal JSON-RPC parsing, the depth limit, and both assembler paths.
+
+The full-tree gate temporarily accepts two additional development-only
+advisories. Both entries name Cotsel security maintainers as owner and expire
+on 31 October 2026:
+
+| Advisory                                                                 | Dependency path                                 | Reason for temporary acceptance                                                                                           |
+| ------------------------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| [GHSA-hp3w-g68c-fv3c](https://github.com/advisories/GHSA-hp3w-g68c-fv3c) | `auth > jest > … > sprintf-js@1.0.3`            | No patched release exists. The production audit excludes this test-tool path.                                             |
+| [GHSA-hqr4-qq8f-hg3x](https://github.com/advisories/GHSA-hqr4-qq8f-hg3x) | `sdk > @web3auth/modal > … > stream-json@1.9.1` | The production audit excludes this development dependency, and version 1.9.1 has no JSONC parser or verifier entry point. |
+
+The gate checks advisory ID, package, severity, version, and dependency path for
+these entries. It rejects any production finding and any development finding
+outside the exact allowlist. Reassess or remove the entries before expiry in
+[dependency issue #100](https://github.com/Agroasys/Cotsel/issues/100). A green
+repository gate does not replace release-candidate scan and acceptance evidence.
+
 ## Hardhat Major Deferral Policy (Issue #192)
 
 ### Deferral Rationale

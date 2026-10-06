@@ -132,6 +132,21 @@ const parsedRequest = await new Promise((resolve, reject) => {
 assert.deepEqual(parsedRequest, nestedRequest);
 
 const Pick = require(path.join(streamJsonPath, 'filters', 'Pick.js'));
+const Assembler = require(path.join(streamJsonPath, 'Assembler.js'));
+for (const options of [undefined, { reviver: (_key, value) => value }]) {
+  const assembler = new Assembler(options);
+  assembler.startObject();
+  assembler.keyValue('__proto__');
+  assembler.startObject();
+  assembler.keyValue('isAdmin');
+  assembler.trueValue();
+  assembler.endObject();
+  assembler.endObject();
+  assert.equal(Object.getPrototypeOf(assembler.current), Object.prototype);
+  assert.equal(Object.hasOwn(assembler.current, '__proto__'), true);
+  assert.deepEqual(assembler.current, JSON.parse('{"__proto__":{"isAdmin":true}}'));
+  assert.equal({}.isAdmin, undefined);
+}
 await new Promise((resolve, reject) => {
   const depth = 50;
   const input = '{"a":'.repeat(depth) + '1' + '}'.repeat(depth);
@@ -146,6 +161,24 @@ await new Promise((resolve, reject) => {
   pipeline.on('end', () => reject(new Error('Expected an over-depth JSON error')));
 });
 
+const graphqlServerRequire = createRequire(
+  path.join(fs.realpathSync('indexer/node_modules/@subsquid/graphql-server'), 'package.json'),
+);
+const { makeExecutableSchema, mergeSchemas } = graphqlServerRequire('@graphql-tools/schema');
+const { graphqlSync } = graphqlServerRequire('graphql');
+const left = makeExecutableSchema({
+  typeDefs: 'type Query { left: String }',
+  resolvers: { Query: { left: () => 'left' } },
+});
+const right = makeExecutableSchema({
+  typeDefs: 'type Query { right: String }',
+  resolvers: { Query: { right: () => 'right' } },
+});
+const merged = mergeSchemas({ schemas: [left, right] });
+const result = graphqlSync({ schema: merged, source: '{ left right }' });
+assert.equal(result.errors, undefined);
+assert.deepEqual({ ...result.data }, { left: 'left', right: 'right' });
+
 console.log(
-  `Dependency compatibility check passed: minimatch ${minimatchVersions.join(', ')} -> patched brace-expansion 5.0.12; glob consumers -> depth-patched braces 3.0.3; jayson 4.3.0 -> security-patched stream-json 1.9.1`,
+  `Dependency compatibility check passed: minimatch ${minimatchVersions.join(', ')} -> patched brace-expansion 5.0.12; glob consumers -> depth-patched braces 3.0.3; jayson 4.3.0 -> security-patched stream-json 1.9.1; Subsquid GraphQL schema merge`,
 );
