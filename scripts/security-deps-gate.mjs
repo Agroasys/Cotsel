@@ -15,6 +15,33 @@ const developmentAuditAllowlist = new Map([
         'No patched release exists. The affected path is limited to development-only Hardhat tooling.',
     },
   ],
+  [
+    'GHSA-hp3w-g68c-fv3c',
+    {
+      moduleName: 'sprintf-js',
+      severity: 'moderate',
+      versions: new Set(['1.0.3']),
+      patchedVersions: '<0.0.0',
+      pathPrefix: 'auth>jest>',
+      owner: 'Cotsel security maintainers',
+      expiresOn: '2026-10-31',
+      reason: 'No patched release exists. This path is limited to development-only Jest tooling.',
+    },
+  ],
+  [
+    'GHSA-hqr4-qq8f-hg3x',
+    {
+      moduleName: 'stream-json',
+      severity: 'moderate',
+      versions: new Set(['1.9.1']),
+      patchedVersions: '>=3.6.0',
+      pathPrefix: 'sdk>@web3auth/modal>',
+      owner: 'Cotsel security maintainers',
+      expiresOn: '2026-10-31',
+      reason:
+        'Only development-only Web3Auth reaches this version; stream-json 1.9.1 has no JSONC parser or verifier entry point.',
+    },
+  ],
 ]);
 
 const locallyPatchedAdvisories = new Map([
@@ -36,6 +63,16 @@ const locallyPatchedAdvisories = new Map([
       versions: new Set(['1.9.1']),
       patchedVersions: '>=3.5.0',
       upstreamCommit: 'a869fb98aaef9225556f49901a8f55954ff856e6',
+    },
+  ],
+  [
+    'GHSA-mjw6-4jj6-33hc',
+    {
+      moduleName: 'stream-json',
+      severity: 'moderate',
+      versions: new Set(['1.9.1']),
+      patchedVersions: '>=3.6.0',
+      patchFile: 'patches/stream-json@1.9.1.patch',
     },
   ],
 ]);
@@ -99,6 +136,13 @@ function matchesDevelopmentAllowlist(advisory, currentDate = new Date()) {
 
   const expiresAt = new Date(`${allowed.expiresOn}T23:59:59Z`);
   const findingVersions = (advisory.findings ?? []).map((finding) => finding.version);
+  const pathsMatch =
+    !allowed.pathPrefix ||
+    (advisory.findings ?? []).every(
+      (finding) =>
+        (finding.paths ?? []).length > 0 &&
+        finding.paths.every((path) => path.startsWith(allowed.pathPrefix)),
+    );
 
   return (
     currentDate <= expiresAt &&
@@ -106,7 +150,8 @@ function matchesDevelopmentAllowlist(advisory, currentDate = new Date()) {
     advisory.severity === allowed.severity &&
     advisory.patched_versions === allowed.patchedVersions &&
     findingVersions.length > 0 &&
-    findingVersions.every((version) => allowed.versions.has(version))
+    findingVersions.every((version) => allowed.versions.has(version)) &&
+    pathsMatch
   );
 }
 

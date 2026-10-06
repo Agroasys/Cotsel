@@ -46,6 +46,8 @@ minimumReleaseAgeExclude:
   # block below pins the resolved version.
   - js-yaml
 overrides:
+  # GHSA-7mx3-vvmw-hjmv affects every earlier GraphQL Tools utils major (PR #865).
+  '@graphql-tools/utils@<=12.0.0': 12.0.1
   '@babel/core@<=7.29.0': 7.29.6
   '@humanfs/node': 0.16.8
   '@protobufjs/utf8': 1.1.1
@@ -73,6 +75,8 @@ overrides:
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
   lodash: 4.18.1
   qs: 6.16.0
+  # GHSA-jqcg-44mw-7w3h affects the Express trust-proxy dependency (PR #865).
+  proxy-addr@<2.0.8: 2.0.8
   serialize-javascript: 7.0.5
   socket.io-parser: 4.2.7
   tmp: 0.2.7

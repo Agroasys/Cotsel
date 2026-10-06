@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@graphql-tools/utils@<=12.0.0': 12.0.1
   '@babel/core@<=7.29.0': 7.29.6
   '@humanfs/node': 0.16.8
   '@protobufjs/utf8': 1.1.1
@@ -25,6 +26,7 @@ overrides:
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
   lodash: 4.18.1
   qs: 6.16.0
+  proxy-addr@<2.0.8: 2.0.8
   serialize-javascript: 7.0.5
   socket.io-parser: 4.2.7
   tmp: 0.2.7
@@ -44,7 +46,7 @@ patchedDependencies:
     hash: 7e75ade1e27447432f36cda3fe73db74ce0d4b84cc2a3ae904b2710807dd8130
     path: patches/braces@3.0.3.patch
   stream-json@1.9.1:
-    hash: fe09015178d7af091bf29d9da9575fa6e124fd51bbbae0cca31d9a0fd59b5ee3
+    hash: fe64e65732c5c53cc420309600b9b089075436191a85e4101e1024c2ce90b786
     path: patches/stream-json@1.9.1.patch
 
 importers:
@@ -1586,37 +1588,12 @@ packages:
     peerDependencies:
       graphql: 15.10.2
 
-  '@graphql-tools/utils@10.11.0':
+  '@graphql-tools/utils@12.0.1':
     resolution:
       {
-        integrity: sha512-iBFR9GXIs0gCD+yc3hoNswViL1O5josI33dUqiNStFI/MHLCEPduasceAcazRH77YONKNiviHBV8f7OgcT4o2Q==,
+        integrity: sha512-8YC6jn4xYDS6YTY6xDAgQAs/nGgvzRaIGHS8GeSfVItQzNK7Ms24CQtE3EJY+amvR+tBnhRSX0N83aGj+V/RIg==,
       }
     engines: { node: '>=16.0.0' }
-    peerDependencies:
-      graphql: 15.10.2
-
-  '@graphql-tools/utils@11.2.0':
-    resolution:
-      {
-        integrity: sha512-eu9h1R3j/wWc4rvmYJF5AKtlwniDzstrZ/c6KSz+HdI+n7I7iog9xyKmBfpUwSbG1TqPNZBzWjFMkzdYOKq6Bg==,
-      }
-    engines: { node: '>=16.0.0' }
-    peerDependencies:
-      graphql: 15.10.2
-
-  '@graphql-tools/utils@8.9.0':
-    resolution:
-      {
-        integrity: sha512-pjJIWH0XOVnYGXCqej8g/u/tsfV4LvLlj0eATKQu5zwnxd/TiTHq7Cg313qUPTFFHZ3PP5wJ15chYVtLDwaymg==,
-      }
-    peerDependencies:
-      graphql: 15.10.2
-
-  '@graphql-tools/utils@9.2.1':
-    resolution:
-      {
-        integrity: sha512-WUw506Ql6xzmOORlriNrD6Ugx+HjVgYxt9KCXD9mHAak+eaXSwuGGPyE60hy9xaDEoXKBsG7SkG69ybitaVl6A==,
-      }
     peerDependencies:
       graphql: 15.10.2
 
@@ -8991,10 +8968,10 @@ packages:
       }
     engines: { node: '>= 6' }
 
-  proxy-addr@2.0.7:
+  proxy-addr@2.0.8:
     resolution:
       {
-        integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==,
+        integrity: sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ==,
       }
     engines: { node: '>= 0.10' }
 
@@ -11659,26 +11636,26 @@ snapshots:
 
   '@graphql-tools/merge@8.3.1(graphql@15.10.2)':
     dependencies:
-      '@graphql-tools/utils': 8.9.0(graphql@15.10.2)
+      '@graphql-tools/utils': 12.0.1(graphql@15.10.2)
       graphql: 15.10.2
       tslib: 2.8.1
 
   '@graphql-tools/merge@8.4.2(graphql@15.10.2)':
     dependencies:
-      '@graphql-tools/utils': 9.2.1(graphql@15.10.2)
+      '@graphql-tools/utils': 12.0.1(graphql@15.10.2)
       graphql: 15.10.2
       tslib: 2.8.1
 
   '@graphql-tools/merge@9.2.0(graphql@15.10.2)':
     dependencies:
-      '@graphql-tools/utils': 11.2.0(graphql@15.10.2)
+      '@graphql-tools/utils': 12.0.1(graphql@15.10.2)
       graphql: 15.10.2
       tslib: 2.8.1
 
   '@graphql-tools/mock@8.7.20(graphql@15.10.2)':
     dependencies:
       '@graphql-tools/schema': 9.0.19(graphql@15.10.2)
-      '@graphql-tools/utils': 9.2.1(graphql@15.10.2)
+      '@graphql-tools/utils': 12.0.1(graphql@15.10.2)
       fast-json-stable-stringify: 2.1.0
       graphql: 15.10.2
       tslib: 2.8.1
@@ -11686,14 +11663,14 @@ snapshots:
   '@graphql-tools/schema@10.0.36(graphql@15.10.2)':
     dependencies:
       '@graphql-tools/merge': 9.2.0(graphql@15.10.2)
-      '@graphql-tools/utils': 11.2.0(graphql@15.10.2)
+      '@graphql-tools/utils': 12.0.1(graphql@15.10.2)
       graphql: 15.10.2
       tslib: 2.8.1
 
   '@graphql-tools/schema@8.5.1(graphql@15.10.2)':
     dependencies:
       '@graphql-tools/merge': 8.3.1(graphql@15.10.2)
-      '@graphql-tools/utils': 8.9.0(graphql@15.10.2)
+      '@graphql-tools/utils': 12.0.1(graphql@15.10.2)
       graphql: 15.10.2
       tslib: 2.8.1
       value-or-promise: 1.0.11
@@ -11701,35 +11678,16 @@ snapshots:
   '@graphql-tools/schema@9.0.19(graphql@15.10.2)':
     dependencies:
       '@graphql-tools/merge': 8.4.2(graphql@15.10.2)
-      '@graphql-tools/utils': 9.2.1(graphql@15.10.2)
+      '@graphql-tools/utils': 12.0.1(graphql@15.10.2)
       graphql: 15.10.2
       tslib: 2.8.1
       value-or-promise: 1.0.12
 
-  '@graphql-tools/utils@10.11.0(graphql@15.10.2)':
+  '@graphql-tools/utils@12.0.1(graphql@15.10.2)':
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@15.10.2)
       '@whatwg-node/promise-helpers': 1.3.2
       cross-inspect: 1.0.1
-      graphql: 15.10.2
-      tslib: 2.8.1
-
-  '@graphql-tools/utils@11.2.0(graphql@15.10.2)':
-    dependencies:
-      '@graphql-typed-document-node/core': 3.2.0(graphql@15.10.2)
-      '@whatwg-node/promise-helpers': 1.3.2
-      cross-inspect: 1.0.1
-      graphql: 15.10.2
-      tslib: 2.8.1
-
-  '@graphql-tools/utils@8.9.0(graphql@15.10.2)':
-    dependencies:
-      graphql: 15.10.2
-      tslib: 2.8.1
-
-  '@graphql-tools/utils@9.2.1(graphql@15.10.2)':
-    dependencies:
-      '@graphql-typed-document-node/core': 3.2.0(graphql@15.10.2)
       graphql: 15.10.2
       tslib: 2.8.1
 
@@ -12869,7 +12827,7 @@ snapshots:
       '@apollo/utils.keyvaluecache': 1.0.2
       '@graphql-tools/merge': 9.2.0(graphql@15.10.2)
       '@graphql-tools/schema': 10.0.36(graphql@15.10.2)
-      '@graphql-tools/utils': 10.11.0(graphql@15.10.2)
+      '@graphql-tools/utils': 12.0.1(graphql@15.10.2)
       '@keyv/redis': 2.5.8
       '@subsquid/apollo-server-core': 3.14.0(graphql@15.10.2)
       '@subsquid/apollo-server-express': 3.14.1(express@4.22.2)(graphql@15.10.2)
@@ -15345,7 +15303,7 @@ snapshots:
       on-finished: 2.4.1
       parseurl: 1.3.3
       path-to-regexp: 0.1.13
-      proxy-addr: 2.0.7
+      proxy-addr: 2.0.8
       qs: 6.16.0
       range-parser: 1.2.1
       safe-buffer: 5.2.1
@@ -15380,7 +15338,7 @@ snapshots:
       on-finished: 2.4.1
       once: 1.4.0
       parseurl: 1.3.3
-      proxy-addr: 2.0.7
+      proxy-addr: 2.0.8
       qs: 6.16.0
       range-parser: 1.2.1
       router: 2.2.0
@@ -16152,7 +16110,7 @@ snapshots:
       eyes: 0.1.8
       isomorphic-ws: 4.0.1(ws@7.5.11(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       json-stringify-safe: 5.0.1
-      stream-json: 1.9.1(patch_hash=fe09015178d7af091bf29d9da9575fa6e124fd51bbbae0cca31d9a0fd59b5ee3)
+      stream-json: 1.9.1(patch_hash=fe64e65732c5c53cc420309600b9b089075436191a85e4101e1024c2ce90b786)
       uuid: 11.1.1
       ws: 7.5.11(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     transitivePeerDependencies:
@@ -17264,7 +17222,7 @@ snapshots:
       kleur: 3.0.3
       sisteransi: 1.0.5
 
-  proxy-addr@2.0.7:
+  proxy-addr@2.0.8:
     dependencies:
       forwarded: 0.2.0
       ipaddr.js: 1.9.1
@@ -17804,7 +17762,7 @@ snapshots:
 
   stream-chain@2.2.5: {}
 
-  stream-json@1.9.1(patch_hash=fe09015178d7af091bf29d9da9575fa6e124fd51bbbae0cca31d9a0fd59b5ee3):
+  stream-json@1.9.1(patch_hash=fe64e65732c5c53cc420309600b9b089075436191a85e4101e1024c2ce90b786):
     dependencies:
       stream-chain: 2.2.5
 
