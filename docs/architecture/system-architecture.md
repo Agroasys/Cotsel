@@ -4,6 +4,13 @@ This is the canonical architecture view for the active Cotsel settlement and
 control subsystem. It treats Agroasys as an upstream integration boundary rather
 than duplicating the entire marketplace architecture inside Cotsel.
 
+The Agroasys [service-boundary decision](https://github.com/Agroasys/agroasys-backend/blob/develop/docs/adr/0001-federated-modulith-service-extraction.md)
+and [implementation plan](https://github.com/Agroasys/agroasys-backend/blob/develop/docs/architecture/service-boundary-implementation-plan.md)
+govern Agroasys-owned code. Cotsel owns its gateway, contract, oracle, treasury,
+indexing, and reconciliation implementation. Cross-repository changes must keep
+the signed handoff, callback, and reconciliation contracts consistent in both
+repos; a backend issue does not transfer Cotsel execution authority.
+
 The diagram distinguishes implemented runtime from target or external
 infrastructure. Dashed SQS and EventBridge connections are target durable
 eventing; current gateway, relayer, callback, governance, treasury, and
@@ -222,6 +229,11 @@ flowchart TB
 - Cotsel consumes bounded compliance and logistics attestation references. The
   repository does not contain direct KYB, KYT, sanctions, banking, or logistics
   provider execution clients.
+- Agroasys Documents / Evidence owns stored-document safety and evidence
+  references. A file cleared for evidence use does not by itself prove a
+  certification or commercial claim. Cotsel validates the bounded attestations
+  required by its settlement protocol; it does not adjudicate the underlying
+  Agroasys certification claim.
 - Redis is support infrastructure only. Critical workflows must use an approved
   Postgres outbox or SQS/DLQ implementation; neither SQS nor EventBridge is
   represented as deployed by the current repository.
