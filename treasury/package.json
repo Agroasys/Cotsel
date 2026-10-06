@@ -20,7 +20,7 @@
     "@agroasys/shared-auth": "^1.0.0",
     "@agroasys/shared-http": "^1.0.0",
     "cors": "^2.8.6",
-    "dotenv": "^18.0.1",
+    "dotenv": "^18.0.4",
     "express": "^5.2.1",
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
