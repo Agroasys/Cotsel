@@ -30,7 +30,7 @@
   "devDependencies": {
     "@subsquid/typeorm-codegen": "^2.4.0",
     "@types/minimatch": "^6.0.0",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.3",
     "@types/pg": "^8.23.1",
     "typescript": ">=6.0.2 <6.1.0"
   }
