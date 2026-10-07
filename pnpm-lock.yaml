@@ -25,6 +25,7 @@ overrides:
   js-yaml@<3.15.2: 3.15.2
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
   lodash: 4.18.1
+  pbkdf2@<=3.1.6: 3.1.7
   qs: 6.16.0
   proxy-addr@<2.0.8: 2.0.8
   serialize-javascript: 7.0.5
@@ -8711,10 +8712,10 @@ packages:
         integrity: sha512-Dp6zGqpTdETdR63lehJYPeIOqpiNBNtc7BpWSLrOje7UaIsE5aY92r/AunQA7rsXvet3lrJ3JnZX29UPTKXyKQ==,
       }
 
-  pbkdf2@3.1.5:
+  pbkdf2@3.1.7:
     resolution:
       {
-        integrity: sha512-Q3CG/cYvCO1ye4QKkuH7EXxs3VC/rI1/trd+qX2+PolbaKG0H+bgcZzrTt96mMyRtejk+JMCiLUn3y29W8qmFQ==,
+        integrity: sha512-nS4mvFgVwUrecPTRdpdseM2fwpdfnX0/HibA8DgBRQtihUAzHQYJFU2l+OlEtiXtpqkrMvCPDwyXMUnASDt6Qw==,
       }
     engines: { node: '>= 0.10' }
 
@@ -15161,7 +15162,7 @@ snapshots:
       create-hmac: 1.1.7
       hash.js: 1.1.7
       keccak: 3.0.4
-      pbkdf2: 3.1.5
+      pbkdf2: 3.1.7
       randombytes: 2.1.0
       safe-buffer: 5.2.1
       scrypt-js: 3.0.1
@@ -17088,7 +17089,7 @@ snapshots:
 
   pathval@1.1.1: {}
 
-  pbkdf2@3.1.5:
+  pbkdf2@3.1.7:
     dependencies:
       create-hash: 1.2.0
       create-hmac: 1.1.7

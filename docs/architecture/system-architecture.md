@@ -11,6 +11,19 @@ indexing, and reconciliation implementation. Cross-repository changes must keep
 the signed handoff, callback, and reconciliation contracts consistent in both
 repos; a backend issue does not transfer Cotsel execution authority.
 
+Agroasys Business Accounts / Tenancy owns member invitations, organization scope,
+explicit active-account switching, and advisory capability readiness. Identity
+owns verified email and sessions. Compliance and Finance supply current owner
+decisions; Notification owns invitation delivery. The
+[Business Accounts contract](https://github.com/Agroasys/agroasys-backend/blob/develop/docs/architecture/business-account-product-contract.md)
+defines this upstream workflow. An invitation or readiness observation cannot
+authorize Cotsel settlement, treasury control, or a privileged signing action.
+
+Agroasys [PR #750](https://github.com/Agroasys/agroasys-backend/pull/750) replaces the
+tracked direct cross-owner reads with purpose-specific owner contracts. Shared
+database relation projections and runtime extraction retain their ADR gates.
+This alignment changes no Cotsel handoff, callback, or session-exchange wire format.
+
 The diagram distinguishes implemented runtime from target or external
 infrastructure. Dashed SQS and EventBridge connections are target durable
 eventing; current gateway, relayer, callback, governance, treasury, and

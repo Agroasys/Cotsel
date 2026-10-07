@@ -74,6 +74,8 @@ overrides:
   js-yaml@<3.15.2: 3.15.2
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
   lodash: 4.18.1
+  # GHSA-477h-4r7f-fvrx affects long-password hashing in older pbkdf2 releases.
+  pbkdf2@<=3.1.6: 3.1.7
   qs: 6.16.0
   # GHSA-jqcg-44mw-7w3h affects the Express trust-proxy dependency (PR #865).
   proxy-addr@<2.0.8: 2.0.8
