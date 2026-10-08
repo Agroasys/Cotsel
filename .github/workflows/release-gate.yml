@@ -197,16 +197,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: '22.23.2'
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Install supported toolchain and dependencies
+        uses: ./.github/actions/node-pnpm
 
       - name: Run repo-quality baseline
         shell: bash
@@ -237,6 +229,9 @@ jobs:
           run_check ci-cost-controls node --test scripts/tests/ci-cost-controls.test.mjs
           run_check release-evidence-binding pnpm run release:evidence:check
           run_check release-supply-chain pnpm run release:supply-chain:check
+          run_check governance-policy node --test scripts/tests/wp6-governance-policy.test.mjs
+          run_check security-scan-evidence node --test scripts/tests/security-scan-evidence.test.mjs scripts/tests/sdk-release-evidence.test.mjs scripts/tests/license-inventory.test.mjs
+          run_check dependency-license-inventory pnpm run licenses:report
           run_check relayer-tests pnpm --filter @agroasys/relayer run test
           run_check relayer-build pnpm --filter @agroasys/relayer run build
 
@@ -249,7 +244,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ci-report-repo-quality
-          path: ci-reports/repo-quality.txt
+          path: |
+            ci-reports/repo-quality.txt
+            reports/licenses/
 
   shared-packages:
     name: ci/shared-packages
@@ -1172,6 +1169,9 @@ jobs:
     uses: ./.github/workflows/cross-repository-compatibility.yml
     secrets: inherit
 
+  repository-security:
+    uses: ./.github/workflows/repository-security.yml
+
   release-gate:
     name: ci/release-gate
     runs-on: ubuntu-latest
@@ -1179,6 +1179,7 @@ jobs:
     needs:
       - changes
       - dependency-security
+      - repository-security
       - docs-profile-guard
       - env-profile-regression
       - repo-quality

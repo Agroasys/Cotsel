@@ -16,12 +16,20 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+concurrency:
+  group: sdk-publish-${{ inputs.version }}
+  cancel-in-progress: false
 
 jobs:
   publish:
     name: Publish @agroasys/sdk
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    environment: staging
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,6 +49,9 @@ jobs:
 
       - name: Validate requested version
         run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test -z "$(git status --porcelain --untracked-files=all)"
           node <<'NODE'
           const fs = require('node:fs');
           const requested = process.env.SDK_VERSION;
@@ -53,12 +64,21 @@ jobs:
             console.error(`Invalid semver version: ${requested}`);
             process.exit(1);
           }
+          if (!/^[a-z][a-z0-9-]*$/.test(process.env.SDK_DIST_TAG)) {
+            throw new Error('dist_tag must be a non-version npm tag');
+          }
           NODE
         env:
           SDK_VERSION: ${{ inputs.version }}
+          SDK_DIST_TAG: ${{ inputs.dist_tag }}
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Require exact-main release checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/sdk-source-gate.mjs
 
       - name: Validate SDK
         run: |
@@ -67,9 +87,75 @@ jobs:
           pnpm --filter @agroasys/sdk run test
           pnpm --filter @agroasys/sdk run build
 
-      - name: Publish SDK package
+      - name: Pack the validated SDK once
+        id: package
         working-directory: sdk
-        run: npm publish --tag "$SDK_DIST_TAG"
+        run: |
+          set -euo pipefail
+          npm pack --ignore-scripts --json > pack.json
+          node -e 'const fs = require("fs"); const p = JSON.parse(fs.readFileSync("pack.json"))[0]; fs.appendFileSync(process.env.GITHUB_OUTPUT, `path=sdk/${p.filename}\nintegrity=${p.integrity}\n`);'
+
+      - name: Generate SPDX build-workspace SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c
+        with:
+          syft-version: v1.54.1
+          path: .
+          format: spdx-json
+          output-file: sdk/sbom-build-workspace.spdx.json
+          upload-artifact: false
+
+      - name: Attest package provenance
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: ${{ steps.package.outputs.path }}
+
+      - name: Attest package SBOM
+        id: sbom
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: ${{ steps.package.outputs.path }}
+          sbom-path: sdk/sbom-build-workspace.spdx.json
+
+      - name: Verify package attestations and preserve bundles
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_FILE: ${{ steps.package.outputs.path }}
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          identity=https://github.com/Agroasys/Cotsel/.github/workflows/sdk-publish.yml@refs/heads/main
+          gh attestation verify "$PACKAGE_FILE" --repo "$GITHUB_REPOSITORY" --cert-identity "$identity" --source-ref refs/heads/main --source-digest "$GITHUB_SHA" --deny-self-hosted-runners --format json > sdk/provenance-verification.json
+          gh attestation verify "$PACKAGE_FILE" --repo "$GITHUB_REPOSITORY" --cert-identity "$identity" --source-ref refs/heads/main --source-digest "$GITHUB_SHA" --deny-self-hosted-runners --predicate-type https://spdx.dev/Document/v2.3 --format json > sdk/sbom-verification.json
+          cp "$PROVENANCE_BUNDLE" sdk/provenance.sigstore.json
+          cp "$SBOM_BUNDLE" sdk/sbom.sigstore.json
+
+      - name: Publish SDK package
+        run: npm publish "$PACKAGE_FILE" --ignore-scripts --tag "$SDK_DIST_TAG"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SDK_DIST_TAG: ${{ inputs.dist_tag }}
+          PACKAGE_FILE: ${{ steps.package.outputs.path }}
+
+      - name: Verify published package identity
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SDK_VERSION: ${{ inputs.version }}
+          PACKAGE_FILE: ${{ steps.package.outputs.path }}
+          PACKAGE_INTEGRITY: ${{ steps.package.outputs.integrity }}
+        run: node scripts/sdk-release-evidence.mjs
+
+      - name: Retain SDK release evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cotsel-sdk-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            sdk/*.tgz
+            sdk/pack.json
+            sdk/sbom-build-workspace.spdx.json
+            sdk/*-verification.json
+            sdk/*.sigstore.json
+            sdk/release-sdk.json

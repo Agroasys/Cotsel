@@ -243,6 +243,7 @@ jobs:
       - name: Generate SPDX image SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c
         with:
+          syft-version: v1.54.1
           image: ${{ steps.identity.outputs.reference }}
           format: spdx-json
           output-file: sbom-image-${{ matrix.service }}.spdx.json

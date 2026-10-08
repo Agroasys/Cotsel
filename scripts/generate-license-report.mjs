@@ -9,27 +9,27 @@ const jsonOut = path.join(outputDir, 'third-party-licenses.json');
 const summaryOut = path.join(outputDir, 'third-party-licenses-summary.txt');
 
 const INTERNAL_PREFIX = '@agroasys/';
+const rootManifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 const workspaceNames = new Set([
-  'Cotsel',
-  'contracts',
-  'indexer',
-  'oracle',
-  '@agroasys/sdk',
-  'reconciliation',
-  '@agroasys/notifications',
-  'ricardian',
-  'treasury',
-  '@agroasys/shared-auth',
+  rootManifest.name,
+  ...rootManifest.workspaces.map(
+    (directory) =>
+      JSON.parse(fs.readFileSync(path.join(repoRoot, directory, 'package.json'), 'utf8')).name,
+  ),
 ]);
 
 function runPnpmListJson() {
   try {
-    return execFileSync('pnpm', ['list', '--depth', 'Infinity', '--json', '--long', '--prod'], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    return execFileSync(
+      'pnpm',
+      ['list', '--recursive', '--depth', 'Infinity', '--json', '--long', '--prod'],
+      {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
   } catch (error) {
     // pnpm list can return non-zero while still emitting parseable JSON.
     if (
@@ -68,7 +68,10 @@ function childNodes(node) {
       return [];
     }
 
-    return Object.values(value);
+    return Object.entries(value).map(([name, child]) => ({
+      ...child,
+      name: child.name ?? child.from ?? name,
+    }));
   });
 }
 
@@ -154,13 +157,20 @@ function buildSummary(packages) {
 function main() {
   const raw = runPnpmListJson();
   const tree = JSON.parse(raw);
+  if (!Array.isArray(tree) || !tree.length)
+    throw new Error('License inventory contains no workspace trees');
+  const missing = [...workspaceNames].filter((name) => !tree.some((entry) => entry.name === name));
+  if (missing.length)
+    throw new Error(`License inventory is missing workspaces: ${missing.join(', ')}`);
   const packages = collectPackages(tree);
+  if (!packages.length) throw new Error('License inventory contains no production dependencies');
 
   fs.mkdirSync(outputDir, { recursive: true });
 
   const report = {
     generatedAt: new Date().toISOString(),
-    sourceCommand: 'pnpm list --depth Infinity --json --long --prod',
+    sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+    sourceCommand: 'pnpm list --recursive --depth Infinity --json --long --prod',
     packageCount: packages.length,
     packages,
   };

@@ -3,6 +3,7 @@ import { basename, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const supportedNodeVersion = '22.23.2';
+export const supportedSyftVersion = 'v1.54.1';
 
 const sha256Pattern = /@sha256:[a-f0-9]{64}(?:\s|$)/u;
 const actionShaPattern = /^[a-f0-9]{40}$/u;
@@ -42,6 +43,13 @@ export function workflowViolations(path, contents) {
     }
   }
 
+  for (const block of contents.split(/\n\s*- (?:name:|uses:)/u)) {
+    if (block.includes('uses: anchore/sbom-action@') || block.startsWith(' anchore/sbom-action@')) {
+      if (!block.includes(`syft-version: ${supportedSyftVersion}`)) {
+        violations.push(`${path}: SBOM generation must pin Syft ${supportedSyftVersion}`);
+      }
+    }
+  }
   return violations;
 }
 
@@ -122,8 +130,11 @@ export function releaseWorkflowViolations(contents) {
 export function repositoryViolations(root) {
   const violations = [];
   const workflowDirectory = join(root, '.github', 'workflows');
+  const actionDirectory = join(root, '.github', 'actions');
 
-  for (const path of filesBelow(workflowDirectory).filter((file) => /\.ya?ml$/u.test(file))) {
+  for (const path of [...filesBelow(workflowDirectory), ...filesBelow(actionDirectory)].filter(
+    (file) => /\.ya?ml$/u.test(file),
+  )) {
     violations.push(...workflowViolations(relative(root, path), readFileSync(path, 'utf8')));
   }
 

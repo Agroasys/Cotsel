@@ -1,0 +1,63 @@
+name: Repository security
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  scan:
+    name: ci/repository-security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.2'
+      - name: Scan tracked source for secrets
+        id: secrets
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          version: v0.70.0
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: '1'
+          format: json
+          output: /tmp/cotsel-secret-scan.json
+          hide-progress: true
+          skip-dirs: .git
+      - name: Scan infrastructure configuration
+        id: iac
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          version: v0.70.0
+          scan-type: config
+          scan-ref: infra/terraform
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          format: json
+          output: /tmp/cotsel-iac-scan.json
+          hide-progress: true
+      - name: Prove seeded detections
+        id: seeded
+        if: always()
+        run: node scripts/security-scanner-selftest.mjs
+      - name: Retain safe scan evidence and enforce outcomes
+        if: always()
+        env:
+          SECRET_SCAN_OUTCOME: ${{ steps.secrets.outcome }}
+          IAC_SCAN_OUTCOME: ${{ steps.iac.outcome }}
+          SEEDED_SCAN_OUTCOME: ${{ steps.seeded.outcome }}
+        run: node scripts/security-scan-evidence.mjs
+      - name: Upload redacted scan evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ci-report-repository-security
+          path: ci-reports/repository-security.json
+          if-no-files-found: error

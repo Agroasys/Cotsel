@@ -12,7 +12,7 @@ From repository root:
 pnpm run licenses:report
 ```
 
-The report is generated from `pnpm list --depth Infinity --json --long --prod`.
+The report is generated from `pnpm list --recursive --depth Infinity --json --long --prod`.
 
 ## Output Artifacts
 
@@ -30,5 +30,7 @@ The command writes two files:
 
 ## Notes
 
-- This runbook is advisory and does not fail CI by default.
+- CI requires a non-empty inventory covering every workspace. Missing workspaces or malformed output fail the aggregate.
+- CI retains license reports with the source commit. Unknown licenses require an independent disposition before promotion.
+- Inventory success is not legal acceptance. Attach the reviewed report and decision to the candidate evidence index.
 - Keep generated files as review artifacts; do not treat this as a policy allow/deny engine.
