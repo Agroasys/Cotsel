@@ -26,6 +26,7 @@ test('SDK publication uses protected main, attests the archive, and publishes wi
   assert.match(workflow, /--source-digest "\$GITHUB_SHA"/u);
   assert.match(workflow, /node scripts\/sdk-release-evidence.mjs/u);
   assert.match(workflow, /node scripts\/sdk-source-gate.mjs/u);
+  assert.match(workflow, /^ {2}checks: read$/mu);
 });
 
 test('publication rejects each missing, skipped, failed, cancelled, pending, or spoofed source check', () => {
