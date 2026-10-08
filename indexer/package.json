@@ -22,9 +22,9 @@
     "@subsquid/logger": "^1.6.0",
     "@subsquid/typeorm-migration": "^1.4.0",
     "@subsquid/typeorm-store": "^1.9.2",
-    "dotenv": "^18.0.1",
+    "dotenv": "^18.0.4",
     "ethers": "^6.17.0",
-    "pg": "8.23.0",
+    "pg": "8.23.1",
     "typeorm": "1.1.1"
   },
   "devDependencies": {
