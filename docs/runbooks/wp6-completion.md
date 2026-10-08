@@ -68,6 +68,10 @@ Unknown licenses require independent disposition. Inventory success does not est
 SDK publication runs from protected `main`. It packs validated output once and publishes that exact archive without lifecycle scripts.
 Its signed SBOM describes the build workspace. It is not a claim that every workspace dependency ships inside the archive.
 Registry integrity must match the attested package bytes.
+Registry reads use five attempts, with 1, 2, 4, and 8 second delays.
+Each request has a 15-second process timeout. A different valid digest fails immediately.
+If retries fail, retain the archive, pack record, and verified bundles.
+Rerun the identity check against that retained archive after registry recovery. Do not republish the version.
 
 ## Batch 3: Governance packet and enforcement
 

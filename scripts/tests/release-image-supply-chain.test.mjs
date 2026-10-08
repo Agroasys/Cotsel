@@ -91,6 +91,9 @@ test('published image metadata records the SBOM passed to the attester and bindi
   assert.match(workflow, /sbom-path: sbom-image-\$\{\{ matrix\.service \}\}\.spdx\.json/u);
   assert.match(workflow, /const sbomPath = `sbom-image-\$\{process\.env\.SERVICE\}\.spdx\.json`/u);
   assert.match(workflow, /node scripts\/verify-image-sbom-binding.mjs/u);
+  assert.doesNotMatch(workflow, /sbom-\$\{\{ matrix\.service \}\}\.spdx\.json/u);
+  assert.equal((workflow.match(/uses: aquasecurity\/trivy-action@/gu) ?? []).length, 1);
+  assert.match(workflow, /output: scan-image-\$\{\{ matrix\.service \}\}\.json/u);
 });
 
 test('published images require provenance, an SBOM, and verified keyless signatures', async () => {

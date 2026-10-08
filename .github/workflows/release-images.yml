@@ -290,15 +290,6 @@ jobs:
           exit-code: '1'
           hide-progress: true
 
-      - name: Generate SPDX image SBOM
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-        with:
-          scan-type: image
-          image-ref: ${{ steps.identity.outputs.reference }}
-          format: spdx-json
-          output: sbom-${{ matrix.service }}.spdx.json
-          hide-progress: true
-
       - name: Attest image SBOM
         id: sbom_attestation
         if: steps.kind.outputs.publish == 'true'
@@ -421,7 +412,6 @@ jobs:
             sbom-image-${{ matrix.service }}.spdx.json
             signature-image-${{ matrix.service }}.json
             scan-image-${{ matrix.service }}.json
-            sbom-${{ matrix.service }}.spdx.json
             provenance-${{ matrix.service }}.sigstore.json
             sbom-attestation-${{ matrix.service }}.sigstore.json
             attestation-verification-${{ matrix.service }}.json
