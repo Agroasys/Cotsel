@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { Readable } from 'node:stream';
-import { pbkdf2Sync as nativePbkdf2Sync } from 'node:crypto';
+import { createHash, pbkdf2Sync as nativePbkdf2Sync } from 'node:crypto';
 
 const require = createRequire(import.meta.url);
 const virtualStore = path.resolve('node_modules/.pnpm');
@@ -191,6 +191,60 @@ const result = graphqlSync({ schema: merged, source: '{ left right }' });
 assert.equal(result.errors, undefined);
 assert.deepEqual({ ...result.data }, { left: 'left', right: 'right' });
 
+// Exercise the real Web3Auth -> permissionless -> Ox WebAuthn import path.
+// permissionless 0.3.5 must retain its supported Ox 0.11 API when the SDK uses 1.x.
+const modalRequire = createRequire(
+  path.join(fs.realpathSync('sdk/node_modules/@web3auth/modal'), 'package.json'),
+);
+const noModalRequire = createRequire(modalRequire.resolve('@web3auth/no-modal'));
+const permissionlessEntry = noModalRequire.resolve('permissionless');
+const permissionlessRequire = createRequire(permissionlessEntry);
+assert.match(fs.realpathSync(permissionlessRequire.resolve('ox')), /ox@0\.11\.3_/);
+const { getOxExports, getOxModule } = require(
+  path.join(path.dirname(permissionlessEntry), 'utils', 'ox.js'),
+);
+const { Base64, Hex, PublicKey, Signature, WebAuthnP256 } = await getOxExports();
+assert.equal(Hex.toString(Hex.fromString('wallet-compatibility')), 'wallet-compatibility');
+assert.equal(Base64.toString(Base64.fromString('wallet-compatibility')), 'wallet-compatibility');
+assert.equal(typeof PublicKey.from, 'function');
+assert.equal(typeof Signature.fromHex, 'function');
+const challenge = `0x${'11'.repeat(32)}`;
+const { metadata, payload } = WebAuthnP256.getSignPayload({
+  challenge,
+  origin: 'https://wallet.example',
+  rpId: 'wallet.example',
+});
+const clientData = JSON.parse(metadata.clientDataJSON);
+assert.deepEqual(clientData, {
+  type: 'webauthn.get',
+  challenge: Buffer.from(challenge.slice(2), 'hex').toString('base64url'),
+  origin: 'https://wallet.example',
+  crossOrigin: false,
+});
+assert.equal(metadata.userVerificationRequired, true);
+assert.equal(
+  payload,
+  metadata.authenticatorData + createHash('sha256').update(metadata.clientDataJSON).digest('hex'),
+);
+const { P256 } = await getOxModule();
+const fixturePrivateKey = `0x${'22'.repeat(32)}`;
+const publicKey = P256.getPublicKey({ privateKey: fixturePrivateKey });
+const signature = P256.sign({ payload, privateKey: fixturePrivateKey, hash: true });
+assert.equal(WebAuthnP256.verify({ challenge, metadata, publicKey, signature }), true);
+assert.equal(
+  WebAuthnP256.verify({ challenge: `0x${'33'.repeat(32)}`, metadata, publicKey, signature }),
+  false,
+);
+assert.equal(
+  WebAuthnP256.verify({
+    challenge,
+    metadata,
+    publicKey: P256.getPublicKey({ privateKey: `0x${'44'.repeat(32)}` }),
+    signature,
+  }),
+  false,
+);
+
 console.log(
-  `Dependency compatibility check passed: minimatch ${minimatchVersions.join(', ')} -> patched brace-expansion 5.0.12; glob consumers -> depth-patched braces 3.0.3; jayson 4.3.0 -> security-patched stream-json 1.9.1; Subsquid GraphQL schema merge`,
+  `Dependency compatibility check passed: minimatch ${minimatchVersions.join(', ')} -> patched brace-expansion 5.0.12; glob consumers -> depth-patched braces 3.0.3; jayson 4.3.0 -> security-patched stream-json 1.9.1; Subsquid GraphQL schema merge; Web3Auth WebAuthn payload`,
 );

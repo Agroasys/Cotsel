@@ -16,6 +16,7 @@ packages:
   - treasury
 
 linkWorkspacePackages: true
+pnpmfile: patches/permissionless-ox-peer.cjs
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   # Security fix for GHSA-7q85-xj36-vmfc. Keep the exception version-specific.
