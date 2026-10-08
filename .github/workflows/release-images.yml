@@ -306,7 +306,7 @@ jobs:
         with:
           subject-name: ${{ steps.identity.outputs.name }}
           subject-digest: ${{ steps.identity.outputs.digest }}
-          sbom-path: sbom-${{ matrix.service }}.spdx.json
+          sbom-path: sbom-image-${{ matrix.service }}.spdx.json
           push-to-registry: true
 
       - name: Preserve signed SBOM bundle
@@ -323,6 +323,7 @@ jobs:
         env:
           CERT_IDENTITY: https://github.com/Agroasys/Cotsel/.github/workflows/release-images.yml@refs/heads/main
           GH_TOKEN: ${{ github.token }}
+          IMAGE_DIGEST: ${{ steps.identity.outputs.digest }}
           REFERENCE: ${{ steps.identity.outputs.reference }}
           SERVICE: ${{ matrix.service }}
         run: |
@@ -344,6 +345,7 @@ jobs:
             --deny-self-hosted-runners \
             --format json \
             > "sbom-attestation-verification-${SERVICE}.json"
+          node scripts/verify-image-sbom-binding.mjs
 
       - name: Resolve producing workflow identity
         id: producing
