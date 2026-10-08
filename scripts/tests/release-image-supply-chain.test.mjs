@@ -10,7 +10,7 @@ test('published images require provenance, an SBOM, and verified keyless signatu
   const workflow = await readFile(workflowPath, 'utf8');
 
   assert.match(workflow, /provenance: mode=max/);
-  assert.match(workflow, /anchore\/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26/);
+  assert.match(workflow, /anchore\/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c/);
   assert.match(workflow, /sigstore\/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6/);
   assert.match(workflow, /cosign sign --yes "\$IMAGE_REFERENCE"/);
   assert.match(workflow, /cosign verify \\/);
