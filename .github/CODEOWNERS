@@ -1,5 +1,5 @@
-# Astton and czpyioe own settlement and infrastructure changes for ordinary
-# contributions. Organization administrators retain the owner-approved right
-# to bypass review and checks. A bypass is recorded as evidence; it is not a
-# green check or release acceptance.
+# Astton and czpyioe review sensitive changes independently.
+# The WP-6 target policy prohibits standing administrator and app bypasses.
+# Effective enforcement requires the reviewed settings packet and live probes.
+# A temporary emergency grant needs approval, expiry, incident review, and revocation.
 * @Astton @czpyioe

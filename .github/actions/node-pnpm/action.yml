@@ -1,0 +1,10 @@
+name: Install the supported Cotsel toolchain
+description: Use pinned Node and the lockfile-declared pnpm release.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      with:
+        node-version: '22.23.2'
+    - shell: bash
+      run: corepack enable && pnpm install --frozen-lockfile

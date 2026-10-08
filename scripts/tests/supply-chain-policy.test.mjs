@@ -91,3 +91,12 @@ test('release workflow requires signed provenance and SBOM controls', () => {
     /must attest its SBOM/u,
   );
 });
+
+test('SBOM generation rejects a mutable Syft version', () => {
+  const workflow = `- name: Generate SBOM
+  uses: anchore/sbom-action@${'a'.repeat(40)}
+  with:
+    syft-version: latest
+`;
+  assert.match(workflowViolations('sdk-publish.yml', workflow).join('\n'), /must pin Syft/u);
+});

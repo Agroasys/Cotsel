@@ -3,8 +3,98 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { releaseCandidateInventory } from '../lib/release-candidate-inventory.mjs';
+import { verifyImageSbomBinding } from '../verify-image-sbom-binding.mjs';
 
 const workflowPath = new URL('../../.github/workflows/release-images.yml', import.meta.url);
+
+const sbomBinding = () => {
+  const sbom = { spdxVersion: 'SPDX-2.3', packages: [{ name: 'image-runtime', versionInfo: '1' }] };
+  const sourceCommit = 'a'.repeat(40);
+  const imageDigest = `sha256:${'b'.repeat(64)}`;
+  return {
+    sbom,
+    sourceCommit,
+    imageDigest,
+    verificationResults: [
+      {
+        verificationResult: {
+          signature: {
+            certificate: {
+              subjectAlternativeName:
+                'https://github.com/Agroasys/Cotsel/.github/workflows/release-images.yml@refs/heads/main',
+              issuer: 'https://token.actions.githubusercontent.com',
+              sourceRepositoryURI: 'https://github.com/Agroasys/Cotsel',
+              sourceRepositoryDigest: sourceCommit,
+              sourceRepositoryRef: 'refs/heads/main',
+              runnerEnvironment: 'github-hosted',
+            },
+          },
+          statement: {
+            predicateType: 'https://spdx.dev/Document/v2.3',
+            subject: [{ digest: { sha256: imageDigest.slice(7) } }],
+            predicate: structuredClone(sbom),
+          },
+        },
+      },
+    ],
+  };
+};
+
+test('recorded image SBOM must equal the verified signed document', () => {
+  const binding = sbomBinding();
+  assert.doesNotThrow(() => verifyImageSbomBinding(binding));
+  binding.sbom.packages[0].versionInfo = 'unsigned-other-report';
+  assert.throws(() => verifyImageSbomBinding(binding), /must equal/u);
+});
+
+test('SBOM binding rejects wrong source, digest, predicate, identity, and unverified records', () => {
+  for (const change of [
+    (b) => {
+      b.sourceCommit = 'c'.repeat(40);
+    },
+    (b) => {
+      b.imageDigest = `sha256:${'c'.repeat(64)}`;
+    },
+    (b) => {
+      b.verificationResults[0].verificationResult.statement.predicateType = 'other';
+    },
+    (b) => {
+      b.verificationResults[0].verificationResult.signature.certificate.subjectAlternativeName =
+        'other';
+    },
+    (b) => {
+      b.verificationResults[0].verificationResult.signature.certificate.issuer = 'other';
+    },
+    (b) => {
+      b.verificationResults[0].verificationResult.signature.certificate.sourceRepositoryRef =
+        'refs/heads/feature';
+    },
+    (b) => {
+      b.verificationResults[0].verificationResult.signature.certificate.runnerEnvironment =
+        'self-hosted';
+    },
+    (b) => {
+      delete b.verificationResults[0].verificationResult;
+    },
+    (b) => {
+      b.verificationResults = [];
+    },
+  ]) {
+    const binding = sbomBinding();
+    change(binding);
+    assert.throws(() => verifyImageSbomBinding(binding));
+  }
+});
+
+test('published image metadata records the SBOM passed to the attester and binding check', async () => {
+  const workflow = await readFile(workflowPath, 'utf8');
+  assert.match(workflow, /sbom-path: sbom-image-\$\{\{ matrix\.service \}\}\.spdx\.json/u);
+  assert.match(workflow, /const sbomPath = `sbom-image-\$\{process\.env\.SERVICE\}\.spdx\.json`/u);
+  assert.match(workflow, /node scripts\/verify-image-sbom-binding.mjs/u);
+  assert.doesNotMatch(workflow, /sbom-\$\{\{ matrix\.service \}\}\.spdx\.json/u);
+  assert.equal((workflow.match(/uses: aquasecurity\/trivy-action@/gu) ?? []).length, 1);
+  assert.match(workflow, /output: scan-image-\$\{\{ matrix\.service \}\}\.json/u);
+});
 
 test('published images require provenance, an SBOM, and verified keyless signatures', async () => {
   const workflow = await readFile(workflowPath, 'utf8');

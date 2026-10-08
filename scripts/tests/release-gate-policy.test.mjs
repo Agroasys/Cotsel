@@ -8,6 +8,26 @@ import { fileURLToPath } from 'node:url';
 
 import { RELEASE_GATE_CHECKS, evaluateReleaseGateNeeds } from '../evaluate-release-gate.mjs';
 
+test('the required aggregate includes the reusable security workflow and retained scanner evidence', () => {
+  const workflow = fs.readFileSync(
+    new URL('../../.github/workflows/release-gate.yml', import.meta.url),
+    'utf8',
+  );
+  const security = fs.readFileSync(
+    new URL('../../.github/workflows/repository-security.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    workflow,
+    /repository-security:\n\s+uses: \.\/\.github\/workflows\/repository-security.yml/u,
+  );
+  assert.match(workflow.slice(workflow.indexOf('  release-gate:')), /- repository-security/u);
+  assert.match(security, /node scripts\/security-scan-evidence.mjs/u);
+  assert.match(security, /node scripts\/security-scanner-selftest.mjs/u);
+  assert.match(security, /if-no-files-found: error/u);
+  assert.match(security, /scan-ref: infra\/terraform/u);
+});
+
 const selectionNames = [
   'auth',
   'contracts',

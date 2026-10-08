@@ -243,6 +243,7 @@ jobs:
       - name: Generate SPDX image SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c
         with:
+          syft-version: v1.54.1
           image: ${{ steps.identity.outputs.reference }}
           format: spdx-json
           output-file: sbom-image-${{ matrix.service }}.spdx.json
@@ -289,15 +290,6 @@ jobs:
           exit-code: '1'
           hide-progress: true
 
-      - name: Generate SPDX image SBOM
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-        with:
-          scan-type: image
-          image-ref: ${{ steps.identity.outputs.reference }}
-          format: spdx-json
-          output: sbom-${{ matrix.service }}.spdx.json
-          hide-progress: true
-
       - name: Attest image SBOM
         id: sbom_attestation
         if: steps.kind.outputs.publish == 'true'
@@ -305,7 +297,7 @@ jobs:
         with:
           subject-name: ${{ steps.identity.outputs.name }}
           subject-digest: ${{ steps.identity.outputs.digest }}
-          sbom-path: sbom-${{ matrix.service }}.spdx.json
+          sbom-path: sbom-image-${{ matrix.service }}.spdx.json
           push-to-registry: true
 
       - name: Preserve signed SBOM bundle
@@ -322,6 +314,7 @@ jobs:
         env:
           CERT_IDENTITY: https://github.com/Agroasys/Cotsel/.github/workflows/release-images.yml@refs/heads/main
           GH_TOKEN: ${{ github.token }}
+          IMAGE_DIGEST: ${{ steps.identity.outputs.digest }}
           REFERENCE: ${{ steps.identity.outputs.reference }}
           SERVICE: ${{ matrix.service }}
         run: |
@@ -343,6 +336,7 @@ jobs:
             --deny-self-hosted-runners \
             --format json \
             > "sbom-attestation-verification-${SERVICE}.json"
+          node scripts/verify-image-sbom-binding.mjs
 
       - name: Resolve producing workflow identity
         id: producing
@@ -418,7 +412,6 @@ jobs:
             sbom-image-${{ matrix.service }}.spdx.json
             signature-image-${{ matrix.service }}.json
             scan-image-${{ matrix.service }}.json
-            sbom-${{ matrix.service }}.spdx.json
             provenance-${{ matrix.service }}.sigstore.json
             sbom-attestation-${{ matrix.service }}.sigstore.json
             attestation-verification-${{ matrix.service }}.json

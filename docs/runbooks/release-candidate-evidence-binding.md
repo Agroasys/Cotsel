@@ -317,8 +317,11 @@ Do not replace a digest with a floating tag.
 
 ## Open dependencies
 
-The contracts are complete, but two WP-0 inputs remain unapproved and no candidate can be pinned
-until they land:
+The manifest schemas are implemented. WP-0 scope and governance issues #635 and #637 were accepted and closed.
+Their approved boundaries remain binding. Issue #636 remains open for the complete deployed candidate and accepted evidence.
+
+Before pinning a candidate, verify all required artifacts, migration identities, configuration, contract identity, and archive custody.
+Use the current [WP-6 completion ledger](https://github.com/Agroasys/Cotsel/issues/628#issuecomment-6060804583) for remaining dependencies.
 
 | Dependency                                                             | Effect                                                                                                                                                                                                                                          |
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

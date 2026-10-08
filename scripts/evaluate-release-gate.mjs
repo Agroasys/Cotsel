@@ -18,6 +18,7 @@ const OPTIONAL_SELECTIONS = [
 
 export const RELEASE_GATE_CHECKS = [
   { job: 'changes', label: 'ci/changes', required: () => true },
+  { job: 'repository-security', label: 'ci/repository-security', required: () => true },
   {
     job: 'dependency-security',
     label: 'ci/dependency-security',
